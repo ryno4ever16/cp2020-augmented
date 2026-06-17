@@ -1,0 +1,12 @@
+{
+  "CYBERPUNK": {
+    "Augmented": {
+      "WrongSystem": "Cyberpunk 2020: Augmented Edition requires the Cyberpunk 2020 system to be active.",
+      "AutomationReceived": "Augmented automation: {actor} fired {weapon}."
+    }
+  },
+  "SETTINGS": {
+    "AugmentedCombatAutomation": "Augmented: Combat Automation",
+    "AugmentedCombatAutomationHint": "Enable automated damage application, saving throws, and area effects for the Augmented Edition combat features. Off by default."
+  }
+}

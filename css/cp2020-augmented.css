@@ -1,0 +1,8 @@
+/*
+ * Cyberpunk 2020: Augmented Edition — styles.
+ *
+ * Reuse the base system's classes and visual language wherever possible; only
+ * add module-specific classes here, prefixed `cp2020ae-` to avoid collisions
+ * with the system's own CSS. Keep the system's overall design style (no new
+ * colour schemes or one-off inline styles).
+ */

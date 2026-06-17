@@ -1,0 +1,38 @@
+{
+  "id": "cp2020-augmented",
+  "title": "Cyberpunk 2020: Augmented Edition",
+  "description": "A companion expansion for the Cyberpunk 2020 system: vehicles & ACPA (Maximum Metal), combat automation, shopping, and Improvement Point tracking — added as opt-in features on top of the base system.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": 13,
+    "verified": 14,
+    "maximum": 14
+  },
+  "authors": [
+    {
+      "name": "ryno4ever16",
+      "url": "https://github.com/ryno4ever16"
+    }
+  ],
+  "relationships": {
+    "systems": [
+      {
+        "id": "cyberpunk2020",
+        "type": "system"
+      }
+    ]
+  },
+  "esmodules": ["module/cp2020-augmented.js"],
+  "styles": ["css/cp2020-augmented.css"],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "socket": true,
+  "url": "https://github.com/ryno4ever16/cp2020-augmented",
+  "manifest": "https://raw.githubusercontent.com/ryno4ever16/cp2020-augmented/main/module.json",
+  "download": "https://github.com/ryno4ever16/cp2020-augmented/releases/latest/download/cp2020-augmented.zip"
+}
