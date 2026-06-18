@@ -1,0 +1,9 @@
+{{!--
+  Drag-to-buy Buy/Cancel confirm body (renderChatCard from confirmPurchaseDialog). `msg` is a
+  pre-localized sentence (carries <b> around the pre-escaped item name) → triple-stash. The quantity
+  field shows only when a quantity is allowed; the dialog callback reads it by name="qty".
+--}}
+<p>{{{msg}}}</p>
+{{#if allowQty}}
+<div class="form-group"><label>{{CPLocal "ShopQty"}}</label><input type="number" name="qty" value="1" min="1" class="cp-qty-input"/></div>
+{{/if}}

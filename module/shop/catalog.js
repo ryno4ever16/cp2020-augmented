@@ -597,6 +597,14 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     setTimeout(() => doc.addEventListener("click", close), 0);
   }
 
+  /** Localized Yes/No confirm whose body comes from the generic confirm-body template (no inline HTML). */
+  async _confirm(title, body) {
+    return foundry.applications.api.DialogV2.confirm({
+      window: { title }, rejectClose: false,
+      content: await renderChatCard("confirm-body.hbs", { body }),
+    });
+  }
+
   /** Popup menu listing every shop (+ create new) to add a catalog item to. */
   _catalogAddMenu(rowEl, ev) {
     const sk = rowEl.dataset.sourceKey; if (!sk) return;
@@ -637,7 +645,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         .map(r => r.dataset.sourceKey).filter(sk => sk && !def?.items?.[sk]);
       if (!newKeys.length) { ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopBulkNone")); return; }
       if (newKeys.length > BULK_ADD_CONFIRM_OVER &&
-          !(await foundry.applications.api.DialogV2.confirm({ window: { title: def?.name ?? "" }, rejectClose: false, content: `<p>${game.i18n.format("CYBERPUNK.ShopBulkAddConfirm", { n: newKeys.length })}</p>` }))) return;
+          !(await this._confirm(def?.name ?? "", game.i18n.format("CYBERPUNK.ShopBulkAddConfirm", { n: newKeys.length })))) return;
       const n = await addShopItems(id, newKeys.map(sk => ({ sourceKey: sk })));
       ui.notifications?.info(game.i18n.format("CYBERPUNK.ShopBulkAdded", { n }));
       this.render();
@@ -647,7 +655,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       const def = getShop(id);
       const count = Object.keys(def?.items ?? {}).length;
       if (!count) return;
-      if (await foundry.applications.api.DialogV2.confirm({ window: { title: def?.name ?? "" }, rejectClose: false, content: `<p>${game.i18n.format("CYBERPUNK.ShopClearVendorConfirm", { n: count })}</p>` })) {
+      if (await this._confirm(def?.name ?? "", game.i18n.format("CYBERPUNK.ShopClearVendorConfirm", { n: count }))) {
         await clearShopItems(id);
         this.render();
       }
@@ -695,7 +703,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector(".cp-shop-notes")?.addEventListener("change", async (ev) => { await updateShop(id, { notes: ev.currentTarget.value }); });
     root.querySelector(".cp-shop-publish")?.addEventListener("click", async (ev) => { ev.preventDefault(); await publishShop(id); this.render(); });
     root.querySelector(".cp-shop-preview")?.addEventListener("click", (ev) => { ev.preventDefault(); this.navigate("storefront", id); });
-    root.querySelector(".cp-shop-delete")?.addEventListener("click", async (ev) => { ev.preventDefault(); if (await foundry.applications.api.DialogV2.confirm({ window: { title: getShop(id)?.name ?? "" }, rejectClose: false, content: `<p>${game.i18n.localize("CYBERPUNK.ShopDeleteConfirm")}</p>` })) { await deleteShop(id); this.navigate("home"); } });
+    root.querySelector(".cp-shop-delete")?.addEventListener("click", async (ev) => { ev.preventDefault(); if (await this._confirm(getShop(id)?.name ?? "", game.i18n.localize("CYBERPUNK.ShopDeleteConfirm"))) { await deleteShop(id); this.navigate("home"); } });
     // NOTE: the storefront "Manage" button is bound in activateListeners (this method early-returns outside build view).
 
     // Drag a catalog row into the vendor tray (in addition to ＋Add).
@@ -720,7 +728,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       { action: "toggle", label: def.open ? game.i18n.localize("CYBERPUNK.ShopClose") : game.i18n.localize("CYBERPUNK.ShopShowToPlayers"), handler: async () => { await updateShop(shopId, { open: !def.open }); this.render(); } },
       { action: "duplicate", label: game.i18n.localize("CYBERPUNK.ShopCtxDuplicate"), handler: async () => { await duplicateShop(shopId); this.render(); } },
       { action: "rename", label: game.i18n.localize("CYBERPUNK.ShopCtxRename"), handler: async () => { const name = await promptText(game.i18n.localize("CYBERPUNK.ShopName"), def.name); if (name) { await updateShop(shopId, { name }); this.render(); } } },
-      { action: "delete", label: game.i18n.localize("CYBERPUNK.ShopCtxDelete"), handler: async () => { if (await foundry.applications.api.DialogV2.confirm({ window: { title: def.name }, rejectClose: false, content: `<p>${game.i18n.localize("CYBERPUNK.ShopDeleteConfirm")}</p>` })) { await deleteShop(shopId); this.render(); } } },
+      { action: "delete", label: game.i18n.localize("CYBERPUNK.ShopCtxDelete"), handler: async () => { if (await this._confirm(def.name, game.i18n.localize("CYBERPUNK.ShopDeleteConfirm"))) { await deleteShop(shopId); this.render(); } } },
     ]);
   }
 }
@@ -780,11 +788,10 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
 async function confirmPurchaseDialog({ name, unitPrice, buyerName, isService, allowQty }) {
   const msg = game.i18n.format(isService ? "CYBERPUNK.ShopDropConfirmService" : "CYBERPUNK.ShopDropConfirmItem",
     { name: foundry.utils.escapeHTML(name), price: unitPrice, buyer: foundry.utils.escapeHTML(buyerName) });
-  const qtyRow = allowQty
-    ? `<div class="form-group"><label>${game.i18n.localize("CYBERPUNK.ShopQty")}</label><input type="number" name="qty" value="1" min="1" style="width:64px;"/></div>` : "";
+  const content = await renderChatCard("shop/purchase-confirm.hbs", { msg, allowQty });
   const result = await foundry.applications.api.DialogV2.wait({
     window: { title: game.i18n.localize("CYBERPUNK.ShopBuy") },
-    content: `<p>${msg}</p>${qtyRow}`,
+    content,
     buttons: [
       { action: "buy", icon: "fa-solid fa-cart-shopping", label: game.i18n.localize("CYBERPUNK.ShopBuy"), default: true,
         callback: (ev, btn, dlg) => allowQty ? Math.max(1, parseInt(dlg.element.querySelector('[name="qty"]')?.value, 10) || 1) : 1 },
@@ -844,7 +851,7 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null } = {}) {
 async function promptText(title, initial = "") {
   const result = await foundry.applications.api.DialogV2.wait({
     window: { title },
-    content: `<div class="form-group"><input type="text" name="t" value="${foundry.utils.escapeHTML(initial)}"/></div>`,
+    content: await renderChatCard("shop/prompt-text.hbs", { initial }),
     buttons: [
       { action: "ok", label: game.i18n.localize("CYBERPUNK.ShopCreate"), default: true,
         callback: (ev, btn, dlg) => ({ ok: true, text: (dlg.element.querySelector('[name="t"]')?.value ?? "").trim() }) },

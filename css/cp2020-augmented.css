@@ -91,6 +91,7 @@
 .cp-add-to-shop-btn:hover { background: rgba(138,109,59,0.4); border-color: #b8916a; }
 .cp-src-badge { flex: 0 0 auto; font-size: 0.7em; opacity: 0.75; padding: 0 4px; border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; white-space: nowrap; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
 .cp-catalog-qty { width: 42px; }
+.cp-qty-input { width: 64px; }
 /* Buy with no buyer: clickable (so it can warn you to pick a token) but visibly muted. */
 .cp-catalog-buy.cp-buy-nobuyer { opacity: 0.5; }
 .cp-catalog-buy.cp-buy-nobuyer:hover { opacity: 0.8; }
