@@ -241,3 +241,15 @@
 /* --- Cyberware in-sheet "Install (Surgery)" button (injected on the vanilla system). Size to its
    label instead of being stretched to fill the .field row, mirroring the fork's own .cyber-install. --- */
 .cyberpunk .field button.cp2020ae-cyber-install { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
+
+/* --- In-sheet Recurring Services panel (injected into the gear tab body; NOT a nav tab). --- */
+.cp2020ae-services-panel { margin-top: 8px; border-top: 1px solid rgba(184,145,106,0.4); padding-top: 6px; }
+.cp2020ae-services-header .larger { font-weight: bold; }
+.cp2020ae-service-row { display: flex; align-items: center; gap: 6px; }
+.cp2020ae-service-row .field-image { flex: 0 0 auto; width: 22px; height: 22px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.cp2020ae-service-name { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp2020ae-service-cost { white-space: nowrap; opacity: 0.9; }
+/* Foundry stretches buttons to fill a flex row by default — keep the service controls content-sized. */
+.cp2020ae-services-panel .field button { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; padding: 1px 8px; }
+.cp2020ae-services-total-val { white-space: nowrap; }
+.cp2020ae-services-empty { padding: 4px; opacity: 0.7; }

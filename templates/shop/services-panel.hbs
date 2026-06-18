@@ -1,0 +1,36 @@
+{{!-- Augmented Edition: in-sheet Recurring Services panel, injected into the GEAR tab body by
+     module/shop/services-sheet.js. NOT a nav tab (restyler-safe). Each row pays one period on demand;
+     the recurring-service items are de-duplicated out of the gear inventory by the injector. Rows use
+     data-service-id (not data-item-id) so the de-dup never matches the panel's own rows. --}}
+<div class="cp2020ae-services-panel field-list">
+    <div class="field cp2020ae-services-header">
+        <label class="larger">{{localize "CYBERPUNK.ServicesTitle"}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp2020ae-service-add" title="{{localize "CYBERPUNK.ServiceAdd"}}">
+            <i class="fas fa-plus"></i> {{localize "CYBERPUNK.ServiceAdd"}}
+        </button>
+    </div>
+
+    {{#if services.length}}
+    <div class="cp2020ae-services-list">
+        {{#each services}}
+        <div class="field cp2020ae-service-row" data-service-id="{{id}}">
+            <div class="field-image" style="background-image: url({{img}})"></div>
+            <label class="cp2020ae-service-name">{{name}}</label>
+            <span class="flex-pad"></span>
+            <span class="cp2020ae-service-cost"><b>{{cost}}</b>eb / {{period}}</span>
+            <button type="button" class="cp2020ae-service-pay" data-service-id="{{id}}" title="{{localize "CYBERPUNK.ServicePay"}}">{{localize "CYBERPUNK.ServicePay"}}</button>
+            <button type="button" class="cp2020ae-service-edit" data-service-id="{{id}}" title="{{localize "CYBERPUNK.ServiceEdit"}}"><i class="fas fa-pen"></i></button>
+            <button type="button" class="cp2020ae-service-delete" data-service-id="{{id}}" title="{{localize "CYBERPUNK.ServiceDelete"}}"><i class="fas fa-xmark"></i></button>
+        </div>
+        {{/each}}
+    </div>
+    <div class="field cp2020ae-services-total">
+        <label>{{localize "CYBERPUNK.ServicesMonthlyTotal"}}</label>
+        <span class="flex-pad"></span>
+        <span class="cp2020ae-services-total-val"><b>{{servicesTotal}}</b>eb</span>
+    </div>
+    {{else}}
+    <div class="cp2020ae-services-empty inactive">{{localize "CYBERPUNK.ServicesEmpty"}}</div>
+    {{/if}}
+</div>
