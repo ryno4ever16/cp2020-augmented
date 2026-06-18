@@ -1,0 +1,19 @@
+{{!--
+  Vehicle weapon-mount fire result card (Maximum Metal p.4-5). Rendered via renderChatCard from
+  _executeVehicleFire and posted with ChatMessage.create (the 1d10 to-hit attaches via rolls:[]).
+  `verdict` is a pre-localized HIT/MISS line carrying its own coloured span. On a hit with no
+  pre-selected target, the apply block exposes the cp-vfire-apply button — its data-* payload is
+  read back by registerVehicleFireHandlers, so every data-attribute is kept verbatim. i18n via
+  CPLocal; triple-stash on values carrying markup.
+--}}
+<div class="cyberpunk vehicle-fire-result">
+  <h3>{{CPLocal "Vehicle.FireResultTitle" weapon=mountName}}</h3>
+  <div>{{{CPLocal "Vehicle.FireToHit" d10=d10 ref=ref skill=skill mods=modsSigned total=total}}}</div>
+  <div class="result-line">{{{verdict}}}</div>
+  {{#if showApply}}
+  <div class="vehicle-apply-block">
+    <span class="apply-hint">{{CPLocal "Vehicle.FireApplyHint"}}</span><br>
+    <button class="cp-vfire-apply" data-pen="{{pen}}" data-facing="{{facing}}" data-range="{{range}}" data-gs="{{gs}}" data-rounds="{{rounds}}" data-ap="{{ap}}" data-hef="{{hef}}" data-heat="{{heat}}" data-hda="{{hda}}" data-weapon="{{weapon}}" data-dmg="{{dmg}}">{{CPLocal "Vehicle.FireApplyBtn"}}</button>
+  </div>
+  {{/if}}
+</div>

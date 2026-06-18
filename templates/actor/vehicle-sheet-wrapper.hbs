@@ -1,0 +1,11 @@
+{{!-- V2 single-root part for the vehicle / ACPA actor sheet. Renders the ACPA layout for powered
+     armor, otherwise the plain-vehicle layout, by including the matching sub-template as a
+     Handlebars partial (both registered via preloadHandlebarsTemplates). This wrapper div is the
+     part's single root element, which ApplicationV2's HandlebarsApplicationMixin requires. --}}
+<div class="cp-vehicle-sheet-root flexcol" style="flex:1;min-height:0;">
+{{#if system.isACPA}}
+{{> "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs"}}
+{{else}}
+{{> "modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs"}}
+{{/if}}
+</div>

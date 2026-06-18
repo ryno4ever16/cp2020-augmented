@@ -1,0 +1,41 @@
+{{!--
+  Vehicle weapon-mount fire dialog (Maximum Metal p.4-5). DialogV2 content rendered via
+  renderChatCard from openVehicleFireDialog(). Every cp-vf-* input/select/checkbox id is read back
+  by the Fire callback and the gunner/shell/arc live handlers — kept verbatim. #cp-vf-arcwarn is
+  re-filled live by arcWarnHtml() when the firer/target moves. Layout via the shared
+  .vehicle-fire-dialog class; gunner/shell/facing/range option lists arrive as {value,label}
+  arrays; the intro / WA / target clauses are pre-localized strings. The shell row + DFB field are
+  conditional. i18n via CPLocal; triple-stash on values carrying markup.
+--}}
+<div class="cyberpunk vehicle-fire-dialog">
+  <div class="dialog-intro">{{{intro}}}</div>
+  <div id="cp-vf-arcwarn">{{{arcWarn}}}</div>
+  <label>{{CPLocal "Vehicle.Gunner"}} <select id="cp-vf-gunner">{{#each gunnerOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select></label>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.GunnerRef"}} <input type="number" id="cp-vf-ref" value="{{ref0}}"></label>
+    <label>{{CPLocal "Vehicle.WeaponSkill"}} <input type="number" id="cp-vf-skill" value="{{skill0}}"></label>
+    <label>{{CPLocal "Vehicle.TargetNumberDV"}} <input type="number" id="cp-vf-tn" value="15"></label>
+  </div>
+  {{#if hasShells}}
+  <label title="{{CPLocal "Vehicle.ShellTip"}}">{{CPLocal "Vehicle.Shell"}} <select id="cp-vf-shell">{{#each shellOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+  {{/if}}
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.BasePenetration"}} <input type="number" id="cp-vf-pen" value="{{pen0}}"></label>
+    <label>{{CPLocal "Vehicle.ROF"}} <input type="number" id="cp-vf-rof" value="{{rof0}}"></label>
+    <label>{{CPLocal "Vehicle.Facing"}} <select id="cp-vf-facing">{{#each facingOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+    <label>{{CPLocal "Vehicle.Range"}} <select id="cp-vf-range">{{#each rangeOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+  </div>
+  <fieldset>
+    <legend>{{CPLocal "Vehicle.ToHitModifiers"}}</legend>
+    <label><input type="checkbox" id="cp-vf-stationary"> {{CPLocal "Vehicle.TargetStationary"}}</label>
+    <label class="ml8">{{CPLocal "Vehicle.TargetSpeedMph"}} <input type="number" id="cp-vf-tspeed" value="0"></label><br>
+    <label><input type="checkbox" id="cp-vf-turret"{{#if isTurret}} checked{{/if}}> {{CPLocal "Vehicle.TurretMount"}}</label>
+    <label class="ml8"><input type="checkbox" id="cp-vf-link"{{#if vehicleLink}} checked{{/if}}> {{CPLocal "Vehicle.VehicleLink"}}</label><br>
+    <label><input type="checkbox" id="cp-vf-moving"> {{CPLocal "Vehicle.FirerMovingUnstab"}}</label><br>
+    <label><input type="checkbox" id="cp-vf-dark"> {{CPLocal "Vehicle.DarkObscured"}}</label>
+    <label class="ml8" title="{{CPLocal "Vehicle.FireControlTip"}}">{{CPLocal "Vehicle.FireControl"}} <input type="number" id="cp-vf-other" value="{{fireControl}}"></label>
+    {{#if isAcpaFirer}}
+    <label class="ml8" title="{{CPLocal "Vehicle.DFBTip"}}">{{CPLocal "Vehicle.DFB"}} <input type="number" id="cp-vf-dfb" value="{{acpaDfb}}"></label>
+    {{/if}}
+  </fieldset>
+</div>

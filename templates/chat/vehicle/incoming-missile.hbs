@@ -1,0 +1,17 @@
+{{!--
+  "Incoming Missile" reaction card (Maximum Metal p.10). Rendered via renderChatCard from
+  _postIncomingCard() in module/vehicle/vehicle-missile-flight.js, whispered to the target's
+  owner + GM. The cp-missile-cm / cp-missile-evade / cp-missile-intercept buttons + their
+  data-token-id/data-scene-id are kept verbatim for the global click handler. `cmLabel` is a
+  pre-localized clause (empty when no countermeasure defeats the homing method). i18n via
+  CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-prompt vehicle-incoming">
+  <h3>{{CPLocal "Vehicle.IncomingMissileTitle" target=target}}</h3>
+  <div class="save-info">{{{CPLocal "Vehicle.IncomingMissileBody" weapon=weapon guidance=guidance homing=homing turns=turns}}}{{#if how}} <span class="save-note">{{how}}.</span>{{/if}}</div>
+  <div class="save-buttons">
+    {{#if cmLabel}}<button class="cp-missile-cm" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">{{cmLabel}}</button>{{else}}<span class="save-note">{{CPLocal "Vehicle.MissileNoCmShort" homing=homing}}</span>{{/if}}
+    <button class="cp-missile-evade" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">{{CPLocal "Vehicle.MissileEvadeBtn"}}</button>
+    {{#if hasAM}}<button class="cp-missile-intercept" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">{{CPLocal "Vehicle.MissileAntiBtn"}}</button>{{/if}}
+  </div>
+</div>

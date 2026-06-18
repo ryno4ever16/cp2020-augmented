@@ -22,6 +22,15 @@
       }
     ]
   },
+  "documentTypes": {
+    "Actor": {
+      "vehicle": { "htmlFields": ["notes"] }
+    },
+    "Item": {
+      "vehicleWeapon": { "htmlFields": ["notes"] },
+      "acpaSystem": { "htmlFields": ["notes"] }
+    }
+  },
   "esmodules": ["module/cp2020-augmented.js"],
   "styles": ["css/cp2020-augmented.css"],
   "languages": [

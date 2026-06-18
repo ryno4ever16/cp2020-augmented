@@ -1,0 +1,28 @@
+{{!--
+  Indirect / artillery fire dialog (Maximum Metal p.8). DialogV2 content rendered via
+  renderChatCard from openIndirectFireDialog(). The cp-if-* input ids are read back by the
+  dialog callback, so they are kept verbatim. `shells` is a [{value,label}] list built in JS
+  (no inline <option> HTML). Layout via the .vehicle-fire-dialog CSS class; i18n via CPLocal
+  (triple-stash on the intro which carries <b>).
+--}}
+<div class="cyberpunk vehicle-fire-dialog">
+  <div class="dialog-intro">{{{CPLocal "Vehicle.IndirectIntro" actor=actorName weapon=weaponName target=targetName}}}</div>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.SpotterHW"}} <input type="number" id="cp-if-shw" value="0"></label>
+    <label>{{CPLocal "Vehicle.SpotterINT"}} <input type="number" id="cp-if-sint" value="0"></label>
+    <label>{{CPLocal "Vehicle.FirerHW"}} <input type="number" id="cp-if-fhw" value="0"></label>
+  </div>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.RangeM"}} <input type="number" id="cp-if-range" class="num-wide" value="{{rangeAuto}}"></label>
+    <label><input type="checkbox" id="cp-if-ranged"> {{CPLocal "Vehicle.AlreadyRangedIn"}}</label>
+  </div>
+  <label>{{CPLocal "Vehicle.Shell"}} <select id="cp-if-shell">{{#each shells}}<option value="{{value}}">{{label}}</option>{{/each}}</select></label>
+  <fieldset>
+    <legend>{{CPLocal "Vehicle.SpotterMods"}}</legend>
+    <label><input type="checkbox" id="cp-if-distract"> {{CPLocal "Vehicle.SpotterDistracted"}}</label>
+    <label class="ml8"><input type="checkbox" id="cp-if-optics"> {{CPLocal "Vehicle.ComputerOptics"}}</label><br>
+    <label><input type="checkbox" id="cp-if-link"> {{CPLocal "Vehicle.Cyberlinked"}}</label>
+    <label class="ml8"><input type="checkbox" id="cp-if-dark"> {{CPLocal "Vehicle.Darkness"}}</label>
+    <label class="ml8">{{CPLocal "Vehicle.Other"}} <input type="number" id="cp-if-other" value="0"></label>
+  </fieldset>
+</div>

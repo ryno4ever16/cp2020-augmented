@@ -1,0 +1,43 @@
+{{!--
+  Control / Maneuver Roll dialog (Core p.112 / Maximum Metal p.10-11). DialogV2 content rendered via
+  renderChatCard from openControlRollDialog(). The cp-ctl-* input/select ids are read back by the
+  roll callback and the driver/difficulty change handlers — kept verbatim. Layout via the shared
+  .vehicle-fire-dialog class; the driver/skill/difficulty option lists arrive as {value,label}
+  arrays; i18n via CPLocal (intro triple-stashed for its <b>). MM raises Difficulty via conditions,
+  Core adds a flat roll modifier — hence the {{#if isMM}} split.
+--}}
+<div class="cyberpunk vehicle-fire-dialog vehicle-control-dialog">
+  <div class="dialog-intro">{{{CPLocal "Vehicle.ControlIntro" system=systemLabel actor=actorName}}}</div>
+  <label>{{CPLocal "Vehicle.Driver"}}
+    <select id="cp-ctl-driver">{{#each driverOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+  </label>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.Ref"}} <input type="number" id="cp-ctl-ref" value="{{ref0}}"></label>
+    <label>{{CPLocal "Vehicle.Skill"}}
+      <select id="cp-ctl-skillkey">{{#each skillOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select>
+      <input type="number" id="cp-ctl-skill" value="{{skill0}}">
+    </label>
+  </div>
+  <label>{{CPLocal "Vehicle.ManeuverLabel"}}
+    <select id="cp-ctl-difficulty">{{#each difficultyOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+  </label>
+  <div id="cp-ctl-maneuver-hint" class="dialog-hint">{{maneuverHint}}</div>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.CurrentSpeed"}} <input type="number" id="cp-ctl-speed" value="0" class="num-wide"></label>
+    <span class="dialog-hint">{{speedHint}}</span>
+  </div>
+  <label>{{CPLocal "Vehicle.HandlingMod"}} <input type="number" id="cp-ctl-handling" value="{{handling0}}"></label>
+  {{#if isMM}}
+  <fieldset>
+    <legend>{{CPLocal "Vehicle.ConditionsLegend"}}</legend>
+    <label><input type="checkbox" id="cp-ctl-cantsee"> {{CPLocal "Vehicle.CondCantSee"}}</label><br>
+    <label><input type="checkbox" id="cp-ctl-multitask"> {{CPLocal "Vehicle.CondMultitask"}}</label><br>
+    <label><input type="checkbox" id="cp-ctl-slippery"> {{CPLocal "Vehicle.CondSlippery"}}</label>
+    <label class="ml8"><input type="checkbox" id="cp-ctl-icy"> {{CPLocal "Vehicle.CondIcy"}}</label><br>
+    <label><input type="checkbox" id="cp-ctl-cyberlink"> {{CPLocal "Vehicle.CondCyberlink"}}</label>
+  </fieldset>
+  <label>{{CPLocal "Vehicle.OtherDVMod"}} <input type="number" id="cp-ctl-otherdv" value="0"></label>
+  {{else}}
+  <label>{{CPLocal "Vehicle.OtherRollMod"}} <input type="number" id="cp-ctl-other" value="0"></label>
+  {{/if}}
+</div>

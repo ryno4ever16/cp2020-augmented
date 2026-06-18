@@ -1,0 +1,16 @@
+{{!--
+  Bombing dialog (Maximum Metal p.9). DialogV2 content rendered via renderChatCard from
+  openBombDialog(). The cp-bm-* input ids are read back by the dialog callback, kept verbatim.
+  `shells` is a [{value,label}] list built in JS (no inline <option> HTML). Layout via the
+  .vehicle-fire-dialog CSS class; i18n via CPLocal (triple-stash on the intro which carries <b>).
+--}}
+<div class="cyberpunk vehicle-fire-dialog">
+  <div class="dialog-intro">{{{CPLocal "Vehicle.BombIntro" actor=actorName weapon=weaponName target=targetName}}}</div>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.DropHeight"}} <input type="number" id="cp-bm-height" class="num-wide" value="500"></label>
+    <label>{{CPLocal "Vehicle.DiveTurns"}} <input type="number" id="cp-bm-dive" value="0" title="{{CPLocal "Vehicle.DiveTurnsTip"}}"></label>
+    <label>{{CPLocal "Vehicle.AircraftSpeed"}} <input type="number" id="cp-bm-speed" class="num-wide" value="0" title="{{CPLocal "Vehicle.AircraftSpeedTip"}}"></label>
+  </div>
+  <label>{{CPLocal "Vehicle.Bomb"}} <select id="cp-bm-shell">{{#each shells}}<option value="{{value}}">{{label}}</option>{{/each}}</select></label>
+  <label>{{CPLocal "Vehicle.OtherToHitMods"}} <input type="number" id="cp-bm-other" value="0"></label>
+</div>

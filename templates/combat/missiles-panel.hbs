@@ -1,0 +1,14 @@
+{{!--
+  "Missiles in Flight" combat-tracker panel (Maximum Metal guided missiles). Rendered via
+  renderTemplate from the renderCombatTracker hook in vehicle-missile-flight.js and injected as the
+  inner HTML of the .cp-missiles-panel div. Each row's data-token-id + the cp-missile-row /
+  cp-missile-reveal / cp-missile-step classes are read back by the panel's click handlers and the
+  global reveal/step handlers — kept verbatim. GM-only controls are gated by {{isGM}}. Layout via
+  CSS classes (no inline styles); i18n via CPLocal (row triple-stashed for its <b>).
+--}}
+<h4 class="cp-missiles-head">{{CPLocal "Vehicle.MissilesInFlight"}}</h4>
+<ul class="cp-missiles-list">
+  {{#each missiles}}
+  <li class="cp-missile-row" data-token-id="{{tokenId}}">{{{CPLocal "Vehicle.MissileRow" weapon=weapon target=target guidance=guidance turns=turns}}}{{#unless detected}} <span class="cp-missile-undetected">{{CPLocal "Vehicle.MissileUndetected"}}</span>{{#if isGM}} <button class="cp-missile-reveal" data-token-id="{{tokenId}}" title="{{CPLocal "Vehicle.MissileRevealTip"}}">👁</button>{{/if}}{{/unless}}{{#if isGM}} <button class="cp-missile-step" data-token-id="{{tokenId}}" title="{{CPLocal "Vehicle.MissileStepTip"}}">▶</button>{{/if}}</li>
+  {{/each}}
+</ul>

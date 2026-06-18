@@ -1,0 +1,16 @@
+{{!--
+  LUCK-save prompt for a person struck by an anti-vehicle (Penetration) weapon (MM p.8 step 2).
+  Rendered via renderChatCard from postLuckSavePrompt(). The cp-luck-save-roll button + its
+  data-actor-id/data-token-id/data-pen/data-weapon are kept verbatim for the global click handler.
+  i18n via CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "Vehicle.LuckHitTitle" name=targetName weapon=weaponName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "Vehicle.LuckHitBody" pen=pen}}}</span><br>
+    <span class="save-note">{{CPLocal "Vehicle.LuckHitNote" luck=luck}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-luck-save-roll" data-actor-id="{{actorId}}" data-token-id="{{tokenId}}" data-pen="{{pen}}" data-weapon="{{weaponName}}">{{CPLocal "Vehicle.LuckRollBtn" luck=luck}}</button>
+  </div>
+</div>

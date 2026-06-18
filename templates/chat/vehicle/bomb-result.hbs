@@ -1,0 +1,11 @@
+{{!--
+  Bombing result card (MM p.9). Rendered via renderChatCard from the dialog callback and posted
+  with ChatMessage.create. DIRECT HIT ×5 / MISS verdict carries a result-fail / result-warn span
+  (coloured via CSS). `fallExtra` is a pre-assembled localized clause (dive / dive-aim). i18n via
+  CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result vehicle-fire-result">
+  <h3>{{CPLocal "Vehicle.BombResultTitle" shell=shellName}}</h3>
+  <div>{{#if hit}}{{{CPLocal "Vehicle.BombDirectHit" d10=d10 mods=mods total=total tn=tn pen=pen}}}{{else}}{{{CPLocal "Vehicle.BombMiss" dev=dev missedBy=missedBy}}}{{/if}}</div>
+  <div class="result-note">{{{CPLocal "Vehicle.BombFallNote" turns=fall extra=fallExtra}}}</div>
+</div>

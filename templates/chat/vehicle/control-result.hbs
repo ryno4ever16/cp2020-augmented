@@ -1,0 +1,24 @@
+{{!--
+  Control / Maneuver Roll result card (Core p.112 / Maximum Metal p.10-11). Rendered via
+  renderChatCard from _executeControlRoll and posted with ChatMessage.create (the dice attach via
+  rolls:[]). The roll/DV breakdown labels are localized at the render edge (label->key map); the
+  success/fail verdict carries its own coloured <span> baked into the i18n value (the established
+  IndirectOnTarget / AcpaHit convention). The loss-table outcome `text` is the pure tables' English
+  sentence with the rolled numbers baked in — localizing it is a deferred i18n pass on the pure
+  logic (its exact substrings are asserted by the deterministic RAW-outcome tests). i18n via
+  CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result vehicle-control-result">
+  <h3>{{CPLocal "Vehicle.ControlRollTitle" mode=modeLabel actor=actorName}}</h3>
+  <div class="result-line">{{{CPLocal "Vehicle.ControlDriverLine" driver=driverName difficulty=diffName}}}</div>
+  <div class="result-line">{{{CPLocal "Vehicle.ControlRollBreakdown" total=total rollBreakdown=rollBreakdown dv=dv dvBreakdown=dvBreakdown}}}</div>
+  <div class="result-line">
+    {{#if success}}{{{CPLocal "Vehicle.ControlSuccess" actor=actorName}}}{{else}}{{{CPLocal "Vehicle.ControlFail" missedBy=missedBy}}}{{/if}}
+  </div>
+  {{#if hasLoss}}
+  <div class="vehicle-loss-card">
+    <div class="loss-head">{{{CPLocal "Vehicle.LossTableLine" table=lossTable roll=lossRoll band=lossBand}}}</div>
+    <div class="loss-text {{lossSevClass}}">{{{lossText}}}</div>
+  </div>
+  {{/if}}
+</div>

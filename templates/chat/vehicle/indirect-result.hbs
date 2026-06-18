@@ -1,0 +1,11 @@
+{{!--
+  Indirect-fire result card (MM p.8). Rendered via renderChatCard from the dialog callback and
+  posted with ChatMessage.create. ON TARGET / SCATTER verdict carries a result-success /
+  result-warn span (coloured via CSS, not inline style). i18n via CPLocal; triple-stash on
+  values that carry markup.
+--}}
+<div class="cyberpunk save-result vehicle-fire-result">
+  <h3>{{CPLocal "Vehicle.IndirectResultTitle" shell=shellName}}</h3>
+  <div>{{#if hit}}{{{CPLocal "Vehicle.IndirectOnTarget" d10=d10 bonus=bonus total=total tn=tn}}}{{else}}{{{CPLocal "Vehicle.IndirectScatter" dev=dev missedBy=missedBy d10=d10 bonus=bonus total=total tn=tn}}}{{/if}}</div>
+  <div class="result-note">{{{CPLocal "Vehicle.ShellTravelNote" turns=travel mps=mps}}}</div>
+</div>

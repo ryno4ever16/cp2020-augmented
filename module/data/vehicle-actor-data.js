@@ -1,0 +1,198 @@
+import {
+  arrayField,
+  booleanField,
+  htmlField,
+  mergeDefaults,
+  numberField,
+  objectField,
+  stringField
+} from "./schema-helpers.js";
+
+import { acpaAreaSOP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib } from "../vehicle/vehicle-acpa.js";
+
+function hasOwn(source, key) {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
+/**
+ * Vehicle / ACPA actor (CP2020 Core "Vehicles in FNFF" p.112 + Maximum Metal).
+ * Standalone schema — vehicles have no stats/skills/hitLocations. Armor is stored per
+ * facing (Core uses `front` as its single SP); Maximum Metal needs all five for flank rules.
+ * Derived Armor Value (SP/20) and Body Value (SDP/20, or STR/20 for ACPA) are recomputed
+ * in prepareDerivedData. Canvas link to the art Tile lives in flags, not the schema.
+ *
+ * Augmented Edition: registered as the module sub-type `cp2020-augmented.vehicle` (data in
+ * `system.*`, no flags); embedded weapon/system Items are `cp2020-augmented.vehicleWeapon`
+ * and `cp2020-augmented.acpaSystem`.
+ */
+export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
+  static defineSchema() {
+    return {
+      vehicleType: stringField("car"),   // car/sportscar/limo/AV-4/AV-6/AV-7/cycle/truck/rotor/osprey/boat/tank/APC/acpa
+      isACPA:      booleanField(false),
+      str:         numberField(0),        // ACPA chassis STR — drives Body Value when isACPA
+
+      // Armor SP per facing. Core mode edits only `front` (its single SP).
+      sp:  objectField({ front: 0, side: 0, rear: 0, top: 0, bottom: 0 }),
+      // Structure (no hit locations in the simple system).
+      sdp: objectField({ value: 0, max: 0 }),
+
+      // Movement
+      topSpeed:   numberField(0),
+      safeSpeed:  numberField(0),
+      acc:        numberField(0),
+      dec:        numberField(0),
+      controlMod: numberField(0),
+
+      // Crew
+      crewSlots:      numberField(1),
+      passengerSlots: numberField(0),
+
+      // Systems
+      vehicleLink:   booleanField(false),
+      damageControl: booleanField(false),
+      compositeArmor: booleanField(false),   // halves shaped-charge (HEAT) Penetration (MM p.23)
+      reactiveArmor: booleanField(false),    // explosive tiles: 1d10 (2-10) halves shaped-charge Pen, degrades w/ hits (MM p.23)
+      reactiveHits:  numberField(0),         // shaped/HE hits absorbed; −1 to the deflect roll per 2; reset by "Replace"
+      sensors:       booleanField(false),    // radar/detectors: auto-detect inbound missiles (90%)
+      antiMissile:   booleanField(false),    // AGAMS/AEAMS: can attempt to shoot down inbound missiles
+      fireControl:   numberField(0),
+      countermeasures: arrayField(stringField(), []),
+      weaponMounts:    arrayField(null, []),   // [{ name, penetration, rof, shots, range, arc, ammoType }]
+
+      // Status (set by the damage resolver in later phases)
+      onFire:         booleanField(false),
+      immobilized:    booleanField(false),
+      damagedSystems: arrayField(stringField(), []),
+
+      // ACPA combat status (Maximum Metal p.55-56) — written by the powered-armor damage resolver.
+      // Additive: existing actors get the schema defaults on load (no migration / relaunch needed).
+      strDamage:    numberField(0),    // accumulated Suit STR loss from criticals
+      refDamage:    numberField(0),    // accumulated Suit REF loss (already ÷2 per the chart)
+      powerHours:   numberField(24),   // remaining power-cell life in hours (24h default)
+      coolingTimer: numberField(0),    // minutes until heatstroke (0 = cooling OK)
+      heatstrokeLevel: numberField(0), // 0 = none; ≥1 escalating Stun-save level after build-up (Serious→…)
+      interfaceOut: numberField(0),    // rounds the interface/electronics are out
+      seizeUp:      numberField(0),    // rounds a body area is seized up
+
+      // ACPA frame structure (Maximum Metal p.61): CURRENT per-area frame SOP (damage tracked by the
+      // powered-armor resolver). Max + chassis stats are DERIVED from chassis STR below.
+      frameSOP:    objectField({ head: 0, rArm: 0, lArm: 0, rLeg: 0, lLeg: 0, torso: 0 }),
+
+      // ACPA build selections (Maximum Metal p.64-65). Additive — existing actors get these defaults
+      // on load (no migration / relaunch). Defaults are the neutral military baseline: Full-HUD
+      // Wideband (SIB 0, so no surprise to existing suits) + Advanced reflex/control (full REF, max 10).
+      realityInterface: stringField("FULL_HUD_WIDEBAND"),
+      reflexControl:    stringField("ADVANCED"),
+      commandComputer:  booleanField(false),   // C3: +1 initiative/awareness while linked (integrable with any)
+      pilotId:          stringField(""),        // linked pilot character actor (its REF + takes overflow damage)
+      pilotRef:         numberField(0),         // fallback pilot base REF when no pilot actor is linked
+      trooperCapacity:  numberField(114),       // pilot+gear weight set aside for SIB (114 std; Russian 136; elite 80-91)
+      systemsWeight:    numberField(0),          // aggregate weight of mounted systems (D-4d computes this; manual for now)
+
+      // Derived (recomputed each prepare; stored so they're available to templates/rolls)
+      armorValue: objectField({ front: 0, side: 0, rear: 0, top: 0, bottom: 0 }),
+      bodyValue:  numberField(0),
+      destroyed:  booleanField(false),
+      // ACPA-derived frame stats (from chassis STR via the Chassis Inventory Table).
+      frameSOPMax: objectField({ head: 0, rArm: 0, lArm: 0, rLeg: 0, lLeg: 0, torso: 0 }),
+      toughness:   numberField(0),    // damage-reduction Toughness Mod (negative)
+      damMod:      stringField(""),   // linear-frame melee Damage Mod (display)
+      lift:        numberField(0),
+      carry:       numberField(0),
+      // ACPA-derived interface/reflex stats (from the Reality Interface + Reflex/Control selections).
+      dfb:          numberField(0),    // Direct-Fire Bonus — to-hit mod when the suit fires its weapons
+      interfaceSib: numberField(0),    // Reality Interface's contribution to the suit's Initiative Bonus
+      interfaceSop: numberField(0),    // Reality Interface SOP (build budget)
+      maxRef:       numberField(10),   // operating-REF cap from the Reflex/Control system
+      refMod:       numberField(0),    // REF modifier from the Reflex/Control system
+      effectiveRef: numberField(0),    // clamp(pilotRef + refMod, 0..maxRef) − refDamage
+      // ACPA-derived weight + initiative (from the Armor Inventory + SIB derivation, MM p.61-62).
+      armorWeight:  numberField(0),    // armor-shell weight (kg) from the chosen shell SP
+      armorCost:    numberField(0),    // armor-shell cost (eb) from the chosen shell SP
+      mountedSystemsWeight: numberField(0),  // summed weight of embedded acpaSystem Items
+      mountedSystemsCost:   numberField(0),  // summed cost of embedded acpaSystem Items
+      totalWeight:  numberField(0),    // total fully-loaded weight (chassis + armor + trooper + systems)
+      buildCost:    numberField(0),    // total build cost (chassis + armor + interface + reflex + systems)
+      sib:          numberField(0),    // Suit Initiative Bonus = round(cap ÷ totalWeight) − 1 + interface SIB
+
+      notes: htmlField("")
+    };
+  }
+
+  static migrateData(source) {
+    source ??= {};
+    if (hasOwn(source, "sp"))  source.sp  = mergeDefaults(source.sp,  { front: 0, side: 0, rear: 0, top: 0, bottom: 0 });
+    if (hasOwn(source, "sdp")) source.sdp = mergeDefaults(source.sdp, { value: 0, max: 0 });
+    return super.migrateData(source);
+  }
+
+  prepareDerivedData() {
+    super.prepareDerivedData();
+    const av = (sp) => Math.round((Number(sp) || 0) / 20);   // Armor Value = SP/20 (MM p.4)
+    const sp = this.sp ?? {};
+    this.armorValue = {
+      front: av(sp.front), side: av(sp.side), rear: av(sp.rear), top: av(sp.top), bottom: av(sp.bottom)
+    };
+    // Body Value = SDP/20; ACPA uses chassis STR as its SDP source.
+    const sdpMax = this.isACPA ? (Number(this.str) || 0) : (Number(this.sdp?.max) || 0);
+    this.bodyValue = Math.round(sdpMax / 20);
+    this.destroyed = sdpMax > 0 && (Number(this.sdp?.value) || 0) <= 0;
+
+    // ACPA frame derivations (Maximum Metal p.61-62): per-area frame SOP max + Chassis Inventory stats.
+    if (this.isACPA) {
+      const str = Number(this.str) || 0;
+      this.frameSOPMax = acpaAreaSOP(str);
+      const cs = chassisStats(str);
+      this.toughness = cs.toughness;
+      this.damMod = cs.damMod;
+      this.lift = cs.lift;
+      this.carry = cs.carry;
+
+      // Reality Interface + Reflex/Control derivations (Maximum Metal p.64-65).
+      const ri = realityInterface(this.realityInterface);
+      const rc = reflexControl(this.reflexControl);
+      this.dfb = ri.dfb;
+      this.interfaceSib = ri.sib;
+      this.interfaceSop = ri.sop;
+      this.maxRef = rc.maxRef;
+      // Basic control on a military STR42+ frame is stricter (REF−3 not −2) — acpaReflexMod handles it.
+      this.refMod = acpaReflexMod(this.reflexControl, str);
+      // A linked pilot actor supplies the base REF; otherwise the manual pilotRef field is the fallback.
+      let pilotRef = Number(this.pilotRef) || 0;
+      try {
+        if (this.pilotId) {
+          const pilot = game.actors?.get(this.pilotId);
+          const r = Number(pilot?.system?.stats?.ref?.total);
+          if (Number.isFinite(r)) pilotRef = r;
+        }
+      } catch (e) { /* actors not ready */ }
+      this.effectiveRef = acpaEffectiveRef({
+        pilotRef, refMod: this.refMod, maxRef: rc.maxRef, refDamage: this.refDamage
+      });
+
+      // Weight budget + Suit Initiative Bonus (Maximum Metal p.61-62). Total loaded weight = chassis
+      // + armor shell + Trooper capacity + interface + mounted systems (+1kg for a Command Computer).
+      const armorSP = Number(this.sp?.front) || 0;
+      this.armorWeight = acpaArmorWeight(armorSP);
+      this.armorCost = acpaArmorCost(armorSP);
+      const trooper = Number(this.trooperCapacity) || 0;
+      const sysW = Number(this.systemsWeight) || 0;
+      const cmdW = this.commandComputer ? 1 : 0;
+      // Sum embedded acpaSystem Items (prepared by now) for the mounted-systems weight + cost.
+      let mountedSystemsWeight = 0, mountedSystemsCost = 0;
+      const items = this.parent?.items;
+      if (items) for (const it of items) if (it.type === "cp2020-augmented.acpaSystem") {
+        mountedSystemsWeight += Number(it.system?.weight) || 0;
+        mountedSystemsCost   += Number(it.system?.cost)   || 0;
+      }
+      this.mountedSystemsWeight = mountedSystemsWeight;
+      this.mountedSystemsCost = mountedSystemsCost;
+      this.totalWeight = cs.weight + this.armorWeight + trooper + ri.weight + mountedSystemsWeight + sysW + cmdW;
+      this.sib = acpaSib({ chassisCapacity: cs.lift, totalWeight: this.totalWeight, interfaceSib: ri.sib });
+      // Total build cost (chassis + armor shell + interface + reflex/control + Command Computer + systems).
+      this.buildCost = (Number(cs.cost) || 0) + this.armorCost + (Number(ri.cost) || 0) + (Number(rc.cost) || 0)
+        + (this.commandComputer ? 5000 : 0) + mountedSystemsCost;
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{{!--
+  Guided-missile launch card (Maximum Metal). Rendered via renderChatCard from
+  launchMissile() in module/vehicle/vehicle-missile-flight.js. Out of combat the missile
+  needs manual stepping, so a warning hint is shown when there's no active encounter.
+  i18n via CPLocal; triple-stash on values that carry <b>.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "Vehicle.MissileLaunchedTitle" weapon=weapon}}</h3>
+  <div class="save-info">{{{CPLocal "Vehicle.MissileLaunchedBody" firer=firer target=target turns=turns guidance=guidance}}}</div>
+  {{#unless inCombat}}<div class="save-note vehicle-warn">{{{CPLocal "Vehicle.MissileNoCombatHint"}}}</div>{{/unless}}
+</div>

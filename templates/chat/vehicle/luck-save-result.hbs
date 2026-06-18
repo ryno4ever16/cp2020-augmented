@@ -1,0 +1,11 @@
+{{!--
+  LUCK-save result card for personnel vs an anti-vehicle weapon (MM p.8). Rendered via
+  renderChatCard from the chat-button handler and passed as roll.toMessage() content. `detail`
+  is a pre-localized GRAZED / stopped / PENETRATED line (carries a result-success/result-fail
+  span). i18n via CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result">
+  <h3>{{CPLocal "Vehicle.LuckResultTitle" name=actorName}}</h3>
+  <div>{{{CPLocal "Vehicle.LuckResultDetail" luck=luck d10=d10 total=total av=av}}}</div>
+  <div class="result-line">{{{detail}}}</div>
+</div>

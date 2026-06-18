@@ -1,0 +1,21 @@
+{{!--
+  ACPA melee dialog (Maximum Metal p.58). DialogV2 content rendered via renderChatCard from
+  openAcpaMeleeDialog(). The cp-am-* input/select ids are read back by the callback, kept
+  verbatim. Layout via the shared .vehicle-fire-dialog CSS class; i18n via CPLocal (triple-stash
+  on the intro which carries <b>).
+--}}
+<div class="cyberpunk vehicle-fire-dialog">
+  <div class="dialog-intro">{{{CPLocal "Vehicle.AcpaMeleeIntro" actor=actorName str=effStr strDmg=strDmgClause target=targetName}}}</div>
+  <label>{{CPLocal "Vehicle.AcpaStrike"}}
+    <select id="cp-am-kind">
+      <option value="punch">{{CPLocal "Vehicle.AcpaPunch"}}</option>
+      <option value="crush">{{CPLocal "Vehicle.AcpaCrush"}}</option>
+      <option value="kick">{{CPLocal "Vehicle.AcpaKick"}}</option>
+    </select>
+  </label>
+  <div class="field-row">
+    <label title="{{CPLocal "Vehicle.PilotRefTip"}}">{{CPLocal "Vehicle.PilotRef"}} <input type="number" id="cp-am-ref" value="{{effRef}}"></label>
+    <label>{{CPLocal "Vehicle.MeleeSkill"}} <input type="number" id="cp-am-skill" value="0"></label>
+    <label>{{CPLocal "Vehicle.TargetDV"}} <input type="number" id="cp-am-dv" value="15"></label>
+  </div>
+</div>

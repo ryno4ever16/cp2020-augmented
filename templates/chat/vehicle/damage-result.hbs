@@ -1,0 +1,15 @@
+{{!--
+  Vehicle / ACPA damage result card (Core p.112 / Maximum Metal p.4-6, p.54-56). Rendered via
+  renderChatCard from applyVehicleDamageCore / applyVehicleDamageMM and posted with
+  ChatMessage.create (the MM dice attach via rolls:[]). `systemLabel` is the localized "Core /
+  Maximum Metal / Powered-Armor Damage" heading. `body` and `lines` carry the resolution narrative:
+  the Core path passes fully-localized text; the MM/ACPA SOP narrative passes English prose (the
+  rolled numbers baked in) whose colour emphasis is shared .result-* classes (no inline CSS) —
+  localizing that sprawling, branch-heavy prose is a deferred i18n pass (see the apply* functions).
+  Triple-stash because body/lines carry markup.
+--}}
+<div class="cyberpunk save-result vehicle-damage-result">
+  <h3>{{CPLocal "Vehicle.DamageResultTitle" actor=actorName system=systemLabel}}</h3>
+  <div class="result-line">{{{body}}}</div>
+  {{#if lines}}<div class="result-line">{{{lines}}}</div>{{/if}}
+</div>

@@ -1,0 +1,10 @@
+{{!--
+  ACPA melee result card (MM p.58). Rendered via renderChatCard from the dialog callback and
+  posted with ChatMessage.create (the 1d10 to-hit roll is attached via rolls:[]). `verdict` is a
+  pre-localized HIT/MISS span. i18n via CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result vehicle-fire-result">
+  <h3>{{CPLocal "Vehicle.AcpaResultTitle" kind=kindName}}</h3>
+  <div>{{{CPLocal "Vehicle.AcpaToHit" d10=d10 ref=ref skill=skill total=total dv=dv verdict=verdict}}}</div>
+  <div class="result-note">{{{CPLocal "Vehicle.AcpaDamageLine" formula=formula pen=pen}}}</div>
+</div>

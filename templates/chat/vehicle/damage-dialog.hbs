@@ -1,0 +1,34 @@
+{{!--
+  Vehicle damage dialog (Core p.112 / Maximum Metal p.4-6). DialogV2 content rendered via
+  renderChatCard from openVehicleDamageDialog(). The cp-vd-* input/select ids are read back by the
+  Resolve callback — kept verbatim (cp-vd-facing exists in both branches; only one renders). Layout
+  via the shared .vehicle-fire-dialog class; facing/range option lists arrive as {value,label}
+  arrays. Core takes a flat incoming-damage number; MM takes Penetration + Good-Shot / rounds /
+  range — hence the {{#if isMM}} split.
+--}}
+<div class="cyberpunk vehicle-fire-dialog vehicle-damage-dialog">
+  <div class="dialog-intro">{{{CPLocal "Vehicle.DamageIntro" system=systemLabel actor=actorName}}}</div>
+  {{#if isMM}}
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.BasePenetration"}} <input type="number" id="cp-vd-pen" value="0"></label>
+    <label>{{CPLocal "Vehicle.Facing"}}
+      <select id="cp-vd-facing">{{#each facingOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+    </label>
+  </div>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.ToHitClearedBy"}} <input type="number" id="cp-vd-overby" value="0"> <span class="dialog-hint">{{CPLocal "Vehicle.GoodShotHint"}}</span></label>
+  </div>
+  <div class="field-row">
+    <label>{{CPLocal "Vehicle.ExtraRoundsSameArea"}} <input type="number" id="cp-vd-rounds" value="0"></label>
+    <label>{{CPLocal "Vehicle.Range"}}
+      <select id="cp-vd-range">{{#each rangeOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+    </label>
+  </div>
+  {{else}}
+  <label>{{CPLocal "Vehicle.IncomingDamage"}} <input type="number" id="cp-vd-raw" value="0" class="num-wide"></label>
+  <label class="ml8"><input type="checkbox" id="cp-vd-ap"> {{CPLocal "Vehicle.ArmorPiercing"}}</label>
+  <label>{{CPLocal "Vehicle.FacingWhichSP"}}
+    <select id="cp-vd-facing">{{#each facingOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+  </label>
+  {{/if}}
+</div>

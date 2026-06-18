@@ -315,10 +315,149 @@ export function registerAugmentedSettings() {
     type:    Boolean,
     default: false,
   });
+
+  // --- Vehicles (Core CP2020 "Vehicles in FNFF", p.112) — available WITHOUT Maximum Metal ---
+  // These two are core vehicle automation; they default ON and work under the Core ruleset on their
+  // own. They live above the Maximum Metal header so they stay configurable when MM is off.
+  game.settings.register(SCOPE, "vehicleControlEnabled", {
+    name: "Vehicles: Movement & Control Rolls",
+    hint: "When enabled, vehicles get a 🎲 Control Roll button (sheet header) and the game.cpAugmented.vehicles.controlRoll API. It opens a dialog to roll REF + Driving/Pilot + 1d10 vs a Difficulty Value (Simple 15 / Difficult 20 / Very Difficult 25), and on failure rolls the Control Loss (Core p.112) or Failure (Maximum Metal p.10) table — whichever the active ruleset selects. Works in Core mode without Maximum Metal. Default ON.",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: true,
+  });
+
+  game.settings.register(SCOPE, "vehicleDamageEnabled", {
+    name: "Vehicles: Damage Resolver",
+    hint: "When enabled, vehicles get a 💥 Damage button (sheet header) and the game.cpAugmented.vehicles.applyDamage API. Core (p.112) subtracts SP and reduces SDP; Maximum Metal (p.4-6) compares Penetration to Armor Value, rolls the Surface/Minor/Major/Catastrophic damage table, then a hit location with fuel-fire / ammo-cookoff / crew-damage effects (and honors a Damage Control system). The active branch follows the ruleset (Core when Maximum Metal is off). Default ON.",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: true,
+  });
+
+  // ===================== MAXIMUM METAL (master + overlay) =====================
+  // Master switch. Everything registered from here down belongs to the Maximum Metal layer; the
+  // renderSettingsConfig hook (below) groups them under a "Maximum Metal" header.
+  game.settings.register(SCOPE, "mmEnabled", {
+    name: "Maximum Metal: Enable Maximum Metal",
+    hint: "Master switch for the Maximum Metal military-hardware layer. When OFF (default), vehicles use only the Core 'Vehicles in FNFF' rules (CP2020 p.112) and every MM-only feature is disabled: the Penetration/Armor-Value resolver, composite armor, personnel-vs-anti-vehicle (p.8), area weapons, missiles, the 5-facing vehicle sheet, and the Maximum Metal weapon compendium seeding. Turn ON for the detailed military system. The settings below belong to Maximum Metal.",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: false,
+    onChange: () => {
+      // Live-apply the MM hide/show: refresh the compendium sidebar + any open vehicle sheets.
+      try { ui.compendium?.render(); } catch (e) { /* sidebar not ready */ }
+      try { for (const a of game.actors) if (a.type === "cp2020-augmented.vehicle" && a.sheet?.rendered) a.sheet.render(false); } catch (e) { /* no actors */ }
+    },
+  });
+
+  // --- Vehicles: which ruleset the vehicle resolver uses ---
+  game.settings.register(SCOPE, "vehicleRuleSystem", {
+    name: "Vehicles: Rule System",
+    hint: "Core = the simple Vehicles-in-FNFF rules (Control Roll vs DV 15/20/25, SP−SDP damage, crash = speed/20 × weight). Maximum Metal = the detailed military system (Penetration vs Armor Value, Surface/Minor/Major/Catastrophic damage, hit-location & crit tables, ACPA). The vehicle sheet shows a single SP in Core mode and all five facings under Maximum Metal.",
+    scope:   "world",
+    config:  true,
+    type:    String,
+    choices: {
+      "Core":         "Core (simple — Vehicles in FNFF, p.112)",
+      "MaximumMetal": "Maximum Metal (detailed — Penetration/Armor Value)",
+    },
+    default: "Core",
+  });
+
+  // --- Maximum Metal optional rule: Armor Damage via Penetration (errata p.107) ---
+  game.settings.register(SCOPE, "vehicleArmorDamageEnabled", {
+    name: "Maximum Metal: Armor Damage via Penetration (errata)",
+    hint: "Optional errata rule (Maximum Metal p.107). A heavy round (>20mm) erodes the struck facing's SP whether or not it penetrates: SP removed = factor × Penetration (HE ×½, AP/DPU ×0.6, HEAT ×¾, HESH ×1.0). Because Armor Value is derived from SP (SP÷20), sustained fire grinds armor down over time — addressing 'hard to knock down' heavy armor. Applies only under the Maximum Metal resolver. Default OFF; intended for >20mm vehicle weapons (the GM enables it deliberately).",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: false,
+  });
+
+  // --- Maximum Metal optional rule: Crew Morale (MM optional) ---
+  game.settings.register(SCOPE, "vehicleMoraleEnabled", {
+    name: "Maximum Metal: Crew Morale",
+    hint: "Optional rule. After a vehicle takes a Minor-or-worse penetrating hit, its crew must pass a morale check — Leadership + 1d10 vs 15 — or bail out / disengage. The damage card shows the 1d10 result and the Leadership needed to hold; the GM adjudicates the consequence. Applies only under the Maximum Metal resolver. Default OFF.",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: false,
+  });
+
+  // --- Vehicles: Weapon mount arc enforcement (Phase 5) ---
+  game.settings.register(SCOPE, "vehicleArcEnforcement", {
+    name: "Vehicles: Weapon Mount Arc Enforcement",
+    hint: "How a weapon mount's firing arc (turret 360° / front / side / rear) is enforced when the target lies outside it. Token facing defines 'front' — rotate a vehicle with Ctrl+scroll (Foundry's 0° points north). Free (default): the Fire dialog only WARNS that the target is outside the mount's arc; you can still fire (GM discretion). Strict: an out-of-arc shot is blocked until the mount can bear — rotate the firing vehicle to face the target, or use a turret. Applies to all vehicle/ACPA weapon mounts, missiles included.",
+    scope:   "world",
+    config:  true,
+    type:    String,
+    choices: {
+      "free":   "Free (warn only — discretionary override, default)",
+      "strict": "Strict (block out-of-arc shots — keep mounts within bounds)",
+    },
+    default: "free",
+  });
+
+  // --- Maximum Metal: in-list section header + master gating of the MM sub-settings ---
+  Hooks.on("renderSettingsConfig", (app, html) => {
+    const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
+    if (!root?.querySelector) return;
+    const MM_KEYS = ["mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"];
+    const groupOf = (k) => {
+      const el = root.querySelector(`[name="${SCOPE}.${k}"], [data-setting-id="${SCOPE}.${k}"]`);
+      return el?.closest(".form-group") ?? el?.closest(".setting") ?? null;
+    };
+    const groups = MM_KEYS.map(groupOf).filter(Boolean);
+    if (!groups.length) return;
+    const first = groups[0];
+    if (!first.previousElementSibling?.classList?.contains("cp-mm-header")) {
+      const header = document.createElement("h3");
+      header.className = "cp-mm-header";
+      header.textContent = localize("Vehicle.SystemMM");
+      first.parentNode.insertBefore(header, first);
+    }
+    // Keep the MM groups consecutive under the header.
+    let anchor = first;
+    for (const g of groups.slice(1)) { if (anchor.nextElementSibling !== g) anchor.parentNode.insertBefore(g, anchor.nextElementSibling); anchor = g; }
+    // Grey out / disable the MM sub-settings when the master is off; live-update when it's toggled.
+    const subGroups = groups.slice(1);
+    const setEnabled = (on) => { for (const g of subGroups) { g.classList.toggle("cp-mm-disabled", !on); g.querySelectorAll("input,select,button,textarea").forEach(el => { el.disabled = !on; }); } };
+    setEnabled(mmEnabled());
+    const masterInput = first.querySelector(`[name="${SCOPE}.mmEnabled"]`);
+    masterInput?.addEventListener("change", () => setEnabled(!!masterInput.checked));
+  });
+
+  // --- Maximum Metal: hide the MM weapon compendium from the sidebar when MM is off ---
+  Hooks.on("renderCompendiumDirectory", (app, html) => {
+    const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
+    if (!root?.querySelector || mmEnabled()) return;          // MM on → show it normally
+    const li = root.querySelector(`[data-pack="${SCOPE}.vehicle-weapons"]`);
+    if (li) li.classList.add("cp-hidden");
+  });
 }
 
 /** Whether the Augmented combat-automation layer is enabled. Off by default (opt-in). */
 export function combatAutomationEnabled() {
   try { return game.settings.get(SCOPE, "combatAutomationEnabled") === true; }
   catch { return false; }
+}
+
+/** Master Maximum Metal toggle. When OFF (default), every MM-overlay feature falls back to Core CP2020. */
+export function mmEnabled() {
+  try { return !!game.settings.get(SCOPE, "mmEnabled"); } catch { return false; }
+}
+
+/** The active vehicle ruleset, gated by the master MM toggle: forces "Core" whenever MM is off. */
+export function effectiveVehicleRuleSystem() {
+  try { return mmEnabled() ? (game.settings.get(SCOPE, "vehicleRuleSystem") || "Core") : "Core"; }
+  catch { return "Core"; }
+}
+
+/** Mount-arc enforcement: "free" (warn-but-allow, default) or "strict" (block out-of-arc shots). */
+export function vehicleArcEnforcement() {
+  try { return game.settings.get(SCOPE, "vehicleArcEnforcement") || "free"; } catch { return "free"; }
 }
