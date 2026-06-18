@@ -17,6 +17,7 @@ import { registerPopoutCompat } from "./popout-compat.js";
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
 import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData } from "./data/vehicle-item-data.js";
 import { CyberpunkVehicleSheet } from "./actor/vehicle-sheet.js";
+import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
 import { openControlRollDialog } from "./vehicle/vehicle-control.js";
 import { openVehicleDamageDialog } from "./vehicle/vehicle-damage.js";
@@ -33,10 +34,14 @@ const VEHICLE_ACTOR  = `${MODULE_ID}.vehicle`;
 const VEHICLE_WEAPON = `${MODULE_ID}.vehicleWeapon`;
 const ACPA_SYSTEM    = `${MODULE_ID}.acpaSystem`;
 
-/** Wrapper-partial templates the vehicle/ACPA sheet includes via {{> path}} (must be preloaded). */
+/** Partial templates the sheets include via {{> path}} (must be preloaded for the includes to resolve). */
 const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs",
+  "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs",
 ];
 
 Hooks.once("init", function () {
@@ -56,6 +61,11 @@ Hooks.once("init", function () {
   // namespaced collection, falling back to the bare global on cores that lack it (v13).
   const _Actors = foundry?.documents?.collections?.Actors ?? Actors;
   _Actors.registerSheet(MODULE_ID, CyberpunkVehicleSheet, { types: [VEHICLE_ACTOR], makeDefault: true });
+
+  // Item sheet for the module's vehicle/ACPA sub-type items. A type-specific makeDefault wins over
+  // the base system's typeless makeDefault item sheet (which can't render a namespaced sub-type).
+  const _Items = foundry?.documents?.collections?.Items ?? Items;
+  _Items.registerSheet(MODULE_ID, CyberpunkAugmentedItemSheet, { types: [VEHICLE_WEAPON, ACPA_SYSTEM], makeDefault: true });
 
   // Preload the wrapper sub-templates the sheet includes as Handlebars partials.
   const loadTemplates = foundry?.applications?.handlebars?.loadTemplates ?? globalThis.loadTemplates;

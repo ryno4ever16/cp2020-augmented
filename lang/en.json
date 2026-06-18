@@ -465,7 +465,10 @@
     "SPFull": "Stopping Power",
     "Safe": "Safe",
     "Speed": "Speed",
-    "Type": "Type"
+    "Type": "Type",
+    "ItemName": "Item Name",
+    "Settings": "Settings",
+    "Notes": "Notes"
   },
   "SETTINGS": {
     "AugmentedCombatAutomation": "Augmented: Combat Automation",

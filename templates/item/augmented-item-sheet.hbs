@@ -1,0 +1,28 @@
+{{!-- Focused item sheet for the Augmented Edition vehicle/ACPA sub-type items
+     (cp2020-augmented.vehicleWeapon / acpaSystem). Single V2 part: the <form> comes from the
+     sheet's tag:"form"; this <div> is the part's single root element. `partType` (set in
+     _prepareContext, the bare sub-type name) selects the matching item/parts/<type>/ partials,
+     which are preloaded at init. --}}
+<div class="cp2020ae-item-sheet flexcol" style="flex:1;min-height:0;">
+    <header class="flexrow nowrap">
+        <img class="profile-img" src="{{item.img}}" title="{{item.name}}" width="48" height="48"/>
+        <div class="header-fields flexcol">
+            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="{{CPLocal 'ItemName'}}"/></h1>
+            <span class="summary inactive">
+                {{#if (equals partType "vehicleWeapon")}}
+                {{> "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/summary.hbs"}}
+                {{else}}
+                {{> "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs"}}
+                {{/if}}
+            </span>
+        </div>
+    </header>
+
+    <section class="sheet-body">
+        {{#if (equals partType "vehicleWeapon")}}
+        {{> "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs"}}
+        {{else}}
+        {{> "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs"}}
+        {{/if}}
+    </section>
+</div>
