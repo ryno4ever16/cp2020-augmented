@@ -402,6 +402,64 @@ export function registerAugmentedSettings() {
     default: "free",
   });
 
+  // --- IP (Improvement Points) tracker ([[ip-tracker-design]]) ---
+  game.settings.register(SCOPE, "ipSystem", {
+    name: "SETTINGS.IpSystem",
+    hint: "SETTINGS.IpSystemHint",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: { disabled: "SETTINGS.IpSystemDisabled", simple: "SETTINGS.IpSystemSimple", raw: "SETTINGS.IpSystemRaw" },
+    default: "disabled"
+  });
+  game.settings.register(SCOPE, "ipAwardModel", {
+    name: "SETTINGS.IpAwardModel",
+    hint: "SETTINGS.IpAwardModelHint",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: { manual: "SETTINGS.IpAwardManual", autoBaseline: "SETTINGS.IpAwardAuto" },
+    default: "manual"
+  });
+  game.settings.register(SCOPE, "ipAutoBaselineAmount", {
+    name: "SETTINGS.IpAutoBaselineAmount",
+    hint: "SETTINGS.IpAutoBaselineAmountHint",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 1
+  });
+  game.settings.register(SCOPE, "ipThrottle", {
+    name: "SETTINGS.IpThrottle",
+    hint: "SETTINGS.IpThrottleHint",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: { off: "SETTINGS.IpThrottleOff", hardcap: "SETTINGS.IpThrottleHardcap", diminishing: "SETTINGS.IpThrottleDiminishing" },
+    default: "off"
+  });
+  game.settings.register(SCOPE, "ipSkillLockMode", {
+    name: "SETTINGS.IpSkillLockMode",
+    hint: "SETTINGS.IpSkillLockModeHint",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: { owner: "SETTINGS.IpSkillLockOwner", gm: "SETTINGS.IpSkillLockGm", mutual: "SETTINGS.IpSkillLockMutual" },
+    default: "owner"
+  });
+  game.settings.register(SCOPE, "ipShowPending", {
+    name: "SETTINGS.IpShowPending",
+    hint: "SETTINGS.IpShowPendingHint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+  // IP auto-queue of skill rolls awaiting a GM IP decision (GM working list). Not shown in the menu.
+  game.settings.register(SCOPE, "ipQueue", { scope: "world", config: false, type: Array, default: [] });
+  // Per-skill IP awards within the current Apply cycle, for the throttle. Not shown in the menu.
+  game.settings.register(SCOPE, "ipThrottleCounts", { scope: "world", config: false, type: Object, default: {} });
+
   // --- Maximum Metal: in-list section header + master gating of the MM sub-settings ---
   Hooks.on("renderSettingsConfig", (app, html) => {
     const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
@@ -460,4 +518,28 @@ export function effectiveVehicleRuleSystem() {
 /** Mount-arc enforcement: "free" (warn-but-allow, default) or "strict" (block out-of-arc shots). */
 export function vehicleArcEnforcement() {
   try { return game.settings.get(SCOPE, "vehicleArcEnforcement") || "free"; } catch { return "free"; }
+}
+
+// --- IP (Improvement Points) accessors ([[ip-tracker-design]]) ---
+/** IP system mode: "disabled" (default) / "simple" (single pool) / "raw" (per-skill tracker). */
+export function ipSystem() {
+  try { return game.settings.get(SCOPE, "ipSystem") || "disabled"; } catch { return "disabled"; }
+}
+/** Whether the IP system is active at all. */
+export function ipEnabled() { return ipSystem() !== "disabled"; }
+/** IP award model: "manual" (RAW GM-per-use, default) / "autoBaseline" (GM-marked success → +N). */
+export function ipAwardModel() {
+  try { return game.settings.get(SCOPE, "ipAwardModel") || "manual"; } catch { return "manual"; }
+}
+/** IP auto-granted per GM-marked success when the award model is autoBaseline (default 1). */
+export function ipAutoBaselineAmount() {
+  try { const n = Number(game.settings.get(SCOPE, "ipAutoBaselineAmount")); return Number.isFinite(n) ? n : 1; } catch { return 1; }
+}
+/** Anti-grind throttle: "off" (default) / "hardcap" (1/skill/apply-cycle) / "diminishing" (halving). */
+export function ipThrottle() {
+  try { return game.settings.get(SCOPE, "ipThrottle") || "off"; } catch { return "off"; }
+}
+/** Skill-lock mode: "owner" (default) / "gm" / "mutual". */
+export function ipSkillLockMode() {
+  try { return game.settings.get(SCOPE, "ipSkillLockMode") || "owner"; } catch { return "owner"; }
 }

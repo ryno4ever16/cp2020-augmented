@@ -1,0 +1,22 @@
+{{!--
+  Manual IP-award dialog form (DialogV2 content), rendered from IpTracker._manualAdd().
+  Pick a character, then a skill (RAW mode only — the skill <select> is filled in the dialog's
+  render callback per the chosen actor), then an IP amount. Actor options are passed in as a
+  {value,label} data array (the template owns the <option> markup, not the JS). i18n via CPLocal.
+--}}
+<form class="cyberpunk">
+  <div class="form-group">
+    <label>{{CPLocal "IpManualActor"}}</label>
+    <select name="actor">{{#each actorOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+  </div>
+  {{#unless simple}}
+  <div class="form-group">
+    <label>{{CPLocal "IpManualSkill"}}</label>
+    <select name="skill"></select>
+  </div>
+  {{/unless}}
+  <div class="form-group">
+    <label>{{CPLocal "IpManualAmount"}}</label>
+    <input type="number" name="amount" value="1" min="1"/>
+  </div>
+</form>

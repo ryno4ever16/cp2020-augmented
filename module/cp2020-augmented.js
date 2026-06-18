@@ -7,7 +7,7 @@
  * own init/ready wiring shape: registration functions imported here and called
  * from Hooks.once('init'/'ready').
  */
-import { registerAugmentedSettings, combatAutomationEnabled } from "./settings.js";
+import { registerAugmentedSettings, combatAutomationEnabled, ipSystem } from "./settings.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
@@ -25,6 +25,10 @@ import { weaponToPenetration, vehicleToHitModifier, openVehicleFireDialog, regis
 import { registerVehicleTargetingHandlers } from "./vehicle/vehicle-targeting.js";
 import { registerMissileFlightHooks } from "./vehicle/vehicle-missile-flight.js";
 import { openAcpaMeleeDialog, registerAcpaCombatHooks, repairAcpa } from "./vehicle/vehicle-acpa-combat.js";
+
+// IP (Improvement Points) tracker — GM engine + tracker window; IP stored in module flags.
+import { registerIpHooks } from "./ip/ip.js";
+import { openIpTracker } from "./ip/tracker.js";
 
 export const MODULE_ID = "cp2020-augmented";
 export const SYSTEM_ID = "cyberpunk2020";
@@ -84,6 +88,8 @@ Hooks.once("init", function () {
       weaponToPen: weaponToPenetration, toHitMod: vehicleToHitModifier, fire: openVehicleFireDialog,
       acpaMelee: openAcpaMeleeDialog, acpaRepair: repairAcpa,
     },
+    // IP tracker API: open the GM Improvement-Points tracker.
+    ip: { openTracker: openIpTracker },
   };
   const mod = game.modules.get(MODULE_ID);
   if (mod) mod.api = game.cpAugmented;
@@ -115,5 +121,27 @@ Hooks.once("ready", function () {
     registerAcpaCombatHooks();
   }
 
+  // IP (Improvement Points) tracker — independent of the combat layer; self-gates on ipSystem.
+  registerIpHooks();
+
   console.log(`${MODULE_ID} | Ready (on ${SYSTEM_ID} v${game.system.version}).`);
+});
+
+/**
+ * Add a GM "IP Tracker" button to the Actors directory header when the IP system is enabled.
+ * Mirrors the system's own button, scoped to the module's tracker.
+ */
+Hooks.on("renderActorDirectory", (app, html) => {
+  try {
+    if (!game.user.isGM || ipSystem() === "disabled") return;
+    const root = html instanceof jQuery ? html[0] : html;
+    if (!root || root.querySelector(".cp2020ae-ip-tracker-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cp2020ae-ip-tracker-btn";
+    btn.innerHTML = `<i class="fas fa-graduation-cap"></i> ${game.i18n.localize("CYBERPUNK.IpTrackerTitle")}`;
+    btn.addEventListener("click", () => openIpTracker());
+    const header = root.querySelector(".directory-header") ?? root.querySelector(".header-actions") ?? root.firstElementChild ?? root;
+    header.prepend(btn);
+  } catch (e) { /* non-fatal */ }
 });

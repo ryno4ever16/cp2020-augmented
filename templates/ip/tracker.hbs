@@ -1,0 +1,47 @@
+<div class="cp-ip-tracker-window flexcol" style="height:100%;">
+    <div class="flexrow" style="gap:8px; align-items:center; padding:4px 0;">
+        <button type="button" data-action="ipManual" title="Manually add IP to a skill (or the pool).">＋ {{localize "CYBERPUNK.IpManualAdd"}}</button>
+        <span class="flex-pad" style="flex:1;"></span>
+        {{#unless (equals throttle "off")}}<button type="button" data-action="ipReset" title="Reset the per-skill throttle counters for a fresh cycle.">↻ {{localize "CYBERPUNK.IpThrottleResetBtn"}}</button>{{/unless}}
+        <button type="button" data-action="ipApply" title="Award all queued rows and release pending IP to players. Starts a new cycle."><b>{{localize "CYBERPUNK.IpApply"}}</b></button>
+    </div>
+
+    {{!-- Queue of skill rolls awaiting an IP decision --}}
+    <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpQueue"}} {{#if rowCount}}({{rowCount}}){{/if}}</h2>
+    <div class="flexcol" style="overflow-y:auto; min-height:60px; max-height:45%;">
+        {{#if rowCount}}
+        {{#each rows as |row|}}
+        <div class="flexrow cp-ip-row" data-row-id="{{row.id}}" style="align-items:center; gap:6px; padding:2px 4px;">
+            <span style="flex:1;" title="rolled {{row.total}}">{{row.actorName}} · <b>{{row.skillName}}</b> <span style="opacity:0.6;">({{row.total}})</span></span>
+            {{#if ../auto}}
+            <label title="Mark this use a success → grants the baseline IP."><input type="checkbox" class="cp-ip-success" {{#if row.success}}checked{{/if}}/> {{localize "CYBERPUNK.IpSuccess"}}</label>
+            <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" style="width:46px;" title="{{localize "CYBERPUNK.IpBonus"}}"/>
+            {{else}}
+            <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" max="9" style="width:46px;" title="{{localize "CYBERPUNK.IpAmount"}}"/>
+            {{/if}}
+            <button type="button" data-action="ipAward" title="Award this row's IP (to pending).">✓</button>
+            <button type="button" data-action="ipSkip" title="Discard this row (no IP).">✕</button>
+        </div>
+        {{/each}}
+        {{else}}
+        <p style="opacity:0.6; padding:6px;">{{localize "CYBERPUNK.IpQueueEmpty"}}</p>
+        {{/if}}
+    </div>
+
+    {{!-- Pending (awarded, not yet released) --}}
+    <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpPending"}} {{#if pendingTotal}}— {{pendingTotal}}{{/if}}</h2>
+    <div class="flexcol" style="overflow-y:auto; min-height:40px; flex:1;">
+        {{#if pending.length}}
+        {{#each pending as |p|}}
+        <div class="flexrow" style="gap:6px; padding:1px 4px;">
+            <span style="flex:1;">{{p.actorName}} · {{p.skillName}}</span>
+            <span style="opacity:0.8;">+{{p.pending}}</span>
+        </div>
+        {{/each}}
+        {{else}}
+        <p style="opacity:0.6; padding:6px;">{{localize "CYBERPUNK.IpPendingEmpty"}}</p>
+        {{/if}}
+    </div>
+
+    <p style="opacity:0.55; font-size:0.74em; margin:4px 0 0;">{{localize "CYBERPUNK.IpTrackerFooter"}}</p>
+</div>
