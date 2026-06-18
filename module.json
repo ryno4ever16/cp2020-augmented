@@ -40,6 +40,22 @@
       "path": "lang/en.json"
     }
   ],
+  "packs": [
+    {
+      "name": "vehicle-weapons",
+      "label": "Vehicle Weapons (MM)",
+      "path": "packs/vehicle-weapons",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "acpa-systems",
+      "label": "ACPA Systems (MM)",
+      "path": "packs/acpa-systems",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    }
+  ],
   "socket": true,
   "url": "https://github.com/ryno4ever16/cp2020-augmented",
   "manifest": "https://raw.githubusercontent.com/ryno4ever16/cp2020-augmented/main/module.json",

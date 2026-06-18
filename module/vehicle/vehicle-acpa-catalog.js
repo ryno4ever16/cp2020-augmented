@@ -9,7 +9,7 @@
 import { ACPA_SYSTEMS } from "./vehicle-acpa-systems.js";
 import { mmEnabled } from "../settings.js";
 
-const PACK_ID = "cyberpunk2020.acpa-systems";
+const PACK_ID = "cp2020-augmented.acpa-systems";
 const ICON = "icons/svg/chest.svg";
 const SOURCE = "Maximum Metal";
 

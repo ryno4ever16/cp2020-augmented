@@ -1,0 +1,79 @@
+{
+  "name": "105mm Cannon",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 250000,
+    "weight": 0,
+    "equipped": true,
+    "source": "Maximum Metal",
+    "weaponClass": "directFire",
+    "mountType": "turret",
+    "arc": "turret",
+    "wa": 1,
+    "penetration": 10,
+    "damage": "",
+    "rof": 1,
+    "shots": 1,
+    "range": 1000,
+    "reliability": "ST",
+    "space": 10,
+    "shellVariants": [
+      {
+        "name": "Hi-Ex (105mm)",
+        "pen": 6,
+        "burst": 6,
+        "hiEx": true
+      },
+      {
+        "name": "HEAT (105mm)",
+        "pen": 11,
+        "burst": 2,
+        "heat": true,
+        "ap": true
+      }
+    ],
+    "lastOwnerId": "",
+    "ap": false,
+    "heat": false,
+    "hiEx": false,
+    "highDensityAP": false,
+    "burst": 0,
+    "rofAlt": 0,
+    "shotsLeft": 1,
+    "minRange": 0,
+    "guidance": "none",
+    "guidanceSkill": 0,
+    "homingMethod": "radar",
+    "coneAngle": 0,
+    "projectiles": 0,
+    "activeShell": "",
+    "area": "torso",
+    "sop": 0,
+    "sopDamage": 0,
+    "destroyed": false
+  },
+  "_id": "MRWqYTmjv6RZTY91",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "HAGE0F9Z3ttltmt9": 3
+  },
+  "flags": {},
+  "_stats": {
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null,
+    "coreVersion": "13.350",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.0",
+    "createdTime": 1780786659393,
+    "modifiedTime": 1780786659393,
+    "lastModifiedBy": "HAGE0F9Z3ttltmt9"
+  },
+  "_key": "!items!MRWqYTmjv6RZTY91"
+}

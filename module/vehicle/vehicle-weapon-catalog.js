@@ -328,7 +328,7 @@ export const SEED_VEHICLE_WEAPONS = [
       wa:3, penetration:0, damage:"", rof:1, shots:1, range:1000, reliability:"VR", space:1, cost:1000, source:SOURCE } }
 ];
 
-const PACK_ID = "cyberpunk2020.vehicle-weapons";
+const PACK_ID = "cp2020-augmented.vehicle-weapons";
 
 /**
  * Populate the Vehicle Weapons (MM) compendium from the seed catalog. Idempotent — creates only

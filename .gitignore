@@ -2,3 +2,7 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+
+# Built compendium packs (LevelDB) — compiled from src/packs via `npm run pack`.
+# Root-anchored so it ignores ONLY the top-level built packs/, never src/packs/.
+/packs/

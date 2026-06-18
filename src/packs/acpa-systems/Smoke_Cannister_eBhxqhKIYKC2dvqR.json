@@ -1,0 +1,44 @@
+{
+  "name": "Smoke Cannister",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1500,
+    "weight": 2,
+    "equipped": true,
+    "source": "Maximum Metal",
+    "category": "defensive",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 1,
+    "sp": 0,
+    "sop": 10,
+    "catalogKey": "SMOKE_CANNISTER",
+    "lastOwnerId": "",
+    "sopDamage": 0,
+    "destroyed": false
+  },
+  "_id": "eBhxqhKIYKC2dvqR",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "HAGE0F9Z3ttltmt9": 3
+  },
+  "flags": {},
+  "_stats": {
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null,
+    "coreVersion": "13.350",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.0",
+    "createdTime": 1780786660306,
+    "modifiedTime": 1780786660306,
+    "lastModifiedBy": "HAGE0F9Z3ttltmt9"
+  },
+  "_key": "!items!eBhxqhKIYKC2dvqR"
+}

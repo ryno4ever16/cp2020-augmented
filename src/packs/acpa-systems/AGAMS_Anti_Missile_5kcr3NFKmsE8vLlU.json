@@ -1,0 +1,44 @@
+{
+  "name": "AGAMS Anti-Missile",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 3000,
+    "weight": 4,
+    "equipped": true,
+    "source": "Maximum Metal",
+    "category": "defensive",
+    "mount": "external",
+    "area": "torso",
+    "spaces": 0.5,
+    "sp": 20,
+    "sop": 10,
+    "catalogKey": "AGAMS",
+    "lastOwnerId": "",
+    "sopDamage": 0,
+    "destroyed": false
+  },
+  "_id": "5kcr3NFKmsE8vLlU",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "HAGE0F9Z3ttltmt9": 3
+  },
+  "flags": {},
+  "_stats": {
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null,
+    "coreVersion": "13.350",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.0",
+    "createdTime": 1780786660306,
+    "modifiedTime": 1780786660306,
+    "lastModifiedBy": "HAGE0F9Z3ttltmt9"
+  },
+  "_key": "!items!5kcr3NFKmsE8vLlU"
+}

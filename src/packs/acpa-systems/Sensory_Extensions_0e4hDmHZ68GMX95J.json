@@ -1,0 +1,44 @@
+{
+  "name": "Sensory Extensions",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 500,
+    "weight": 2,
+    "equipped": true,
+    "source": "Maximum Metal",
+    "category": "sensor",
+    "mount": "external",
+    "area": "torso",
+    "spaces": 0.5,
+    "sp": 15,
+    "sop": 15,
+    "catalogKey": "SENSORY_EXTENSIONS",
+    "lastOwnerId": "",
+    "sopDamage": 0,
+    "destroyed": false
+  },
+  "_id": "0e4hDmHZ68GMX95J",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "HAGE0F9Z3ttltmt9": 3
+  },
+  "flags": {},
+  "_stats": {
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null,
+    "coreVersion": "13.350",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.0",
+    "createdTime": 1780786660306,
+    "modifiedTime": 1780786660306,
+    "lastModifiedBy": "HAGE0F9Z3ttltmt9"
+  },
+  "_key": "!items!0e4hDmHZ68GMX95J"
+}

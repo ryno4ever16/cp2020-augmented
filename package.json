@@ -1,0 +1,13 @@
+{
+  "name": "cp2020-augmented-tools",
+  "private": true,
+  "type": "module",
+  "description": "Build tooling for the Cyberpunk 2020: Augmented Edition module (compendium pack compile/extract).",
+  "scripts": {
+    "unpack": "node tools/unpack.mjs",
+    "pack": "node tools/pack.mjs"
+  },
+  "devDependencies": {
+    "@foundryvtt/foundryvtt-cli": "^1.0.4"
+  }
+}

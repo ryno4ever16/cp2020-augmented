@@ -16,7 +16,7 @@ import { localize, localizeParam } from "../utils.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
-const MISSILE_IMG = "systems/cyberpunk2020/img/missile.webp";
+const MISSILE_IMG = "modules/cp2020-augmented/img/missile.webp";
 // ⚠ PLACEHOLDER ART: missile.webp points diagonally on a solid background. This offset rotates the
 // sprite so the nose roughly faces its heading; tune it in-engine. MUST be replaced before release
 // with a north-pointing, transparent sprite (then set this to 0). See vehicle-combat-design memory.

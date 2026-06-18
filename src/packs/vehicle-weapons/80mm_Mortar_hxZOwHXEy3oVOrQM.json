@@ -1,0 +1,78 @@
+{
+  "name": "80mm Mortar",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1500,
+    "weight": 0,
+    "equipped": true,
+    "source": "Maximum Metal",
+    "weaponClass": "artillery",
+    "mountType": "fixed",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 5,
+    "hiEx": true,
+    "burst": 6,
+    "rof": 1,
+    "shots": 1,
+    "range": 3500,
+    "minRange": 35,
+    "reliability": "VR",
+    "space": 1,
+    "shellVariants": [
+      {
+        "name": "80mm WP",
+        "pen": 0,
+        "burst": 18,
+        "warhead": "wp"
+      },
+      {
+        "name": "80mm Cluster",
+        "pen": 4,
+        "burst": 18,
+        "warhead": "cluster"
+      }
+    ],
+    "lastOwnerId": "",
+    "damage": "",
+    "ap": false,
+    "heat": false,
+    "highDensityAP": false,
+    "rofAlt": 0,
+    "shotsLeft": 1,
+    "guidance": "none",
+    "guidanceSkill": 0,
+    "homingMethod": "radar",
+    "coneAngle": 0,
+    "projectiles": 0,
+    "activeShell": "",
+    "area": "torso",
+    "sop": 0,
+    "sopDamage": 0,
+    "destroyed": false
+  },
+  "_id": "hxZOwHXEy3oVOrQM",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "HAGE0F9Z3ttltmt9": 3
+  },
+  "flags": {},
+  "_stats": {
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null,
+    "coreVersion": "13.350",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.0",
+    "createdTime": 1780786659393,
+    "modifiedTime": 1780786659393,
+    "lastModifiedBy": "HAGE0F9Z3ttltmt9"
+  },
+  "_key": "!items!hxZOwHXEy3oVOrQM"
+}
