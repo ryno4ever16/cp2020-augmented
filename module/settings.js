@@ -460,6 +460,65 @@ export function registerAugmentedSettings() {
   // Per-skill IP awards within the current Apply cycle, for the throttle. Not shown in the menu.
   game.settings.register(SCOPE, "ipThrottleCounts", { scope: "world", config: false, type: Object, default: {} });
 
+  // --- Shopping / economy ([[shopping-design]]) ---
+  // Master gate for the Augmented shop (the sidebar cart, the catalog window, custom shops). On by
+  // default once the module is enabled; the system stands down its own shop when this module is active.
+  game.settings.register(SCOPE, "shoppingEnabled", {
+    name: "SETTINGS.ShoppingEnabled",
+    hint: "SETTINGS.ShoppingEnabledHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  game.settings.register(SCOPE, "playersCanShop", {
+    name: "SETTINGS.PlayersCanShop",
+    hint: "SETTINGS.PlayersCanShopHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  // Master gate for homebrew (non-canon/community) content. The deliberate System-Settings step:
+  // homebrew is absent from the shop entirely until this is on (then curated per-source in the shop).
+  game.settings.register(SCOPE, "shopAllowHomebrew", {
+    name: "SETTINGS.ShopAllowHomebrew",
+    hint: "SETTINGS.ShopAllowHomebrewHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  // Per-source enable map { supplementName: true } for PLAYERS. GM-curated via in-shop controls.
+  game.settings.register(SCOPE, "shopEnabledSources", { scope: "world", config: false, type: Object, default: {} });
+
+  // Per-user: show the item source/supplement badge in the shop (default on; each player can hide).
+  game.settings.register(SCOPE, "shopShowSource", {
+    name: "SETTINGS.ShopShowSource",
+    hint: "SETTINGS.ShopShowSourceHint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  // GM custom shops as world DATA (shops are not Actors). Map { [id]: ShopDef }; GM-written, all clients
+  // read it. See module/shop/shops.js for the ShopDef shape + CRUD.
+  game.settings.register(SCOPE, "shops", { scope: "world", config: false, type: Object, default: {} });
+
+  // Ammunition purchasing access (used by the catalog's generated ammo rows).
+  game.settings.register(SCOPE, "playersCanBuyAmmo", {
+    name: "SETTINGS.PlayersCanBuyAmmo",
+    hint: "SETTINGS.PlayersCanBuyAmmoHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
   // --- Maximum Metal: in-list section header + master gating of the MM sub-settings ---
   Hooks.on("renderSettingsConfig", (app, html) => {
     const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
@@ -542,4 +601,31 @@ export function ipThrottle() {
 /** Skill-lock mode: "owner" (default) / "gm" / "mutual". */
 export function ipSkillLockMode() {
   try { return game.settings.get(SCOPE, "ipSkillLockMode") || "owner"; } catch { return "owner"; }
+}
+
+// --- Shopping / economy accessors ([[shopping-design]]) ---
+/** Master gate: is the Augmented shop enabled at all? (Off when the setting is missing.) */
+export function shoppingEnabled() {
+  try { return game.settings.get(SCOPE, "shoppingEnabled") === true; } catch { return false; }
+}
+/** Whether the current user may purchase. GMs always may; players only when allowed by the setting. */
+export function canShop() {
+  if (game.user?.isGM) return true;
+  try { return game.settings.get(SCOPE, "playersCanShop") !== false; } catch { return true; }
+}
+/** Master gate: are homebrew (non-canon/community) sources allowed in play at all? */
+export function shopAllowHomebrew() {
+  try { return game.settings.get(SCOPE, "shopAllowHomebrew") === true; } catch { return false; }
+}
+/** Per-source enable map { supplementName: true } for players (GM-curated from the shop). */
+export function shopEnabledSources() {
+  try { return game.settings.get(SCOPE, "shopEnabledSources") || {}; } catch { return {}; }
+}
+/** Per-user toggle: show the item source/supplement badge in the shop (default on). */
+export function shopShowSource() {
+  try { return game.settings.get(SCOPE, "shopShowSource") !== false; } catch { return true; }
+}
+/** Bundled config for the supplement-visibility helpers in shop/supplements.js. */
+export function shopSourceConfig() {
+  return { allowHomebrew: shopAllowHomebrew(), enabledSources: shopEnabledSources() };
 }

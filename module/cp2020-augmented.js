@@ -30,6 +30,10 @@ import { openAcpaMeleeDialog, registerAcpaCombatHooks, repairAcpa } from "./vehi
 import { registerIpHooks } from "./ip/ip.js";
 import { openIpTracker } from "./ip/tracker.js";
 
+// Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
+// the browse/buy engine + custom-shop curation live in module/shop/.
+import { registerShopHooks, openShopWindow } from "./shop/catalog.js";
+
 export const MODULE_ID = "cp2020-augmented";
 export const SYSTEM_ID = "cyberpunk2020";
 
@@ -90,6 +94,8 @@ Hooks.once("init", function () {
     },
     // IP tracker API: open the GM Improvement-Points tracker.
     ip: { openTracker: openIpTracker },
+    // Shop API: open the shop window (the sidebar cart is the primary entry point).
+    shop: { open: openShopWindow },
   };
   const mod = game.modules.get(MODULE_ID);
   if (mod) mod.api = game.cpAugmented;
@@ -123,6 +129,11 @@ Hooks.once("ready", function () {
 
   // IP (Improvement Points) tracker — independent of the combat layer; self-gates on ipSystem.
   registerIpHooks();
+
+  // Shop / economy — the sidebar cart button + chat links + live buyer sync + the GM stock-decrement
+  // relay. Independent of the combat layer; self-gates on shoppingEnabled (the sidebar button only
+  // injects when shopping is on, and the catalog index is only warmed then).
+  registerShopHooks();
 
   console.log(`${MODULE_ID} | Ready (on ${SYSTEM_ID} v${game.system.version}).`);
 });

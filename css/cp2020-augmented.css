@@ -6,3 +6,220 @@
  * with the system's own CSS. Keep the system's overall design style (no new
  * colour schemes or one-off inline styles).
  */
+
+/* ===== Shimmering singletons (shop window re-focus) — ported from base system ===== */
+/* Shimmering singletons: a glowing light streak runs around the window border when an already-open
+   singleton is re-opened. A dedicated overlay (.cp-shimmer-ring, injected by shimmerWindow) holds a
+   conic gradient masked to a thin ring; animating the @property angle sweeps the bright arc around the
+   perimeter, and a drop-shadow makes it glow as it travels. */
+@property --cp-shim {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.cp-shimmer-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  padding: 2px;
+  pointer-events: none;
+  z-index: 10000;
+  background: conic-gradient(from var(--cp-shim),
+    transparent 0deg 220deg,
+    rgba(107, 179, 204, 0.5) 300deg, #eaffff 350deg, rgba(107, 179, 204, 0.5) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  filter: drop-shadow(0 0 4px rgba(135, 206, 235, 0.9));
+  animation: cp-shim-run 0.85s linear 1;
+}
+@keyframes cp-shim-run { to { --cp-shim: 360deg; } }
+
+/* ===== Shopping & IP custom UI (mirrors scss/_shop.scss) =====
+   Self-contained input colors so custom fields stay readable under ANY UI theme (Carolingian etc.
+   otherwise override our inputs to dark-on-dark). */
+.cp-catalog input, .cp-catalog select, .cp-catalog textarea,
+.cp-ip-tracker input, .cp-ip-tracker select,
+.cyberpunk.sheet.shop input[type="text"], .cyberpunk.sheet.shop input[type="number"],
+.cyberpunk.sheet.shop select, .cyberpunk.sheet.shop textarea {
+  color: #f0f0f0 !important;
+  background-color: #1b1b1b !important;
+  border: 1px solid #555;
+}
+/* Layout (scoped to out-specify Foundry core's .flexrow{align-items:center} + .flexcol>*{flex:none}). */
+.cp-catalog .window-content { display: flex; flex-direction: column; }
+.cp-catalog .cp-catalog-window { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cp-catalog .cp-catalog-body { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: stretch; flex: 1 1 auto; min-height: 0; gap: 8px; }
+.cp-catalog .cp-catalog-center { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.cp-catalog .cp-catalog-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Foundry defaults buttons to full width; our chips/letters/buy must size to content. */
+.cp-catalog button { width: auto; }
+.cp-catalog .cp-catalog-jump { flex: 0 0 auto; }
+.cp-catalog .cp-catalog-jump .cp-jump { width: auto; flex: 0 0 auto; min-width: 0; }
+.cp-catalog .cp-cat-chip { width: auto; flex: 0 0 auto; }
+.cp-catalog-toolbar { gap: 8px; align-items: center; padding: 4px 0; }
+/* Side panels SHRINK (not fixed) so a narrow window keeps the item list usable instead of collapsing it. */
+.cp-catalog-filters { flex: 0 1 150px; min-width: 92px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.12); padding-right: 6px; }
+.cp-catalog-sources { display: flex; flex-direction: column; flex: 0 1 210px; min-width: 160px; overflow: hidden; border-left: 1px solid rgba(255,255,255,0.12); padding-left: 6px; }
+.cp-catalog-sources .cp-src-title { flex: 0 0 auto; margin: 2px 0; }
+.cp-catalog-sources .cp-src-hint { flex: 0 0 auto; }
+.cp-src-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.cp-src-list { display: flex; flex-direction: column; align-items: stretch; gap: 1px; }
+.cp-catalog .cp-catalog-center { min-width: 96px; }
+.cp-cat-chip { display: inline-block; margin: 1px; padding: 1px 6px; font-size: 0.8em; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 3px; color: inherit; }
+.cp-cat-chip.active { background: #8a6d3b; color: #fff; border-color: #b8916a; }
+.cp-cat-top { font-weight: bold; }
+.cp-cat-subs { margin: 0 0 3px 8px; }
+.cp-cat-sub { font-size: 0.72em; opacity: 0.9; }
+.cp-catalog-jump { display: flex; flex-wrap: wrap; gap: 1px; padding: 2px 0; }
+.cp-catalog-jump .cp-jump { padding: 0 4px; font-size: 0.75em; cursor: pointer; background: none; border: none; color: inherit; }
+.cp-letter-header { font-weight: bold; opacity: 0.7; border-bottom: 1px solid rgba(255,255,255,0.15); margin-top: 4px; padding-left: 2px; }
+/* Live (client-side) text search: the A–Z jump bar + letter headers are meaningless while filtering. */
+.cp-searching .cp-catalog-jump, .cp-searching .cp-letter-header { display: none; }
+.cp-catalog-nomatch { opacity: 0.7; padding: 8px; }
+.cp-hidden-divider { font-size: 0.8em; opacity: 0.65; font-style: italic; margin-top: 10px; padding: 3px 4px; border-top: 1px dashed rgba(192,160,98,0.5); color: #c0a062; }
+.cp-catalog-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
+.cp-catalog-row.cp-buy-draggable { cursor: grab; }
+.cp-catalog-row.cp-buy-draggable:active { cursor: grabbing; }
+.cp-catalog-row.cp-dimmed { opacity: 0.5; }
+.cp-catalog-row .cp-cat-itemname { flex: 1; min-width: 0; }
+.cp-catalog-row:hover { background: rgba(255,255,255,0.045); border-radius: 3px; }
+.cp-catalog-row .cp-cat-thumb, .cp-catalog-row .cp-cat-itemname { cursor: pointer; }
+.cp-catalog-row .cp-cat-itemname:hover { text-decoration: underline; }
+.cp-add-to-shop-btn { flex: 0 0 auto; width: auto; padding: 1px 7px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 3px; color: inherit; cursor: pointer; }
+.cp-add-to-shop-btn:hover { background: rgba(138,109,59,0.4); border-color: #b8916a; }
+.cp-src-badge { flex: 0 0 auto; font-size: 0.7em; opacity: 0.75; padding: 0 4px; border: 1px solid rgba(255,255,255,0.2); border-radius: 3px; white-space: nowrap; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
+.cp-catalog-qty { width: 42px; }
+/* Buy with no buyer: clickable (so it can warn you to pick a token) but visibly muted. */
+.cp-catalog-buy.cp-buy-nobuyer { opacity: 0.5; }
+.cp-catalog-buy.cp-buy-nobuyer:hover { opacity: 0.8; }
+.cp-src-row { display: flex; width: 100%; align-items: flex-start; gap: 6px; font-size: 0.82em; padding: 1px 0; cursor: pointer; }
+.cp-src-row > input { flex: 0 0 auto; width: 14px; height: 14px; margin: 1px 0 0; }
+.cp-src-row > span { min-width: 0; line-height: 1.25; }
+.cp-src-group-label { font-weight: bold; margin-top: 6px; opacity: 0.85; }
+.cp-src-none, .cp-src-hint, .cp-catalog-footer { opacity: 0.6; font-size: 0.75em; }
+/* Catalog item list: rows are natural height (NOT stretched to fill) so a short list reads normally
+   instead of spreading out — Foundry's .flexcol > *{flex:1 1 0%} would otherwise inflate each row. */
+.cp-catalog .cp-catalog-list > * { flex: 0 0 auto; }
+/* Books filter panel: one chip per source book (Core pinned on top); GM eye-toggle = player visibility. */
+/* Filter-panel headers (Categories + Books): title grows, the clear-✕ stays a small content-sized
+   button. flex:0 0 auto pins the header row so the Categories flexcol can't stretch it (+ its ✕) tall. */
+.cp-catalog .cp-book-head, .cp-catalog .cp-cat-head { align-items: center; justify-content: space-between; gap: 6px; flex: 0 0 auto; }
+.cp-book-head .cp-src-title, .cp-cat-head .cp-cat-title { flex: 1 1 auto; margin: 2px 0; }
+.cp-catalog .cp-book-clear, .cp-catalog .cp-cat-clear { flex: 0 0 auto; width: auto; min-width: 0; padding: 1px 8px; }
+.cp-books-hint { font-size: 0.72em; opacity: 0.72; line-height: 1.3; margin: 1px 0 3px; padding: 0 1px; }
+.cp-books-hint .fa-eye { color: #6db86d; opacity: 0.9; margin-right: 2px; }
+.cp-catalog-books .cp-book-list { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.cp-book-pinned { margin-top: 6px; }
+.cp-book-row { display: flex; align-items: center; gap: 4px; }
+.cp-catalog .cp-book-chip { flex: 1 1 auto; width: auto; min-width: 0; display: block; text-align: center; margin: 0; padding: 2px 6px; font-size: 0.8em; line-height: 1.3; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 3px; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-catalog .cp-book-chip.active { background: #8a6d3b; color: #fff; border-color: #b8916a; }
+.cp-book-pinned .cp-book-chip { font-weight: bold; }
+.cp-book-eye { flex: 0 0 auto; cursor: pointer; opacity: 0.4; line-height: 1; padding: 0 2px; }
+.cp-book-eye.on { opacity: 1; color: #6db86d; }
+.cp-book-eye input { display: none; }
+.cp-book-divider { height: 0; border-top: 1px solid rgba(255,255,255,0.18); margin: 5px 0; }
+.cp-hiddenmark { opacity: 0.6; font-size: 0.85em; }
+.cp-catalog-srctoggle { font-size: 0.8em; opacity: 0.85; white-space: nowrap; }
+.cp-catalog-buyer { font-size: 0.85em; opacity: 0.9; display: inline-flex; align-items: center; gap: 4px; }
+.cp-buyer-pick { width: auto; max-width: 150px; }
+.cp-buyer-funds { opacity: 0.85; white-space: nowrap; }
+.cp-buyer-warn { color: #c0a062; display: inline-flex; align-items: center; gap: 4px; }
+/* Build (curation) + storefront controls. */
+.cp-shop-config { padding: 4px 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; }
+.cp-shop-config label { font-size: 0.8em; white-space: nowrap; }
+.cp-shop-config .cp-shop-status { font-size: 0.8em; opacity: 0.85; white-space: nowrap; }
+.cp-storefront-head { padding: 2px 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; }
+.cp-shop-econ { font-size: 0.75em; opacity: 0.9; white-space: nowrap; display: inline-flex; align-items: center; gap: 2px; }
+.cp-catalog-row.cp-shop-soldout { opacity: 0.55; }
+.cp-catalog-row.cp-shop-extra { background: rgba(192,160,98,0.08); }
+.cp-shop-stockcount { font-size: 0.78em; opacity: 0.75; }
+.cp-shop-add { font-size: 0.8em; }
+.cp-add-to-shop { font-size: 0.75em; max-width: 130px; }
+/* Item name + thumbnail open the compendium sheet on click. */
+.cp-catalog-row .cp-cat-itemname, .cp-catalog-row .cp-cat-thumb { cursor: pointer; }
+.cp-catalog-row .cp-cat-itemname:hover { text-decoration: underline; }
+/* Cyberware buy/install dialog: equal, non-wrapping action buttons. */
+.cp-cyber-install-dialog .dialog-buttons { gap: 6px; }
+.cp-cyber-install-dialog .dialog-buttons button { flex: 1 1 0; white-space: nowrap; min-width: 0; }
+
+/* Apply-damage "Select Target" dialog: three buttons share the row and the long
+   "Use Canvas Target" label overflowed its third. Size each button to its content
+   (min-width:max-content keeps the label+icon from spilling) and let them wrap if
+   the dialog is narrow, rather than clipping the text. */
+.cp-apply-target-dialog .dialog-buttons { gap: 6px; flex-wrap: wrap; }
+.cp-apply-target-dialog .dialog-buttons button { flex: 1 1 auto; min-width: max-content; white-space: nowrap; }
+
+/* ── Round-7: single window — home directory + vendor tray + context menu ── */
+.cp-shop-home { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.cp-home-title { margin: 0; font-size: 1.25em; color: #6fb7c9; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 6px; flex: 0 0 auto; }
+.cp-shop-home .cp-home-list { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
+.cp-shop-home .cp-home-entry { display: flex; align-items: center; gap: 14px; width: 100%; flex: 0 0 auto; min-height: 0; height: auto; padding: 11px 16px; text-align: left; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease; }
+.cp-shop-home .cp-home-entry:hover { background: rgba(138,109,59,0.22); border-color: #b8916a; }
+.cp-home-icon { font-size: 1.4em; width: 26px; text-align: center; flex: 0 0 auto; opacity: 0.85; }
+.cp-home-icon .cp-home-closed { opacity: 0.45; }
+.cp-home-catalog .cp-home-icon { color: #d8b15a; }
+.cp-home-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; gap: 1px; }
+.cp-home-name { font-weight: bold; font-size: 1.02em; }
+.cp-home-sub { font-size: 0.78em; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-home-go { opacity: 0.3; flex: 0 0 auto; }
+.cp-shop-home .cp-home-entry:hover .cp-home-go { opacity: 0.75; }
+.cp-shop-home .cp-home-create { border-style: dashed; opacity: 0.8; justify-content: center; gap: 8px; margin-top: 2px; }
+.cp-shop-home .cp-home-create .cp-home-text { flex: 0 0 auto; }
+.cp-shop-home .cp-home-create:hover { opacity: 1; }
+.cp-shop-header { padding: 2px 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; flex-wrap: wrap; }
+.cp-shop-header label { font-size: 0.8em; white-space: nowrap; }
+.cp-shop-header button { width: auto; }
+.cp-catalog .cp-shop-header > * { flex: 0 0 auto; }
+.cp-catalog .cp-shop-header > h2,
+.cp-catalog .cp-shop-header .cp-shop-name { flex: 1 1 auto; min-width: 120px; }
+.cp-shop-discountbadge { color: #6ad06a; font-size: 0.7em; }
+/* Pin fixed-height window children so Foundry's .flexcol > *{flex:1 1 0%} can't collapse the vendor
+   tray to ~10px and overlap the catalog body. Only the body grows. */
+.cp-catalog-window > .cp-shop-header,
+.cp-catalog-window > .cp-catalog-toolbar,
+.cp-catalog-window > .cp-vendor-tray,
+.cp-catalog-window > .cp-shop-notes-row,
+.cp-catalog-window > .cp-catalog-footer { flex: 0 0 auto; }
+.cp-vendor-tray { flex: 0 0 auto; border: 1px dashed rgba(192,160,98,0.5); border-radius: 4px; padding: 4px 6px; margin-bottom: 6px; max-height: 220px; display: flex; flex-direction: column; min-height: 0; }
+.cp-vendor-tray.cp-drop-hot { border-color: #b8916a; background: rgba(138,109,59,0.15); }
+.cp-vendor-head { flex: 0 0 auto; }
+.cp-vendor-head button { width: auto; }
+.cp-vendor-clear { opacity: 0.7; }
+.cp-vendor-clear:hover { opacity: 1; color: #e08a8a; border-color: #e08a8a; }
+.cp-vendor-items { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+.cp-vendor-empty { opacity: 0.6; font-size: 0.8em; font-style: italic; padding: 4px; }
+.cp-vendor-row, .cp-vendor-colhead { display: grid; grid-template-columns: 24px minmax(0, 1fr) 50px 56px 80px 96px 22px; align-items: center; gap: 6px; padding: 2px 4px; }
+.cp-vendor-colhead { flex: 0 0 auto; font-size: 0.66em; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 2px; }
+.cp-vendor-colhead .cp-col-num { text-align: right; }
+.cp-vendor-colhead .cp-col-ctr { text-align: center; }
+.cp-vendor-row .cp-cat-itemname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-vendor-sells { text-align: right; white-space: nowrap; font-size: 0.85em; }
+.cp-vendor-row .cp-shop-price { width: 100%; min-width: 0; }
+.cp-vendor-stock { display: inline-flex; align-items: center; gap: 3px; }
+.cp-vendor-stock .cp-shop-stock-qty { width: 44px; min-width: 0; text-align: center; }
+.cp-vendor-stock .cp-shop-stock-qty.cp-stock-inf { opacity: 0.4; }
+.cp-catalog .cp-shop-inf { flex: 0 0 auto; width: auto; padding: 1px 5px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 3px; color: inherit; cursor: pointer; opacity: 0.6; }
+.cp-catalog .cp-shop-inf.active { opacity: 1; background: rgba(138,109,59,0.45); border-color: #b8916a; color: #fff; }
+/* "Set all" stock control in the vendor header (set every item's stock in one action). */
+.cp-stockall { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8em; }
+.cp-stockall-label { white-space: nowrap; opacity: 0.85; }
+.cp-stockall .cp-stockall-qty { width: 42px; min-width: 0; text-align: center; }
+.cp-catalog .cp-stockall-apply { width: auto; padding: 1px 8px; }
+.cp-catalog .cp-stockall-inf { width: auto; padding: 1px 6px; }
+.cp-shop-style { width: 100%; min-width: 0; font-size: 0.78em; }
+.cp-style-na { opacity: 0.3; text-align: center; }
+.cp-style-tag { font-size: 0.72em; opacity: 0.85; padding: 0 5px; border: 1px solid rgba(192,160,98,0.5); border-radius: 3px; color: #c0a062; white-space: nowrap; }
+/* Ammo catalog rows (folded-in ammunition): box-size badge + load dropdown. Rows aren't clickable
+   (generated, no compendium sheet), so suppress the name/thumb open-details affordance. */
+.cp-ammo-rounds { flex: 0 0 auto; font-size: 0.7em; opacity: 0.7; padding: 0 4px; border: 1px solid rgba(107,179,204,0.35); border-radius: 3px; white-space: nowrap; }
+.cp-catalog-ammo-load { flex: 0 0 auto; max-width: 132px; }
+.cp-ammo-row .cp-cat-itemname, .cp-ammo-row .cp-cat-thumb { cursor: default; }
+.cp-ammo-row .cp-cat-itemname:hover { text-decoration: none; }
+.cp-shop-remove { width: auto; padding: 0 3px; background: none; border: none; color: inherit; cursor: pointer; opacity: 0.7; }
+.cp-shop-remove:hover { opacity: 1; color: #e08a8a; }
+.cp-inshop-mark { color: #6ad06a; font-weight: bold; padding: 0 4px; }
+.cp-context-menu { background: #14110d; border: 1px solid #b8916a; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); display: flex; flex-direction: column; min-width: 150px; }
+.cp-context-menu button { width: 100%; text-align: left; background: none; border: none; color: #f0f0f0; padding: 5px 10px; cursor: pointer; }
+.cp-context-menu button:hover { background: rgba(138,109,59,0.4); }

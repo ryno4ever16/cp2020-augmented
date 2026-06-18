@@ -1,0 +1,18 @@
+{{!--
+  Cyberware install confirm dialog (DialogV2 content), rendered from _confirmInstall(). Cost rows
+  (the part-cost line only when buying, showPart) + the two option checkboxes — name="rollHumanity"
+  and name="applyDamage" are read by the OK-button callback, so keep them verbatim. Values are
+  auto-escaped by Handlebars (no esc() needed). i18n via CPLocal.
+--}}
+<form class="cyberpunk cp-cyber-install">
+  {{#if showPart}}<div>{{CPLocal "CyberPartCost"}}: <b>{{partPrice}}</b>eb</div>{{/if}}
+  <div>{{CPLocal "CyberSurgeryCost"}} ({{surgeryLabel}}): <b>{{surgeryCost}}</b>eb</div>
+  <div>{{CPLocal "CyberTotalCost"}}: <b>{{total}}</b>eb</div>
+  <hr/>
+  <label>
+    <input type="checkbox" name="rollHumanity" checked/> {{CPLocal "CyberRollHumanity"}} ({{hc}})
+  </label>
+  <label>
+    <input type="checkbox" name="applyDamage" checked/> {{CPLocal "CyberApplyDamage"}} ({{surgeryDamage}})
+  </label>
+</form>
