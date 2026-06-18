@@ -1,4 +1,4 @@
-<div class="cp-catalog-window flexcol" style="height:100%;">
+<div class="cp-catalog-window flexcol">
 
     {{!-- ───────────────────────── HOME: directory ───────────────────────── --}}
     {{#if isHome}}
@@ -26,21 +26,21 @@
     {{else}}
 
     {{!-- ───────────────────── shared header (catalog/build/storefront) ───────────────────── --}}
-    <div class="cp-shop-header flexrow" style="align-items:center; gap:8px;">
+    <div class="cp-shop-header flexrow">
         <button type="button" class="cp-shop-back" title="{{localize "CYBERPUNK.ShopBackHome"}}">‹ {{localize "CYBERPUNK.ShopTitle"}}</button>
         {{#if isBuild}}
-            <input type="text" class="cp-shop-name" value="{{shop.name}}" title="{{localize "CYBERPUNK.ShopName"}}" style="flex:1; min-width:120px;"/>
+            <input type="text" class="cp-shop-name" value="{{shop.name}}" title="{{localize "CYBERPUNK.ShopName"}}"/>
             <label title="{{localize "CYBERPUNK.ShopOpenHint"}}"><input type="checkbox" class="cp-shop-open" {{#if shop.open}}checked{{/if}}/> {{localize "CYBERPUNK.ShopStatusOpen"}}</label>
             <label title="{{localize "CYBERPUNK.ShopFullSearchHint"}}"><input type="checkbox" class="cp-shop-fullsearch" {{#if shop.fullSearch}}checked{{/if}}/> {{localize "CYBERPUNK.ShopFullSearch"}}</label>
-            <label title="{{localize "CYBERPUNK.ShopDiscountHint"}}">{{localize "CYBERPUNK.ShopDiscount"}} <input type="number" class="cp-shop-discount" value="{{shop.discountPct}}" min="0" max="100" style="width:48px;"/>%</label>
+            <label title="{{localize "CYBERPUNK.ShopDiscountHint"}}">{{localize "CYBERPUNK.ShopDiscount"}} <input type="number" class="cp-shop-discount" value="{{shop.discountPct}}" min="0" max="100"/>%</label>
             <button type="button" class="cp-shop-preview" title="{{localize "CYBERPUNK.ShopPreviewHint"}}"><i class="fa-solid fa-eye"></i></button>
             <button type="button" class="cp-shop-publish" title="{{localize "CYBERPUNK.ShopShowToPlayersHint"}}"><i class="fa-solid fa-bullhorn"></i> {{localize "CYBERPUNK.ShopShowToPlayers"}}</button>
             <button type="button" class="cp-shop-delete" title="{{localize "CYBERPUNK.ShopCtxDelete"}}"><i class="fa-solid fa-trash"></i></button>
         {{else if isStorefront}}
-            <h2 style="margin:0; flex:1;">{{shop.name}}{{#if shop.discountPct}} <span class="cp-shop-discountbadge">−{{shop.discountPct}}%</span>{{/if}}</h2>
+            <h2>{{shop.name}}{{#if shop.discountPct}} <span class="cp-shop-discountbadge">−{{shop.discountPct}}%</span>{{/if}}</h2>
             {{#if manageBack}}<button type="button" class="cp-shop-manage" title="{{localize "CYBERPUNK.ShopManageHint"}}"><i class="fa-solid fa-screwdriver-wrench"></i> {{localize "CYBERPUNK.ShopManage"}}</button>{{/if}}
         {{else}}
-            <h2 style="margin:0; flex:1;">{{localize "CYBERPUNK.CatalogTitle"}}</h2>
+            <h2>{{localize "CYBERPUNK.CatalogTitle"}}</h2>
         {{/if}}
         {{#unless isBuild}}
         <span class="cp-catalog-buyer">
@@ -70,16 +70,16 @@
         {{#if showFilters}}
         <label class="cp-catalog-srctoggle" title="{{localize "SETTINGS.ShopShowSourceHint"}}"><input type="checkbox" class="cp-catalog-showsource" {{#if showSource}}checked{{/if}}/> {{localize "CYBERPUNK.CatalogShowSource"}}</label>
         {{/if}}
-        <span class="flex-pad" style="flex:1;"></span>
+        <span class="flex-pad"></span>
     </div>
     {{/if}}
 
     {{!-- Build: vendor tray docked above the catalog --}}
     {{#if isBuild}}
     <div class="cp-vendor-tray">
-        <div class="cp-vendor-head flexrow" style="align-items:center; gap:6px;">
+        <div class="cp-vendor-head flexrow">
             <b>{{localize "CYBERPUNK.ShopVendorTray"}}</b> <span class="cp-shop-stockcount">({{vendorCount}})</span>
-            <span class="flex-pad" style="flex:1;"></span>
+            <span class="flex-pad"></span>
             {{#if vendorCount}}
             <span class="cp-stockall" title="{{localize "CYBERPUNK.ShopStockAllHint"}}">
                 <span class="cp-stockall-label">{{localize "CYBERPUNK.ShopStockAll"}}</span>
@@ -139,12 +139,12 @@
         </div>
         {{/if}}
 
-        <div class="cp-catalog-center flexcol" style="flex:1; min-height:0;">
+        <div class="cp-catalog-center flexcol">
             {{!-- Always render the jump bar; the .cp-searching class (set by _applySearch) hides it live. --}}
             {{#if showJump}}{{#if letters.length}}
             <div class="cp-catalog-jump">{{#each letters as |L|}}<button type="button" class="cp-jump" data-letter="{{L}}">{{L}}</button>{{/each}}</div>
             {{/if}}{{/if}}
-            <div class="cp-catalog-list flexcol" style="flex:1; min-height:0; overflow-y:auto;">
+            <div class="cp-catalog-list flexcol">
                 {{#if rowCount}}
                 {{#each rows as |r|}}
                 {{#if r._featuredDivider}}<div class="cp-letter-header">★ {{localize "CYBERPUNK.ShopFeatured"}}</div>{{/if}}
@@ -174,7 +174,7 @@
                 </div>
                 {{/each}}
                 {{else}}
-                <p style="opacity:0.7; padding:8px;">{{localize "CYBERPUNK.CatalogNoMatch"}}</p>
+                <p class="cp-catalog-empty">{{localize "CYBERPUNK.CatalogNoMatch"}}</p>
                 {{/if}}
                 {{!-- Shown by _applySearch when a live text search hides every row (no re-render). --}}
                 <p class="cp-catalog-nomatch" style="display:none;">{{localize "CYBERPUNK.CatalogNoMatch"}}</p>
@@ -222,7 +222,7 @@
     </div>
 
     {{#if isBuild}}
-    <div class="cp-shop-notes-row" style="padding:4px 6px;"><textarea class="cp-shop-notes" rows="1" placeholder="{{localize "CYBERPUNK.ShopNotes"}}" style="width:100%;">{{shop.notes}}</textarea></div>
+    <div class="cp-shop-notes-row"><textarea class="cp-shop-notes" rows="1" placeholder="{{localize "CYBERPUNK.ShopNotes"}}">{{shop.notes}}</textarea></div>
     {{/if}}
 
     <p class="cp-catalog-footer">{{#if isBuild}}{{localize "CYBERPUNK.ShopBuildFooter"}}{{else}}{{localize "CYBERPUNK.CatalogFooter"}}{{/if}}</p>

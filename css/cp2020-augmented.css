@@ -168,13 +168,20 @@
 .cp-shop-home .cp-home-create { border-style: dashed; opacity: 0.8; justify-content: center; gap: 8px; margin-top: 2px; }
 .cp-shop-home .cp-home-create .cp-home-text { flex: 0 0 auto; }
 .cp-shop-home .cp-home-create:hover { opacity: 1; }
-.cp-shop-header { padding: 2px 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; flex-wrap: wrap; }
+.cp-shop-header { padding: 2px 2px 6px; border-bottom: 1px solid rgba(255,255,255,0.15); margin-bottom: 4px; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cp-shop-header label { font-size: 0.8em; white-space: nowrap; }
 .cp-shop-header button { width: auto; }
 .cp-catalog .cp-shop-header > * { flex: 0 0 auto; }
 .cp-catalog .cp-shop-header > h2,
 .cp-catalog .cp-shop-header .cp-shop-name { flex: 1 1 auto; min-width: 120px; }
 .cp-shop-discountbadge { color: #6ad06a; font-size: 0.7em; }
+/* Inline styles lifted out of catalog.hbs → classes (templates carry no style=). */
+.cp-catalog .flex-pad { flex: 1 1 auto; }
+.cp-catalog .cp-shop-header > h2 { margin: 0; }
+.cp-shop-discount { width: 48px; }
+.cp-shop-notes-row { padding: 4px 6px; }
+.cp-shop-notes { width: 100%; }
+.cp-catalog-empty { opacity: 0.7; padding: 8px; }
 /* Pin fixed-height window children so Foundry's .flexcol > *{flex:1 1 0%} can't collapse the vendor
    tray to ~10px and overlap the catalog body. Only the body grows. */
 .cp-catalog-window > .cp-shop-header,
@@ -184,7 +191,7 @@
 .cp-catalog-window > .cp-catalog-footer { flex: 0 0 auto; }
 .cp-vendor-tray { flex: 0 0 auto; border: 1px dashed rgba(192,160,98,0.5); border-radius: 4px; padding: 4px 6px; margin-bottom: 6px; max-height: 220px; display: flex; flex-direction: column; min-height: 0; }
 .cp-vendor-tray.cp-drop-hot { border-color: #b8916a; background: rgba(138,109,59,0.15); }
-.cp-vendor-head { flex: 0 0 auto; }
+.cp-vendor-head { flex: 0 0 auto; align-items: center; gap: 6px; }
 .cp-vendor-head button { width: auto; }
 .cp-vendor-clear { opacity: 0.7; }
 .cp-vendor-clear:hover { opacity: 1; color: #e08a8a; border-color: #e08a8a; }
