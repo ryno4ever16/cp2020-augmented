@@ -6,7 +6,8 @@ const SCOPE = "cp2020-augmented";
 /**
  * Fashion style multipliers applied at purchase to style-priced (clothing) items.
  * Core 2020 Gear-List fashion pricing ([[core-rules-reference]] #1). `key` is stored; `mult`
- * multiplies the unit price; `label` is shown on the chat card.
+ * multiplies the unit price; `label` is the stable English display label (localized at the render
+ * edge — see catalog.js `shopStyleLabel`, keyed off `key`; this table stays i18n-free for the unit tests).
  */
 export const FASHION_STYLES = [
   { key: "generic",    label: "Generic",     mult: 1 },
@@ -18,7 +19,7 @@ export const FASHION_STYLES = [
 
 /** Price multiplier for a stored style key (unknown/empty → ×1, i.e. Generic). */
 export function styleMultOf(key) { return FASHION_STYLES.find(s => s.key === key)?.mult ?? 1; }
-/** Display label for a stored style key (unknown/empty → ""). */
+/** Stable English display label for a stored style key (unknown/empty → ""). Localize via catalog.js `shopStyleLabel`. */
 export function styleLabelOf(key) { return FASHION_STYLES.find(s => s.key === key)?.label ?? ""; }
 
 /**

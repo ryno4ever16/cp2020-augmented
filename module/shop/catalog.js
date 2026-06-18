@@ -1,4 +1,4 @@
-import { buyItem, FASHION_STYLES, styleMultOf, styleLabelOf } from "./purchase.js";
+import { buyItem, FASHION_STYLES, styleMultOf } from "./purchase.js";
 import { buyAndInstallCyberware } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
@@ -14,6 +14,45 @@ import {
 } from "./shops.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+// ── Render-edge i18n for the (pure, English) shop taxonomy + fashion tables ──────────────────────────
+// CATEGORIES (categories.js) and FASHION_STYLES (purchase.js) stay i18n-free + unit-tested — their keys
+// are STABLE English identities (matched against item category/sub and stored on shop items). We map those
+// identities to label keys HERE, at the render edge, so localization never enters the pure data (the
+// pure/impure boundary: no game.i18n in unit-tested code). Unknown keys fall back to the English identity
+// (categories) or "" (style), matching the pre-i18n behavior.
+const SHOP_CAT_LABEL_KEYS = {
+  Weapons: "CYBERPUNK.ShopCatWeapons", Armor: "CYBERPUNK.ShopCatArmor", Ammo: "CYBERPUNK.ShopCatAmmo",
+  Cyberware: "CYBERPUNK.ShopCatCyberware", Gear: "CYBERPUNK.ShopCatGear", Netrunning: "CYBERPUNK.ShopCatNetrunning",
+  Programs: "CYBERPUNK.ShopCatPrograms", Vehicles: "CYBERPUNK.ShopCatVehicles",
+};
+const SHOP_SUB_LABEL_KEYS = {
+  Pistols: "CYBERPUNK.ShopSubPistols", SMGs: "CYBERPUNK.ShopSubSMGs", Rifles: "CYBERPUNK.ShopSubRifles",
+  Shotguns: "CYBERPUNK.ShopSubShotguns", Heavy: "CYBERPUNK.ShopSubHeavy", Melee: "CYBERPUNK.ShopSubMelee",
+  Exotic: "CYBERPUNK.ShopSubExotic", Other: "CYBERPUNK.ShopSubOther",
+  Cyberlimbs: "CYBERPUNK.ShopSubCyberlimbs", Cyberoptics: "CYBERPUNK.ShopSubCyberoptics",
+  Cyberaudio: "CYBERPUNK.ShopSubCyberaudio", Neuralware: "CYBERPUNK.ShopSubNeuralware",
+  Implants: "CYBERPUNK.ShopSubImplants", Bioware: "CYBERPUNK.ShopSubBioware",
+  Fashionware: "CYBERPUNK.ShopSubFashionware", Cyberweapons: "CYBERPUNK.ShopSubCyberweapons",
+  Communication: "CYBERPUNK.ShopSubCommunication", Electronics: "CYBERPUNK.ShopSubElectronics",
+  Entertainment: "CYBERPUNK.ShopSubEntertainment", Fashion: "CYBERPUNK.ShopSubFashion",
+  Furnishing: "CYBERPUNK.ShopSubFurnishing", Medical: "CYBERPUNK.ShopSubMedical",
+  Security: "CYBERPUNK.ShopSubSecurity", Surveillance: "CYBERPUNK.ShopSubSurveillance",
+  Tools: "CYBERPUNK.ShopSubTools", "Rentals & Services": "CYBERPUNK.ShopSubRentalsServices",
+};
+const SHOP_STYLE_LABEL_KEYS = {
+  generic: "CYBERPUNK.ShopStyleGeneric", leisure: "CYBERPUNK.ShopStyleLeisure",
+  urbanflash: "CYBERPUNK.ShopStyleUrbanFlash", business: "CYBERPUNK.ShopStyleBusiness",
+  highfashion: "CYBERPUNK.ShopStyleHighFashion",
+};
+/** Localized top-category label (falls back to the English identity). */
+const shopCatLabel = (key) => SHOP_CAT_LABEL_KEYS[key] ? game.i18n.localize(SHOP_CAT_LABEL_KEYS[key]) : key;
+/** Localized sub-type label (falls back to the English identity). */
+const shopSubLabel = (sub) => SHOP_SUB_LABEL_KEYS[sub] ? game.i18n.localize(SHOP_SUB_LABEL_KEYS[sub]) : sub;
+/** Localized fashion-style label for a style key (unknown/empty → ""). */
+const shopStyleLabel = (styleKey) => SHOP_STYLE_LABEL_KEYS[styleKey] ? game.i18n.localize(SHOP_STYLE_LABEL_KEYS[styleKey]) : "";
+/** Fashion styles with localized labels for the render context: [{key,label,mult}]. */
+const shopFashionStyleOptions = () => FASHION_STYLES.map(s => ({ key: s.key, label: shopStyleLabel(s.key), mult: s.mult }));
 
 /**
  * The Shop window ([[shopping-design]] round-7). ONE standalone window (a singleton) that navigates
@@ -172,8 +211,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   }
   _catTree() {
     return CATEGORIES.map(c => ({
-      key: c.key, active: this._cats.has(c.key),
-      subs: c.subs.map(s => ({ key: `${c.key}/${s}`, label: s, active: this._cats.has(`${c.key}/${s}`) }))
+      key: c.key, label: shopCatLabel(c.key), active: this._cats.has(c.key),
+      subs: c.subs.map(s => ({ key: `${c.key}/${s}`, label: shopSubLabel(s), active: this._cats.has(`${c.key}/${s}`) }))
     }));
   }
   /** The "Books" filter panel: one chip per source book that has items (Core pinned at the top, then
@@ -216,8 +255,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         category: idx?.category ?? "", sub: idx?.sub ?? "", supplement: idx?.supplement ?? "",
         catalogCost, override: e.price, unlimited: e.unlimited, qty: e.qty,
         isClothing, style: e.style,
-        styleLabel: (isClothing && e.style && e.style !== "generic") ? styleLabelOf(e.style) : "",
-        styleOptions: isClothing ? FASHION_STYLES.map(s => ({ key: s.key, label: s.label, mult: s.mult, selected: s.key === (e.style ?? "generic") })) : null,
+        styleLabel: (isClothing && e.style && e.style !== "generic") ? shopStyleLabel(e.style) : "",
+        styleOptions: isClothing ? FASHION_STYLES.map(s => ({ key: s.key, label: shopStyleLabel(s.key), mult: s.mult, selected: s.key === (e.style ?? "generic") })) : null,
         eff: effectivePrice(def, sk, catalogCost, styleMult), soldOut: !e.unlimited && e.qty <= 0
       };
     }).sort((a, b) => a.name.localeCompare(b.name));
@@ -248,7 +287,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       buyerName: this.buyer?.name ?? "",
       buyerFunds: this.buyer ? (Number(this.buyer.system?.eurobucks) || 0) : 0,
       buyerOptions: this._buyerOptions(),
-      fashionStyles: FASHION_STYLES, showSource: shopShowSource(), search: this._search,
+      fashionStyles: shopFashionStyleOptions(), showSource: shopShowSource(), search: this._search,
       searching: !!this._search.trim()
     };
     if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
@@ -453,7 +492,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       ev.preventDefault(); ev.stopPropagation(); await this._openItemSheet(rowEl);
     }));
 
-    const styleOf = (rowEl) => { const s = rowEl.querySelector(".cp-catalog-style"); if (s?.value) { const m = FASHION_STYLES.find(x => x.key === s.value); if (m) return { styleMult: m.mult, styleLabel: m.label }; } return { styleMult: 1, styleLabel: "" }; };
+    const styleOf = (rowEl) => { const s = rowEl.querySelector(".cp-catalog-style"); if (s?.value) { const m = FASHION_STYLES.find(x => x.key === s.value); if (m) return { styleMult: m.mult, styleLabel: shopStyleLabel(m.key) }; } return { styleMult: 1, styleLabel: "" }; };
     const qtyOf = (rowEl) => Math.max(1, parseInt(rowEl.querySelector(".cp-catalog-qty")?.value, 10) || 1);
 
     // Buy (catalog + storefront).
@@ -704,7 +743,7 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
   const styleMult = isClothing ? styleMultOf(e.style) : 1;
   const unitPrice = effectivePrice(def, sourceKey, Number(doc.system?.cost) || 0, styleMult);
   const bits = [];
-  if (isClothing && e.style && e.style !== "generic") bits.push(`${styleLabelOf(e.style)} ×${styleMult}`);
+  if (isClothing && e.style && e.style !== "generic") bits.push(`${shopStyleLabel(e.style)} ×${styleMult}`);
   if (def.discountPct) bits.push(`-${def.discountPct}%`);
   const label = bits.join(", ");
 
@@ -768,7 +807,7 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null } = {}) {
     const e = normalizeShopItem(def.items[sourceKey]);
     styleMult = isClothing ? styleMultOf(e.style) : 1;
     unitPrice = effectivePrice(def, sourceKey, Number(doc.system?.cost) || 0, styleMult);
-    styleLabel = (isClothing && e.style && e.style !== "generic") ? styleLabelOf(e.style) : "";
+    styleLabel = (isClothing && e.style && e.style !== "generic") ? shopStyleLabel(e.style) : "";
   } else {
     unitPrice = Math.max(0, Math.round(Number(doc.system?.cost) || 0));
   }
@@ -855,8 +894,9 @@ function injectSidebarShopButton(html) {
 export async function publishShop(shopId) {
   const def = getShop(shopId); if (!def) return;
   await updateShop(shopId, { open: true });
+  const intro = game.i18n.format("CYBERPUNK.ShopOpenForBusiness", { shop: `<b>🛒 ${foundry.utils.escapeHTML(def.name)}</b>` });
   ChatMessage.create({
-    content: `<div class="cp-shop-publish"><b>🛒 ${foundry.utils.escapeHTML(def.name)}</b> is open for business. <button type="button" class="cp-shop-open-link" data-shop-id="${shopId}">${game.i18n.localize("CYBERPUNK.ShopBrowse")}</button></div>`
+    content: `<div class="cp-shop-publish">${intro} <button type="button" class="cp-shop-open-link" data-shop-id="${shopId}">${game.i18n.localize("CYBERPUNK.ShopBrowse")}</button></div>`
   });
 }
 

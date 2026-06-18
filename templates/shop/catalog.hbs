@@ -132,7 +132,7 @@
             </div>
             {{#each cats as |c|}}
             <div class="cp-cat-group">
-                <button type="button" class="cp-cat-chip cp-cat-top {{#if c.active}}active{{/if}}" data-cat="{{c.key}}">{{c.key}}</button>
+                <button type="button" class="cp-cat-chip cp-cat-top {{#if c.active}}active{{/if}}" data-cat="{{c.key}}">{{c.label}}</button>
                 {{#if c.subs.length}}<div class="cp-cat-subs">{{#each c.subs as |s|}}<button type="button" class="cp-cat-chip cp-cat-sub {{#if s.active}}active{{/if}}" data-cat="{{s.key}}">{{s.label}}</button>{{/each}}</div>{{/if}}
             </div>
             {{/each}}
