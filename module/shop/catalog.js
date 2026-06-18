@@ -571,6 +571,32 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
   }
 
+  /**
+   * Open a small cursor-positioned popup menu. `items` = [{action, label, handler}]. The structure
+   * comes from templates/shop/context-menu.hbs (templates own the HTML); only the cursor x/y is set
+   * inline (genuinely dynamic — the box itself lives in the .cp-context-menu CSS class). Mounts in the
+   * event's OWN document (PopOut!-safe) and closes on an outside click. Each button's handler is wired
+   * by its data-action after render.
+   */
+  async _openContextMenu(ev, items) {
+    const doc = ev.currentTarget?.ownerDocument || ev.target?.ownerDocument || document;
+    const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
+    const html = await render("modules/cp2020-augmented/templates/shop/context-menu.hbs",
+      { items: items.map(i => ({ action: i.action, label: i.label })) });
+    const tmp = doc.createElement("div");
+    tmp.innerHTML = html;
+    const menu = tmp.firstElementChild;
+    menu.style.left = `${ev.clientX}px`;
+    menu.style.top = `${ev.clientY}px`;
+    const handlers = new Map(items.map(i => [i.action, i.handler]));
+    for (const btn of menu.querySelectorAll("button[data-action]")) {
+      btn.addEventListener("click", async () => { menu.remove(); await handlers.get(btn.dataset.action)?.(); });
+    }
+    doc.body.appendChild(menu);
+    const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); doc.removeEventListener("click", close); } };
+    setTimeout(() => doc.addEventListener("click", close), 0);
+  }
+
   /** Popup menu listing every shop (+ create new) to add a catalog item to. */
   _catalogAddMenu(rowEl, ev) {
     const sk = rowEl.dataset.sourceKey; if (!sk) return;
@@ -579,22 +605,17 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       const added = await addShopItem(shopId, sk);
       ui.notifications?.info(added ? game.i18n.format("CYBERPUNK.ShopAddedTo", { shop: getShop(shopId)?.name ?? "" }) : game.i18n.localize("CYBERPUNK.ShopAlreadyStocked"));
     };
-    // PopOut!: build/mount the menu (and its outside-click closer) in the row's OWN document.
-    const doc = rowEl.ownerDocument || document;
-    const menu = doc.createElement("div");
-    menu.className = "cp-context-menu";
-    menu.style.cssText = `position:fixed; left:${ev.clientX}px; top:${ev.clientY}px; z-index:1000;`;
-    const item = (label, fn) => { const b = doc.createElement("button"); b.type = "button"; b.textContent = label; b.addEventListener("click", async () => { menu.remove(); await fn(); }); menu.appendChild(b); };
-    for (const s of listShops()) item(s.name, () => addTo(s.id));
-    item("＋ " + game.i18n.localize("CYBERPUNK.ShopNew"), async () => {
-      const name = await promptText(game.i18n.localize("CYBERPUNK.ShopNewTitle"), game.i18n.localize("CYBERPUNK.ShopNewDefault"));
-      if (name === null) return;
-      const def = await createShop({ name });
-      if (def) await addTo(def.id);
+    const items = listShops().map(s => ({ action: `shop:${s.id}`, label: s.name, handler: () => addTo(s.id) }));
+    items.push({
+      action: "new", label: "＋ " + game.i18n.localize("CYBERPUNK.ShopNew"),
+      handler: async () => {
+        const name = await promptText(game.i18n.localize("CYBERPUNK.ShopNewTitle"), game.i18n.localize("CYBERPUNK.ShopNewDefault"));
+        if (name === null) return;
+        const def = await createShop({ name });
+        if (def) await addTo(def.id);
+      },
     });
-    doc.body.appendChild(menu);
-    const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); doc.removeEventListener("click", close); } };
-    setTimeout(() => doc.addEventListener("click", close), 0);
+    this._openContextMenu(ev, items);
   }
 
   /** Build-view curation: ＋add / drag-in / bulk add / remove / economics / config. */
@@ -693,21 +714,14 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   /** Right-click directory context menu for a shop. */
   _shopContextMenu(shopId, ev) {
     const def = getShop(shopId); if (!def) return;
-    // PopOut!: build/mount in the right-clicked element's OWN document (shop window may be popped out).
-    const doc = ev.currentTarget?.ownerDocument || ev.target?.ownerDocument || document;
-    const menu = doc.createElement("div");
-    menu.className = "cp-context-menu";
-    menu.style.cssText = `position:fixed; left:${ev.clientX}px; top:${ev.clientY}px; z-index:1000;`;
-    const item = (label, fn) => { const b = doc.createElement("button"); b.type = "button"; b.textContent = label; b.addEventListener("click", async () => { menu.remove(); await fn(); }); menu.appendChild(b); };
-    item(game.i18n.localize("CYBERPUNK.ShopCtxEdit"), () => this.navigate("build", shopId));
-    item(game.i18n.localize("CYBERPUNK.ShopCtxPreview"), () => this.navigate("storefront", shopId));
-    item(def.open ? game.i18n.localize("CYBERPUNK.ShopClose") : game.i18n.localize("CYBERPUNK.ShopShowToPlayers"), async () => { await updateShop(shopId, { open: !def.open }); this.render(); });
-    item(game.i18n.localize("CYBERPUNK.ShopCtxDuplicate"), async () => { await duplicateShop(shopId); this.render(); });
-    item(game.i18n.localize("CYBERPUNK.ShopCtxRename"), async () => { const name = await promptText(game.i18n.localize("CYBERPUNK.ShopName"), def.name); if (name) { await updateShop(shopId, { name }); this.render(); } });
-    item(game.i18n.localize("CYBERPUNK.ShopCtxDelete"), async () => { if (await foundry.applications.api.DialogV2.confirm({ window: { title: def.name }, rejectClose: false, content: `<p>${game.i18n.localize("CYBERPUNK.ShopDeleteConfirm")}</p>` })) { await deleteShop(shopId); this.render(); } });
-    doc.body.appendChild(menu);
-    const close = (e) => { if (!menu.contains(e.target)) { menu.remove(); doc.removeEventListener("click", close); } };
-    setTimeout(() => doc.addEventListener("click", close), 0);
+    this._openContextMenu(ev, [
+      { action: "edit", label: game.i18n.localize("CYBERPUNK.ShopCtxEdit"), handler: () => this.navigate("build", shopId) },
+      { action: "preview", label: game.i18n.localize("CYBERPUNK.ShopCtxPreview"), handler: () => this.navigate("storefront", shopId) },
+      { action: "toggle", label: def.open ? game.i18n.localize("CYBERPUNK.ShopClose") : game.i18n.localize("CYBERPUNK.ShopShowToPlayers"), handler: async () => { await updateShop(shopId, { open: !def.open }); this.render(); } },
+      { action: "duplicate", label: game.i18n.localize("CYBERPUNK.ShopCtxDuplicate"), handler: async () => { await duplicateShop(shopId); this.render(); } },
+      { action: "rename", label: game.i18n.localize("CYBERPUNK.ShopCtxRename"), handler: async () => { const name = await promptText(game.i18n.localize("CYBERPUNK.ShopName"), def.name); if (name) { await updateShop(shopId, { name }); this.render(); } } },
+      { action: "delete", label: game.i18n.localize("CYBERPUNK.ShopCtxDelete"), handler: async () => { if (await foundry.applications.api.DialogV2.confirm({ window: { title: def.name }, rejectClose: false, content: `<p>${game.i18n.localize("CYBERPUNK.ShopDeleteConfirm")}</p>` })) { await deleteShop(shopId); this.render(); } } },
+    ]);
   }
 }
 

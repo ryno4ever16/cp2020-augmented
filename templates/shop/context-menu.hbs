@@ -1,0 +1,10 @@
+{{!--
+  Shop context menu (cursor-positioned popup). `items` = [{action,label}] built in JS; the click
+  handler is wired per data-action after render (CatalogBrowser._openContextMenu). Only the cursor
+  x/y is set inline (genuinely dynamic) — the box styling lives in the .cp-context-menu CSS class.
+--}}
+<div class="cp-context-menu">
+    {{#each items as |it|}}
+    <button type="button" data-action="{{it.action}}">{{it.label}}</button>
+    {{/each}}
+</div>
