@@ -5,6 +5,7 @@ import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSuppleme
 import { categoryOfPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopSourceConfig, shopShowSource, shopAllowHomebrew } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
+import { renderChatCard } from "../compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, AMMO_MODIFIERS } from "../lookups.js";
 import { purchaseAmmo } from "./buy-ammo.js";
 import {
@@ -894,10 +895,8 @@ function injectSidebarShopButton(html) {
 export async function publishShop(shopId) {
   const def = getShop(shopId); if (!def) return;
   await updateShop(shopId, { open: true });
-  const intro = game.i18n.format("CYBERPUNK.ShopOpenForBusiness", { shop: `<b>🛒 ${foundry.utils.escapeHTML(def.name)}</b>` });
-  ChatMessage.create({
-    content: `<div class="cp-shop-publish">${intro} <button type="button" class="cp-shop-open-link" data-shop-id="${shopId}">${game.i18n.localize("CYBERPUNK.ShopBrowse")}</button></div>`
-  });
+  const content = await renderChatCard("shop-published.hbs", { shopName: foundry.utils.escapeHTML(def.name), shopId });
+  ChatMessage.create({ content });
 }
 
 /** Ready-time hooks: sidebar button + chat links + live buyer sync + the GM stock-decrement relay. */

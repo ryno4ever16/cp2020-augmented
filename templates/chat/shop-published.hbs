@@ -1,0 +1,6 @@
+{{!--
+  Shop "open for business" chat card (GM "Show to Players"). Posts a clickable link that opens the
+  shop's storefront for players to browse + buy. Rendered via renderChatCard from publishShop().
+  `shopName` is pre-escaped; the bold lives in the ShopOpenForBusiness i18n value (triple-stash). CPLocal.
+--}}
+<div class="cyberpunk cp-shop-publish">🛒 {{{CPLocal "ShopOpenForBusiness" shop=shopName}}} <button type="button" class="cp-shop-open-link" data-shop-id="{{shopId}}">{{CPLocal "ShopBrowse"}}</button></div>

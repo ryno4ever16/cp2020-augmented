@@ -645,7 +645,7 @@
     "ShopNotAllowed": "Purchasing is GM-only right now — ask your GM.",
     "ShopNotes": "Notes",
     "ShopOpenDetails": "Click to open this item's details",
-    "ShopOpenForBusiness": "{shop} is open for business.",
+    "ShopOpenForBusiness": "<b>{shop}</b> is open for business.",
     "ShopOpenHint": "Open: visible & buyable to players.",
     "ShopOutOfStock": "Out of stock: {name} (only {qty} left).",
     "ShopPreviewHint": "Open the storefront the way players see it.",
