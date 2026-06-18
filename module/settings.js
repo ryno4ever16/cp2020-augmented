@@ -402,6 +402,24 @@ export function registerAugmentedSettings() {
     default: "free",
   });
 
+  // --- Martial arts: FNFF2 ruleset toggle ---
+  // FNFF2 (Friday Night Fistfight 2) expands the martial-art styles + per-action bonuses used by
+  // the Augmented martial panel. On the fork the SYSTEM owns this setting, so isFnff2Enabled()
+  // (lookups.js) reads the system's value and we hide this duplicate. On vanilla the system key is
+  // absent, so the module owns the toggle here. registerAugmentedSettings runs in `init` AFTER the
+  // system's init, so this membership test is reliable.
+  const systemOwnsFnff2 = (() => {
+    try { return game.settings.settings.has("cyberpunk2020.fnff2Enabled"); } catch { return false; }
+  })();
+  game.settings.register(SCOPE, "fnff2Enabled", {
+    name: "SETTINGS.FNFF2Enabled",
+    hint: "SETTINGS.FNFF2EnabledHint",
+    scope: "world",
+    config: !systemOwnsFnff2,
+    type: Boolean,
+    default: false,
+  });
+
   // --- IP (Improvement Points) tracker ([[ip-tracker-design]]) ---
   game.settings.register(SCOPE, "ipSystem", {
     name: "SETTINGS.IpSystem",

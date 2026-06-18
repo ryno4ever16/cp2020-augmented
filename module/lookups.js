@@ -1,6 +1,6 @@
 // This is where all the magic values go, because cyberpunk has SO many of those
 // Any given string value is the same as its key in the localization file, and will be used for translation
-import { cloneSystemDefault, DEFAULT_HIT_LOCATIONS, STAT_KEYS } from "./constants.js";
+import { cloneSystemDefault, DEFAULT_HIT_LOCATIONS, STAT_KEYS, MODULE_ID } from "./constants.js";
 
 export let weaponTypes = {
     pistol: "Pistol",
@@ -335,7 +335,13 @@ export function isFnff2OnlyMartialArtId(id) {
 }
 
 export function isFnff2Enabled() {
-  return Boolean(game?.settings?.get("cyberpunk2020", "fnff2Enabled"));
+  // FNFF2 is a fork feature. Prefer the system's setting when present (running on the fork),
+  // then the module's own toggle (running on vanilla, where the system key is unregistered and
+  // game.settings.get THROWS), then default off. Never throw — the martial engine calls this on
+  // vanilla actors. See the module-owned fnff2Enabled registration in settings.js.
+  try { return Boolean(game?.settings?.get("cyberpunk2020", "fnff2Enabled")); } catch { /* not on the fork */ }
+  try { return Boolean(game?.settings?.get(MODULE_ID, "fnff2Enabled")); } catch { /* not registered (yet) */ }
+  return false;
 }
 
 // A skill is treated as a martial art if it carries the explicit flag or is named with the

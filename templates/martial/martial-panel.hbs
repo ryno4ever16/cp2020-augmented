@@ -1,0 +1,26 @@
+{{!--
+  Combat-tab martial-arts panel (module injection, vanilla only).
+
+  Mirrors the fork's .martial-panel: one button per action, grouped by martialActionGroups()
+  (Defensive / Attacks / Grapple, +FNFF2 extras). The martial-art STYLE + cyberlimb are chosen in
+  the dialog after a button is clicked; the action is fixed by the button. Classes are
+  cp2020ae-prefixed so the base system's delegated handlers never bind to them, and so the fork-skip
+  check (`.martial-action` present) reliably tells "the system already drew its own panel". Injected
+  by martial-sheet.js after the .weapons-list section.
+--}}
+<section class="weapons-list cp2020ae-martial-panel">
+  <header>
+    <h2>{{CPLocal "MartialArt"}}</h2>
+  </header>
+
+  {{#each groups as |grp|}}
+    <div class="cp2020ae-martial-group-header">{{CPLocal grp.groupName}}</div>
+    {{#each grp.actions as |a|}}
+      <div class="cp2020ae-martial-action field action" data-action="{{a.action}}"{{#if a.hint}} title="{{a.hint}}"{{/if}}>
+        <i class="fa-solid {{a.icon}} cp2020ae-martial-icon"></i>
+        <label class="name">{{CPLocal a.action}}</label>
+        <span class="flex-pad"></span>
+      </div>
+    {{/each}}
+  {{/each}}
+</section>

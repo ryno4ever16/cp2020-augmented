@@ -253,3 +253,21 @@
 .cp2020ae-services-panel .field button { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; padding: 1px 8px; }
 .cp2020ae-services-total-val { white-space: nowrap; }
 .cp2020ae-services-empty { padding: 4px; opacity: 0.7; }
+
+/* --- In-sheet martial-arts panel (injected into the combat tab; vanilla-only). Mirrors the fork's
+   .martial-panel spacing; rows reuse the system's `.field action` row styling. --- */
+.cp2020ae-martial-panel { margin-top: 6px; }
+.cp2020ae-martial-group-header { font-size: 0.75em; text-transform: uppercase; opacity: 0.6; margin: 11px 0 2px; }
+.cp2020ae-martial-action { margin-bottom: 3px; cursor: pointer; }
+.cp2020ae-martial-icon { flex: 0 0 auto; width: 20px; text-align: center; margin-right: 4px; opacity: 0.85; }
+
+/* Martial attack chat card. */
+.cp2020ae-martial-attack .cp2020ae-martial-card-header { display: flex; align-items: center; gap: 6px; }
+.cp2020ae-martial-card-img { flex: 0 0 auto; width: 28px; height: 28px; border: none; object-fit: cover; }
+.cp2020ae-martial-roll-line { display: flex; align-items: baseline; gap: 6px; margin: 2px 0; }
+.cp2020ae-martial-roll-label { flex: 0 0 auto; font-weight: bold; opacity: 0.85; min-width: 4.5em; }
+.cp2020ae-martial-area { font-style: italic; }
+.cp2020ae-martial-note { opacity: 0.8; font-style: italic; margin: 4px 0 0; }
+
+/* Martial attack dialog. */
+.cp2020ae-martial-dialog-action { font-weight: bold; margin: 0 0 6px; }

@@ -1,0 +1,28 @@
+{{!--
+  Martial-arts attack dialog (module). The ACTION is fixed by the combat-tab button that opened this
+  (shown as actionLabel); the dialog collects the martial-art STYLE, the cyberlimb terminus, and an
+  optional extra to-hit modifier, then calls rollMartialAttack. Mirrors the fork's style+cyberlimb
+  collection (martialOptions) in a focused, module-owned form. CPLocal for labels.
+--}}
+<form class="cp2020ae-martial-dialog">
+  <p class="cp2020ae-martial-dialog-action"><i class="fa-solid fa-hand-fist"></i> {{actionLabel}}</p>
+
+  <div class="form-group">
+    <label for="cp2020ae-ma-style">{{CPLocal "MartialArt"}}</label>
+    <select id="cp2020ae-ma-style" name="style">
+      {{#each styles}}<option value="{{value}}">{{label}}</option>{{/each}}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="cp2020ae-ma-cyber">{{CPLocal "CyberTerminus"}}</label>
+    <select id="cp2020ae-ma-cyber" name="cyber">
+      {{#each cyberChoices}}<option value="{{value}}">{{label}}</option>{{/each}}
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="cp2020ae-ma-mod">{{CPLocal "MartialExtraMod"}}</label>
+    <input id="cp2020ae-ma-mod" name="mod" type="number" value="0">
+  </div>
+</form>
