@@ -8,10 +8,11 @@
  * already renders [name="system.isMartialArt"] (the fork), the module skips (fork-double-up rule).
  */
 
-import { MODULE_ID } from "../constants.js";
 import { MARTIAL_BONUS_ACTIONS } from "../lookups.js";
 import { combatAutomationEnabled } from "../settings.js";
 
+// Module flag / settings scope (per-file convention used across the module).
+const SCOPE = "cp2020-augmented";
 const EDITOR_TPL = "modules/cp2020-augmented/templates/item/martial-skill-editor.hbs";
 
 export function registerMartialSkillEditor() {
@@ -40,9 +41,9 @@ async function injectMartialEditor(app, html, _context) {
   // Idempotent.
   if (root.querySelector(".cp2020ae-martial-editor")) return;
 
-  const bonuses = item.getFlag(MODULE_ID, "martialBonuses") ?? {};
+  const bonuses = item.getFlag(SCOPE, "martialBonuses") ?? {};
   const data = {
-    isMA: !!item.getFlag(MODULE_ID, "isMartialArt"),
+    isMA: !!item.getFlag(SCOPE, "isMartialArt"),
     actions: MARTIAL_BONUS_ACTIONS.map((action) => ({ action, value: Number(bonuses[action]) || 0 })),
   };
 
@@ -60,7 +61,7 @@ async function injectMartialEditor(app, html, _context) {
   const checkbox = editor.querySelector(".cp2020ae-ma-isma");
   const grid = editor.querySelector(".cp2020ae-ma-bonus-grid");
   checkbox?.addEventListener("change", async () => {
-    await item.setFlag(MODULE_ID, "isMartialArt", checkbox.checked);
+    await item.setFlag(SCOPE, "isMartialArt", checkbox.checked);
     if (grid) grid.style.display = checkbox.checked ? "" : "none";
   });
 
@@ -68,7 +69,7 @@ async function injectMartialEditor(app, html, _context) {
     input.addEventListener("change", async () => {
       const action = input.dataset.action;
       if (!action) return;
-      await item.update({ [`flags.${MODULE_ID}.martialBonuses.${action}`]: Number(input.value) || 0 });
+      await item.update({ [`flags.${SCOPE}.martialBonuses.${action}`]: Number(input.value) || 0 });
     });
   });
 }

@@ -1,6 +1,9 @@
 // This is where all the magic values go, because cyberpunk has SO many of those
 // Any given string value is the same as its key in the localization file, and will be used for translation
-import { cloneSystemDefault, DEFAULT_HIT_LOCATIONS, STAT_KEYS, MODULE_ID } from "./constants.js";
+import { cloneSystemDefault, DEFAULT_HIT_LOCATIONS, STAT_KEYS } from "./constants.js";
+
+// Module flag / settings scope (per-file convention used across the module).
+const SCOPE = "cp2020-augmented";
 
 export let weaponTypes = {
     pistol: "Pistol",
@@ -340,7 +343,7 @@ export function isFnff2Enabled() {
   // game.settings.get THROWS), then default off. Never throw — the martial engine calls this on
   // vanilla actors. See the module-owned fnff2Enabled registration in settings.js.
   try { return Boolean(game?.settings?.get("cyberpunk2020", "fnff2Enabled")); } catch { /* not on the fork */ }
-  try { return Boolean(game?.settings?.get(MODULE_ID, "fnff2Enabled")); } catch { /* not registered (yet) */ }
+  try { return Boolean(game?.settings?.get(SCOPE, "fnff2Enabled")); } catch { /* not registered (yet) */ }
   return false;
 }
 

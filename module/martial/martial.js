@@ -12,7 +12,6 @@
  * flags.cp2020-augmented.* (vanilla). Built-in styles resolve by stable id and need neither.
  */
 
-import { MODULE_ID } from "../constants.js";
 import {
   MARTIAL_ART_ID_BY_KEY,
   MARTIAL_ART_KEY_BY_ID,
@@ -28,6 +27,9 @@ import {
 import { localize, localizeParam, rollLocation } from "../utils.js";
 import { renderChatCard } from "../compat.js";
 import { specialMeleeEffectsEnabled } from "../settings.js";
+
+// Module flag / settings scope (per-file convention used across the module).
+const SCOPE = "cp2020-augmented";
 
 // ---------------------------------------------------------------------------
 // Stable-id / skill-value resolution (vendored from CyberpunkActor statics).
@@ -101,7 +103,7 @@ function getSkillByStableId(actor, stableId) {
 export function isMartialArtSkill(item) {
   if (!item) return false;
   if (isMartialArtSkillItem(item)) return true;
-  try { return item.getFlag?.(MODULE_ID, "isMartialArt") === true; } catch { return false; }
+  try { return item.getFlag?.(SCOPE, "isMartialArt") === true; } catch { return false; }
 }
 
 /** Per-action bonus override map for a style: system field (fork) then flag (vanilla), else null. */
@@ -109,7 +111,7 @@ export function martialBonusesFor(skill) {
   if (!skill) return null;
   const sys = skill.system?.martialBonuses;
   if (sys) return sys;
-  try { return skill.getFlag?.(MODULE_ID, "martialBonuses") ?? null; } catch { return null; }
+  try { return skill.getFlag?.(SCOPE, "martialBonuses") ?? null; } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -228,18 +230,18 @@ export async function applyMartialHitEffects(action, targetActor, attackerActor)
   if (action === martialActions.throw || action === martialActions.sweepTrip) {
     titleKey = "MartialFxKnockdownTitle"; bodyKey = "MartialFxKnockdownBody";
   } else if (action === martialActions.hold) {
-    await targetActor.setFlag(MODULE_ID, "heldBy", attackerActor?.id ?? "").catch(() => {});
+    await targetActor.setFlag(SCOPE, "heldBy", attackerActor?.id ?? "").catch(() => {});
     titleKey = "MartialFxHeldTitle"; bodyKey = "MartialFxHeldBody";
   } else if (action === martialActions.grapple) {
-    await targetActor.setFlag(MODULE_ID, "grappledBy", attackerActor?.id ?? "").catch(() => {});
+    await targetActor.setFlag(SCOPE, "grappledBy", attackerActor?.id ?? "").catch(() => {});
     titleKey = "MartialFxGrappledTitle"; bodyKey = "MartialFxGrappledBody";
   } else if (action === martialActions.choke) {
-    await targetActor.setFlag(MODULE_ID, "chokeState", { formula: "1d6" }).catch(() => {});
+    await targetActor.setFlag(SCOPE, "chokeState", { formula: "1d6" }).catch(() => {});
     titleKey = "MartialFxChokeTitle"; bodyKey = "MartialFxChokeBody";
   } else if (action === martialActions.escape) {
-    await targetActor.unsetFlag(MODULE_ID, "heldBy").catch(() => {});
-    await targetActor.unsetFlag(MODULE_ID, "grappledBy").catch(() => {});
-    await targetActor.unsetFlag(MODULE_ID, "chokeState").catch(() => {});
+    await targetActor.unsetFlag(SCOPE, "heldBy").catch(() => {});
+    await targetActor.unsetFlag(SCOPE, "grappledBy").catch(() => {});
+    await targetActor.unsetFlag(SCOPE, "chokeState").catch(() => {});
     titleKey = "MartialFxEscapedTitle"; bodyKey = "MartialFxEscapedBody";
   } else {
     return; // no special effect for this action
@@ -384,8 +386,8 @@ export async function rollMartialAttack(actor, {
       const def = await rollMeleeDefense(targetActor);
       rolls.push(def.roll);
 
-      const dodgeBonus = targetActor.getFlag?.(MODULE_ID, "dodging") ? 2 : 0;
-      const parried = !!targetActor.getFlag?.(MODULE_ID, "parrying");
+      const dodgeBonus = targetActor.getFlag?.(SCOPE, "dodging") ? 2 : 0;
+      const parried = !!targetActor.getFlag?.(SCOPE, "parrying");
       const hits = !parried && (attackRoll.total > def.total + dodgeBonus);
 
       cardData.contested = {

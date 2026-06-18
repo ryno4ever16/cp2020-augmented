@@ -6,10 +6,6 @@
  * without reading Foundry's legacy Actor template objects at runtime.
  */
 
-/** Module id / settings scope. Single source of truth so lookups + engine code can
- *  reference it without importing the settings layer (avoids a circular dependency). */
-export const MODULE_ID = "cp2020-augmented";
-
 export const DEFAULT_STATS = {
   int: { base: 5, tempMod: 0 },
   ref: { base: 5, tempMod: 0 },
