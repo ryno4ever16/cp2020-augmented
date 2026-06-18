@@ -1,7 +1,7 @@
 import { localize } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 import {
-  ipEnabled, ipSystem, ipAwardModel, ipAutoBaselineAmount, ipThrottle, ipSkillLockMode
+  ipEnabled, ipSystem, ipAwardModel, ipAutoBaselineAmount, ipThrottle, ipSkillLockMode, ipShowPending
 } from "../settings.js";
 
 /**
@@ -65,6 +65,34 @@ export async function toggleSkillLock(actor) {
   if (mode === "gm" && !isGM) { ui.notifications?.warn(localize("IpLockGmOnly")); return; }
   const cur = actor.getFlag(SCOPE, flag) === true;
   await actor.setFlag(SCOPE, flag, !cur);
+}
+
+/* --------------------------------------------------------------------- */
+/*  In-sheet display payload                                              */
+/* --------------------------------------------------------------------- */
+
+/**
+ * Build the in-sheet IP display payload for an actor: the global flags (Simple-mode pool, lock state,
+ * GM pending visibility) plus a per-skill `{ cost, banked, pending, canLevel }` map. Reads the
+ * relocation-boundary flag accessors so the in-sheet injection ([[ip-tracker-design]]) has a single
+ * flag-based data source — the module mirror of the system's `_prepareIp`, but flag-stored so it
+ * works on the vanilla cyberpunk2020 system.
+ */
+export function ipDisplayForActor(actor) {
+  if (!actor || !ipEnabled()) return { enabled: false, bySkill: {} };
+  const simple = ipSystem() === "simple";
+  const isGM = game.user?.isGM === true;
+  const lock = ipLockState(actor);
+  const pool = actorPool(actor);
+  const bySkill = {};
+  for (const s of actor.items) {
+    if (s.type !== "skill") continue;
+    const cost = ipCost(s);
+    const banked = skillIp(s);
+    const have = simple ? pool : banked;
+    bySkill[s.id] = { cost, banked, pending: skillPending(s), canLevel: have >= cost };
+  }
+  return { enabled: true, simple, locked: lock.locked, lockMode: lock.mode, pool, showPending: isGM && ipShowPending(), bySkill };
 }
 
 /* --------------------------------------------------------------------- */

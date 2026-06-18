@@ -602,6 +602,10 @@ export function ipThrottle() {
 export function ipSkillLockMode() {
   try { return game.settings.get(SCOPE, "ipSkillLockMode") || "owner"; } catch { return "owner"; }
 }
+/** Whether the GM sees the pending-IP pip in the in-sheet cluster (client setting; default on). */
+export function ipShowPending() {
+  try { return game.settings.get(SCOPE, "ipShowPending") !== false; } catch { return true; }
+}
 
 // --- Shopping / economy accessors ([[shopping-design]]) ---
 /** Master gate: is the Augmented shop enabled at all? (Off when the setting is missing.) */

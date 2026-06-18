@@ -223,3 +223,17 @@
 .cp-context-menu { background: #14110d; border: 1px solid #b8916a; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.6); display: flex; flex-direction: column; min-width: 150px; }
 .cp-context-menu button { width: 100%; text-align: left; background: none; border: none; color: #f0f0f0; padding: 5px 10px; cursor: pointer; }
 .cp-context-menu button:hover { background: rgba(138,109,59,0.4); }
+
+/* --- IP (Improvement Points) in-sheet UI: skills-tab header + per-skill cluster.
+   Injected into Tilt's actor sheet by module/ip/ip-sheet.js; de-inlines the system's inline-styled
+   header. All classes cp2020ae-prefixed to stay isolated from the base system's own .ip-* markup. --- */
+.cp2020ae-ip-skills-header { display: flex; align-items: center; gap: 8px; padding: 2px 4px; }
+.cp2020ae-ip-skills-header .cp2020ae-ip-spacer { flex: 1; }
+.cp2020ae-ip-skills-header .cp2020ae-ip-pool { white-space: nowrap; opacity: 0.9; }
+/* Foundry stretches buttons to fill a flex row by default — keep the toggle content-sized. */
+.cp2020ae-ip-skills-header .cp2020ae-ip-lock-toggle { flex: 0 0 auto; width: auto; display: inline-flex; align-items: center; gap: 4px; }
+.cp2020ae-ip-cluster { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; white-space: nowrap; }
+.cp2020ae-ip-banked { font-variant-numeric: tabular-nums; opacity: 0.85; }
+.cp2020ae-ip-pending-pip { font-weight: bold; color: var(--color-text-hyperlink, #ff7b00); }
+.cp2020ae-ip-level-up { cursor: pointer; }
+.cp2020ae-ip-level-up:hover { color: var(--color-text-hyperlink, #ff7b00); }

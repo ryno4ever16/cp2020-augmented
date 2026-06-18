@@ -29,6 +29,7 @@ import { openAcpaMeleeDialog, registerAcpaCombatHooks, repairAcpa } from "./vehi
 // IP (Improvement Points) tracker — GM engine + tracker window; IP stored in module flags.
 import { registerIpHooks } from "./ip/ip.js";
 import { openIpTracker } from "./ip/tracker.js";
+import { registerIpSheet } from "./ip/ip-sheet.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
@@ -50,6 +51,9 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs",
+  // In-sheet IP UI fragments injected into the actor sheet (warm the cache; not partial includes).
+  "modules/cp2020-augmented/templates/ip/skill-cluster.hbs",
+  "modules/cp2020-augmented/templates/ip/skills-header.hbs",
 ];
 
 Hooks.once("init", function () {
@@ -129,6 +133,8 @@ Hooks.once("ready", function () {
 
   // IP (Improvement Points) tracker — independent of the combat layer; self-gates on ipSystem.
   registerIpHooks();
+  // Player-facing in-sheet IP UI (per-skill level-up + lock header); self-gates on ipEnabled() per render.
+  registerIpSheet();
 
   // Shop / economy — the sidebar cart button + chat links + live buyer sync + the GM stock-decrement
   // relay. Independent of the combat layer; self-gates on shoppingEnabled (the sidebar button only
