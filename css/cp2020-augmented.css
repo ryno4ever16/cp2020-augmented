@@ -237,3 +237,7 @@
 .cp2020ae-ip-pending-pip { font-weight: bold; color: var(--color-text-hyperlink, #ff7b00); }
 .cp2020ae-ip-level-up { cursor: pointer; }
 .cp2020ae-ip-level-up:hover { color: var(--color-text-hyperlink, #ff7b00); }
+
+/* --- Cyberware in-sheet "Install (Surgery)" button (injected on the vanilla system). Size to its
+   label instead of being stretched to fill the .field row, mirroring the fork's own .cyber-install. --- */
+.cyberpunk .field button.cp2020ae-cyber-install { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }

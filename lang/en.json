@@ -531,6 +531,7 @@
     "CyberBoughtUninstalled": "<b>Cyberware:</b> {actor} bought “{item}” for {cost}eb — <i>not installed</i> (no surgery / Humanity yet).",
     "CyberBuyInstallTitle": "Buy & Install {item}",
     "CyberBuyOnly": "Buy Only",
+    "CyberInstall": "Install (Surgery)",
     "CyberInstallConfirm": "Install",
     "CyberInstallTitle": "Install {item} (Surgery)",
     "CyberInstalled": "Installed {item}.",

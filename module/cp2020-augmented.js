@@ -34,6 +34,8 @@ import { registerIpSheet } from "./ip/ip-sheet.js";
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
 import { registerShopHooks, openShopWindow } from "./shop/catalog.js";
+// In-sheet cyberware "Install (Surgery)" button (item sheet; vanilla-only, defers to the fork's own).
+import { registerCyberwareSheet } from "./cyberware/cyberware-sheet.js";
 
 export const MODULE_ID = "cp2020-augmented";
 export const SYSTEM_ID = "cyberpunk2020";
@@ -51,9 +53,10 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs",
-  // In-sheet IP UI fragments injected into the actor sheet (warm the cache; not partial includes).
+  // In-sheet UI fragments injected into the actor/item sheet (warm the cache; not partial includes).
   "modules/cp2020-augmented/templates/ip/skill-cluster.hbs",
   "modules/cp2020-augmented/templates/ip/skills-header.hbs",
+  "modules/cp2020-augmented/templates/cyberware/install-button.hbs",
 ];
 
 Hooks.once("init", function () {
@@ -135,6 +138,8 @@ Hooks.once("ready", function () {
   registerIpHooks();
   // Player-facing in-sheet IP UI (per-skill level-up + lock header); self-gates on ipEnabled() per render.
   registerIpSheet();
+  // In-sheet cyberware Install button on the item sheet; self-gates on shoppingEnabled() + vanilla-only.
+  registerCyberwareSheet();
 
   // Shop / economy — the sidebar cart button + chat links + live buyer sync + the GM stock-decrement
   // relay. Independent of the combat layer; self-gates on shoppingEnabled (the sidebar button only
