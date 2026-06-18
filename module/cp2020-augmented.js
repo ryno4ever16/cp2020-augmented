@@ -43,13 +43,14 @@ import { registerMartialSheet } from "./martial/martial-sheet.js";
 // In-skill martial-art editor on the skill item sheet (vanilla-only; writes flags.cp2020-augmented.*).
 import { registerMartialSkillEditor } from "./martial/martial-skill-editor.js";
 
-export const MODULE_ID = "cp2020-augmented";
-export const SYSTEM_ID = "cyberpunk2020";
+// Module flag / settings scope (per-file convention used across the module).
+const SCOPE = "cp2020-augmented";
+const SYSTEM_ID = "cyberpunk2020";
 
 // Module-namespaced document sub-type ids (Foundry prefixes the manifest's bare keys with the id).
-const VEHICLE_ACTOR  = `${MODULE_ID}.vehicle`;
-const VEHICLE_WEAPON = `${MODULE_ID}.vehicleWeapon`;
-const ACPA_SYSTEM    = `${MODULE_ID}.acpaSystem`;
+const VEHICLE_ACTOR  = `${SCOPE}.vehicle`;
+const VEHICLE_WEAPON = `${SCOPE}.vehicleWeapon`;
+const ACPA_SYSTEM    = `${SCOPE}.acpaSystem`;
 
 /** Partial templates the sheets include via {{> path}} (must be preloaded for the includes to resolve). */
 const AUGMENTED_TEMPLATES = [
@@ -72,7 +73,7 @@ const AUGMENTED_TEMPLATES = [
 ];
 
 Hooks.once("init", function () {
-  console.log(`${MODULE_ID} | Initializing Cyberpunk 2020: Augmented Edition`);
+  console.log(`${SCOPE} | Initializing Cyberpunk 2020: Augmented Edition`);
 
   registerAugmentedSettings();
 
@@ -87,12 +88,12 @@ Hooks.once("init", function () {
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
   // namespaced collection, falling back to the bare global on cores that lack it (v13).
   const _Actors = foundry?.documents?.collections?.Actors ?? Actors;
-  _Actors.registerSheet(MODULE_ID, CyberpunkVehicleSheet, { types: [VEHICLE_ACTOR], makeDefault: true });
+  _Actors.registerSheet(SCOPE, CyberpunkVehicleSheet, { types: [VEHICLE_ACTOR], makeDefault: true });
 
   // Item sheet for the module's vehicle/ACPA sub-type items. A type-specific makeDefault wins over
   // the base system's typeless makeDefault item sheet (which can't render a namespaced sub-type).
   const _Items = foundry?.documents?.collections?.Items ?? Items;
-  _Items.registerSheet(MODULE_ID, CyberpunkAugmentedItemSheet, { types: [VEHICLE_WEAPON, ACPA_SYSTEM], makeDefault: true });
+  _Items.registerSheet(SCOPE, CyberpunkAugmentedItemSheet, { types: [VEHICLE_WEAPON, ACPA_SYSTEM], makeDefault: true });
 
   // Preload the wrapper sub-templates the sheet includes as Handlebars partials.
   const loadTemplates = foundry?.applications?.handlebars?.loadTemplates ?? globalThis.loadTemplates;
@@ -116,14 +117,14 @@ Hooks.once("init", function () {
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
   };
-  const mod = game.modules.get(MODULE_ID);
+  const mod = game.modules.get(SCOPE);
   if (mod) mod.api = game.cpAugmented;
 });
 
 Hooks.once("ready", function () {
   // Hard guard: the Augmented Edition only works on the cyberpunk2020 system.
   if (game.system.id !== SYSTEM_ID) {
-    console.error(`${MODULE_ID} | requires the ${SYSTEM_ID} system; current system is "${game.system.id}".`);
+    console.error(`${SCOPE} | requires the ${SYSTEM_ID} system; current system is "${game.system.id}".`);
     ui.notifications?.error(game.i18n.localize("CYBERPUNK.Augmented.WrongSystem"));
     return;
   }
@@ -164,7 +165,7 @@ Hooks.once("ready", function () {
   // injects when shopping is on, and the catalog index is only warmed then).
   registerShopHooks();
 
-  console.log(`${MODULE_ID} | Ready (on ${SYSTEM_ID} v${game.system.version}).`);
+  console.log(`${SCOPE} | Ready (on ${SYSTEM_ID} v${game.system.version}).`);
 });
 
 /**

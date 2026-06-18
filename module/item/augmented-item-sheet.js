@@ -1,5 +1,8 @@
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
+// Module flag / settings scope (per-file convention used across the module).
+const SCOPE = "cp2020-augmented";
+
 /**
  * Item sheet for the Augmented Edition vehicle/ACPA sub-type items
  * (`cp2020-augmented.vehicleWeapon`, `cp2020-augmented.acpaSystem`).
@@ -38,7 +41,7 @@ export class CyberpunkAugmentedItemSheet extends HandlebarsApplicationMixin(foun
       editable: this.isEditable,
       owner: item.isOwner,
       // Bare sub-type name (drop the module prefix) → selects which item/parts/<type>/ partials render.
-      partType: String(item.type).replace(`${this.constructor.MODULE_ID}.`, ""),
+      partType: String(item.type).replace(`${SCOPE}.`, ""),
     };
   }
 
@@ -55,7 +58,7 @@ export class CyberpunkAugmentedItemSheet extends HandlebarsApplicationMixin(foun
       });
     }
 
-    if (this.item.type === `${this.constructor.MODULE_ID}.vehicleWeapon`) this._bindShellVariants(root);
+    if (this.item.type === `${SCOPE}.vehicleWeapon`) this._bindShellVariants(root);
   }
 
   /**
@@ -99,6 +102,3 @@ export class CyberpunkAugmentedItemSheet extends HandlebarsApplicationMixin(foun
     }
   }
 }
-
-// Module id used to derive the bare sub-type name + the namespaced type checks above.
-CyberpunkAugmentedItemSheet.MODULE_ID = "cp2020-augmented";
