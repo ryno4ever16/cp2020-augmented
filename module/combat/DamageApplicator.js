@@ -106,8 +106,8 @@ export function spLocationKey(location) {
  * rule wins even if multiple flags are somehow set. The settings enforce mutual exclusivity too.
  */
 export function activeLimbModel() {
-  try { if (game.settings.get("cyberpunk2020", "w4rst4rLimbRules")) return "W4RST4R"; } catch (e) { /* default */ }
-  try { if (game.settings.get("cyberpunk2020", "limbCripplingDetailed")) return "ListenUp"; } catch (e) { /* default */ }
+  try { if (game.settings.get("cp2020-augmented", "w4rst4rLimbRules")) return "W4RST4R"; } catch (e) { /* default */ }
+  try { if (game.settings.get("cp2020-augmented", "limbCripplingDetailed")) return "ListenUp"; } catch (e) { /* default */ }
   return "Core";
 }
 
@@ -124,7 +124,7 @@ export function activeLimbModel() {
  */
 export function computeNetDamage(afterSP, btm, penetrates, location) {
   let headDoubling = false;
-  try { headDoubling = game.settings.get("cyberpunk2020", "headHitDoubling"); } catch (e) { /* default */ }
+  try { headDoubling = game.settings.get("cp2020-augmented", "headHitDoubling"); } catch (e) { /* default */ }
   // Only Listen Up doubles limb damage. W4RST4R (and Core) do not — they use the raw post-BTM net.
   const detailedLimb = activeLimbModel() === "ListenUp";
 
@@ -150,7 +150,7 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   // vehicle resolver). Defense in depth alongside the applyAreaDamages redirect.
   if (target?.type === "vehicle") return;
   let limbLoss = false;
-  try { limbLoss = game.settings.get("cyberpunk2020", "limbLossEnabled"); } catch (e) { /* default */ }
+  try { limbLoss = game.settings.get("cp2020-augmented", "limbLossEnabled"); } catch (e) { /* default */ }
   if (!limbLoss) return;
   const model = activeLimbModel();   // "W4RST4R" | "ListenUp" | "Core"
 
@@ -186,9 +186,9 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
     if (netDamage >= 6) {
       const destroyed = netDamage >= 13;
       const status = destroyed ? "destroyed" : "crippled";
-      const cur = foundry.utils.duplicate(liveTarget.getFlag("cyberpunk2020", "limbStatus") ?? {});
+      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "limbStatus") ?? {});
       cur[location] = status;
-      await liveTarget.setFlag("cyberpunk2020", "limbStatus", cur).catch(() => {});
+      await liveTarget.setFlag("cp2020-augmented", "limbStatus", cur).catch(() => {});
       const content = await renderChatCard("limb-wound.hbs", {
         title:  localizeParam(destroyed ? "LimbWoundDestroyedTitle" : "LimbWoundCrippledTitle", { name: liveTarget.name }),
         detail: localizeParam(destroyed ? "LimbWoundLuDestroyedDetail" : "LimbWoundLuCrippledDetail", { net: netDamage, limb: limbName }),
@@ -207,9 +207,9 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
     if (netDamage > 8) {
       const severed = netDamage > 12;
       const status = severed ? "severed" : "disabled";
-      const cur = foundry.utils.duplicate(liveTarget.getFlag("cyberpunk2020", "limbStatus") ?? {});
+      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "limbStatus") ?? {});
       cur[location] = status;
-      await liveTarget.setFlag("cyberpunk2020", "limbStatus", cur).catch(() => {});
+      await liveTarget.setFlag("cp2020-augmented", "limbStatus", cur).catch(() => {});
       const content = await renderChatCard("limb-wound.hbs", {
         title:           localizeParam(severed ? "LimbWoundSeveredTitle" : "LimbWoundDisabledTitle", { name: liveTarget.name }),
         locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
@@ -264,7 +264,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     try {
       const VW = await import("../vehicle/vehicle-weapons.js");
       await VW.routeWeaponFiredToVehicle({ areaDamages, ap }, target);
-    } catch (err) { console.warn("cyberpunk2020 | vehicle damage routing failed:", err); }
+    } catch (err) { console.warn("cp2020-augmented | vehicle damage routing failed:", err); }
     return [];
   }
 
@@ -322,8 +322,8 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
           { render: false, fromCyberpunkDamageSystem: true }
         );
         // New damage clears stabilization — death saves restart (CP2020 p.105)
-        if (target.getFlag?.("cyberpunk2020", "stabilized")) {
-          await target.unsetFlag("cyberpunk2020", "stabilized");
+        if (target.getFlag?.("cp2020-augmented", "stabilized")) {
+          await target.unsetFlag("cp2020-augmented", "stabilized");
           await postSavePromptCard({
             body: localizeParam("StabilizedLostBody", { name: target.name }),
             speaker: ChatMessage.getSpeaker({ actor: target }),

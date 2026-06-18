@@ -54,8 +54,8 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   };
 
   async _prepareContext(_options) {
-    const armorMode = this._armorMode ?? game.settings.get("cyberpunk2020", "damageArmorMode");
-    const ablate    = this._ablate    ?? game.settings.get("cyberpunk2020", "damageAblation");
+    const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
+    const ablate    = this._ablate    ?? game.settings.get("cp2020-augmented", "damageAblation");
     const coverSP   = this._coverSP;
 
     const rawHits = resolveAreaDamagesSync({
@@ -136,7 +136,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   _updateTotalDisplay() {
     const root = this.element;
     if (!root) return;
-    const armorMode = this._armorMode ?? game.settings.get("cyberpunk2020", "damageArmorMode");
+    const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     const btm = Number(this.target.system.stats?.bt?.modifier) || 0;
     const base = resolveAreaDamagesSync({
       target:      this.target,
@@ -161,13 +161,13 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   static async _onApply(event, target) {
     event.preventDefault();
 
-    const armorMode = this._armorMode ?? game.settings.get("cyberpunk2020", "damageArmorMode");
+    const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     const coverSP   = this._coverSP;
     const btm       = Number(this.target.system.stats?.bt?.modifier) || 0;
 
     const ablateEl = this.element?.querySelector("input[name='ablate']");
     const ablate   = ablateEl ? ablateEl.checked
-                              : (this._ablate ?? game.settings.get("cyberpunk2020", "damageAblation"));
+                              : (this._ablate ?? game.settings.get("cp2020-augmented", "damageAblation"));
 
     const rawHits = resolveAreaDamagesSync({
       target:      this.target,
@@ -245,7 +245,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Taser flag must be updated BEFORE the save prompt — threshold calculation reads it
     if (this.payload.stunSaveOnHit && resolvedHits.some(h => h.penetrates)) {
-      const taserEnabled = (() => { try { return game.settings.get("cyberpunk2020", "taserCumPenaltyEnabled"); } catch { return true; } })();
+      const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
       if (taserEnabled) await updateTaserState(this.target, this.payload);
     }
 

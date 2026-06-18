@@ -88,9 +88,9 @@ function _registerStabilizeSocket() {
     const actor = game.actors.get(data.actorId);
     if (!actor) return;
     try {
-      await actor.setFlag("cyberpunk2020", "stabilized", true);
+      await actor.setFlag("cp2020-augmented", "stabilized", true);
     } catch (err) {
-      console.warn("cyberpunk2020 | Stabilize flag relay failed:", err);
+      console.warn("cp2020-augmented | Stabilize flag relay failed:", err);
     }
   });
 }
@@ -101,11 +101,11 @@ function _registerStabilizeSocket() {
  */
 function _getTaserPenalty(actor) {
   const enabled = (() => {
-    try { return game.settings.get("cyberpunk2020", "taserCumPenaltyEnabled"); }
+    try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); }
     catch { return true; }
   })();
   if (!enabled) return 0;
-  const state = actor.getFlag?.("cyberpunk2020", "taserState");
+  const state = actor.getFlag?.("cp2020-augmented", "taserState");
   if (!state || state.count <= 1) return 0;
   const currentRound = game?.combat?.round ?? 0;
   // Penalty expires outside the 3-turn window. round=0 means outside combat — always active.
@@ -119,15 +119,15 @@ function _getTaserPenalty(actor) {
  * Legacy single-object dotState is transparently migrated to array format on read.
  */
 export async function applyAcidDotState(target, location, turnsLeft, formula) {
-  const mode = (() => { try { return game.settings.get("cyberpunk2020", "acidDotStackMode"); } catch { return "stack"; } })();
+  const mode = (() => { try { return game.settings.get("cp2020-augmented", "acidDotStackMode"); } catch { return "stack"; } })();
   const newEntry = { location, turnsLeft: Number(turnsLeft), formula: String(formula || "1d6") };
 
   if (mode === "reset") {
-    await target.setFlag("cyberpunk2020", "dotState", [newEntry]);
+    await target.setFlag("cp2020-augmented", "dotState", [newEntry]);
     return;
   }
 
-  const raw = target.getFlag?.("cyberpunk2020", "dotState");
+  const raw = target.getFlag?.("cp2020-augmented", "dotState");
   const states = Array.isArray(raw) ? [...raw] : (raw ? [raw] : []);
 
   if (mode === "stack") {
@@ -141,7 +141,7 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
     // "separate": push a new independent timer regardless of existing effects at the location
     states.push(newEntry);
   }
-  await target.setFlag("cyberpunk2020", "dotState", states);
+  await target.setFlag("cp2020-augmented", "dotState", states);
 }
 
 /**
@@ -152,16 +152,16 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
  * concurrent timer. Legacy single-object state is transparently migrated to array form on read.
  */
 export async function applyFireDotState(target, location, turnsLeft, formula) {
-  const mode = (() => { try { return game.settings.get("cyberpunk2020", "fireDotStackMode"); } catch { return "stack"; } })();
+  const mode = (() => { try { return game.settings.get("cp2020-augmented", "fireDotStackMode"); } catch { return "stack"; } })();
   // mult halves each surviving turn so a burn diminishes: RAW API is 1d6 then 1d6/2 (Chromebook 2).
   const newEntry = { location, turnsLeft: Number(turnsLeft), formula: String(formula || "1d6"), mult: 1 };
 
   if (mode === "reset") {
-    await target.setFlag("cyberpunk2020", "fireDotState", [newEntry]);
+    await target.setFlag("cp2020-augmented", "fireDotState", [newEntry]);
     return;
   }
 
-  const raw = target.getFlag?.("cyberpunk2020", "fireDotState");
+  const raw = target.getFlag?.("cp2020-augmented", "fireDotState");
   const states = Array.isArray(raw) ? [...raw] : (raw ? [raw] : []);
 
   if (mode === "stack") {
@@ -175,7 +175,7 @@ export async function applyFireDotState(target, location, turnsLeft, formula) {
   } else {
     states.push(newEntry);
   }
-  await target.setFlag("cyberpunk2020", "fireDotState", states);
+  await target.setFlag("cp2020-augmented", "fireDotState", states);
 }
 
 /**
@@ -196,10 +196,10 @@ export async function applyDotFromPayload(target, location, src, penetrated = tr
     // Incendiary only ignites the target when the round gets through armor (RAW: "if the bullet
     // penetrates"). An unarmored target always counts as penetrated, so they always catch fire.
     if (!penetrated) return;
-    const on = (() => { try { return game.settings.get("cyberpunk2020", "fireDotEnabled"); } catch { return true; } })();
+    const on = (() => { try { return game.settings.get("cp2020-augmented", "fireDotEnabled"); } catch { return true; } })();
     if (on) await applyFireDotState(target, location, turns, formula);
   } else {
-    const on = (() => { try { return game.settings.get("cyberpunk2020", "acidArmorDotEnabled"); } catch { return true; } })();
+    const on = (() => { try { return game.settings.get("cp2020-augmented", "acidArmorDotEnabled"); } catch { return true; } })();
     if (on) await applyAcidDotState(target, location, turns, formula);
   }
 }
@@ -208,10 +208,10 @@ export async function applyDotFromPayload(target, location, src, penetrated = tr
 export async function updateTaserState(actor, payload) {
   const mod   = Number(payload.stunSaveMod ?? -2);
   const round = game?.combat?.round ?? 0;
-  const state = actor.getFlag?.("cyberpunk2020", "taserState");
+  const state = actor.getFlag?.("cp2020-augmented", "taserState");
   const withinWindow = state && (state.round === 0 || (round > 0 && round <= state.round + 2));
   const count = withinWindow ? (state.count ?? 0) + 1 : 1;
-  await actor.setFlag("cyberpunk2020", "taserState", { count, round, mod });
+  await actor.setFlag("cp2020-augmented", "taserState", { count, round, mod });
 }
 
 /**
@@ -263,7 +263,7 @@ export async function postStunSavePrompt(actor, token = null) {
   // threshold is already floored to ≥ 1 by getStunThreshold, so no floored note is shown.
   const woundClause = penalty > 0      ? localizeParam("StunWoundPenaltyClause", { penalty }) : "";
   const taserClause = taserPenalty > 0 ? localizeParam("StunTaserPenaltyClause", { penalty: taserPenalty }) : "";
-  const taserCount  = actor.getFlag?.("cyberpunk2020", "taserState")?.count ?? 1;
+  const taserCount  = actor.getFlag?.("cp2020-augmented", "taserState")?.count ?? 1;
 
   const content = await renderChatCard("stun-save-prompt.hbs", {
     actorName: actor.name,
@@ -328,7 +328,7 @@ export async function postSavePrompts(actor, token = null) {
 
   if (woundState >= 4) {
     // Death Save before Stun Save at Mortal (p.99: both required, death is more urgent)
-    const isStabilized = liveActor.getFlag?.("cyberpunk2020", "stabilized");
+    const isStabilized = liveActor.getFlag?.("cp2020-augmented", "stabilized");
     if (!isStabilized) {
       await postDeathSavePrompt(liveActor, liveToken);
     }
@@ -475,7 +475,7 @@ export async function executeStabilize({ actorId }) {
             // A medic may stabilize a patient they don't own: write the flag directly
             // if we can, otherwise relay it to the GM (the roll already posted to chat).
             if (_canModifyActor(actor)) {
-              await actor.setFlag("cyberpunk2020", "stabilized", true);
+              await actor.setFlag("cp2020-augmented", "stabilized", true);
             } else {
               _relayStabilizedFlag(actorId);
             }
@@ -510,7 +510,7 @@ async function _applyStatusEffect(actorId, tokenId, sceneId, statusId, restrictM
         ?? tokenDoc.actor?.system?.ma?.total
         ?? null;
       if (currentSpeed !== null) {
-        await tokenDoc.actor?.setFlag("cyberpunk2020", "preStunMovement", currentSpeed);
+        await tokenDoc.actor?.setFlag("cp2020-augmented", "preStunMovement", currentSpeed);
       }
       // Foundry v13+: direct TokenDocument movement update
       await tokenDoc.update({ "movement.walk": 0 }).catch(() => {
@@ -518,7 +518,7 @@ async function _applyStatusEffect(actorId, tokenId, sceneId, statusId, restrictM
       });
     }
   } catch (err) {
-    console.warn("cyberpunk2020 | Could not apply status effect:", statusId, err);
+    console.warn("cp2020-augmented | Could not apply status effect:", statusId, err);
   }
 }
 
@@ -578,11 +578,11 @@ export function registerSaveRollHandlers() {
 
     // Death Save each turn (CP2020 p.105): Mortal + unstabilized
     const deathPerTurn = (() => {
-      try { return game.settings.get("cyberpunk2020", "autoDeathSavePerTurn"); }
+      try { return game.settings.get("cp2020-augmented", "autoDeathSavePerTurn"); }
       catch { return false; }
     })();
     if (deathPerTurn && woundState >= 4) {
-      const isStabilized = actor.getFlag?.("cyberpunk2020", "stabilized");
+      const isStabilized = actor.getFlag?.("cp2020-augmented", "stabilized");
       if (!isStabilized) {
         await postDeathSavePrompt(actor, token);
       }
@@ -590,7 +590,7 @@ export function registerSaveRollHandlers() {
 
     // Stun Save recovery (CP2020 p.104): unconscious characters re-roll each turn
     const stunRecovery = (() => {
-      try { return game.settings.get("cyberpunk2020", "autoSaveRePrompt"); }
+      try { return game.settings.get("cp2020-augmented", "autoSaveRePrompt"); }
       catch { return false; }
     })();
     if (stunRecovery) {
