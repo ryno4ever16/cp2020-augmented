@@ -1,0 +1,9 @@
+{{!--
+  "Act after which combatant" picker (DialogV2 content) for the Wait action. Rendered via
+  renderChatCard with { options:[{value,label}] }. The #cp-wait-target select id is kept verbatim
+  so the confirm callback reads the chosen combatant. i18n via CPLocal.
+--}}
+<div class="cp-select-dialog">
+  <p>{{CPLocal "WaitAfterWhichTurn"}}</p>
+  <select id="cp-wait-target">{{#each options}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+</div>

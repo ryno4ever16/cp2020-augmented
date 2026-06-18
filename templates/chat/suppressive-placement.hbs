@@ -1,0 +1,22 @@
+{{!--
+  Suppressive Fire zone-placement card (CP2020 p.110). Rendered via renderChatCard with
+  { weaponName, saveDC, templateId, dmgFormula, attackerId }. The cp-confirm-fire-zone button
+  + its data-* are kept verbatim so the global click handler fires; the button text must keep
+  the literal "Confirm Fire Zone" (e2e). Mirrors explosion-confirm.hbs. i18n via CPLocal.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "SuppPlacementTitle" weapon=weaponName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "SuppPlacementDC" dc=saveDC}}}</span><br>
+    <span>{{CPLocal "SuppPlacementPlaced"}}</span><br>
+    <span class="save-note">{{{CPLocal "SuppPlacementHint"}}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-confirm-fire-zone"
+      data-template-id="{{templateId}}"
+      data-save-dc="{{saveDC}}"
+      data-dmg-formula="{{dmgFormula}}"
+      data-attacker-id="{{attackerId}}"
+      data-weapon-name="{{weaponName}}">{{CPLocal "ConfirmFireZoneBtn"}}</button>
+  </div>
+</div>

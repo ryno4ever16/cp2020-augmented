@@ -1,0 +1,26 @@
+{{!--
+  Death Save result card (CP2020 p.99). Rendered via renderTemplate from
+  executeDeathSave(). Two shapes:
+    isAutoDeath  threshold was 0 — no roll happened, posted via ChatMessage.create.
+    rolled       success/fail of the 1d10, posted as roll.toMessage() content; on a
+                 successful save the stabilize block offers an Attempt Stabilization
+                 button (cp-stabilize-roll, data-* kept verbatim for the click handler).
+  i18n via CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result death-save-result">
+  <h3>{{CPLocal "DeathSaveTitle" name=actorName}}</h3>
+  {{#if isAutoDeath}}
+  <div>{{{CPLocal "DeathSaveAutoResult" name=actorName}}}</div>
+  {{else}}
+  <div>{{{CPLocal "DeathSaveResultDetail" mortal=mortalLevel result=result threshold=threshold}}}</div>
+  <div class="result-line">
+    {{#if success}}{{{CPLocal "DeathSaveResultWin" name=actorName result=result threshold=threshold}}}{{else}}{{{CPLocal "DeathSaveResultLose" name=actorName result=result threshold=threshold}}}{{/if}}
+  </div>
+  {{#if showStabilize}}
+  <div class="stabilize-block">
+    <span class="stabilize-hint">{{CPLocal "StabilizeHint" damage=totalDamage}}</span>
+    <button class="cp-stabilize-roll" data-actor-id="{{actorId}}" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">{{CPLocal "StabilizeAttemptBtn"}}</button>
+  </div>
+  {{/if}}
+  {{/if}}
+</div>

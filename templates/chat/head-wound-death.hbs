@@ -1,0 +1,12 @@
+{{!--
+  Head-wound automatic-death card (CP2020 p.103). Rendered via renderChatCard from
+  assessWoundSeverity() when a head wound exceeds 8 net damage — a head wound over 8
+  kills automatically, so there is no roll or button. Mirrors death-save-result.hbs.
+  i18n via CPLocal; triple-stash on the AUTOMATIC DEATH line (it carries a result-fail
+  verdict span baked into the i18n value, the DeathSaveAutoResult idiom).
+--}}
+<div class="cyberpunk save-result death-save-result">
+  <h3>{{CPLocal "HeadWoundTitle" name=actorName}}</h3>
+  <div>{{CPLocal "HeadWoundDamage" net=netDamage}}</div>
+  <div class="result-line">{{{CPLocal "HeadWoundAutoDeath" name=actorName}}}</div>
+</div>

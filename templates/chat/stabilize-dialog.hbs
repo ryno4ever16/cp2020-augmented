@@ -1,0 +1,26 @@
+{{!--
+  Stabilization input form (CP2020 p.105). Rendered via renderTemplate and passed as
+  the `content` of the DialogV2 in executeStabilize(). The input/select ids
+  (cp-stab-tech / cp-stab-med / cp-stab-facility) are read back by the dialog callback,
+  so they are kept verbatim. Layout via the .cp-stabilize-dialog CSS class (no inline
+  style); i18n via CPLocal (triple-stash on the intro which carries <b>).
+--}}
+<div class="cp-stabilize-dialog">
+  <p class="intro">{{{CPLocal "StabilizeDialogIntro" damage=totalDamage}}}</p>
+  <div class="fields">
+    <label>{{CPLocal "StabilizeTechLabel"}}
+      <input type="number" id="cp-stab-tech" value="{{techVal}}">
+    </label>
+    <label>{{CPLocal "StabilizeMedLabel"}}
+      <input type="number" id="cp-stab-med" value="{{medSkill}}">
+    </label>
+    <label>{{CPLocal "StabilizeFacilityLabel"}}
+      <select id="cp-stab-facility">
+        <option value="0">{{CPLocal "StabilizeFacilityNone"}}</option>
+        <option value="3">{{CPLocal "StabilizeFacilityTrauma"}}</option>
+        <option value="5">{{CPLocal "StabilizeFacilityHospital"}}</option>
+        <option value="3" id="life-tank">{{CPLocal "StabilizeFacilityTank"}}</option>
+      </select>
+    </label>
+  </div>
+</div>

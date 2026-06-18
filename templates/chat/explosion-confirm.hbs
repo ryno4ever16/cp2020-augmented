@@ -1,0 +1,18 @@
+{{!--
+  Explosion blast confirm card (CP2020 p.108). Rendered via renderTemplate with
+  { weaponName, radius, baseDamage, fullWithin, templateId }. The button classes
+  (cp-confirm-explosion-scatter / cp-confirm-explosion) + data-template-id are kept
+  verbatim so the existing global click handlers fire. i18n via CPLocal (matches
+  templates/chat/suppressive.hbs); triple-stash on the summary because it carries <b>.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "ExplosionConfirmTitle" weapon=weaponName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "ExplosionConfirmSummary" radius=radius damage=baseDamage within=fullWithin}}}</span><br>
+    <span class="save-note">{{CPLocal "ExplosionConfirmHint"}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-confirm-explosion-scatter" data-template-id="{{templateId}}">{{CPLocal "ExplosionScatterBtn"}}</button>
+    <button class="cp-confirm-explosion" data-template-id="{{templateId}}">{{CPLocal "ExplosionConfirmBtn"}}</button>
+  </div>
+</div>

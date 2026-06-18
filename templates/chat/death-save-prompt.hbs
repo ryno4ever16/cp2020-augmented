@@ -1,0 +1,27 @@
+{{!--
+  Death Save prompt card (CP2020 p.99). Rendered via renderTemplate from
+  postDeathSavePrompt() in module/combat/save-rolls.js. When the threshold is 0 no
+  roll can succeed (isAutoDeath) — the card shows an automatic-death warning instead
+  of the roll button. The cp-death-save-roll button + its data-* attrs (incl.
+  data-mortal-level) are kept verbatim so the existing global click handler fires.
+  i18n via CPLocal; triple-stash on values that carry <b>.
+--}}
+<div class="cyberpunk save-prompt death-save-prompt">
+  <h3>{{CPLocal "DeathSaveTitle" name=actorName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "SaveWoundLine" wound=woundText}}}</span><br>
+    <span>{{{CPLocal "DeathSaveFormula" bt=bt mortal=mortalLevel threshold=threshold auto=autoDeathClause}}}</span><br>
+    {{#if isAutoDeath}}
+    <span class="result-fail">{{{CPLocal "DeathSaveAutoWarn"}}}</span>
+    {{else}}
+    <span>{{{CPLocal "DeathSaveNeed" threshold=threshold}}}</span>
+    {{/if}}
+  </div>
+  <div class="save-buttons">
+    {{#if isAutoDeath}}
+    <div class="result-note danger">{{CPLocal "DeathSaveTrauma"}}</div>
+    {{else}}
+    <button class="cp-death-save-roll" data-actor-id="{{actorId}}" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}" data-mortal-level="{{mortalLevel}}">{{CPLocal "DeathSaveRollBtn" threshold=threshold}}</button>
+    {{/if}}
+  </div>
+</div>

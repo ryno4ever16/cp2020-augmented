@@ -1,0 +1,14 @@
+{{!--
+  Stabilization result card (CP2020 p.105). Rendered via renderTemplate and passed as
+  the `content` of roll.toMessage() in executeStabilize(). `facility` is a pre-assembled
+  localized clause (empty when no facility bonus) and `breakdown` is the arithmetic
+  total string, both built in JS. i18n via CPLocal; triple-stash on values with markup.
+--}}
+<div class="cyberpunk save-result stabilize-result">
+  <h3>{{CPLocal "StabilizeResultTitle" name=actorName}}</h3>
+  <div>{{{CPLocal "StabilizeResultDetail" damage=totalDamage tech=tech med=med facility=facility result=result total=total}}}</div>
+  <div class="result-line">
+    {{#if success}}{{{CPLocal "StabilizeResultWin" breakdown=breakdown damage=totalDamage}}}{{else}}{{{CPLocal "StabilizeResultLose" breakdown=breakdown damage=totalDamage}}}{{/if}}
+  </div>
+  {{#if success}}<div class="result-note">{{CPLocal "StabilizeResultNote"}}</div>{{/if}}
+</div>

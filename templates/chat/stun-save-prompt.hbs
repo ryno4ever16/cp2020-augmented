@@ -1,0 +1,20 @@
+{{!--
+  Stun / Shock Save prompt card (CP2020 p.99). Rendered via renderTemplate from
+  postStunSavePrompt() in module/combat/save-rolls.js. The cp-stun-save-roll button
+  + its data-* attrs are kept verbatim so the existing global click handler fires.
+  i18n via CPLocal (matches explosion-confirm.hbs / suppressive.hbs); conditional
+  penalty clauses are pre-assembled in JS via localizeParam and passed in as params
+  (the GasCloudTurnBody / GasCloudPenaltyClause pattern). Triple-stash on values that
+  carry <b>.
+--}}
+<div class="cyberpunk save-prompt stun-save-prompt">
+  <h3>{{CPLocal "StunSaveTitle" name=actorName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "SaveWoundLine" wound=woundLabel}}}</span><br>
+    <span>{{{CPLocal "StunSaveFormula" bt=bt wound=woundClause taser=taserClause threshold=threshold}}}</span>{{#if taserPenalty}}<br><span class="taser-warning">{{{CPLocal "StunSaveTaserWarn" count=taserCount penalty=taserPenalty}}}</span>{{/if}}<br>
+    <span>{{{CPLocal "StunSaveNeed" threshold=threshold}}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-stun-save-roll" data-actor-id="{{actorId}}" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">{{CPLocal "StunSaveRollBtn" threshold=threshold}}</button>
+  </div>
+</div>

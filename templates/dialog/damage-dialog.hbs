@@ -1,0 +1,119 @@
+{{!--
+  systems/cyberpunk2020/templates/dialog/damage-dialog.hbs
+
+  Damage sequence displayed:
+    Roll (raw) − SP = after-SP damage   ← editable
+    Then on Apply: − BTM = HP written to character (min 1 if SP penetrated)
+
+  BTM is NOT pre-applied in the preview. It is the character's personal
+  toughness and is only subtracted at the moment damage is actually received.
+--}}
+{{!-- V2: NOT a <form> — the outer <form> is provided by the dialog's tag:"form". The Apply/Cancel
+     buttons are data-action handlers; a nested form here lets Enter submit natively (GET) and brick
+     the app. --}}
+<div class="cyberpunk flexcol damage-dialog">
+
+  {{!-- Header --}}
+  <div class="field-list one-col">
+    <div class="field">
+      <label>Weapon</label>
+      <span class="flex-pad">{{weaponName}}</span>
+    </div>
+    <div class="field">
+      <label>Target</label>
+      <span class="flex-pad">{{targetName}}</span>
+    </div>
+    {{#if ap}}
+    <div class="field inactive">
+      <span>AP round — armor SP halved</span>
+    </div>
+    {{/if}}
+  </div>
+
+  <hr>
+
+  {{!-- Per-hit table --}}
+  <div class="damage-hit-list field-list one-col">
+    <div class="field inactive" style="font-size:0.8em; gap:4px; padding-bottom:2px;">
+      <span style="min-width:60px;">Location</span>
+      <span class="flex-pad"></span>
+      <span style="min-width:36px; text-align:right;" title="Raw damage from dice roll">Roll</span>
+      <span style="width:14px; text-align:center;">−</span>
+      <span style="min-width:36px; text-align:right;" title="SP at the moment this bullet hit">SP</span>
+      <span style="width:14px; text-align:center;">=</span>
+      <span style="min-width:52px; text-align:right;" title="Damage after armor. BTM will be subtracted when you click Apply. Editable.">After SP</span>
+    </div>
+
+    {{#each resolvedHits as |hit i|}}
+    <div class="damage-hit field" style="gap:4px;">
+      <span style="min-width:60px;">{{hit.location}}</span>
+      <span class="flex-pad"></span>
+      <span class="inactive" style="min-width:36px; text-align:right;">{{hit.rawDamage}}</span>
+      <span class="inactive" style="width:14px; text-align:center;">−</span>
+      <span class="inactive" style="min-width:36px; text-align:right;"
+        title="{{#if hit.penetrates}}Armor penetrated{{else}}Armor stopped this hit{{/if}}">{{hit.spUsed}}</span>
+      <span class="inactive" style="width:14px; text-align:center;">=</span>
+      <input
+        type="number"
+        class="after-sp-override number nogrow"
+        data-hit-index="{{@index}}"
+        value="{{hit.afterSP}}"
+        min="0"
+        style="width:52px; text-align:right;"
+        title="After-armor damage. Editable. BTM (−{{../../btm}}) is subtracted at Apply time.">
+      {{#unless hit.penetrates}}<span class="inactive" style="font-size:0.75em;" title="Armor stopped this hit">✗</span>{{/unless}}
+      {{#if hit.overridden}}<span class="inactive" style="font-size:0.75em; color:var(--color-text-hyperlink);" title="Overridden">✎</span>{{/if}}
+    </div>
+    {{/each}}
+  </div>
+
+  {{!-- BTM line + total --}}
+  <div class="field inactive" style="margin-top:4px; font-size:0.85em;">
+    <span>− BTM {{btm}} applied at Apply time (min 1 per penetrating hit)</span>
+  </div>
+  <div class="field" style="margin-top:2px; font-weight:bold;">
+    <label>Total HP damage</label>
+    <span class="flex-pad"></span>
+    <strong class="damage-total-value">{{totalNet}}</strong>
+  </div>
+
+  <hr>
+
+  {{!-- Options --}}
+  <div class="field-list one-col damage-options">
+    <div class="field">
+      <label title="SP of any wall or obstacle between attacker and target.">Cover SP</label>
+      <span class="flex-pad"></span>
+      <input
+        type="number"
+        name="coverSP"
+        class="number nogrow"
+        value="{{coverSP}}"
+        min="0"
+        style="width:52px; text-align:right;"
+        title="Common: Sheetrock 5 · Car door 10 · Concrete block 10 · Brick 25 · Stone/Tree 30">
+    </div>
+
+    <div class="field">
+      <label>Armor mode</label>
+      <span class="flex-pad"></span>
+      <select name="armorMode" class="nogrow">
+        <option value="full"   {{#if (equals armorMode "full")}}selected{{/if}}>Full (SP + Ablation)</option>
+        <option value="simple" {{#if (equals armorMode "simple")}}selected{{/if}}>Simple (SP, no Ablation)</option>
+        <option value="none"   {{#if (equals armorMode "none")}}selected{{/if}}>Ignore armor</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Ablate armor on penetrating hits</label>
+      <span class="flex-pad"></span>
+      <input type="checkbox" name="ablate" {{#if ablate}}checked{{/if}}>
+    </div>
+  </div>
+
+  <div class="flexrow dialog-buttons" style="margin-top:8px; gap:4px;">
+    <button type="button" data-action="applyDamage"  class="action">Apply Damage</button>
+    <button type="button" data-action="cancelDialog">Cancel</button>
+  </div>
+
+</div>

@@ -1,0 +1,14 @@
+{{!--
+  Stun Save result card (CP2020 p.99). Rendered via renderTemplate and passed as the
+  `content` of roll.toMessage() in executeStunSave(). The win/lose line carries a
+  result-success / result-fail span (coloured via CSS, not inline style). i18n via
+  CPLocal; triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result stun-save-result">
+  <h3>{{CPLocal "StunSaveResultTitle" name=actorName}}</h3>
+  <div>{{{CPLocal "StunSaveResultDetail" wound=woundLabel result=result threshold=threshold}}}</div>
+  <div class="result-line">
+    {{#if success}}{{{CPLocal "StunSaveResultWin" name=actorName result=result threshold=threshold}}}{{else}}{{{CPLocal "StunSaveResultLose" name=actorName result=result threshold=threshold}}}{{/if}}
+  </div>
+  {{#unless success}}<div class="result-note">{{CPLocal "StunSaveRecoveryNote"}}</div>{{/unless}}
+</div>

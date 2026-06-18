@@ -1,0 +1,14 @@
+{{!--
+  Limb-wound severity card (CP2020 p.103 + W4RST4R / Listen Up variants). Rendered via
+  renderChatCard from assessWoundSeverity(). ONE template for all three limb models — the
+  title, the optional location line, the severity detail, and the optional Death-Save clause
+  are localized + assembled in JS and passed in as data (empty string when absent: the
+  GasCloudPenaltyClause pattern), so the template stays a declarative shell. Every value may
+  carry <b> emphasis → triple-stash throughout.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{{title}}}</h3>
+  {{#if locationLine}}<div>{{{locationLine}}}</div>{{/if}}
+  <div>{{{detail}}}</div>
+  {{#if deathSaveClause}}<div class="result-line">{{{deathSaveClause}}}</div>{{/if}}
+</div>

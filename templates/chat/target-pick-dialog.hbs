@@ -1,0 +1,18 @@
+{{!--
+  Apply-damage target picker (DialogV2 content) shown when no token is pre-targeted. Rendered via
+  renderChatCard with { targetedName, options:[{value,label}] }. The #cp-target-pick select id is
+  kept verbatim so the list callback reads the chosen token. The conditional "currently targeted"
+  hint is a simple in-template branch (two CPLocal calls). i18n via CPLocal; triple-stash on the
+  hints because they carry <strong>/<em>.
+--}}
+<div class="cp-select-dialog cp-target-dialog">
+  <p class="cp-dlg-title">{{CPLocal "TargetPickPrompt"}}</p>
+  {{#if targetedName}}
+  <div class="cp-target-hint targeted">{{{CPLocal "TargetPickCurrentlyTargeted" name=targetedName}}}</div>
+  {{else}}
+  <div class="cp-target-hint none">{{{CPLocal "TargetPickNoneHint"}}}</div>
+  {{/if}}
+  <hr>
+  <p class="cp-dlg-sub">{{CPLocal "TargetPickOrList"}}</p>
+  <select id="cp-target-pick">{{#each options}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
+</div>

@@ -1,0 +1,13 @@
+{{!--
+  Suppressive Fire evasion result card (CP2020 p.110). Posted as roll.toMessage content with
+  { actorName, athletics, ref, die, total, dc, evaded }. The evaded/caught verdict carries its
+  result-success/result-fail colour span inside the i18n value (the established idiom). CPLocal;
+  triple-stash on values that carry markup.
+--}}
+<div class="cyberpunk save-result">
+  <h3>{{CPLocal "SuppEvasionTitle" name=actorName}}</h3>
+  <div>{{{CPLocal "SuppEvasionResultDetail" ath=athletics ref=ref die=die total=total dc=dc}}}</div>
+  <div class="result-line">
+    {{#if evaded}}{{{CPLocal "SuppEvasionEvaded" total=total dc=dc name=actorName}}}{{else}}{{{CPLocal "SuppEvasionCaught" total=total dc=dc name=actorName}}}{{/if}}
+  </div>
+</div>

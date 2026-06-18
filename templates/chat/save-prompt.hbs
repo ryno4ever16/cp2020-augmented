@@ -1,0 +1,18 @@
+{{!--
+  Generic Cyberpunk "save-prompt" chat card. Replaces the inline-HTML content blocks that
+  the combat module used to build by hand (one template instead of ~18 copies).
+
+  Params (both pre-localized; light inline <b> emphasis in the i18n strings is intentional):
+    title  heading text. When present it renders as an <h3>, and `body` (if any) goes in a
+           <div class="save-info"> beneath it (the structured card look).
+    body   the card text. When there is no `title`, body renders flat inside the prompt div
+           (for short one-line reminders, e.g. "X is still held by Y").
+--}}
+<div class="cyberpunk save-prompt">
+{{#if title}}
+  <h3>{{{title}}}</h3>
+  {{#if body}}<div class="save-info">{{{body}}}</div>{{/if}}
+{{else}}
+  {{{body}}}
+{{/if}}
+</div>

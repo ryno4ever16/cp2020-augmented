@@ -1,0 +1,46 @@
+{{!-- "Setup & What's New" notice (ApplicationV2). Markup only: text comes from lang/*.json via
+      {{localize}}, styling from css/cyberpunk2020.css (.cp-automation-notice). One page shown at a
+      time (the class swaps `page` and re-renders); nav uses V2 data-action buttons. --}}
+<div class="cp-automation-notice">
+
+  {{#if page.intro}}<p class="notice-intro">{{{page.intro}}}</p>{{/if}}
+
+  {{#each page.boxes as |box|}}
+  <div class="feat-box{{#if box.variant}} feat-box--{{box.variant}}{{/if}}">
+    <p class="feat-box-heading">{{box.heading}}</p>
+
+    {{#if box.rows}}
+    <table class="feat-table">
+      {{#each box.rows as |row|}}
+      <tr><td class="feat-name">{{row.name}}</td><td class="feat-desc">{{{row.desc}}}</td></tr>
+      {{/each}}
+    </table>
+    {{/if}}
+
+    {{#if box.bullets}}
+    <div class="feat-cols">
+      {{#each box.bullets as |b|}}<div class="feat-bullet">&bull; {{b}}</div>{{/each}}
+    </div>
+    {{/if}}
+  </div>
+  {{/each}}
+
+  <div class="notice-nav">
+    <label class="notice-hide">
+      <input type="checkbox" class="cp-notice-hide" {{#if hideChecked}}checked{{/if}}/>
+      {{localize "CYBERPUNK.AutoNotice.HideAgain"}}
+    </label>
+    <button type="button" class="notice-btn notice-settings" data-action="noticeSettings">
+      <i class="fas fa-cog"></i> {{localize "CYBERPUNK.AutoNotice.OpenSettings"}}
+    </button>
+    <span class="notice-spacer"></span>
+    <span class="notice-count">{{pageNum}} / {{pageCount}}</span>
+    {{#if canBack}}
+    <button type="button" class="notice-btn" data-action="noticePrev">{{localize "CYBERPUNK.AutoNotice.Back"}}</button>
+    {{/if}}
+    <button type="button" class="notice-btn notice-next" data-action="noticeNext">
+      {{#if isLast}}{{localize "CYBERPUNK.AutoNotice.GotIt"}}{{else}}{{localize "CYBERPUNK.AutoNotice.Next"}}{{/if}}
+    </button>
+  </div>
+
+</div>

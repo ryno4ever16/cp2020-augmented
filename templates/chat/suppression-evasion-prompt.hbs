@@ -1,0 +1,23 @@
+{{!--
+  Suppressive Fire evasion prompt card (CP2020 p.110), one per token in the fire zone. Rendered
+  via renderChatCard with { actorName, saveDC, weaponName, ref, athletics, actorId, tokenId,
+  sceneId, dmgFormula, attackerId }. The cp-suppression-evasion-roll button + its data-* are kept
+  verbatim so the global click handler fires. i18n via CPLocal.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "SuppEvasionTitle" name=actorName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "SuppEvasionPromptDC" dc=saveDC weapon=weaponName}}}</span><br>
+    <span>{{{CPLocal "SuppEvasionPromptRoll"}}}</span><br>
+    <span class="save-note">{{CPLocal "SuppEvasionPromptHint" ref=ref ath=athletics dc=saveDC}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-suppression-evasion-roll"
+      data-actor-id="{{actorId}}"
+      data-token-id="{{tokenId}}"
+      data-scene-id="{{sceneId}}"
+      data-save-dc="{{saveDC}}"
+      data-dmg-formula="{{dmgFormula}}"
+      data-attacker-id="{{attackerId}}">{{CPLocal "SuppEvasionRollBtn" ath=athletics ref=ref dc=saveDC}}</button>
+  </div>
+</div>
