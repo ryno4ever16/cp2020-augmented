@@ -40,6 +40,8 @@ import { registerCyberwareSheet } from "./cyberware/cyberware-sheet.js";
 import { registerServicesSheet } from "./shop/services-sheet.js";
 // In-sheet martial-arts panel (combat tab; vanilla-only, defers to the fork's own .martial-panel).
 import { registerMartialSheet } from "./martial/martial-sheet.js";
+// In-skill martial-art editor on the skill item sheet (vanilla-only; writes flags.cp2020-augmented.*).
+import { registerMartialSkillEditor } from "./martial/martial-skill-editor.js";
 
 export const MODULE_ID = "cp2020-augmented";
 export const SYSTEM_ID = "cyberpunk2020";
@@ -65,6 +67,8 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/martial/martial-panel.hbs",
   "modules/cp2020-augmented/templates/dialog/martial-style.hbs",
   "modules/cp2020-augmented/templates/chat/martial-attack.hbs",
+  "modules/cp2020-augmented/templates/chat/martial-effect.hbs",
+  "modules/cp2020-augmented/templates/item/martial-skill-editor.hbs",
 ];
 
 Hooks.once("init", function () {
@@ -152,6 +156,8 @@ Hooks.once("ready", function () {
   registerServicesSheet();
   // In-sheet martial-arts panel on the combat tab; self-gates on combatAutomationEnabled() + vanilla-only.
   registerMartialSheet();
+  // In-skill martial-art editor on the skill item sheet; self-gates on combatAutomationEnabled() + vanilla-only.
+  registerMartialSkillEditor();
 
   // Shop / economy — the sidebar cart button + chat links + live buyer sync + the GM stock-decrement
   // relay. Independent of the combat layer; self-gates on shoppingEnabled (the sidebar button only

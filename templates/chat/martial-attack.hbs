@@ -24,18 +24,18 @@
       <span class="cp2020ae-martial-roll-label">{{CPLocal "Damage"}}</span>
       {{{damageRender}}}
     </div>
+  {{/if}}
 
-    {{#if contested}}
-      <div class="cp2020ae-martial-roll-line">
-        <span class="cp2020ae-martial-roll-label">{{CPLocal "MartialDefenseLabel"}}</span>
-        {{{contested.defenseRender}}}
-      </div>
-      <p class="cp2020ae-martial-defense-detail">{{CPLocal "MartialDefenseDetail" name=contested.defenderName skill=contested.skillName val=contested.skillVal ref=contested.ref}}{{#if contested.dodgeBonus}} {{CPLocal "MartialDodgeBonus" bonus=contested.dodgeBonus}}{{/if}}</p>
-      <p class="cp2020ae-martial-verdict">
-        {{#if contested.parried}}{{{CPLocal "MartialParried" name=contested.defenderName}}}{{else if contested.hits}}{{{CPLocal "MartialHits" name=contested.defenderName}}}{{else}}{{{CPLocal "MartialMisses" name=contested.defenderName}}}{{/if}}
-      </p>
-    {{/if}}
+  {{#if contested}}
+    <div class="cp2020ae-martial-roll-line">
+      <span class="cp2020ae-martial-roll-label">{{CPLocal "MartialDefenseLabel"}}</span>
+      {{{contested.defenseRender}}}
+    </div>
+    <p class="cp2020ae-martial-defense-detail">{{CPLocal "MartialDefenseDetail" name=contested.defenderName skill=contested.skillName val=contested.skillVal ref=contested.ref}}{{#if contested.dodgeBonus}} {{CPLocal "MartialDodgeBonus" bonus=contested.dodgeBonus}}{{/if}}</p>
+    <p class="cp2020ae-martial-verdict">
+      {{#if contested.parried}}{{{CPLocal "MartialParried" name=contested.defenderName}}}{{else if contested.hits}}{{{CPLocal "MartialHits" name=contested.defenderName}}}{{else}}{{{CPLocal "MartialMisses" name=contested.defenderName}}}{{/if}}
+    </p>
   {{else}}
-    <p class="cp2020ae-martial-note">{{CPLocal "MartialNoDamageNote"}}</p>
+    {{#unless hasDamage}}<p class="cp2020ae-martial-note">{{CPLocal "MartialNoDamageNote"}}</p>{{/unless}}
   {{/if}}
 </div>

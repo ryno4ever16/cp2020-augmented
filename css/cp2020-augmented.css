@@ -271,3 +271,13 @@
 
 /* Martial attack dialog. */
 .cp2020ae-martial-dialog-action { font-weight: bold; margin: 0 0 6px; }
+
+/* Special hit-effect reminder card. */
+.cp2020ae-martial-effect .cp2020ae-martial-effect-body { margin-top: 2px; }
+
+/* In-skill martial-art editor (injected into the skill item sheet, vanilla). */
+.cp2020ae-martial-editor { margin-top: 6px; border-top: 1px solid rgba(184,145,106,0.4); padding-top: 4px; }
+.cp2020ae-ma-bonus-header { font-size: 0.75em; text-transform: uppercase; opacity: 0.6; margin: 4px 0 2px; }
+.cp2020ae-ma-bonus-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.cp2020ae-ma-bonus-grid .cp2020ae-ma-bonus-header { grid-column: 1 / -1; }
+.cp2020ae-ma-bonus-field .cp2020ae-ma-bonus { flex: 0 0 auto; width: 3em; text-align: center; }

@@ -420,6 +420,22 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
+  // --- Martial arts: special hit-effects toggle ---
+  // Hold/Grapple set a status flag on the target; Choke sets a 1d6/turn flag; Throw/Sweep post a
+  // knockdown reminder; Escape clears them. Same system-owns-it-on-the-fork pattern as fnff2Enabled,
+  // but defaults ON (the effects are core CP2020 p.100–102). See applyMartialHitEffects (martial.js).
+  const systemOwnsSpecialMelee = (() => {
+    try { return game.settings.settings.has("cyberpunk2020.specialMeleeEffectsEnabled"); } catch { return false; }
+  })();
+  game.settings.register(SCOPE, "specialMeleeEffectsEnabled", {
+    name: "SETTINGS.SpecialMeleeEffects",
+    hint: "SETTINGS.SpecialMeleeEffectsHint",
+    scope: "world",
+    config: !systemOwnsSpecialMelee,
+    type: Boolean,
+    default: true,
+  });
+
   // --- IP (Improvement Points) tracker ([[ip-tracker-design]]) ---
   game.settings.register(SCOPE, "ipSystem", {
     name: "SETTINGS.IpSystem",
@@ -579,6 +595,13 @@ export function registerAugmentedSettings() {
 export function combatAutomationEnabled() {
   try { return game.settings.get(SCOPE, "combatAutomationEnabled") === true; }
   catch { return false; }
+}
+
+/** Martial-arts special hit-effects. System setting on the fork, module-owned on vanilla; default ON. */
+export function specialMeleeEffectsEnabled() {
+  try { return game.settings.get("cyberpunk2020", "specialMeleeEffectsEnabled") === true; } catch { /* not the fork */ }
+  try { return game.settings.get(SCOPE, "specialMeleeEffectsEnabled") === true; } catch { /* not registered */ }
+  return true;
 }
 
 /** Master Maximum Metal toggle. When OFF (default), every MM-overlay feature falls back to Core CP2020. */

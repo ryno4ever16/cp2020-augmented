@@ -27,6 +27,7 @@ import {
 } from "../lookups.js";
 import { localize, localizeParam, rollLocation } from "../utils.js";
 import { renderChatCard } from "../compat.js";
+import { specialMeleeEffectsEnabled } from "../settings.js";
 
 // ---------------------------------------------------------------------------
 // Stable-id / skill-value resolution (vendored from CyberpunkActor statics).
@@ -209,6 +210,48 @@ export async function rollMeleeDefense(targetActor) {
   return { roll, total: roll.total, skillName: best.name, skillVal: best.val, ref };
 }
 
+/**
+ * Special martial hit-effects (CP2020 p.100–102). Faithful port of CyberpunkItem._applyMartialHitEffects,
+ * but built the conformant way — a chat template + i18n, not the fork's inline HTML strings. Status
+ * flags are written under the module scope (the module owns combat status on vanilla, like dodging/
+ * parrying in damage-hooks.js). Gated on specialMeleeEffectsEnabled().
+ *
+ * @param {string} action          a martialActions value
+ * @param {Actor}  targetActor
+ * @param {Actor}  [attackerActor]
+ */
+export async function applyMartialHitEffects(action, targetActor, attackerActor) {
+  if (!specialMeleeEffectsEnabled() || !targetActor) return;
+  const names = { target: targetActor.name, attacker: attackerActor?.name ?? "" };
+
+  let titleKey = null, bodyKey = null;
+  if (action === martialActions.throw || action === martialActions.sweepTrip) {
+    titleKey = "MartialFxKnockdownTitle"; bodyKey = "MartialFxKnockdownBody";
+  } else if (action === martialActions.hold) {
+    await targetActor.setFlag(MODULE_ID, "heldBy", attackerActor?.id ?? "").catch(() => {});
+    titleKey = "MartialFxHeldTitle"; bodyKey = "MartialFxHeldBody";
+  } else if (action === martialActions.grapple) {
+    await targetActor.setFlag(MODULE_ID, "grappledBy", attackerActor?.id ?? "").catch(() => {});
+    titleKey = "MartialFxGrappledTitle"; bodyKey = "MartialFxGrappledBody";
+  } else if (action === martialActions.choke) {
+    await targetActor.setFlag(MODULE_ID, "chokeState", { formula: "1d6" }).catch(() => {});
+    titleKey = "MartialFxChokeTitle"; bodyKey = "MartialFxChokeBody";
+  } else if (action === martialActions.escape) {
+    await targetActor.unsetFlag(MODULE_ID, "heldBy").catch(() => {});
+    await targetActor.unsetFlag(MODULE_ID, "grappledBy").catch(() => {});
+    await targetActor.unsetFlag(MODULE_ID, "chokeState").catch(() => {});
+    titleKey = "MartialFxEscapedTitle"; bodyKey = "MartialFxEscapedBody";
+  } else {
+    return; // no special effect for this action
+  }
+
+  const content = await renderChatCard("martial-effect.hbs", {
+    title: localizeParam(titleKey, names),
+    body: localizeParam(bodyKey, names),
+  });
+  await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor: targetActor }) });
+}
+
 // ---------------------------------------------------------------------------
 // Attack resolver.
 //
@@ -333,16 +376,16 @@ export async function rollMartialAttack(actor, {
 
     // Contested resolution (mirror of __martialBonk): when there is exactly one target, the defender
     // rolls REF + best defense skill; the attack lands only if it beats that total. A held Dodge adds
-    // +2 to the defense; a held Parry blocks outright. Those flags live in the system scope and are
-    // honoured when present (a future module Dodge/Parry action can set them); on plain vanilla they
-    // are simply absent, so this reduces to a straight opposed roll.
+    // +2 to the defense; a held Parry blocks outright. Those flags are set by the module's own Dodge/
+    // Parry actions under the module scope (see damage-hooks.js); on plain vanilla they are simply
+    // absent, so this reduces to a straight opposed roll.
     let doEmit = true;
     if (targetActor) {
       const def = await rollMeleeDefense(targetActor);
       rolls.push(def.roll);
 
-      const dodgeBonus = targetActor.getFlag?.("cyberpunk2020", "dodging") ? 2 : 0;
-      const parried = !!targetActor.getFlag?.("cyberpunk2020", "parrying");
+      const dodgeBonus = targetActor.getFlag?.(MODULE_ID, "dodging") ? 2 : 0;
+      const parried = !!targetActor.getFlag?.(MODULE_ID, "parrying");
       const hits = !parried && (attackRoll.total > def.total + dodgeBonus);
 
       cardData.contested = {
@@ -372,6 +415,32 @@ export async function rollMartialAttack(actor, {
         payload.targetActorId = targetActor.id;
       }
       Hooks.callAll("cyberpunk2020.weaponFired", payload);
+      // Damage actions that also carry an effect (Throw knockdown, Choke status) apply it on a hit.
+      if (targetActor) await applyMartialHitEffects(action, targetActor, actor);
+    }
+  }
+
+  // Non-damaging special maneuvers (Hold / Grapple / Sweep-Trip / Escape): opposed roll, and on a hit
+  // the status effect is applied (mirror of __martialBonk's T4-B block). No damage, no weaponFired.
+  const SPECIAL_NO_DAMAGE = [martialActions.hold, martialActions.grapple, martialActions.sweepTrip, martialActions.escape];
+  if (!damageFormula && specialMeleeEffectsEnabled() && SPECIAL_NO_DAMAGE.includes(action)) {
+    const target = (game.user?.targets?.size === 1) ? game.user.targets.first() : null;
+    const targetActor = target?.actor ?? null;
+    if (targetActor) {
+      const def = await rollMeleeDefense(targetActor);
+      rolls.push(def.roll);
+      const hits = attackRoll.total > def.total;
+      cardData.contested = {
+        defenderName: targetActor.name,
+        skillName: def.skillName,
+        skillVal: def.skillVal,
+        ref: def.ref,
+        dodgeBonus: 0,
+        parried: false,
+        hits,
+        defenseRender: await def.roll.render(),
+      };
+      if (hits) await applyMartialHitEffects(action, targetActor, actor);
     }
   }
 
