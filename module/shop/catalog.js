@@ -895,4 +895,15 @@ export function registerShopHooks() {
     try { await decrementShopStock(data.shopId, data.sourceKey, data.qty); }
     catch (e) { console.warn("cp2020-augmented | shopBuyRelay failed", e); }
   });
+
+  // Drag-to-buy: dropping a catalog/storefront row onto a character sheet purchases it for that actor.
+  // The core `dropActorSheetData` hook fires for BOTH the v1 and v2 actor sheets BEFORE the sheet
+  // processes the drop, so this works without overriding the system's sheet class or coupling to its
+  // (v1-vs-v2) DOM. Returning false cancels the default drop so the purchase payload isn't mistaken
+  // for an item drop. (The catalog rows emit this payload via _activatePurchaseDrag.)
+  Hooks.on("dropActorSheetData", (actor, sheet, data) => {
+    if (data?.type !== "cp2020-augmentedPurchase") return true;
+    if (actor?.isOwner) purchaseByDrop(actor, data);
+    return false;
+  });
 }
