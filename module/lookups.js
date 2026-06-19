@@ -542,8 +542,8 @@ export { rangeDCs, rangeResolve }
  * stay aligned. The chosen key is stored per-actor in flags.cyberpunk2020.anatomyImage.
  */
 export const ANATOMY_IMAGES = {
-  male:   { label: "Male",   src: "systems/cyberpunk2020/img/male-anatomy-unsegmented.svg", svg: true  },
-  female: { label: "Female", src: "systems/cyberpunk2020/img/female-anatomy-unsegmented.png", svg: false },
+  male:   { label: "Male",   src: "modules/cp2020-augmented/img/male-anatomy-unsegmented.svg", svg: true  },
+  female: { label: "Female", src: "modules/cp2020-augmented/img/female-anatomy-unsegmented.png", svg: false },
 };
 export const DEFAULT_ANATOMY_KEY = "male";
 

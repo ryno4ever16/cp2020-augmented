@@ -545,7 +545,7 @@ export function reliabilityLabel(reliabilityKey) {
  *  (the template owns the structure; the i18n line values stay structure-free). */
 function _renderFumbleCard(lines) {
   const render = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
-  return render("systems/cyberpunk2020/templates/chat/fumble-card.hbs", { lines });
+  return render("modules/cp2020-augmented/templates/chat/fumble-card.hbs", { lines });
 }
 
 async function _buildControlLossSkillFumbleData({ skill, roll }) {

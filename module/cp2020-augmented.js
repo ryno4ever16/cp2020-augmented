@@ -69,6 +69,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/dialog/martial-style.hbs",
   "modules/cp2020-augmented/templates/chat/martial-attack.hbs",
   "modules/cp2020-augmented/templates/chat/martial-effect.hbs",
+  "modules/cp2020-augmented/templates/chat/fumble-card.hbs",
   "modules/cp2020-augmented/templates/item/martial-skill-editor.hbs",
 ];
 
