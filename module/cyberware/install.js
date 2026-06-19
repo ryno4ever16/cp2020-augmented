@@ -1,5 +1,5 @@
 import { formulaHasDice } from "../dice.js";
-import { localize } from "../utils.js";
+import { localize, tryLocalize } from "../utils.js";
 import { canShop } from "../settings.js";
 import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage } from "../compat.js";
 
@@ -90,7 +90,7 @@ async function _confirmInstall(o) {
   const content = await render("modules/cp2020-augmented/templates/dialog/cyber-install.hbs", {
     showPart: o.showPart,
     partPrice: Number(o.partPrice) || 0,
-    surgeryLabel: o.surgery.label,
+    surgeryLabel: tryLocalize(o.surgery.label),
     surgeryCost: Number(o.surgeryCost) || 0,
     total,
     hc: String(hc),
@@ -137,7 +137,7 @@ async function _postInstallSummary(actor, item, { surgery, charged, loss, dmg })
     speaker,
     content: localize("CyberInstalledSummary", {
       actor: actor?.name ?? game.user.name, item: item.name,
-      surgery: surgery.label, charged, loss, dmg
+      surgery: tryLocalize(surgery.label), charged, loss, dmg
     })
   }, { messageMode: getPublicMessageMode() });
 }

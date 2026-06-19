@@ -602,7 +602,7 @@ function _hookSuppressiveFirePerTurn() {
       await _postEvasionPrompts([tokDoc], {
         saveDC:     zf.saveDC,
         dmgFormula: zf.dmgFormula,
-        weaponName: (zf.weaponName ?? "") + " (per-turn)",
+        weaponName: localizeParam("WpnVariantPerTurn", { name: zf.weaponName ?? "" }),
         attackerId: zf.actorId,
       });
     }
@@ -656,7 +656,7 @@ async function _executeSuppressionEvasion({ actorId, tokenId, sceneId, saveDC, d
         ap:           false,
         targetTokenId: tokenId,
         targetActorId: actorId,
-        weaponName:   "Suppressive Fire Hit",
+        weaponName:   localize("WpnSuppressiveFireHit"),
       });
     }
   }
@@ -1193,7 +1193,7 @@ function _hookGasCloud() {
       color: "#88ff44", borderColor: "#44aa22",
       flags: {
         isGasCloud: true, turnsLeft: duration, stunSaveMod,
-        createdRound: game.combat?.round ?? 0, weaponName: payload.weaponName ?? "Gas Grenade",
+        createdRound: game.combat?.round ?? 0, weaponName: payload.weaponName ?? localize("WpnGasGrenade"),
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Gas cloud creation failed"); return; }
@@ -1222,7 +1222,7 @@ function _hookGasCloud() {
       const flags = cloud.doc.flags.cyberpunk2020;
       const turnsLeft    = Number(flags.turnsLeft   ?? 0);
       const stunSaveMod  = Number(flags.stunSaveMod ?? 0);
-      const weaponName   = flags.weaponName ?? "Gas Grenade";
+      const weaponName   = flags.weaponName ?? localize("WpnGasGrenade");
 
       if (turnsLeft <= 0) {
         await deleteArea(cloud);
@@ -1322,7 +1322,7 @@ function _isOccluded(ox, oy, tok) {
  * permanent HP and half is stun (a Stun Save is always prompted). Soft armor at the torso loses
  * 2 SP. Used by the explosion blast when Detailed Explosives is enabled.
  */
-async function _applyConcussionToToken(tok, falloffDmg, { weaponName = "Explosion" } = {}) {
+async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize("WpnExplosion") } = {}) {
   if (!tok?.actor || falloffDmg <= 0) return 0;
   const actor = tok.actor;
   const btm = Number(actor.system.stats?.bt?.modifier) || 0;
@@ -1390,7 +1390,7 @@ function _hookExplosion() {
     const radius = Number(payload.blastRadius) || 0;
     if (baseDamage <= 0 || radius <= 0) return;
 
-    const weaponName = payload.weaponName ?? "Explosion";
+    const weaponName = payload.weaponName ?? localize("WpnExplosion");
     const fullWithin = Number(payload.blastFullDamageWithin ?? 1);
     // Create via the core-agnostic shim (MeasuredTemplate circle on v13, Region ellipse on v14).
     // originX/originY are stored in flags so _confirmExplosion can compute falloff distances even
@@ -1474,15 +1474,15 @@ async function _confirmExplosion(templateId) {
 
     if (detailed) {
       // HEP concussion (SP ignored, ½ permanent + ½ stun, soft armor −2). Optional shrapnel on top.
-      await _applyConcussionToToken(tok, dmg, { weaponName: (f.weaponName ?? "Explosion") + " (concussion)" });
+      await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) });
       if (f.blastShrapnel) {
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
-          { ap: false, edged: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: (f.weaponName ?? "Explosion") + " (shrapnel)" });
+          { ap: false, edged: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) });
       }
     } else {
       // Core blast: range-banded damage through normal armor.
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: (f.weaponName ?? "Explosion") + " (blast)" });
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) });
     }
   }
 }
@@ -1575,7 +1575,7 @@ function _hookSpread() {
       (band === "Short" ? payload.spreadDamageShort : band === "Long" ? payload.spreadDamageLong : payload.spreadDamageMedium)
       || (band === "Short" ? "4d6" : band === "Long" ? "2d6" : "3d6");   // Core defaults
 
-    const weaponName = payload.weaponName ?? "Shotgun";
+    const weaponName = payload.weaponName ?? localize("WpnShotgun");
     // Create via the core-agnostic shim (MeasuredTemplate ray on v13, Region polygon on v14).
     const handle = await createArea(scene, {
       kind: "ray",
@@ -1631,7 +1631,7 @@ async function _confirmSpreadZone(templateId) {
     const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
     const dmgRoll = await new Roll(f.dmgFormula || "3d6").evaluate();
     const dmg = Math.max(0, Math.floor(dmgRoll.total));
-    await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: (f.weaponName ?? "Shotgun") + " (spread)" });
+    await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantSpread", { name: f.weaponName ?? localize("WpnShotgun") }) });
   }
 }
 

@@ -11,6 +11,8 @@
  *   crewToken.flags.cp2020-augmented.boardedVehicle  = <vehicleActorId>
  */
 
+import { localizeParam } from "../utils.js";
+
 const SCOPE = "cp2020-augmented";
 const VEHICLE_SORT = -100;            // render below crew tokens
 /** token.id → {dx,dy} captured in preUpdateToken, consumed in updateToken (same client). */
@@ -36,7 +38,7 @@ export async function deployVehicleToScene(actor, opts = {}) {
 
   const existing = scene.tokens.find(t => t.actorId === actor.id && t.flags?.[SCOPE]?.vehicleHandle);
   if (existing) {
-    ui.notifications?.info?.(`${actor.name} is already on this scene — resize/move that token.`);
+    ui.notifications?.info?.(localizeParam("Vehicle.AlreadyOnScene", { name: actor.name }));
     return { tokenId: existing.id, existing: true };
   }
 

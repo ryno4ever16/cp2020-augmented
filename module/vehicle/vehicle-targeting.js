@@ -257,13 +257,13 @@ function _canModifyTarget(target) {
  * so the GM doesn't re-derive it from a possibly-different active scene. See [[combat-data-hazards]].
  */
 function _relayVehicleAttack(payload, target) {
-  if (!game.users?.activeGM) { ui.notifications?.warn?.(`No GM is connected to apply damage to ${target?.name ?? "the vehicle"}.`); return; }
+  if (!game.users?.activeGM) { ui.notifications?.warn?.(localizeParam("Vehicle.NoGMForDamage", { name: target?.name ?? "the vehicle" })); return; }
   const facing = resolveFacing(payload, target);
   game.socket.emit(`system.${SCOPE}`, {
     type: "vehicleDamage", targetActorId: target.id,
     payload: { ...payload, facing }, requesterId: game.user.id,
   });
-  ui.notifications?.info?.(`Vehicle damage sent to the GM (${target?.name ?? "target"}).`);
+  ui.notifications?.info?.(localizeParam("Vehicle.DamageSentToGM", { name: target?.name ?? "target" }));
 }
 
 /**

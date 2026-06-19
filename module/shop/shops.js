@@ -127,7 +127,7 @@ export async function duplicateShop(id) {
   if (!src || !game.user.isGM) return null;
   const newId = foundry.utils.randomID();
   const map = _rawMap();
-  map[newId] = { ...foundry.utils.deepClone(src), id: newId, name: `${src.name} (Copy)`, open: false };
+  map[newId] = { ...foundry.utils.deepClone(src), id: newId, name: game.i18n.format("CYBERPUNK.ShopCopySuffix", { name: src.name }), open: false };
   await _save(map);
   return getShop(newId);
 }
