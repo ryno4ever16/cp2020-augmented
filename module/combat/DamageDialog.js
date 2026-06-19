@@ -34,7 +34,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   static DEFAULT_OPTIONS = {
     classes:   ["cyberpunk", "dialog", "damage-dialog"],
     tag:       "form",
-    window:    { title: "Apply Damage" },
+    window:    { title: "CYBERPUNK.ApplyDamageTitle" },
     position:  { width: 500, height: "auto" },
     resizable: true,
     actions: {

@@ -8,6 +8,7 @@
  * from Hooks.once('init'/'ready').
  */
 import { registerAugmentedSettings, combatAutomationEnabled, ipSystem, applyCarolingianSkinClass } from "./settings.js";
+import { registerAugmentedHandlebarsHelpers } from "./handlebars-helpers.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
@@ -77,6 +78,9 @@ Hooks.once("init", function () {
   console.log(`${SCOPE} | Initializing Cyberpunk 2020: Augmented Edition`);
 
   registerAugmentedSettings();
+  // Vendor the {{CPLocal}}/{{CPLocalParam}} localization helpers the module's templates use, so
+  // they resolve without depending on the base system registering them (vanilla self-sufficiency).
+  registerAugmentedHandlebarsHelpers();
 
   // Register the module's vehicle/ACPA DataModels. Data lives in system.* of the sub-type
   // documents (no flags) — see module.json `documentTypes` for the manifest declaration.

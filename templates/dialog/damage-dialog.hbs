@@ -1,5 +1,5 @@
 {{!--
-  systems/cyberpunk2020/templates/dialog/damage-dialog.hbs
+  modules/cp2020-augmented/templates/dialog/damage-dialog.hbs
 
   Damage sequence displayed:
     Roll (raw) − SP = after-SP damage   ← editable
@@ -16,16 +16,16 @@
   {{!-- Header --}}
   <div class="field-list one-col">
     <div class="field">
-      <label>Weapon</label>
+      <label>{{CPLocal "Weapon"}}</label>
       <span class="flex-pad">{{weaponName}}</span>
     </div>
     <div class="field">
-      <label>Target</label>
+      <label>{{CPLocal "Target"}}</label>
       <span class="flex-pad">{{targetName}}</span>
     </div>
     {{#if ap}}
     <div class="field inactive">
-      <span>AP round — armor SP halved</span>
+      <span>{{CPLocal "DamageDlgApRound"}}</span>
     </div>
     {{/if}}
   </div>
@@ -35,13 +35,13 @@
   {{!-- Per-hit table --}}
   <div class="damage-hit-list field-list one-col">
     <div class="field inactive" style="font-size:0.8em; gap:4px; padding-bottom:2px;">
-      <span style="min-width:60px;">Location</span>
+      <span style="min-width:60px;">{{CPLocal "Location"}}</span>
       <span class="flex-pad"></span>
-      <span style="min-width:36px; text-align:right;" title="Raw damage from dice roll">Roll</span>
+      <span style="min-width:36px; text-align:right;" title="{{CPLocal 'DamageDlgRollTip'}}">{{CPLocal "DamageDlgRoll"}}</span>
       <span style="width:14px; text-align:center;">−</span>
-      <span style="min-width:36px; text-align:right;" title="SP at the moment this bullet hit">SP</span>
+      <span style="min-width:36px; text-align:right;" title="{{CPLocal 'DamageDlgSpTip'}}">{{CPLocal "SP"}}</span>
       <span style="width:14px; text-align:center;">=</span>
-      <span style="min-width:52px; text-align:right;" title="Damage after armor. BTM will be subtracted when you click Apply. Editable.">After SP</span>
+      <span style="min-width:52px; text-align:right;" title="{{CPLocal 'DamageDlgAfterSpHeaderTip'}}">{{CPLocal "DamageDlgAfterSp"}}</span>
     </div>
 
     {{#each resolvedHits as |hit i|}}
@@ -51,7 +51,7 @@
       <span class="inactive" style="min-width:36px; text-align:right;">{{hit.rawDamage}}</span>
       <span class="inactive" style="width:14px; text-align:center;">−</span>
       <span class="inactive" style="min-width:36px; text-align:right;"
-        title="{{#if hit.penetrates}}Armor penetrated{{else}}Armor stopped this hit{{/if}}">{{hit.spUsed}}</span>
+        title="{{#if hit.penetrates}}{{CPLocal 'DamageDlgPenetrated'}}{{else}}{{CPLocal 'DamageDlgStopped'}}{{/if}}">{{hit.spUsed}}</span>
       <span class="inactive" style="width:14px; text-align:center;">=</span>
       <input
         type="number"
@@ -60,19 +60,19 @@
         value="{{hit.afterSP}}"
         min="0"
         style="width:52px; text-align:right;"
-        title="After-armor damage. Editable. BTM (−{{../../btm}}) is subtracted at Apply time.">
-      {{#unless hit.penetrates}}<span class="inactive" style="font-size:0.75em;" title="Armor stopped this hit">✗</span>{{/unless}}
-      {{#if hit.overridden}}<span class="inactive" style="font-size:0.75em; color:var(--color-text-hyperlink);" title="Overridden">✎</span>{{/if}}
+        title="{{CPLocal 'DamageDlgAfterSpTip' btm=../../btm}}">
+      {{#unless hit.penetrates}}<span class="inactive" style="font-size:0.75em;" title="{{CPLocal 'DamageDlgStopped'}}">✗</span>{{/unless}}
+      {{#if hit.overridden}}<span class="inactive" style="font-size:0.75em; color:var(--color-text-hyperlink);" title="{{CPLocal 'DamageDlgOverridden'}}">✎</span>{{/if}}
     </div>
     {{/each}}
   </div>
 
   {{!-- BTM line + total --}}
   <div class="field inactive" style="margin-top:4px; font-size:0.85em;">
-    <span>− BTM {{btm}} applied at Apply time (min 1 per penetrating hit)</span>
+    <span>{{CPLocal "DamageDlgBtmLine" btm=btm}}</span>
   </div>
   <div class="field" style="margin-top:2px; font-weight:bold;">
-    <label>Total HP damage</label>
+    <label>{{CPLocal "DamageDlgTotalHp"}}</label>
     <span class="flex-pad"></span>
     <strong class="damage-total-value">{{totalNet}}</strong>
   </div>
@@ -82,7 +82,7 @@
   {{!-- Options --}}
   <div class="field-list one-col damage-options">
     <div class="field">
-      <label title="SP of any wall or obstacle between attacker and target.">Cover SP</label>
+      <label title="{{CPLocal 'DamageDlgCoverSpTip'}}">{{CPLocal "DamageDlgCoverSp"}}</label>
       <span class="flex-pad"></span>
       <input
         type="number"
@@ -91,29 +91,29 @@
         value="{{coverSP}}"
         min="0"
         style="width:52px; text-align:right;"
-        title="Common: Sheetrock 5 · Car door 10 · Concrete block 10 · Brick 25 · Stone/Tree 30">
+        title="{{CPLocal 'DamageDlgCoverSpExamples'}}">
     </div>
 
     <div class="field">
-      <label>Armor mode</label>
+      <label>{{CPLocal "DamageDlgArmorMode"}}</label>
       <span class="flex-pad"></span>
       <select name="armorMode" class="nogrow">
-        <option value="full"   {{#if (equals armorMode "full")}}selected{{/if}}>Full (SP + Ablation)</option>
-        <option value="simple" {{#if (equals armorMode "simple")}}selected{{/if}}>Simple (SP, no Ablation)</option>
-        <option value="none"   {{#if (equals armorMode "none")}}selected{{/if}}>Ignore armor</option>
+        <option value="full"   {{#if (equals armorMode "full")}}selected{{/if}}>{{CPLocal "DamageDlgArmorFull"}}</option>
+        <option value="simple" {{#if (equals armorMode "simple")}}selected{{/if}}>{{CPLocal "DamageDlgArmorSimple"}}</option>
+        <option value="none"   {{#if (equals armorMode "none")}}selected{{/if}}>{{CPLocal "DamageDlgArmorNone"}}</option>
       </select>
     </div>
 
     <div class="field">
-      <label>Ablate armor on penetrating hits</label>
+      <label>{{CPLocal "DamageDlgAblate"}}</label>
       <span class="flex-pad"></span>
       <input type="checkbox" name="ablate" {{#if ablate}}checked{{/if}}>
     </div>
   </div>
 
   <div class="flexrow dialog-buttons" style="margin-top:8px; gap:4px;">
-    <button type="button" data-action="applyDamage"  class="action">Apply Damage</button>
-    <button type="button" data-action="cancelDialog">Cancel</button>
+    <button type="button" data-action="applyDamage"  class="action">{{CPLocal "DamageDlgApplyBtn"}}</button>
+    <button type="button" data-action="cancelDialog">{{CPLocal "Cancel"}}</button>
   </div>
 
 </div>

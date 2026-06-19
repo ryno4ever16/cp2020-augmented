@@ -12,30 +12,30 @@
             <div class="flexcol" style="flex:1; margin-left:8px;">
                 <h1 class="title"><input type="text" class="field-value" name="name" value="{{actor.name}}"/></h1>
                 <div class="fieldrow">
-                    <div class="field" title="Powered Armor (ACPA). Uncheck to turn this back into a standard vehicle (the sheet switches automatically).">
-                        <label>ACPA</label>
+                    <div class="field" title="{{CPLocal 'Vehicle.AcpaCheckboxTip'}}">
+                        <label>{{CPLocal "Vehicle.AcpaLabel"}}</label>
                         <input type="checkbox" name="system.isACPA" {{#if system.isACPA}}checked{{/if}}/>
                     </div>
-                    <div class="field" title="Active vehicle ruleset (world setting)">
-                        <label>Ruleset</label>
+                    <div class="field" title="{{CPLocal 'Vehicle.RulesetTip'}}">
+                        <label>{{CPLocal "Vehicle.RulesetLabel"}}</label>
                         <input type="text" class="not-editable" value="{{ruleSystem}}" readonly/>
                     </div>
                     {{#if controlEnabled}}
                     <div class="field cp-header-action">
-                        <button type="button" data-action="controlRoll" title="Roll a Control / Maneuver check (REF + Pilot + 1d10 vs Difficulty Value). On failure, rolls the loss/failure table for the active ruleset.">🎲 Control</button>
+                        <button type="button" data-action="controlRoll" title="{{CPLocal 'Vehicle.ControlRollTipAcpa'}}">{{CPLocal "Vehicle.ControlBtnAcpa"}}</button>
                     </div>
                     {{/if}}
                     {{#if damageEnabled}}
                     <div class="field cp-header-action">
-                        <button type="button" data-action="vehicleDamage" title="Resolve damage against this suit. Maximum Metal compares Penetration to Armor Value, then rolls the powered-armor System Hit / Critical Hit / Integrity flow.">💥 Damage</button>
+                        <button type="button" data-action="vehicleDamage" title="{{CPLocal 'Vehicle.DamageTipAcpa'}}">{{CPLocal "Vehicle.DamageBtn"}}</button>
                     </div>
                     {{/if}}
                     {{#if mmOn}}
                     <div class="field cp-header-action">
-                        <button type="button" data-action="acpaMelee" title="ACPA hand-to-hand (Maximum Metal p.58): Punch / Crush / Kick → vehicle-scale Penetration through the dispatcher. Target a token first.">🤜 Melee</button>
+                        <button type="button" data-action="acpaMelee" title="{{CPLocal 'Vehicle.MeleeTip'}}">{{CPLocal "Vehicle.MeleeBtn"}}</button>
                     </div>
                     <div class="field cp-header-action">
-                        <button type="button" data-action="acpaRepair" title="Field repair: restore the suit to full — frame SOP per area, SDP, power, and clear all damage/status.">🔧 Repair</button>
+                        <button type="button" data-action="acpaRepair" title="{{CPLocal 'Vehicle.RepairTip'}}">{{CPLocal "Vehicle.RepairBtn"}}</button>
                     </div>
                     {{/if}}
                 </div>
@@ -46,205 +46,205 @@
     <div class="sheet-body flexcol" style="overflow-y:auto;">
 
         {{!-- Chassis & Armor --}}
-        <h2 class="cyber-section-header">Chassis &amp; Armor</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.ChassisArmorHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Chassis Strength (Linear Frame). Drives Body Value (STR ÷ 20), melee damage and lift (Maximum Metal p.5/61).">
-                <label>Chassis STR</label><input type="number" name="system.str" value="{{system.str}}"/></div>
-            <div class="field" title="Body Value = chassis STR ÷ 20 (rounded). Subtracted on the MM damage-severity roll. Read-only.">
-                <label>Body Value</label><input type="number" class="not-editable" value="{{system.bodyValue}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ChassisStrTip'}}">
+                <label>{{CPLocal "Vehicle.ChassisStrLabel"}}</label><input type="number" name="system.str" value="{{system.str}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.BodyValueTip'}}">
+                <label>{{CPLocal "Vehicle.BodyValueLabel"}}</label><input type="number" class="not-editable" value="{{system.bodyValue}}" readonly/></div>
         </div>
         <div class="field-list">
-            <div class="field" title="Armor-shell Stopping Power. ACPA armor is equal on every side (no flank rules); SP ≤ 2× chassis STR (MM p.61).">
-                <label>Armor SP</label><input type="number" name="system.sp.front" value="{{system.sp.front}}"/></div>
-            <div class="field" title="Armor Value = SP ÷ 20 (MM p.4). A weapon's Penetration is compared to this. Read-only.">
-                <label>Armor Value</label><input type="number" class="not-editable" value="{{system.armorValue.front}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ArmorSpTip'}}">
+                <label>{{CPLocal "Vehicle.ArmorSpLabel"}}</label><input type="number" name="system.sp.front" value="{{system.sp.front}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ArmorValueTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.ArmorValueLabel"}}</label><input type="number" class="not-editable" value="{{system.armorValue.front}}" readonly/></div>
         </div>
         <div class="field-list">
-            <div class="field" title="Structural Damage Points — the suit's structural hit points.">
-                <label>SDP (current)</label><input type="number" name="system.sdp.value" value="{{system.sdp.value}}"/></div>
-            <div class="field" title="Maximum SDP.">
-                <label>SDP (max)</label><input type="number" name="system.sdp.max" value="{{system.sdp.max}}"/></div>
-            {{#if system.destroyed}}<div class="field"><label style="color:#ff4040;font-weight:bold;">DESTROYED</label></div>{{/if}}
+            <div class="field" title="{{CPLocal 'Vehicle.SdpCurrentTip'}}">
+                <label>{{CPLocal "Vehicle.SdpCurrentLabel"}}</label><input type="number" name="system.sdp.value" value="{{system.sdp.value}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.SdpMaxTip'}}">
+                <label>{{CPLocal "Vehicle.SdpMaxLabel"}}</label><input type="number" name="system.sdp.max" value="{{system.sdp.max}}"/></div>
+            {{#if system.destroyed}}<div class="field"><label class="cp-vehicle-destroyed">{{CPLocal "Vehicle.Destroyed"}}</label></div>{{/if}}
         </div>
 
         {{!-- Linear Frame — derived from chassis STR via the Chassis Inventory Table (MM p.61-62). --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Linear Frame</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.LinearFrameHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Toughness Mod (MM p.62): reduces incoming damage (like BTM). Derived from chassis STR. Read-only.">
-                <label>Toughness</label><input type="number" class="not-editable" value="{{system.toughness}}" readonly/></div>
-            <div class="field" title="Linear-frame melee Damage Mod (frame worn standalone; full ACPA melee uses Punch/Crush/Kick). Derived.">
-                <label>Frame Dam Mod</label><input type="text" class="not-editable" value="{{system.damMod}}" readonly/></div>
-            <div class="field" title="Dead-weight lift (kg), derived from chassis STR."><label>Lift (kg)</label><input type="number" class="not-editable" value="{{system.lift}}" readonly/></div>
-            <div class="field" title="Carry capacity (kg), derived from chassis STR."><label>Carry (kg)</label><input type="number" class="not-editable" value="{{system.carry}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ToughnessTip'}}">
+                <label>{{CPLocal "Vehicle.ToughnessLabel"}}</label><input type="number" class="not-editable" value="{{system.toughness}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.FrameDamModTip'}}">
+                <label>{{CPLocal "Vehicle.FrameDamModLabel"}}</label><input type="text" class="not-editable" value="{{system.damMod}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.LiftKgTip'}}"><label>{{CPLocal "Vehicle.LiftKgLabel"}}</label><input type="number" class="not-editable" value="{{system.lift}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CarryKgTip'}}"><label>{{CPLocal "Vehicle.CarryKgLabel"}}</label><input type="number" class="not-editable" value="{{system.carry}}" readonly/></div>
         </div>
-        <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">Frame SOP per body area (max, from chassis STR — Head/Arm 25%, Leg 50%, Torso 75%). Destroying an area kills its systems; the Torso shuts the suit down.</p>
+        <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">{{CPLocal "Vehicle.FrameSopNote"}}</p>
         <div class="field-list">
-            <div class="field"><label>Head</label><input type="number" class="not-editable" value="{{system.frameSOPMax.head}}" readonly/></div>
-            <div class="field"><label>Torso</label><input type="number" class="not-editable" value="{{system.frameSOPMax.torso}}" readonly/></div>
-            <div class="field"><label>R.Arm</label><input type="number" class="not-editable" value="{{system.frameSOPMax.rArm}}" readonly/></div>
-            <div class="field"><label>L.Arm</label><input type="number" class="not-editable" value="{{system.frameSOPMax.lArm}}" readonly/></div>
-            <div class="field"><label>R.Leg</label><input type="number" class="not-editable" value="{{system.frameSOPMax.rLeg}}" readonly/></div>
-            <div class="field"><label>L.Leg</label><input type="number" class="not-editable" value="{{system.frameSOPMax.lLeg}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.HeadLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.head}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.TorsoLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.torso}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.RArmLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.rArm}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.LArmLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.lArm}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.RLegLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.rLeg}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.LLegLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.lLeg}}" readonly/></div>
         </div>
         {{/if}}
 
         {{!-- Reality Interface & Reflex/Control — the suit's "user interface" (MM p.64-65). The
               interface sets DFB (weapon to-hit) + its SIB contribution; reflex/control sets the REF cap. --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Reality Interface &amp; Reflex/Control</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.RealityInterfaceHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Reality Interface (MM p.64). Always mounted in the helmet. Sets the suit's SIB contribution and its Direct-Fire Bonus (DFB) — the to-hit modifier when the suit fires its own weapons, replacing any smartgun bonus.">
-                <label>Reality Interface</label>
+            <div class="field" title="{{CPLocal 'Vehicle.RealityInterfaceTip'}}">
+                <label>{{CPLocal "Vehicle.RealityInterfaceLabel"}}</label>
                 <select name="system.realityInterface">
                     {{#each realityInterfaceChoices}}<option value="{{key}}" {{#if (equals ../system.realityInterface key)}}selected{{/if}}>{{label}}</option>{{/each}}
                 </select>
             </div>
-            <div class="field" title="Reflex/Control system (MM p.65). Sets the REF modifier and the maximum operating Reflex (the suit's REF cap). Takes no spaces. Advanced is the free military standard.">
-                <label>Reflex/Control</label>
+            <div class="field" title="{{CPLocal 'Vehicle.ReflexControlTip'}}">
+                <label>{{CPLocal "Vehicle.ReflexControlLabel"}}</label>
                 <select name="system.reflexControl">
                     {{#each reflexControlChoices}}<option value="{{key}}" {{#if (equals ../system.reflexControl key)}}selected{{/if}}>{{label}}</option>{{/each}}
                 </select>
             </div>
         </div>
         <div class="field-list">
-            <div class="field" title="Direct-Fire Bonus — added to the suit's weapon to-hit rolls (replaces any smartgun bonus). Derived from the Reality Interface. Read-only.">
-                <label>DFB (to-hit)</label><input type="number" class="not-editable" value="{{system.dfb}}" readonly/></div>
-            <div class="field" title="The Reality Interface's contribution to the suit's Initiative Bonus (SIB). Derived. Read-only.">
-                <label>Interface SIB</label><input type="number" class="not-editable" value="{{system.interfaceSib}}" readonly/></div>
-            <div class="field" title="Maximum operating Reflex allowed by the Reflex/Control system. The pilot's REF is capped here while driving the suit. Read-only.">
-                <label>Max REF</label><input type="number" class="not-editable" value="{{system.maxRef}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.DfbToHitTip'}}">
+                <label>{{CPLocal "Vehicle.DfbToHitLabel"}}</label><input type="number" class="not-editable" value="{{system.dfb}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.InterfaceSibTip'}}">
+                <label>{{CPLocal "Vehicle.InterfaceSibLabel"}}</label><input type="number" class="not-editable" value="{{system.interfaceSib}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.MaxRefTip'}}">
+                <label>{{CPLocal "Vehicle.MaxRefLabel"}}</label><input type="number" class="not-editable" value="{{system.maxRef}}" readonly/></div>
         </div>
         <div class="field-list">
-            <div class="field" title="Link the pilot character actor. Its REF drives the suit's effective REF, and it takes frame-breach / overflow damage (firing the normal stun/death saves). Leave as (none) to use the manual Pilot REF.">
-                <label>Pilot</label>
+            <div class="field" title="{{CPLocal 'Vehicle.PilotLinkTip'}}">
+                <label>{{CPLocal "Vehicle.PilotLabel"}}</label>
                 <select name="system.pilotId">
-                    <option value="" {{#unless system.pilotId}}selected{{/unless}}>(none — use manual REF)</option>
+                    <option value="" {{#unless system.pilotId}}selected{{/unless}}>{{CPLocal "Vehicle.PilotNoneOption"}}</option>
                     {{#each pilotChoices}}<option value="{{id}}" {{#if (equals ../system.pilotId id)}}selected{{/if}}>{{name}}</option>{{/each}}
                 </select>
             </div>
             {{#if linkedPilotName}}
-            <div class="field" title="The linked pilot's base REF (from their character sheet), used as the suit's base REF.">
+            <div class="field" title="{{CPLocal 'Vehicle.LinkedPilotRefTip'}}">
                 <label>{{linkedPilotName}} REF</label><input type="number" class="not-editable" value="{{linkedPilotRef}}" readonly/></div>
             {{else}}
-            <div class="field" title="Manual fallback base Reflex (REF), used when no pilot actor is linked.">
-                <label>Pilot REF (manual)</label><input type="number" name="system.pilotRef" value="{{system.pilotRef}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.PilotRefManualTip'}}">
+                <label>{{CPLocal "Vehicle.PilotRefManualLabel"}}</label><input type="number" name="system.pilotRef" value="{{system.pilotRef}}"/></div>
             {{/if}}
-            <div class="field" title="Effective operating REF = clamp(pilot REF + Reflex/Control mod, 0..max) − suit REF critical damage. Derived. Read-only.">
-                <label>Effective REF</label><input type="number" class="not-editable" value="{{system.effectiveRef}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.EffectiveRefTip'}}">
+                <label>{{CPLocal "Vehicle.EffectiveRefLabel"}}</label><input type="number" class="not-editable" value="{{system.effectiveRef}}" readonly/></div>
         </div>
         <div class="field-list">
-            <div class="field" title="Command &amp; Control Computer (C3): squad-coordination option, +1 to Initiative and Awareness while linked. Integrable with any Reflex/Control system.">
-                <label>Command Computer</label><input type="checkbox" name="system.commandComputer" {{#if system.commandComputer}}checked{{/if}}/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CommandComputerTip'}}">
+                <label>{{CPLocal "Vehicle.CommandComputerLabel"}}</label><input type="checkbox" name="system.commandComputer" {{#if system.commandComputer}}checked{{/if}}/></div>
         </div>
-        <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">Suit Initiative Bonus (SIB) = round(chassis Lift/Cap ÷ total loaded weight) − 1, plus the Reality Interface SIB. Total weight = chassis + armor shell + Trooper capacity + interface + systems.</p>
+        <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">{{CPLocal "Vehicle.SibNote"}}</p>
         <div class="field-list">
-            <div class="field" title="Suit Initiative Bonus (SIB) — added to the pilot's initiative in ACPA combat. Derived from the power-to-weight ratio + the Reality Interface. Read-only.">
-                <label>SIB (initiative)</label><input type="number" class="not-editable" value="{{system.sib}}" readonly/></div>
-            <div class="field" title="Total fully-loaded weight (kg). Derived; drives the SIB. Read-only.">
-                <label>Total Wt (kg)</label><input type="number" class="not-editable" value="{{system.totalWeight}}" readonly/></div>
-            <div class="field" title="Armor-shell weight (kg), from the chosen shell SP via the Armor Inventory Table. Derived. Read-only.">
-                <label>Armor Wt (kg)</label><input type="number" class="not-editable" value="{{system.armorWeight}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.SibInitiativeTip'}}">
+                <label>{{CPLocal "Vehicle.SibInitiativeLabel"}}</label><input type="number" class="not-editable" value="{{system.sib}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.TotalWtKgTip'}}">
+                <label>{{CPLocal "Vehicle.TotalWtKgLabel"}}</label><input type="number" class="not-editable" value="{{system.totalWeight}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ArmorWtKgTip'}}">
+                <label>{{CPLocal "Vehicle.ArmorWtKgLabel"}}</label><input type="number" class="not-editable" value="{{system.armorWeight}}" readonly/></div>
         </div>
         <div class="field-list">
-            <div class="field" title="Trooper Capacity — the weight budget set aside for the pilot and personal gear (counts toward total weight for SIB). 114 kg standard; Russian frames 136; elite 80-91.">
-                <label>Trooper Cap (kg)</label><input type="number" name="system.trooperCapacity" value="{{system.trooperCapacity}}"/></div>
-            <div class="field" title="EXTRA / misc systems weight (kg) added ON TOP of the mounted-systems weight (shown in the Systems section). Mounted acpaSystem Items are summed automatically; use this only for gear not in the catalog. Both count toward Total Weight / SIB.">
-                <label>Extra Sys Wt (kg)</label><input type="number" name="system.systemsWeight" value="{{system.systemsWeight}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.TrooperCapTip'}}">
+                <label>{{CPLocal "Vehicle.TrooperCapLabel"}}</label><input type="number" name="system.trooperCapacity" value="{{system.trooperCapacity}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ExtraSysWtTip'}}">
+                <label>{{CPLocal "Vehicle.ExtraSysWtLabel"}}</label><input type="number" name="system.systemsWeight" value="{{system.systemsWeight}}"/></div>
         </div>
         {{/if}}
 
         {{!-- Pilot & Systems --}}
-        <h2 class="cyber-section-header">Pilot &amp; Systems</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.PilotSystemsHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Cyberlinked controls: +2 to control / maneuver / weapon rolls. ACPA are normally linked.">
-                <label>Cyberlinked</label><input type="checkbox" name="system.vehicleLink" {{#if system.vehicleLink}}checked{{/if}}/></div>
-            <div class="field" title="Targeting-computer / fire-control bonus added to weapon to-hit rolls.">
-                <label>Fire Control</label><input type="number" name="system.fireControl" value="{{system.fireControl}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CyberlinkedTip'}}">
+                <label>{{CPLocal "Vehicle.CyberlinkedLabel"}}</label><input type="checkbox" name="system.vehicleLink" {{#if system.vehicleLink}}checked{{/if}}/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.FireControlTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.FireControl"}}</label><input type="number" name="system.fireControl" value="{{system.fireControl}}"/></div>
         </div>
         {{#if mmOn}}
         <div class="field-list">
-            <div class="field" title="Damage Control: a hit system keeps working on a 1d10 of 6-10 (MM p.4).">
-                <label>Damage Control</label><input type="checkbox" name="system.damageControl" {{#if system.damageControl}}checked{{/if}}/></div>
-            <div class="field" title="Composite armor: halves shaped-charge (HEAT) Penetration (MM p.23).">
-                <label>Composite Armor</label><input type="checkbox" name="system.compositeArmor" {{#if system.compositeArmor}}checked{{/if}}/></div>
-            <div class="field" title="Sensors / radar: auto-detect inbound missiles (90%).">
-                <label>Sensors / Radar</label><input type="checkbox" name="system.sensors" {{#if system.sensors}}checked{{/if}}/></div>
-            <div class="field" title="Anti-missile (AGAMS): may shoot down a detected missile.">
-                <label>Anti-Missile</label><input type="checkbox" name="system.antiMissile" {{#if system.antiMissile}}checked{{/if}}/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.DamageControlTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.DamageControlLabel"}}</label><input type="checkbox" name="system.damageControl" {{#if system.damageControl}}checked{{/if}}/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CompositeArmorTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.CompositeArmorLabel"}}</label><input type="checkbox" name="system.compositeArmor" {{#if system.compositeArmor}}checked{{/if}}/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.SensorsRadarTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.SensorsRadarLabel"}}</label><input type="checkbox" name="system.sensors" {{#if system.sensors}}checked{{/if}}/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.AntiMissileTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.AntiMissileLabel"}}</label><input type="checkbox" name="system.antiMissile" {{#if system.antiMissile}}checked{{/if}}/></div>
         </div>
         {{/if}}
 
         {{!-- ACPA Combat Status (written by the damage resolver + per-round ticks; editable for field repairs). --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Combat Status</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.CombatStatusHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Suit Strength lost to Critical Hits (reduces melee damage and lift). 0 = undamaged.">
-                <label>STR damage</label><input type="number" name="system.strDamage" value="{{system.strDamage}}"/></div>
-            <div class="field" title="Suit Reflexes lost to Critical Hits (reduces the pilot's REF / control). 0 = undamaged.">
-                <label>REF damage</label><input type="number" name="system.refDamage" value="{{system.refDamage}}"/></div>
-            <div class="field" title="Remaining power-cell life in hours (24h normal). Drained by power-unit criticals.">
-                <label>Power (hrs)</label><input type="number" name="system.powerHours" value="{{system.powerHours}}"/></div>
-            <div class="field" title="Minutes until heatstroke after a cooling-system critical (0 = OK). Counts down ~0.05/round (3s rounds); at 0 the heatstroke escalation begins.">
-                <label>Cooling (min)</label><input type="number" step="0.05" name="system.coolingTimer" value="{{system.coolingTimer}}"/></div>
-            <div class="field" title="Heatstroke escalation after the cooling build-up expires (MM p.55): 0 none · 1 Serious · 2 Critical · 3 Mortal · 4 out. The pilot makes a Stun/Shock Save one level worse each round.">
-                <label>Heatstroke</label><input type="number" name="system.heatstrokeLevel" value="{{system.heatstrokeLevel}}"/></div>
-            <div class="field" title="Rounds the interface/electronics are out (counts down each combat round).">
-                <label>Interface out</label><input type="number" name="system.interfaceOut" value="{{system.interfaceOut}}"/></div>
-            <div class="field" title="Rounds a body area is seized up / immobile (counts down each round; mobility restored at 0).">
-                <label>Seized (rds)</label><input type="number" name="system.seizeUp" value="{{system.seizeUp}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.StrDamageTip'}}">
+                <label>{{CPLocal "Vehicle.StrDamageLabel"}}</label><input type="number" name="system.strDamage" value="{{system.strDamage}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.RefDamageTip'}}">
+                <label>{{CPLocal "Vehicle.RefDamageLabel"}}</label><input type="number" name="system.refDamage" value="{{system.refDamage}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.PowerHrsTip'}}">
+                <label>{{CPLocal "Vehicle.PowerHrsLabel"}}</label><input type="number" name="system.powerHours" value="{{system.powerHours}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CoolingMinTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.CoolingMinLabel"}}</label><input type="number" step="0.05" name="system.coolingTimer" value="{{system.coolingTimer}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.HeatstrokeTip'}}">
+                <label>{{CPLocal "Vehicle.HeatstrokeLabel"}}</label><input type="number" name="system.heatstrokeLevel" value="{{system.heatstrokeLevel}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.InterfaceOutTip'}}">
+                <label>{{CPLocal "Vehicle.InterfaceOutLabel"}}</label><input type="number" name="system.interfaceOut" value="{{system.interfaceOut}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.SeizedRdsTipAcpa'}}">
+                <label>{{CPLocal "Vehicle.SeizedRdsLabel"}}</label><input type="number" name="system.seizeUp" value="{{system.seizeUp}}"/></div>
         </div>
         {{/if}}
 
         {{!-- Weapons = embedded vehicleWeapon Items. --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Weapons</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.WeaponsHeader"}}</h2>
         <div class="cp-weapons">
             {{#each weapons as |weapon|}}
             <div class="field-list cp-weapon-row">
                 <img class="cp-weapon-img" src="{{weapon.img}}" width="24" height="24"/>
                 <span class="cp-weapon-name" title="{{weapon.system.weaponClass}} · {{weapon.system.mountType}} mount"><b>{{weapon.name}}</b>{{#if weapon.system.activeShell}} <span style="opacity:0.7;font-size:0.85em;">▸ {{weapon.system.activeShell}}</span>{{/if}}</span>
-                <span class="cp-weapon-stat" title="Vehicle Penetration">Pen {{weapon.system.penetration}}{{#if weapon.system.ap}} AP{{/if}}{{#if weapon.system.heat}} HEAT{{/if}}</span>
-                <span class="cp-weapon-stat" title="Rate of fire">ROF {{weapon.system.rof}}</span>
-                <span class="cp-weapon-stat" title="Firing arc">{{weapon.system.arc}}</span>
-                {{#if @root.damageEnabled}}<button type="button" data-action="weaponFire" data-weapon-id="{{weapon.id}}" title="Fire this weapon at the target (to-hit roll → resolver)">🎯</button>{{/if}}
-                <button type="button" data-action="weaponEdit" data-weapon-id="{{weapon.id}}" title="Edit this weapon">✎</button>
-                <button type="button" data-action="weaponDelete" data-weapon-id="{{weapon.id}}" title="Remove this weapon">✕</button>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.WeaponPenTip'}}">Pen {{weapon.system.penetration}}{{#if weapon.system.ap}} AP{{/if}}{{#if weapon.system.heat}} HEAT{{/if}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.WeaponRofTip'}}">ROF {{weapon.system.rof}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.WeaponArcTip'}}">{{weapon.system.arc}}</span>
+                {{#if @root.damageEnabled}}<button type="button" data-action="weaponFire" data-weapon-id="{{weapon.id}}" title="{{CPLocal 'Vehicle.WeaponFireTip'}}">🎯</button>{{/if}}
+                <button type="button" data-action="weaponEdit" data-weapon-id="{{weapon.id}}" title="{{CPLocal 'Vehicle.WeaponEditTip'}}">✎</button>
+                <button type="button" data-action="weaponDelete" data-weapon-id="{{weapon.id}}" title="{{CPLocal 'Vehicle.WeaponDeleteTip'}}">✕</button>
             </div>
             {{/each}}
-            <button type="button" data-action="weaponAdd" title="Create a blank weapon to edit.">＋ Add Weapon</button>
-            <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">Drag weapons from the <b>Vehicle Weapons (MM)</b> compendium onto this sheet, or add a blank one and edit it.</p>
+            <button type="button" data-action="weaponAdd" title="{{CPLocal 'Vehicle.WeaponAddTip'}}">{{CPLocal "Vehicle.WeaponAddBtn"}}</button>
+            <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">{{CPLocal "Vehicle.WeaponsDragNote"}}</p>
         </div>
         {{/if}}
 
         {{!-- Non-weapon systems = embedded acpaSystem Items (utility/sensor/movement/defensive/safety). --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Systems</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.SystemsHeader"}}</h2>
         <div class="cp-weapons">
             {{#each acpaSystems as |sys|}}
             <div class="field-list cp-weapon-row">
                 <img class="cp-weapon-img" src="{{sys.img}}" width="24" height="24"/>
-                <span class="cp-weapon-name" title="{{sys.system.category}} system"><b>{{sys.name}}</b>{{#if sys.system.destroyed}} <span style="color:#ff4040;">✖</span>{{/if}}</span>
-                <span class="cp-weapon-stat" title="Body area">{{sys.system.area}}</span>
-                <span class="cp-weapon-stat" title="Spaces ({{sys.system.mount}})">{{sys.system.spaces}} sp</span>
-                <span class="cp-weapon-stat" title="Structural points (SOP) — damage {{sys.system.sopDamage}}">SOP {{sys.system.sop}}</span>
-                <button type="button" data-action="acpaSystemEdit" data-system-id="{{sys.id}}" title="Edit this system">✎</button>
-                <button type="button" data-action="acpaSystemDelete" data-system-id="{{sys.id}}" title="Remove this system">✕</button>
+                <span class="cp-weapon-name" title="{{sys.system.category}} system"><b>{{sys.name}}</b>{{#if sys.system.destroyed}} <span class="cp-acpa-system-destroyed">✖</span>{{/if}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemBodyAreaTip'}}">{{sys.system.area}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemSpacesTip' mount=sys.system.mount}}">{{sys.system.spaces}} sp</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemSopStatTip' damage=sys.system.sopDamage}}">SOP {{sys.system.sop}}</span>
+                <button type="button" data-action="acpaSystemEdit" data-system-id="{{sys.id}}" title="{{CPLocal 'Vehicle.SystemEditTip'}}">✎</button>
+                <button type="button" data-action="acpaSystemDelete" data-system-id="{{sys.id}}" title="{{CPLocal 'Vehicle.SystemDeleteTip'}}">✕</button>
             </div>
             {{/each}}
-            <button type="button" data-action="acpaSystemAdd" title="Create a blank system to edit.">＋ Add System</button>
-            <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">Drag systems from the <b>ACPA Systems (MM)</b> compendium onto this sheet, or add a blank one. (Offensive weapons use the <b>Vehicle Weapons (MM)</b> compendium.)</p>
+            <button type="button" data-action="acpaSystemAdd" title="{{CPLocal 'Vehicle.SystemAddTip'}}">{{CPLocal "Vehicle.SystemAddBtn"}}</button>
+            <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">{{CPLocal "Vehicle.SystemsDragNote"}}</p>
         </div>
         {{!-- Per-area spaces budget (used / available; internal + external). --}}
         <p style="opacity:0.6; font-size:0.78em; margin:4px 0 2px;">Spaces used / available per area — internal (enclosed) and external (unprotected). Mounted-systems weight <b>{{system.mountedSystemsWeight}}</b> kg{{#if acpaSystemsCost}}, cost <b>{{acpaSystemsCost}}</b> eb{{/if}}.</p>
         <table style="width:100%; font-size:0.82em; border-collapse:collapse;">
-            <thead><tr style="opacity:0.7;"><th style="text-align:left;">Area</th><th>Internal</th><th>External</th></tr></thead>
+            <thead><tr style="opacity:0.7;"><th style="text-align:left;">{{CPLocal "Vehicle.SpacesAreaHeader"}}</th><th>{{CPLocal "Vehicle.SpacesInternalHeader"}}</th><th>{{CPLocal "Vehicle.SpacesExternalHeader"}}</th></tr></thead>
             <tbody>
             {{#each acpaSpaceRows as |row|}}
             <tr>
                 <td style="text-align:left;">{{row.label}}</td>
-                <td style="text-align:center;{{#if row.overInt}}color:#ff6060;font-weight:bold;{{/if}}">{{row.usedInt}} / {{row.availInt}}</td>
-                <td style="text-align:center;{{#if row.overExt}}color:#ff6060;font-weight:bold;{{/if}}">{{row.usedExt}} / {{row.availExt}}</td>
+                <td style="text-align:center;" class="{{#if row.overInt}}cp-acpa-spaces-over{{/if}}">{{row.usedInt}} / {{row.availInt}}</td>
+                <td style="text-align:center;" class="{{#if row.overExt}}cp-acpa-spaces-over{{/if}}">{{row.usedExt}} / {{row.availExt}}</td>
             </tr>
             {{/each}}
             </tbody>
@@ -253,18 +253,18 @@
 
         {{!-- Build validation (point-buy budget: SP ≤ 2×STR, weight ≤ capacity, per-area spaces). --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Build</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.BuildHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Total build cost — chassis + armor shell + Reality Interface + Reflex/Control + Command Computer + systems.">
-                <label>Total Cost (eb)</label><input type="number" class="not-editable" value="{{system.buildCost}}" readonly/></div>
-            <div class="field" title="Total loaded weight vs the chassis Lift/Capacity. An overweight suit is flagged below.">
-                <label>Weight / Cap</label><input type="text" class="not-editable" value="{{system.totalWeight}} / {{system.lift}} kg" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.TotalCostTip'}}">
+                <label>{{CPLocal "Vehicle.TotalCostLabel"}}</label><input type="number" class="not-editable" value="{{system.buildCost}}" readonly/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.WeightCapTip'}}">
+                <label>{{CPLocal "Vehicle.WeightCapLabel"}}</label><input type="text" class="not-editable" value="{{system.totalWeight}} / {{system.lift}} kg" readonly/></div>
         </div>
         {{#if acpaBuildValid}}
-        <p style="color:#3ad13a; font-size:0.85em; margin:2px 0;">✓ Legal build — within SP, weight, and space limits.</p>
+        <p class="cp-acpa-build-valid">{{CPLocal "Vehicle.LegalBuild"}}</p>
         {{else}}
-        <div style="border:1px solid #ff6060; border-radius:3px; padding:4px 6px; margin:2px 0;">
-            <p style="color:#ff6060; font-weight:bold; font-size:0.85em; margin:0 0 2px;">⚠ Build issues</p>
+        <div class="cp-acpa-build-issues">
+            <p class="cp-acpa-build-issues-header">{{CPLocal "Vehicle.BuildIssuesHeader"}}</p>
             <ul style="margin:0; padding-left:18px; font-size:0.82em;">
                 {{#each acpaBuildIssues as |issue|}}<li>{{issue}}</li>{{/each}}
             </ul>
@@ -273,9 +273,9 @@
         {{/if}}
 
         {{!-- Notes --}}
-        <h2 class="cyber-section-header">Notes</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.NotesHeader"}}</h2>
         <textarea name="system.notes" rows="4" style="width:100%;">{{system.notes}}</textarea>
 
-        <p style="opacity:0.6; font-size:0.8em; margin-top:6px;">Powered armor (ACPA). The full build system — Linear Frame &amp; Toughness, Reality Interface, Reflex/Control, derived SIB, per-area frame SOP, the systems catalog (per-system SOP), and the point-buy budget validator — and combat (Penetration damage, the System Hit / Critical Hit chart, melee) are in place.</p>
+        <p style="opacity:0.6; font-size:0.8em; margin-top:6px;">{{CPLocal "Vehicle.AcpaFootnote"}}</p>
     </div>
 </div>

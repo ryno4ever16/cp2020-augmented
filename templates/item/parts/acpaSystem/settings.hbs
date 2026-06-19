@@ -2,57 +2,57 @@
       its own SOP so a hit can knock out this one system. Offensive weapons use the vehicleWeapon type. --}}
 
 <div class="field-list">
-    <div class="field" title="System category (Maximum Metal p.64-79).">
-        <label>Category</label>
+    <div class="field" title="{{CPLocal 'Vehicle.SysCategoryTip'}}">
+        <label>{{CPLocal "Vehicle.SysCategory"}}</label>
         <select name="system.category">
-            <option value="utility"   {{#if (equals system.category "utility")}}selected{{/if}}>Utility</option>
-            <option value="sensor"    {{#if (equals system.category "sensor")}}selected{{/if}}>Sensor</option>
-            <option value="movement"  {{#if (equals system.category "movement")}}selected{{/if}}>Movement</option>
-            <option value="defensive" {{#if (equals system.category "defensive")}}selected{{/if}}>Defensive</option>
-            <option value="safety"    {{#if (equals system.category "safety")}}selected{{/if}}>Safety</option>
+            <option value="utility"   {{#if (equals system.category "utility")}}selected{{/if}}>{{CPLocal "Vehicle.SysCatUtility"}}</option>
+            <option value="sensor"    {{#if (equals system.category "sensor")}}selected{{/if}}>{{CPLocal "Vehicle.SysCatSensor"}}</option>
+            <option value="movement"  {{#if (equals system.category "movement")}}selected{{/if}}>{{CPLocal "Vehicle.SysCatMovement"}}</option>
+            <option value="defensive" {{#if (equals system.category "defensive")}}selected{{/if}}>{{CPLocal "Defensive"}}</option>
+            <option value="safety"    {{#if (equals system.category "safety")}}selected{{/if}}>{{CPLocal "Vehicle.SysCatSafety"}}</option>
         </select>
     </div>
-    <div class="field" title="Body area this system is mounted in. Destroying that area's frame knocks out its systems (Maximum Metal p.61).">
-        <label>Body Area</label>
+    <div class="field" title="{{CPLocal 'Vehicle.SysBodyAreaTip'}}">
+        <label>{{CPLocal "Vehicle.SysBodyArea"}}</label>
         <select name="system.area">
-            <option value="head"  {{#if (equals system.area "head")}}selected{{/if}}>Head</option>
-            <option value="torso" {{#if (equals system.area "torso")}}selected{{/if}}>Torso</option>
-            <option value="rArm"  {{#if (equals system.area "rArm")}}selected{{/if}}>Right Arm</option>
-            <option value="lArm"  {{#if (equals system.area "lArm")}}selected{{/if}}>Left Arm</option>
-            <option value="rLeg"  {{#if (equals system.area "rLeg")}}selected{{/if}}>Right Leg</option>
-            <option value="lLeg"  {{#if (equals system.area "lLeg")}}selected{{/if}}>Left Leg</option>
+            <option value="head"  {{#if (equals system.area "head")}}selected{{/if}}>{{CPLocal "Head"}}</option>
+            <option value="torso" {{#if (equals system.area "torso")}}selected{{/if}}>{{CPLocal "Torso"}}</option>
+            <option value="rArm"  {{#if (equals system.area "rArm")}}selected{{/if}}>{{CPLocal "Vehicle.AreaRArm"}}</option>
+            <option value="lArm"  {{#if (equals system.area "lArm")}}selected{{/if}}>{{CPLocal "Vehicle.AreaLArm"}}</option>
+            <option value="rLeg"  {{#if (equals system.area "rLeg")}}selected{{/if}}>{{CPLocal "Vehicle.AreaRLeg"}}</option>
+            <option value="lLeg"  {{#if (equals system.area "lLeg")}}selected{{/if}}>{{CPLocal "Vehicle.AreaLLeg"}}</option>
         </select>
     </div>
-    <div class="field" title="Internal = enclosed, protected by the suit armor. External = NOT armor-protected (carries its own SP). Either / Retract per the catalog.">
-        <label>Mount</label>
+    <div class="field" title="{{CPLocal 'Vehicle.SysMountTip'}}">
+        <label>{{CPLocal "Vehicle.SysMount"}}</label>
         <select name="system.mount">
-            <option value="internal" {{#if (equals system.mount "internal")}}selected{{/if}}>Internal (enclosed)</option>
-            <option value="external" {{#if (equals system.mount "external")}}selected{{/if}}>External</option>
-            <option value="either"   {{#if (equals system.mount "either")}}selected{{/if}}>Either</option>
-            <option value="retract"  {{#if (equals system.mount "retract")}}selected{{/if}}>Retractable</option>
+            <option value="internal" {{#if (equals system.mount "internal")}}selected{{/if}}>{{CPLocal "Vehicle.MountInternal"}}</option>
+            <option value="external" {{#if (equals system.mount "external")}}selected{{/if}}>{{CPLocal "Vehicle.MountExternal"}}</option>
+            <option value="either"   {{#if (equals system.mount "either")}}selected{{/if}}>{{CPLocal "Vehicle.MountEither"}}</option>
+            <option value="retract"  {{#if (equals system.mount "retract")}}selected{{/if}}>{{CPLocal "Vehicle.MountRetractable"}}</option>
         </select>
     </div>
 </div>
 
 <div class="field-list">
-    <div class="field" title="Spaces this system consumes in its body area (internal or external space budget, Maximum Metal p.61).">
-        <label>Spaces</label><input type="number" step="0.25" name="system.spaces" value="{{system.spaces}}"/></div>
-    <div class="field" title="Intrinsic Stopping Power (external / retractable items have their own SP).">
-        <label>SP</label><input type="number" name="system.sp" value="{{system.sp}}"/></div>
-    <div class="field" title="Structural points — the system is destroyed when its accumulated SOP damage reaches this. 0 = derive 3× SP (Maximum Metal p.62).">
-        <label>SOP</label><input type="number" name="system.sop" value="{{system.sop}}"/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysSpacesTip'}}">
+        <label>{{CPLocal "Spaces"}}</label><input type="number" step="0.25" name="system.spaces" value="{{system.spaces}}"/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysSPTip'}}">
+        <label>{{CPLocal "SP"}}</label><input type="number" name="system.sp" value="{{system.sp}}"/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysSOPTip'}}">
+        <label>{{CPLocal "Vehicle.SysSOP"}}</label><input type="number" name="system.sop" value="{{system.sop}}"/></div>
 </div>
 
 <div class="field-list">
-    <div class="field" title="Weight (kg) — counts toward total loaded weight for the SIB.">
-        <label>Weight (kg)</label><input type="number" name="system.weight" value="{{system.weight}}"/></div>
-    <div class="field" title="Cost (eb) — counts toward the build budget.">
-        <label>Cost (eb)</label><input type="number" name="system.cost" value="{{system.cost}}"/></div>
-    <div class="field" title="Accumulated SOP damage from hits to this system (0 = undamaged).">
-        <label>SOP damage</label><input type="number" name="system.sopDamage" value="{{system.sopDamage}}"/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysWeightKgTip'}}">
+        <label>{{CPLocal "Vehicle.SysWeightKg"}}</label><input type="number" name="system.weight" value="{{system.weight}}"/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysCostEbTip'}}">
+        <label>{{CPLocal "Vehicle.SysCostEb"}}</label><input type="number" name="system.cost" value="{{system.cost}}"/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysSOPDamageTip'}}">
+        <label>{{CPLocal "Vehicle.SysSOPDamage"}}</label><input type="number" name="system.sopDamage" value="{{system.sopDamage}}"/></div>
 </div>
 
 <div class="field-list">
-    <div class="field" title="This system is destroyed (its SOP was exceeded). Set automatically by the damage resolver; editable for field repairs.">
-        <label>Destroyed</label><input type="checkbox" name="system.destroyed" {{#if system.destroyed}}checked{{/if}}/></div>
+    <div class="field" title="{{CPLocal 'Vehicle.SysDestroyedTip'}}">
+        <label>{{CPLocal "Vehicle.SysDestroyed"}}</label><input type="checkbox" name="system.destroyed" {{#if system.destroyed}}checked{{/if}}/></div>
 </div>

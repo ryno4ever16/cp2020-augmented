@@ -10,32 +10,32 @@
                 <h1 class="title"><input type="text" class="field-value" name="name" value="{{actor.name}}"/></h1>
                 <div class="fieldrow">
                     <div class="field">
-                        <label>Type</label>
+                        <label>{{CPLocal "Vehicle.TypeLabel"}}</label>
                         <select name="system.vehicleType">
-                            {{#each vehicleTypes}}<option value="{{this}}" {{#if (equals ../system.vehicleType this)}}selected{{/if}}>{{this}}</option>{{/each}}
+                            {{#each vehicleTypes}}<option value="{{this}}" {{#if (equals ../system.vehicleType this)}}selected{{/if}}>{{CPLocal this}}</option>{{/each}}
                         </select>
                     </div>
-                    <div class="field" title="Powered Armor (ACPA): derives Body Value from chassis STR ÷ 20 instead of SDP, has equal armor on every facing, takes no size penalty to be hit, and includes a built-in vehicle link (Maximum Metal, p.52).">
-                        <label>ACPA (Powered Armor)</label>
+                    <div class="field" title="{{CPLocal 'Vehicle.AcpaPoweredArmorTip'}}">
+                        <label>{{CPLocal "Vehicle.AcpaPoweredArmorLabel"}}</label>
                         <input type="checkbox" name="system.isACPA" {{#if system.isACPA}}checked{{/if}}/>
                     </div>
-                    <div class="field" title="Active vehicle ruleset (world setting)">
-                        <label>Ruleset</label>
+                    <div class="field" title="{{CPLocal 'Vehicle.RulesetTip'}}">
+                        <label>{{CPLocal "Vehicle.RulesetLabel"}}</label>
                         <input type="text" class="not-editable" value="{{ruleSystem}}" readonly/>
                     </div>
                     {{#if controlEnabled}}
                     <div class="field cp-header-action">
-                        <button type="button" data-action="controlRoll" title="Roll a Control / Maneuver check (REF + Driving/Pilot + 1d10 vs Difficulty Value). On failure, rolls the Control Loss / Failure table for the active ruleset.">🎲 Control Roll</button>
+                        <button type="button" data-action="controlRoll" title="{{CPLocal 'Vehicle.ControlRollTipVehicle'}}">{{CPLocal "Vehicle.ControlRollBtn"}}</button>
                     </div>
                     {{/if}}
                     {{#if damageEnabled}}
                     <div class="field cp-header-action">
-                        <button type="button" data-action="vehicleDamage" title="Resolve damage against this vehicle. Core subtracts SP and reduces SDP; Maximum Metal compares Penetration to Armor Value, rolls Surface/Minor/Major/Catastrophic and a hit location with fuel-fire / ammo-cookoff / crew effects.">💥 Damage</button>
+                        <button type="button" data-action="vehicleDamage" title="{{CPLocal 'Vehicle.DamageTipVehicle'}}">{{CPLocal "Vehicle.DamageBtn"}}</button>
                     </div>
                     {{/if}}
                     {{#if mmOn}}{{#if system.isACPA}}
                     <div class="field cp-header-action">
-                        <button type="button" data-action="acpaMelee" title="ACPA hand-to-hand (Maximum Metal p.58): Punch / Crush / Kick → vehicle-scale Penetration through the dispatcher. Target a token first.">🤜 Melee</button>
+                        <button type="button" data-action="acpaMelee" title="{{CPLocal 'Vehicle.MeleeTip'}}">{{CPLocal "Vehicle.MeleeBtn"}}</button>
                     </div>
                     {{/if}}{{/if}}
                 </div>
@@ -46,156 +46,156 @@
     <div class="sheet-body flexcol" style="overflow-y:auto;">
 
         {{!-- Armor & Structure --}}
-        <h2 class="cyber-section-header">Armor &amp; Structure</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.ArmorStructureHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Stopping Power — the vehicle's armor. Core subtracts SP from incoming damage (p.112); Maximum Metal instead converts it to Armor Value (SP ÷ 20).">
-                <label>{{#if isMM}}Front SP{{else}}Stopping Power (SP){{/if}}</label>
+            <div class="field" title="{{CPLocal 'Vehicle.SpFrontTip'}}">
+                <label>{{#if isMM}}{{CPLocal "Vehicle.SpFrontLabelMM"}}{{else}}{{CPLocal "Vehicle.SpFrontLabel"}}{{/if}}</label>
                 <input type="number" name="system.sp.front" value="{{system.sp.front}}"/>
             </div>
-            <div class="field" title="Armor Value = SP ÷ 20 (Maximum Metal, p.4). A weapon's Penetration is compared to this value — not to raw SP — to see if it gets through. Read-only; edit SP to change it.">
-                <label>AV (front)</label>
+            <div class="field" title="{{CPLocal 'Vehicle.AvFrontTip'}}">
+                <label>{{CPLocal "Vehicle.AvFrontLabel"}}</label>
                 <input type="number" class="not-editable" value="{{system.armorValue.front}}" readonly/>
             </div>
         </div>
         {{#if isMM}}
-        <div class="field-list" title="Per-facing armor (Maximum Metal flank rules, p.4): a hit to the side uses 75% of armor, top/rear/bottom 50%. The facing depends on the angle of the shot. ACPA armor is equal on all sides.">
-            <div class="field"><label>Side SP</label><input type="number" name="system.sp.side" value="{{system.sp.side}}"/></div>
-            <div class="field"><label>AV side</label><input type="number" class="not-editable" value="{{system.armorValue.side}}" readonly/></div>
-            <div class="field"><label>Rear SP</label><input type="number" name="system.sp.rear" value="{{system.sp.rear}}"/></div>
-            <div class="field"><label>AV rear</label><input type="number" class="not-editable" value="{{system.armorValue.rear}}" readonly/></div>
+        <div class="field-list" title="{{CPLocal 'Vehicle.FacingSpTip'}}">
+            <div class="field"><label>{{CPLocal "Vehicle.SideSpLabel"}}</label><input type="number" name="system.sp.side" value="{{system.sp.side}}"/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.AvSideLabel"}}</label><input type="number" class="not-editable" value="{{system.armorValue.side}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.RearSpLabel"}}</label><input type="number" name="system.sp.rear" value="{{system.sp.rear}}"/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.AvRearLabel"}}</label><input type="number" class="not-editable" value="{{system.armorValue.rear}}" readonly/></div>
         </div>
         <div class="field-list">
-            <div class="field"><label>Top SP</label><input type="number" name="system.sp.top" value="{{system.sp.top}}"/></div>
-            <div class="field"><label>AV top</label><input type="number" class="not-editable" value="{{system.armorValue.top}}" readonly/></div>
-            <div class="field"><label>Bottom SP</label><input type="number" name="system.sp.bottom" value="{{system.sp.bottom}}"/></div>
-            <div class="field"><label>AV bottom</label><input type="number" class="not-editable" value="{{system.armorValue.bottom}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.TopSpLabel"}}</label><input type="number" name="system.sp.top" value="{{system.sp.top}}"/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.AvTopLabel"}}</label><input type="number" class="not-editable" value="{{system.armorValue.top}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.BottomSpLabel"}}</label><input type="number" name="system.sp.bottom" value="{{system.sp.bottom}}"/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.AvBottomLabel"}}</label><input type="number" class="not-editable" value="{{system.armorValue.bottom}}" readonly/></div>
         </div>
         {{/if}}
         <div class="field-list">
-            <div class="field" title="Structural Damage Points — the vehicle's hit points. Damage that gets past SP comes off here; at 0 SDP the vehicle is destroyed / inoperable (Core p.112).">
-                <label>SDP (current)</label><input type="number" name="system.sdp.value" value="{{system.sdp.value}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.SdpCurrentVehicleTip'}}">
+                <label>{{CPLocal "Vehicle.SdpCurrentLabel"}}</label><input type="number" name="system.sdp.value" value="{{system.sdp.value}}"/>
             </div>
-            <div class="field" title="Maximum SDP — the undamaged total. Body Value is derived from this.">
-                <label>SDP (max)</label><input type="number" name="system.sdp.max" value="{{system.sdp.max}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.SdpMaxVehicleTip'}}">
+                <label>{{CPLocal "Vehicle.SdpMaxLabel"}}</label><input type="number" name="system.sdp.max" value="{{system.sdp.max}}"/>
             </div>
-            <div class="field" title="Body Value = SDP ÷ 20 (rounded), or chassis STR ÷ 20 for ACPA. The vehicle's bulk/toughness on the Maximum Metal damage scale (p.4): it is subtracted on the damage-severity roll. Every vehicle has one (e.g. SDP 50 → Body 3); Core mode just doesn't use it — it tracks raw SDP instead. Read-only.">
-                <label>Body Value</label>
+            <div class="field" title="{{CPLocal 'Vehicle.BodyValueVehicleTip'}}">
+                <label>{{CPLocal "Vehicle.BodyValueLabel"}}</label>
                 <input type="number" class="not-editable" value="{{system.bodyValue}}" readonly/>
             </div>
-            {{#if system.destroyed}}<div class="field"><label style="color:#ff4040;font-weight:bold;">DESTROYED</label></div>{{/if}}
+            {{#if system.destroyed}}<div class="field"><label class="cp-vehicle-destroyed">{{CPLocal "Vehicle.Destroyed"}}</label></div>{{/if}}
         </div>
         {{#if system.isACPA}}
         <div class="field-list">
-            <div class="field" title="ACPA chassis Strength. For powered armor, Body Value is STR ÷ 20 instead of SDP ÷ 20 (Maximum Metal, p.5)."><label>Chassis STR</label><input type="number" name="system.str" value="{{system.str}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ChassisStrVehicleTip'}}"><label>{{CPLocal "Vehicle.ChassisStrLabel"}}</label><input type="number" name="system.str" value="{{system.str}}"/></div>
         </div>
         {{/if}}
 
         {{!-- ACPA combat status (Maximum Metal p.55-56): written by the powered-armor damage resolver
               + per-round ticks; editable here so the GM can adjust/reset (e.g. field repairs). --}}
         {{#if mmOn}}{{#if system.isACPA}}
-        <h2 class="cyber-section-header">ACPA Combat Status</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.AcpaCombatStatusHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Suit Strength lost to Critical Hits (reduces melee damage and lift). 0 = undamaged.">
-                <label>STR damage</label><input type="number" name="system.strDamage" value="{{system.strDamage}}"/></div>
-            <div class="field" title="Suit Reflexes lost to Critical Hits (reduces the pilot's REF / control). 0 = undamaged.">
-                <label>REF damage</label><input type="number" name="system.refDamage" value="{{system.refDamage}}"/></div>
-            <div class="field" title="Remaining power-cell life in hours (24h normal). Drained by power-unit criticals.">
-                <label>Power (hrs)</label><input type="number" name="system.powerHours" value="{{system.powerHours}}"/></div>
-            <div class="field" title="Minutes until heatstroke after a cooling-system critical (0 = OK). When it expires the pilot makes escalating Stun Saves.">
-                <label>Cooling (min)</label><input type="number" name="system.coolingTimer" value="{{system.coolingTimer}}"/></div>
-            <div class="field" title="Rounds the interface/electronics are out (counts down each combat round).">
-                <label>Interface out</label><input type="number" name="system.interfaceOut" value="{{system.interfaceOut}}"/></div>
-            <div class="field" title="Rounds a body area is seized up / immobile (counts down each combat round; restores mobility at 0).">
-                <label>Seized (rds)</label><input type="number" name="system.seizeUp" value="{{system.seizeUp}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.StrDamageTip'}}">
+                <label>{{CPLocal "Vehicle.StrDamageLabel"}}</label><input type="number" name="system.strDamage" value="{{system.strDamage}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.RefDamageTip'}}">
+                <label>{{CPLocal "Vehicle.RefDamageLabel"}}</label><input type="number" name="system.refDamage" value="{{system.refDamage}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.PowerHrsTip'}}">
+                <label>{{CPLocal "Vehicle.PowerHrsLabel"}}</label><input type="number" name="system.powerHours" value="{{system.powerHours}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CoolingMinTipVehicle'}}">
+                <label>{{CPLocal "Vehicle.CoolingMinLabel"}}</label><input type="number" name="system.coolingTimer" value="{{system.coolingTimer}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.InterfaceOutTip'}}">
+                <label>{{CPLocal "Vehicle.InterfaceOutLabel"}}</label><input type="number" name="system.interfaceOut" value="{{system.interfaceOut}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.SeizedRdsTipVehicle'}}">
+                <label>{{CPLocal "Vehicle.SeizedRdsLabel"}}</label><input type="number" name="system.seizeUp" value="{{system.seizeUp}}"/></div>
         </div>
         {{/if}}{{/if}}
 
         {{!-- Movement --}}
-        <h2 class="cyber-section-header">Movement</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.MovementHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="Maximum speed. In Maximum Metal, going fast costs handling: the maneuver Difficulty rises +1 for every 10% of top speed you are driving above 50% of top speed (p.11).">
-                <label>Top Speed</label><input type="number" name="system.topSpeed" value="{{system.topSpeed}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.TopSpeedTip'}}">
+                <label>{{CPLocal "Vehicle.TopSpeedLabel"}}</label><input type="number" name="system.topSpeed" value="{{system.topSpeed}}"/>
             </div>
-            <div class="field" title="The fastest you can go without a handling penalty. In Core, driving at 2× / 3× / 4× safe speed applies −2 / −4 / −6 to the Control Roll (p.112).">
-                <label>Safe Speed</label><input type="number" name="system.safeSpeed" value="{{system.safeSpeed}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.SafeSpeedTip'}}">
+                <label>{{CPLocal "Vehicle.SafeSpeedLabel"}}</label><input type="number" name="system.safeSpeed" value="{{system.safeSpeed}}"/>
             </div>
         </div>
         <div class="field-list">
-            <div class="field" title="How much speed the vehicle can gain per combat turn (Maximum Metal chase rules).">
-                <label>Acceleration</label><input type="number" name="system.acc" value="{{system.acc}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.AccelerationTip'}}">
+                <label>{{CPLocal "Vehicle.AccelerationLabel"}}</label><input type="number" name="system.acc" value="{{system.acc}}"/>
             </div>
-            <div class="field" title="How much speed the vehicle can shed per combat turn — braking (Maximum Metal chase rules).">
-                <label>Deceleration</label><input type="number" name="system.dec" value="{{system.dec}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.DecelerationTip'}}">
+                <label>{{CPLocal "Vehicle.DecelerationLabel"}}</label><input type="number" name="system.dec" value="{{system.dec}}"/>
             </div>
-            <div class="field" title="Vehicle handling modifier added to every Control / Maneuver roll (e.g. sportscar +2, limo −3, truck −4). It prefills the Control Roll dialog. Core uses the p.112 table; Maximum Metal the revised p.11 table.">
-                <label>Control Mod</label><input type="number" name="system.controlMod" value="{{system.controlMod}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.ControlModTip'}}">
+                <label>{{CPLocal "Vehicle.ControlModLabel"}}</label><input type="number" name="system.controlMod" value="{{system.controlMod}}"/>
             </div>
         </div>
 
         {{!-- Crew & Systems --}}
-        <h2 class="cyber-section-header">Crew &amp; Systems</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.CrewSystemsHeader"}}</h2>
         <div class="field-list">
-            <div class="field" title="How many crew positions the vehicle has (driver, gunner, etc.). At least one is needed to operate it."><label>Crew Slots</label><input type="number" name="system.crewSlots" value="{{system.crewSlots}}"/></div>
-            <div class="field" title="How many additional passengers the vehicle can carry beyond the crew."><label>Passenger Slots</label><input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.CrewSlotsTip'}}"><label>{{CPLocal "Vehicle.CrewSlotsLabel"}}</label><input type="number" name="system.crewSlots" value="{{system.crewSlots}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.PassengerSlotsTip'}}"><label>{{CPLocal "Vehicle.PassengerSlotsLabel"}}</label><input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}"/></div>
         </div>
         <div class="field-list">
-            <div class="field" title="Cybernetic vehicle link: the driver/pilot adds +2 to all control, maneuver, and vehicle-weapon rolls, and can act while driving without the 'doing something else' penalty (Maximum Metal). ACPA always counts as linked.">
-                <label>Vehicle Link</label><input type="checkbox" name="system.vehicleLink" {{#if system.vehicleLink}}checked{{/if}}/>
+            <div class="field" title="{{CPLocal 'Vehicle.VehicleLinkTip'}}">
+                <label>{{CPLocal "Vehicle.VehicleLinkLabel"}}</label><input type="checkbox" name="system.vehicleLink" {{#if system.vehicleLink}}checked{{/if}}/>
             </div>
-            <div class="field" title="A redundant network of backups, fire extinguishers and breakers. When a system is hit, roll 1d10 — on a 6-10 it keeps working as if undamaged (Maximum Metal, p.4). Used by the damage resolver.">
-                <label>Damage Control</label><input type="checkbox" name="system.damageControl" {{#if system.damageControl}}checked{{/if}}/>
+            <div class="field" title="{{CPLocal 'Vehicle.DamageControlTip'}}">
+                <label>{{CPLocal "Vehicle.DamageControlLabel"}}</label><input type="checkbox" name="system.damageControl" {{#if system.damageControl}}checked{{/if}}/>
             </div>
             {{#if mmOn}}
-            <div class="field" title="Composite armor (metals + plastics + ceramics + depleted heavy metals): halves the Penetration of shaped-charge HEAT weapons, but penetrating damage is not halved (Maximum Metal, p.23). Used by the damage resolver.">
-                <label>Composite Armor</label><input type="checkbox" name="system.compositeArmor" {{#if system.compositeArmor}}checked{{/if}}/>
+            <div class="field" title="{{CPLocal 'Vehicle.CompositeArmorTip'}}">
+                <label>{{CPLocal "Vehicle.CompositeArmorLabel"}}</label><input type="checkbox" name="system.compositeArmor" {{#if system.compositeArmor}}checked{{/if}}/>
             </div>
-            <div class="field" title="Reactive armor: explosive tiles that detonate against shaped-charge (HEAT) attacks. On a HEAT hit, roll 1d10 — 2-10 halves Penetration, minus 1 per two prior shaped-charge / high-explosive hits the array has absorbed. Tiles are consumed each hit; press Replace to rearm after a battle (Maximum Metal, p.23). Stacks with Composite (¼ Pen if both fire). Used by the damage resolver.">
-                <label>Reactive Armor</label><input type="checkbox" name="system.reactiveArmor" {{#if system.reactiveArmor}}checked{{/if}}/>
+            <div class="field" title="{{CPLocal 'Vehicle.ReactiveArmorTip'}}">
+                <label>{{CPLocal "Vehicle.ReactiveArmorLabel"}}</label><input type="checkbox" name="system.reactiveArmor" {{#if system.reactiveArmor}}checked{{/if}}/>
             </div>
             {{#if system.reactiveArmor}}
-            <div class="field" title="Shaped-charge / high-explosive hits absorbed by the reactive tiles. The deflection roll drops 1 for every two hits. Replace rearms the array (resets wear to 0).">
-                <label>Reactive Wear</label>
-                <span class="cp-reactive-wear">{{system.reactiveHits}} hit{{#unless oneReactiveHit}}s{{/unless}}{{#if reactiveWear}} (−{{reactiveWear}}){{/if}}<button type="button" data-action="reactiveReplace" title="Rearm the reactive array (reset wear to 0)">↻ Replace</button></span>
+            <div class="field" title="{{CPLocal 'Vehicle.ReactiveWearTip'}}">
+                <label>{{CPLocal "Vehicle.ReactiveWearLabel"}}</label>
+                <span class="cp-reactive-wear">{{system.reactiveHits}} hit{{#unless oneReactiveHit}}s{{/unless}}{{#if reactiveWear}} (−{{reactiveWear}}){{/if}}<button type="button" data-action="reactiveReplace" title="{{CPLocal 'Vehicle.ReactiveReplaceTip'}}">{{CPLocal "Vehicle.ReactiveReplaceBtn"}}</button></span>
             </div>
             {{/if}}
-            <div class="field" title="Sensors / radar: automatically detect an inbound missile (90%) so the crew can react. Without sensors, detection falls back to a Notice/Awareness roll (Maximum Metal, p.10/25-26).">
-                <label>Sensors / Radar</label><input type="checkbox" name="system.sensors" {{#if system.sensors}}checked{{/if}}/>
+            <div class="field" title="{{CPLocal 'Vehicle.SensorsRadarTip'}}">
+                <label>{{CPLocal "Vehicle.SensorsRadarLabel"}}</label><input type="checkbox" name="system.sensors" {{#if system.sensors}}checked{{/if}}/>
             </div>
-            <div class="field" title="Anti-missile system (AGAMS/AEAMS): when a missile is detected, the crew may attempt to shoot it down — destroy on a roll of 4+, detonate it early (half damage) on 1-3 (Maximum Metal, p.24).">
-                <label>Anti-Missile (AGAMS)</label><input type="checkbox" name="system.antiMissile" {{#if system.antiMissile}}checked{{/if}}/>
+            <div class="field" title="{{CPLocal 'Vehicle.AntiMissileTip'}}">
+                <label>{{CPLocal "Vehicle.AntiMissileGagsLabel"}}</label><input type="checkbox" name="system.antiMissile" {{#if system.antiMissile}}checked{{/if}}/>
             </div>
             {{/if}}
-            <div class="field" title="Targeting-computer bonus added to the vehicle's weapon to-hit rolls (Maximum Metal). 0 = no fire-control computer.">
-                <label>Fire Control</label><input type="number" name="system.fireControl" value="{{system.fireControl}}"/>
+            <div class="field" title="{{CPLocal 'Vehicle.FireControlTipVehicle'}}">
+                <label>{{CPLocal "Vehicle.FireControl"}}</label><input type="number" name="system.fireControl" value="{{system.fireControl}}"/>
             </div>
         </div>
 
         {{!-- Weapon Mounts = embedded vehicleWeapon Items (drag from the Vehicle Weapons (MM) compendium).
               The MM weapon system (Penetration/arc/missiles/bursts) is Maximum Metal — hidden when MM is off. --}}
         {{#if mmOn}}
-        <h2 class="cyber-section-header">Weapons</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.WeaponsHeader"}}</h2>
         <div class="cp-weapons">
             {{#each weapons as |weapon|}}
             <div class="field-list cp-weapon-row">
                 <img class="cp-weapon-img" src="{{weapon.img}}" width="24" height="24"/>
                 <span class="cp-weapon-name" title="{{weapon.system.weaponClass}} · {{weapon.system.mountType}} mount"><b>{{weapon.name}}</b>{{#if weapon.system.activeShell}} <span style="opacity:0.7;font-size:0.85em;">▸ {{weapon.system.activeShell}}</span>{{/if}}</span>
-                <span class="cp-weapon-stat" title="Vehicle Penetration">Pen {{weapon.system.penetration}}{{#if weapon.system.ap}} AP{{/if}}{{#if weapon.system.heat}} HEAT{{/if}}</span>
-                <span class="cp-weapon-stat" title="Rate of fire">ROF {{weapon.system.rof}}</span>
-                <span class="cp-weapon-stat" title="Firing arc">{{weapon.system.arc}}</span>
-                {{#if @root.damageEnabled}}<button type="button" data-action="weaponFire" data-weapon-id="{{weapon.id}}" title="Fire this weapon at the target (to-hit roll → resolver)">🎯</button>{{/if}}
-                <button type="button" data-action="weaponEdit" data-weapon-id="{{weapon.id}}" title="Edit this weapon">✎</button>
-                <button type="button" data-action="weaponDelete" data-weapon-id="{{weapon.id}}" title="Remove this weapon">✕</button>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.WeaponPenTip'}}">Pen {{weapon.system.penetration}}{{#if weapon.system.ap}} AP{{/if}}{{#if weapon.system.heat}} HEAT{{/if}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.WeaponRofTip'}}">ROF {{weapon.system.rof}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.WeaponArcTip'}}">{{weapon.system.arc}}</span>
+                {{#if @root.damageEnabled}}<button type="button" data-action="weaponFire" data-weapon-id="{{weapon.id}}" title="{{CPLocal 'Vehicle.WeaponFireTip'}}">🎯</button>{{/if}}
+                <button type="button" data-action="weaponEdit" data-weapon-id="{{weapon.id}}" title="{{CPLocal 'Vehicle.WeaponEditTip'}}">✎</button>
+                <button type="button" data-action="weaponDelete" data-weapon-id="{{weapon.id}}" title="{{CPLocal 'Vehicle.WeaponDeleteTip'}}">✕</button>
             </div>
             {{/each}}
-            <button type="button" data-action="weaponAdd" title="Create a blank weapon to edit.">＋ Add Weapon</button>
-            <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">Drag weapons from the <b>Vehicle Weapons (MM)</b> compendium onto this sheet, or add a blank one and edit it.</p>
+            <button type="button" data-action="weaponAdd" title="{{CPLocal 'Vehicle.WeaponAddTip'}}">{{CPLocal "Vehicle.WeaponAddBtn"}}</button>
+            <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">{{CPLocal "Vehicle.WeaponsDragNote"}}</p>
         </div>
         {{/if}}
 
         {{!-- Notes --}}
-        <h2 class="cyber-section-header">Notes</h2>
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.NotesHeader"}}</h2>
         <textarea name="system.notes" rows="4" style="width:100%;">{{system.notes}}</textarea>
 
-        <p style="opacity:0.6; font-size:0.8em; margin-top:6px;">Set the actor image (top-left) to your vehicle art, then drag the actor onto the canvas like any other actor — the token is pre-sized and scales to fit (drag its resize handle to adjust). Crew tokens placed on top render above it and ride along once boarded. Weapon mounts and the damage resolver arrive in later phases.</p>
+        <p style="opacity:0.6; font-size:0.8em; margin-top:6px;">{{CPLocal "Vehicle.VehicleFootnote"}}</p>
     </div>
 </div>

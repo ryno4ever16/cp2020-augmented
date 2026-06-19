@@ -2,94 +2,94 @@
 
 {{!-- Classification --}}
 <div class="field-list">
-    <div class="field" title="Resolution archetype. Direct-fire = guns; Burst = HE/HEAT shells; Rocket = unguided HE; Missile = guided; Artillery = indirect; Bomb; Cone = scatter-packs; Melee = ACPA; Special.">
-        <label>Class</label>
+    <div class="field" title="{{CPLocal 'Vehicle.WClassTip'}}">
+        <label>{{CPLocal "Vehicle.WClass"}}</label>
         <select name="system.weaponClass">
-            <option value="directFire" {{#if (equals system.weaponClass "directFire")}}selected{{/if}}>Direct Fire</option>
-            <option value="burst" {{#if (equals system.weaponClass "burst")}}selected{{/if}}>Burst / HE</option>
-            <option value="rocket" {{#if (equals system.weaponClass "rocket")}}selected{{/if}}>Rocket (unguided)</option>
-            <option value="missile" {{#if (equals system.weaponClass "missile")}}selected{{/if}}>Missile (guided)</option>
-            <option value="artillery" {{#if (equals system.weaponClass "artillery")}}selected{{/if}}>Artillery / Indirect</option>
-            <option value="bomb" {{#if (equals system.weaponClass "bomb")}}selected{{/if}}>Bomb</option>
-            <option value="cone" {{#if (equals system.weaponClass "cone")}}selected{{/if}}>Cone / Scatter-pack</option>
-            <option value="melee" {{#if (equals system.weaponClass "melee")}}selected{{/if}}>Melee (ACPA)</option>
-            <option value="special" {{#if (equals system.weaponClass "special")}}selected{{/if}}>Special</option>
+            <option value="directFire" {{#if (equals system.weaponClass "directFire")}}selected{{/if}}>{{CPLocal "Vehicle.WClassDirectFire"}}</option>
+            <option value="burst" {{#if (equals system.weaponClass "burst")}}selected{{/if}}>{{CPLocal "Vehicle.WClassBurst"}}</option>
+            <option value="rocket" {{#if (equals system.weaponClass "rocket")}}selected{{/if}}>{{CPLocal "Vehicle.WClassRocket"}}</option>
+            <option value="missile" {{#if (equals system.weaponClass "missile")}}selected{{/if}}>{{CPLocal "Vehicle.WClassMissile"}}</option>
+            <option value="artillery" {{#if (equals system.weaponClass "artillery")}}selected{{/if}}>{{CPLocal "Vehicle.WClassArtillery"}}</option>
+            <option value="bomb" {{#if (equals system.weaponClass "bomb")}}selected{{/if}}>{{CPLocal "Vehicle.Bomb"}}</option>
+            <option value="cone" {{#if (equals system.weaponClass "cone")}}selected{{/if}}>{{CPLocal "Vehicle.WClassCone"}}</option>
+            <option value="melee" {{#if (equals system.weaponClass "melee")}}selected{{/if}}>{{CPLocal "Vehicle.WClassMelee"}}</option>
+            <option value="special" {{#if (equals system.weaponClass "special")}}selected{{/if}}>{{CPLocal "Special"}}</option>
         </select>
     </div>
-    <div class="field" title="Weapon mount (MM p.15). Turret = 360°/+2 to-hit; Fixed = forward only; Articulated = one side; Open/Pintle = exposed; Pod; Jury-rigged.">
-        <label>Mount</label>
+    <div class="field" title="{{CPLocal 'Vehicle.WMountTip'}}">
+        <label>{{CPLocal "Vehicle.WMount"}}</label>
         <select name="system.mountType">
-            <option value="turret" {{#if (equals system.mountType "turret")}}selected{{/if}}>Turret</option>
-            <option value="fixed" {{#if (equals system.mountType "fixed")}}selected{{/if}}>Fixed</option>
-            <option value="articulated" {{#if (equals system.mountType "articulated")}}selected{{/if}}>Articulated</option>
-            <option value="open" {{#if (equals system.mountType "open")}}selected{{/if}}>Open</option>
-            <option value="pintle" {{#if (equals system.mountType "pintle")}}selected{{/if}}>Pintle</option>
-            <option value="pod" {{#if (equals system.mountType "pod")}}selected{{/if}}>Pod</option>
-            <option value="juryRigged" {{#if (equals system.mountType "juryRigged")}}selected{{/if}}>Jury-rigged</option>
+            <option value="turret" {{#if (equals system.mountType "turret")}}selected{{/if}}>{{CPLocal "Vehicle.MountTurret"}}</option>
+            <option value="fixed" {{#if (equals system.mountType "fixed")}}selected{{/if}}>{{CPLocal "Vehicle.MountFixed"}}</option>
+            <option value="articulated" {{#if (equals system.mountType "articulated")}}selected{{/if}}>{{CPLocal "Vehicle.MountArticulated"}}</option>
+            <option value="open" {{#if (equals system.mountType "open")}}selected{{/if}}>{{CPLocal "Vehicle.MountOpen"}}</option>
+            <option value="pintle" {{#if (equals system.mountType "pintle")}}selected{{/if}}>{{CPLocal "Vehicle.MountPintle"}}</option>
+            <option value="pod" {{#if (equals system.mountType "pod")}}selected{{/if}}>{{CPLocal "Vehicle.MountPod"}}</option>
+            <option value="juryRigged" {{#if (equals system.mountType "juryRigged")}}selected{{/if}}>{{CPLocal "Vehicle.MountJuryRigged"}}</option>
         </select>
     </div>
-    <div class="field" title="Firing arc relative to the vehicle's facing.">
-        <label>Arc</label>
+    <div class="field" title="{{CPLocal 'Vehicle.WArcTip'}}">
+        <label>{{CPLocal "Vehicle.WArc"}}</label>
         <select name="system.arc">
-            <option value="turret" {{#if (equals system.arc "turret")}}selected{{/if}}>Turret (360°)</option>
-            <option value="front" {{#if (equals system.arc "front")}}selected{{/if}}>Front</option>
-            <option value="side" {{#if (equals system.arc "side")}}selected{{/if}}>Side</option>
-            <option value="rear" {{#if (equals system.arc "rear")}}selected{{/if}}>Rear</option>
+            <option value="turret" {{#if (equals system.arc "turret")}}selected{{/if}}>{{CPLocal "Vehicle.ArcTurret"}}</option>
+            <option value="front" {{#if (equals system.arc "front")}}selected{{/if}}>{{CPLocal "Vehicle.ArcFront"}}</option>
+            <option value="side" {{#if (equals system.arc "side")}}selected{{/if}}>{{CPLocal "Vehicle.ArcSide"}}</option>
+            <option value="rear" {{#if (equals system.arc "rear")}}selected{{/if}}>{{CPLocal "Vehicle.ArcRear"}}</option>
         </select>
     </div>
 </div>
 
 {{!-- To-hit + damage scale --}}
 <div class="field-list">
-    <div class="field" title="Weapon Accuracy: a flat modifier to the to-hit roll (MM stat block).">
-        <label>WA</label><input type="number" name="system.wa" value="{{system.wa}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.WATip'}}">
+        <label>{{CPLocal "Vehicle.WA"}}</label><input type="number" name="system.wa" value="{{system.wa}}"/>
     </div>
-    <div class="field" title="Vehicle Penetration — the parenthetical (n) in the MM stat block. Given directly by the book; compared to the target's Armor Value.">
-        <label>Penetration</label><input type="number" name="system.penetration" value="{{system.penetration}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.PenetrationTip'}}">
+        <label>{{CPLocal "Penetration"}}</label><input type="number" name="system.penetration" value="{{system.penetration}}"/>
     </div>
-    <div class="field" title="Personnel damage dice (e.g. 9D10). Used for the MM p.8 alternative method vs characters.">
-        <label>Damage dice</label><input type="text" name="system.damage" value="{{system.damage}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.DamageDiceTip'}}">
+        <label>{{CPLocal "Vehicle.DamageDice"}}</label><input type="text" name="system.damage" value="{{system.damage}}"/>
     </div>
 </div>
 
 {{!-- Damage flags --}}
 <div class="field-list">
-    <div class="field" title="Armor-piercing: ×2 Penetration Factor (already baked into the listed Pen for AP weapons).">
-        <label>AP</label><input type="checkbox" name="system.ap" {{#if system.ap}}checked{{/if}}/>
+    <div class="field" title="{{CPLocal 'Vehicle.FlagAPTip'}}">
+        <label>{{CPLocal "Vehicle.FlagAP"}}</label><input type="checkbox" name="system.ap" {{#if system.ap}}checked{{/if}}/>
     </div>
-    <div class="field" title="HEAT / shaped-charge: Penetration is NOT affected by range; Composite Armor halves Pen (penetrating damage is not halved).">
-        <label>HEAT</label><input type="checkbox" name="system.heat" {{#if system.heat}}checked{{/if}}/>
+    <div class="field" title="{{CPLocal 'Vehicle.FlagHEATTip'}}">
+        <label>{{CPLocal "Vehicle.FlagHEAT"}}</label><input type="checkbox" name="system.heat" {{#if system.heat}}checked{{/if}}/>
     </div>
-    <div class="field" title="High-explosive: Penetration is not affected by range.">
-        <label>Hi-Ex</label><input type="checkbox" name="system.hiEx" {{#if system.hiEx}}checked{{/if}}/>
+    <div class="field" title="{{CPLocal 'Vehicle.FlagHiExTip'}}">
+        <label>{{CPLocal "Vehicle.FlagHiEx"}}</label><input type="checkbox" name="system.hiEx" {{#if system.hiEx}}checked{{/if}}/>
     </div>
-    <div class="field" title="High-density AP (errata p.105): full damage through armor, like HEAT (e.g. Barret 20mm, 30mm Gatling).">
-        <label>Hi-density AP</label><input type="checkbox" name="system.highDensityAP" {{#if system.highDensityAP}}checked{{/if}}/>
+    <div class="field" title="{{CPLocal 'Vehicle.HiDensityAPTip'}}">
+        <label>{{CPLocal "Vehicle.HiDensityAP"}}</label><input type="checkbox" name="system.highDensityAP" {{#if system.highDensityAP}}checked{{/if}}/>
     </div>
-    <div class="field" title="Burst radius in meters (0 = no area effect). Hi-Ex/HEAT shells, rockets, GLs, mortars, bombs.">
-        <label>Burst (m)</label><input type="number" name="system.burst" value="{{system.burst}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.BurstMTip'}}">
+        <label>{{CPLocal "Vehicle.BurstM"}}</label><input type="number" name="system.burst" value="{{system.burst}}"/>
     </div>
 </div>
 
 {{!-- Rate / ammo / range --}}
 <div class="field-list">
-    <div class="field" title="Rate of fire. ROF 30 hits with 5 rounds per hit, ROF 100 with 10 (extra rounds add Penetration).">
-        <label>ROF</label><input type="number" name="system.rof" value="{{system.rof}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.ROFTip'}}">
+        <label>{{CPLocal "Vehicle.ROF"}}</label><input type="number" name="system.rof" value="{{system.rof}}"/>
     </div>
-    <div class="field" title="Alternate ROF for variable weapons (e.g. '30 OR 5'). 0 = none.">
-        <label>ROF (alt)</label><input type="number" name="system.rofAlt" value="{{system.rofAlt}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.ROFAltTip'}}">
+        <label>{{CPLocal "Vehicle.ROFAlt"}}</label><input type="number" name="system.rofAlt" value="{{system.rofAlt}}"/>
     </div>
-    <div class="field" title="Magazine / shots before reload.">
-        <label>Shots</label><input type="number" name="system.shots" value="{{system.shots}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.ShotsTip'}}">
+        <label>{{CPLocal "Shots"}}</label><input type="number" name="system.shots" value="{{system.shots}}"/>
     </div>
-    <div class="field" title="Maximum range in meters.">
-        <label>Range (m)</label><input type="number" name="system.range" value="{{system.range}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.RangeMTip'}}">
+        <label>{{CPLocal "Vehicle.RangeM"}}</label><input type="number" name="system.range" value="{{system.range}}"/>
     </div>
-    <div class="field" title="Minimum range in meters (missiles = 1/10 Long range; 0 = none).">
-        <label>Min range</label><input type="number" name="system.minRange" value="{{system.minRange}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.MinRangeTip'}}">
+        <label>{{CPLocal "Vehicle.MinRange"}}</label><input type="number" name="system.minRange" value="{{system.minRange}}"/>
     </div>
-    <div class="field" title="Reliability: ST (standard), VR (very reliable), UR (unreliable).">
-        <label>Reliability</label>
+    <div class="field" title="{{CPLocal 'Vehicle.ReliabilityTip'}}">
+        <label>{{CPLocal "Reliability"}}</label>
         <select name="system.reliability">
             <option value="ST" {{#if (equals system.reliability "ST")}}selected{{/if}}>ST</option>
             <option value="VR" {{#if (equals system.reliability "VR")}}selected{{/if}}>VR</option>
@@ -100,61 +100,61 @@
 
 {{!-- Guidance (missiles) --}}
 <div class="field-list">
-    <div class="field" title="Missile guidance: Semi-active uses the operator's skill; Active uses the missile's own Skill (ignores operator); Paint hits 2-10 if a painting laser hits.">
-        <label>Guidance</label>
+    <div class="field" title="{{CPLocal 'Vehicle.GuidanceTip'}}">
+        <label>{{CPLocal "Vehicle.Guidance"}}</label>
         <select name="system.guidance">
-            <option value="none" {{#if (equals system.guidance "none")}}selected{{/if}}>None</option>
-            <option value="semiActive" {{#if (equals system.guidance "semiActive")}}selected{{/if}}>Semi-active</option>
-            <option value="active" {{#if (equals system.guidance "active")}}selected{{/if}}>Active</option>
-            <option value="paint" {{#if (equals system.guidance "paint")}}selected{{/if}}>Paint (Hellfire)</option>
+            <option value="none" {{#if (equals system.guidance "none")}}selected{{/if}}>{{CPLocal "Vehicle.GuidanceNone"}}</option>
+            <option value="semiActive" {{#if (equals system.guidance "semiActive")}}selected{{/if}}>{{CPLocal "Vehicle.GuidanceSemiActive"}}</option>
+            <option value="active" {{#if (equals system.guidance "active")}}selected{{/if}}>{{CPLocal "Vehicle.GuidanceActive"}}</option>
+            <option value="paint" {{#if (equals system.guidance "paint")}}selected{{/if}}>{{CPLocal "Vehicle.GuidancePaint"}}</option>
         </select>
     </div>
-    <div class="field" title="Active missile's own Skill rating (e.g. +15 / +20), used in place of the operator's skill.">
-        <label>Guide skill</label><input type="number" name="system.guidanceSkill" value="{{system.guidanceSkill}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.GuideSkillTip'}}">
+        <label>{{CPLocal "Vehicle.GuideSkill"}}</label><input type="number" name="system.guidanceSkill" value="{{system.guidanceSkill}}"/>
     </div>
-    <div class="field" title="Homing method — determines which countermeasures defeat it (radar ← chaff/jamming/ECM; thermal/IR ← flares/IR-baffling/IR-smoke; optical ← smoke; laser ← anti-laser aerosol).">
-        <label>Homing</label>
+    <div class="field" title="{{CPLocal 'Vehicle.HomingTip'}}">
+        <label>{{CPLocal "Vehicle.Homing"}}</label>
         <select name="system.homingMethod">
-            <option value="radar" {{#if (equals system.homingMethod "radar")}}selected{{/if}}>Radar</option>
-            <option value="thermal" {{#if (equals system.homingMethod "thermal")}}selected{{/if}}>Thermal / IR</option>
-            <option value="optical" {{#if (equals system.homingMethod "optical")}}selected{{/if}}>Optical</option>
-            <option value="laser" {{#if (equals system.homingMethod "laser")}}selected{{/if}}>Laser</option>
+            <option value="radar" {{#if (equals system.homingMethod "radar")}}selected{{/if}}>{{CPLocal "Vehicle.HomingRadar"}}</option>
+            <option value="thermal" {{#if (equals system.homingMethod "thermal")}}selected{{/if}}>{{CPLocal "Vehicle.HomingThermal"}}</option>
+            <option value="optical" {{#if (equals system.homingMethod "optical")}}selected{{/if}}>{{CPLocal "Vehicle.HomingOptical"}}</option>
+            <option value="laser" {{#if (equals system.homingMethod "laser")}}selected{{/if}}>{{CPLocal "Laser"}}</option>
         </select>
     </div>
-    <div class="field" title="Cone angle in degrees for scatter-pack weapons (60 / 120 / 180).">
-        <label>Cone°</label><input type="number" name="system.coneAngle" value="{{system.coneAngle}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.ConeAngleTip'}}">
+        <label>{{CPLocal "Vehicle.ConeAngle"}}</label><input type="number" name="system.coneAngle" value="{{system.coneAngle}}"/>
     </div>
-    <div class="field" title="Number of projectiles per volley (cone/scatter weapons).">
-        <label>Projectiles</label><input type="number" name="system.projectiles" value="{{system.projectiles}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.ProjectilesTip'}}">
+        <label>{{CPLocal "Vehicle.Projectiles"}}</label><input type="number" name="system.projectiles" value="{{system.projectiles}}"/>
     </div>
 </div>
 
 {{!-- Construction (Equipped / Cost / Weight / Source come from the common panel below) --}}
 <div class="field-list">
-    <div class="field" title="Spaces the weapon occupies (vehicle construction).">
-        <label>Spaces</label><input type="number" name="system.space" value="{{system.space}}"/>
+    <div class="field" title="{{CPLocal 'Vehicle.WSpacesTip'}}">
+        <label>{{CPLocal "Spaces"}}</label><input type="number" name="system.space" value="{{system.space}}"/>
     </div>
 </div>
 
 {{!-- Shell / warhead variants — selectable shells offered at fire time (artillery / bombs / HE). --}}
-<h3 class="cyber-section-header" style="margin-top:8px;">Shell Variants</h3>
-<p style="opacity:0.6; font-size:0.78em; margin:0 0 4px;">Offered when firing. The warhead drives the effect: HEAT (shaped charge, halved by composite), WP (3D6 burn), Cluster (×3 burst, Pen 4), Chemical (gas cloud, no Pen). Leave empty for a plain HE round.</p>
+<h3 class="cyber-section-header" style="margin-top:8px;">{{CPLocal "Vehicle.ShellVariantsHeader"}}</h3>
+<p style="opacity:0.6; font-size:0.78em; margin:0 0 4px;">{{CPLocal "Vehicle.ShellVariantsHint"}}</p>
 <div class="cp-shellvariants">
     {{#each system.shellVariants as |v i|}}
     <div class="cp-shellvar" data-index="{{i}}" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:3px;">
-        <input type="text" class="cp-sv" data-field="name" value="{{v.name}}" placeholder="Name" style="flex:1 1 120px;"/>
-        <label style="font-size:0.8em;">Pen <input type="number" class="cp-sv" data-field="pen" value="{{v.pen}}" style="width:44px;"/></label>
-        <label style="font-size:0.8em;">Burst <input type="number" class="cp-sv" data-field="burst" value="{{v.burst}}" style="width:44px;"/></label>
+        <input type="text" class="cp-sv" data-field="name" value="{{v.name}}" placeholder="{{CPLocal 'Vehicle.ShellNamePlaceholder'}}" style="flex:1 1 120px;"/>
+        <label style="font-size:0.8em;">{{CPLocal "Vehicle.ShellPenLabel"}} <input type="number" class="cp-sv" data-field="pen" value="{{v.pen}}" style="width:44px;"/></label>
+        <label style="font-size:0.8em;">{{CPLocal "Vehicle.ShellBurstLabel"}} <input type="number" class="cp-sv" data-field="burst" value="{{v.burst}}" style="width:44px;"/></label>
         <select class="cp-sv" data-field="warhead" style="font-size:0.8em;">
-            <option value="" {{#if (equals v.warhead "")}}selected{{/if}}>HE</option>
-            <option value="heat" {{#if (equals v.warhead "heat")}}selected{{/if}}>HEAT</option>
-            <option value="wp" {{#if (equals v.warhead "wp")}}selected{{/if}}>WP</option>
-            <option value="cluster" {{#if (equals v.warhead "cluster")}}selected{{/if}}>Cluster</option>
-            <option value="chemical" {{#if (equals v.warhead "chemical")}}selected{{/if}}>Chemical</option>
+            <option value="" {{#if (equals v.warhead "")}}selected{{/if}}>{{CPLocal "Vehicle.ShellWarheadHE"}}</option>
+            <option value="heat" {{#if (equals v.warhead "heat")}}selected{{/if}}>{{CPLocal "Vehicle.ShellWarheadHEAT"}}</option>
+            <option value="wp" {{#if (equals v.warhead "wp")}}selected{{/if}}>{{CPLocal "Vehicle.ShellWarheadWP"}}</option>
+            <option value="cluster" {{#if (equals v.warhead "cluster")}}selected{{/if}}>{{CPLocal "Vehicle.ShellWarheadCluster"}}</option>
+            <option value="chemical" {{#if (equals v.warhead "chemical")}}selected{{/if}}>{{CPLocal "Vehicle.ShellWarheadChemical"}}</option>
         </select>
-        <label style="font-size:0.8em;" title="Armor-piercing">AP <input type="checkbox" class="cp-sv" data-field="ap" {{#if v.ap}}checked{{/if}}/></label>
-        <button type="button" class="cp-sv-remove" data-index="{{i}}" title="Remove this shell" style="padding:0 6px;">✕</button>
+        <label style="font-size:0.8em;" title="{{CPLocal 'Vehicle.ShellAPTip'}}">{{CPLocal "AP"}} <input type="checkbox" class="cp-sv" data-field="ap" {{#if v.ap}}checked{{/if}}/></label>
+        <button type="button" class="cp-sv-remove" data-index="{{i}}" title="{{CPLocal 'Vehicle.ShellRemoveTip'}}" style="padding:0 6px;">✕</button>
     </div>
     {{/each}}
-    <button type="button" class="cp-sv-add" style="margin-top:2px;">＋ Add Shell Variant</button>
+    <button type="button" class="cp-sv-add" style="margin-top:2px;">{{CPLocal "Vehicle.ShellAddBtn"}}</button>
 </div>
