@@ -21,3 +21,21 @@ This module is written to the **same conventions as the base system** ("Tilt's W
 ## Status
 
 Early scaffold. See the project board for the feature roll-out order (combat automation → vehicles/ACPA → shopping → IP).
+
+## Credits & licenses
+
+The optional **Carolingian terminal sheet skin** (the per-user `carolingianSkin` setting — a dark
+cyberpunk-terminal look for the character/item sheets) is an adaptation, **scoped to this system's
+`.cyberpunk` sheets**, of two MIT-licensed projects. It is a snapshot of *visual styles only* — not
+the modules themselves, not their palette UI / scripts / window chrome:
+
+- **Cyberpunk Restyler** — © DARKNEET69, MIT — the sheet styling (dark surface, bracketed `[ ]`
+  tabs, `>`-prompt headers + blink cursor, teal glow, statsrow / armor-display / wound-tracker /
+  skill chip-toggle / selects + buttons).
+- **Carolingian UI** (`crlngn-ui`) — © Carol / crlngn-dev, MIT — a snapshot of ~8 colour-token
+  values from one teal preset, and the Work Sans / Roboto Slab typography it uses. When Carolingian
+  UI is installed, the skin defers to its live palette. Install it for more palettes + a matching
+  interface theme.
+
+Bundled fonts **Work Sans** and **Roboto Slab** are licensed under the SIL Open Font License 1.1
+(full text in [`fonts/OFL.txt`](fonts/OFL.txt)).

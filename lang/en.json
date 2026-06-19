@@ -744,6 +744,8 @@
     "ShopAllowHomebrewHint": "Off by default. When on, community / non-canon / cross-system items become available in the shop, where the GM can enable individual sources for players. Core and official R.Talsorian books are unaffected by this.",
     "ShopShowSource": "Show item sources in the shop",
     "PlayersCanBuyAmmo": "Allow players to purchase ammunition",
-    "PlayersCanBuyAmmoHint": "When off, only the GM can buy ammo; players are told they must purchase it at a shop and should ask the GM. Keeps ammo from appearing out of thin air."
+    "PlayersCanBuyAmmoHint": "When off, only the GM can buy ammo; players are told they must purchase it at a shop and should ask the GM. Keeps ammo from appearing out of thin air.",
+    "CarolingianSkin": "Carolingian terminal sheet skin",
+    "CarolingianSkinHint": "Give the character and item sheets a dark cyberpunk-terminal look (teal accents, bracketed tabs, prompt-style headers), adapted from DARKNEET's Cyberpunk Restyler and the Carolingian UI palette. Per-user; on by default. Turn it off for the standard light/dark sheet theme. Install the Carolingian UI module for more colour palettes and a matching interface theme."
   }
 }

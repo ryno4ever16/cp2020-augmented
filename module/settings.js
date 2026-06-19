@@ -7,6 +7,18 @@
  */
 const SCOPE = "cp2020-augmented";
 
+/**
+ * Apply (or clear) the `cp-carolingian` <body> class that gates the optional Carolingian /
+ * Restyler terminal sheet skin in css/cp2020-augmented.css, per the per-user `carolingianSkin`
+ * setting (default on). Called once on `ready` and again whenever the setting is toggled.
+ */
+export function applyCarolingianSkinClass() {
+  try {
+    const on = game.settings.get(SCOPE, "carolingianSkin") !== false;
+    document.body?.classList.toggle("cp-carolingian", on);
+  } catch (e) { /* settings or DOM not ready yet */ }
+}
+
 export function registerAugmentedSettings() {
   // Master toggle for the Augmented combat-automation layer (damage application,
   // saves, area effects, combat-tracker controls). On by default once the module is
@@ -551,6 +563,21 @@ export function registerAugmentedSettings() {
     config: true,
     type: Boolean,
     default: true
+  });
+
+  // --- Carolingian / Restyler terminal sheet skin (per-user UI) ---
+  // Toggles the `cp-carolingian` <body> class that gates the optional terminal skin in
+  // css/cp2020-augmented.css (an adaptation of DARKNEET's Cyberpunk Restyler + the Carolingian
+  // UI palette, both MIT — see README). Client-scoped, on by default; applyCarolingianSkinClass()
+  // re-applies on ready and on every toggle.
+  game.settings.register(SCOPE, "carolingianSkin", {
+    name: "SETTINGS.CarolingianSkin",
+    hint: "SETTINGS.CarolingianSkinHint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true,
+    onChange: () => applyCarolingianSkinClass()
   });
 
   // --- Maximum Metal: in-list section header + master gating of the MM sub-settings ---

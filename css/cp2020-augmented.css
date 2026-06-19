@@ -289,3 +289,293 @@
 .cp2020ae-ma-bonus-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
 .cp2020ae-ma-bonus-grid .cp2020ae-ma-bonus-header { grid-column: 1 / -1; }
 .cp2020ae-ma-bonus-field .cp2020ae-ma-bonus { flex: 0 0 auto; width: 3em; text-align: center; }
+
+/* ══ CAROLINGIAN / RESTYLER TERMINAL SHEET SKIN (optional, per-user) ════════════════
+ * An optional cyberpunk-terminal look for the SYSTEM's actor/item/dialog sheets (.cyberpunk),
+ * adapted from:
+ *   • Cyberpunk Restyler — © DARKNEET69, MIT — the sheet styling (dark surface, bracketed
+ *     "[ ]" tabs, ">" prompt headers + blink cursor, teal glow, statsrow / armor-display /
+ *     wound-tracker / skill chip-toggle / selects + buttons).
+ *   • Carolingian UI (crlngn-ui) — © Carol / crlngn-dev, MIT — the teal palette token VALUES
+ *     (a snapshot of one preset) and the Work Sans / Roboto Slab typography it provides.
+ * Both MIT; full credits in README.md + fonts/OFL.txt. A SNAPSHOT of visual styles SCOPED to
+ * `.cyberpunk` (NOT a Foundry-wide skin, NOT Carolingian's palette UI / scripts / window
+ * chrome, NOT the modules copied whole) — by agreement with Carol (2026-06-18). For more
+ * palettes + the full theme/fonts, install Carolingian UI; the deference rule below makes it
+ * "just work". Restyler's broad `.dialog *:not(.item-image)` universal-descendant rule is
+ * intentionally NOT vendored (it would overreach the chrome + clobber our coloured spans).
+ *
+ * GATING: the whole layer is behind `body.cp-carolingian`, toggled by the per-user
+ * `carolingianSkin` setting (default ON; module/settings.js). OFF → the class is absent → none
+ * of these rules match → the sheets fall back to the system's own theme-aware palette.
+ * DEFERENCE: the hardcoded palette tokens apply only when Carolingian is ABSENT
+ * (`:not(.crlngn-ui)`); when crlngn-ui is installed, its live preset tokens cascade onto the
+ * sheets instead, so the skin tracks the user's chosen palette.
+ *
+ * MODULE vs SYSTEM: in the system fork this skin guarded the system's own `.theme-*` readability
+ * rules with `:not(.cp-carolingian)` so the two layers were mutually exclusive. Living in the
+ * module, it can't edit those system rules — so the text-colour re-assertion block at the very
+ * end uses `!important` to win over them (the same layering technique Restyler itself uses). */
+
+/* Restyler's own tokens — scoped to the skin (not :root) so they exist only when it's on. */
+body.cp-carolingian {
+  --background: rgba(11, 10, 19, 1);
+  --restyler-border: #555555;
+  --restyler-text-shadow: 0 0 1px var(--color-highlights);
+  --color-scheme: dark;
+}
+/* Carolingian palette snapshot (teal preset) — only when Carolingian itself is NOT installed
+ * (else defer to her live preset). --color-dark-4 / --color-light-4 feed Foundry's wrapper
+ * vars --color-text-subtle / --color-form-label via their `var()` chains. */
+body.cp-carolingian:not(.crlngn-ui) {
+  --color-highlights: rgb(68, 147, 173);
+  --color-highlights-75: rgba(68, 147, 173, 0.75);
+  --color-highlights-50: rgba(68, 147, 173, 0.5);
+  --color-warm-3: rgb(60, 120, 146);
+  --color-light-1: #f7f4f8;
+  --color-dark-bg-25: rgba(15, 15, 15, 0.25);
+  --color-dark-4: #555555;   /* feeds --color-text-subtle */
+  --color-light-4: #bbbbca;  /* feeds --color-form-label */
+}
+
+@keyframes cp-carolingian-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
+
+/* Window chrome (frame / header / content) — OUR cyberpunk windows only. */
+body.cp-carolingian .application.cyberpunk .window-content,
+body.cp-carolingian .application.cyberpunk .window-header,
+body.cp-carolingian .application.cyberpunk .window-resizable-handle,
+body.cp-carolingian .cyberpunk.dialog .window-content {
+  background-color: var(--background) !important;
+  background-image: none !important;
+  color: var(--color-light-1) !important;
+}
+body.cp-carolingian .application.cyberpunk {
+  border: 1px solid var(--restyler-border);
+  border-radius: 6px;
+  box-shadow: 0 0 10px #000;
+}
+body.cp-carolingian .cyberpunk .dialog-buttons {
+  background-color: var(--background) !important;
+  border-top: 1px solid var(--restyler-border) !important;
+}
+
+/* Sheet body */
+body.cp-carolingian .cyberpunk section.window-content {
+  background-color: var(--background) !important;
+  color: var(--color-light-1);
+  font-weight: normal;
+}
+body.cp-carolingian .cyberpunk .flavor { color: var(--color-form-label) !important; }
+body.cp-carolingian .cyberpunk .editor-content {
+  background-color: var(--background);
+  color: var(--color-light-1);
+  border: 1px solid var(--restyler-border);
+  padding: 8px;
+  text-shadow: var(--restyler-text-shadow);
+}
+
+/* Tabs — bracketed "[ ]" terminal style */
+body.cp-carolingian .cyberpunk section.window-content nav.tabs {
+  border-bottom: 2px solid var(--restyler-border);
+  background-color: var(--background);
+  padding: 0;
+}
+body.cp-carolingian .cyberpunk section.window-content nav.tabs > .item {
+  color: #cccccc;
+  white-space: nowrap;
+}
+body.cp-carolingian .cyberpunk section.window-content nav.tabs > .item.active {
+  background-color: var(--color-highlights-75);
+  border: 1px solid var(--color-highlights-75);
+  color: var(--color-text-light-0, #fff);
+}
+body.cp-carolingian .cyberpunk section.window-content nav.tabs > .item::before { content: "[ "; }
+body.cp-carolingian .cyberpunk section.window-content nav.tabs > .item::after { content: " ]"; }
+body.cp-carolingian .cyberpunk section.window-content nav.tabs > .item:hover {
+  background: var(--color-highlights-50);
+  border: 1px solid var(--color-highlights-50);
+  box-shadow: 0 0 8px inset var(--color-dark-bg-25);
+}
+
+/* Headers — ">" prompt + blink cursor */
+body.cp-carolingian .cyberpunk h1.title,
+body.cp-carolingian .cyberpunk h2 {
+  color: var(--color-highlights);
+  text-shadow: var(--restyler-text-shadow);
+  border-bottom: 1px solid var(--restyler-border);
+  position: relative;
+  padding-left: 20px;
+}
+body.cp-carolingian .cyberpunk h1.title::before,
+body.cp-carolingian .cyberpunk h2::before {
+  content: "> ";
+  position: absolute;
+  left: 0;
+  color: var(--color-highlights);
+  animation: cp-carolingian-blink 2s infinite;
+}
+body.cp-carolingian .cyberpunk h1.title > input {
+  background-color: transparent;
+  border: none;
+  color: var(--color-light-1);
+  font-weight: bold;
+  text-shadow: var(--restyler-text-shadow);
+}
+
+/* Fields / labels / submit buttons */
+body.cp-carolingian .cyberpunk .field > input,
+body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc; border: unset; background-color: unset; }
+body.cp-carolingian .cyberpunk .field .stat { border: 1px solid var(--restyler-border); }
+body.cp-carolingian .cyberpunk .field { border: unset; background-color: unset; }
+body.cp-carolingian .cyberpunk label,
+body.cp-carolingian .cyberpunk .program-type { align-self: center; background-color: unset; }
+body.cp-carolingian .cyberpunk .field > *,
+body.cp-carolingian .cyberpunk .field > span > * { background-color: unset; }
+body.cp-carolingian .cyberpunk button[type=submit] { color: var(--color-light-1); background-color: var(--color-highlights-75); }
+body.cp-carolingian .cyberpunk button[type=submit]:focus { box-shadow: unset; }
+body.cp-carolingian .cyberpunk button[type=submit]:hover {
+  background: var(--color-highlights-50);
+  border: 1px solid var(--color-highlights-50);
+  box-shadow: 0 0 8px inset var(--color-dark-bg-25);
+}
+
+/* Stats row + armor-display grid */
+body.cp-carolingian .cyberpunk .statsrow > div.stat,
+body.cp-carolingian .cyberpunk .armor-display .armor-segment { border: 1px solid var(--color-highlights-50); min-width: 55px; }
+body.cp-carolingian .cyberpunk .statsrow > div.stat label { color: var(--color-highlights) !important; }
+body.cp-carolingian .cyberpunk .statsrow > div.stat .flexrow input,
+body.cp-carolingian .cyberpunk .statsrow > div.stat .flexrow .stat-mod { color: var(--color-text-subtle) !important; }
+body.cp-carolingian .cyberpunk .statsrow > div.stat .stat-base,
+body.cp-carolingian .cyberpunk .statsrow > div.stat .stat-mod,
+body.cp-carolingian .cyberpunk .statsrow > div.stat .stat-temp,
+body.cp-carolingian .cyberpunk .netrun-options-row { background: unset; border: unset; }
+body.cp-carolingian .cyberpunk .armor-display {
+  max-width: unset;
+  grid-template-areas: "lArm Head rArm" "lLeg Torso rLeg";
+}
+body.cp-carolingian .cyberpunk .armor-display .armor-segment {
+  grid-template-rows: 1fr 1fr;
+  grid-template-columns: 1fr 1fr auto;
+  grid-template-areas: "name name loc" "ablate sp repair";
+}
+body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-sp,
+body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-sdp-row,
+body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-name { grid-column: unset !important; }
+body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-name { text-align: unset; padding: 3px; }
+
+/* Wound tracker */
+body.cp-carolingian .cyberpunk .wound-tracker { display: flex; flex-wrap: wrap; flex-grow: 2; margin-right: -3px; }
+body.cp-carolingian .cyberpunk .wound-tracker .wound-state {
+  flex-grow: 1; flex-direction: column; height: fit-content;
+  margin-right: 3px; margin-top: 5px;
+  border: solid var(--restyler-border); border-width: 0 2px 2px 2px;
+  width: clamp(70px, 19%, 140px);
+}
+body.cp-carolingian .cyberpunk .wound-tracker .damage.unfilled { background-color: var(--color-text-subtle); }
+body.cp-carolingian .cyberpunk .wound-tracker .damage.filled { background-color: var(--color-highlights); }
+body.cp-carolingian .cyberpunk .wound-tracker .damage:hover { background-color: var(--color-highlights-50); }
+
+/* Skill chip-toggle (chip.png is bundled in the module's img/) */
+body.cp-carolingian .cyberpunk .field.skill label.chip-toggle {
+  background-color: var(--background);
+  display: flex; align-items: center; padding-right: 3px;
+  position: relative; cursor: pointer;
+}
+body.cp-carolingian .cyberpunk .field.skill label.chip-toggle .chip-icon::before {
+  content: ""; display: block; width: 1.5em; height: 1.5em;
+  background-image: url(../img/chip.png); background-size: cover; background-position: center;
+  transition: opacity 0.2s ease-in-out; opacity: 1;
+}
+body.cp-carolingian .cyberpunk .field.skill label.chip-toggle > * { font-variant: all-small-caps; }
+body.cp-carolingian .cyberpunk .field.skill input[type=checkbox] { display: none; }
+body.cp-carolingian .cyberpunk .field.skill input[type=checkbox]:checked + .chip-icon::before { opacity: 1; }
+
+/* Lists / images / controls / selects */
+body.cp-carolingian .cyberpunk .field.skill,
+body.cp-carolingian .cyberpunk .field.action,
+body.cp-carolingian .cyberpunk .field.gear,
+body.cp-carolingian .cyberpunk .field.item-edit,
+body.cp-carolingian .cyberpunk .field.netrun-program { background-color: unset; border-bottom: 1px solid var(--color-highlights-50); }
+body.cp-carolingian .cyberpunk .roll-image { height: 32px; }
+body.cp-carolingian .cyberpunk .active-cyberware { background-image: unset !important; }
+body.cp-carolingian .cyberpunk .profile-img,
+body.cp-carolingian .cyberpunk .item-img { object-fit: contain; }
+body.cp-carolingian .cyberpunk input[type=checkbox]:checked,
+body.cp-carolingian .cyberpunk input[type=radio]:checked { accent-color: var(--color-highlights); color: var(--color-light-1); }
+body.cp-carolingian .cyberpunk .item-controls { display: flex; align-items: center; gap: 5px; }
+body.cp-carolingian .cyberpunk .fa-edit:hover,
+body.cp-carolingian .cyberpunk .fa-trash:hover { color: var(--color-highlights); }
+body.cp-carolingian .cyberpunk select,
+body.cp-carolingian .cyberpunk button,
+body.cp-carolingian .cyberpunk select option { background: var(--color-warm-3) !important; border: 1px solid var(--color-highlights-50) !important; border-radius: 4px; color: var(--color-light-1) !important; }
+body.cp-carolingian .cyberpunk .tinymce svg { fill: var(--color-light-1) !important; }
+body.cp-carolingian .cyberpunk .deck-option { color: unset; }
+body.cp-carolingian .cyberpunk .netrun-cell input { color: var(--color-light-1); }
+
+/* ── Typography: self-hosted Work Sans (body) + Roboto Slab (titles) ──────────────
+ * Both fonts © their authors, SIL Open Font License 1.1 (see fonts/OFL.txt). These are the
+ * faces Carolingian uses (it loads them from Google Fonts); we self-host a subset so the skin
+ * matches WITHOUT a network dependency and WITHOUT needing Carolingian installed. Subsets:
+ * Work Sans = latin + latin-ext (Google ships no Cyrillic for Work Sans → Cyrillic falls back
+ * to Arial); Roboto Slab = latin + latin-ext + cyrillic. @font-face is a global declaration
+ * (it only DEFINES the families); they are APPLIED only under the gated skin selectors below. */
+@font-face {
+  font-family: "Work Sans"; font-style: normal; font-weight: 300 800; font-display: swap;
+  src: url("../fonts/WorkSans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Work Sans"; font-style: normal; font-weight: 300 800; font-display: swap;
+  src: url("../fonts/WorkSans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Roboto Slab"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/RobotoSlab-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Roboto Slab"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/RobotoSlab-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Roboto Slab"; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url("../fonts/RobotoSlab-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* Body font on the .cyberpunk root AND on section.window-content directly — the latter beats
+ * the system's own `.cyberpunk section.window-content { font-family:"Noto Sans" }` base rule (an
+ * element's own font-family wins over one inherited from an ancestor), so body text gets Work Sans. */
+body.cp-carolingian .cyberpunk,
+body.cp-carolingian .cyberpunk section.window-content { font-family: "Work Sans", Arial, sans-serif; }
+body.cp-carolingian .cyberpunk h1.title,
+body.cp-carolingian .cyberpunk h2 { font-family: "Roboto Slab", "Work Sans", Arial, serif; }
+
+/* ── Module adaptation: re-assert the skin's text palette over the system's (now-unguarded)
+ * theme-aware readability rules in css/cyberpunk2020.css. Those colour headers / field inputs /
+ * body copy with --cp-ink (warm tan) at a HIGHER selector specificity than the skin rules above,
+ * so !important is what lets the skin's teal headers + light text win. (In the fork those system
+ * rules carried a :not(.cp-carolingian) guard; a module can't add that, hence !important here —
+ * the same layering technique Restyler itself uses.) */
+body.cp-carolingian .cyberpunk h1.title,
+body.cp-carolingian .cyberpunk h2 { color: var(--color-highlights) !important; }
+body.cp-carolingian .cyberpunk h1.title > input { color: var(--color-light-1) !important; }
+body.cp-carolingian .cyberpunk .cyberpunk-actor-sheet-content h3,
+body.cp-carolingian .cyberpunk .cyberpunk-actor-sheet-content p,
+body.cp-carolingian .cyberpunk .cyberpunk-actor-sheet-content .summary { color: var(--color-light-1) !important; }
+body.cp-carolingian .cyberpunk .field > input,
+body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !important; }
+
+/* ── Shop catalog toolbar checkbox compatibility (independent of the skin) ─────────
+ * The shop catalog's toolbar toggles live in bare <label>s, so they miss the system's general
+ * `.cyberpunk .field > input[type=checkbox]` appearance:none deference. A checkbox-restyling
+ * module (e.g. Cyberpunk Restyler installed standalone) then re-enables the native control on
+ * top of Foundry's styled box, drawing two checkboxes. Re-assert the deference on these toggles
+ * by class so Foundry's single styled checkbox is used. (Border-fit nit tracked separately.) */
+.cyberpunk input.cp-catalog-showsource,
+.cyberpunk input.cp-shop-open,
+.cyberpunk input.cp-shop-fullsearch {
+  appearance: none;
+  -webkit-appearance: none;
+}

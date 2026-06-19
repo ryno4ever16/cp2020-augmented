@@ -7,7 +7,7 @@
  * own init/ready wiring shape: registration functions imported here and called
  * from Hooks.once('init'/'ready').
  */
-import { registerAugmentedSettings, combatAutomationEnabled, ipSystem } from "./settings.js";
+import { registerAugmentedSettings, combatAutomationEnabled, ipSystem, applyCarolingianSkinClass } from "./settings.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
@@ -128,6 +128,11 @@ Hooks.once("ready", function () {
     ui.notifications?.error(game.i18n.localize("CYBERPUNK.Augmented.WrongSystem"));
     return;
   }
+
+  // Apply the per-user Carolingian / Restyler terminal sheet skin (toggles the cp-carolingian
+  // <body> class that gates the skin CSS in cp2020-augmented.css). Client-side cosmetic, so it
+  // runs independently of the combat-automation gate below.
+  applyCarolingianSkinClass();
 
   // combatAutomationEnabled is the master gate for the Augmented combat layer
   // (damage application, saves, area effects, combat-tracker controls, vehicle/ACPA
