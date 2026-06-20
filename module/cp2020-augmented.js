@@ -32,6 +32,9 @@ import { registerIpHooks } from "./ip/ip.js";
 import { openIpTracker } from "./ip/tracker.js";
 import { registerIpSheet } from "./ip/ip-sheet.js";
 
+// Settings presets — the GM "Choose Preset" menu button (one-click playstyle tiers).
+import { PresetPicker } from "./dialog/preset-picker.js";
+
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
 import { registerShopHooks, openShopWindow } from "./shop/catalog.js";
@@ -65,6 +68,8 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/ip/skill-cluster.hbs",
   "modules/cp2020-augmented/templates/ip/skills-header.hbs",
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
+  "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
+  "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",
   "modules/cp2020-augmented/templates/cyberware/install-button.hbs",
   "modules/cp2020-augmented/templates/shop/services-panel.hbs",
   "modules/cp2020-augmented/templates/martial/martial-panel.hbs",
@@ -79,6 +84,17 @@ Hooks.once("init", function () {
   console.log(`${SCOPE} | Initializing Cyberpunk 2020: Augmented Edition`);
 
   registerAugmentedSettings();
+  // GM-only "Settings Presets" menu button — applies one of the 4 playstyle tiers in one click.
+  // Registered here (not settings.js) so settings.js stays free of foundry.applications imports, mirroring
+  // the fork. See module/presets.js + dialog/preset-picker.js.
+  game.settings.registerMenu(SCOPE, "presetMenu", {
+    name: "SETTINGS.PresetMenuName",
+    label: "SETTINGS.PresetMenuLabel",
+    hint: "SETTINGS.PresetMenuHint",
+    icon: "fa-solid fa-sliders",
+    type: PresetPicker,
+    restricted: true,
+  });
   // Vendor the {{CPLocal}}/{{CPLocalParam}} localization helpers the module's templates use, so
   // they resolve without depending on the base system registering them (vanilla self-sufficiency).
   registerAugmentedHandlebarsHelpers();

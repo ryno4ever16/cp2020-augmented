@@ -1,0 +1,17 @@
+{{!-- Preset-apply confirmation body. NAMES the active features the tier switches on (especially the
+      silent RAW-IP accumulator) so a GM can't enable a feature without seeing it. Text from lang/*.json;
+      tier/desc/features are passed pre-localized. --}}
+<div class="cp-preset-confirm">
+  <p class="cp-preset-confirm-lead">{{CPLocal "PresetConfirmLead" tier=tier}}</p>
+  <p class="cp-preset-confirm-desc">{{desc}}</p>
+
+  {{#if hasFeatures}}
+  <p class="cp-preset-confirm-switch">{{localize "CYBERPUNK.PresetConfirmSwitchesOn"}}</p>
+  <ul class="cp-preset-confirm-features">
+    {{#each features as |f|}}<li>{{f}}</li>{{/each}}
+  </ul>
+  {{/if}}
+
+  <p class="cp-preset-confirm-count">{{CPLocal "PresetConfirmCount" count=count}}</p>
+  <p class="cp-preset-confirm-note">{{localize "CYBERPUNK.PresetUntouchedNote"}}</p>
+</div>

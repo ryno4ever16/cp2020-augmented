@@ -5,6 +5,8 @@
  * SETTINGS.* i18n keys (text lives in lang/*.json), and try/catch accessor
  * helpers that return a safe default. Augmented features are opt-in (default off).
  */
+import { enhanceSettingsConfig } from "./settings-sections.js";
+
 const SCOPE = "cp2020-augmented";
 
 /**
@@ -637,55 +639,10 @@ export function registerAugmentedSettings() {
     onChange: () => applyCarolingianSkinClass()
   });
 
-  // --- Maximum Metal: in-list section header + master gating of the MM sub-settings ---
-  Hooks.on("renderSettingsConfig", (app, html) => {
-    const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
-    if (!root?.querySelector) return;
-    const MM_KEYS = ["mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"];
-    const groupOf = (k) => {
-      const el = root.querySelector(`[name="${SCOPE}.${k}"], [data-setting-id="${SCOPE}.${k}"]`);
-      return el?.closest(".form-group") ?? el?.closest(".setting") ?? null;
-    };
-    const groups = MM_KEYS.map(groupOf).filter(Boolean);
-    if (!groups.length) return;
-    const first = groups[0];
-    if (!first.previousElementSibling?.classList?.contains("cp-mm-header")) {
-      const header = document.createElement("h3");
-      header.className = "cp-mm-header";
-      header.textContent = localize("Vehicle.SystemMM");
-      first.parentNode.insertBefore(header, first);
-    }
-    // Keep the MM groups consecutive under the header.
-    let anchor = first;
-    for (const g of groups.slice(1)) { if (anchor.nextElementSibling !== g) anchor.parentNode.insertBefore(g, anchor.nextElementSibling); anchor = g; }
-    // Grey out / disable the MM sub-settings when the master is off; live-update when it's toggled.
-    const subGroups = groups.slice(1);
-    const setEnabled = (on) => { for (const g of subGroups) { g.classList.toggle("cp-mm-disabled", !on); g.querySelectorAll("input,select,button,textarea").forEach(el => { el.disabled = !on; }); } };
-    setEnabled(mmEnabled());
-    const masterInput = first.querySelector(`[name="${SCOPE}.mmEnabled"]`);
-    masterInput?.addEventListener("change", () => setEnabled(!!masterInput.checked));
-  });
-
-  // --- IP: grey out the RAW-only sub-settings while RAW auto-tracking is off ---
-  // The award-model / auto-baseline / throttle / skill-lock options only matter under RAW; mirror the
-  // fork's master-gating (reusing the .cp-mm-disabled style) so they read as inert until RAW is on.
-  Hooks.on("renderSettingsConfig", (app, html) => {
-    try {
-      const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
-      if (!root?.querySelector) return;
-      const groupOf = (k) => {
-        const el = root.querySelector(`[name="${SCOPE}.${k}"], [data-setting-id="${SCOPE}.${k}"]`);
-        return el?.closest(".form-group") ?? el?.closest(".setting") ?? null;
-      };
-      const masterInput = groupOf("ipRawTracking")?.querySelector(`[name="${SCOPE}.ipRawTracking"]`);
-      if (!masterInput) return;
-      const subGroups = ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"].map(groupOf).filter(Boolean);
-      if (!subGroups.length) return;
-      const setEnabled = (on) => { for (const g of subGroups) { g.classList.toggle("cp-mm-disabled", !on); g.querySelectorAll("input,select,button,textarea").forEach(el => { el.disabled = !on; }); } };
-      setEnabled(!!masterInput.checked);
-      masterInput.addEventListener("change", () => setEnabled(!!masterInput.checked));
-    } catch (e) { /* the settings page stays usable even if gating fails */ }
-  });
+  // --- Native System Settings page organizer (section headers + reorder + master-gating) ---
+  // One data-driven pass (module/settings-sections.js) replacing the per-feature MM + IP grey-out
+  // hooks: labelled section headers, contiguous reorder, and grey/disable of each master's sub-settings.
+  Hooks.on("renderSettingsConfig", (app, html) => enhanceSettingsConfig(html));
 
   // --- Maximum Metal: hide the MM weapon compendium from the sidebar when MM is off ---
   Hooks.on("renderCompendiumDirectory", (app, html) => {

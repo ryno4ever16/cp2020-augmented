@@ -1,0 +1,33 @@
+{{!-- Settings-preset picker (ApplicationV2). Markup only: text from lang/*.json, styling from
+      css/cp2020-augmented.css (.cp-preset-picker). Each tier's Apply button carries data-preset; the V2
+      action opens a confirm dialog then applies. The undo bar shows after an apply this session. --}}
+<div class="cp-preset-picker">
+
+  <p class="cp-preset-intro">{{localize "CYBERPUNK.PresetIntro"}}</p>
+
+  <div class="cp-preset-tiers">
+    {{#each tiers as |tier|}}
+    <div class="cp-preset-tier">
+      <div class="cp-preset-tier-text">
+        <p class="cp-preset-tier-name">{{tier.label}}</p>
+        <p class="cp-preset-tier-desc">{{tier.desc}}</p>
+      </div>
+      <button type="button" class="cp-preset-apply" data-action="presetApply" data-preset="{{tier.id}}">
+        {{localize "CYBERPUNK.PresetApply"}}
+      </button>
+    </div>
+    {{/each}}
+  </div>
+
+  {{#if lastAppliedLabel}}
+  <div class="cp-preset-undo-bar">
+    <span class="cp-preset-undo-text">{{CPLocal "PresetAppliedBar" tier=lastAppliedLabel}}</span>
+    <button type="button" class="cp-preset-undo" data-action="presetUndo">
+      <i class="fas fa-rotate-left"></i> {{localize "CYBERPUNK.PresetUndo"}}
+    </button>
+  </div>
+  {{/if}}
+
+  <p class="cp-preset-note">{{localize "CYBERPUNK.PresetUntouchedNote"}}</p>
+
+</div>

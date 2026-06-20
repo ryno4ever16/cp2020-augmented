@@ -584,3 +584,46 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   appearance: none;
   -webkit-appearance: none;
 }
+
+/* ===== Native System Settings page organizer (module/settings-sections.js) ===== */
+/* Section header injected into the system Settings menu (replaces an inline cssText). */
+.cp-mm-header { margin-top: 14px; border-top: 2px solid var(--color-border-light-primary); padding-top: 8px; }
+/* Greyed-out state for sub-settings while their master toggle is off (replaces an inline opacity). */
+.cp-mm-disabled { opacity: 0.5; }
+/* Settings section headers injected into the native System Settings page. */
+.cp-settings-header {
+  margin: 16px 0 4px; padding: 6px 0 4px;
+  border-bottom: 2px solid var(--color-border-light-primary);
+  font-size: 1.05em; font-weight: bold; letter-spacing: 0.02em;
+}
+.cp-settings-header:first-of-type { margin-top: 8px; }
+
+/* ===== Settings-preset picker (ApplicationV2). Matches the automation-notice palette. ===== */
+.cp-preset-picker { padding: 8px 4px; font-size: 0.9em; line-height: 1.5; }
+.cp-preset-picker .cp-preset-intro { margin: 0 0 12px; }
+.cp-preset-picker .cp-preset-tiers { display: flex; flex-direction: column; gap: 8px; }
+.cp-preset-picker .cp-preset-tier {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid rgba(30, 100, 180, 0.3); background: rgba(30, 100, 180, 0.10);
+  border-radius: 4px; padding: 8px 10px;
+}
+.cp-preset-picker .cp-preset-tier-text { flex: 1; }
+.cp-preset-picker .cp-preset-tier-name { font-weight: bold; margin: 0 0 3px; }
+.cp-preset-picker .cp-preset-tier-desc { margin: 0; font-size: 0.87em; opacity: 0.9; }
+.cp-preset-picker .cp-preset-apply { width: auto; flex: 0 0 auto; align-self: center; }
+.cp-preset-picker .cp-preset-undo-bar {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.cp-preset-picker .cp-preset-undo-text { flex: 1; font-size: 0.85em; opacity: 0.85; }
+.cp-preset-picker .cp-preset-undo { width: auto; flex: 0 0 auto; }
+.cp-preset-picker .cp-preset-note { margin: 10px 0 0; font-size: 0.8em; opacity: 0.65; font-style: italic; }
+
+.cp-preset-confirm { font-size: 0.92em; line-height: 1.5; }
+.cp-preset-confirm .cp-preset-confirm-lead { font-weight: bold; margin: 0 0 6px; }
+.cp-preset-confirm .cp-preset-confirm-desc { margin: 0 0 8px; opacity: 0.9; }
+.cp-preset-confirm .cp-preset-confirm-switch { margin: 0 0 2px; font-weight: bold; }
+.cp-preset-confirm .cp-preset-confirm-features { margin: 0 0 8px; padding-left: 20px; }
+.cp-preset-confirm .cp-preset-confirm-features li { margin-bottom: 1px; }
+.cp-preset-confirm .cp-preset-confirm-count { margin: 0 0 6px; font-size: 0.88em; opacity: 0.8; }
+.cp-preset-confirm .cp-preset-confirm-note { margin: 0; font-size: 0.8em; opacity: 0.65; font-style: italic; }
