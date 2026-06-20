@@ -34,11 +34,12 @@ export function registerAugmentedSettings() {
   });
 
   // --- automationNoticeHide ---
+  // config:false — driven by the notice's own "Don't show this again" checkbox, not a menu toggle.
   game.settings.register(SCOPE, "automationNoticeHide", {
     name: "SETTINGS.AutomationNoticeHide",
     hint: "SETTINGS.AutomationNoticeHideHint",
     scope: "world",
-    config: true,
+    config: false,
     type: Boolean,
     default: false,
   });
@@ -583,6 +584,25 @@ export function registerAugmentedSettings() {
     config: true,
     type: Boolean,
     default: true
+  });
+
+  // --- ammoBlackhandsPricing (one selector: box prices + brass ×3) ---
+  // Optional Blackhand's Guide ammo pricing, read in lookups.js. The old ammoUseBlackhandsBoxes/Brass
+  // booleans were referenced there but never registered, so this registers the merged selector (and the
+  // lookups.js reads were also reading the wrong scope — fixed alongside).
+  game.settings.register(SCOPE, "ammoBlackhandsPricing", {
+    name: "Ammunition: Blackhand's Guide Pricing",
+    hint: "Optional Blackhand's Guide ammo pricing, in place of the Core rulebook. Box prices: uniform box-of-100 sizes instead of Core's per-class boxes. Brass ×3: brass-cased loads cost ×3 the base price instead of Core's ×2. Choose either, both, or off (Core). Default: Off.",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: {
+      "off":   "Off (Core rulebook)",
+      "boxes": "Box prices only",
+      "brass": "Brass cost ×3 only",
+      "both":  "Both (box prices + brass ×3)",
+    },
+    default: "off",
   });
 
   // --- Carolingian / Restyler terminal sheet skin (per-user UI) ---

@@ -196,22 +196,26 @@ export function getCalibers() {
   return { ...CALIBERS, ...custom };
 }
 
-function _ammoSetting(key, fallback = false) {
-  try { return game.settings.get("cyberpunk2020", key) === true; } catch (e) { return fallback; }
+// Blackhand's-Guide ammo-pricing mode: "off" | "boxes" | "brass" | "both" (Core when unset). (Scope
+// fixed: reads the cp2020-augmented setting, not the base system's — a copy-from-fork bug.)
+function _blackhandsPricing() {
+  try { return game.settings.get("cp2020-augmented", "ammoBlackhandsPricing") || "off"; } catch (e) { return "off"; }
 }
 
-/** Box size + price for a caliber, honoring the Blackhand's box-size setting. */
+/** Box size + price for a caliber, honoring the Blackhand's box-pricing mode. */
 export function getCaliberBox(caliberId) {
   const cal = getCalibers()[caliberId];
   const cls = AMMO_COST_CLASSES[cal?.costClass] ?? AMMO_COST_CLASSES.none;
-  const conv = _ammoSetting("ammoUseBlackhandsBoxes") ? cls.blackhands : cls.core;
+  const p = _blackhandsPricing();
+  const conv = (p === "boxes" || p === "both") ? cls.blackhands : cls.core;
   return { box: Number(conv.box) || 1, price: Number(conv.price) || 0 };
 }
 
-/** Cost multiplier for a modifier, honoring the Blackhand's brass setting. */
+/** Cost multiplier for a modifier, honoring the Blackhand's brass-pricing mode. */
 export function getModifierCostMult(modifierId) {
   const mod = AMMO_MODIFIERS[modifierId] ?? AMMO_MODIFIERS.standard;
-  if (mod.costMultBlackhands !== undefined && _ammoSetting("ammoUseBlackhandsBrass")) {
+  const p = _blackhandsPricing();
+  if (mod.costMultBlackhands !== undefined && (p === "brass" || p === "both")) {
     return Number(mod.costMultBlackhands) || 1;
   }
   return Number(mod.costMult) || 1;
