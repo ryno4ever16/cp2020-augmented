@@ -19,6 +19,22 @@
 
 const SCOPE = "cp2020-augmented";
 
+// Two settings the FORK system also registers (martial special hit-effects + FNFF2). On the fork they
+// live under the SYSTEM scope and the accessors (settings.js specialMeleeEffectsEnabled, lookups.js
+// isFnff2Enabled) read the system copy FIRST — the module keeps a hidden shadow only for vanilla. So a
+// preset must read AND write whichever copy is authoritative: otherwise applying a tier writes the
+// module shadow while behaviour (and the "already applied" diff) reads the system value, so the tier
+// never registers as applied and the picker re-offers it on every reload. On vanilla the system key is
+// absent, so settingScope() falls back to the module scope and it round-trips normally.
+const SYSTEM_SCOPE = "cyberpunk2020";
+const DUAL_OWNED = new Set(["specialMeleeEffectsEnabled", "fnff2Enabled"]);
+function settingScope(key) {
+  if (DUAL_OWNED.has(key)) {
+    try { if (game.settings.settings.has(`${SYSTEM_SCOPE}.${key}`)) return SYSTEM_SCOPE; } catch (e) { /* not the fork */ }
+  }
+  return SCOPE;
+}
+
 // MANUAL = every preset-controlled setting at its "off / Core" value. Its KEYS define the full universe
 // a preset touches; the deltas below only override.
 const MANUAL = {
@@ -29,9 +45,11 @@ const MANUAL = {
   multiActionPenaltyEnabled: false, multiActionAutoTrack: false, limbLossEnabled: false, suppressiveFireSaves: false,
   shotgunSpreadEnabled: false, explosivesEnabled: false, areaEffectOcclusion: false, gasGrenadeCloudEnabled: false,
   taserCumPenaltyEnabled: false, acidArmorDotEnabled: false, fireDotEnabled: false, specialMeleeEffectsEnabled: false,
-  // Subsystems — off (IP stays present-but-ignorable: just RAW auto-tracking off; ipHideUI is a
-  // separate manual GM presence choice that presets never touch)
-  shoppingEnabled: false, vehicleControlEnabled: false, vehicleDamageEnabled: false, ipRawTracking: false,
+  // Subsystems — Shopping + Improvement-Point (RAW) tracking are ON at EVERY tier: both are ignorable
+  // if unused (the neglect detector keeps RAW IP safe as a default), so they belong in the baseline
+  // rather than a tier upgrade. Vehicles stay off until Standard. ipHideUI is a separate manual GM
+  // presence choice presets never touch.
+  shoppingEnabled: true, vehicleControlEnabled: false, vehicleDamageEnabled: false, ipRawTracking: true,
   // Bookkeeping rules + supplements — off / Core
   restrictMovementOncePerTurn: false, damageAblation: false, mmEnabled: false, vehicleRuleSystem: "Core",
   vehicleArmorDamageEnabled: false, vehicleMoraleEnabled: false, vehicleArcEnforcement: "free",
@@ -40,8 +58,8 @@ const MANUAL = {
   headHitDoubling: true, damageArmorMode: "full", limbModel: "core",
 };
 
-// STANDARD = Manual + the combat master + full combat automation + core subsystems + RAW IP (the
-// Model-A redesign makes RAW self-announcing/non-ignorable, so it's a safe default).
+// STANDARD = Manual + the combat master + full combat automation + vehicles. (Shopping + RAW IP are
+// already on from Manual — they're ignorable subsystems available at every tier.)
 const STANDARD_DELTA = {
   combatAutomationEnabled: true,
   damageAutoApply: true, autoDeathSavePerTurn: true, autoSaveRePrompt: true,
@@ -49,7 +67,7 @@ const STANDARD_DELTA = {
   multiActionPenaltyEnabled: true, multiActionAutoTrack: true, limbLossEnabled: true, suppressiveFireSaves: true,
   shotgunSpreadEnabled: true, explosivesEnabled: true, areaEffectOcclusion: true, gasGrenadeCloudEnabled: true,
   taserCumPenaltyEnabled: true, acidArmorDotEnabled: true, fireDotEnabled: true, specialMeleeEffectsEnabled: true,
-  shoppingEnabled: true, vehicleControlEnabled: true, vehicleDamageEnabled: true, ipRawTracking: true,
+  vehicleControlEnabled: true, vehicleDamageEnabled: true,
 };
 
 // BY THE BOOK = Standard + the divisive-but-faithful bookkeeping rules. (IP is already RAW from Standard.)
@@ -118,7 +136,7 @@ export function presetChanges(id, current = {}) {
 export function currentSettings() {
   const cur = {};
   for (const k of presetKeys()) {
-    try { cur[k] = game.settings.get(SCOPE, k); } catch (e) { cur[k] = undefined; }
+    try { cur[k] = game.settings.get(settingScope(k), k); } catch (e) { cur[k] = undefined; }
   }
   return cur;
 }
@@ -133,11 +151,12 @@ export async function applyPreset(id) {
   if (!target) return null;
   const snapshot = {};
   for (const [k, v] of Object.entries(target)) {
+    const sc = settingScope(k);
     let cur;
-    try { cur = game.settings.get(SCOPE, k); } catch (e) { cur = undefined; }
+    try { cur = game.settings.get(sc, k); } catch (e) { cur = undefined; }
     snapshot[k] = cur;
     if (cur !== v) {
-      try { await game.settings.set(SCOPE, k, v); }
+      try { await game.settings.set(sc, k, v); }
       catch (e) { console.error(`cp2020-augmented | preset "${id}" failed to set ${k}`, e); }
     }
   }
@@ -149,10 +168,11 @@ export async function undoPreset(snapshot) {
   if (!snapshot) return;
   for (const [k, v] of Object.entries(snapshot)) {
     if (v === undefined) continue;
+    const sc = settingScope(k);
     let cur;
-    try { cur = game.settings.get(SCOPE, k); } catch (e) { cur = undefined; }
+    try { cur = game.settings.get(sc, k); } catch (e) { cur = undefined; }
     if (cur !== v) {
-      try { await game.settings.set(SCOPE, k, v); }
+      try { await game.settings.set(sc, k, v); }
       catch (e) { console.error(`cp2020-augmented | preset undo failed to restore ${k}`, e); }
     }
   }

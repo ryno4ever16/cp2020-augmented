@@ -9,9 +9,16 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  *
  * Apply-safety: clicking a tier opens a confirm dialog that NAMES the notable active features it
  * switches on (especially the silent RAW-IP accumulator); after applying, the picker shows a one-step
- * Undo (the snapshot taken in applyPreset). Markup lives in templates/dialog/preset-picker.hbs +
- * preset-confirm.hbs; all strings are CYBERPUNK.Preset* i18n keys; structure mirrors automation-notice.js.
+ * Undo (the snapshot taken in applyPreset). The undo state lives at MODULE scope (below), so it PERSISTS
+ * across closing and reopening the window — it clears only when used or when Foundry is reloaded/restarted.
+ * Markup lives in templates/dialog/preset-picker.hbs + preset-confirm.hbs; all strings are
+ * CYBERPUNK.Preset* i18n keys; structure mirrors automation-notice.js.
  */
+
+// The most recent apply, for one-step undo: { presetId, snapshot, labelKey }. Module-scoped so the undo
+// survives the window being closed and reopened; resets on a page reload (a Foundry restart).
+let lastApplied = null;
+
 export class PresetPicker extends HandlebarsApplicationMixin(ApplicationV2) {
   static DEFAULT_OPTIONS = {
     id: "cp-preset-picker",
@@ -28,12 +35,6 @@ export class PresetPicker extends HandlebarsApplicationMixin(ApplicationV2) {
     main: { template: "modules/cp2020-augmented/templates/dialog/preset-picker.hbs" },
   };
 
-  constructor(options = {}) {
-    super(options);
-    // The most recent apply this session, for one-step undo: { presetId, snapshot, labelKey }.
-    this._lastApplied = null;
-  }
-
   async _prepareContext(_options) {
     const tiers = PRESETS.map((p) => ({
       id: p.id,
@@ -42,7 +43,7 @@ export class PresetPicker extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
     return {
       tiers,
-      lastAppliedLabel: this._lastApplied ? localize(this._lastApplied.labelKey) : null,
+      lastAppliedLabel: lastApplied ? localize(lastApplied.labelKey) : null,
     };
   }
 
@@ -74,16 +75,16 @@ export class PresetPicker extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!ok) return;
 
     const result = await applyPreset(id);
-    this._lastApplied = result ? { ...result, labelKey: preset.labelKey } : null;
+    lastApplied = result ? { ...result, labelKey: preset.labelKey } : null;
     ui.notifications?.info?.(localize("PresetApplied", { tier: localize(preset.labelKey) }));
     this.render();
   }
 
   static async _onUndo() {
-    if (!this._lastApplied) return;
-    const label = localize(this._lastApplied.labelKey);
-    await undoPreset(this._lastApplied.snapshot);
-    this._lastApplied = null;
+    if (!lastApplied) return;
+    const label = localize(lastApplied.labelKey);
+    await undoPreset(lastApplied.snapshot);
+    lastApplied = null;
     ui.notifications?.info?.(localize("PresetUndone", { tier: label }));
     this.render();
   }
