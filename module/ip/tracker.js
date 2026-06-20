@@ -1,6 +1,7 @@
 import {
   getQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, resolveAllQueue,
-  applyPending, resetThrottle, awardPending, addToPool, pendingForSkill
+  applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
+  bankForSkill, poolForActor, setActorPool, setSkillBank
 } from "./ip.js";
 import { ipRawTracking, ipAwardModel, ipThrottle } from "../settings.js";
 import { localize } from "../utils.js";
@@ -39,16 +40,26 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     const auto = ipAwardModel() === "autoBaseline";
     const rows = getQueue().map(r => ({ ...r }));
 
-    // Per-skill pending summary across the party (read from the module flag).
-    const pending = [];
+    // GM correction / balances view: each party actor's fungible pool + every skill that carries IP
+    // (banked or pending). Pool + bank are GM-editable in the template; pending is shown read-only.
+    const balances = [];
+    let pendingTotal = 0;
     for (const a of game.actors.filter(x => x.type === "character" || x.type === "npc")) {
+      const skills = [];
       for (const s of a.items) {
         if (s.type !== "skill") continue;
-        const p = pendingForSkill(s);
-        if (p > 0) pending.push({ actorName: a.name, skillName: s.name, pending: p });
+        const bank = bankForSkill(s);
+        const pend = pendingForSkill(s);
+        pendingTotal += pend;
+        if (bank > 0 || pend > 0) skills.push({ skillId: s.id, skillName: s.name, bank, pending: pend });
+      }
+      const pool = poolForActor(a);
+      if (pool > 0 || skills.length) {
+        skills.sort((x, y) => x.skillName.localeCompare(y.skillName));
+        balances.push({ actorId: a.id, actorName: a.name, pool, skills });
       }
     }
-    pending.sort((x, y) => x.actorName.localeCompare(y.actorName) || x.skillName.localeCompare(y.skillName));
+    balances.sort((x, y) => x.actorName.localeCompare(y.actorName));
 
     return {
       auto,
@@ -56,8 +67,9 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
       throttle: ipThrottle(),
       rows,
       rowCount: rows.length,
-      pending,
-      pendingTotal: pending.reduce((t, p) => t + p.pending, 0)
+      balances,
+      hasBalances: balances.length > 0,
+      pendingTotal,
     };
   }
 
@@ -72,6 +84,19 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     }));
     root.querySelectorAll(".cp-ip-success").forEach(el => el.addEventListener("change", (ev) => {
       updateQueueRow(rowId(ev.currentTarget), { success: ev.currentTarget.checked });
+    }));
+
+    // GM correction: edit a skill's banked IP or an actor's pool to an absolute value (add or remove).
+    // No re-render — the field already shows the typed value, and a re-render would steal focus.
+    root.querySelectorAll(".cp-ip-bank").forEach(el => el.addEventListener("change", async (ev) => {
+      const r = ev.currentTarget.closest("[data-skill-id]");
+      const actor = game.actors.get(r?.dataset?.actorId);
+      const skill = actor?.items.get(r?.dataset?.skillId);
+      if (skill) await setSkillBank(skill, ev.currentTarget.value);
+    }));
+    root.querySelectorAll(".cp-ip-pool").forEach(el => el.addEventListener("change", async (ev) => {
+      const actor = game.actors.get(ev.currentTarget.dataset?.actorId);
+      if (actor) await setActorPool(actor, ev.currentTarget.value);
     }));
   }
 
@@ -109,17 +134,20 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     await dismissQueueRow(rowId);
   }
 
-  /** Manual add: pick an actor, then a skill, then an IP amount (or add to the Simple pool). */
+  /** Manual add: pick an actor, then a skill (RAW mode), then an IP amount (or add to the pool in
+   *  simple mode). Singleton — re-invoking focuses the open dialog instead of stacking a new one. */
   async _manualAdd() {
     const actors = game.actors.filter(a => a.type === "character" || a.type === "npc");
     if (!actors.length) return;
+    if (_manualDlg?.rendered) { _manualDlg.bringToTop?.(); return _manualDlg; }   // singleton
+
     const simple = !ipRawTracking();
     const renderTemplate = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
     const content = await renderTemplate("modules/cp2020-augmented/templates/ip/manual-add.hbs", {
       simple,
       actorOptions: actors.map(a => ({ value: a.id, label: a.name })),
     });
-    const dlg = new foundry.applications.api.DialogV2({
+    _manualDlg = new foundry.applications.api.DialogV2({
       window: { title: localize("IpManualTitle") },
       content,
       buttons: [
@@ -142,30 +170,36 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
         },
         { action: "cancel", label: localize("Cancel") },
       ],
-      render: (event, dialog) => {
-        const r = dialog.element;
-        const actorSel = r.querySelector('[name="actor"]');
-        const skillSel = r.querySelector('[name="skill"]');
-        const fillSkills = () => {
-          if (!skillSel) return;
-          const a = game.actors.get(actorSel.value);
-          const skills = (a?.items.filter(i => i.type === "skill") ?? []).sort((x, y) => x.name.localeCompare(y.name));
-          skillSel.replaceChildren(...skills.map(s => {
-            const opt = document.createElement("option");
-            opt.value = s.id;
-            opt.textContent = s.name;
-            return opt;
-          }));
-        };
-        actorSel?.addEventListener("change", fillSkills);
-        fillSkills();
-      },
     });
-    dlg.render({ force: true });
+    await _manualDlg.render({ force: true });
+
+    // Populate the skill <select> AFTER render and keep it in sync with the chosen actor. DialogV2 has
+    // no render-callback option, so the old inline `render:` config was silently ignored and the
+    // dropdown never filled; wiring it on the live DOM here is the fix.
+    if (!simple) {
+      const r = _manualDlg.element;
+      const actorSel = r?.querySelector('[name="actor"]');
+      const skillSel = r?.querySelector('[name="skill"]');
+      const fillSkills = () => {
+        if (!skillSel) return;
+        const a = game.actors.get(actorSel?.value);
+        const skills = (a?.items.filter(i => i.type === "skill") ?? []).sort((x, y) => x.name.localeCompare(y.name));
+        skillSel.replaceChildren(...skills.map(s => {
+          const opt = document.createElement("option");
+          opt.value = s.id;
+          opt.textContent = s.name;
+          return opt;
+        }));
+      };
+      actorSel?.addEventListener("change", fillSkills);
+      fillSkills();
+    }
+    return _manualDlg;
   }
 }
 
 let _ipTracker = null;
+let _manualDlg = null;
 
 /** Open (or focus) the GM IP Tracker. GM-only. */
 export function openIpTracker() {

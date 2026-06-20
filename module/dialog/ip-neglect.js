@@ -10,6 +10,10 @@ const SCOPE = "cp2020-augmented";
  * click: Open the tracker / Clear the backlog / Turn RAW tracking off. A "don't ask again" checkbox
  * mutes it. Markup lives in templates/dialog/ip-neglect.hbs; this module is loaded LAZILY from ip.js
  * (dynamic import) to avoid an ip.js ↔ tracker.js static import cycle.
+ *
+ * It opens MODAL (`modal: true`): the dialog sits forced on top, blocks the rest of the UI, and flashes
+ * when the GM tries to interact elsewhere — so they must engage with one of the off-ramps (or tick
+ * "don't ask again" + pick one) rather than dismiss it absent-mindedly.
  */
 export async function showIpNeglectNudge(pendingCount) {
   const render = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
@@ -22,6 +26,7 @@ export async function showIpNeglectNudge(pendingCount) {
 
   await foundry.applications.api.DialogV2.wait({
     window: { title: localize("IpNeglectTitle"), icon: "fa-solid fa-graduation-cap" },
+    modal: true,
     content,
     rejectClose: false,
     buttons: [

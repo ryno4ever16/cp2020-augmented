@@ -185,8 +185,30 @@ async function _rearmNeglectIfBelow() {
 /** Empty the queue without awarding (the nudge's "Clear the backlog" off-ramp). */
 export async function clearQueue() {
   await setQueue([]);
+  _overflowNotified = false;
   await _rearmNeglectIfBelow();
   _rerenderTracker();
+}
+
+/* --------------------------------------------------------------------- */
+/*  Queue cap — bound the auto-queue so a muted backlog can't grow forever */
+/* --------------------------------------------------------------------- */
+
+/** Hard cap on the auto-queue: older un-awarded rolls age out (FIFO) beyond this, so even a MUTED
+ *  neglect nudge can never let the log balloon to thousands of rows. */
+export const QUEUE_MAX = 100;
+
+// Has the "queue full" notice already fired for the current over-cap episode? (Reset on apply/clear.)
+let _overflowNotified = false;
+
+/** Inform everyone (a chat notice) + the GM (a warning), ONCE per over-cap episode, that old rolls are
+ *  aging out — so a capped backlog is never silent, even when the neglect nudge is muted. */
+async function _notifyQueueOverflow() {
+  if (_overflowNotified) return;
+  _overflowNotified = true;
+  try { await postSavePromptCard({ body: localize("IpQueueOverflow", { max: QUEUE_MAX }), speaker: {} }); }
+  catch (e) { /* chat notice is best-effort */ }
+  ui.notifications?.warn(localize("IpQueueOverflowGm", { max: QUEUE_MAX }));
 }
 
 /**
@@ -207,8 +229,11 @@ async function _enqueue(row) {
     actorName: row.actorName ?? "", skillName: row.skillName ?? "",
     total: Number(row.total) || 0, ip: 0, success: false, ts: Date.now()
   });
+  let overflowed = false;
+  while (q.length > QUEUE_MAX) { q.shift(); overflowed = true; }   // FIFO: oldest un-awarded rolls age out
   await setQueue(q);
   _rerenderTracker();
+  if (overflowed) await _notifyQueueOverflow();
   await _maybeNudgeNeglect(q.length);
 }
 
@@ -329,6 +354,7 @@ export async function applyPending(actor = null) {
   // Clear the queue + throttle for the new cycle.
   await setQueue(actor ? getQueue().filter(r => r.actorId !== actor.id) : []);
   await resetThrottle();
+  _overflowNotified = false;
   await _rearmNeglectIfBelow();
   _rerenderTracker();
   ui.notifications?.info(localize("IpApplied", { ip: released }));
@@ -382,8 +408,24 @@ export async function addToPool(actor, amount) {
   return true;
 }
 
-/** Per-skill pending IP (used by the tracker summary). */
+/** GM correction: set an actor's fungible IP pool to an absolute value (clamped ≥ 0). */
+export async function setActorPool(actor, value) {
+  if (!actor) return false;
+  await actor.setFlag(SCOPE, "ipPool", Math.max(0, Math.floor(Number(value) || 0)));
+  return true;
+}
+
+/** GM correction: set a skill's banked IP to an absolute value (clamped ≥ 0). Fixes mis-awards. */
+export async function setSkillBank(skill, value) {
+  if (!skill || skill.type !== "skill") return false;
+  await skill.setFlag(SCOPE, "ip", Math.max(0, Math.floor(Number(value) || 0)));
+  return true;
+}
+
+/** Per-skill banked IP + pending IP (read for the tracker summary / balances). */
 export function pendingForSkill(skill) { return skillPending(skill); }
+export function bankForSkill(skill) { return skillIp(skill); }
+export function poolForActor(actor) { return actorPool(actor); }
 
 /* --------------------------------------------------------------------- */
 /*  Hook + socket registration                                            */

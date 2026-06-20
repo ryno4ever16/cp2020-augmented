@@ -6,6 +6,11 @@
         <button type="button" data-action="ipApply" title="Award all queued rows and release pending IP to players. Starts a new cycle."><b>{{localize "CYBERPUNK.IpApply"}}</b></button>
     </div>
 
+    {{!-- RAW auto-tracking is off → skill rolls don't queue here. Explain so it isn't mistaken for a bug. --}}
+    {{#if simple}}
+    <p class="cp-ip-rawoff-note">{{localize "CYBERPUNK.IpRawOffNote"}}</p>
+    {{/if}}
+
     {{!-- Queue of skill rolls awaiting an IP decision --}}
     <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpQueue"}} {{#if rowCount}}({{rowCount}}){{/if}}</h2>
     <div class="flexcol" style="overflow-y:auto; min-height:60px; max-height:45%;">
@@ -28,18 +33,30 @@
         {{/if}}
     </div>
 
-    {{!-- Pending (awarded, not yet released) --}}
-    <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpPending"}} {{#if pendingTotal}}— {{pendingTotal}}{{/if}}</h2>
-    <div class="flexcol" style="overflow-y:auto; min-height:40px; flex:1;">
-        {{#if pending.length}}
-        {{#each pending as |p|}}
-        <div class="flexrow" style="gap:6px; padding:1px 4px;">
-            <span style="flex:1;">{{p.actorName}} · {{p.skillName}}</span>
-            <span style="opacity:0.8;">+{{p.pending}}</span>
+    {{!-- GM balances: each actor's pool + every skill that carries IP. Pool + banked are GM-editable
+         (type an absolute value to add or remove); pending is shown read-only as a +N badge. --}}
+    <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpBalances"}}{{#if pendingTotal}} — {{localize "CYBERPUNK.IpPending"}} {{pendingTotal}}{{/if}}</h2>
+    <div class="cp-ip-balances flexcol" style="overflow-y:auto; min-height:40px; flex:1;">
+        {{#if hasBalances}}
+        {{#each balances as |b|}}
+        <div class="cp-ip-bal-actor flexrow" style="align-items:center; gap:6px; padding:3px 4px 1px;">
+            <span class="cp-ip-bal-name" style="flex:1;"><b>{{b.actorName}}</b></span>
+            <label title="{{localize "CYBERPUNK.IpPoolHint"}}">{{localize "CYBERPUNK.IpPool"}}
+                <input type="number" class="cp-ip-pool" data-actor-id="{{b.actorId}}" value="{{b.pool}}" min="0" style="width:54px;"/>
+            </label>
+        </div>
+        {{#each b.skills as |s|}}
+        <div class="cp-ip-bal-skill flexrow" data-actor-id="{{b.actorId}}" data-skill-id="{{s.skillId}}" style="align-items:center; gap:6px; padding:1px 4px 1px 14px;">
+            <span style="flex:1;">{{s.skillName}}</span>
+            {{#if s.pending}}<span class="cp-ip-pend-badge" title="{{localize "CYBERPUNK.IpPendingPip"}}">+{{s.pending}}</span>{{/if}}
+            <label title="{{localize "CYBERPUNK.IpBankHint"}}">{{localize "CYBERPUNK.IpBanked"}}
+                <input type="number" class="cp-ip-bank" value="{{s.bank}}" min="0" style="width:54px;"/>
+            </label>
         </div>
         {{/each}}
+        {{/each}}
         {{else}}
-        <p style="opacity:0.6; padding:6px;">{{localize "CYBERPUNK.IpPendingEmpty"}}</p>
+        <p style="opacity:0.6; padding:6px;">{{localize "CYBERPUNK.IpBalancesEmpty"}}</p>
         {{/if}}
     </div>
 
