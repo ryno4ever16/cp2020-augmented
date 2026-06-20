@@ -36,6 +36,19 @@
 }
 @keyframes cp-shim-run { to { --cp-shim: 360deg; } }
 
+/* Published-shops-only purchase request (GM-whispered chat card + Approve/Deny). Self-contained colors
+   so the card reads under any chat theme (the module has no shared result-* classes). */
+.cp-shop-request-head { font-weight: bold; margin: 0 0 2px; }
+.cp-shop-request-body { margin: 0 0 6px; }
+.cp-shop-request-note { opacity: 0.75; font-size: 0.9em; }
+.cp-shop-request-actions { display: flex; gap: 6px; }
+.cp-shop-request-actions .cp-shop-request-btn { flex: 1 1 auto; width: auto; }
+.cp-shop-request-btn.cp-approve { color: #1f9d2f; }
+.cp-shop-request-btn.cp-deny { color: #d1502f; }
+.cp-shop-request-status { margin: 4px 0 0; font-weight: bold; }
+.cp-shop-request-status.cp-approved { color: #1f9d2f; }
+.cp-shop-request-status.cp-denied { color: #d1502f; }
+
 /* ===== Shopping & IP custom UI (mirrors scss/_shop.scss) =====
    Self-contained input colors so custom fields stay readable under ANY UI theme (Carolingian etc.
    otherwise override our inputs to dark-on-dark). */

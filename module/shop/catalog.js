@@ -3,7 +3,7 @@ import { buyAndInstallCyberware } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
-import { shoppingEnabled, shopSourceConfig, shopShowSource, shopAllowHomebrew } from "../settings.js";
+import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
 import { renderChatCard } from "../compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, AMMO_MODIFIERS } from "../lookups.js";
@@ -742,6 +742,13 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   if (!doc) return;
   const unitPrice = Math.max(0, Math.round((Number(doc.system?.cost) || 0) * styleMult));
   const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
+  // Published-shops-only: a player may BROWSE the full catalog but needs GM permission to buy from it
+  // directly — route the buy through a GM purchase request instead. (Published-shop buys go through
+  // purchaseShopItem and are unaffected; a GM buying here is unaffected.)
+  if (!game.user.isGM && shopBuySource() === "shops") {
+    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel });
+    return;
+  }
   if (doc.type === "cyberware") { await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice }); return; }
   const svc = classifyService(doc, game.packs.get(packId)?.metadata?.name ?? "");
   if (svc === "oneoff") await payOneOffService(buyer, doc, { unitPrice, priceLabel: label });
@@ -782,6 +789,57 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
     if (game.user.isGM) await decrementShopStock(def.id, sourceKey, n);
     else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "shopBuyRelay", shopId: def.id, sourceKey, qty: n });
   }
+}
+
+/* ── Published-shops-only: GM purchase-request flow ───────────────────────────────────────────────────
+ * When "Player buy source" = published shops only, a player can browse the full catalog but cannot buy
+ * from it directly. Instead we whisper the GMs a request card (Approve / Deny). Approve runs the exact
+ * same purchaseCatalogItem AS the GM (the gate above is GM-exempt), so the buyer is charged + stocked
+ * through the normal path; Deny whispers the requester. Buttons are bound per-viewer for GMs in
+ * registerShopHooks (the card itself is viewer-neutral, like the apply-damage card). */
+
+/** Post a GM-whispered purchase request for a full-catalog item; notify the requesting player. */
+async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice = 0, styleMult = 1, styleLabel = "" } = {}) {
+  const n = Math.max(1, Math.floor(Number(qty) || 1));
+  const total = Math.max(0, Math.round((Number(unitPrice) || 0) * n));
+  const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
+  const content = await renderChatCard("shop/purchase-request.hbs", {
+    requester: game.user.name, buyer: buyer?.name ?? "", name, qty: n, total, label, pending: true,
+  });
+  const gms = ChatMessage.getWhisperRecipients("GM").map((u) => u.id);
+  await ChatMessage.create({
+    content, whisper: gms, speaker: ChatMessage.getSpeaker({ actor: buyer }),
+    flags: { "cp2020-augmented": { purchaseRequest: {
+      buyerId: buyer?.id ?? "", packId, itemId, qty: n, styleMult, styleLabel,
+      name, total, requesterId: game.user.id, status: "pending",
+    } } },
+  });
+  ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopRequestSent"));
+}
+
+/** GM resolves a pending purchase request: Approve runs the buy as GM; Deny whispers the requester. */
+async function resolvePurchaseRequest(message, approve) {
+  if (!game.user.isGM) return;
+  const req = message?.getFlag?.("cp2020-augmented", "purchaseRequest");
+  if (!req || req.status !== "pending") return;
+  const buyer = game.actors.get(req.buyerId);
+  if (approve) {
+    if (!buyer) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopNoActor")); return; }
+    await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel });
+  } else {
+    const player = game.users.get(req.requesterId);
+    if (player) ChatMessage.create({
+      whisper: [player.id],
+      content: game.i18n.format("CYBERPUNK.ShopRequestDeniedWhisper", { name: foundry.utils.escapeHTML(req.name ?? "") }),
+    });
+  }
+  const label = req.styleLabel && req.styleMult !== 1 ? `${req.styleLabel} ×${req.styleMult}` : "";
+  const content = await renderChatCard("shop/purchase-request.hbs", {
+    requester: game.users.get(req.requesterId)?.name ?? "", buyer: buyer?.name ?? req.buyerId,
+    name: req.name, qty: req.qty, total: req.total, label,
+    pending: false, approved: approve, resolvedBy: game.user.name,
+  });
+  await message.update({ content, "flags.cp2020-augmented.purchaseRequest.status": approve ? "approved" : "denied" });
 }
 
 /** A small Buy/Cancel confirm for drag-to-buy. Resolves to the chosen qty, or null on cancel. */
@@ -946,6 +1004,12 @@ export function registerShopHooks() {
       if (btn.dataset.cpBound === "1") return;
       btn.dataset.cpBound = "1";
       btn.addEventListener("click", (ev) => { ev.preventDefault(); openShopWindow(resolveSidebarBuyer(), { view: "storefront", shopId: btn.dataset.shopId }); });
+    });
+    // GM Approve/Deny on a pending purchase request (the card is whispered to GMs, so only GMs see it).
+    if (game.user.isGM) root?.querySelectorAll?.(".cp-shop-request-btn").forEach(btn => {
+      if (btn.dataset.cpBound === "1") return;
+      btn.dataset.cpBound = "1";
+      btn.addEventListener("click", (ev) => { ev.preventDefault(); resolvePurchaseRequest(message, btn.dataset.action === "approve"); });
     });
   });
 

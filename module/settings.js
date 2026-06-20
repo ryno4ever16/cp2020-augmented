@@ -578,6 +578,19 @@ export function registerAugmentedSettings() {
     default: false
   });
 
+  // Player buy source when buying directly: "catalog" (full compendia) or "shops" (published shops only —
+  // players still browse the catalog, but must request GM permission to buy from it; see the purchase
+  // request flow in shop/catalog.js). Default: published shops only.
+  game.settings.register(SCOPE, "shopBuySource", {
+    name: "SETTINGS.ShopBuySource",
+    hint: "SETTINGS.ShopBuySourceHint",
+    scope: "world",
+    config: true,
+    type: String,
+    choices: { catalog: "SETTINGS.ShopBuySourceCatalog", shops: "SETTINGS.ShopBuySourceShops" },
+    default: "shops"
+  });
+
   // Per-source enable map { supplementName: true } for PLAYERS. GM-curated via in-shop controls.
   game.settings.register(SCOPE, "shopEnabledSources", { scope: "world", config: false, type: Object, default: {} });
 
@@ -730,6 +743,10 @@ export function canShop() {
 /** Master gate: are homebrew (non-canon/community) sources allowed in play at all? */
 export function shopAllowHomebrew() {
   try { return game.settings.get(SCOPE, "shopAllowHomebrew") === true; } catch { return false; }
+}
+/** Player buy source when buying directly: "catalog" (full compendia) or "shops" (published shops only). */
+export function shopBuySource() {
+  try { return game.settings.get(SCOPE, "shopBuySource") || "shops"; } catch { return "shops"; }
 }
 /** Per-source enable map { supplementName: true } for players (GM-curated from the shop). */
 export function shopEnabledSources() {

@@ -37,7 +37,7 @@ const SECTIONS = [
     "ipRawTracking", "ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode",
     "ipHideUI", "ipShowPending",
   ] },
-  { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
+  { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo"] },
   { key: "SectionDisplay", keys: ["carolingianSkin"] },
@@ -47,7 +47,7 @@ const SECTIONS = [
 const MASTERS = {
   mmEnabled:                 ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"],
   ipRawTracking:             ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"],
-  shoppingEnabled:           ["playersCanShop", "shopAllowHomebrew", "shopShowSource"],
+  shoppingEnabled:           ["playersCanShop", "shopBuySource", "shopAllowHomebrew", "shopShowSource"],
   explosivesEnabled:         ["explosivesDetailed", "areaEffectOcclusion"],
   gasGrenadeCloudEnabled:    ["gasCloudAutoMove"],
   acidArmorDotEnabled:       ["acidDotStackMode"],

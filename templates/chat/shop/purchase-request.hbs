@@ -1,0 +1,19 @@
+{{!-- Purchase request (published-shops-only): a player asks the GM to approve a full-catalog buy.
+      Whispered to the GMs; the Approve/Deny buttons are bound for GMs in catalog.js registerShopHooks.
+      Text from lang/en.json (CYBERPUNK.ShopRequest*); styling from css (.cp-shop-request). --}}
+<div class="cp-shop-request">
+  <p class="cp-shop-request-head"><i class="fas fa-cart-shopping"></i> {{localize "CYBERPUNK.ShopRequestTitle"}}</p>
+  <p class="cp-shop-request-body">{{CPLocal "ShopRequestBody" requester=requester buyer=buyer qty=qty name=name total=total}}{{#if label}} <span class="cp-shop-request-note">({{label}})</span>{{/if}}</p>
+  {{#if pending}}
+  <div class="cp-shop-request-actions">
+    <button type="button" class="cp-shop-request-btn cp-approve" data-action="approve"><i class="fas fa-check"></i> {{localize "CYBERPUNK.ShopRequestApprove"}}</button>
+    <button type="button" class="cp-shop-request-btn cp-deny" data-action="deny"><i class="fas fa-xmark"></i> {{localize "CYBERPUNK.ShopRequestDeny"}}</button>
+  </div>
+  {{else}}
+  {{#if approved}}
+  <p class="cp-shop-request-status cp-approved">{{CPLocal "ShopRequestApproved" by=resolvedBy}}</p>
+  {{else}}
+  <p class="cp-shop-request-status cp-denied">{{CPLocal "ShopRequestDenied" by=resolvedBy}}</p>
+  {{/if}}
+  {{/if}}
+</div>
