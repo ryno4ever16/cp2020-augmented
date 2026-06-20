@@ -92,13 +92,14 @@ export function deleteFieldUpdate(path) {
  * @param {*} targetArea If you're aiming at a specific area, this is the NAME of that area - eg "Head"
  * @returns {*} {roll: The rolled diceroll when aiming, areaHit: where actually hit}
  */
-// Which number→location table to roll/display on. W4RST4R's model uses its own table (incl.
+// Which number→location table to roll/display on. The W4RST4R limb model uses its own table (incl.
 // Groin). Otherwise, the "Core hit-location display" setting (default on) forces the canonical
-// Core table; with it off, a per-actor custom hitLocLookup is honored instead.
+// Core table; with it off, a per-actor custom hitLocLookup is honored instead. (Scope fixed: these
+// read the cp2020-augmented settings, not the base system's — a copy-from-fork bug.)
 function _hitLocationLookup(targetActor) {
-    const w4 = (() => { try { return game.settings.get("cyberpunk2020", "w4rst4rLimbRules"); } catch { return false; } })();
+    const w4 = (() => { try { return game.settings.get("cp2020-augmented", "limbModel") === "w4rst4r"; } catch { return false; } })();
     if (w4) return W4RST4R_AREA_LOOKUP;
-    const coreDisplay = (() => { try { return game.settings.get("cyberpunk2020", "hitLocationCoreDisplay"); } catch { return true; } })();
+    const coreDisplay = (() => { try { return game.settings.get("cp2020-augmented", "hitLocationCoreDisplay"); } catch { return true; } })();
     if (coreDisplay) return defaultAreaLookup;
     return (targetActor?.hitLocLookup) ? targetActor.hitLocLookup : defaultAreaLookup;
 }

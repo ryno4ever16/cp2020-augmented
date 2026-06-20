@@ -318,14 +318,34 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
-  // --- limbCripplingDetailed ---
-  game.settings.register(SCOPE, "limbCripplingDetailed", {
-    name: "Combat: Detailed Crippling Injuries (Listen Up)",
-    hint: "Optional grittier limb rule from Listen Up You Primitive Screwheads. Limb damage is DOUBLED (post-armor, before BTM); 6–12 net to a limb cripples it (unusable), 13+ destroys it (needs replacement). Replaces the Core flat '>8 = severed' limb branch when on. Requires 'Limb Loss & Head Wound Checks' to be enabled. Default OFF (Core rules).",
+  // --- limbModel (Core / Listen Up crippling / W4RST4R) ---
+  // One selector replacing the old limbCripplingDetailed + w4rst4rLimbRules booleans (w4rst4rLimbRules
+  // was referenced but never registered here). Read via activeLimbModel() in combat/DamageApplicator.js;
+  // existing worlds are migrated from the old toggle in cp2020-augmented.js.
+  game.settings.register(SCOPE, "limbModel", {
+    name: "Combat: Limb-Damage Model",
+    hint: "Which limb-injury rules apply when a hit lands on an arm or leg (requires 'Limb Loss & Head Wound Checks'). Core: the rulebook flat rule (a big hit severs the limb). Listen Up (Detailed Crippling): limb damage is DOUBLED post-armor — 6–12 net cripples it (unusable), 13+ destroys it (needs replacement). W4RST4R: an alternate model where over 8 damage disables the limb and over 12 severs it (either way a Death Save), a head hit over 8 is instantly fatal, and it uses its own hit-location chart (adds the groin). Default: Core.",
+    scope:   "world",
+    config:  true,
+    type:    String,
+    choices: {
+      "core":     "Core (rulebook)",
+      "listenup": "Listen Up (detailed crippling)",
+      "w4rst4r":  "W4RST4R's Limb Rules",
+    },
+    default: "core",
+  });
+
+  // --- hitLocationCoreDisplay (Core human table vs each actor's own) ---
+  // Orthogonal to the limb model: ON (default) forces the canonical Core human hit-location table;
+  // OFF honors a per-actor custom hit-location table. (Was referenced in utils.js but never registered.)
+  game.settings.register(SCOPE, "hitLocationCoreDisplay", {
+    name: "Combat: Show Hit Location (Core Table)",
+    hint: "When on (default), hits use the standard Core rulebook hit-location chart (head, torso, arms, legs) for every actor. Turn it off to let custom creatures use their own hit-location table instead. (The W4RST4R limb model always uses its own chart regardless of this.)",
     scope:   "world",
     config:  true,
     type:    Boolean,
-    default: false,
+    default: true,
   });
 
   // --- Vehicles (Core CP2020 "Vehicles in FNFF", p.112) — available WITHOUT Maximum Metal ---

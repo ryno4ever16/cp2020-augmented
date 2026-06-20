@@ -126,6 +126,37 @@ Hooks.once("init", function () {
   if (mod) mod.api = game.cpAugmented;
 });
 
+/**
+ * One-time, self-gating settings migrations mirroring the fork's setting merges (the module has no
+ * migrate.js). Reads each orphaned legacy key from world storage, writes the merged value once, then
+ * deletes the legacy doc so it never re-runs. Safe to fail — settings just keep their defaults.
+ */
+async function migrateAugmentedSettings() {
+  const rawSetting = (key) => {
+    try {
+      const doc = game.settings?.storage?.get?.("world")?.find?.((s) => s.key === `${SCOPE}.${key}`);
+      if (!doc || doc.value === undefined || doc.value === null) return undefined;
+      let v = doc.value;
+      if (typeof v === "string") { try { v = JSON.parse(v); } catch (e) { /* bare string */ } }
+      return v;
+    } catch (e) { return undefined; }
+  };
+  const dropLegacy = async (key) => {
+    const doc = game.settings?.storage?.get?.("world")?.find?.((s) => s.key === `${SCOPE}.${key}`);
+    if (doc) await doc.delete();
+  };
+
+  // limbCripplingDetailed → limbModel (Listen Up when it was on, else Core). w4rst4rLimbRules was never
+  // registered here, so there's nothing to migrate from it.
+  const lcd = rawSetting("limbCripplingDetailed");
+  if (lcd !== undefined && rawSetting("limbModel") === undefined) {
+    const model = lcd === true ? "listenup" : "core";
+    await game.settings.set(SCOPE, "limbModel", model);
+    await dropLegacy("limbCripplingDetailed");
+    console.log(`${SCOPE} | limb-model migrated from limbCripplingDetailed → "${model}".`);
+  }
+}
+
 Hooks.once("ready", function () {
   // Hard guard: the Augmented Edition only works on the cyberpunk2020 system.
   if (game.system.id !== SYSTEM_ID) {
@@ -133,6 +164,11 @@ Hooks.once("ready", function () {
     ui.notifications?.error(game.i18n.localize("CYBERPUNK.Augmented.WrongSystem"));
     return;
   }
+
+  // One-time settings migrations (GM-only, self-gating, no version bump). The module has no migrate.js,
+  // so the fork's setting-merge migrations live here. Each reads the orphaned legacy key straight from
+  // world storage, writes the merged value once, then deletes the legacy doc so it never re-runs.
+  if (game.user?.isGM) migrateAugmentedSettings().catch((e) => console.warn(`${SCOPE} | settings migration failed`, e));
 
   // Apply the per-user Carolingian / Restyler terminal sheet skin (toggles the cp-carolingian
   // <body> class that gates the skin CSS in cp2020-augmented.css). Client-side cosmetic, so it

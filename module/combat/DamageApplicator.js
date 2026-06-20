@@ -102,19 +102,20 @@ export function spLocationKey(location) {
 }
 
 /**
- * Active limb model, resolved with precedence W4RST4R > Listen Up (detailed) > Core, so the right
- * rule wins even if multiple flags are somehow set. The settings enforce mutual exclusivity too.
+ * Active limb model from the single `limbModel` selector: "w4rst4r" → W4RST4R, "listenup" → Listen Up
+ * (detailed crippling), anything else → Core. Returns "Core" when settings are unavailable. The
+ * selector is exclusive by construction, so no precedence juggling is needed.
  */
 export function activeLimbModel() {
-  try { if (game.settings.get("cp2020-augmented", "w4rst4rLimbRules")) return "W4RST4R"; } catch (e) { /* default */ }
-  try { if (game.settings.get("cp2020-augmented", "limbCripplingDetailed")) return "ListenUp"; } catch (e) { /* default */ }
-  return "Core";
+  let m = "core";
+  try { m = game.settings.get("cp2020-augmented", "limbModel") || "core"; } catch (e) { /* default */ }
+  return m === "w4rst4r" ? "W4RST4R" : (m === "listenup" ? "ListenUp" : "Core");
 }
 
 /**
  * Final HP damage for one hit, including the location-doubling rules.
  *   - Head (headHitDoubling, CP2020 p.103): damage doubled AFTER BTM.
- *   - Limb (limbCripplingDetailed, Listen Up): post-armor damage doubled BEFORE BTM —
+ *   - Limb (limbModel = "listenup", Listen Up): post-armor damage doubled BEFORE BTM —
  *     the grittier limb model where crippling thresholds are measured on the doubled value.
  * Centralized so every apply path (auto-apply, damage dialog, socket relay) is identical.
  * @param {number}  afterSP     Post-armor damage (may be a GM override)
@@ -138,7 +139,7 @@ export function computeNetDamage(afterSP, btm, penetrates, location) {
 
 /**
  * Limb / head wound severity check (CP2020 p.103, optional Listen Up crippling).
- * Gated by limbLossEnabled; the granular variant by limbCripplingDetailed.
+ * Gated by limbLossEnabled; the granular variant by limbModel = "listenup".
  * Posts chat + applies status/death-save. Runs after netDamage is written, on every apply path.
  * @param {Actor}  target
  * @param {string} location
