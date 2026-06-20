@@ -1,0 +1,10 @@
+{{!-- RAW-IP neglect nudge body (DialogV2). Text from lang/*.json; the off-ramp buttons are the
+      DialogV2 buttons (Open tracker / Clear backlog / Turn RAW off). Styling: css .cp-ip-neglect. --}}
+<div class="cp-ip-neglect">
+  <p class="cp-ip-neglect-lead">{{CPLocal "IpNeglectBody" count=count}}</p>
+  <p class="cp-ip-neglect-q">{{localize "CYBERPUNK.IpNeglectQuestion"}}</p>
+  <label class="cp-ip-neglect-mute-label">
+    <input type="checkbox" class="cp-ip-neglect-mute"/>
+    {{localize "CYBERPUNK.IpNeglectMute"}}
+  </label>
+</div>

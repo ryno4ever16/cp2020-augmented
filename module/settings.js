@@ -470,14 +470,26 @@ export function registerAugmentedSettings() {
   });
 
   // --- IP (Improvement Points) tracker ([[ip-tracker-design]]) ---
-  game.settings.register(SCOPE, "ipSystem", {
-    name: "SETTINGS.IpSystem",
-    hint: "SETTINGS.IpSystemHint",
+  // Two gates over the always-present dual-bucket store (per-skill flag `ip` bank + a fungible actor
+  // flag `ipPool`): ipRawTracking (behaviour — per-skill auto-attribution + the skill-roll queue) and
+  // ipHideUI (presence — hide the IP UI entirely). The 4 sub-settings below only matter under RAW; the
+  // renderSettingsConfig hook greys them out while ipRawTracking is off. Migrated from the old 3-way
+  // `ipSystem` by migrateAugmentedSettings().
+  game.settings.register(SCOPE, "ipRawTracking", {
+    name: "SETTINGS.IpRawTracking",
+    hint: "SETTINGS.IpRawTrackingHint",
     scope: "world",
     config: true,
-    type: String,
-    choices: { disabled: "SETTINGS.IpSystemDisabled", simple: "SETTINGS.IpSystemSimple", raw: "SETTINGS.IpSystemRaw" },
-    default: "disabled"
+    type: Boolean,
+    default: false,
+  });
+  game.settings.register(SCOPE, "ipHideUI", {
+    name: "SETTINGS.IpHideUI",
+    hint: "SETTINGS.IpHideUIHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
   });
   game.settings.register(SCOPE, "ipAwardModel", {
     name: "SETTINGS.IpAwardModel",
@@ -526,6 +538,11 @@ export function registerAugmentedSettings() {
   game.settings.register(SCOPE, "ipQueue", { scope: "world", config: false, type: Array, default: [] });
   // Per-skill IP awards within the current Apply cycle, for the throttle. Not shown in the menu.
   game.settings.register(SCOPE, "ipThrottleCounts", { scope: "world", config: false, type: Object, default: {} });
+  // RAW-IP neglect detector state (not in the menu): muted = GM ticked "don't ask again"; nudged = a
+  // nudge already fired for the current over-threshold episode (re-arms when the queue drops back below
+  // the threshold). See module/ip/ip.js.
+  game.settings.register(SCOPE, "ipNeglectMuted", { scope: "world", config: false, type: Boolean, default: false });
+  game.settings.register(SCOPE, "ipNeglectNudged", { scope: "world", config: false, type: Boolean, default: false });
 
   // --- Shopping / economy ([[shopping-design]]) ---
   // Master gate for the Augmented shop (the sidebar cart, the catalog window, custom shops). On by
@@ -649,6 +666,27 @@ export function registerAugmentedSettings() {
     masterInput?.addEventListener("change", () => setEnabled(!!masterInput.checked));
   });
 
+  // --- IP: grey out the RAW-only sub-settings while RAW auto-tracking is off ---
+  // The award-model / auto-baseline / throttle / skill-lock options only matter under RAW; mirror the
+  // fork's master-gating (reusing the .cp-mm-disabled style) so they read as inert until RAW is on.
+  Hooks.on("renderSettingsConfig", (app, html) => {
+    try {
+      const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
+      if (!root?.querySelector) return;
+      const groupOf = (k) => {
+        const el = root.querySelector(`[name="${SCOPE}.${k}"], [data-setting-id="${SCOPE}.${k}"]`);
+        return el?.closest(".form-group") ?? el?.closest(".setting") ?? null;
+      };
+      const masterInput = groupOf("ipRawTracking")?.querySelector(`[name="${SCOPE}.ipRawTracking"]`);
+      if (!masterInput) return;
+      const subGroups = ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"].map(groupOf).filter(Boolean);
+      if (!subGroups.length) return;
+      const setEnabled = (on) => { for (const g of subGroups) { g.classList.toggle("cp-mm-disabled", !on); g.querySelectorAll("input,select,button,textarea").forEach(el => { el.disabled = !on; }); } };
+      setEnabled(!!masterInput.checked);
+      masterInput.addEventListener("change", () => setEnabled(!!masterInput.checked));
+    } catch (e) { /* the settings page stays usable even if gating fails */ }
+  });
+
   // --- Maximum Metal: hide the MM weapon compendium from the sidebar when MM is off ---
   Hooks.on("renderCompendiumDirectory", (app, html) => {
     const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
@@ -688,12 +726,19 @@ export function vehicleArcEnforcement() {
 }
 
 // --- IP (Improvement Points) accessors ([[ip-tracker-design]]) ---
-/** IP system mode: "disabled" (default) / "simple" (single pool) / "raw" (per-skill tracker). */
-export function ipSystem() {
-  try { return game.settings.get(SCOPE, "ipSystem") || "disabled"; } catch { return "disabled"; }
+// IP is ALWAYS present as a dual-bucket store (per-skill flag `ip` bank + a fungible actor flag
+// `ipPool`); it is ignorable when unused. Two world gates replace the old 3-way `ipSystem`:
+// ipRawTracking (behaviour) and ipHideUI (presence).
+/** Whether RAW auto-tracking (per-skill attribution + the skill-roll queue) is on. Off by default. */
+export function ipRawTracking() {
+  try { return game.settings.get(SCOPE, "ipRawTracking") === true; } catch { return false; }
 }
-/** Whether the IP system is active at all. */
-export function ipEnabled() { return ipSystem() !== "disabled"; }
+/** Whether the GM has hidden the IP UI entirely (presence gate, for pure-narrative tables). */
+export function ipHideUI() {
+  try { return game.settings.get(SCOPE, "ipHideUI") === true; } catch { return false; }
+}
+/** Whether the IP UI/logic is shown. The dual-bucket store always exists; this only hides the UI. */
+export function ipEnabled() { return !ipHideUI(); }
 /** IP award model: "manual" (RAW GM-per-use, default) / "autoBaseline" (GM-marked success → +N). */
 export function ipAwardModel() {
   try { return game.settings.get(SCOPE, "ipAwardModel") || "manual"; } catch { return "manual"; }

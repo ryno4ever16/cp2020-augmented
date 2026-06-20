@@ -1,7 +1,7 @@
 import { localize } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 import {
-  ipEnabled, ipSystem, ipAwardModel, ipAutoBaselineAmount, ipThrottle, ipSkillLockMode, ipShowPending
+  ipEnabled, ipRawTracking, ipAwardModel, ipAutoBaselineAmount, ipThrottle, ipSkillLockMode, ipShowPending
 } from "../settings.js";
 
 /**
@@ -9,12 +9,19 @@ import {
  *
  * Augmented Edition port: the IP fields are stored as MODULE FLAGS (flags.cp2020-augmented.*) on
  * Tilt's existing character/npc + skill documents, NOT on system.*, so the feature works on the
- * vanilla cyberpunk2020 system (which has no IP fields). Two stored layers (both additive):
- *   • a skill's flag `ip` = BANKED IP the owner can spend to level up;
+ * vanilla cyberpunk2020 system (which has no IP fields).
+ *
+ * Model A dual-bucket store (both additive, migration-safe, always present):
+ *   • a skill's flag `ip` = BANKED IP earmarked to that skill (RAW per-skill attribution);
+ *   • the actor's flag `ipPool` = a fungible, unattributed IP pool;
  *   • a skill's flag `ipPending` = IP the GM has attributed but NOT released (hidden from the player
  *     until the GM clicks Apply, which moves ipPending → ip).
- * Simple mode banks one actor-flag `ipPool` instead of per-skill IP. The auto-queue + throttle live
- * in world settings. Skill `level`/`diffMod` are Tilt's own fields and stay on system.*.
+ * Spendable on skill X = X's bank + the pool; a level-up spends the bank first, then the pool, so
+ * banked RAW IP is never stranded by toggling RAW off. Plus a GM-only world queue `ipQueue` of skill
+ * rolls awaiting an IP decision (RAW auto-tracking), and `ipThrottleCounts` per Apply cycle. Skill
+ * `level`/`diffMod` are Tilt's own fields and stay on system.*.
+ *
+ * RAW on → new IP is attributed per-skill (queue); RAW off → the GM tops up the pool.
  */
 
 const SCOPE = "cp2020-augmented";
@@ -29,6 +36,20 @@ export function ipCost(skill) {
   const level = Number(skill?.system?.level) || 0;
   const mult = Math.max(1, Number(skill?.system?.diffMod) || 1);
   return Math.max(1, level) * 10 * mult;
+}
+
+/**
+ * PURE dual-bucket spend breakdown (Model A): pay `cost` from the skill's own bank first, then from the
+ * fungible pool. So banked RAW IP is spent before pool IP and is never stranded by toggling RAW off.
+ * @returns {{fromBank:number, fromPool:number, newBank:number, newPool:number, affordable:boolean}}
+ */
+export function ipSpendBreakdown(bank, pool, cost) {
+  const b = Math.max(0, Number(bank) || 0);
+  const p = Math.max(0, Number(pool) || 0);
+  const c = Math.max(0, Number(cost) || 0);
+  const fromBank = Math.min(b, c);
+  const fromPool = c - fromBank;
+  return { fromBank, fromPool, newBank: b - fromBank, newPool: p - fromPool, affordable: (b + p) >= c };
 }
 
 /* --------------------------------------------------------------------- */
@@ -80,7 +101,7 @@ export async function toggleSkillLock(actor) {
  */
 export function ipDisplayForActor(actor) {
   if (!actor || !ipEnabled()) return { enabled: false, bySkill: {} };
-  const simple = ipSystem() === "simple";
+  const simple = !ipRawTracking();
   const isGM = game.user?.isGM === true;
   const lock = ipLockState(actor);
   const pool = actorPool(actor);
@@ -89,7 +110,8 @@ export function ipDisplayForActor(actor) {
     if (s.type !== "skill") continue;
     const cost = ipCost(s);
     const banked = skillIp(s);
-    const have = simple ? pool : banked;
+    // Dual-bucket (Model A): available = the skill's own bank + the fungible pool, in every mode.
+    const have = banked + pool;
     bySkill[s.id] = { cost, banked, pending: skillPending(s), canLevel: have >= cost };
   }
   return { enabled: true, simple, locked: lock.locked, lockMode: lock.mode, pool, showPending: isGM && ipShowPending(), bySkill };
@@ -123,12 +145,56 @@ function _rerenderTracker() {
   }
 }
 
+/* --------------------------------------------------------------------- */
+/*  Neglect detector — nudge the GM when RAW IP is accruing un-worked     */
+/* --------------------------------------------------------------------- */
+
+/** The pending-queue length at which the RAW-IP neglect nudge fires (tunable). */
+export const NEGLECT_THRESHOLD = 20;
+
 /**
- * Record a skill roll into the auto-queue. RAW mode only. Called from the cyberpunkSkillRolled hook;
- * relays to the active GM if the roller isn't the GM.
+ * PURE: should the RAW-IP neglect nudge fire right now? True only when RAW auto-tracking is on, the
+ * queue is at/over the threshold, the GM hasn't muted it, and a nudge hasn't already fired for this
+ * over-threshold episode.
+ */
+export function shouldNudgeNeglect({ rawOn, queueLength, muted, nudged } = {}) {
+  return !!rawOn && (Number(queueLength) || 0) >= NEGLECT_THRESHOLD && !muted && !nudged;
+}
+
+function _neglectFlag(key) { try { return game.settings.get(SCOPE, key) === true; } catch { return false; } }
+
+/** Fire the once-per-episode GM neglect nudge when the queue crosses the threshold (active GM only). */
+async function _maybeNudgeNeglect(queueLength) {
+  if (!_isActiveGM() || !ipRawTracking()) return;
+  if (!shouldNudgeNeglect({ rawOn: true, queueLength, muted: _neglectFlag("ipNeglectMuted"), nudged: _neglectFlag("ipNeglectNudged") })) return;
+  try { await game.settings.set(SCOPE, "ipNeglectNudged", true); } catch (e) { /* ignore */ }
+  try {
+    const { showIpNeglectNudge } = await import("../dialog/ip-neglect.js");
+    await showIpNeglectNudge(queueLength);
+  } catch (e) { console.warn("cp2020-augmented | IP neglect nudge failed", e); }
+}
+
+/** Re-arm the nudge once the queue drops back below the threshold (so a future buildup re-nudges). */
+async function _rearmNeglectIfBelow() {
+  if (!_isActiveGM()) return;
+  if (getQueue().length < NEGLECT_THRESHOLD && _neglectFlag("ipNeglectNudged")) {
+    try { await game.settings.set(SCOPE, "ipNeglectNudged", false); } catch (e) { /* ignore */ }
+  }
+}
+
+/** Empty the queue without awarding (the nudge's "Clear the backlog" off-ramp). */
+export async function clearQueue() {
+  await setQueue([]);
+  await _rearmNeglectIfBelow();
+  _rerenderTracker();
+}
+
+/**
+ * Record a skill roll into the auto-queue. RAW mode only (Simple mode has no per-skill attribution).
+ * Called from the cyberpunkSkillRolled hook; relays to the active GM if the roller isn't the GM.
  */
 export function recordSkillRoll(payload) {
-  if (ipSystem() !== "raw") return;
+  if (!ipRawTracking()) return;
   if (_isActiveGM()) return _enqueue(payload);
   else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "ipSkillRolled", payload });
 }
@@ -143,11 +209,13 @@ async function _enqueue(row) {
   });
   await setQueue(q);
   _rerenderTracker();
+  await _maybeNudgeNeglect(q.length);
 }
 
 /** Remove a queue row without awarding (skip). */
 export async function dismissQueueRow(rowId) {
   await setQueue(getQueue().filter(r => r.id !== rowId));
+  await _rearmNeglectIfBelow();
   _rerenderTracker();
 }
 
@@ -228,6 +296,7 @@ export async function resolveQueueRow(rowId) {
     if (amount > 0) await awardPending(actor, skill, amount);
   }
   await setQueue(q.filter(r => r.id !== rowId));
+  await _rearmNeglectIfBelow();
   _rerenderTracker();
 }
 
@@ -260,6 +329,7 @@ export async function applyPending(actor = null) {
   // Clear the queue + throttle for the new cycle.
   await setQueue(actor ? getQueue().filter(r => r.actorId !== actor.id) : []);
   await resetThrottle();
+  await _rearmNeglectIfBelow();
   _rerenderTracker();
   ui.notifications?.info(localize("IpApplied", { ip: released }));
   return released;
@@ -270,16 +340,18 @@ export async function applyPending(actor = null) {
 /* --------------------------------------------------------------------- */
 
 /**
- * Raise a skill one level, spending banked IP (RAW: the skill's own ip flag; Simple: the actor's
- * ipPool flag). Shows a confirm dialog. The skill `level` is Tilt's own field and stays on system.*.
+ * Raise a skill one level, spending the skill's own bank first then the fungible pool (dual-bucket).
+ * Shows a confirm dialog. The skill `level` is Tilt's own field and stays on system.*; the IP banks are
+ * module flags. Honors the skill lock only for raw hand-editing — leveling via this button is allowed.
  */
 export async function levelUpSkill(actor, skill, { confirm = true } = {}) {
   if (!actor || !skill || skill.type !== "skill") return false;
   if (!ipEnabled()) return false;
-  const simple = ipSystem() === "simple";
   const cost = ipCost(skill);
-  const have = simple ? actorPool(actor) : skillIp(skill);
-  if (have < cost) { ui.notifications?.warn(localize("IpNotEnough", { cost, have })); return false; }
+  const bank = skillIp(skill);
+  const pool = actorPool(actor);
+  const spend = ipSpendBreakdown(bank, pool, cost);   // dual-bucket: bank first, then pool
+  if (!spend.affordable) { ui.notifications?.warn(localize("IpNotEnough", { cost, have: bank + pool })); return false; }
 
   if (confirm) {
     const ok = await foundry.applications.api.DialogV2.confirm({
@@ -292,12 +364,10 @@ export async function levelUpSkill(actor, skill, { confirm = true } = {}) {
   }
 
   const newLevel = (Number(skill.system?.level) || 0) + 1;
-  if (simple) {
-    await actor.setFlag(SCOPE, "ipPool", have - cost);
-    await skill.update({ "system.level": newLevel });
-  } else {
-    await skill.update({ "system.level": newLevel, [`flags.${SCOPE}.ip`]: skillIp(skill) - cost });
-  }
+  const skillUpdate = { "system.level": newLevel };
+  if (spend.fromBank > 0) skillUpdate[`flags.${SCOPE}.ip`] = spend.newBank;
+  await skill.update(skillUpdate);
+  if (spend.fromPool > 0) await actor.setFlag(SCOPE, "ipPool", spend.newPool);
   await postSavePromptCard({
     body: localize("IpLeveledUp", { actor: actor.name, skill: skill.name, level: newLevel, cost }),
     speaker: ChatMessage.getSpeaker({ actor }),

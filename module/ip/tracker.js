@@ -2,7 +2,7 @@ import {
   getQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, resolveAllQueue,
   applyPending, resetThrottle, awardPending, addToPool, pendingForSkill
 } from "./ip.js";
-import { ipSystem, ipAwardModel, ipThrottle } from "../settings.js";
+import { ipRawTracking, ipAwardModel, ipThrottle } from "../settings.js";
 import { localize } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -52,7 +52,7 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
 
     return {
       auto,
-      simple: ipSystem() === "simple",
+      simple: !ipRawTracking(),
       throttle: ipThrottle(),
       rows,
       rowCount: rows.length,
@@ -113,7 +113,7 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
   async _manualAdd() {
     const actors = game.actors.filter(a => a.type === "character" || a.type === "npc");
     if (!actors.length) return;
-    const simple = ipSystem() === "simple";
+    const simple = !ipRawTracking();
     const renderTemplate = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
     const content = await renderTemplate("modules/cp2020-augmented/templates/ip/manual-add.hbs", {
       simple,

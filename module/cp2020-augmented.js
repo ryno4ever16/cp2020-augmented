@@ -7,7 +7,7 @@
  * own init/ready wiring shape: registration functions imported here and called
  * from Hooks.once('init'/'ready').
  */
-import { registerAugmentedSettings, combatAutomationEnabled, ipSystem, applyCarolingianSkinClass } from "./settings.js";
+import { registerAugmentedSettings, combatAutomationEnabled, ipHideUI, applyCarolingianSkinClass } from "./settings.js";
 import { registerAugmentedHandlebarsHelpers } from "./handlebars-helpers.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
@@ -64,6 +64,7 @@ const AUGMENTED_TEMPLATES = [
   // In-sheet UI fragments injected into the actor/item sheet (warm the cache; not partial includes).
   "modules/cp2020-augmented/templates/ip/skill-cluster.hbs",
   "modules/cp2020-augmented/templates/ip/skills-header.hbs",
+  "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/cyberware/install-button.hbs",
   "modules/cp2020-augmented/templates/shop/services-panel.hbs",
   "modules/cp2020-augmented/templates/martial/martial-panel.hbs",
@@ -155,6 +156,17 @@ async function migrateAugmentedSettings() {
     await dropLegacy("limbCripplingDetailed");
     console.log(`${SCOPE} | limb-model migrated from limbCripplingDetailed → "${model}".`);
   }
+
+  // ipSystem (3-way) → ipRawTracking (behaviour) + ipHideUI (presence). The dual-bucket flag DATA
+  // (per-skill `ip` + actor `ipPool`) already exists, so there's no per-actor data migration — only
+  // this setting remap: disabled → hide the UI; raw → RAW auto-tracking on; simple → neither.
+  const ipOld = rawSetting("ipSystem");
+  if (ipOld !== undefined) {
+    if (ipOld === "raw" && rawSetting("ipRawTracking") === undefined) await game.settings.set(SCOPE, "ipRawTracking", true);
+    if (ipOld === "disabled" && rawSetting("ipHideUI") === undefined) await game.settings.set(SCOPE, "ipHideUI", true);
+    await dropLegacy("ipSystem");
+    console.log(`${SCOPE} | IP setting migrated: ipSystem "${ipOld}" → rawTracking=${ipOld === "raw"}, hideUI=${ipOld === "disabled"}.`);
+  }
 }
 
 Hooks.once("ready", function () {
@@ -193,7 +205,8 @@ Hooks.once("ready", function () {
     registerAcpaCombatHooks();
   }
 
-  // IP (Improvement Points) tracker — independent of the combat layer; self-gates on ipSystem.
+  // IP (Improvement Points) tracker — independent of the combat layer; the auto-queue self-gates on
+  // ipRawTracking (RAW mode only), the in-sheet UI on ipEnabled (= !ipHideUI).
   registerIpHooks();
   // Player-facing in-sheet IP UI (per-skill level-up + lock header); self-gates on ipEnabled() per render.
   registerIpSheet();
@@ -220,7 +233,7 @@ Hooks.once("ready", function () {
  */
 Hooks.on("renderActorDirectory", (app, html) => {
   try {
-    if (!game.user.isGM || ipSystem() === "disabled") return;
+    if (!game.user.isGM || ipHideUI()) return;
     const root = html instanceof jQuery ? html[0] : html;
     if (!root || root.querySelector(".cp2020ae-ip-tracker-btn")) return;
     const btn = document.createElement("button");
