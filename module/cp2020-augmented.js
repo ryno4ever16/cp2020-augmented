@@ -198,6 +198,20 @@ Hooks.once("ready", function () {
   // world storage, writes the merged value once, then deletes the legacy doc so it never re-runs.
   if (game.user?.isGM) migrateAugmentedSettings().catch((e) => console.warn(`${SCOPE} | settings migration failed`, e));
 
+  // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
+  // first-run picker). The flag flips immediately so the picker never reappears on later loads; the
+  // GM can reopen it from the System Settings "Settings Presets" menu. Guarded so a hiccup is non-fatal.
+  if (game.user?.isGM) {
+    try {
+      if (!game.settings.get(SCOPE, "presetFirstRunDone")) {
+        game.settings.set(SCOPE, "presetFirstRunDone", true);
+        new PresetPicker().render(true);
+      }
+    } catch (e) {
+      console.warn(`${SCOPE} | first-run preset picker failed (open it from System Settings)`, e);
+    }
+  }
+
   // Apply the per-user Carolingian / Restyler terminal sheet skin (toggles the cp-carolingian
   // <body> class that gates the skin CSS in cp2020-augmented.css). Client-side cosmetic, so it
   // runs independently of the combat-automation gate below.

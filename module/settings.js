@@ -46,6 +46,16 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
+  // --- presetFirstRunDone ---
+  // config:false — first-run flag for the one-time Settings Presets picker (see the ready hook in
+  // cp2020-augmented.js). Flipped true the first time a GM loads, so the picker is offered once only.
+  game.settings.register(SCOPE, "presetFirstRunDone", {
+    scope: "world",
+    config: false,
+    type: Boolean,
+    default: false,
+  });
+
   // --- damageArmorMode ---
   game.settings.register(SCOPE, "damageArmorMode", {
     name: "Damage: Armor Mode",
