@@ -14,7 +14,13 @@ const SHIMMER_MS = 950; // a touch longer than the CSS animation so it always fi
 /** @param {Application|JQuery|HTMLElement} target  An app (uses its .element) or a raw element. */
 export function shimmerWindow(target) {
   const raw = target?.element;
-  const el = raw?.[0] ?? (raw instanceof HTMLElement ? raw : (target instanceof HTMLElement ? target : null));
+  // Resolve the full window frame. Check HTMLElement FIRST: an ApplicationV2 frame is often a <form>
+  // (`app.element` is the `.application` form), and `form[0]` returns the first form CONTROL (a header
+  // button), NOT the element — appending the ring there sized it to the header bar instead of the whole
+  // window. Only index-unwrap when `raw` is a jQuery/array-like collection whose [0] is itself a node.
+  const el = raw instanceof HTMLElement ? raw
+    : (raw?.[0] instanceof HTMLElement ? raw[0]
+    : (target instanceof HTMLElement ? target : null));
   if (!el?.appendChild) return;
 
   el.querySelectorAll(":scope > .cp-shimmer-ring").forEach((n) => n.remove()); // restart on rapid re-open
