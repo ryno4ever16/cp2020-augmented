@@ -34,6 +34,7 @@ import { registerIpSheet } from "./ip/ip-sheet.js";
 
 // Settings presets — the GM "Choose Preset" menu button (one-click playstyle tiers).
 import { PresetPicker } from "./dialog/preset-picker.js";
+import { registerPinnedSubwindows } from "./pin-window.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
@@ -98,6 +99,11 @@ Hooks.once("init", function () {
   // Vendor the {{CPLocal}}/{{CPLocalParam}} localization helpers the module's templates use, so
   // they resolve without depending on the base system registering them (vanilla self-sufficiency).
   registerAugmentedHandlebarsHelpers();
+
+  // Keep spawned child windows (confirm dialogs + the Attack Modifiers window) floating above the
+  // ordinary window they were opened from, so clicking the parent never buries them. Idempotent: on a
+  // base-system+module install the system already installed this wrap, so this call no-ops.
+  registerPinnedSubwindows();
 
   // Register the module's vehicle/ACPA DataModels. Data lives in system.* of the sub-type
   // documents (no flags) — see module.json `documentTypes` for the manifest declaration.
