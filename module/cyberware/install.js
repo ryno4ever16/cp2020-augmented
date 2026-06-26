@@ -31,20 +31,41 @@ export function getSurgery(code) {
 }
 
 /**
+ * Evaluate a dice/flat-number formula DEFENSIVELY, never throwing.
+ *
+ * The base system's compendia carry malformed Humanity-Cost strings — e.g. a trailing-operator
+ * `"3d6+"` (the Kiroshi "Tricloptics") — which make `new Roll()` throw a peg-parse error and abort
+ * an install mid-flow. A null/absent formula likewise makes `formulaHasDice()` throw on `.match`.
+ * So: tolerate null/non-string, strip any dangling trailing operator before parsing, and catch any
+ * parse error — falling back to a flat 0 (with a console warning) rather than throwing. Reused by
+ * both the Humanity and surgical-damage rolls so there's a single hardened path.
+ * @returns {Promise<{value:number, roll:Roll|null}>}
+ */
+async function evaluateFormulaSafe(formula) {
+  // Strip a trailing operator/whitespace run left dangling by bad data ("3d6+", "2d6+ ") — a valid
+  // formula never ends in an operator, so this is always safe and recovers the intended value.
+  const cleaned = (formula == null ? "" : String(formula)).replace(/[+\-*/\s]+$/, "");
+  if (formulaHasDice(cleaned)) {
+    try {
+      const roll = await new Roll(cleaned).evaluate();
+      return { value: roll?.total ? roll.total : 0, roll };
+    } catch (err) {
+      console.warn(`cp2020-augmented | could not evaluate formula "${formula}", treating it as 0.`, err);
+      return { value: 0, roll: null };
+    }
+  }
+  const n = Number(cleaned);
+  return { value: Number.isNaN(n) ? 0 : n, roll: null };
+}
+
+/**
  * Roll an item's Humanity Cost and persist the result as `system.humanityLoss`, posting a public
  * chat card (so a player can't silently reroll). Mirrors the item-sheet humanity-cost button.
  * @returns {Promise<{loss:number, roll:Roll|null}>}
  */
 export async function rollCyberwareHumanity(item) {
   const hc = item?.system?.humanityCost;
-  let loss = 0, roll = null;
-  if (formulaHasDice(hc)) {
-    roll = await new Roll(hc).evaluate();
-    loss = roll?.total ? roll.total : 0;
-  } else {
-    const n = Number(hc);
-    loss = Number.isNaN(n) ? 0 : n;
-  }
+  const { value: loss, roll } = await evaluateFormulaSafe(hc);
   await item.update({ "system.humanityLoss": loss });
 
   const actor = item.actor ?? null;
@@ -64,13 +85,7 @@ export async function rollCyberwareHumanity(item) {
 
 /** Roll a surgical-damage formula and add it to the actor's wound track (no stun/death prompt). */
 async function rollSurgicalDamage(actor, formula) {
-  let dmg = 0, roll = null;
-  if (formulaHasDice(formula)) {
-    roll = await new Roll(formula).evaluate();
-    dmg = roll?.total ? roll.total : 0;
-  } else {
-    dmg = Number(formula) || 0;
-  }
+  const { value: dmg, roll } = await evaluateFormulaSafe(formula);
   if (dmg > 0) {
     const current = Number(actor.system?.damage) || 0;
     // fromCyberpunkDamageSystem suppresses the updateActor save-prompt hook — surgery isn't combat.
