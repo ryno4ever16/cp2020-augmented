@@ -1,3 +1,11 @@
+import { apiHelper } from "./system-api.js";
+
+// Prefer the base system's chat helpers (game.cyberpunk.api.chat) at call time; fall back to the
+// local copies (the _-prefixed functions below). See module/system-api.js.
+export const getPublicMessageMode       = apiHelper("chat", "getPublicMessageMode", _getPublicMessageMode);
+export const createCyberpunkChatMessage = apiHelper("chat", "createCyberpunkChatMessage", _createCyberpunkChatMessage);
+export const rollToCyberpunkChatMessage = apiHelper("chat", "rollToCyberpunkChatMessage", _rollToCyberpunkChatMessage);
+
 /**
  * Compatibility helpers for Foundry VTT v13/v14.
  * Keep version and API branching here instead of spreading it across sheets,
@@ -283,7 +291,7 @@ export function getSelfRollMode() {
   return getRollMode("self");
 }
 
-export function getPublicMessageMode() {
+function _getPublicMessageMode() {
   return getMessageMode("public");
 }
 
@@ -374,7 +382,7 @@ export async function evaluateCyberpunkRoll(roll, options = {}) {
  * - messageMode: v14-style visibility mode (public/gm/blind/self)
  * - useDefaultRollMode: apply the user's current chat roll/message mode explicitly
  */
-export async function createCyberpunkChatMessage(data = {}, options = {}) {
+async function _createCyberpunkChatMessage(data = {}, options = {}) {
   const { rollMode, messageMode, useDefaultRollMode = false, ...createOptions } = options ?? {};
   let chatData = { ...data };
 
@@ -391,7 +399,7 @@ export async function createCyberpunkChatMessage(data = {}, options = {}) {
 /**
  * Send a single Roll to chat, using the correct v13/v14 visibility option.
  */
-export async function rollToCyberpunkChatMessage(roll, messageData = {}, options = {}) {
+async function _rollToCyberpunkChatMessage(roll, messageData = {}, options = {}) {
   const { rollMode, messageMode, useDefaultRollMode = true, ...rollOptions } = options ?? {};
   await evaluateCyberpunkRoll(roll);
 

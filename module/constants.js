@@ -1,3 +1,9 @@
+import { apiHelper } from "./system-api.js";
+
+// Prefer the base system's cloneSystemDefault (game.cyberpunk.api.constants) at call time; fall back
+// to the local copy below. See module/system-api.js. (The data tables stay local for now.)
+export const cloneSystemDefault = apiHelper("constants", "cloneSystemDefault", _cloneSystemDefault);
+
 /**
  * Runtime constants for the Cyberpunk 2020 system.
  *
@@ -37,7 +43,7 @@ export const DEFAULT_SDP = {
   touched: { Head: false, Torso: false, lArm: false, rArm: false, lLeg: false, rLeg: false }
 };
 
-export function cloneSystemDefault(value) {
+function _cloneSystemDefault(value) {
   if (globalThis.foundry?.utils?.deepClone) return foundry.utils.deepClone(value);
   return JSON.parse(JSON.stringify(value));
 }

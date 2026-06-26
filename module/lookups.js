@@ -1,6 +1,15 @@
 // This is where all the magic values go, because cyberpunk has SO many of those
 // Any given string value is the same as its key in the localization file, and will be used for translation
 import { cloneSystemDefault, DEFAULT_HIT_LOCATIONS, STAT_KEYS } from "./constants.js";
+import { apiHelper } from "./system-api.js";
+
+// Prefer the base system's lookup helpers (game.cyberpunk.api.lookups) at call time; fall back to the
+// local copies (the _-prefixed functions below). See module/system-api.js. (Data tables stay local.)
+export const defaultHitLocations       = apiHelper("lookups", "defaultHitLocations", _defaultHitLocations);
+export const strengthDamageBonus       = apiHelper("lookups", "strengthDamageBonus", _strengthDamageBonus);
+export const isFnff2Enabled            = apiHelper("lookups", "isFnff2Enabled", _isFnff2Enabled);
+export const getFnff2DamageBonusSymbol = apiHelper("lookups", "getFnff2DamageBonusSymbol", _getFnff2DamageBonusSymbol);
+export const getMartialActionBonus     = apiHelper("lookups", "getMartialActionBonus", _getMartialActionBonus);
 
 // Module flag / settings scope (per-file convention used across the module).
 const SCOPE = "cp2020-augmented";
@@ -341,7 +350,7 @@ export function isFnff2OnlyMartialArtId(id) {
   return FNFF2_ONLY_MARTIAL_ART_IDS.has(id);
 }
 
-export function isFnff2Enabled() {
+function _isFnff2Enabled() {
   // FNFF2 is a fork feature. Prefer the system's setting when present (running on the fork),
   // then the module's own toggle (running on vanilla, where the system key is unregistered and
   // game.settings.get THROWS), then default off. Never throw — the martial engine calls this on
@@ -489,7 +498,7 @@ export const fnff2DamageBonusSymbols = {
   Ram: "*"
 };
 
-export function getFnff2DamageBonusSymbol(actionKey) {
+function _getFnff2DamageBonusSymbol(actionKey) {
   return fnff2DamageBonusSymbols[actionKey] ?? "*";
 }
 
@@ -500,7 +509,7 @@ export function getFnff2DamageBonusSymbol(actionKey) {
  * @param {object|null} skillBonuses  Optional per-skill bonus map from skill.system.martialBonuses.
  *   Used for custom styles (no built-in table) and to let any skill override a built-in bonus.
  */
-export function getMartialActionBonus(martialKey, actionKey, skillBonuses = null) {
+function _getMartialActionBonus(martialKey, actionKey, skillBonuses = null) {
   // Per-skill bonus takes priority — this is how custom styles (and overrides) work.
   const perSkill = skillBonuses ? Number(skillBonuses[actionKey] || 0) : 0;
   if (perSkill) return perSkill;
@@ -565,7 +574,7 @@ export let defaultAreaLookup = {
     10: "rLeg"
 }
 
-export function defaultHitLocations() {
+function _defaultHitLocations() {
   return cloneSystemDefault(DEFAULT_HIT_LOCATIONS);
 }
 
@@ -766,7 +775,7 @@ export function btmFromBT(body) {
       }
 }
 
-export function strengthDamageBonus(bt) {
+function _strengthDamageBonus(bt) {
     let btm = btmFromBT(bt);
     if(btm < 5)
         return btm - 2;

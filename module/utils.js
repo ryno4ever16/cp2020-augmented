@@ -1,4 +1,13 @@
 import { defaultAreaLookup, defaultHitLocations, W4RST4R_AREA_LOOKUP } from "./lookups.js"
+import { apiHelper } from "./system-api.js";
+
+// Prefer the base system's i18n + dice helpers (game.cyberpunk.api) at call time; fall back to the
+// local copies (the _-prefixed functions below). See module/system-api.js.
+export const localize      = apiHelper("i18n", "localize", _localize);
+export const tryLocalize   = apiHelper("i18n", "tryLocalize", _tryLocalize);
+export const localizeParam = apiHelper("i18n", "localizeParam", _localizeParam);
+export const rollLocation  = apiHelper("dice", "rollLocation", _rollLocation);
+
 // Utility methods that don't really belong anywhere else
 
 export function properCase(str) {
@@ -52,17 +61,17 @@ export function openSingletonDialog(key, factory) {
     return dialog;
 }
 
-export function localize(key, data = {}) {
+function _localize(key, data = {}) {
   return game.i18n.format("CYBERPUNK." + key, data);
 }
-export function tryLocalize(str, defaultResult=str) {
+function _tryLocalize(str, defaultResult=str) {
     let key = "CYBERPUNK." + str;
     if(!game.i18n.has(key))
         return defaultResult;
     else
         return game.i18n.localize(key);
 }
-export function localizeParam(str, params) {
+function _localizeParam(str, params) {
     return game.i18n.format("CYBERPUNK."+ str, params);
 }
 
@@ -104,7 +113,7 @@ function _hitLocationLookup(targetActor) {
     return (targetActor?.hitLocLookup) ? targetActor.hitLocLookup : defaultAreaLookup;
 }
 
-export async function rollLocation(targetActor, targetArea) {
+async function _rollLocation(targetActor, targetArea) {
     if(targetArea) {
         // Area name to number lookup. Tolerate areas (e.g. W4RST4R "Groin") absent from the actor's
         // hitLocations by still reporting the targeted area.

@@ -35,6 +35,8 @@ import { registerIpSheet } from "./ip/ip-sheet.js";
 // Settings presets — the GM "Choose Preset" menu button (one-click playstyle tiers).
 import { PresetPicker } from "./dialog/preset-picker.js";
 import { registerPinnedSubwindows } from "./pin-window.js";
+import { registerSeamShim } from "./seam-shim.js";
+import { hostProvides } from "./system-api.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
@@ -199,6 +201,12 @@ Hooks.once("ready", function () {
     return;
   }
 
+  // No host-API guard: the module's shared helpers (i18n / chat / lookups / constants / dice via
+  // module/system-api.js apiHelper, and schema via the local schema-helpers) PREFER game.cyberpunk.api
+  // when the base system exposes it, else fall back to the module's own local copies — so the module
+  // runs on a stock (API-less) base too, and self-upgrades to the system's helpers the moment they
+  // appear. The hooks it relies on are bridged the same self-disengaging way (registerSeamShim below).
+
   // One-time settings migrations (GM-only, self-gating, no version bump). The module has no migrate.js,
   // so the fork's setting-merge migrations live here. Each reads the orphaned legacy key straight from
   // world storage, writes the merged value once, then deletes the legacy doc so it never re-runs.
@@ -223,17 +231,27 @@ Hooks.once("ready", function () {
   // runs independently of the combat-automation gate below.
   applyCarolingianSkinClass();
 
-  // combatAutomationEnabled is the master gate for the Augmented combat layer
-  // (damage application, saves, area effects, combat-tracker controls, vehicle/ACPA
-  // weapon fire + targeting + missiles); each individual behaviour is further gated by
-  // its own setting. This mirrors the system's own "ready" registration, minus the
-  // shop/IP registrars that land in later slices.
-  if (combatAutomationEnabled()) {
-    registerPopoutCompat();
+  // TEMPORARY seam shim: emit the weaponFired / skillRolled hooks the module relies on, but ONLY while
+  // the base system lacks native emission (the seam PRs aren't merged). Self-disengages the instant the
+  // base system emits them — including on a fork+module install (the fork emits natively). See seam-shim.js.
+  registerSeamShim();
+
+  // combatAutomationEnabled is the master gate for the Augmented combat layer (damage application,
+  // saves, area effects, combat-tracker controls, vehicle/ACPA weapon fire + targeting + missiles);
+  // each individual behaviour is further gated by its own setting. ADDITIONALLY, each feature layer
+  // stands down when the host system already provides it (hostProvides → game.cyberpunk.api.features),
+  // so the module never double-registers a feature the base absorbed — e.g. two weaponFired listeners
+  // applying damage twice. An absent features map reads false, so vanilla behaviour is unchanged.
+  // See system-api.js + Data/_seamwork/FOLLOWUP-cherrypick-hardening.md.
+  const doCombat   = combatAutomationEnabled() && !hostProvides("combatAutomation");
+  const doVehicles = combatAutomationEnabled() && !hostProvides("vehicles");
+  if (doCombat || doVehicles) registerPopoutCompat();
+  if (doCombat) {
     registerDamageHooks();
     registerMovementGate();
     registerSaveRollHandlers();
-
+  }
+  if (doVehicles) {
     // Vehicle / ACPA combat handlers (chat-button + per-round flight + crit hooks).
     registerVehicleFireHandlers();
     registerVehicleTargetingHandlers();
@@ -243,24 +261,33 @@ Hooks.once("ready", function () {
 
   // IP (Improvement Points) tracker — independent of the combat layer; the auto-queue self-gates on
   // ipRawTracking (RAW mode only), the in-sheet UI on ipEnabled (= !ipHideUI).
-  registerIpHooks();
-  // Player-facing in-sheet IP UI (per-skill level-up + lock header); self-gates on ipEnabled() per render.
-  registerIpSheet();
-  // In-sheet cyberware Install button on the item sheet; self-gates on shoppingEnabled() + vanilla-only.
-  registerCyberwareSheet();
-  // In-sheet Recurring Services panel in the gear tab; self-gates on shoppingEnabled() per render.
-  registerServicesSheet();
-  // In-sheet martial-arts panel on the combat tab; self-gates on combatAutomationEnabled() + vanilla-only.
-  registerMartialSheet();
-  // In-skill martial-art editor on the skill item sheet; self-gates on combatAutomationEnabled() + vanilla-only.
-  registerMartialSkillEditor();
+  const doIp = !hostProvides("ip");
+  if (doIp) {
+    registerIpHooks();
+    // Player-facing in-sheet IP UI (per-skill level-up + lock header); self-gates on ipEnabled() per render.
+    registerIpSheet();
+  }
 
-  // Shop / economy — the sidebar cart button + chat links + live buyer sync + the GM stock-decrement
-  // relay. Independent of the combat layer; self-gates on shoppingEnabled (the sidebar button only
-  // injects when shopping is on, and the catalog index is only warmed then).
-  registerShopHooks();
+  // Shopping layer — independent of the combat layer; each self-gates on shoppingEnabled.
+  const doShopping = !hostProvides("shopping");
+  if (doShopping) {
+    // In-sheet cyberware Install button on the item sheet; self-gates on shoppingEnabled() + vanilla-only.
+    registerCyberwareSheet();
+    // In-sheet Recurring Services panel in the gear tab; self-gates on shoppingEnabled() per render.
+    registerServicesSheet();
+    // Sidebar cart button + chat links + live buyer sync + the GM stock-decrement relay.
+    registerShopHooks();
+  }
 
-  console.log(`${SCOPE} | Ready (on ${SYSTEM_ID} v${game.system.version}).`);
+  // Martial-arts layer — in-sheet panel + skill editor; self-gate on combatAutomationEnabled() + vanilla-only.
+  const doMartial = !hostProvides("martial");
+  if (doMartial) {
+    registerMartialSheet();
+    registerMartialSkillEditor();
+  }
+
+  console.log(`${SCOPE} | Ready (on ${SYSTEM_ID} v${game.system.version}); layers: ` +
+    `combat=${doCombat} vehicles=${doVehicles} ip=${doIp} shopping=${doShopping} martial=${doMartial}`);
 });
 
 /**
@@ -269,7 +296,7 @@ Hooks.once("ready", function () {
  */
 Hooks.on("renderActorDirectory", (app, html) => {
   try {
-    if (!game.user.isGM || ipHideUI()) return;
+    if (!game.user.isGM || ipHideUI() || hostProvides("ip")) return;
     const root = html instanceof jQuery ? html[0] : html;
     if (!root || root.querySelector(".cp2020ae-ip-tracker-btn")) return;
     const btn = document.createElement("button");
