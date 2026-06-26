@@ -62,6 +62,7 @@
     }
   ],
   "socket": true,
+  "license": "LICENSE",
   "url": "https://github.com/ryno4ever16/cp2020-augmented",
   "manifest": "https://raw.githubusercontent.com/ryno4ever16/cp2020-augmented/main/module.json",
   "download": "https://github.com/ryno4ever16/cp2020-augmented/releases/latest/download/cp2020-augmented.zip"

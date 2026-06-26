@@ -19,16 +19,16 @@ export const EXCLUDED_TYPES = new Set(["skill", "ammo"]);
 /** pack name → { category, sub }. Unmapped buyable packs fall back to { Gear, Other }. */
 const PACK_MAP = {
   // Weapons
-  "pistols": ["Weapons", "Pistols"], "pistols-add": ["Weapons", "Pistols"],
-  "submachineguns": ["Weapons", "SMGs"], "smgs-add": ["Weapons", "SMGs"],
-  "rifles": ["Weapons", "Rifles"], "rifles-add": ["Weapons", "Rifles"],
+  "pistols": ["Weapons", "Pistols"],
+  "submachineguns": ["Weapons", "SMGs"],
+  "rifles": ["Weapons", "Rifles"],
   "shotguns": ["Weapons", "Shotguns"],
   "heavy": ["Weapons", "Heavy"],
   "melee": ["Weapons", "Melee"],
   "exotics": ["Weapons", "Exotic"],
   "weapons-community": ["Weapons", "Other"], "weapons-noncanon": ["Weapons", "Other"],
   // Armor
-  "armor": ["Armor", ""], "armor-add": ["Armor", ""],
+  "armor": ["Armor", ""],
   // Cyberware
   "cyberlimbs": ["Cyberware", "Cyberlimbs"],
   "cyberoptic": ["Cyberware", "Cyberoptics"],
