@@ -57,9 +57,12 @@ const RULES = [
   [s => s.includes("interface"), "Interface (zine)", "official"],
 
   // Core (and the Reference Book bound with it). Kept late so "Cyberpunk 2020" inside an official-book
-  // string doesn't pre-empt the book match above.
+  // string doesn't pre-empt the book match above. Also accept the bare-citation forms the base system
+  // uses for the core book ("2nd ed.", "core rules") — they carry no book name but ARE the core book;
+  // placed AFTER the official rules so a real supplement never falls in here.
   [s => s.includes("reference book"), "Cyberpunk 2020 (Core)", "core"],
   [s => /cyberpunk\s*2020/.test(s), "Cyberpunk 2020 (Core)", "core"],
+  [s => /\b2nd ed/.test(s) || s.includes("core rule") || s.includes("corebook") || s.includes("core book"), "Cyberpunk 2020 (Core)", "core"],
 ];
 
 /**
