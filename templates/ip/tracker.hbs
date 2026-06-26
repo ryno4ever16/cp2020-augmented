@@ -1,9 +1,9 @@
 <div class="cp-ip-tracker-window flexcol" style="height:100%;">
     <div class="flexrow" style="gap:8px; align-items:center; padding:4px 0;">
-        <button type="button" data-action="ipManual" title="Manually add IP to a skill (or the pool).">＋ {{localize "CYBERPUNK.IpManualAdd"}}</button>
+        <button type="button" data-action="ipManual" title="{{localize "CYBERPUNK.IpManualAddTip"}}">＋ {{localize "CYBERPUNK.IpManualAdd"}}</button>
         <span class="flex-pad" style="flex:1;"></span>
-        {{#unless (equals throttle "off")}}<button type="button" data-action="ipReset" title="Reset the per-skill throttle counters for a fresh cycle.">↻ {{localize "CYBERPUNK.IpThrottleResetBtn"}}</button>{{/unless}}
-        <button type="button" data-action="ipApply" title="Award all queued rows and release pending IP to players. Starts a new cycle."><b>{{localize "CYBERPUNK.IpApply"}}</b></button>
+        {{#unless (equals throttle "off")}}<button type="button" data-action="ipReset" title="{{localize "CYBERPUNK.IpThrottleResetTip"}}">↻ {{localize "CYBERPUNK.IpThrottleResetBtn"}}</button>{{/unless}}
+        <button type="button" data-action="ipApply" title="{{localize "CYBERPUNK.IpApplyTip"}}"><b>{{localize "CYBERPUNK.IpApply"}}</b></button>
     </div>
 
     {{!-- RAW auto-tracking is off → skill rolls don't queue here. Explain so it isn't mistaken for a bug. --}}
@@ -17,15 +17,15 @@
         {{#if rowCount}}
         {{#each rows as |row|}}
         <div class="flexrow cp-ip-row" data-row-id="{{row.id}}" style="align-items:center; gap:6px; padding:2px 4px;">
-            <span style="flex:1;" title="rolled {{row.total}}">{{row.actorName}} · <b>{{row.skillName}}</b> <span style="opacity:0.6;">({{row.total}})</span></span>
+            <span style="flex:1;" title="{{CPLocal 'IpRolledTip' total=row.total}}">{{row.actorName}} · <b>{{row.skillName}}</b> <span style="opacity:0.6;">({{row.total}})</span></span>
             {{#if ../auto}}
-            <label title="Mark this use a success → grants the baseline IP."><input type="checkbox" class="cp-ip-success" {{#if row.success}}checked{{/if}}/> {{localize "CYBERPUNK.IpSuccess"}}</label>
+            <label title="{{localize "CYBERPUNK.IpSuccessTip"}}"><input type="checkbox" class="cp-ip-success" {{#if row.success}}checked{{/if}}/> {{localize "CYBERPUNK.IpSuccess"}}</label>
             <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" style="width:46px;" title="{{localize "CYBERPUNK.IpBonus"}}"/>
             {{else}}
             <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" max="9" style="width:46px;" title="{{localize "CYBERPUNK.IpAmount"}}"/>
             {{/if}}
-            <button type="button" data-action="ipAward" title="Award this row's IP (to pending).">✓</button>
-            <button type="button" data-action="ipSkip" title="Discard this row (no IP).">✕</button>
+            <button type="button" data-action="ipAward" title="{{localize "CYBERPUNK.IpAwardTip"}}">✓</button>
+            <button type="button" data-action="ipSkip" title="{{localize "CYBERPUNK.IpSkipTip"}}">✕</button>
         </div>
         {{/each}}
         {{else}}

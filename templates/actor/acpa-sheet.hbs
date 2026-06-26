@@ -236,7 +236,7 @@
             <p style="opacity:0.6; font-size:0.78em; margin-top:2px;">{{CPLocal "Vehicle.SystemsDragNote"}}</p>
         </div>
         {{!-- Per-area spaces budget (used / available; internal + external). --}}
-        <p style="opacity:0.6; font-size:0.78em; margin:4px 0 2px;">Spaces used / available per area — internal (enclosed) and external (unprotected). Mounted-systems weight <b>{{system.mountedSystemsWeight}}</b> kg{{#if acpaSystemsCost}}, cost <b>{{acpaSystemsCost}}</b> eb{{/if}}.</p>
+        <p style="opacity:0.6; font-size:0.78em; margin:4px 0 2px;">{{#if acpaSystemsCost}}{{{CPLocal "Vehicle.SpacesNoteWithCost" weight=system.mountedSystemsWeight cost=acpaSystemsCost}}}{{else}}{{{CPLocal "Vehicle.SpacesNote" weight=system.mountedSystemsWeight}}}{{/if}}</p>
         <table style="width:100%; font-size:0.82em; border-collapse:collapse;">
             <thead><tr style="opacity:0.7;"><th style="text-align:left;">{{CPLocal "Vehicle.SpacesAreaHeader"}}</th><th>{{CPLocal "Vehicle.SpacesInternalHeader"}}</th><th>{{CPLocal "Vehicle.SpacesExternalHeader"}}</th></tr></thead>
             <tbody>
