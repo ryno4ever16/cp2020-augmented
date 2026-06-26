@@ -48,6 +48,13 @@
 .cp-shop-request-status { margin: 4px 0 0; font-weight: bold; }
 .cp-shop-request-status.cp-approved { color: #1f9d2f; }
 .cp-shop-request-status.cp-denied { color: #d1502f; }
+/* Price-request variant: the GM enters a price for an item the base compendium leaves unpriced. */
+.cp-shop-request-price-row { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; }
+.cp-shop-request-price-label { flex: 0 0 auto; font-weight: bold; }
+.cp-shop-request-price-row .cp-shop-request-price { flex: 1 1 auto; width: auto; }
+.cp-shop-request-price-unit { flex: 0 0 auto; opacity: 0.75; }
+/* Catalog price cell for an unpriced item: a muted "GM-priced" chip instead of a free 0eb. */
+.cp-price-gm { font-style: italic; opacity: 0.7; font-size: 0.9em; }
 
 /* ===== Shopping & IP custom UI (mirrors scss/_shop.scss) =====
    Self-contained input colors so custom fields stay readable under ANY UI theme (Carolingian etc.

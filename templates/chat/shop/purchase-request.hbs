@@ -2,11 +2,23 @@
       Whispered to the GMs; the Approve/Deny buttons are bound for GMs in catalog.js registerShopHooks.
       Text from lang/en.json (CYBERPUNK.ShopRequest*); styling from css (.cp-shop-request). --}}
 <div class="cp-shop-request">
+  {{#if needsPrice}}
+  <p class="cp-shop-request-head"><i class="fas fa-tag"></i> {{localize "CYBERPUNK.ShopPriceRequestTitle"}}</p>
+  <p class="cp-shop-request-body">{{CPLocal "ShopPriceRequestBody" requester=requester buyer=buyer qty=qty name=name}}{{#if label}} <span class="cp-shop-request-note">({{label}})</span>{{/if}}</p>
+  {{else}}
   <p class="cp-shop-request-head"><i class="fas fa-cart-shopping"></i> {{localize "CYBERPUNK.ShopRequestTitle"}}</p>
   <p class="cp-shop-request-body">{{CPLocal "ShopRequestBody" requester=requester buyer=buyer qty=qty name=name total=total}}{{#if label}} <span class="cp-shop-request-note">({{label}})</span>{{/if}}</p>
+  {{/if}}
   {{#if pending}}
+  {{#if needsPrice}}
+  <div class="cp-shop-request-price-row">
+    <label class="cp-shop-request-price-label">{{localize "CYBERPUNK.ShopPriceLabel"}}</label>
+    <input type="number" class="cp-shop-request-price" min="0" step="1" placeholder="0"/>
+    <span class="cp-shop-request-price-unit">eb</span>
+  </div>
+  {{/if}}
   <div class="cp-shop-request-actions">
-    <button type="button" class="cp-shop-request-btn cp-approve" data-action="approve"><i class="fas fa-check"></i> {{localize "CYBERPUNK.ShopRequestApprove"}}</button>
+    <button type="button" class="cp-shop-request-btn cp-approve" data-action="approve"><i class="fas fa-check"></i> {{#if needsPrice}}{{localize "CYBERPUNK.ShopPriceSetBuy"}}{{else}}{{localize "CYBERPUNK.ShopRequestApprove"}}{{/if}}</button>
     <button type="button" class="cp-shop-request-btn cp-deny" data-action="deny"><i class="fas fa-xmark"></i> {{localize "CYBERPUNK.ShopRequestDeny"}}</button>
   </div>
   {{else}}

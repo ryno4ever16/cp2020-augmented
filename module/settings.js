@@ -604,6 +604,14 @@ export function registerAugmentedSettings() {
   // Per-source enable map { supplementName: true } for PLAYERS. GM-curated via in-shop controls.
   game.settings.register(SCOPE, "shopEnabledSources", { scope: "world", config: false, type: Object, default: {} });
 
+  // GM price overrides for items the BASE compendium leaves unpriced (blank / "varies by design"
+  // cost). Map { [item._id]: price }, GM-written. Keyed by _id (stable across rename/localization —
+  // see the by-id rule). This is a SELF-DISENGAGING fallback: resolveCatalogPrice (purchase.js) always
+  // prefers a valid compendium cost, so an override goes dead the instant real data appears (the value
+  // is fixed upstream / our data PR lands). Same mechanism the variable-price items (cybermodems/decks)
+  // use. Not shown in the menu — written via the catalog's price-request flow.
+  game.settings.register(SCOPE, "shopPriceOverrides", { scope: "world", config: false, type: Object, default: {} });
+
   // Per-user: show the item source/supplement badge in the shop (default on; each player can hide).
   game.settings.register(SCOPE, "shopShowSource", {
     name: "SETTINGS.ShopShowSource",
@@ -761,6 +769,21 @@ export function shopBuySource() {
 /** Per-source enable map { supplementName: true } for players (GM-curated from the shop). */
 export function shopEnabledSources() {
   try { return game.settings.get(SCOPE, "shopEnabledSources") || {}; } catch { return {}; }
+}
+/** GM price-override map { [item._id]: price } for compendium items the base leaves unpriced. */
+export function getShopPriceOverrides() {
+  try { return game.settings.get(SCOPE, "shopPriceOverrides") || {}; } catch { return {}; }
+}
+/** The GM price override for one item _id, or undefined if none set. */
+export function getShopPriceOverride(itemId) {
+  if (!itemId) return undefined;
+  return getShopPriceOverrides()[itemId];
+}
+/** Persist a GM price override for one item _id (GM only; clamped to a non-negative integer). */
+export async function setShopPriceOverride(itemId, price) {
+  if (!itemId || !game.user?.isGM) return;
+  const map = { ...getShopPriceOverrides(), [itemId]: Math.max(0, Math.round(Number(price) || 0)) };
+  await game.settings.set(SCOPE, "shopPriceOverrides", map);
 }
 /** Per-user toggle: show the item source/supplement badge in the shop (default on). */
 export function shopShowSource() {

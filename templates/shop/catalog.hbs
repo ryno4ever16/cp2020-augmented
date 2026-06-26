@@ -156,7 +156,7 @@
                     <span class="cp-cat-itemname" title="{{#if r.ammo}}{{localize "CYBERPUNK.AmmoBuyTitle"}}{{else}}{{localize "CYBERPUNK.ShopOpenDetails"}}{{/if}}">{{r.name}}{{#if r.featured}} ★{{/if}}</span>
                     {{#if r.ammo}}<span class="cp-ammo-rounds" title="{{localize "CYBERPUNK.AmmoRoundsPerBox"}}">{{r.boxSize}}/box</span>{{/if}}
                     {{#if @root.showSource}}{{#if r.supplement}}<span class="cp-src-badge" title="{{r.supplement}}">{{#if r.supplementShort}}{{r.supplementShort}}{{else}}{{r.supplement}}{{/if}}</span>{{/if}}{{/if}}
-                    <span class="cp-cat-price"><b>{{#if r.eff}}{{r.eff}}{{else}}{{r.cost}}{{/if}}</b>eb</span>
+                    <span class="cp-cat-price">{{#if r.eff}}<b>{{r.eff}}</b>eb{{else}}{{#if r.unpriced}}<span class="cp-price-gm" title="{{localize "CYBERPUNK.ShopPriceUnsetHint"}}">{{localize "CYBERPUNK.ShopPriceUnset"}}</span>{{else}}<b>{{r.cost}}</b>eb{{/if}}{{/if}}</span>
 
                     {{#if @root.isBuild}}
                         {{#if r.inShop}}<span class="cp-inshop-mark" title="{{localize "CYBERPUNK.ShopInShop"}}">✓</span>
