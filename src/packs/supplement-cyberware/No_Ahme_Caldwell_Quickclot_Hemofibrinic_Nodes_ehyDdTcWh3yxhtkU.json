@@ -1,0 +1,54 @@
+{
+  "_id": "ehyDdTcWh3yxhtkU",
+  "name": "No-Ahme Caldwell Quickclot Hemofibrinic Nodes",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 3000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "1d6",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 2300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 4",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ehyDdTcWh3yxhtkU"
+}

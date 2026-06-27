@@ -1,0 +1,60 @@
+{
+  "_id": "XU622V4pLYwLdHke",
+  "name": "U-barrel Micromissile",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Heavy",
+    "accuracy": 1,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "micromissile",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 200,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 2900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!XU622V4pLYwLdHke"
+}

@@ -1,0 +1,57 @@
+{
+  "_id": "KZTtWjoblea9nKMM",
+  "name": "Microtech Remote Attack Drone (RAD)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 3500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 5,
+      "max": 5
+    },
+    "sp": 10,
+    "passengers": 4,
+    "speed": {
+      "value": 0,
+      "max": 40,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": -2,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Firestorm: Shockwave",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!KZTtWjoblea9nKMM"
+}

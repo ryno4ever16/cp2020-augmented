@@ -1,0 +1,62 @@
+{
+  "_id": "ARkN1HM8czByoeUG",
+  "name": "10-Gauge Pistol",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "weaponType": "Pistol",
+    "accuracy": -2,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "10ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "5d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 9,
+    "shots": 9,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 30,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "SOF2",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ARkN1HM8czByoeUG"
+}

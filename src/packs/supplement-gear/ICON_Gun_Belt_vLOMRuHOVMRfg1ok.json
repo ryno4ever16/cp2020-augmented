@@ -1,0 +1,35 @@
+{
+  "_id": "vLOMRuHOVMRfg1ok",
+  "name": "ICON Gun Belt",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 60,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "ICON America",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!vLOMRuHOVMRfg1ok"
+}

@@ -1,0 +1,37 @@
+{
+  "_id": "NkAtCyrAEZEECB3i",
+  "name": "EBM XR-10 Chip-Rack Deck Extension",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 5000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rache Bartmoss Guide to the Net",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Rache Bartmoss Guide to the Net",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!NkAtCyrAEZEECB3i"
+}

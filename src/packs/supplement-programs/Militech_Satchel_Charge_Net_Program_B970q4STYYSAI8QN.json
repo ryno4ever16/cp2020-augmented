@@ -1,0 +1,39 @@
+{
+  "_id": "B970q4STYYSAI8QN",
+  "name": "Militech \"Satchel Charge\" (Net Program)",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 18500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 6600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Firestorm: Shockwave",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!B970q4STYYSAI8QN"
+}

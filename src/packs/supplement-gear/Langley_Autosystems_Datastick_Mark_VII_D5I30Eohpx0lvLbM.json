@@ -1,0 +1,37 @@
+{
+  "_id": "D5I30Eohpx0lvLbM",
+  "name": "Langley Autosystems Datastick Mark VII",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 9500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Brainware Blowout",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 36200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Brainware Blowout",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!D5I30Eohpx0lvLbM"
+}

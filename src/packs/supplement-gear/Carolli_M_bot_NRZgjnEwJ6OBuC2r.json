@@ -1,0 +1,37 @@
+{
+  "_id": "NRZgjnEwJ6OBuC2r",
+  "name": "Carolli M-bot",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1150,
+    "weight": 12,
+    "equipped": false,
+    "source": "Chromebook 3",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 3",
+      "importCategory": "other",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!NRZgjnEwJ6OBuC2r"
+}

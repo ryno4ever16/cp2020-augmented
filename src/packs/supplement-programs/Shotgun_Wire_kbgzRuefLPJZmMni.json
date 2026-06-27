@@ -1,0 +1,39 @@
+{
+  "_id": "kbgzRuefLPJZmMni",
+  "name": "Shotgun Wire",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 40000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Brainware Blowout",
+    "lastOwnerId": "",
+    "power": 5,
+    "mu": 0,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Brainware Blowout",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kbgzRuefLPJZmMni"
+}

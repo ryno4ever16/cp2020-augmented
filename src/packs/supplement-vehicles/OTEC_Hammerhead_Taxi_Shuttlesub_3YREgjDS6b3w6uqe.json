@@ -1,0 +1,57 @@
+{
+  "_id": "3YREgjDS6b3w6uqe",
+  "name": "OTEC \"Hammerhead\" Taxi/Shuttlesub",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 4100000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Stormfront",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 85,
+    "passengers": 4,
+    "speed": {
+      "value": 0,
+      "max": 33,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": -5,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Firestorm: Stormfront",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!3YREgjDS6b3w6uqe"
+}

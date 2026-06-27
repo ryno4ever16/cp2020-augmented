@@ -1,0 +1,37 @@
+{
+  "_id": "pTESXHHrYHIcgRPv",
+  "name": "Arasaka Security Services Knowledge Chip",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 1",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 1",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!pTESXHHrYHIcgRPv"
+}

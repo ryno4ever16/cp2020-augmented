@@ -1,0 +1,63 @@
+{
+  "_id": "QQnCaLEHXTWcKEoi",
+  "name": "15mm 'Long' Rifle",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 3000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "15mm BMG",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D10",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 9,
+    "shots": 9,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 900,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!QQnCaLEHXTWcKEoi"
+}

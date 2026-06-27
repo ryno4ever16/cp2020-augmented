@@ -1,0 +1,57 @@
+{
+  "_id": "JXoC9EPYqDFUATLA",
+  "name": "CINO \"RELaCS\" Cargo Sub",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 30470000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Stormfront",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 4000,
+      "max": 4000
+    },
+    "sp": 10,
+    "passengers": 4,
+    "speed": {
+      "value": 0,
+      "max": 56,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Firestorm: Stormfront",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JXoC9EPYqDFUATLA"
+}

@@ -1,0 +1,56 @@
+{
+  "_id": "FhZ1vXjXeWKgrmGA",
+  "name": "Malorian Arms 3516",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Developed to the personal specifications of rockerboy Johnny Silverhand, this radical handgun uses a solid Orbital titanium frame with custom Dyna-porting and a direct cyberarm interlink that locks the arm in place during firing. The most powerful production handgun available. Requires a cyberarm, interface plugs, and smartgun link. Special order only.",
+    "notes": "",
+    "cost": 4525,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "weaponType": "Pistol",
+    "accuracy": -1,
+    "concealability": "ConcealJacket",
+    "availability": "Rare",
+    "ammoType": "14mm",
+    "ammoItemId": "",
+    "damage": "6d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!FhZ1vXjXeWKgrmGA"
+}

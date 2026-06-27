@@ -1,0 +1,39 @@
+{
+  "_id": "OLD6qBmlRBhBYe4O",
+  "name": "Skiwiss",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1320,
+    "weight": 0,
+    "equipped": false,
+    "source": "Brainware Blowout",
+    "lastOwnerId": "",
+    "power": 4,
+    "mu": 7,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Brainware Blowout",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!OLD6qBmlRBhBYe4O"
+}

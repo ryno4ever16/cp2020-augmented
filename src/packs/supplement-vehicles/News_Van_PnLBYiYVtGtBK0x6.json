@@ -1,0 +1,57 @@
+{
+  "_id": "PnLBYiYVtGtBK0x6",
+  "name": "News Van",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 750000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Live & Direct",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 10,
+    "passengers": 5,
+    "speed": {
+      "value": 0,
+      "max": 560,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Live & Direct",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!PnLBYiYVtGtBK0x6"
+}

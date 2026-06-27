@@ -1,0 +1,63 @@
+{
+  "_id": "6PGdSc9xACyoCXaE",
+  "name": "12.7mm \"Assault Rifle\" (Full Borg)",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 2000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "12.7mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D10",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 50,
+    "shots": 50,
+    "rof": 10,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 400,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune 2",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!6PGdSc9xACyoCXaE"
+}

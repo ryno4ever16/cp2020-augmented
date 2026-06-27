@@ -1,0 +1,56 @@
+{
+  "_id": "bAt3xjUGka4tbdtq",
+  "name": "Skunker",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A small handheld device that delivers up to 4 doses of non-lethal gas of the purchaser's choice. Compact and discreet.",
+    "notes": "",
+    "cost": 70,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Exotic",
+    "accuracy": -1,
+    "concealability": "ConcealPocket",
+    "availability": "Excellent",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "Gas",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 1,
+    "reliability": "VeryReliable",
+    "range": 2,
+    "attackType": "Ranged",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!bAt3xjUGka4tbdtq"
+}

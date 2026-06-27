@@ -1,0 +1,37 @@
+{
+  "_id": "awiWaF9NwOGh6Cmw",
+  "name": "Adrek Robotics Robot Patrol Unit ALPHA (RPU-A)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 75000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 27900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Protect & Serve",
+      "importCategory": "other",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!awiWaF9NwOGh6Cmw"
+}

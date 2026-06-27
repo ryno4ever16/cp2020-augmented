@@ -1,0 +1,57 @@
+{
+  "_id": "MEdsGom5Xok65lh1",
+  "name": "Longrider Generic 500cc Motorcycle",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 3500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 25,
+      "max": 25
+    },
+    "sp": 10,
+    "passengers": 1,
+    "speed": {
+      "value": 0,
+      "max": 120,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!MEdsGom5Xok65lh1"
+}

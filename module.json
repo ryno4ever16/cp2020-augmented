@@ -2,7 +2,7 @@
   "id": "cp2020-augmented",
   "title": "Cyberpunk 2020: Augmented Edition",
   "description": "A companion expansion for the Cyberpunk 2020 system: vehicles & ACPA (Maximum Metal), combat automation, shopping, and Improvement Point tracking — added as opt-in features on top of the base system.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "compatibility": {
     "minimum": 13,
     "verified": 14,
@@ -59,6 +59,125 @@
       "path": "packs/acpa-systems",
       "type": "Item",
       "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-pistols",
+      "label": "Supplements — Pistols",
+      "path": "packs/supplement-pistols",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-submachineguns",
+      "label": "Supplements — SMGs",
+      "path": "packs/supplement-submachineguns",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-rifles",
+      "label": "Supplements — Rifles",
+      "path": "packs/supplement-rifles",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-shotguns",
+      "label": "Supplements — Shotguns",
+      "path": "packs/supplement-shotguns",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-heavy",
+      "label": "Supplements — Heavy Weapons",
+      "path": "packs/supplement-heavy",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-melee",
+      "label": "Supplements — Melee",
+      "path": "packs/supplement-melee",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-exotics",
+      "label": "Supplements — Exotic",
+      "path": "packs/supplement-exotics",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-armor",
+      "label": "Supplements — Armor & Clothing",
+      "path": "packs/supplement-armor",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-gear",
+      "label": "Supplements — Gear, Drugs & Services",
+      "path": "packs/supplement-gear",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-cyberware",
+      "label": "Supplements — Cyberware",
+      "path": "packs/supplement-cyberware",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-vehicles",
+      "label": "Supplements — Vehicles",
+      "path": "packs/supplement-vehicles",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
+      "name": "supplement-programs",
+      "label": "Supplements — Programs",
+      "path": "packs/supplement-programs",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    }
+  ],
+  "packFolders": [
+    {
+      "name": "Items",
+      "sorting": "m",
+      "folders": [
+        {
+          "name": "Equipment",
+          "sorting": "m",
+          "packs": ["supplement-armor"],
+          "folders": [
+            {
+              "name": "Weapons",
+              "sorting": "m",
+              "packs": ["supplement-pistols", "supplement-submachineguns", "supplement-rifles", "supplement-shotguns", "supplement-heavy", "supplement-melee", "supplement-exotics"]
+            },
+            {
+              "name": "Cyberware",
+              "sorting": "m",
+              "packs": ["supplement-cyberware"]
+            }
+          ]
+        },
+        {
+          "name": "Gear",
+          "sorting": "m",
+          "packs": ["supplement-gear", "supplement-vehicles"]
+        },
+        {
+          "name": "Netrunning",
+          "sorting": "m",
+          "packs": ["supplement-programs"]
+        }
+      ]
     }
   ],
   "socket": true,

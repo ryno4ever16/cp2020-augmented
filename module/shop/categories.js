@@ -75,6 +75,34 @@ export function categoryOfPack(packName) {
   return { category: "Gear", sub: "Other" };
 }
 
+/** True when the pack is explicitly mapped (legacy packs categorize by pack identity, one cat/sub each). */
+export function isMappedPack(packName) {
+  return Object.prototype.hasOwnProperty.call(PACK_MAP, packName);
+}
+
+/** Weapon system.weaponType → Weapons sub-filter (for type-grouped packs). */
+const WEAPON_TYPE_SUB = {
+  Pistol: "Pistols", SMG: "SMGs", Rifle: "Rifles", Shotgun: "Shotguns",
+  Heavy: "Heavy", Melee: "Melee", Exotic: "Exotic"
+};
+
+/**
+ * Resolve { category, sub } from an item's OWN data, for packs not in PACK_MAP — e.g. the imported
+ * `supplement-*` packs, which are grouped by item TYPE rather than by the fine-grained legacy pack
+ * identity. Weapons sub-categorize by system.weaponType; everything else maps from the item type.
+ * This is strictly finer than the old blanket Gear/Other fallback for unmapped packs.
+ */
+export function categoryOfItem(type, system = {}) {
+  switch (type) {
+    case "weapon":    return { category: "Weapons", sub: WEAPON_TYPE_SUB[system?.weaponType] ?? "Other" };
+    case "armor":     return { category: "Armor", sub: "" };
+    case "vehicle":   return { category: "Vehicles", sub: "" };
+    case "program":   return { category: "Programs", sub: "" };
+    case "cyberware": return { category: "Cyberware", sub: "Other" };
+    default:          return { category: "Gear", sub: "Other" };
+  }
+}
+
 /** Item compendia eligible for the catalog (excludes ammo/skills/sell/MM-vehicle packs). */
 export function catalogPacks() {
   return game.packs.filter(p => p.metadata?.type === "Item" && !EXCLUDED_PACKS.has(p.metadata?.name));

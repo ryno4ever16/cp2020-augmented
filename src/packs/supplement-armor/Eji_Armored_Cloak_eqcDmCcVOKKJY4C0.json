@@ -1,0 +1,62 @@
+{
+  "_id": "eqcDmCcVOKKJY4C0",
+  "name": "Eji Armored Cloak",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A fashionable armored cloak from Eji of Japan providing torso, arm, and leg coverage at SP 14.",
+    "notes": "",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Eji of Japan",
+      "garmentType": "cloak",
+      "importReview": {
+        "level": "user-signed",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!eqcDmCcVOKKJY4C0"
+}

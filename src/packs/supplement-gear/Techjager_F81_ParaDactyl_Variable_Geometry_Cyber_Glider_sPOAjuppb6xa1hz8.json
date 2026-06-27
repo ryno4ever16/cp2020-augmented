@@ -1,0 +1,37 @@
+{
+  "_id": "sPOAjuppb6xa1hz8",
+  "name": "Techjager F81 \"ParaDactyl\" Variable-Geometry Cyber-Glider",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 2300,
+    "weight": 14.3,
+    "equipped": false,
+    "source": "Firestorm: Stormfront",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 33700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Firestorm: Stormfront",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!sPOAjuppb6xa1hz8"
+}

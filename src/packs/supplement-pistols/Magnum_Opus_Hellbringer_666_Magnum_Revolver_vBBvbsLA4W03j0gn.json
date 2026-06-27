@@ -1,0 +1,63 @@
+{
+  "_id": "vBBvbsLA4W03j0gn",
+  "name": "Magnum Opus \"Hellbringer\" .666 Magnum Revolver",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 4000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": ".666 Magnum",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "7D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 3,
+    "shots": 3,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 80,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune 2",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!vBBvbsLA4W03j0gn"
+}

@@ -1,0 +1,62 @@
+{
+  "_id": "x9HEEINbqaFagzWq",
+  "name": "H&K HK77SD3",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 880,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Stormfront",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "7.7mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "3d6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 154,
+    "shots": 154,
+    "rof": 3,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 250,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "SF",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!x9HEEINbqaFagzWq"
+}

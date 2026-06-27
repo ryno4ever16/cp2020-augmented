@@ -1,0 +1,62 @@
+{
+  "_id": "w8UDX06qeH45WriG",
+  "name": "Armored Cotton T-Shirt",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 10,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "10",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 3300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Gibson Battlegear",
+      "garmentType": "t-shirt",
+      "importReview": {
+        "level": "user-signed",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!w8UDX06qeH45WriG"
+}

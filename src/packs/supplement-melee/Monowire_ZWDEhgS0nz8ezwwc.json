@@ -1,0 +1,56 @@
+{
+  "_id": "ZWDEhgS0nz8ezwwc",
+  "name": "Monowire",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A spool of monomolecular wire sold by the meter, usable as a garrote or cutting tool. Will cut through almost any organic material. Monofilament construction reduces armor SP to 1/3 (partially automated — isEdged halves soft armor SP; full 1/3 effect requires GM override).",
+    "notes": "",
+    "cost": 60,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Melee",
+    "accuracy": null,
+    "concealability": "ConcealPocket",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "3d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": true,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 0,
+    "reliability": "VeryReliable",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ZWDEhgS0nz8ezwwc"
+}

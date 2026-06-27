@@ -1,0 +1,49 @@
+{
+  "_id": "BEVIZElekMtc0tR4",
+  "name": "Soviet Military Industries Armored Greatcoat",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 3",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lArm": false,
+      "rArm": false,
+      "lLeg": false,
+      "rLeg": false
+    },
+    "encumbrance": 1,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 3",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!BEVIZElekMtc0tR4"
+}

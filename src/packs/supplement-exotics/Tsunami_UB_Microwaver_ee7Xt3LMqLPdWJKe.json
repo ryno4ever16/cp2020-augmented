@@ -1,0 +1,56 @@
+{
+  "_id": "ee7Xt3LMqLPdWJKe",
+  "name": "Tsunami UB Microwaver",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "The microwaver variant of Tsunami's underbarrel capacitor weapon system. Delivers microwave energy in a compact under-barrel package.",
+    "notes": "",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Exotic",
+    "accuracy": null,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "1d6 + special",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 2,
+    "reliability": "Standard",
+    "range": 20,
+    "attackType": "Ranged",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ee7Xt3LMqLPdWJKe"
+}

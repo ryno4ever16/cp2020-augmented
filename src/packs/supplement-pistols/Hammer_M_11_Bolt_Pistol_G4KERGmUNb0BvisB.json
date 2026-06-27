@@ -1,0 +1,63 @@
+{
+  "_id": "G4KERGmUNb0BvisB",
+  "name": "Hammer M-11 Bolt Pistol",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 320,
+    "weight": 0,
+    "equipped": false,
+    "source": "Deep Space",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1D6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 10,
+    "shots": 10,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 30,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Deep Space",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!G4KERGmUNb0BvisB"
+}

@@ -1,0 +1,57 @@
+{
+  "_id": "G6SzXtDwFVDEiIRH",
+  "name": "Tetracorp Fei Lien 100 Aerodyne",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 290000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 50,
+      "max": 50
+    },
+    "sp": 25,
+    "passengers": 3,
+    "speed": {
+      "value": 0,
+      "max": 450,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 1,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 3100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 3",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!G6SzXtDwFVDEiIRH"
+}

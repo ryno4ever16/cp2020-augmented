@@ -1,0 +1,64 @@
+{
+  "_id": "UCgBdGmxke7P0SlB",
+  "name": "Pit Viper (Raven Microcyb Viper Suit)",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 26000,
+    "weight": 350,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "30",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "30",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "30",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "30",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "30",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "30",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 6200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune 2",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!UCgBdGmxke7P0SlB"
+}

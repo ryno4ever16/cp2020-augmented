@@ -1,0 +1,56 @@
+{
+  "_id": "BUEBlz3he6P0zwAF",
+  "name": "Arasaka Nauseator",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A large-scale crowd control device that generates focused ultrasound. All targets within range must make a Very Difficult BOD check or suffer disorientation and nausea. On failed saves the effects range from debilitation (-4 to all actions) to complete incapacitation. Special damage: BOD vs. 25.",
+    "notes": "",
+    "cost": 1900,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "1d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 10,
+    "shots": 10,
+    "rof": 1,
+    "reliability": "Standard",
+    "range": 15,
+    "attackType": "Ranged",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!BUEBlz3he6P0zwAF"
+}

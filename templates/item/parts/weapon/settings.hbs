@@ -1,0 +1,61 @@
+{{!-- Stuff that affects a single given attack's effects at the other end --}}
+<div class="field-list">
+    {{> (template "fields/string") label="Damage" edit="system.damage"}}
+    {{> (template "fields/number") label="Accuracy" edit="system.accuracy"}}
+    {{> (template "fields/number") label="Range" edit="system.range"}}
+
+    {{> (template "fields/select") label="Reliability" edit="system.reliability" choices=reliabilities}}
+</div>
+
+{{!-- Ammo-related fields: only for ranged weapons --}}
+{{#unless (equals system.weaponType 'Melee')}}
+<div class="field-list">
+    {{> (template "fields/number") label="ShotsLeft" edit="system.shotsLeft"}}
+    {{> (template "fields/number") label="Shots" edit="system.shots"}}
+    {{> (template "fields/number") label="RoF" edit="system.rof"}}
+    {{> (template "fields/select") label="Ammo" edit="system.ammoItemId" choices=ammoChoices allowBlank=true}}
+    {{!-- Fire-mode capability (our net-new). Full auto also grants Suppressive; burst is separate (e.g. M16A4). --}}
+    {{> (template "fields/boolean") label="FullAutoCapable" edit="system.fullAutoCapable"}}
+    {{> (template "fields/boolean") label="BurstCapable" edit="system.burstCapable"}}
+</div>
+{{/unless}}
+
+{{!-- What kind of thing is this weapon, how it's used --}}
+<div class="field-list">
+    {{!-- When changing weapon type, the weapon's attack type will not update correspondingly until the sheet is closed --}}
+    {{> (template "fields/select") label="WeaponType" edit="system.weaponType" choices=weaponTypes}}
+    {{> (template "fields/select") label="AttackType" edit="system.attackType" choices=attackTypes allowBlank=true}}
+    {{!-- Custom, as all the translate keys start with Skill, but they don't in the character --}}
+    {{!-- This might not need to be custom anymore, as regular selects can deal with choices that supply their own translateKeys --}}
+    <div class="field">
+        <label for="system.attackSkill">{{CPLocal "AttackSkill"}}</label>
+        <div class="flex-pad"></div>
+        {{#if (equals system.weaponType 'Exotic')}}
+            {{!-- This will be populated by actor skills if it's held by an actor, but an input is at least editable --}}
+            <datalist id="possibleSkills">
+                {{#each attackSkills as |skill|}}
+                <option value="{{skill.value}}">{{skill.label}}</option>
+                {{/each}}
+            </datalist>
+            <input type="text" list="possibleSkills" placeholder="Choose Skill" name="system.attackSkill" value="{{system.attackSkill}}"/>
+        {{else}}
+            <select name="system.attackSkill">
+                {{#each attackSkills as |skill|}}
+                <option value="{{skill.value}}" {{#if (equals ../system.attackSkill skill.value)}}selected{{/if}}{{#if (equals ../system.attackSkill skill.label)}}selected{{/if}}>{{skill.label}}</option>
+                {{/each}}
+            </select>
+        {{/if}}
+    </div>
+    {{> (template "fields/select") label="Concealability" edit="system.concealability" choices=concealabilities}}
+</div>
+
+{{!-- Market stuff --}}
+<div class="field-list">
+    {{> (template "fields/select") label="Availability" edit="system.availability" choices=availabilities}}
+
+    {{#if isMelee}}
+        {{> (template "fields/boolean") label="AP" edit="system.ap"}}
+    {{else}}
+        {{> (template "fields/string") label="AmmoType" edit="system.ammoType"}}
+    {{/if}}
+</div>

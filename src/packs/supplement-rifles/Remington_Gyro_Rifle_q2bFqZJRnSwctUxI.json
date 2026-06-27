@@ -1,0 +1,62 @@
+{
+  "_id": "q2bFqZJRnSwctUxI",
+  "name": "Remington Gyro-Rifle",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve",
+    "weaponType": "Rifle",
+    "accuracy": 2,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "18mm G",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "7d6API",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 600,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "P&S",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!q2bFqZJRnSwctUxI"
+}

@@ -1,0 +1,39 @@
+{
+  "_id": "VnSmaazjLBEQb5XQ",
+  "name": "Astro Database",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Deep Space",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 6100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Deep Space",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!VnSmaazjLBEQb5XQ"
+}

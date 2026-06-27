@@ -1,0 +1,39 @@
+{
+  "_id": "cAEdks3X8TE40i0L",
+  "name": "R&D Protocol Files",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Brainware Blowout",
+    "lastOwnerId": "",
+    "power": 4,
+    "mu": 3,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 15300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Brainware Blowout",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!cAEdks3X8TE40i0L"
+}

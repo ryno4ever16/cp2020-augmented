@@ -1,0 +1,63 @@
+{
+  "_id": "2301cY4kZD12CLlg",
+  "name": "Salamander Hat",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 65,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 4900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Salamander Line (Savagery)",
+      "garmentType": "hat",
+      "fireSP": 20,
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!2301cY4kZD12CLlg"
+}

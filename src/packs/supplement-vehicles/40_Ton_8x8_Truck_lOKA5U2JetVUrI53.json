@@ -1,0 +1,57 @@
+{
+  "_id": "lOKA5U2JetVUrI53",
+  "name": "40-Ton 8x8 Truck",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 185000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 300,
+      "max": 300
+    },
+    "sp": 20,
+    "passengers": 4,
+    "speed": {
+      "value": 0,
+      "max": 60,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!lOKA5U2JetVUrI53"
+}

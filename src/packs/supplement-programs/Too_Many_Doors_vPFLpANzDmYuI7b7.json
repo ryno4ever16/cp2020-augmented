@@ -1,0 +1,39 @@
+{
+  "_id": "vPFLpANzDmYuI7b7",
+  "name": "Too Many Doors",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Brainware Blowout",
+    "lastOwnerId": "",
+    "power": 3,
+    "mu": 3,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Brainware Blowout",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!vPFLpANzDmYuI7b7"
+}

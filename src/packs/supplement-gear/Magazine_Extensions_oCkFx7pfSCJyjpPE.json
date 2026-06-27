@@ -1,0 +1,37 @@
+{
+  "_id": "oCkFx7pfSCJyjpPE",
+  "name": "Magazine Extensions",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 40,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 29600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune",
+      "importCategory": "accessory",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!oCkFx7pfSCJyjpPE"
+}

@@ -1,0 +1,57 @@
+{
+  "_id": "6Zjowcs5nwOhMwEh",
+  "name": "Kundalini Roadworks GSR1200 Tetsuo",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 25000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 34,
+      "max": 34
+    },
+    "sp": 10,
+    "passengers": 4,
+    "speed": {
+      "value": 0,
+      "max": 204,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 4,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 4800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 4",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!6Zjowcs5nwOhMwEh"
+}

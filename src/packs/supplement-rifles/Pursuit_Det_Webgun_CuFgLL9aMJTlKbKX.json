@@ -1,0 +1,56 @@
+{
+  "_id": "CuFgLL9aMJTlKbKX",
+  "name": "Pursuit Det-Webgun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "The Pursuit Webgun loaded with a Det-Web, replacing the nylon strands with Detcord strips. When detonated the explosive charges deal a 40-point AP hit to every body location, capable of destroying all but the most heavily armored targets.",
+    "notes": "",
+    "cost": 450,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Rifle",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Common",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "Entangle",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "reliability": "Standard",
+    "range": 25,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!CuFgLL9aMJTlKbKX"
+}

@@ -1,0 +1,62 @@
+{
+  "_id": "ieCsycuhUqJ64cVM",
+  "name": "Sternmeyer M-5A SAW",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 1",
+    "weaponType": "Heavy",
+    "accuracy": -1,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "7.62",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6d6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 200,
+    "shots": 200,
+    "rof": 20,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 500,
+    "attackType": "Auto",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "CB1",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ieCsycuhUqJ64cVM"
+}

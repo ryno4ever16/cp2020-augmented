@@ -1,0 +1,46 @@
+{
+  "_id": "oiixpPLB2A6T1U8Z",
+  "name": "Bearskin Hat",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 3",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": false,
+      "lArm": false,
+      "rArm": false,
+      "lLeg": false,
+      "rLeg": false
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 3",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!oiixpPLB2A6T1U8Z"
+}

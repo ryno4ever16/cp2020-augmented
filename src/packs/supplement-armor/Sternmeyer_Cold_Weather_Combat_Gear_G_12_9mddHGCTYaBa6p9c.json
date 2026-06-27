@@ -1,0 +1,47 @@
+{
+  "_id": "9mddHGCTYaBa6p9c",
+  "name": "Sternmeyer Cold Weather Combat Gear (G-12)",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 575,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 3",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": false,
+      "lArm": false,
+      "rArm": false,
+      "lLeg": false,
+      "rLeg": false
+    },
+    "encumbrance": 1,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 3",
+      "importCategory": "clothing",
+      "garmentType": "clothing",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!9mddHGCTYaBa6p9c"
+}

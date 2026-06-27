@@ -1,0 +1,62 @@
+{
+  "_id": "evqtSi52ZzHUrEij",
+  "name": "Tanaka Armor Topcoat",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A stylish armored overcoat from Tanaka providing SP 16 protection to the torso, arms, and legs.",
+    "notes": "",
+    "cost": 2000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "16",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "16",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "16",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "16",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "16",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Tanaka/Takanaka Exec",
+      "garmentType": "topcoat",
+      "importReview": {
+        "level": "user-signed",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!evqtSi52ZzHUrEij"
+}

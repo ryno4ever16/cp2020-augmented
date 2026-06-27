@@ -6,3 +6,7 @@ Thumbs.db
 # Built compendium packs (LevelDB) — compiled from src/packs via `npm run pack`.
 # Root-anchored so it ignores ONLY the top-level built packs/, never src/packs/.
 /packs/
+
+# Local working / planning docs — not part of the published module.
+/RELEASE-STAGING.md
+/VENDORING-REPORT.md

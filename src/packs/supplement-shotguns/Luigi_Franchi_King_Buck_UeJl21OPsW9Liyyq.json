@@ -1,0 +1,56 @@
+{
+  "_id": "UeJl21OPsW9Liyyq",
+  "name": "Luigi Franchi King Buck",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "An Italian-made four-barreled pepperbox-style 10-gauge shotgun, built for hunting big game. The four chambers can be fired individually or all at once. A massive, unusual collector's item weighing 7 kilos.",
+    "notes": "",
+    "cost": 800,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Shotgun",
+    "accuracy": -1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "10ga",
+    "ammoItemId": "",
+    "damage": "6d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 2,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "Autoshotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!UeJl21OPsW9Liyyq"
+}

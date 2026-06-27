@@ -1,0 +1,37 @@
+{
+  "_id": "M2UJZnjnH1FGn6Jb",
+  "name": "Lazarus Group Mercenary Soldier/Agent (monthly contract)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 2500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 2",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 24000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 2",
+      "importCategory": "service",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!M2UJZnjnH1FGn6Jb"
+}

@@ -18,4 +18,12 @@ export function registerAugmentedHandlebarsHelpers() {
   Handlebars.registerHelper("CPLocalParam", function (str, options) {
     return game.i18n.format("CYBERPUNK." + str, options);
   });
+
+  // Resolve a per-type item-sheet partial to the MODULE's templates dir. The base system's
+  // varTemplate helper prepends "systems/cyberpunk2020/templates/" (→ HIS parts); our vendored item
+  // sheet needs OUR parts, so this mirror prepends the module dir instead.
+  // Usage: {{> (augVarTemplate "item/parts/[VAR]/summary.hbs" item.type)}}
+  Handlebars.registerHelper("augVarTemplate", function (path, replaceWith) {
+    return "modules/cp2020-augmented/templates/" + String(path).replace("[VAR]", replaceWith);
+  });
 }

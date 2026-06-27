@@ -30,7 +30,6 @@ import { openAcpaMeleeDialog, registerAcpaCombatHooks, repairAcpa } from "./vehi
 // IP (Improvement Points) tracker — GM engine + tracker window; IP stored in module flags.
 import { registerIpHooks } from "./ip/ip.js";
 import { openIpTracker } from "./ip/tracker.js";
-import { registerIpSheet } from "./ip/ip-sheet.js";
 
 // Settings presets — the GM "Choose Preset" menu button (one-click playstyle tiers).
 import { PresetPicker } from "./dialog/preset-picker.js";
@@ -41,14 +40,12 @@ import { hostProvides } from "./system-api.js";
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
 import { registerShopHooks, openShopWindow } from "./shop/catalog.js";
-// In-sheet cyberware "Install (Surgery)" button (item sheet; vanilla-only, defers to the fork's own).
-import { registerCyberwareSheet } from "./cyberware/cyberware-sheet.js";
-// In-sheet Recurring Services panel (gear-tab body; NOT a nav tab).
-import { registerServicesSheet } from "./shop/services-sheet.js";
-// In-sheet martial-arts panel (combat tab; vanilla-only, defers to the fork's own .martial-panel).
-import { registerMartialSheet } from "./martial/martial-sheet.js";
-// In-skill martial-art editor on the skill item sheet (vanilla-only; writes flags.cp2020-augmented.*).
-import { registerMartialSkillEditor } from "./martial/martial-skill-editor.js";
+// Full character/NPC + item sheets (Option B): on a host that doesn't ship the augmented sheets (his
+// vanilla 1.1.1), the module REGISTERS our own V2 sheets as default — replacing ALL the old in-sheet
+// injectors (martial panel / services / IP / cyberware-install button / martial-skill editor), which
+// either rendered poorly on his foreign DOM or wrote fields his DataModel strips.
+import { CyberpunkActorSheet } from "./actor/actor-sheet.js";
+import { CyberpunkItemSheet } from "./item/item-sheet.js";
 
 // Module flag / settings scope (per-file convention used across the module).
 const SCOPE = "cp2020-augmented";
@@ -63,6 +60,42 @@ const ACPA_SYSTEM    = `${SCOPE}.acpaSystem`;
 const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs",
+  // Augmented character/NPC actor sheet (Option B) + its parts. The {{> "modules/…/parts/X.hbs"}}
+  // includes resolve as registered partials only once preloaded here.
+  "modules/cp2020-augmented/templates/actor/actor-sheet.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/statsrow.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/woundtracker.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/skills.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/skill.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/combat.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/armor-layers-panel.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/gear.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/services.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/cyberware.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/life.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/netrunning.hbs",
+  // Tear-off tab window (CyberpunkActorTabSheet PART) — renders one tab body in its own window.
+  "modules/cp2020-augmented/templates/actor/actor-tab-popout.hbs",
+  // Augmented item sheet (Option B) + its standard-type parts + the Buy-Ammo dialog body.
+  "modules/cp2020-augmented/templates/item/item-sheet.hbs",
+  "modules/cp2020-augmented/templates/item/parts/weapon/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/weapon/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/armor/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/armor/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/skill/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/skill/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/cyberware/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/cyberware/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/ammo/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/ammo/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/program/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/program/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/misc/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/misc/settings.hbs",
+  "modules/cp2020-augmented/templates/item/parts/vehicle/summary.hbs",
+  "modules/cp2020-augmented/templates/item/parts/vehicle/settings.hbs",
+  "modules/cp2020-augmented/templates/dialog/buy-ammo.hbs",
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
@@ -124,6 +157,28 @@ Hooks.once("init", function () {
   // the base system's typeless makeDefault item sheet (which can't render a namespaced sub-type).
   const _Items = foundry?.documents?.collections?.Items ?? Items;
   _Items.registerSheet(SCOPE, CyberpunkAugmentedItemSheet, { types: [VEHICLE_WEAPON, ACPA_SYSTEM], makeDefault: true });
+
+  // Augmented character/NPC actor sheet (Option B). Register our full V2 sheet and make it default —
+  // UNLESS the host already ships the augmented sheet (our own fork declares features.actorSheet, so
+  // the fork's sheet stays default and the module does not double-register).
+  if (!hostProvides("actorSheet")) {
+    _Actors.registerSheet(SCOPE, CyberpunkActorSheet, {
+      types: ["character", "npc"],
+      makeDefault: true,
+      label: "CYBERPUNK.SheetAugmentedActor",
+    });
+  }
+
+  // Augmented item sheet (Option B). Register our full V2 item sheet for the BASE item types and make
+  // it default — UNLESS the host already ships it (fork declares features.itemSheet). The module's own
+  // CyberpunkAugmentedItemSheet keeps the vehicleWeapon/acpaSystem sub-types (registered just above).
+  if (!hostProvides("itemSheet")) {
+    _Items.registerSheet(SCOPE, CyberpunkItemSheet, {
+      types: ["weapon", "armor", "skill", "cyberware", "ammo", "program", "vehicle", "misc"],
+      makeDefault: true,
+      label: "CYBERPUNK.SheetAugmentedItem",
+    });
+  }
 
   // Preload the wrapper sub-templates the sheet includes as Handlebars partials.
   const loadTemplates = foundry?.applications?.handlebars?.loadTemplates ?? globalThis.loadTemplates;
@@ -264,27 +319,26 @@ Hooks.once("ready", function () {
   const doIp = !hostProvides("ip");
   if (doIp) {
     registerIpHooks();
-    // Player-facing in-sheet IP UI (per-skill level-up + lock header); self-gates on ipEnabled() per render.
-    registerIpSheet();
+    // (Option B) The in-sheet IP UI now ships with our registered actor sheet — the old
+    // renderCyberpunkActorSheet injector is removed (it rendered poorly on the base system's DOM).
   }
 
   // Shopping layer — independent of the combat layer; each self-gates on shoppingEnabled.
   const doShopping = !hostProvides("shopping");
   if (doShopping) {
-    // In-sheet cyberware Install button on the item sheet; self-gates on shoppingEnabled() + vanilla-only.
-    registerCyberwareSheet();
-    // In-sheet Recurring Services panel in the gear tab; self-gates on shoppingEnabled() per render.
-    registerServicesSheet();
+    // (Option B) The cyberware "Install (Surgery)" button now ships with our registered ITEM sheet and
+    // the Recurring Services tab with our registered actor sheet — both in-sheet injectors are removed
+    // (services dumped into his Gear tab; install is native on our item sheet now).
     // Sidebar cart button + chat links + live buyer sync + the GM stock-decrement relay.
     registerShopHooks();
   }
 
-  // Martial-arts layer — in-sheet panel + skill editor; self-gate on combatAutomationEnabled() + vanilla-only.
+  // Martial-arts layer (Option B): martial features now ship entirely with our registered sheets — the
+  // combat-tab panel via the actor sheet, and the skill martial-art editor via the item sheet (skill
+  // type, writing flags.cp2020-augmented.* because his skill DataModel lacks isMartialArt/martialBonuses).
+  // Both renderCyberpunk*Sheet injectors are removed; nothing to register at ready (the gate var is kept
+  // for the readiness log).
   const doMartial = !hostProvides("martial");
-  if (doMartial) {
-    registerMartialSheet();
-    registerMartialSkillEditor();
-  }
 
   console.log(`${SCOPE} | Ready (on ${SYSTEM_ID} v${game.system.version}); layers: ` +
     `combat=${doCombat} vehicles=${doVehicles} ip=${doIp} shopping=${doShopping} martial=${doMartial}`);

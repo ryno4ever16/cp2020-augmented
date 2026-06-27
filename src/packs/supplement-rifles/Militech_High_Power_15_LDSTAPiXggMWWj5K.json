@@ -1,0 +1,62 @@
+{
+  "_id": "LDSTAPiXggMWWj5K",
+  "name": "Militech High Power 15",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune",
+    "weaponType": "Rifle",
+    "accuracy": 2,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "9mm L",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2d6+4",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 180,
+    "shots": 180,
+    "rof": 20,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 200,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "SOF",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!LDSTAPiXggMWWj5K"
+}

@@ -1,0 +1,63 @@
+{
+  "_id": "hCf9SvOqx6S6dOAf",
+  "name": "IMI \"Gamdaii\" Dual-Purpose SMG",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 950,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": 2,
+    "concealability": "ConcealNoHide",
+    "availability": "Excellent",
+    "ammoType": "10mm Caseless",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 35,
+    "shots": 35,
+    "rof": 25,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 0,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune 2",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!hCf9SvOqx6S6dOAf"
+}

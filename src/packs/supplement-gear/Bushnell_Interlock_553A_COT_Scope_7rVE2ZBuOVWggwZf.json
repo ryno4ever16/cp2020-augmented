@@ -1,0 +1,37 @@
+{
+  "_id": "7rVE2ZBuOVWggwZf",
+  "name": "Bushnell Interlock 553A (COT Scope)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 7000,
+    "weight": null,
+    "equipped": false,
+    "source": "Solo of Fortune",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 30400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune",
+      "importCategory": "accessory",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!7rVE2ZBuOVWggwZf"
+}

@@ -1,0 +1,63 @@
+{
+  "_id": "pkJ3dLnMMLWBq91j",
+  "name": "Arasaka WMA Submachinegun (Silenced)",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 700,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 1",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": -1,
+    "concealability": "ConcealLongcoat",
+    "availability": "Excellent",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2d6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 40,
+    "shots": 40,
+    "rof": 20,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 200,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 1",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!pkJ3dLnMMLWBq91j"
+}

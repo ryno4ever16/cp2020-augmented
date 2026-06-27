@@ -90,7 +90,7 @@
 .cp-catalog button { width: auto; }
 .cp-catalog .cp-catalog-jump { flex: 0 0 auto; }
 .cp-catalog .cp-catalog-jump .cp-jump { width: auto; flex: 0 0 auto; min-width: 0; }
-.cp-catalog .cp-cat-chip { width: auto; flex: 0 0 auto; }
+.cp-catalog .cp-cat-chip { width: auto; flex: 0 0 auto; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 .cp-catalog-toolbar { gap: 8px; align-items: center; padding: 4px 0; }
 /* Side panels SHRINK (not fixed) so a narrow window keeps the item list usable instead of collapsing it. */
 .cp-catalog-filters { flex: 0 1 150px; min-width: 92px; overflow-y: auto; border-right: 1px solid rgba(255,255,255,0.12); padding-right: 6px; }
@@ -103,7 +103,9 @@
 .cp-cat-chip { display: inline-block; margin: 1px; padding: 1px 6px; font-size: 0.8em; cursor: pointer; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 3px; color: inherit; }
 .cp-cat-chip.active { background: #8a6d3b; color: #fff; border-color: #b8916a; }
 .cp-cat-top { font-weight: bold; }
-.cp-cat-subs { margin: 0 0 3px 8px; }
+/* Wrap as a flex row so a sub-chip that grows to two lines (long labels under a restyler font) pushes the
+   row taller instead of overlapping its neighbours; flex-start keeps single-line chips from stretching. */
+.cp-cat-subs { margin: 0 0 3px 8px; display: flex; flex-flow: row wrap; align-items: flex-start; gap: 1px; }
 .cp-cat-sub { font-size: 0.72em; opacity: 0.9; }
 .cp-catalog-jump { display: flex; flex-wrap: wrap; gap: 1px; padding: 2px 0; }
 .cp-catalog-jump .cp-jump { padding: 0 4px; font-size: 0.75em; cursor: pointer; background: none; border: none; color: inherit; }
@@ -460,6 +462,8 @@ body.cp-carolingian .cyberpunk .field > input,
 body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc; border: unset; background-color: unset; }
 body.cp-carolingian .cyberpunk .field .stat { border: 1px solid var(--restyler-border); }
 body.cp-carolingian .cyberpunk .field { border: unset; background-color: unset; }
+/* …but keep an outline on the skill-search box so it's visible against the dark terminal surface. */
+body.cp-carolingian .cyberpunk .field.skill-search-field { border: 1px solid var(--restyler-border); }
 body.cp-carolingian .cyberpunk label,
 body.cp-carolingian .cyberpunk .program-type { align-self: center; background-color: unset; }
 body.cp-carolingian .cyberpunk .field > *,
@@ -486,15 +490,11 @@ body.cp-carolingian .cyberpunk .armor-display {
   max-width: unset;
   grid-template-areas: "lArm Head rArm" "lLeg Torso rLeg";
 }
-body.cp-carolingian .cyberpunk .armor-display .armor-segment {
-  grid-template-rows: 1fr 1fr;
-  grid-template-columns: 1fr 1fr auto;
-  grid-template-areas: "name name loc" "ablate sp repair";
-}
-body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-sp,
-body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-sdp-row,
-body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-name { grid-column: unset !important; }
-body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-name { text-align: unset; padding: 3px; }
+/* Inner segment layout: defer to the base 3-row stack ("loc" / "ablate sp repair" / "name") so the
+   body-part name and location number sit on their own rows. The former 2-row "name name loc" override
+   (with grid-column:unset on the name) stripped the name's column span, so longer names like "L. ARM"
+   overflowed into the location number. Only re-center the name to match the terminal look. */
+body.cp-carolingian .cyberpunk .armor-display .armor-segment .segment-name { text-align: center; padding: 3px; }
 
 /* Wound tracker */
 body.cp-carolingian .cyberpunk .wound-tracker { display: flex; flex-wrap: wrap; flex-grow: 2; margin-right: -3px; }
@@ -655,3 +655,1248 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-preset-confirm .cp-preset-confirm-features li { margin-bottom: 1px; }
 .cp-preset-confirm .cp-preset-confirm-count { margin: 0 0 6px; font-size: 0.88em; opacity: 0.8; }
 .cp-preset-confirm .cp-preset-confirm-note { margin: 0; font-size: 0.8em; opacity: 0.65; font-style: italic; }
+
+/* ===================================================================================
+ * Augmented actor-sheet styling — vendored DELTA over the base cyberpunk2020 system CSS.
+ * Auto-extracted (rule-level): every fork css/cyberpunk2020.css rule whose selector+body
+ * is NOT identical to a base-system rule (our net-new rules + our overrides). Loaded after
+ * the base CSS, so overrides win. Re-generate with scratchpad/css_delta.py on fork-CSS change.
+ * =================================================================================== */
+
+.cyberpunk section.window-content .editor-content {
+  font-weight: normal;
+  border: 2px solid var(--cp-line, black);
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.cyberpunk section.window-content nav.tabs {
+  border-bottom: 2px solid var(--cp-line, black);
+  box-sizing: content-box;
+  flex: 0;
+  padding-top: 0px;
+  padding-bottom: 0px;
+  /* Breathing room between the tab bar's bottom border and the first content boxes, which
+     otherwise sit flush against the line. ~matches the project's block-separation spacing. */
+  margin-bottom: 6px;
+}
+
+.cyberpunk section.window-content .meter-gauge {
+  border: 2px solid var(--cp-line, black);
+}
+
+/* Actor-sheet flex height chain — mirrors upstream's `.cyberpunk-actor-sheet-content` wrapper
+ * (our single-root part div now carries that class). Establishes the column height chain
+ * window-content → form → wrapper → sheet-body → active life tab, so the Life-tab ProseMirror
+ * notes editor fills its tab instead of collapsing. Fixes the half-rendered notes canvas
+ * regression introduced with the notes view/edit toggle. Dual-selector = verbatim upstream. */
+.application.cyberpunk.sheet.actor .window-content,
+.cyberpunk.sheet.actor .window-content { min-height: 0; }
+
+.application.cyberpunk.sheet.actor form,
+.cyberpunk.sheet.actor form { min-height: 0; }
+
+.application.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.application.cyberpunk.sheet.actor .sheet-body,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .sheet-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.application.cyberpunk.sheet.actor .sheet-body > .tab.life.active,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .sheet-body > .tab.life.active {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Strip AppV2 theme-color/shadow leakage from header/body text (theme-neutral). */
+.application.cyberpunk.sheet.actor h1.title,
+.application.cyberpunk.sheet.actor h1.title > input,
+.application.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content h2,
+.application.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content h3,
+.application.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content p,
+.application.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .summary {
+  background: transparent;
+  text-shadow: unset;
+}
+
+/* ── Item-sheet SURFACE + readability ────────────────────────────────────────────
+ * Theme-aware (mirrors the actor sheet): light = parchment + black text; dark = our
+ * dark-readable surface + warm light text. Plus a Notes-tab height chain (below) so the
+ * {{editor}} fills its tab instead of collapsing to 0px (the half-rendered gray-box bug).
+ * No forced beige (see the actor-sheet note). `container-type` stays UNCONDITIONAL. */
+.application.cyberpunk.sheet.item .window-content,
+.cyberpunk.sheet.item .window-content {
+  container-type: inline-size;
+}
+
+.application.cyberpunk.sheet.item h1.title,
+.application.cyberpunk.sheet.item h1.title > input,
+.application.cyberpunk.sheet.item .summary,
+.application.cyberpunk.sheet.item textarea.flavor {
+  background: transparent;
+  text-shadow: unset;
+}
+
+/* Notes-tab height chain (only the ACTIVE tab, so inactive tabs stay display:none). */
+.application.cyberpunk.sheet.item .sheet-body > .tab[data-tab="notes"].active {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor,
+.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor .editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor .editor-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Tear-off tabs: the floating drag "ghost" (on document.body) + the lifted tab while dragging. */
+.cp-tab-ghost {
+  position: fixed;
+  z-index: 100000;
+  pointer-events: none;
+  padding: 2px 9px;
+  border-radius: 3px;
+  white-space: nowrap;
+  background: rgba(16, 24, 32, 0.95);
+  color: #cfe8ff;
+  border: 1px solid rgba(68, 147, 173, 0.95);
+  font: 12px/1.4 "Noto Sans", sans-serif;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+}
+
+/* draggable affordance: normal pointer on hover; grab (open hand) once a tab is pressed; grabbing
+   (closed hand) everywhere once the drag arms. */
+.cyberpunk nav.sheet-tabs .item.cp-tab-pressing { cursor: grab !important; }
+
+.cyberpunk nav.sheet-tabs .item.cp-tab-grabbing { opacity: 0.5 !important; }
+
+html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
+
+/* a tab whose content is currently popped out → greyed/disabled on the main sheet (click focuses it). */
+.cyberpunk nav.sheet-tabs .item.cp-tab-detached { opacity: 0.4 !important; font-style: italic; cursor: pointer !important; }
+
+/* Popped-out single tab window (CyberpunkActorTabSheet): the body fills the window and scrolls. */
+.cp-tab-popout .window-content { overflow: hidden; }
+
+.cp-tab-popout .cp-tab-popout-form { flex: 1 1 auto; min-height: 0; }
+
+.cp-tab-popout .cp-tab-popout-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 6px 8px; }
+
+.cp-tab-popout .cp-tab-popout-body > .tab { height: auto; }
+
+/* Gear tab drag-to-reorder: the row being dragged + the insertion indicator. */
+.cyberpunk .gear-sortable .gear.cp-gear-dragging { opacity: 0.4; }
+
+.cyberpunk .gear-sortable .gear.cp-gear-drop-before { box-shadow: inset 0 2px 0 0 #6bb3cc; }
+
+.cyberpunk .gear-sortable .gear.cp-gear-drop-after { box-shadow: inset 0 -2px 0 0 #6bb3cc; }
+
+/* Armor-layers panel: the location-header spacer is a layout-only flex filler, so it must NOT
+ * inherit the opaque black `.cyberpunk .field > *` value-box background — that rendered as a
+ * confusing thin black strip floating in the header gap (worse on dark theme). Keep it transparent. */
+.armor-layers-panel .field .flex-pad {
+  background-color: transparent;
+  padding: 0;
+}
+
+/**
+* A convenience class to prevent boilerplate
+* Best used like so, in its basic form:
+* <div class="field"><label></label><input></div>
+* 
+* Can include a div with a background using .field-image, and the size of the input adjusted with the classes .number, .smallnumber, or .textsize
+* This specifically does not adjust margins - that's up to containers.
+* Adjusting field size is best done by changing the font size and/or the childrens' padding
+*/
+.cyberpunk .field {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--cp-line, black);
+}
+
+/* Foundry v13+ styles checkboxes itself (appearance:none + a 20×20 ::before box). Forcing the
+   native control back on top of that drew TWO boxes for the same input (the "duplicate checkbox"
+   bug). Defer to Foundry's single styled checkbox instead of re-forcing the native one. */
+.cyberpunk .field > input[type=checkbox] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Cyberware "🔧 Install (Surgery)" action button: size to its label instead of being
+   squeezed by the .field row (the emoji + text was overflowing the button bounds). */
+.cyberpunk .field button.cyber-install {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: max-content;
+  white-space: nowrap;
+  height: auto;
+  line-height: normal;
+  padding: 2px 8px;
+}
+
+.statsrow > div.stat .stat-total {
+  border-color: var(--cp-line, black);
+  border-style: none solid solid solid;
+  border-width: 2px;
+  font-size: 13pt;
+  font-weight: bold;
+}
+
+.statsrow > div.stat .stat-base {
+  font-size: 9pt;
+  color: whitesmoke;
+  background: black;
+  border-color: var(--cp-line, black);
+  border-style: none solid none solid;
+  border-width: 2px;
+}
+
+.statsrow > div.stat .stat-temp {
+  font-size: 9pt;
+  background: rgb(90, 90, 90);
+  color: whitesmoke;
+  border-right-style: solid;
+  border-right-color: var(--cp-line, black);
+  border-width: 2px;
+}
+
+.wound-tracker .wound-state {
+  display: flex;
+  flex-grow: 1;
+  height: fit-content;
+  flex-direction: column;
+  margin-right: 3px;
+  margin-top: 5px;
+  border: solid var(--cp-line, black);
+  border-width: 0px 2px 2px 2px;
+}
+
+.wound-tracker .damage {
+  height: 100%;
+  width: 1.3em;
+  flex-grow: 1;
+  border-style: solid;
+  border-width: 0px 1px 0px 1px;
+  border-color: var(--cp-line, black);
+  transition: background-color 0.25s;
+}
+
+.cyberpunk textarea.flavor {
+  font-family: "Noto Sans", sans-serif;
+  font-weight: bold;
+  font-style: italic;
+  align-self: stretch;
+  border: 2px solid var(--cp-line, black);
+  border-radius: 0px;
+  min-height: 5em;
+}
+
+.cyberpunk-card h2 {
+  font-family: "Noto Sans", sans-serif;
+  font-variant: small-caps;
+  font-weight: bold;
+  border-bottom: 2px solid var(--cp-line, black);
+}
+
+/* Utility: hide a row/field without an inline style= (used by the ModifiersDialog
+   suppressive/autofire field toggle). !important so it wins over a row's natural display. */
+.cp-hidden { display: none !important; }
+
+/* Save-prompt chat-card helpers (replace the inline styles from the old hand-built cards). */
+.cyberpunk .save-prompt .save-note { opacity: 0.75; font-size: 0.85em; }
+
+.cyberpunk .save-prompt .save-buttons { margin-top: 6px; }
+
+/* Stun/Death/Stabilize save cards (replace the inline styles from the old hand-built cards). */
+.cyberpunk .result-success { color: #1f9d2f; font-weight: bold; }
+
+.cyberpunk .result-fail { color: #d1502f; font-weight: bold; }
+
+.cyberpunk .result-line { margin-top: 4px; }
+
+.cyberpunk .result-note { margin-top: 4px; font-size: 0.85em; opacity: 0.75; }
+
+.cyberpunk .result-note.danger { color: #d1502f; opacity: 1; }
+
+.cyberpunk .taser-warning { color: #c25e00; font-weight: bold; }
+
+/* Published-shops-only purchase request (GM-whispered chat card + Approve/Deny). */
+.cyberpunk .cp-shop-request-head { font-weight: bold; margin: 0 0 2px; }
+
+.cyberpunk .cp-shop-request-body { margin: 0 0 6px; }
+
+.cyberpunk .cp-shop-request-note { opacity: 0.75; font-size: 0.9em; }
+
+.cyberpunk .cp-shop-request-actions { display: flex; gap: 6px; }
+
+.cyberpunk .cp-shop-request-actions .cp-shop-request-btn { flex: 1 1 auto; width: auto; }
+
+.cyberpunk .cp-shop-request-btn.cp-approve { color: #1f9d2f; }
+
+.cyberpunk .cp-shop-request-btn.cp-deny { color: #d1502f; }
+
+.cyberpunk .cp-shop-request-status { margin: 4px 0 0; }
+
+/* Price-request variant: the GM enters a price for an item the compendium leaves unpriced. */
+.cyberpunk .cp-shop-request-price-row { display: flex; align-items: center; gap: 4px; margin: 0 0 6px; }
+
+.cyberpunk .cp-shop-request-price-label { flex: 0 0 auto; font-weight: bold; }
+
+.cyberpunk .cp-shop-request-price-row .cp-shop-request-price { flex: 1 1 auto; width: auto; }
+
+.cyberpunk .cp-shop-request-price-unit { flex: 0 0 auto; opacity: 0.75; }
+
+/* Catalog price cell for an unpriced item: a muted "GM-priced" chip instead of a free 0eb. */
+.cyberpunk .cp-price-gm { font-style: italic; opacity: 0.7; font-size: 0.9em; }
+
+.cyberpunk .stabilize-block {
+  margin-top: 6px;
+  border-top: 1px solid var(--cp-line, #ccc);
+  padding-top: 4px;
+  font-size: 0.85em;
+}
+
+.cyberpunk .stabilize-block .stabilize-hint { opacity: 0.8; }
+
+.cyberpunk .stabilize-block button { margin-top: 4px; }
+
+/* Stabilization input dialog (DialogV2 content — no .cyberpunk wrapper). */
+.cp-stabilize-dialog { padding: 4px; }
+
+.cp-stabilize-dialog .intro { margin: 0 0 8px; }
+
+.cp-stabilize-dialog .fields { display: flex; flex-direction: column; gap: 6px; }
+
+.cp-stabilize-dialog input[type="number"] { width: 60px; margin-left: 8px; }
+
+.cp-stabilize-dialog select { margin-left: 8px; }
+
+/* PATH-B "Apply Damage" chat button (injected into the damage card by the render hook). */
+.cp2020-apply-damage-btn { margin-top: 4px; width: 100%; }
+
+/* IP-tracker button injected into the Actor Directory header (replaces an inline cssText). */
+.cp-ip-tracker-btn { flex: 0 0 auto; margin: 4px; }
+
+/* Buy-Ammo dialog live cost preview line (DialogV2 content). */
+.cp-buy-ammo-preview { margin-top: 6px; font-weight: bold; }
+
+/* Cyberware install dialog option rows (DialogV2 content — checkbox + label). */
+.cp-cyber-install label { display: flex; gap: 6px; align-items: center; }
+
+/* Wait-for-turn + apply-damage target picker (DialogV2 content — no .cyberpunk wrapper). */
+.cp-select-dialog { padding: 4px; }
+
+.cp-select-dialog p { margin: 0 0 6px; }
+
+.cp-select-dialog select { width: 100%; }
+
+.cp-target-dialog .cp-dlg-title { font-weight: bold; }
+
+.cp-target-dialog .cp-dlg-sub { margin: 0 0 4px; font-size: 0.85em; }
+
+.cp-target-dialog hr { margin: 10px 0; border-color: #555; }
+
+.cp-target-hint { margin: 4px 0 0; padding: 4px 6px; border-radius: 3px; font-size: 0.85em; }
+
+.cp-target-hint.targeted { background: rgba(0, 80, 0, 0.2); }
+
+.cp-target-hint.none { background: rgba(50, 50, 50, 0.3); color: #aaa; }
+
+/* Vehicle / Maximum Metal chat cards (replace the inline styles from the old hand-built cards). */
+.cyberpunk .vehicle-warn { color: #c0791a; opacity: 1; }
+
+.cyberpunk .vehicle-incoming .save-buttons button { margin: 2px 2px 0 0; }
+
+.cyberpunk .result-warn { color: #c0791a; font-weight: bold; }
+
+/* Shared vehicle fire/damage dialog layout (DialogV2 content). */
+.vehicle-fire-dialog { display: flex; flex-direction: column; gap: 4px; }
+
+.vehicle-fire-dialog .dialog-intro { opacity: 0.7; font-size: 0.85em; }
+
+.vehicle-fire-dialog .field-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.vehicle-fire-dialog input[type="number"] { width: 48px; }
+
+.vehicle-fire-dialog input.num-wide { width: 64px; }
+
+.vehicle-fire-dialog .ml8 { margin-left: 8px; }
+
+.vehicle-fire-dialog fieldset { border: 1px solid var(--color-border-light-tertiary); padding: 4px 6px; }
+
+.vehicle-fire-dialog fieldset legend { font-size: 0.8em; }
+
+.vehicle-fire-dialog .dialog-hint { font-size: 0.78em; opacity: 0.65; }
+
+/* Control / maneuver roll result — loss-table sub-block (replaces the inline border/colour). */
+.cyberpunk .vehicle-loss-card { margin-top: 6px; border-top: 1px solid var(--color-border-dark-tertiary); padding-top: 4px; }
+
+.cyberpunk .vehicle-loss-card .loss-head { font-size: 0.85em; opacity: 0.8; }
+
+.cyberpunk .vehicle-loss-card .loss-text { margin-top: 2px; }
+
+/* Vehicle fire dialog — mount-arc out-of-arc warning (replaces the inline colour/size). */
+.vehicle-fire-dialog .arc-warn { font-size: 0.82em; margin-top: 2px; }
+
+.vehicle-fire-dialog .arc-warn.strict { color: #ff5555; }
+
+.vehicle-fire-dialog .arc-warn.soft { color: #e0a020; }
+
+/* Vehicle fire result — "apply to target" sub-block (replaces the inline border/spacing). */
+.cyberpunk .vehicle-apply-block { margin-top: 6px; border-top: 1px solid var(--color-border-dark-tertiary); padding-top: 4px; }
+
+.cyberpunk .vehicle-apply-block .apply-hint { font-size: 0.85em; opacity: 0.8; }
+
+.cyberpunk .vehicle-apply-block button { margin-top: 4px; }
+
+/* Combat-tracker control badges (take-aim / wait / dodge / parry). Replaces the per-button inline
+   cssText; the lit/active colour is applied with a .cp-active modifier toggled in JS. */
+.cp-take-aim-btn, .cp-wait-for-turn-btn, .cp-dodge-btn, .cp-parry-btn { cursor: pointer; color: #888; }
+
+.cp-wait-act-btn { cursor: pointer; color: #ffcc44; }
+
+.cp-take-aim-btn.cp-active { color: #ffcc00; }
+
+.cp-dodge-btn.cp-active { color: #44cc88; }
+
+.cp-parry-btn.cp-active { color: #44aaff; }
+
+.cp-add-action-btn { cursor: pointer; color: #888; }
+
+.cp-action-count-badge { font-size: 0.74em; padding: 1px 4px; border-radius: 3px; background: rgba(80, 80, 80, 0.7); color: var(--color-text-light-primary, #ccc); margin-right: 2px; line-height: 1.6; pointer-events: none; }
+
+/* "Missiles in Flight" combat-tracker panel (replaces the inline h4/ul/li/span/button styles). */
+.cp-missiles-panel .cp-missiles-head { margin: 6px 0 2px; border-top: 1px solid var(--color-border-dark-tertiary); padding-top: 4px; }
+
+.cp-missiles-panel .cp-missiles-list { list-style: none; margin: 0; padding: 0; }
+
+.cp-missiles-panel .cp-missile-row { cursor: pointer; font-size: 0.82em; padding: 2px 4px; }
+
+.cp-missiles-panel .cp-missile-undetected { opacity: 0.6; }
+
+.cp-missiles-panel .cp-missile-reveal, .cp-missiles-panel .cp-missile-step { font-size: 0.72em; padding: 0 4px; }
+
+.combat-tab {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  /* rolls + rep size to their content; weapons/armor take the remaining height.
+     (A `1fr` rolls row used to stretch and open a big gap above Reputation.) */
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "rolls rolls" "rep rep" "weapons armor";
+  column-gap: 10px;
+  row-gap: 6px;
+  align-items: start;
+}
+
+/* Reputation + Facedown panel */
+.combat-tab .reputation-section { grid-area: rep; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 2px; border-top: 1px solid rgba(255,255,255,0.12); }
+
+.combat-tab .reputation-field { display: flex; align-items: center; gap: 6px; flex: 1 1 auto; }
+
+.combat-tab .reputation-field input[type="number"] { flex: 0 0 4.5em; width: 4.5em; min-width: 4.5em; text-align: center; }
+
+.combat-tab .reputation-field .flex-pad { background-color: transparent; padding: 0; }
+
+.combat-tab .reputation-actions { display: flex; gap: 6px; margin-left: auto; }
+
+.cyberpunk .combat-tab .reputation-actions button { width: auto; flex: 0 0 auto; padding: 1px 8px; }
+
+/* Facedown / Recognition chat card */
+.cp-facedown-card .cp-facedown-line { padding: 1px 0; }
+
+.cp-facedown-result { margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(192,160,98,0.4); color: #c0a062; }
+
+.cp-facedown-result.cp-facedown-tie { color: inherit; opacity: 0.85; }
+
+.cp-facedown-note { font-size: 0.85em; opacity: 0.8; font-style: italic; }
+
+.combat-tab .weapons-list .martial-panel {
+  margin-top: 6px;
+}
+
+.combat-tab .weapons-list .martial-panel .martial-panel-title {
+  margin: 4px 0 2px;
+}
+
+.combat-tab .weapons-list .martial-panel .martial-group-header {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin: 11px 0 2px;
+}
+
+.combat-tab .weapons-list .martial-panel .martial-action {
+  margin-bottom: 3px;
+}
+
+/* Services tab: compact per-row action buttons (Pay / ✎ / ✕) — default buttons stretched to the row. */
+.cp-services .cp-service-row { align-items: center; gap: 4px; padding-top: 3px; padding-bottom: 3px; }
+
+.cyberpunk .cp-services .cp-service-row button { flex: 0 0 auto; width: auto; min-width: 0; height: 24px; line-height: 22px; padding: 0 9px; font-size: 0.85em; }
+
+.cyberpunk .cp-services .cp-service-edit, .cyberpunk .cp-services .cp-service-delete { width: 24px; padding: 0; text-align: center; }
+
+.cp-services .cp-service-cost { white-space: nowrap; margin: 0 4px; }
+
+/* Same fix as the armor-layers panel: the row spacer is layout-only, so it must NOT inherit the
+   opaque black `.cyberpunk .field > *` background (it rendered as a confusing black strip in the gap). */
+.cp-services .cp-service-row .flex-pad { background-color: transparent; padding: 0; }
+
+/* One service per row: the inherited `.field-list` 2-column grid put right-column names mid-sheet
+   and left odd cells empty ("doesn't fill the rectangle"). One column moves every name flush-left
+   and fills the width. */
+.cp-services { grid-template-columns: 1fr; }
+
+.cp-services .cp-service-name { text-align: left; }
+
+/* Fill each service row solid black: the name's indent then reads as intentional padding and every
+   service is a clean, clearly-bounded bar matching the sheet's black-box aesthetic. Outline the
+   action buttons so they stay legible against the black fill. */
+.cp-services .cp-service-row { background-color: black; }
+
+.cyberpunk .cp-services .cp-service-row button { border: 1px solid rgba(255, 255, 255, 0.3); }
+
+/* "+ Add Service" doesn't need a bordered box: drop the border and the empty spacer label (it only
+   existed to height-match the Eurobucks field) so the button just floats, right-aligned, in its cell.
+   Scoped to the services tab so the vehicle sheet's .cp-header-action is unaffected. */
+.cyberpunk .tab[data-tab="services"] .field.cp-header-action { border: none; justify-content: flex-end; align-items: center; }
+
+.cyberpunk .tab[data-tab="services"] .cp-header-action > label { display: none; }
+
+.cyberpunk .armor-display {
+  max-height: 200px;
+  max-width: 25em;
+  padding-left: 10%;
+  padding-right: 10%;
+  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-areas: ". Head ." "lArm Torso rArm" "lLeg . rLeg";
+  column-gap: 3px;
+  row-gap: 3px;
+  justify-items: center;
+}
+
+.cyberpunk .armor-display .armor-segment {
+  width: 100%;
+  border: solid var(--cp-line, black);
+  border-width: 2px 2px 0px 2px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-areas: "loc loc loc" "ablate sp repair" "name name name";
+}
+
+.chipware-container.is-empty .chipware-dropzone {
+  height: 18px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px dashed var(--cp-line, rgba(0, 0, 0, 0.35));
+}
+
+.active-cyberware .active-cyberware-segment {
+  margin-top: 0px;
+  padding: 6px 6px 6px 6px;
+  position: relative;
+  border: 3px solid var(--cp-line, black);
+}
+
+.anatomy-container {
+  background-size:auto;
+  min-width: 270px;
+  position: relative;
+}
+
+/* Anatomy art (the male SVG and the female PNG, both <img> now) keeps its aspect inside the
+   fixed box. */
+img#anatomy-img {
+  object-fit: contain;
+}
+
+.anatomy-container .anatomy-select {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  width: auto;
+  font-size: 0.75rem;
+  /* The picker sits on the dark gridded anatomy panel, so its text must be light to read. */
+  color: whitesmoke;
+  background-color: #1a1a1a;
+  border: 1px solid #555;
+}
+
+.anatomy-container .anatomy-select option {
+  color: whitesmoke;
+  background-color: #1a1a1a;
+}
+
+/* ── "Setup & What's New" automation notice (ApplicationV2; module/dialog/automation-notice.js) ──
+   Replaces the old inline styles + JS BOX/ROWH/ROWD style-constants. */
+.cp-automation-notice { padding: 8px 4px; font-size: 0.9em; line-height: 1.5; }
+
+.cp-automation-notice .notice-intro { margin: 0 0 10px; }
+
+.cp-automation-notice .feat-box {
+  border: 1px solid rgba(30, 100, 180, 0.3); background: rgba(30, 100, 180, 0.10);
+  border-radius: 4px; padding: 8px 10px; margin-bottom: 8px;
+}
+
+.cp-automation-notice .feat-box--corerule { border-color: rgba(40, 150, 90, 0.35); background: rgba(40, 150, 90, 0.10); }
+
+.cp-automation-notice .feat-box--gold { border-color: rgba(192, 160, 98, 0.4); background: rgba(192, 160, 98, 0.10); }
+
+.cp-automation-notice .feat-box-heading { font-weight: bold; margin: 0 0 6px; }
+
+.cp-automation-notice .feat-table { width: 100%; border-collapse: collapse; font-size: 0.87em; }
+
+.cp-automation-notice .feat-name { padding: 2px 10px 2px 0; white-space: nowrap; font-weight: bold; vertical-align: top; }
+
+.cp-automation-notice .feat-desc { padding: 2px 0; }
+
+.cp-automation-notice .feat-cols { font-size: 0.87em; columns: 2; column-gap: 16px; }
+
+.cp-automation-notice .feat-bullet { margin-bottom: 2px; break-inside: avoid; }
+
+.cp-automation-notice .notice-nav {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cp-automation-notice .notice-hide { display: flex; align-items: center; gap: 5px; font-size: 0.82em; cursor: pointer; flex: 0 0 auto; }
+
+.cp-automation-notice .notice-spacer { flex: 1; }
+
+.cp-automation-notice .notice-count { font-size: 0.82em; opacity: 0.7; }
+
+.cp-automation-notice .notice-btn { width: auto; flex: 0 0 auto; }
+
+.active-cyberware .active-cyberware-segment:hover {
+  border-color: var(--cp-line, black) !important;
+  box-shadow: none !important;
+}
+
+/* Compact inline icon button for the ammo quantity lock (and similar). Strips the default
+   button chrome so it reads as a small lock toggle aligned with the number it guards. */
+.cyberpunk .field button.cp-ammo-qty-lock {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  align-self: stretch;
+  margin: 0;
+  padding: 0 5px;
+  border: none;
+  background-color: black;
+  color: whitesmoke;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.cyberpunk .field button.cp-ammo-qty-lock i {
+  font-size: small;
+  color: whitesmoke;
+  padding: 0;
+}
+
+/* Custom hover dice tooltip for cp-inline-roll (shows only dice faces/results) */
+.cp-dice-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* Give the tooltip a readable container */
+.cp-dice-tooltip .dice-tooltip {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-dark, rgba(0, 0, 0, 0.5));
+  background: var(--color-bg, rgba(0, 0, 0, 0.85));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+/**********************************************
+
+ *  NETRUN TAB
+
+ **********************************************/
+
+ .netrun-container {
+
+  border: 3px solid var(--cp-line, black);
+
+  width: 100%;
+
+  margin-top: 10px;
+
+  box-sizing: border-box;
+
+  padding: 0;
+
+}
+
+.netrun-row {
+
+  display: flex;
+
+  flex-direction: row;
+
+  border-bottom: 3px solid var(--cp-line, black);
+
+}
+
+.netrun-cell {
+
+  flex: 1;
+
+  border-right: 3px solid var(--cp-line, black);
+
+  padding: 6px;
+
+  box-sizing: border-box;
+
+}
+
+/* String of 5 columns (CPU, SPEED, DATA WALL, RAM)*/
+
+.netrun-row-four {
+
+  display: flex;
+
+  flex-direction: row;
+
+  width: 100%;
+
+  border-bottom: 3px solid var(--cp-line, black);
+
+}
+
+.netrun-row-four .netrun-cell {
+
+  flex: 1;
+
+  border-right: 3px solid var(--cp-line, black);
+
+  padding: 6px;
+
+}
+
+/**********************************************
+
+ *  OPTIONS ROW
+
+ **********************************************/
+
+.netrun-options-row {
+
+  display: flex;
+
+  flex-direction: row;
+
+  width: 100%;
+
+  border-bottom: 3px solid var(--cp-line, black);
+
+}
+
+.netrun-options-row .netrun-cell {
+
+  flex: 1;
+
+  border-right: 3px solid var(--cp-line, black);
+
+  padding: 6px;
+
+}
+
+.deck-option {
+
+  display: flex;
+
+  align-items: center;
+
+  background-color: transparent;
+
+  color: var(--cp-ink, black);
+
+}
+
+/**********************************************
+
+ *  ACTIVE PROGRAMS
+
+ **********************************************/
+
+.netrun-active-programs-container {
+
+  border: 3px solid var(--cp-line, black);
+
+  padding: 6px;
+
+  margin-top: 5px;
+
+}
+
+.netrun-active-icon {
+
+  width: 120px;
+
+  height: 120px;
+
+  border: 2px solid var(--cp-line, black);
+
+  background-color: #ccc;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+}
+
+/**********************************************
+
+ *  ALL PROGRAMS
+
+ **********************************************/
+
+
+
+/* List (2 columns) */
+
+.netrun-program-list {
+
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns: 1fr 1fr;
+
+  gap: 4px;
+
+  grid-auto-rows: auto;
+
+  margin-top: 5px;
+
+  border: 3px solid var(--cp-line, black);
+
+  padding: 6px;
+
+}
+
+/* Each program (tile) - background on the whole area */
+
+.field.netrun-program {
+
+  display: flex;
+
+  flex-direction: row;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+
+
+  background-color: rgb(90, 90, 90);
+
+  color: whitesmoke;
+
+  border: 2px solid var(--cp-line, black);
+
+  padding: 4px;
+
+  margin-bottom: 0;
+
+}
+
+/* ============================================================
+   VEHICLE SHEET — layout pass (header buttons + column alignment)
+   ============================================================ */
+.cyberpunk.vehicle header.cyberheader .fieldrow .field.cp-header-action {
+  flex-grow: 0;
+}
+
+.cyberpunk.vehicle header.cyberheader [data-action="controlRoll"],
+.cyberpunk.vehicle header.cyberheader [data-action="vehicleDamage"],
+.cyberpunk.vehicle header.cyberheader [data-action="acpaMelee"],
+.cyberpunk.vehicle header.cyberheader [data-action="acpaRepair"] {
+  white-space: nowrap;
+  width: auto;
+  min-width: 0;
+  padding: 2px 10px;
+  font-size: 0.85em;
+  line-height: 1.3;
+  align-self: center;
+}
+
+.cyberpunk.vehicle .field-list .field > label {
+  flex: 1 1 auto;
+}
+
+.cyberpunk.vehicle .field-list .field > input[type=number] {
+  flex: 0 0 4em;
+  width: 4em;
+  text-align: right;
+  padding-right: 5px;
+}
+
+.cyberpunk.vehicle .field-list .field > input[type=checkbox] {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.cyberpunk.vehicle .cp-weapons {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.cyberpunk.vehicle .cp-weapon-row.field-list {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 2px;
+}
+
+.cyberpunk.vehicle .cp-weapon-row .cp-weapon-img {
+  flex: 0 0 auto;
+}
+
+.cyberpunk.vehicle .cp-weapon-row .cp-weapon-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cyberpunk.vehicle .cp-weapon-row .cp-weapon-stat {
+  flex: 0 0 5em;
+  width: 5em;
+  text-align: right;
+  font-size: 0.8em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.cyberpunk.vehicle .cp-weapon-row > button {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cyberpunk.vehicle .cp-weapons > button {
+  display: block;
+  width: 100%;
+  margin-top: 3px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.cyberpunk.vehicle .cp-reactive-wear {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.cyberpunk.vehicle [data-action="reactiveReplace"] {
+  flex: 0 0 auto;
+  width: auto;
+  height: 20px;
+  padding: 0 8px;
+  line-height: 18px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Life-tab notes: read-only view ↔ ProseMirror edit toggle (upstream parity).
+ * Each rule carries two selectors: `.application.cyberpunk.sheet.actor …` matches
+ * OUR V2 window DOM; the `… .cyberpunk-actor-sheet-content …` variant matches
+ * upstream's wrapper (no-op here) — kept verbatim so the eventual file re-seat is
+ * a clean diff. Ported from supercoon/v1.2.0-dev.
+ * ────────────────────────────────────────────────────────────────────────── */
+.application.cyberpunk.sheet.actor .cp-notes-editor,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 0 8px 0;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-canvas,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  border: 2px solid var(--cp-line, black);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-edit,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-edit {
+  position: absolute;
+  top: 4px;
+  right: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--cp-ink, black);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-edit i,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-edit i {
+  margin: 0;
+  padding: 0;
+  color: var(--cp-ink, black);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-edit:hover,
+.application.cyberpunk.sheet.actor .cp-notes-edit:focus,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-edit:hover,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-edit:focus {
+  opacity: 1;
+  background: transparent;
+  box-shadow: none;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-edit:hover i,
+.application.cyberpunk.sheet.actor .cp-notes-edit:focus i,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-edit:hover i,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-edit:focus i {
+  opacity: 1;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-view,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 8px 36px 8px 8px;
+  color: var(--cp-ink, black) !important;
+  background: transparent;
+  font-family: "Noto Sans", sans-serif;
+  font-size: 14px;
+  font-weight: normal;
+  font-variant: normal;
+  line-height: 1.35;
+  opacity: 1 !important;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-view *,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-view * {
+  color: var(--cp-ink, black) !important;
+  opacity: 1 !important;
+  font-weight: inherit;
+  font-variant: normal;
+  text-shadow: unset;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  color: var(--cp-ink, black);
+  background: transparent;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .editor-container,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .editor-content,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .ProseMirror,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .editor-container,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .editor-content,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .ProseMirror {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  color: var(--cp-ink, black);
+  background: transparent;
+  font-family: "Noto Sans", sans-serif;
+  font-size: 14px;
+  font-weight: normal;
+  font-variant: normal;
+  line-height: 1.35;
+  text-shadow: unset;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .editor-content,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .editor-container,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .ProseMirror,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .editor-content,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .editor-container,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .ProseMirror {
+  border: 0 !important;
+  outline: 0;
+  box-shadow: none;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .ProseMirror,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .ProseMirror {
+  overflow: auto;
+  padding: 8px;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror menu,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .editor-menu,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror [role="menubar"],
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror menu,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .editor-menu,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror [role="menubar"] {
+  position: relative;
+  z-index: 2;
+  margin: -1px -1px 0 -1px;
+  border-radius: 0 !important;
+  box-sizing: border-box;
+}
+
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror menu *,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror .editor-menu *,
+.application.cyberpunk.sheet.actor .cp-notes-prosemirror [role="menubar"] *,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror menu *,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror .editor-menu *,
+.cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-prosemirror [role="menubar"] * {
+  border-radius: 0 !important;
+}
+
+/* ── Vehicle / ACPA sheet semantic color classes ────────────────────────── */
+
+/* DESTROYED label — red bold, used when a vehicle/suit SDP reaches 0. */
+.cp-vehicle-destroyed {
+  color: #ff4040;
+  font-weight: bold;
+}
+
+/* Destroyed ACPA system indicator (✖ icon inside the system row name span). */
+.cp-acpa-system-destroyed {
+  color: #ff4040;
+}
+
+/* Over-budget spaces cell — shown in red when used > available in a body area. */
+.cp-acpa-spaces-over {
+  color: #ff6060;
+  font-weight: bold;
+}
+
+/* Legal-build success paragraph — shown in green when the ACPA build passes all checks. */
+.cp-acpa-build-valid {
+  color: #3ad13a;
+  font-size: 0.85em;
+  margin: 2px 0;
+}
+
+/* Build-issues container — red border box wrapping the error list. */
+.cp-acpa-build-issues {
+  border: 1px solid #ff6060;
+  border-radius: 3px;
+  padding: 4px 6px;
+  margin: 2px 0;
+}
+
+/* Build-issues header paragraph inside the container. */
+.cp-acpa-build-issues-header {
+  color: #ff6060;
+  font-weight: bold;
+  font-size: 0.85em;
+  margin: 0 0 2px;
+}
+
+/* ============================================================================
+   Option B host-compat — running our V2 sheets on a vanilla Foundry v13 host.
+   These correct two ways the host's defaults invert Tilt's intended look; they
+   are scoped to our sheets and defer to the Carolingian skin / external restylers.
+   ============================================================================ */
+
+/* Stat boxes must stack (label over value over total). The base `.cyberpunk .field`
+   rule is flex-direction:row (Tilt's chip layout); re-assert COLUMN for the stat
+   boxes — Tilt's `.statsrow > div.stat` — so it holds on a vanilla host. */
+.cyberpunk .statsrow > div.stat {
+  flex-direction: column;
+}
+
+/* Restyler-OFF surface = Tilt's light page. His sheet design is black field/stat
+   "chips" with light text meant to sit on a LIGHT page; his CSS sets no window
+   background, so on v13's dark AppV2 default the sheet inverts (invisible borderless
+   skill-search, black-on-dark notes, washed-out armor). Restore his own light colour
+   (#f1eee8) — colour only, NO parchment image / no theme-stomping guards. Gated off
+   when the Carolingian skin is on (it brings its own theme); external restylers layer
+   their own rules on top. */
+body:not(.cp-carolingian) .cyberpunk.sheet .window-content {
+  background-color: #f1eee8;
+  color: black;
+}
+
+/* Tab labels on the light page: v13's .sheet-tabs core gives the items a light text colour, which
+   washes out on #f1eee8. Tilt's non-active tabs carry no colour (they inherit dark on his light page),
+   so force them dark here; the ACTIVE tab keeps Tilt's white-on-black chip (`nav.tabs > .item.active`). */
+body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
+  color: black;
+}

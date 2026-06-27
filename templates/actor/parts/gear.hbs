@@ -1,0 +1,32 @@
+{{#*inline "itemListing"}}
+  <div class="field gear item-edit rc-item-delete" data-item-id="{{id}}">
+            <div class="field-image roll fire-weapon action" style="background-image: url({{img}})" data-item-id="{{id}}"></div>
+            <label>{{name}}</label>
+            <span class="flex-pad"></span>
+            <span>
+                <p class="inactive">{{type}}</p>
+            </span>
+        </div>
+{{/inline}}
+
+<div class="field-list no-wrap">
+    <div class="field">
+        <label for="system.eurobucks">{{CPLocal "Eurobucks"}}</label>
+        <input name="system.eurobucks" type="number" value="{{system.eurobucks}}">
+    </div>
+    <div class="field">
+        <label for="system.carryWeight">{{CPLocal "Weight"}}</label>
+        <input class="not-editable" name="system.carryWeight" type="number" value="{{system.carryWeight}}" readonly>
+    </div>
+    {{!-- Shopping now lives in the sidebar Shop tab, not on the character sheet (a sheet is "you and
+          what you own", not a portal to a store). The .cp-open-shop handler remains harmless if unused. --}}
+</div>
+
+{{#if (equals items.length 0)}}
+    <div class="inactive">{{CPLocal "DragItemsPrompt"}}</div>
+{{/if}}
+<div class="field-list gear-sortable">
+    {{#each gearTabItems}}
+        {{> itemListing}}
+    {{/each}}
+</div>

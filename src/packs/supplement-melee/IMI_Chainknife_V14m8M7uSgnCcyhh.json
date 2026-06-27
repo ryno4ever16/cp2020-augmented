@@ -1,0 +1,56 @@
+{
+  "_id": "V14m8M7uSgnCcyhh",
+  "name": "IMI Chainknife",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Designed and manufactured in Israel, the Chainknife is a battery-powered hand-held combat saw shaped like a survival knife. Can chew through armor like cheesecloth, reducing soft armor SP by 2 per hit (enhanced ablation — requires GM tracking). Standard edged-weapon SP halving also applies.",
+    "notes": "",
+    "cost": 120,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Melee",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "2d6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": true,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 0,
+    "reliability": "VeryReliable",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!V14m8M7uSgnCcyhh"
+}

@@ -1,0 +1,35 @@
+{
+  "_id": "lMnB2T7C2EhzG6IO",
+  "name": "Tanaka/Takanaka Sword Case",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Tanaka/Takanaka Exec",
+      "importReview": {
+        "level": "user-signed",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!lMnB2T7C2EhzG6IO"
+}

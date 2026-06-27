@@ -42,6 +42,11 @@ const RULES = [
   [s => s.includes("eurosource plus") || s.includes("eurosource +") || s.includes("eurosource+"), "Eurosource Plus", "official"],
   [s => s.includes("eurotour"), "Eurotour", "official"],
   [s => s.includes("eurosource") || s.includes("euro source"), "Eurosource", "official"],
+  // Corporate Report is THREE books (Corpbook 1/2/3) — one filter each, like the Chromebooks. The numbered
+  // rules run before the generic fallback so a bare "Corporate Report" tag still gets its own (generic) filter.
+  [s => s.includes("corpbook 1") || s.includes("corporate report 1") || s.includes("corp report 1"), "Corporate Report 1", "official"],
+  [s => s.includes("corpbook 2") || s.includes("corporate report 2") || s.includes("corp report 2"), "Corporate Report 2", "official"],
+  [s => s.includes("corpbook 3") || s.includes("corporate report 3") || s.includes("corp report 3"), "Corporate Report 3", "official"],
   [s => s.includes("corpbook") || s.includes("corporate report") || s.includes("corp report"), "Corporate Report", "official"],
   [s => s.includes("protect") && s.includes("serve"), "Protect & Serve", "official"],
   [s => s.includes("neo tribes") || s.includes("neotribes"), "Neo Tribes", "official"],
@@ -53,8 +58,16 @@ const RULES = [
   [s => s.includes("wildside"), "Wildside", "official"],
   [s => s.includes("listen up"), "Listen Up You Primitive Screwheads", "official"],
   [s => s.includes("blackhand"), "Blackhand's Street Weapons", "official"],
+  // Firestorm is a two-part series — Stormfront and Shockwave — one filter each, generic fallback last.
+  [s => s.includes("firestorm") && s.includes("stormfront"), "Firestorm: Stormfront", "official"],
+  [s => s.includes("firestorm") && s.includes("shockwave"), "Firestorm: Shockwave", "official"],
   [s => s.includes("firestorm"), "Firestorm", "official"],
   [s => s.includes("interface"), "Interface (zine)", "official"],
+  [s => s.includes("brainware"), "Brainware Blowout", "official"],
+  [s => s.includes("night city"), "Night City", "official"],
+  [s => s.includes("edgerunners"), "Edgerunners Inc", "official"],
+  [s => s.includes("bartmoss") || s.includes("rache"), "Rache Bartmoss' Guide to the Net", "official"],
+  [s => s.includes("live") && s.includes("direct"), "Live & Direct", "official"],
 
   // Core (and the Reference Book bound with it). Kept late so "Cyberpunk 2020" inside an official-book
   // string doesn't pre-empt the book match above. Also accept the bare-citation forms the base system
@@ -105,11 +118,18 @@ const SHORT = {
   "Eurosource": "Eurosrc",
   "Eurosource Plus": "Eurosrc+",
   "Corporate Report": "Corp Rpt",
+  "Corporate Report 1": "Corp Rpt 1",
+  "Corporate Report 2": "Corp Rpt 2",
+  "Corporate Report 3": "Corp Rpt 3",
+  "Firestorm: Stormfront": "Stormfront",
+  "Firestorm: Shockwave": "Shockwave",
   "Rough Guide to the UK": "Rough Guide",
   "Listen Up You Primitive Screwheads": "Screwheads",
   "Blackhand's Street Weapons": "Blackhand",
   "Home of the Brave": "Home/Brave",
   "Protect & Serve": "Protect&Srv",
+  "Brainware Blowout": "Brainware",
+  "Rache Bartmoss' Guide to the Net": "Bartmoss Net",
   "When Gravity Fails": "Grav Fails",
   "Datafortress 2020": "DF2020",
   "Blackhammer Project": "Blackhammer"

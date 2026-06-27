@@ -1,0 +1,57 @@
+{
+  "_id": "yIeba4u0cRHUuABx",
+  "name": "Blue Knight Police Motorcycle",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 6000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 36,
+      "max": 36
+    },
+    "sp": 20,
+    "passengers": 4,
+    "speed": {
+      "value": 0,
+      "max": 240,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Protect & Serve",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!yIeba4u0cRHUuABx"
+}

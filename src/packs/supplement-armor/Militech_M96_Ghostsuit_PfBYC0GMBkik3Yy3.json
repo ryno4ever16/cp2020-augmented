@@ -1,0 +1,60 @@
+{
+  "_id": "PfBYC0GMBkik3Yy3",
+  "name": "Militech M96 Ghostsuit",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A full-body stealth suit from Militech. Provides SP 10 protection and a -4 penalty to Awareness/Notice checks against the wearer.",
+    "notes": "",
+    "cost": 5300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "10",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "10",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "10",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "10",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "10",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "10",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!PfBYC0GMBkik3Yy3"
+}

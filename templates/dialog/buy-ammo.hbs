@@ -1,0 +1,22 @@
+{{!--
+  Buy-Ammo dialog form (DialogV2 content), rendered from openBuyAmmoDialog(). Caliber + modifier
+  options come from the {id,label} data arrays (_ammoOptions); the template owns the <option>
+  markup (Handlebars auto-escapes, so no esc() needed). The name="caliber|modifier|boxes" fields
+  and the .cp-buy-ammo-preview node are read by the live-preview render callback + _doPurchase, so
+  keep them verbatim. i18n via CPLocal.
+--}}
+<form class="cyberpunk buy-ammo">
+  <div class="form-group">
+    <label>{{CPLocal "AmmoCaliber"}}</label>
+    <select name="caliber">{{#each caliberOpts}}<option value="{{id}}">{{label}}</option>{{/each}}</select>
+  </div>
+  <div class="form-group">
+    <label>{{CPLocal "AmmoModifier"}}</label>
+    <select name="modifier">{{#each modifierOpts}}<option value="{{id}}">{{label}}</option>{{/each}}</select>
+  </div>
+  <div class="form-group">
+    <label>{{CPLocal "AmmoBuyBoxes"}}</label>
+    <input type="number" name="boxes" value="1" min="1" step="1"/>
+  </div>
+  <p class="cp-buy-ammo-preview"></p>
+</form>

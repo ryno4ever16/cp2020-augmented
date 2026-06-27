@@ -1,0 +1,39 @@
+{
+  "_id": "JSfdljQ1YFm2qphE",
+  "name": "Science Database",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Deep Space",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 6300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Deep Space",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JSfdljQ1YFm2qphE"
+}

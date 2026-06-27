@@ -1,0 +1,49 @@
+{
+  "_id": "Iax4RxMcuTc6RcCV",
+  "name": "'Guercio' Helmet",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "Torso": false,
+      "lArm": false,
+      "rArm": false,
+      "lLeg": false,
+      "rLeg": false
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 3",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Iax4RxMcuTc6RcCV"
+}

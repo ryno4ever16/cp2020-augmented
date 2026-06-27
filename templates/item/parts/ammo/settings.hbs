@@ -1,0 +1,229 @@
+{{!-- ===== Ammunition (caliber + load + quantity) ===== --}}
+<div class="field-list">
+    {{!-- Caliber: what weapons can chamber this ammo. Pick a known caliber or type a custom one. --}}
+    <div class="field">
+        <label for="system.caliber">{{CPLocal "AmmoCaliber"}}</label>
+        <span class="flex-pad"></span>
+        <input type="text" list="cp-caliber-list" name="system.caliber" value="{{system.caliber}}" placeholder="{{CPLocal "AmmoCaliberPlaceholder"}}"/>
+        <datalist id="cp-caliber-list">
+            {{#each caliberChoices}}<option value="{{value}}">{{label}}</option>{{/each}}
+        </datalist>
+    </div>
+
+    {{!-- Modifier (load): selecting one seeds the mechanical fields below; they stay editable. --}}
+    <div class="field">
+        <label for="system.modifier">{{CPLocal "AmmoModifier"}}</label>
+        <span class="flex-pad"></span>
+        <select name="system.modifier" class="cp-ammo-modifier">
+            {{#each modifierChoices}}
+            <option value="{{value}}" {{#if (equals ../system.modifier value)}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+        </select>
+    </div>
+
+    {{!-- Quantity (rounds in inventory). Locked by default so it acts as the economy's ledger;
+         flip the lock to edit it by hand as a manual override. --}}
+    <div class="field">
+        <label for="system.quantity">{{CPLocal "AmmoQuantity"}}</label>
+        <span class="flex-pad"></span>
+        <input
+            {{#if system.qtyLocked}}readonly{{/if}}
+            class="number nogrow"
+            name="system.quantity"
+            type="number"
+            value="{{system.quantity}}"
+        />
+        <button type="button" class="cp-ammo-qty-lock" title="{{CPLocal 'AmmoQtyLockHint'}}">
+            <i class="fas {{#if system.qtyLocked}}fa-lock{{else}}fa-lock-open{{/if}}"></i>
+        </button>
+    </div>
+
+    {{> (template "fields/select")
+        label="WeaponType"
+        edit="system.weaponType"
+        choices=ammoReloadTypes
+        allowBlank=true
+    }}
+</div>
+
+{{!-- ===== Economy: buy a box of rounds with eurobucks ===== --}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoSectionEconomy"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+    {{> (template "fields/number") label="AmmoBoxSize" edit="system.boxSize"}}
+    {{> (template "fields/number") label="AmmoBoxCost" edit="system.boxCost"}}
+    <div class="field span-two-cells">
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-ammo-buy-box" title="{{CPLocal 'AmmoBuyBoxHint'}}">{{CPLocal "AmmoBuyBox"}}</button>
+    </div>
+</div>
+
+{{!-- ===== Effects (which optional effect sections to show/edit) ===== --}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoEffects"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+
+    <div class="field span-two-cells">
+        <label>{{CPLocal "AmmoEffectTypes"}}</label>
+        <span class="flex-pad"></span>
+
+        {{!-- Dropdown-multiselect (ammo-specific, duplicated styling from cyberware) --}}
+        <div class="ammo-ms" data-path="system.effectTypes">
+            <button type="button" class="ammo-ms-trigger">
+                <span class="ammo-ms-labels">
+                    {{#if ammoFx.typeLabels.length}}
+                        {{#each ammoFx.typeLabels}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
+                    {{else}}
+                        {{CPLocal "AmmoEffect_None"}}
+                    {{/if}}
+                </span>
+                <i class="fa-solid fa-caret-down ammo-ms-caret"></i>
+            </button>
+
+            <div class="ammo-ms-menu">
+                <label class="ammo-ms-opt">
+                    <input type="checkbox" value="None" {{#if (ammoHasEffect system "None")}}checked{{/if}}>
+                    {{CPLocal "AmmoEffect_None"}}
+                </label>
+
+                <label class="ammo-ms-opt">
+                    <input type="checkbox" value="CoreMods" {{#if (ammoHasEffect system "CoreMods")}}checked{{/if}}>
+                    {{CPLocal "AmmoEffect_CoreMods"}}
+                </label>
+
+                <label class="ammo-ms-opt">
+                    <input type="checkbox" value="Stun" {{#if (ammoHasEffect system "Stun")}}checked{{/if}}>
+                    {{CPLocal "AmmoEffect_Stun"}}
+                </label>
+
+                <label class="ammo-ms-opt">
+                    <input type="checkbox" value="DoT" {{#if (ammoHasEffect system "DoT")}}checked{{/if}}>
+                    {{CPLocal "AmmoEffect_DoT"}}
+                </label>
+
+                <label class="ammo-ms-opt">
+                    <input type="checkbox" value="Blast" {{#if (ammoHasEffect system "Blast")}}checked{{/if}}>
+                    {{CPLocal "AmmoEffect_Blast"}}
+                </label>
+
+                <label class="ammo-ms-opt">
+                    <input type="checkbox" value="Spread" {{#if (ammoHasEffect system "Spread")}}checked{{/if}}>
+                    {{CPLocal "AmmoEffect_Spread"}}
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{!-- ===== Core modifiers ===== --}}
+{{#if (ammoHasEffect system "CoreMods")}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoSectionCoreMods"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+
+    {{> (template "fields/number") label="AmmoArmorMultSoft" edit="system.armorMultSoft"}}
+    {{> (template "fields/number") label="AmmoArmorMultHard" edit="system.armorMultHard"}}
+
+    {{> (template "fields/number") label="AmmoRawDamageMult" edit="system.rawDamageMult"}}
+    {{> (template "fields/number") label="AmmoPenDamageMult" edit="system.penDamageMult"}}
+
+    {{> (template "fields/string") label="AmmoBonusDamage" edit="system.bonusDamageFormula"}}
+    {{> (template "fields/number") label="AmmoAccuracyMod" edit="system.accuracyMod"}}
+</div>
+{{/if}}
+
+{{!-- ===== STUN ===== --}}
+{{#if (ammoHasEffect system "Stun")}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoSectionStun"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+
+    {{> (template "fields/boolean") label="AmmoStunOnHit" edit="system.stunSaveOnHit"}}
+    {{> (template "fields/number") label="AmmoStunMod" edit="system.stunSaveMod"}}
+</div>
+{{/if}}
+
+{{!-- ===== DoT ===== --}}
+{{#if (ammoHasEffect system "DoT")}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoSectionDoT"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+
+    {{> (template "fields/boolean") label="AmmoDoTEnabled" edit="system.dotEnabled"}}
+    {{> (template "fields/number") label="AmmoDoTTurns" edit="system.dotTurns"}}
+    {{> (template "fields/string") label="AmmoDoTDamage" edit="system.dotDamageFormula"}}
+</div>
+{{/if}}
+
+{{!-- ===== Blast (AoE) ===== --}}
+{{#if (ammoHasEffect system "Blast")}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoSectionBlast"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+
+    {{> (template "fields/number") label="AmmoBlastRadius" edit="system.blastRadius"}}
+    {{> (template "fields/number") label="AmmoBlastFullDamageWithin" edit="system.blastFullDamageWithin"}}
+
+    {{!-- Zones count selector --}}
+    <div class="field">
+        <label>{{CPLocal "AmmoBlastZones"}}</label>
+        <span class="flex-pad"></span>
+        <select name="system.blastZones" data-dtype="Number">
+            {{selectOptions blastZonesOptions selected=system.blastZones}}
+        </select>
+    </div>
+    {{> (template "fields/boolean") label="AmmoBlastShrapnel" edit="system.blastShrapnel"}}
+    {{#each blastMultiplierIndices}}
+        <div class="field">
+            <label>{{CPLocal "AmmoBlastMultiplier"}} ({{inc this}})</label>
+            <span class="flex-pad"></span>
+            <input
+                type="number"
+                class="ammo-blast-mult"
+                data-index="{{this}}"
+                value="{{lookup ../system.blastMultipliers this}}"
+                step="0.01"
+                min="0"
+            />
+        </div>
+    {{/each}}
+</div>
+{{/if}}
+
+{{!-- Spread  --}}
+{{#if (ammoHasEffect system "Spread")}}
+<div class="field-list">
+    <div class="field span-two-cells">
+        <label class="larger">{{CPLocal "AmmoSectionSpread"}}</label>
+        <span class="flex-pad"></span>
+    </div>
+    {{> (template "fields/select")
+        label="AmmoSpreadMode"
+        edit="system.spreadMode"
+        choices=ammoSpreadModes
+        allowBlank=false
+    }}
+    {{#if (equals system.spreadMode "spread")}}
+        {{> (template "fields/number") label="AmmoSpreadDistance" edit="system.spreadDistance"}}
+
+        {{> (template "fields/number") label="AmmoSpreadWidthShort" edit="system.spreadWidthShort"}}
+        {{> (template "fields/number") label="AmmoSpreadWidthMedium" edit="system.spreadWidthMedium"}}
+        {{> (template "fields/number") label="AmmoSpreadWidthLong" edit="system.spreadWidthLong"}}
+    {{/if}}
+    {{> (template "fields/string") label="AmmoSpreadDamageShort" edit="system.spreadDamageShort"}}
+    {{> (template "fields/string") label="AmmoSpreadDamageMedium" edit="system.spreadDamageMedium"}}
+    {{> (template "fields/string") label="AmmoSpreadDamageLong" edit="system.spreadDamageLong"}}
+</div>
+{{/if}}

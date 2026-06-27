@@ -1,0 +1,49 @@
+{
+  "_id": "iSHbRQQ3HJ7Zeo46",
+  "name": "Motorcycle Jacket",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": {
+        "stoppingPower": "4",
+        "ablation": 0
+      },
+      "lArm": false,
+      "rArm": false,
+      "lLeg": false,
+      "rLeg": false
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 6600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!iSHbRQQ3HJ7Zeo46"
+}

@@ -1,0 +1,63 @@
+{
+  "_id": "6GSPO9Bz8mtk7O1N",
+  "name": "Calico Submachine Gun",
+  "type": "weapon",
+  "img": "icons/svg/sword.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 750,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": 0,
+    "concealability": "ConcealLongcoat",
+    "availability": "Common",
+    "ammoType": "9mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 50,
+    "shots": 50,
+    "rof": 1,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!6GSPO9Bz8mtk7O1N"
+}

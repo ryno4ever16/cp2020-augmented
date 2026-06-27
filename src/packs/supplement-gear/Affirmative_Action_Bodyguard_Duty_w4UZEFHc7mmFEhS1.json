@@ -1,0 +1,37 @@
+{
+  "_id": "w4UZEFHc7mmFEhS1",
+  "name": "Affirmative Action Bodyguard Duty",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Edgerunners Inc",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 34900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Edgerunners Inc",
+      "importCategory": "service",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!w4UZEFHc7mmFEhS1"
+}

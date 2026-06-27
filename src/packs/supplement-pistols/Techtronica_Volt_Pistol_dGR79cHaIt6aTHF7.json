@@ -1,0 +1,56 @@
+{
+  "_id": "dGR79cHaIt6aTHF7",
+  "name": "Techtronica Volt Pistol",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Inside the Volt Pistol's sleek metallic frame is a low-intensity laser projector that ionizes the air. The weapon then releases an electrical charge along that path, creating a directed lightning bolt. Damage is 1/2 real and 1/2 stun. Cyberlimbs hit are shorted out for 1d6+3 turns. Normal armor offers no protection.",
+    "notes": "",
+    "cost": 950,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "3d6 + special",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "reliability": "Standard",
+    "range": 25,
+    "attackType": "Ranged",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!dGR79cHaIt6aTHF7"
+}

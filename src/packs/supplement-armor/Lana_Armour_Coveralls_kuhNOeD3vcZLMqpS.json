@@ -1,0 +1,61 @@
+{
+  "_id": "kuhNOeD3vcZLMqpS",
+  "name": "'Lana' Armour Coveralls",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 2,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 3",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kuhNOeD3vcZLMqpS"
+}

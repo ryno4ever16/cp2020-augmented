@@ -1,0 +1,60 @@
+{
+  "_id": "kyTKs80EFTOsbFXw",
+  "name": "Sneaksuit Flak Vest",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A flak vest designed to be worn over a sneaksuit without revealing the stealth layer beneath.",
+    "notes": "",
+    "cost": 375,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "armorType": "Hard",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "16",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kyTKs80EFTOsbFXw"
+}

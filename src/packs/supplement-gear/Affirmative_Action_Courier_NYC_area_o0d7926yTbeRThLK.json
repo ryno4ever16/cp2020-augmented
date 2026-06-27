@@ -1,0 +1,37 @@
+{
+  "_id": "o0d7926yTbeRThLK",
+  "name": "Affirmative Action Courier (NYC area)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Edgerunners Inc",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 35100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Edgerunners Inc",
+      "importCategory": "service",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!o0d7926yTbeRThLK"
+}

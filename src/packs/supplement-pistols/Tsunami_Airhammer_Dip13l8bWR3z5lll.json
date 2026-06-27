@@ -1,0 +1,56 @@
+{
+  "_id": "Dip13l8bWR3z5lll",
+  "name": "Tsunami \"Airhammer\"",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Designed for Crystal Palace Security, the Airhammer fires a 5.3x19mm cartridge using compressed gas propulsion. Three settings: Target (half damage), Combat (normal), and Overload (+3 damage, UR reliability). Available rounds include Kendachi fragmentation flechette, gas, gel, and practice. Available in a 5-round cylinder model with laser sight and gun camera, or a 7-round Mark 2 with an integral smartgun rig.",
+    "notes": "",
+    "cost": 325,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "5.3mm",
+    "ammoItemId": "",
+    "damage": "Special",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 5,
+    "shots": 5,
+    "rof": 2,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Dip13l8bWR3z5lll"
+}

@@ -1,0 +1,62 @@
+{
+  "_id": "MoVuIcSxwl22AsZT",
+  "name": "Medieval Reproduction Armor",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 3500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "armorType": "Hard",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 6
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "",
+      "garmentType": "full-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!MoVuIcSxwl22AsZT"
+}

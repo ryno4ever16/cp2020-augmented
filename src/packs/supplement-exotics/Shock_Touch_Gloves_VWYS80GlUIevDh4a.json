@@ -1,0 +1,56 @@
+{
+  "_id": "VWYS80GlUIevDh4a",
+  "name": "Shock Touch Gloves",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Electrified combat gloves that deliver a stun charge on any successful strike.",
+    "notes": "",
+    "cost": 120,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Common",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "Stun",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 1,
+    "reliability": "Standard",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!VWYS80GlUIevDh4a"
+}

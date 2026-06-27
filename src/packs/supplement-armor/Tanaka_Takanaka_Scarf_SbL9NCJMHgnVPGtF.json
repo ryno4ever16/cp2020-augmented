@@ -1,0 +1,62 @@
+{
+  "_id": "SbL9NCJMHgnVPGtF",
+  "name": "Tanaka/Takanaka Scarf",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 75,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 2100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Tanaka/Takanaka Exec",
+      "garmentType": "scarf",
+      "importReview": {
+        "level": "user-signed",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!SbL9NCJMHgnVPGtF"
+}

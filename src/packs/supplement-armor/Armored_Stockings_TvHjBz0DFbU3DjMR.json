@@ -1,0 +1,52 @@
+{
+  "_id": "TvHjBz0DFbU3DjMR",
+  "name": "Armored Stockings",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 110,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": false,
+      "lArm": false,
+      "rArm": false,
+      "lLeg": {
+        "stoppingPower": "6",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "6",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 0,
+    "armorType": "Soft",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!TvHjBz0DFbU3DjMR"
+}

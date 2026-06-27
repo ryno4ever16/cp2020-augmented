@@ -1,0 +1,56 @@
+{
+  "_id": "y53tt1hAvvymGOzF",
+  "name": "Petrochem Drug-A-Thug",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A PetroChem contact delivery device that injects a paralysing or sleep-inducing drug dose on touch. Compatible with any standard paralyzing or sleep agent.",
+    "notes": "",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Common",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "Chemical",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 5,
+    "shots": 5,
+    "rof": 1,
+    "reliability": "VeryReliable",
+    "range": 0,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!y53tt1hAvvymGOzF"
+}

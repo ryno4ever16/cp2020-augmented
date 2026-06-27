@@ -1,0 +1,37 @@
+{
+  "_id": "FgeMGurHze0x9vMv",
+  "name": "Biotech: Endurance Tab (ignore fatigue effects for 12 hrs)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 1200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Eurosource Plus",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 18200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Eurosource Plus",
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!FgeMGurHze0x9vMv"
+}

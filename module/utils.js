@@ -321,6 +321,16 @@ export function cwIsEnabled(obj) {
   return true;
 }
 
+// Skinweave subtype tag. Skinweave is a subdermal weave: it adds SP without an EV layering penalty.
+export const CYBERWARE_SUBTYPE_SKINWEAVE = "SKINWEAVE";
+
+// Is this cyberware a Skinweave? Detect by the stable subtype field, NEVER the item name — names get
+// renamed by players and rewritten by localization, while the subtype is data that survives both.
+export function cwIsSkinweave(obj) {
+  const sys = obj?.system ?? obj;
+  return sys?.cyberwareSubtype === CYBERWARE_SUBTYPE_SKINWEAVE;
+}
+
 // Fumble Table (optional rule)
 
 /**
@@ -523,6 +533,31 @@ function _isAircraftControlSkillById(skill) {
   }
 
   return false;
+}
+
+// Combat Sense (Solo special ability): its level is added to Initiative and Awareness/Notice rolls.
+// Keyed by stable _id, never name — names are renamed by users and rewritten by localization. The RU
+// role-skills pack uses a different _id than EN, so both Combat Sense ids are listed.
+const _COMBAT_SENSE_SKILL_IDS = new Set([
+  "BjBZ8zc7wh52MSwK", // Combat Sense   (role-skills-en)
+  "L2hC8GzV0mRqE7xS"  // Чувство Боя    (role-skills-ru)
+]);
+
+// Shared identity check for "is this a particular skill": match the skill's stable _id (or its
+// compendium sourceId, still an _id) against a set of known ids. Keyed on _id, never name, so renames
+// and localization — which rewrite item names — can't break detection.
+function _skillIdInSet(skill, ids) {
+  const baseId = _getSkillBaseId(skill);
+  if (baseId && ids.has(baseId)) return true;
+  const src = skill?.flags?.core?.sourceId;
+  if (src && typeof src === "string" && ids.has(src.split(".").pop())) return true;
+  return false;
+}
+
+/** True if `skill` is the Combat Sense special ability (by stable _id, EN or RU pack). Its level
+ *  drives system.CombatSenseMod, which is added to Initiative and Awareness/Notice rolls. */
+export function isCombatSenseSkill(skill) {
+  return skill?.type === "skill" && _skillIdInSet(skill, _COMBAT_SENSE_SKILL_IDS);
 }
 
 function _skillTableByStat(stat) {

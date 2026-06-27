@@ -1,0 +1,60 @@
+{
+  "_id": "ZUdJOgpJd1KCHVt7",
+  "name": "MedicGear Combat Armor",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Full-body combat armor with an integrated medical support system. Provides +2 to Medical Tech rolls.",
+    "notes": "",
+    "cost": 3400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "armorType": "Hard",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "20",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 3
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ZUdJOgpJd1KCHVt7"
+}

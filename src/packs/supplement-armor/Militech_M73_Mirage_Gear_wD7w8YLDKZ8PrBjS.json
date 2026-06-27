@@ -1,0 +1,60 @@
+{
+  "_id": "wD7w8YLDKZ8PrBjS",
+  "name": "Militech M73 Mirage Gear",
+  "type": "armor",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A full-body camouflage suit with SP 12. Imposes a -2 penalty to Awareness/Notice checks against the wearer.",
+    "notes": "",
+    "cost": 1050,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "armorType": "Soft",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "12",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "12",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "12",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "12",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "12",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "12",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!wD7w8YLDKZ8PrBjS"
+}

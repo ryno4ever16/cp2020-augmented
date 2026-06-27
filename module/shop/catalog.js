@@ -2,7 +2,7 @@ import { buyItem, FASHION_STYLES, styleMultOf, resolveCatalogPrice, isValidPrice
 import { buyAndInstallCyberware } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
-import { categoryOfPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
+import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
 import { renderChatCard } from "../compat.js";
@@ -88,14 +88,18 @@ async function buildCatalogIndex() {
   // Read the GM price-override map ONCE for the whole index (avoids a settings read per row).
   const overrides = getShopPriceOverrides();
   const results = await Promise.all(catalogPacks().map(async (pack) => {
-    const { category, sub } = categoryOfPack(pack.metadata.name);
+    const packName = pack.metadata.name;
+    const mapped = isMappedPack(packName);          // legacy packs: one cat/sub for the whole pack
+    const packCat = categoryOfPack(packName);
     let idx;
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "type", "img"] }); }
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {
       const type = e.type ?? "misc";
       if (EXCLUDED_TYPES.has(type)) continue;
+      // Type-grouped supplement packs (and any other unmapped pack) categorize per-item from item data.
+      const { category, sub } = mapped ? packCat : categoryOfItem(type, e.system);
       const { supplement, canon } = classifySupplement(e.system?.source);
       // Price precedence (compendium → GM override → unpurchasable): an item the base leaves unpriced
       // is NOT free — it shows "GM-priced" and routes a buy through the GM price-request flow.

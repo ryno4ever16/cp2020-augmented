@@ -1,0 +1,123 @@
+{{!-- Actor sheet's combat tab --}}
+<div class="combat-tab">
+    <section class="combat-rolls">
+    <div class="field-list no-wrap">
+    <div class="field roll-initiative">
+        <label class="action">{{CPLocal "Initiative"}}</label>
+        <span class="flex-pad"></span>
+        <input class="roll-initiative-modificator number" type="number" value="{{initiativeMod}}" placeholder="0">
+    </div>
+
+    <div class="field stun-death-save">
+        <label class="action">{{CPLocal "StunDeathSave"}}</label>
+        <span class="flex-pad"></span>
+        <input class="roll-stun-death-modificator number" type="number" value="{{StunDeathMod}}" placeholder="0">
+    </div>
+</div>
+    </section>
+
+    {{!-- Reputation + Facedown (CP2020 p.54). Passive sheet panel; tables that skip Rep just ignore it. --}}
+    <section class="reputation-section">
+        <div class="field reputation-field">
+            <label title="{{CPLocal 'ReputationHint'}}">{{CPLocal "Reputation"}}</label>
+            <span class="flex-pad"></span>
+            <input type="number" name="system.reputation" value="{{system.reputation}}" class="number" placeholder="0" title="{{CPLocal 'ReputationHint'}}">
+        </div>
+        <div class="reputation-actions">
+            <button type="button" class="facedown-roll" title="{{CPLocal 'FacedownHint'}}">⚔ {{CPLocal "Facedown"}}</button>
+            <button type="button" class="recognition-roll" title="{{CPLocal 'RecognitionHint'}}">👁 {{CPLocal "Recognition"}}</button>
+        </div>
+    </section>
+
+    <section class="armor-section">
+        {{!-- TODO: It'd be quite possible to loop through hit locations here, I think. Would work well for other creatures. --}}
+        <header>
+            <h2>{{CPLocal "Armor"}}</h2>
+        </header>
+
+        {{> "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs" hitLocations=system.hitLocations hitLocsName="hitLocations"}}
+
+        {{!-- Armor layer compliance panel. Only rendered when damageLayersEnabled setting is on. --}}
+        {{#if showArmorLayers}}
+        {{> "modules/cp2020-augmented/templates/actor/parts/armor-layers-panel.hbs"}}
+        {{/if}}
+
+        <div class="field margin-bottom">
+            <label for="system.stats.ref.armorMod">{{CPLocal "Encumbrance"}}</label>
+            <span class="flex-pad"></span>
+            <input type="number" name="system.stats.ref.armorMod" value="{{system.stats.ref.armorMod}}" class="number nogrow not-editable" readonly>
+        </div>
+        
+        <div class="field-list one-col">
+            {{#each gear.armor}}
+            <div class="field item-edit" data-item-id="{{id}}">
+                <div class="field-image" style="background-image: url({{img}})" data-item-id="{{id}}"></div>
+                <label class="name">{{name}}</label>
+                <span class="flex-pad"></span>
+                <span>
+                    <label class="inactive">{{armorSummary system.coverage}}</label>
+                </span>
+            </div>
+            {{/each}}
+        </div>
+        
+    </section>
+    <section class="weapons-list">
+        <header>
+            <h2>{{CPLocal "Weapons"}}</h2>
+        </header>
+
+        {{!-- Normal weapons (martial-arts weapons are consolidated into the panel below) --}}
+        {{#each gear.weapons as |weapon|}}
+            {{#unless (equals weapon.system.attackType @root.MARTIAL_ATTACK_TYPE)}}
+            <div class="fire-weapon field action" data-item-id="{{weapon.id}}">
+            <div class="no-action field-image item-edit" style="background-image: url({{weapon.img}})" data-item-id="{{weapon.id}}"></div>
+            <label class="name">{{weapon.name}}</label>
+            <span class="flex-pad"></span>
+            <span>
+                {{#with weapon.system}}
+                <div class="field-label inactive">{{#if attackType}}{{attackType}}{{else}}{{weaponType}}{{/if}}</div>
+                {{/with}}
+            </span>
+            </div>
+            {{/unless}}
+        {{/each}}
+
+        {{!-- Cyberweapons (non-martial) --}}
+        {{#each gear.cyberware as |cyber|}}
+            {{#if (cwHasType cyber.system.CyberWorkType "Weapon")}}
+                {{#unless (equals cyber.system.CyberWorkType.Weapon.attackType @root.MARTIAL_ATTACK_TYPE)}}
+                <div class="fire-weapon field action" data-item-id="{{cyber.id}}">
+                    <div class="no-action field-image item-edit" style="background-image: url({{cyber.img}})" data-item-id="{{cyber.id}}"></div>
+                    <label class="name">{{cyber.name}}</label>
+                    <span class="flex-pad"></span>
+                    <span>
+                    {{#with cyber.system.CyberWorkType.Weapon}}
+                    <div class="field-label inactive">{{#if attackType}}{{attackType}}{{else}}{{weaponType}}{{/if}}</div>
+                    {{/with}}
+                    </span>
+                </div>
+                {{/unless}}
+            {{/if}}
+        {{/each}}
+
+        {{!-- Consolidated Martial Arts panel: one action per row (styled like the weapon rows —
+             icon + name box, full-width), stacked vertically under the Defensive / Attacks /
+             Grapple headers. The martial-art style is chosen in the dialog after clicking. The
+             panel is weapon-less: if the actor has a real martial weapon its id is used, otherwise
+             the handler builds a transient unarmed weapon (damage derives from the action). --}}
+        <div class="martial-panel">
+            <h3 class="martial-panel-title">{{CPLocal "MartialArt"}}</h3>
+            {{#each @root.martialActionGroups as |grp|}}
+            <div class="martial-group-header">{{CPLocal grp.groupName}}</div>
+            {{#each grp.choices as |act|}}
+            <div class="martial-action field action" data-item-id="{{@root.martialWeaponId}}" data-action="{{act}}" title="{{CPLocal (concat act 'Hint')}}">
+                <div class="field-image" style="background-image: url(systems/cyberpunk2020/img/{{#if (equals act 'Kick')}}kick-icon.svg{{else}}punch-icon.svg{{/if}});"></div>
+                <label class="name">{{CPLocal act}}</label>
+                <span class="flex-pad"></span>
+            </div>
+            {{/each}}
+            {{/each}}
+        </div>
+    </section>
+</div>

@@ -1,0 +1,37 @@
+{
+  "_id": "nbnSaWpuqdsBsJMC",
+  "name": "Fire-based Fuse",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 5,
+    "weight": 0,
+    "equipped": false,
+    "source": "Listen Up You Primitive Screwheads",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 39200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Listen Up You Primitive Screwheads",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!nbnSaWpuqdsBsJMC"
+}

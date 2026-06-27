@@ -1,0 +1,447 @@
+{{!-- templates/item/parts/cyberware/settings.hbs --}}
+
+<div class="field-list">
+  {{> (template "fields/string") label="SurgeryCode" edit="system.surgCode"}}
+
+  <div class="field">
+    <label for="system.humanityCost">{{CPLocal "HumanityCostRoll"}}</label>
+    <span class="flex-pad"></span>
+    <input
+      class="textsize{{#unless canEditCyberwareHumanity}} cyberware-humanity-locked{{/unless}}"
+      name="system.humanityCost"
+      type="text"
+      value="{{system.humanityCost}}"
+      {{#unless canEditCyberwareHumanity}}readonly{{/unless}}
+    />
+    <div class="humanity-cost-roll field-image action" style="background-image: url('../../../icons/svg/d10-grey.svg')"></div>
+  </div>
+
+  {{#if canEditCyberwareHumanity}}
+    {{> (template "fields/number") label="HumanityLoss" edit="system.humanityLoss"}}
+  {{else}}
+    {{> (template "fields/number") label="HumanityLoss" edit="system.humanityLoss" readOnly=true extraClasses="cyberware-humanity-locked"}}
+  {{/if}}
+
+  {{!-- Install (Surgery) button (our net-new): only on actor-owned cyberware. Handler = _cpActivateCyberwareInstall. --}}
+  {{#if item.isEmbedded}}
+  <div class="field">
+    <label>{{CPLocal "CyberInstall"}}</label>
+    <span class="flex-pad"></span>
+    <button type="button" class="cyber-install" title="{{CPLocal "CyberInstallTip"}}">🔧 {{CPLocal "CyberInstall"}}</button>
+  </div>
+  {{/if}}
+  {{> (template "fields/string") label="Abbrev" edit="system.abbrev"}}
+
+  {{!-- Module toggle --}}
+  {{> (template "fields/boolean") label="CWT_IsModule" edit="system.Module.IsModule"}}
+  <div class="field">
+    <label>{{CPLocal "CWT_Install_MountZone"}}</label>
+    <span class="flex-pad"></span>
+    <select name="system.MountZone">
+      <option value=""></option>
+      {{#each cw.bodyZones as |b|}}
+        <option value="{{b.key}}" {{#if (equals ../system.MountZone b.key)}}selected{{/if}}>{{b.label}}</option>
+      {{/each}}
+    </select>
+  </div>
+    {{#if (or (equals system.MountZone "Arm") (equals system.MountZone "Leg"))}}
+    <div class="field">
+      <label for="system.CyberBodyType.Location">{{CPLocal "CyberBodyTypeLocation"}}</label>
+      <span class="flex-pad"></span>
+      <select name="system.CyberBodyType.Location">
+        <option value=""></option>
+        <option value="Left"  {{#if (equals system.CyberBodyType.Location "Left")}}selected{{/if}}>{{CPLocal "Left"}}</option>
+        <option value="Right" {{#if (equals system.CyberBodyType.Location "Right")}}selected{{/if}}>{{CPLocal "Right"}}</option>
+      </select>
+    </div>
+    {{/if}}
+    {{!-- Effect mode selector --}}
+    <div class="field">
+      <label>{{CPLocal "CWT_EffectMode"}}</label>
+      <span class="flex-pad"></span>
+      <select name="system.EffectMode">
+        <option value="Permanent"   {{#if (equals system.EffectMode "Permanent")}}selected{{/if}}>{{CPLocal "CWT_EffectMode_Permanent"}}</option>
+        <option value="Activatable" {{#if (equals system.EffectMode "Activatable")}}selected{{/if}}>{{CPLocal "CWT_EffectMode_Activatable"}}</option>
+      </select>
+    </div>
+
+    {{#if (equals system.EffectMode "Activatable")}}
+      {{> (template "fields/boolean") label="CWT_EffectActive" edit="system.EffectActive"}}
+    {{/if}}
+</div>
+
+{{!-- Module block (outside of CyberWorkType) --}}
+{{#if (lookup (lookup system "Module") "IsModule")}}
+<div class="field-list">
+  <div class="field span-two-cells">
+    <label class="larger">{{CPLocal "CWT_IsModule"}}</label>
+    <span class="flex-pad"></span>
+  </div>
+
+  {{> (template "fields/number") label="CWT_Module_SlotsTaken" edit="system.Module.SlotsTaken"}}
+
+  <div class="field">
+    <label>{{CPLocal "CWT_Module_ParentImplant"}}</label>
+    <span class="flex-pad"></span>
+    <select name="system.Module.ParentId">
+      <option value=""></option>
+      {{#each cw.parentImplants as |p|}}
+        <option
+          value="{{p.id}}"
+          title="{{CPLocal 'CWT_AvailSlotsFull'}}: {{p.left}}"
+          {{#if (equals ../system.Module.ParentId p.id)}}selected{{/if}}>
+          {{p.name}}. {{CPLocal "CWT_AvailSlotsShort"}}: {{p.left}}
+        </option>
+      {{/each}}
+    </select>
+  </div>
+
+  <div class="field">
+    <label>{{CPLocal "CWT_Implant_ModuleAllowedParentCWType"}}</label>
+    <span class="flex-pad"></span>
+    <select name="system.Module.AllowedParentCyberwareType">
+      {{#each cw.parentCwTypeChoices as |ch|}}
+        <option value="{{ch.value}}" {{#if (equals ../cw.allowedParentCwTypeSelected ch.value)}}selected{{/if}}>
+          {{#if (equals ch.localKey ch.value)}}
+            {{ch.value}}
+          {{else}}
+            {{CPLocal ch.localKey}}
+          {{/if}}
+        </option>
+      {{/each}}
+    </select>
+  </div>
+</div>
+{{/if}}
+
+<div class="field-list">
+  <div class="field span-two-cells">
+    <label class="larger">{{CPLocal "CyberWorkType"}}</label>
+    <span class="flex-pad"></span>
+  </div>
+
+<div class="field">
+  <label>{{CPLocal "CyberWorkTypeType"}}</label>
+  <span class="flex-pad"></span>
+
+  <div class="cw-ms" data-path="system.CyberWorkType.Types">
+    <button type="button" class="cw-ms-trigger">
+      <span class="cw-ms-labels">
+        {{#if cw.typeLabels.length}}
+          {{#each cw.typeLabels}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}
+        {{else}}
+          {{CPLocal "CWT_Type_Descriptive"}}
+        {{/if}}
+      </span>
+      <i class="fa-solid fa-caret-down cw-ms-caret"></i>
+    </button>
+
+    <div class="cw-ms-menu">
+      <label class="cw-ms-opt">
+        <input type="checkbox" value="Descriptive"
+               {{#if (cwHasType system.CyberWorkType "Descriptive")}}checked{{/if}}>
+        {{CPLocal "CWT_Type_Descriptive"}}
+      </label>
+      <label class="cw-ms-opt">
+        <input type="checkbox" value="Characteristic"
+               {{#if (cwHasType system.CyberWorkType "Characteristic")}}checked{{/if}}>
+        {{CPLocal "CWT_Type_Characteristic"}}
+      </label>
+      <label class="cw-ms-opt">
+        <input type="checkbox" value="Armor"
+               {{#if (cwHasType system.CyberWorkType "Armor")}}checked{{/if}}>
+        {{CPLocal "CWT_Type_Armor"}}
+      </label>
+      <label class="cw-ms-opt">
+        <input type="checkbox" value="Weapon"
+               {{#if (cwHasType system.CyberWorkType "Weapon")}}checked{{/if}}>
+        {{CPLocal "CWT_Type_Weapon"}}
+      </label>
+      <label class="cw-ms-opt">
+        <input type="checkbox" value="Implant"
+               {{#if (cwHasType system.CyberWorkType "Implant")}}checked{{/if}}>
+        {{CPLocal "CWT_Type_Implant"}}
+      </label>
+      <label class="cw-ms-opt">
+        <input type="checkbox" value="Chip"
+               {{#if (cwHasType system.CyberWorkType "Chip")}}checked{{/if}}>
+        {{CPLocal "CWT_Type_Chip"}}
+      </label>
+    </div>
+  </div>
+</div>
+
+  {{!-- ===== Characteristic ===== --}}
+  {{#if (cwHasType system.CyberWorkType "Characteristic")}}
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_AddStat"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    <div class="field">
+      <label>{{CPLocal "CWT_AddStat"}}</label>
+      <span class="flex-pad"></span>
+      <select class="cw-add-stat">
+        <option value=""></option>
+        {{#each cw.statRemain as |s|}}
+          <option value="{{s.key}}">{{s.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    {{#each cw.currentStats as |s|}}
+      <div class="field">
+        <label>{{s.label}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" class="smallnumber" name="system.CyberWorkType.Stat.{{s.key}}" placeholder="0"
+               value="{{#if (equals (lookup ../system.CyberWorkType.Stat s.key) 0)}}{{else}}{{lookup ../system.CyberWorkType.Stat s.key}}{{/if}}">
+        <a class="button danger cw-remove-stat" data-key="{{s.key}}">x</a>
+      </div>
+    {{/each}}
+
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_AddCheck"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    <div class="field">
+      <label>{{CPLocal "CWT_AddCheck"}}</label>
+      <span class="flex-pad"></span>
+      <select class="cw-add-check">
+        <option value=""></option>
+        {{#each cw.checkRemain as |c|}}
+          <option value="{{c.key}}">{{c.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    {{#each cw.currentChecks as |c|}}
+      <div class="field">
+        <label>{{c.label}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" class="smallnumber" name="system.CyberWorkType.Checks.{{c.key}}" placeholder="0"
+               value="{{#if (equals (lookup ../system.CyberWorkType.Checks c.key) 0)}}{{else}}{{lookup ../system.CyberWorkType.Checks c.key}}{{/if}}">
+        <a class="button danger cw-remove-check" data-key="{{c.key}}">x</a>
+      </div>
+    {{/each}}
+
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_AddSkill"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    {{#if cw.skillOptions.length}}
+      <div class="field">
+        <label>{{CPLocal "CWT_AddSkill"}}</label>
+        <span class="flex-pad"></span>
+        <input type="text" name="cw-skill-search" list="cw-skill-options" placeholder="{{CPLocal 'CWT_SkillSearchPh'}}"/>
+        <datalist id="cw-skill-options">
+          {{#each cw.skillOptions as |n|}}<option value="{{n}}">{{n}}</option>{{/each}}
+        </datalist>
+      </div>
+    {{else}}
+      <div class="field span-two-cells inactive">
+        <label>{{CPLocal "CWT_NoActorForSkills"}}</label>
+        <span class="flex-pad"></span>
+      </div>
+    {{/if}}
+
+    {{#each cw.currentSkills as |sk|}}
+      <div class="field">
+        <label>{{sk.label}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" class="smallnumber" name="system.CyberWorkType.Skill.{{sk.key}}" placeholder="0"
+              value="{{#if (equals (lookup ../system.CyberWorkType.Skill sk.key) 0)}}{{else}}{{lookup ../system.CyberWorkType.Skill sk.key}}{{/if}}">
+        <a class="button danger cw-remove-skill" data-key="{{sk.key}}">x</a>
+      </div>
+    {{/each}}
+  {{/if}}
+
+  {{!-- ===== Armor ===== --}}
+  {{#if (cwHasType system.CyberWorkType "Armor")}}
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "ArmorLocations"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    <div class="field">
+      <label>{{CPLocal "CWT_AddLocation"}}</label>
+      <span class="flex-pad"></span>
+      <select class="cw-add-location">
+        <option value=""></option>
+        {{#each cw.locationRemain as |l|}}<option value="{{l.key}}">{{l.label}}</option>{{/each}}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>{{CPLocal "CWT_Armor_Encumbrance"}}</label>
+      <span class="flex-pad"></span>
+      <input type="number" class="smallnumber" name="system.CyberWorkType.Encumbrance" placeholder="0"
+             value="{{#if (equals system.CyberWorkType.Encumbrance 0)}}{{else}}{{system.CyberWorkType.Encumbrance}}{{/if}}">
+    </div>
+
+    {{#each cw.currentLocations as |l|}}
+      <div class="field">
+        <label>{{l.label}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" class="smallnumber" name="system.CyberWorkType.Locations.{{l.key}}" placeholder="0"
+               value="{{#if (equals (lookup ../system.CyberWorkType.Locations l.key) 0)}}{{else}}{{lookup ../system.CyberWorkType.Locations l.key}}{{/if}}">
+        <a class="button danger cw-remove-location" data-key="{{l.key}}">x</a>
+      </div>
+    {{/each}}
+
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_Armor_Penalties"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    <div class="field">
+      <label>{{CPLocal "CWT_AddPenalty"}}</label>
+      <span class="flex-pad"></span>
+      <select class="cw-add-penalty">
+        <option value=""></option>
+        {{#each cw.penaltyRemain as |p|}}<option value="{{p.key}}">{{p.label}}</option>{{/each}}
+      </select>
+    </div>
+
+    {{#each cw.currentPenalties as |p|}}
+      <div class="field">
+        <label>{{p.label}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" class="smallnumber" name="system.CyberWorkType.Penalties.{{p.key}}" placeholder="0"
+               value="{{#if (equals (lookup ../system.CyberWorkType.Penalties p.key) 0)}}{{else}}{{lookup ../system.CyberWorkType.Penalties p.key}}{{/if}}">
+        <a class="button danger cw-remove-penalty" data-key="{{p.key}}">x</a>
+      </div>
+    {{/each}}
+  {{/if}}
+
+  {{!-- ===== Weapon ===== --}}
+  {{#if (cwHasType system.CyberWorkType "Weapon")}}
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_Type_Weapon"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    <div class="field span-two-cells">
+    <div class="field-list cw-weapon-grid">
+        {{> (template "fields/select") label="WeaponType" edit="system.CyberWorkType.Weapon.weaponType" choices=weaponTypes}}
+        {{> (template "fields/select") label="AttackType" edit="system.CyberWorkType.Weapon.attackType" choices=attackTypes allowBlank=true}}
+
+        {{> (template "fields/string") label="Damage" edit="system.CyberWorkType.Weapon.damage"}}
+        {{> (template "fields/number") label="Accuracy" edit="system.CyberWorkType.Weapon.accuracy"}}
+
+        {{> (template "fields/number") label="Range" edit="system.CyberWorkType.Weapon.range"}}
+
+        {{> (template "fields/select") label="Reliability" edit="system.CyberWorkType.Weapon.reliability" choices=reliabilities}}
+
+        {{#unless cwWeaponIsMelee}}
+          {{> (template "fields/number") label="ShotsLeft" edit="system.CyberWorkType.Weapon.shotsLeft"}}
+          {{> (template "fields/number") label="Shots" edit="system.CyberWorkType.Weapon.shots"}}
+
+          {{> (template "fields/number") label="RoF" edit="system.CyberWorkType.Weapon.rof"}}
+
+          {{> (template "fields/select") label="Ammo" edit="system.CyberWorkType.Weapon.ammoItemId" choices=cwAmmoChoices allowBlank=true}}
+        {{/unless}}
+
+        <div class="field">
+          <label for="system.CyberWorkType.Weapon.attackSkill">{{CPLocal "AttackSkill"}}</label>
+          <div class="flex-pad"></div>
+          {{#if (equals system.CyberWorkType.Weapon.weaponType 'Exotic')}}
+            <datalist id="possibleSkillsCW">
+                {{#each attackSkills as |skill|}}<option value="{{skill}}">{{skill}}</option>{{/each}}
+            </datalist>
+            <input type="text" list="possibleSkillsCW" placeholder="{{CPLocal 'AttackSkill'}}" name="system.CyberWorkType.Weapon.attackSkill" value="{{system.CyberWorkType.Weapon.attackSkill}}">
+          {{else}}
+            <select name="system.CyberWorkType.Weapon.attackSkill">
+              {{#each attackSkills as |skill|}}
+                <option value="{{skill.value}}" {{#if (equals ../system.CyberWorkType.Weapon.attackSkill skill.value)}}selected{{/if}}{{#if (equals ../system.CyberWorkType.Weapon.attackSkill skill.label)}}selected{{/if}}>{{skill.label}}</option>
+              {{/each}}
+            </select>
+          {{/if}}
+        </div>
+
+        {{#if cwWeaponIsMelee}}
+            {{> (template "fields/boolean") label="AP" edit="system.CyberWorkType.Weapon.ap"}}
+        {{else}}
+            {{> (template "fields/string") label="AmmoType" edit="system.CyberWorkType.Weapon.ammoType"}}
+        {{/if}}
+      </div>
+    </div>
+  {{/if}}
+
+  {{!-- ===== Implant ===== --}}
+  {{#if (cwHasType system.CyberWorkType "Implant")}}
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_Type_Implant"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    {{> (template "fields/number") label="CWT_Implant_OptionsAvailable" edit="system.CyberWorkType.OptionsAvailable"}}
+
+    <div class="field">
+      <label>{{CPLocal "CWT_Implant_SlotsLeft"}}</label>
+      <span class="flex-pad"></span>
+      <input type="number" class="smallnumber" value="{{cw.implantSlotsLeft}}" readonly>
+    </div>
+
+    {{> (template "fields/number") label="CWT_Implant_SDP" edit="system.CyberWorkType.SDP"}}
+
+    <div class="field">
+      <label>{{CPLocal "CWT_Implant_ImplantType"}}</label>
+      <span class="flex-pad"></span>
+      <select name="system.cyberwareType">
+        {{#each cw.parentCwTypeChoices as |ch|}}
+          <option value="{{ch.value}}" {{#if (equals ../cw.cyberwareTypeSelected ch.value)}}selected{{/if}}>
+            {{#if (equals ch.localKey ch.value)}}
+              {{ch.value}}
+            {{else}}
+              {{CPLocal ch.localKey}}
+            {{/if}}
+          </option>
+        {{/each}}
+      </select>
+    </div>
+  {{/if}}
+
+  {{!-- ===== Chip: activation toggle ===== --}}
+  {{#if (cwHasType system.CyberWorkType "Chip")}}
+    <div class="field span-two-cells">
+      <label class="larger">{{CPLocal "CWT_Type_Chip"}}</label>
+      <span class="flex-pad"></span>
+    </div>
+
+    <div class="field">
+      <label>{{CPLocal "CWT_Chip_Active"}}</label>
+      <span class="flex-pad"></span>
+      <input type="checkbox" name="system.CyberWorkType.ChipActive" {{checked system.CyberWorkType.ChipActive}}/>
+    </div>
+  {{/if}}
+  {{!-- ===== Chip ===== --}}
+  {{#if (cwHasType system.CyberWorkType "Chip")}}
+    {{#if cw.skillOptions.length}}
+      <div class="field">
+        <label>{{CPLocal "CWT_AddChipSkill"}}</label>
+        <span class="flex-pad"></span>
+        <input type="text" name="cw-chip-skill-search" list="cw-skill-options" placeholder="{{CPLocal 'CWT_SkillSearchPh'}}"/>
+        <datalist id="cw-skill-options">
+          {{#each cw.skillOptions as |n|}}<option value="{{n}}">{{n}}</option>{{/each}}
+        </datalist>
+      </div>
+    {{else}}
+      <div class="field span-two-cells inactive">
+        <label>{{CPLocal "CWT_NoActorForSkills"}}</label>
+        <span class="flex-pad"></span>
+      </div>
+    {{/if}}
+
+    {{#each cw.currentChipSkills as |sk|}}
+      <div class="field">
+        <label>{{sk.label}}</label>
+        <span class="flex-pad"></span>
+        <input type="number" class="smallnumber" name="system.CyberWorkType.ChipSkills.{{sk.key}}" placeholder="0"
+               value="{{#if (equals (lookup ../system.CyberWorkType.ChipSkills sk.key) 0)}}{{else}}{{lookup ../system.CyberWorkType.ChipSkills sk.key}}{{/if}}">
+        <a class="button danger cw-remove-chipskill" data-key="{{sk.key}}">x</a>
+      </div>
+    {{/each}}
+  {{/if}}
+</div>

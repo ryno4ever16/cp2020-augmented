@@ -1,0 +1,35 @@
+{
+  "_id": "yOuZVMlQfXiLfw95",
+  "name": "Tanaka/Takanaka Cologne",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "clothingLine": "Tanaka/Takanaka Exec",
+      "importReview": {
+        "level": "user-signed",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!yOuZVMlQfXiLfw95"
+}

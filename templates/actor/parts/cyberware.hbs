@@ -1,0 +1,120 @@
+<div class="field-list no-wrap">
+    <div class="field">
+        <label for="totalCyberCost">{{CPLocal "TotalEBVal"}}</label>
+        <input name="totalCyberCost" type="number" value="{{gear.cyberCost}}" readonly>
+    </div>
+    <div class="field">
+        <label for="system.stats.emp.humanity.loss">{{CPLocal "HumanityLoss"}}</label>
+        <input class="not-editable" name="system.stats.emp.humanity.loss" type="number" value="{{system.stats.emp.humanity.loss}}" readonly>
+    </div>
+    {{#if system.stats.emp.cyberpsychosis}}
+    <div class="field" title="{{system.stats.emp.cyberpsychosis.label}}">
+        <label>{{CPLocal "Cyberpsychosis"}}</label>
+        <input class="not-editable cp-cyberpsychosis-state" data-state="{{system.stats.emp.cyberpsychosis.state}}" type="text"
+               value="{{system.stats.emp.cyberpsychosis.label}}"
+               style="{{#if system.stats.emp.cyberpsychosis.lost}}color:#ff4040;font-weight:bold;{{else if system.stats.emp.cyberpsychosis.atRisk}}color:#ffaa33;{{/if}}" readonly>
+    </div>
+    {{/if}}
+</div>
+
+<header class="cyberware-header">
+    <h2>{{CPLocal "ActiveChipware"}}</h2>
+</header>
+<div class="chip-scroll-wrapper">
+  <div class="chipware-container {{#unless chipsActive.length}}is-empty{{/unless}}" data-drop-target="active-chips">
+    {{#if chipsActive.length}}
+      {{#each chipsActive as |chip|}}
+        {{#with chip.system}}
+          <div class="chipware field gear full-width"
+               data-full="{{chip.name}}"
+               style="background-image: url('systems/cyberpunk2020/img/chip.png')"
+               data-item-id="{{chip.id}}"
+               draggable="true">
+            <span class="chip-name">
+              <span class="chip-name-text">{{chip.name}}</span>
+            </span>
+            <div class="chipware-slot item-unequip" data-item-id="{{chip.id}}" draggable="false">X</div>
+          </div>
+        {{/with}}
+      {{/each}}
+    {{else}}
+      <div class="chipware-dropzone" data-drop-target="active-chips"></div>
+    {{/if}}
+  </div>
+</div>
+<header class="cyberware-header">
+    <h2>{{CPLocal "ActiveCyberware"}}</h2>
+</header>
+
+
+<div class="active-cyberware" style="background-image: url('systems/cyberpunk2020/img/black_gray_grid.png')">
+    <div class="active-cyberware-right" >
+        {{#each cyberwareSegmentsRight}}
+            <section class="field-list cyberware-field-list active-cyberware-segment"
+            data-drop-target="zone:{{this.area}}">
+            <button type="button">{{this.areaLabel}}</button>
+            {{#each (lookup ../cyberZones this.area) as |cyber|}}
+                <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
+                <label>{{cyber.name}}</label>
+                {{#with cyber.system}}
+                    <span>{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>
+                {{/with}}
+                <span class="item-unequip" data-item-id="{{cyber.id}}" draggable="false">X</span>
+                </div>
+            {{/each}}
+            </section>
+        {{/each}}
+    </div>
+
+    <div class="anatomy-container" style="background-image: url('systems/cyberpunk2020/img/black_gray_grid.png');">
+        <select class="anatomy-select" title="{{CPLocal "AnatomySelectTip"}}">
+            {{#each anatomyOptions as |opt|}}
+            <option value="{{opt.key}}" {{#if opt.selected}}selected{{/if}}>{{opt.label}}</option>
+            {{/each}}
+        </select>
+        {{!-- V14 strips <object> SVG embeds during sheet HTML rendering, so the male SVG vanished.
+             <img> renders both the SVG and the female PNG fine; CSS sizes #anatomy-img and
+             img#anatomy-img adds object-fit:contain. (anatomy.svg flag retained for callers.) --}}
+        <img src="{{anatomy.src}}" id="anatomy-img" alt="anatomy"/>
+    </div>
+    <div class="active-cyberware-left">
+        {{#each cyberwareSegmentsLeft}}
+            <section class="field-list cyberware-field-list active-cyberware-segment"
+                data-drop-target="zone:{{this.area}}">
+                <button type="button">{{this.areaLabel}}</button>
+                {{#each (lookup ../cyberZones this.area) as |cyber|}}
+                    <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
+                    <label>{{cyber.name}}</label>
+                    {{#with cyber.system}}
+                        <span>{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>
+                    {{/with}}
+                    <span class="item-unequip" data-item-id="{{cyber.id}}" draggable="false">X</span>
+                    </div>
+                {{/each}}
+            </section>
+         {{/each}}
+    </div>
+</div>
+
+<div class="cyberware-header">
+    <header>
+        <h2>{{CPLocal "Cyberware"}}</h2>
+    </header>
+</div>
+{{#if (equals items.length 0)}}
+<div class="inactive">{{CPLocal "DragItemsPrompt"}}</div>
+{{/if}}
+<div class="field-list" data-drop-target="cyber-inventory">
+    {{#each gear.cyberware as |cyber|}}
+    <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
+        <div class="field-image" data-item-id="{{cyber.id}}">
+            <img src={{cyber.img}}>
+        </div>
+        <label class="cyber-name">{{cyber.name}}</label>
+            {{#with cyber.system}}
+                <span class="cyber-hm-loss">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>
+            {{/with}}
+        <span class="item-delete" data-item-id="{{cyber.id}}">X</span>
+    </div>
+    {{/each}}
+</div>

@@ -1,0 +1,39 @@
+{{!-- Skills tab contents --}}
+<div class="skill-top-matter">
+  {{!-- Search bar --}}
+  <div class="field skill-search-field">
+    <div class="field-image search-icon"></div>
+    <input
+      class="skill-search"
+      name="cpSkillFilter"
+      value="{{skillFilter}}"
+      autocomplete="off"
+    />
+    <button type="button" class="skill-search-clear" data-action="clear-skill-search">×</button>
+  </div>
+
+  {{> (template "fields/select")
+      label="SortBy"
+      edit="system.skillsSortedBy"
+      choices=skillsSortChoices
+      extraClasses="skill-sort"}}
+</div>
+
+{{!-- IP tracker header: Simple-mode pool + the skill-lock toggle (when the IP system is on). --}}
+{{#if ip.enabled}}
+<div class="ip-skills-header flexrow" style="gap:8px; align-items:center; padding:2px 4px;">
+    {{#if ip.simple}}<span title="{{CPLocal 'IpPool'}}">{{CPLocal "IpPool"}}: <b>{{ip.pool}}</b></span>{{/if}}
+    <span class="flex-pad" style="flex:1;"></span>
+    <button type="button" class="ip-lock-toggle" title="{{CPLocal 'IpSkillLockToggle'}} ({{ip.lockMode}})">{{#if ip.locked}}🔒{{else}}🔓{{/if}} {{CPLocal "IpSkillLockToggle"}}</button>
+</div>
+{{/if}}
+
+{{!-- Actual skills --}}
+<div class="field-list">
+    {{#each skillDisplayList as |skill|}}
+        {{> "modules/cp2020-augmented/templates/actor/parts/skill.hbs" skill=skill}}
+    {{/each}}
+</div>
+
+{{!-- Stops the skills getting real tall when there's only one or two --}}
+<div class="spacer"></div>

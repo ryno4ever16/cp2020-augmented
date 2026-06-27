@@ -1,0 +1,60 @@
+{
+  "_id": "BhvlukJbytYnbAhZ",
+  "name": "Militech Mini-Gat",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 695,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "weaponType": "SMG",
+    "accuracy": 0,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": ".22/5mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 120,
+    "shots": 120,
+    "rof": 40,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 150,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 2200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!BhvlukJbytYnbAhZ"
+}

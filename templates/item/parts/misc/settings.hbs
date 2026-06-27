@@ -1,0 +1,31 @@
+<div class="field-list">
+    {{> (template "fields/boolean") label="Equipped" edit="system.equipped"}}
+    {{> (template "fields/number") label="Cost" edit="system.cost"}}
+    {{> (template "fields/number") label="Weight" edit="system.weight"}}
+    {{> (template "fields/string") label="Source" edit="system.source"}}
+
+    {{!-- Services (Shopping #15): override how this item is treated when shopping is enabled. "Auto"
+         infers from the source list / name; the others force gear / a recurring bill / a one-off.
+         serviceMode/servicePeriod live ONLY on the `misc` data model, but this part doubles as the
+         shared Cost/Weight/Source footer for every item type → gate the block to misc so it doesn't
+         render (vestigially) on cyberware/weapons/armor/etc. --}}
+    {{#if (equals item.type "misc")}}
+    <div class="field">
+        <label for="system.serviceMode">{{CPLocal "ServiceMode"}}</label>
+        <span class="flex-pad"></span>
+        <select name="system.serviceMode">
+            <option value="" {{#if (equals system.serviceMode "")}}selected{{/if}}>{{CPLocal "ServiceModeAuto"}}</option>
+            <option value="gear" {{#if (equals system.serviceMode "gear")}}selected{{/if}}>{{CPLocal "ServiceModeGear"}}</option>
+            <option value="recurring" {{#if (equals system.serviceMode "recurring")}}selected{{/if}}>{{CPLocal "ServiceModeRecurring"}}</option>
+            <option value="oneoff" {{#if (equals system.serviceMode "oneoff")}}selected{{/if}}>{{CPLocal "ServiceModeOneoff"}}</option>
+        </select>
+    </div>
+    {{#if (equals system.serviceMode "recurring")}}
+    <div class="field">
+        <label for="system.servicePeriod">{{CPLocal "ServicePeriod"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.servicePeriod" type="text" value="{{system.servicePeriod}}"/>
+    </div>
+    {{/if}}
+    {{/if}}
+</div>

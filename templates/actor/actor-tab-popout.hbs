@@ -1,0 +1,48 @@
+{{!-- A single character-sheet tab, popped out into its own window (CyberpunkActorTabSheet).
+      Mirrors the matching body <div> from actor-sheet.hbs (same wrapper classes) so all CSS applies,
+      and marks it `active` since there is no in-window tab switcher. --}}
+<div class="{{cssClass}} flexcol cp-tab-popout-form" style="flex:1;min-height:0;">
+    <section class="sheet-body cp-tab-popout-body">
+        {{#if (equals tabKey "skills")}}
+        <div class="tab skills flexcol active" data-group="primary" data-tab="skills">
+            {{> "modules/cp2020-augmented/templates/actor/parts/skills.hbs"}}
+        </div>
+        {{/if}}
+
+        {{#if (equals tabKey "combat")}}
+        <div class="tab combat flexcol active" data-group="primary" data-tab="combat">
+            {{> "modules/cp2020-augmented/templates/actor/parts/combat.hbs"}}
+        </div>
+        {{/if}}
+
+        {{#if (equals tabKey "gear")}}
+        <div class="tab gear flexcol active" data-group="primary" data-tab="gear">
+            {{> "modules/cp2020-augmented/templates/actor/parts/gear.hbs"}}
+        </div>
+        {{/if}}
+
+        {{#if (equals tabKey "services")}}
+        <div class="tab gear flexcol active" data-group="primary" data-tab="services">
+            {{> "modules/cp2020-augmented/templates/actor/parts/services.hbs"}}
+        </div>
+        {{/if}}
+
+        {{#if (equals tabKey "cyber")}}
+        <div class="tab gear flexcol active" data-group="primary" data-tab="cyber">
+            {{> "modules/cp2020-augmented/templates/actor/parts/cyberware.hbs"}}
+        </div>
+        {{/if}}
+
+        {{#if (equals tabKey "life")}}
+        <div class="tab life flexcol active" data-group="primary" data-tab="life">
+            {{> "modules/cp2020-augmented/templates/actor/parts/life.hbs"}}
+        </div>
+        {{/if}}
+
+        {{#if (equals tabKey "netrun")}}
+        <div class="tab gear flexcol active" data-group="primary" data-tab="netrun">
+            {{> "modules/cp2020-augmented/templates/actor/parts/netrunning.hbs"}}
+        </div>
+        {{/if}}
+    </section>
+</div>

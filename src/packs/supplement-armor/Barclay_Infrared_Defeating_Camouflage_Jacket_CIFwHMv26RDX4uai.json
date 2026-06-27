@@ -1,0 +1,47 @@
+{
+  "_id": "CIFwHMv26RDX4uai",
+  "name": "Barclay Infrared Defeating Camouflage (Jacket)",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 2",
+    "lastOwnerId": "",
+    "coverage": {
+      "Head": false,
+      "Torso": false,
+      "lArm": false,
+      "rArm": false,
+      "lLeg": false,
+      "rLeg": false
+    },
+    "encumbrance": 0,
+    "armorType": "",
+    "clothingWeight": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 2",
+      "importCategory": "clothing",
+      "garmentType": "clothing",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!CIFwHMv26RDX4uai"
+}

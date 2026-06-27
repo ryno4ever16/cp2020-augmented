@@ -16,11 +16,11 @@ This module is written to the **same conventions as the base system** ("Tilt's W
 ## Requirements
 
 - FoundryVTT v13–v14
-- The `cyberpunk2020` system (v2.0.0-beta+)
+- The `cyberpunk2020` system, v1.1.1 or later. The module uses the system's public helper API (`game.cyberpunk.api`) when it is present and falls back to its own bundled copies otherwise, so it runs on a stock install.
 
 ## Status
 
-Early scaffold. See the project board for the feature roll-out order (combat automation → vehicles/ACPA → shopping → IP).
+v1.0.0 — first public release: vehicles & ACPA (Maximum Metal), combat automation, shopping with an imported multi-supplement catalog, and Improvement Point tracking. Further supplement-data review ships as follow-up patches.
 
 ## Credits & licenses
 

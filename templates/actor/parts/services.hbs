@@ -1,0 +1,36 @@
+{{!-- Services tab: recurring bills (rent, cell, trauma team…). Shown only when Shopping is enabled.
+      Each row has a Pay button that deducts one period's cost on demand (no auto-billing in v1). --}}
+<div class="field-list no-wrap">
+    <div class="field">
+        <label>{{CPLocal "Eurobucks"}}</label>
+        <input class="not-editable" type="number" value="{{system.eurobucks}}" readonly>
+    </div>
+    <div class="field cp-header-action">
+        <label>&nbsp;</label>
+        <button type="button" class="cp-service-add" title="{{CPLocal "ServiceAddTip"}}">＋ {{CPLocal "ServiceAdd"}}</button>
+    </div>
+</div>
+
+{{#if services.length}}
+<div class="cp-services field-list">
+    {{#each services}}
+    <div class="field cp-service-row" data-item-id="{{id}}">
+        <div class="field-image" style="background-image: url({{img}})" data-item-id="{{id}}"></div>
+        <label class="cp-service-name">{{name}}</label>
+        <span class="flex-pad"></span>
+        <span class="cp-service-cost"><b>{{cost}}</b>eb / {{period}}</span>
+        <button type="button" class="cp-service-pay" data-item-id="{{id}}" title="{{CPLocal "ServicePayTip" period=period}}">{{CPLocal "ServicePay"}}</button>
+        <button type="button" class="cp-service-edit" data-item-id="{{id}}" title="{{CPLocal "ServiceEditTip"}}">✎</button>
+        <button type="button" class="cp-service-delete" data-item-id="{{id}}" title="{{CPLocal "ServiceDeleteTip"}}">✕</button>
+    </div>
+    {{/each}}
+</div>
+<div class="field-list">
+    <div class="field">
+        <label>{{CPLocal "ServicesMonthlyTotal"}}</label>
+        <input class="not-editable" type="text" value="{{servicesTotal}}eb" readonly>
+    </div>
+</div>
+{{else}}
+<div class="inactive">{{CPLocal "ServicesEmpty"}}</div>
+{{/if}}

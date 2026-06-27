@@ -1,0 +1,74 @@
+{{!-- V2 single-root part: the <form> is now provided by the sheet's tag:"form"; this div is the
+      part's single root element (HandlebarsApplicationMixin requires exactly one). --}}
+<div class="{{cssClass}} flexcol cp-actor-sheet-root cyberpunk-actor-sheet-content" style="flex:1;min-height:0;">
+    {{!-- Sheet Header --}}
+    <header class="cyberheader">
+        <div class="fieldrow">
+            <h1 class="title">
+                <input type="text" class="field-value" name="name"  value="{{actor.name}}"/>
+            </h1>
+            {{#if (equals actor.type "npc")}}
+                <div class="field">
+                    <label>{{CPLocal "NPC"}}</label>
+                </div>
+            {{/if}}
+            {{> (template "fields/string") label="Role" edit="system.role.value"}}
+            {{> (template "fields/number") label="Age" edit="system.age" isNum=true}}
+            {{> (template "fields/number") label="Points" edit="system.points"}}
+            </div>
+
+        <div class="flexrow">
+            <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}"/>
+            <div class="flexcol">
+                {{> "modules/cp2020-augmented/templates/actor/parts/statsrow.hbs"}}
+                {{> "modules/cp2020-augmented/templates/actor/parts/woundtracker.hbs"}}
+            </div>
+        </div>
+    </header>
+
+    {{!-- Sheet Tab Navigation --}}
+    <nav class="sheet-tabs tabs" data-group="primary">
+        <a class="item" data-tab="skills">{{localize 'CYBERPUNK.TabSkills'}}</a>
+        <a class="item" data-tab="combat">{{localize 'CYBERPUNK.TabCombat'}}</a>
+        <a class="item" data-tab="gear">{{localize 'CYBERPUNK.TabGear'}}</a>
+        {{#if showShop}}<a class="item" data-tab="services">{{localize 'CYBERPUNK.ServicesTab'}}</a>{{/if}}
+        <a class="item" data-tab="cyber">{{localize 'CYBERPUNK.TabCyber'}}</a>
+        <a class="item" data-tab="life">{{localize 'CYBERPUNK.Life'}}</a>
+        <a class="item" data-tab="netrun">{{localize 'CYBERPUNK.NetRun'}}</a>
+    </nav>
+
+    {{!-- Sheet Body --}}
+    <section class="sheet-body">
+        <div class="tab skills flexcol" data-group="primary" data-tab="skills">
+            {{> "modules/cp2020-augmented/templates/actor/parts/skills.hbs"}}
+        </div>
+
+        <div class="tab combat flexcol" data-group="primary" data-tab="combat">
+            {{> "modules/cp2020-augmented/templates/actor/parts/combat.hbs"}}
+        </div>
+
+        <div class="tab gear flexcol" data-group="primary" data-tab="gear">
+            {{> "modules/cp2020-augmented/templates/actor/parts/gear.hbs"}}
+        </div>
+
+        {{#if showShop}}
+        <div class="tab gear flexcol" data-group="primary" data-tab="services">
+            {{> "modules/cp2020-augmented/templates/actor/parts/services.hbs"}}
+        </div>
+        {{/if}}
+
+        <div class="tab gear flexcol" data-group="primary" data-tab="cyber">
+            {{> "modules/cp2020-augmented/templates/actor/parts/cyberware.hbs"}}
+        </div>
+
+        {{!-- Biography Tab --}}
+        <div class="tab life flexcol" data-group="primary" data-tab="life">
+            {{> "modules/cp2020-augmented/templates/actor/parts/life.hbs"}}
+        </div>
+
+        <div class="tab gear flexcol" data-group="primary" data-tab="netrun">
+            {{> "modules/cp2020-augmented/templates/actor/parts/netrunning.hbs"}}
+        </div>
+    </section>
+</div>
+

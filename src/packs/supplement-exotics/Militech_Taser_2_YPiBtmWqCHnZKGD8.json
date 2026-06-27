@@ -1,0 +1,56 @@
+{
+  "_id": "YPiBtmWqCHnZKGD8",
+  "name": "Militech Taser 2",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "The compact successor to the Militech Taser. Touch-operated design for close-quarters use.",
+    "notes": "",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Common",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "Stun -3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 2,
+    "reliability": "VeryReliable",
+    "range": 0,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!YPiBtmWqCHnZKGD8"
+}

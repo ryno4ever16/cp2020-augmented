@@ -1,0 +1,56 @@
+{
+  "_id": "OJozUhSKNrvJvkmJ",
+  "name": "Techtronica M40 \"Pulse\"",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Techtronica's mil-spec Electro-Magnetic Pulse cannon. Disrupts, defeats, and destroys electronics and computer systems. At close range it can permanently fry cyberware and electronics of all kinds. The weapon is fully insulated against its own effects.",
+    "notes": "",
+    "cost": 3500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2",
+    "weaponType": "Rifle",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "damage": "EMP Effect",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "Explocharge",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!OJozUhSKNrvJvkmJ"
+}

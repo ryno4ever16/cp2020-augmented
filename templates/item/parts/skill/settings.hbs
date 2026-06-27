@@ -1,0 +1,29 @@
+<div class="field-list">
+    {{>(template "fields/number") label="Level" edit="system.level"}}
+    {{>(template "fields/number") label="LevelChipped" edit="system.chipLevel"}}
+    {{>(template "fields/boolean") label="Chipped" edit="system.isChipped"}}
+</div>
+
+<div class="field-list">
+    {{>(template "fields/number") label="ImprovementPoints" edit="system.ip"}}
+    {{>(template "fields/number") label="DifficultyMod" edit="system.diffMod"}}
+</div>
+<div class="field-list">
+    {{>(template "fields/select") label="Stat" edit="system.stat" choices=stats noTranslateOptions=true}}
+    {{>(template "fields/boolean") label="IsRoleSkill" edit="system.isRoleSkill"}}
+</div>
+
+<div class="field-list">
+    {{>(template "fields/boolean") label="IsMartialArt" edit="flags.cp2020-augmented.isMartialArt"}}
+</div>
+
+{{#if (deepLookup . "flags.cp2020-augmented.isMartialArt")}}
+<h3>{{CPLocal "MartialArtBonuses"}}</h3>
+<p class="notes" style="font-size:0.85em; opacity:0.75; margin:2px 0 6px;">{{CPLocal "MartialArtBonusesHint"}}</p>
+<div class="field-list">
+    {{#each martialBonusActions as |action|}}
+        {{!-- pass @root as context so the number field reads system.martialBonuses.* from the sheet data, not the loop's action string --}}
+        {{>(template "fields/number") @root label=action edit=(concat "flags.cp2020-augmented.martialBonuses." action)}}
+    {{/each}}
+</div>
+{{/if}}
