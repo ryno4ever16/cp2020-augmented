@@ -1126,6 +1126,29 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 .cyberpunk .combat-tab .reputation-actions button { width: auto; flex: 0 0 auto; padding: 1px 8px; }
 
+/* ── Chat-card readability (live-1.0.0 fix) ─────────────────────────────────────────
+ * The host system's theme-aware text colours are scoped to SHEETS/DIALOGS only; cyberpunk
+ * CHAT cards (.cyberpunk-card roll cards + our .cyberpunk save-prompt / facedown / vehicle
+ * cards) define no surface of their own, so they inherit Foundry's dark chat text (#111) over
+ * the dark chat/canvas backdrop → ~1.1 contrast (black-on-black) in every theme, with or
+ * without the skin. Give the cards a self-contained dark surface + warm light text (the
+ * system's own dark-theme token VALUES) so they read on ANY chat theme — the same
+ * self-contained-card approach the shop request card already takes. Scoped to .chat-message
+ * so sheets/dialogs (also .cyberpunk) are untouched. */
+.chat-message .cyberpunk {
+  background-color: #14110d;
+  color: #e7d1b1;
+  border: 1px solid #6b5d48;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+/* Foundry colours chat headings explicitly (beats the card's inherited colour), so re-assert
+ * the light ink on the card's own headings. */
+.chat-message .cyberpunk h1,
+.chat-message .cyberpunk h2,
+.chat-message .cyberpunk h3,
+.chat-message .cyberpunk h4 { color: #e7d1b1; }
+
 /* Facedown / Recognition chat card */
 .cp-facedown-card .cp-facedown-line { padding: 1px 0; }
 

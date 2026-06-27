@@ -2,7 +2,7 @@
   "id": "cp2020-augmented",
   "title": "Cyberpunk 2020: Augmented Edition",
   "description": "A companion expansion for the Cyberpunk 2020 system: vehicles & ACPA (Maximum Metal), combat automation, shopping, and Improvement Point tracking — added as opt-in features on top of the base system.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "compatibility": {
     "minimum": 13,
     "verified": 14,

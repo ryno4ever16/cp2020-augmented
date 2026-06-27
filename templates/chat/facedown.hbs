@@ -1,0 +1,20 @@
+{{!--
+  Facedown chat card (CP2020 p.54). Rendered via renderChatCard from rollFacedown(). `lines` is the
+  per-combatant roll breakdown ({name,die,cool,rep,total}) — solo posts just this actor + the hint;
+  contested posts both lines + a tie/winner outcome (winnerName/loserName). Names auto-escaped. CPLocal.
+--}}
+<div class="cyberpunk cp-facedown-card">
+  <h3>⚔ {{CPLocal "Facedown"}}</h3>
+  {{#each lines}}
+  <div class="cp-facedown-line"><b>{{name}}</b>: 🎲 {{die}} + {{CPLocal "CoolFull"}} {{cool}} + {{CPLocal "Reputation"}} {{rep}} = <b>{{total}}</b></div>
+  {{/each}}
+  {{#if solo}}
+  <div class="cp-facedown-note">{{CPLocal "FacedownSoloHint"}}</div>
+  {{else}}
+    {{#if tie}}
+  <div class="cp-facedown-result cp-facedown-tie">{{CPLocal "FacedownTie"}}</div>
+    {{else}}
+  <div class="cp-facedown-result"><b>{{CPLocal "FacedownWinner" winner=winnerName}}</b><div class="cp-facedown-note">{{CPLocal "FacedownPenalty" loser=loserName winner=winnerName}}</div></div>
+    {{/if}}
+  {{/if}}
+</div>

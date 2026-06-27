@@ -54,6 +54,13 @@ function getItemIdCandidates(itemData) {
   addSourceId(itemData?.flags?.core?.sourceId);
   addSourceId(itemData?._source?.flags?.core?.sourceId);
 
+  // Foundry v12+ records a document's compendium origin on _stats.compendiumSource
+  // (flags.core.sourceId is deprecated/absent on items created after that change). Without
+  // this, a built-in martial-art skill added to a sheet keeps only its fresh embedded _id,
+  // fails the id lookup, and is misclassified as a custom style — losing its Key-Attack bonus.
+  addSourceId(itemData?._stats?.compendiumSource);
+  addSourceId(itemData?._source?._stats?.compendiumSource);
+
   return [...ids];
 }
 

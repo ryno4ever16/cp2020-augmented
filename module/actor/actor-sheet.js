@@ -2,6 +2,7 @@ import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill } from "../utils.js"
 import { ModifiersDialog } from "../dialog/modifiers.js"
 import { SortOrders, sortSkills } from "./skill-sort.js";
+import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } from "./reputation.js";
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
@@ -381,14 +382,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const facedown = target.closest(".facedown-roll");
       if (facedown) {
         event.preventDefault();
-        this.actor.rollFacedown();
+        cpRollFacedown(this.actor);
         return;
       }
 
       const recognition = target.closest(".recognition-roll");
       if (recognition) {
         event.preventDefault();
-        this.actor.rollRecognition();
+        cpRollRecognition(this.actor);
         return;
       }
 

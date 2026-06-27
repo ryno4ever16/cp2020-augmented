@@ -1,0 +1,8 @@
+{{!--
+  Recognition chat card (CP2020 p.54). Rendered via renderChatCard from rollRecognition(). Pass
+  { recognized, name, roll, rep }; the result line uses the tie style when NOT recognized. CPLocal.
+--}}
+<div class="cyberpunk cp-facedown-card">
+  <h3>👁 {{CPLocal "Recognition"}}</h3>
+  <div class="cp-facedown-result{{#unless recognized}} cp-facedown-tie{{/unless}}">{{#if recognized}}{{CPLocal "RecognizedYes" name=name roll=roll rep=rep}}{{else}}{{CPLocal "RecognizedNo" name=name roll=roll rep=rep}}{{/if}}</div>
+</div>
