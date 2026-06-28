@@ -92,6 +92,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const StunDeathMod = foundry.utils.getProperty(system, "StunDeathMod") || 0;
       sheetData.StunDeathMod = StunDeathMod;
 
+      // Facedown/Recognition Reputation lives in a MODULE FLAG, not system.* — the stock base
+      // system's DataModel has no `reputation` field and strips any system.reputation write.
+      // The combat-tab input binds to flags.cp2020-augmented.reputation; this reads it back for
+      // display. See module/actor/reputation.js.
+      sheetData.reputation = Number(actor.getFlag("cp2020-augmented", "reputation")) || 0;
+
       // Whether to show the "Shop" button on the gear tab (world setting; default off).
       sheetData.showShop = shoppingEnabled();
     }
