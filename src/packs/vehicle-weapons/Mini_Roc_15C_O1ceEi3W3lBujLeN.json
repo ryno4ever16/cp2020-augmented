@@ -1,0 +1,48 @@
+{
+  "name": "Mini-Roc 15C",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 171,
+    "magWeight": 0,
+    "notes": "15-shot 50mm rocket pod; heavy bombardment; 3m burst; 2-handed/torso.",
+    "weaponClass": "rocket",
+    "mountType": "pod",
+    "arc": "front",
+    "wa": -2,
+    "penetration": 3,
+    "damage": "6D10",
+    "hiEx": true,
+    "burst": 3,
+    "rof": 1,
+    "shots": 15,
+    "range": 500,
+    "reliability": "VR",
+    "space": 3,
+    "cost": 4500,
+    "sp": 20,
+    "sdp": 112,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "O1ceEi3W3lBujLeN",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961231,
+    "modifiedTime": 1782732961231,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!O1ceEi3W3lBujLeN"
+}

@@ -1,0 +1,48 @@
+{
+  "name": "Heavy Bladed Weapon (2-Hand)",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 10,
+    "magWeight": 0,
+    "notes": "Two-handed powered blade; bigger dice, same FIST-boosted melee. Sheathed external mount.",
+    "weaponClass": "melee",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": -1,
+    "penetration": 5,
+    "damage": "6D6AP",
+    "ap": true,
+    "addFist": true,
+    "rof": 1,
+    "shots": 1,
+    "range": 3,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 1000,
+    "sp": 20,
+    "sdp": 30,
+    "area": "rArm",
+    "source": "Maximum Metal"
+  },
+  "_id": "Z8KFqEN9p1gYIE8O",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961229,
+    "modifiedTime": 1782732961229,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!Z8KFqEN9p1gYIE8O"
+}

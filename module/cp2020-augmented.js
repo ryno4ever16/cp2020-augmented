@@ -16,7 +16,7 @@ import { registerPopoutCompat } from "./popout-compat.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
-import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData } from "./data/vehicle-item-data.js";
+import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData, CyberpunkVehicleItemData } from "./data/vehicle-item-data.js";
 import { CyberpunkVehicleSheet } from "./actor/vehicle-sheet.js";
 import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
@@ -146,6 +146,9 @@ Hooks.once("init", function () {
   Object.assign(CONFIG.Item.dataModels, {
     [VEHICLE_WEAPON]: CyberpunkVehicleWeaponData,
     [ACPA_SYSTEM]:    CyberpunkAcpaSystemData,
+    // Re-register the bare `vehicle` type with the richer module model (range/rangeUnit/speed.unit).
+    // Module loads after the system, so this wins; mirrors the system schema + the additions.
+    vehicle:          CyberpunkVehicleItemData,
   });
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the

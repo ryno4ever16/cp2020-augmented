@@ -23,8 +23,8 @@
 import { openSingletonDialog, localize, localizeParam } from "../utils.js";
 import { effectiveVehicleRuleSystem } from "../settings.js";
 import { renderChatCard } from "../compat.js";
-import { acpaBodyArea, externalSystemHit, acpaSystemHit, acpaRollAgain, acpaCriticalEffect, acpaCriticalUpdate, acpaAreaSOP, systemIntegrity } from "./vehicle-acpa.js";
-import { acpaHitSystem, acpaSystemSop } from "./vehicle-acpa-systems.js";
+import { acpaBodyArea, externalSystemHit, acpaSystemHit, acpaRollAgain, acpaCriticalEffect, acpaCriticalUpdate, acpaAreaSDP, systemIntegrity } from "./vehicle-acpa.js";
+import { acpaHitSystem, acpaSystemSdp } from "./vehicle-acpa-systems.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -289,10 +289,10 @@ export async function applyVehicleDamageCore(actor, { rawDamage = 0, ap = false,
 const _ACPA_AREA_KEY = { "Head": "head", "Right Arm": "rArm", "Left Arm": "lArm", "Right Leg": "rLeg", "Left Leg": "lLeg", "Torso": "torso" };
 
 /**
- * Faithful ACPA (powered-armor) damage (Maximum Metal p.54-56): SOP damage = incoming damage − armor
+ * Faithful ACPA (powered-armor) damage (Maximum Metal p.54-56): SDP damage = incoming damage − armor
  * SP − Toughness Mod. If it gets through, roll a body area → 50% external system → System Hit Table
  * → (Critical Hit Chart on a critical). An "enclosed system" hit consumes a specific mounted system's
- * SOP (a destroyed system spills its overflow to the frame); a "chassis"/"weapons" hit goes to the
+ * SDP (a destroyed system spills its overflow to the frame); a "chassis"/"weapons" hit goes to the
  * frame. Frame overflow spills to the pilot; a destroyed area knocks out its systems and a destroyed
  * Torso shuts the suit down.
  *
@@ -313,39 +313,39 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
   const incoming = (rawDamage != null) ? Math.max(0, Number(rawDamage) || 0) : Math.max(0, pen * 10);
   const armorSP = Number(sys.sp?.front) || 0;
   const toughness = Math.abs(Number(sys.toughness) || 0);
-  const sop = incoming - armorSP - toughness;
+  const sdp = incoming - armorSP - toughness;
   const dmgSrc = (rawDamage != null) ? `${incoming} dmg` : `Pen ${pen} ≈ ${incoming} dmg`;
-  const body = `${dmgSrc} − Armor SP ${armorSP} − Toughness ${toughness} = <b>${sop}</b> SOP`;
+  const body = `${dmgSrc} − Armor SP ${armorSP} − Toughness ${toughness} = <b>${sdp}</b> SDP`;
 
-  if (sop <= 0) return { body, lines: `Armor + frame absorbed it — no penetration.`, updates, itemUpdates };
+  if (sdp <= 0) return { body, lines: `Armor + frame absorbed it — no penetration.`, updates, itemUpdates };
 
   const areaName = acpaBodyArea(await d10());
   const areaKey = _ACPA_AREA_KEY[areaName] ?? "torso";
-  let lines = `<b>${sop}</b> SOP to the <b>${areaName}</b>`;
-  // How much SOP reaches the FRAME. A struck system (external or enclosed) may absorb it (frame/suit
+  let lines = `<b>${sdp}</b> SDP to the <b>${areaName}</b>`;
+  // How much SDP reaches the FRAME. A struck system (external or enclosed) may absorb it (frame/suit
   // spared) or, when destroyed, pass its overflow on.
-  let frameDamage = sop;
+  let frameDamage = sdp;
 
   // Hit the first live mounted Item (acpaSystem or ACPA weapon) matching `filterFn` in the struck
-  // area; records the Item update and returns the outcome (or null if none is there). `sop` is incoming.
+  // area; records the Item update and returns the outcome (or null if none is there). `sdp` is incoming.
   const hitMountedSystem = (filterFn) => {
     const sysItems = (actor.items?.filter(i => filterFn(i)) ?? []);
-    const mounted = sysItems.map(it => ({ id: it.id, key: it.system?.catalogKey, area: it.system?.area, sop: it.system?.sop, sp: it.system?.sp, sopDamage: it.system?.sopDamage, destroyed: it.system?.destroyed }));
-    const hit = acpaHitSystem(mounted, areaKey, sop);
+    const mounted = sysItems.map(it => ({ id: it.id, key: it.system?.catalogKey, area: it.system?.area, sdp: it.system?.sdp, sp: it.system?.sp, sdpDamage: it.system?.sdpDamage, destroyed: it.system?.destroyed }));
+    const hit = acpaHitSystem(mounted, areaKey, sdp);
     if (hit.index < 0) return null;
     const struck = hit.updated[hit.index];
     const it = sysItems.find(x => x.id === struck.id);
     // Keep a reference to the pushed Item update so the Integrity Check can flip it to destroyed.
-    const iu = { _id: struck.id, "system.sopDamage": struck.sopDamage, "system.destroyed": !!struck.destroyed };
+    const iu = { _id: struck.id, "system.sdpDamage": struck.sdpDamage, "system.destroyed": !!struck.destroyed };
     itemUpdates.push(iu);
-    return { name: it?.name ?? "system", struck, destroyed: hit.destroyed, overflow: hit.overflow, total: acpaSystemSop({ sop: it?.system?.sop, sp: it?.system?.sp }), iu };
+    return { name: it?.name ?? "system", struck, destroyed: hit.destroyed, overflow: hit.overflow, total: acpaSystemSdp({ sdp: it?.system?.sdp, sp: it?.system?.sp }), iu };
   };
 
-  // System Integrity Check (MM p.56): a system that ABSORBED a hit without its SOP being fully consumed
-  // can still be knocked out — 25% if it has lost < ½ its SOP, 75% if ≥ ½. On failure it's inoperable
-  // (marked destroyed) but the frame is still spared (it absorbed the SOP). Returns a note, or "".
+  // System Integrity Check (MM p.56): a system that ABSORBED a hit without its SDP being fully consumed
+  // can still be knocked out — 25% if it has lost < ½ its SDP, 75% if ≥ ½. On failure it's inoperable
+  // (marked destroyed) but the frame is still spared (it absorbed the SDP). Returns a note, or "".
   const integrityCheck = async (r) => {
-    const chk = systemIntegrity({ sopLost: r.struck.sopDamage, sopTotal: r.total });
+    const chk = systemIntegrity({ sopLost: r.struck.sdpDamage, sopTotal: r.total });
     const pct = Math.round(chk.inopChance * 100);
     if ((await d100()) > pct) return "";
     r.iu["system.destroyed"] = true;
@@ -358,13 +358,13 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
     if (!r) return { body, lines: lines + `<br>An <b>external system</b> on the ${areaName} took it (none mounted there — GM adjudicates).`, updates, itemUpdates };
     if (!r.destroyed) {
       const inopNote = await integrityCheck(r);
-      lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} absorbed <b>${sop}</b> SOP (now ${r.struck.sopDamage}/${r.total}). Suit proper spared.${inopNote}`;
+      lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Suit proper spared.${inopNote}`;
       return { body, lines, updates, itemUpdates };
     }
     lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} was <span class="result-warn">DESTROYED</span>.`;
     if (r.overflow <= 0) return { body, lines, updates, itemUpdates };
     frameDamage = r.overflow;
-    lines += ` ${r.overflow} SOP overflows into the suit frame.`;
+    lines += ` ${r.overflow} SDP overflows into the suit frame.`;
     // falls through to frame consumption with frameDamage = overflow
   } else {
     // The hit reached the suit proper — roll the System Hit Table (a 10 re-rolls into Critical/System Hit).
@@ -378,35 +378,35 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
       lines += `<br><span class="result-fail">CRITICAL</span> — ${eff.label}: ${note}.`;
       if (eff.type === "mechShock") pilotStun = true;   // mechanical shock stuns the pilot
     } else if (cat === "enclosed") {
-      // Per-system SOP (D-4d): the SOP damages a specific mounted, enclosed system in the struck area.
+      // Per-system SDP (D-4d): the SDP damages a specific mounted, enclosed system in the struck area.
       const r = hitMountedSystem(i => i.type === "cp2020-augmented.acpaSystem" && i.system?.mount !== "external");
       if (r) {
         if (r.destroyed) {
           lines += `<br>System Hit: <b>${r.name}</b> (${areaName}) — <span class="result-warn">DESTROYED</span>.`;
           frameDamage = r.overflow;
-          if (r.overflow > 0) lines += ` ${r.overflow} SOP overflows to the frame.`;
+          if (r.overflow > 0) lines += ` ${r.overflow} SDP overflows to the frame.`;
         } else {
           const inopNote = await integrityCheck(r);
-          lines += `<br>System Hit: <b>${r.name}</b> (${areaName}) absorbed <b>${sop}</b> SOP (now ${r.struck.sopDamage}/${r.total}). Frame spared.${inopNote}`;
+          lines += `<br>System Hit: <b>${r.name}</b> (${areaName}) absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Frame spared.${inopNote}`;
           frameDamage = 0;
         }
       } else {
         lines += `<br>System Hit: <b>an enclosed system</b> in the ${areaName} (none mounted there — hits the frame).`;
       }
     } else if (cat === "weapons") {
-      // Per-weapon SOP (deferral B): a SOP-tracked ACPA weapon (system.sop > 0) in the struck area
-      // takes the hit; weapons without SOP data fall through to the frame.
-      const r = hitMountedSystem(i => i.type === "cp2020-augmented.vehicleWeapon" && (Number(i.system?.sop) || 0) > 0);
+      // Per-weapon SDP (deferral B): a SDP-tracked ACPA weapon (system.sdp > 0) in the struck area
+      // takes the hit; weapons without SDP data fall through to the frame.
+      const r = hitMountedSystem(i => i.type === "cp2020-augmented.vehicleWeapon" && (Number(i.system?.sdp) || 0) > 0);
       if (r) {
         if (r.destroyed) {
           lines += `<br>System Hit: <b>${r.name}</b> (weapon, ${areaName}) — <span class="result-warn">DESTROYED</span>.`;
           frameDamage = r.overflow;
-          if (r.overflow > 0) lines += ` ${r.overflow} SOP overflows to the frame.`;
+          if (r.overflow > 0) lines += ` ${r.overflow} SDP overflows to the frame.`;
           const dn = `${r.name} (destroyed)`;
           if (!damaged.includes(dn)) { damaged.push(dn); updates["system.damagedSystems"] = damaged; }
         } else {
           const inopNote = await integrityCheck(r);
-          lines += `<br>System Hit: <b>${r.name}</b> (weapon, ${areaName}) absorbed <b>${sop}</b> SOP (now ${r.struck.sopDamage}/${r.total}). Frame spared.${inopNote}`;
+          lines += `<br>System Hit: <b>${r.name}</b> (weapon, ${areaName}) absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Frame spared.${inopNote}`;
           frameDamage = 0;
           if (inopNote) { const dn = `${r.name} (destroyed)`; if (!damaged.includes(dn)) { damaged.push(dn); updates["system.damagedSystems"] = damaged; } }
         }
@@ -418,18 +418,18 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
     }
   }
 
-  // Consume the area's FRAME SOP with whatever damage reached it; overflow spills to the pilot.
-  // Initialize current SOP to full on the first hit (a freshly built/repaired suit has frameSOP = max).
+  // Consume the area's FRAME SDP with whatever damage reached it; overflow spills to the pilot.
+  // Initialize current SDP to full on the first hit (a freshly built/repaired suit has frameSDP = max).
   if (frameDamage > 0) {
-    const max = sys.frameSOPMax ?? acpaAreaSOP(str);
-    let cur = { ...(sys.frameSOP ?? {}) };
+    const max = sys.frameSDPMax ?? acpaAreaSDP(str);
+    let cur = { ...(sys.frameSDP ?? {}) };
     if (Object.values(cur).every(v => !Number(v))) cur = { ...max };
     const before = Number(cur[areaKey]) || 0;
     const remaining = before - frameDamage;
     cur[areaKey] = Math.max(0, remaining);
-    updates["system.frameSOP"] = cur;
-    if (remaining < 0) { pilotDamage = -remaining; lines += `<br>${areaName} frame SOP ${before} → 0; <b>${-remaining}</b> overflows to the <b>pilot</b>.`; }
-    else lines += `<br>${areaName} frame SOP ${before} → ${cur[areaKey]}.`;
+    updates["system.frameSDP"] = cur;
+    if (remaining < 0) { pilotDamage = -remaining; lines += `<br>${areaName} frame SDP ${before} → 0; <b>${-remaining}</b> overflows to the <b>pilot</b>.`; }
+    else lines += `<br>${areaName} frame SDP ${before} → ${cur[areaKey]}.`;
 
     if (cur[areaKey] === 0) {
       lines += `<br><span class="result-warn">${areaName} frame destroyed — its systems are inoperable.</span>`;
@@ -448,7 +448,7 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
 
 /**
  * Apply Maximum Metal damage and post a card. Vehicles use the Penetration → severity → hit-location
- * flow; powered armor (isACPA) uses the faithful SOP-damage flow (MM p.54-56). `rawDamage` is the
+ * flow; powered armor (isACPA) uses the faithful SDP-damage flow (MM p.54-56). `rawDamage` is the
  * actual rolled weapon damage when the caller has it (used for ACPA); else ACPA estimates it from Pen.
  */
 export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front", goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, heat = false, highDensityAP = false, ap = false, rawDamage = null } = {}) {
@@ -496,12 +496,12 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
   const damaged = Array.isArray(sys.damagedSystems) ? [...sys.damagedSystems] : [];
 
   if (isACPA) {
-    // Powered armor uses the faithful SOP-damage flow (MM p.54-56), not the vehicle severity table.
+    // Powered armor uses the faithful SDP-damage flow (MM p.54-56), not the vehicle severity table.
     const r = await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0 }, rolls);
     body = r.body;
     lines = r.lines;
     Object.assign(updates, r.updates);
-    // Per-system SOP: apply damage/destruction to the struck embedded acpaSystem Item(s).
+    // Per-system SDP: apply damage/destruction to the struck embedded acpaSystem Item(s).
     if (r.itemUpdates?.length) await actor.updateEmbeddedDocuments("Item", r.itemUpdates);
     // Frame-breach overflow wounds the linked pilot (fires the normal stun/death saves via updateActor).
     if (r.pilotDamage > 0 && sys.pilotId) {
@@ -597,7 +597,7 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
 
   // `body`/`lines` are the MM/ACPA resolution narrative built above. Colour emphasis uses the shared
   // .result-* classes (no inline CSS); the prose itself is English (the rolled numbers baked in).
-  // This sprawling, branch-heavy text (esp. the ACPA SOP flow) is left for a focused i18n pass —
+  // This sprawling, branch-heavy text (esp. the ACPA SDP flow) is left for a focused i18n pass —
   // the same deferral as control's loss text and acpaTickStatus's lines. Triple-stash in the template.
   const content = await renderChatCard("vehicle/damage-result.hbs", {
     actorName: actor.name,

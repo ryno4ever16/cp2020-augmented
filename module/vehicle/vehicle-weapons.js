@@ -21,6 +21,7 @@ import { effectiveVehicleRuleSystem, vehicleArcEnforcement } from "../settings.j
 import { onGlobalClick } from "../popout-compat.js";
 import { gridDistanceBetween } from "../combat/rangefinding.js";
 import { renderChatCard } from "../compat.js";
+import { acpaMeleeDamage } from "./vehicle-acpa.js";
 
 /** Average of a CP2020 damage formula ("2d6+1", "5d6", "1d10", "3d6+2"). PURE. */
 export function averageDamageFromFormula(formula) {
@@ -179,7 +180,7 @@ export async function routeWeaponFiredToVehicle(payload, vehicleActor) {
   const VD = await import("./vehicle-damage.js");
   if (ruleSystem === "MaximumMetal") {
     const pen = _payloadPenetration(payload, total, ap);
-    // ACPA's faithful SOP flow uses the actual rolled damage; pass it through (vehicles ignore it).
+    // ACPA's faithful SDP flow uses the actual rolled damage; pass it through (vehicles ignore it).
     await VD.applyVehicleDamageMM(vehicleActor, { basePen: pen, facing: "front", rawDamage: total });
   } else {
     await VD.applyVehicleDamageCore(vehicleActor, { rawDamage: total, ap, facing: "front" });
@@ -258,6 +259,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
       name: vname,
       label: localizeParam("Vehicle.FireShellVariant", { name: vname, pen: Number(v.pen) || 0, burst: burstClause, warhead: warheadClause }),
       pen: Number(v.pen) || 0, burst: Number(v.burst) || 0, ap: !!v.ap, heat: !!v.heat, hiEx: !!v.hiEx,
+      damage: v.damage || "",   // a variant may carry its OWN dice (e.g. the Photon's power settings); else Pen-only
     };
   });
   const shells = [baseShell, ...variantShells];
@@ -358,13 +360,27 @@ export async function openVehicleFireDialog(actor, mount = {}) {
           if (item && (item.system?.activeShell ?? "") !== shellSel.name) {
             try { await item.update({ "system.activeShell": shellSel.name }); } catch (e) { /* non-owner: shell stays transient for this shot */ }
           }
+          // ACPA armed-melee (+FIST): the weapon's dice get the chassis Fist strike (round(STR/9) d10)
+          // added on top, plus its Penetration (avg/10), when an ACPA wields an addFist weapon (MM p.70).
+          // A variant with its own dice (Photon power settings) rolls those; an old Pen-only variant rolls
+          // nothing (Pen drives it); the base round uses the weapon's dice.
+          let dmgFormula = shellSel.damage ? shellSel.damage : (shellSel.name ? "" : (item?.system?.damage ?? ""));
+          let firePen = num("#cp-vf-pen");
+          if (item?.system?.addFist && actor?.system?.isACPA && !shellSel.name) {
+            const effStr = Math.max(0, (Number(actor.system.str) || 0) - (Number(actor.system.strDamage) || 0));
+            const fist = acpaMeleeDamage(effStr);
+            if (fist.dice > 0) {
+              dmgFormula = dmgFormula ? `${dmgFormula} + ${fist.formula}` : fist.formula;
+              firePen += Math.max(0, Math.round((fist.dice * 5.5) / 10));
+            }
+          }
           await _executeVehicleFire(actor, targetActor, {
             ref: num("#cp-vf-ref"), skill: num("#cp-vf-skill"), targetNumber: num("#cp-vf-tn"),
-            penetration: num("#cp-vf-pen"), rof: num("#cp-vf-rof"),
+            penetration: firePen, rof: num("#cp-vf-rof"),
             facing: root.querySelector("#cp-vf-facing")?.value || "front",
             range: root.querySelector("#cp-vf-range")?.value || "normal",
             ap: shellSel.ap, hefPenetrator: (shellSel.heat || shellSel.hiEx), heat: shellSel.heat, highDensityAP,
-            damageFormula: shellSel.name ? "" : (item?.system?.damage ?? ""),   // base round carries the weapon's dice
+            damageFormula: dmgFormula,   // base round carries the weapon's dice (+ chassis FIST for armed melee)
             burst: shellSel.burst, coneAngle, weaponClass, weaponRange,
             guidance, missileSkill: guidanceSkill, homingMethod,
             firerTokenId: firerTok?.id, targetTokenId: targetTok?.id,
@@ -526,7 +542,7 @@ async function _applyAreaShot(p, res, extraRounds) {
  */
 async function _applyVehicleShot(targetActor, { penetration = 0, facing = "front", range = "normal", goodShotSteps = 0, extraRounds = 0, ap = false, hefPenetrator = false, heat = false, highDensityAP = false, weaponName = "weapon", damageFormula = "" } = {}) {
   const { dispatchAttack } = await import("./vehicle-targeting.js");
-  // Roll the weapon's real damage when known so an ACPA target's SOP flow uses it (not the Pen×10 estimate).
+  // Roll the weapon's real damage when known so an ACPA target's SDP flow uses it (not the Pen×10 estimate).
   let rawDamage = null;
   if (damageFormula) { try { rawDamage = (await new Roll(String(damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
   await dispatchAttack({

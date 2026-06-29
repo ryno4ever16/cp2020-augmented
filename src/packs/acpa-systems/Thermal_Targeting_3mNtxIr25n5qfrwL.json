@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 0.25,
     "sp": 0,
-    "sop": 5,
+    "sdp": 5,
     "catalogKey": "THERMAL_TARGETING",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "3mNtxIr25n5qfrwL",
   "effects": [],

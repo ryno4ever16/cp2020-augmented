@@ -8,7 +8,7 @@ import {
   stringField
 } from "./schema-helpers.js";
 
-import { acpaAreaSOP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib } from "../vehicle/vehicle-acpa.js";
+import { acpaAreaSDP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib } from "../vehicle/vehicle-acpa.js";
 
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
@@ -75,9 +75,9 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       interfaceOut: numberField(0),    // rounds the interface/electronics are out
       seizeUp:      numberField(0),    // rounds a body area is seized up
 
-      // ACPA frame structure (Maximum Metal p.61): CURRENT per-area frame SOP (damage tracked by the
+      // ACPA frame structure (Maximum Metal p.61): CURRENT per-area frame SDP (damage tracked by the
       // powered-armor resolver). Max + chassis stats are DERIVED from chassis STR below.
-      frameSOP:    objectField({ head: 0, rArm: 0, lArm: 0, rLeg: 0, lLeg: 0, torso: 0 }),
+      frameSDP:    objectField({ head: 0, rArm: 0, lArm: 0, rLeg: 0, lLeg: 0, torso: 0 }),
 
       // ACPA build selections (Maximum Metal p.64-65). Additive — existing actors get these defaults
       // on load (no migration / relaunch). Defaults are the neutral military baseline: Full-HUD
@@ -95,7 +95,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       bodyValue:  numberField(0),
       destroyed:  booleanField(false),
       // ACPA-derived frame stats (from chassis STR via the Chassis Inventory Table).
-      frameSOPMax: objectField({ head: 0, rArm: 0, lArm: 0, rLeg: 0, lLeg: 0, torso: 0 }),
+      frameSDPMax: objectField({ head: 0, rArm: 0, lArm: 0, rLeg: 0, lLeg: 0, torso: 0 }),
       toughness:   numberField(0),    // damage-reduction Toughness Mod (negative)
       damMod:      stringField(""),   // linear-frame melee Damage Mod (display)
       lift:        numberField(0),
@@ -103,7 +103,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       // ACPA-derived interface/reflex stats (from the Reality Interface + Reflex/Control selections).
       dfb:          numberField(0),    // Direct-Fire Bonus — to-hit mod when the suit fires its weapons
       interfaceSib: numberField(0),    // Reality Interface's contribution to the suit's Initiative Bonus
-      interfaceSop: numberField(0),    // Reality Interface SOP (build budget)
+      interfaceSdp: numberField(0),    // Reality Interface SDP (build budget)
       maxRef:       numberField(10),   // operating-REF cap from the Reflex/Control system
       refMod:       numberField(0),    // REF modifier from the Reflex/Control system
       effectiveRef: numberField(0),    // clamp(pilotRef + refMod, 0..maxRef) − refDamage
@@ -124,6 +124,11 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
     source ??= {};
     if (hasOwn(source, "sp"))  source.sp  = mergeDefaults(source.sp,  { front: 0, side: 0, rear: 0, top: 0, bottom: 0 });
     if (hasOwn(source, "sdp")) source.sdp = mergeDefaults(source.sdp, { value: 0, max: 0 });
+    // Renamed the ACPA frame structural fields SOP→SDP (the book's term is Structural Damage Points;
+    // "SOP" was an OCR artifact in the Maximum Metal scan). Carry pre-1.0.3 stored values forward.
+    if (hasOwn(source, "frameSOP")    && !hasOwn(source, "frameSDP"))    source.frameSDP    = source.frameSOP;
+    if (hasOwn(source, "frameSOPMax") && !hasOwn(source, "frameSDPMax")) source.frameSDPMax = source.frameSOPMax;
+    if (hasOwn(source, "interfaceSop") && !hasOwn(source, "interfaceSdp")) source.interfaceSdp = source.interfaceSop;
     return super.migrateData(source);
   }
 
@@ -139,10 +144,10 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
     this.bodyValue = Math.round(sdpMax / 20);
     this.destroyed = sdpMax > 0 && (Number(this.sdp?.value) || 0) <= 0;
 
-    // ACPA frame derivations (Maximum Metal p.61-62): per-area frame SOP max + Chassis Inventory stats.
+    // ACPA frame derivations (Maximum Metal p.61-62): per-area frame SDP max + Chassis Inventory stats.
     if (this.isACPA) {
       const str = Number(this.str) || 0;
-      this.frameSOPMax = acpaAreaSOP(str);
+      this.frameSDPMax = acpaAreaSDP(str);
       const cs = chassisStats(str);
       this.toughness = cs.toughness;
       this.damMod = cs.damMod;
@@ -154,7 +159,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       const rc = reflexControl(this.reflexControl);
       this.dfb = ri.dfb;
       this.interfaceSib = ri.sib;
-      this.interfaceSop = ri.sop;
+      this.interfaceSdp = ri.sdp;
       this.maxRef = rc.maxRef;
       // Basic control on a military STR42+ frame is stricter (REF−3 not −2) — acpaReflexMod handles it.
       this.refMod = acpaReflexMod(this.reflexControl, str);

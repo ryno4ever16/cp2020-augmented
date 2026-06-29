@@ -1,0 +1,48 @@
+{
+  "name": "Extra Power Cells",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "safety",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 0.5,
+    "sp": 0,
+    "sdp": 15,
+    "weight": 0,
+    "cost": 2000,
+    "catalogKey": "EXTRA_POWER_CELLS",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "RbQnmE5ySt0dqnAc",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "WGfmeaFXASRimlGE": 3
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782632212823,
+    "modifiedTime": 1782632212824,
+    "lastModifiedBy": "WGfmeaFXASRimlGE",
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!RbQnmE5ySt0dqnAc"
+}

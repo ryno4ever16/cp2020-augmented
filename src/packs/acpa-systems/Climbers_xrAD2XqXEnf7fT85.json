@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 0.5,
     "sp": 30,
-    "sop": 15,
+    "sdp": 15,
     "catalogKey": "CLIMBERS",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "xrAD2XqXEnf7fT85",
   "effects": [],

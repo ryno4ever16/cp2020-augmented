@@ -1,0 +1,47 @@
+{
+  "name": "Searchlight",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "utility",
+    "mount": "external",
+    "area": "torso",
+    "spaces": 0,
+    "sp": 10,
+    "sdp": 5,
+    "weight": 5,
+    "cost": 300,
+    "catalogKey": "SEARCHLIGHT",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "3zrSDd1KrABk3oBm",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681958587,
+    "modifiedTime": 1782681958587,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!3zrSDd1KrABk3oBm"
+}

@@ -1,3 +1,9 @@
+{{!-- cp-vehicle-item-fields: a display:contents wrapper used ONLY to scope the label-width
+      fix (css) to the vehicle item sheet, without changing the field-list layout. The bare
+      `vehicle` item sheet has no `.vehicle` class, so it never gets the actor sheet's label
+      rules and its long labels (Speed/Fuel/Passengers/Maneuverability/Efficiency) otherwise
+      collapse to ~0 width and overprint their inputs. --}}
+<div class="cp-vehicle-item-fields">
 {{!-- Structural Damage Points (SDP is a terrible name) --}}
 <div class="field-list">
     {{#with system.sdp}}
@@ -17,13 +23,13 @@
                 <input type="number" name="system.sdp.max" value="{{max}}">
             </span>
         </div>
+    </div>{{!-- /.flexcol.span-two-cells — was left unclosed, which swallowed every later field-list --}}
     {{/with}}
 
     <div class="field">
         <label for="system.sp" title="{{CPLocal "SPFull"}}">{{CPLocal "SP"}}</label>
         <span class="flex-pad"></span>
         <input type="number" class="number nogrow" name="system.sp" value="{{system.sp}}">
-        </span>
     </div>
 </div>
 <div class="field-list">
@@ -44,14 +50,18 @@
             <input type="number" name="system.speed.value" value="{{value}}"> 
             <span class="nogrow">/</span>
             <input type="number" name="system.speed.max" value="{{max}}">
-            <span class="nogrow">mph</span>
+            <select name="system.speed.unit" class="nogrow">
+                <option value="mph" {{#if (equals unit "mph")}}selected{{/if}}>mph</option>
+                <option value="kph" {{#if (equals unit "kph")}}selected{{/if}}>kph</option>
+            </select>
+            <span class="nogrow"><small>≈ {{@root.veh.speedAlt.max}} {{@root.veh.speedAltUnit}}</small></span>
         </span>
     </div>
      <div class="field">
         <label for="system.speed.value">{{CPLocal "Accel"}}</label>
         <span class="flexrow flex-pad">
-            <input type="number" name="system.speed.acceleration" value="{{acceleration}}"> 
-            <span class="nogrow">{{CPLocal "MPH"}}</span>
+            <input type="number" name="system.speed.acceleration" value="{{acceleration}}">
+            <span class="nogrow">{{@root.veh.speedUnit}}</span>
         </span>
     </div>
 
@@ -64,8 +74,8 @@
        {{!-- This should I guess be maneuver? But safe works a lot better meaningwise --}}
         <label for="system.speed.value">{{CPLocal "Safe"}}</label>
         <span class="flexrow flex-pad">
-            <input type="number" name="system.speed.maneuver" value="{{maneuver}}"> 
-            <span class="nogrow">{{CPLocal "MPH"}}</span>
+            <input type="number" name="system.speed.maneuver" value="{{maneuver}}">
+            <span class="nogrow">{{@root.veh.speedUnit}}</span>
         </span>
     </div>
     {{/with}}
@@ -120,7 +130,20 @@
     <div class="field">
         <label for="system.maneuverability.value">{{CPLocal "ManeuverabilityFull"}}</label>
         <span class="flexrow flex-pad">
-            <input type="number" name="system.maneuverability.value" value="{{system.maneuverability.value}}"> 
+            <input type="number" name="system.maneuverability.value" value="{{system.maneuverability.value}}">
+        </span>
+    </div>
+    {{!-- Travel range (raw value + unit; the sheet shows the converted unit too) --}}
+    <div class="field">
+        <label for="system.range">{{CPLocal "Range"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.range" value="{{system.range}}">
+            <select name="system.rangeUnit" class="nogrow">
+                <option value="mi" {{#if (equals system.rangeUnit "mi")}}selected{{/if}}>mi</option>
+                <option value="km" {{#if (equals system.rangeUnit "km")}}selected{{/if}}>km</option>
+            </select>
+            <span class="nogrow"><small>≈ {{veh.rangeAlt}} {{veh.rangeAltUnit}}</small></span>
         </span>
     </div>
 </div>
+</div>{{!-- /.cp-vehicle-item-fields --}}

@@ -81,7 +81,7 @@ export async function openAcpaMeleeDialog(actor) {
             rolls: [d10], content,
           });
           if (hit && targetActor) {
-            // Roll the strike's real damage so an ACPA target's SOP flow uses it, not the Pen×10 estimate.
+            // Roll the strike's real damage so an ACPA target's SDP flow uses it, not the Pen×10 estimate.
             const dmgRoll = await new Roll(dmg.formula).evaluate();
             const { dispatchAttack, detectFacingFromTokens } = await import("./vehicle-targeting.js");
             const facing = (firerTok && targetTok) ? detectFacingFromTokens(firerTok, targetTok) : "front";
@@ -95,22 +95,22 @@ export async function openAcpaMeleeDialog(actor) {
   return openSingletonDialog(`acpa-melee:${actor.id}`, () => dialog);
 }
 
-/** Field repair: restore an ACPA suit to full — frame SOP, SDP, power, and clear all damage/status. */
+/** Field repair: restore an ACPA suit to full — frame SDP, SDP, power, and clear all damage/status. */
 export async function repairAcpa(actor) {
   if (!actor || actor.type !== "cp2020-augmented.vehicle" || !actor.system?.isACPA) { ui.notifications?.warn?.(localize("Vehicle.RepairOnlyAcpa")); return; }
   const sys = actor.system;
   const sdpMax = Number(sys.sdp?.max) || 0;
   await actor.update({
-    "system.frameSOP": { ...(sys.frameSOPMax ?? {}) },
+    "system.frameSDP": { ...(sys.frameSDPMax ?? {}) },
     "system.sdp": { value: sdpMax, max: sdpMax },
     "system.strDamage": 0, "system.refDamage": 0, "system.powerHours": 24,
     "system.coolingTimer": 0, "system.heatstrokeLevel": 0, "system.interfaceOut": 0, "system.seizeUp": 0,
     "system.destroyed": false, "system.immobilized": false, "system.onFire": false,
   });
-  // Un-damage every mounted system + ACPA weapon (per-system / per-weapon SOP).
+  // Un-damage every mounted system + ACPA weapon (per-system / per-weapon SDP).
   const itemRepairs = (actor.items ?? [])
-    .filter(i => (i.type === "cp2020-augmented.acpaSystem" || i.type === "cp2020-augmented.vehicleWeapon") && ((Number(i.system?.sopDamage) || 0) > 0 || i.system?.destroyed))
-    .map(i => ({ _id: i.id, "system.sopDamage": 0, "system.destroyed": false }));
+    .filter(i => (i.type === "cp2020-augmented.acpaSystem" || i.type === "cp2020-augmented.vehicleWeapon") && ((Number(i.system?.sdpDamage) || 0) > 0 || i.system?.destroyed))
+    .map(i => ({ _id: i.id, "system.sdpDamage": 0, "system.destroyed": false }));
   if (itemRepairs.length) await actor.updateEmbeddedDocuments("Item", itemRepairs);
   ui.notifications?.info?.(localizeParam("Vehicle.AcpaRepaired", { actor: actor.name }));
 }

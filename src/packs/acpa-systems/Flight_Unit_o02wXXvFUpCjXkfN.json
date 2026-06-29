@@ -1,0 +1,47 @@
+{
+  "name": "Flight Unit",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "movement",
+    "mount": "external",
+    "area": "torso",
+    "spaces": 0,
+    "sp": 30,
+    "sdp": 60,
+    "weight": 300,
+    "cost": 75000,
+    "catalogKey": "FLIGHT_UNIT",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "o02wXXvFUpCjXkfN",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681958588,
+    "modifiedTime": 1782681958588,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!o02wXXvFUpCjXkfN"
+}

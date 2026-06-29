@@ -21,7 +21,8 @@
       "value": 0,
       "max": 365,
       "maneuver": 0,
-      "acceleration": 0
+      "acceleration": 80,
+      "unit": "kph"
     },
     "maneuverability": {
       "value": 0,
@@ -29,10 +30,12 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 1,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 1288,
+    "rangeUnit": "km"
   },
   "effects": [],
   "folder": null,

@@ -1,0 +1,46 @@
+{
+  "name": "14mm Pistol",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 2,
+    "magWeight": 1,
+    "notes": "PA Malorian 3516 copy, triple ammo; hard-hitting backup pistol (Chromebook 1).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 1,
+    "damage": "6D6",
+    "rof": 2,
+    "shots": 20,
+    "range": 75,
+    "reliability": "VR",
+    "space": 0.5,
+    "cost": 2260,
+    "sp": 20,
+    "sdp": 15,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "LZaCYpnIaIY3WASG",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961233,
+    "modifiedTime": 1782732961233,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!LZaCYpnIaIY3WASG"
+}

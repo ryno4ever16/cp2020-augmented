@@ -15,13 +15,13 @@
       "value": 20,
       "max": 20
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 120,
       "maneuver": 0,
-      "acceleration": 0
+      "acceleration": 18
     },
     "maneuverability": {
       "value": 2,
@@ -32,7 +32,8 @@
       "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 400
   },
   "effects": [],
   "folder": null,

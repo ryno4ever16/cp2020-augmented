@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 0.5,
     "sp": 15,
-    "sop": 15,
+    "sdp": 15,
     "catalogKey": "SENSORY_EXTENSIONS",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "0e4hDmHZ68GMX95J",
   "effects": [],

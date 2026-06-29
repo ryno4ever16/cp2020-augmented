@@ -21,7 +21,8 @@
       "value": 0,
       "max": 350,
       "maneuver": 0,
-      "acceleration": 0
+      "acceleration": 0,
+      "unit": "kph"
     },
     "maneuverability": {
       "value": 0,
@@ -29,7 +30,7 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 30,
       "max": 0,
       "value": 0
     }

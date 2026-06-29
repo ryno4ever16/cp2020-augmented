@@ -1,0 +1,47 @@
+{
+  "name": "Glider",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "movement",
+    "mount": "retract",
+    "area": "torso",
+    "spaces": 6,
+    "sp": 15,
+    "sdp": 30,
+    "weight": 45,
+    "cost": 3000,
+    "catalogKey": "GLIDER",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "H7P6nSq4yJq8pVNx",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681958587,
+    "modifiedTime": 1782681958587,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!H7P6nSq4yJq8pVNx"
+}

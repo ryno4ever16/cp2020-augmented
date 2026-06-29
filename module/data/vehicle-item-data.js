@@ -2,9 +2,11 @@ import {
   arrayField,
   booleanField,
   htmlField,
+  mergeDefaults,
   normalizeArray,
   normalizeBoolean,
   numberField,
+  objectField,
   stringField
 } from "./schema-helpers.js";
 
@@ -27,6 +29,15 @@ function normalizeBooleanIfPresent(source, key, fallback = false) {
 
 function normalizeArrayIfPresent(source, key, fallback = []) {
   if (hasOwn(source, key)) source[key] = normalizeArray(source[key], fallback);
+}
+
+/**
+ * Renamed the per-item structural fields SOP→SDP (the book's term is Structural Damage Points;
+ * "SOP" was an OCR artifact in the Maximum Metal scan). Carry pre-1.0.3 stored values forward.
+ */
+function migrateSopToSdp(source) {
+  if (hasOwn(source, "sop") && !hasOwn(source, "sdp")) source.sdp = source.sop;
+  if (hasOwn(source, "sopDamage") && !hasOwn(source, "sdpDamage")) source.sdpDamage = source.sopDamage;
 }
 
 function commonSchema() {
@@ -89,6 +100,10 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
       rofAlt:      numberField(0),               // variable ROF ("30 OR 5" → rof 30, rofAlt 5; 0 = none)
       shots:       numberField(1),
       shotsLeft:   numberField(1),
+      // MM lists weapon weight as "empty / full-magazine" (p.75-78). `weight` (commonSchema) holds the
+      // empty weapon; `magWeight` holds a full magazine. Carried weight = weight + magWeight×shotsLeft/shots
+      // (no consumer yet — data preserved for a future encumbrance pass). Additive; default 0, no migration.
+      magWeight:   numberField(0),
       // Range.
       range:       numberField(0),
       minRange:    numberField(0),               // missiles: 1/10 Long range
@@ -105,12 +120,15 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
       activeShell:   stringField(""),            // selected variant name ("" = base stats)
       // Construction.
       space:       numberField(0),
-      // ACPA mounting (Maximum Metal p.95-96): which body area, and the weapon's own SOP so a
+      // ACPA mounting (Maximum Metal p.95-96): which body area, and the weapon's own SDP so a
       // System Hit can knock out this specific weapon (additive — schema defaults; no migration).
       area:        stringField("torso"),   // head|rArm|lArm|rLeg|lLeg|torso (when mounted on an ACPA)
-      sop:         numberField(0),          // structural points (0 = no per-weapon tracking → frame)
-      sopDamage:   numberField(0),
-      destroyed:   booleanField(false)
+      sdp:         numberField(0),          // structural points (0 = no per-weapon tracking → frame)
+      sdpDamage:   numberField(0),
+      destroyed:   booleanField(false),
+      // ACPA armed-melee weapons add the chassis Fist strike (round(STR/9) d10) on top of their own
+      // dice (MM p.70 "+FIST"); the resolver adds it + its Penetration when an ACPA wields the weapon.
+      addFist:     booleanField(false)
     };
   }
 
@@ -121,14 +139,16 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
     normalizeBooleanIfPresent(source, "hiEx", false);
     normalizeBooleanIfPresent(source, "highDensityAP", false);
     normalizeBooleanIfPresent(source, "destroyed", false);
+    normalizeBooleanIfPresent(source, "addFist", false);
     normalizeArrayIfPresent(source, "shellVariants", []);
+    migrateSopToSdp(source);
     return super.migrateData(source);
   }
 }
 
 /**
  * ACPA non-weapon system (Maximum Metal p.61-79). A utility / sensor / movement / defensive / safety
- * device mounted in a powered-armor body area. Carries its own SOP (so a hit can knock out this one
+ * device mounted in a powered-armor body area. Carries its own SDP (so a hit can knock out this one
  * system), its build budget (weight/spaces/cost/SP), and where it sits (area + internal/external mount).
  * Offensive systems are vehicleWeapon Items, not this type. `weight`/`cost` come from commonSchema.
  */
@@ -141,8 +161,9 @@ export class CyberpunkAcpaSystemData extends CyberpunkBaseItemData {
       mount:      stringField("internal"),   // internal(enclosed)|external(unprotected)|either|retract
       spaces:     numberField(0),            // spaces consumed in its area
       sp:         numberField(0),            // intrinsic SP (external / retractable items)
-      sop:        numberField(0),            // structural points (0 → derive 3×SP at runtime)
-      sopDamage:  numberField(0),            // accumulated SOP damage (per-system tracking)
+      shots:      numberField(0),            // charges for dispensers (countermeasure cannisters / AGAMS); 0 = N/A
+      sdp:        numberField(0),            // structural points (0 → derive 3×SP at runtime)
+      sdpDamage:  numberField(0),            // accumulated SDP damage (per-system tracking)
       destroyed:  booleanField(false),
       catalogKey: stringField("")            // links back to ACPA_SYSTEMS (blank = custom)
     };
@@ -151,6 +172,50 @@ export class CyberpunkAcpaSystemData extends CyberpunkBaseItemData {
   static migrateData(source) {
     source ??= {};
     normalizeBooleanIfPresent(source, "destroyed", false);
+    migrateSopToSdp(source);
+    return super.migrateData(source);
+  }
+}
+
+/**
+ * Extended model for the BARE `vehicle` item type (BMW 600, Musashi, the supplement catalog).
+ *
+ * The base system owns the `vehicle` type and registers its own model (OctarineSourcerer legacy:
+ * sdp/sp/passengers/speed/maneuverability/fuel). The module RE-REGISTERS this richer model for the
+ * same type (module loads after the system, so it wins) so the Augmented-Edition additions persist
+ * even for users on the STOCK system: `range`+`rangeUnit` and a per-vehicle `speed.unit`. CP2020
+ * prints vehicle speed/range in MIXED units (mph & kph, miles & km) — empirically the catalog stored
+ * the raw printed number in the book's own unit — so we keep the RAW value + its unit and convert at
+ * display time (no lossy precompute). All additions are additive with sensible defaults (mph/mi/0),
+ * so existing items migrate with no data change.
+ *
+ * ⚠ SYNC: this MIRRORS the base system's `CyberpunkVehicleData` field-for-field (+ the 3 additions).
+ * If the base vehicle model ever gains a field, add it here too or that field is dropped. See
+ * [[feedback-module-fork-sync]].
+ */
+export class CyberpunkVehicleItemData extends CyberpunkBaseItemData {
+  static defineSchema() {
+    return {
+      ...commonSchema(),
+      sdp:             objectField({ value: 0, max: 0 }),
+      sp:              numberField(10),
+      passengers:      numberField(4),
+      // `unit` (mph|kph) applies to all of value/max/maneuver/acceleration for this vehicle.
+      speed:           objectField({ value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" }),
+      maneuverability: objectField({ value: 0, condition: "" }),
+      fuel:            objectField({ type: "", efficiency: 0, max: 0, value: 0 }),
+      // Travel range in `rangeUnit` (mi|km) — Chromebook/SoF stat-block field the base model lacked.
+      range:           numberField(0),
+      rangeUnit:       stringField("mi")
+    };
+  }
+
+  static migrateData(source) {
+    source ??= {};
+    if (hasOwn(source, "sdp"))             source.sdp             = mergeDefaults(source.sdp,             { value: 0, max: 0 });
+    if (hasOwn(source, "speed"))           source.speed           = mergeDefaults(source.speed,           { value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" });
+    if (hasOwn(source, "maneuverability")) source.maneuverability = mergeDefaults(source.maneuverability, { value: 0, condition: "" });
+    if (hasOwn(source, "fuel"))            source.fuel            = mergeDefaults(source.fuel,            { type: "", efficiency: 0, max: 0, value: 0 });
     return super.migrateData(source);
   }
 }

@@ -1,0 +1,47 @@
+{
+  "name": "Militech Repeater",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "utility",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 2,
+    "sp": 0,
+    "sdp": 25,
+    "weight": 3,
+    "cost": 4000,
+    "catalogKey": "MILITECH_REPEATER",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "BOvUdyN040RmcmxH",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681215036,
+    "modifiedTime": 1782681215036,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!BOvUdyN040RmcmxH"
+}

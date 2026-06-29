@@ -21,7 +21,7 @@
     "range": 550,
     "reliability": "VR",
     "space": 3,
-    "sop": 15,
+    "sdp": 15,
     "area": "rArm",
     "lastOwnerId": "",
     "ap": false,
@@ -38,8 +38,9 @@
     "projectiles": 0,
     "shellVariants": [],
     "activeShell": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "sp": 20
   },
   "_id": "B1cLAziYZ2g2goxe",
   "effects": [],

@@ -23,7 +23,7 @@
     "range": 200,
     "reliability": "VR",
     "space": 1,
-    "sop": 10,
+    "sdp": 10,
     "area": "torso",
     "lastOwnerId": "",
     "hiEx": false,
@@ -38,8 +38,9 @@
     "projectiles": 0,
     "shellVariants": [],
     "activeShell": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "sp": 20
   },
   "_id": "njXKBVMahos2m3wQ",
   "effects": [],

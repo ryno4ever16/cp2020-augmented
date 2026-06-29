@@ -1,0 +1,48 @@
+{
+  "name": "IFAR 3-Pod",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 40,
+    "magWeight": 0,
+    "notes": "3-tube 2.75in folding-fin rocket pod (ACPA-specific); salvo any number per turn; 6m burst; 2-handed/torso.",
+    "weaponClass": "rocket",
+    "mountType": "pod",
+    "arc": "front",
+    "wa": -2,
+    "penetration": 4,
+    "damage": "8D10",
+    "hiEx": true,
+    "burst": 6,
+    "rof": 1,
+    "shots": 3,
+    "range": 500,
+    "reliability": "VR",
+    "space": 3,
+    "cost": 2100,
+    "sp": 20,
+    "sdp": 45,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "jAL5Dy3lgcm0xlNT",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961231,
+    "modifiedTime": 1782732961231,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!jAL5Dy3lgcm0xlNT"
+}

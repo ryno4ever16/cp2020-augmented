@@ -1,0 +1,48 @@
+{
+  "name": "Cellular Phone",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "sensor",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 0.25,
+    "sp": 0,
+    "sdp": 5,
+    "weight": 2,
+    "cost": 500,
+    "catalogKey": "CELL_PHONE",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "lqOJonTU6DqZD0Xh",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "WGfmeaFXASRimlGE": 3
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782632212822,
+    "modifiedTime": 1782632212824,
+    "lastModifiedBy": "WGfmeaFXASRimlGE",
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!lqOJonTU6DqZD0Xh"
+}

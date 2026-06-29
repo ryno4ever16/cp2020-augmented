@@ -1,0 +1,46 @@
+{
+  "name": "Super Rakate",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 5,
+    "magWeight": 0,
+    "notes": "PA-scale Rostovic Wrist Rakate; light, low-restriction support firepower (Chromebook 1).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 1,
+    "damage": "5D6",
+    "rof": 1,
+    "shots": 8,
+    "range": 300,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 700,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "WaafGV1gzBJpB7QE",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961233,
+    "modifiedTime": 1782732961233,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!WaafGV1gzBJpB7QE"
+}

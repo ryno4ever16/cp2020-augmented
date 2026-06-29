@@ -21,7 +21,7 @@
     "range": 1000,
     "reliability": "ST",
     "space": 3,
-    "sop": 15,
+    "sdp": 15,
     "area": "rArm",
     "lastOwnerId": "",
     "heat": false,
@@ -38,8 +38,9 @@
     "projectiles": 0,
     "shellVariants": [],
     "activeShell": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "sp": 25
   },
   "_id": "rvTNGm8uK8qcxyBs",
   "effects": [],

@@ -44,8 +44,8 @@
     "projectiles": 0,
     "activeShell": "",
     "area": "torso",
-    "sop": 0,
-    "sopDamage": 0,
+    "sdp": 0,
+    "sdpDamage": 0,
     "destroyed": false
   },
   "_id": "qwICUjJeFY7MR3Cw",

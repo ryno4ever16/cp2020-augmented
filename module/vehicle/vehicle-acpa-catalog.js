@@ -17,7 +17,7 @@ const SOURCE = "Maximum Metal";
 function defToSystem(def) {
   return {
     category: def.category, mount: def.mount, area: "torso",
-    spaces: def.spaces, sp: def.sp, sop: def.sop,
+    spaces: def.spaces, sp: def.sp, sdp: def.sdp, shots: def.shots ?? 0,
     weight: def.weight, cost: def.cost,
     catalogKey: def.key, source: SOURCE,
   };

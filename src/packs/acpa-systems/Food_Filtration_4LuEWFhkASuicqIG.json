@@ -1,0 +1,48 @@
+{
+  "name": "Food/Filtration",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "safety",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 0.5,
+    "sp": 0,
+    "sdp": 10,
+    "weight": 2,
+    "cost": 400,
+    "catalogKey": "FOOD_FILTRATION",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "4LuEWFhkASuicqIG",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "WGfmeaFXASRimlGE": 3
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782632212823,
+    "modifiedTime": 1782632212824,
+    "lastModifiedBy": "WGfmeaFXASRimlGE",
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!4LuEWFhkASuicqIG"
+}

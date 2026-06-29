@@ -1,5 +1,5 @@
 import {
-  getQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, resolveAllQueue,
+  getQueue, pruneOrphanQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, resolveAllQueue,
   applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
   bankForSkill, poolForActor, setActorPool, setSkillBank
 } from "./ip.js";
@@ -38,6 +38,9 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
 
   async _prepareContext(_options) {
     const auto = ipAwardModel() === "autoBaseline";
+    // Self-heal: drop any rows whose source actor was deleted (e.g. old test-actor debris) before
+    // building the list — rerender:false since we're already inside a render.
+    await pruneOrphanQueue({ rerender: false });
     const rows = getQueue().map(r => ({ ...r }));
 
     // GM correction / balances view: each party actor's fungible pool + every skill that carries IP

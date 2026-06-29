@@ -15,7 +15,7 @@
       "value": 5,
       "max": 5
     },
-    "sp": 10,
+    "sp": 0,
     "passengers": 4,
     "speed": {
       "value": 0,
@@ -32,7 +32,8 @@
       "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 20
   },
   "effects": [],
   "folder": null,

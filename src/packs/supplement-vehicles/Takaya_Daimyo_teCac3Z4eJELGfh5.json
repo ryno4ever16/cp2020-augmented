@@ -29,10 +29,11 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 30,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 300
   },
   "effects": [],
   "folder": null,

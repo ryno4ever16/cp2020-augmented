@@ -21,7 +21,7 @@
       "value": 0,
       "max": 75,
       "maneuver": 0,
-      "acceleration": 0
+      "acceleration": 30
     },
     "maneuverability": {
       "value": -3,
@@ -29,10 +29,11 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 25,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 100
   },
   "effects": [],
   "folder": null,

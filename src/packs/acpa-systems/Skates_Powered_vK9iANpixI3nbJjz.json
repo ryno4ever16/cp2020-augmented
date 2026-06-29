@@ -1,0 +1,47 @@
+{
+  "name": "Skates (Powered)",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "movement",
+    "mount": "retract",
+    "area": "torso",
+    "spaces": 2,
+    "sp": 20,
+    "sdp": 20,
+    "weight": 14,
+    "cost": 4000,
+    "catalogKey": "SKATES_POWERED",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "vK9iANpixI3nbJjz",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681958588,
+    "modifiedTime": 1782681958588,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!vK9iANpixI3nbJjz"
+}

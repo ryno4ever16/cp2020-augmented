@@ -1,0 +1,47 @@
+{
+  "name": "Skates (Unpowered)",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "movement",
+    "mount": "external",
+    "area": "torso",
+    "spaces": 1,
+    "sp": 20,
+    "sdp": 20,
+    "weight": 5,
+    "cost": 500,
+    "catalogKey": "SKATES_UNPOWERED",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "GIzNac7gUP8dESId",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681958588,
+    "modifiedTime": 1782681958588,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!GIzNac7gUP8dESId"
+}

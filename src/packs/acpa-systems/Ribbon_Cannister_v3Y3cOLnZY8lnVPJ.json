@@ -1,0 +1,47 @@
+{
+  "name": "Ribbon Cannister",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "defensive",
+    "mount": "external",
+    "area": "torso",
+    "spaces": 1,
+    "sp": 20,
+    "sdp": 20,
+    "weight": 3,
+    "cost": 300,
+    "catalogKey": "RIBBON_CANNISTER",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 3
+  },
+  "_id": "v3Y3cOLnZY8lnVPJ",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782681958589,
+    "modifiedTime": 1782681958589,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!v3Y3cOLnZY8lnVPJ"
+}

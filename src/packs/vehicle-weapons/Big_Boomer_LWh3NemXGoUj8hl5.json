@@ -1,0 +1,47 @@
+{
+  "name": "\"Big Boomer\"",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 12,
+    "magWeight": 1,
+    "notes": "Up-scaled .477 Boomer Buster with double the shots (Solo of Fortune).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 1,
+    "penetration": 2,
+    "damage": "5D6AP",
+    "ap": true,
+    "rof": 2,
+    "shots": 8,
+    "range": 100,
+    "reliability": "VR",
+    "space": 0.5,
+    "cost": 550,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "LWh3NemXGoUj8hl5",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961234,
+    "modifiedTime": 1782732961234,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!LWh3NemXGoUj8hl5"
+}

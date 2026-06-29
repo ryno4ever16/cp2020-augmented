@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 2,
     "sp": 25,
-    "sop": 60,
+    "sdp": 60,
     "catalogKey": "SWIMMER",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "wHUIjUwcIvMvxfPZ",
   "effects": [],

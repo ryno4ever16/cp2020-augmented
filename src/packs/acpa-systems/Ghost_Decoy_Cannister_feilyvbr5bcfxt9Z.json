@@ -5,8 +5,8 @@
   "system": {
     "flavor": "",
     "notes": "",
-    "cost": 500,
-    "weight": 2,
+    "cost": 3000,
+    "weight": 4,
     "equipped": true,
     "source": "Maximum Metal",
     "category": "defensive",
@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 0.5,
     "sp": 20,
-    "sop": 25,
+    "sdp": 10,
     "catalogKey": "GHOST_DECOY",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 1
   },
   "_id": "feilyvbr5bcfxt9Z",
   "effects": [],

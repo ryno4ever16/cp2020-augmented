@@ -1,0 +1,48 @@
+{
+  "name": "HIVE 10mm Caseless Gatling",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 50,
+    "magWeight": 25,
+    "notes": "Tri-barrel chain-driven 10mm gatling; shreds borgs, light ACPA, vehicles, infantry. Ammo cannister = 2 spaces if hand-carried.",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 4,
+    "damage": "5D10AP",
+    "ap": true,
+    "rof": 120,
+    "rofAlt": 60,
+    "shots": 2400,
+    "range": 500,
+    "reliability": "VR",
+    "space": 4,
+    "cost": 12500,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "MKOUQuJ2XhgO1yDY",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961232,
+    "modifiedTime": 1782732961232,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!MKOUQuJ2XhgO1yDY"
+}

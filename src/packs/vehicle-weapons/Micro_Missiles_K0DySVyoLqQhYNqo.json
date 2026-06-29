@@ -1,0 +1,46 @@
+{
+  "name": "Micro-Missiles",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 5,
+    "magWeight": 3,
+    "notes": "Magazine-fed micro-missiles; 2m blast, track around obstacles; reload 400eb (CP2020 / Chromebook 2).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 2,
+    "penetration": 1,
+    "damage": "4D6",
+    "rof": 2,
+    "shots": 8,
+    "range": 200,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 900,
+    "sp": 20,
+    "sdp": 10,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "K0DySVyoLqQhYNqo",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961234,
+    "modifiedTime": 1782732961234,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!K0DySVyoLqQhYNqo"
+}

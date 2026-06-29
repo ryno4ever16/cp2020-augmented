@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 4,
     "sp": 0,
-    "sop": 50,
+    "sdp": 50,
     "catalogKey": "SELF_SEAL",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "uuOGj8wLvBVVxzEh",
   "effects": [],

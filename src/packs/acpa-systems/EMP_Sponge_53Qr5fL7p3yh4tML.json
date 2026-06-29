@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 0.5,
     "sp": 0,
-    "sop": 30,
+    "sdp": 30,
     "catalogKey": "EMP_SPONGE",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "53Qr5fL7p3yh4tML",
   "effects": [],

@@ -41,7 +41,7 @@ export function acpaRollAgain(d10) {
 }
 
 /**
- * System Integrity Check (MM p.56). PURE. Given the SOP a struck system lost vs its total:
+ * System Integrity Check (MM p.56). PURE. Given the SDP a struck system lost vs its total:
  *   lost < ½ total → 25% chance inoperable · ≥ ½ (not exceeding) → 75% · exceeds total → destroyed.
  * @returns {{destroyed:boolean, inopChance:number}}
  */
@@ -75,7 +75,7 @@ export function acpaBodyArea(d10) {
  *   1-2 seize-up (1d10+1 rounds, body-area penalties)  · 3 cooling failure (heatstroke in 2d10 min)
  *   4-5 Suit STR −1d6                                   · 6-7 Suit REF −1d6/2
  *   8 Power Unit −(1d6×2) hours of life                 · 9 Interface out 1d6 rounds (2d6 civilian)
- *   10 Mechanical Shock: 1d6 extra SOP to a random area + pilot stunned that many rounds
+ *   10 Mechanical Shock: 1d6 extra SDP to a random area + pilot stunned that many rounds
  */
 export function acpaCriticalEffect(d10) {
   const r = Math.max(1, Math.min(10, Math.round(Number(d10) || 1)));
@@ -86,7 +86,7 @@ export function acpaCriticalEffect(d10) {
     case r <= 7:  return { roll: r, type: "refLoss",      formula: "1d6", divisor: 2, label: "Suit Reflexes lowered (−1d6/2)" };
     case r === 8: return { roll: r, type: "powerLoss",    formula: "1d6", mult: 2, unit: "hours", label: "Power unit life reduced" };
     case r === 9: return { roll: r, type: "interfaceOut", formula: "1d6",    unit: "rounds", label: "Interface/electronics out" };
-    default:      return { roll: r, type: "mechShock",    formula: "1d6",    unit: "SOP", label: "Mechanical shock (frame damage + stun)" };
+    default:      return { roll: r, type: "mechShock",    formula: "1d6",    unit: "SDP", label: "Mechanical shock (frame damage + stun)" };
   }
 }
 
@@ -215,12 +215,12 @@ export function acpaJumpM(runM, { running = false, vertical = false } = {}) {
 /* ------------------------------ Construction / Linear Frame (MM p.61-63) ------------------------------ */
 
 /**
- * Per-body-area frame SOP from chassis STR (MM p.61): Head and each Arm 25%, each Leg 50%, Torso 75%
+ * Per-body-area frame SDP from chassis STR (MM p.61): Head and each Arm 25%, each Leg 50%, Torso 75%
  * (rounded). These are the Structural Damage Points of the FRAME in each area; destroying an area's
- * frame SOP knocks out its systems, and destroying the Torso shuts the suit down. PURE.
+ * frame SDP knocks out its systems, and destroying the Torso shuts the suit down. PURE.
  * @returns {{head:number, rArm:number, lArm:number, rLeg:number, lLeg:number, torso:number}}
  */
-export function acpaAreaSOP(str) {
+export function acpaAreaSDP(str) {
   const s = Math.max(0, Number(str) || 0);
   const r = (p) => Math.round(s * p);
   return { head: r(0.25), rArm: r(0.25), lArm: r(0.25), rLeg: r(0.5), lLeg: r(0.5), torso: r(0.75) };
@@ -259,16 +259,16 @@ export function chassisStats(str) {
  * Reality Interface systems (MM p.64). The interface always lives in the helmet. Each level sets
  * the suit's SIB bonus (added in the SIB derivation) and its Direct-Fire Bonus (DFB) — the to-hit
  * modifier applied when the suit fires its OWN weapons (this replaces any smartgun bonus).
- * `sop`/`weight`/`spaces`/`cost` feed the build budget; `maxWeapons` = simultaneous targets. PURE.
+ * `sdp`/`weight`/`spaces`/`cost` feed the build budget; `maxWeapons` = simultaneous targets. PURE.
  */
 export const REALITY_INTERFACES = {
-  APERTURE_BASED:    { key: "APERTURE_BASED",    label: "Aperture-Based",    sib: -6, dfb: -2, sop: 20, weight: 0, spaces: 0,   cost: 100,  enclosed: true,  maxWeapons: 1 },
-  ENHANCED_APERTURE: { key: "ENHANCED_APERTURE", label: "Enhanced Aperture", sib: -4, dfb:  0, sop: 15, weight: 1, spaces: 0.5, cost: 300,  enclosed: true,  maxWeapons: 1 },
-  WIDEBAND_APERTURE: { key: "WIDEBAND_APERTURE", label: "Wideband Aperture", sib: -2, dfb:  1, sop: 15, weight: 1, spaces: 0.5, cost: 800,  enclosed: true,  maxWeapons: 1 },
-  FULL_HUD_WIDEBAND: { key: "FULL_HUD_WIDEBAND", label: "Full-HUD Wideband", sib:  0, dfb:  2, sop: 10, weight: 2, spaces: 0.5, cost: 2400, enclosed: false, maxWeapons: 1 },
-  ECI_WIDEBAND_HUD:  { key: "ECI_WIDEBAND_HUD",  label: "ECI Wideband HUD",  sib:  2, dfb:  2, sop: 10, weight: 2, spaces: 0.5, cost: 4000, enclosed: false, maxWeapons: 3 },
-  RUSSIAN_ARMS_VRI:  { key: "RUSSIAN_ARMS_VRI",  label: "Russian Arms VRI",  sib:  3, dfb:  3, sop: 25, weight: 3, spaces: 1,   cost: 6000, enclosed: false, maxWeapons: 4 },
-  MILITECH_VRI:      { key: "MILITECH_VRI",      label: "Militech VRI",      sib:  3, dfb:  3, sop: 15, weight: 2, spaces: 1,   cost: 8000, enclosed: false, maxWeapons: 4 },
+  APERTURE_BASED:    { key: "APERTURE_BASED",    label: "Aperture-Based",    sib: -6, dfb: -2, sdp: 20, weight: 0, spaces: 0,   cost: 100,  enclosed: true,  maxWeapons: 1 },
+  ENHANCED_APERTURE: { key: "ENHANCED_APERTURE", label: "Enhanced Aperture", sib: -4, dfb:  0, sdp: 15, weight: 1, spaces: 0.5, cost: 300,  enclosed: true,  maxWeapons: 1 },
+  WIDEBAND_APERTURE: { key: "WIDEBAND_APERTURE", label: "Wideband Aperture", sib: -2, dfb:  1, sdp: 15, weight: 1, spaces: 0.5, cost: 800,  enclosed: true,  maxWeapons: 1 },
+  FULL_HUD_WIDEBAND: { key: "FULL_HUD_WIDEBAND", label: "Full-HUD Wideband", sib:  0, dfb:  2, sdp: 10, weight: 2, spaces: 0.5, cost: 2400, enclosed: false, maxWeapons: 1 },
+  ECI_WIDEBAND_HUD:  { key: "ECI_WIDEBAND_HUD",  label: "ECI Wideband HUD",  sib:  2, dfb:  2, sdp: 10, weight: 2, spaces: 0.5, cost: 4000, enclosed: false, maxWeapons: 3 },
+  RUSSIAN_ARMS_VRI:  { key: "RUSSIAN_ARMS_VRI",  label: "Russian Arms VRI",  sib:  3, dfb:  3, sdp: 25, weight: 3, spaces: 1,   cost: 6000, enclosed: false, maxWeapons: 4 },
+  MILITECH_VRI:      { key: "MILITECH_VRI",      label: "Militech VRI",      sib:  3, dfb:  3, sdp: 15, weight: 2, spaces: 1,   cost: 8000, enclosed: false, maxWeapons: 4 },
 };
 
 /** Reality Interface row for a key (defaults to Full-HUD Wideband — the neutral SIB-0 baseline). PURE. */

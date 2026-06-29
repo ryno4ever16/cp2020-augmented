@@ -1,0 +1,46 @@
+{
+  "name": "Saucer Shooter",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 15,
+    "magWeight": 0,
+    "notes": "Fires FENdz-22 Saucer Grenades; trick ricochet/declivity shots possible (Chromebook 1).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": -1,
+    "penetration": 0,
+    "damage": "2D6+3",
+    "rof": 1,
+    "shots": 30,
+    "range": 250,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 1500,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "Cj26y8APJqzRqNno",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961233,
+    "modifiedTime": 1782732961233,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!Cj26y8APJqzRqNno"
+}

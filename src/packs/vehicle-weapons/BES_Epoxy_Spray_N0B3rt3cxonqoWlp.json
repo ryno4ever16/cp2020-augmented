@@ -1,0 +1,46 @@
+{
+  "name": "BES Epoxy Spray",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 2,
+    "magWeight": 0,
+    "notes": "TRAP/utility: two-part epoxy; cures brittle-hard in 5 min; strongest bond while it lasts.",
+    "weaponClass": "special",
+    "mountType": "open",
+    "arc": "front",
+    "wa": -1,
+    "penetration": 0,
+    "damage": "",
+    "rof": 1,
+    "shots": 1,
+    "range": 2,
+    "reliability": "VR",
+    "space": 0.5,
+    "cost": 30,
+    "sp": 20,
+    "sdp": 10,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "N0B3rt3cxonqoWlp",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961235,
+    "modifiedTime": 1782732961235,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!N0B3rt3cxonqoWlp"
+}

@@ -1,0 +1,49 @@
+{
+  "name": "BFC-2 Flechette Cloud",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 2,
+    "magWeight": 0,
+    "notes": "Needle-cloud anti-personnel scatter, 120° cone; mows down soft/light infantry, ineffective vs PA.",
+    "weaponClass": "cone",
+    "mountType": "open",
+    "arc": "front",
+    "wa": 6,
+    "penetration": 2,
+    "damage": "2D10AP",
+    "ap": true,
+    "coneAngle": 120,
+    "projectiles": 144,
+    "rof": 1,
+    "shots": 1,
+    "range": 25,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 300,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "j165ksLINTGy4azA",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961226,
+    "modifiedTime": 1782732961226,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!j165ksLINTGy4azA"
+}

@@ -1,0 +1,46 @@
+{
+  "name": "G-20 Caseless 10mm MG",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 15,
+    "magWeight": 3,
+    "notes": "H&K caseless MG; beats all personal armor + some light ACPA; saboted-AP option (Veh Pen 3).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 2,
+    "damage": "8D6",
+    "rof": 20,
+    "shots": 200,
+    "range": 800,
+    "reliability": "VR",
+    "space": 2,
+    "cost": 3000,
+    "sp": 25,
+    "sdp": 25,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "p1m5k8ab4Yg3Awaf",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961232,
+    "modifiedTime": 1782732961232,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!p1m5k8ab4Yg3Awaf"
+}

@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 1,
     "sp": 20,
-    "sop": 30,
+    "sdp": 30,
     "catalogKey": "JUMP_JETS",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "ZzowhDZlTv1ao5hF",
   "effects": [],

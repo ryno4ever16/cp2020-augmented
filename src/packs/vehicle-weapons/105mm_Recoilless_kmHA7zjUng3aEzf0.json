@@ -37,8 +37,8 @@
     "shellVariants": [],
     "activeShell": "",
     "area": "torso",
-    "sop": 0,
-    "sopDamage": 0,
+    "sdp": 0,
+    "sdpDamage": 0,
     "destroyed": false
   },
   "_id": "kmHA7zjUng3aEzf0",

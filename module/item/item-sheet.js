@@ -88,11 +88,48 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
         this._prepareAmmo(data);
         break;
 
+      case "vehicle":
+        this._prepareVehicle(data);
+        break;
+
       default:
         break;
     }
 
     return data;
+  }
+
+  /**
+   * Vehicle item: speed & range are stored as a RAW value + a unit (mph|kph, mi|km) because CP2020
+   * prints vehicles in mixed units. Precompute the converted ("the other unit") values so the sheet
+   * can show e.g. "150 kph (93 mph)" without baking a conversion into stored data.
+   */
+  _prepareVehicle(sheet) {
+    const sys = this.item?.system ?? {};
+    const MI_PER_KM = 0.621371, KM_PER_MI = 1.609344;
+    const sUnit = (sys.speed?.unit === "kph") ? "kph" : "mph";
+    const sAltUnit = sUnit === "mph" ? "kph" : "mph";
+    const sFactor = sUnit === "mph" ? KM_PER_MI : MI_PER_KM;
+    const conv = (v) => Math.round((Number(v) || 0) * sFactor);
+    const rUnit = (sys.rangeUnit === "km") ? "km" : "mi";
+    const rAltUnit = rUnit === "mi" ? "km" : "mi";
+    const rFactor = rUnit === "mi" ? KM_PER_MI : MI_PER_KM;
+
+    sheet.veh = {
+      speedUnit: sUnit,
+      speedAltUnit: sAltUnit,
+      speedAlt: {
+        max:          conv(sys.speed?.max),
+        value:        conv(sys.speed?.value),
+        maneuver:     conv(sys.speed?.maneuver),
+        acceleration: conv(sys.speed?.acceleration)
+      },
+      rangeUnit: rUnit,
+      rangeAltUnit: rAltUnit,
+      rangeAlt: Math.round((Number(sys.range) || 0) * rFactor),
+      speedUnitOptions: { mph: "mph", kph: "kph" },
+      rangeUnitOptions: { mi: "mi", km: "km" }
+    };
   }
 
   _prepareSkill(sheet) {

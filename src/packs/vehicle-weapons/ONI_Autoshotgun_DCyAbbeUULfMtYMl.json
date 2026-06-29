@@ -1,0 +1,47 @@
+{
+  "name": "ONI Autoshotgun",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 7,
+    "magWeight": 12,
+    "notes": "Arasaka 10-gauge auto-scattergun with deep ammo; can collapse building interiors.",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 2,
+    "damage": "4D6+3",
+    "rof": 20,
+    "rofAlt": 5,
+    "shots": 180,
+    "range": 75,
+    "reliability": "VR",
+    "space": 2,
+    "cost": 1350,
+    "sp": 25,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "DCyAbbeUULfMtYMl",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961232,
+    "modifiedTime": 1782732961232,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!DCyAbbeUULfMtYMl"
+}

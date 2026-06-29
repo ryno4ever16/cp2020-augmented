@@ -1,0 +1,46 @@
+{
+  "name": "\"Dragon\" Flamer",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 5,
+    "magWeight": 0,
+    "notes": "Enlarged Kendachi Dragon flamethrower; more fuel + range (Chromebook 1).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 1,
+    "damage": "3D6",
+    "rof": 1,
+    "shots": 8,
+    "range": 8,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 990,
+    "sp": 20,
+    "sdp": 10,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "cBwuXwfBC4Mr0kEX",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961234,
+    "modifiedTime": 1782732961234,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!cBwuXwfBC4Mr0kEX"
+}

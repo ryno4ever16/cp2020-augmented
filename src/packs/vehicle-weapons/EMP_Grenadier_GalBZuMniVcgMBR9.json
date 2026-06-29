@@ -1,0 +1,46 @@
+{
+  "name": "EMP Grenadier",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 10,
+    "magWeight": 0,
+    "notes": "Launches EMP grenades — disrupts electronics on both sides; rare (Chromebook 1).",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 0,
+    "damage": "",
+    "rof": 1,
+    "shots": 5,
+    "range": 300,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 2000,
+    "sp": 20,
+    "sdp": 15,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "GalBZuMniVcgMBR9",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961233,
+    "modifiedTime": 1782732961233,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!GalBZuMniVcgMBR9"
+}

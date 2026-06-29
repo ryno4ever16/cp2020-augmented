@@ -1,0 +1,48 @@
+{
+  "name": "BIM Minelet Volley",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 2,
+    "magWeight": 0,
+    "notes": "Seeds a 60° cone with pressure-triggered mini-mines (maim legs/feet; non-PA flung 1-2m). Fired direct, they detonate on contact.",
+    "weaponClass": "cone",
+    "mountType": "open",
+    "arc": "front",
+    "wa": 3,
+    "penetration": 1,
+    "damage": "4D6",
+    "coneAngle": 60,
+    "projectiles": 50,
+    "rof": 1,
+    "shots": 1,
+    "range": 50,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 1000,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "63D9qJ0Ad8lLFrhc",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961229,
+    "modifiedTime": 1782732961229,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!63D9qJ0Ad8lLFrhc"
+}

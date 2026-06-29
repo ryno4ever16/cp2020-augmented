@@ -1,0 +1,48 @@
+{
+  "name": "Laser Communicator",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "sensor",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 0.25,
+    "sp": 0,
+    "sdp": 10,
+    "weight": 10,
+    "cost": 7000,
+    "catalogKey": "LASER_COM",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "sgdX7KE2agssB7pg",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "WGfmeaFXASRimlGE": 3
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782632212823,
+    "modifiedTime": 1782632212824,
+    "lastModifiedBy": "WGfmeaFXASRimlGE",
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!sgdX7KE2agssB7pg"
+}

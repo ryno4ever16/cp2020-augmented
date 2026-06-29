@@ -10,3 +10,8 @@ Thumbs.db
 # Local working / planning docs — not part of the published module.
 /RELEASE-STAGING.md
 /VENDORING-REPORT.md
+
+# Verbatim source-book text extracts used only as audit working files — NEVER commit (copyright).
+import-staging/**/*_fulltext.txt
+import-staging/**/*-prose-dump.txt
+import-staging/**/booktext/

@@ -6,10 +6,10 @@
  * weapons are NOT here — an ACPA mounts those as ordinary `vehicleWeapon` Items, same as any vehicle.
  *
  * Scope is a verified CORE SET (a representative handful per category); the table is structured so the
- * full p.64-79 catalog can be added entry-by-entry later. Each system carries its own SOP, so a hit can
- * knock out one specific system rather than always biting the frame (this refines the D-3 SOP flow).
+ * full p.64-79 catalog can be added entry-by-entry later. Each system carries its own SDP, so a hit can
+ * knock out one specific system rather than always biting the frame (this refines the D-3 SDP flow).
  *
- * Stat columns (from the charts): weight(kg) · spaces · cost(eb) · sp · sop · mount. `mount`:
+ * Stat columns (from the charts): weight(kg) · spaces · cost(eb) · sp · sdp · mount. `mount`:
  *   "internal" (enclosed, helmet/torso interior — protected by the shell) · "external" (NOT shell-
  *   protected; carries its own SP) · "either" (YES/NO) · "retract" (stows internally, SP only extended).
  */
@@ -21,34 +21,74 @@ export const ACPA_SYSTEM_CATEGORIES = ["utility", "sensor", "movement", "defensi
 /** Core ACPA systems (Maximum Metal charts, Appendix A). Verified stats; expand freely. */
 export const ACPA_SYSTEMS = {
   // ── Sensors (Audio-Visual / Special Sensors, p.67/93) ──
-  RADAR:              { key: "RADAR",              label: "Radar",                 category: "sensor",   weight: 5, spaces: 0.5,  sp: 0,  sop: 15, cost: 1000, mount: "internal" },
-  INFRARED:           { key: "INFRARED",           label: "Infra-Red Sensors",     category: "sensor",   weight: 0, spaces: 0.25, sp: 0,  sop: 5,  cost: 400,  mount: "internal" },
-  THERMAL_TARGETING:  { key: "THERMAL_TARGETING",  label: "Thermal Targeting",     category: "sensor",   weight: 0, spaces: 0.25, sp: 0,  sop: 5,  cost: 500,  mount: "internal" },
-  SENSORY_EXTENSIONS: { key: "SENSORY_EXTENSIONS", label: "Sensory Extensions",    category: "sensor",   weight: 2, spaces: 0.5,  sp: 15, sop: 15, cost: 500,  mount: "external" },
+  RADAR:              { key: "RADAR",              label: "Radar",                 category: "sensor",   weight: 5, spaces: 0.5,  sp: 0,  sdp: 15, cost: 1000, mount: "internal" },
+  INFRARED:           { key: "INFRARED",           label: "Infra-Red Sensors",     category: "sensor",   weight: 0, spaces: 0.25, sp: 0,  sdp: 5,  cost: 400,  mount: "internal" },
+  THERMAL_TARGETING:  { key: "THERMAL_TARGETING",  label: "Thermal Targeting",     category: "sensor",   weight: 0, spaces: 0.25, sp: 0,  sdp: 5,  cost: 500,  mount: "internal" },
+  SENSORY_EXTENSIONS: { key: "SENSORY_EXTENSIONS", label: "Sensory Extensions",    category: "sensor",   weight: 2, spaces: 0.5,  sp: 15, sdp: 15, cost: 500,  mount: "external" },
+
+  // ── Communications (Audio-Visual / Communications, p.67-68; grouped with Special Sensors) ──
+  COMMO_RADIO_STD:    { key: "COMMO_RADIO_STD",    label: "Standard Radio",        category: "sensor",   weight: 0,  spaces: 0,    sp: 0,  sdp: 5,  cost: 200,  mount: "internal" },  // 80 km, IFF transponder
+  COMMO_RADIO_LONG:   { key: "COMMO_RADIO_LONG",   label: "Long-Range Radio",      category: "sensor",   weight: 5,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 1000, mount: "internal" },  // 300 km, IFF
+  COMMO_RADIO_MIL:    { key: "COMMO_RADIO_MIL",    label: "Military Radio",        category: "sensor",   weight: 10, spaces: 0.5,  sp: 0,  sdp: 10, cost: 2500, mount: "internal" },  // band-jump/burst, 500 km, IFF
+  SAT_UPLINK:         { key: "SAT_UPLINK",         label: "Satellite Uplink",      category: "sensor",   weight: 20, spaces: 1,    sp: 0,  sdp: 15, cost: 3000, mount: "retract" },   // links comms/recon sat; external when deployed
+  CELL_PHONE:         { key: "CELL_PHONE",         label: "Cellular Phone",        category: "sensor",   weight: 2,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 500,  mount: "internal" },  // 20 km urban; needs repeaters underground
+  SCRAMBLER:          { key: "SCRAMBLER",          label: "Scrambler",             category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 500,  mount: "internal" },  // coded comms; +500eb decoder cracks 20%
+  LASER_COM:          { key: "LASER_COM",          label: "Laser Communicator",    category: "sensor",   weight: 10, spaces: 0.25, sp: 0,  sdp: 10, cost: 7000, mount: "internal" },  // line-of-sight, unjammable
+
+  // ── Special Sensors (Audio-Visual / Special Sensors, p.68; anchor-validated table) ──
+  REMOTE_TARGETING:   { key: "REMOTE_TARGETING",   label: "Remote Targeting",      category: "sensor",   weight: 1,  spaces: 0.5,  sp: 0,  sdp: 5,  cost: 800,  mount: "internal" },  // forward-observer indirect-fire link
+  ANTI_DAZZLE:        { key: "ANTI_DAZZLE",        label: "Anti-Dazzle",           category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 200,  mount: "internal" },  // = cyberoptic anti-dazzle
+  LOW_LITE:           { key: "LOW_LITE",           label: "Low-Lite",              category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 200,  mount: "internal" },  // = LL goggles
+  TELESCOPIC_OPTICS:  { key: "TELESCOPIC_OPTICS",  label: "Telescopic Optics",     category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 150,  mount: "internal" },  // = teleoptics
+  IMAGE_ENHANCE:      { key: "IMAGE_ENHANCE",      label: "Image Enhance",         category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 450,  mount: "internal" },  // Notice/Awareness bonus
+  VISUAL_BACKUP:      { key: "VISUAL_BACKUP",      label: "Visual Spectrum Backup",category: "sensor",   weight: 1,  spaces: 0.5,  sp: 0,  sdp: 15, cost: 300,  mount: "internal" },  // fallback view if primary interface fails
+  AV_RECORDER:        { key: "AV_RECORDER",        label: "A/V Recorder",          category: "sensor",   weight: 2,  spaces: 0.25, sp: 0,  sdp: 10, cost: 300,  mount: "internal" },  // 6 hrs/chip, 2 chips
+  SONAR:              { key: "SONAR",              label: "Sonar",                 category: "sensor",   weight: 10, spaces: 1,    sp: 0,  sdp: 10, cost: 2000, mount: "internal" },  // 50m detect / 200m listen
+  MAGNETOMETER:       { key: "MAGNETOMETER",       label: "Magnetometer",          category: "sensor",   weight: 20, spaces: 1,    sp: 0,  sdp: 15, cost: 3000, mount: "internal" },  // 100m metal; railguns at 3x range
+  LASER_DETECTOR:     { key: "LASER_DETECTOR",     label: "Laser Detector",        category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 1000, mount: "internal" },
+  MICROWAVE_DETECTOR: { key: "MICROWAVE_DETECTOR", label: "Microwave Detector",    category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 5000, mount: "internal" },
 
   // ── Utility (General + Auto-Doctors, p.64) ──
-  FIRE_EXTINGUISHER:  { key: "FIRE_EXTINGUISHER",  label: "Fire Extinguisher",     category: "utility",  weight: 20, spaces: 1,   sp: 0,  sop: 40, cost: 500,  mount: "internal" },
-  HEAVY_TOOL_SUITE:   { key: "HEAVY_TOOL_SUITE",   label: "Heavy Tool Suite",      category: "utility",  weight: 10, spaces: 1,   sp: 20, sop: 20, cost: 500,  mount: "either" },
-  KWIKFIX_AUTODOC:    { key: "KWIKFIX_AUTODOC",    label: "RussianArms Kwikfix",   category: "utility",  weight: 1,  spaces: 0.5, sp: 0,  sop: 15, cost: 200,  mount: "internal" },
-  BODYWEIGHT_MEDIC:   { key: "BODYWEIGHT_MEDIC",   label: "Bodyweight Medic",      category: "utility",  weight: 3,  spaces: 1,   sp: 0,  sop: 15, cost: 2000, mount: "internal" },
+  FIRE_EXTINGUISHER:  { key: "FIRE_EXTINGUISHER",  label: "Fire Extinguisher",     category: "utility",  weight: 10, spaces: 1,   sp: 20, sdp: 20, cost: 500,  mount: "either" },   // corrected to MM p.70
+  HEAVY_TOOL_SUITE:   { key: "HEAVY_TOOL_SUITE",   label: "Heavy Tool Suite",      category: "utility",  weight: 50, spaces: 2,   sp: 15, sdp: 40, cost: 400,  mount: "either" },   // corrected to MM p.70
+  LIGHT_TOOL_SUITE:   { key: "LIGHT_TOOL_SUITE",   label: "Light Tool Suite",      category: "utility",  weight: 8,  spaces: 1,   sp: 0,  sdp: 15, cost: 560,  mount: "internal" }, // electronic/light-mech repair (p.70)
+  SEARCHLIGHT:        { key: "SEARCHLIGHT",        label: "Searchlight",           category: "utility",  weight: 5,  spaces: 0,   sp: 10, sdp: 5,  cost: 300,  mount: "external" }, // white/IR/UV; can blind (+4 WA, 200m); +200eb armors to 10SP/10SDP
+  WINCH_GRAPPLE:      { key: "WINCH_GRAPPLE",      label: "Winch & Grapple",       category: "utility",  weight: 20, spaces: 1,   sp: 0,  sdp: 40, cost: 500,  mount: "internal" }, // 100m cable, 1200kg winch (p.70)
+  KWIKFIX_AUTODOC:    { key: "KWIKFIX_AUTODOC",    label: "RussianArms Kwikfix",   category: "utility",  weight: 1,  spaces: 0.5, sp: 0,  sdp: 15, cost: 200,  mount: "internal" },
+  BODYWEIGHT_MEDIC:   { key: "BODYWEIGHT_MEDIC",   label: "Bodyweight Medic",      category: "utility",  weight: 3,  spaces: 1,   sp: 0,  sdp: 15, cost: 2000, mount: "internal" },
+  ARASAKA_MONITOR:    { key: "ARASAKA_MONITOR",    label: "Arasaka Monitor",       category: "utility",  weight: 1,  spaces: 1,   sp: 0,  sdp: 15, cost: 800,  mount: "internal" },  // 4 injections + KO/death broadcast + 1d6h beacon
+  MILITECH_REPEATER:  { key: "MILITECH_REPEATER",  label: "Militech Repeater",     category: "utility",  weight: 3,  spaces: 2,   sp: 0,  sdp: 25, cost: 4000, mount: "internal" },  // 7 meds; +2 on every stun/death re-roll
+  ORBITAL_AIR_PRIME:  { key: "ORBITAL_AIR_PRIME",  label: "Orbital Air Prime",     category: "utility",  weight: 2,  spaces: 1,   sp: 0,  sdp: 20, cost: 8000, mount: "internal" },  // = Repeater, smaller
 
   // ── Movement (p.68) ──
-  CLIMBERS:           { key: "CLIMBERS",           label: "Climbers",              category: "movement", weight: 1,  spaces: 0.5, sp: 30, sop: 15, cost: 1000, mount: "either",  perLimb: true },
-  SWIMMER:            { key: "SWIMMER",            label: "Swimmer Unit",          category: "movement", weight: 50, spaces: 2,   sp: 25, sop: 60, cost: 6000, mount: "external" },
-  JUMP_JETS:          { key: "JUMP_JETS",          label: "Jump Jets",             category: "movement", weight: 0,  spaces: 1,   sp: 20, sop: 30, cost: 10000, mount: "retract" },
+  CLIMBERS:           { key: "CLIMBERS",           label: "Climbers",              category: "movement", weight: 1,  spaces: 0.5, sp: 30, sdp: 15, cost: 1000, mount: "either",  perLimb: true },
+  SWIMMER:            { key: "SWIMMER",            label: "Swimmer Unit",          category: "movement", weight: 50, spaces: 2,   sp: 25, sdp: 60, cost: 6000, mount: "external" },
+  JUMP_JETS:          { key: "JUMP_JETS",          label: "Jump Jets",             category: "movement", weight: 0,  spaces: 1,   sp: 20, sdp: 30, cost: 10000, mount: "retract" },
+  GLIDER:             { key: "GLIDER",             label: "Glider",                category: "movement", weight: 45, spaces: 6,   sp: 15, sdp: 30, cost: 3000,  mount: "retract" },   // retractable gliding wings (p.69)
+  FLIGHT_UNIT:        { key: "FLIGHT_UNIT",        label: "Flight Unit",           category: "movement", weight: 300,spaces: 0,   sp: 30, sdp: 60, cost: 75000, mount: "external" },  // true flight; sled=0 spaces, flying-wing=8
+  SKATES_POWERED:     { key: "SKATES_POWERED",     label: "Skates (Powered)",      category: "movement", weight: 14, spaces: 2,   sp: 20, sdp: 20, cost: 4000,  mount: "retract" },   // ~117 km/h; 1 space/leg
+  SKATES_UNPOWERED:   { key: "SKATES_UNPOWERED",   label: "Skates (Unpowered)",    category: "movement", weight: 5,  spaces: 1,   sp: 20, sdp: 20, cost: 500,   mount: "external" },  // double MA; 1/2 space/leg
 
   // ── Safety (Trooper Safety, p.64) ──
-  ESCAPE_HATCH:       { key: "ESCAPE_HATCH",       label: "Escape Hatch",          category: "safety",   weight: 1,  spaces: 0.5, sp: 0,  sop: 30, cost: 500,  mount: "internal" },
-  LIFE_SUPPORT:       { key: "LIFE_SUPPORT",       label: "Extended Life Support", category: "safety",   weight: 2,  spaces: 0.5, sp: 0,  sop: 10, cost: 400,  mount: "internal" },
-  SELF_SEAL:          { key: "SELF_SEAL",          label: "Self-Seal Compression", category: "safety",   weight: 5,  spaces: 4,   sp: 0,  sop: 50, cost: 6000, mount: "internal" },
+  ESCAPE_HATCH:       { key: "ESCAPE_HATCH",       label: "Escape Hatch",          category: "safety",   weight: 1,  spaces: 0.5, sp: 0,  sdp: 30, cost: 500,  mount: "internal" },
+  LIFE_SUPPORT:       { key: "LIFE_SUPPORT",       label: "Extended Life Support", category: "safety",   weight: 10, spaces: 1,   sp: 30, sdp: 20, cost: 500,  mount: "either" },   // per 10kg/4hr unit; corrected to MM p.67
+  SELF_SEAL:          { key: "SELF_SEAL",          label: "Self-Seal Compression", category: "safety",   weight: 5,  spaces: 4,   sp: 0,  sdp: 50, cost: 6000, mount: "internal" },
+  FOOD_FILTRATION:    { key: "FOOD_FILTRATION",    label: "Food/Filtration",       category: "safety",   weight: 2,  spaces: 0.5, sp: 0,  sdp: 10, cost: 400,  mount: "internal" },  // 2.5 days no rations/waste
+  EXTRA_POWER_CELLS:  { key: "EXTRA_POWER_CELLS",  label: "Extra Power Cells",     category: "safety",   weight: 0,  spaces: 0.5, sp: 0,  sdp: 15, cost: 2000, mount: "internal" },  // wt ≈6% chassis (Russian +50%); +8 hrs each, 48 hr max
 
   // ── Defensive / countermeasures (ACPA Defensive Systems, p.79 / charts p.97) ──
-  EMP_SPONGE:         { key: "EMP_SPONGE",         label: "EMP Sponge",            category: "defensive", weight: 2, spaces: 0.5, sp: 0,  sop: 30, cost: 500,    mount: "internal" },  // one-shot EMP protection
-  SMOKE_CANNISTER:    { key: "SMOKE_CANNISTER",    label: "Smoke Cannister",       category: "defensive", weight: 2, spaces: 1,   sp: 0,  sop: 10, cost: 1500,   mount: "internal" },  // −3 to-hit vs visual guidance
-  IR_BAFFLING:        { key: "IR_BAFFLING",        label: "IR Baffling",           category: "defensive", weight: 6, spaces: 1,   sp: 20, sop: 20, cost: 300,    mount: "external" },  // vs thermal/IR
-  GHOST_DECOY:        { key: "GHOST_DECOY",        label: "Ghost Decoy Cannister", category: "defensive", weight: 2, spaces: 0.5, sp: 20, sop: 25, cost: 500,    mount: "external" },  // one-shot ECM decoy (~1 min)
-  AGAMS:              { key: "AGAMS",              label: "AGAMS Anti-Missile",    category: "defensive", weight: 4, spaces: 0.5, sp: 20, sop: 10, cost: 3000,   mount: "external" },  // shoots down inbound missiles
-  ECM_SUITE:          { key: "ECM_SUITE",          label: "ECM Suite",             category: "defensive", weight: 5, spaces: 1,   sp: 0,  sop: 15, cost: 100000, mount: "internal" },  // jamming, 100m radius
+  EMP_SPONGE:         { key: "EMP_SPONGE",         label: "EMP Sponge",            category: "defensive", weight: 2, spaces: 0.5, sp: 0,  sdp: 30, cost: 500,    mount: "internal" },  // one-shot EMP protection
+  SMOKE_CANNISTER:    { key: "SMOKE_CANNISTER",    label: "Smoke Cannister",       category: "defensive", weight: 4, spaces: 1,   sp: 20, sdp: 15, cost: 200,    shots: 6, mount: "external" },  // −3 to-hit vs visual guidance; corrected to MM p.79
+  IR_BAFFLING:        { key: "IR_BAFFLING",        label: "IR Baffling",           category: "defensive", weight: 0, spaces: 0,   sp: 0,  sdp: 0,  cost: 0,      mount: "internal" },  // SPECIAL: cost = 10% chassis cost; reduces IR signature only; no spaces/SP/SDP (MM p.79)
+  GHOST_DECOY:        { key: "GHOST_DECOY",        label: "Ghost Decoy Cannister", category: "defensive", weight: 4, spaces: 0.5, sp: 20, sdp: 10, cost: 3000,   shots: 1, mount: "external" },  // one-shot ECM decoy (~1 min); corrected to MM p.79
+  AGAMS:              { key: "AGAMS",              label: "AGAMS Anti-Missile",    category: "defensive", weight: 25, spaces: 2,  sp: 20, sdp: 20, cost: 24000,  shots: 30, mount: "external" },  // gatling anti-missile: 3d6 (Pen 0), ROF 30, 400m; 25kg empty/+13kg full mag; MM p.79
+  ECM_SUITE:          { key: "ECM_SUITE",          label: "ECM Suite",             category: "defensive", weight: 25, spaces: 2,  sp: 0,  sdp: 15, cost: 500000, mount: "internal" },  // jamming, 100m radius; corrected to MM p.79
+  EMP_CAPACITOR:      { key: "EMP_CAPACITOR",      label: "EMP Capacitor",         category: "defensive", weight: 2,  spaces: 1,   sp: 0,  sdp: 10, cost: 1500,   mount: "internal" },  // absorbs/discharges EMP; 50% destroyed (p.79)
+  STARDUST_CANNISTER: { key: "STARDUST_CANNISTER", label: "Stardust Cannister",    category: "defensive", weight: 2,  spaces: 0.5, sp: 20, sdp: 25, cost: 500,    shots: 2, mount: "external" },  // anti-laser glass dust (90%); SDP 25 (user-confirmed from ACPA defensive table)
+  RIBBON_CANNISTER:   { key: "RIBBON_CANNISTER",   label: "Ribbon Cannister",      category: "defensive", weight: 3,  spaces: 1,   sp: 20, sdp: 20, cost: 300,    shots: 3, mount: "external" },  // anti-radar chaff foil (p.79)
+  FLASH_CANNISTER:    { key: "FLASH_CANNISTER",    label: "Flash Cannister",       category: "defensive", weight: 6,  spaces: 1,   sp: 20, sdp: 20, cost: 300,    shots: 6, mount: "external" },  // flash-stun + anti-thermal flare (p.79)
+  ECCM:               { key: "ECCM",               label: "ECCM",                  category: "defensive", weight: 5,  spaces: 1,   sp: 0,  sdp: 15, cost: 100000, mount: "internal" },  // burns through jamming on 4-10 (p.79)
+  STEALTHING:         { key: "STEALTHING",         label: "Stealthing",            category: "defensive", weight: 0,  spaces: 0,   sp: 0,  sdp: 0,  cost: 0,      mount: "internal" },  // SPECIAL: 10x suit cost, -10% capacity, -1 external space/area (p.79)
 };
 
 /** Catalog entry for a key (or null). PURE. */
@@ -57,12 +97,12 @@ export function acpaSystemDef(key) {
 }
 
 /**
- * A system's structural points (SOP). The charts list SOP directly; a system given an SP but no SOP
- * has SOP = 3 × SP (MM p.62). PURE — accepts a catalog def or any {sop, sp}.
+ * A system's structural points (SDP). The charts list SDP directly; a system given an SP but no SDP
+ * has SDP = 3 × SP (MM p.62). PURE — accepts a catalog def or any {sdp, sp}.
  */
-export function acpaSystemSop(def) {
-  const sop = Number(def?.sop) || 0;
-  if (sop > 0) return sop;
+export function acpaSystemSdp(def) {
+  const sdp = Number(def?.sdp) || 0;
+  if (sdp > 0) return sdp;
   const sp = Number(def?.sp) || 0;
   return sp > 0 ? sp * 3 : 0;
 }
@@ -139,34 +179,34 @@ export function acpaSpacesOver(mounted, str) {
   return out;
 }
 
-/* ------------------------------- Per-system SOP damage (MM p.55) ------------------------------- */
+/* ------------------------------- Per-system SDP damage (MM p.55) ------------------------------- */
 
 /**
- * Apply SOP damage to one mounted system in a struck body area (MM p.55-56). Picks the first LIVE
- * system in the area, adds the damage to its accumulated `sopDamage`, and marks it destroyed once that
- * meets/exceeds its SOP. PURE — returns a NEW array plus the outcome; if no live system is in the area,
- * nothing is consumed (the caller falls through to frame SOP, per D-3).
- * @param {Array}  mounted  [{ key, area, mount, sopDamage?, destroyed? }]
+ * Apply SDP damage to one mounted system in a struck body area (MM p.55-56). Picks the first LIVE
+ * system in the area, adds the damage to its accumulated `sdpDamage`, and marks it destroyed once that
+ * meets/exceeds its SDP. PURE — returns a NEW array plus the outcome; if no live system is in the area,
+ * nothing is consumed (the caller falls through to frame SDP, per D-3).
+ * @param {Array}  mounted  [{ key, area, mount, sdpDamage?, destroyed? }]
  * @param {string} area     struck body-area key (head/rArm/lArm/rLeg/lLeg/torso)
- * @param {number} sopDamage incoming SOP damage
+ * @param {number} sdpDamage incoming SDP damage
  * @returns {{ index:number, hitKey:(string|null), destroyed:boolean, overflow:number, updated:Array }}
  */
-export function acpaHitSystem(mounted = [], area, sopDamage = 0) {
+export function acpaHitSystem(mounted = [], area, sdpDamage = 0) {
   const updated = (mounted ?? []).map(m => ({ ...m }));
-  const dmg = Math.max(0, Number(sopDamage) || 0);
+  const dmg = Math.max(0, Number(sdpDamage) || 0);
   const index = updated.findIndex(m => m?.area === area && !m?.destroyed);
   if (index < 0) return { index: -1, hitKey: null, destroyed: false, overflow: dmg, updated };
   const m = updated[index];
-  // Prefer the mounted entry's own SOP/SP (a placed Item may be edited); fall back to the catalog.
+  // Prefer the mounted entry's own SDP/SP (a placed Item may be edited); fall back to the catalog.
   const def = acpaSystemDef(m.key) ?? {};
-  const sop = acpaSystemSop({ sop: m.sop ?? def.sop, sp: m.sp ?? def.sp });
-  const prev = Math.max(0, Number(m.sopDamage) || 0);
+  const sdp = acpaSystemSdp({ sdp: m.sdp ?? def.sdp, sp: m.sp ?? def.sp });
+  const prev = Math.max(0, Number(m.sdpDamage) || 0);
   const total = prev + dmg;
-  const destroyed = sop > 0 && total >= sop;
-  m.sopDamage = Math.min(total, sop || total);
+  const destroyed = sdp > 0 && total >= sdp;
+  m.sdpDamage = Math.min(total, sdp || total);
   m.destroyed = !!destroyed;
-  // Damage beyond what destroying this system absorbs spills back to the caller (→ frame SOP).
-  const overflow = destroyed ? Math.max(0, total - sop) : 0;
+  // Damage beyond what destroying this system absorbs spills back to the caller (→ frame SDP).
+  const overflow = destroyed ? Math.max(0, total - sdp) : 0;
   return { index, hitKey: m.key, destroyed, overflow, updated };
 }
 

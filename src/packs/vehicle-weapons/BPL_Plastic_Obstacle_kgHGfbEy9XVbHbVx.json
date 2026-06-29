@@ -1,0 +1,46 @@
+{
+  "name": "BPL Plastic Obstacle",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 2,
+    "magWeight": 0,
+    "notes": "TRAP: scatters ~240 plastic loops over a 5m radius; non-PA crawl ≤0.5m/round, PA pass freely.",
+    "weaponClass": "special",
+    "mountType": "open",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 0,
+    "damage": "",
+    "rof": 1,
+    "shots": 1,
+    "range": 10,
+    "reliability": "VR",
+    "space": 0.5,
+    "cost": 10,
+    "sp": 20,
+    "sdp": 10,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "kgHGfbEy9XVbHbVx",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961235,
+    "modifiedTime": 1782732961235,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!kgHGfbEy9XVbHbVx"
+}

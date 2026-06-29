@@ -258,6 +258,11 @@
    (generated, no compendium sheet), so suppress the name/thumb open-details affordance. */
 .cp-ammo-rounds { flex: 0 0 auto; font-size: 0.7em; opacity: 0.7; padding: 0 4px; border: 1px solid rgba(107,179,204,0.35); border-radius: 3px; white-space: nowrap; }
 .cp-catalog-ammo-load { flex: 0 0 auto; max-width: 132px; }
+/* Fashion style picker shares the buy-row with the flex:1 item name. A bare <select> sizes to its
+   long option ("Businesswear ×3"), and its flex min-content floor (min-width:auto) lets that width
+   collapse the name to nothing. Cap it like the ammo loader; min-width:0 is REQUIRED so the cap
+   beats the min-content floor (the ammo loader escapes it only because its labels are short). */
+.cp-catalog-style { flex: 0 1 auto; min-width: 0; max-width: 132px; }
 .cp-ammo-row .cp-cat-itemname, .cp-ammo-row .cp-cat-thumb { cursor: default; }
 .cp-ammo-row .cp-cat-itemname:hover { text-decoration: none; }
 .cp-shop-remove { width: auto; padding: 0 3px; background: none; border: none; color: inherit; cursor: pointer; opacity: 0.7; }
@@ -1585,6 +1590,30 @@ img#anatomy-img {
 .cyberpunk.vehicle .field-list .field > label {
   flex: 1 1 auto;
 }
+
+/* Vehicle ITEM sheet (the bare `vehicle` item type — BMW 600, Musashi, etc.). Unlike the vehicle
+   ACTOR sheet it carries no `.vehicle` class, so it never inherits the label rule above. The stock
+   system's `.cyberpunk.sheet.item .field-list .field label { min-width: 0 }` then lets the long
+   labels (Speed/Fuel/Passengers/Maneuverability/Efficiency) collapse to ~0 width and overprint
+   their inputs. Restore the actor-sheet treatment, scoped to the vehicle partial's display:contents
+   wrapper so no OTHER item sheet's labels are affected (their min-width:0 column-shrink stays). */
+.cp-vehicle-item-fields { display: contents; }
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field > label {
+  flex: 1 1 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=number] {
+  min-width: 0;
+}
+
+/* Reality Interface / Reflex-Control selects carry long, stat-laden option labels (e.g. "ECI Wideband
+   HUD (SIB +2 / DFB +2)"). A <select> defaults to its LONGEST option's width, and a grid cell's
+   default min-width:auto lets it blow past its half of the row — pushing the adjacent field off the
+   right edge of a narrow starting window. Bound the selects to their cell so the row stays on-screen
+   (the open dropdown still shows each option's full text). */
+.cyberpunk.vehicle .field-list .field:has(> select) { min-width: 0; }
+.cyberpunk.vehicle .field-list .field > select { min-width: 0; max-width: 100%; width: 100%; }
 
 .cyberpunk.vehicle .field-list .field > input[type=number] {
   flex: 0 0 4em;

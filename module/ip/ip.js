@@ -190,6 +190,34 @@ export async function clearQueue() {
   _rerenderTracker();
 }
 
+/** Prune queue rows whose source actor no longer exists — a deleted PC/NPC, or leftover test-actor
+ *  debris. Such rows can never be awarded (`resolveQueueRow` already no-ops on a missing actor/skill)
+ *  and would otherwise linger in the tracker forever, because the queue is a name/id SNAPSHOT in a
+ *  world setting, independent of the actor document. Active-GM only (world-setting write). Returns the
+ *  number of rows removed. `rerender:false` when called from inside a tracker render (avoids re-entry). */
+export async function pruneOrphanQueue({ rerender = true } = {}) {
+  if (!_isActiveGM()) return 0;
+  const q = getQueue();
+  const live = q.filter(r => game.actors.get(r.actorId));
+  if (live.length === q.length) return 0;
+  await setQueue(live);
+  await _rearmNeglectIfBelow();
+  if (rerender) _rerenderTracker();
+  return q.length - live.length;
+}
+
+/** Drop every queued row for one actor id — called when that actor is deleted. Active-GM only. */
+export async function removeActorFromQueue(actorId) {
+  if (!_isActiveGM()) return 0;
+  const q = getQueue();
+  const kept = q.filter(r => r.actorId !== actorId);
+  if (kept.length === q.length) return 0;
+  await setQueue(kept);
+  await _rearmNeglectIfBelow();
+  _rerenderTracker();
+  return q.length - kept.length;
+}
+
 /* --------------------------------------------------------------------- */
 /*  Queue cap — bound the auto-queue so a muted backlog can't grow forever */
 /* --------------------------------------------------------------------- */
@@ -443,5 +471,12 @@ export function registerIpHooks() {
     if (data?.type !== "ipSkillRolled") return;
     if (!_isActiveGM()) return;
     try { await _enqueue(data.payload); } catch (e) { console.warn("cp2020-augmented | IP relay enqueue failed", e); }
+  });
+
+  // Deleting an actor orphans its queued skill-roll rows (the queue snapshots actorId/name in a world
+  // setting, independent of the actor doc), so drop them — else the tracker shows phantom rows for a
+  // deleted PC. The active-GM-only write is enforced inside removeActorFromQueue.
+  Hooks.on("deleteActor", (actor) => {
+    removeActorFromQueue(actor.id).catch(e => console.warn("cp2020-augmented | IP queue prune on actor delete failed", e));
   });
 }

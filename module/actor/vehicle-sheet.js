@@ -107,8 +107,13 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     let linkedPilotName = "";
     let linkedPilotRef = null;
     try {
-      pilotChoices = (game.actors?.filter(a => a.type === "character") ?? []).map(a => ({ id: a.id, name: a.name }));
       const linkedPilot = system?.pilotId ? game.actors?.get(system.pilotId) : null;
+      // Owned-only: a GM owns every actor (sees all); a player sees only their own character(s) — so the
+      // menu never exposes GM-only NPCs. GUARD: always keep the currently-linked pilot in the list so it
+      // still renders as the selected option even when the viewer doesn't own it. (Masking that pilot's
+      // displayed NAME for non-owners is the separate hidden-pilot decision — see the sheet's pilot display.)
+      pilotChoices = (game.actors?.filter(a => a.type === "character" && (a.isOwner || a.id === system?.pilotId)) ?? [])
+        .map(a => ({ id: a.id, name: a.name }));
       linkedPilotName = linkedPilot?.name ?? "";
       linkedPilotRef = linkedPilot ? (Number(linkedPilot.system?.stats?.ref?.total) || 0) : null;
     } catch (e) { /* defaults above */ }

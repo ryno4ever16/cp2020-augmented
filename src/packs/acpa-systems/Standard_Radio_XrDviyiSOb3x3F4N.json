@@ -1,0 +1,48 @@
+{
+  "name": "Standard Radio",
+  "type": "cp2020-augmented.acpaSystem",
+  "img": "icons/svg/chest.svg",
+  "system": {
+    "htmlFields": [
+      "notes"
+    ],
+    "category": "sensor",
+    "mount": "internal",
+    "area": "torso",
+    "spaces": 0,
+    "sp": 0,
+    "sdp": 5,
+    "weight": 0,
+    "cost": 200,
+    "catalogKey": "COMMO_RADIO_STD",
+    "source": "Maximum Metal",
+    "flavor": "",
+    "notes": "",
+    "equipped": true,
+    "lastOwnerId": "",
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
+  },
+  "_id": "XrDviyiSOb3x3F4N",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0,
+    "WGfmeaFXASRimlGE": 3
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782632212821,
+    "modifiedTime": 1782632212823,
+    "lastModifiedBy": "WGfmeaFXASRimlGE",
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!XrDviyiSOb3x3F4N"
+}

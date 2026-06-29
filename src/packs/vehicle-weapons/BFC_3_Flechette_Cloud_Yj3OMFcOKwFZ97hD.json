@@ -1,0 +1,49 @@
+{
+  "name": "BFC-3 Flechette Cloud",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 2,
+    "magWeight": 0,
+    "notes": "Highest needle count, 120° cone; widest soft-target spread, weakest per-hit, no effect vs PA.",
+    "weaponClass": "cone",
+    "mountType": "open",
+    "arc": "front",
+    "wa": 9,
+    "penetration": 1,
+    "damage": "1D10AP",
+    "ap": true,
+    "coneAngle": 120,
+    "projectiles": 288,
+    "rof": 1,
+    "shots": 1,
+    "range": 30,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 300,
+    "sp": 20,
+    "sdp": 20,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "Yj3OMFcOKwFZ97hD",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961228,
+    "modifiedTime": 1782732961228,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!Yj3OMFcOKwFZ97hD"
+}

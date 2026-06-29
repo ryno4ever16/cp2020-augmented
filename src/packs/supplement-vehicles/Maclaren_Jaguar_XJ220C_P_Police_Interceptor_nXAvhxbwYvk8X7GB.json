@@ -16,12 +16,12 @@
       "max": 100
     },
     "sp": 30,
-    "passengers": 4,
+    "passengers": 1,
     "speed": {
       "value": 0,
       "max": 0,
       "maneuver": 0,
-      "acceleration": 0
+      "acceleration": 25
     },
     "maneuverability": {
       "value": 1,
@@ -29,10 +29,11 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 30,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 350
   },
   "effects": [],
   "folder": null,

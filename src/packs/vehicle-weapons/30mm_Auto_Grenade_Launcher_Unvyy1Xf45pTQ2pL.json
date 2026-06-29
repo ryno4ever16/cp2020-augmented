@@ -1,0 +1,47 @@
+{
+  "name": "30mm Auto-Grenade Launcher",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 20,
+    "magWeight": 11,
+    "notes": "Russian 30-round auto-GL; ROF slow enough to single-fire; same grenade effects as the 40mm.",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 0,
+    "damage": "",
+    "rof": 1,
+    "rofAlt": 10,
+    "shots": 30,
+    "range": 1300,
+    "reliability": "VR",
+    "space": 2,
+    "cost": 2000,
+    "sp": 25,
+    "sdp": 25,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "Unvyy1Xf45pTQ2pL",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961232,
+    "modifiedTime": 1782732961232,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!Unvyy1Xf45pTQ2pL"
+}

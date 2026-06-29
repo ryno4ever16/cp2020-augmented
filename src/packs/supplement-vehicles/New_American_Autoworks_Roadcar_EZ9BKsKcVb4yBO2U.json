@@ -15,7 +15,7 @@
       "value": 25,
       "max": 25
     },
-    "sp": 10,
+    "sp": 0,
     "passengers": 1,
     "speed": {
       "value": 0,
@@ -29,10 +29,11 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 30,
       "max": 0,
       "value": 0
-    }
+    },
+    "range": 600
   },
   "effects": [],
   "folder": null,

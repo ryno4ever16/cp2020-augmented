@@ -4,9 +4,9 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "Pre-existing. Target designator for laser-guided weapons; no damage, but 90% chance to permanently blind unshielded biological eyes; blocked by smoke/anti-laser aerosol.",
     "cost": 1000,
-    "weight": 0,
+    "weight": 3,
     "equipped": true,
     "source": "Maximum Metal",
     "weaponClass": "special",
@@ -37,9 +37,10 @@
     "shellVariants": [],
     "activeShell": "",
     "area": "torso",
-    "sop": 0,
-    "sopDamage": 0,
-    "destroyed": false
+    "sdp": 0,
+    "sdpDamage": 0,
+    "destroyed": false,
+    "magWeight": 0
   },
   "_id": "hsH5mwlIZeVbgIp9",
   "effects": [],

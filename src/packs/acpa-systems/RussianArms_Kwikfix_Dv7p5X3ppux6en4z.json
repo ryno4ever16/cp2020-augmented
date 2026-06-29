@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 0.5,
     "sp": 0,
-    "sop": 15,
+    "sdp": 15,
     "catalogKey": "KWIKFIX_AUTODOC",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "Dv7p5X3ppux6en4z",
   "effects": [],

@@ -14,11 +14,12 @@
     "area": "torso",
     "spaces": 1,
     "sp": 0,
-    "sop": 15,
+    "sdp": 15,
     "catalogKey": "BODYWEIGHT_MEDIC",
     "lastOwnerId": "",
-    "sopDamage": 0,
-    "destroyed": false
+    "sdpDamage": 0,
+    "destroyed": false,
+    "shots": 0
   },
   "_id": "xUkHBpr013l7yKpp",
   "effects": [],

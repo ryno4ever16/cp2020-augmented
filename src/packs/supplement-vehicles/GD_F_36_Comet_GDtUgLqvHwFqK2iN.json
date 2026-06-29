@@ -29,7 +29,7 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 1,
       "max": 0,
       "value": 0
     }

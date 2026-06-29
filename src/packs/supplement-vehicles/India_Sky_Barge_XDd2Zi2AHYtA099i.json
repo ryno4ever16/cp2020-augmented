@@ -15,7 +15,7 @@
       "value": 750,
       "max": 750
     },
-    "sp": 10,
+    "sp": 0,
     "passengers": 6,
     "speed": {
       "value": 0,
@@ -29,7 +29,7 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 0,
+      "efficiency": 0.33,
       "max": 0,
       "value": 0
     }

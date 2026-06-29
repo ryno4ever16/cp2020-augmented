@@ -1,0 +1,48 @@
+{
+  "name": "Mini-Roc 6",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 69,
+    "magWeight": 0,
+    "notes": "6-shot 50mm light rocket pod; anti-personnel/light targets; 3m burst; leg-mountable.",
+    "weaponClass": "rocket",
+    "mountType": "pod",
+    "arc": "front",
+    "wa": -2,
+    "penetration": 3,
+    "damage": "6D10",
+    "hiEx": true,
+    "burst": 3,
+    "rof": 1,
+    "shots": 6,
+    "range": 500,
+    "reliability": "VR",
+    "space": 2,
+    "cost": 1800,
+    "sp": 20,
+    "sdp": 45,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "XIGf7gEjO7lVQDWS",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961231,
+    "modifiedTime": 1782732961231,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!XIGf7gEjO7lVQDWS"
+}

@@ -78,14 +78,14 @@
             <div class="field" title="{{CPLocal 'Vehicle.LiftKgTip'}}"><label>{{CPLocal "Vehicle.LiftKgLabel"}}</label><input type="number" class="not-editable" value="{{system.lift}}" readonly/></div>
             <div class="field" title="{{CPLocal 'Vehicle.CarryKgTip'}}"><label>{{CPLocal "Vehicle.CarryKgLabel"}}</label><input type="number" class="not-editable" value="{{system.carry}}" readonly/></div>
         </div>
-        <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">{{CPLocal "Vehicle.FrameSopNote"}}</p>
+        <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">{{CPLocal "Vehicle.FrameSdpNote"}}</p>
         <div class="field-list">
-            <div class="field"><label>{{CPLocal "Vehicle.HeadLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.head}}" readonly/></div>
-            <div class="field"><label>{{CPLocal "Vehicle.TorsoLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.torso}}" readonly/></div>
-            <div class="field"><label>{{CPLocal "Vehicle.RArmLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.rArm}}" readonly/></div>
-            <div class="field"><label>{{CPLocal "Vehicle.LArmLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.lArm}}" readonly/></div>
-            <div class="field"><label>{{CPLocal "Vehicle.RLegLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.rLeg}}" readonly/></div>
-            <div class="field"><label>{{CPLocal "Vehicle.LLegLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSOPMax.lLeg}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.HeadLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSDPMax.head}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.TorsoLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSDPMax.torso}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.RArmLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSDPMax.rArm}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.LArmLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSDPMax.lArm}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.RLegLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSDPMax.rLeg}}" readonly/></div>
+            <div class="field"><label>{{CPLocal "Vehicle.LLegLabel"}}</label><input type="number" class="not-editable" value="{{system.frameSDPMax.lLeg}}" readonly/></div>
         </div>
         {{/if}}
 
@@ -227,7 +227,7 @@
                 <span class="cp-weapon-name" title="{{sys.system.category}} system"><b>{{sys.name}}</b>{{#if sys.system.destroyed}} <span class="cp-acpa-system-destroyed">✖</span>{{/if}}</span>
                 <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemBodyAreaTip'}}">{{sys.system.area}}</span>
                 <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemSpacesTip' mount=sys.system.mount}}">{{sys.system.spaces}} sp</span>
-                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemSopStatTip' damage=sys.system.sopDamage}}">SOP {{sys.system.sop}}</span>
+                <span class="cp-weapon-stat" title="{{CPLocal 'Vehicle.SystemSdpStatTip' damage=sys.system.sdpDamage}}">SDP {{sys.system.sdp}}</span>
                 <button type="button" data-action="acpaSystemEdit" data-system-id="{{sys.id}}" title="{{CPLocal 'Vehicle.SystemEditTip'}}">✎</button>
                 <button type="button" data-action="acpaSystemDelete" data-system-id="{{sys.id}}" title="{{CPLocal 'Vehicle.SystemDeleteTip'}}">✕</button>
             </div>

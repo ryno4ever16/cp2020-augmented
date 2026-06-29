@@ -1,0 +1,46 @@
+{
+  "name": "BHC-G8 30mm Rifle",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 70,
+    "magWeight": 9,
+    "notes": "Huge 30mm A-10-style ACPA rifle; drops a heavy trooper in one hit, but very heavy.",
+    "weaponClass": "directFire",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 5,
+    "damage": "9D10",
+    "rof": 1,
+    "shots": 10,
+    "range": 600,
+    "reliability": "VR",
+    "space": 2,
+    "cost": 3500,
+    "sp": 30,
+    "sdp": 40,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "KMm0pO2F4tYduxK1",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961231,
+    "modifiedTime": 1782732961231,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!KMm0pO2F4tYduxK1"
+}

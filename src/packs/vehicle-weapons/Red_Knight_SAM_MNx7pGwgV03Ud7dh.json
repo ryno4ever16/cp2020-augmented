@@ -1,0 +1,51 @@
+{
+  "name": "Red Knight SAM",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 23,
+    "magWeight": 0,
+    "notes": "4th-gen IR-guided SAM/AAM; overkill vs PA; 10m burst; 2-handed only.",
+    "weaponClass": "missile",
+    "mountType": "pod",
+    "arc": "front",
+    "guidance": "active",
+    "homingMethod": "radar",
+    "guidanceSkill": 15,
+    "wa": 0,
+    "penetration": 5,
+    "damage": "10D10",
+    "burst": 10,
+    "rof": 1,
+    "shots": 1,
+    "range": 4500,
+    "minRange": 450,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 4600,
+    "sp": 20,
+    "sdp": 15,
+    "area": "torso",
+    "source": "Maximum Metal"
+  },
+  "_id": "MNx7pGwgV03Ud7dh",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961232,
+    "modifiedTime": 1782732961232,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!MNx7pGwgV03Ud7dh"
+}

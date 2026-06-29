@@ -1,0 +1,48 @@
+{
+  "name": "Heavy Pointed Weapon (2-Hand)",
+  "type": "cp2020-augmented.vehicleWeapon",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "weight": 6,
+    "magWeight": 0,
+    "notes": "Two-handed powered spear/pick; AP thrust plus FIST; longest melee reach (5m).",
+    "weaponClass": "melee",
+    "mountType": "articulated",
+    "arc": "front",
+    "wa": 0,
+    "penetration": 2,
+    "damage": "3D6AP",
+    "ap": true,
+    "addFist": true,
+    "rof": 1,
+    "shots": 1,
+    "range": 5,
+    "reliability": "VR",
+    "space": 1,
+    "cost": 225,
+    "sp": 20,
+    "sdp": 15,
+    "area": "rArm",
+    "source": "Maximum Metal"
+  },
+  "_id": "XgCrShhPcHtbPJmZ",
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {},
+  "_stats": {
+    "coreVersion": "14.364",
+    "systemId": "cyberpunk2020",
+    "systemVersion": "1.1.1",
+    "createdTime": 1782732961230,
+    "modifiedTime": 1782732961230,
+    "lastModifiedBy": null,
+    "compendiumSource": null,
+    "duplicateSource": null,
+    "exportSource": null
+  },
+  "_key": "!items!XgCrShhPcHtbPJmZ"
+}
