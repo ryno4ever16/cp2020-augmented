@@ -50,11 +50,15 @@
             <input type="number" name="system.speed.value" value="{{value}}"> 
             <span class="nogrow">/</span>
             <input type="number" name="system.speed.max" value="{{max}}">
-            <select name="system.speed.unit" class="nogrow">
+            {{#if @root.editable}}
+            <select name="system.speed.unit" class="nogrow cp-unit-select">
                 <option value="mph" {{#if (equals unit "mph")}}selected{{/if}}>mph</option>
                 <option value="kph" {{#if (equals unit "kph")}}selected{{/if}}>kph</option>
             </select>
-            <span class="nogrow"><small>≈ {{@root.veh.speedAlt.max}} {{@root.veh.speedAltUnit}}</small></span>
+            {{else}}
+            <span class="nogrow cp-unit-static">{{@root.veh.speedUnit}}</span>
+            {{/if}}
+            <span class="nogrow cp-unit-conv"><small>≈ {{@root.veh.speedAlt.max}} {{@root.veh.speedAltUnit}}</small></span>
         </span>
     </div>
      <div class="field">
@@ -65,11 +69,14 @@
         </span>
     </div>
 
-    {{!-- Accel/decel buttons --}}
+    {{!-- Accel/decel buttons — only when editable; they write speed.value, so on a locked compendium
+          item they would fire item.update() and warn. Hidden (and unwired) when !editable. --}}
+    {{#if @root.editable}}
     <div class="flexrow">
         <div class="field decel"><label class="fillwidth" style="text-align: center; font-size: larger">-</label></div>
         <div class="field accel"><label class="fillwidth" style="text-align: center; font-size: larger">+</label></div>
     </div>
+    {{/if}}
    <div class="field">
        {{!-- This should I guess be maneuver? But safe works a lot better meaningwise --}}
         <label for="system.speed.value">{{CPLocal "Safe"}}</label>
@@ -138,11 +145,15 @@
         <label for="system.range">{{CPLocal "Range"}}</label>
         <span class="flexrow flex-pad">
             <input type="number" name="system.range" value="{{system.range}}">
-            <select name="system.rangeUnit" class="nogrow">
+            {{#if @root.editable}}
+            <select name="system.rangeUnit" class="nogrow cp-unit-select">
                 <option value="mi" {{#if (equals system.rangeUnit "mi")}}selected{{/if}}>mi</option>
                 <option value="km" {{#if (equals system.rangeUnit "km")}}selected{{/if}}>km</option>
             </select>
-            <span class="nogrow"><small>≈ {{veh.rangeAlt}} {{veh.rangeAltUnit}}</small></span>
+            {{else}}
+            <span class="nogrow cp-unit-static">{{veh.rangeUnit}}</span>
+            {{/if}}
+            <span class="nogrow cp-unit-conv"><small>≈ {{veh.rangeAlt}} {{veh.rangeAltUnit}}</small></span>
         </span>
     </div>
 </div>

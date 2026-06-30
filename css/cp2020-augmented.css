@@ -1606,6 +1606,35 @@ img#anatomy-img {
 .cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=number] {
   min-width: 0;
 }
+/* Unit selects (mph/kph, mi/km) on the vehicle ITEM sheet: compact inline controls sized to their
+   content, not full-width chips. The actor-sheet select-sizing rules below are scoped to
+   .cyberpunk.vehicle, which the item sheet's class set (.cyberpunk.sheet.item) does not include, so
+   they never applied here. When the sheet is locked the unit renders as static text (.cp-unit-static)
+   instead of a disabled-but-interactive-looking select. */
+.cyberpunk.sheet.item .cp-vehicle-item-fields select.cp-unit-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  max-width: max-content;
+  font-size: 0.85em;
+}
+.cyberpunk.sheet.item .cp-vehicle-item-fields .cp-unit-static {
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+/* The "≈ <value> <unit>" conversion hint must stay one horizontal unit. .nogrow only zeroes
+   flex-grow (not shrink) and there's no nowrap, so in the half-width Speed/Range cell it was being
+   squeezed and word-wrapping into stacked ≈ / value / unit lines. Keep it unbreakable, and let the
+   row wrap it to its own (still horizontal) line rather than overflow when the cell is tight. */
+.cyberpunk.sheet.item .cp-vehicle-item-fields .cp-unit-conv {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field .flexrow:has(.cp-unit-conv) {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  align-items: center;
+}
 
 /* Reality Interface / Reflex-Control selects carry long, stat-laden option labels (e.g. "ECI Wideband
    HUD (SIB +2 / DFB +2)"). A <select> defaults to its LONGEST option's width, and a grid cell's

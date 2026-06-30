@@ -750,11 +750,21 @@ async _prepareCyberware(sheet) {
   _cpActivateVehicleSpeedControls(root) {
     if (!root?.ownerDocument) return;
 
+    // Always remove a previously-bound handler first, so a sheet that re-renders from editable to
+    // locked (e.g. opening the same item out of a locked compendium) un-wires the +/- controls.
     if (this._cpVehicleSpeedRoot && this._cpVehicleSpeedHandler) {
       try {
         this._cpVehicleSpeedRoot.ownerDocument.removeEventListener("click", this._cpVehicleSpeedHandler, true);
       } catch (_) {}
+      this._cpVehicleSpeedRoot = null;
+      this._cpVehicleSpeedHandler = null;
     }
+
+    // The +/- accel/decel controls write speed.value to the item, so only wire them when the sheet
+    // is editable — otherwise a click on a locked compendium item fires item.update() and Foundry
+    // warns "you can't modify a locked compendium." (The template also hides them when !editable.)
+    const editable = this.isEditable ?? this.options?.editable ?? false;
+    if (!editable) return;
 
     const handler = async (event) => {
       const target = event.target;
