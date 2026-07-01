@@ -39,3 +39,10 @@ the modules themselves, not their palette UI / scripts / window chrome:
 
 Bundled fonts **Work Sans** and **Roboto Slab** are licensed under the SIL Open Font License 1.1
 (full text in [`fonts/OFL.txt`](fonts/OFL.txt)).
+
+## Legal / content policy
+
+Cyberpunk 2020: Augmented Edition is unofficial content provided under the
+[Homebrew Content Policy](https://rtalsoriangames.com/homebrew-content-policy/) of R. Talsorian
+Games and is not approved or endorsed by RTG. This content references materials that are the
+property of R. Talsorian Games and its licensees.

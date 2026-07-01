@@ -4,7 +4,7 @@ Copyright (c) 2026 ryno4ever16 and the cp2020-augmented contributors.
 
 This module vendors portions of the Cyberpunk 2020 for Foundry VTT game system
 (core utility, lookup, compatibility, and schema-helper modules, and some item
-templates) originally authored by Tilt and OctarineSourceror; those portions
+templates) originally authored by SuperCoon666 and OctarineSourceror; those portions
 remain copyright their respective authors and are used here under the same MIT
 terms.
 
@@ -33,3 +33,8 @@ system for Foundry VTT. It extends, but does not include, that system's code.
 Any third-party assets or vendored code bundled with this module (for example
 the Carolingian UI sheet skin) remain under their own original licenses. The
 Cyberpunk 2020 tabletop RPG is the intellectual property of R. Talsorian Games.
+
+Cyberpunk 2020: Augmented Edition is unofficial content provided under the Homebrew
+Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This
+content references materials that are the property of R. Talsorian Games and its
+licensees.
