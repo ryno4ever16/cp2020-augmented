@@ -224,15 +224,29 @@ function installSkillRolledShim(ActorProto) {
   const orig = ActorProto?.rollSkill;
   if (!shouldPatch(orig)) return false;                        // missing or already ours → skip
   function rollSkillWrapper(skillId, ...rest) {
+    // Emit cyberpunkSkillRolled AFTER the roll, carrying its total. The base's common rollSkill path
+    // posts its roll card WITHOUT awaiting it and returns nothing, so the total isn't on the return —
+    // instead capture the roll card as it's created (Multiroll attaches rolls:[…]) and emit from there.
+    // The old shim emitted BEFORE the roll with no total, so every IP-tracker queue row showed 0 (F8).
     try {
       const skill = this.items?.get?.(skillId);
       if (skill) {
-        Hooks.callAll(SKILL_ROLLED, {
-          actorId: this.id, skillId: skill.id, actorName: this.name, skillName: skill.name,
+        const actorId = this.id, actorName = this.name, rolledSkillId = skill.id, skillName = skill.name;
+        let done = false;
+        const hookId = Hooks.on("createChatMessage", (msg) => {
+          if (done) return;
+          const total = msg?.rolls?.[0]?.total;
+          if (typeof total !== "number") return;   // wait for the actual rolled card
+          done = true;
+          Hooks.off("createChatMessage", hookId);
+          try { Hooks.callAll(SKILL_ROLLED, { actorId, skillId: rolledSkillId, actorName, skillName, total }); }
+          catch (e) { console.warn(`${SCOPE} | seam-shim skillRolled emit failed`, e); }
         });
+        // Never leak the hook if no rolled card appears (e.g., the skill vanished before the roll).
+        setTimeout(() => { if (!done) { done = true; Hooks.off("createChatMessage", hookId); } }, 8000);
       }
     } catch (e) {
-      console.warn(`${SCOPE} | seam-shim skillRolled emit failed`, e);
+      console.warn(`${SCOPE} | seam-shim skillRolled setup failed`, e);
     }
     return orig.call(this, skillId, ...rest);
   }
