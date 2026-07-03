@@ -103,9 +103,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",
-  // Martial-arts panel/dialog/chat fragments (the on-sheet action panel + resolution flow).
-  "modules/cp2020-augmented/templates/martial/martial-panel.hbs",
-  "modules/cp2020-augmented/templates/dialog/martial-style.hbs",
+  // Martial-arts chat fragments (the on-declare effect card + the attack resolution card).
   "modules/cp2020-augmented/templates/chat/martial-attack.hbs",
   "modules/cp2020-augmented/templates/chat/martial-effect.hbs",
   "modules/cp2020-augmented/templates/chat/fumble-card.hbs",
