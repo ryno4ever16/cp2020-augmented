@@ -937,6 +937,28 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 .cyberpunk .save-prompt .save-buttons { margin-top: 6px; }
 
+/* Chat-card action buttons (confirm / scatter / save-roll / apply, across our .cyberpunk,
+   .cyberpunk-card and .cp-shop-request cards). These carry no button styling of their own, so they
+   INHERIT `user-select: text` from Foundry's `.message-content` (the copy-chat-log feature) — which
+   made a button's LABEL drag-highlightable. And the click handlers only set `disabled = true`, with no
+   rule giving a spent look, so a used button stayed fully lit (only the cursor changed) — reading as
+   inert highlightable text rather than a consumed button. Reset the inherited selection, and give
+   `:disabled` a clear greyed state. The button keeps its chrome: it still reads as a button, just spent. */
+.chat-message .cyberpunk button,
+.chat-message .cyberpunk-card button,
+.chat-message .cp-shop-request button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.chat-message .cyberpunk button:disabled,
+.chat-message .cyberpunk-card button:disabled,
+.chat-message .cp-shop-request button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  filter: grayscale(0.5);
+}
+
 /* Stun/Death/Stabilize save cards (replace the inline styles from the old hand-built cards). */
 .cyberpunk .result-success { color: #1f9d2f; font-weight: bold; }
 
