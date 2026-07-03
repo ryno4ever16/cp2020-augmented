@@ -236,12 +236,14 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   const basePen = Number(w.penetration ?? mount.penetration) || 0;
   const wa = Number(w.wa) || 0;
   const rof0 = Number(w.rof ?? mount.rof) || 1;
+  const rofAlt = Number(w.rofAlt) || 0;           // variable-ROF weapons ("30 OR 5"): offer a high/low fire-rate pick (MM p.5)
   const arc = w.arc ?? mount.arc ?? "turret";
   const ap = !!w.ap, heat = !!w.heat, hiEx = !!w.hiEx;
   const highDensityAP = !!w.highDensityAP;        // errata p.110: kinetic, range-immune like HEAT (weapon-level, all shells)
   const railgun = !!w.railgun;                    // errata "Armor Damage via Penetration": SP-erosion factor 0.20, not 0.60 generic AP
   const hefPenetrator = heat || hiEx;             // HEAT / Hi-Ex → Penetration not reduced by range
   const weaponRange = Number(w.range) || 0;
+  const minRange = Number(w.minRange) || 0;       // missiles: fired at a target inside this → the warhead won't arm (MM p.9)
   const burst = Number(w.burst) || 0;             // Class B area weapons (HE/HEAT shells, GLs, rockets)
   const coneAngle = Number(w.coneAngle) || 0;     // Class F scatter-packs
   const weaponClass = w.weaponClass ?? "directFire";
@@ -334,6 +336,11 @@ export async function openVehicleFireDialog(actor, mount = {}) {
     hasShells: variantShells.length > 0,
     shellOptions: shells.map((s, i) => ({ value: i, label: s.label, selected: i === shellIdx })),
     pen0: shells[shellIdx].pen, rof0,
+    hasRofAlt: rofAlt > 0,
+    rofModeOptions: rofAlt > 0 ? [
+      { value: rof0, label: localizeParam("Vehicle.RofHigh", { rof: rof0 }), selected: true },
+      { value: rofAlt, label: localizeParam("Vehicle.RofLow", { rof: rofAlt }) },
+    ] : [],
     facingOptions: FACINGS.map(f => ({ value: f, label: localize("Vehicle.Facing_" + f), selected: f === detFacing })),
     rangeOptions: ["normal", "long", "extreme"].map(r => ({ value: r, label: localize("Vehicle.Range" + cap(r)), selected: r === detRange })),
     isTurret, vehicleLink: !!actor.system?.vehicleLink,
@@ -389,7 +396,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
             ap: shellSel.ap, hefPenetrator: (shellSel.heat || shellSel.hiEx), heat: shellSel.heat, highDensityAP, railgun,
             damageFormula: dmgFormula,   // base round carries the weapon's dice (+ chassis FIST for armed melee)
             burst: shellSel.burst, warhead: shellSel.warhead, coneAngle, weaponClass, weaponRange,
-            guidance, missileSkill: guidanceSkill, homingMethod,
+            guidance, missileSkill: guidanceSkill, homingMethod, minRange,
             firerTokenId: firerTok?.id, targetTokenId: targetTok?.id,
             mods: wa + vehicleToHitModifier({
               targetLarge: targetActor ? targetActor.type === "cp2020-augmented.vehicle" : true,
@@ -405,57 +412,71 @@ export async function openVehicleFireDialog(actor, mount = {}) {
       },
       { action: "cancel", label: localize("Cancel") },
     ],
-    render: (event, dlg) => {
-      const root = dlg.element;
-      const gSel = root.querySelector("#cp-vf-gunner");
-      const refIn = root.querySelector("#cp-vf-ref");
-      const skillIn = root.querySelector("#cp-vf-skill");
-      gSel?.addEventListener("change", () => {
-        const g = gunnersById[gSel.value];
-        if (!g) return;
-        if (refIn) refIn.value = Number(g.system?.stats?.ref?.total) || 0;
-        if (skillIn) skillIn.value = g.getSkillVal?.(GUNNER_SKILL) ?? 0;
-      });
-      // Picking a shell updates the Penetration field to that round's Pen (still hand-editable after).
-      const shellSelEl = root.querySelector("#cp-vf-shell");
-      const penInEl = root.querySelector("#cp-vf-pen");
-      shellSelEl?.addEventListener("change", () => {
-        const s = shells[Number(shellSelEl.value) || 0];
-        if (s && penInEl) penInEl.value = s.pen;
-      });
-      // Live arc recheck: spin/move the firing vehicle (or the target) and the warning updates in
-      // place — no need to close and reopen. Under strict arc, also enable/disable the Fire button.
-      if (firerTok && targetTok) {
-        const refreshArc = () => {
-          const bearing = VT.bearingFromFirer(firerTok, targetTok);
-          const bears = VT.mountArcBears(bearing, arc);
-          const el = dialog.element ?? root;
-          const warnEl = el?.querySelector("#cp-vf-arcwarn");
-          if (warnEl) warnEl.innerHTML = arcWarnHtml(bearing, bears);
-          // DialogV2 buttons use data-action (not data-button)
-          if (strictArc) { const fb = el?.querySelector('button[data-action="fire"]'); if (fb) fb.disabled = !bears; }
-        };
-        const onTokUpdate = (doc, change) => {
-          if (doc.id !== firerTok.id && doc.id !== targetTok.id) return;
-          if (change.rotation === undefined && change.x === undefined && change.y === undefined && change.elevation === undefined) return;
-          refreshArc();
-        };
-        Hooks.on("updateToken", onTokUpdate);
-        dialog._cpArcHook = onTokUpdate;
-        // Clean the hook up on ANY close path (✕, Escape, or a button) by wrapping the instance
-        // close() — the single path every Application close goes through. Guard against re-wraps.
-        if (!dialog._cpCloseWrapped) {
-          dialog._cpCloseWrapped = true;
-          const origClose = dialog.close.bind(dialog);
-          dialog.close = async (...args) => {
-            if (dialog._cpArcHook) { Hooks.off("updateToken", dialog._cpArcHook); dialog._cpArcHook = null; }
-            return origClose(...args);
-          };
-        }
-        refreshArc();   // sync once on render (also corrects a stale singleton that was re-shown)
-      }
-    },
   });
+  // Foundry v14 does not invoke DialogV2's `render:` config callback, so wire the dialog's live
+  // controls from the lifecycle it DOES call: patch this instance's _onRender (the module's standard
+  // post-render hook, mirroring the sheets). Bind-once per instance — the content is static after open.
+  const _origOnRender = dialog._onRender?.bind(dialog);
+  dialog._onRender = function (context, options) {
+    _origOnRender?.(context, options);
+    if (this._cpFireWired) return;
+    this._cpFireWired = true;
+    const root = this.element;
+    if (!root) return;
+    const gSel = root.querySelector("#cp-vf-gunner");
+    const refIn = root.querySelector("#cp-vf-ref");
+    const skillIn = root.querySelector("#cp-vf-skill");
+    gSel?.addEventListener("change", () => {
+      const g = gunnersById[gSel.value];
+      if (!g) return;
+      if (refIn) refIn.value = Number(g.system?.stats?.ref?.total) || 0;
+      if (skillIn) skillIn.value = g.getSkillVal?.(GUNNER_SKILL) ?? 0;
+    });
+    // Picking a shell updates the Penetration field to that round's Pen (still hand-editable after).
+    const shellSelEl = root.querySelector("#cp-vf-shell");
+    const penInEl = root.querySelector("#cp-vf-pen");
+    shellSelEl?.addEventListener("change", () => {
+      const s = shells[Number(shellSelEl.value) || 0];
+      if (s && penInEl) penInEl.value = s.pen;
+    });
+    // Variable-ROF weapons: picking the fire-rate mode seeds the ROF field (still hand-editable after).
+    const rofModeEl = root.querySelector("#cp-vf-rofmode");
+    const rofInEl = root.querySelector("#cp-vf-rof");
+    rofModeEl?.addEventListener("change", () => {
+      if (rofInEl) rofInEl.value = rofModeEl.value;
+    });
+    // Live arc recheck: spin/move the firing vehicle (or the target) and the warning updates in
+    // place — no need to close and reopen. Under strict arc, also enable/disable the Fire button.
+    if (firerTok && targetTok) {
+      const refreshArc = () => {
+        const bearing = VT.bearingFromFirer(firerTok, targetTok);
+        const bears = VT.mountArcBears(bearing, arc);
+        const el = dialog.element ?? root;
+        const warnEl = el?.querySelector("#cp-vf-arcwarn");
+        if (warnEl) warnEl.innerHTML = arcWarnHtml(bearing, bears);
+        // DialogV2 buttons use data-action (not data-button)
+        if (strictArc) { const fb = el?.querySelector('button[data-action="fire"]'); if (fb) fb.disabled = !bears; }
+      };
+      const onTokUpdate = (doc, change) => {
+        if (doc.id !== firerTok.id && doc.id !== targetTok.id) return;
+        if (change.rotation === undefined && change.x === undefined && change.y === undefined && change.elevation === undefined) return;
+        refreshArc();
+      };
+      Hooks.on("updateToken", onTokUpdate);
+      dialog._cpArcHook = onTokUpdate;
+      // Clean the hook up on ANY close path (✕, Escape, or a button) by wrapping the instance
+      // close() — the single path every Application close goes through. Guard against re-wraps.
+      if (!dialog._cpCloseWrapped) {
+        dialog._cpCloseWrapped = true;
+        const origClose = dialog.close.bind(dialog);
+        dialog.close = async (...args) => {
+          if (dialog._cpArcHook) { Hooks.off("updateToken", dialog._cpArcHook); dialog._cpArcHook = null; }
+          return origClose(...args);
+        };
+      }
+      refreshArc();   // sync once on render (also corrects a stale singleton that was re-shown)
+    }
+  };
   return openSingletonDialog(`vehicle-fire:${actor.id}`, () => dialog);
 }
 
@@ -470,6 +491,7 @@ async function _executeVehicleFire(actor, targetActor, p) {
         guidance: p.guidance, homingMethod: p.homingMethod, penetration: p.penetration,
         ap: p.ap, heat: p.heat, hefPenetrator: p.hefPenetrator, weaponName: p.mountName,
         operatorBonus: (p.ref || 0) + (p.skill || 0), missileSkill: p.missileSkill, targetNumber: p.targetNumber,
+        minRange: p.minRange,
       } });
       return { launched: true };
     }

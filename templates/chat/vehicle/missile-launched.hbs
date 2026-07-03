@@ -8,4 +8,5 @@
   <h3>{{CPLocal "Vehicle.MissileLaunchedTitle" weapon=weapon}}</h3>
   <div class="save-info">{{{CPLocal "Vehicle.MissileLaunchedBody" firer=firer target=target turns=turns guidance=guidance}}}</div>
   {{#unless inCombat}}<div class="save-note vehicle-warn">{{{CPLocal "Vehicle.MissileNoCombatHint"}}}</div>{{/unless}}
+  {{#unless armed}}<div class="save-note vehicle-warn">{{{CPLocal "Vehicle.MissileWontArm"}}}</div>{{/unless}}
 </div>

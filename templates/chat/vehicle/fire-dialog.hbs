@@ -19,6 +19,9 @@
   {{#if hasShells}}
   <label title="{{CPLocal "Vehicle.ShellTip"}}">{{CPLocal "Vehicle.Shell"}} <select id="cp-vf-shell">{{#each shellOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select></label>
   {{/if}}
+  {{#if hasRofAlt}}
+  <label title="{{CPLocal "Vehicle.RofModeTip"}}">{{CPLocal "Vehicle.RofMode"}} <select id="cp-vf-rofmode">{{#each rofModeOptions}}<option value="{{value}}"{{#if selected}} selected{{/if}}>{{label}}</option>{{/each}}</select></label>
+  {{/if}}
   <div class="field-row">
     <label>{{CPLocal "Vehicle.BasePenetration"}} <input type="number" id="cp-vf-pen" value="{{pen0}}"></label>
     <label>{{CPLocal "Vehicle.ROF"}} <input type="number" id="cp-vf-rof" value="{{rof0}}"></label>

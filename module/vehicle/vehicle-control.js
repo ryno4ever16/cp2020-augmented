@@ -354,29 +354,36 @@ export async function openControlRollDialog(actor, opts = {}) {
       },
       { action: "cancel", label: localize("Cancel") },
     ],
-    render: (event, dlg) => {
-      const root = dlg.element;
-      const refIn = root.querySelector("#cp-ctl-ref");
-      const skillIn = root.querySelector("#cp-ctl-skill");
-      const skillKey = root.querySelector("#cp-ctl-skillkey");
-      const driverSel = root.querySelector("#cp-ctl-driver");
-      const diffSel = root.querySelector("#cp-ctl-difficulty");
-      const hint = root.querySelector("#cp-ctl-maneuver-hint");
-      const refreshDriver = () => {
-        const a = driversById[driverSel?.value];
-        if (!a) return;
-        if (refIn) refIn.value = Number(a.system?.stats?.ref?.total) || 0;
-        if (skillIn) skillIn.value = a.getSkillVal?.(skillKey?.value || "Driving") ?? 0;
-      };
-      const refreshSkill = () => {
-        const a = driversById[driverSel?.value];
-        if (a && skillIn) skillIn.value = a.getSkillVal?.(skillKey?.value || "Driving") ?? 0;
-      };
-      driverSel?.addEventListener("change", refreshDriver);
-      skillKey?.addEventListener("change", refreshSkill);
-      diffSel?.addEventListener("change", () => { if (hint) hint.textContent = localize("Vehicle.ManeuverExamples_" + diffSel.value); });
-    },
   });
+  // Foundry v14 does not invoke DialogV2's `render:` config callback; wire the driver/skill/hint
+  // controls from the render lifecycle it DOES call (patch _onRender, bind-once per instance).
+  const _origOnRender = dialog._onRender?.bind(dialog);
+  dialog._onRender = function (context, options) {
+    _origOnRender?.(context, options);
+    if (this._cpCtlWired) return;
+    this._cpCtlWired = true;
+    const root = this.element;
+    if (!root) return;
+    const refIn = root.querySelector("#cp-ctl-ref");
+    const skillIn = root.querySelector("#cp-ctl-skill");
+    const skillKey = root.querySelector("#cp-ctl-skillkey");
+    const driverSel = root.querySelector("#cp-ctl-driver");
+    const diffSel = root.querySelector("#cp-ctl-difficulty");
+    const hint = root.querySelector("#cp-ctl-maneuver-hint");
+    const refreshDriver = () => {
+      const a = driversById[driverSel?.value];
+      if (!a) return;
+      if (refIn) refIn.value = Number(a.system?.stats?.ref?.total) || 0;
+      if (skillIn) skillIn.value = a.getSkillVal?.(skillKey?.value || "Driving") ?? 0;
+    };
+    const refreshSkill = () => {
+      const a = driversById[driverSel?.value];
+      if (a && skillIn) skillIn.value = a.getSkillVal?.(skillKey?.value || "Driving") ?? 0;
+    };
+    driverSel?.addEventListener("change", refreshDriver);
+    skillKey?.addEventListener("change", refreshSkill);
+    diffSel?.addEventListener("change", () => { if (hint) hint.textContent = localize("Vehicle.ManeuverExamples_" + diffSel.value); });
+  };
   return openSingletonDialog(`vehicle-control:${actor.id}`, () => dialog);
 }
 

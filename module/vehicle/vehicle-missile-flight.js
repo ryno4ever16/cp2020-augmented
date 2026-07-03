@@ -67,6 +67,10 @@ export async function launchMissile({ scene: sceneArg, shooterToken, targetToken
   const distM = pixelsToMeters(scene, Math.hypot(tc.x - sc.x, tc.y - sc.y));
   const speed = missileSpeed(missile.guidance, missile.speed);
   const tti = turnsToImpact(distM, speed);
+  // Arming (MM p.9): a missile fired at a target inside its minimum range does NOT arm — it still flies
+  // and strikes, but the warhead never goes live, so it deals no damage at impact. `minRange` 0 = none.
+  const armRange = Number(missile.minRange) || 0;
+  const armed = !(armRange > 0 && distM < armRange);
 
   const flight = {
     shooterTokenId: sDoc.id, shooterActorId: sDoc.actorId ?? null,
@@ -76,7 +80,7 @@ export async function launchMissile({ scene: sceneArg, shooterToken, targetToken
     weaponName: missile.weaponName ?? "missile",
     operatorBonus: Number(missile.operatorBonus) || 0, missileSkill: Number(missile.missileSkill) || 0,
     targetNumber: Number(missile.targetNumber) || 0,
-    speed, turnsToImpact: tti, totalTurns: tti, detected: false,
+    speed, turnsToImpact: tti, totalTurns: tti, detected: false, armed,
     difficultyMods: 0, intercepted: null, reactions: [], launchRound: game.combat?.round ?? 0,
     // Was it launched during an active encounter? If not, the first combat round ADOPTS it (re-baselines
     // its flight) instead of resolving it on the spot — so an out-of-combat missile carries into combat.
@@ -97,7 +101,7 @@ export async function launchMissile({ scene: sceneArg, shooterToken, targetToken
     weapon: flight.weaponName,
     firer: sDoc.name ?? localize("Vehicle.Firer"),
     target: tDoc.name ?? localize("Vehicle.Target"),
-    turns: tti, guidance: flight.guidance, inCombat,
+    turns: tti, guidance: flight.guidance, inCombat, armed: flight.armed,
   });
   await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: shooterToken.actor ?? undefined }), content });
   if (!inCombat) ui.notifications?.info?.(localize("Vehicle.MissileLaunchedNotice"));
@@ -152,6 +156,14 @@ export async function advanceOneMissile(scene, tokenId) {
 
 async function _resolveMissileImpact(f, targetDoc, scene, gs) {
   const target = targetDoc.actor;
+  // Fired inside its minimum arming range (MM p.9): the warhead never armed — it strikes without effect.
+  if (f.armed === false) {
+    await postSavePromptCard({
+      title: localizeParam("Vehicle.MissileDudTitle", { weapon: f.weaponName }),
+      body: localizeParam("Vehicle.MissileDudBody", { target: targetDoc.name ?? localize("Vehicle.Target") }),
+    });
+    return;
+  }
   const d10 = (await new Roll("1d10").evaluate()).total;
   const dm = Number(f.difficultyMods) || 0;   // accumulated countermeasure / evade +Difficulty
   const hit = f.guidance === "paint"
