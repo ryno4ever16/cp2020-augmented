@@ -105,9 +105,10 @@ export function ammoEffectFields(weapon) {
 
 function installWeaponFiredShim(ItemProto) {
   if (prototypeEmits(ItemProto, WEAPON_FIRED)) return false;   // base system emits it (method or helper) → disengage
-  let patchedAny = false;
+  let patchedAny = false, foundAny = false;
   for (const name of FIRE_METHODS) {
     const orig = ItemProto?.[name];
+    if (typeof orig === "function") foundAny = true;           // the method exists (base's or already ours)
     if (!shouldPatch(orig)) continue;                          // missing or already ours → skip
     function fireWrapper(attackMods, ...rest) {
       _fireCtx = {
@@ -122,6 +123,12 @@ function installWeaponFiredShim(ItemProto) {
     fireWrapper.__cpSeamShim = true;
     ItemProto[name] = fireWrapper;
     patchedAny = true;
+  }
+  // We got past the disengage check (the base does NOT emit weaponFired natively), yet NONE of the base
+  // fire methods exist to wrap → the damage automation would silently never run. Make that loud so a
+  // host rename of these methods is diagnosable, not a mysterious "nothing happens on fire". (C5)
+  if (!foundAny) {
+    console.warn(`${SCOPE} | seam shim: base emits no ${WEAPON_FIRED} and none of its fire methods (${FIRE_METHODS.join(", ")}) were found to patch — combat damage automation is inactive (did the base system rename them?).`);
   }
   // Only intercept the renderer if at least one fire method is actually shimmed; if all four emit
   // natively we never get here, so renderTemplate is left untouched (no chance of a double-emit).
