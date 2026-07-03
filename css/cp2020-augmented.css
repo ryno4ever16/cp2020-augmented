@@ -363,6 +363,14 @@ body.cp-carolingian {
   --restyler-border: #555555;
   --restyler-text-shadow: 0 0 1px var(--color-highlights);
   --color-scheme: dark;
+  /* Sheet ink/line/surface tokens the module CONSUMES as var(--cp-ink,…) (e.g. the Life-tab
+     .cp-notes-view) but never DEFINED — it borrowed them from the fork's system CSS. On Tilt's
+     official system there is no such token, so every var(--cp-ink,black) fell back to black
+     (saved notes rendered black on the dark surface). Define them here so the module is
+     self-contained under the skin, following the restyler palette (matches the editor's ink). */
+  --cp-ink: var(--color-light-1);
+  --cp-line: var(--restyler-border);
+  --cp-surface: var(--background);
 }
 /* Carolingian palette snapshot (teal preset) — only when Carolingian itself is NOT installed
  * (else defer to her live preset). --color-dark-4 / --color-light-4 feed Foundry's wrapper
@@ -376,6 +384,18 @@ body.cp-carolingian:not(.crlngn-ui) {
   --color-dark-bg-25: rgba(15, 15, 15, 0.25);
   --color-dark-4: #555555;   /* feeds --color-text-subtle */
   --color-light-4: #bbbbca;  /* feeds --color-form-label */
+}
+
+/* Same tokens for Foundry's dark theme when the Carolingian skin is OFF (mirrors the fork's
+   system CSS, which the module used to inherit). Guarded :not(.cp-carolingian) so the skin
+   above wins when it's on. Light theme leaves them undefined → var(--cp-ink,black)=black,
+   which is correct on the parchment surface. */
+.theme-dark:not(.cp-carolingian) .application.cyberpunk.sheet.actor, .theme-dark:not(.cp-carolingian) .cyberpunk.sheet.actor,
+.theme-dark:not(.cp-carolingian) .application.cyberpunk.sheet.item,  .theme-dark:not(.cp-carolingian) .cyberpunk.sheet.item,
+.theme-dark:not(.cp-carolingian) .application.cyberpunk.dialog,      .theme-dark:not(.cp-carolingian) .cyberpunk.weapon-modifiers {
+  --cp-ink: #e7d1b1;
+  --cp-line: #6b5d48;
+  --cp-surface: #14110d;
 }
 
 @keyframes cp-carolingian-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
