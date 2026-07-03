@@ -878,10 +878,14 @@ async _prepareCyberware(sheet) {
     if (!root?.addEventListener) return;
     if (root.dataset.cpBasicItemActionsBound === "1") return;
 
-    root.dataset.cpBasicItemActionsBound = "1";
-
     const editable = this.isEditable ?? this.options?.editable ?? false;
     if (!editable) return;
+
+    // Set the bind-once flag only once we're actually binding. A read-only first render must NOT claim
+    // it — otherwise a later editable render is skipped by the guard above and the roll/humanity
+    // handlers never bind (dead buttons until close+reopen). This matches the guard order the module's
+    // own _cpActivate* helpers already use + document below. (F6)
+    root.dataset.cpBasicItemActionsBound = "1";
 
     root.addEventListener("click", async (event) => {
       const target = event.target;
