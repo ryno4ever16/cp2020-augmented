@@ -102,9 +102,19 @@ export async function resolveAreaShot({ firerToken, origin, shape, payload = {},
   const affected = inside.filter(tok => !(firerToken && tok.id === firerToken.id));
   const struck = [];
   if (!skipDispatch) {
+    // Scatter-packs (MM p.72): the to-hit tells us only WHETHER a target is caught; the weapon's XD6
+    // "ROF" dice are rolled PER hit target for how many individual munitions struck it. The munitions
+    // apply as multiple rounds (the MM p.5 multiple-rounds Penetration aggregation). scatterDice 0
+    // (any ordinary cone/burst weapon) → a single application, exactly as before.
+    const scatterDice = Math.max(0, Number(payload.scatterDice) || 0);
     for (const tok of affected) {
       const facing = firerToken ? detectFacingFromTokens(firerToken, tok) : (payload.facing || "front");
-      await dispatchAttack({ ...payload, facing, targetTokenId: tok.id }, tok.actor);
+      let shot = payload;
+      if (scatterDice > 0) {
+        const munitions = (await new Roll(`${scatterDice}d6`).evaluate()).total;
+        shot = { ...payload, extraRounds: Math.max(0, munitions - 1) };
+      }
+      await dispatchAttack({ ...shot, facing, targetTokenId: tok.id }, tok.actor);
       struck.push(tok.actor);
     }
   }

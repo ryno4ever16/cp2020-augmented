@@ -98,34 +98,35 @@ export const SEED_VEHICLE_WEAPONS = [
     system: {
       weaponClass: "cone", mountType: "open", arc: "front",
       wa: 4, penetration: 3, damage: "3D10AP", ap: true,
-      coneAngle: 60, projectiles: 24, rof: 1, shots: 6, range: 15, reliability: "VR",
+      coneAngle: 60, projectiles: 24, scatterDice: 2, rof: 1, shots: 6, range: 15, reliability: "VR",
       space: 1, cost: 500, source: SOURCE
     }
   },
   // Additional ACPA scatter packs (MM p.73; BRP-anchored). DAMAGE dice OCR-cleaned (verify); (Pen) book-given.
+  // scatterDice = the book's ROF-column XD6, rolled per hit target for # munitions that strike (MM p.72).
   { name: "BFC-2 Flechette Cloud", img: ICON, system: { weight: 2, magWeight: 0, notes: "Needle-cloud anti-personnel scatter, 120° cone; mows down soft/light infantry, ineffective vs PA.",
       weaponClass: "cone", mountType: "open", arc: "front", wa: 6, penetration: 2, damage: "2D10AP", ap: true,
-      coneAngle: 120, projectiles: 144, rof: 1, shots: 1, range: 25, reliability: "VR",
+      coneAngle: 120, projectiles: 144, scatterDice: 3, rof: 1, shots: 1, range: 25, reliability: "VR",
       space: 1, cost: 300, sp: 20, sdp: 20, area: "torso", source: SOURCE } },
   { name: "BFC-3 Flechette Cloud", img: ICON, system: { weight: 2, magWeight: 0, notes: "Highest needle count, 120° cone; widest soft-target spread, weakest per-hit, no effect vs PA.",
       weaponClass: "cone", mountType: "open", arc: "front", wa: 9, penetration: 1, damage: "1D10AP", ap: true,
-      coneAngle: 120, projectiles: 288, rof: 1, shots: 1, range: 30, reliability: "VR",
+      coneAngle: 120, projectiles: 288, scatterDice: 4, rof: 1, shots: 1, range: 30, reliability: "VR",
       space: 1, cost: 300, sp: 20, sdp: 20, area: "torso", source: SOURCE } },
   { name: "BFC-4 Flechette Cloud", img: ICON, system: { weight: 2, magWeight: 0, notes: "Heaviest flechette cloud, 120° cone; the only BFC that bites light/medium PA.",
       weaponClass: "cone", mountType: "open", arc: "front", wa: 3, penetration: 4, damage: "4D10AP", ap: true,
-      coneAngle: 120, projectiles: 72, rof: 1, shots: 1, range: 20, reliability: "VR",
+      coneAngle: 120, projectiles: 72, scatterDice: 1, rof: 1, shots: 1, range: 20, reliability: "VR",
       space: 1, cost: 1200, sp: 20, sdp: 20, area: "torso", source: SOURCE } },
   { name: "BFC-WA Flechette Cloud", img: ICON, system: { weight: 2, magWeight: 0, notes: "Wide-angle 180° flechette cloud; sweeps the broadest arc of soft targets.",
       weaponClass: "cone", mountType: "open", arc: "front", wa: 5, penetration: 2, damage: "2D10AP", ap: true,
-      coneAngle: 180, projectiles: 144, rof: 1, shots: 1, range: 30, reliability: "VR",
+      coneAngle: 180, projectiles: 144, scatterDice: 2, rof: 1, shots: 1, range: 30, reliability: "VR",
       space: 1, cost: 300, sp: 20, sdp: 20, area: "torso", source: SOURCE } },
   { name: "BIM Minelet Volley", img: ICON, system: { weight: 2, magWeight: 0, notes: "Seeds a 60° cone with pressure-triggered mini-mines (maim legs/feet; non-PA flung 1-2m). Fired direct, they detonate on contact.",
       weaponClass: "cone", mountType: "open", arc: "front", wa: 3, penetration: 1, damage: "4D6",
-      coneAngle: 60, projectiles: 50, rof: 1, shots: 1, range: 50, reliability: "VR",
+      coneAngle: 60, projectiles: 50, scatterDice: 1, rof: 1, shots: 1, range: 50, reliability: "VR",
       space: 1, cost: 1000, sp: 20, sdp: 20, area: "torso", source: SOURCE } },         // seeds mini-mines in a 60° cone
   { name: "BSP Variety Show", img: ICON, system: { weight: 2, magWeight: 0, notes: "Multi-munition launcher — loads rubber/smoke/paint/phosphorus pellets, delayed minelets, or pyrotechnics; effect varies by load.",
       weaponClass: "cone", mountType: "open", arc: "front", wa: 3, penetration: 0, damage: "",
-      coneAngle: 60, projectiles: 50, rof: 1, shots: 1, range: 50, reliability: "VR",
+      coneAngle: 60, projectiles: 50, scatterDice: 1, rof: 1, shots: 1, range: 50, reliability: "VR",
       space: 1, cost: 300, sp: 20, sdp: 20, area: "torso", source: SOURCE } },           // SPECIAL: fires variety pellets (rubber/smoke/paint/phosphorus/minelet, p.74)
 
   // ───────────────────────── ACPA weapon roster (Maximum Metal charts, Appendix A p.95-96) ─────────────────────────

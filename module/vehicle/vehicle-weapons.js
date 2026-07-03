@@ -246,6 +246,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   const minRange = Number(w.minRange) || 0;       // missiles: fired at a target inside this → the warhead won't arm (MM p.9)
   const burst = Number(w.burst) || 0;             // Class B area weapons (HE/HEAT shells, GLs, rockets)
   const coneAngle = Number(w.coneAngle) || 0;     // Class F scatter-packs
+  const scatterDice = Number(w.scatterDice) || 0; // Class F: XD6 rolled per hit target for # munitions that strike (MM p.72)
   const weaponClass = w.weaponClass ?? "directFire";
   // Indirect artillery and bombs use their own guided helpers (5g) — delegate before building the
   // direct-fire dialog.
@@ -395,7 +396,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
             range: root.querySelector("#cp-vf-range")?.value || "normal",
             ap: shellSel.ap, hefPenetrator: (shellSel.heat || shellSel.hiEx), heat: shellSel.heat, highDensityAP, railgun,
             damageFormula: dmgFormula,   // base round carries the weapon's dice (+ chassis FIST for armed melee)
-            burst: shellSel.burst, warhead: shellSel.warhead, coneAngle, weaponClass, weaponRange,
+            burst: shellSel.burst, warhead: shellSel.warhead, coneAngle, scatterDice, weaponClass, weaponRange,
             guidance, missileSkill: guidanceSkill, homingMethod, minRange,
             firerTokenId: firerTok?.id, targetTokenId: targetTok?.id,
             mods: wa + vehicleToHitModifier({
@@ -557,7 +558,7 @@ async function _applyAreaShot(p, res, extraRounds) {
     const fc = center(firerTok), tc = center(targetTok);
     if (!fc || !tc) return;
     const dirDeg = Math.atan2(tc.y - fc.y, tc.x - fc.x) * 180 / Math.PI;
-    await resolveAreaShot({ firerToken: firerTok, origin: fc, shape: { type: "cone", angleDeg: p.coneAngle || 60, rangeM: p.weaponRange || 15, dirDeg }, payload });
+    await resolveAreaShot({ firerToken: firerTok, origin: fc, shape: { type: "cone", angleDeg: p.coneAngle || 60, rangeM: p.weaponRange || 15, dirDeg }, payload: { ...payload, scatterDice: p.scatterDice || 0 } });
   } else {
     const tc = center(targetTok);
     if (!tc) return;

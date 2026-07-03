@@ -115,7 +115,8 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
       homingMethod:  stringField("radar"),       // radar|thermal|optical|laser (which countermeasures defeat it); "wire" = wire-guided, no onboard CM defeats it (break LOS / kill the operator instead)
       // Cone weapons (class F scatter-packs).
       coneAngle:   numberField(0),               // degrees (60/120/180)
-      projectiles: numberField(0),
+      projectiles: numberField(0),               // munitions launched per volley (ammo/flavour; the "24" in "6x24")
+      scatterDice: numberField(0),               // MM p.72: XD6 rolled PER hit target for # munitions that strike (0 = not a scatter-pack)
       // Shell / warhead variants (selected at fire time). Each: {name, pen, burst, ap, heat, hiEx, damage}.
       shellVariants: arrayField(null, []),
       activeShell:   stringField(""),            // selected variant name ("" = base stats)
