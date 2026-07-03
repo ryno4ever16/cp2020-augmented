@@ -2024,12 +2024,13 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   color: black;
 }
 
-/* Countermeasures loadout (vehicle + ACPA sheets) — its OWN layout, NOT the system's .field-list/.field
-   grid (that centers each label|input pair, so the checkboxes scatter to a ragged edge). An auto-fill
-   grid of left-aligned [checkbox] label items → the boxes line up in a clean column per grid track. */
+/* Countermeasures loadout (vehicle + ACPA sheets) — a FIXED 2-column grid mirroring the sheet's
+   `.field-list` (`grid-template-columns: 1fr 1fr`), so the loadout reads as two aligned columns like the
+   rest of the sheet AND stays 2-up when the resizable window is widened. (An auto-fill track count spills
+   the items into one wide row at larger widths — do NOT use a width-dependent grid next to fixed fields.) */
 .cp-countermeasures {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 3px 16px;
   align-items: start;
   margin: 2px 0 8px;
