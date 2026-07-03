@@ -1885,6 +1885,20 @@ function _hookSocketRelay() {
       return;
     }
 
+    // Relayed special martial hit-effect (A6): a player performed a grapple/choke/hold on a target
+    // they can't write. Only the active GM applies it (writes the target's held/grapple/choke flags +
+    // posts the effect card), else N GMs each apply it N times.
+    if (data.type === "martialEffect") {
+      if (game.users.activeGM?.id !== game.user.id) return;
+      const tgt = game.actors.get(data.targetActorId);
+      if (tgt) {
+        const { applyMartialHitEffects } = await import("../martial/martial.js");
+        const atk = data.attackerActorId ? game.actors.get(data.attackerActorId) : null;
+        await applyMartialHitEffects(data.action, tgt, atk);
+      }
+      return;
+    }
+
     if (data.type !== "applyDamage") return;
 
     // The socket fires on every connected GM client. Only the primary (active) GM

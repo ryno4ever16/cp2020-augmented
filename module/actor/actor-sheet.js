@@ -1230,9 +1230,38 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       weapon: item,
       targetTokens,
       modifierGroups: martialOptions(this.actor),
-      onConfirm: (fireOptions) => item.__weaponRoll({ ...fireOptions, action }, targetTokens),
+      onConfirm: async (fireOptions) => {
+        await item.__weaponRoll({ ...fireOptions, action }, targetTokens);
+        // On-declare special martial hit-effect (A6): a hold / grapple / choke / throw / sweep / escape
+        // action applies its status to a single target, activating the already-live per-turn enforcement
+        // (choke DOT + Stun Save, hold/grapple reminders in damage-hooks). The system has no automatic
+        // melee hit/miss — the GM confirms the hit via Apply-Damage, and the escape action clears a
+        // mis-adjudicated grab. Contested defensive rolls are an earmarked future extension (GM-choice,
+        // not fully automatic). applyMartialHitEffects self-gates: it no-ops for non-status actions and
+        // when specialMeleeEffectsEnabled is off.
+        if (targetTokens.length === 1) {
+          const targetActor = canvas?.tokens?.get(targetTokens[0].id)?.actor ?? null;
+          if (targetActor) await this._cpApplyOrRelayMartialEffect(action, targetActor);
+        }
+      },
     });
     dialog.render(true);
+  }
+
+  /** Apply a special martial hit-effect to the target — directly if this client can write the target,
+   *  else relayed to the active GM (mirrors the damage / vehicle relays; the target's held/grapple/
+   *  choke flags are a GM-owned write). (A6) */
+  async _cpApplyOrRelayMartialEffect(action, targetActor) {
+    if (!targetActor) return;
+    if (game.user.isGM || targetActor.isOwner) {
+      const { applyMartialHitEffects } = await import("../martial/martial.js");
+      await applyMartialHitEffects(action, targetActor, this.actor);
+    } else if (game.users.activeGM) {
+      game.socket.emit("module.cp2020-augmented", {
+        type: "martialEffect", action,
+        targetActorId: targetActor.id, attackerActorId: this.actor?.id ?? null,
+      });
+    }
   }
 
   _prepareSkills(sheetData) {
