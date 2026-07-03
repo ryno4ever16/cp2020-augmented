@@ -1,4 +1,4 @@
-import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_IDS, isFnff2Enabled, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY } from "../lookups.js"
+import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY } from "../lookups.js"
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill } from "../utils.js"
 import { ModifiersDialog } from "../dialog/modifiers.js"
 import { SortOrders, sortSkills } from "./skill-sort.js";
@@ -1289,7 +1289,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       this.actor.itemTypes?.skill ?? this.actor.items.filter(i => i.type === "skill");
 
     if (!isFnff2Enabled()) {
-      currentSkills = currentSkills.filter(s => !FNFF2_ONLY_MARTIAL_ART_IDS.has(s._id));
+      // Filter by the martial-art KEY (= the skill's name), NOT the embedded _id: a copied/re-created
+      // skill gets a fresh _id, so id-matching would fail to hide it (the documented inverse id-match trap).
+      currentSkills = currentSkills.filter(s => !FNFF2_ONLY_MARTIAL_ART_KEYS.has(s.name));
     }
 
     const currentIds = currentSkills.map(s => s.id);

@@ -8,6 +8,7 @@
 
 /** True if the formula string contains a die term (e.g. "2d6+1"), false for a flat number ("3"). */
 export const formulaHasDice = function (formula) {
+  if (typeof formula !== "string") return false;   // a null/number cost has no dice — don't throw on .match
   return formula.match(/[0-9)][dD]/) || formula.match(/[dD][0-9(]/);
 };
 

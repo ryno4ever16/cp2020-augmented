@@ -1937,8 +1937,17 @@ async _prepareCyberware(sheet) {
       return;
     }
 
+    // Charge first, then stock; if stocking throws, refund so eurobucks aren't lost (the charge-first/
+    // refund-on-failure guard shop/purchase.js and the other buy paths use).
     await actor.update({ "system.eurobucks": funds - boxCost });
-    await this.item.update({ "system.quantity": qty + boxSize });
+    try {
+      await this.item.update({ "system.quantity": qty + boxSize });
+    } catch (err) {
+      console.error("cp2020-augmented | Ammo restock failed after charging, refunding.", err);
+      await actor.update({ "system.eurobucks": funds }).catch(() => {});
+      ui.notifications.error(game.i18n.localize("CYBERPUNK.AmmoBuyFailed"));
+      return;
+    }
     ui.notifications.info(game.i18n.format("CYBERPUNK.AmmoBought", { count: boxSize, cost: boxCost }));
   }
 

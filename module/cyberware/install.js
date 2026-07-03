@@ -116,7 +116,7 @@ async function _confirmInstall(o) {
     const buttons = [
       {
         action: "ok",
-        icon: '<i class="fas fa-syringe"></i>',
+        icon: "fas fa-syringe",
         label: localize("CyberInstallConfirm"),
         default: true,
         callback: (ev, btn, dlg) => {
@@ -130,11 +130,11 @@ async function _confirmInstall(o) {
     // Only the BUY flow offers "buy only" (from the sheet you already own the item you're installing).
     if (o.showPart) buttons.push({
       action: "buyOnly",
-      icon: '<i class="fas fa-box"></i>',
+      icon: "fas fa-box",
       label: localize("CyberBuyOnly"),
       callback: () => resolve({ proceed: true, installNow: false }),
     });
-    buttons.push({ action: "cancel", icon: '<i class="fas fa-times"></i>', label: localize("Cancel"), callback: () => resolve(null) });
+    buttons.push({ action: "cancel", icon: "fas fa-times", label: localize("Cancel"), callback: () => resolve(null) });
     new foundry.applications.api.DialogV2({
       window: { title: o.title },
       content,

@@ -740,7 +740,7 @@ async function _pickTargetDialog() {
       buttons: [
         {
           action: "useCanvas",
-          icon: '<i class="fas fa-crosshairs"></i>',
+          icon: "fas fa-crosshairs",
           label: localize("UseCanvasTarget"),
           default: !!openTimeTarget,
           callback: () => {
@@ -756,7 +756,7 @@ async function _pickTargetDialog() {
         },
         {
           action: "useList",
-          icon: '<i class="fas fa-list"></i>',
+          icon: "fas fa-list",
           label: localize("UseList"),
           default: !openTimeTarget,
           callback: (ev, btn, dlg) => {

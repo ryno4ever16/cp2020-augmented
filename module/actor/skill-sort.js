@@ -41,13 +41,9 @@ const SortOrders = {
 
 // To sort hierarchically, break ties (0) with the return of another comparison function
 export function byName(skillA, skillB) {
-    if(skillA.name > skillB.name) {
-        return 1;
-    }
-    else if(skillA.name === skillB.name) {
-        return 0;
-    }
-    return -1;
+    // Locale-aware compare (matches the gear tab's Intl.Collator) so non-ASCII skill names sort by
+    // collation order, not UTF-16 code points — matters for the RU localization goal.
+    return String(skillA.name ?? "").localeCompare(String(skillB.name ?? ""));
 }
 
 export function hasPoints(skillA, skillB) {

@@ -171,15 +171,8 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
-  // --- specialMeleeEffectsEnabled ---
-  game.settings.register(SCOPE, "specialMeleeEffectsEnabled", {
-    name: "SETTINGS.SpecialMeleeEffectsEnabled",
-    hint: "SETTINGS.SpecialMeleeEffectsEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true,
-  });
+  // (specialMeleeEffectsEnabled is registered below, in the dual-owned block that stands down when the
+  //  fork's system already owns the key — an earlier plain registration here was dead, the second won.)
 
   // --- gasGrenadeCloudEnabled ---
   game.settings.register(SCOPE, "gasGrenadeCloudEnabled", {
