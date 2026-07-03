@@ -70,6 +70,31 @@ export function shouldPatch(method) {
 // refreshes this first, so leaving the last context set is correct and never mis-attributes.
 let _fireCtx = null;
 
+// The effect fields the combat engine reads off a weaponFired payload (beyond identity + areaDamages).
+// On stock, the base fire methods build ONLY areaDamages, so without these the module's explosion / gas /
+// spread / DOT / taser / armor-piercing / penetration branches never fire. They live on the loaded ammo
+// item's system.* (seeded by ammoModifierSystemFields + the ammo sheet); `edged` is weapon-level for melee.
+const AMMO_EFFECT_FIELDS = [
+  "ap", "edged", "effectTypes", "blastRadius", "blastFullDamageWithin", "blastMultipliers", "blastShrapnel",
+  "penDamageMult", "armorMultSoft", "armorMultHard",
+  "spreadMode", "spreadDamageShort", "spreadDamageMedium", "spreadDamageLong",
+  "spreadWidthShort", "spreadWidthMedium", "spreadWidthLong",
+  "stunSaveOnHit", "stunSaveMod", "dotEnabled", "dotTurns", "dotType", "dotDamageFormula",
+];
+
+/** Effect fields for the fired weapon, read from its loaded ammo (system.*) first, then the weapon
+ *  itself (melee `edged`). Only defined fields are copied → the engine applies its own defaults for the
+ *  rest. Pure-ish read; safe when there's no ammo (returns whatever the weapon provides, else {}). */
+export function ammoEffectFields(weapon) {
+  const out = {};
+  const ammoSys = weapon?.actor?.items?.get?.(weapon?.system?.ammoItemId)?.system;
+  for (const sys of [ammoSys, weapon?.system]) {
+    if (!sys) continue;
+    for (const k of AMMO_EFFECT_FIELDS) if (out[k] === undefined && sys[k] !== undefined) out[k] = sys[k];
+  }
+  return out;
+}
+
 function installWeaponFiredShim(ItemProto) {
   if (prototypeEmits(ItemProto, WEAPON_FIRED)) return false;   // base system emits it (method or helper) → disengage
   let patchedAny = false;
@@ -81,6 +106,7 @@ function installWeaponFiredShim(ItemProto) {
         attackerId: this.actor?.id ?? null,
         weaponName: this.name,
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
+        effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       return orig.call(this, attackMods, ...rest);
     }
@@ -115,6 +141,7 @@ function installMultiHitEmit() {
           areaDamages: data?.areaDamages ?? {},
           targetTokenId: target?.id ?? null,
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
+          ...(_fireCtx.effectFields ?? {}),   // explosion/gas/spread/DOT/taser/AP/pen fields from the ammo
         });
       }
     } catch (e) {

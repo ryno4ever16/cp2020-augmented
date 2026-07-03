@@ -10,7 +10,7 @@ import { localize, tryLocalize } from "../utils.js";
 export function canBuyAmmo() {
   if (game.user?.isGM) return { ok: true, reason: "" };
   let allowed = true;
-  try { allowed = game.settings.get("cyberpunk2020", "playersCanBuyAmmo") !== false; } catch (e) { /* default allow */ }
+  try { allowed = game.settings.get("cp2020-augmented", "playersCanBuyAmmo") !== false; } catch (e) { /* default allow */ }
   return allowed ? { ok: true, reason: "" } : { ok: false, reason: game.i18n.localize("CYBERPUNK.AmmoBuyAtShop") };
 }
 

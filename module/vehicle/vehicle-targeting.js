@@ -233,7 +233,7 @@ export function registerVehicleTargetingHandlers() {
   // GM-side relay: a player firing at a GM-owned vehicle can't write it, so they emit a vehicleDamage
   // request (see _relayVehicleAttack). The socket fires on every connected GM — only the active GM
   // applies (else N GMs apply N×). The active GM re-runs dispatchAttack, which writes directly here.
-  game.socket.on(`system.${SCOPE}`, async (data) => {
+  game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "vehicleDamage") return;
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
     const target = game.actors.get(data.targetActorId);
@@ -259,7 +259,7 @@ function _canModifyTarget(target) {
 function _relayVehicleAttack(payload, target) {
   if (!game.users?.activeGM) { ui.notifications?.warn?.(localizeParam("Vehicle.NoGMForDamage", { name: target?.name ?? "the vehicle" })); return; }
   const facing = resolveFacing(payload, target);
-  game.socket.emit(`system.${SCOPE}`, {
+  game.socket.emit("module.cp2020-augmented", {
     type: "vehicleDamage", targetActorId: target.id,
     payload: { ...payload, facing }, requesterId: game.user.id,
   });

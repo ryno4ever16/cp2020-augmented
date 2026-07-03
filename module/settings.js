@@ -481,6 +481,27 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
+  // --- Automated rangefinding ---
+  // Pre-selects the range band in the attack dialog from the measured token distance. Fork-owned on
+  // the fork (system scope); the module registers a shadow so vanilla installs get an off-switch
+  // (without it the read threw and the feature was permanently ON). Read via autoRangefindingEnabled().
+  const systemOwnsRangefinding = (() => {
+    try { return game.settings.settings.has("cyberpunk2020.autoRangefinding"); } catch { return false; }
+  })();
+  game.settings.register(SCOPE, "autoRangefinding", {
+    name: "SETTINGS.AutoRangefinding",
+    hint: "SETTINGS.AutoRangefindingHint",
+    scope: "world",
+    config: !systemOwnsRangefinding,
+    type: Boolean,
+    default: true,
+  });
+
+  // GM-registered custom calibers as world DATA (config:false; set via macro/API, merged in
+  // lookups.js getCalibers). Fork-owned on the fork; the module registers a shadow so a vanilla GM
+  // can carry custom calibers (without it the module read threw → custom calibers never appeared).
+  game.settings.register(SCOPE, "customCalibers", { scope: "world", config: false, type: Object, default: {} });
+
   // --- IP (Improvement Points) tracker ([[ip-tracker-design]]) ---
   // Two gates over the always-present dual-bucket store (per-skill flag `ip` bank + a fungible actor
   // flag `ipPool`): ipRawTracking (behaviour — per-skill auto-attribution + the skill-roll queue) and
@@ -694,6 +715,14 @@ export function combatAutomationEnabled() {
 export function specialMeleeEffectsEnabled() {
   try { return game.settings.get("cyberpunk2020", "specialMeleeEffectsEnabled") === true; } catch { /* not the fork */ }
   try { return game.settings.get(SCOPE, "specialMeleeEffectsEnabled") === true; } catch { /* not registered */ }
+  return true;
+}
+
+/** Automated rangefinding toggle. Fork's system copy is authoritative; falls back to the module
+ *  shadow (vanilla), then the ON default. Same dual-scope shape as specialMeleeEffectsEnabled. */
+export function autoRangefindingEnabled() {
+  try { return game.settings.get("cyberpunk2020", "autoRangefinding") === true; } catch { /* not the fork */ }
+  try { return game.settings.get(SCOPE, "autoRangefinding") === true; } catch { /* not registered */ }
   return true;
 }
 

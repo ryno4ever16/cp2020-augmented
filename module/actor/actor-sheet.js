@@ -7,9 +7,9 @@ import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
-import { classifyService, payService } from "../shop/services.js";
+import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipCost, ipLockState, canEditSkillLevels, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
-import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending } from "../settings.js";
+import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled } from "../settings.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -538,10 +538,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       // ── Automated Rangefinding ──────────────────────────────────────────
       // If enabled and exactly one target is selected, measure the token
       // distance and pre-select the correct range category in the dialog.
-      const rangefindingEnabled = (() => {
-        try { return game.settings.get("cyberpunk2020", "autoRangefinding"); }
-        catch { return true; }  // default ON (matches the setting default)
-      })();
+      const rangefindingEnabled = autoRangefindingEnabled();
 
       if (rangefindingEnabled && targetTokens.length === 1) {
         const attackerToken = canvas?.tokens?.placeables?.find(
@@ -1357,7 +1354,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     if (shopOn) {
       const recurring = sheetData.actor.items.filter(i => i.type === "misc" && classifyService(i) === "recurring");
       sheetData.services = recurring
-        .map(i => ({ id: i.id, name: i.name, img: i.img, cost: Number(i.system?.cost) || 0, period: i.system?.servicePeriod || "month" }))
+        .map(i => ({ id: i.id, name: i.name, img: i.img, cost: Number(i.system?.cost) || 0, period: servicePeriodOf(i) }))
         .sort((a, b) => a.name.localeCompare(b.name));
       sheetData.servicesTotal = sheetData.services.reduce((s, x) => s + x.cost, 0);
     }

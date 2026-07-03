@@ -194,7 +194,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     if (!game.user.isGM) {
       // Route through GM socket relay — player cannot write to unowned actor documents
-      game.socket.emit("system.cyberpunk2020", {
+      game.socket.emit("module.cp2020-augmented", {
         type:             "applyDamage",
         mode:             "resolved",
         requesterId:      game.user.id,

@@ -9,22 +9,25 @@
          serviceMode/servicePeriod live ONLY on the `misc` data model, but this part doubles as the
          shared Cost/Weight/Source footer for every item type → gate the block to misc so it doesn't
          render (vestigially) on cyberware/weapons/armor/etc. --}}
+    {{!-- serviceMode/servicePeriod persist in module flags (flags.cp2020-augmented.*): the base `misc`
+         DataModel strips unknown system fields, so binding system.* silently dropped edits. The item
+         sheet exposes the normalized `serviceMode`/`servicePeriod` (via serviceModeOf/servicePeriodOf). --}}
     {{#if (equals item.type "misc")}}
     <div class="field">
-        <label for="system.serviceMode">{{CPLocal "ServiceMode"}}</label>
+        <label for="flags.cp2020-augmented.serviceMode">{{CPLocal "ServiceMode"}}</label>
         <span class="flex-pad"></span>
-        <select name="system.serviceMode">
-            <option value="" {{#if (equals system.serviceMode "")}}selected{{/if}}>{{CPLocal "ServiceModeAuto"}}</option>
-            <option value="gear" {{#if (equals system.serviceMode "gear")}}selected{{/if}}>{{CPLocal "ServiceModeGear"}}</option>
-            <option value="recurring" {{#if (equals system.serviceMode "recurring")}}selected{{/if}}>{{CPLocal "ServiceModeRecurring"}}</option>
-            <option value="oneoff" {{#if (equals system.serviceMode "oneoff")}}selected{{/if}}>{{CPLocal "ServiceModeOneoff"}}</option>
+        <select name="flags.cp2020-augmented.serviceMode">
+            <option value="" {{#if (equals serviceMode "")}}selected{{/if}}>{{CPLocal "ServiceModeAuto"}}</option>
+            <option value="gear" {{#if (equals serviceMode "gear")}}selected{{/if}}>{{CPLocal "ServiceModeGear"}}</option>
+            <option value="recurring" {{#if (equals serviceMode "recurring")}}selected{{/if}}>{{CPLocal "ServiceModeRecurring"}}</option>
+            <option value="oneoff" {{#if (equals serviceMode "oneoff")}}selected{{/if}}>{{CPLocal "ServiceModeOneoff"}}</option>
         </select>
     </div>
-    {{#if (equals system.serviceMode "recurring")}}
+    {{#if (equals serviceMode "recurring")}}
     <div class="field">
-        <label for="system.servicePeriod">{{CPLocal "ServicePeriod"}}</label>
+        <label for="flags.cp2020-augmented.servicePeriod">{{CPLocal "ServicePeriod"}}</label>
         <span class="flex-pad"></span>
-        <input class="textsize" name="system.servicePeriod" type="text" value="{{system.servicePeriod}}"/>
+        <input class="textsize" name="flags.cp2020-augmented.servicePeriod" type="text" value="{{servicePeriod}}"/>
     </div>
     {{/if}}
     {{/if}}

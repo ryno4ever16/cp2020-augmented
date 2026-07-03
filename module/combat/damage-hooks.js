@@ -70,6 +70,7 @@ export function registerDamageHooks() {
   _hookDodgeParry();
   _hookDotEffects();
   _hookGasCloud();
+  _hookGasCloudPerTurn();
   _hookExplosion();
   _hookSpread();
   _hookMultiActionPenalty();
@@ -432,7 +433,7 @@ function _hookSuppressiveFire() {
     if (game.users.activeGM?.id === game.user.id) {
       await _placeSuppressiveZone(payload);
     } else {
-      game.socket.emit("system.cyberpunk2020", { type: "suppressiveFire", payload });
+      game.socket.emit("module.cp2020-augmented", { type: "suppressiveFire", payload });
     }
   });
 }
@@ -554,7 +555,7 @@ function _hookSuppressiveTemplateOriginLock() {
   // Region created already-aimed (not drag-rotated), so there is no draggable origin to lock.
   if (usesRegions()) return;
   Hooks.on("preUpdateMeasuredTemplate", (doc, change) => {
-    const flags = doc.flags?.cyberpunk2020;
+    const flags = doc.flags?.["cp2020-augmented"];
     if (!flags?.isSuppressiveZone) return;
 
     // Lock origin position
@@ -593,7 +594,7 @@ function _hookSuppressiveFirePerTurn() {
     // Expire zones created in a previous round (fire zones last 1 round), via the shim.
     let zones = areasByFlag(scene, "isSuppressiveZone");
     for (const z of zones) {
-      const createdRound = z.doc.flags?.cyberpunk2020?.createdRound ?? 0;
+      const createdRound = z.doc.flags?.["cp2020-augmented"]?.createdRound ?? 0;
       if (currentRound > createdRound) await deleteArea(z);
     }
     zones = areasByFlag(scene, "isSuppressiveZone");   // refresh after any deletions
@@ -605,7 +606,7 @@ function _hookSuppressiveFirePerTurn() {
     if (!tokDoc?.actor) return;
 
     for (const z of zones) {
-      const zf = z.doc.flags?.cyberpunk2020;
+      const zf = z.doc.flags?.["cp2020-augmented"];
       if (tokDoc.actor.id === zf?.actorId) continue;        // skip the attacker
       if (!tokensInArea(z, [tokDoc]).length) continue;
 
@@ -1160,13 +1161,19 @@ function _hookGasCloud() {
   };
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
-    if (!game.user.isGM) return;
-    // Only the primary GM places the cloud, else each connected GM creates a duplicate.
-    if (game.users.activeGM?.id !== game.user.id) return;
     if (!gasEnabled()) return;
     const types = payload.effectTypes ?? [];
     if (!types.includes("Gas")) return;
+    // weaponFired fires only on the firing client; placing the cloud needs the GM. The active GM
+    // places it directly; anyone else (a player, or a non-active GM) relays to it. Without this a
+    // player's gas grenade produced no cloud. Mirrors _hookSuppressiveFire.
+    if (game.users.activeGM?.id === game.user.id) await _placeGasCloud(payload);
+    else game.socket.emit("module.cp2020-augmented", { type: "gasCloudFired", payload });
+  });
+}
 
+/** Place the gas cloud + post its notice card. Runs on the active GM (directly or via socket relay). */
+async function _placeGasCloud(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
 
@@ -1213,9 +1220,15 @@ function _hookGasCloud() {
       body: localizeParam("GasCloudPlacedBody", { radius, mod: stunSaveMod, duration }),
       speaker: ChatMessage.getSpeaker({ actor: attackerId ? game.actors.get(attackerId) : undefined }),
     });
-  });
+}
 
-  // Per-turn: prompt saves for tokens in gas cloud; decrement turns; delete when expired
+/** Per-turn: prompt saves for tokens in a gas cloud; decrement turns; delete when expired. */
+function _hookGasCloudPerTurn() {
+  const gasEnabled = () => {
+    try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); }
+    catch { return true; }
+  };
+
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!game.user.isGM) return;
     // Only the primary GM runs the per-turn cloud logic, else duplicate prompts/updates.
@@ -1229,7 +1242,7 @@ function _hookGasCloud() {
     const clouds = areasByFlag(scene, "isGasCloud");
 
     for (const cloud of clouds) {
-      const flags = cloud.doc.flags.cyberpunk2020;
+      const flags = cloud.doc.flags["cp2020-augmented"];
       const turnsLeft    = Number(flags.turnsLeft   ?? 0);
       const stunSaveMod  = Number(flags.stunSaveMod ?? 0);
       const weaponName   = flags.weaponName ?? localize("WpnGasGrenade");
@@ -1265,7 +1278,7 @@ function _hookGasCloud() {
       }
 
       const autoMove = (() => { try { return game.settings.get("cp2020-augmented", "gasCloudAutoMove"); } catch { return false; } })();
-      await cloud.doc.update({ ["flags.cyberpunk2020.turnsLeft"]: turnsLeft - 1 }).catch(() => {});
+      await cloud.doc.update({ ["flags.cp2020-augmented.turnsLeft"]: turnsLeft - 1 }).catch(() => {});
 
       if (autoMove) {
         // Drift 2m in a random direction (wind) — shifts the template (v13) or region shape (v14).
@@ -1370,11 +1383,18 @@ function _hookExplosion() {
   const enabled = () => { try { return game.settings.get("cp2020-augmented", "explosivesEnabled"); } catch { return true; } };
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;   // only the primary GM places it
     if (!enabled()) return;
     if (!(payload.effectTypes ?? []).includes("Explosive")) return;
+    // weaponFired fires only on the firing client; placing the blast needs the GM. The active GM
+    // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
+    // _hookSuppressiveFire. Without this a player's grenade produced no blast.
+    if (game.users.activeGM?.id === game.user.id) await _placeExplosion(payload);
+    else game.socket.emit("module.cp2020-augmented", { type: "explosionFired", payload });
+  });
+}
 
+/** Place the explosion blast area + post its Confirm card. Runs on the active GM (direct or relay). */
+async function _placeExplosion(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
 
@@ -1428,7 +1448,6 @@ function _hookExplosion() {
       content: explosionCard,
       speaker: ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined }),
     });
-  });
 }
 
 /** Detonate a confirmed blast: damage every token in the template with range-banded falloff. */
@@ -1439,7 +1458,7 @@ async function _confirmExplosion(templateId) {
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
   const handle = areaById(scene, templateId);
   if (!handle) { ui.notifications.warn(localize("ExplosionTemplateNotFound")); return; }
-  const f = handle.doc.flags?.cyberpunk2020;
+  const f = handle.doc.flags?.["cp2020-augmented"];
   if (!f?.isExplosion) return;
 
   const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
@@ -1504,7 +1523,7 @@ async function _scatterExplosion(templateId) {
 
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
   const handle = areaById(scene, templateId);
-  if (!handle?.doc?.flags?.cyberpunk2020?.isExplosion) { ui.notifications.warn(localize("BlastTemplateNotFound")); return; }
+  if (!handle?.doc?.flags?.["cp2020-augmented"]?.isExplosion) { ui.notifications.warn(localize("BlastTemplateNotFound")); return; }
 
   const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
   const gridDist = scene.grid?.distance ?? 1;
@@ -1525,7 +1544,7 @@ async function _scatterExplosion(templateId) {
   await moveArea(handle, dx, dy);
 
   // Update the stored originX/originY flags so _confirmExplosion uses the new blast centre.
-  const f = handle.doc.flags?.cyberpunk2020 ?? {};
+  const f = handle.doc.flags?.["cp2020-augmented"] ?? {};
   const newOriginX = (Number(f.originX) || 0) + dx;
   const newOriginY = (Number(f.originY) || 0) + dy;
   try {
@@ -1548,12 +1567,19 @@ function _hookSpread() {
   const enabled = () => { try { return game.settings.get("cp2020-augmented", "shotgunSpreadEnabled"); } catch { return true; } };
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
     if (!enabled()) return;
     const mode = payload.spreadMode;
     if (!mode || mode === "single") return;
+    // weaponFired fires only on the firing client; placing the pattern needs the GM. The active GM
+    // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
+    // _hookSuppressiveFire. Without this a player's shotgun produced no spread.
+    if (game.users.activeGM?.id === game.user.id) await _placeSpreadZone(payload);
+    else game.socket.emit("module.cp2020-augmented", { type: "spreadFired", payload });
+  });
+}
 
+/** Place the shotgun/flechette spread pattern + post its Confirm card. Runs on the active GM. */
+async function _placeSpreadZone(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
 
@@ -1608,7 +1634,6 @@ function _hookSpread() {
       content: spreadCard,
       speaker: ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined }),
     });
-  });
 }
 
 /** Apply spread damage to every token in the confirmed pattern (no evasion — buckshot just hits). */
@@ -1619,7 +1644,7 @@ async function _confirmSpreadZone(templateId) {
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
   const handle = areaById(scene, templateId);
   if (!handle) { ui.notifications.warn(localize("SpreadTemplateNotFound")); return; }
-  const f = handle.doc.flags?.cyberpunk2020;
+  const f = handle.doc.flags?.["cp2020-augmented"];
   if (!f?.isSpreadZone) return;
 
   // Origin for cover checks: stored as originX/originY in flags at creation, with a doc.x/y
@@ -1795,7 +1820,16 @@ function _hookLiveSheetUpdate() {
 }
 
 function _hookSocketRelay() {
-  game.socket.on("system.cyberpunk2020", async (data) => {
+  // Area/zone placements relayed from a non-GM firer. weaponFired/suppressiveFire fire only on the
+  // firing client, so the active GM places the area on their behalf — one shape for all four effects.
+  const AREA_PLACERS = {
+    suppressiveFire: _placeSuppressiveZone,
+    gasCloudFired:   _placeGasCloud,
+    explosionFired:  _placeExplosion,
+    spreadFired:     _placeSpreadZone,
+  };
+
+  game.socket.on("module.cp2020-augmented", async (data) => {
     if (!game.user.isGM) {
       if (data.type === "damageApplied" && data.requesterId === game.user.id) {
         ui.notifications.info(localizeParam("DamageApplied", { amount: data.totalApplied, target: data.targetName }));
@@ -1805,10 +1839,12 @@ function _hookSocketRelay() {
       return;
     }
 
-    // Suppressive fire relayed from a player: only the active GM places the fire-zone template.
-    if (data.type === "suppressiveFire") {
+    // Relayed area placement (suppressive / gas / explosion / spread): only the active GM performs
+    // it, else N connected GMs each place a duplicate.
+    const areaPlacer = AREA_PLACERS[data.type];
+    if (areaPlacer) {
       if (game.users.activeGM?.id !== game.user.id) return;
-      await _placeSuppressiveZone(data.payload);
+      await areaPlacer(data.payload);
       return;
     }
 
@@ -1913,7 +1949,7 @@ function _hookSocketRelay() {
 
     } catch (err) {
       console.error("CP2020 | Socket applyDamage handler failed:", err);
-      game.socket.emit("system.cyberpunk2020", {
+      game.socket.emit("module.cp2020-augmented", {
         type:        "damageError",
         requesterId: data.requesterId,
         message:     err.message ?? "Unknown error",
@@ -1921,7 +1957,7 @@ function _hookSocketRelay() {
       return;
     }
 
-    game.socket.emit("system.cyberpunk2020", {
+    game.socket.emit("module.cp2020-augmented", {
       type:        "damageApplied",
       requesterId: data.requesterId,
       targetName:  target.name,
@@ -1933,7 +1969,7 @@ function _hookSocketRelay() {
 async function _autoApply(payload, target) {
   if (!game.user.isGM) {
     // Route through GM socket relay — player cannot write to unowned actor documents
-    game.socket.emit("system.cyberpunk2020", {
+    game.socket.emit("module.cp2020-augmented", {
       type:             "applyDamage",
       mode:             "auto",
       requesterId:      game.user.id,

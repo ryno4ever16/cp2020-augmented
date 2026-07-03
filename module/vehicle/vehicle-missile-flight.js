@@ -45,6 +45,21 @@ export async function launchMissile({ scene: sceneArg, shooterToken, targetToken
   if (!scene || !shooterToken || !targetToken) { ui.notifications?.warn?.(localize("Vehicle.MissileNeedsTokens")); return null; }
   const sDoc = shooterToken.document ?? shooterToken;
   const tDoc = targetToken.document ?? targetToken;
+
+  // Creating the proxy actor + the missile token requires the GM. If we're not the active GM (a
+  // player, or a non-active GM), relay the launch by ids; the active GM spawns the missile. Mirrors
+  // the vehicle-damage relay (_relayVehicleAttack). Without this a player's guided missile spawned
+  // nothing. The GM-side handler is in registerMissileFlightHooks.
+  if (game.users?.activeGM?.id !== game.user.id) {
+    if (!game.users?.activeGM) { ui.notifications?.warn?.(localize("Vehicle.NoGMForMissile")); return null; }
+    game.socket.emit("module.cp2020-augmented", {
+      type: "missileLaunch", sceneId: scene.id,
+      shooterTokenId: sDoc.id, targetTokenId: tDoc.id, missile,
+    });
+    ui.notifications?.info?.(localize("Vehicle.MissileLaunchSentToGM"));
+    return null;
+  }
+
   const gs = _gridSize(scene);
   const proxy = await _ensureMissileActor();
 
@@ -271,7 +286,7 @@ async function _applyMissileReaction(tokenId, kind, sceneArg = null) {
  */
 async function _reactOrRelay(tokenId, kind) {
   if (game.user?.isGM) { await _applyMissileReaction(tokenId, kind); return; }
-  game.socket.emit(`system.${SCOPE}`, { type: "missileReaction", tokenId, kind, sceneId: canvas?.scene?.id, requesterId: game.user.id });
+  game.socket.emit("module.cp2020-augmented", { type: "missileReaction", tokenId, kind, sceneId: canvas?.scene?.id, requesterId: game.user.id });
   ui.notifications?.info?.(localize("Vehicle.ReactionSent"));
 }
 
@@ -279,7 +294,7 @@ async function _reactOrRelay(tokenId, kind) {
 export function registerMissileFlightHooks() {
   // Player → GM relay for deliberate missile reactions (only the active GM applies; verify the
   // requester actually owns the targeted vehicle so a stray socket can't trigger a reaction).
-  game.socket.on(`system.${SCOPE}`, async (data) => {
+  game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "missileReaction") return;
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
     const scene = (data.sceneId ? game.scenes.get(data.sceneId) : null) ?? canvas?.scene ?? game.scenes?.find(s => s.tokens.get(data.tokenId));
@@ -288,6 +303,17 @@ export function registerMissileFlightHooks() {
     const requester = game.users?.get(data.requesterId);
     if (target && requester && !target.testUserPermission(requester, "OWNER")) return;   // not their missile
     await _applyMissileReaction(data.tokenId, data.kind, scene);
+  });
+
+  // Player → GM relay for a guided-missile launch: the active GM spawns the missile token on the
+  // firer's behalf (Actor/Token.create are GM-only). Emitted by launchMissile when a non-GM fires.
+  game.socket.on("module.cp2020-augmented", async (data) => {
+    if (data?.type !== "missileLaunch") return;
+    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    const scene = (data.sceneId ? game.scenes.get(data.sceneId) : null) ?? canvas?.scene;
+    const shooterToken = scene?.tokens?.get(data.shooterTokenId);
+    const targetToken  = scene?.tokens?.get(data.targetTokenId);
+    if (scene && shooterToken && targetToken) await launchMissile({ scene, shooterToken, targetToken, missile: data.missile ?? {} });
   });
 
   // Reaction buttons on the Incoming-Missile card (+ GM reveal from the tracker panel).

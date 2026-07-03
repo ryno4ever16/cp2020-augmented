@@ -197,11 +197,14 @@ export const AMMO_MODIFIERS = {
 
 /** Merge built-in CALIBERS with any GM-registered custom calibers (world setting). */
 export function getCalibers() {
+  // Dual-scope: the fork's system copy is authoritative; fall back to the module shadow (vanilla).
   let custom = {};
-  try {
-    const raw = game.settings.get("cyberpunk2020", "customCalibers");
-    if (raw && typeof raw === "object") custom = raw;
-  } catch (e) { /* settings not ready */ }
+  for (const scope of ["cyberpunk2020", "cp2020-augmented"]) {
+    try {
+      const raw = game.settings.get(scope, "customCalibers");
+      if (raw && typeof raw === "object" && Object.keys(raw).length) { custom = raw; break; }
+    } catch (e) { /* not registered under this scope */ }
+  }
   return { ...CALIBERS, ...custom };
 }
 
@@ -687,10 +690,12 @@ export function martialOptions(actor, savedOptions={}) {
     const martialChoices = [
       { value: "Brawling", localKey: "SkillBrawling" },
 
-      // trainedMartials() returns { value, label } — value is the built-in key or a
-      // custom skill name; label is the skill's display name (rendered literally via `text`).
+      // trainedMartials() shape differs by platform: the installed 1.1.1 system returns STRING keys
+      // (display name via getMartialDisplayName), the fork returns { value, label } objects. Handle
+      // both, else the dropdown collapses to just "Brawling" on stock. `text` is rendered literally.
       ...(actor.trainedMartials().map(m => {
-        return { value: m.value, text: m.label };
+        if (typeof m === "string") return { value: m, text: actor.getMartialDisplayName?.(m) ?? m };
+        return { value: m.value, text: m.label ?? m.value };
       }))
     ];
     // Saved attack options: pre-fill the weapon's last-used martial art, if still a valid choice.

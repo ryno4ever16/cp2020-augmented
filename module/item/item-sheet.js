@@ -1,5 +1,6 @@
 import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, getCalibers, AMMO_MODIFIERS, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice } from "../lookups.js";
 import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
+import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
@@ -90,6 +91,13 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
 
       case "vehicle":
         this._prepareVehicle(data);
+        break;
+
+      case "misc":
+        // Service classification lives in module flags (the base `misc` DataModel strips unknown
+        // system fields). Normalize via the accessors so the settings partial binds/reads the flags.
+        data.serviceMode = serviceModeOf(this.item);
+        data.servicePeriod = servicePeriodOf(this.item);
         break;
 
       default:

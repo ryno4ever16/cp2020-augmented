@@ -71,17 +71,17 @@ function _relayStabilizedFlag(actorId) {
     ui.notifications.warn(localize("StabilizeNoGM"));
     return;
   }
-  game.socket.emit("system.cyberpunk2020", { type: "stabilizeFlag", actorId, requesterId: game.user.id });
+  game.socket.emit("module.cp2020-augmented", { type: "stabilizeFlag", actorId, requesterId: game.user.id });
   ui.notifications.info(localize("StabilizeRelayed"));
 }
 
 /**
  * GM-side listener for relayed stabilization writes (see _relayStabilizedFlag).
- * Shares the system.cyberpunk2020 channel with the damage relay; filters on
+ * Shares the module.cp2020-augmented channel with the damage relay; filters on
  * type === "stabilizeFlag". Only the primary GM responds (no double-write under 2+ GMs).
  */
 function _registerStabilizeSocket() {
-  game.socket.on("system.cyberpunk2020", async (data) => {
+  game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "stabilizeFlag") return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;
