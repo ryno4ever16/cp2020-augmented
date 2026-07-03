@@ -153,4 +153,18 @@ export function registerAcpaCombatHooks() {
       await tickAcpaCombatant(c.actor);
     }
   });
+
+  // An ACPA's effective REF is DERIVED from its linked pilot's REF (prepareDerivedData reads the pilot
+  // actor). Foundry only re-derives a suit when the SUIT itself changes, not when the PILOT does — so a
+  // pilot REF change left the suit's effectiveRef stale until an unrelated re-prepare. Re-derive + refresh
+  // any suit linked to a pilot whose REF just changed. Derived data is per-client, so every client runs it.
+  Hooks.on("updateActor", (actor, changed) => {
+    if (!actor || actor.type === "cp2020-augmented.vehicle") return;   // pilots (non-suit actors) only
+    if (!foundry.utils.hasProperty(changed, "system.stats.ref")) return;
+    for (const suit of game.actors ?? []) {
+      if (suit.type !== "cp2020-augmented.vehicle" || suit.system?.pilotId !== actor.id) continue;
+      suit.reset();                                        // recompute derived data (effectiveRef)
+      if (suit.sheet?.rendered) suit.sheet.render(false);  // refresh an open suit sheet
+    }
+  });
 }

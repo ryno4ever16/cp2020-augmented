@@ -355,17 +355,23 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
   // 50% (5-in-10): the hit struck an EXTERNAL (unarmored) system instead of the suit proper (MM p.55).
   if (externalSystemHit(await d10())) {
     const r = hitMountedSystem(i => i.type === "cp2020-augmented.acpaSystem" && i.system?.mount === "external");
-    if (!r) return { body, lines: lines + `<br>An <b>external system</b> on the ${areaName} took it (none mounted there — GM adjudicates).`, updates, itemUpdates };
-    if (!r.destroyed) {
-      const inopNote = await integrityCheck(r);
-      lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Suit proper spared.${inopNote}`;
-      return { body, lines, updates, itemUpdates };
+    if (r) {
+      if (!r.destroyed) {
+        const inopNote = await integrityCheck(r);
+        lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Suit proper spared.${inopNote}`;
+        return { body, lines, updates, itemUpdates };
+      }
+      lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} was <span class="result-warn">DESTROYED</span>.`;
+      if (r.overflow <= 0) return { body, lines, updates, itemUpdates };
+      frameDamage = r.overflow;
+      lines += ` ${r.overflow} SDP overflows into the suit frame.`;
+      // falls through to frame consumption with frameDamage = overflow
+    } else {
+      // No external system is mounted where the hit landed — it reaches the suit frame (mirrors the
+      // enclosed / weapon "none mounted" branches below). Previously this returned early, so ~half of
+      // penetrating hits silently dealt zero damage. frameDamage stays = sdp → frame consumption below.
+      lines += `<br>The hit struck the ${areaName} where <b>no external system</b> is mounted — it reaches the suit frame.`;
     }
-    lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} was <span class="result-warn">DESTROYED</span>.`;
-    if (r.overflow <= 0) return { body, lines, updates, itemUpdates };
-    frameDamage = r.overflow;
-    lines += ` ${r.overflow} SDP overflows into the suit frame.`;
-    // falls through to frame consumption with frameDamage = overflow
   } else {
     // The hit reached the suit proper — roll the System Hit Table (a 10 re-rolls into Critical/System Hit).
     let cat = acpaSystemHit(await d10());

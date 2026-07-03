@@ -202,11 +202,14 @@ export function acpaHitSystem(mounted = [], area, sdpDamage = 0) {
   const sdp = acpaSystemSdp({ sdp: m.sdp ?? def.sdp, sp: m.sp ?? def.sp });
   const prev = Math.max(0, Number(m.sdpDamage) || 0);
   const total = prev + dmg;
-  const destroyed = sdp > 0 && total >= sdp;
-  m.sdpDamage = Math.min(total, sdp || total);
+  // A system with no SDP capacity (0 or unset) provides no protection: it is overrun immediately and
+  // the full damage passes through to the frame — it must never become an invulnerable damage sponge.
+  const hasSdp = sdp > 0;
+  const destroyed = hasSdp ? total >= sdp : true;
+  m.sdpDamage = hasSdp ? Math.min(total, sdp) : total;
   m.destroyed = !!destroyed;
   // Damage beyond what destroying this system absorbs spills back to the caller (→ frame SDP).
-  const overflow = destroyed ? Math.max(0, total - sdp) : 0;
+  const overflow = destroyed ? Math.max(0, total - (hasSdp ? sdp : 0)) : 0;
   return { index, hitKey: m.key, destroyed, overflow, updated };
 }
 

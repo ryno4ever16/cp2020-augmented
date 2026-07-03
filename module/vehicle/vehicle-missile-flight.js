@@ -242,6 +242,15 @@ async function _applyMissileReaction(tokenId, kind, sceneArg = null) {
   const mt = scene?.tokens?.get(tokenId);
   const f = mt?.flags?.[SCOPE]?.missile;
   if (!mt || !f) return;
+
+  // Each reaction (evade / countermeasure / intercept) is one-shot per missile. The card button only
+  // disables in the clicking client's DOM — a chat re-render or a second client re-enables it — so guard
+  // on a PERSISTED reactions[] flag: re-clicking otherwise stacked the difficulty modifier or re-rolled
+  // the intercept. Record the consumed reaction and reject a repeat.
+  const reactions = Array.isArray(f.reactions) ? f.reactions : [];
+  if (reactions.includes(kind)) { ui.notifications?.info?.(localize("Vehicle.ReactionAlready")); return; }
+  await mt.update({ [`flags.${SCOPE}.missile.reactions`]: [...reactions, kind] });
+
   const target = scene.tokens.get(f.targetTokenId)?.actor;
 
   if (kind === "intercept") {

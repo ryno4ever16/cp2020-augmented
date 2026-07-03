@@ -148,8 +148,9 @@ export function computeNetDamage(afterSP, btm, penetrates, location) {
  */
 export async function assessWoundSeverity(target, location, netDamage, { token = null } = {}) {
   // Vehicles have no limbs/head/death saves — never run wound severity on them (they use the
-  // vehicle resolver). Defense in depth alongside the applyAreaDamages redirect.
-  if (target?.type === "vehicle") return;
+  // vehicle resolver). Defense in depth alongside the applyAreaDamages redirect. Vehicle/ACPA actors
+  // are the module sub-type "cp2020-augmented.vehicle" (NOT the bare "vehicle", which is an Item type).
+  if (target?.type === "cp2020-augmented.vehicle") return;
   let limbLoss = false;
   try { limbLoss = game.settings.get("cp2020-augmented", "limbLossEnabled"); } catch (e) { /* default */ }
   if (!limbLoss) return;
@@ -261,7 +262,9 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
   // running limb/head checks. Catches every apply path (auto-apply, DamageDialog, Apply button).
-  if (!dryRun && target?.type === "vehicle") {
+  // Vehicle/ACPA actors are the module sub-type "cp2020-augmented.vehicle" (the bare "vehicle" is an
+  // Item type, so the old check never matched → area/blast hits wrongly fell through to personnel).
+  if (!dryRun && target?.type === "cp2020-augmented.vehicle") {
     try {
       const VW = await import("../vehicle/vehicle-weapons.js");
       await VW.routeWeaponFiredToVehicle({ areaDamages, ap }, target);

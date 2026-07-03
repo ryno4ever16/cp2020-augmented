@@ -301,6 +301,7 @@
       "CountermeasureTitle": "🎆 Countermeasure — {label}",
       "CountermeasureBody": "vs {weapon}: to-hit Difficulty now +{mod}.",
       "ReactionSent": "Reaction sent to the GM.",
+      "ReactionAlready": "You have already made that reaction to this missile.",
       "NoCmDefeats": "No countermeasure defeats this missile's homing method.",
       "MissileRevealedByGM": "revealed by GM",
       "MissilesInFlight": "🚀 Missiles in Flight",

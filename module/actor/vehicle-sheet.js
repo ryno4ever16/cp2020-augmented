@@ -240,7 +240,9 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
 
   static async _onAcpaSystemAdd(event, _target) {
     event.preventDefault();
-    await this.actor.createEmbeddedDocuments("Item", [{ name: "New System", type: "cp2020-augmented.acpaSystem" }]);
+    // Seed a sane, editable default SDP so a freshly added system has real integrity (a 0-SDP system is
+    // now overrun immediately rather than absorbing forever — see acpaHitSystem — but 0 is still a poor default).
+    await this.actor.createEmbeddedDocuments("Item", [{ name: "New System", type: "cp2020-augmented.acpaSystem", system: { sdp: 10 } }]);
   }
 
   static _onAcpaSystemEdit(event, target) {

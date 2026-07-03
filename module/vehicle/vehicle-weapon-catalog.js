@@ -337,7 +337,7 @@ export const SEED_VEHICLE_WEAPONS = [
       wa:-1, penetration:4, damage:"7D10", heat:true, burst:6, rof:1, shots:1, range:1000, minRange:100, reliability:"VR", space:1, cost:1000, source:SOURCE } },
   { name: "VSAM", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"radar", guidanceSkill:15,
       wa:0, penetration:8, damage:"15D10", heat:true, burst:10, rof:1, shots:1, range:5000, minRange:500, reliability:"VR", space:1, cost:10000, source:SOURCE } },
-  { name: "AAM (short-ranged)", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"infrared", guidanceSkill:15,
+  { name: "AAM (short-ranged)", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"thermal", guidanceSkill:15,
       wa:0, penetration:8, damage:"15D10", heat:true, burst:12, rof:1, shots:1, range:15000, minRange:1500, reliability:"VR", space:1, cost:15000, source:SOURCE } },
   { name: "AAMRAM", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"radar", guidanceSkill:20,
       wa:0, penetration:9, damage:"17D10", heat:true, burst:12, rof:1, shots:1, range:80000, minRange:8000, reliability:"VR", space:3, cost:250000, source:SOURCE } },
@@ -392,7 +392,7 @@ export const SEED_VEHICLE_WEAPONS = [
       wa:-2, penetration:3, damage:"6D10", hiEx:true, burst:3, rof:1, shots:6, range:500, reliability:"VR", space:2, cost:1800, sp:20, sdp:45, area:"torso", source:SOURCE } },
   { name: "Mini-Roc 15C", img: ICON, system: { weight: 171, magWeight: 0, notes: "15-shot 50mm rocket pod; heavy bombardment; 3m burst; 2-handed/torso.", weaponClass:"rocket", mountType:"pod", arc:"front",
       wa:-2, penetration:3, damage:"6D10", hiEx:true, burst:3, rof:1, shots:15, range:500, reliability:"VR", space:3, cost:4500, sp:20, sdp:112, area:"torso", source:SOURCE } },
-  { name: "Red Knight SAM", img: ICON, system: { weight: 23, magWeight: 0, notes: "4th-gen IR-guided SAM/AAM; overkill vs PA; 10m burst; 2-handed only.", weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"radar", guidanceSkill:15,
+  { name: "Red Knight SAM", img: ICON, system: { weight: 23, magWeight: 0, notes: "4th-gen IR-guided SAM/AAM; overkill vs PA; 10m burst; 2-handed only.", weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"thermal", guidanceSkill:15,
       wa:0, penetration:5, damage:"10D10", burst:10, rof:1, shots:1, range:4500, minRange:450, reliability:"VR", space:1, cost:4600, sp:20, sdp:15, area:"torso", source:SOURCE } },
   // Anti-personnel guns (p.77)
   { name: "G-20 Caseless 10mm MG", img: ICON, system: { weight: 15, magWeight: 3, notes: "H&K caseless MG; beats all personal armor + some light ACPA; saboted-AP option (Veh Pen 3).", weaponClass:"directFire", mountType:"articulated", arc:"front",

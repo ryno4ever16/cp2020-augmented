@@ -186,13 +186,13 @@ export function mmFailureTable(tableRoll, { aircraft = false, skidDie = 0 } = {}
   if (r <= 6) {
     return aircraft
       ? { band: "5-6", severity: "lose-control",
-          text: `Lose control. All weapon fire −10 this turn. The aircraft stalls, losing ${skidDie * 50} ft (${skidDie}×50, ≈15 m) of altitude. Make a Difficulty 20 control roll next turn to regain control, or roll the Failure Table again.` }
+          text: `Lose control. All weapon fire −10 this turn. The aircraft stalls, losing ${skidDie * 50} ft (${skidDie}×50, ≈${skidDie * 15} m) of altitude. Make a Difficulty 20 control roll next turn to regain control, or roll the Failure Table again.` }
       : { band: "5-6", severity: "lose-control",
           text: `Lose control. All weapon fire −10 this turn. The vehicle skids ${skidDie * 3} m (${skidDie}×3) sideways. Make a Difficulty 20 control roll next turn to regain control, or roll the Failure Table again. It crashes if it meets an obstacle within the skid distance.` };
   }
   return aircraft
     ? { band: "7+", severity: "catastrophic",
-        text: `Catastrophic control loss — no weapon fire this turn. The aircraft goes into a tailspin, losing ${skidDie * 100} ft (${skidDie}×100, ≈30 m) of altitude per turn until control is regained (Difficulty 25 Pilot roll) or it crashes.` }
+        text: `Catastrophic control loss — no weapon fire this turn. The aircraft goes into a tailspin, losing ${skidDie * 100} ft (${skidDie}×100, ≈${skidDie * 30} m) of altitude per turn until control is regained (Difficulty 25 Pilot roll) or it crashes.` }
     : { band: "7+", severity: "catastrophic",
         text: `Catastrophic control loss — no weapon fire this turn. The vehicle rolls ${skidDie * 3} m (${skidDie}×3), taking a Penetration 1d6 hit to its thinnest armor; it keeps rolling (speed/20 turns), taking Pen 1d6 to the thinnest armor each turn.` };
 }
