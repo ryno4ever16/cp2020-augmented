@@ -2024,30 +2024,10 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   color: black;
 }
 
-/* Countermeasures loadout (vehicle + ACPA sheets) — a FIXED 2-column grid mirroring the sheet's
-   `.field-list` (`grid-template-columns: 1fr 1fr`), so the loadout reads as two aligned columns like the
-   rest of the sheet AND stays 2-up when the resizable window is widened. (An auto-fill track count spills
-   the items into one wide row at larger widths — do NOT use a width-dependent grid next to fixed fields.) */
-.cp-countermeasures {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3px 16px;
-  align-items: start;
-  margin: 2px 0 8px;
-}
-.cp-cm-item {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.cp-cm-item input.cp-cm-box {
-  flex: 0 0 auto;
-  margin: 0;
-}
-.cp-cm-item[title] span { cursor: help; }
+/* Countermeasures loadout (vehicle + ACPA sheets) reuses the system's .field-list/.field grid (see
+   templates/actor/parts/countermeasures.hbs) so it mirrors the surrounding sheet fields exactly — a fixed
+   2-column grid with the label left and the checkbox pushed right. No custom grid rule is needed; only the
+   intro hint keeps its own small style. */
 .cp-cm-hint {
   margin: 2px 0 6px;
   opacity: 0.7;

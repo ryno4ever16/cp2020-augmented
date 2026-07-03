@@ -9,14 +9,15 @@
 --}}
 <h2 class="cyber-section-header">{{CPLocal "Vehicle.CountermeasuresHeader"}}</h2>
 <p class="cp-cm-hint">{{CPLocal "Vehicle.CountermeasuresHint"}}</p>
-{{!-- Own layout (NOT .field-list/.field — that grid centers each label|input pair, scattering the
-      checkboxes). .cp-countermeasures = a left-aligned auto-fill grid so the boxes line up; CSS in
-      css/cp2020-augmented.css. --}}
-<div class="cp-countermeasures">
+{{!-- Reuse the system's .field-list/.field grid, exactly like every other section of this sheet: a fixed
+      2-column grid (label on the left, checkbox pushed to the right via
+      `.cyberpunk.vehicle .field-list .field > input[type=checkbox] { margin-left:auto }`), so the loadout
+      mirrors the surrounding fields. The tooltip lists which homing methods each CM defeats. --}}
+<div class="field-list">
     {{#each countermeasureOptions}}
-    <label class="cp-cm-item" title="{{CPLocal 'Vehicle.CMDefeats' methods=this.defeats}}">
+    <div class="field" title="{{CPLocal 'Vehicle.CMDefeats' methods=this.defeats}}">
+        <label>{{this.label}}</label>
         <input type="checkbox" class="cp-cm-box" data-cm="{{this.key}}" {{#if this.checked}}checked{{/if}} {{#unless ../editable}}disabled{{/unless}}/>
-        <span>{{this.label}}</span>
-    </label>
+    </div>
     {{/each}}
 </div>
