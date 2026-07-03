@@ -255,7 +255,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   // Shell selection (MM p.17): a cannon/launcher with shellVariants fires a chosen round per shot —
   // the base (solid / standard) round or a Hi-Ex / HEAT variant, each with its own Penetration, burst
   // and range-immunity. The pick is PERSISTED in system.activeShell (survives + shows on the sheet).
-  const baseShell = { name: "", label: localizeParam("Vehicle.FireShellBase", { weapon: wName, pen: basePen }), pen: basePen, burst, ap, heat, hiEx };
+  const baseShell = { name: "", label: localizeParam("Vehicle.FireShellBase", { weapon: wName, pen: basePen }), pen: basePen, burst, ap, heat, hiEx, warhead: w.warhead || (heat ? "heat" : "") };
   const variantShells = (Array.isArray(w.shellVariants) ? w.shellVariants : []).map(v => {
     const vname = v.name || "shell";
     const burstClause = v.burst ? localizeParam("Vehicle.FireShellBurst", { burst: v.burst }) : "";
@@ -264,6 +264,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
       name: vname,
       label: localizeParam("Vehicle.FireShellVariant", { name: vname, pen: Number(v.pen) || 0, burst: burstClause, warhead: warheadClause }),
       pen: Number(v.pen) || 0, burst: Number(v.burst) || 0, ap: !!v.ap, heat: !!v.heat, hiEx: !!v.hiEx,
+      warhead: v.warhead || (v.heat ? "heat" : ""),   // WP/cluster/chemical/heat → resolved by the burst path (G8)
       damage: v.damage || "",   // a variant may carry its OWN dice (e.g. the Photon's power settings); else Pen-only
     };
   });
@@ -386,7 +387,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
             range: root.querySelector("#cp-vf-range")?.value || "normal",
             ap: shellSel.ap, hefPenetrator: (shellSel.heat || shellSel.hiEx), heat: shellSel.heat, highDensityAP,
             damageFormula: dmgFormula,   // base round carries the weapon's dice (+ chassis FIST for armed melee)
-            burst: shellSel.burst, coneAngle, weaponClass, weaponRange,
+            burst: shellSel.burst, warhead: shellSel.warhead, coneAngle, weaponClass, weaponRange,
             guidance, missileSkill: guidanceSkill, homingMethod,
             firerTokenId: firerTok?.id, targetTokenId: targetTok?.id,
             mods: wa + vehicleToHitModifier({
@@ -537,7 +538,11 @@ async function _applyAreaShot(p, res, extraRounds) {
   } else {
     const tc = center(targetTok);
     if (!tc) return;
-    await resolveAreaShot({ firerToken: firerTok, origin: tc, shape: { type: "circle", radiusM: p.burst }, payload });
+    // Route the burst through the warhead resolver so an authored WP / cluster / chemical round
+    // resolves (DOT / spread / gas) instead of a plain-HE blast. Plain HE and HEAT profiles are
+    // identity ({pen, burstM}), so a solid or Hi-Ex / HEAT shell resolves exactly as before. (G8)
+    const { resolveWarheadBurst } = await import("./vehicle-ordnance.js");
+    await resolveWarheadBurst({ firerToken: firerTok, origin: tc, warhead: p.warhead || "", pen: p.penetration, burstM: p.burst, payload });
   }
 }
 

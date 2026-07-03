@@ -117,7 +117,7 @@ function _firerTokenOf(actor) {
 
 /** Shell/warhead choices for a weapon: the base HE round plus any authored shellVariants. */
 function _shellOptions(w, wName) {
-  const base = { name: `${wName} (HE)`, pen: Number(w.penetration) || 0, burst: Number(w.burst) || 0, warhead: w.heat ? "heat" : (w.hiEx ? "" : ""), ap: !!w.ap };
+  const base = { name: `${wName} (HE)`, pen: Number(w.penetration) || 0, burst: Number(w.burst) || 0, warhead: w.warhead || (w.heat ? "heat" : ""), ap: !!w.ap };
   const variants = (Array.isArray(w.shellVariants) ? w.shellVariants : []).map(v => ({
     name: v.name || "shell", pen: Number(v.pen) || 0, burst: Number(v.burst) || 0,
     warhead: v.warhead || (v.heat ? "heat" : ""), ap: !!v.ap,
