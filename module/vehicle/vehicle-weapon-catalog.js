@@ -295,15 +295,15 @@ export const SEED_VEHICLE_WEAPONS = [
 
   // ── Railguns / gauss cannon (p.18). Inherently armor-piercing. ──
   { name: "1cm Rail Cannon", img: ICON, system: { weaponClass:"directFire", mountType:"turret", arc:"turret",
-      wa:2, penetration:10, damage:"10D10AP", ap:true, rof:2, shots:50, range:1500, reliability:"ST", space:5, cost:750000, source:SOURCE } },
+      wa:2, penetration:10, damage:"10D10AP", ap:true, railgun:true, rof:2, shots:50, range:1500, reliability:"ST", space:5, cost:750000, source:SOURCE } },
   { name: "2cm Rail Gun", img: ICON, system: { weaponClass:"directFire", mountType:"turret", arc:"turret",
-      wa:1, penetration:17, damage:"16D10AP", ap:true, rof:1, shots:50, range:2000, reliability:"ST", space:9, cost:1500000, source:SOURCE } },
+      wa:1, penetration:17, damage:"16D10AP", ap:true, railgun:true, rof:1, shots:50, range:2000, reliability:"ST", space:9, cost:1500000, source:SOURCE } },
   { name: "3cm Rail Gun", img: ICON, system: { weaponClass:"directFire", mountType:"turret", arc:"turret",
-      wa:0, penetration:22, damage:"20D10AP", ap:true, rof:1, shots:50, range:3000, reliability:"UR", space:15, cost:3000000, source:SOURCE } },
+      wa:0, penetration:22, damage:"20D10AP", ap:true, railgun:true, rof:1, shots:50, range:3000, reliability:"UR", space:15, cost:3000000, source:SOURCE } },
   { name: "EMG-84 Railgun", img: ICON, system: { weaponClass:"directFire", mountType:"turret", arc:"turret",
-      wa:1, penetration:7, damage:"5D10+10AP", ap:true, rof:10, shots:500, range:1000, reliability:"UR", space:2, cost:25000, source:SOURCE } },
+      wa:1, penetration:7, damage:"5D10+10AP", ap:true, railgun:true, rof:10, shots:500, range:1000, reliability:"UR", space:2, cost:25000, source:SOURCE } },
   { name: "EMG-85 Railgun", img: ICON, system: { weaponClass:"directFire", mountType:"articulated", arc:"front",
-      wa:3, penetration:7, damage:"5D10+10AP", ap:true, rof:1, shots:5, range:1500, reliability:"ST", space:1, cost:11370, source:SOURCE } },
+      wa:3, penetration:7, damage:"5D10+10AP", ap:true, railgun:true, rof:1, shots:5, range:1500, reliability:"ST", space:1, cost:11370, source:SOURCE } },
   // E-Harpoon: effective Pen 20 IGNORING armor (composite/Body still apply); damage is temporary (backup circuits).
   { name: "E-Harpoon", img: ICON, system: { weaponClass:"special", mountType:"pod", arc:"front",
       wa:1, penetration:20, damage:"", ap:true, rof:1, shots:1, range:500, reliability:"ST", space:2, cost:20000, source:SOURCE } },

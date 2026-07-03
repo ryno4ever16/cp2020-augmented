@@ -239,6 +239,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   const arc = w.arc ?? mount.arc ?? "turret";
   const ap = !!w.ap, heat = !!w.heat, hiEx = !!w.hiEx;
   const highDensityAP = !!w.highDensityAP;        // errata p.110: kinetic, range-immune like HEAT (weapon-level, all shells)
+  const railgun = !!w.railgun;                    // errata "Armor Damage via Penetration": SP-erosion factor 0.20, not 0.60 generic AP
   const hefPenetrator = heat || hiEx;             // HEAT / Hi-Ex → Penetration not reduced by range
   const weaponRange = Number(w.range) || 0;
   const burst = Number(w.burst) || 0;             // Class B area weapons (HE/HEAT shells, GLs, rockets)
@@ -385,7 +386,7 @@ export async function openVehicleFireDialog(actor, mount = {}) {
             penetration: firePen, rof: num("#cp-vf-rof"),
             facing: root.querySelector("#cp-vf-facing")?.value || "front",
             range: root.querySelector("#cp-vf-range")?.value || "normal",
-            ap: shellSel.ap, hefPenetrator: (shellSel.heat || shellSel.hiEx), heat: shellSel.heat, highDensityAP,
+            ap: shellSel.ap, hefPenetrator: (shellSel.heat || shellSel.hiEx), heat: shellSel.heat, highDensityAP, railgun,
             damageFormula: dmgFormula,   // base round carries the weapon's dice (+ chassis FIST for armed melee)
             burst: shellSel.burst, warhead: shellSel.warhead, coneAngle, weaponClass, weaponRange,
             guidance, missileSkill: guidanceSkill, homingMethod,
@@ -492,7 +493,7 @@ async function _executeVehicleFire(actor, targetActor, p) {
     verdict,
     showApply: res.hit && !targetActor,
     pen: p.penetration, facing: p.facing, range: p.range, gs: res.goodShotSteps, rounds: extraRounds,
-    ap: p.ap ? 1 : 0, hef: p.hefPenetrator ? 1 : 0, heat: p.heat ? 1 : 0, hda: p.highDensityAP ? 1 : 0,
+    ap: p.ap ? 1 : 0, hef: p.hefPenetrator ? 1 : 0, heat: p.heat ? 1 : 0, hda: p.highDensityAP ? 1 : 0, rg: p.railgun ? 1 : 0,
     weapon: p.mountName, dmg: p.damageFormula ?? "",
   });
 
@@ -510,7 +511,7 @@ async function _executeVehicleFire(actor, targetActor, p) {
   } else {
     await _applyVehicleShot(targetActor, {
       penetration: p.penetration, facing: p.facing, range: p.range,
-      goodShotSteps: res.goodShotSteps, extraRounds, ap: p.ap, hefPenetrator: p.hefPenetrator, heat: p.heat, highDensityAP: p.highDensityAP, weaponName: p.mountName,
+      goodShotSteps: res.goodShotSteps, extraRounds, ap: p.ap, hefPenetrator: p.hefPenetrator, heat: p.heat, highDensityAP: p.highDensityAP, railgun: p.railgun, weaponName: p.mountName,
       damageFormula: p.damageFormula
     });
   }
@@ -528,7 +529,7 @@ async function _applyAreaShot(p, res, extraRounds) {
   if (p.damageFormula) { try { rawDamage = (await new Roll(String(p.damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
   const payload = {
     scale: "penetration", penetration: p.penetration, range: p.range,
-    goodShotSteps: res.goodShotSteps, extraRounds, ap: p.ap, hefPenetrator: p.hefPenetrator, heat: p.heat, highDensityAP: p.highDensityAP, weaponName: p.mountName, rawDamage
+    goodShotSteps: res.goodShotSteps, extraRounds, ap: p.ap, hefPenetrator: p.hefPenetrator, heat: p.heat, highDensityAP: p.highDensityAP, railgun: p.railgun, weaponName: p.mountName, rawDamage
   };
   if (p.weaponClass === "cone") {
     const fc = center(firerTok), tc = center(targetTok);
@@ -550,13 +551,13 @@ async function _applyAreaShot(p, res, extraRounds) {
  * Apply a resolved vehicle shot to ANY target via the unified 5c dispatcher: a vehicle target uses
  * the Phase-4 resolver (Pen vs Armor Value), a person uses MM p.8 (Penetration vs the personal AV).
  */
-async function _applyVehicleShot(targetActor, { penetration = 0, facing = "front", range = "normal", goodShotSteps = 0, extraRounds = 0, ap = false, hefPenetrator = false, heat = false, highDensityAP = false, weaponName = "weapon", damageFormula = "" } = {}) {
+async function _applyVehicleShot(targetActor, { penetration = 0, facing = "front", range = "normal", goodShotSteps = 0, extraRounds = 0, ap = false, hefPenetrator = false, heat = false, highDensityAP = false, railgun = false, weaponName = "weapon", damageFormula = "" } = {}) {
   const { dispatchAttack } = await import("./vehicle-targeting.js");
   // Roll the weapon's real damage when known so an ACPA target's SDP flow uses it (not the Pen×10 estimate).
   let rawDamage = null;
   if (damageFormula) { try { rawDamage = (await new Roll(String(damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
   await dispatchAttack({
-    scale: "penetration", penetration, facing, range, goodShotSteps, extraRounds, ap, hefPenetrator, heat, highDensityAP, weaponName, rawDamage
+    scale: "penetration", penetration, facing, range, goodShotSteps, extraRounds, ap, hefPenetrator, heat, highDensityAP, railgun, weaponName, rawDamage
   }, targetActor);
 }
 
@@ -572,7 +573,7 @@ export function registerVehicleFireHandlers() {
       penetration: Number(btn.dataset.pen) || 0, facing: btn.dataset.facing || "front",
       range: btn.dataset.range || "normal", goodShotSteps: Number(btn.dataset.gs) || 0,
       extraRounds: Number(btn.dataset.rounds) || 0, ap: btn.dataset.ap === "1",
-      hefPenetrator: btn.dataset.hef === "1", heat: btn.dataset.heat === "1", highDensityAP: btn.dataset.hda === "1", weaponName: btn.dataset.weapon || "weapon",
+      hefPenetrator: btn.dataset.hef === "1", heat: btn.dataset.heat === "1", highDensityAP: btn.dataset.hda === "1", railgun: btn.dataset.rg === "1", weaponName: btn.dataset.weapon || "weapon",
       damageFormula: btn.dataset.dmg || "",
     });
   });

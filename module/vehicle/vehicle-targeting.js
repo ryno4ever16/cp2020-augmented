@@ -294,7 +294,8 @@ export async function dispatchAttack(payload, target) {
           hefPenetrator: !!payload.hefPenetrator,  // HEAT/Hi-Ex → Penetration not reduced by range
           heat: !!payload.heat,                    // HEAT (shaped-charge) → halved by Composite Armor
           highDensityAP: !!payload.highDensityAP,  // kinetic, range-immune; NOT halved by Composite/Reactive (errata p.110)
-          ap: !!payload.ap,                        // armor-piercing — sets the SP-erosion factor (errata p.107)
+          ap: !!payload.ap,                        // armor-piercing — sets the SP-erosion factor
+          railgun: !!payload.railgun,              // railgun round — SP-erosion factor 0.20, not the 0.60 generic AP
           // Real rolled weapon damage when the firer supplies it (ACPA SDP uses it; vehicles ignore it).
           rawDamage: (payload.rawDamage != null) ? Number(payload.rawDamage) : null
         });

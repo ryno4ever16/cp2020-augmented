@@ -457,7 +457,7 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
  * flow; powered armor (isACPA) uses the faithful SDP-damage flow (MM p.54-56). `rawDamage` is the
  * actual rolled weapon damage when the caller has it (used for ACPA); else ACPA estimates it from Pen.
  */
-export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front", goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, heat = false, highDensityAP = false, ap = false, rawDamage = null } = {}) {
+export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front", goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, heat = false, highDensityAP = false, ap = false, railgun = false, rawDamage = null } = {}) {
   // Master toggle. The weaponFired auto-dispatch (dispatchAttack) reaches this resolver directly,
   // bypassing the dialog's own pre-check — so without this guard, auto-fire would write the vehicle
   // even when the GM has vehicle-damage automation disabled. No warning here (the manual dialog warns);
@@ -580,13 +580,16 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
       }
     }
 
-    // Armor Damage via Penetration (errata p.107, optional): a heavy round (>20mm) strips SP from the
-    // struck facing whether or not it penetrated — SP removed = factor × Pen (HE ½, AP/DPU 0.6, HEAT ¾,
-    // HESH 1.0). Since Armor Value is derived from SP (SP/20), sustained fire erodes AV over time.
+    // Armor Damage via Penetration (errata "ARMOR DAMAGE VIA PENETRATION", optional): a heavy round
+    // (>20mm) strips SP from the struck facing whether or not it penetrated — SP removed = factor × Pen.
+    // Factors: Railgun 0.20 (hypervelocity — punches through, strips little), HEAT 0.75, AP/DPU 0.60,
+    // HE 0.50 (HESH 1.00 unused — no seeded weapon). The book's per-weapon table groups a NORMAL solid
+    // round with HE, so an unflagged kinetic round uses the 0.50 HE factor. Armor Value derives from SP
+    // (SP/20), so sustained fire erodes AV over time.
     // Off by default; gated behind Maximum Metal being the active rule system (we are in the MM branch).
     const armorDmgOn = (() => { try { return game.settings.get(SCOPE, "vehicleArmorDamageEnabled"); } catch { return false; } })();
     if (armorDmgOn) {
-      const factor = heat ? 0.75 : (heHit ? 0.5 : ((ap || highDensityAP) ? 0.6 : 0.5)); // heHit = Hi-Ex (non-shaped)
+      const factor = railgun ? 0.2 : (heat ? 0.75 : (heHit ? 0.5 : ((ap || highDensityAP) ? 0.6 : 0.5))); // railgun first (railguns are also ap:true); heHit = Hi-Ex (non-shaped)
       const curSP = Number(sys.sp?.[avKey]) || 0;
       const stripped = Math.min(curSP, Math.round(factor * pen));
       if (stripped > 0) {
