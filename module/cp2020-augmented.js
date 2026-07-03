@@ -16,7 +16,7 @@ import { registerPopoutCompat } from "./popout-compat.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
-import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData, CyberpunkVehicleItemData } from "./data/vehicle-item-data.js";
+import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData, makeVehicleItemData } from "./data/vehicle-item-data.js";
 import { CyberpunkVehicleSheet } from "./actor/vehicle-sheet.js";
 import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
@@ -143,12 +143,15 @@ Hooks.once("init", function () {
   // Register the module's vehicle/ACPA DataModels. Data lives in system.* of the sub-type
   // documents (no flags) — see module.json `documentTypes` for the manifest declaration.
   Object.assign(CONFIG.Actor.dataModels, { [VEHICLE_ACTOR]: CyberpunkVehicleActorData });
+  // Capture the system's own vehicle model BEFORE we overwrite it (its init ran first), so the module's
+  // richer model can EXTEND it rather than statically mirror it — future base fields + migrate then chain.
+  const SystemVehicleData = CONFIG.Item.dataModels.vehicle;
   Object.assign(CONFIG.Item.dataModels, {
     [VEHICLE_WEAPON]: CyberpunkVehicleWeaponData,
     [ACPA_SYSTEM]:    CyberpunkAcpaSystemData,
-    // Re-register the bare `vehicle` type with the richer module model (range/rangeUnit/speed.unit).
-    // Module loads after the system, so this wins; mirrors the system schema + the additions.
-    vehicle:          CyberpunkVehicleItemData,
+    // Re-register the bare `vehicle` type with the richer module model (range/rangeUnit/speed.unit),
+    // built to EXTEND the system's model. Module loads after the system, so this wins.
+    vehicle:          makeVehicleItemData(SystemVehicleData),
   });
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the

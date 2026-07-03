@@ -181,41 +181,45 @@ export class CyberpunkAcpaSystemData extends CyberpunkBaseItemData {
  * Extended model for the BARE `vehicle` item type (BMW 600, Musashi, the supplement catalog).
  *
  * The base system owns the `vehicle` type and registers its own model (OctarineSourcerer legacy:
- * sdp/sp/passengers/speed/maneuverability/fuel). The module RE-REGISTERS this richer model for the
- * same type (module loads after the system, so it wins) so the Augmented-Edition additions persist
- * even for users on the STOCK system: `range`+`rangeUnit` and a per-vehicle `speed.unit`. CP2020
- * prints vehicle speed/range in MIXED units (mph & kph, miles & km) — empirically the catalog stored
- * the raw printed number in the book's own unit — so we keep the RAW value + its unit and convert at
- * display time (no lossy precompute). All additions are additive with sensible defaults (mph/mi/0),
- * so existing items migrate with no data change.
+ * sdp/sp/passengers/speed/maneuverability/fuel). The module RE-REGISTERS a richer model for the same
+ * type (module loads after the system, so it wins) so the Augmented-Edition additions persist even for
+ * users on the STOCK system: `range`+`rangeUnit` and a per-vehicle `speed.unit`. CP2020 prints vehicle
+ * speed/range in MIXED units (mph & kph, miles & km) — empirically the catalog stored the raw printed
+ * number in the book's own unit — so we keep the RAW value + its unit and convert at display time (no
+ * lossy precompute). All additions are additive with sensible defaults (mph/mi/0), so existing items
+ * migrate with no data change.
  *
- * ⚠ SYNC: this MIRRORS the base system's `CyberpunkVehicleData` field-for-field (+ the 3 additions).
- * If the base vehicle model ever gains a field, add it here too or that field is dropped. See
- * [[feedback-module-fork-sync]].
+ * Built at INIT via this factory so the model EXTENDS the system's own registered `vehicle` model
+ * (`CONFIG.Item.dataModels.vehicle`) instead of a static mirror of it. Consequence: any field the base
+ * model later gains — AND its `migrateData` — CHAIN automatically via `super`, instead of being silently
+ * dropped by a stale mirror. Only the `speed` override (to add `unit`) remains a manual sync point.
+ * Falls back to the module's own base if the system registered no vehicle model (a very old base).
+ * See [[feedback-module-fork-sync]].
+ *
+ * @param {typeof foundry.abstract.TypeDataModel} [SystemVehicleData]  the system's registered vehicle model
+ * @returns {typeof foundry.abstract.TypeDataModel}
  */
-export class CyberpunkVehicleItemData extends CyberpunkBaseItemData {
-  static defineSchema() {
-    return {
-      ...commonSchema(),
-      sdp:             objectField({ value: 0, max: 0 }),
-      sp:              numberField(10),
-      passengers:      numberField(4),
-      // `unit` (mph|kph) applies to all of value/max/maneuver/acceleration for this vehicle.
-      speed:           objectField({ value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" }),
-      maneuverability: objectField({ value: 0, condition: "" }),
-      fuel:            objectField({ type: "", efficiency: 0, max: 0, value: 0 }),
-      // Travel range in `rangeUnit` (mi|km) — Chromebook/SoF stat-block field the base model lacked.
-      range:           numberField(0),
-      rangeUnit:       stringField("mi")
-    };
-  }
+export function makeVehicleItemData(SystemVehicleData) {
+  const Base = SystemVehicleData ?? CyberpunkBaseItemData;
+  return class CyberpunkVehicleItemData extends Base {
+    static defineSchema() {
+      return {
+        ...super.defineSchema(),   // the system's full vehicle schema (chains any future field it gains)
+        // Override `speed` ONLY to add `unit` (mph|kph), covering value/max/maneuver/acceleration.
+        speed:     objectField({ value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" }),
+        // Travel range in `rangeUnit` (mi|km) — Chromebook/SoF stat-block field the base model lacked.
+        range:     numberField(0),
+        rangeUnit: stringField("mi")
+      };
+    }
 
-  static migrateData(source) {
-    source ??= {};
-    if (hasOwn(source, "sdp"))             source.sdp             = mergeDefaults(source.sdp,             { value: 0, max: 0 });
-    if (hasOwn(source, "speed"))           source.speed           = mergeDefaults(source.speed,           { value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" });
-    if (hasOwn(source, "maneuverability")) source.maneuverability = mergeDefaults(source.maneuverability, { value: 0, condition: "" });
-    if (hasOwn(source, "fuel"))            source.fuel            = mergeDefaults(source.fuel,            { type: "", efficiency: 0, max: 0, value: 0 });
-    return super.migrateData(source);
-  }
+    static migrateData(source) {
+      source ??= {};
+      if (hasOwn(source, "sdp"))             source.sdp             = mergeDefaults(source.sdp,             { value: 0, max: 0 });
+      if (hasOwn(source, "speed"))           source.speed           = mergeDefaults(source.speed,           { value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" });
+      if (hasOwn(source, "maneuverability")) source.maneuverability = mergeDefaults(source.maneuverability, { value: 0, condition: "" });
+      if (hasOwn(source, "fuel"))            source.fuel            = mergeDefaults(source.fuel,            { type: "", efficiency: 0, max: 0, value: 0 });
+      return super.migrateData(source);   // chains to the system's vehicle/base migrateData
+    }
+  };
 }
