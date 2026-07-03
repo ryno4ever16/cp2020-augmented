@@ -1,9 +1,0 @@
-{{!-- Augmented Edition: per-skill IP cluster (GM pending pip + banked/cost readout + self-service
-     level-up arrow), injected into Tilt's skill rows by module/ip/ip-sheet.js. i18n uses the
-     built-in {{localize}} with fully-namespaced keys so it resolves on the vanilla cyberpunk2020
-     system too (no dependency on the system's CPLocal helper). --}}
-<span class="cp2020ae-ip-cluster" title="{{localize "CYBERPUNK.IpBanked"}} {{ipd.banked}} / {{ipd.cost}}">
-    {{#if showPending}}{{#if ipd.pending}}<span class="cp2020ae-ip-pending-pip" title="{{localize "CYBERPUNK.IpPendingPip"}}">+{{ipd.pending}}</span>{{/if}}{{/if}}
-    <span class="cp2020ae-ip-banked">{{ipd.banked}}/{{ipd.cost}}</span>
-    {{#if ipd.canLevel}}<i class="fas fa-arrow-up cp2020ae-ip-level-up" data-skill-id="{{skillId}}" title="{{localize "CYBERPUNK.IpLevelUp"}} ({{ipd.cost}} IP)"></i>{{/if}}
-</span>

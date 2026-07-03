@@ -95,25 +95,19 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/item/parts/misc/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/vehicle/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/vehicle/settings.hbs",
-  "modules/cp2020-augmented/templates/dialog/buy-ammo.hbs",
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs",
-  // In-sheet UI fragments injected into the actor/item sheet (warm the cache; not partial includes).
-  "modules/cp2020-augmented/templates/ip/skill-cluster.hbs",
-  "modules/cp2020-augmented/templates/ip/skills-header.hbs",
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",
-  "modules/cp2020-augmented/templates/cyberware/install-button.hbs",
-  "modules/cp2020-augmented/templates/shop/services-panel.hbs",
+  // Martial-arts panel/dialog/chat fragments (the on-sheet action panel + resolution flow).
   "modules/cp2020-augmented/templates/martial/martial-panel.hbs",
   "modules/cp2020-augmented/templates/dialog/martial-style.hbs",
   "modules/cp2020-augmented/templates/chat/martial-attack.hbs",
   "modules/cp2020-augmented/templates/chat/martial-effect.hbs",
   "modules/cp2020-augmented/templates/chat/fumble-card.hbs",
-  "modules/cp2020-augmented/templates/item/martial-skill-editor.hbs",
 ];
 
 Hooks.once("init", function () {
