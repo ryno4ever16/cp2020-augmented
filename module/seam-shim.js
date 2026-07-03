@@ -1,8 +1,9 @@
 /**
  * Seam shim — a TEMPORARY, self-disengaging compatibility patch.
  *
- * The Augmented module reacts to two base-system events: `cyberpunk2020.weaponFired` (drives the damage
- * automation) and `cyberpunkSkillRolled` (drives the IP tracker). Those hook emissions are proposed to
+ * The Augmented module reacts to three base-system events: `cyberpunk2020.weaponFired` (drives the damage
+ * automation), `cyberpunk2020.suppressiveFire` (draws the fire zone + posts evasion prompts), and
+ * `cyberpunkSkillRolled` (drives the IP tracker). Those hook emissions are proposed to
  * the base system as PRs; until they land, the base system does not emit them, so the module's
  * automation is inert on a stock install. This shim monkey-patches the base roll methods to emit the
  * hooks ITSELF — but only for as long as the base system lacks them.
@@ -19,8 +20,10 @@
 const SCOPE = "cp2020-augmented";
 
 const WEAPON_FIRED = "cyberpunk2020.weaponFired";
+const SUPPRESSIVE_FIRE = "cyberpunk2020.suppressiveFire";
 const SKILL_ROLLED = "cyberpunkSkillRolled";
 const MULTI_HIT_TEMPLATE = "systems/cyberpunk2020/templates/chat/multi-hit.hbs";
+const SUPPRESSIVE_TEMPLATE = "systems/cyberpunk2020/templates/chat/suppressive.hbs";
 // The base system's four ranged/melee fire resolvers; each builds the per-location areaDamages and
 // renders multi-hit.hbs. Matches the seam PR (item.js: __fullAuto/__threeRoundBurst/__semiAuto/__meleeBonk).
 const FIRE_METHODS = ["__fullAuto", "__threeRoundBurst", "__semiAuto", "__meleeBonk"];
@@ -70,6 +73,11 @@ export function shouldPatch(method) {
 // refreshes this first, so leaving the last context set is correct and never mis-attributes.
 let _fireCtx = null;
 
+// Set while a SHIM-wrapped __suppressiveFire runs, so the renderTemplate wrap below can emit the
+// suppressiveFire hook for the suppressive card it renders. The base method AWAITS its render inside the
+// call (unlike two of the fire methods), so this is set immediately before and never goes stale mid-render.
+let _suppressiveCtx = null;
+
 // The effect fields the combat engine reads off a weaponFired payload (beyond identity + areaDamages).
 // On stock, the base fire methods build ONLY areaDamages, so without these the module's explosion / gas /
 // spread / DOT / taser / armor-piercing / penetration branches never fire. They live on the loaded ammo
@@ -116,13 +124,14 @@ function installWeaponFiredShim(ItemProto) {
   }
   // Only intercept the renderer if at least one fire method is actually shimmed; if all four emit
   // natively we never get here, so renderTemplate is left untouched (no chance of a double-emit).
-  if (patchedAny) installMultiHitEmit();
+  if (patchedAny) installRenderEmit();
   return patchedAny;
 }
 
-/** Wrap the global renderTemplate so each multi-hit.hbs render (one per resolved target) emits
- *  weaponFired, combining the fire context (attacker/weapon) with the render's own per-target data. */
-function installMultiHitEmit() {
+/** Wrap the global renderTemplate ONCE so each fire-card render emits its hook, combining the captured
+ *  method context with the render's own computed data: multi-hit.hbs → weaponFired (one per resolved
+ *  target); suppressive.hbs → suppressiveFire. Idempotent — either shim half may install it. */
+function installRenderEmit() {
   // The base fire methods render multi-hit.hbs via the BARE GLOBAL renderTemplate (Multiroll.execute →
   // renderTemplate(path, data)). On v13/v14 that global is a deprecation accessor whose SETTER overrides
   // what callers resolve, whereas foundry.applications.handlebars.renderTemplate is a NON-WRITABLE property
@@ -143,9 +152,22 @@ function installMultiHitEmit() {
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
           ...(_fireCtx.effectFields ?? {}),   // explosion/gas/spread/DOT/taser/AP/pen fields from the ammo
         });
+      } else if (_suppressiveCtx && path === SUPPRESSIVE_TEMPLATE) {
+        // suppressive.hbs carries the base method's already-computed saveDC/dmgFormula/weaponName/width;
+        // the wrapper supplies the actor/token/range context the render data lacks. Matches the fork's
+        // native cyberpunk2020.suppressiveFire payload so damage-hooks.js draws the fire zone identically.
+        Hooks.callAll(SUPPRESSIVE_FIRE, {
+          saveDC: data?.saveDC,
+          dmgFormula: data?.dmgFormula,
+          weaponName: data?.weaponName,
+          actorId: _suppressiveCtx.actorId,
+          attackerTokenId: _suppressiveCtx.attackerTokenId,
+          zoneWidth: data?.width,
+          weaponRange: _suppressiveCtx.weaponRange,
+        });
       }
     } catch (e) {
-      console.warn(`${SCOPE} | seam-shim weaponFired emit failed`, e);
+      console.warn(`${SCOPE} | seam-shim card render emit failed`, e);
     }
     return out;
   }
@@ -156,8 +178,34 @@ function installMultiHitEmit() {
   try {
     globalThis.renderTemplate = renderWrapper;
   } catch (e) {
-    console.warn(`${SCOPE} | seam-shim could not wrap renderTemplate; weaponFired will not auto-emit`, e);
+    console.warn(`${SCOPE} | seam-shim could not wrap renderTemplate; weaponFired/suppressiveFire will not auto-emit`, e);
   }
+}
+
+/* ─── suppressiveFire: identity/range from the method, computed values from the render ─────────── */
+
+/** Wrap __suppressiveFire so it emits suppressiveFire on stock (the base posts a card but fires no hook,
+ *  so damage-hooks.js never draws the fire zone / prompts evasion). The wrapper only CAPTURES the context
+ *  the suppressive.hbs render data lacks (attacker actor/token + weapon range); installRenderEmit() does
+ *  the actual emit when that template renders, reading the base's already-computed saveDC/dmgFormula/width
+ *  (recomputing saveDC here would drift — the base derives it from a shot count it then decrements). */
+function installSuppressiveFireShim(ItemProto) {
+  if (prototypeEmits(ItemProto, SUPPRESSIVE_FIRE)) return false;  // base system emits it → disengage
+  const orig = ItemProto?.__suppressiveFire;
+  if (!shouldPatch(orig)) return false;                          // missing or already ours → skip
+  function suppressiveWrapper(mods, ...rest) {
+    const attackerTok = canvas?.tokens?.placeables?.find(t => t.actor?.id === this.actor?.id) ?? null;
+    _suppressiveCtx = {
+      actorId: this.actor?.id ?? null,
+      attackerTokenId: attackerTok?.id ?? null,
+      weaponRange: Number(this._getWeaponSystem?.()?.range ?? 50),
+    };
+    return orig.call(this, mods, ...rest);
+  }
+  suppressiveWrapper.__cpSeamShim = true;
+  ItemProto.__suppressiveFire = suppressiveWrapper;
+  installRenderEmit();   // the shared render wrap emits suppressiveFire when suppressive.hbs renders
+  return true;
 }
 
 /* ─── skillRolled: the whole payload is available to a simple wrapper ──────────────────────────── */
@@ -189,7 +237,7 @@ function installSkillRolledShim(ActorProto) {
 /** Install the seam shim, self-disengaging where the base system already emits the hooks.
  *  @returns {{weaponFired:boolean, skillRolled:boolean}} which halves actually engaged. */
 export function registerSeamShim() {
-  const out = { weaponFired: false, skillRolled: false };
+  const out = { weaponFired: false, suppressiveFire: false, skillRolled: false };
   const ItemProto = CONFIG?.Item?.documentClass?.prototype;
   const ActorProto = CONFIG?.Actor?.documentClass?.prototype;
   // Install each half in its OWN try/catch: a failure wrapping one hook must never abort the other.
@@ -199,11 +247,16 @@ export function registerSeamShim() {
     console.warn(`${SCOPE} | seam shim weaponFired install failed`, e);
   }
   try {
+    if (ItemProto) out.suppressiveFire = installSuppressiveFireShim(ItemProto);
+  } catch (e) {
+    console.warn(`${SCOPE} | seam shim suppressiveFire install failed`, e);
+  }
+  try {
     if (ActorProto) out.skillRolled = installSkillRolledShim(ActorProto);
   } catch (e) {
     console.warn(`${SCOPE} | seam shim skillRolled install failed`, e);
   }
-  if (out.weaponFired || out.skillRolled) {
+  if (out.weaponFired || out.suppressiveFire || out.skillRolled) {
     console.log(`${SCOPE} | seam shim engaged (base system lacks native hooks):`, out);
   }
   return out;
