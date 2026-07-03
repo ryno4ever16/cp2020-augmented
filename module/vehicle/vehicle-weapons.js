@@ -150,9 +150,14 @@ const SCOPE = "cp2020-augmented";
  */
 function _payloadPenetration(payload, totalRolled, ap) {
   const attacker = game.actors?.get(payload.attackerId ?? payload.actorId ?? "");
-  if (attacker && payload.weaponName) {
-    const w = attacker.items.find(i => i.type === "weapon" && i.name === payload.weaponName)
-           ?? attacker.items.find(i => i.type === "cyberware" && i.name === payload.weaponName);
+  if (attacker) {
+    // Prefer the EXACT weapon by id — two same-named weapons with different ammo would otherwise both
+    // resolve to whichever name-match is found first. Fall back to name for payloads that carry no id.
+    const w = (payload.weaponId ? attacker.items.get(payload.weaponId) : null)
+           ?? (payload.weaponName
+                 ? (attacker.items.find(i => i.type === "weapon" && i.name === payload.weaponName)
+                    ?? attacker.items.find(i => i.type === "cyberware" && i.name === payload.weaponName))
+                 : null);
     if (w) return weaponToPenetration(w, { apOverride: ap });
   }
   return penetrationFactor({ avgDamage: totalRolled, ap, smallArms: false });

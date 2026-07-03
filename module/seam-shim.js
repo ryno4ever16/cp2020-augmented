@@ -113,6 +113,7 @@ function installWeaponFiredShim(ItemProto) {
       _fireCtx = {
         attackerId: this.actor?.id ?? null,
         weaponName: this.name,
+        weaponId: this.id ?? null,   // resolve the EXACT weapon downstream (two same-named weapons with different ammo)
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
@@ -147,6 +148,7 @@ function installRenderEmit() {
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
           weaponName: _fireCtx.weaponName,
+          weaponId: _fireCtx.weaponId,
           areaDamages: data?.areaDamages ?? {},
           targetTokenId: target?.id ?? null,
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
