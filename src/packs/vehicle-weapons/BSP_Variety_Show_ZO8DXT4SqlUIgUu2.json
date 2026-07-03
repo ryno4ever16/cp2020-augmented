@@ -14,6 +14,7 @@
     "damage": "",
     "coneAngle": 60,
     "projectiles": 50,
+    "scatterDice": 1,
     "rof": 1,
     "shots": 1,
     "range": 50,

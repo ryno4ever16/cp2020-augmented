@@ -18,6 +18,7 @@
     "ap": true,
     "coneAngle": 60,
     "projectiles": 24,
+    "scatterDice": 2,
     "rof": 1,
     "shots": 6,
     "range": 15,
