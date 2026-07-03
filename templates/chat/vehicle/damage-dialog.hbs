@@ -24,6 +24,14 @@
       <select id="cp-vd-range">{{#each rangeOptions}}<option value="{{value}}">{{label}}</option>{{/each}}</select>
     </label>
   </div>
+  <div class="field-row">
+    <span class="dialog-hint">{{CPLocal "Vehicle.WarheadRow"}}</span>
+    <label><input type="checkbox" id="cp-vd-heat"> {{CPLocal "Vehicle.WarheadHeat"}}</label>
+    <label><input type="checkbox" id="cp-vd-hiex"> {{CPLocal "Vehicle.WarheadHiEx"}}</label>
+    <label><input type="checkbox" id="cp-vd-ap"> {{CPLocal "Vehicle.WarheadAP"}}</label>
+    <label><input type="checkbox" id="cp-vd-hda"> {{CPLocal "Vehicle.WarheadHDAP"}}</label>
+    <label><input type="checkbox" id="cp-vd-rg"> {{CPLocal "Vehicle.WarheadRailgun"}}</label>
+  </div>
   {{else}}
   <label>{{CPLocal "Vehicle.IncomingDamage"}} <input type="number" id="cp-vd-raw" value="0" class="num-wide"></label>
   <label class="ml8"><input type="checkbox" id="cp-vd-ap"> {{CPLocal "Vehicle.ArmorPiercing"}}</label>

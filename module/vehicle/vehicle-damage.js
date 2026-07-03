@@ -243,11 +243,18 @@ export async function openVehicleDamageDialog(actor) {
           const num = (id) => Number(root.querySelector(id)?.value) || 0;
           const val = (id) => root.querySelector(id)?.value;
           const facing = val("#cp-vd-facing") || "front";
+          const chk = (id) => !!root.querySelector(id)?.checked;
           if (isMM) {
+            // Warhead flags so a hand-resolved shaped-charge / kinetic hit engages the armor rules the
+            // automated fire path already applies: HEAT ½ vs Composite + Reactive deflection, Hi-Ex
+            // Reactive wear, HEAT/Hi-Ex range-immunity (hefPenetrator), high-density AP, railgun erosion. (G1)
+            const heat = chk("#cp-vd-heat"), hiEx = chk("#cp-vd-hiex");
             await applyVehicleDamageMM(actor, {
               basePen: num("#cp-vd-pen"), facing,
               goodShotSteps: Math.floor(Math.max(0, num("#cp-vd-overby")) / 10),
               extraRounds: num("#cp-vd-rounds"), range: val("#cp-vd-range") || "normal",
+              heat, hefPenetrator: heat || hiEx,
+              ap: chk("#cp-vd-ap"), highDensityAP: chk("#cp-vd-hda"), railgun: chk("#cp-vd-rg"),
             });
           } else {
             await applyVehicleDamageCore(actor, { rawDamage: num("#cp-vd-raw"), ap: !!root.querySelector("#cp-vd-ap")?.checked, facing });
