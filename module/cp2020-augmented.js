@@ -60,6 +60,7 @@ const ACPA_SYSTEM    = `${SCOPE}.acpaSystem`;
 const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/countermeasures.hbs",
   // Augmented character/NPC actor sheet (Option B) + its parts. The {{> "modules/…/parts/X.hbs"}}
   // includes resolve as registered partials only once preloaded here.
   "modules/cp2020-augmented/templates/actor/actor-sheet.hbs",

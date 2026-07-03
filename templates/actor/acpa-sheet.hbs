@@ -175,6 +175,8 @@
         </div>
         {{/if}}
 
+        {{#if mmOn}}{{> "modules/cp2020-augmented/templates/actor/parts/countermeasures.hbs"}}{{/if}}
+
         {{!-- ACPA Combat Status (written by the damage resolver + per-round ticks; editable for field repairs). --}}
         {{#if mmOn}}
         <h2 class="cyber-section-header">{{CPLocal "Vehicle.CombatStatusHeader"}}</h2>

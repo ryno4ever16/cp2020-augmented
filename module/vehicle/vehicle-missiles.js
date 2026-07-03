@@ -77,6 +77,13 @@ const CM_EFFECT = {
   antiLaserAerosol: { laser: 15 },               // MM: anti-laser aerosol blocks laser homing (~90%)
 };
 
+/**
+ * The countermeasures a vehicle/ACPA can carry, in display order — the single source of truth shared by
+ * the incoming-missile reader (countermeasureModifier) and the sheet loadout UI. `defeats` lists the
+ * homing methods each one raises Difficulty against (MM p.9-10), used for the sheet tooltips.
+ */
+export const COUNTERMEASURES = Object.entries(CM_EFFECT).map(([key, eff]) => ({ key, defeats: Object.keys(eff) }));
+
 /** Total +Difficulty the active countermeasures impose on a missile of the given homing method. PURE. */
 export function countermeasureModifier(activeCMs = [], homingMethod = "radar") {
   let mod = 0;

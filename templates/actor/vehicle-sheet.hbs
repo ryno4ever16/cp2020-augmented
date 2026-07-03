@@ -170,6 +170,8 @@
             </div>
         </div>
 
+        {{#if mmOn}}{{> "modules/cp2020-augmented/templates/actor/parts/countermeasures.hbs"}}{{/if}}
+
         {{!-- Weapon Mounts = embedded vehicleWeapon Items (drag from the Vehicle Weapons (MM) compendium).
               The MM weapon system (Penetration/arc/missiles/bursts) is Maximum Metal — hidden when MM is off. --}}
         {{#if mmOn}}

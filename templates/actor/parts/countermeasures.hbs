@@ -1,0 +1,19 @@
+{{!--
+  Countermeasures loadout (MM p.9-10) — shared by the vehicle + ACPA sheets. Presence model: tick which
+  countermeasures the vehicle/ACPA carries. The incoming-missile reader (vehicle-missile-flight.js) picks
+  the best +Difficulty a CARRIED CM imposes on a missile's homing method. Written to
+  system.countermeasures (array) by the sheet's _cpActivateCountermeasures handler — the checkboxes carry
+  class cp-cm-box + data-cm and NO name= (so the reactive form ignores them and the handler owns the whole
+  array, which lets deselecting them all clear it). countermeasureOptions is built in _prepareContext from
+  COUNTERMEASURES (vehicle-missiles.js). i18n via CPLocal.
+--}}
+<h2 class="cyber-section-header">{{CPLocal "Vehicle.CountermeasuresHeader"}}</h2>
+<p class="cp-cm-hint">{{CPLocal "Vehicle.CountermeasuresHint"}}</p>
+<div class="cp-countermeasures field-list">
+    {{#each countermeasureOptions}}
+    <label class="field cp-cm-item" title="{{CPLocal 'Vehicle.CMDefeats' methods=this.defeats}}">
+        <input type="checkbox" class="cp-cm-box" data-cm="{{this.key}}" {{#if this.checked}}checked{{/if}} {{#unless ../editable}}disabled{{/unless}}/>
+        <span>{{this.label}}</span>
+    </label>
+    {{/each}}
+</div>

@@ -3,6 +3,7 @@ import { openVehicleDamageDialog } from "../vehicle/vehicle-damage.js";
 import { openVehicleFireDialog } from "../vehicle/vehicle-weapons.js";
 import { openAcpaMeleeDialog, repairAcpa } from "../vehicle/vehicle-acpa-combat.js";
 import { REALITY_INTERFACES, REFLEX_CONTROLS } from "../vehicle/vehicle-acpa.js";
+import { COUNTERMEASURES } from "../vehicle/vehicle-missiles.js";
 import { acpaSystemsSummary, acpaAreaSpaces, acpaSpacesOver, acpaBuildIssues } from "../vehicle/vehicle-acpa-systems.js";
 import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 
@@ -96,6 +97,19 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     const weapons = (actor.itemTypes?.["cp2020-augmented.vehicleWeapon"] ?? actor.items.filter(i => i.type === "cp2020-augmented.vehicleWeapon"))
       .map(i => ({ id: i.id, name: i.name, img: i.img, system: i.system }));
 
+    // Countermeasures loadout (MM p.9-10): which CMs the vehicle/ACPA carries. The incoming-missile
+    // reader (vehicle-missile-flight.js) picks the best +Difficulty a CARRIED CM imposes on the
+    // missile's homing method. Single source of truth = COUNTERMEASURES (vehicle-missiles.js).
+    const carriedCMs = Array.isArray(system?.countermeasures) ? system.countermeasures : [];
+    const HOMING_KEY = { radar: "Vehicle.HomingRadar", thermal: "Vehicle.HomingThermal", optical: "Vehicle.HomingOptical", laser: "Laser" };
+    const loc = (k, d) => { try { return game.i18n.has("CYBERPUNK." + k) ? game.i18n.localize("CYBERPUNK." + k) : d; } catch (e) { return d; } };
+    const countermeasureOptions = COUNTERMEASURES.map(cm => ({
+      key: cm.key,
+      label: loc("Vehicle.CM_" + cm.key, cm.key),
+      defeats: cm.defeats.map(m => loc(HOMING_KEY[m] || m, m)).join(", "),
+      checked: carriedCMs.includes(cm.key),
+    }));
+
     // ACPA build dropdowns (Reality Interface + Reflex/Control). Labels show the key stats inline.
     const realityInterfaceChoices = Object.values(REALITY_INTERFACES)
       .map(r => ({ key: r.key, label: `${r.label} (SIB ${r.sib >= 0 ? "+" : ""}${r.sib} / DFB ${r.dfb >= 0 ? "+" : ""}${r.dfb})` }));
@@ -177,7 +191,33 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaSystemsCost,
       acpaBuildIssues: acpaBuildIssuesArr,
       acpaBuildValid,
+      countermeasureOptions,
     };
+  }
+
+  /** @override — wire the countermeasures loadout after the base render. */
+  async _onRender(context, options) {
+    await super._onRender(context, options);
+    this._cpActivateCountermeasures(this.element);
+  }
+
+  /**
+   * Countermeasures loadout: a change on any CM checkbox rewrites the WHOLE system.countermeasures
+   * array from the currently-checked boxes (so deselecting them all clears it — a bare multi-select
+   * can't). Delegated on the sheet root (which persists across V2 re-renders, unlike the replaced
+   * inner content) and bound once. `stopPropagation` keeps the form's submitOnChange from also firing.
+   */
+  _cpActivateCountermeasures(root) {
+    if (!root || root.dataset.cpCmBound === "1") return;
+    root.dataset.cpCmBound = "1";
+    root.addEventListener("change", async (ev) => {
+      const box = ev.target?.closest?.("input.cp-cm-box");
+      if (!box) return;
+      ev.stopPropagation();
+      if (!this.isEditable) return;
+      const selected = [...root.querySelectorAll("input.cp-cm-box:checked")].map(b => b.dataset.cm).filter(Boolean);
+      await this.actor.update({ "system.countermeasures": selected });
+    });
   }
 
   // ── Action handlers (static; V2 binds `this` to the sheet instance) ─────
