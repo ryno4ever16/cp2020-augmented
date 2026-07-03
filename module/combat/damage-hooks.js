@@ -499,6 +499,29 @@ async function _placeSuppressiveZone(payload) {
   }
 }
 
+// Area-Confirm ids already resolved on THIS client. The confirm handlers below apply their effect but do
+// NOT consume the template (it persists for scatter + visibility), so without this a double-click — or two
+// GMs each clicking Confirm — applies the blast/spread/fire-zone twice. The synchronous check+add (before
+// any await) makes it race-free; all confirms route to the active GM, so its Set is the authoritative one.
+const _resolvedAreaConfirms = new Set();
+
+/**
+ * Gate an area-Confirm to the active GM and make it idempotent. A non-active-GM's click is relayed to the
+ * active GM (mirrors the placement relay) so exactly one client resolves the effect; the active GM claims
+ * the template id so a stray double-click/double-relay is a no-op. `relayData` is spread into the socket
+ * payload (fire-zone carries its full args; blast/spread carry only the template id).
+ * @returns {boolean} true iff this client should resolve the Confirm now.
+ */
+function _claimAreaConfirm(relayType, relayData, templateId) {
+  if (game.users.activeGM?.id !== game.user.id) {
+    game.socket.emit("module.cp2020-augmented", { type: relayType, ...relayData });
+    return false;
+  }
+  if (_resolvedAreaConfirms.has(templateId)) return false;
+  _resolvedAreaConfirms.add(templateId);
+  return true;
+}
+
 /**
  * After the player has aimed the fire zone template, detect all tokens inside it
  * and post evasion prompts for each (excluding the attacker).
@@ -506,6 +529,7 @@ async function _placeSuppressiveZone(payload) {
 async function _confirmFireZone({ templateId, saveDC, dmgFormula, attackerId, weaponName }) {
   const scene = canvas?.scene;
   if (!scene) return;
+  if (!_claimAreaConfirm("confirmFireZone", { args: { templateId, saveDC, dmgFormula, attackerId, weaponName } }, templateId)) return;
 
   const handle = areaById(scene, templateId);
   if (!handle) {
@@ -1453,6 +1477,7 @@ async function _placeExplosion(payload) {
 /** Detonate a confirmed blast: damage every token in the template with range-banded falloff. */
 async function _confirmExplosion(templateId) {
   if (!canvas?.scene || !templateId) return;
+  if (!_claimAreaConfirm("confirmExplosion", { templateId }, templateId)) return;
   const scene = canvas.scene;
 
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
@@ -1639,6 +1664,7 @@ async function _placeSpreadZone(payload) {
 /** Apply spread damage to every token in the confirmed pattern (no evasion — buckshot just hits). */
 async function _confirmSpreadZone(templateId) {
   if (!canvas?.scene || !templateId) return;
+  if (!_claimAreaConfirm("confirmSpreadZone", { templateId }, templateId)) return;
   const scene = canvas.scene;
 
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
@@ -1828,6 +1854,13 @@ function _hookSocketRelay() {
     explosionFired:  _placeExplosion,
     spreadFired:     _placeSpreadZone,
   };
+  // Area-Confirm clicks relayed from a non-active GM so exactly one client resolves the effect (the
+  // handlers also claim the template id, so a stray double-relay is idempotent).
+  const AREA_CONFIRMERS = {
+    confirmExplosion:  (d) => _confirmExplosion(d.templateId),
+    confirmSpreadZone: (d) => _confirmSpreadZone(d.templateId),
+    confirmFireZone:   (d) => _confirmFireZone(d.args),
+  };
 
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (!game.user.isGM) {
@@ -1845,6 +1878,15 @@ function _hookSocketRelay() {
     if (areaPlacer) {
       if (game.users.activeGM?.id !== game.user.id) return;
       await areaPlacer(data.payload);
+      return;
+    }
+
+    // Relayed area-Confirm (blast / spread / fire-zone): only the active GM resolves it, else two GMs
+    // both clicking Confirm apply it twice. The handler also claims the template id (double-relay safe).
+    const areaConfirmer = AREA_CONFIRMERS[data.type];
+    if (areaConfirmer) {
+      if (game.users.activeGM?.id !== game.user.id) return;
+      await areaConfirmer(data);
       return;
     }
 

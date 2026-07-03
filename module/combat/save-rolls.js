@@ -558,9 +558,11 @@ export function registerSaveRollHandlers() {
     }
   });
 
-  // Only GM processes this — avoids duplicate prompts on each connected client
+  // Only the ACTIVE GM processes this — an isGM-only gate posts the death/stun prompt card twice when two
+  // GMs are connected (each connected GM client fires updateCombat). Post-only; no data write.
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!game.user.isGM) return;
+    if (game.users.activeGM?.id !== game.user.id) return;
     // Only fire on turn/round change, not on other combat updates
     if (updateData.turn === undefined && updateData.round === undefined) return;
 
