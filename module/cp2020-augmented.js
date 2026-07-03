@@ -167,6 +167,12 @@ Hooks.once("init", function () {
       makeDefault: true,
       label: "CYBERPUNK.SheetAugmentedActor",
     });
+    // The augmented actor sheet is now the world default, overriding whatever the host ships. On stock
+    // 1.1.1 the host has only a V1 sheet; a future host V2 sheet (Tilt 1.2.0) would NOT set
+    // features.actorSheet (that flag lives only in the fork PRs), so we still win here — log it so the
+    // override is visible, not silent. MAINTENANCE: revisit integrating the augmented panels into a
+    // host V2 sheet rather than replacing it. (C3)
+    console.info(`${SCOPE} | Registered the augmented actor sheet as world default (overriding the host default sheet).`);
   }
 
   // Augmented item sheet (Option B). Register our full V2 item sheet for the BASE item types and make
@@ -178,6 +184,8 @@ Hooks.once("init", function () {
       makeDefault: true,
       label: "CYBERPUNK.SheetAugmentedItem",
     });
+    // Same override + visibility log as the actor sheet above; same 1.2.0 maintenance note. (C3)
+    console.info(`${SCOPE} | Registered the augmented item sheet as world default (overriding the host default sheet).`);
   }
 
   // Preload the wrapper sub-templates the sheet includes as Handlebars partials.
