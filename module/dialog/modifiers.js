@@ -58,7 +58,10 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static DEFAULT_OPTIONS = {
-    id:      "weapon-modifier",
+    // No fixed `id`: a fixed id makes ApplicationV2 treat the dialog as a SINGLETON, so opening the Fire
+    // dialog for a second weapon while the first is still open replaces the first's window in place and
+    // orphans its onConfirm callback. Omitting id lets V2 assign a unique id per instance (styling is via
+    // the `cyberpunk2020` class + the template's `.weapon-modifiers` class, not the id).
     classes: ["cyberpunk2020"],
     tag:     "form",
     window:  { title: "CYBERPUNK.AttackModifiers" },

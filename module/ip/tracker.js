@@ -142,7 +142,7 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
   async _manualAdd() {
     const actors = game.actors.filter(a => a.type === "character" || a.type === "npc");
     if (!actors.length) return;
-    if (_manualDlg?.rendered) { _manualDlg.bringToTop?.(); return _manualDlg; }   // singleton
+    if (_manualDlg?.rendered) { (_manualDlg.bringToFront ?? _manualDlg.bringToTop)?.call(_manualDlg); return _manualDlg; }   // singleton
 
     const simple = !ipRawTracking();
     const renderTemplate = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
@@ -207,7 +207,9 @@ let _manualDlg = null;
 /** Open (or focus) the GM IP Tracker. GM-only. */
 export function openIpTracker() {
   if (!game.user.isGM) { ui.notifications?.warn(localize("IpTrackerGmOnly")); return; }
-  if (_ipTracker?.rendered) { _ipTracker.bringToTop(); return _ipTracker; }
+  // ApplicationV2 exposes bringToFront (not the V1 bringToTop) — calling bringToTop() here THREW, so
+  // re-opening the tracker crashed. Prefer bringToFront, fall back to bringToTop on a V1 host; optional-call.
+  if (_ipTracker?.rendered) { (_ipTracker.bringToFront ?? _ipTracker.bringToTop)?.call(_ipTracker); return _ipTracker; }
   _ipTracker = new IpTracker();
   _ipTracker.render(true);
   return _ipTracker;

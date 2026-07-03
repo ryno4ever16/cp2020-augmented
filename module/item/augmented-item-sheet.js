@@ -33,8 +33,12 @@ export class CyberpunkAugmentedItemSheet extends HandlebarsApplicationMixin(foun
 
   /** @override */
   async _prepareContext(options) {
+    // Chain super so the context carries the base V2 fields (document/fields/source/editable) and tracks
+    // framework evolution, rather than a frozen hand-built literal (the anti-pattern fixed on the actor sheet).
+    const context = await super._prepareContext(options);
     const item = this.item;
     return {
+      ...context,
       item,
       document: this.document,
       system: item.system,

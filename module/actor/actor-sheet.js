@@ -2226,16 +2226,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const sheet = skill?.sheet;
       if (!sheet?.rendered) continue;
 
-      const html = sheet.element;
+      // sheet.element is a native HTMLElement on the V2 item sheet; the old jQuery `.find()` threw here
+      // ("html.find is not a function"), aborting the tail of the chip-toggle / unequip / drop handler.
+      const root = sheet.element instanceof HTMLElement ? sheet.element : sheet.element?.[0];
+      if (!root) continue;
 
       if (Object.prototype.hasOwnProperty.call(patch, "isChipped")) {
-        const $cb = html.find('input[name="system.isChipped"]');
-        if ($cb.length) $cb.prop('checked', !!patch.isChipped);
+        const cb = root.querySelector('input[name="system.isChipped"]');
+        if (cb) cb.checked = !!patch.isChipped;
       }
 
       if (Object.prototype.hasOwnProperty.call(patch, "chipLevel")) {
-        const $in = html.find('input[name="system.chipLevel"], select[name="system.chipLevel"]');
-        if ($in.length) $in.val(String(patch.chipLevel));
+        for (const inp of root.querySelectorAll('input[name="system.chipLevel"], select[name="system.chipLevel"]')) {
+          inp.value = String(patch.chipLevel);
+        }
       }
     }
   }
