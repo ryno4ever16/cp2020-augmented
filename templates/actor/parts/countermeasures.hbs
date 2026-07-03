@@ -9,9 +9,12 @@
 --}}
 <h2 class="cyber-section-header">{{CPLocal "Vehicle.CountermeasuresHeader"}}</h2>
 <p class="cp-cm-hint">{{CPLocal "Vehicle.CountermeasuresHint"}}</p>
-<div class="cp-countermeasures field-list">
+{{!-- Own layout (NOT .field-list/.field — that grid centers each label|input pair, scattering the
+      checkboxes). .cp-countermeasures = a left-aligned auto-fill grid so the boxes line up; CSS in
+      css/cp2020-augmented.css. --}}
+<div class="cp-countermeasures">
     {{#each countermeasureOptions}}
-    <label class="field cp-cm-item" title="{{CPLocal 'Vehicle.CMDefeats' methods=this.defeats}}">
+    <label class="cp-cm-item" title="{{CPLocal 'Vehicle.CMDefeats' methods=this.defeats}}">
         <input type="checkbox" class="cp-cm-box" data-cm="{{this.key}}" {{#if this.checked}}checked{{/if}} {{#unless ../editable}}disabled{{/unless}}/>
         <span>{{this.label}}</span>
     </label>
