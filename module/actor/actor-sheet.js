@@ -1651,7 +1651,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const onUp = async (ev) => {
       if (!st) return;
       const armed = st.armed, tabKey = st.tabKey, dropX = ev.clientX, dropY = ev.clientY;
-      end(armed); // swallow the trailing click only if we actually tore a tab off
+      // Swallow the trailing click ONLY when the release lands on the nav. A click fires on the common
+      // ancestor of the pointerdown+pointerup targets, so an OFF-nav drop produces no trailing nav-click;
+      // setting the suppress flag then would linger and eat the NEXT real tab click (F7).
+      const releasedOnNav = !!(ev.target && nav.contains(ev.target));
+      end(armed && releasedOnNav);
       if (!armed) return;
       ev.preventDefault();
       const left = Math.max(0, Math.min(dropX - 40, window.innerWidth - 220));
