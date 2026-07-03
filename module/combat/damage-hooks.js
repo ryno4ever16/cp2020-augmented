@@ -1224,11 +1224,6 @@ async function _placeGasCloud(payload) {
     const duration    = Number(payload.dotTurns)    || 3;
     const stunSaveMod = Number(payload.stunSaveMod) || 0;
 
-    // Convert radius from meters to pixels using the scene grid
-    const gridSize  = scene.grid?.size  ?? canvas?.grid?.size ?? 100;
-    const gridDist  = scene.grid?.distance ?? scene.gridDistance ?? 1;
-    const radiusPx  = Math.max(gridSize, (radius / gridDist) * gridSize);
-
     const handle = await createArea(scene, {
       kind: "circle", x: cloudX, y: cloudY, radiusM: radius,
       color: "#88ff44", borderColor: "#44aa22",
@@ -1865,7 +1860,7 @@ function _hookSocketRelay() {
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (!game.user.isGM) {
       if (data.type === "damageApplied" && data.requesterId === game.user.id) {
-        ui.notifications.info(localizeParam("DamageApplied", { amount: data.totalApplied, target: data.targetName }));
+        ui.notifications.info(localizeParam("DamageApplied", { amount: data.totalApplied, name: data.targetName }));
       } else if (data.type === "damageError" && data.requesterId === game.user.id) {
         ui.notifications.error(localizeParam("DamageApplyFailed", { message: data.message ?? localize("UnknownError") }));
       }
@@ -2052,7 +2047,7 @@ async function _autoApply(payload, target) {
   });
 
   const total = hits.reduce((s, h) => s + h.netDamage, 0);
-  ui.notifications.info(localizeParam("DamageApplied", { amount: total, target: target.name }));
+  ui.notifications.info(localizeParam("DamageApplied", { amount: total, name: target.name }));
 
   // Taser flag must be set BEFORE the save prompt — threshold reads it
   if (payload.stunSaveOnHit && hits.some(h => h.penetrates)) {

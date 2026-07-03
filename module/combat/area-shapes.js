@@ -154,7 +154,9 @@ export function tokensInArea(handle, candidates) {
     const obj = handle.doc.object ?? handle.doc._object;
     const shape = obj?.shape;
     const ox = handle.doc.x, oy = handle.doc.y;
-    if (!shape) return out;
+    // The MeasuredTemplate placeable (and its .shape) is drawn a beat after the doc is created; if we
+    // land here before that, we'd silently report zero tokens. Warn so a "nothing was hit" isn't invisible.
+    if (!shape) { console.warn("CP2020 | area containment: template placeable not drawn yet — 0 tokens detected"); return out; }
     for (const t of toks) {
       const c = tokenCenter(t, scene);
       try { if (shape.contains(c.x - ox, c.y - oy)) out.push(t); } catch { /* skip */ }

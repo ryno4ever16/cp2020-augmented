@@ -373,8 +373,11 @@ export async function executeDeathSave({ actorId, tokenId, sceneId, mortalLevel 
   // Only the actor's owner or the GM may resolve this save (see _assertCanResolveSave).
   if (!_assertCanResolveSave(actor)) return;
 
-  const threshold = getDeathThreshold(actor);   // floored at 0
-  mortalLevel     = Math.min(6, Math.max(0, (actor.woundState?.() ?? 4) - 4));
+  // Resolve at the SAME mortal level the prompt was built with (limb loss etc. can FORCE it). The button
+  // carries it via data-mortal-level; fall back to the live wound state only when it's missing (an older card).
+  const bt = Number(actor.system?.stats?.bt?.total) || 0;
+  mortalLevel = Number.isFinite(mortalLevel) ? Math.min(6, Math.max(0, mortalLevel)) : Math.min(6, Math.max(0, (actor.woundState?.() ?? 4) - 4));
+  const threshold = Math.max(0, bt - mortalLevel);   // floored at 0
 
   // Threshold 0 = auto-death (roll ≤ 0 on d10 is impossible)
   if (threshold < 1) {
