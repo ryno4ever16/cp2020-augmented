@@ -67,6 +67,8 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     data.isGM = game.user.isGM;
     data.canEditCyberwareHumanity = game.user.isGM
       || game.settings.get("cyberpunk2020", "playersCanEditCyberwareHumanity");
+    // P3 light emitters live on misc gear + cyberware only (the shared footer partial gates on this).
+    data.mechLightEligible = this.item.type === "misc" || this.item.type === "cyberware";
 
     switch (this.item.type) {
       case "weapon":

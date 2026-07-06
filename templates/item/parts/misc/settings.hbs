@@ -31,4 +31,33 @@
     </div>
     {{/if}}
     {{/if}}
+
+    {{!-- P3 light emitter (misc gear + cyberware; SPECIAL-MECHANICS-PROPOSAL.md, D2 sheet-first).
+         `system.mechLight` is a REAL field — the module extends the misc/cyberware DataModels at
+         init (D1) — so the inputs bind directly; no flags detour. "Lit" is the runtime toggle a
+         player flips; the token lights up only while the item is also equipped. --}}
+    {{#if @root.mechLightEligible}}
+    {{> (template "fields/boolean") label="MechLight" edit="system.mechLight.enabled"}}
+    {{#if system.mechLight.enabled}}
+    <div class="field">
+        <label for="system.mechLight.shape">{{CPLocal "MechLightShape"}}</label>
+        <span class="flex-pad"></span>
+        <select name="system.mechLight.shape">
+            <option value="cone" {{#if (equals system.mechLight.shape "cone")}}selected{{/if}}>{{CPLocal "MechLightShapeCone"}}</option>
+            <option value="circle" {{#if (equals system.mechLight.shape "circle")}}selected{{/if}}>{{CPLocal "MechLightShapeCircle"}}</option>
+        </select>
+    </div>
+    {{> (template "fields/number") label="MechLightBright" edit="system.mechLight.bright"}}
+    {{> (template "fields/number") label="MechLightDim" edit="system.mechLight.dim"}}
+    {{#if (equals system.mechLight.shape "cone")}}
+    {{> (template "fields/number") label="MechLightAngle" edit="system.mechLight.angle"}}
+    {{/if}}
+    <div class="field">
+        <label for="system.mechLight.color" title="{{CPLocal "MechLightColorHint"}}">{{CPLocal "MechLightColor"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.mechLight.color" type="text" value="{{system.mechLight.color}}" placeholder="#ffffff"/>
+    </div>
+    {{> (template "fields/boolean") label="MechLightOn" edit="system.mechLight.on"}}
+    {{/if}}
+    {{/if}}
 </div>

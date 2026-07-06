@@ -45,6 +45,10 @@ function cwAttackSkill(ru) { return { patch: { "CyberWorkType.Weapon.attackSkill
 function weaponAttackSkill(ru) { return { patch: { attackSkill: ATTACK_SKILL_RU_EN[ru] } }; }
 /** Correction entry re-keying a CyberWorkType.Skill map: keep the RU-pack _id key, add the EN name. */
 function skillAlias(id, enName, mod) { return { patch: { "CyberWorkType.Skill": { [id]: mod, [enName]: mod } } }; }
+/** Correction entry making a base-pack item a P3 light emitter (ranges from the item's own printed text). */
+function mechLight({ shape = "cone", bright = 10, dim = 20, angle = 45, color = "" } = {}) {
+  return { patch: { mechLight: { enabled: true, on: false, shape, bright, dim, angle, color } } };
+}
 
 /** One `<p>` block appended to a corrected item's notes. */
 function note(text) { return `<p>${text}</p>`; }
@@ -114,6 +118,11 @@ export const DATA_CORRECTIONS = {
     sx1PGl6gzLSZ18sn: { name: "Dynalar Endo-Frame (Basic)" },        // was "Dynala"
     // ── PR #43 (upstream, unmerged): Blitzkrieg (Chromebook 4 text: 1050eb; surgery M; HC 2d6) ──
     Vg33kDXF2VZlqX1K: { cost: 1050, patch: { surgCode: "M", humanityCost: "2d6" } },
+    // ── P3 light emitters (beam ranges from each item's own printed text) ──
+    "4wxdvs3c63eQKino": mechLight({ shape: "cone", bright: 1, dim: 3 }),            // Cyberlimb Flashlight — "3m range"
+    D5uZmayiXzXXLTRM: mechLight({ shape: "circle", bright: 0, dim: 1 }),            // Flashlite Implant — "semi-focused glow; 1m"
+    z3unj4w9y7CpJgOq: mechLight({ shape: "cone", bright: 1, dim: 3 }),              // Flashlight Implant — "3m range"
+    wAGWZRb3afAZDYhj: mechLight({ shape: "cone", bright: 10, dim: 25 }),            // Mini Light — "25m beam"
   },
 
   // ── PR #41 (upstream, unmerged): name typos across gear packs ──
@@ -132,6 +141,14 @@ export const DATA_CORRECTIONS = {
   },
   "cyberpunk2020.tools": {
     gkjBAKUHKs4pd9uE: { name: "Protective Goggles" },
+    // ── P3 light emitters (Tools p.69; glow durations stay in the flavor text) ──
+    KjN5Qr3r8vPjiD9i: mechLight({ shape: "cone", bright: 10, dim: 20 }),                  // Flashtube
+    LRy3GrRtMME1asRE: mechLight({ shape: "circle", bright: 0, dim: 2 }),                  // Flash Paint (painted surfaces, 4h)
+    OLlP8EaVlXIqzCVE: mechLight({ shape: "circle", bright: 1, dim: 4, color: "#66ff66" }), // Glowstick (6h chem-glow)
+    yqmogdOnO4BpGlHl: mechLight({ shape: "circle", bright: 0, dim: 2 }),                  // Flash Tape (6h)
+  },
+  "cyberpunk2020.furnishing": {
+    nlf3SoNWrlRZLwEM: mechLight({ shape: "circle", bright: 5, dim: 10 }),                 // Lamp
   },
 
   // ── PR #42 (upstream, unmerged): weapon-accuracy corrections (book WA values) ──

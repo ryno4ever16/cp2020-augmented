@@ -35,6 +35,8 @@ import { openIpTracker } from "./ip/tracker.js";
 import { PresetPicker } from "./dialog/preset-picker.js";
 import { registerPinnedSubwindows } from "./pin-window.js";
 import { registerDataCorrections } from "./data-corrections.js";
+import { makeMechAugmentedData } from "./data/mech-item-data.js";
+import { registerMechLight } from "./mech/light.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -151,6 +153,10 @@ Hooks.once("init", function () {
     // Re-register the bare `vehicle` type with the richer module model (range/rangeUnit/speed.unit),
     // built to EXTEND the system's model. Module loads after the system, so this wins.
     vehicle:          makeVehicleItemData(SystemVehicleData),
+    // Special-mechanics fields (SPECIAL-MECHANICS-PROPOSAL.md D1 — extend, don't flag): misc gear +
+    // cyberware gain mechLight (P3 light emitters). Same extend-the-registered-model pattern.
+    misc:             makeMechAugmentedData(CONFIG.Item.dataModels.misc),
+    cyberware:        makeMechAugmentedData(CONFIG.Item.dataModels.cyberware),
   });
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
@@ -279,6 +285,9 @@ Hooks.once("ready", function () {
   // so the fork's setting-merge migrations live here. Each reads the orphaned legacy key straight from
   // world storage, writes the merged value once, then deletes the legacy doc so it never re-runs.
   if (game.user?.isGM) migrateAugmentedSettings().catch((e) => console.warn(`${SCOPE} | settings migration failed`, e));
+
+  // P3 light emitters: item toggles drive the bearer's token light (active GM applies the writes).
+  registerMechLight();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the

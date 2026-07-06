@@ -1,0 +1,120 @@
+/**
+ * P3 — Light emitters (SPECIAL-MECHANICS-PROPOSAL.md; the flashlight pattern).
+ *
+ * An equipped item with `system.mechLight.enabled` and `.on` lights the bearer's token: cone for
+ * flashlights, circle for glowsticks/lamps. The engine listens to the owning actor's item events
+ * (create/update/delete fire on EVERY client), and the ACTIVE GM applies the token update — so a
+ * player toggling their flashlight on the item sheet needs no special permission and no extra
+ * socket traffic. If no GM is connected, an owning client tries the update directly (best effort).
+ *
+ * The token's pre-existing light is preserved in a token flag the first time an emitter overrides
+ * it and restored when the last emitter goes dark — a GM-authored torch glow is never clobbered.
+ *
+ * Pure pieces (profile read + merge) are exported for tests; only register/apply touch the world.
+ */
+
+const SCOPE = "cp2020-augmented";
+const BASE_FLAG = "mechBaseLight";
+
+/** The item's light profile when it is an enabled emitter, else null. Pure. */
+export function lightProfileOf(item) {
+  const ml = item?.system?.mechLight;
+  if (!ml?.enabled) return null;
+  return {
+    shape: ml.shape === "circle" ? "circle" : "cone",
+    bright: Math.max(0, Number(ml.bright) || 0),
+    dim: Math.max(0, Number(ml.dim) || 0),
+    angle: Math.min(360, Math.max(1, Number(ml.angle) || 45)),
+    color: String(ml.color ?? "").trim(),
+    on: !!ml.on
+  };
+}
+
+/** True when the item is currently emitting (equipped + enabled + on). Pure. */
+export function isEmitting(item) {
+  const p = lightProfileOf(item);
+  return !!(p?.on && item?.system?.equipped);
+}
+
+/**
+ * Merge the actor's emitting items into ONE desired token light, or null when nothing emits.
+ * Ranges take the max across emitters; any circle contributor opens the beam to 360°, otherwise
+ * the widest cone wins; the first non-empty color (stable item order) tints the light. Pure.
+ */
+export function desiredLightFor(items) {
+  const emitting = (items ?? []).filter(isEmitting).map(lightProfileOf);
+  if (!emitting.length) return null;
+  const anyCircle = emitting.some(p => p.shape === "circle");
+  return {
+    bright: Math.max(...emitting.map(p => p.bright)),
+    dim: Math.max(...emitting.map(p => p.dim)),
+    angle: anyCircle ? 360 : Math.max(...emitting.map(p => p.angle)),
+    color: emitting.map(p => p.color).find(c => c) || null
+  };
+}
+
+/** The actor's tokens on the viewed scene (token DOCUMENTS; handles synthetic token-actors). */
+function tokensOf(actor) {
+  if (actor?.isToken) return actor.token ? [actor.token] : [];
+  return actor?.getActiveTokens?.(true, true) ?? [];
+}
+
+/** Apply (or restore) the merged emitter light on every active token of `actor`. */
+export async function applyActorLight(actor) {
+  if (!actor) return;
+  const desired = desiredLightFor(actor.items?.contents ?? actor.items ?? []);
+  for (const tokenDoc of tokensOf(actor)) {
+    try {
+      const base = tokenDoc.getFlag(SCOPE, BASE_FLAG);
+      if (desired) {
+        const patch = {
+          "light.bright": desired.bright, "light.dim": desired.dim,
+          "light.angle": desired.angle, "light.color": desired.color
+        };
+        // First override: remember the token's own light so going dark restores it exactly.
+        if (base === undefined) patch[`flags.${SCOPE}.${BASE_FLAG}`] = tokenDoc.light?.toObject?.() ?? {};
+        await tokenDoc.update(patch);
+      } else if (base !== undefined) {
+        await tokenDoc.update({ light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
+      }
+    } catch (err) {
+      console.warn("cp2020-augmented | mech-light token update failed:", err);
+    }
+  }
+}
+
+/** True when THIS client should perform the token writes for the event. */
+function iAmTheApplier(actor) {
+  const gm = game.users?.activeGM;
+  if (gm) return gm.id === game.user.id;      // exactly one applier when any GM is on
+  return !!actor?.isOwner;                     // no GM online: an owner tries directly
+}
+
+/** Does this item event concern the light engine at all? */
+function lightRelevant(item, changed) {
+  if (!item?.actor || item.actor.documentName !== "Actor") return false;
+  if (changed) {
+    const sys = changed.system ?? {};
+    return ("mechLight" in sys) || ("equipped" in sys && !!item.system?.mechLight?.enabled);
+  }
+  return !!item.system?.mechLight?.enabled;
+}
+
+/** Hook wiring — called once from the module's ready hook. */
+export function registerMechLight() {
+  Hooks.on("updateItem", (item, changed) => {
+    if (lightRelevant(item, changed) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
+  });
+  Hooks.on("createItem", (item) => {
+    if (lightRelevant(item) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
+  });
+  Hooks.on("deleteItem", (item) => {
+    if (lightRelevant(item) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
+  });
+  // A freshly placed token for an actor with a lit emitter starts lit.
+  Hooks.on("createToken", (tokenDoc) => {
+    const actor = tokenDoc?.actor;
+    if (!actor) return;
+    if ((actor.items?.contents ?? []).some(isEmitting) && iAmTheApplier(actor)) applyActorLight(actor);
+  });
+}
