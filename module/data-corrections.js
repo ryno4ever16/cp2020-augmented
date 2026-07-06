@@ -53,6 +53,11 @@ function mechLight({ shape = "cone", bright = 10, dim = 20, angle = 45, color = 
 function mechVision(mode, range = 20) {
   return { mechVision: { enabled: true, on: false, mode, range } };
 }
+/** P6 protection-tag patch: e.g. mechProtection({ gas: { immune: true } }). */
+function mechProtection(hazards) {
+  const entry = (h) => ({ immune: false, mod: 0, ...(hazards[h] ?? {}) });
+  return { mechProtection: { enabled: true, gas: entry("gas"), flash: entry("flash"), sonic: entry("sonic") } };
+}
 
 /** One `<p>` block appended to a corrected item's notes. */
 function note(text) { return `<p>${text}</p>`; }
@@ -151,6 +156,8 @@ export const DATA_CORRECTIONS = {
     LRy3GrRtMME1asRE: mechLight({ shape: "circle", bright: 0, dim: 2 }),                  // Flash Paint (painted surfaces, 4h)
     OLlP8EaVlXIqzCVE: mechLight({ shape: "circle", bright: 1, dim: 4, color: "#66ff66" }), // Glowstick (6h chem-glow)
     yqmogdOnO4BpGlHl: mechLight({ shape: "circle", bright: 0, dim: 2 }),                  // Flash Tape (6h)
+    // ── P6 protection: a filter mask seals breathing while worn ("Contains 2 Filters") ──
+    iQcJpq8LofSYbPJO: { patch: mechProtection({ gas: { immune: true } }) },               // Breathing Mask
   },
   "cyberpunk2020.furnishing": {
     nlf3SoNWrlRZLwEM: mechLight({ shape: "circle", bright: 5, dim: 10 }),                 // Lamp
@@ -232,12 +239,16 @@ export const DATA_CORRECTIONS = {
     YBS9vFZX14R6bwk0: { patch: mechVision("lowlight") },     // Low Lite — "see in dim light, almost total darkness"
     yOFBoZ9tV3czAW2B: { patch: mechVision("thermograph") },  // Thermograph sensor — "see heat patterns"
     XG6ffmsWnkUWNkcW: { patch: mechVision("uv") },           // Ultra Violet — "see in darkness; using UV flash"
+    // P6: "Immune to flash; laser blinding" — data-ready for the future flash effect engine.
+    H7PSx0gcnKET6usp: { patch: mechProtection({ flash: { immune: true } }) },  // Anti-Dazzle
   },
   "cyberpunk2020.fashonware": {
     T7uGBTZgaeB7NKIm: skillAlias("svx86NhUYhqVlLNw", "Resist Torture/Drugs", 2),  // Biomonitor
   },
   "cyberpunk2020.implants": {
     i264oefxjekvVgnN: skillAlias("WotYfaW9pqhl7S6N", "Seduction", 1),  // Mr Studd Sexual Implant
+    // P6: sealed internal air ("good for 10 to 25 minutes" — duration stays in the flavor).
+    zOzfWnALVczrmjkZ: { patch: mechProtection({ gas: { immune: true } }) },  // Independent Air Supply
   },
   "cyberpunk2020.neuralware": {
     "4gYluthCnbT7zVQQ": skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Olfactory Boost

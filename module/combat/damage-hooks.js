@@ -23,6 +23,7 @@ import { AutomationNotice }                                   from "../dialog/au
 import { onGlobalClick } from "../popout-compat.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, ARMOR_MODES } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
+import { gasSaveDecisionFor } from "../mech/protection.js";
 import { rollLocation, localize, localizeParam }              from "../utils.js";
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
@@ -1275,24 +1276,34 @@ function _hookGasCloudPerTurn() {
       const tokensInCloud = tokensInArea(cloud, scene.tokens?.contents ?? []);
 
       if (tokensInCloud.length > 0) {
-        const gasNames = tokensInCloud.map(t => `<b>${t.name}</b>`).join(", ");
+        // P6 protection tags (mech/protection.js): sealed breathing gear (mask / independent air)
+        // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0).
+        const decisions = tokensInCloud.map(tokDoc => {
+          const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
+          const items = liveActor?.items?.contents ?? [];
+          return { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod) };
+        });
+        const affected = decisions.filter(d => d.liveActor && !d.skip);
+        const sealed = decisions.filter(d => d.liveActor && d.skip);
+        const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
         const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
+        const sealedClause = sealed.length
+          ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
+          : "";
         await postSavePromptCard({
           title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
-          body: localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }),
+          body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause,
         });
-        for (const tokDoc of tokensInCloud) {
-          if (!tokDoc.actor) continue;
-          const liveActor = game.actors.get(tokDoc.actor.id) ?? tokDoc.actor;
-          // Temporarily apply stunSaveMod via the taser additive-threshold path
-          if (stunSaveMod < 0) {
-            const existingState = liveActor.getFlag?.("cp2020-augmented", "taserState");
+        for (const d of affected) {
+          // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path
+          if (d.effMod < 0) {
+            const existingState = d.liveActor.getFlag?.("cp2020-augmented", "taserState");
             const round = game?.combat?.round ?? 0;
             const count = existingState && (existingState.round === 0 || round <= existingState.round + 2)
               ? (existingState.count ?? 0) + 1 : 1;
-            await liveActor.setFlag("cp2020-augmented", "taserState", { count, round, mod: stunSaveMod });
+            await d.liveActor.setFlag("cp2020-augmented", "taserState", { count, round, mod: d.effMod });
           }
-          await postStunSavePrompt(liveActor, tokDoc);
+          await postStunSavePrompt(d.liveActor, d.tokDoc);
         }
       }
 

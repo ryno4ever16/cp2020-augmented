@@ -74,5 +74,22 @@
     {{> (template "fields/number") label="MechVisionRange" edit="system.mechVision.range"}}
     {{> (template "fields/boolean") label="MechVisionOn" edit="system.mechVision.on"}}
     {{/if}}
+
+    {{!-- P6 protection tags: passive gear the save engines consult (gas is live; flash/sonic are
+         data-ready). Rows come from _prepareContext (JS owns the hazard list + labels). --}}
+    {{> (template "fields/boolean") label="MechProtection" edit="system.mechProtection.enabled"}}
+    {{#if system.mechProtection.enabled}}
+    {{#each @root.mechProtectionRows}}
+    <div class="field">
+        <label>{{label}}</label>
+        <span class="flexrow flex-pad">
+            <label class="nogrow">{{immuneLabel}}</label>
+            <input type="checkbox" name="system.mechProtection.{{key}}.immune" data-dtype="Boolean" {{#if immune}}checked{{/if}}>
+            <label class="nogrow">{{modLabel}}</label>
+            <input type="number" name="system.mechProtection.{{key}}.mod" value="{{mod}}">
+        </span>
+    </div>
+    {{/each}}
+    {{/if}}
     {{/if}}
 </div>

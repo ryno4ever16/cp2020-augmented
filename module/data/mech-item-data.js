@@ -39,6 +39,22 @@ export const MECH_LIGHT_DEFAULTS = {
 export const MECH_VISION_DEFAULTS = { enabled: false, on: false, mode: "lowlight", range: 20 };
 export const VISION_DEVICE_MODES = ["lowlight", "infrared", "thermograph", "uv"];
 
+/**
+ * `mechProtection` (pattern P6 — protection tags): passive gear the save engines consult.
+ * Per hazard: `immune` (sealed breathing mask vs gas; Anti-Dazzle vs flash) or a save `mod`
+ * (positive helps). Hazards typed now: gas (LIVE — the gas-cloud per-turn save consults it),
+ * flash + sonic (data-ready; their effect engines come later). Fire/corrosion armor stays with
+ * the D5 discussion. Percent-effective items ("70% effective" nasal filters) have no honest
+ * save-mod mapping — open question Q8 in the proposal; they stay unwired rather than invented.
+ */
+export const MECH_PROTECTION_HAZARDS = ["gas", "flash", "sonic"];
+export const MECH_PROTECTION_DEFAULTS = {
+  enabled: false,
+  gas:   { immune: false, mod: 0 },
+  flash: { immune: false, mod: 0 },
+  sonic: { immune: false, mod: 0 }
+};
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -62,6 +78,18 @@ function mechVisionField() {
   });
 }
 
+function mechProtectionField() {
+  const f = foundry.data.fields;
+  const hazard = () => new f.SchemaField({
+    immune: new f.BooleanField({ initial: false }),
+    mod:    new f.NumberField({ initial: 0 })
+  });
+  return new f.SchemaField({
+    enabled: new f.BooleanField({ initial: false }),
+    gas: hazard(), flash: hazard(), sonic: hazard()
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -72,7 +100,8 @@ export function makeMechAugmentedData(SystemModel) {
       return {
         ...super.defineSchema(),
         mechLight: mechLightField(),
-        mechVision: mechVisionField()
+        mechVision: mechVisionField(),
+        mechProtection: mechProtectionField()
       };
     }
   };

@@ -4,7 +4,7 @@ import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
-import { VISION_DEVICE_MODES } from "../data/mech-item-data.js";
+import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -76,6 +76,15 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       data.mechVisionModes = VISION_DEVICE_MODES.map(m => ({
         value: m, selected: m === current,
         label: localize("MechVisionMode" + m.charAt(0).toUpperCase() + m.slice(1))
+      }));
+      const mp = this.item.system?.mechProtection ?? {};
+      data.mechProtectionRows = MECH_PROTECTION_HAZARDS.map(h => ({
+        key: h,
+        label: localize("MechProtection" + h.charAt(0).toUpperCase() + h.slice(1)),
+        immuneLabel: localize("MechProtectionImmune"),
+        modLabel: localize("MechProtectionMod"),
+        immune: !!mp[h]?.immune,
+        mod: Number(mp[h]?.mod) || 0
       }));
     }
 
