@@ -36,6 +36,7 @@ const SHOP_SUB_LABEL_KEYS = {
   Cyberaudio: "CYBERPUNK.ShopSubCyberaudio", Neuralware: "CYBERPUNK.ShopSubNeuralware",
   Implants: "CYBERPUNK.ShopSubImplants", Bioware: "CYBERPUNK.ShopSubBioware",
   Fashionware: "CYBERPUNK.ShopSubFashionware", Cyberweapons: "CYBERPUNK.ShopSubCyberweapons",
+  Chipware: "CYBERPUNK.ShopSubChipware",
   Communication: "CYBERPUNK.ShopSubCommunication", Electronics: "CYBERPUNK.ShopSubElectronics",
   Entertainment: "CYBERPUNK.ShopSubEntertainment", Fashion: "CYBERPUNK.ShopSubFashion",
   Furnishing: "CYBERPUNK.ShopSubFurnishing", Medical: "CYBERPUNK.ShopSubMedical",
@@ -97,7 +98,7 @@ async function buildCatalogIndex() {
     const mapped = isMappedPack(packName);          // legacy packs: one cat/sub for the whole pack
     const packCat = categoryOfPack(packName);
     let idx;
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "type", "img"] }); }
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {

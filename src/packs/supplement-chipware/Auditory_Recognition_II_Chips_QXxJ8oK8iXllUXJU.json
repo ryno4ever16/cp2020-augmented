@@ -1,0 +1,59 @@
+{
+  "_id": "QXxJ8oK8iXllUXJU",
+  "name": "Auditory Recognition II Chips",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "Require Amp Hearing and Sound Edit; +2",
+    "notes": "",
+    "cost": 300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 pg.39",
+    "lastOwnerId": "",
+    "surgCode": "N",
+    "humanityCost": "0",
+    "cyberwareType": "CHIPWARE",
+    "cyberwareSubtype": "OPTION",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {
+      "Type": "Descriptive",
+      "Types": [
+        "Descriptive"
+      ],
+      "ChipSkills": {}
+    },
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "chipware",
+      "importReview": {
+        "level": "clean",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!QXxJ8oK8iXllUXJU"
+}

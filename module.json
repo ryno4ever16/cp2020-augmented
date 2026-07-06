@@ -131,6 +131,13 @@
       "system": "cyberpunk2020"
     },
     {
+      "name": "supplement-chipware",
+      "label": "Supplements — Chipware",
+      "path": "packs/supplement-chipware",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
       "name": "supplement-vehicles",
       "label": "Supplements — Vehicles",
       "path": "packs/supplement-vehicles",
@@ -163,7 +170,7 @@
             {
               "name": "Cyberware",
               "sorting": "m",
-              "packs": ["supplement-cyberware"]
+              "packs": ["supplement-cyberware", "supplement-chipware"]
             }
           ]
         },

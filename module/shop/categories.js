@@ -64,7 +64,7 @@ export const CATEGORIES = [
   { key: "Weapons",    subs: ["Pistols", "SMGs", "Rifles", "Shotguns", "Heavy", "Melee", "Exotic", "Other"] },
   { key: "Armor",      subs: [] },
   { key: "Ammo",       subs: [] },
-  { key: "Cyberware",  subs: ["Cyberlimbs", "Cyberoptics", "Cyberaudio", "Neuralware", "Implants", "Bioware", "Fashionware", "Cyberweapons", "Other"] },
+  { key: "Cyberware",  subs: ["Cyberlimbs", "Cyberoptics", "Cyberaudio", "Neuralware", "Implants", "Bioware", "Fashionware", "Cyberweapons", "Chipware", "Other"] },
   { key: "Gear",       subs: ["Communication", "Electronics", "Entertainment", "Fashion", "Furnishing", "Medical", "Security", "Surveillance", "Tools", "Rentals & Services"] },
   { key: "Netrunning", subs: [] },
   { key: "Programs",   subs: [] },
@@ -127,7 +127,8 @@ export function categoryOfItem(type, system = {}) {
     case "armor":     return { category: "Armor", sub: "" };
     case "vehicle":   return { category: "Vehicles", sub: vehicleSubOf(system?.vehicleType) };
     case "program":   return { category: "Programs", sub: "" };
-    case "cyberware": return { category: "Cyberware", sub: "Other" };
+    // Skill chips carry cyberwareType CHIPWARE (the supplement-chipware pack + strays elsewhere).
+    case "cyberware": return { category: "Cyberware", sub: String(system?.cyberwareType ?? "").toUpperCase() === "CHIPWARE" ? "Chipware" : "Other" };
     default:          return { category: "Gear", sub: "Other" };
   }
 }

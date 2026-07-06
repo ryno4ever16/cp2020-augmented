@@ -1,0 +1,59 @@
+{
+  "_id": "aE9XfP5An5EEpe4u",
+  "name": "Honey Pilar",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "Seductress supreme",
+    "notes": "",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "When Gravity Fails pg.53",
+    "lastOwnerId": "",
+    "surgCode": "N",
+    "humanityCost": "1d6/2",
+    "cyberwareType": "CHIPWARE",
+    "cyberwareSubtype": "OPTION",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {
+      "Type": "Descriptive",
+      "Types": [
+        "Descriptive"
+      ],
+      "ChipSkills": {}
+    },
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "chipware",
+      "importReview": {
+        "level": "clean",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!aE9XfP5An5EEpe4u"
+}

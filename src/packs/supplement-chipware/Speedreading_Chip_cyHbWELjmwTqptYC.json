@@ -1,0 +1,59 @@
+{
+  "_id": "cyHbWELjmwTqptYC",
+  "name": "Speedreading Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "Requires optic. Half to a third normal reading time",
+    "notes": "",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 pg.16",
+    "lastOwnerId": "",
+    "surgCode": "N",
+    "humanityCost": "0",
+    "cyberwareType": "CHIPWARE",
+    "cyberwareSubtype": "OPTION",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {
+      "Type": "Descriptive",
+      "Types": [
+        "Descriptive"
+      ],
+      "ChipSkills": {}
+    },
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "chipware",
+      "importReview": {
+        "level": "clean",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!cyHbWELjmwTqptYC"
+}

@@ -1,0 +1,59 @@
+{
+  "_id": "GOAJDVDej8n3UskJ",
+  "name": "Independent Action Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "Independent action for each arm. Amb +2 optics",
+    "notes": "",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 pg.75",
+    "lastOwnerId": "",
+    "surgCode": "N",
+    "humanityCost": "0",
+    "cyberwareType": "CHIPWARE",
+    "cyberwareSubtype": "OPTION",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {
+      "Type": "Descriptive",
+      "Types": [
+        "Descriptive"
+      ],
+      "ChipSkills": {}
+    },
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "chipware",
+      "importReview": {
+        "level": "clean",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!GOAJDVDej8n3UskJ"
+}

@@ -1,0 +1,59 @@
+{
+  "_id": "U0Jnv3FxKT4SXZFe",
+  "name": "Shape Recognition",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "Picks out chosen object; requires Time Square +",
+    "notes": "",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 pg.15",
+    "lastOwnerId": "",
+    "surgCode": "N",
+    "humanityCost": "0",
+    "cyberwareType": "CHIPWARE",
+    "cyberwareSubtype": "OPTION",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {
+      "Type": "Descriptive",
+      "Types": [
+        "Descriptive"
+      ],
+      "ChipSkills": {}
+    },
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "chipware",
+      "importReview": {
+        "level": "clean",
+        "weightSkimNotReviewed": true,
+        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!U0Jnv3FxKT4SXZFe"
+}
