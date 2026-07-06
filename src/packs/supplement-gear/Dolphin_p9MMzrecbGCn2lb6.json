@@ -1,11 +1,11 @@
 {
   "_id": "p9MMzrecbGCn2lb6",
-  "name": "Dolphin",
+  "name": "Cyberpet: Dolphin",
   "type": "misc",
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Renamed from bare 'Dolphin' (audit 2026-07): Chromebook 3 cyberpet.</p>",
     "cost": 3000,
     "weight": 0,
     "equipped": false,

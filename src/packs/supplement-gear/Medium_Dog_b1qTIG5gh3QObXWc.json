@@ -1,11 +1,11 @@
 {
   "_id": "b1qTIG5gh3QObXWc",
-  "name": "Medium Dog",
+  "name": "Cyberpet: Medium Dog",
   "type": "misc",
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Renamed from bare 'Medium Dog' (audit 2026-07): Chromebook 3 cyberpet.</p>",
     "cost": 200,
     "weight": 0,
     "equipped": false,

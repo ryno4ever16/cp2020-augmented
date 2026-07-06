@@ -1,11 +1,11 @@
 {
   "_id": "U7Yt8ckgptovZrsh",
-  "name": "Rabbit",
+  "name": "Cyberpet: Rabbit",
   "type": "misc",
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Renamed from bare 'Rabbit' (audit 2026-07): Chromebook 3 cyberpet.</p>",
     "cost": 100,
     "weight": 0,
     "equipped": false,

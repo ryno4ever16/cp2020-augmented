@@ -1,0 +1,64 @@
+{
+  "_id": "hTOpx0JVqhaHvfw7",
+  "name": "Arasaka Combat 10 (Shockwave revision)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Urban-assault IFV (not for full-scale war). 80mph, crew2+10, 2.5t cargo, 25t. | Shockwave-revised stats/price; the Corpbook 1 original ('Arasaka Combat 10 Heavy Assault Vehicle', 1,500,000eb) is a separate catalog entry. [Audit row +315 — Firestorm: Shockwave p.63]</p>",
+    "cost": 965000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.63",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 250,
+      "max": 250
+    },
+    "sp": 50,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 80,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+315",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 63
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!hTOpx0JVqhaHvfw7"
+}

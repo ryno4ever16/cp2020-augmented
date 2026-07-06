@@ -1,11 +1,11 @@
 {
   "_id": "y3BP6bLY6T94lEdG",
-  "name": "Large Raptor",
+  "name": "Cyberpet: Large Raptor",
   "type": "misc",
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Renamed from bare 'Large Raptor' (audit 2026-07): Chromebook 3 cyberpet.</p>",
     "cost": 1500,
     "weight": 0,
     "equipped": false,

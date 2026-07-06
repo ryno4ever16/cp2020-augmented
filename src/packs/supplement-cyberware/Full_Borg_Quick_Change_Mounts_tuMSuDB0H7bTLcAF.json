@@ -1,0 +1,59 @@
+{
+  "_id": "tuMSuDB0H7bTLcAF",
+  "name": "Full Borg: Quick-Change Mounts",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Per limb/hand/foot (not Gemini); handless arms fit Rifles (2 spaces)/Heavy Weapons (3 spaces). | Distinct from the core cyberlimb 'Quick Change Mount' (2nd ed. p.89) and the When-Gravity-Fails variant — this is the full-borg frame option. [Audit row +129 — Chromebook 2 p.85]</p>",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.85",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+129",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 85
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!tuMSuDB0H7bTLcAF"
+}

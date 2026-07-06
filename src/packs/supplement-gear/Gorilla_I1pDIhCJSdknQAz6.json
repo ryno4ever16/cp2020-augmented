@@ -1,11 +1,11 @@
 {
   "_id": "I1pDIhCJSdknQAz6",
-  "name": "Gorilla",
+  "name": "Cyberpet: Gorilla",
   "type": "misc",
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Renamed from bare 'Gorilla' (audit 2026-07): Chromebook 3 cyberpet.</p>",
     "cost": 2000,
     "weight": 0,
     "equipped": false,

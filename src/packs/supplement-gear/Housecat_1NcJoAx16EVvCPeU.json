@@ -1,11 +1,11 @@
 {
   "_id": "1NcJoAx16EVvCPeU",
-  "name": "Housecat",
+  "name": "Cyberpet: Housecat",
   "type": "misc",
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Renamed from bare 'Housecat' (audit 2026-07): Chromebook 3 cyberpet.</p>",
     "cost": 100,
     "weight": 0,
     "equipped": false,
