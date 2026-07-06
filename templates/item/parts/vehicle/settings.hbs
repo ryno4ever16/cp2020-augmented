@@ -112,56 +112,12 @@
     </div>
     {{/if}}
    <div class="field">
-       {{!-- This should I guess be maneuver? But safe works a lot better meaningwise --}}
-        <label for="system.speed.value">{{CPLocal "Safe"}}</label>
+       {{!-- Maneuver (safe) SPEED — a printed stat ("Maneuver Speed 400kph / Top 560kph"), distinct
+             from the Maneuverability control-roll modifier below (VEHICLE-SPEC.md §6). --}}
+        <label for="system.speed.maneuver" title="{{CPLocal "ManeuverSpeedFull"}}">{{CPLocal "ManeuverSpeed"}}</label>
         <span class="flexrow flex-pad">
             <input type="number" name="system.speed.maneuver" value="{{maneuver}}">
             <span class="nogrow">{{@root.veh.speedUnit}}</span>
-        </span>
-    </div>
-    {{/with}}
-</div>
-
-{{!-- Fuel --}}
-<div class="field-list">
-    {{#with system.fuel}}
-    <div class="flexcol fillwidth span-two-cells">
-        <div class="meter-gauge fillwidth">
-            <span style="width: calc(100% * ({{value}}/{{max}}));" class="
-            {{#if (compare value "<" (math max "/" 3))}}
-            danger
-            {{/if}}"></span>
-        </div>
-    </div>
-    <div class="field">
-        <label class="larger" for="system.fuel.value">{{CPLocal "Fuel"}}</label>
-        <span class="flexrow flex-pad">
-            <input type="number" name="system.fuel.value" value="{{value}}">
-            <span class="nogrow">/</span>
-            <input type="number" name="system.fuel.max" value="{{max}}">
-            {{#if @root.editable}}
-            <select name="system.fuel.unit" class="nogrow cp-unit-select">
-                <option value="gal" {{#if (equals unit "gal")}}selected{{/if}}>gal</option>
-                <option value="liters" {{#if (equals unit "liters")}}selected{{/if}}>L</option>
-            </select>
-            {{else}}
-            <span class="nogrow cp-unit-static">{{@root.veh.fuelCapSuffix}}</span>
-            {{/if}}
-        </span>
-    </div>
-     <div class="field">
-        <label for="system.speed.value">{{CPLocal "Type"}}</label>
-        <span class="flexrow flex-pad">
-            <input type="text" name="system.fuel.type" value="{{type}}"> 
-        </span>
-    </div>
-    {{!-- There's a reason I don't use meter here - it's evil to style, and IE doesn't support it. If anyone playing this is using IE, they're already in the dystopia --}}
-
-   <div class="field">
-        <label for="system.fuel.efficiency">{{CPLocal "Efficiency"}}</label>
-        <span class="flexrow flex-pad">
-            <input type="number" name="system.fuel.efficiency" value="{{efficiency}}">
-            <span class="nogrow">{{@root.veh.fuelEffSuffix}}</span>
         </span>
     </div>
     {{/with}}
@@ -176,7 +132,7 @@
         </span>
     </div>
     <div class="field">
-        <label for="system.maneuverability.value">{{CPLocal "ManeuverabilityFull"}}</label>
+        <label for="system.maneuverability.value" title="{{CPLocal "ManeuverabilityHint"}}">{{CPLocal "ManeuverabilityFull"}}</label>
         <span class="flexrow flex-pad">
             <input type="number" name="system.maneuverability.value" value="{{system.maneuverability.value}}">
         </span>
@@ -227,4 +183,53 @@
         </span>
     </div>
 </div>
+
+{{!-- Fuel — DEMOTED (VEHICLE-SPEC.md §4): the books print the fuel triad on ~1% of vehicles
+      (range above is the real endurance stat), so it renders LAST, its gauge only appears once a
+      capacity is recorded, and a locked sheet with no fuel data skips the block (veh.showFuel). --}}
+{{#if @root.veh.showFuel}}
+<div class="field-list">
+    {{#with system.fuel}}
+    {{#if max}}
+    <div class="flexcol fillwidth span-two-cells">
+        <div class="meter-gauge fillwidth">
+            <span style="width: calc(100% * ({{value}}/{{max}}));" class="
+            {{#if (compare value "<" (math max "/" 3))}}
+            danger
+            {{/if}}"></span>
+        </div>
+    </div>
+    {{/if}}
+    <div class="field">
+        <label class="larger" for="system.fuel.value">{{CPLocal "Fuel"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.fuel.value" value="{{value}}">
+            <span class="nogrow">/</span>
+            <input type="number" name="system.fuel.max" value="{{max}}">
+            {{#if @root.editable}}
+            <select name="system.fuel.unit" class="nogrow cp-unit-select">
+                <option value="gal" {{#if (equals unit "gal")}}selected{{/if}}>gal</option>
+                <option value="liters" {{#if (equals unit "liters")}}selected{{/if}}>L</option>
+            </select>
+            {{else}}
+            <span class="nogrow cp-unit-static">{{@root.veh.fuelCapSuffix}}</span>
+            {{/if}}
+        </span>
+    </div>
+     <div class="field">
+        <label for="system.fuel.type">{{CPLocal "Type"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="text" name="system.fuel.type" value="{{type}}">
+        </span>
+    </div>
+   <div class="field">
+        <label for="system.fuel.efficiency">{{CPLocal "Efficiency"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.fuel.efficiency" value="{{efficiency}}">
+            <span class="nogrow">{{@root.veh.fuelEffSuffix}}</span>
+        </span>
+    </div>
+    {{/with}}
+</div>
+{{/if}}
 </div>{{!-- /.cp-vehicle-item-fields --}}

@@ -145,6 +145,10 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       fuelUnit: fUnit,
       fuelCapSuffix: fUnit === "gal" ? "gal" : "L",
       fuelEffSuffix: fUnit === "gal" ? "mpg" : "km/L",
+      // Fuel is DEMOTED in the UI (VEHICLE-SPEC.md §4 — printed on ~1% of vehicles): a locked sheet
+      // with no fuel data skips the block; an editable sheet always shows it (data entry).
+      showFuel: !!sheet.editable || !!(Number(sys.fuel?.max) || Number(sys.fuel?.value)
+        || Number(sys.fuel?.efficiency) || String(sys.fuel?.type ?? "").trim()),
       // Soft-enum suggestions for the class datalist (VEHICLE_TYPE_SUGGESTIONS, module/lookups.js).
       vehicleTypeSuggestions: VEHICLE_TYPE_SUGGESTIONS
     };
