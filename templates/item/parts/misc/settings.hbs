@@ -116,5 +116,27 @@
                {{#if system.mechRollMods.auto}}checked{{/if}}/>
     </div>
     {{/if}}
+
+    {{!-- P7 timed consumable: dose counter + optional duration (number or roll formula, rolled at
+         use time; the round tick counts it down). Activatable cyberware spends a dose on
+         ACTIVATION, so the Use button renders only for non-activatable items. --}}
+    {{> (template "fields/boolean") label="MechConsumable" edit="system.mechConsumable.enabled"}}
+    {{#if system.mechConsumable.enabled}}
+    {{> (template "fields/number") label="MechConsumableDoses" edit="system.mechConsumable.doses"}}
+    <div class="field" title="{{CPLocal "MechConsumableDurationHint"}}">
+        <label for="system.mechConsumable.durationTurns">{{CPLocal "MechConsumableDuration"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.mechConsumable.durationTurns" type="text"
+               value="{{system.mechConsumable.durationTurns}}" placeholder="1d6+2"/>
+    </div>
+    {{> (template "fields/string") label="MechConsumableNote" edit="system.mechConsumable.note"}}
+    {{#unless (equals system.EffectMode "Activatable")}}
+    <div class="field">
+        <label>{{CPLocal "MechConsumableUseHint"}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-consumable-use nogrow">{{CPLocal "MechConsumableUse"}}</button>
+    </div>
+    {{/unless}}
+    {{/if}}
     {{/if}}
 </div>

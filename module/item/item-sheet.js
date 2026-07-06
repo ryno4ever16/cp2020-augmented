@@ -5,6 +5,7 @@ import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
 import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
+import { useConsumable } from "../mech/consumable.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -794,6 +795,21 @@ async _prepareCyberware(sheet) {
     this._cpActivateCyberwareInstall(root);
     this._cpActivateVehicleWeaponShellControls(root);
     this._cpActivateAmmoControls(root);
+    this._cpActivateMechConsumableControls(root);
+  }
+
+  /** P7 consumable Use button — spends a dose via the mech engine (bind-once). */
+  _cpActivateMechConsumableControls(root) {
+    if (!root?.ownerDocument) return;
+    if (!this.isEditable) return;
+    if (root.dataset.cpMechConsumableBound === "1") return;
+    root.dataset.cpMechConsumableBound = "1";
+    root.addEventListener("click", async (event) => {
+      const btn = event.target?.closest?.(".cp-consumable-use");
+      if (!btn) return;
+      event.preventDefault();
+      await useConsumable(this.item);
+    });
   }
 
   _cpActivateVehicleSpeedControls(root) {

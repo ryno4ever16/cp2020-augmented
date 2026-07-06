@@ -38,6 +38,7 @@ import { registerDataCorrections } from "./data-corrections.js";
 import { makeMechAugmentedData } from "./data/mech-item-data.js";
 import { registerMechLight } from "./mech/light.js";
 import { registerMechVision } from "./mech/vision.js";
+import { registerMechConsumable } from "./mech/consumable.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -291,6 +292,8 @@ Hooks.once("ready", function () {
   // (the active GM applies the token writes).
   registerMechLight();
   registerMechVision();
+  // P7 timed consumables: dose gate on activation + the per-turn timer tick.
+  registerMechConsumable();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the

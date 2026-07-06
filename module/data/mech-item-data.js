@@ -75,6 +75,26 @@ export const MECH_ROLL_MODS_DEFAULTS = {
   enabled: false, attackMod: 0, skillName: "", skillMod: 0, auto: true
 };
 
+/**
+ * `mechConsumable` (pattern P7 — timed consumables): dose-tracked items whose effect runs out.
+ *   doses         — uses remaining. The Use action (misc) or an Activatable cyberware's
+ *                   activation consumes one; at 0 the action warns / the activation is blocked.
+ *                   Refills are the GM's call (e.g. the Adrenal Booster's "3x per day" — day
+ *                   tracking is theirs, the counter is ours).
+ *   durationTurns — "" = instant/untimed. Otherwise a number or roll formula ("1d6+2"), rolled at
+ *                   use time; the module/mech/consumable.js round tick (DOT-pattern: the current
+ *                   combatant's timers tick when their turn comes up) counts it down and posts a
+ *                   wear-off card. For Activatable cyberware, expiry also flips EffectActive off,
+ *                   so a payload the BASE engine gates on activation (the Booster's Stat +1 REF)
+ *                   starts and stops with the timer — P7 owns time + uses, never the effect math.
+ *   note          — short effect label for the chat cards ("+1 REF"); item DATA, stays English.
+ * Effects whose numbers the books don't print stay unwired (the supplement drug texts were never
+ * captured — proposal §3b); this block only ever carries printed values.
+ */
+export const MECH_CONSUMABLE_DEFAULTS = {
+  enabled: false, doses: 1, durationTurns: "", note: ""
+};
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -121,6 +141,16 @@ function mechRollModsField() {
   });
 }
 
+function mechConsumableField() {
+  const f = foundry.data.fields;
+  return new f.SchemaField({
+    enabled:       new f.BooleanField({ initial: MECH_CONSUMABLE_DEFAULTS.enabled }),
+    doses:         new f.NumberField({ initial: MECH_CONSUMABLE_DEFAULTS.doses }),
+    durationTurns: new f.StringField({ initial: MECH_CONSUMABLE_DEFAULTS.durationTurns }),
+    note:          new f.StringField({ initial: MECH_CONSUMABLE_DEFAULTS.note })
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -133,7 +163,8 @@ export function makeMechAugmentedData(SystemModel) {
         mechLight: mechLightField(),
         mechVision: mechVisionField(),
         mechProtection: mechProtectionField(),
-        mechRollMods: mechRollModsField()
+        mechRollMods: mechRollModsField(),
+        mechConsumable: mechConsumableField()
       };
     }
   };

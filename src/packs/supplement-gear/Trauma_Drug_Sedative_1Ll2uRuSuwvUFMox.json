@@ -12,7 +12,13 @@
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechConsumable": {
+      "enabled": true,
+      "doses": 1,
+      "durationTurns": "",
+      "note": ""
+    }
   },
   "effects": [],
   "folder": null,

@@ -63,6 +63,11 @@ function mechProtection(hazards) {
 function mechRollMods({ attackMod = 0, skillName = "", skillMod = 0, auto = true } = {}) {
   return { mechRollMods: { enabled: true, attackMod, skillName, skillMod, auto } };
 }
+/** P7 timed-consumable patch (doses/duration from the item's own printed text; duration may be a
+ *  roll formula, rolled at use time). */
+function mechConsumable({ doses = 1, durationTurns = "", note = "" } = {}) {
+  return { mechConsumable: { enabled: true, doses, durationTurns, note } };
+}
 
 /** One `<p>` block appended to a corrected item's notes. */
 function note(text) { return `<p>${text}</p>`; }
@@ -144,6 +149,9 @@ export const DATA_CORRECTIONS = {
     fA02aOWaC6JRuWg8: { name: "First Aid Kit" },                     // was "Fist Aid Kit"
     // P5: "+2 on DiagnoseSkill" (Medical p.71) — suggested on Diagnose Illness rolls.
     oTl9WjtAxnwI2wly: { patch: mechRollMods({ skillName: "Diagnose Illness", skillMod: 2 }) },  // Medscanner
+    // P7: an adhesive drug patch is one application; the drug it carries is the GM's call
+    // ("Price differs per used Drug" — the book prices the drug, not the patch).
+    I2c4U3FtntrJCIEl: { patch: mechConsumable({ doses: 1 }) },       // Slap Patch
   },
   "cyberpunk2020.rentalandservices": {
     oN5HJZeZ4Ef4MMTY: { name: "Apartment/Condo – Combat Zone" },
@@ -258,6 +266,10 @@ export const DATA_CORRECTIONS = {
     i264oefxjekvVgnN: skillAlias("WotYfaW9pqhl7S6N", "Seduction", 1),  // Mr Studd Sexual Implant
     // P6: sealed internal air ("good for 10 to 25 minutes" — duration stays in the flavor).
     zOzfWnALVczrmjkZ: { patch: mechProtection({ gas: { immune: true } }) },  // Independent Air Supply
+    // P7: "Boosts REF by +1 for 1d6+2 turns 3x per day" — the pack already carries Stat {ref:+1}
+    // + Activatable, so the BASE engine owns the +1 while active; this adds the uses counter
+    // (3; the per-day reset is the GM's) + the rolled duration whose expiry switches it back off.
+    EHOfG6zqqaFTHIV8: { patch: mechConsumable({ doses: 3, durationTurns: "1d6+2", note: "+1 REF" }) },  // Adrenal Booster
   },
   "cyberpunk2020.neuralware": {
     "4gYluthCnbT7zVQQ": skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Olfactory Boost
