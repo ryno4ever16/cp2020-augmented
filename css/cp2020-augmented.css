@@ -55,6 +55,8 @@
 .cp-shop-request-price-unit { flex: 0 0 auto; opacity: 0.75; }
 /* Catalog price cell for an unpriced item: a muted "GM-priced" chip instead of a free 0eb. */
 .cp-price-gm { font-style: italic; opacity: 0.7; font-size: 0.9em; }
+/* Variable-price item (data-corrections priceRange): the book's range shown beside the listed price. */
+.cp-price-range { opacity: 0.7; font-size: 0.9em; cursor: help; }
 
 /* ===== Shopping & IP custom UI (mirrors scss/_shop.scss) =====
    Self-contained input colors so custom fields stay readable under ANY UI theme (Carolingian etc.

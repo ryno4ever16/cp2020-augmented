@@ -1,4 +1,5 @@
 import { buyItem, FASHION_STYLES, styleMultOf, resolveCatalogPrice, isValidPrice } from "./purchase.js";
+import { correctionFor, correctedCost } from "../data-corrections.js";
 import { buyAndInstallCyberware } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
@@ -101,12 +102,16 @@ async function buildCatalogIndex() {
       // Type-grouped supplement packs (and any other unmapped pack) categorize per-item from item data.
       const { category, sub } = mapped ? packCat : categoryOfItem(type, e.system);
       const { supplement, canon } = classifySupplement(e.system?.source);
+      // Book-verified corrections to base-pack data (name/cost/priceRange) — data-corrections.js.
+      const corr = correctionFor(pack.collection, e._id);
       // Price precedence (compendium → GM override → unpurchasable): an item the base leaves unpriced
-      // is NOT free — it shows "GM-priced" and routes a buy through the GM price-request flow.
-      const pr = resolveCatalogPrice(e.system?.cost, e._id, overrides);
+      // is NOT free — it shows "GM-priced" and routes a buy through the GM price-request flow. For a
+      // variable-price item (corr.priceRange) the GM override wins instead (the range is a suggestion).
+      const pr = resolveCatalogPrice(correctedCost(pack.collection, e._id, e.system?.cost), e._id, overrides, { preferOverride: !!corr?.priceRange });
       items.push({
-        id: e._id, packId: pack.collection, name: e.name, img: e.img,
-        cost: pr.price ?? 0, unpriced: !pr.purchasable, type, category, sub, supplement, supplementShort: shortSupplement(supplement), canon,
+        id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: e.img,
+        cost: pr.price ?? 0, unpriced: !pr.purchasable, priceRange: corr?.priceRange ?? null,
+        type, category, sub, supplement, supplementShort: shortSupplement(supplement), canon,
         key: `${pack.collection}.${e._id}`
       });
     }
@@ -751,8 +756,10 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   if (!doc) return;
   // Price precedence: compendium cost → GM override → unpurchasable. An item the base leaves unpriced
   // is NEVER free — route it (for ANYONE, GM included) through the price-request flow so the GM sets a
-  // price first; that price is saved as a self-disengaging override (re-runs here once set).
-  const pr = resolveCatalogPrice(doc.system?.cost, itemId);
+  // price first; that price is saved as a self-disengaging override (re-runs here once set). For a
+  // variable-price item (data-corrections priceRange) the GM override wins over the compendium cost.
+  const corr = correctionFor(packId, itemId);
+  const pr = resolveCatalogPrice(correctedCost(packId, itemId, doc.system?.cost), itemId, undefined, { preferOverride: !!corr?.priceRange });
   if (!pr.purchasable) {
     await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, styleMult, styleLabel, needsPrice: true });
     return;
@@ -761,9 +768,10 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
   // Published-shops-only: a player may BROWSE the full catalog but needs GM permission to buy from it
   // directly — route the buy through a GM purchase request instead. (Published-shop buys go through
-  // purchaseShopItem and are unaffected; a GM buying here is unaffected.)
+  // purchaseShopItem and are unaffected; a GM buying here is unaffected.) A variable-price item's
+  // request carries the book range so the GM can set the final price right on the card.
   if (!game.user.isGM && shopBuySource() === "shops") {
-    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel });
+    await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel, priceRange: corr?.priceRange ?? null });
     return;
   }
   if (doc.type === "cyberware") { await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice }); return; }
@@ -788,7 +796,7 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
   const { category, sub } = categoryOfPack(game.packs.get(packId)?.metadata?.name ?? "");
   const isClothing = category === "Gear" && sub === "Fashion";
   const styleMult = isClothing ? styleMultOf(e.style) : 1;
-  const unitPrice = effectivePrice(def, sourceKey, Number(doc.system?.cost) || 0, styleMult);
+  const unitPrice = effectivePrice(def, sourceKey, Number(correctedCost(packId, itemId, doc.system?.cost)) || 0, styleMult);
   const bits = [];
   if (isClothing && e.style && e.style !== "generic") bits.push(`${shopStyleLabel(e.style)} ×${styleMult}`);
   if (def.discountPct) bits.push(`-${def.discountPct}%`);
@@ -816,20 +824,22 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
  * registerShopHooks (the card itself is viewer-neutral, like the apply-damage card). */
 
 /** Post a GM-whispered purchase request for a full-catalog item; notify the requesting player.
- *  `needsPrice` = the item has no catalog price; the card shows the GM a price input to set first. */
-async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice = 0, styleMult = 1, styleLabel = "", needsPrice = false } = {}) {
+ *  `needsPrice` = the item has no catalog price; the card shows the GM a price input to set first.
+ *  `priceRange` = a variable-price item (data-corrections): the card shows the book's range and an
+ *  OPTIONAL price input — the GM may set the final price or approve at the listed one. */
+async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice = 0, styleMult = 1, styleLabel = "", needsPrice = false, priceRange = null } = {}) {
   const n = Math.max(1, Math.floor(Number(qty) || 1));
   const total = Math.max(0, Math.round((Number(unitPrice) || 0) * n));
   const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
   const content = await renderChatCard("shop/purchase-request.hbs", {
-    requester: game.user.name, buyer: buyer?.name ?? "", name, qty: n, total, label, pending: true, needsPrice,
+    requester: game.user.name, buyer: buyer?.name ?? "", name, qty: n, total, label, pending: true, needsPrice, priceRange,
   });
   const gms = ChatMessage.getWhisperRecipients("GM").map((u) => u.id);
   await ChatMessage.create({
     content, whisper: gms, speaker: ChatMessage.getSpeaker({ actor: buyer }),
     flags: { "cp2020-augmented": { purchaseRequest: {
       buyerId: buyer?.id ?? "", packId, itemId, qty: n, styleMult, styleLabel,
-      name, total, needsPrice, requesterId: game.user.id, status: "pending",
+      name, total, needsPrice, priceRange, requesterId: game.user.id, status: "pending",
     } } },
   });
   ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopRequestSent"));
@@ -837,7 +847,10 @@ async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice
 
 /** GM resolves a pending purchase request: Approve runs the buy as GM; Deny whispers the requester.
  *  For a price-request (needsPrice), `price` is the GM-entered value: it's saved as a self-disengaging
- *  override (never written to the compendium) BEFORE the buy, so purchaseCatalogItem resolves to it. */
+ *  override (never written to the compendium) BEFORE the buy, so purchaseCatalogItem resolves to it.
+ *  For a variable-price request (priceRange) the input is OPTIONAL: a GM-entered price is saved as the
+ *  item's override (which WINS for range items — see resolveCatalogPrice preferOverride); left blank,
+ *  the buy runs at the listed price. */
 async function resolvePurchaseRequest(message, approve, price) {
   if (!game.user.isGM) return;
   const req = message?.getFlag?.("cp2020-augmented", "purchaseRequest");
@@ -848,6 +861,8 @@ async function resolvePurchaseRequest(message, approve, price) {
     if (req.needsPrice) {
       if (!isValidPrice(price)) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopPriceNeeded")); return; }
       await setShopPriceOverride(req.itemId, price);   // self-disengaging: compendium cost always wins later
+    } else if (req.priceRange && isValidPrice(price)) {
+      await setShopPriceOverride(req.itemId, price);   // range item: the GM's price becomes the standing final price
     }
     await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel });
   } else {
@@ -858,8 +873,10 @@ async function resolvePurchaseRequest(message, approve, price) {
     });
   }
   const label = req.styleLabel && req.styleMult !== 1 ? `${req.styleLabel} ×${req.styleMult}` : "";
-  // After a price-request approval the total is now known (price × qty); otherwise keep the original.
-  const total = (req.needsPrice && approve) ? Math.max(0, Math.round((Number(price) || 0) * req.qty)) : req.total;
+  // After a price-request approval the total is now known (price × qty); a range request the GM
+  // repriced recomputes the same way; otherwise keep the original.
+  const gmPriced = approve && (req.needsPrice || (req.priceRange && isValidPrice(price)));
+  const total = gmPriced ? Math.max(0, Math.round((Number(price) || 0) * req.qty)) : req.total;
   const content = await renderChatCard("shop/purchase-request.hbs", {
     requester: game.users.get(req.requesterId)?.name ?? "", buyer: buyer?.name ?? req.buyerId,
     name: req.name, qty: req.qty, total, label,
@@ -912,10 +929,11 @@ export async function purchaseByDrop(buyer, { sourceKey, shopId = null } = {}) {
     if (def.open === false && !game.user.isGM) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopClosed")); return; }
     const e = normalizeShopItem(def.items[sourceKey]);
     styleMult = isClothing ? styleMultOf(e.style) : 1;
-    unitPrice = effectivePrice(def, sourceKey, Number(doc.system?.cost) || 0, styleMult);
+    unitPrice = effectivePrice(def, sourceKey, Number(correctedCost(packId, itemId, doc.system?.cost)) || 0, styleMult);
     styleLabel = (isClothing && e.style && e.style !== "generic") ? shopStyleLabel(e.style) : "";
   } else {
-    const pr = resolveCatalogPrice(doc.system?.cost, itemId);
+    const corr = correctionFor(packId, itemId);
+    const pr = resolveCatalogPrice(correctedCost(packId, itemId, doc.system?.cost), itemId, undefined, { preferOverride: !!corr?.priceRange });
     if (!pr.purchasable) {
       // Unpriced catalog item: skip the misleading 0eb confirm — purchaseCatalogItem routes the drop
       // through the GM price-request flow (no free buy). Qty defaults to 1 until a price is set.

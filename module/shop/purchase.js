@@ -44,9 +44,18 @@ export function isPositivePrice(raw) {
  * @param {*} rawCost            the item's raw `system.cost`
  * @param {string} itemId        the item `_id` (the override key — stable across rename/localization)
  * @param {object} [overrides]   optional pre-fetched override map (else read live for this id)
+ * @param {object} [opts]
+ * @param {boolean} [opts.preferOverride] variable-price items (data-corrections `priceRange`): the
+ *   compendium cost is only the book range's top end, so a GM-set override IS the real price and wins.
+ *   Everything else keeps the self-disengaging order (compendium first) so a fixed upstream cost
+ *   retires its override.
  * @returns {{price:number|null, purchasable:boolean, source:"compendium"|"override"|"none"}}
  */
-export function resolveCatalogPrice(rawCost, itemId, overrides) {
+export function resolveCatalogPrice(rawCost, itemId, overrides, { preferOverride = false } = {}) {
+  if (preferOverride) {
+    const early = overrides ? overrides[itemId] : getShopPriceOverride(itemId);
+    if (isValidPrice(early)) return { price: Math.max(0, Math.round(Number(early))), purchasable: true, source: "override" };
+  }
   if (isPositivePrice(rawCost)) return { price: Math.round(Number(rawCost)), purchasable: true, source: "compendium" };
   const override = overrides ? overrides[itemId] : getShopPriceOverride(itemId);
   if (isValidPrice(override)) return { price: Math.max(0, Math.round(Number(override))), purchasable: true, source: "override" };

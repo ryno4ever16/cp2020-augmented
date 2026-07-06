@@ -16,7 +16,16 @@
     <input type="number" class="cp-shop-request-price" min="0" step="1" placeholder="0"/>
     <span class="cp-shop-request-price-unit">eb</span>
   </div>
-  {{/if}}
+  {{else}}{{#if priceRange}}
+  {{!-- Variable-price item: the book prints a range; the price input is a SUGGESTION (optional).
+        Blank = approve at the listed price; a value = saved as the item's standing price. --}}
+  <p class="cp-shop-request-note">{{CPLocal "ShopPriceRangeReqNote" min=priceRange.min max=priceRange.max}}</p>
+  <div class="cp-shop-request-price-row">
+    <label class="cp-shop-request-price-label">{{localize "CYBERPUNK.ShopPriceLabel"}}</label>
+    <input type="number" class="cp-shop-request-price" min="0" step="1" placeholder="{{localize "CYBERPUNK.ShopPriceRangeKeep"}}"/>
+    <span class="cp-shop-request-price-unit">eb</span>
+  </div>
+  {{/if}}{{/if}}
   <div class="cp-shop-request-actions">
     <button type="button" class="cp-shop-request-btn cp-approve" data-action="approve"><i class="fas fa-check"></i> {{#if needsPrice}}{{localize "CYBERPUNK.ShopPriceSetBuy"}}{{else}}{{localize "CYBERPUNK.ShopRequestApprove"}}{{/if}}</button>
     <button type="button" class="cp-shop-request-btn cp-deny" data-action="deny"><i class="fas fa-xmark"></i> {{localize "CYBERPUNK.ShopRequestDeny"}}</button>

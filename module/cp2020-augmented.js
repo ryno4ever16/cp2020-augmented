@@ -34,6 +34,7 @@ import { openIpTracker } from "./ip/tracker.js";
 // Settings presets — the GM "Choose Preset" menu button (one-click playstyle tiers).
 import { PresetPicker } from "./dialog/preset-picker.js";
 import { registerPinnedSubwindows } from "./pin-window.js";
+import { registerDataCorrections } from "./data-corrections.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -127,6 +128,11 @@ Hooks.once("init", function () {
   // Vendor the {{CPLocal}}/{{CPLocalParam}} localization helpers the module's templates use, so
   // they resolve without depending on the base system registering them (vanilla self-sufficiency).
   registerAugmentedHandlebarsHelpers();
+
+  // Book-verified corrections to base-system compendium items (the packs can't be edited in place —
+  // they're reinstalled on every system update). Copies created from a corrected compendium item get
+  // the corrected data; the shop prices with it too. See module/data-corrections.js.
+  registerDataCorrections();
 
   // Keep spawned child windows (confirm dialogs + the Attack Modifiers window) floating above the
   // ordinary window they were opened from, so clicking the parent never buries them. Idempotent: on a
