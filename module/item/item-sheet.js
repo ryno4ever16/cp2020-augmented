@@ -4,6 +4,7 @@ import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
+import { VISION_DEVICE_MODES } from "../data/mech-item-data.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -67,8 +68,16 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     data.isGM = game.user.isGM;
     data.canEditCyberwareHumanity = game.user.isGM
       || game.settings.get("cyberpunk2020", "playersCanEditCyberwareHumanity");
-    // P3 light emitters live on misc gear + cyberware only (the shared footer partial gates on this).
-    data.mechLightEligible = this.item.type === "misc" || this.item.type === "cyberware";
+    // P3/P4 special-mechanics fields live on misc gear + cyberware only (the shared footer partial
+    // gates on this). Vision-mode options are built here — JS owns data, labels localized.
+    data.mechFieldsEligible = this.item.type === "misc" || this.item.type === "cyberware";
+    if (data.mechFieldsEligible) {
+      const current = this.item.system?.mechVision?.mode ?? "lowlight";
+      data.mechVisionModes = VISION_DEVICE_MODES.map(m => ({
+        value: m, selected: m === current,
+        label: localize("MechVisionMode" + m.charAt(0).toUpperCase() + m.slice(1))
+      }));
+    }
 
     switch (this.item.type) {
       case "weapon":

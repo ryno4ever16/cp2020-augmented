@@ -53,15 +53,32 @@ export function desiredLightFor(items) {
   };
 }
 
-/** The actor's tokens on the viewed scene (token DOCUMENTS; handles synthetic token-actors). */
-function tokensOf(actor) {
+/** The actor's tokens on the viewed scene (token DOCUMENTS; handles synthetic token-actors).
+ *  Shared by the mech/ engines (vision.js imports it). */
+export function tokensOf(actor) {
   if (actor?.isToken) return actor.token ? [actor.token] : [];
   return actor?.getActiveTokens?.(true, true) ?? [];
 }
 
-/** Apply (or restore) the merged emitter light on every active token of `actor`. */
-export async function applyActorLight(actor) {
-  if (!actor) return;
+/** Per-actor apply queue shared by the mech/ engines: rapid toggles fire overlapping async applies,
+ *  and an EARLIER apply's token write can land after a LATER restore (rig-proven race). Chaining
+ *  per actor serializes the writes; each job re-reads item state at run time, so the chain
+ *  converges on the latest toggle. */
+const _applyQueues = new Map();
+export function enqueueApply(actor, job) {
+  const key = actor?.uuid ?? actor?.id ?? "?";
+  const next = (_applyQueues.get(key) ?? Promise.resolve()).then(job, job);
+  _applyQueues.set(key, next);
+  return next;
+}
+
+/** Apply (or restore) the merged emitter light on every active token of `actor` (serialized). */
+export function applyActorLight(actor) {
+  if (!actor) return Promise.resolve();
+  return enqueueApply(actor, () => _applyActorLight(actor));
+}
+
+async function _applyActorLight(actor) {
   const desired = desiredLightFor(actor.items?.contents ?? actor.items ?? []);
   for (const tokenDoc of tokensOf(actor)) {
     try {
@@ -72,7 +89,10 @@ export async function applyActorLight(actor) {
           "light.angle": desired.angle, "light.color": desired.color
         };
         // First override: remember the token's own light so going dark restores it exactly.
-        if (base === undefined) patch[`flags.${SCOPE}.${BASE_FLAG}`] = tokenDoc.light?.toObject?.() ?? {};
+        // Snapshot the SOURCE (a plain, complete object on every core — prepared `token.light`
+        // is a DataModel here but plain elsewhere, and a failed toObject() would store {} and
+        // silently break the restore, the exact defect the sight engine hit).
+        if (base === undefined) patch[`flags.${SCOPE}.${BASE_FLAG}`] = foundry.utils.deepClone(tokenDoc._source?.light ?? {});
         await tokenDoc.update(patch);
       } else if (base !== undefined) {
         await tokenDoc.update({ light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
@@ -83,8 +103,9 @@ export async function applyActorLight(actor) {
   }
 }
 
-/** True when THIS client should perform the token writes for the event. */
-function iAmTheApplier(actor) {
+/** True when THIS client should perform the token writes for the event.
+ *  Shared by the mech/ engines (vision.js imports it). */
+export function iAmTheApplier(actor) {
   const gm = game.users?.activeGM;
   if (gm) return gm.id === game.user.id;      // exactly one applier when any GM is on
   return !!actor?.isOwner;                     // no GM online: an owner tries directly

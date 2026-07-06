@@ -27,6 +27,18 @@ export const MECH_LIGHT_DEFAULTS = {
   enabled: false, on: false, shape: "cone", bright: 10, dim: 20, angle: 45, color: ""
 };
 
+/**
+ * `mechVision` (pattern P4 — vision devices): IR/low-light/thermograph/UV optics that change how
+ * the wearer's token SEES (where mechLight changes how it is seen). `mode` is a soft enum
+ * (VISION_DEVICE_MODES); the Foundry mapping lives in module/mech/vision.js and is deliberately a
+ * small upgradeable table — the fidelity question (plain see-in-dark vs live-target detection for
+ * thermograph) is an OPEN QUESTION in SPECIAL-MECHANICS-PROPOSAL.md, and the default is the simple
+ * darkvision-class approximation. `range` is the device's effective sight range in scene units
+ * (the books print absolutes like "see in total darkness", so the default is a playable 20).
+ */
+export const MECH_VISION_DEFAULTS = { enabled: false, on: false, mode: "lowlight", range: 20 };
+export const VISION_DEVICE_MODES = ["lowlight", "infrared", "thermograph", "uv"];
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -40,6 +52,16 @@ function mechLightField() {
   });
 }
 
+function mechVisionField() {
+  const f = foundry.data.fields;
+  return new f.SchemaField({
+    enabled: new f.BooleanField({ initial: MECH_VISION_DEFAULTS.enabled }),
+    on:      new f.BooleanField({ initial: MECH_VISION_DEFAULTS.on }),
+    mode:    new f.StringField({ initial: MECH_VISION_DEFAULTS.mode }),
+    range:   new f.NumberField({ initial: MECH_VISION_DEFAULTS.range })
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -49,7 +71,8 @@ export function makeMechAugmentedData(SystemModel) {
     static defineSchema() {
       return {
         ...super.defineSchema(),
-        mechLight: mechLightField()
+        mechLight: mechLightField(),
+        mechVision: mechVisionField()
       };
     }
   };

@@ -36,7 +36,7 @@
          `system.mechLight` is a REAL field — the module extends the misc/cyberware DataModels at
          init (D1) — so the inputs bind directly; no flags detour. "Lit" is the runtime toggle a
          player flips; the token lights up only while the item is also equipped. --}}
-    {{#if @root.mechLightEligible}}
+    {{#if @root.mechFieldsEligible}}
     {{> (template "fields/boolean") label="MechLight" edit="system.mechLight.enabled"}}
     {{#if system.mechLight.enabled}}
     <div class="field">
@@ -58,6 +58,21 @@
         <input class="textsize" name="system.mechLight.color" type="text" value="{{system.mechLight.color}}" placeholder="#ffffff"/>
     </div>
     {{> (template "fields/boolean") label="MechLightOn" edit="system.mechLight.on"}}
+    {{/if}}
+
+    {{!-- P4 vision device (IR / low-light / thermograph / UV): changes how the wearer's token SEES.
+         Mode options are assembled in _prepareContext (JS owns data; labels localized there). --}}
+    {{> (template "fields/boolean") label="MechVision" edit="system.mechVision.enabled"}}
+    {{#if system.mechVision.enabled}}
+    <div class="field">
+        <label for="system.mechVision.mode">{{CPLocal "MechVisionMode"}}</label>
+        <span class="flex-pad"></span>
+        <select name="system.mechVision.mode">
+            {{#each @root.mechVisionModes}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+    </div>
+    {{> (template "fields/number") label="MechVisionRange" edit="system.mechVision.range"}}
+    {{> (template "fields/boolean") label="MechVisionOn" edit="system.mechVision.on"}}
     {{/if}}
     {{/if}}
 </div>

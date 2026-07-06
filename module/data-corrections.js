@@ -49,6 +49,10 @@ function skillAlias(id, enName, mod) { return { patch: { "CyberWorkType.Skill": 
 function mechLight({ shape = "cone", bright = 10, dim = 20, angle = 45, color = "" } = {}) {
   return { patch: { mechLight: { enabled: true, on: false, shape, bright, dim, angle, color } } };
 }
+/** P4 vision-device patch (mode per the item's own printed text; range = playable default). */
+function mechVision(mode, range = 20) {
+  return { mechVision: { enabled: true, on: false, mode, range } };
+}
 
 /** One `<p>` block appended to a corrected item's notes. */
 function note(text) { return `<p>${text}</p>`; }
@@ -136,8 +140,9 @@ export const DATA_CORRECTIONS = {
     fe2JHml3p3rOS9M3: { name: "Apartment/Condo – Moderate Zone" },
   },
   "cyberpunk2020.surveillance": {
-    j8D1o1qngrZDsmaB: { name: "IR Goggles" },                        // was "Googles"
-    cok1ozJSd3VniVAt: { name: "Light Booster Goggles" },
+    // PR #41 name fixes + P4 vision profiles (their own text: IR / light amplification).
+    j8D1o1qngrZDsmaB: { name: "IR Goggles", patch: mechVision("infrared") },       // was "Googles"
+    cok1ozJSd3VniVAt: { name: "Light Booster Goggles", patch: mechVision("lowlight") },
   },
   "cyberpunk2020.tools": {
     gkjBAKUHKs4pd9uE: { name: "Protective Goggles" },
@@ -222,6 +227,11 @@ export const DATA_CORRECTIONS = {
   },
   "cyberpunk2020.cyberoptic": {
     C868gK04Emnui8Dm: skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Image Enhancement
+    // P4 vision devices — modes straight from each option's printed text.
+    qiTXkPooklv9UHsI: { patch: mechVision("infrared") },     // Infrared — "see in total darkness, using heat emissions"
+    YBS9vFZX14R6bwk0: { patch: mechVision("lowlight") },     // Low Lite — "see in dim light, almost total darkness"
+    yOFBoZ9tV3czAW2B: { patch: mechVision("thermograph") },  // Thermograph sensor — "see heat patterns"
+    XG6ffmsWnkUWNkcW: { patch: mechVision("uv") },           // Ultra Violet — "see in darkness; using UV flash"
   },
   "cyberpunk2020.fashonware": {
     T7uGBTZgaeB7NKIm: skillAlias("svx86NhUYhqVlLNw", "Resist Torture/Drugs", 2),  // Biomonitor

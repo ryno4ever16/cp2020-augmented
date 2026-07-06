@@ -37,6 +37,7 @@ import { registerPinnedSubwindows } from "./pin-window.js";
 import { registerDataCorrections } from "./data-corrections.js";
 import { makeMechAugmentedData } from "./data/mech-item-data.js";
 import { registerMechLight } from "./mech/light.js";
+import { registerMechVision } from "./mech/vision.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -286,8 +287,10 @@ Hooks.once("ready", function () {
   // world storage, writes the merged value once, then deletes the legacy doc so it never re-runs.
   if (game.user?.isGM) migrateAugmentedSettings().catch((e) => console.warn(`${SCOPE} | settings migration failed`, e));
 
-  // P3 light emitters: item toggles drive the bearer's token light (active GM applies the writes).
+  // P3 light emitters + P4 vision devices: item toggles drive the bearer's token light/sight
+  // (the active GM applies the token writes).
   registerMechLight();
+  registerMechVision();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the
