@@ -4,6 +4,32 @@
       rules and its long labels (Speed/Fuel/Passengers/Maneuverability/Efficiency) otherwise
       collapse to ~0 width and overprint their inputs. --}}
 <div class="cp-vehicle-item-fields">
+{{!-- Identity / capacity (audit-walk schema upgrade — VEHICLE-SPEC.md §4). vehicleType is a SOFT
+      enum: free text + a suggestions datalist, so the books' own class vocabulary survives. The
+      datalist id is per-item to avoid the fixed-id singleton clash across two open sheets. --}}
+<div class="field-list">
+    <div class="field">
+        <label for="system.vehicleType">{{CPLocal "VehicleClass"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="text" name="system.vehicleType" value="{{system.vehicleType}}" list="cp-vehicle-types-{{@root.item._id}}">
+        </span>
+        <datalist id="cp-vehicle-types-{{@root.item._id}}">
+            {{#each @root.veh.vehicleTypeSuggestions}}<option value="{{this}}"></option>{{/each}}
+        </datalist>
+    </div>
+    <div class="field">
+        <label for="system.crew">{{CPLocal "Crew"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.crew" value="{{system.crew}}">
+        </span>
+    </div>
+    <div class="field">
+        <label for="system.body" title="{{CPLocal "BodyRatingFull"}}">{{CPLocal "Body"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.body" value="{{system.body}}">
+        </span>
+    </div>
+</div>
 {{!-- Structural Damage Points (SDP is a terrible name) --}}
 <div class="field-list">
     {{#with system.sdp}}
@@ -62,9 +88,17 @@
         </span>
     </div>
      <div class="field">
-        <label for="system.speed.value">{{CPLocal "Accel"}}</label>
+        <label for="system.speed.acceleration">{{CPLocal "Accel"}}</label>
         <span class="flexrow flex-pad">
             <input type="number" name="system.speed.acceleration" value="{{acceleration}}">
+            <span class="nogrow">{{@root.veh.speedUnit}}</span>
+        </span>
+    </div>
+     <div class="field">
+        {{!-- The books print accel/decel as a pair ("ACC/DEC 18/30") — VEHICLE-SPEC.md §6 --}}
+        <label for="system.speed.deceleration">{{CPLocal "Decel"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.speed.deceleration" value="{{deceleration}}">
             <span class="nogrow">{{@root.veh.speedUnit}}</span>
         </span>
     </div>
@@ -100,12 +134,19 @@
         </div>
     </div>
     <div class="field">
-        <label class="larger" for="system.speed.value">{{CPLocal "Fuel"}}</label>
+        <label class="larger" for="system.fuel.value">{{CPLocal "Fuel"}}</label>
         <span class="flexrow flex-pad">
-            <input type="number" name="system.fuel.value" value="{{value}}"> 
+            <input type="number" name="system.fuel.value" value="{{value}}">
             <span class="nogrow">/</span>
             <input type="number" name="system.fuel.max" value="{{max}}">
-            <span class="nogrow">{{CPLocal "Gallon"}}</span>
+            {{#if @root.editable}}
+            <select name="system.fuel.unit" class="nogrow cp-unit-select">
+                <option value="gal" {{#if (equals unit "gal")}}selected{{/if}}>gal</option>
+                <option value="liters" {{#if (equals unit "liters")}}selected{{/if}}>L</option>
+            </select>
+            {{else}}
+            <span class="nogrow cp-unit-static">{{@root.veh.fuelCapSuffix}}</span>
+            {{/if}}
         </span>
     </div>
      <div class="field">
@@ -119,8 +160,8 @@
    <div class="field">
         <label for="system.fuel.efficiency">{{CPLocal "Efficiency"}}</label>
         <span class="flexrow flex-pad">
-            <input type="number" name="system.fuel.efficiency" value="{{efficiency}}"> 
-            <span class="nogrow">{{CPLocal "MPG"}}</span>
+            <input type="number" name="system.fuel.efficiency" value="{{efficiency}}">
+            <span class="nogrow">{{@root.veh.fuelEffSuffix}}</span>
         </span>
     </div>
     {{/with}}
@@ -154,6 +195,35 @@
             <span class="nogrow cp-unit-static">{{veh.rangeUnit}}</span>
             {{/if}}
             <span class="nogrow cp-unit-conv"><small>≈ {{veh.rangeAlt}} {{veh.rangeAltUnit}}</small></span>
+        </span>
+    </div>
+    {{!-- Mass + cargo (audit-walk schema upgrade): value + unit, mirroring the speed/range pattern --}}
+    <div class="field">
+        <label for="system.mass.value">{{CPLocal "Mass"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.mass.value" value="{{system.mass.value}}">
+            {{#if @root.editable}}
+            <select name="system.mass.unit" class="nogrow cp-unit-select">
+                <option value="tons" {{#if (equals system.mass.unit "tons")}}selected{{/if}}>tons</option>
+                <option value="kg" {{#if (equals system.mass.unit "kg")}}selected{{/if}}>kg</option>
+            </select>
+            {{else}}
+            <span class="nogrow cp-unit-static">{{system.mass.unit}}</span>
+            {{/if}}
+        </span>
+    </div>
+    <div class="field">
+        <label for="system.cargo.value">{{CPLocal "Cargo"}}</label>
+        <span class="flexrow flex-pad">
+            <input type="number" name="system.cargo.value" value="{{system.cargo.value}}">
+            {{#if @root.editable}}
+            <select name="system.cargo.unit" class="nogrow cp-unit-select">
+                <option value="kg" {{#if (equals system.cargo.unit "kg")}}selected{{/if}}>kg</option>
+                <option value="tons" {{#if (equals system.cargo.unit "tons")}}selected{{/if}}>tons</option>
+            </select>
+            {{else}}
+            <span class="nogrow cp-unit-static">{{system.cargo.unit}}</span>
+            {{/if}}
         </span>
     </div>
 </div>

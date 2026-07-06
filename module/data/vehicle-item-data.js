@@ -208,20 +208,33 @@ export function makeVehicleItemData(SystemVehicleData) {
     static defineSchema() {
       return {
         ...super.defineSchema(),   // the system's full vehicle schema (chains any future field it gains)
-        // Override `speed` ONLY to add `unit` (mph|kph), covering value/max/maneuver/acceleration.
-        speed:     objectField({ value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" }),
+        // Override `speed` ONLY to add `unit` (mph|kph) + `deceleration` — the books print the pair
+        // ("ACC/DEC 18/30"). Covers value/max/maneuver/acceleration.
+        speed:     objectField({ value: 0, max: 0, maneuver: 0, acceleration: 0, deceleration: 0, unit: "mph" }),
         // Travel range in `rangeUnit` (mi|km) — Chromebook/SoF stat-block field the base model lacked.
         range:     numberField(0),
-        rangeUnit: stringField("mi")
+        rangeUnit: stringField("mi"),
+        // Override `fuel` ONLY to add `unit` (gal|liters) — L&D/FH print liters + km-per-liter.
+        // Second manual sync point beside `speed` (document both if the base model ever changes).
+        fuel:      objectField({ type: "", efficiency: 0, max: 0, value: 0, unit: "gal" }),
+        // Audit-walk schema upgrade (VEHICLE-SPEC.md §4, evidence §0b-§1): the fields the books
+        // actually print that the inherited Core-car shape lacked. All additive.
+        vehicleType: stringField(""),                      // soft enum — book class ("Car", "AV", …)
+        crew:        numberField(0),                       // operating crew (49% printed)
+        body:        numberField(0),                       // abstract Body rating ("SDP 100 (Body 5)")
+        cargo:       objectField({ value: 0, unit: "kg" }),   // cargo capacity (33% printed)
+        mass:        objectField({ value: 0, unit: "tons" })  // vehicle mass (41% printed) — NOT inventory `weight`
       };
     }
 
     static migrateData(source) {
       source ??= {};
       if (hasOwn(source, "sdp"))             source.sdp             = mergeDefaults(source.sdp,             { value: 0, max: 0 });
-      if (hasOwn(source, "speed"))           source.speed           = mergeDefaults(source.speed,           { value: 0, max: 0, maneuver: 0, acceleration: 0, unit: "mph" });
+      if (hasOwn(source, "speed"))           source.speed           = mergeDefaults(source.speed,           { value: 0, max: 0, maneuver: 0, acceleration: 0, deceleration: 0, unit: "mph" });
       if (hasOwn(source, "maneuverability")) source.maneuverability = mergeDefaults(source.maneuverability, { value: 0, condition: "" });
-      if (hasOwn(source, "fuel"))            source.fuel            = mergeDefaults(source.fuel,            { type: "", efficiency: 0, max: 0, value: 0 });
+      if (hasOwn(source, "fuel"))            source.fuel            = mergeDefaults(source.fuel,            { type: "", efficiency: 0, max: 0, value: 0, unit: "gal" });
+      if (hasOwn(source, "cargo"))           source.cargo           = mergeDefaults(source.cargo,           { value: 0, unit: "kg" });
+      if (hasOwn(source, "mass"))            source.mass            = mergeDefaults(source.mass,            { value: 0, unit: "tons" });
       return super.migrateData(source);   // chains to the system's vehicle/base migrateData
     }
   };

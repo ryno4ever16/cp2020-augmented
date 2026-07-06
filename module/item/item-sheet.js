@@ -1,4 +1,4 @@
-import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, getCalibers, AMMO_MODIFIERS, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice } from "../lookups.js";
+import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, getCalibers, AMMO_MODIFIERS, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice, VEHICLE_TYPE_SUGGESTIONS } from "../lookups.js";
 import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
 import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
@@ -123,6 +123,10 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     const rAltUnit = rUnit === "mi" ? "km" : "mi";
     const rFactor = rUnit === "mi" ? KM_PER_MI : MI_PER_KM;
 
+    // Fuel unit (gal|liters) drives the capacity + efficiency suffixes ("gal"/"mpg" vs "L"/"km/L").
+    // Raw designations, same convention as mph/kph — no i18n keys for unit designations.
+    const fUnit = (sys.fuel?.unit === "liters") ? "liters" : "gal";
+
     sheet.veh = {
       speedUnit: sUnit,
       speedAltUnit: sAltUnit,
@@ -130,13 +134,19 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
         max:          conv(sys.speed?.max),
         value:        conv(sys.speed?.value),
         maneuver:     conv(sys.speed?.maneuver),
-        acceleration: conv(sys.speed?.acceleration)
+        acceleration: conv(sys.speed?.acceleration),
+        deceleration: conv(sys.speed?.deceleration)
       },
       rangeUnit: rUnit,
       rangeAltUnit: rAltUnit,
       rangeAlt: Math.round((Number(sys.range) || 0) * rFactor),
       speedUnitOptions: { mph: "mph", kph: "kph" },
-      rangeUnitOptions: { mi: "mi", km: "km" }
+      rangeUnitOptions: { mi: "mi", km: "km" },
+      fuelUnit: fUnit,
+      fuelCapSuffix: fUnit === "gal" ? "gal" : "L",
+      fuelEffSuffix: fUnit === "gal" ? "mpg" : "km/L",
+      // Soft-enum suggestions for the class datalist (VEHICLE_TYPE_SUGGESTIONS, module/lookups.js).
+      vehicleTypeSuggestions: VEHICLE_TYPE_SUGGESTIONS
     };
   }
 
