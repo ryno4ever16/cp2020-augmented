@@ -1,0 +1,35 @@
+{
+  "_id": "ja4IJpAigwduPSMO",
+  "name": "LiveWires (Wearable)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "Prehensile interface cables — non-implant wearable version",
+    "notes": "<p>The wearable, non-implant version of LiveWires. The body-implant version is cyberware and costs 200eb. (Chromebook 3 p.24)</p>",
+    "cost": 400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "accessory",
+      "importReview": {
+        "level": "user-eyes",
+        "ledger": "USER-AUDIT-2026-07-05",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ja4IJpAigwduPSMO"
+}

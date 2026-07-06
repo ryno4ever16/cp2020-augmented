@@ -1,0 +1,35 @@
+{
+  "_id": "sqCqC5d6YHSPk2VW",
+  "name": "Lead's Coloring Nail Pen",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "Coloring pen for Lead's Show-Off Nails",
+    "notes": "<p>Coloring pen for Lead's Show-Off Nails. (Chromebook 3 p.36)</p>",
+    "cost": 90,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "accessory",
+      "importReview": {
+        "level": "user-eyes",
+        "ledger": "USER-AUDIT-2026-07-05",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!sqCqC5d6YHSPk2VW"
+}
