@@ -56,6 +56,9 @@ const PACK_MAP = {
   "vehicles": ["Vehicles", ""]
 };
 
+/** Vehicles sub-filters (display order: ground → air → water → space → military → unmanned). */
+const VEHICLE_SUBS = ["Cars", "Cycles", "Trucks", "AVs", "Aircraft", "Hover", "Watercraft", "Spacecraft", "Military", "Drones", "ACPA", "Other"];
+
 /** The filter taxonomy shown in the shop UI (top category → ordered sub-types). */
 export const CATEGORIES = [
   { key: "Weapons",    subs: ["Pistols", "SMGs", "Rifles", "Shotguns", "Heavy", "Melee", "Exotic", "Other"] },
@@ -65,8 +68,34 @@ export const CATEGORIES = [
   { key: "Gear",       subs: ["Communication", "Electronics", "Entertainment", "Fashion", "Furnishing", "Medical", "Security", "Surveillance", "Tools", "Rentals & Services"] },
   { key: "Netrunning", subs: [] },
   { key: "Programs",   subs: [] },
-  { key: "Vehicles",   subs: [] }
+  { key: "Vehicles",   subs: VEHICLE_SUBS }
 ];
+
+/**
+ * system.vehicleType (a SOFT enum — free text with datalist suggestions) → Vehicles sub-filter.
+ * Keyword rules over the books' own class vocabulary; FIRST match wins, so locomotion outranks
+ * role ("Hover Tank" is a hovercraft — MM panzers — not Military). Blank stays "" (unclassified:
+ * no data is not a class), a non-empty class no rule knows lands in "Other".
+ */
+const VEHICLE_SUB_RULES = [
+  ["ACPA",       /acpa|powered? armou?r/],
+  ["Drones",     /rpv|drone|remote/],
+  ["Hover",      /hover|panzer|\bgev\b|plenum|ground.effect/],
+  ["Military",   /\btank\b|\bapc\b|\bifv\b|\bafv\b|\bmbt\b|acav|artillery/],
+  ["AVs",        /aerodyne|\bavs?\b|aircar/],
+  ["Aircraft",   /helicopter|gunship|chopper|tilt.?rotor|tilt.?wing|osprey|dirigible|airship|blimp|zeppelin|ultralight|microlight|autogyro|fixed.?wing|plane\b|\bjet\b|fighter|bomber|aircraft|vtol/],
+  ["Watercraft", /submarine|submersible|\bsub\b|boat|\bship\b|watercraft|hydrofoil|jet.?ski|yacht|naval/],
+  ["Spacecraft", /space|orbit|shuttle/],
+  ["Cycles",     /cycle|\bbike\b|trike/],
+  ["Trucks",     /truck|\bsemi\b|hauler|prime mover|tractor|bulldozer|construction|crane|earthmover|\b\dx\d\b/],
+  ["Cars",       /car\b|sedan|coupe|limo|taxi|\bcab\b|\bvan\b|wagon|jeep|buggy|roadster|convertible|hatchback|pickup|\batv\b|utility/],
+];
+export function vehicleSubOf(vehicleType) {
+  const t = String(vehicleType ?? "").trim().toLowerCase();
+  if (!t) return "";
+  for (const [sub, re] of VEHICLE_SUB_RULES) if (re.test(t)) return sub;
+  return "Other";
+}
 
 /** Resolve a pack name to { category, sub }. Unmapped buyable packs → Gear / Other. */
 export function categoryOfPack(packName) {
@@ -96,7 +125,7 @@ export function categoryOfItem(type, system = {}) {
   switch (type) {
     case "weapon":    return { category: "Weapons", sub: WEAPON_TYPE_SUB[system?.weaponType] ?? "Other" };
     case "armor":     return { category: "Armor", sub: "" };
-    case "vehicle":   return { category: "Vehicles", sub: "" };
+    case "vehicle":   return { category: "Vehicles", sub: vehicleSubOf(system?.vehicleType) };
     case "program":   return { category: "Programs", sub: "" };
     case "cyberware": return { category: "Cyberware", sub: "Other" };
     default:          return { category: "Gear", sub: "Other" };

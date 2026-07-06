@@ -41,6 +41,10 @@ const SHOP_SUB_LABEL_KEYS = {
   Furnishing: "CYBERPUNK.ShopSubFurnishing", Medical: "CYBERPUNK.ShopSubMedical",
   Security: "CYBERPUNK.ShopSubSecurity", Surveillance: "CYBERPUNK.ShopSubSurveillance",
   Tools: "CYBERPUNK.ShopSubTools", "Rentals & Services": "CYBERPUNK.ShopSubRentalsServices",
+  Cars: "CYBERPUNK.ShopSubCars", Cycles: "CYBERPUNK.ShopSubCycles", Trucks: "CYBERPUNK.ShopSubTrucks",
+  AVs: "CYBERPUNK.ShopSubAVs", Aircraft: "CYBERPUNK.ShopSubAircraft", Hover: "CYBERPUNK.ShopSubHover",
+  Watercraft: "CYBERPUNK.ShopSubWatercraft", Spacecraft: "CYBERPUNK.ShopSubSpacecraft",
+  Military: "CYBERPUNK.ShopSubMilitary", Drones: "CYBERPUNK.ShopSubDrones", ACPA: "CYBERPUNK.ShopSubACPA",
 };
 const SHOP_STYLE_LABEL_KEYS = {
   generic: "CYBERPUNK.ShopStyleGeneric", leisure: "CYBERPUNK.ShopStyleLeisure",
@@ -93,14 +97,16 @@ async function buildCatalogIndex() {
     const mapped = isMappedPack(packName);          // legacy packs: one cat/sub for the whole pack
     const packCat = categoryOfPack(packName);
     let idx;
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "type", "img"] }); }
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {
       const type = e.type ?? "misc";
       if (EXCLUDED_TYPES.has(type)) continue;
       // Type-grouped supplement packs (and any other unmapped pack) categorize per-item from item data.
-      const { category, sub } = mapped ? packCat : categoryOfItem(type, e.system);
+      // Vehicles ALWAYS categorize per-item: their class sub-filter reads system.vehicleType (the soft
+      // enum), which a mapped pack's one-cat/sub-per-pack identity can't carry.
+      const { category, sub } = (mapped && type !== "vehicle") ? packCat : categoryOfItem(type, e.system);
       const { supplement, canon } = classifySupplement(e.system?.source);
       // Book-verified corrections to base-pack data (name/cost/priceRange) — data-corrections.js.
       const corr = correctionFor(pack.collection, e._id);
