@@ -1,0 +1,68 @@
+{
+  "_id": "QmtsuFqB6FQobKNq",
+  "name": "Nomad Sling",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Neo Tribes origin per Reference Book; printed in Blackhand's. 10eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +286 — Neo Tribes p.9]</p>",
+    "cost": 10,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes p.9",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1/2d6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+286",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Neo Tribes",
+        "page": 9
+      },
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!QmtsuFqB6FQobKNq"
+}

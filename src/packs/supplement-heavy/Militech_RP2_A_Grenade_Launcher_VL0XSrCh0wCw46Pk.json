@@ -1,0 +1,69 @@
+{
+  "_id": "VL0XSrCh0wCw46Pk",
+  "name": "Militech RP2-A Grenade Launcher",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 designation OCR 'RPii-A' = RP2-A (RPG-A?). 1500eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +300 — Blackhand's Street Weapons p.37]</p>",
+    "cost": 1500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.37",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+300",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 37
+      },
+      "manufacturer": "Militech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!VL0XSrCh0wCw46Pk"
+}

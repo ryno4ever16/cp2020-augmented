@@ -1,0 +1,69 @@
+{
+  "_id": "3pt95x2HoDIqDny0",
+  "name": "Stein & Wasserman Model F",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index-priced. | [Audit row +114 — Chromebook 1 p.93]</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.93",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+114",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 93
+      },
+      "manufacturer": "Stein & Wasserman",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!3pt95x2HoDIqDny0"
+}

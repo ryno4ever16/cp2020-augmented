@@ -1,0 +1,63 @@
+{
+  "_id": "e4vVxD3YWfhQQy6k",
+  "name": "HMMWV \"Hummer\" (2020)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Military pickup under license by a dozen manufacturers (artificially low price). 100mph, crew1+5, 1250kg, 2.25t. | [Audit row +312 — Firestorm: Shockwave p.63]</p>",
+    "cost": 30000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.63",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 60,
+      "max": 60
+    },
+    "sp": 10,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+312",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 63
+      },
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!e4vVxD3YWfhQQy6k"
+}

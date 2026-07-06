@@ -1,0 +1,64 @@
+{
+  "_id": "OvoR5lRe39yVUsQB",
+  "name": "NAA Ambunaught",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Armored paramedic 4×4; environment-sealed, fireproof; 16 man-hours life support; 4 stretchers + 2 medics. | [Audit row +60 — Chromebook 1 p.23]</p>",
+    "cost": 76000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.23",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 120,
+      "max": 120
+    },
+    "sp": 40,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 72,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+60",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 23
+      },
+      "manufacturer": "New American Autoworks",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!OvoR5lRe39yVUsQB"
+}

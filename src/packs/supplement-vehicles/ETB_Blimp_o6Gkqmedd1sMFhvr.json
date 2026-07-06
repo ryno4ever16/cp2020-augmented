@@ -1,0 +1,64 @@
+{
+  "_id": "o6Gkqmedd1sMFhvr",
+  "name": "ETB Blimp",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Advertising/regional patrol/area denial dirigible; envelope is a flexible video display screen; crew 5+1 (pilot, commander, 2 gunners, ECM officer), 10t, 2.5t cargo; 2x 7.62 miniguns in stabilized turrets; long-range radio, scrambler, anti-laser aerosol, chaff/flares, 2x +2 targeting computers, mini-galley, damage + environment control, radar, autopilot/nav, ECM, image enhancement, IR, light amp, radar detector, thermal imaging, telescopic optics, 5x ejection seats. Feared/hated by Nomads and rural residents. RGUK p.43. | [Audit row +365 — Rough Guide to the UK p.43]</p>",
+    "cost": 900000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.43",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 70,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 1500
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+365",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 43
+      },
+      "manufacturer": "Goodyear (English Tourist Board)",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!o6Gkqmedd1sMFhvr"
+}

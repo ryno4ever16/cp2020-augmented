@@ -1,0 +1,45 @@
+{
+  "_id": "qVmJyeUnU5jZ4pni",
+  "name": "Ominbus Cyberspace Explorer One",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>25,000/1300eb (index). | [Audit row +239 — Chromebook 3 p.125]</p>",
+    "cost": 25000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.125",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "Deck",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+239",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 125
+      },
+      "manufacturer": "Ominbus",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!qVmJyeUnU5jZ4pni"
+}

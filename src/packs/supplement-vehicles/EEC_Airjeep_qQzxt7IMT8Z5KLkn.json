@@ -1,0 +1,64 @@
+{
+  "_id": "qQzxt7IMT8Z5KLkn",
+  "name": "EEC Airjeep",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Slow, reliable, ugly, functional, cheap (Kubelwagen-looking). 150mph, crew1+5, 525mi, 2t. | [Audit row +336 — Firestorm: Shockwave p.67]</p>",
+    "cost": 25000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.67",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 50,
+      "max": 50
+    },
+    "sp": 15,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+336",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 67
+      },
+      "manufacturer": "EEC",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!qQzxt7IMT8Z5KLkn"
+}

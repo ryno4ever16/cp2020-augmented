@@ -1,0 +1,69 @@
+{
+  "_id": "h9iyvu0FpYB2B4U2",
+  "name": "Militech Military/Police Shotgun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Riot/duty shotgun, 300eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +294 — Blackhand's Street Weapons p.23]</p>",
+    "cost": 300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.23",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+294",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 23
+      },
+      "manufacturer": "Militech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!h9iyvu0FpYB2B4U2"
+}

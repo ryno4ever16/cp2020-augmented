@@ -1,0 +1,43 @@
+{
+  "_id": "UyCf3SfWZjwFBYlJ",
+  "name": "Lead's Turn-On Coloring Pen",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR 'so eb'=50eb. Color-adjust pen for Turn-On Nails (twist + tap). NOTE for corrections layer: Turn-On implant HC = 1 per pair of limbs. Distinct from Show-Off's 90eb pen. | [Audit row +12 — Chromebook 3 p.36]</p>",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.36",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 45600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+12",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 36
+      },
+      "manufacturer": "Lead's",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "user-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!UyCf3SfWZjwFBYlJ"
+}

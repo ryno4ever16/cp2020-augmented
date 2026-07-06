@@ -1,0 +1,64 @@
+{
+  "_id": "SGETJUmwTlgAlfZ3",
+  "name": "GKN Sankey-Landrover Police Control Cruiser",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Pickup, crew 2+6, 2.4t; crash control, fire extinguisher system, tear-gas smoke launcher, military radio, IR active systems, light amp, searchlight, shocker taser grid, two-space stabilized weapon turret. RGUK p.40. | [Audit row +362 — Rough Guide to the UK p.40]</p>",
+    "cost": 65750,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.40",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 60,
+      "max": 60
+    },
+    "sp": 24,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 70,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 300
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+362",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 40
+      },
+      "manufacturer": "GKN Sankey-Landrover",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!SGETJUmwTlgAlfZ3"
+}

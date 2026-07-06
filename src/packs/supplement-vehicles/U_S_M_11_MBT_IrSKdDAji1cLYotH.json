@@ -1,0 +1,63 @@
+{
+  "_id": "IrSKdDAji1cLYotH",
+  "name": "U.S. M-11 MBT",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Army state-of-the-art cyberlinked MBT. 60mph, crew3, 60t. | [Audit row +346 — Firestorm: Shockwave p.69]</p>",
+    "cost": 16400000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.69",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 360,
+      "max": 360
+    },
+    "sp": 225,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+346",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 69
+      },
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!IrSKdDAji1cLYotH"
+}

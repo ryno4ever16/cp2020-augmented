@@ -1,0 +1,69 @@
+{
+  "_id": "AjqHgbR4ySE10IfC",
+  "name": "Arasaka EMF Grenade",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>EMF/EMP-class grenade per RefBook (SW). 👁 page unknown. | [Audit row +354 — Firestorm: Shockwave p.👁]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.👁",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "10d10 special",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+354",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": "👁"
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!AjqHgbR4ySE10IfC"
+}

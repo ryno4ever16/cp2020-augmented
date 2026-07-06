@@ -1,0 +1,64 @@
+{
+  "_id": "J9FKHTgyUbhXKAem",
+  "name": "PGU-10D \"Pigman\" ACPA",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>US military heavy ACPA: STR40, 1566kg. | [Audit row +310 — Firestorm: Shockwave p.86]</p>",
+    "cost": 246700,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.86",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 40,
+      "max": 40
+    },
+    "sp": 40,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+310",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 86
+      },
+      "manufacturer": "US Military",
+      "importCategory": "acpa-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!J9FKHTgyUbhXKAem"
+}

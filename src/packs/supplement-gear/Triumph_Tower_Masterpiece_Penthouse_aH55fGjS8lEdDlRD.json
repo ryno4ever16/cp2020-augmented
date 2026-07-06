@@ -1,0 +1,43 @@
+{
+  "_id": "aH55fGjS8lEdDlRD",
+  "name": "Triumph Tower \"Masterpiece\" Penthouse",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Luxury penthouse suite atop Triumph Tower (San Francisco); OPENING BID 800,000eb (OCR 'BOO,OODeb', B→8/D→0). Two floors + rooftop helipad; SP40 walls, SP25 glass; satellite comms w/ scrambler. Found during blank-row recovery — p.83 was missed by the walk. | [Audit row +282 — Chromebook 1 p.83]</p>",
+    "cost": 800000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.83",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 44000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+282",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 83
+      },
+      "manufacturer": "Harris and Company",
+      "importCategory": "service",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!aH55fGjS8lEdDlRD"
+}

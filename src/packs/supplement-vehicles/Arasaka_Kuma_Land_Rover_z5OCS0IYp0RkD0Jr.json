@@ -1,0 +1,64 @@
+{
+  "_id": "z5OCS0IYp0RkD0Jr",
+  "name": "Arasaka Kuma Land Rover",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>4x4 (Car). 90mph, crew1+3, 650kg cargo, 2t. Arasaka pays manufacturer's price 15,000eb. | [Audit row +311 — Firestorm: Shockwave p.63]</p>",
+    "cost": 28000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.63",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 50,
+      "max": 50
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+311",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 63
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!z5OCS0IYp0RkD0Jr"
+}

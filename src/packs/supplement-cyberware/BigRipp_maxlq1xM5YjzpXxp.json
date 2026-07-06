@@ -1,0 +1,60 @@
+{
+  "_id": "maxlq1xM5YjzpXxp",
+  "name": "BigRipp",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>14\" carboglas blade: meat-mount 1200eb (Surg MA) / cyberlimb 850eb (Surg M). 2D6, knife-AP (full AP cyber-mounted); parry-break 1-3 on d10 (forearm mount 1, w/ martial parry riposte). Black market. | [Audit row +262 — Chromebook 4 p.11]</p>",
+    "cost": 1200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 p.11",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "3D6+1",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+262",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 4",
+        "page": 11
+      },
+      "manufacturer": "NovelTech",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!maxlq1xM5YjzpXxp"
+}

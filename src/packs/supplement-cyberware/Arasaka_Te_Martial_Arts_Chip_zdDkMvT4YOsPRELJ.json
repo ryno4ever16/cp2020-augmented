@@ -1,0 +1,60 @@
+{
+  "_id": "zdDkMvT4YOsPRELJ",
+  "name": "Arasaka-Te Martial Arts Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>270eb/LEVEL, to +3. Style (diff 1), USER-VERIFIED: Strike+1 Kick+1 Block+1 Dodge+1 Throw+1 Hold+1 Escape+1 Choke+2 Sweep— Grapple+1. | [Audit row +6 — Chromebook 3 p.38]</p>",
+    "cost": 270,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.38",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+6",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 38
+      },
+      "manufacturer": "The Weaponmasters",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "user-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!zdDkMvT4YOsPRELJ"
+}

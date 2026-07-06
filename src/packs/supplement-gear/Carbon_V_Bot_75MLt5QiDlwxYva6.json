@@ -1,0 +1,43 @@
+{
+  "_id": "75MLt5QiDlwxYva6",
+  "name": "Carbon V-Bot",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 maker as above. | [Audit row +214 — Chromebook 3 p.125]</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.125",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 47500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+214",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 125
+      },
+      "manufacturer": "Carbon",
+      "importCategory": "robot",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!75MLt5QiDlwxYva6"
+}

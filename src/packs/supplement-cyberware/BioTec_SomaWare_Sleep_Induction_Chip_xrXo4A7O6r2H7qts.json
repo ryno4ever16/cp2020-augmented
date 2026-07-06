@@ -1,0 +1,60 @@
+{
+  "_id": "xrXo4A7O6r2H7qts",
+  "name": "BioTec \"SomaWare\" Sleep Induction Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '40Deb'=400eb. Chipware. Normal sleep in 25s + alarm. Addiction: after 15 uses Average COOL to resist hooking, +1 Diff per 2 uses over; Endurance/Resist Torture&Drugs modify. | [Audit row +1 — Chromebook 3 p.37]</p>",
+    "cost": 400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.37",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+1",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 37
+      },
+      "manufacturer": "BioTec I.",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "user-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!xrXo4A7O6r2H7qts"
+}

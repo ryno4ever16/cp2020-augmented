@@ -1,0 +1,60 @@
+{
+  "_id": "TzOTh89i41BiHaPM",
+  "name": "Wearman Mark II",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Skull micro-speakers + laser-optic microdisk reader under ear; clinic install. | [Audit row +76 — Chromebook 1 p.38]</p>",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.38",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "0",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 3800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+76",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 38
+      },
+      "manufacturer": "Advanced Audio Systems",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!TzOTh89i41BiHaPM"
+}

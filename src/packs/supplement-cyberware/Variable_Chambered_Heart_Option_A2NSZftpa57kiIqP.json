@@ -1,0 +1,60 @@
+{
+  "_id": "A2NSZftpa57kiIqP",
+  "name": "Variable-Chambered Heart Option",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>+450eb to cyberheart: crocodile-style bypass doubles breath-holding (10-20 min), +1 Endurance; Overdrive+Bypass together = stroke! Surgery N. | [Audit row +259 — Chromebook 4 p.9]</p>",
+    "cost": 450,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 p.9",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "+1D6/2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+259",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 4",
+        "page": 9
+      },
+      "manufacturer": "Bodyweight",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!A2NSZftpa57kiIqP"
+}

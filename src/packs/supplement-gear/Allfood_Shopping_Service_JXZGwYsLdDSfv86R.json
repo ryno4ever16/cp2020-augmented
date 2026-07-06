@@ -1,0 +1,43 @@
+{
+  "_id": "JXZGwYsLdDSfv86R",
+  "name": "Allfood Shopping Service",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 25eb/month membership + 10eb/delivery groceries. | [Audit row +34 — Chromebook 1 p.70]</p>",
+    "cost": 25,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.70",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+34",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 70
+      },
+      "manufacturer": "Allfood Inc. (Holt Coalition)",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JXZGwYsLdDSfv86R"
+}

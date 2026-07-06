@@ -1,0 +1,69 @@
+{
+  "_id": "3eUYVOIFA4Gl5tby",
+  "name": "Excalibur Macestick",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Sibling of the Excalibur Nightstick; mace-dispensing baton, 6 charges. Stats from Reference Book. | [Audit row +373 — Protect & Serve p.34]</p>",
+    "cost": 80,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve p.34",
+    "lastOwnerId": "",
+    "weaponType": "Melee",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2d6+3 + Mace",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": true,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 1,
+    "attackType": "",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+373",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Protect & Serve",
+        "page": 34
+      },
+      "manufacturer": "Excalibur",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!3eUYVOIFA4Gl5tby"
+}

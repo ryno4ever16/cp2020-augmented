@@ -1,0 +1,63 @@
+{
+  "_id": "6ybzjxjsFgqjuHwU",
+  "name": "Pedicab",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Pedal cab; fare ~1.5eb/mile; 25mph level; 75% of gunfire = cosmetic only. | [Audit row +59 — Chromebook 1 p.22]</p>",
+    "cost": 1200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.22",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 15,
+      "max": 15
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+59",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 22
+      },
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!6ybzjxjsFgqjuHwU"
+}

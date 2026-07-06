@@ -1,0 +1,69 @@
+{
+  "_id": "LLYn7EBTNo5DBL6d",
+  "name": "BACL Reactive Body Armor (complete system)",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>RGUK p.37. 20SP Flack Vest (EV+1) + 20SP fully-enclosed nylon battle helmet (respirator/anti-gas, smart goggles, UV imaging, anti-dazzle, infra-red, closed-circuit comms; optional direct-feed video). Multi-spectrum receptors in vest warn wearer of laser/smartgun acquisition on helmet HUD: negates Ambush modifier vs those systems; boosted-reflex wearer may dodge (roll > to-hit). British special forces; extremely rare. | [Audit row +371 — Rough Guide to the UK p.37]</p>",
+    "cost": 4990,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.37",
+    "lastOwnerId": "",
+    "armorType": "Hard",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "20",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "0",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 1
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+371",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 37
+      },
+      "manufacturer": "Birmingham Arms Company Ltd",
+      "importCategory": "armor",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!LLYn7EBTNo5DBL6d"
+}

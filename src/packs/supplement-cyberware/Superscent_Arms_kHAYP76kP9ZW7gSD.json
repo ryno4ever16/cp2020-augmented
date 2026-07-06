@@ -1,0 +1,59 @@
+{
+  "_id": "kHAYP76kP9ZW7gSD",
+  "name": "Superscent Arms",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 index 'SUPERSam ARMs 4000-SOOOEB' — name + range garbled (4000-5000/6000?). | [Audit row +228 — Chromebook 3 p.124]</p>",
+    "cost": 4000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.124",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+228",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 124
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kHAYP76kP9ZW7gSD"
+}

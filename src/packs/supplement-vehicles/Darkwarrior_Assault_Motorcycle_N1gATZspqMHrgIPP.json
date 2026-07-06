@@ -1,0 +1,63 @@
+{
+  "_id": "N1gATZspqMHrgIPP",
+  "name": "Darkwarrior Assault Motorcycle",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Armed cycle: pair of light MGs + improved armor. 100mph, 140kg. | [Audit row +313 — Firestorm: Shockwave p.63]</p>",
+    "cost": 13350,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.63",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 35,
+      "max": 35
+    },
+    "sp": 5,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+313",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 63
+      },
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!N1gATZspqMHrgIPP"
+}

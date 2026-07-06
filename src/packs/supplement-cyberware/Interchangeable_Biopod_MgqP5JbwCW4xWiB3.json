@@ -1,0 +1,59 @@
+{
+  "_id": "MgqP5JbwCW4xWiB3",
+  "name": "Interchangeable Biopod",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Biosystem in a life-support module (~2 cu.ft), swappable between fitted borg bodies; buy only at transplant time; humanity index varies by body (total HC − 16D6). | [Audit row +130 — Chromebook 2 p.85]</p>",
+    "cost": 20000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.85",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "18D6",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+130",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 85
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!MgqP5JbwCW4xWiB3"
+}

@@ -1,0 +1,64 @@
+{
+  "_id": "psfSgAPPBhwrEU3n",
+  "name": "Bell-Boeing Falcon-6",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Commuter osprey; Falcon-B = armored military version. 315mph, crew1+9, 4t, 12.5t. | [Audit row +339 — Firestorm: Shockwave p.68]</p>",
+    "cost": 600000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.68",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 100,
+      "max": 100
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+339",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 68
+      },
+      "manufacturer": "Bell-Boeing",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!psfSgAPPBhwrEU3n"
+}

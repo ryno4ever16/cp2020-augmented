@@ -1,0 +1,64 @@
+{
+  "_id": "jNfsCZW3zC6xwjcr",
+  "name": "Mitsubishi Dragon",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>2.5M eb (index). | [Audit row +68 — Chromebook 1 p.93]</p>",
+    "cost": 2500000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.93",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+68",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 93
+      },
+      "manufacturer": "Mitsubishi",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!jNfsCZW3zC6xwjcr"
+}

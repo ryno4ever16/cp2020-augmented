@@ -1,0 +1,43 @@
+{
+  "_id": "QsMUUEsgYaDxYbB1",
+  "name": "DataTel's Mapmaker",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '50Deb'=500eb (D→0). Portable inertial tracking computer; traceback warning mode; 1kg; +400eb Navstar satellite link (true position within 10m, OCR '1 Om'). | Jenny: DataTel. Portable tracking computer. Marks progress through unknown terrain. Shows current and starting positions. On traceback mode if return course deviates from memory it will give warning via audio, visual or both. For 400eb more can plot your true Earth position within 10m. | [Audit row +17 — Chromebook 1 p.9]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.9",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+17",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 9
+      },
+      "manufacturer": "DataTel",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!QsMUUEsgYaDxYbB1"
+}

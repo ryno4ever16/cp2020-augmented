@@ -1,0 +1,64 @@
+{
+  "_id": "Yky4rWjSwirmD6VS",
+  "name": "Lockheed C-200 Universe",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Largest STOL jet; fast cargo-lifter. 600mph, crew3, 100 pax OR 42t, 80t. | [Audit row +341 — Firestorm: Shockwave p.68]</p>",
+    "cost": 6100000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.68",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 5,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+341",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 68
+      },
+      "manufacturer": "Lockheed",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Yky4rWjSwirmD6VS"
+}

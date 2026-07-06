@@ -1,0 +1,60 @@
+{
+  "_id": "yYkRl1Ysvx4uVG4t",
+  "name": "Bio-Chip (Calm)",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 name OCR-garbled ('Btre-') — verify printed name. Biofeedback calm: +1 COOL (combat morale), +1 EMP (interactive skills); relieves migraines/hypertension. | [Audit row +91 — Chromebook 1 p.75]</p>",
+    "cost": 350,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.75",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+91",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 75
+      },
+      "manufacturer": "BioTec I.",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!yYkRl1Ysvx4uVG4t"
+}

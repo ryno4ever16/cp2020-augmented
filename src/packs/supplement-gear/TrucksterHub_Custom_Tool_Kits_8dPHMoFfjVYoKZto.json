@@ -1,0 +1,42 @@
+{
+  "_id": "8dPHMoFfjVYoKZto",
+  "name": "'TrucksterHub' Custom Tool Kits",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>1000/1500eb (index). | [Audit row +155 — Chromebook 3 p.124]</p>",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.124",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 45900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+155",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 124
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!8dPHMoFfjVYoKZto"
+}

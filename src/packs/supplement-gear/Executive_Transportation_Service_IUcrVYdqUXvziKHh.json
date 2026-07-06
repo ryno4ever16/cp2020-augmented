@@ -1,0 +1,43 @@
+{
+  "_id": "IUcrVYdqUXvziKHh",
+  "name": "Executive Transportation Service",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: armored limo 150eb/hr; AV-4 500eb/hr; V-22B Osprey 850eb/hr (incl. pilot; 4hr deposit). | [Audit row +36 — Chromebook 1 p.70]</p>",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.70",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+36",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 70
+      },
+      "manufacturer": "ETS",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!IUcrVYdqUXvziKHh"
+}

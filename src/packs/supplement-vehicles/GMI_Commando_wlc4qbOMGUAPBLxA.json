@@ -1,0 +1,64 @@
+{
+  "_id": "wlc4qbOMGUAPBLxA",
+  "name": "GMI Commando",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Militarized car; city or country. 80mph, crew2+2, 1t cargo, 3t. (Not the ACPA of the same name.) | [Audit row +319 — Firestorm: Shockwave p.64]</p>",
+    "cost": 60000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.64",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 80,
+      "max": 80
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+319",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 64
+      },
+      "manufacturer": "GMI",
+      "importCategory": "acpa-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!wlc4qbOMGUAPBLxA"
+}

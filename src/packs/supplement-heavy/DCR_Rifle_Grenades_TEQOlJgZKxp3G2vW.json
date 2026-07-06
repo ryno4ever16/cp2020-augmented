@@ -1,0 +1,68 @@
+{
+  "_id": "TEQOlJgZKxp3G2vW",
+  "name": "DCR Rifle Grenades",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Blackhand's idx42 'DCR Rifle Grenades': 50eb — corroborates. | 50eb/100eb (index). | [Audit row +107 — Chromebook 1 p.93]</p>",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.93",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+107",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 93
+      },
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!TEQOlJgZKxp3G2vW"
+}

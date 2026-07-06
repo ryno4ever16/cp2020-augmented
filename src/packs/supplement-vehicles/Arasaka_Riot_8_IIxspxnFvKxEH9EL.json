@@ -1,0 +1,64 @@
+{
+  "_id": "IIxspxnFvKxEH9EL",
+  "name": "Arasaka Riot 8",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Riot-control APC; 8 passengers. 120mph, 20t. | [Audit row +318 — Firestorm: Shockwave p.64]</p>",
+    "cost": 575000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.64",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 30,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+318",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 64
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!IIxspxnFvKxEH9EL"
+}

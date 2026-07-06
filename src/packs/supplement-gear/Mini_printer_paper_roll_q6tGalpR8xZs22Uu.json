@@ -1,0 +1,42 @@
+{
+  "_id": "q6tGalpR8xZs22Uu",
+  "name": "Mini-printer paper roll",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>500' register paper | [Audit row +116 — Chromebook 1 p.8]</p>",
+    "cost": 1,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.8",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 40800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+116",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 8
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!q6tGalpR8xZs22Uu"
+}

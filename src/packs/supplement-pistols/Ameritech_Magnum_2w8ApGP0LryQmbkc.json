@@ -1,0 +1,69 @@
+{
+  "_id": "2w8ApGP0LryQmbkc",
+  "name": "Ameritech Magnum",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Origin: Interface 1.1 (not an imported book); printed in Blackhand's. Stats from Reference Book. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +302 — Blackhand's Street Weapons p.17]</p>",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.17",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4d6+3 (.454)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+302",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 17
+      },
+      "manufacturer": "Ameritech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!2w8ApGP0LryQmbkc"
+}

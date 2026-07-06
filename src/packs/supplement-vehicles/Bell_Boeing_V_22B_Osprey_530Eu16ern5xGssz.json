@@ -1,0 +1,64 @@
+{
+  "_id": "530Eu16ern5xGssz",
+  "name": "Bell-Boeing V-22B Osprey",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>'Whirly Bird' tilt-rotor workhorse. 315mph, crew2+20, 9t cargo, 25t. | [Audit row +340 — Firestorm: Shockwave p.68]</p>",
+    "cost": 650000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.68",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 19400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+340",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 68
+      },
+      "manufacturer": "Bell-Boeing",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!530Eu16ern5xGssz"
+}

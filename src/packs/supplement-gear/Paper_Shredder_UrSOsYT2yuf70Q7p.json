@@ -1,0 +1,43 @@
+{
+  "_id": "UrSOsYT2yuf70Q7p",
+  "name": "Paper Shredder",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Arasaka-designed paper + disc shredder. | [Audit row +14 — Chromebook 1 p.8]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.8",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 40900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+14",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 8
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!UrSOsYT2yuf70Q7p"
+}

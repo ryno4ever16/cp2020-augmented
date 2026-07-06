@@ -1,0 +1,43 @@
+{
+  "_id": "EFCDMtjvH1TDtHlv",
+  "name": "Baskin Undercover Investigation",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 200eb/hr + expenses; +100/hr dangerous; +150/hr per extra operative; 5000eb flat if subject is extraction target. | [Audit row +32 — Chromebook 1 p.69]</p>",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.69",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+32",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 69
+      },
+      "manufacturer": "Baskin Undercover Inc.",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!EFCDMtjvH1TDtHlv"
+}

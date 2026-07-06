@@ -1,0 +1,59 @@
+{
+  "_id": "kns1t8mKaH3JqXZM",
+  "name": "Cyberfacial Remount: Jigsaw",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SP12, one eye + top corner of skull; −1 ATTR, 25% hit. Surgery MA. | [Audit row +220 — Chromebook 3 p.33]</p>",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.33",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "2D6",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+220",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 33
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kns1t8mKaH3JqXZM"
+}

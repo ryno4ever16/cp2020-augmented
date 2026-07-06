@@ -1,0 +1,43 @@
+{
+  "_id": "wnjazbmpsSMyBWzA",
+  "name": "Adrek A-3 Beetle",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Robot (index). | [Audit row +216 — Chromebook 3 p.125]</p>",
+    "cost": 10000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.125",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 47700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+216",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 125
+      },
+      "manufacturer": "Adrek Robotics",
+      "importCategory": "robot",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!wnjazbmpsSMyBWzA"
+}

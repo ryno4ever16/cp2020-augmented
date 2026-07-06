@@ -1,0 +1,69 @@
+{
+  "_id": "nXsLHO2PLT7uadsu",
+  "name": "Mustang Arms ARS-SC Submachinegun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR 'AR!i-SC' = ARS-SC. 600eb SMG. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +291 — Blackhand's Street Weapons p.20]</p>",
+    "cost": 600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.20",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Submachinegun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+291",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 20
+      },
+      "manufacturer": "Mustang Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!nXsLHO2PLT7uadsu"
+}

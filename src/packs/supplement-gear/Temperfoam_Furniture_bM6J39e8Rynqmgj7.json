@@ -1,0 +1,42 @@
+{
+  "_id": "bM6J39e8Rynqmgj7",
+  "name": "Temperfoam Furniture",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>80–140eb/piece (index ✓). Self-shaping foam furniture. | [Audit row +25 — Chromebook 1 p.13]</p>",
+    "cost": 80,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.13",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+25",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 13
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!bM6J39e8Rynqmgj7"
+}

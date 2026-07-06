@@ -1,0 +1,60 @@
+{
+  "_id": "VY2KE25NgEA5Wix9",
+  "name": "Security Chip (Type I)",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>+base chip price. Erased-stays-erased (IMPOSSIBLE Computer Tech to recover). Type II 75eb+base: meltable silicon, unrecoverable. | [Audit row +79 — Chromebook 1 p.73]</p>",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.73",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 4100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+79",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 73
+      },
+      "manufacturer": "Digital Dimensions",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!VY2KE25NgEA5Wix9"
+}

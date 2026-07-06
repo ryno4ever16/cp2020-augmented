@@ -1,0 +1,43 @@
+{
+  "_id": "OiJyTLqFKVwqU4x4",
+  "name": "Militech Porcupine Shell",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Missile/rocket multi-projectile shell per RefBook (SW). 👁 page unknown; WA/ROF read oddly — verify. | [Audit row +357 — Firestorm: Shockwave p.👁]</p>",
+    "cost": 7500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.👁",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 47800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+357",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": "👁"
+      },
+      "manufacturer": "Militech",
+      "importCategory": "ammo",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!OiJyTLqFKVwqU4x4"
+}

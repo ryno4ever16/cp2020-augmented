@@ -1,0 +1,59 @@
+{
+  "_id": "O0H2gvdZe8jP7TQu",
+  "name": "Full Borg: Increased Stats",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>REF 2000eb/+1 (max 15); MA 1500eb/+1 (max 25); BOD 1000eb/+1 (max 20). HC 2 per +1. | [Audit row +127 — Chromebook 2 p.85]</p>",
+    "cost": 2000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.85",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 7300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+127",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 85
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!O0H2gvdZe8jP7TQu"
+}

@@ -1,0 +1,64 @@
+{
+  "_id": "Kcq1wGywTsmL0Cl4",
+  "name": "GM/Hyundai Worker Bee",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index ✓5000 (page '5 1DDDeb' garbled). Semi-autonomous warehouse robot; 2t cargo; secondary arms 400kg. | [Audit row +62 — Chromebook 1 p.25]</p>",
+    "cost": 5000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.25",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 60,
+      "max": 60
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 25,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+62",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 25
+      },
+      "manufacturer": "GM/Hyundai",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Kcq1wGywTsmL0Cl4"
+}

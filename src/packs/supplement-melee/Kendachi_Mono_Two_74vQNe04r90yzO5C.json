@@ -1,0 +1,69 @@
+{
+  "_id": "74vQNe04r90yzO5C",
+  "name": "Kendachi Mono-Two",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 650/700eb two prices (blade lengths?). Two-handed monoblade sword. OCR rough — your eyes for the split. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +287 — Blackhand's Street Weapons p.4]</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.4",
+    "lastOwnerId": "",
+    "weaponType": "Melee",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": true,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+287",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 4
+      },
+      "manufacturer": "Kendachi",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!74vQNe04r90yzO5C"
+}

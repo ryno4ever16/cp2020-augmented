@@ -1,0 +1,60 @@
+{
+  "_id": "m8gAtzR6RIslnFuq",
+  "name": "Techie Visual Recognition Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>100eb/LEVEL to +3 (w/ TimesSquare Plus). INT+chip+1D10(+SK). IDs circuits/parts/tools/makers/serials; valid to manufacture date. | [Audit row +98 — Chromebook 1 p.76]</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.76",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 5800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+98",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 76
+      },
+      "manufacturer": "Direct Dataware",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!m8gAtzR6RIslnFuq"
+}

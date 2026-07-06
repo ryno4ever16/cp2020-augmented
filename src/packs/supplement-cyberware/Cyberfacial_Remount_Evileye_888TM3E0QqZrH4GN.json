@@ -1,0 +1,59 @@
+{
+  "_id": "888TM3E0QqZrH4GN",
+  "name": "Cyberfacial Remount: Evileye",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR 'USOEB'=150. SP6, covers one eye socket; −1 ATTR, 15% to be hit. Surgery MA. | [Audit row +219 — Chromebook 3 p.33]</p>",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.33",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "1D6",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+219",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 33
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!888TM3E0QqZrH4GN"
+}

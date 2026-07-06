@@ -1,0 +1,69 @@
+{
+  "_id": "8fBNjq5IOZKcgb7E",
+  "name": "Royal Enfield Ordnance 25mm Cockerill Assault Cannon",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>7400eb 25mm assault cannon. (Pg = PDF index; Blackhand's folios unmapped.) | Full writeup found: Rough Guide UK p.35 (7400eb ✓ matches; low-pressure rocket-assisted 25mm; AP Pen 5 / HEP Pen 6 / APF flechette rounds; BOD 6+ to carry, 8+ to hip-fire, WA -1 from hip). | [Audit row +299 — Blackhand's Street Weapons p.37]</p>",
+    "cost": 7400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.37",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+299",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 37
+      },
+      "manufacturer": "Royal Enfield Ordnance",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!8fBNjq5IOZKcgb7E"
+}

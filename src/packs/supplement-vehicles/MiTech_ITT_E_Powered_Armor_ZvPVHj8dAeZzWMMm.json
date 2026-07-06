@@ -1,0 +1,64 @@
+{
+  "_id": "ZvPVHj8dAeZzWMMm",
+  "name": "MiTech ITT-E (Powered Armor)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 index name garbled ('MlnECHITTI ~E') — verify. | [Audit row +211 — Chromebook 3 p.125]</p>",
+    "cost": 62000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.125",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+211",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 125
+      },
+      "manufacturer": "MiTech",
+      "importCategory": "acpa-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ZvPVHj8dAeZzWMMm"
+}

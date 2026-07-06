@@ -1,0 +1,43 @@
+{
+  "_id": "ymLFRq1HcGZOfuP8",
+  "name": "Cybercam EX-1",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Headset multi-format newscam; visual synch w/ cyberoptics/audio; on-site editing; Nikkon America design; 2.2kg. | 👁 COST CHECK: Corpbook 3 p.43 NPC-gear crossref lists 'Raven Microcybernetics Cybercam EX-1 (see Chromebook) 200eb' vs this row's 1200 — verify at the Chromebook source page. | [Audit row +22 — Chromebook 1 p.13]</p>",
+    "cost": 1200,
+    "weight": 2.2,
+    "equipped": false,
+    "source": "Chromebook 1 p.13",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+22",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 13
+      },
+      "manufacturer": "Raven Microcybernetics",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ymLFRq1HcGZOfuP8"
+}

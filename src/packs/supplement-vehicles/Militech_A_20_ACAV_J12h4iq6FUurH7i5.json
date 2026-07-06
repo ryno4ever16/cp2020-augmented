@@ -1,0 +1,64 @@
+{
+  "_id": "J12h4iq6FUurH7i5",
+  "name": "Militech A-20 ACAV",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Air-cushion assault vehicle ('panzer'): strike fast w/ missiles + cut out. 200mph, crew3, 3t cargo, 10t. | Full stat block also in Forlorn Hope p.41: 'Militech A-20 Air Cushion Assault Vehicle (Panzer)' — 200mph (100 offroad), 800 gal/600 mi, 3 crew; turret Militech 20mm cannon (4D10+2AP, 500 rds) + coax 7.62 MG + 4x turret TOW (6D10); chaff/flare, 20x smoke, ECM, AP frag grenades at 7 hull points; skirts SP10 SDP15/panel, turret SP60 SDP60, body SP50 SDP100, windshield SP30 SDP30, plenum SP40 SDP40. | [Audit row +325 — Firestorm: Shockwave p.65]</p>",
+    "cost": 730000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.65",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 100,
+      "max": 100
+    },
+    "sp": 50,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 18100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+325",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 65
+      },
+      "manufacturer": "Militech",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!J12h4iq6FUurH7i5"
+}

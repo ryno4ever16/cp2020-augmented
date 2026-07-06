@@ -1,0 +1,68 @@
+{
+  "_id": "IdVixmGVAUqVxMho",
+  "name": "Medieval Armor Maximillian",
+  "type": "armor",
+  "img": "icons/svg/shield.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Maximillian style of Medieval Armor for those who want to cut a swath of steel in style. | Index \"Replica Armor\" second price 10,600 ✓. | [Audit row +115 — Chromebook 1 p.16]</p>",
+    "cost": 10600,
+    "weight": 10.0,
+    "equipped": false,
+    "source": "Chromebook 1 p.16",
+    "lastOwnerId": "",
+    "armorType": "Hard",
+    "coverage": {
+      "Head": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "Torso": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rArm": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "lLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      },
+      "rLeg": {
+        "stoppingPower": "14",
+        "ablation": 0
+      }
+    },
+    "encumbrance": 6
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 8400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+115",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 16
+      },
+      "importCategory": "armor",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!IdVixmGVAUqVxMho"
+}

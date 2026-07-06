@@ -1,0 +1,42 @@
+{
+  "_id": "twJSxe4IyGxu5r8o",
+  "name": "Avgas (per gallon)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Aerodyne/jet fuel: (2D6×10)+50 eb/gallon = 70-170eb; airports + AV ports. (Aerodynes can't burn alcohol fuels.) | [Audit row +283 — Chromebook 2 p.86]</p>",
+    "cost": 70,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.86",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 45400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+283",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 86
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!twJSxe4IyGxu5r8o"
+}

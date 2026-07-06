@@ -1,0 +1,43 @@
+{
+  "_id": "sLwe1f3M24lKsZk0",
+  "name": "Newsviewer",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '1 OOeb'=100eb. Portable dataterm download 'Newsdeck'; thumbprint login; breaking-story alerts; 0.1kg; rental 2eb/hr. | Jenny: WorldSat Communications. \"Newsdeck\" Portable dataterm download device. add rental newsviewers as service 2eb an hour | [Audit row +19 — Chromebook 1 p.10]</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.10",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+19",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 10
+      },
+      "manufacturer": "WorldSat",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!sLwe1f3M24lKsZk0"
+}

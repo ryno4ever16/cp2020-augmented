@@ -1,0 +1,43 @@
+{
+  "_id": "T1rht0IgLkhc22vq",
+  "name": "Habit Executive Refinement Course",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 6-month etiquette course; +2 Social Skill per course, max 2 courses. | [Audit row +38 — Chromebook 1 p.71]</p>",
+    "cost": 5000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.71",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+38",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 71
+      },
+      "manufacturer": "Habit",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!T1rht0IgLkhc22vq"
+}

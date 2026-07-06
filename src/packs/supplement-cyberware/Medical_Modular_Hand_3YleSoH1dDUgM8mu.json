@@ -1,0 +1,60 @@
+{
+  "_id": "3YleSoH1dDUgM8mu",
+  "name": "Medical Modular Hand",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>5 med instruments: monoedge scalpel, 4-dose air hypo, dermal stapler, clamp/forceps, biomonitor probe. W/ cyberarm Surg N (HC +1D6/2); independent hand Surg MA (HC 1D6+2). | [Audit row +253 — Chromebook 4 p.5]</p>",
+    "cost": 975,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 p.5",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "+1D6/2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+253",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 4",
+        "page": 5
+      },
+      "manufacturer": "Donner & Savage / Dynalar",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!3YleSoH1dDUgM8mu"
+}

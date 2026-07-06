@@ -1,0 +1,43 @@
+{
+  "_id": "pURIcwDyfVMDlbdq",
+  "name": "Arasaka Sleep Facility Cubicle",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 40eb/night sleep cube; options: outlet 10/hr, TV 50dep+5, radio 25dep+2.5, phone 10+0.75/min, heavy lock 100dep+10, privacy 1000dep+100. | [Audit row +40 — Chromebook 1 p.78]</p>",
+    "cost": 40,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.78",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+40",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 78
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!pURIcwDyfVMDlbdq"
+}

@@ -1,0 +1,43 @@
+{
+  "_id": "oWfQ78Au3ePB8Zeg",
+  "name": "PetMinders",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 50–5000eb/month exotic pet care; also locates rare/black-market pets (1,000eb–1M). | [Audit row +33 — Chromebook 1 p.69]</p>",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.69",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+33",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 69
+      },
+      "manufacturer": "PetMinders (Holt Coalition)",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!oWfQ78Au3ePB8Zeg"
+}

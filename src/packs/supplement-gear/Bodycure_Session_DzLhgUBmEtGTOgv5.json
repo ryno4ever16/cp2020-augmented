@@ -1,0 +1,43 @@
+{
+  "_id": "DzLhgUBmEtGTOgv5",
+  "name": "Bodycure Session",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 3hr total body rejuvenation; +2 ATTR for 1D6 days; 10-visit coupons 4000eb. | [Audit row +39 — Chromebook 1 p.71]</p>",
+    "cost": 450,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.71",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+39",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 71
+      },
+      "manufacturer": "Bodycure (Holt Coalition)",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!DzLhgUBmEtGTOgv5"
+}

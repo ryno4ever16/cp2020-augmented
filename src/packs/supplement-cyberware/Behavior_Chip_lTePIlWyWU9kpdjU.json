@@ -1,0 +1,59 @@
+{
+  "_id": "lTePIlWyWU9kpdjU",
+  "name": "Behavior Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Surgery N. | [Audit row +147 — Chromebook 2 p.102]</p>",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.102",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "1D6/2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+147",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 102
+      },
+      "importCategory": "chip",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!lTePIlWyWU9kpdjU"
+}

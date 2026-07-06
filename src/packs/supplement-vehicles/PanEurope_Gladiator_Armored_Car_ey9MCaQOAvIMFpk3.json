@@ -1,0 +1,64 @@
+{
+  "_id": "ey9MCaQOAvIMFpk3",
+  "name": "PanEurope Gladiator Armored Car",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Wheeled 'tank-alike' IFV. 60mph, crew3, 1.1M eb. | [Audit row +316 — Firestorm: Shockwave p.63]</p>",
+    "cost": 1100000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.63",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 80,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+316",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 63
+      },
+      "manufacturer": "PanEurope",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ey9MCaQOAvIMFpk3"
+}

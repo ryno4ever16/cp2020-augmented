@@ -1,0 +1,43 @@
+{
+  "_id": "aaXT2juZpRM8PUne",
+  "name": "SyCust Cybernetic Customization",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: tattoo 20–5000eb; colorization 25eb/in³ (eyes 50eb/optic; +2000 if surgery); LimbLite 750eb +1000 processor (chip-only 700eb, HC 1d6-1 proc, 1-2 limblite). Custom cyberoptions at 4× list. | [Audit row +37 — Chromebook 1 p.71]</p>",
+    "cost": 25,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.71",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+37",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 71
+      },
+      "manufacturer": "SyCust",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!aaXT2juZpRM8PUne"
+}

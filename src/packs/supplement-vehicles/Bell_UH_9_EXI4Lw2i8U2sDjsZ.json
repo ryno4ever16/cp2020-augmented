@@ -1,0 +1,64 @@
+{
+  "_id": "EXI4Lw2i8U2sDjsZ",
+  "name": "Bell UH-9",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Troop-mover helicopter (the reasonable SM-Dragon alternative). 165mph, crew2+20, 2500kg, 8t. | [Audit row +326 — Firestorm: Shockwave p.65]</p>",
+    "cost": 2450000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.65",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 40,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 18200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+326",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 65
+      },
+      "manufacturer": "Bell",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!EXI4Lw2i8U2sDjsZ"
+}

@@ -1,0 +1,42 @@
+{
+  "_id": "Gf698pxy6N8vbnRH",
+  "name": "Sleep Inducer",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>\"The Russian Sleep\" small device with electrodes placed on eyelids and nape of neck. Users can get a full night's sleep in two or three hours. If not turned off via the integral timer, the user will eventually be awakened by hunger. | Index 85eb ✓. | (Referenced by CB3 SomaWare chip as the Chromebook 1 predecessor.) | [Audit row +53 — Chromebook 1 p.11]</p>",
+    "cost": 85,
+    "weight": 0.3,
+    "equipped": false,
+    "source": "Chromebook 1 p.11",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+53",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 11
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Gf698pxy6N8vbnRH"
+}

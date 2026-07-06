@@ -1,0 +1,64 @@
+{
+  "_id": "G2Xh4NoAFZvJWg9t",
+  "name": "Orbital Air/Raven Microcyb Spider (ACPA)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>ACPA suit: STR27, 620kg. Orbital-assault specialist w/ ECM suites; VRI (+4 init/+3 direct fire), zero-G jets, 5hr life support. | [Audit row +304 — Firestorm: Shockwave p.61]</p>",
+    "cost": 789830,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.61",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 27,
+      "max": 27
+    },
+    "sp": 40,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+304",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 61
+      },
+      "manufacturer": "Orbital Air / Raven Microcybernetics",
+      "importCategory": "acpa-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!G2Xh4NoAFZvJWg9t"
+}

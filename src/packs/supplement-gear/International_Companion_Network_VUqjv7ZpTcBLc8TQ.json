@@ -1,0 +1,43 @@
+{
+  "_id": "VUqjv7ZpTcBLc8TQ",
+  "name": "International Companion Network",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: companion/protection 75eb/hr, 750/day, 4000/week, 10,000/month; defense specialists need 1wk notice. | [Audit row +35 — Chromebook 1 p.70]</p>",
+    "cost": 75,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.70",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+35",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 70
+      },
+      "manufacturer": "ICN",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!VUqjv7ZpTcBLc8TQ"
+}

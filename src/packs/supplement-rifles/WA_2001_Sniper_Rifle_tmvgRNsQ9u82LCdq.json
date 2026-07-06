@@ -1,0 +1,68 @@
+{
+  "_id": "tmvgRNsQ9u82LCdq",
+  "name": "WA 2001 Sniper Rifle",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>RGUK p.37 older-weapons table. | [Audit row +367 — Rough Guide to the UK p.37]</p>",
+    "cost": 900,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.37",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 3,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "7.62mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 10,
+    "shots": 10,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 1000,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+367",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 37
+      },
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!tmvgRNsQ9u82LCdq"
+}

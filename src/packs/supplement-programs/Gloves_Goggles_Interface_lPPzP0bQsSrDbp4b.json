@@ -1,0 +1,44 @@
+{
+  "_id": "lPPzP0bQsSrDbp4b",
+  "name": "Gloves/Goggles Interface",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index-priced. | [Audit row +280 — Chromebook 4 p.77]</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 p.77",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "Netgear",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 22000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+280",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 4",
+        "page": 77
+      },
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!lPPzP0bQsSrDbp4b"
+}

@@ -1,0 +1,43 @@
+{
+  "_id": "Q5HVRBc8w5tOsRaD",
+  "name": "Auto Punchout",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Analysis plugs auto-disconnect on any current above data-signal; Netrunning Initiative −5. | Jenny: MinFac analysis plugs. Disconnects you from the net when strong currents are detected. Slows the user's Netrunning Initiative Roll by -5. | [Audit row +15 — Chromebook 1 p.8]</p>",
+    "cost": 330,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.8",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+15",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 8
+      },
+      "manufacturer": "MinFac",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Q5HVRBc8w5tOsRaD"
+}

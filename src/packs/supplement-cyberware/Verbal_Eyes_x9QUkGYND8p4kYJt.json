@@ -1,0 +1,60 @@
+{
+  "_id": "x9QUkGYND8p4kYJt",
+  "name": "Verbal-Eyes",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Per optic. Mood-image irises/whites; update chips via chipware socket. Video Imager option total 1000eb (HC5, 3 opts); Customised Images (TimesSquare Plus) total 1200eb (HC5, 4 opts). Surgery M (N for 2nd eye). | [Audit row +218 — Chromebook 3 p.32]</p>",
+    "cost": 750,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.32",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "3",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 9400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+218",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 32
+      },
+      "manufacturer": "Wyzard Technologies",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!x9QUkGYND8p4kYJt"
+}

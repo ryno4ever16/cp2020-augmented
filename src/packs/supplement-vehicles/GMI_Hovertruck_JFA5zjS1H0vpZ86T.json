@@ -1,0 +1,64 @@
+{
+  "_id": "JFA5zjS1H0vpZ86T",
+  "name": "GMI Hovertruck",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>USMC APC variant refitted as troop/cargo hover. 100mph, crew2. | [Audit row +324 — Firestorm: Shockwave p.65]</p>",
+    "cost": 220000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.65",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 100,
+      "max": 100
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 18000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+324",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 65
+      },
+      "manufacturer": "GMI",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JFA5zjS1H0vpZ86T"
+}

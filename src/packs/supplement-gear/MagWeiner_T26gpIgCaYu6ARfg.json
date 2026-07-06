@@ -1,0 +1,42 @@
+{
+  "_id": "T26gpIgCaYu6ARfg",
+  "name": "MagWeiner",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 index name garbled ('MAGVrE!N£11') — verify. | [Audit row +165 — Chromebook 3 p.124]</p>",
+    "cost": 375,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.124",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 46600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+165",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 124
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!T26gpIgCaYu6ARfg"
+}

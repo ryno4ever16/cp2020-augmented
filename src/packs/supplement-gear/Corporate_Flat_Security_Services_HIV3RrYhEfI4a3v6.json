@@ -1,0 +1,43 @@
+{
+  "_id": "HIV3RrYhEfI4a3v6",
+  "name": "Corporate Flat (Security Services)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 2500eb/month corporate flat; ultrasonic/IR/pressure security; extra sensors 2000eb; safe 100eb/10pages. | [Audit row +41 — Chromebook 1 p.82]</p>",
+    "cost": 2500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.82",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 43900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+41",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 82
+      },
+      "manufacturer": "Security Services",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!HIV3RrYhEfI4a3v6"
+}

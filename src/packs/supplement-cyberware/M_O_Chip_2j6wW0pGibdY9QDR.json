@@ -1,0 +1,60 @@
+{
+  "_id": "2j6wW0pGibdY9QDR",
+  "name": "M.O. Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>MRAM criminal-personality construct (M.O., contacts, traits): 1 yes/no Q per INT roll (INT+1D10 vs 15). First use: EMP+1D10>=10 or personality shifts to the criminal's (therapy EMP>=12 weekly to recover). Black-market value 1200eb. | [Audit row +77 — Chromebook 1 p.73]</p>",
+    "cost": 1200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.73",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 3900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+77",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 73
+      },
+      "manufacturer": "Digital Dimensions",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!2j6wW0pGibdY9QDR"
+}

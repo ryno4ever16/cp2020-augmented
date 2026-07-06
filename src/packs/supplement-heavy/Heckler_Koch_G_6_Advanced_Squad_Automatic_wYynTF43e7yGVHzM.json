@@ -1,0 +1,69 @@
+{
+  "_id": "wYynTF43e7yGVHzM",
+  "name": "Heckler & Koch G-6 Advanced Squad Automatic",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '6-6' = G-6. 2050eb (OCR '!OSO' = 2050). (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +296 — Blackhand's Street Weapons p.34]</p>",
+    "cost": 2050,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.34",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+296",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 34
+      },
+      "manufacturer": "Heckler & Koch",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!wYynTF43e7yGVHzM"
+}

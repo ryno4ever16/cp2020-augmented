@@ -1,0 +1,60 @@
+{
+  "_id": "S8rYVR6kvqxOPRJn",
+  "name": "Tailored Pheromones: Gullibility",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>+1 Fast Talk/Persuasion. Surgery M. | [Audit row +277 — Chromebook 4 p.23]</p>",
+    "cost": 2000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 p.23",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "1D6/2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 11900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+277",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 4",
+        "page": 23
+      },
+      "manufacturer": "Revolution Genetics",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!S8rYVR6kvqxOPRJn"
+}

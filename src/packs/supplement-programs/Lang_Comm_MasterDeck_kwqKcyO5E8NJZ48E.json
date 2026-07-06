@@ -1,0 +1,45 @@
+{
+  "_id": "kwqKcyO5E8NJZ48E",
+  "name": "Lang Comm MasterDeck",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index-priced. | [Audit row +237 — Chromebook 3 p.125]</p>",
+    "cost": 5000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.125",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "Deck",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+237",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 125
+      },
+      "manufacturer": "Lang Communications",
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kwqKcyO5E8NJZ48E"
+}

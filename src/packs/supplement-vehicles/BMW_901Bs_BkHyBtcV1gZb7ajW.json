@@ -1,0 +1,64 @@
+{
+  "_id": "BkHyBtcV1gZb7ajW",
+  "name": "BMW 901Bs",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index ✓100,000 (page price garbled). Handbuilt luxury sedan, 6 seats, full cybernetic controls, bespoke options. | [Audit row +58 — Chromebook 1 p.19]</p>",
+    "cost": 100000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.19",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 90,
+      "max": 90
+    },
+    "sp": 24,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 210,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+58",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 19
+      },
+      "manufacturer": "BMW",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!BkHyBtcV1gZb7ajW"
+}

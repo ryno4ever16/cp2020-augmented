@@ -1,0 +1,64 @@
+{
+  "_id": "TbhtUxLGyrG2V1XJ",
+  "name": "Arasaka Riot-VIII",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Crowd control: turreted water cannon (30m; steam 10m), roof grenade launcher (18 std grenades, 300m, 180° arc); troops 75% cover. | [Audit row +61 — Chromebook 1 p.24]</p>",
+    "cost": 250000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.24",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 200,
+      "max": 200
+    },
+    "sp": 30,
+    "passengers": 2,
+    "speed": {
+      "value": 0,
+      "max": 120,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+61",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 24
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!TbhtUxLGyrG2V1XJ"
+}

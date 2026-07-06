@@ -1,0 +1,69 @@
+{
+  "_id": "ecSQRLzbxcvLkOfa",
+  "name": "FN-MAG Machine Gun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>RGUK p.37 older-weapons table; ROF cell cramped in print 👁. | [Audit row +368 — Rough Guide to the UK p.37]</p>",
+    "cost": 1500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.37",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "7.62mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 100,
+    "shots": 100,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 1000,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+368",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 37
+      },
+      "manufacturer": "FN",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ecSQRLzbxcvLkOfa"
+}

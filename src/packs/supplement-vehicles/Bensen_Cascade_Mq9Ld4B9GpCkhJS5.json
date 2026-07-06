@@ -1,0 +1,64 @@
+{
+  "_id": "Mq9Ld4B9GpCkhJS5",
+  "name": "Bensen Cascade",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index-priced. | [Audit row +65 — Chromebook 1 p.93]</p>",
+    "cost": 58000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.93",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+65",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 93
+      },
+      "manufacturer": "Bensen",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Mq9Ld4B9GpCkhJS5"
+}

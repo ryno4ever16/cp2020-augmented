@@ -1,0 +1,43 @@
+{
+  "_id": "u82kWrEp6NLdXdNN",
+  "name": "Williams Complex Services Contract",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 500–2000eb/month conapt services (maid/pet/cable/food); mgmt fee 10% purchase / 15% rent. | [Audit row +28 — Chromebook 1 p.66]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.66",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+28",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 66
+      },
+      "manufacturer": "Williams Management Inc.",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!u82kWrEp6NLdXdNN"
+}

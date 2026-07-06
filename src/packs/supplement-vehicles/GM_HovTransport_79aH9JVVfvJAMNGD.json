@@ -1,0 +1,64 @@
+{
+  "_id": "79aH9JVVfvJAMNGD",
+  "name": "GM HovTransport",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index-priced. | [Audit row +201 — Chromebook 3 p.124]</p>",
+    "cost": 360000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.124",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 15200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+201",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 124
+      },
+      "manufacturer": "GM",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!79aH9JVVfvJAMNGD"
+}

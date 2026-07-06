@@ -1,0 +1,64 @@
+{
+  "_id": "veh70TDmFAK1aUpY",
+  "name": "IEC Newport Mk. II (WAD)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>WAD: Gunslinger chassis STR25; 4 legs (front/back pairs), no protective shell; punch 3D10/kick 5D10; cellular control, adv. reflex. | [Audit row +196 — Chromebook 3 p.118]</p>",
+    "cost": 56440,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.118",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 0,
+      "max": 0
+    },
+    "sp": 0,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+196",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 118
+      },
+      "manufacturer": "International Electric",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!veh70TDmFAK1aUpY"
+}

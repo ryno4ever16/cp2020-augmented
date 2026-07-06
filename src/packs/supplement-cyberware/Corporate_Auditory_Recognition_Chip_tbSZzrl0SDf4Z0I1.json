@@ -1,0 +1,60 @@
+{
+  "_id": "tbSZzrl0SDf4Z0I1",
+  "name": "Corporate Auditory Recognition Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>150eb/level (to 2); quarterly updates 35eb/level. Corp jingles + voice prints; corporate employees only. | [Audit row +9 — Chromebook 3 p.39]</p>",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.39",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+9",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 39
+      },
+      "manufacturer": "Direct Dataware",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "user-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!tbSZzrl0SDf4Z0I1"
+}

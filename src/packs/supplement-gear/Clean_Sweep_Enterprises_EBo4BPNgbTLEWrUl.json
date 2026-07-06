@@ -1,0 +1,42 @@
+{
+  "_id": "EBo4BPNgbTLEWrUl",
+  "name": "Clean Sweep Enterprises",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 7000eb/year (index). | [Audit row +56 — Chromebook 1 p.93]</p>",
+    "cost": 7000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.93",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 45200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+56",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 93
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!EBo4BPNgbTLEWrUl"
+}

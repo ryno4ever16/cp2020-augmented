@@ -1,0 +1,42 @@
+{
+  "_id": "aLb5RowE7Uh8HxfS",
+  "name": "Advanced Alarm Removal Kit",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>+1 TECH vs card/voco-locks, security scanners, movement sensors; 3kg. | [Audit row +26 — Chromebook 1 p.14]</p>",
+    "cost": 290,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.14",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+26",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 14
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!aLb5RowE7Uh8HxfS"
+}

@@ -1,0 +1,69 @@
+{
+  "_id": "V3OjRXpcZ3pgztWW",
+  "name": "Excalibur Taserstick",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Sibling of the Excalibur Nightstick (already in sheet, same p.34); taser-charge baton, 8 charges. Stats from Reference Book. | [Audit row +372 — Protect & Serve p.34]</p>",
+    "cost": 80,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve p.34",
+    "lastOwnerId": "",
+    "weaponType": "Melee",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2d6+3 + Stun (-2)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": true,
+    "shotsLeft": 8,
+    "shots": 8,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 1,
+    "attackType": "",
+    "attackSkill": "Brawling"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+372",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Protect & Serve",
+        "page": 34
+      },
+      "manufacturer": "Excalibur",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!V3OjRXpcZ3pgztWW"
+}

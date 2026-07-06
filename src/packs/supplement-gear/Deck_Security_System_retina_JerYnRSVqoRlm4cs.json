@@ -1,0 +1,42 @@
+{
+  "_id": "JerYnRSVqoRlm4cs",
+  "name": "Deck Security System retina",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>More advanced retina scanner. Can check for cyberoptics serial number. | [Audit row +117 — Chromebook 1 p.9]</p>",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.9",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+117",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 9
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JerYnRSVqoRlm4cs"
+}

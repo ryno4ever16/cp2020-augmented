@@ -1,0 +1,69 @@
+{
+  "_id": "PMC4VsxPZVQYYmO8",
+  "name": "Techtronica 20 Microwaver",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Chromebook 2 origin per Reference Book (15 Microwaver is in packs; the 20 was missed). Printed in Blackhand's too. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +303 — Chromebook 2 p.10]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.10",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1d6 + special",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+303",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 10
+      },
+      "manufacturer": "Techtronica",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!PMC4VsxPZVQYYmO8"
+}

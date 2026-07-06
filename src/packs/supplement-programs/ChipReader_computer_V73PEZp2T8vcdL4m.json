@@ -1,0 +1,44 @@
+{
+  "_id": "V73PEZp2T8vcdL4m",
+  "name": "ChipReader (computer)",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Index-priced. | [Audit row +244 — Chromebook 3 p.125]</p>",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.125",
+    "lastOwnerId": "",
+    "power": 0,
+    "mu": 0,
+    "programType": "Comp. imp.",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+244",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 125
+      },
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!V73PEZp2T8vcdL4m"
+}

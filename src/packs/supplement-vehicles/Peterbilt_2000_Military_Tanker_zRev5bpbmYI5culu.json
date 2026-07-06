@@ -1,0 +1,64 @@
+{
+  "_id": "zRev5bpbmYI5culu",
+  "name": "Peterbilt 2000 Military Tanker",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Fuel truck; multi-fuel with a little tinkering. 100mph, 6.7t. 👁 name line partly cut — verify designation. | [Audit row +320 — Firestorm: Shockwave p.64]</p>",
+    "cost": 110000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.64",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 100,
+      "max": 100
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+320",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 64
+      },
+      "manufacturer": "Peterbilt",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!zRev5bpbmYI5culu"
+}

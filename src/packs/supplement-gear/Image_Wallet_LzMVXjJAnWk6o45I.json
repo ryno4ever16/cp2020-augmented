@@ -1,0 +1,43 @@
+{
+  "_id": "LzMVXjJAnWk6o45I",
+  "name": "Image Wallet",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '1 OOeb'=100eb. Thumbprint-locked electronic document wallet; optical scan of ID/registration; 0.1kg. | Jenny: DataTel. Electronic documentation carrier. uses thumbprint on cover to flash images on surface. Documents can be optically scanned | [Audit row +20 — Chromebook 1 p.10]</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.10",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+20",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 10
+      },
+      "manufacturer": "DataTel",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!LzMVXjJAnWk6o45I"
+}

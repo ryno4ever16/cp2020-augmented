@@ -1,0 +1,64 @@
+{
+  "_id": "UquTkgONuOesqwYH",
+  "name": "BAE Electric Metro 2",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Four-passenger electric city car (1+3); 1t; crash control + auto-pilot; ~30% of the UK car market. RGUK p.40. | [Audit row +361 — Rough Guide to the UK p.40]</p>",
+    "cost": 7500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.40",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 25,
+      "max": 25
+    },
+    "sp": 10,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 100,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 300
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+361",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 40
+      },
+      "manufacturer": "British Aerospace",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!UquTkgONuOesqwYH"
+}

@@ -1,0 +1,64 @@
+{
+  "_id": "5n7jyBMQURXXp5YD",
+  "name": "Raven Microcyb/Tsunami Arms Magus (ACPA)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>ACPA C4I suit: STR40, 920kg. Deathwind railgun debut (+3, 5d10+10 AP, 1250m); massive EW/comms/countermeasures battery. | [Audit row +305 — Firestorm: Shockwave p.61]</p>",
+    "cost": 1447530,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.61",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 40,
+      "max": 40
+    },
+    "sp": 65,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+305",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 61
+      },
+      "manufacturer": "Raven Microcybernetics / Tsunami Arms",
+      "importCategory": "acpa-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!5n7jyBMQURXXp5YD"
+}

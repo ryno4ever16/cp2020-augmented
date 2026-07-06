@@ -1,0 +1,43 @@
+{
+  "_id": "Cil1HH9gmqhCR8Bn",
+  "name": "EBM Carfaxx© 2002",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Portable cellular car fax; links to Data Terms + vehicle short-wave. | Jenny: EBM. Fax machine for car that can link to DataTerms and most vehicle short-wave systems. | [Audit row +16 — Chromebook 1 p.8]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.8",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+16",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 8
+      },
+      "manufacturer": "Eurobusiness Machines",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Cil1HH9gmqhCR8Bn"
+}

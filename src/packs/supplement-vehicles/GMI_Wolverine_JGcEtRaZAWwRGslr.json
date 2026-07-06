@@ -1,0 +1,64 @@
+{
+  "_id": "JGcEtRaZAWwRGslr",
+  "name": "GMI Wolverine",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Border/territory patrol APC. 110mph, crew3, 2500kg, 7.5t. | [Audit row +321 — Firestorm: Shockwave p.64]</p>",
+    "cost": 360000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.64",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 75,
+      "max": 75
+    },
+    "sp": 35,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 17700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+321",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 64
+      },
+      "manufacturer": "GMI",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JGcEtRaZAWwRGslr"
+}

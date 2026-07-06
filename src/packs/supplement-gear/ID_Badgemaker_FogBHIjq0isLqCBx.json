@@ -1,0 +1,43 @@
+{
+  "_id": "FogBHIjq0isLqCBx",
+  "name": "ID Badgemaker",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '50Deb'=500 (index ✓). Solid-plastic/keycard/photo-ID badges; +200eb interfaces Tennerec CookieCutter smartgun cut-out (SoF p.22). | [Audit row +23 — Chromebook 1 p.13]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.13",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+23",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 13
+      },
+      "manufacturer": "Danshi",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!FogBHIjq0isLqCBx"
+}

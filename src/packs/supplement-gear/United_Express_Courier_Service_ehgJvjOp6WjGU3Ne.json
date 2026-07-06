@@ -1,0 +1,43 @@
+{
+  "_id": "ehgJvjOp6WjGU3Ne",
+  "name": "United Express Courier Service",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 25–650eb/package by speed/secrecy/distance; purchases 10% of price, 25eb min. | [Audit row +29 — Chromebook 1 p.66]</p>",
+    "cost": 25,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.66",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+29",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 66
+      },
+      "manufacturer": "United Express",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!ehgJvjOp6WjGU3Ne"
+}

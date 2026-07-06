@@ -1,0 +1,43 @@
+{
+  "_id": "iOrFLdbjrWewY7nI",
+  "name": "'Trode Link (RUSH upgrade)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>RUSH VR upgrade: 'trode interface for users without neural processors/plugs; includes 4 'trode sets. (Chromebook 2-attributed; printed in Brainware Blowout p.31 — its RUSH-family siblings are already in this section.) 👁 CB2 page unknown. | [Audit row +358 — Chromebook 2 p.👁]</p>",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.👁",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 45500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+358",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": "👁"
+      },
+      "manufacturer": "SegAtari",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!iOrFLdbjrWewY7nI"
+}

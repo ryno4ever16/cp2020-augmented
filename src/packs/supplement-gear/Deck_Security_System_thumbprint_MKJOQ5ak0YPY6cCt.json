@@ -1,0 +1,42 @@
+{
+  "_id": "MKJOQ5ak0YPY6cCt",
+  "name": "Deck Security System thumbprint",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>400eb thumbprint / 1000eb retinal (OCR '1 OOOeb'). Blood-flow check defeats severed thumbs; retinal version reads cyberoptic serial numbers. | Jenny: Thumbprint scanner connected to deck CPU. Checks blood flow to prevent dismembered thumb. | [Audit row +18 — Chromebook 1 p.9]</p>",
+    "cost": 400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.9",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+18",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 9
+      },
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!MKJOQ5ak0YPY6cCt"
+}

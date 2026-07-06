@@ -1,0 +1,64 @@
+{
+  "_id": "Kw9NVhZskrIwl2xi",
+  "name": "BAE Police Pursuit Cruiser",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Crew 2+2; 4t; crash control, environment control, +1 gunnery computer, auto-pilot, cyberlink, image enhancement, light amp, radar, nav, security shocker system, searchlight. Cost 'aprox.' per book. RGUK p.39-40. | [Audit row +360 — Rough Guide to the UK p.39]</p>",
+    "cost": 490000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.39",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 100,
+      "max": 100
+    },
+    "sp": 25,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 160,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 300
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+360",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 39
+      },
+      "manufacturer": "British Aerospace",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Kw9NVhZskrIwl2xi"
+}

@@ -1,0 +1,69 @@
+{
+  "_id": "IgdWVnAo8lb8paws",
+  "name": "FN BRG-15 15mm HMG",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Mounted on the Vosper/Wolf patrol craft (RGUK p.42; page stat line garbled) — full stats from Reference Book. Also appears in Maximum Metal. | [Audit row +369 — Rough Guide to the UK p.42]</p>",
+    "cost": 2800,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.42",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "15mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "7d10",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 100,
+    "shots": 100,
+    "rof": 10,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 650,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 14600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+369",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 42
+      },
+      "manufacturer": "FN",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!IgdWVnAo8lb8paws"
+}

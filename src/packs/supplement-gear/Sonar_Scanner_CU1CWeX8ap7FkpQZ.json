@@ -1,0 +1,43 @@
+{
+  "_id": "CU1CWeX8ap7FkpQZ",
+  "name": "Sonar Scanner",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>'Ranger' hand-held sonar: distance/dimensions of nearest obstruction + 120m motion detector; 0.2kg. (SUBSTR dedup false-positive — verified NEW vs HotB Portable Sonar 150eb.) | Jenny: Telectronics' Ranger. Hand-held. Measures distance to and dimensions of the nearest solid obstruction. Motion detector within 120m radius. | [Audit row +21 — Chromebook 1 p.8]</p>",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.8",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+21",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 8
+      },
+      "manufacturer": "Telectronics",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!CU1CWeX8ap7FkpQZ"
+}

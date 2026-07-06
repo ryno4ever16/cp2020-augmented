@@ -1,0 +1,59 @@
+{
+  "_id": "axkvIrsUmhTNmkn8",
+  "name": "Quickdraw Armholster",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Forearm spring holster launches P-conceal pistol/knife into hand (+2 Initiative on declared fast draw); 1 space. | [Audit row +122 — Chromebook 2 p.6]</p>",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.6",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "0",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 6900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+122",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 2",
+        "page": 6
+      },
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!axkvIrsUmhTNmkn8"
+}

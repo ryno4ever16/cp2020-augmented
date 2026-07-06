@@ -1,0 +1,64 @@
+{
+  "_id": "Om7wmgokolJ1rTsF",
+  "name": "Kestrel Medium Helicopter",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 full designation/manufacturer cut by page art. BCF gunship/patrol helicopter; single cyber-augmented pilot controls ground+airspace to 50-mile radius; turret cannon w/ 750-rd magazine 👁 + two weapon wings (8t total, must balance); chaff/flares, +5 gunnery computer, terrain-following military radar, thermal/IR, laser comm + detect, ECM/ECCM, anti-laser aerosol, telescopic optics. RGUK p.41. | [Audit row +363 — Rough Guide to the UK p.41]</p>",
+    "cost": 1780000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.41",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 80,
+      "max": 80
+    },
+    "sp": 20,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 150,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 400
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+363",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 41
+      },
+      "manufacturer": "👁 (BCF; maker cut by page art)",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Om7wmgokolJ1rTsF"
+}

@@ -1,0 +1,68 @@
+{
+  "_id": "Zhbm632VzcgA0HN1",
+  "name": "Teen Dream",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>👁 'Teen Oreem 36eb' — cheap polymer pistol; name + price need eyes. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +289 — Blackhand's Street Weapons p.14]</p>",
+    "cost": 36,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.14",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 13100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+289",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Blackhand's Street Weapons",
+        "page": 14
+      },
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Zhbm632VzcgA0HN1"
+}

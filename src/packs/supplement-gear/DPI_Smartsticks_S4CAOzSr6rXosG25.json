@@ -1,0 +1,43 @@
+{
+  "_id": "S4CAOzSr6rXosG25",
+  "name": "DPI Smartsticks",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Drumstick style percussion instrument. Can strike sticks on any solid surface and can program any percussion sound. +1 on Play Drums skill. Dealer's price may vary. | Index 800eb ✓. | [Audit row +55 — Chromebook 1 p.11]</p>",
+    "cost": 800,
+    "weight": 1,
+    "equipped": false,
+    "source": "Chromebook 1 p.11",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 41900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+55",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 11
+      },
+      "manufacturer": "DPI",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "jenny-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!S4CAOzSr6rXosG25"
+}

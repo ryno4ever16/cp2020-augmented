@@ -1,0 +1,43 @@
+{
+  "_id": "J83nvxBDsQy5H7yS",
+  "name": "Smartlock Door Security System",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>250eb/LEVEL. Plug-in interface lock for door/safe/terminal; +220eb option: guard must jack in at preset times or police alarm. | [Audit row +13 — Chromebook 1 p.8]</p>",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.8",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 40700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+13",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 8
+      },
+      "manufacturer": "Smartlock",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!J83nvxBDsQy5H7yS"
+}

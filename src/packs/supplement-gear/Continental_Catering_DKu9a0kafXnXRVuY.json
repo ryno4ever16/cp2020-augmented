@@ -1,0 +1,43 @@
+{
+  "_id": "DKu9a0kafXnXRVuY",
+  "name": "Continental Catering",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>SERVICE: 200eb/dinner guest (150eb/guest above 15). Full prep/service/cleanup. | [Audit row +30 — Chromebook 1 p.67]</p>",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.67",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+30",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 67
+      },
+      "manufacturer": "Continental",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!DKu9a0kafXnXRVuY"
+}

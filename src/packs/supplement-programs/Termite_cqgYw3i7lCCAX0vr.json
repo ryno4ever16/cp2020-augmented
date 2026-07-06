@@ -1,0 +1,44 @@
+{
+  "_id": "cqgYw3i7lCCAX0vr",
+  "name": "Termite",
+  "type": "program",
+  "img": "icons/svg/book.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>OCR '1BOeb'=180. Early quiet data-wall borer; cheap weefle favorite. | [Audit row +104 — Chromebook 1 p.91]</p>",
+    "cost": 180,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.91",
+    "lastOwnerId": "",
+    "power": 1,
+    "mu": 2,
+    "programType": "Intrusion",
+    "actionFormula": ""
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+104",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 91
+      },
+      "importCategory": "program",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!cqgYw3i7lCCAX0vr"
+}

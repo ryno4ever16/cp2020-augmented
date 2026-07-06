@@ -1,0 +1,64 @@
+{
+  "_id": "5Z3eDqHuJq3SpJ15",
+  "name": "Russian Arms Boris 1 (ACPA)",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>ACPA heavy-lift suit: STR50, 1235kg; frame rated 2600kg (engine 2000kg). | [Audit row +307 — Firestorm: Shockwave p.62]</p>",
+    "cost": 116027,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.62",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 50,
+      "max": 50
+    },
+    "sp": 65,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 16400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+307",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Firestorm: Shockwave",
+        "page": 62
+      },
+      "manufacturer": "Russian Arms",
+      "importCategory": "acpa-suit",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!5Z3eDqHuJq3SpJ15"
+}

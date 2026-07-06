@@ -1,0 +1,60 @@
+{
+  "_id": "xcaUXoEQrY3v1sEu",
+  "name": "Tailored Pheromones: Confusion",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Within 1m: −1 INT-based skills + Initiative. Surgery M. | [Audit row +278 — Chromebook 4 p.23]</p>",
+    "cost": 2500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 4 p.23",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "1D6/2",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 12000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+278",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 4",
+        "page": 23
+      },
+      "manufacturer": "Revolution Genetics",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!xcaUXoEQrY3v1sEu"
+}

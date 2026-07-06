@@ -1,0 +1,60 @@
+{
+  "_id": "a88tVxJfrtGgliCl",
+  "name": "MiTech Cybernetics Spyder (FBC)",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Full-body conversion; index ✓118,110. Spec pp.~98-102: BODY 12, MA 12/20 versions, run 40mph, 6 limbs w/ SP25-30; sensor + cyberoptic packages. | [Audit row +223 — Chromebook 3 p.101]</p>",
+    "cost": 118110,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.101",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+223",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 101
+      },
+      "manufacturer": "MiTech Cybernetics",
+      "importCategory": "cyberware",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!a88tVxJfrtGgliCl"
+}

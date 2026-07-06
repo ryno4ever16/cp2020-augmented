@@ -1,0 +1,60 @@
+{
+  "_id": "TWcTyBjRvavkeT28",
+  "name": "Thamoc Martial Arts Chip",
+  "type": "cyberware",
+  "img": "icons/svg/biohazard.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>270eb/LEVEL, to +3. Style (diff 2), USER-VERIFIED: Strike— Kick— Block+1 Dodge+2 Throw— Hold— Escape+2 Choke— Sweep+1 Grapple+1. ⚠ Escape read from 'esc - +2' — confirm Escape=+2. Also: defense vs Disarm at level+4. | [Audit row +7 — Chromebook 3 p.38]</p>",
+    "cost": 270,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 3 p.38",
+    "lastOwnerId": "",
+    "surgCode": "",
+    "humanityCost": "",
+    "cyberwareType": "",
+    "cyberwareSubtype": "",
+    "abbrev": "",
+    "humanityLoss": 0,
+    "MountZone": "",
+    "EffectMode": "Permanent",
+    "EffectActive": false,
+    "Module": {},
+    "CyberBodyType": {},
+    "CyberWorkType": {},
+    "slots": 0,
+    "spaces": 0,
+    "cwTypeLabel": "",
+    "cwSubtypeLabel": "",
+    "effectTypes": [
+      "None"
+    ]
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 10400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+7",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 3",
+        "page": 38
+      },
+      "manufacturer": "The Weaponmasters",
+      "importCategory": "chip",
+      "importReview": {
+        "level": "user-verified",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": false
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!TWcTyBjRvavkeT28"
+}

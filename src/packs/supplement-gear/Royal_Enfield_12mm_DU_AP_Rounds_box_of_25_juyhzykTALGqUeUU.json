@@ -1,0 +1,43 @@
+{
+  "_id": "juyhzykTALGqUeUU",
+  "name": "Royal Enfield 12mm DU AP Rounds (box of 25)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Special round for the H&K MPK-2020 (SAS/SBS issue). Pre-fragmented semi-AP depleted-uranium cap; treat as AP, damage doubled if it penetrates; '95% of human targets hit by this round die'. Extremely rare, illegal outside BCF. RGUK p.35. | [Audit row +370 — Rough Guide to the UK p.35]</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.35",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 47900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+370",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 35
+      },
+      "manufacturer": "Royal Enfield Ordnance",
+      "importCategory": "ammo",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!juyhzykTALGqUeUU"
+}

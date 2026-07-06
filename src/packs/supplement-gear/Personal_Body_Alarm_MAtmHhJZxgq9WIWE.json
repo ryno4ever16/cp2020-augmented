@@ -1,0 +1,43 @@
+{
+  "_id": "MAtmHhJZxgq9WIWE",
+  "name": "Personal Body Alarm",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>+300eb/month (+ammo/medical on extraction). Break-card summons contracted security squad. | [Audit row +27 — Chromebook 1 p.14]</p>",
+    "cost": 400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.14",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 42500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+27",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 14
+      },
+      "manufacturer": "Militech",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!MAtmHhJZxgq9WIWE"
+}

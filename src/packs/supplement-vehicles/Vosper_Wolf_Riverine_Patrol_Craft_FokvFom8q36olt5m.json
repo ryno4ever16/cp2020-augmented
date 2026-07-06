@@ -1,0 +1,64 @@
+{
+  "_id": "FokvFom8q36olt5m",
+  "name": "Vosper/Wolf Riverine Patrol Craft",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Shallow-water patrol boat for flooded coastal Britain; crew 5+1; 5t, 1.6t cargo; non-metallic armored buoyant hull, crew stations sealed under armor. Fwd stabilized turret: 2x BRG-15 15mm HMG + twin Milan-C ATGM; aft turret: 15mm HMG + 2x 40mm auto-GL; tamped directional Claymores vs boarders; chaff/flare/smoke, satellite uplink, scrambler, radar+ID, thermograph, IR, ECM/ECCM, +2 gunnery, autopilot/nav, magnetometer, damage + environment control. RGUK p.42. | [Audit row +364 — Rough Guide to the UK p.42]</p>",
+    "cost": 600000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK p.42",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 100,
+      "max": 100
+    },
+    "sp": 40,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 25,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "auditWalk": {
+        "row": "+364",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Rough Guide to the UK",
+        "page": 42
+      },
+      "manufacturer": "Vosper/Wolf",
+      "importCategory": "vehicle",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "AUDIT-WALK-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!FokvFom8q36olt5m"
+}
