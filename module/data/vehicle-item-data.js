@@ -204,38 +204,50 @@ export class CyberpunkAcpaSystemData extends CyberpunkBaseItemData {
  */
 export function makeVehicleItemData(SystemVehicleData) {
   const Base = SystemVehicleData ?? CyberpunkBaseItemData;
+  const f = foundry.data.fields;
+  // ⚠ These module-owned groups are real nested SchemaFields, NOT bare objectField, deliberately:
+  // Foundry applies `migrateData` to UPDATE CHANGES too, so the old mergeDefaults floors here
+  // expanded a partial update ("system.speed.value" — the sheet's accel/decel buttons) into a full
+  // object of defaults, wiping max/unit/etc. (rig-proven). SchemaFields give per-key merge on
+  // partial updates AND fill missing keys on legacy sources at clean time — both floors, no fills
+  // over changes. (The system's own bare-objectField groups keep its semantics untouched.)
+  const speedField = () => new f.SchemaField({
+    value: new f.NumberField({ initial: 0 }), max: new f.NumberField({ initial: 0 }),
+    maneuver: new f.NumberField({ initial: 0 }), acceleration: new f.NumberField({ initial: 0 }),
+    deceleration: new f.NumberField({ initial: 0 }), unit: new f.StringField({ initial: "mph" })
+  });
+  const fuelField = () => new f.SchemaField({
+    type: new f.StringField({ initial: "" }), efficiency: new f.NumberField({ initial: 0 }),
+    max: new f.NumberField({ initial: 0 }), value: new f.NumberField({ initial: 0 }),
+    unit: new f.StringField({ initial: "gal" })
+  });
+  const valueUnitField = (unit) => new f.SchemaField({
+    value: new f.NumberField({ initial: 0 }), unit: new f.StringField({ initial: unit })
+  });
   return class CyberpunkVehicleItemData extends Base {
     static defineSchema() {
       return {
         ...super.defineSchema(),   // the system's full vehicle schema (chains any future field it gains)
         // Override `speed` ONLY to add `unit` (mph|kph) + `deceleration` — the books print the pair
         // ("ACC/DEC 18/30"). Covers value/max/maneuver/acceleration.
-        speed:     objectField({ value: 0, max: 0, maneuver: 0, acceleration: 0, deceleration: 0, unit: "mph" }),
+        speed:     speedField(),
         // Travel range in `rangeUnit` (mi|km) — Chromebook/SoF stat-block field the base model lacked.
         range:     numberField(0),
         rangeUnit: stringField("mi"),
         // Override `fuel` ONLY to add `unit` (gal|liters) — L&D/FH print liters + km-per-liter.
         // Second manual sync point beside `speed` (document both if the base model ever changes).
-        fuel:      objectField({ type: "", efficiency: 0, max: 0, value: 0, unit: "gal" }),
+        fuel:      fuelField(),
         // Audit-walk schema upgrade (VEHICLE-SPEC.md §4, evidence §0b-§1): the fields the books
         // actually print that the inherited Core-car shape lacked. All additive.
         vehicleType: stringField(""),                      // soft enum — book class ("Car", "AV", …)
         crew:        numberField(0),                       // operating crew (49% printed)
         body:        numberField(0),                       // abstract Body rating ("SDP 100 (Body 5)")
-        cargo:       objectField({ value: 0, unit: "kg" }),   // cargo capacity (33% printed)
-        mass:        objectField({ value: 0, unit: "tons" })  // vehicle mass (41% printed) — NOT inventory `weight`
+        cargo:       valueUnitField("kg"),                 // cargo capacity (33% printed)
+        mass:        valueUnitField("tons")                // vehicle mass (41% printed) — NOT inventory `weight`
       };
     }
-
-    static migrateData(source) {
-      source ??= {};
-      if (hasOwn(source, "sdp"))             source.sdp             = mergeDefaults(source.sdp,             { value: 0, max: 0 });
-      if (hasOwn(source, "speed"))           source.speed           = mergeDefaults(source.speed,           { value: 0, max: 0, maneuver: 0, acceleration: 0, deceleration: 0, unit: "mph" });
-      if (hasOwn(source, "maneuverability")) source.maneuverability = mergeDefaults(source.maneuverability, { value: 0, condition: "" });
-      if (hasOwn(source, "fuel"))            source.fuel            = mergeDefaults(source.fuel,            { type: "", efficiency: 0, max: 0, value: 0, unit: "gal" });
-      if (hasOwn(source, "cargo"))           source.cargo           = mergeDefaults(source.cargo,           { value: 0, unit: "kg" });
-      if (hasOwn(source, "mass"))            source.mass            = mergeDefaults(source.mass,            { value: 0, unit: "tons" });
-      return super.migrateData(source);   // chains to the system's vehicle/base migrateData
-    }
+    // No migrateData override: the old mergeDefaults floors are superseded by the SchemaFields
+    // (missing legacy keys fill from initials at clean time), and running fills over update
+    // changes was exactly the partial-update wipe. The system's own migrateData still chains.
   };
 }
