@@ -58,6 +58,11 @@ function mechProtection(hazards) {
   const entry = (h) => ({ immune: false, mod: 0, ...(hazards[h] ?? {}) });
   return { mechProtection: { enabled: true, gas: entry("gas"), flash: entry("flash"), sonic: entry("sonic") } };
 }
+/** P5 roll-mod-provider patch (numbers straight from the item's own printed text; `auto:false` =
+ *  suggested UNTICKED, for gear whose bonus only applies in a narrow situation). */
+function mechRollMods({ attackMod = 0, skillName = "", skillMod = 0, auto = true } = {}) {
+  return { mechRollMods: { enabled: true, attackMod, skillName, skillMod, auto } };
+}
 
 /** One `<p>` block appended to a corrected item's notes. */
 function note(text) { return `<p>${text}</p>`; }
@@ -137,6 +142,8 @@ export const DATA_CORRECTIONS = {
   // ── PR #41 (upstream, unmerged): name typos across gear packs ──
   "cyberpunk2020.medical": {
     fA02aOWaC6JRuWg8: { name: "First Aid Kit" },                     // was "Fist Aid Kit"
+    // P5: "+2 on DiagnoseSkill" (Medical p.71) — suggested on Diagnose Illness rolls.
+    oTl9WjtAxnwI2wly: { patch: mechRollMods({ skillName: "Diagnose Illness", skillMod: 2 }) },  // Medscanner
   },
   "cyberpunk2020.rentalandservices": {
     oN5HJZeZ4Ef4MMTY: { name: "Apartment/Condo – Combat Zone" },
@@ -241,6 +248,8 @@ export const DATA_CORRECTIONS = {
     XG6ffmsWnkUWNkcW: { patch: mechVision("uv") },           // Ultra Violet — "see in darkness; using UV flash"
     // P6: "Immune to flash; laser blinding" — data-ready for the future flash effect engine.
     H7PSx0gcnKET6usp: { patch: mechProtection({ flash: { immune: true } }) },  // Anti-Dazzle
+    // P5: "+1 on all Smartgun attacks" — pre-ticked; untick when firing a non-smart weapon.
+    wO5L7J2iuRHjXI7d: { patch: mechRollMods({ attackMod: 1 }) },  // Targeting Scope
   },
   "cyberpunk2020.fashonware": {
     T7uGBTZgaeB7NKIm: skillAlias("svx86NhUYhqVlLNw", "Resist Torture/Drugs", 2),  // Biomonitor
@@ -253,6 +262,17 @@ export const DATA_CORRECTIONS = {
   "cyberpunk2020.neuralware": {
     "4gYluthCnbT7zVQQ": skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Olfactory Boost
     "9CXsUvDafTQCGmbU": skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Tactile Boost
+    // P5: "+2 to Smartgun attacks" — pre-ticked (its owner's loadout is smart weapons);
+    // untick when firing a non-smart weapon. Its Characteristic tag ships with empty payloads,
+    // so this is the item's first live mechanic, not a double-apply.
+    GWnQ3KQVL6PZpedS: { patch: mechRollMods({ attackMod: 2 }) },  // Smartgun Link
+  },
+
+  // ── P5 roll-mod tools (Security p.70): each prints a flat check bonus against ONE lock type,
+  //    so the suggestion renders UNTICKED — the player claims it only when it actually applies. ──
+  "cyberpunk2020.security": {
+    oVGBBUXDnAph5s72: { patch: mechRollMods({ skillName: "Electronic Security", skillMod: 5, auto: false }) },  // Voc Decryptor — "+5 on Check against VocaLock"
+    ycLktwLxqVMsxr7K: { patch: mechRollMods({ skillName: "Electronic Security", skillMod: 5, auto: false }) },  // Code Decryptor — "+5 on Check against CardLock"
   },
 };
 

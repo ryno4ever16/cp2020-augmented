@@ -91,5 +91,30 @@
     </div>
     {{/each}}
     {{/if}}
+
+    {{!-- P5 roll-modifier provider: while equipped (and, for cyberware, active) the item adds a
+         suggestion row to the attack / skill Modifiers dialog; a checked row folds into the roll's
+         extra modifier. Skill names come from the skill index datalist (per-item id — two open
+         sheets must not share one datalist element). --}}
+    {{> (template "fields/boolean") label="MechRollMods" edit="system.mechRollMods.enabled"}}
+    {{#if system.mechRollMods.enabled}}
+    {{> (template "fields/number") label="MechRollModsAttackMod" edit="system.mechRollMods.attackMod"}}
+    <div class="field">
+        <label for="system.mechRollMods.skillName">{{CPLocal "MechRollModsSkillName"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.mechRollMods.skillName" type="text"
+               value="{{system.mechRollMods.skillName}}" list="cp-mech-skills-{{@root.item._id}}"/>
+        <datalist id="cp-mech-skills-{{@root.item._id}}">
+            {{#each @root.mechSkillOptions as |n|}}<option value="{{n}}">{{n}}</option>{{/each}}
+        </datalist>
+    </div>
+    {{> (template "fields/number") label="MechRollModsSkillMod" edit="system.mechRollMods.skillMod"}}
+    <div class="field" title="{{CPLocal "MechRollModsAutoHint"}}">
+        <label for="system.mechRollMods.auto">{{CPLocal "MechRollModsAuto"}}</label>
+        <span class="flex-pad"></span>
+        <input class="nogrow" name="system.mechRollMods.auto" type="checkbox" data-dtype="Boolean"
+               {{#if system.mechRollMods.auto}}checked{{/if}}/>
+    </div>
+    {{/if}}
     {{/if}}
 </div>

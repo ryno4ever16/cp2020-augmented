@@ -55,6 +55,26 @@ export const MECH_PROTECTION_DEFAULTS = {
   sonic: { immune: false, mod: 0 }
 };
 
+/**
+ * `mechRollMods` (pattern P5 — roll-modifier providers): equipped gear that advertises a bonus the
+ * player may claim on a roll. The engine (module/mech/roll-mods.js) turns providers into extra
+ * pre-suggested checkbox rows in the EXISTING Modifiers dialog; a checked row folds its mod into
+ * the roll's `extraMod` term (the system's own always-present catch-all), so the roll math and
+ * chat cards are untouched.
+ *   attackMod — ± to RANGED weapon-attack rolls (the fire dialog). 0 = no attack row.
+ *   skillName/skillMod — ± to rolls of the named skill (the skill-roll dialog; canonical English
+ *     skill name, same convention as CyberWorkType.Skill name keys). Empty name or 0 = no row.
+ *   auto — render the suggestion PRE-TICKED. Wiring sets false for narrow-condition gear (a
+ *     vocalock decryptor helps only against vocalocks) so Enter-through never claims a bonus the
+ *     situation doesn't earn.
+ * One slot of each kind per item: every book item wired so far provides a single bonus; widen to a
+ * list only when a real item demands it. Items whose printed bonus targets a roll that has no
+ * modifiers dialog (Facedown, bare stat checks) stay unwired — see the proposal doc §3b.
+ */
+export const MECH_ROLL_MODS_DEFAULTS = {
+  enabled: false, attackMod: 0, skillName: "", skillMod: 0, auto: true
+};
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -90,6 +110,17 @@ function mechProtectionField() {
   });
 }
 
+function mechRollModsField() {
+  const f = foundry.data.fields;
+  return new f.SchemaField({
+    enabled:   new f.BooleanField({ initial: MECH_ROLL_MODS_DEFAULTS.enabled }),
+    attackMod: new f.NumberField({ initial: MECH_ROLL_MODS_DEFAULTS.attackMod }),
+    skillName: new f.StringField({ initial: MECH_ROLL_MODS_DEFAULTS.skillName }),
+    skillMod:  new f.NumberField({ initial: MECH_ROLL_MODS_DEFAULTS.skillMod }),
+    auto:      new f.BooleanField({ initial: MECH_ROLL_MODS_DEFAULTS.auto })
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -101,7 +132,8 @@ export function makeMechAugmentedData(SystemModel) {
         ...super.defineSchema(),
         mechLight: mechLightField(),
         mechVision: mechVisionField(),
-        mechProtection: mechProtectionField()
+        mechProtection: mechProtectionField(),
+        mechRollMods: mechRollModsField()
       };
     }
   };

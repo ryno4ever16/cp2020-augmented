@@ -5,6 +5,7 @@ import { SortOrders, sortSkills } from "./skill-sort.js";
 import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } from "./reputation.js";
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { resolveAttackRange } from "../combat/rangefinding.js";
+import { attackModProviders, skillModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
@@ -478,29 +479,38 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   }
 
   /**
-   * Roll a skill from its `.skill-roll` element. If the skill has askMods set, open a ModifiersDialog
-   * (extra-mod + adv/dis) first, otherwise roll directly. (Was the inline .skill-roll handler.)
+   * Roll a skill from its `.skill-roll` element. If the skill has askMods set — or equipped gear
+   * advertises a bonus to this skill (P5 mechRollMods) — open a ModifiersDialog first (gear
+   * suggestions + extra-mod + adv/dis), otherwise roll directly. Checked gear rows fold into the
+   * roll's extraMod term. (Was the inline .skill-roll handler.)
    */
   _cpRollSkillFromElement(el) {
     const id = el?.dataset?.skillId;
     const skill = this.actor.items.get(id);
     if (!skill) return;
 
-    if (skill.system?.askMods) {
+    const gearProviders = skillModProviders(this.actor.items, skill.name);
+
+    if (skill.system?.askMods || gearProviders.length) {
+      const modifierGroups = [];
+      if (gearProviders.length) modifierGroups.push(gearModGroup(gearProviders));
+      modifierGroups.push([
+        { localKey: "ExtraModifiers", dataPath: "extraMod", defaultValue: 0 }
+      ]);
       const dlg = new ModifiersDialog(this.actor, {
         title: localize("ModifiersSkillTitle"),
         showAdvDis: true,
-        modifierGroups: [[
-          { localKey: "ExtraModifiers", dataPath: "extraMod", defaultValue: 0 }
-        ]],
-        onConfirm: ({ extraMod = 0, advantage = false, disadvantage = false, hiddenAdvantage = false }) =>
-          this.actor.rollSkill(
+        modifierGroups,
+        onConfirm: (options) => {
+          const { extraMod = 0, advantage = false, disadvantage = false, hiddenAdvantage = false } = options;
+          return this.actor.rollSkill(
             id,
-            Number(extraMod) || 0,
+            (Number(extraMod) || 0) + gearModSum(options, gearProviders),
             !!advantage,
             !!disadvantage,
             !!hiddenAdvantage
-          )
+          );
+        }
       });
       return dlg.render(true);
     }
@@ -532,8 +542,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         id: target.id};
     });
 
+    // P5 mechRollMods: equipped gear advertising a ranged-attack bonus (smartgun link, targeting
+    // scope) becomes a suggestion row in the dialog; checked rows fold into extraMod on confirm.
+    // Ranged only — every wired attack provider is a ranged aid (see mech/roll-mods.js).
+    const gearProviders = isRanged ? attackModProviders(this.actor.items) : [];
+
     if(isRanged) {
       modifierGroups = rangedModifiers(item, targetTokens, savedAttackOptions);
+      if (gearProviders.length) modifierGroups.push(gearModGroup(gearProviders));
 
       // ── Automated Rangefinding ──────────────────────────────────────────
       // If enabled and exactly one target is selected, measure the token
@@ -607,6 +623,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         // Persist the chosen options so the next attack with this weapon pre-fills them.
         if (isRanged) await this._cpSaveRangedAttackOptions(item, fireOptions);
         else await this._cpSaveMeleeAttackOptions(item, fireOptions);
+        if (gearProviders.length) {
+          fireOptions.extraMod = (Number(fireOptions.extraMod) || 0) + gearModSum(fireOptions, gearProviders);
+        }
         return item.__weaponRoll(fireOptions, targetTokens);
       }
     });

@@ -86,6 +86,13 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
         immune: !!mp[h]?.immune,
         mod: Number(mp[h]?.mod) || 0
       }));
+      // P5 roll-mod provider: canonical skill names for the block's datalist (the same index the
+      // CyberWorkType skill UI uses; cached). Fetched only once the block is enabled — the enable
+      // checkbox submit re-renders, so the datalist is there when the fields appear.
+      if (this.item.system?.mechRollMods?.enabled) {
+        const skills = await getSkillIndex(game.i18n.lang);
+        data.mechSkillOptions = skills.map(s => s.name);
+      }
     }
 
     switch (this.item.type) {

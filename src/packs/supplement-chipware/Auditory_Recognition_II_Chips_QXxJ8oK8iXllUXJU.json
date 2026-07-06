@@ -35,7 +35,14 @@
     "cwSubtypeLabel": "",
     "effectTypes": [
       "None"
-    ]
+    ],
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "Awareness/Notice",
+      "skillMod": 2,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,
