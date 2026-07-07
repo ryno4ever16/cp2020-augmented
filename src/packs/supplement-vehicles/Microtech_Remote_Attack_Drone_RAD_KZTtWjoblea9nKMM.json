@@ -33,7 +33,8 @@
       "max": 0,
       "value": 0
     },
-    "range": 20
+    "range": 20,
+    "vehicleType": "RPV aerodyne (flying saucer, 1m, 15kg)"
   },
   "effects": [],
   "folder": null,

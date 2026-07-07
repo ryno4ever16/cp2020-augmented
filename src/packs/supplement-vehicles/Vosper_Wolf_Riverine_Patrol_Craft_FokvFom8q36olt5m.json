@@ -16,7 +16,7 @@
       "max": 100
     },
     "sp": 40,
-    "passengers": 0,
+    "passengers": 1,
     "speed": {
       "value": 0,
       "max": 25,
@@ -33,7 +33,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "Boat",
+    "crew": 5,
+    "mass": {
+      "value": 5.0,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 1.6,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

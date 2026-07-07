@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 130
+    "range": 130,
+    "vehicleType": "Cycle",
+    "crew": 1,
+    "mass": {
+      "value": 148,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

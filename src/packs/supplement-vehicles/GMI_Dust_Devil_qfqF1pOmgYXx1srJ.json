@@ -32,7 +32,8 @@
       "efficiency": 30,
       "max": 0,
       "value": 0
-    }
+    },
+    "vehicleType": "Car"
   },
   "effects": [],
   "folder": null,

@@ -32,7 +32,8 @@
       "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "vehicleType": "netrunner spider-drone (Spider body+legs, claws+tail)"
   },
   "effects": [],
   "folder": null,

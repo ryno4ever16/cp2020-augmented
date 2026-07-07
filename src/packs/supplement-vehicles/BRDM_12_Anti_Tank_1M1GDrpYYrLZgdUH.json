@@ -32,6 +32,11 @@
       "efficiency": 30,
       "max": 0,
       "value": 0
+    },
+    "crew": 4,
+    "cargo": {
+      "value": 8,
+      "unit": "tons"
     }
   },
   "effects": [],

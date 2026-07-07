@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "ACPA (Powered Armor)",
+    "mass": {
+      "value": 1566.0,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

@@ -21,7 +21,8 @@
       "value": 0,
       "max": 45,
       "maneuver": 0,
-      "acceleration": 5
+      "acceleration": 5,
+      "deceleration": 5
     },
     "maneuverability": {
       "value": 0,
@@ -33,7 +34,12 @@
       "max": 0,
       "value": 0
     },
-    "range": 1500
+    "range": 1500,
+    "vehicleType": "modular multi-role sub",
+    "cargo": {
+      "value": 605,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

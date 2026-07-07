@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 300
+    "range": 300,
+    "vehicleType": "Tracked IFV",
+    "crew": 2,
+    "mass": {
+      "value": 14,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

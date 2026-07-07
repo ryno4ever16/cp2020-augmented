@@ -19,7 +19,7 @@
     "passengers": 0,
     "speed": {
       "value": 0,
-      "max": 0,
+      "max": 180,
       "maneuver": 0,
       "acceleration": 0
     },
@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "Boat",
+    "crew": 4,
+    "mass": {
+      "value": 10.0,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

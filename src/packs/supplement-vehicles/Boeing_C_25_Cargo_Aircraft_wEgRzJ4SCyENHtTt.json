@@ -33,7 +33,8 @@
       "max": 0,
       "value": 0
     },
-    "range": 8000
+    "range": 8000,
+    "crew": 4
   },
   "effects": [],
   "folder": null,

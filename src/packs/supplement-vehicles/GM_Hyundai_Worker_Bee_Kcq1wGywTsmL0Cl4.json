@@ -33,7 +33,16 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "Truck",
+    "mass": {
+      "value": 400.0,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 2.0,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

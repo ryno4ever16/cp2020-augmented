@@ -21,7 +21,8 @@
       "value": 0,
       "max": 810,
       "maneuver": 0,
-      "acceleration": 100
+      "acceleration": 100,
+      "deceleration": 75
     },
     "maneuverability": {
       "value": 3,
@@ -33,7 +34,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 1200
+    "range": 1200,
+    "vehicleType": "AV",
+    "crew": 1,
+    "mass": {
+      "value": 2000,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 650,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

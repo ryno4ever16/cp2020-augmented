@@ -16,10 +16,10 @@
       "max": 50
     },
     "sp": 20,
-    "passengers": 0,
+    "passengers": 3,
     "speed": {
       "value": 0,
-      "max": 0,
+      "max": 90,
       "maneuver": 0,
       "acceleration": 0
     },
@@ -33,7 +33,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "Car",
+    "crew": 1,
+    "mass": {
+      "value": 2.0,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 650.0,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

@@ -21,7 +21,8 @@
       "value": 0,
       "max": 60,
       "maneuver": 0,
-      "acceleration": 10
+      "acceleration": 10,
+      "deceleration": 30
     },
     "maneuverability": {
       "value": 0,
@@ -33,7 +34,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 400
+    "range": 400,
+    "vehicleType": "Heavy Truck",
+    "crew": 2,
+    "mass": {
+      "value": 15,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 40,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

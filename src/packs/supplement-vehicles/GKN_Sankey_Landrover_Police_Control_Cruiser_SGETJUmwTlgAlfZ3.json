@@ -16,7 +16,7 @@
       "max": 60
     },
     "sp": 24,
-    "passengers": 0,
+    "passengers": 6,
     "speed": {
       "value": 0,
       "max": 70,
@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 300
+    "range": 300,
+    "vehicleType": "Car",
+    "crew": 2,
+    "mass": {
+      "value": 2.4,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

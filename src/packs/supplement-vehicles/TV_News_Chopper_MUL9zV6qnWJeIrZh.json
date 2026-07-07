@@ -22,7 +22,8 @@
       "max": 460,
       "maneuver": 0,
       "acceleration": 60,
-      "unit": "kph"
+      "unit": "kph",
+      "deceleration": 60
     },
     "maneuverability": {
       "value": 0,
@@ -35,7 +36,9 @@
       "value": 0
     },
     "range": 300,
-    "rangeUnit": "km"
+    "rangeUnit": "km",
+    "vehicleType": "helicopter (typical = Bell Spy-Eye 18)",
+    "crew": 1
   },
   "effects": [],
   "folder": null,

@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 500
+    "range": 500,
+    "vehicleType": "Pickup truck",
+    "crew": 1,
+    "mass": {
+      "value": 1.6,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

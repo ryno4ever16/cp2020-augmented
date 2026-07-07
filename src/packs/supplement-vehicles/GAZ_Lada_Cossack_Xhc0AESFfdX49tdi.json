@@ -21,7 +21,8 @@
       "value": 0,
       "max": 75,
       "maneuver": 0,
-      "acceleration": 15
+      "acceleration": 15,
+      "deceleration": 40
     },
     "maneuverability": {
       "value": 0,
@@ -33,7 +34,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 500
+    "range": 500,
+    "vehicleType": "Car",
+    "crew": 1,
+    "mass": {
+      "value": 3200,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 1065,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

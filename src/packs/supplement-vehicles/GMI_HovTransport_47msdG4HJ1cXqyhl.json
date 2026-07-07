@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 400
+    "range": 400,
+    "vehicleType": "Hovercraft",
+    "crew": 2,
+    "mass": {
+      "value": 10,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

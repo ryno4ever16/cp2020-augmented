@@ -16,10 +16,10 @@
       "max": 200
     },
     "sp": 0,
-    "passengers": 0,
+    "passengers": 20,
     "speed": {
       "value": 0,
-      "max": 0,
+      "max": 315,
       "maneuver": 0,
       "acceleration": 0
     },
@@ -33,7 +33,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "Osprey",
+    "crew": 2,
+    "mass": {
+      "value": 25.0,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 9.0,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

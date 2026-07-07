@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 200
+    "range": 200,
+    "vehicleType": "Light Helicopter",
+    "crew": 1,
+    "mass": {
+      "value": 1000,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

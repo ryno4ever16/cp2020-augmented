@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 135
+    "range": 135,
+    "vehicleType": "Motorcycle",
+    "crew": 1,
+    "mass": {
+      "value": 35,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 2656
+    "range": 2656,
+    "vehicleType": "Small Jet",
+    "crew": 1,
+    "mass": {
+      "value": 20,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

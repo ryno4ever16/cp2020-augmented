@@ -21,7 +21,8 @@
       "value": 0,
       "max": 101,
       "maneuver": 0,
-      "acceleration": 10
+      "acceleration": 10,
+      "deceleration": 30
     },
     "maneuverability": {
       "value": -4,
@@ -33,7 +34,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 1300
+    "range": 1300,
+    "vehicleType": "Truck",
+    "crew": 2,
+    "mass": {
+      "value": 9300,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 0,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

@@ -32,6 +32,11 @@
       "efficiency": 25,
       "max": 0,
       "value": 0
+    },
+    "vehicleType": "Pickup truck",
+    "mass": {
+      "value": 2.4,
+      "unit": "tons"
     }
   },
   "effects": [],

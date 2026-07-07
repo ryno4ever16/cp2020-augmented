@@ -22,7 +22,8 @@
       "max": 560,
       "maneuver": 0,
       "acceleration": 80,
-      "unit": "kph"
+      "unit": "kph",
+      "deceleration": 80
     },
     "maneuverability": {
       "value": 0,
@@ -35,7 +36,9 @@
       "value": 0
     },
     "range": 600,
-    "rangeUnit": "km"
+    "rangeUnit": "km",
+    "vehicleType": "AV-4 variant (air/ground)",
+    "crew": 1
   },
   "effects": [],
   "folder": null,

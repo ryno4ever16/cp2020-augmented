@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "Dirigible",
+    "crew": 4,
+    "mass": {
+      "value": 41.0,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

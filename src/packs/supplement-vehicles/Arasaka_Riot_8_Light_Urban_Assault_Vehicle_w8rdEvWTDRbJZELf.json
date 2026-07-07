@@ -32,7 +32,8 @@
       "efficiency": 5,
       "max": 0,
       "value": 0
-    }
+    },
+    "crew": 2
   },
   "effects": [],
   "folder": null,

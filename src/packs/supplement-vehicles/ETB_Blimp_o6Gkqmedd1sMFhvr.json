@@ -16,7 +16,7 @@
       "max": 200
     },
     "sp": 20,
-    "passengers": 0,
+    "passengers": 1,
     "speed": {
       "value": 0,
       "max": 70,
@@ -33,7 +33,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 1500
+    "range": 1500,
+    "vehicleType": "Dirigible",
+    "crew": 5,
+    "mass": {
+      "value": 10.0,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 2.5,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

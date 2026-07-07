@@ -32,7 +32,8 @@
       "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "vehicleType": "self-mobile minelayer RPV (suitcase on wheels, 10kg + 10kg cargo)"
   },
   "effects": [],
   "folder": null,

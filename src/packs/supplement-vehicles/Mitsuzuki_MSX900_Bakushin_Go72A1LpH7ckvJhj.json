@@ -21,7 +21,8 @@
       "value": 0,
       "max": 192,
       "maneuver": 0,
-      "acceleration": 25
+      "acceleration": 25,
+      "deceleration": 45
     },
     "maneuverability": {
       "value": 3,
@@ -33,7 +34,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 400
+    "range": 400,
+    "vehicleType": "Cycle",
+    "crew": 1,
+    "mass": {
+      "value": 60,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 20,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

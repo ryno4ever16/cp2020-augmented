@@ -16,10 +16,10 @@
       "max": 300
     },
     "sp": 80,
-    "passengers": 0,
+    "passengers": 30,
     "speed": {
       "value": 0,
-      "max": 0,
+      "max": 120,
       "maneuver": 0,
       "acceleration": 0
     },
@@ -33,7 +33,16 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "crew": 2,
+    "mass": {
+      "value": 12.0,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 4.0,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

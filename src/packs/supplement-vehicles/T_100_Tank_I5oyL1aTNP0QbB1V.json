@@ -22,7 +22,8 @@
       "max": 80,
       "maneuver": 0,
       "acceleration": 16,
-      "unit": "kph"
+      "unit": "kph",
+      "deceleration": 80
     },
     "maneuverability": {
       "value": 2,
@@ -35,7 +36,12 @@
       "value": 0
     },
     "range": 612,
-    "rangeUnit": "km"
+    "rangeUnit": "km",
+    "crew": 4,
+    "mass": {
+      "value": 56,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

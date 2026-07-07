@@ -21,7 +21,8 @@
       "value": 0,
       "max": 70,
       "maneuver": 0,
-      "acceleration": 18
+      "acceleration": 18,
+      "deceleration": 30
     },
     "maneuverability": {
       "value": 1,
@@ -33,7 +34,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 500
+    "range": 500,
+    "vehicleType": "Motorcycle",
+    "crew": 1,
+    "mass": {
+      "value": 160,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 60,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

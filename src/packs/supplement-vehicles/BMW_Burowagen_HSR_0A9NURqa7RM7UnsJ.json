@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 200
+    "range": 200,
+    "vehicleType": "Car",
+    "crew": 1,
+    "mass": {
+      "value": 2.9,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

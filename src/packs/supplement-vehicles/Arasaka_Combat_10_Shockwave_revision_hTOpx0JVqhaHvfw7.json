@@ -16,7 +16,7 @@
       "max": 250
     },
     "sp": 50,
-    "passengers": 0,
+    "passengers": 10,
     "speed": {
       "value": 0,
       "max": 80,
@@ -33,7 +33,17 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "APC/IFV",
+    "crew": 2,
+    "mass": {
+      "value": 25.0,
+      "unit": "tons"
+    },
+    "cargo": {
+      "value": 2.5,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,

@@ -19,7 +19,7 @@
     "passengers": 0,
     "speed": {
       "value": 0,
-      "max": 0,
+      "max": 495,
       "maneuver": 0,
       "acceleration": 0
     },
@@ -33,7 +33,13 @@
       "max": 0,
       "value": 0
     },
-    "range": 0
+    "range": 0,
+    "vehicleType": "AV (Aerodyne)",
+    "crew": 2,
+    "mass": {
+      "value": 1300.0,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

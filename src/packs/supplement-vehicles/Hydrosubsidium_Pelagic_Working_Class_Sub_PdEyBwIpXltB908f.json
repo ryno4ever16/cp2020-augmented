@@ -21,7 +21,8 @@
       "value": 0,
       "max": 33,
       "maneuver": 0,
-      "acceleration": 8
+      "acceleration": 8,
+      "deceleration": 8
     },
     "maneuverability": {
       "value": 0,
@@ -33,7 +34,12 @@
       "max": 0,
       "value": 0
     },
-    "range": 40
+    "range": 40,
+    "vehicleType": "submarine (working-class)",
+    "cargo": {
+      "value": 220,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,

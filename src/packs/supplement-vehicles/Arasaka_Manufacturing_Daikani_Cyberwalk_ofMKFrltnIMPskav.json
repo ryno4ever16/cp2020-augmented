@@ -21,7 +21,8 @@
       "value": 0,
       "max": 40,
       "maneuver": 0,
-      "acceleration": 20
+      "acceleration": 20,
+      "deceleration": 15
     },
     "maneuverability": {
       "value": -1,
@@ -33,7 +34,12 @@
       "max": 0,
       "value": 0
     },
-    "range": 200
+    "range": 200,
+    "crew": 2,
+    "mass": {
+      "value": 3,
+      "unit": "tons"
+    }
   },
   "effects": [],
   "folder": null,
