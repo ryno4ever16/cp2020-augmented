@@ -25,7 +25,7 @@
     "CyberWorkType": {
       "Type": "Descriptive",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
       "ChipSkills": {}
     },
@@ -35,7 +35,18 @@
     "cwSubtypeLabel": "",
     "effectTypes": [
       "None"
-    ]
+    ],
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false,
+      "statName": "int",
+      "statMod": 2,
+      "facedownMod": 0,
+      "dualWieldOnly": false
+    }
   },
   "effects": [],
   "folder": null,

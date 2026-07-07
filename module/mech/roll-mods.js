@@ -33,16 +33,45 @@ export function isRollModActive(item) {
   return true;
 }
 
-/** Active RANGED-attack providers among `items`: [{ id, name, mod, auto }]. Pure. */
+/** Active RANGED-attack providers among `items`: [{ id, name, mod, auto, dualWieldOnly }]. Pure. */
 export function attackModProviders(items) {
   const out = [];
   for (const it of items ?? []) {
     const rm = rollModsOf(it);
     const mod = Number(rm?.attackMod) || 0;
     if (!mod || !isRollModActive(it)) continue;
+    out.push({ id: it.id ?? it._id, name: it.name, mod, auto: rm.auto !== false, dualWieldOnly: !!rm.dualWieldOnly });
+  }
+  return out;
+}
+
+/** Active providers for rolls of the STAT named `statName` (Q9, Photo Memory): [{ id, name, mod, auto }]. Pure. */
+export function statModProviders(items, statName) {
+  const want = String(statName ?? "").trim().toLowerCase();
+  if (!want) return [];
+  const out = [];
+  for (const it of items ?? []) {
+    const rm = rollModsOf(it);
+    const mod = Number(rm?.statMod) || 0;
+    const name = String(rm?.statName ?? "").trim().toLowerCase();
+    if (!mod || name !== want || !isRollModActive(it)) continue;
     out.push({ id: it.id ?? it._id, name: it.name, mod, auto: rm.auto !== false });
   }
   return out;
+}
+
+/** Total unconditional Facedown bonus from active providers (Q9, Facedown Chip): { total, sources }. Pure. */
+export function facedownModFor(items) {
+  let total = 0;
+  const sources = [];
+  for (const it of items ?? []) {
+    const rm = rollModsOf(it);
+    const mod = Number(rm?.facedownMod) || 0;
+    if (!mod || !isRollModActive(it)) continue;
+    total += mod;
+    sources.push({ name: it.name, mod });
+  }
+  return { total, sources };
 }
 
 /** Active providers for rolls of the skill named `skillName` (case-insensitive). Pure. */

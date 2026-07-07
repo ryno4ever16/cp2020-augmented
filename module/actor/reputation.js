@@ -14,6 +14,7 @@
  */
 import { makeD10Roll } from "../dice.js";
 import { createCyberpunkRollCard, renderChatCard } from "../compat.js";
+import { facedownModFor } from "../mech/roll-mods.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -22,12 +23,18 @@ function getReputation(actor) {
   return Number(actor?.getFlag?.(SCOPE, "reputation")) || 0;
 }
 
-/** Per-combatant Facedown line: split the rolled total back into die + COOL + Reputation for the card. */
+/** The active Facedown chip bonus (Q9, Facedown Chip +1) for an actor. */
+function facedownChipBonus(actor) {
+  return facedownModFor(actor?.items?.contents ?? actor?.items ?? []);
+}
+
+/** Per-combatant Facedown line: split the rolled total back into die + COOL + Reputation (+ chip). */
 function facedownLineData(actor, roll) {
   const cool = Number(actor.system?.stats?.cool?.total) || 0;
   const rep = getReputation(actor);
-  const die = roll.total - cool - rep;   // the 1d10 (incl. any 10-explosion) portion
-  return { name: actor.name, die, cool, rep, total: roll.total };
+  const chip = facedownChipBonus(actor).total;
+  const die = roll.total - cool - rep - chip;   // the 1d10 (incl. any 10-explosion) portion
+  return { name: actor.name, die, cool, rep, chip, total: roll.total };
 }
 
 /**
@@ -37,8 +44,14 @@ function facedownLineData(actor, roll) {
  */
 export async function rollFacedown(actor) {
   // COOL comes from system.stats (present on every base system); Reputation from the module flag,
-  // passed as a literal term (the base DataModel has no @reputation roll-data path).
-  const mkRoll = (a) => makeD10Roll(["@stats.cool.total", String(getReputation(a))], a.system).evaluate();
+  // passed as a literal term (the base DataModel has no @reputation roll-data path). The Facedown
+  // Chip's unconditional +1 (Q9) is added as a literal term and shown on the card.
+  const mkRoll = (a) => {
+    const terms = ["@stats.cool.total", String(getReputation(a))];
+    const chip = facedownChipBonus(a).total;
+    if (chip) terms.push(String(chip));
+    return makeD10Roll(terms, a.system).evaluate();
+  };
 
   const myRoll = await mkRoll(actor);
   const foes = [...(game.user?.targets ?? [])].map((t) => t.actor).filter((a) => a && a.id !== actor.id);

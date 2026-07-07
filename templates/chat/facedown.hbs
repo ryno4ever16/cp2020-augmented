@@ -6,7 +6,7 @@
 <div class="cyberpunk cp-facedown-card">
   <h3>⚔ {{CPLocal "Facedown"}}</h3>
   {{#each lines}}
-  <div class="cp-facedown-line"><b>{{name}}</b>: 🎲 {{die}} + {{CPLocal "CoolFull"}} {{cool}} + {{CPLocal "Reputation"}} {{rep}} = <b>{{total}}</b></div>
+  <div class="cp-facedown-line"><b>{{name}}</b>: 🎲 {{die}} + {{CPLocal "CoolFull"}} {{cool}} + {{CPLocal "Reputation"}} {{rep}}{{#if chip}} + {{CPLocal "FacedownChipBonus"}} {{chip}}{{/if}} = <b>{{total}}</b></div>
   {{/each}}
   {{#if solo}}
   <div class="cp-facedown-note">{{CPLocal "FacedownSoloHint"}}</div>

@@ -172,10 +172,13 @@ export function rollModRows(items) {
     const attackMod = Number(rm.attackMod) || 0;
     const skillMod = Number(rm.skillMod) || 0;
     const skillName = String(rm.skillName ?? "").trim();
-    if (!attackMod && !(skillMod && skillName)) continue;
+    const statMod = Number(rm.statMod) || 0;
+    const statName = String(rm.statName ?? "").trim();
+    const facedownMod = Number(rm.facedownMod) || 0;
+    if (!attackMod && !(skillMod && skillName) && !(statMod && statName) && !facedownMod) continue;
     out.push({
       itemId: it.id ?? it._id, kind: "roll", name: it.name,
-      detail: { attackMod, skillName, skillMod },
+      detail: { attackMod, skillName, skillMod, statName, statMod, facedownMod, dualWieldOnly: !!rm.dualWieldOnly },
       togglePath: quickTogglePathOf(it)
     });
   }

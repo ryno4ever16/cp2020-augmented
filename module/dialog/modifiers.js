@@ -33,6 +33,7 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       hiddenAdvantage  = false,
       onConfirm        = () => {},
       title,
+      dualWieldGearPaths = [],   // Q9: gearMod_<id> rows shown only while Dual Wield is checked
       closeOnSubmit,   // consumed; ignored — V2 manages this via DEFAULT_OPTIONS.form
       ...rest
     } = options;
@@ -51,6 +52,7 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     this._disadvantage    = disadvantage;
     this._hiddenAdvantage = hiddenAdvantage;
     this._onConfirm       = onConfirm;
+    this._dualWieldGearPaths = Array.isArray(dualWieldGearPaths) ? dualWieldGearPaths : [];
 
     // Per-instance data is held on the private fields above. ApplicationV2 FREEZES `this.options`,
     // so writing this._weapon etc. throws "object is not extensible"; internal code reads
@@ -427,14 +429,23 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     ];
     const autoRows = _collectParentRows(root, autoSelectors);
 
+    // ── Dual-wield-only gear rows (Q9, Ambidexterity): show only while Dual Wield is checked ──
+    const dualWieldEl = root.querySelector(
+      'input[name="fields.dualWield"], input[name="dualWield"], .field[data-path="dualWield"] input[type="checkbox"]'
+    );
+    const dualWieldRows = _collectParentRows(root,
+      (this._dualWieldGearPaths ?? []).flatMap(p => [`input[name="fields.${p}"]`, `input[name="${p}"]`]));
+
     const updateVisibility = () => {
       const mode = fireModeEl?.value ?? "";
       _setVisible(supRows,  mode === fireModes.suppressive);
       _setVisible(autoRows, mode === fireModes.fullAuto);
+      _setVisible(dualWieldRows, !!dualWieldEl?.checked);
     };
 
     updateVisibility();
     fireModeEl?.addEventListener("change", updateVisibility);
+    dualWieldEl?.addEventListener("change", updateVisibility);
   }
 
   /** Form handler — called when the submit button is clicked. */

@@ -1,11 +1,12 @@
 import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY } from "../lookups.js"
-import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill } from "../utils.js"
+import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, properCase } from "../utils.js"
+import { makeD10Roll } from "../dice.js"
 import { ModifiersDialog } from "../dialog/modifiers.js"
 import { SortOrders, sortSkills } from "./skill-sort.js";
 import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } from "./reputation.js";
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { resolveAttackRange } from "../combat/rangefinding.js";
-import { attackModProviders, skillModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
+import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, uninstallItem, installedInOf } from "../mech/container.js";
@@ -439,7 +440,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       const statRoll = target.closest(".stat-roll");
       if (statRoll) {
-        this.actor.rollStat(statRoll.dataset.statName);
+        this._cpRollStatFromElement(statRoll);
         return;
       }
 
@@ -549,30 +550,59 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     const gearProviders = skillModProviders(this.actor.items, skill.name);
 
-    if (skill.system?.askMods || gearProviders.length) {
+    return this._cpRollWithProviders(gearProviders, skill.system?.askMods,
+      () => this.actor.rollSkill(id),
+      (mod, opts) => this.actor.rollSkill(id, mod, !!opts.advantage, !!opts.disadvantage, !!opts.hiddenAdvantage),
+      "ModifiersSkillTitle");
+  }
+
+  /**
+   * Q9 (Photo Memory): roll a bare STAT from its `.stat-roll` element. If equipped gear advertises a
+   * bonus to this stat (mechRollMods.statName/statMod), open the Modifiers dialog and fold the checked
+   * rows into the roll; otherwise roll directly via the base rollStat (unchanged for the common case).
+   */
+  _cpRollStatFromElement(el) {
+    const statName = el?.dataset?.statName;
+    if (!statName) return;
+    const gearProviders = statModProviders(this.actor.items, statName);
+    return this._cpRollWithProviders(gearProviders, false,
+      () => this.actor.rollStat(statName),
+      (mod) => this._cpRollStatWithMod(statName, mod),
+      "ModifiersStatTitle");
+  }
+
+  /** Roll a bare stat with a folded modifier (Q9). Self-contained via makeD10Roll + toMessage —
+   *  only reached when a stat provider is active, so the base rollStat styling is untouched otherwise. */
+  async _cpRollStatWithMod(statName, mod) {
+    const flavor = localize(properCase(statName) + "Full");
+    const terms = [`@stats.${statName}.total`];
+    if (mod) terms.push(String(mod));
+    const roll = await makeD10Roll(terms, this.actor.system).evaluate();
+    await roll.toMessage({ flavor, speaker: ChatMessage.getSpeaker({ actor: this.actor }) });
+    return roll;
+  }
+
+  /** Shared opener: with providers or askMods, show the Modifiers dialog (gear rows + extraMod +
+   *  adv/dis) and fold the checked rows via `confirm(mod, opts)`; else call `direct()`. */
+  _cpRollWithProviders(gearProviders, askMods, direct, confirm, titleKey) {
+    if (askMods || gearProviders.length) {
       const modifierGroups = [];
       if (gearProviders.length) modifierGroups.push(gearModGroup(gearProviders));
       modifierGroups.push([
         { localKey: "ExtraModifiers", dataPath: "extraMod", defaultValue: 0 }
       ]);
       const dlg = new ModifiersDialog(this.actor, {
-        title: localize("ModifiersSkillTitle"),
+        title: localize(titleKey),
         showAdvDis: true,
         modifierGroups,
         onConfirm: (options) => {
-          const { extraMod = 0, advantage = false, disadvantage = false, hiddenAdvantage = false } = options;
-          return this.actor.rollSkill(
-            id,
-            (Number(extraMod) || 0) + gearModSum(options, gearProviders),
-            !!advantage,
-            !!disadvantage,
-            !!hiddenAdvantage
-          );
+          const mod = (Number(options.extraMod) || 0) + gearModSum(options, gearProviders);
+          return confirm(mod, options);
         }
       });
       return dlg.render(true);
     }
-    this.actor.rollSkill(id);
+    return direct();
   }
 
   /**
@@ -673,16 +703,24 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       modifierGroups = meleeBonkOptions(savedAttackOptions);
     }
 
+    // Q9 (Ambidexterity): gear rows whose bonus applies ONLY when dual-wielding — the dialog shows
+    // them only while the Dual Wield checkbox is ticked. gearMod_<id> is the input name.
+    const dualWieldGearPaths = gearProviders.filter(g => g.dualWieldOnly).map(g => `gearMod_${g.id}`);
+
     let dialog = new ModifiersDialog(this.actor, {
       weapon: item,
       targetTokens: targetTokens,
       modifierGroups: modifierGroups,
+      dualWieldGearPaths,
       onConfirm: async (fireOptions) => {
         // Persist the chosen options so the next attack with this weapon pre-fills them.
         if (isRanged) await this._cpSaveRangedAttackOptions(item, fireOptions);
         else await this._cpSaveMeleeAttackOptions(item, fireOptions);
         if (gearProviders.length) {
-          fireOptions.extraMod = (Number(fireOptions.extraMod) || 0) + gearModSum(fireOptions, gearProviders);
+          // Q9: a dual-wield-only provider (Ambidexterity) folds in only when Dual Wield is on —
+          // even if its (hidden) row stayed pre-ticked, an off dual-wield state excludes it.
+          const effective = gearProviders.filter(g => !g.dualWieldOnly || fireOptions.dualWield);
+          fireOptions.extraMod = (Number(fireOptions.extraMod) || 0) + gearModSum(fireOptions, effective);
         }
         return item.__weaponRoll(fireOptions, targetTokens);
       }
@@ -1457,8 +1495,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         case "skill": return r.detail.skills.map(s => `${s.name} ${signed(s.mod)}`).join(", ");
         case "roll": {
           const parts = [];
-          if (r.detail.attackMod) parts.push(localizeParam("StatusStripRangedMod", { mod: signed(r.detail.attackMod) }));
+          if (r.detail.attackMod) parts.push(r.detail.dualWieldOnly
+            ? localizeParam("StatusStripDualWieldMod", { mod: signed(r.detail.attackMod) })
+            : localizeParam("StatusStripRangedMod", { mod: signed(r.detail.attackMod) }));
           if (r.detail.skillMod && r.detail.skillName) parts.push(`${r.detail.skillName} ${signed(r.detail.skillMod)}`);
+          if (r.detail.statMod && r.detail.statName) parts.push(`${r.detail.statName.toUpperCase()} ${signed(r.detail.statMod)}`);
+          if (r.detail.facedownMod) parts.push(localizeParam("StatusStripFacedownMod", { mod: signed(r.detail.facedownMod) }));
           return parts.join(", ");
         }
         case "moddy": return r.detail.mods.map(m => {

@@ -77,7 +77,15 @@ export const MECH_PROTECTION_DEFAULTS = {
  * modifiers dialog (Facedown, bare stat checks) stay unwired — see the proposal doc §3b.
  */
 export const MECH_ROLL_MODS_DEFAULTS = {
-  enabled: false, attackMod: 0, skillName: "", skillMod: 0, auto: true
+  enabled: false, attackMod: 0, skillName: "", skillMod: 0, auto: true,
+  // Q9 extensions:
+  //   statName/statMod — a bonus to a bare STAT roll (Photo Memory "INT roll +2"); the stat-roll
+  //     handler opens the Modifiers dialog when a provider matches the stat.
+  //   facedownMod — an unconditional bonus to the Facedown roll (Facedown Chip +1); no dialog —
+  //     rollFacedown sums active providers and adds a card line.
+  //   dualWieldOnly — the attackMod row appears in the fire dialog ONLY while Dual Wield is checked
+  //     (Ambidexterity's +3, which cancels the dialog's own −3 dual-wield penalty).
+  statName: "", statMod: 0, facedownMod: 0, dualWieldOnly: false
 };
 
 /**
@@ -178,12 +186,17 @@ function mechProtectionField() {
 
 function mechRollModsField() {
   const f = foundry.data.fields;
+  const d = MECH_ROLL_MODS_DEFAULTS;
   return new f.SchemaField({
-    enabled:   new f.BooleanField({ initial: MECH_ROLL_MODS_DEFAULTS.enabled }),
-    attackMod: new f.NumberField({ initial: MECH_ROLL_MODS_DEFAULTS.attackMod }),
-    skillName: new f.StringField({ initial: MECH_ROLL_MODS_DEFAULTS.skillName }),
-    skillMod:  new f.NumberField({ initial: MECH_ROLL_MODS_DEFAULTS.skillMod }),
-    auto:      new f.BooleanField({ initial: MECH_ROLL_MODS_DEFAULTS.auto })
+    enabled:   new f.BooleanField({ initial: d.enabled }),
+    attackMod: new f.NumberField({ initial: d.attackMod }),
+    skillName: new f.StringField({ initial: d.skillName }),
+    skillMod:  new f.NumberField({ initial: d.skillMod }),
+    auto:      new f.BooleanField({ initial: d.auto }),
+    statName:  new f.StringField({ initial: d.statName }),
+    statMod:   new f.NumberField({ initial: d.statMod }),
+    facedownMod: new f.NumberField({ initial: d.facedownMod }),
+    dualWieldOnly: new f.BooleanField({ initial: d.dualWieldOnly })
   });
 }
 
