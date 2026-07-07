@@ -21,6 +21,7 @@ import { isEmitting, lightProfileOf } from "./light.js";
 import { isViewing, visionProfileOf, desiredVisionFor } from "./vision.js";
 import { protectionEntryOf } from "./protection.js";
 import { rollModsOf, isRollModActive } from "./roll-mods.js";
+import { activeStatMods } from "./stat-mods.js";
 
 const SCOPE = "cp2020-augmented";
 const TIMER_FLAG = "consumableState";
@@ -181,6 +182,20 @@ export function rollModRows(items) {
   return out;
 }
 
+/** Personality-moddy providers (Q7): one row per active mechStatMods item, its entries in detail. Pure. */
+export function statModRows(items) {
+  const byItem = new Map();
+  for (const m of activeStatMods(items)) {
+    if (!byItem.has(m.itemId)) byItem.set(m.itemId, { itemId: m.itemId, name: m.itemName, mods: [] });
+    byItem.get(m.itemId).mods.push(m);
+  }
+  return [...byItem.values()].map(g => ({
+    itemId: g.itemId, kind: "moddy", name: g.name,
+    detail: { mods: g.mods },
+    togglePath: quickTogglePathOf((items ?? []).find(it => (it.id ?? it._id) === g.itemId))
+  }));
+}
+
 /**
  * Every active influence on the actor, in stable kind order. `resolveSkillName` maps a skill-item
  * id to its name (payload Skill/ChipSkills keys may be either — the base engine's own fallback).
@@ -200,7 +215,8 @@ export function activeInfluencesFor(actor) {
     ...chipRows(items, resolveSkillName),
     ...statRows(items),
     ...skillRows(items, resolveSkillName),
-    ...rollModRows(items)
+    ...rollModRows(items),
+    ...statModRows(items)
   ];
 }
 
@@ -240,6 +256,12 @@ export function statContributionsFor(actor, key) {
     const hl = Number(actor?.system?.stats?.emp?.humanity?.loss) || 0;
     const empLoss = Math.floor(hl / 10);
     if (empLoss) parts.push({ kind: "humanity", value: -empLoss });
+  }
+
+  // Q7 moddy contributions (applied in the prepareDerivedData wrapper; named here, else the
+  // residual would fold them into "other").
+  for (const mc of actor?._mechStatMods?.[key] ?? []) {
+    parts.push({ kind: "item", name: mc.name, value: Number(mc.value) || 0 });
   }
 
   const named = parts.reduce((s, p) => s + p.value, 0);

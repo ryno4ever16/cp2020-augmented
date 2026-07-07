@@ -115,6 +115,25 @@ export const MECH_CONSUMABLE_DEFAULTS = {
  */
 export const MECH_CONTAINER_DEFAULTS = { installedIn: "", capacity: 0, slotsTaken: 1 };
 
+/**
+ * `mechStatMods` (pattern Q7 — personality moddies): stat modifiers with printed CAPS and
+ * combat/non-combat CONTEXT that exceed the base Characteristic-Stat engine (which is a plain add).
+ * A chip carries a list of entries, each a mod (or absolute set) to one stat with an optional cap
+ * (max resulting value), floor (min resulting value), and context:
+ *   any        — always applies (`mod`).
+ *   combat     — applies only while the actor is in the active combat (`mod`).
+ *   noncombat  — applies only while NOT in combat (`mod`).
+ *   split      — `mod` out of combat, `combatMod` in combat (Perfect Soldier's INT −2/+2).
+ * `isSet` sets the stat to `set` absolutely (Xarghis Khan's EMP 1 / COOL 10). Applied in a
+ * prepareDerivedData wrapper (module/mech/stat-mods.js) AFTER the base's stat totals so cap/floor
+ * clamp the FINAL value (the RAW reading of "COOL +2 (max 11)"); movement/body derived values are
+ * re-derived if a mod touches MA/BT. Personality overlays do NOT alter the humanity pool (a
+ * deliberate, documented choice — humanity is permanent essence, the chip is transient).
+ */
+export const MECH_STAT_MOD_ENTRY_DEFAULTS = {
+  stat: "cool", mod: 0, combatMod: 0, context: "any", cap: 0, floor: 0, isSet: false, set: 0
+};
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -187,6 +206,24 @@ function mechContainerField() {
   });
 }
 
+function mechStatModsField() {
+  const f = foundry.data.fields;
+  const d = MECH_STAT_MOD_ENTRY_DEFAULTS;
+  return new f.SchemaField({
+    enabled: new f.BooleanField({ initial: false }),
+    mods: new f.ArrayField(new f.SchemaField({
+      stat:      new f.StringField({ initial: d.stat }),
+      mod:       new f.NumberField({ initial: d.mod }),
+      combatMod: new f.NumberField({ initial: d.combatMod }),
+      context:   new f.StringField({ initial: d.context }),
+      cap:       new f.NumberField({ initial: d.cap }),
+      floor:     new f.NumberField({ initial: d.floor }),
+      isSet:     new f.BooleanField({ initial: d.isSet }),
+      set:       new f.NumberField({ initial: d.set })
+    }))
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -201,7 +238,8 @@ export function makeMechAugmentedData(SystemModel) {
         mechProtection: mechProtectionField(),
         mechRollMods: mechRollModsField(),
         mechConsumable: mechConsumableField(),
-        mechContainer: mechContainerField()
+        mechContainer: mechContainerField(),
+        mechStatMods: mechStatModsField()
       };
     }
   };

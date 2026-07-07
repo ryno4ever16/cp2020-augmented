@@ -25,7 +25,7 @@
     "CyberWorkType": {
       "Type": "Descriptive",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
       "ChipSkills": {}
     },
@@ -35,7 +35,32 @@
     "cwSubtypeLabel": "",
     "effectTypes": [
       "None"
-    ]
+    ],
+    "mechStatMods": {
+      "enabled": true,
+      "mods": [
+        {
+          "stat": "cool",
+          "mod": 0,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": true,
+          "set": 10
+        },
+        {
+          "stat": "emp",
+          "mod": 0,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": true,
+          "set": 1
+        }
+      ]
+    }
   },
   "effects": [],
   "folder": null,

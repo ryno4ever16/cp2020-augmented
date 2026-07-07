@@ -938,6 +938,7 @@
     "StatusStripKindStat": "Stat",
     "StatusStripKindSkill": "Skill",
     "StatusStripKindRoll": "Roll",
+    "StatusStripKindModdy": "Moddy",
     "StatusStripOff": "Switch off / unequip",
     "StatusStripTurnsLeft": "{turns} turn(s) left",
     "StatusStripRangedMod": "{mod} ranged attacks",

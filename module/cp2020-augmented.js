@@ -41,6 +41,7 @@ import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/visio
 import { registerMechConsumable } from "./mech/consumable.js";
 import { registerMechChipGrant } from "./mech/chip-grant.js";
 import { registerMechContainer } from "./mech/container.js";
+import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -164,6 +165,11 @@ Hooks.once("init", function () {
     misc:             makeMechAugmentedData(CONFIG.Item.dataModels.misc),
     cyberware:        makeMechAugmentedData(CONFIG.Item.dataModels.cyberware),
   });
+
+  // Q7 personality moddies: wrap the actor's prepareDerivedData so stat mods with caps/combat
+  // context apply on top of the base totals. Wrapped at INIT (before any actor prepares) so the
+  // first world-load prep already reflects them; also wires the combat-context refresh hooks.
+  registerMechStatMods();
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
   // namespaced collection, falling back to the bare global on cores that lack it (v13).

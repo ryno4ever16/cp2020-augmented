@@ -1431,7 +1431,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       light: "StatusStripKindLight", vision: "StatusStripKindVision",
       protection: "StatusStripKindProtection", timer: "StatusStripKindTimer",
       chip: "StatusStripKindChip", stat: "StatusStripKindStat",
-      skill: "StatusStripKindSkill", roll: "StatusStripKindRoll"
+      skill: "StatusStripKindSkill", roll: "StatusStripKindRoll",
+      moddy: "StatusStripKindModdy"
     };
     const HAZARD_LABEL = { gas: "MechProtectionGas", flash: "MechProtectionFlash", sonic: "MechProtectionSonic" };
     const detailText = (r) => {
@@ -1460,6 +1461,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           if (r.detail.skillMod && r.detail.skillName) parts.push(`${r.detail.skillName} ${signed(r.detail.skillMod)}`);
           return parts.join(", ");
         }
+        case "moddy": return r.detail.mods.map(m => {
+          const st = m.stat.toUpperCase();
+          if (m.isSet) return `${st} =${m.set}`;
+          if (m.context === "split") return `${st} ${signed(m.mod)}/${signed(m.combatMod)}`;
+          const ctx = m.context === "combat" ? " (cbt)" : m.context === "noncombat" ? " (non-cbt)" : "";
+          return `${st} ${signed(m.mod)}${ctx}`;
+        }).join(", ");
         default: return "";
       }
     };
