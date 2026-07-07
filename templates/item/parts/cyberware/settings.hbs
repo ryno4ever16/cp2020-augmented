@@ -443,5 +443,14 @@
         <a class="button danger cw-remove-chipskill" data-key="{{sk.key}}">x</a>
       </div>
     {{/each}}
+    {{!-- Q2 choose-chip: a resolved parameterized chip (Language/Martial Art) can be re-slotted for
+         a different skill via this reset (shown only once a choice was made). --}}
+    {{#if cw.chipChoiceResettable}}
+      <div class="field" title="{{CPLocal 'ChipChoiceResetHint'}}">
+        <label>{{CPLocal "ChipChoiceReset"}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-chip-choice-reset nogrow">{{CPLocal "ChipChoiceReset"}}</button>
+      </div>
+    {{/if}}
   {{/if}}
 </div>

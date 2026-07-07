@@ -25,9 +25,11 @@
     "CyberWorkType": {
       "Type": "Descriptive",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {
+        "(choose:Martial Art)": 1
+      }
     },
     "slots": 0,
     "spaces": 0,

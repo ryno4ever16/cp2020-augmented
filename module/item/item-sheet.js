@@ -6,6 +6,7 @@ import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
 import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { useConsumable } from "../mech/consumable.js";
+import { resetChipChoice } from "../mech/chip-grant.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -547,6 +548,10 @@ async _prepareCyberware(sheet) {
     .map((k) => ({ key: k, label: resolveSkillLabel(k) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
+  // Q2 choose-chip: once a parameterized chip's "(choose)" key is resolved to a skill, the original
+  // ChipSkills map is stashed in a flag — surface a reset so it can be slotted for a different skill.
+  sheet.cw.chipChoiceResettable = this.item.getFlag?.("cp2020-augmented", "chipChooseOriginal") !== undefined;
+
   // Weapon options: from the actor's inventory or from Items
   if (this.actor) {
     sheet.cw.weaponOptions = (this.actor.itemTypes.weapon ?? [])
@@ -802,17 +807,23 @@ async _prepareCyberware(sheet) {
     this._cpActivateMechConsumableControls(root);
   }
 
-  /** P7 consumable Use button — spends a dose via the mech engine (bind-once). */
+  /** P7 consumable Use button + Q2 chip-choice reset — both spend/reset via the mech engines
+   *  (bind-once, one delegated click handler). */
   _cpActivateMechConsumableControls(root) {
     if (!root?.ownerDocument) return;
     if (!this.isEditable) return;
     if (root.dataset.cpMechConsumableBound === "1") return;
     root.dataset.cpMechConsumableBound = "1";
     root.addEventListener("click", async (event) => {
-      const btn = event.target?.closest?.(".cp-consumable-use");
-      if (!btn) return;
-      event.preventDefault();
-      await useConsumable(this.item);
+      if (event.target?.closest?.(".cp-consumable-use")) {
+        event.preventDefault();
+        await useConsumable(this.item);
+        return;
+      }
+      if (event.target?.closest?.(".cp-chip-choice-reset")) {
+        event.preventDefault();
+        await resetChipChoice(this.item);
+      }
     });
   }
 

@@ -25,9 +25,13 @@
     "CyberWorkType": {
       "Type": "Descriptive",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {
+        "(choose:Language)": 1,
+        "Culture": 1,
+        "Education & General Knowledge": 1
+      }
     },
     "slots": 0,
     "spaces": 0,

@@ -39,6 +39,7 @@ import { makeMechAugmentedData } from "./data/mech-item-data.js";
 import { registerMechLight } from "./mech/light.js";
 import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
 import { registerMechConsumable } from "./mech/consumable.js";
+import { registerMechChipGrant } from "./mech/chip-grant.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -299,6 +300,9 @@ Hooks.once("ready", function () {
   registerMechVision();
   // P7 timed consumables: dose gate on activation + the per-turn timer tick.
   registerMechConsumable();
+  // Q2 chip skill grants: an active chip naming a skill the actor lacks creates it (RAW: chips
+  // work untrained); the choose-chips prompt for the skill. Initiating-client/owner writes.
+  registerMechChipGrant();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the

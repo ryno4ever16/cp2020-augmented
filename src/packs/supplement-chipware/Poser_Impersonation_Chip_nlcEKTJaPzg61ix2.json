@@ -25,9 +25,12 @@
     "CyberWorkType": {
       "Type": "Descriptive",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {
+        "(choose)": 2,
+        "Perform": 1
+      }
     },
     "slots": 0,
     "spaces": 0,

@@ -25,9 +25,12 @@
     "CyberWorkType": {
       "Type": "Descriptive",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {
+        "Space Survival": 2,
+        "Highrider Culture": 1
+      }
     },
     "slots": 0,
     "spaces": 0,
