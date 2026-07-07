@@ -2,6 +2,7 @@
   <div class="field gear item-edit rc-item-delete" data-item-id="{{id}}">
             <div class="field-image roll fire-weapon action" style="background-image: url({{img}})" data-item-id="{{id}}"></div>
             <label>{{name}}</label>
+            {{#with (lookup @root.cpActiveBadges id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
             <span class="flex-pad"></span>
             <span>
                 <p class="inactive">{{type}}</p>

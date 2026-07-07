@@ -70,6 +70,38 @@ async function addMarker(actor, marker) {
   await actor.setFlag(SCOPE, FLAG, list);
 }
 
+/**
+ * Display-only token icon for a running timer (§3c visibility): an ActiveEffect with NO changes —
+ * mechanically inert on any system — whose icon rides the token while the timer runs. Created by
+ * the initiating client (an owner); deleted when the marker expires. `duration.rounds` is set so
+ * the effect registers as temporary (that's what token overlays render).
+ */
+async function addTimerIcon(actor, item, turns) {
+  try {
+    await actor.createEmbeddedDocuments("ActiveEffect", [{
+      name: item.name, img: item.img,
+      duration: { rounds: turns },
+      changes: [], disabled: false, transfer: false,
+      flags: { [SCOPE]: { consumableItemId: item.id } }
+    }]);
+  } catch (err) {
+    console.warn(`${SCOPE} | timer icon create failed:`, err);
+  }
+}
+
+/** Remove the timer icons whose markers are gone (expiry + stray reconciliation). GM-side. */
+async function pruneTimerIcons(actor, survivingItemIds) {
+  try {
+    const stale = (actor.effects?.contents ?? []).filter(e => {
+      const tag = e.getFlag?.(SCOPE, "consumableItemId");
+      return tag && !survivingItemIds.has(tag);
+    });
+    if (stale.length) await actor.deleteEmbeddedDocuments("ActiveEffect", stale.map(e => e.id));
+  } catch (err) {
+    console.warn(`${SCOPE} | timer icon prune failed:`, err);
+  }
+}
+
 /** The used/activated chat card (JS-assembled clauses, GasCloudTurnBody pattern). */
 async function postUseCard(item, { turns, dosesAfter }) {
   const mc = consumableOf(item) ?? {};
@@ -101,6 +133,7 @@ export async function useConsumable(item) {
   const turns = await rollDurationTurns(mc.durationTurns);
   if (turns > 0 && item.actor) {
     await addMarker(item.actor, { itemId: item.id, name: item.name, note: mc.note ?? "", turnsLeft: turns });
+    await addTimerIcon(item.actor, item, turns);
   }
   await postUseCard(item, { turns, dosesAfter });
   return true;
@@ -135,6 +168,7 @@ export function registerMechConsumable() {
     const turns = await rollDurationTurns(mc.durationTurns);
     if (turns > 0 && item.actor) {
       await addMarker(item.actor, { itemId: item.id, name: item.name, note: mc.note ?? "", turnsLeft: turns });
+      await addTimerIcon(item.actor, item, turns);
     }
     await postUseCard(item, { turns, dosesAfter });
   });
@@ -171,5 +205,7 @@ export function registerMechConsumable() {
     }
     if (surviving.length) await actor.setFlag(SCOPE, FLAG, surviving);
     else await actor.unsetFlag(SCOPE, FLAG);
+    // Drop the expired timers' token icons (and any stray icon whose marker is gone).
+    await pruneTimerIcons(actor, new Set(surviving.map(m => m.itemId)));
   });
 }

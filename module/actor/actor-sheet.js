@@ -6,6 +6,7 @@ import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } 
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
+import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
@@ -101,6 +102,10 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       // Whether to show the "Shop" button on the gear tab (world setting; default off).
       sheetData.showShop = shoppingEnabled();
+
+      // §3c visibility hybrid: status-strip rows + item-row badges + stat tooltips. mech/status.js
+      // supplies mechanism rows; this is their render edge (labels localized here, names literal).
+      this._cpPrepareStatusVisibility(sheetData);
     }
 
     sheetData.cyberwareSegmentsRight = [
@@ -183,6 +188,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     this._cpRefreshSkillSearchUI(root);
     // Cyberware controls (anatomy-select / chip-toggle / equip-unequip / chip tooltips) — Stage A2.
     this._cpActivateCyberwareControls(root);
+    // Status-strip quick toggles (§3c visibility hybrid).
+    this._cpActivateStatusStrip(root);
     // Netrunning controls (interface roll / program edit/trash / deactivate) — Stage A2.
     this._cpActivateNetrunningControls(root);
     // CP2020-specific controls (ammo toggle / shop / services / IP / martial) — Stage A2.
@@ -257,6 +264,31 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         fp.render(true);
       });
     }
+  }
+
+  /**
+   * Status-strip quick toggles (§3c): one delegated click handler; a pill's × writes `false` to
+   * the boolean path the row advertised (mech/status.js quickTogglePathOf — mechLight.on /
+   * mechVision.on / equipped / EffectActive / ChipActive). Bind-once on the persistent root;
+   * editable checked BEFORE the flag so a read-only first render doesn't consume the binding.
+   */
+  _cpActivateStatusStrip(root) {
+    if (!root?.addEventListener) return;
+    const editable = this.isEditable ?? this.options?.editable ?? false;
+    if (!editable) return;
+    if (root.dataset.cpStatusStripBound === "1") return;
+    root.dataset.cpStatusStripBound = "1";
+
+    root.addEventListener("click", async (event) => {
+      const off = event.target.closest?.(".cp-pill-off");
+      if (!off || !root.contains(off)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const item = this.actor.items.get(off.dataset.itemId);
+      const path = off.dataset.togglePath;
+      if (!item || !path) return;
+      await item.update({ [path]: false });
+    });
   }
 
   /**
@@ -1357,6 +1389,86 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   // NOTE: skill filtering moved out of _prepareContext to a runtime DOM filter in Stage A2
   // (_cpApplySkillFilterToDOM); _prepareSkills now renders all sorted skills. (The old _filterSkills
   // render-time filter was removed.)
+
+  /**
+   * §3c visibility hybrid — the render edge of mech/status.js. Builds:
+   *   cpStatusRows    — status-strip pills [{itemId, kind, kindLabel, text, title, togglePath}]
+   *   cpActiveBadges  — {itemId: tooltip} for the gear/cyberware row active-dots
+   *   cpStatTips      — {statKey: "8 = 6 base +1 temp +1 Adrenal Booster"} title tooltips
+   * Kind/part labels localize here; item and skill names stay literal (dynamic data, the
+   * martialOptions precedent).
+   */
+  _cpPrepareStatusVisibility(sheetData) {
+    const actor = this.actor;
+    const signed = (n) => `${n >= 0 ? "+" : ""}${n}`;
+    const KIND_LABEL = {
+      light: "StatusStripKindLight", vision: "StatusStripKindVision",
+      protection: "StatusStripKindProtection", timer: "StatusStripKindTimer",
+      chip: "StatusStripKindChip", stat: "StatusStripKindStat",
+      skill: "StatusStripKindSkill", roll: "StatusStripKindRoll"
+    };
+    const HAZARD_LABEL = { gas: "MechProtectionGas", flash: "MechProtectionFlash", sonic: "MechProtectionSonic" };
+    const detailText = (r) => {
+      switch (r.kind) {
+        case "light": return `${r.detail.range}m`;
+        case "vision": {
+          const modeKey = "MechVisionMode" + r.detail.mode.charAt(0).toUpperCase() + r.detail.mode.slice(1);
+          return `${localize(modeKey)} ${r.detail.range}m`;
+        }
+        case "protection": return r.detail.hazards.map(h =>
+          `${localize(HAZARD_LABEL[h.hazard])} ${h.immune ? localize("MechProtectionImmune") : signed(h.mod)}`).join(", ");
+        case "timer": return localizeParam("StatusStripTurnsLeft", { turns: r.detail.turnsLeft });
+        case "chip": return r.detail.skills.map(s => `${s.name} ${s.level}`).join(", ");
+        case "stat": return r.detail.stats.map(s => `${s.stat.toUpperCase()} ${signed(s.mod)}`).join(", ");
+        case "skill": return r.detail.skills.map(s => `${s.name} ${signed(s.mod)}`).join(", ");
+        case "roll": {
+          const parts = [];
+          if (r.detail.attackMod) parts.push(localizeParam("StatusStripRangedMod", { mod: signed(r.detail.attackMod) }));
+          if (r.detail.skillMod && r.detail.skillName) parts.push(`${r.detail.skillName} ${signed(r.detail.skillMod)}`);
+          return parts.join(", ");
+        }
+        default: return "";
+      }
+    };
+
+    const rows = activeInfluencesFor(actor);
+    sheetData.cpStatusRows = rows.map(r => {
+      const kindLabel = localize(KIND_LABEL[r.kind] ?? KIND_LABEL.stat);
+      const detail = detailText(r);
+      const noteClause = r.kind === "timer" && r.detail.note ? ` — ${r.detail.note}` : "";
+      return {
+        itemId: r.itemId, kind: r.kind, kindLabel,
+        text: detail ? `${r.name} (${detail})` : r.name,
+        title: `${kindLabel}: ${r.name}${detail ? ` — ${detail}` : ""}${noteClause}`,
+        togglePath: r.togglePath ?? ""
+      };
+    });
+
+    const badges = {};
+    for (const r of rows) {
+      if (!r.itemId) continue;
+      const piece = `${localize(KIND_LABEL[r.kind] ?? KIND_LABEL.stat)}: ${detailText(r)}`;
+      badges[r.itemId] = badges[r.itemId] ? `${badges[r.itemId]} · ${piece}` : piece;
+    }
+    sheetData.cpActiveBadges = badges;
+
+    const PART_LABEL = {
+      base: "StatBreakdownBase", temp: "StatBreakdownTemp", encumbrance: "StatBreakdownEncumbrance",
+      wounds: "StatBreakdownWounds", humanity: "StatBreakdownHumanity", other: "StatBreakdownOther"
+    };
+    const tips = {};
+    for (const key of Object.keys(actor.system?.stats ?? {})) {
+      const parts = statContributionsFor(actor, key);
+      if (!parts.length) continue;
+      const text = parts.map((p, i) => {
+        if (p.kind === "item") return `${signed(p.value)} ${p.name}`;
+        const label = localize(PART_LABEL[p.kind] ?? PART_LABEL.other);
+        return i === 0 ? `${p.value} ${label}` : `${signed(p.value)} ${label}`;
+      }).join(" ");
+      tips[key] = `${actor.system.stats[key].total} = ${text}`;
+    }
+    sheetData.cpStatTips = tips;
+  }
 
   _addWoundTrack(sheetData) {
     // Add localized wound states, excluding uninjured. All non-mortal, plus mortal

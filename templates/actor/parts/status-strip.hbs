@@ -1,0 +1,17 @@
+{{!-- Status strip (§3c hybrid): one pill per ACTIVE influence, assembled in _prepareContext
+      (cpStatusRows — JS owns the data, this template only lays it out). Renders nothing while
+      idle. The × quick-toggle carries the boolean path _cpActivateStatusStrip writes false. --}}
+{{#if cpStatusRows.length}}
+<div class="cp-status-strip">
+    {{#each cpStatusRows}}
+    <span class="cp-status-pill cp-kind-{{kind}}" title="{{title}}">
+        <span class="cp-pill-kind">{{kindLabel}}</span>
+        <span class="cp-pill-text">{{text}}</span>
+        {{#if togglePath}}
+        <a class="cp-pill-off" data-item-id="{{itemId}}" data-toggle-path="{{togglePath}}"
+           title="{{CPLocal "StatusStripOff"}}">&times;</a>
+        {{/if}}
+    </span>
+    {{/each}}
+</div>
+{{/if}}

@@ -2035,3 +2035,51 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   opacity: 0.7;
   font-size: 0.85em;
 }
+
+/* Status strip (§3c visibility hybrid, actor-sheet header): one compact pill per ACTIVE influence
+   (status-strip.hbs). Wraps; renders nothing when idle. Pills reuse the sheet ink/line tokens so
+   both themes read; the quick-off × mirrors the item-unequip affordance. */
+.cp-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 3px 0 0;
+}
+.cp-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--cp-line, #8886);
+  border-radius: 9px;
+  padding: 0 6px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--cp-ink, inherit);
+}
+.cp-pill-kind {
+  text-transform: uppercase;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+.cp-pill-off {
+  cursor: pointer;
+  font-weight: bold;
+  opacity: 0.65;
+}
+.cp-pill-off:hover {
+  opacity: 1;
+}
+
+/* Item-row active badge (gear + cyberware rows): a small dot marking "this item is contributing
+   right now"; the title carries the contribution text. Gold = the established active color. */
+.cp-active-badge {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffcc00;
+  margin-left: 4px;
+  flex: 0 0 auto;
+}
