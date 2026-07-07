@@ -1014,6 +1014,11 @@ function _hookDotEffects() {
     // multiplying HP loss / armor degradation by N (matches the gas-cloud guard below).
     if (game.users.activeGM?.id !== game.user.id) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
+    // Starting combat is not a turn elapsing: the round-0→1 transition must not tick an
+    // ongoing effect (a character carrying one into the encounter would take instant
+    // damage the moment the GM clicks Begin Combat). Missing `previous` falls through.
+    const dotPrevRound = combat.previous?.round;
+    if (dotPrevRound !== undefined && dotPrevRound < 1) return;
 
     const combatant = combat.combatant;
     if (!combatant?.actor) return;
@@ -1254,6 +1259,11 @@ function _hookGasCloudPerTurn() {
     // Only the primary GM runs the per-turn cloud logic, else duplicate prompts/updates.
     if (game.users.activeGM?.id !== game.user.id) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
+    // Starting combat is not a turn elapsing (matches the DOT block): tokens already standing
+    // in a cloud must not be prompted for saves — and the cloud must not lose a turn — the
+    // moment the GM clicks Begin Combat. Missing `previous` falls through.
+    const gasPrevRound = combat.previous?.round;
+    if (gasPrevRound !== undefined && gasPrevRound < 1) return;
     if (!gasEnabled()) return;
 
     const scene = canvas?.scene;

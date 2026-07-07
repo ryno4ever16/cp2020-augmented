@@ -145,6 +145,10 @@ export function registerMechConsumable() {
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
+    // Starting combat is not a turn elapsing (matches the damage-hooks per-turn blocks): an
+    // effect running when the GM clicks Begin Combat keeps its full remaining duration.
+    const prevRound = combat.previous?.round;
+    if (prevRound !== undefined && prevRound < 1) return;
 
     const actor = combat.combatant?.actor;
     if (!actor) return;
