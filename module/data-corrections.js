@@ -49,9 +49,11 @@ function skillAlias(id, enName, mod) { return { patch: { "CyberWorkType.Skill": 
 function mechLight({ shape = "cone", bright = 10, dim = 20, angle = 45, color = "" } = {}) {
   return { patch: { mechLight: { enabled: true, on: false, shape, bright, dim, angle, color } } };
 }
-/** P4 vision-device patch (mode per the item's own printed text; range = playable default). */
-function mechVision(mode, range = 20) {
-  return { mechVision: { enabled: true, on: false, mode, range } };
+/** P4 vision-device patch (mode per the item's own printed text; range = playable default).
+ *  `requiresItem` = pipe-separated exact illuminator item names (the UV class: the device only
+ *  works while one of them is carried, equipped and lit — see mech/vision.js). */
+function mechVision(mode, range = 20, requiresItem = "") {
+  return { mechVision: { enabled: true, on: false, mode, range, requiresItem } };
 }
 /** P6 protection-tag patch: e.g. mechProtection({ gas: { immune: true } }). */
 function mechProtection(hazards) {
@@ -253,7 +255,9 @@ export const DATA_CORRECTIONS = {
     qiTXkPooklv9UHsI: { patch: mechVision("infrared") },     // Infrared — "see in total darkness, using heat emissions"
     YBS9vFZX14R6bwk0: { patch: mechVision("lowlight") },     // Low Lite — "see in dim light, almost total darkness"
     yOFBoZ9tV3czAW2B: { patch: mechVision("thermograph") },  // Thermograph sensor — "see heat patterns"
-    XG6ffmsWnkUWNkcW: { patch: mechVision("uv") },           // Ultra Violet — "see in darkness; using UV flash"
+    // Ultra Violet — "see in darkness; using UV flash": only works while an illuminator is carried
+    // (Q1c — the cyberfinger IR/UV Flashlight or the surveillance IR Flash), equipped and lit.
+    XG6ffmsWnkUWNkcW: { patch: mechVision("uv", 20, "IR/UV Flashlight|IR Flash") },
     // P6: "Immune to flash; laser blinding" — data-ready for the future flash effect engine.
     H7PSx0gcnKET6usp: { patch: mechProtection({ flash: { immune: true } }) },  // Anti-Dazzle
     // P5: "+1 on all Smartgun attacks" — pre-ticked; untick when firing a non-smart weapon.

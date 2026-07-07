@@ -7,6 +7,7 @@ import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
+import { isLivingActor } from "../mech/vision.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
@@ -288,6 +289,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const path = off.dataset.togglePath;
       if (!item || !path) return;
       await item.update({ [path]: false });
+    });
+
+    // Q5 vision picker: persist the governor choice ("" auto / "natural" / item id) on the actor.
+    root.addEventListener("change", async (event) => {
+      if (!event.target?.matches?.("select.cp-vision-pick")) return;
+      event.stopPropagation();
+      const v = event.target.value;
+      if (v) await this.actor.setFlag("cp2020-augmented", "visionPick", v);
+      else await this.actor.unsetFlag("cp2020-augmented", "visionPick");
     });
   }
 
@@ -1451,6 +1461,26 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       badges[r.itemId] = badges[r.itemId] ? `${badges[r.itemId]} · ${piece}` : piece;
     }
     sheetData.cpActiveBadges = badges;
+
+    // Q5 vision picker: rendered beside the strip while any vision device is switched on (or a
+    // pick is stuck, so it can be un-stuck). Options: Auto (longest range) / Natural / each
+    // active device by name. The choice lives in the actor flag `visionPick`.
+    const pick = String(actor.getFlag?.("cp2020-augmented", "visionPick") ?? "");
+    const visionRowList = rows.filter(r => r.kind === "vision");
+    sheetData.cpVisionPick = (visionRowList.length || pick) ? {
+      current: pick,
+      options: [
+        { value: "", label: localize("VisionPickAuto"), selected: pick === "" },
+        { value: "natural", label: localize("VisionPickNatural"), selected: pick === "natural" },
+        ...visionRowList.map(r => ({ value: r.itemId, label: r.name, selected: pick === r.itemId }))
+      ]
+    } : null;
+
+    // Living flag (heat-sense target gate): explicit flag wins, else the actor-type default.
+    sheetData.cpLiving = isLivingActor(actor);
+
+    // The strip renders when it has pills OR the picker (no `or` helper in this stack).
+    sheetData.cpShowStrip = !!(sheetData.cpStatusRows.length || sheetData.cpVisionPick);
 
     const PART_LABEL = {
       base: "StatBreakdownBase", temp: "StatBreakdownTemp", encumbrance: "StatBreakdownEncumbrance",

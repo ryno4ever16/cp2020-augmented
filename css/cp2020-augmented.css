@@ -2083,3 +2083,14 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   margin-left: 4px;
   flex: 0 0 auto;
 }
+
+/* Q5 vision picker (status strip): compact select inside a pill. */
+.cp-status-pill select.cp-vision-pick {
+  font-size: 0.75rem;
+  height: 1.4em;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: auto;
+}

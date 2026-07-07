@@ -37,7 +37,7 @@ import { registerPinnedSubwindows } from "./pin-window.js";
 import { registerDataCorrections } from "./data-corrections.js";
 import { makeMechAugmentedData } from "./data/mech-item-data.js";
 import { registerMechLight } from "./mech/light.js";
-import { registerMechVision } from "./mech/vision.js";
+import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
 import { registerMechConsumable } from "./mech/consumable.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
@@ -205,6 +205,10 @@ Hooks.once("init", function () {
   // Preload the wrapper sub-templates the sheet includes as Handlebars partials.
   const loadTemplates = foundry?.applications?.handlebars?.loadTemplates ?? globalThis.loadTemplates;
   loadTemplates?.(AUGMENTED_TEMPLATES);
+
+  // Heat-sense detection mode (P4 upgrade, Q1c): registered at init so it exists before any
+  // canvas builds; the vision engine adds/removes the token detectionModes entries at apply time.
+  registerHeatSenseDetectionMode();
 
   // Vehicle canvas: tile→token+crew movement coupling. Type-discriminated on the module sub-type,
   // so it coexists with the system's own vehicle-canvas hook (each fires only for its own type).

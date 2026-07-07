@@ -13,6 +13,15 @@
         <span class="flex-pad"></span>
         <input class="roll-stun-death-modificator number" type="number" value="{{StunDeathMod}}" placeholder="0">
     </div>
+
+    {{!-- Heat-signature gate for the heat-sense detection mode (Q1c): explicit flag wins, else
+         the actor-type default (character/npc = living). Unticked = invisible to thermograph/IR. --}}
+    <div class="field" title="{{CPLocal 'LivingFlagHint'}}">
+        <label>{{CPLocal "LivingFlag"}}</label>
+        <span class="flex-pad"></span>
+        <input class="nogrow" type="checkbox" name="flags.cp2020-augmented.living" data-dtype="Boolean"
+               {{#if cpLiving}}checked{{/if}}>
+    </div>
 </div>
     </section>
 

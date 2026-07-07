@@ -1,7 +1,7 @@
 {{!-- Status strip (§3c hybrid): one pill per ACTIVE influence, assembled in _prepareContext
       (cpStatusRows — JS owns the data, this template only lays it out). Renders nothing while
       idle. The × quick-toggle carries the boolean path _cpActivateStatusStrip writes false. --}}
-{{#if cpStatusRows.length}}
+{{#if cpShowStrip}}
 <div class="cp-status-strip">
     {{#each cpStatusRows}}
     <span class="cp-status-pill cp-kind-{{kind}}" title="{{title}}">
@@ -13,5 +13,17 @@
         {{/if}}
     </span>
     {{/each}}
+    {{!-- Q5: which vision device governs sight (auto = longest range; Natural suspends overrides).
+         Unnamed on purpose — the choice persists via the change handler into an actor flag. --}}
+    {{#if cpVisionPick}}
+    <span class="cp-status-pill cp-kind-vision" title="{{CPLocal "VisionPickHint"}}">
+        <span class="cp-pill-kind">{{CPLocal "StatusStripKindVision"}}</span>
+        <select class="cp-vision-pick">
+            {{#each cpVisionPick.options}}
+            <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+        </select>
+    </span>
+    {{/if}}
 </div>
 {{/if}}

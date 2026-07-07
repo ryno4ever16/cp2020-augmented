@@ -36,7 +36,7 @@ export const MECH_LIGHT_DEFAULTS = {
  * darkvision-class approximation. `range` is the device's effective sight range in scene units
  * (the books print absolutes like "see in total darkness", so the default is a playable 20).
  */
-export const MECH_VISION_DEFAULTS = { enabled: false, on: false, mode: "lowlight", range: 20 };
+export const MECH_VISION_DEFAULTS = { enabled: false, on: false, mode: "lowlight", range: 20, requiresItem: "" };
 export const VISION_DEVICE_MODES = ["lowlight", "infrared", "thermograph", "uv"];
 
 /**
@@ -114,7 +114,12 @@ function mechVisionField() {
     enabled: new f.BooleanField({ initial: MECH_VISION_DEFAULTS.enabled }),
     on:      new f.BooleanField({ initial: MECH_VISION_DEFAULTS.on }),
     mode:    new f.StringField({ initial: MECH_VISION_DEFAULTS.mode }),
-    range:   new f.NumberField({ initial: MECH_VISION_DEFAULTS.range })
+    range:   new f.NumberField({ initial: MECH_VISION_DEFAULTS.range }),
+    // Illuminator dependency (the UV-optic class: "see in darkness; using UV flash"): the device
+    // only counts as active while the actor carries one of these items, equipped and lit —
+    // pipe-separated exact item names, matched case-insensitively (the engine's own name-key
+    // convention, same as CyberWorkType.Skill / ChipSkills name keys). Empty = self-sufficient.
+    requiresItem: new f.StringField({ initial: MECH_VISION_DEFAULTS.requiresItem })
   });
 }
 

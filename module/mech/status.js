@@ -52,15 +52,16 @@ export function lightRows(items) {
   return out;
 }
 
-/** Active vision devices; `governs` marks the one whose profile wins (vision.js rule). Pure. */
-export function visionRows(items) {
-  const list = (items ?? []).filter(isViewing);
-  const governor = desiredVisionFor(list);
+/** Active vision devices; `governs` marks the one whose profile wins (vision.js rule, pick-aware).
+ *  Pure. `pick` = the actor's visionPick flag ("" auto | "natural" | item id). */
+export function visionRows(items, pick = "") {
+  const list = (items ?? []).filter(it => isViewing(it, items));
+  const governor = desiredVisionFor(items, pick);
   return list.map(it => {
     const p = visionProfileOf(it);
     return {
       itemId: it.id ?? it._id, kind: "vision", name: it.name,
-      detail: { mode: p.mode, range: p.range, governs: !!governor && p.mode === governor.mode && p.range === governor.range },
+      detail: { mode: p.mode, range: p.range, governs: !!governor && governor.itemId === (it.id ?? it._id) },
       togglePath: "system.mechVision.on"
     };
   });
@@ -186,13 +187,14 @@ export function rollModRows(items) {
  */
 export function activeInfluencesFor(actor) {
   const items = actor?.items?.contents ?? actor?.items ?? [];
+  const pick = String(actor?.getFlag?.(SCOPE, "visionPick") ?? "");
   const resolveSkillName = (key) => {
     const byId = actor?.items?.get?.(key);
     return byId?.type === "skill" ? byId.name : key;
   };
   return [
     ...lightRows(items),
-    ...visionRows(items),
+    ...visionRows(items, pick),
     ...protectionRows(items),
     ...timerRows(actor),
     ...chipRows(items, resolveSkillName),

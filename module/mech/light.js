@@ -54,10 +54,17 @@ export function desiredLightFor(items) {
 }
 
 /** The actor's tokens on the viewed scene (token DOCUMENTS; handles synthetic token-actors).
- *  Shared by the mech/ engines (vision.js imports it). */
+ *  Shared by the mech/ engines (vision.js imports it).
+ *  ⚠ getActiveTokens resolves through canvas PLACEABLES, which draw async after the token
+ *  document exists — an apply fired in that window (fresh scene load, just-dropped token) would
+ *  see zero tokens and silently skip. Fall back to the viewed scene's linked token DOCUMENTS,
+ *  which exist as soon as the document does. */
 export function tokensOf(actor) {
   if (actor?.isToken) return actor.token ? [actor.token] : [];
-  return actor?.getActiveTokens?.(true, true) ?? [];
+  const active = actor?.getActiveTokens?.(true, true) ?? [];
+  if (active.length) return active;
+  const scene = game.scenes?.viewed ?? game.scenes?.active;
+  return scene?.tokens?.filter?.(t => t.actorLink && t.actorId === actor?.id) ?? [];
 }
 
 /** Per-actor apply queue shared by the mech/ engines: rapid toggles fire overlapping async applies,

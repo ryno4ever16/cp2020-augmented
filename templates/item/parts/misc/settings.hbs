@@ -72,6 +72,12 @@
         </select>
     </div>
     {{> (template "fields/number") label="MechVisionRange" edit="system.mechVision.range"}}
+    <div class="field" title="{{CPLocal "MechVisionRequiresHint"}}">
+        <label for="system.mechVision.requiresItem">{{CPLocal "MechVisionRequires"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.mechVision.requiresItem" type="text"
+               value="{{system.mechVision.requiresItem}}"/>
+    </div>
     {{> (template "fields/boolean") label="MechVisionOn" edit="system.mechVision.on"}}
     {{/if}}
 
