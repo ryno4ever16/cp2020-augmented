@@ -84,8 +84,12 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
         label: localize("MechProtection" + h.charAt(0).toUpperCase() + h.slice(1)),
         immuneLabel: localize("MechProtectionImmune"),
         modLabel: localize("MechProtectionMod"),
+        percentLabel: localize("MechProtectionPercent"),
+        damageMultLabel: localize("MechProtectionDamageMult"),
         immune: !!mp[h]?.immune,
-        mod: Number(mp[h]?.mod) || 0
+        mod: Number(mp[h]?.mod) || 0,
+        percent: Number(mp[h]?.percent) || 0,
+        damageMult: Number(mp[h]?.damageMult) || 0
       }));
       // P5 roll-mod provider: canonical skill names for the block's datalist (the same index the
       // CyberWorkType skill UI uses; cached). Fetched only once the block is enabled — the enable

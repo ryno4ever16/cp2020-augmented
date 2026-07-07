@@ -41,18 +41,23 @@ export const VISION_DEVICE_MODES = ["lowlight", "infrared", "thermograph", "uv"]
 
 /**
  * `mechProtection` (pattern P6 — protection tags): passive gear the save engines consult.
- * Per hazard: `immune` (sealed breathing mask vs gas; Anti-Dazzle vs flash) or a save `mod`
- * (positive helps). Hazards typed now: gas (LIVE — the gas-cloud per-turn save consults it),
- * flash + sonic (data-ready; their effect engines come later). Fire/corrosion armor stays with
- * the D5 discussion. Percent-effective items ("70% effective" nasal filters) have no honest
- * save-mod mapping — open question Q8 in the proposal; they stay unwired rather than invented.
+ * Per hazard:
+ *   immune     — sealed protection (breathing mask vs gas; Anti-Dazzle vs flash): no save at all.
+ *   mod        — save-mod offset (positive helps; the engine never flips a penalty into a bonus).
+ *   percent    — Q8 percent-effective gear ("70% effective" nasal filters), keeping the book's own
+ *                number: per exposure the engine rolls a d10 — roll ≤ percent/10 → protected this
+ *                exposure (the card shows the roll). 0 = not percent-gated.
+ *   damageMult — Q8 damage-multiplier convention ("−25% from SW" → 0.75): applied by the hazard's
+ *                damage path when one exists (sonic has none yet — data-ready). 0 = none.
+ * Hazards typed now: gas (LIVE — the gas-cloud per-turn save consults immune/mod/percent),
+ * flash + sonic (data-ready). Fire/corrosion armor stays with the D5 discussion.
  */
 export const MECH_PROTECTION_HAZARDS = ["gas", "flash", "sonic"];
 export const MECH_PROTECTION_DEFAULTS = {
   enabled: false,
-  gas:   { immune: false, mod: 0 },
-  flash: { immune: false, mod: 0 },
-  sonic: { immune: false, mod: 0 }
+  gas:   { immune: false, mod: 0, percent: 0, damageMult: 0 },
+  flash: { immune: false, mod: 0, percent: 0, damageMult: 0 },
+  sonic: { immune: false, mod: 0, percent: 0, damageMult: 0 }
 };
 
 /**
@@ -126,8 +131,10 @@ function mechVisionField() {
 function mechProtectionField() {
   const f = foundry.data.fields;
   const hazard = () => new f.SchemaField({
-    immune: new f.BooleanField({ initial: false }),
-    mod:    new f.NumberField({ initial: 0 })
+    immune:     new f.BooleanField({ initial: false }),
+    mod:        new f.NumberField({ initial: 0 }),
+    percent:    new f.NumberField({ initial: 0 }),
+    damageMult: new f.NumberField({ initial: 0 })
   });
   return new f.SchemaField({
     enabled: new f.BooleanField({ initial: false }),

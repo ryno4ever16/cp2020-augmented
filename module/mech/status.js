@@ -75,7 +75,7 @@ export function protectionRows(items) {
     const hazards = [];
     for (const h of HAZARDS) {
       const e = protectionEntryOf(it, h);
-      if (e) hazards.push({ hazard: h, immune: e.immune, mod: e.mod });
+      if (e) hazards.push({ hazard: h, immune: e.immune, mod: e.mod, percent: e.percent, damageMult: e.damageMult });
     }
     if (!hazards.length) continue;
     out.push({

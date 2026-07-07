@@ -55,9 +55,10 @@ function mechLight({ shape = "cone", bright = 10, dim = 20, angle = 45, color = 
 function mechVision(mode, range = 20, requiresItem = "") {
   return { mechVision: { enabled: true, on: false, mode, range, requiresItem } };
 }
-/** P6 protection-tag patch: e.g. mechProtection({ gas: { immune: true } }). */
+/** P6 protection-tag patch: e.g. mechProtection({ gas: { immune: true } }) or, for the Q8 kinds,
+ *  mechProtection({ gas: { percent: 70 } }) / mechProtection({ sonic: { damageMult: 0.75 } }). */
 function mechProtection(hazards) {
-  const entry = (h) => ({ immune: false, mod: 0, ...(hazards[h] ?? {}) });
+  const entry = (h) => ({ immune: false, mod: 0, percent: 0, damageMult: 0, ...(hazards[h] ?? {}) });
   return { mechProtection: { enabled: true, gas: entry("gas"), flash: entry("flash"), sonic: entry("sonic") } };
 }
 /** P5 roll-mod-provider patch (numbers straight from the item's own printed text; `auto:false` =
@@ -248,6 +249,10 @@ export const DATA_CORRECTIONS = {
     HAFF2PM96a1WkrFF: skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Sound Editing
     JNhdO6o73hylJLga: skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 1),  // Amplified Hearing
     jgAQuEGsaj8fykCJ: skillAlias("4ylTN4krm7fhMYJv", "Human Perception", 2),  // Voice Stress Analyzer
+    // P6/Q8: "Automatic noise compensation. −25% from SW" → a sonic damage multiplier of 0.75.
+    // Data-ready: no sonic damage path consumes it yet (flash/sonic effect engines come later),
+    // so this stores the book's number without an invented save-mod mapping.
+    fkF5mng29EpC7nvE: { patch: mechProtection({ sonic: { damageMult: 0.75 } }) },  // Level Damper
   },
   "cyberpunk2020.cyberoptic": {
     C868gK04Emnui8Dm: skillAlias("jBfPdSDGwvIEq66p", "Awareness/Notice", 2),  // Image Enhancement
@@ -270,6 +275,10 @@ export const DATA_CORRECTIONS = {
     i264oefxjekvVgnN: skillAlias("WotYfaW9pqhl7S6N", "Seduction", 1),  // Mr Studd Sexual Implant
     // P6: sealed internal air ("good for 10 to 25 minutes" — duration stays in the flavor).
     zOzfWnALVczrmjkZ: { patch: mechProtection({ gas: { immune: true } }) },  // Independent Air Supply
+    // P6/Q8: "Stops gases; fumes. 70% effective" — the book's own percentage, kept as a per-exposure
+    // d10 gate (roll ≤ 7 → the filter held this turn), NOT an invented save mod. The gas-cloud
+    // per-turn block rolls it and shows the roll on the card.
+    "1DFttayJLRcOeS94": { patch: mechProtection({ gas: { percent: 70 } }) },  // Nasal Filters
     // P7: "Boosts REF by +1 for 1d6+2 turns 3x per day" — the pack already carries Stat {ref:+1}
     // + Activatable, so the BASE engine owns the +1 while active; this adds the uses counter
     // (3; the per-day reset is the GM's) + the rolled duration whose expiry switches it back off.

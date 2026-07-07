@@ -1425,8 +1425,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const modeKey = "MechVisionMode" + r.detail.mode.charAt(0).toUpperCase() + r.detail.mode.slice(1);
           return `${localize(modeKey)} ${r.detail.range}m`;
         }
-        case "protection": return r.detail.hazards.map(h =>
-          `${localize(HAZARD_LABEL[h.hazard])} ${h.immune ? localize("MechProtectionImmune") : signed(h.mod)}`).join(", ");
+        case "protection": return r.detail.hazards.map(h => {
+          const label = localize(HAZARD_LABEL[h.hazard]);
+          if (h.immune) return `${label} ${localize("MechProtectionImmune")}`;
+          const parts = [];
+          if (h.mod) parts.push(signed(h.mod));
+          if (h.percent) parts.push(`${h.percent}%`);
+          if (h.damageMult) parts.push(`×${h.damageMult}`);
+          return `${label} ${parts.join(" ") || signed(h.mod)}`;
+        }).join(", ");
         case "timer": return localizeParam("StatusStripTurnsLeft", { turns: r.detail.turnsLeft });
         case "chip": return r.detail.skills.map(s => `${s.name} ${s.level}`).join(", ");
         case "stat": return r.detail.stats.map(s => `${s.stat.toUpperCase()} ${signed(s.mod)}`).join(", ");

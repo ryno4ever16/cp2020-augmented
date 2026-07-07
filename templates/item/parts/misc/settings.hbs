@@ -93,6 +93,10 @@
             <input type="checkbox" name="system.mechProtection.{{key}}.immune" data-dtype="Boolean" {{#if immune}}checked{{/if}}>
             <label class="nogrow">{{modLabel}}</label>
             <input type="number" name="system.mechProtection.{{key}}.mod" value="{{mod}}">
+            <label class="nogrow" title="{{CPLocal "MechProtectionPercentHint"}}">{{percentLabel}}</label>
+            <input type="number" name="system.mechProtection.{{key}}.percent" value="{{percent}}">
+            <label class="nogrow" title="{{CPLocal "MechProtectionDamageMultHint"}}">{{damageMultLabel}}</label>
+            <input type="number" step="0.05" name="system.mechProtection.{{key}}.damageMult" value="{{damageMult}}">
         </span>
     </div>
     {{/each}}

@@ -23,7 +23,7 @@ import { AutomationNotice }                                   from "../dialog/au
 import { onGlobalClick } from "../popout-compat.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, ARMOR_MODES } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
-import { gasSaveDecisionFor } from "../mech/protection.js";
+import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { rollLocation, localize, localizeParam }              from "../utils.js";
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
@@ -1287,22 +1287,38 @@ function _hookGasCloudPerTurn() {
 
       if (tokensInCloud.length > 0) {
         // P6 protection tags (mech/protection.js): sealed breathing gear (mask / independent air)
-        // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0).
-        const decisions = tokensInCloud.map(tokDoc => {
+        // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0); Q8
+        // percent-effective gear (nasal filters "70% effective") rolls one d10 per exposure —
+        // at or under percent/10 the wearer is protected this turn, and the card shows the roll.
+        const decisions = [];
+        for (const tokDoc of tokensInCloud) {
           const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
           const items = liveActor?.items?.contents ?? [];
-          return { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod) };
-        });
-        const affected = decisions.filter(d => d.liveActor && !d.skip);
+          const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod) };
+          if (d.liveActor && !d.skip && d.percent > 0) {
+            const gateRoll = await new Roll("1d10").evaluate();
+            const gate = percentGateOutcome(d.percent, gateRoll.total);
+            d.gateRoll = gateRoll.total;
+            d.gateThreshold = gate.threshold;
+            d.gated = gate.gated;
+          }
+          decisions.push(d);
+        }
+        const affected = decisions.filter(d => d.liveActor && !d.skip && !d.gated);
         const sealed = decisions.filter(d => d.liveActor && d.skip);
         const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
         const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
         const sealedClause = sealed.length
           ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
           : "";
+        // Q8 clauses — one per rolled gate, held or failed, always naming the roll vs threshold.
+        const gateClauses = decisions.filter(d => d.gateRoll !== undefined).map(d =>
+          " " + localizeParam(d.gated ? "GasCloudFilterHeldClause" : "GasCloudFilterFailClause",
+            { name: `<b>${d.tokDoc.name}</b>`, roll: d.gateRoll, threshold: d.gateThreshold })
+        ).join("");
         await postSavePromptCard({
           title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
-          body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause,
+          body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + gateClauses,
         });
         for (const d of affected) {
           // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path
