@@ -100,6 +100,21 @@ export const MECH_CONSUMABLE_DEFAULTS = {
   enabled: false, doses: 1, durationTurns: "", note: ""
 };
 
+/**
+ * `mechContainer` (pattern Q6 — containers, option 1): diegetic nesting for MISC gear, unifying
+ * with the base system's own cyberware-into-cyberware system (which the module already surfaces:
+ * `Module.ParentId` child link + `CyberWorkType.OptionsAvailable` capacity + `Module.SlotsTaken`).
+ * Cyberware keeps using those base fields; MISC (which has no base container fields) uses these:
+ *   installedIn — the parent item's id (empty = loose in inventory). A cybereye option, a hold-out
+ *                 pistol in a cyberarm compartment, an item in a skin pouch — all point at their
+ *                 container item (which may be cyberware OR another misc container).
+ *   capacity    — child slots this item provides AS a container (a limb compartment / skin pouch).
+ *   slotsTaken  — slots this item occupies in its parent (default 1).
+ * The engine (module/mech/container.js) reads base fields for cyberware and these for misc through
+ * one set of accessors, so the telescoping display + capacity + uninstall-cascade are one code path.
+ */
+export const MECH_CONTAINER_DEFAULTS = { installedIn: "", capacity: 0, slotsTaken: 1 };
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -163,6 +178,15 @@ function mechConsumableField() {
   });
 }
 
+function mechContainerField() {
+  const f = foundry.data.fields;
+  return new f.SchemaField({
+    installedIn: new f.StringField({ initial: MECH_CONTAINER_DEFAULTS.installedIn }),
+    capacity:    new f.NumberField({ initial: MECH_CONTAINER_DEFAULTS.capacity }),
+    slotsTaken:  new f.NumberField({ initial: MECH_CONTAINER_DEFAULTS.slotsTaken })
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -176,7 +200,8 @@ export function makeMechAugmentedData(SystemModel) {
         mechVision: mechVisionField(),
         mechProtection: mechProtectionField(),
         mechRollMods: mechRollModsField(),
-        mechConsumable: mechConsumableField()
+        mechConsumable: mechConsumableField(),
+        mechContainer: mechContainerField()
       };
     }
   };

@@ -8,6 +8,7 @@ import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { isLivingActor } from "../mech/vision.js";
+import { buildContainerTree, uninstallItem, installedInOf } from "../mech/container.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
@@ -299,6 +300,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (v) await this.actor.setFlag("cp2020-augmented", "visionPick", v);
       else await this.actor.unsetFlag("cp2020-augmented", "visionPick");
     });
+
+    // Q6 container: the ⏏ on a nested (installed) row detaches it to loose inventory. Mousedown
+    // swallowed first so it can't start a drag; the click runs the detach.
+    root.addEventListener("mousedown", (event) => {
+      if (event.target?.closest?.(".cp-container-uninstall")) { event.preventDefault(); event.stopPropagation(); }
+    });
+    root.addEventListener("click", async (event) => {
+      const btn = event.target?.closest?.(".cp-container-uninstall");
+      if (!btn || !root.contains(btn)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const item = this.actor.items.get(btn.dataset.itemId);
+      if (item) await uninstallItem(item);
+    });
   }
 
   /**
@@ -479,7 +494,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       const itemEdit = target.closest(".item-edit");
       if (itemEdit) {
-        if (target.closest(".item-unequip")) return;
+        // The container uninstall control lives inside the (item-edit) row — let its own handler run.
+        if (target.closest(".item-unequip, .cp-container-uninstall")) return;
         event.stopPropagation();
         this._cpGetItemFromTarget(itemEdit)?.sheet?.render(true);
         return;
@@ -1585,6 +1601,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     sheetData.gear.cyberware = allCyber;
     sheetData.gear.cyberwareInventory = allCyber;
+
+    // Q6 telescoping container trees: the cyberware inventory list + the gear list render as trees
+    // (loose items as roots, installed items nested under their container of any type). Roots are
+    // filtered per tab; children (installedIn a node) are included regardless, so an item installed
+    // in a cyberware shows under it in the cyber tab, one in a misc pouch shows in the gear tab, and
+    // neither double-lists at the top level (buildContainerTree keeps only loose items as roots).
+    const allItems = sheetData.actor.items?.contents ?? [];
+    sheetData.cyberTree = buildContainerTree(allItems, (it) => it.type === "cyberware");
+    const gearRootIds = new Set((sheetData.gearTabItems ?? []).map((i) => i.id));
+    sheetData.gearTree = buildContainerTree(allItems, (it) => gearRootIds.has(it.id));
 
     for (const it of allCyber) {
       const t  = it.system?.cyberwareType;

@@ -1,0 +1,22 @@
+{{!-- Q6 telescoping container node (recursive). One item row — preserving the existing item-edit /
+      fire-weapon / delete affordances the gear + cyberware lists use — plus a capacity badge for
+      containers and an uninstall control for installed children, then its children indented. --}}
+<div class="cp-container-node">
+    <div class="field gear item-edit rc-item-delete" data-item-id="{{item.id}}" draggable="true">
+        <div class="field-image roll fire-weapon action" style="background-image: url({{item.img}})" data-item-id="{{item.id}}"></div>
+        <label>{{item.name}}</label>
+        {{#with (lookup @root.cpActiveBadges item.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
+        {{#if isContainer}}<span class="cp-capacity-badge" title="{{CPLocal 'MechContainerCapacityTip'}}">{{used}}/{{capacity}}</span>{{/if}}
+        <span class="flex-pad"></span>
+        {{#if installed}}<a class="cp-container-uninstall" data-item-id="{{item.id}}" title="{{CPLocal 'MechContainerUninstall'}}">&#9167;</a>{{/if}}
+        <span><p class="inactive">{{item.type}}</p></span>
+        <span class="item-delete" data-item-id="{{item.id}}" title="{{CPLocal 'Delete'}}">X</span>
+    </div>
+    {{#if children.length}}
+    <div class="cp-container-children">
+        {{#each children}}
+            {{> "modules/cp2020-augmented/templates/actor/parts/container-node.hbs"}}
+        {{/each}}
+    </div>
+    {{/if}}
+</div>

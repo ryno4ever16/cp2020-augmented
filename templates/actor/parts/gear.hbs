@@ -26,8 +26,11 @@
 {{#if (equals items.length 0)}}
     <div class="inactive">{{CPLocal "DragItemsPrompt"}}</div>
 {{/if}}
+{{!-- Q6: the gear list telescopes — loose items as roots, contained items nested under them.
+      Top-level rows remain drag-sortable; the recursive node preserves the item-edit/fire/delete
+      affordances the flat itemListing had. --}}
 <div class="field-list gear-sortable">
-    {{#each gearTabItems}}
-        {{> itemListing}}
+    {{#each gearTree}}
+        {{> "modules/cp2020-augmented/templates/actor/parts/container-node.hbs"}}
     {{/each}}
 </div>

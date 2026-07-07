@@ -2094,3 +2094,29 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   color: inherit;
   width: auto;
 }
+
+/* Q6 telescoping container tree (gear + cyberware tabs): installed items indent under their
+   container; a capacity badge shows used/total; the ⏏ detaches a nested item to loose inventory. */
+.cp-container-children {
+  margin-left: 1.1rem;
+  border-left: 2px solid var(--cp-line, #8884);
+  padding-left: 0.3rem;
+}
+.cp-capacity-badge {
+  font-size: 0.72rem;
+  font-family: var(--mono, monospace);
+  opacity: 0.75;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--cp-line, #8886);
+  border-radius: 8px;
+}
+.cp-container-uninstall {
+  cursor: pointer;
+  opacity: 0.65;
+  margin-right: 4px;
+  font-weight: bold;
+}
+.cp-container-uninstall:hover {
+  opacity: 1;
+}

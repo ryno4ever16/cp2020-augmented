@@ -7,6 +7,7 @@ import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.
 import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { useConsumable } from "../mech/consumable.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
+import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds } from "../mech/container.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -98,6 +99,24 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       if (this.item.system?.mechRollMods?.enabled) {
         const skills = await getSkillIndex(game.i18n.lang);
         data.mechSkillOptions = skills.map(s => s.name);
+      }
+      // Q6 container: eligible parent containers on the actor for the "installed in" select — items
+      // with free capacity, excluding self + this item's own descendants (no cycles). Cyberware
+      // uses its own Module.ParentId UI, so this select is offered for misc gear.
+      if (this.item.type === "misc" && this.actor) {
+        const items = this.actor.items?.contents ?? [];
+        const banned = new Set([this.item.id, ...descendantIds(items, this.item.id)]);
+        const selfSlots = slotsTakenOf(this.item);
+        data.mechContainerTargets = items
+          .filter(it => isContainer(it) && !banned.has(it.id))
+          .map(it => ({
+            id: it.id, name: it.name,
+            free: freeSlots(it, items),
+            fits: freeSlots(it, items) >= selfSlots || installedInOf(this.item) === it.id
+          }))
+          .filter(t => t.fits)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        data.mechContainerInstalledIn = installedInOf(this.item);
       }
     }
 

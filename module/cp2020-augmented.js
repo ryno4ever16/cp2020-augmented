@@ -40,6 +40,7 @@ import { registerMechLight } from "./mech/light.js";
 import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
 import { registerMechConsumable } from "./mech/consumable.js";
 import { registerMechChipGrant } from "./mech/chip-grant.js";
+import { registerMechContainer } from "./mech/container.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -73,6 +74,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/parts/statsrow.hbs",
   "modules/cp2020-augmented/templates/actor/parts/woundtracker.hbs",
   "modules/cp2020-augmented/templates/actor/parts/status-strip.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/container-node.hbs",
   "modules/cp2020-augmented/templates/actor/parts/skills.hbs",
   "modules/cp2020-augmented/templates/actor/parts/skill.hbs",
   "modules/cp2020-augmented/templates/actor/parts/combat.hbs",
@@ -303,6 +305,8 @@ Hooks.once("ready", function () {
   // Q2 chip skill grants: an active chip naming a skill the actor lacks creates it (RAW: chips
   // work untrained); the choose-chips prompt for the skill. Initiating-client/owner writes.
   registerMechChipGrant();
+  // Q6 containers: uninstall cascade — deleting a container detaches its children to loose gear.
+  registerMechContainer();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the

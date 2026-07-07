@@ -106,18 +106,10 @@
 {{#if (equals items.length 0)}}
 <div class="inactive">{{CPLocal "DragItemsPrompt"}}</div>
 {{/if}}
+{{!-- Q6: the cyberware inventory telescopes — loose cyberware as roots with their installed options
+      (and any misc in a limb compartment) nested underneath, one level deeper than before. --}}
 <div class="field-list" data-drop-target="cyber-inventory">
-    {{#each gear.cyberware as |cyber|}}
-    <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
-        <div class="field-image" data-item-id="{{cyber.id}}">
-            <img src={{cyber.img}}>
-        </div>
-        <label class="cyber-name">{{cyber.name}}</label>
-        {{#with (lookup @root.cpActiveBadges cyber.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
-            {{#with cyber.system}}
-                <span class="cyber-hm-loss">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>
-            {{/with}}
-        <span class="item-delete" data-item-id="{{cyber.id}}">X</span>
-    </div>
+    {{#each cyberTree}}
+        {{> "modules/cp2020-augmented/templates/actor/parts/container-node.hbs"}}
     {{/each}}
 </div>

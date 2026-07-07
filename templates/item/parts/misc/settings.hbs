@@ -148,5 +148,27 @@
     </div>
     {{/unless}}
     {{/if}}
+
+    {{!-- Q6 container: this misc item can BE a container (capacity) and/or be installed INTO one
+         (a cyberarm compartment, a skin pouch, another container). Cyberware uses its own
+         Module.ParentId UI; this section is misc-only. --}}
+    {{#if (equals item.type "misc")}}
+    {{> (template "fields/number") label="MechContainerCapacity" edit="system.mechContainer.capacity"}}
+    {{#if @root.mechContainerTargets}}
+    <div class="field" title="{{CPLocal 'MechContainerInstalledInHint'}}">
+        <label>{{CPLocal "MechContainerInstalledIn"}}</label>
+        <span class="flex-pad"></span>
+        <select name="system.mechContainer.installedIn">
+            <option value="" {{#unless @root.mechContainerInstalledIn}}selected{{/unless}}>{{CPLocal "MechContainerLoose"}}</option>
+            {{#each @root.mechContainerTargets}}
+            <option value="{{id}}" {{#if (equals @root.mechContainerInstalledIn id)}}selected{{/if}}>{{name}} ({{free}})</option>
+            {{/each}}
+        </select>
+    </div>
+    {{#if @root.mechContainerInstalledIn}}
+    {{> (template "fields/number") label="MechContainerSlotsTaken" edit="system.mechContainer.slotsTaken"}}
+    {{/if}}
+    {{/if}}
+    {{/if}}
     {{/if}}
 </div>
