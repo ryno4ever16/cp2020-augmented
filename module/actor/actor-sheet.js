@@ -872,7 +872,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (target.matches('input[name^="system.sdp.current."]')) {
         const path = target.getAttribute("name");
         const zone = path?.split(".").pop();
-        if (zone) await this.actor.update({ [`system.sdp.current.${zone}`]: Number(target.value || 0) });
+        // system.sdp.current is a bare ObjectField with a default floor: a dotted single-zone update
+        // resets the OTHER zones to 0, which the base prep then heals back to sum (full) — so editing
+        // one zone on a borg's sheet silently heals every other zone. Write the WHOLE object instead
+        // (mech/cyberlimb.js absorbCyberlimbHit does the same; feedback-datamodel-partial-updates §7).
+        if (zone) {
+          const next = { ...(this.actor.system?.sdp?.current ?? {}), [zone]: Number(target.value || 0) };
+          await this.actor.update({ "system.sdp.current": next });
+        }
         return;
       }
       if (target.matches(".skill-level")) { await this._cpSaveSkillLevelFromInput(target); return; }
