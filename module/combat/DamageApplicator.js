@@ -16,9 +16,9 @@
 import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
 import { postDeathSavePrompt } from "./save-rolls.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
-import { localize, localizeParam } from "../utils.js";
+import { localize, localizeParam, combineArmorSP } from "../utils.js";
 import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
-import { isFullBorg, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
+import { isFullBorg, borgArmorSP, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
 
 export const ARMOR_MODES = {
   FULL:   "full",
@@ -26,22 +26,8 @@ export const ARMOR_MODES = {
   NONE:   "none",
 };
 
-// Proportional armor table (CP2020 p.99). Single definition — do not duplicate.
-function _combineSP(a, b) {
-  a = Number(a) || 0;
-  b = Number(b) || 0;
-  if (!a) return b;
-  if (!b) return a;
-  const diff = Math.abs(a - b);
-  let mod;
-  if      (diff >= 27) mod = 0;
-  else if (diff >= 21) mod = 1;
-  else if (diff >= 15) mod = 2;
-  else if (diff >= 9)  mod = 3;
-  else if (diff >= 5)  mod = 4;
-  else                 mod = 5;
-  return Math.max(a, b) + mod;
-}
+// Proportional armor table (CP2020 p.99) lives in module/utils.js `combineArmorSP` — the single
+// definition shared with the borg chassis-SP fold (mech/borg.js).
 
 /**
  * Resolve one hit against armor. Returns damageAfterSP (pre-BTM).
@@ -59,7 +45,7 @@ function resolveHitMath({ currentSP, rawDamage, ap, armorMode, coverSP = 0, penD
   let effectiveSP = currentSP;
   if (coverSP > 0 && armorMode !== ARMOR_MODES.NONE) {
     // Cover is the outermost layer — combined last (inside-out rule, p.99)
-    effectiveSP = _combineSP(currentSP, coverSP);
+    effectiveSP = combineArmorSP(currentSP, coverSP);
   }
 
   const spFull = (armorMode === ARMOR_MODES.NONE) ? 0 : effectiveSP;
@@ -348,7 +334,9 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     if ((effectiveSoftMult !== 1.0 || effectiveHardMult !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
       const contributors = getArmorContributors(target, spKey);
       const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
-      const hasHardArmor = allItems.some(item => getArmorHardness(item) === "hard");
+      // A full-conversion borg's chassis is metal (hard), so a soft-only multiplier (edged weapon,
+      // soft-ammo mult) must not halve its SP even when no armor ITEM is present to mark it hard.
+      const hasHardArmor = isFullBorg(target) || allItems.some(item => getArmorHardness(item) === "hard");
       const mult = hasHardArmor ? effectiveHardMult : effectiveSoftMult;
       if (mult !== 1.0) currentSP = Math.max(0, Math.floor(currentSP * mult));
     }
@@ -411,7 +399,8 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
       if ((effSoftSync !== 1.0 || effHardSync !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
         const contributors = getArmorContributors(target, spLocationKey(location));
         const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
-        const hasHardArmor = allItems.some(item => getArmorHardness(item) === "hard");
+        // Borg chassis is hard metal (mirror of the async path) — soft-only mults never halve it.
+        const hasHardArmor = isFullBorg(target) || allItems.some(item => getArmorHardness(item) === "hard");
         const mult = hasHardArmor ? effHardSync : effSoftSync;
         if (mult !== 1.0) currentSP = Math.max(0, Math.floor(currentSP * mult));
       }
@@ -498,8 +487,14 @@ function _deriveLiveSP(target, location) {
     }
     return Number(item.system?.coverage?.[location]?.stoppingPower) || 0;
   }).filter(sp => sp > 0);
-  if (!sps.length) return 0;
-  return sps.reduce((acc, sp) => _combineSP(acc, sp), 0);
+  let combined = sps.reduce((acc, sp) => combineArmorSP(acc, sp), 0);
+  // A full-conversion borg's chassis SP is intrinsic (no armor item), so fold it in here too — this
+  // re-derivation feeds the ablation refresh (a penetrated burst) and the Maximum Metal anti-vehicle
+  // armor value, both of which would otherwise drop the naked chassis's SP. prepareData already folds
+  // the same SP into hitLocations.stoppingPower (the first-read path); combined proportionally, once.
+  const borgSP = borgArmorSP(target, location);
+  if (borgSP > 0) combined = combineArmorSP(combined, borgSP);
+  return combined;
 }
 
 /** Effective armor SP at a hit location AFTER proportional layer combination (the value the damage

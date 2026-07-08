@@ -27,7 +27,7 @@
  *
  * COVER SP:
  *   Cover is treated as an outermost layer in DamageApplicator.resolveHitMath,
- *   combined via _combineSP(armorSP, coverSP). Cover has no slot in this module.
+ *   combined via utils.combineArmorSP(armorSP, coverSP). Cover has no slot in this module.
  *
  * DATA MODEL:
  *   system.armorLayers per location: ["itemId1", "itemId2", ...]

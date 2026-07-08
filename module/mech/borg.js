@@ -17,7 +17,7 @@
  *
  * No import from cyberlimb.js (it imports isFullBorg from here) — kept one-directional to avoid a cycle.
  */
-import { localize, localizeParam } from "../utils.js";
+import { localize, localizeParam, combineArmorSP } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
@@ -37,6 +37,15 @@ export function borgBodyOf(actor) {
 }
 
 /**
+ * The full-borg chassis stopping power for a zone (the intrinsic full-body armor, Chr2 p.64 — SP 25
+ * baseline, per-borg from the body item's `borgBody.sp` map), else 0. Pure. Read by the damage
+ * resolver's live-SP re-derivation so a naked borg's chassis SP survives ablation + Maximum Metal AV.
+ */
+export function borgArmorSP(actor, zone) {
+  return Number(borgBodyOf(actor)?.sp?.[zone]) || 0;
+}
+
+/**
  * Whether the actor is a full-conversion cyborg. Three-state per the user's D2 call: an explicit
  * `fullBorg` flag forces the answer (true/false); otherwise it is derived from an equipped body item.
  */
@@ -48,13 +57,21 @@ export function isFullBorg(actor) {
 }
 
 /**
- * prepareData post-step: seed the borg body's per-zone SDP into `system.sdp.sum/current` for all six
- * zones, so the shared cyberlimb SDP path (routing, sheet, absorb, repair) covers Head+Torso too. The
- * body items carry no `CyberWorkType.SDP` (a single item can't span six zones), so the base sum is 0
- * for them — we overwrite it here. `current` follows the base's own rule (persisted remaining if valid,
- * else full), with the sticky `limbStatus` flag authoritative for a destroyed zone (the base resets a
- * derived `current` of 0 back to sum, so a destroyed zone's 0 can't live in `current` — same quirk the
- * cyberlimb pass works around). A manual-flag borg with no body item keeps whatever `system.sdp` holds.
+ * prepareData post-step. Two seeds, both from the equipped body item's `borgBody` block:
+ *  1. Per-zone SDP → `system.sdp.sum/current` for all six zones, so the shared cyberlimb SDP path
+ *     (routing, sheet, absorb, repair) covers Head+Torso too. The body items carry no
+ *     `CyberWorkType.SDP` (a single item can't span six zones), so the base sum is 0 for them — we
+ *     overwrite it here. `current` follows the base's own rule (persisted remaining if valid, else
+ *     full), with the sticky `limbStatus` flag authoritative for a destroyed zone (the base resets a
+ *     derived `current` of 0 back to sum, so a destroyed zone's 0 can't live in `current` — same quirk
+ *     the cyberlimb pass works around).
+ *  2. Intrinsic chassis SP → folded into the base's derived `system.hitLocations[zone].stoppingPower`
+ *     (the single value the damage pipeline reads). The base has already collapsed worn/cyber armor
+ *     into that number when this wrap runs, so the chassis is one more innermost layer, combined
+ *     proportionally (p.99) exactly as cover is combined at damage time — worn armor over the chassis
+ *     still stacks, and AP still halves it (chassis armor is armor). This also surfaces the SP on the
+ *     sheet's per-zone armor column for free.
+ * A manual-flag borg with no body item keeps whatever `system.sdp`/`hitLocations` already hold.
  */
 export function applyBorgBody(actor) {
   const bb = borgBodyOf(actor);
@@ -65,7 +82,13 @@ export function applyBorgBody(actor) {
   sdp.current = sdp.current || {};
   const stored = actor?._source?.system?.sdp?.current ?? {};
   const limbStatus = actor?.flags?.[SCOPE]?.limbStatus ?? {};
+  const hitLocations = actor?.system?.hitLocations ?? {};
   for (const zone of ZONES) {
+    // Fold the chassis SP into the derived per-zone armor SP before the SDP seed's early-continue.
+    const sp = Number(bb.sp?.[zone]) || 0;
+    const loc = hitLocations[zone];
+    if (sp > 0 && loc) loc.stoppingPower = combineArmorSP(Number(loc.stoppingPower) || 0, sp);
+
     const max = Number(bb.sdp[zone]) || 0;
     if (max <= 0) continue;
     sdp.sum[zone] = max;

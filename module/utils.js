@@ -23,6 +23,29 @@ export function replaceIn(replaceIn, replaceWith) {
     return replaceIn.replace("[VAR]", replaceWith);
 }
 
+/**
+ * Proportional armor-layer combination (CP2020 p.99): two SP layers don't add — the combined SP is
+ * max(a,b) plus a diminishing bonus by their difference (equal layers +5, far-apart layers +0). This
+ * is the SINGLE definition shared by the damage resolver (cover + live-SP re-derivation, combat/
+ * DamageApplicator.js) and the full-borg chassis-SP fold (mech/borg.js). It mirrors the base system's
+ * own `combineSP` (actor.js maxLayeredSP) so a folded-in layer matches what the sheet would show.
+ */
+export function combineArmorSP(a, b) {
+    a = Number(a) || 0;
+    b = Number(b) || 0;
+    if (!a) return b;
+    if (!b) return a;
+    const diff = Math.abs(a - b);
+    let mod;
+    if      (diff >= 27) mod = 0;
+    else if (diff >= 21) mod = 1;
+    else if (diff >= 15) mod = 2;
+    else if (diff >= 9)  mod = 3;
+    else if (diff >= 5)  mod = 4;
+    else                 mod = 5;
+    return Math.max(a, b) + mod;
+}
+
 /* ------------------------------------------------------------------ *
  *  Singleton popups — one instance of a given dialog at a time.       *
  *  Clicking a "Fire"/"Roll"/etc. button again brings the open dialog  *
