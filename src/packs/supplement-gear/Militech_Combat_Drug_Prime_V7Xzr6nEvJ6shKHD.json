@@ -36,7 +36,14 @@
       "expireSave": {
         "stat": "cool",
         "difficulty": 15,
-        "penalty": "-3 to all skills and -2 COOL for 1d6/2 hours"
+        "penalty": "-3 to all skills and -2 COOL for 1d6/2 hours",
+        "penaltyBoosts": [
+          {
+            "stat": "cool",
+            "mod": -2
+          }
+        ],
+        "penaltyTurns": ""
       },
       "addictionDifficulty": 0,
       "psychosis": "",

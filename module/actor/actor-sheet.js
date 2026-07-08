@@ -1523,7 +1523,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           for (const b of r.detail.rollBoosts) if (b.mod) parts.push(`${b.label} ${signed(b.mod)}`);
           if (r.detail.psychosis) parts.push(r.detail.psychosis);
           if (r.detail.turnsLeft > 0) parts.push(localizeParam("StatusStripTurnsLeft", { turns: r.detail.turnsLeft }));
-          return parts.join(", ");
+          const body = parts.join(", ");
+          return r.detail.isPenalty ? `${localize("DrugCrashLabel")}: ${body}` : body;
         }
         case "addiction": {
           const breakdown = r.detail.byDrug.map(d => `${d.name} ×${d.count}`).join(", ");

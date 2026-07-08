@@ -289,9 +289,19 @@ function mechDrugField() {
     duration:      new f.StringField({ initial: d.duration }),
     durationTurns: new f.StringField({ initial: d.durationTurns }),
     expireSave: new f.SchemaField({
+      // A CP2020 stat check on wear-off: 1d10 + `stat` vs `difficulty` (meet-or-beat = resisted).
+      // Blank stat / 0 difficulty = no rollable save (the card states the printed consequence only).
       stat:       new f.StringField({ initial: "" }),
       difficulty: new f.NumberField({ initial: 0 }),
-      penalty:    new f.StringField({ initial: "" })
+      // On a FAILED save the stat portion of the penalty auto-applies as a timed "crash" overlay
+      // (same overlay as the boost, negative); `penalty` text carries the parts the overlay can't
+      // model (skill penalties, conditions) for the GM. penaltyTurns: "" = until cleared manually.
+      penaltyBoosts: new f.ArrayField(new f.SchemaField({
+        stat: new f.StringField({ initial: "cool" }),
+        mod:  new f.NumberField({ initial: 0 })
+      })),
+      penaltyTurns: new f.StringField({ initial: "" }),
+      penalty:      new f.StringField({ initial: "" })
     }),
     addictionDifficulty: new f.NumberField({ initial: d.addictionDifficulty }),
     psychosis:           new f.StringField({ initial: d.psychosis }),

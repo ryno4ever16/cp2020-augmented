@@ -1,0 +1,17 @@
+{{!--
+  Drug wear-off save prompt (D4 combat-drug engine). Rendered from postWoreOffCard() in
+  module/mech/drug.js when the drug carries a rollable stat check. The cp-drug-save-roll button +
+  its data-* attrs are read verbatim by the global click handler in registerMechDrug(). i18n via
+  CPLocal; triple-stash on values that carry <b>. Reuses the shared save-prompt CSS classes.
+--}}
+<div class="cyberpunk save-prompt drug-save-prompt">
+  <h3>{{CPLocal "DrugSaveTitle" name=name}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "DrugSaveWoreOff" name=name actor=actorName}}}</span><br>
+    <span>{{{CPLocal "DrugSaveNeed" stat=stat difficulty=difficulty}}}</span>
+    {{#if penalty}}<br><span>{{{CPLocal "DrugSaveFailClause" penalty=penalty}}}</span>{{/if}}
+  </div>
+  <div class="save-buttons">
+    <button class="cp-drug-save-roll" data-actor-id="{{actorId}}" data-item-id="{{itemId}}">{{CPLocal "DrugSaveRollBtn" stat=stat difficulty=difficulty}}</button>
+  </div>
+</div>

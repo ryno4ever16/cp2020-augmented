@@ -25,7 +25,8 @@
  */
 
 import { localize, localizeParam } from "../utils.js";
-import { postSavePromptCard } from "../compat.js";
+import { postSavePromptCard, renderChatCard } from "../compat.js";
+import { onGlobalClick } from "../popout-compat.js";
 import { rollDurationTurns } from "./consumable.js";
 import { btmFromBT } from "../lookups.js";
 
@@ -171,21 +172,79 @@ async function postTookCard(item, drug, marker) {
   });
 }
 
-/** The wear-off card: a NOTICE naming the save (stat + difficulty) and the printed penalty. */
+/**
+ * The wear-off card. When the drug carries a rollable stat check (expireSave.stat + difficulty), an
+ * INTERACTIVE save card with a Roll button (executeDrugExpireSave applies the crash on a failure);
+ * otherwise the standard save-prompt NOTICE stating the printed consequence. A crash marker's own
+ * expiry posts a plain "crash passes" recovery note (no re-save).
+ */
 async function postWoreOffCard(actor, marker) {
-  const es = marker.expireSave ?? {};
-  let saveClause = "";
-  if (es.stat && es.difficulty) {
-    saveClause = localizeParam("DrugSaveClause", {
-      stat: String(es.stat).toUpperCase(), difficulty: es.difficulty,
-      penalty: es.penalty || localize("DrugSaveDefaultPenalty")
+  if (marker.isPenalty) {
+    await postSavePromptCard({
+      body: localizeParam("DrugCrashEndedBody", { name: marker.name, actor: actor.name }),
+      speaker: ChatMessage.getSpeaker({ actor })
     });
-  } else if (es.penalty) {
-    saveClause = localizeParam("DrugSaveClauseNoTN", { penalty: es.penalty });
+    return;
   }
+  const es = marker.expireSave ?? {};
+  if (es.stat && es.difficulty && marker.itemId) {
+    const content = await renderChatCard("drug-save-prompt.hbs", {
+      name: marker.name, actorName: actor.name,
+      stat: String(es.stat).toUpperCase(), difficulty: es.difficulty, penalty: es.penalty ?? "",
+      actorId: actor.id, itemId: marker.itemId
+    });
+    await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
+    return;
+  }
+  const saveClause = es.penalty ? localizeParam("DrugSaveClauseNoTN", { penalty: es.penalty }) : "";
   await postSavePromptCard({
     body: localizeParam("DrugWoreOffBody", { name: marker.name, actor: actor.name, saveClause }),
     speaker: ChatMessage.getSpeaker({ actor })
+  });
+}
+
+/**
+ * Resolve a drug's wear-off save (the card's Roll button). A CP2020 stat check — 1d10 + the save
+ * stat vs the printed difficulty; meet-or-beat resists. On a failure the stat portion of the penalty
+ * is applied as a timed "crash" overlay (reusing the boost machinery, negated) and the result card
+ * shows the full printed consequence for the GM. Owner/GM only (mirrors the stun/death save gate).
+ */
+export async function executeDrugExpireSave({ actorId, itemId }) {
+  const actor = game.actors.get(actorId);
+  if (!actor) return;
+  if (!(game.user.isGM || actor.isOwner)) {
+    ui.notifications?.warn(localizeParam("SaveNotOwned", { name: actor.name }));
+    return;
+  }
+  const item = actor.items?.get?.(itemId);
+  const es = item?.system?.mechDrug?.expireSave ?? {};
+  const statKey = String(es.stat ?? "").toLowerCase();
+  const difficulty = Number(es.difficulty) || 0;
+  if (!statKey || !difficulty) return;
+
+  const statVal = Number(actor.system?.stats?.[statKey]?.total) || 0;
+  const roll = await new Roll("1d10").evaluate();
+  const total = roll.total + statVal;
+  const success = total >= difficulty;
+
+  const content = await renderChatCard("drug-save-result.hbs", {
+    name: item?.name ?? "", actorName: actor.name,
+    stat: statKey.toUpperCase(), statVal, die: roll.total, total, difficulty, success,
+    penalty: es.penalty ?? ""
+  });
+  await roll.toMessage({
+    speaker: ChatMessage.getSpeaker({ actor }),
+    flavor: localizeParam("DrugSaveFlavor", { name: item?.name ?? "", stat: statKey.toUpperCase(), difficulty }),
+    content
+  });
+
+  if (success) return;
+  const penaltyBoosts = (es.penaltyBoosts ?? []).map(b => ({ stat: String(b.stat ?? "").toLowerCase(), mod: Number(b.mod) || 0 })).filter(b => b.mod);
+  if (!penaltyBoosts.length) return;   // penalty is prose-only → the card states it, the GM applies it
+  const turns = await rollDurationTurns(es.penaltyTurns);
+  await setDrugMarker(actor, {
+    itemId, name: item?.name ?? "", note: "", statBoosts: penaltyBoosts, rollBoosts: [],
+    expireSave: { stat: "", difficulty: 0, penalty: "" }, psychosis: "", turnsLeft: turns, isPenalty: true
   });
 }
 
@@ -241,6 +300,14 @@ export function registerMechDrug() {
     };
     _wrapped = true;
   }
+
+  // The wear-off card's Roll button (mirrors the stun/death save button wiring in save-rolls.js).
+  onGlobalClick(async (ev) => {
+    const btn = ev.target?.closest?.(".cp-drug-save-roll");
+    if (!btn || btn.disabled) return;
+    ev.preventDefault();
+    await executeDrugExpireSave({ actorId: btn.dataset.actorId, itemId: btn.dataset.itemId });
+  });
 
   // Round tick — the ACTIVE GM counts down the CURRENT combatant's timed drugs when their turn comes
   // up (the acid/fire/consumable per-turn pattern, including the multi-GM + begin-combat guards).

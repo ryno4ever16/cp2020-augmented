@@ -1,0 +1,13 @@
+{{!--
+  Drug wear-off save result (D4). Rendered from executeDrugExpireSave() and passed as the content of
+  roll.toMessage() (the 1d10 attaches as the message roll). The win/lose line carries a
+  result-success / result-fail span (coloured via CSS, not inline style). i18n via CPLocal.
+--}}
+<div class="cyberpunk save-result drug-save-result">
+  <h3>{{CPLocal "DrugSaveResultTitle" name=name}}</h3>
+  <div>{{{CPLocal "DrugSaveResultDetail" stat=stat statVal=statVal die=die total=total difficulty=difficulty}}}</div>
+  <div class="result-line">
+    {{#if success}}{{{CPLocal "DrugSaveResultWin" name=name actor=actorName}}}{{else}}{{{CPLocal "DrugSaveResultLose" name=name actor=actorName}}}{{/if}}
+  </div>
+  {{#unless success}}{{#if penalty}}<div class="result-note">{{CPLocal "DrugSaveResultPenalty" penalty=penalty}}</div>{{/if}}{{/unless}}
+</div>

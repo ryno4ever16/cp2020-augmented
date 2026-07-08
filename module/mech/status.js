@@ -192,7 +192,7 @@ export function drugRows(actor) {
     itemId: m.itemId, kind: "drug", name: m.name,
     detail: {
       statBoosts: m.statBoosts ?? [], rollBoosts: m.rollBoosts ?? [],
-      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? ""
+      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? "", isPenalty: !!m.isPenalty
     },
     // Worn off via the item sheet "Wear off" control (fires the wear-off save) — the strip is display-only.
     togglePath: null
