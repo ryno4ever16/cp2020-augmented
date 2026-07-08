@@ -17,11 +17,13 @@
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,
-    "MountZone": "",
+    "MountZone": "Nervous",
     "EffectMode": "Permanent",
     "EffectActive": false,
     "Module": {},
-    "CyberBodyType": {},
+    "CyberBodyType": {
+      "Type": "Nervous"
+    },
     "CyberWorkType": {},
     "slots": 0,
     "spaces": 0,

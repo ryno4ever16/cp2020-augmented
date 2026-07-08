@@ -17,11 +17,13 @@
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,
-    "MountZone": "",
+    "MountZone": "Arm",
     "EffectMode": "Permanent",
     "EffectActive": false,
     "Module": {},
-    "CyberBodyType": {},
+    "CyberBodyType": {
+      "Type": "Arm"
+    },
     "CyberWorkType": {},
     "slots": 0,
     "spaces": 0,

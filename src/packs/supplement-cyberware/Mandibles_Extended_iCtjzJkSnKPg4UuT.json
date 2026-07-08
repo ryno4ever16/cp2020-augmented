@@ -17,11 +17,13 @@
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,
-    "MountZone": "",
+    "MountZone": "Head",
     "EffectMode": "Permanent",
     "EffectActive": false,
     "Module": {},
-    "CyberBodyType": {},
+    "CyberBodyType": {
+      "Type": "Head"
+    },
     "CyberWorkType": {},
     "slots": 0,
     "spaces": 0,
