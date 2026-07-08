@@ -23,6 +23,7 @@ import { AutomationNotice }                                   from "../dialog/au
 import { onGlobalClick } from "../popout-compat.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
 import { routesToSdp } from "../mech/cyberlimb.js";
+import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { rollLocation, localize, localizeParam }              from "../utils.js";
@@ -1296,7 +1297,7 @@ function _hookGasCloudPerTurn() {
         for (const tokDoc of tokensInCloud) {
           const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
           const items = liveActor?.items?.contents ?? [];
-          const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod) };
+          const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod, { isFullBorg: isFullBorg(liveActor) }) };
           if (d.liveActor && !d.skip && d.percent > 0) {
             const gateRoll = await new Roll("1d10").evaluate();
             const gate = percentGateOutcome(d.percent, gateRoll.total);
@@ -1307,11 +1308,17 @@ function _hookGasCloudPerTurn() {
           decisions.push(d);
         }
         const affected = decisions.filter(d => d.liveActor && !d.skip && !d.gated);
-        const sealed = decisions.filter(d => d.liveActor && d.skip);
+        // A full borg is sealed by its own biosystem, not by gear — report it as an immunity, separate
+        // from the "sealed breathing gear" group, so the flavour is honest.
+        const sealed = decisions.filter(d => d.liveActor && d.skip && !d.borgSealed);
+        const borgSealed = decisions.filter(d => d.liveActor && d.skip && d.borgSealed);
         const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
         const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
         const sealedClause = sealed.length
           ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
+          : "";
+        const borgClause = borgSealed.length
+          ? ((affected.length || sealed.length) ? " " : "") + localizeParam("GasCloudBorgImmuneClause", { names: borgSealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
           : "";
         // Q8 clauses — one per rolled gate, held or failed, always naming the roll vs threshold.
         const gateClauses = decisions.filter(d => d.gateRoll !== undefined).map(d =>
@@ -1320,7 +1327,7 @@ function _hookGasCloudPerTurn() {
         ).join("");
         await postSavePromptCard({
           title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
-          body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + gateClauses,
+          body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + borgClause + gateClauses,
         });
         for (const d of affected) {
           // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path

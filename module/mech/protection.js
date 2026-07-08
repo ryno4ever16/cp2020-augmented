@@ -55,14 +55,19 @@ export function percentGateOutcome(percent, d10) {
 
 /**
  * The gas-save decision for one actor standing in a cloud whose penalty is `stunSaveMod` (≤ 0):
- *   { skip: true }                      — sealed breathing, no save at all
+ *   { skip: true, borgSealed: true }    — a full-conversion borg: intrinsically immune, no save
+ *   { skip: true }                      — sealed breathing gear, no save at all
  *   { skip: false, effMod, percent }    — save with the penalty offset by the gear's mod, never
  *                                         flipping into a bonus (effMod capped at 0). A nonzero
  *                                         `percent` asks the caller to roll the Q8 per-exposure
  *                                         gate (percentGateOutcome) before prompting the save.
- * Pure over the actor's items array.
+ * Pure over the actor's items array (+ the caller-supplied `isFullBorg` boolean).
  */
-export function gasSaveDecisionFor(items, stunSaveMod) {
+export function gasSaveDecisionFor(items, stunSaveMod, { isFullBorg = false } = {}) {
+  // A full borg's lungs are a sealed filtration/oxygenation system, so it is immune to ANY gas
+  // (Chromebook 2 p.64) — intrinsic, not gear. `borgSealed` lets the caller name it as an immunity
+  // rather than "sealed breathing gear". Kept pure: borg-ness arrives as a boolean, no actor/import.
+  if (isFullBorg) return { skip: true, effMod: 0, percent: 0, borgSealed: true };
   const prot = hazardProtectionFor(items, "gas");
   if (prot.immune) return { skip: true, effMod: 0, percent: 0 };
   return { skip: false, effMod: Math.min(0, (Number(stunSaveMod) || 0) + prot.mod), percent: prot.percent };

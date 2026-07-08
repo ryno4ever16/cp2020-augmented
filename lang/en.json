@@ -239,6 +239,7 @@
     "GasCloudPlacedBody": "<div>Gas cloud placed on canvas (radius <b>{radius}m</b>). All tokens within the cloud must make Stun Saves each turn (penalty {mod}).</div><div class=\"save-note\">Cloud persists for {duration} turns, then disperses automatically. GM may reposition the template to represent wind drift.</div>",
     "GasCloudPenaltyClause": " ({mod} penalty)",
     "GasCloudProtectedClause": "Protected by sealed breathing gear: {names} — no save needed.",
+    "GasCloudBorgImmuneClause": "Immune — full-body conversion: {names}. The sealed biosystem ignores all gas.",
     "GasCloudFilterHeldClause": "Filters held for {name} (d10 {roll} ≤ {threshold}) — no save this turn.",
     "GasCloudFilterFailClause": "Filters failed for {name} (d10 {roll} &gt; {threshold}) — save required.",
     "GasCloudTurnTitle": "☠ Gas Cloud — {weapon} ({turnsLeft} turns left)",
