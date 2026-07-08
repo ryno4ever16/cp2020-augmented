@@ -22,6 +22,7 @@ import { isViewing, visionProfileOf, desiredVisionFor } from "./vision.js";
 import { protectionEntryOf } from "./protection.js";
 import { rollModsOf, isRollModActive } from "./roll-mods.js";
 import { activeStatMods } from "./stat-mods.js";
+import { drugMarkersFor, addictionStateFor } from "./drug.js";
 
 const SCOPE = "cp2020-augmented";
 const TIMER_FLAG = "consumableState";
@@ -185,6 +186,29 @@ export function rollModRows(items) {
   return out;
 }
 
+/** Active combat drugs (D4): one row per drug marker, its boosts/remaining in detail. Display-only. Pure. */
+export function drugRows(actor) {
+  return drugMarkersFor(actor).map(m => ({
+    itemId: m.itemId, kind: "drug", name: m.name,
+    detail: {
+      statBoosts: m.statBoosts ?? [], rollBoosts: m.rollBoosts ?? [],
+      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? ""
+    },
+    // Worn off via the item sheet "Wear off" control (fires the wear-off save) — the strip is display-only.
+    togglePath: null
+  }));
+}
+
+/** The addiction tally (D4): a single row when the counter is non-zero, breakdown in detail. Pure. */
+export function addictionRow(actor) {
+  const { byDrug, total } = addictionStateFor(actor);
+  if (!total) return [];
+  const breakdown = Object.entries(byDrug)
+    .filter(([, n]) => Number(n) > 0)
+    .map(([name, count]) => ({ name, count: Number(count) }));
+  return [{ itemId: null, kind: "addiction", name: "", detail: { total, byDrug: breakdown }, togglePath: null }];
+}
+
 /** Personality-moddy providers (Q7): one row per active mechStatMods item, its entries in detail. Pure. */
 export function statModRows(items) {
   const byItem = new Map();
@@ -215,11 +239,13 @@ export function activeInfluencesFor(actor) {
     ...visionRows(items, pick),
     ...protectionRows(items),
     ...timerRows(actor),
+    ...drugRows(actor),
     ...chipRows(items, resolveSkillName),
     ...statRows(items),
     ...skillRows(items, resolveSkillName),
     ...rollModRows(items),
-    ...statModRows(items)
+    ...statModRows(items),
+    ...addictionRow(actor)
   ];
 }
 
@@ -264,6 +290,11 @@ export function statContributionsFor(actor, key) {
   // Q7 moddy contributions (applied in the prepareDerivedData wrapper; named here, else the
   // residual would fold them into "other").
   for (const mc of actor?._mechStatMods?.[key] ?? []) {
+    parts.push({ kind: "item", name: mc.name, value: Number(mc.value) || 0 });
+  }
+
+  // D4 combat-drug boosts (applied in the drug prepareData wrapper; named here for the same reason).
+  for (const mc of actor?._mechDrugMods?.[key] ?? []) {
     parts.push({ kind: "item", name: mc.name, value: Number(mc.value) || 0 });
   }
 

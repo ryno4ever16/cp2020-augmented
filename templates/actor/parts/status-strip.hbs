@@ -11,6 +11,10 @@
         <a class="cp-pill-off" data-item-id="{{itemId}}" data-toggle-path="{{togglePath}}"
            title="{{CPLocal "StatusStripOff"}}">&times;</a>
         {{/if}}
+        {{#if clearAddiction}}
+        <a class="cp-pill-off" data-action="clear-addiction"
+           title="{{CPLocal "StatusStripClearAddiction"}}">&times;</a>
+        {{/if}}
     </span>
     {{/each}}
     {{!-- Q5: which vision device governs sight (auto = longest range; Natural suspends overrides).

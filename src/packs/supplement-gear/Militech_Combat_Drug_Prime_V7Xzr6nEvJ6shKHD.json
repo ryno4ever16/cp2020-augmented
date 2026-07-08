@@ -12,7 +12,36 @@
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "cool",
+          "mod": 2
+        }
+      ],
+      "rollBoosts": [
+        {
+          "label": "Awareness",
+          "mod": 3
+        },
+        {
+          "label": "Stun Saves",
+          "mod": 2
+        }
+      ],
+      "duration": "1d6+1 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "cool",
+        "difficulty": 15,
+        "penalty": "-3 to all skills and -2 COOL for 1d6/2 hours"
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Militech combat drug"
+    }
   },
   "effects": [],
   "folder": null,

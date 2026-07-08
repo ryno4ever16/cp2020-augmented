@@ -12,7 +12,27 @@
     "source": "Corpbook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [
+        {
+          "label": "Stun/Shock Saves",
+          "mod": 5
+        }
+      ],
+      "duration": "30 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Painkiller/euphoriant; ignore pain, no fear, full alertness. Side effects: 10% -1d6 INT/REF, psychosis risk (GM-run)."
+    }
   },
   "effects": [],
   "folder": null,

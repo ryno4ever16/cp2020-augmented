@@ -142,6 +142,40 @@ export const MECH_STAT_MOD_ENTRY_DEFAULTS = {
   stat: "cool", mod: 0, combatMod: 0, context: "any", cap: 0, floor: 0, isSet: false, set: 0
 };
 
+/**
+ * `mechDrug` (D4 combat-drug engine — SPECIAL-MECHANICS-D4-PROPOSAL.md §T2a): a dose-taken item
+ * (misc gear or an implanted dispenser) whose effect runs for a while, then wears off with a save.
+ * Composes the P7 timer lifecycle (its own `drugState` per-actor marker + round tick, mirroring
+ * mech/consumable.js) with the Q7 stat overlay and one new gate — the wear-off save + addiction
+ * counter. Numbers only ever come from printed prose (the D4 capture); nothing is invented.
+ *   statBoosts  — stat modifiers applied WHILE the drug is active (Char's COOL +3 / EMP −3). Applied
+ *                 in a prepareData wrapper reading the drugState marker (the Q7 precedent — WRAP
+ *                 prepareData, not prepareDerivedData). Each: { stat (int/ref/cool/…), mod }.
+ *   rollBoosts  — skill/save bonuses the book grants that have no live modifiers dialog to fold into
+ *                 (Prime's Awareness +3 / Stun Saves +2). MVP surfaces these on the "took" card and
+ *                 the status strip for the GM to apply; graduate to real dialog rows later (D-drug-1).
+ *                 Each: { label (display, English), mod }.
+ *   duration    — the book's printed duration, verbatim, as a display string ("1d6+1 hours"): shown
+ *                 on the card. Preserves the source number without a fragile hours→turns conversion.
+ *   durationTurns — OPTIONAL combat-round auto-expiry ("" | n | "1d6+2"). Empty for the printed drugs
+ *                 (their durations exceed a fight) → they last until worn off manually; the round tick
+ *                 only counts down a drug that sets this (future short drugs + the rig keeper).
+ *   expireSave  — the wear-off gate: { stat (save characteristic, blank if none), difficulty (CP2020
+ *                 ladder number: Easy 10 / Average 15 / Difficult 20 / Very Diff 25; 0 = no numeric TN),
+ *                 penalty (the printed failure consequence, verbatim) }. Surfaced as the module's
+ *                 standard save-prompt notice on wear-off (the gas/toxin save UX); GM adjudicates the
+ *                 roll + penalty (D-drug-2 MVP).
+ *   addictionDifficulty — the drug's addiction TN (0 = non-addictive). Each dose bumps the per-actor
+ *                 addiction counter shown in the status strip (user ask, D-drug-3); withdrawal effects
+ *                 stay GM-adjudicated.
+ *   psychosis   — a display-only condition note for psychosis-only drugs (Paranoia, Cyberpsychosis)
+ *                 that carry no numeric payload (D-drug-4).
+ *   note        — short effect label for the cards; item DATA, stays English.
+ */
+export const MECH_DRUG_DEFAULTS = {
+  enabled: false, duration: "", durationTurns: "", addictionDifficulty: 0, psychosis: "", note: ""
+};
+
 function mechLightField() {
   const f = foundry.data.fields;
   return new f.SchemaField({
@@ -237,6 +271,34 @@ function mechStatModsField() {
   });
 }
 
+function mechDrugField() {
+  const f = foundry.data.fields;
+  const d = MECH_DRUG_DEFAULTS;
+  return new f.SchemaField({
+    enabled: new f.BooleanField({ initial: d.enabled }),
+    // Stat overlay while active (Q7-style): applied in the prepareData wrapper from the drugState marker.
+    statBoosts: new f.ArrayField(new f.SchemaField({
+      stat: new f.StringField({ initial: "cool" }),
+      mod:  new f.NumberField({ initial: 0 })
+    })),
+    // Skill/save bonuses with no live dialog to fold into — surfaced for the GM (D-drug-1 MVP).
+    rollBoosts: new f.ArrayField(new f.SchemaField({
+      label: new f.StringField({ initial: "" }),
+      mod:   new f.NumberField({ initial: 0 })
+    })),
+    duration:      new f.StringField({ initial: d.duration }),
+    durationTurns: new f.StringField({ initial: d.durationTurns }),
+    expireSave: new f.SchemaField({
+      stat:       new f.StringField({ initial: "" }),
+      difficulty: new f.NumberField({ initial: 0 }),
+      penalty:    new f.StringField({ initial: "" })
+    }),
+    addictionDifficulty: new f.NumberField({ initial: d.addictionDifficulty }),
+    psychosis:           new f.StringField({ initial: d.psychosis }),
+    note:                new f.StringField({ initial: d.note })
+  });
+}
+
 /**
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
@@ -252,7 +314,8 @@ export function makeMechAugmentedData(SystemModel) {
         mechRollMods: mechRollModsField(),
         mechConsumable: mechConsumableField(),
         mechContainer: mechContainerField(),
-        mechStatMods: mechStatModsField()
+        mechStatMods: mechStatModsField(),
+        mechDrug: mechDrugField()
       };
     }
   };

@@ -12,7 +12,27 @@
     "source": "Corpbook 2",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [
+        {
+          "label": "Awareness",
+          "mod": 2
+        }
+      ],
+      "duration": "1d6/2 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 17,
+      "psychosis": "",
+      "note": "Perception enhancer; 50% addiction, nerve degeneration after repeated use (GM-run)."
+    }
   },
   "effects": [],
   "folder": null,

@@ -12,7 +12,27 @@
     "source": "Wildside",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "ref",
+          "mod": -1
+        }
+      ],
+      "rollBoosts": [],
+      "duration": "1d10+1 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 12,
+      "psychosis": "",
+      "note": "Euphoric; immune to lie detection; others' Human Perception vs user at -2."
+    }
   },
   "effects": [],
   "folder": null,

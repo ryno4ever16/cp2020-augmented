@@ -12,7 +12,22 @@
     "source": "Corpbook 2",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [],
+      "duration": "2d6 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 21,
+      "psychosis": "",
+      "note": "Stimulant/euphoric/pain-negator; addiction, paranoia, 10% psychotic rage (GM-run)."
+    }
   },
   "effects": [],
   "folder": null,

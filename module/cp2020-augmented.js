@@ -42,6 +42,7 @@ import { registerMechConsumable } from "./mech/consumable.js";
 import { registerMechChipGrant } from "./mech/chip-grant.js";
 import { registerMechContainer } from "./mech/container.js";
 import { registerMechStatMods } from "./mech/stat-mods.js";
+import { registerMechDrug } from "./mech/drug.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -170,6 +171,9 @@ Hooks.once("init", function () {
   // context apply on top of the base totals. Wrapped at INIT (before any actor prepares) so the
   // first world-load prep already reflects them; also wires the combat-context refresh hooks.
   registerMechStatMods();
+  // D4 combat drugs: wrap prepareData (AFTER the Q7 wrap above, so active-drug boosts overlay last)
+  // and wire the round-tick that expires timed drugs. Init-time for the same first-prep reason.
+  registerMechDrug();
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
   // namespaced collection, falling back to the bare global on cores that lack it (v13).

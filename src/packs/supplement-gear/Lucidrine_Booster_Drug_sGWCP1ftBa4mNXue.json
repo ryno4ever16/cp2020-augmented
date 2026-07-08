@@ -12,7 +12,32 @@
     "source": "Brainware Blowout",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "ref",
+          "mod": 2
+        }
+      ],
+      "rollBoosts": [
+        {
+          "label": "Initiative",
+          "mod": 5
+        }
+      ],
+      "duration": "about 5 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "roll 1d10 vs INT-2 or permanently lose 1 INT"
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Reflex/initiative booster."
+    }
   },
   "effects": [],
   "folder": null,

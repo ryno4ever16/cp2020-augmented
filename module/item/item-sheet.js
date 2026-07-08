@@ -6,6 +6,7 @@ import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
 import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { useConsumable } from "../mech/consumable.js";
+import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
 import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds } from "../mech/container.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
@@ -117,6 +118,11 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
           .filter(t => t.fits)
           .sort((a, b) => a.name.localeCompare(b.name));
         data.mechContainerInstalledIn = installedInOf(this.item);
+      }
+      // D4 combat drug: is a dose of THIS drug currently active on the owning actor? Drives the
+      // "Wear off now" control (shown only while active); "Take" is always available.
+      if (this.item.system?.mechDrug?.enabled && this.actor) {
+        data.mechDrugActive = drugMarkersFor(this.actor).some(m => m.itemId === this.item.id);
       }
     }
 
@@ -837,6 +843,16 @@ async _prepareCyberware(sheet) {
       if (event.target?.closest?.(".cp-consumable-use")) {
         event.preventDefault();
         await useConsumable(this.item);
+        return;
+      }
+      if (event.target?.closest?.(".cp-drug-take")) {
+        event.preventDefault();
+        await takeDrug(this.item);
+        return;
+      }
+      if (event.target?.closest?.(".cp-drug-end")) {
+        event.preventDefault();
+        await endDrug(this.item);
         return;
       }
       if (event.target?.closest?.(".cp-chip-choice-reset")) {

@@ -12,7 +12,27 @@
     "source": "Wildside",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "cool",
+          "mod": -1
+        }
+      ],
+      "rollBoosts": [],
+      "duration": "1d10+1 days",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 27,
+      "psychosis": "",
+      "note": "Stay-awake stimulant; hunger and weight loss."
+    }
   },
   "effects": [],
   "folder": null,

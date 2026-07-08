@@ -12,7 +12,22 @@
     "source": "Wildside",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [],
+      "duration": "2-11 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "Paranoia psychosis (GM-run condition).",
+      "note": ""
+    }
   },
   "effects": [],
   "folder": null,

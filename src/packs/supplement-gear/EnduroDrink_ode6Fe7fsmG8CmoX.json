@@ -12,7 +12,27 @@
     "source": "Chromebook 4",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [
+        {
+          "label": "Endurance",
+          "mod": 1
+        }
+      ],
+      "duration": "2 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Sports drink; +1 Endurance, non-cumulative."
+    }
   },
   "effects": [],
   "folder": null,

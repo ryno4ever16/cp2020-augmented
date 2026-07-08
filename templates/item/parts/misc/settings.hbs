@@ -149,6 +149,37 @@
     {{/unless}}
     {{/if}}
 
+    {{!-- D4 combat drug: a dose-taken timed boost that wears off with a save, plus an addiction
+         counter shown in the status strip. The stat/roll boost lists + the wear-off save are
+         authored in the item's pack source (like the Q7 personality moddies); the sheet surfaces the
+         plain fields + the Take / Wear-off controls. "Take" applies the boost; "Wear off now" ends it
+         and posts the wear-off save (shown only while a dose is active on the owning actor). --}}
+    {{> (template "fields/boolean") label="MechDrug" edit="system.mechDrug.enabled"}}
+    {{#if system.mechDrug.enabled}}
+    {{> (template "fields/string") label="MechDrugDuration" edit="system.mechDrug.duration"}}
+    <div class="field" title="{{CPLocal "MechDrugDurationTurnsHint"}}">
+        <label for="system.mechDrug.durationTurns">{{CPLocal "MechDrugDurationTurns"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.mechDrug.durationTurns" type="text"
+               value="{{system.mechDrug.durationTurns}}" placeholder="1d6+2"/>
+    </div>
+    <div class="field" title="{{CPLocal "MechDrugAddictionHint"}}">
+        <label for="system.mechDrug.addictionDifficulty">{{CPLocal "MechDrugAddiction"}}</label>
+        <span class="flex-pad"></span>
+        <input class="textsize" name="system.mechDrug.addictionDifficulty" type="number"
+               value="{{system.mechDrug.addictionDifficulty}}"/>
+    </div>
+    {{> (template "fields/string") label="MechDrugNote" edit="system.mechDrug.note"}}
+    <div class="field">
+        <label>{{CPLocal "MechDrugUseHint"}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-drug-take nogrow">{{CPLocal "MechDrugTake"}}</button>
+        {{#if @root.mechDrugActive}}
+        <button type="button" class="cp-drug-end nogrow">{{CPLocal "MechDrugEnd"}}</button>
+        {{/if}}
+    </div>
+    {{/if}}
+
     {{!-- Q6 container: this misc item can BE a container (capacity) and/or be installed INTO one
          (a cyberarm compartment, a skin pouch, another container). Cyberware uses its own
          Module.ParentId UI; this section is misc-only. --}}

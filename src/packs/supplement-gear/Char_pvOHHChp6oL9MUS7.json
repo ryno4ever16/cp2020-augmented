@@ -12,7 +12,31 @@
     "source": "Wildside",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "cool",
+          "mod": 3
+        },
+        {
+          "stat": "emp",
+          "mod": -3
+        }
+      ],
+      "rollBoosts": [],
+      "duration": "1d10+1 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 20,
+      "psychosis": "",
+      "note": "Confidence drug; psychological addiction."
+    }
   },
   "effects": [],
   "folder": null,

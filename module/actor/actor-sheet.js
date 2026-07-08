@@ -8,6 +8,7 @@ import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
+import { clearAddiction } from "../mech/drug.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, uninstallItem, installedInOf } from "../mech/container.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
@@ -287,6 +288,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (!off || !root.contains(off)) return;
       event.preventDefault();
       event.stopPropagation();
+      // The addiction pill's × clears the whole tally (no boolean path; per-actor flag write).
+      if (off.dataset.action === "clear-addiction") {
+        await clearAddiction(this.actor);
+        return;
+      }
       const item = this.actor.items.get(off.dataset.itemId);
       const path = off.dataset.togglePath;
       if (!item || !path) return;
@@ -1470,7 +1476,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       protection: "StatusStripKindProtection", timer: "StatusStripKindTimer",
       chip: "StatusStripKindChip", stat: "StatusStripKindStat",
       skill: "StatusStripKindSkill", roll: "StatusStripKindRoll",
-      moddy: "StatusStripKindModdy"
+      moddy: "StatusStripKindModdy", drug: "StatusStripKindDrug",
+      addiction: "StatusStripKindAddiction"
     };
     const HAZARD_LABEL = { gas: "MechProtectionGas", flash: "MechProtectionFlash", sonic: "MechProtectionSonic" };
     const detailText = (r) => {
@@ -1510,6 +1517,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const ctx = m.context === "combat" ? " (cbt)" : m.context === "noncombat" ? " (non-cbt)" : "";
           return `${st} ${signed(m.mod)}${ctx}`;
         }).join(", ");
+        case "drug": {
+          const parts = [];
+          for (const b of r.detail.statBoosts) if (b.mod) parts.push(`${String(b.stat).toUpperCase()} ${signed(b.mod)}`);
+          for (const b of r.detail.rollBoosts) if (b.mod) parts.push(`${b.label} ${signed(b.mod)}`);
+          if (r.detail.psychosis) parts.push(r.detail.psychosis);
+          if (r.detail.turnsLeft > 0) parts.push(localizeParam("StatusStripTurnsLeft", { turns: r.detail.turnsLeft }));
+          return parts.join(", ");
+        }
+        case "addiction": {
+          const breakdown = r.detail.byDrug.map(d => `${d.name} ×${d.count}`).join(", ");
+          return breakdown
+            ? localizeParam("StatusStripAddiction", { total: r.detail.total, breakdown })
+            : String(r.detail.total);
+        }
         default: return "";
       }
     };
@@ -1519,11 +1540,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const kindLabel = localize(KIND_LABEL[r.kind] ?? KIND_LABEL.stat);
       const detail = detailText(r);
       const noteClause = r.kind === "timer" && r.detail.note ? ` — ${r.detail.note}` : "";
+      // The addiction tally has no source item/name — its text IS the detail (a bare count breakdown).
       return {
         itemId: r.itemId, kind: r.kind, kindLabel,
-        text: detail ? `${r.name} (${detail})` : r.name,
-        title: `${kindLabel}: ${r.name}${detail ? ` — ${detail}` : ""}${noteClause}`,
-        togglePath: r.togglePath ?? ""
+        text: r.name ? (detail ? `${r.name} (${detail})` : r.name) : detail,
+        title: r.name ? `${kindLabel}: ${r.name}${detail ? ` — ${detail}` : ""}${noteClause}` : `${kindLabel}: ${detail}`,
+        togglePath: r.togglePath ?? "",
+        // The GM clears the addiction tally from the strip when a character kicks the habit.
+        clearAddiction: r.kind === "addiction"
       };
     });
 

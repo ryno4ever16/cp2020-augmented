@@ -12,7 +12,27 @@
     "source": "Chromebook 2",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "attr",
+          "mod": 1
+        }
+      ],
+      "rollBoosts": [],
+      "duration": "1d6 days",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Cosmetic tan; +1 Attractiveness."
+    }
   },
   "effects": [],
   "folder": null,
