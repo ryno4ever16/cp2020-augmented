@@ -161,8 +161,11 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static PARTS = {
     // Single part = the existing one-template, conditional-by-view shop UI. `scrollable` preserves the
-    // item-list scroll position across re-renders (replaces the old V1 _render scroll-capture override).
-    main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-catalog-list"] },
+    // scroll position of EACH listed container across the `this.render()` a filter/search click triggers
+    // (replaces the old V1 _render scroll-capture override). All three panels carry their own
+    // `overflow-y:auto` (css §.cp-catalog-list/.cp-catalog-filters/.cp-src-scroll), so each needs listing —
+    // otherwise clicking a category/book chip while the filter compartment is scrolled snaps it back to top.
+    main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-catalog-list", ".cp-catalog-filters", ".cp-src-scroll"] },
   };
 
   get title() {
