@@ -1285,6 +1285,31 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   grid-template-areas: "loc loc loc" "ablate sp repair" "name name name";
 }
 
+/* Cyberlimb SDP status badge + repair control (armor-display SDP row; mech/cyberlimb.js). The badge
+   reports the TRUE limb state from the sticky limbStatus flag; the wrench repairs SDP + clears it. */
+.cyberpunk .armor-display .segment-sdp-row { align-items: center; }
+.cyberpunk .segment-limb-status {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 3px;
+  border-radius: 3px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.cyberpunk .segment-limb-status.cp-limb-destroyed { color: #fff; background: #d1502f; }
+.cyberpunk .segment-limb-status.cp-limb-useless   { color: #1a1a1a; background: #c0791a; }
+.cyberpunk .segment-limb-status.cp-limb-damaged   { opacity: 0.65; }
+.cyberpunk .segment-repair.cp-cyberlimb-repair {
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.7;
+  text-decoration: none;
+}
+.cyberpunk .segment-repair.cp-cyberlimb-repair:hover { opacity: 1; color: #4a8f3c; }
+
 .chipware-container.is-empty .chipware-dropzone {
   height: 18px;
   width: 100%;

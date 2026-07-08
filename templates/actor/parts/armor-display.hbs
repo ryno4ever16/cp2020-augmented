@@ -36,6 +36,17 @@
                   title="{{CPLocal "SDPCurrentTooltip"}}"
                   name="system.sdp.current.{{name}}"
                   value="{{lookup ../system.sdp.current name}}">
+                {{!-- Cyberlimb true status (from the sticky limbStatus flag) + repair. A destroyed
+                     limb reads "destroyed" even though the base prep resets its current to full. --}}
+                {{#with (lookup ../cpCyberlimb name) as |cl|}}
+                  {{#if cl.statusLabel}}
+                  <span class="segment-limb-status cp-limb-{{cl.status}}" title="{{cl.statusLabel}}">{{cl.statusLabel}}</span>
+                  {{/if}}
+                  {{#if cl.damaged}}
+                  <a class="segment-repair cp-cyberlimb-repair action" data-zone="{{name}}"
+                     title="{{CPLocal "CyberlimbRepairTooltip"}}">&#9874;</a>
+                  {{/if}}
+                {{/with}}
               </div>
             {{/unless}}
           {{/unless}}

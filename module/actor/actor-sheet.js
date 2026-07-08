@@ -9,6 +9,7 @@ import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { clearAddiction } from "../mech/drug.js";
+import { cyberlimbSheetStatus, repairCyberlimb } from "../mech/cyberlimb.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, uninstallItem, installedInOf } from "../mech/container.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
@@ -831,6 +832,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         this._cpRefreshSkillSearchUI(root);
         return;
       }
+
+      // Cyberlimb repair (armor-display SDP row): restore the limb's SDP + clear its disabled/
+      // destroyed flag.
+      const repairLimb = target.closest(".cp-cyberlimb-repair");
+      if (repairLimb) {
+        event.preventDefault();
+        const zone = repairLimb.dataset.zone;
+        if (zone) repairCyberlimb(this.actor, zone);
+        return;
+      }
     });
 
     root.addEventListener("keydown", (event) => {
@@ -1596,6 +1607,17 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       tips[key] = `${actor.system.stats[key].total} = ${text}`;
     }
     sheetData.cpStatTips = tips;
+
+    // Cyberlimb SDP status per zone (the repair UI, read on the armor-display). status = the TRUE
+    // state from the sticky limbStatus flag ("destroyed"/"useless") or "damaged" (current<max); the
+    // localized label rides along so the destroyed-limb-reads-full-SDP quirk shows correctly.
+    const CL_STATUS_LABEL = { destroyed: "CyberlimbStatusDestroyed", useless: "CyberlimbStatusUseless", damaged: "CyberlimbStatusDamaged" };
+    const cl = cyberlimbSheetStatus(actor);
+    const clOut = {};
+    for (const [zone, info] of Object.entries(cl)) {
+      clOut[zone] = { ...info, statusLabel: info.status !== "ok" ? localize(CL_STATUS_LABEL[info.status] ?? CL_STATUS_LABEL.damaged) : "" };
+    }
+    sheetData.cpCyberlimb = clOut;
   }
 
   _addWoundTrack(sheetData) {

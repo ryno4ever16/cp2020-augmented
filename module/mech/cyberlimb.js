@@ -97,3 +97,44 @@ export async function absorbCyberlimbHit(actor, zone, dmg, { token = null } = {}
   });
   return { remaining, max, status };
 }
+
+/**
+ * Repair a cyberlimb: restore its SDP to full and clear the disabled/destroyed flag (the sticky
+ * `limbStatus`). The GM/owner action behind the sheet's repair button. Returns true when it ran.
+ */
+export async function repairCyberlimb(actor, zone) {
+  if (!isCyberlimbZone(actor, zone)) return false;
+  const max = Number(actor?.system?.sdp?.sum?.[zone]) || 0;
+  // Restore SDP + remove ONLY this zone's limbStatus entry. A flag object merges on write, so a
+  // deleted key would linger — use Foundry's `-=` deletion path to drop just this zone.
+  await actor.update({
+    [`system.sdp.current.${zone}`]: max,
+    [`flags.${SCOPE}.limbStatus.-=${zone}`]: null
+  }, { render: false, fromCyberpunkDamageSystem: true });
+  await postSavePromptCard({
+    body: localizeParam("CyberlimbRepairedBody", { limb: localize(zone), max }),
+    speaker: ChatMessage.getSpeaker({ actor })
+  });
+  return true;
+}
+
+/**
+ * Per-zone cyberlimb state for the sheet: `{ rArm: { status, damaged, current, max }, … }` for every
+ * limb zone that carries a cyberlimb. `status` is the TRUE state — from the sticky `limbStatus` flag
+ * ("destroyed"/"useless") when set (so a destroyed limb reads correctly even though the base prep
+ * resets its `current` to full), else "damaged" when current < max, else "ok". Pure-ish.
+ */
+export function cyberlimbSheetStatus(actor) {
+  const out = {};
+  const limbStatus = actor?.getFlag?.(SCOPE, "limbStatus") ?? actor?.flags?.[SCOPE]?.limbStatus ?? {};
+  for (const zone of LIMB_ZONES) {
+    const { max, current } = cyberlimbSdp(actor, zone);
+    if (max <= 0) continue;   // no cyberlimb in this zone
+    const flag = limbStatus[zone];
+    const status = flag === "destroyed" ? "destroyed"
+                 : flag === "disabled"  ? "useless"
+                 : (current < max)      ? "damaged" : "ok";
+    out[zone] = { status, damaged: status !== "ok", current, max };
+  }
+  return out;
+}
