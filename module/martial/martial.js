@@ -194,29 +194,57 @@ export function trainedMartials(actor) {
 }
 
 /**
- * Opposed melee/martial defense roll: the defender's best of the standard defense skills (plus any
- * trained martial art) + REF + 1d10. Vendored from CyberpunkItem._rollMeleeDefense (item.js), using
- * the module's own getSkillVal/trainedMartials so it runs on his vanilla.
+ * Opposed melee/martial defense roll (CP2020 melee formula): the defender's best SINGLE defense skill +
+ * REF + 1d10. The eligible skills are Melee, Fencing, Brawling, Dodge & Escape, Athletics, or a trained
+ * martial art — the defender uses ONE, not several. Vendored from CyberpunkItem._rollMeleeDefense
+ * (item.js), using the module's own getSkillVal/trainedMartials so it runs on his vanilla.
  *
- * @param {Actor} targetActor
- * @returns {Promise<{roll: Roll, total: number, skillName: string, skillVal: number, ref: number}>}
+ * When a dodge is DECLARED, a trained martial art's Dodge key-attack bonus (Core p.100) rides on THAT
+ * art's roll, so it is folded into the skill SELECTION here — an art is only worth choosing over a plain
+ * higher-level skill if its level+Dodge-key wins. `dodgeKeyBonus` is the chosen skill's Dodge key (0 for
+ * a non-martial skill, or when no dodge is declared), so an art's level and its key never come from two
+ * different skills. The generic declared-dodge stance (+2, available to anyone) is added by the caller.
+ *
+ * @param {Actor}   targetActor
+ * @param {object}  [opts]
+ * @param {boolean} [opts.dodging]  the defender declared a dodge → weigh + report the Dodge key bonus
+ * @returns {Promise<{roll: Roll, total: number, skillName: string, skillVal: number, ref: number, dodgeKeyBonus: number}>}
  */
-export async function rollMeleeDefense(targetActor) {
+export async function rollMeleeDefense(targetActor, { dodging = false } = {}) {
   const ref = Number(targetActor?.system?.stats?.ref?.total) || 0;
 
   const CANDIDATES = ["Melee", "Fencing", "Brawling", "Dodge", "Athletics"];
-  let best = { name: localize("NoSkill"), val: 0 };
-  for (const sk of CANDIDATES) {
-    const val = Number(getSkillVal(targetActor, sk) ?? 0);
-    if (val > best.val) best = { name: sk, val };
-  }
+  let best = { name: localize("NoSkill"), val: 0, dodgeKeyBonus: 0 };
+  // Rank by effective defense value (level + Dodge key when dodging); ties keep the earlier candidate.
+  const consider = (name, val, dodgeKeyBonus) => {
+    if ((val + dodgeKeyBonus) > (best.val + best.dodgeKeyBonus)) best = { name, val, dodgeKeyBonus };
+  };
+  for (const sk of CANDIDATES) consider(sk, Number(getSkillVal(targetActor, sk) ?? 0), 0);
   for (const m of trainedMartials(targetActor)) {
     const val = Number(getSkillVal(targetActor, m.value) ?? 0);
-    if (val > best.val) best = { name: m.label, val };
+    const key = dodging
+      ? Number(getMartialActionBonus(m.value, martialActions.dodge, martialBonusesFor(getMartialArtSkill(targetActor, m.value))) || 0)
+      : 0;
+    consider(m.label, val, key);
   }
 
   const roll = await new Roll("1d10 + @ref + @skill", { ref, skill: best.val }).evaluate();
-  return { roll, total: roll.total, skillName: best.name, skillVal: best.val, ref };
+  return { roll, total: roll.total, skillName: best.name, skillVal: best.val, ref, dodgeKeyBonus: best.dodgeKeyBonus };
+}
+
+/**
+ * The bonus a DECLARED dodge adds to the defender's opposed roll (CP2020 p.102): a generic +2 stance
+ * available to anyone dodging (the book's "−2 to attacker", expressed as +2 to the defender's total),
+ * PLUS the defender's martial-style Dodge key-attack bonus (Core p.100) — additive, per the user's
+ * ruling. `dodgeKeyBonus` must be the key of the SAME art rollMeleeDefense chose (0 for a non-martial
+ * dodge), so the two never compose across different skills. Pure (no dice/i18n) for the unit rig.
+ *
+ * @param {boolean} isDodging
+ * @param {number}  dodgeKeyBonus  the chosen art's Dodge key from rollMeleeDefense (0 if none)
+ * @returns {number}
+ */
+export function declaredDodgeBonus(isDodging, dodgeKeyBonus) {
+  return isDodging ? 2 + (Number(dodgeKeyBonus) || 0) : 0;
 }
 
 /**
@@ -384,16 +412,20 @@ export async function rollMartialAttack(actor, {
     cardData.damageRender = await damageRoll.render();
 
     // Contested resolution (mirror of __martialBonk): when there is exactly one target, the defender
-    // rolls REF + best defense skill; the attack lands only if it beats that total. A held Dodge adds
-    // +2 to the defense; a held Parry blocks outright. Those flags are set by the module's own Dodge/
-    // Parry actions under the module scope (see damage-hooks.js); on plain vanilla they are simply
-    // absent, so this reduces to a straight opposed roll.
+    // rolls REF + best defense skill; the attack lands only if it beats that total. A declared Dodge
+    // adds a generic +2 to the defense PLUS the defender's martial style Dodge key-attack bonus (Core
+    // p.100 — additive per the user's ruling); a held Parry blocks outright. Those flags are set by the
+    // module's own Dodge/Parry actions under the module scope (see damage-hooks.js); on plain vanilla
+    // they are simply absent, so this reduces to a straight opposed roll.
     let doEmit = true;
     if (targetActor) {
-      const def = await rollMeleeDefense(targetActor);
+      const isDodging = !!targetActor.getFlag?.(SCOPE, "dodging");
+      const def = await rollMeleeDefense(targetActor, { dodging: isDodging });
       rolls.push(def.roll);
 
-      const dodgeBonus = targetActor.getFlag?.(SCOPE, "dodging") ? 2 : 0;
+      // def.dodgeKeyBonus is the Dodge key of the SAME art rollMeleeDefense chose for the roll (0 for a
+      // non-martial dodge), so the generic stance and the style bonus stack without composing two skills.
+      const dodgeBonus = declaredDodgeBonus(isDodging, def.dodgeKeyBonus);
       const parried = !!targetActor.getFlag?.(SCOPE, "parrying");
       const hits = !parried && (attackRoll.total > def.total + dodgeBonus);
 
