@@ -10,6 +10,7 @@ import { attackModProviders, skillModProviders, statModProviders, gearModGroup, 
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { clearAddiction } from "../mech/drug.js";
 import { cyberlimbSheetStatus, repairCyberlimb } from "../mech/cyberlimb.js";
+import { isFullBorg, borgBodyOf } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, uninstallItem, installedInOf } from "../mech/container.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
@@ -307,6 +308,17 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const v = event.target.value;
       if (v) await this.actor.setFlag("cp2020-augmented", "visionPick", v);
       else await this.actor.unsetFlag("cp2020-augmented", "visionPick");
+    });
+
+    // Full-conversion borg override: "on"/"off" force the fullBorg flag; "auto" clears it (detection
+    // falls back to an equipped borg-body item). stopPropagation keeps the form's submitOnChange out.
+    root.addEventListener("change", async (event) => {
+      if (!event.target?.matches?.("select.cp-fullborg-select")) return;
+      event.stopPropagation();
+      const v = event.target.value;
+      if (v === "on") await this.actor.setFlag("cp2020-augmented", "fullBorg", true);
+      else if (v === "off") await this.actor.setFlag("cp2020-augmented", "fullBorg", false);
+      else await this.actor.unsetFlag("cp2020-augmented", "fullBorg");
     });
 
     // Q6 container: the ⏏ on a nested (installed) row detaches it to loose inventory. Mousedown
@@ -1618,6 +1630,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       clOut[zone] = { ...info, statusLabel: info.status !== "ok" ? localize(CL_STATUS_LABEL[info.status] ?? CL_STATUS_LABEL.damaged) : "" };
     }
     sheetData.cpCyberlimb = clOut;
+
+    // Full-conversion borg mode: a 3-state override (auto / on / off) mirroring isFullBorg's flag
+    // logic. Shown only for actors that are or could be a borg (a body item, the explicit flag, or any
+    // cyber-SDP) so plain characters aren't cluttered. Persisted by an explicit change handler (NOT a
+    // form-bound `name`), so the sheet's submitOnChange can't silently turn "auto" into a forced value.
+    const rawBorg = actor.getFlag("cp2020-augmented", "fullBorg");
+    sheetData.cpBorgMode = rawBorg === true ? "on" : rawBorg === false ? "off" : "auto";
+    sheetData.cpIsFullBorg = isFullBorg(actor);
+    const anyZoneSdp = Object.values(actor.system?.sdp?.sum ?? {}).some(v => (Number(v) || 0) > 0);
+    sheetData.cpShowBorgToggle = sheetData.cpIsFullBorg || !!borgBodyOf(actor) || anyZoneSdp;
   }
 
   _addWoundTrack(sheetData) {

@@ -44,6 +44,20 @@
             <h2>{{CPLocal "Armor"}}</h2>
         </header>
 
+        {{!-- Full-conversion borg override (shown only for borg-capable actors). Auto = detected from an
+              equipped full-borg body item; on/off force it. Not form-bound; a change handler persists it. --}}
+        {{#if cpShowBorgToggle}}
+        <div class="field cp-fullborg-field" title="{{CPLocal 'BorgModeHint'}}">
+            <label>{{CPLocal "BorgMode"}}</label>
+            <span class="flex-pad"></span>
+            <select class="cp-fullborg-select nogrow">
+                <option value="auto" {{#if (equals cpBorgMode "auto")}}selected{{/if}}>{{CPLocal "BorgModeAuto"}}</option>
+                <option value="on" {{#if (equals cpBorgMode "on")}}selected{{/if}}>{{CPLocal "BorgModeFull"}}</option>
+                <option value="off" {{#if (equals cpBorgMode "off")}}selected{{/if}}>{{CPLocal "BorgModeOff"}}</option>
+            </select>
+        </div>
+        {{/if}}
+
         {{> "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs" hitLocations=system.hitLocations hitLocsName="hitLocations"}}
 
         {{!-- Armor layer compliance panel. Only rendered when damageLayersEnabled setting is on. --}}
