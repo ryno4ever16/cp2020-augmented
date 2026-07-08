@@ -17,7 +17,8 @@ import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
 import { postDeathSavePrompt } from "./save-rolls.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { localize, localizeParam } from "../utils.js";
-import { isCyberlimbZone, absorbCyberlimbHit } from "../mech/cyberlimb.js";
+import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
+import { isFullBorg, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
 
 export const ARMOR_MODES = {
   FULL:   "full",
@@ -155,7 +156,7 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   // A cyberlimb zone takes structural SDP damage, not a flesh wound — no limb-loss / death save and
   // no shock/stun (RAW, Core p.89). The hit was absorbed into the limb's SDP (mech/cyberlimb.js); the
   // flesh limb-loss logic below must not run for it. Defense in depth alongside applyLocationDamage.
-  if (isCyberlimbZone(target, location)) return;
+  if (routesToSdp(target, location)) return;
   let limbLoss = false;
   try { limbLoss = game.settings.get("cp2020-augmented", "limbLossEnabled"); } catch (e) { /* default */ }
   if (!limbLoss) return;
@@ -260,9 +261,14 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
  * @returns {Promise<{cyberlimb: boolean, applied: number}>}
  */
 export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null }) {
-  if (isCyberlimbZone(target, location)) {
+  if (routesToSdp(target, location)) {
     const sdpDmg = penetrates ? Math.max(0, Math.round(Number(structuralDamage ?? netDamage) || 0)) : 0;
-    if (sdpDmg > 0) await absorbCyberlimbHit(target, location, sdpDmg, { token });
+    const outcome = sdpDmg > 0 ? await absorbCyberlimbHit(target, location, sdpDmg, { token }) : null;
+    // A full borg's Head (brain) or Torso (biosystem) destroyed ends the actor — the one death the
+    // limb model omits (Chromebook 2 p.64,66). A limb just goes useless, so this only fires for a borg.
+    if (outcome?.status === "destroyed" && BORG_CORE_ZONES.has(location) && isFullBorg(target)) {
+      await killBorgCore(target, location, token);
+    }
     return { cyberlimb: true, applied: 0 };
   }
   if (netDamage > 0) {
@@ -354,7 +360,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     // netDamage centralizes head doubling (p.103) and the optional Listen Up limb model.
     const netDamage = computeNetDamage(damageAfterSP, btm, penetrates, location);
 
-    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: isCyberlimbZone(target, location) });
+    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location) });
 
     if (!dryRun) {
       const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;

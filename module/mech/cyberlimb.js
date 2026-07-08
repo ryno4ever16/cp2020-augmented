@@ -19,9 +19,12 @@
  */
 import { localize, localizeParam } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
+import { isFullBorg } from "./borg.js";
 
 const SCOPE = "cp2020-augmented";
 const LIMB_ZONES = new Set(["rArm", "lArm", "rLeg", "lLeg"]);
+// Every zone, in sheet order — the routing/status set for a full-conversion borg (whole-body machinery).
+const ALL_ZONES = ["Head", "Torso", "rArm", "lArm", "rLeg", "lLeg"];
 
 // The "useless" band is the final SDP before "destroyed": Core prints 20/30 and hydraulic rams 30/40
 // — both a consistent 10-point gap. If a supplement ever prints a different band, this is the single
@@ -32,6 +35,17 @@ export const CYBERLIMB_USELESS_MARGIN = 10;
 export function isCyberlimbZone(actor, location) {
   if (!LIMB_ZONES.has(location)) return false;
   return (Number(actor?.system?.sdp?.sum?.[location]) || 0) > 0;
+}
+
+/**
+ * True when a location's damage should absorb into per-zone SDP instead of the flesh wound track: a
+ * cyberlimb zone, OR — for a full-conversion borg — ANY of the six zones (its whole body is machinery,
+ * Head/Torso included, once the borgBody SDP is seeded). The single routing check every apply path
+ * uses, so cyberlimbs and borgs funnel through the same seam. Pure-ish.
+ */
+export function routesToSdp(actor, location) {
+  if (isCyberlimbZone(actor, location)) return true;
+  return isFullBorg(actor) && (Number(actor?.system?.sdp?.sum?.[location]) || 0) > 0;
 }
 
 /** { max, current } SDP for a zone; current defaults to max when unset. Pure-ish. */
@@ -75,7 +89,11 @@ export async function absorbCyberlimbHit(actor, zone, dmg, { token = null } = {}
   // Only write `current` while the limb still has structure; a destroyed limb's current is left alone
   // (writing 0 would just be reset to sum by the base prep — limbStatus is the truth).
   if (!alreadyDestroyed) {
-    await actor.update({ [`system.sdp.current.${zone}`]: remaining }, { render: false, fromCyberpunkDamageSystem: true });
+    // system.sdp.current is an untyped ObjectField — a dotted per-zone update (…current.${zone}) resets
+    // the SIBLING zones to their schema default (0), which loses other damaged zones on a multi-zone
+    // actor (a full borg tracks all six). Write the whole current object so the siblings survive.
+    const nextCurrent = { ...(actor.system?.sdp?.current ?? {}), [zone]: remaining };
+    await actor.update({ "system.sdp.current": nextCurrent }, { render: false, fromCyberpunkDamageSystem: true });
   }
   const status = alreadyDestroyed ? "destroyed" : cyberlimbStatus(remaining);
 
@@ -88,11 +106,14 @@ export async function absorbCyberlimbHit(actor, zone, dmg, { token = null } = {}
     await actor.setFlag(SCOPE, "limbStatus", cur).catch(() => {});
   }
 
+  // A full borg's whole body is machinery, so its zones (incl. Head/Torso) read as borg chassis, not
+  // "cyberlimb"; a plain cyberlimb keeps the limb wording. Same SDP mechanics either way.
+  const borg = isFullBorg(actor);
   const limb = localize(zone);
-  const statusClause = status === "destroyed" ? localize("CyberlimbDestroyedClause")
-                     : status === "useless"   ? localize("CyberlimbUselessClause") : "";
+  const statusClause = status === "destroyed" ? localize(borg ? "BorgZoneDestroyedClause" : "CyberlimbDestroyedClause")
+                     : status === "useless"   ? localize(borg ? "BorgZoneDisabledClause"  : "CyberlimbUselessClause") : "";
   await postSavePromptCard({
-    body: localizeParam("CyberlimbHitBody", { limb, dmg: hit, remaining, max, statusClause }),
+    body: localizeParam(borg ? "BorgZoneHitBody" : "CyberlimbHitBody", { limb, dmg: hit, remaining, max, statusClause }),
     speaker: ChatMessage.getSpeaker({ actor })
   });
   return { remaining, max, status };
@@ -103,12 +124,14 @@ export async function absorbCyberlimbHit(actor, zone, dmg, { token = null } = {}
  * `limbStatus`). The GM/owner action behind the sheet's repair button. Returns true when it ran.
  */
 export async function repairCyberlimb(actor, zone) {
-  if (!isCyberlimbZone(actor, zone)) return false;
+  if (!routesToSdp(actor, zone)) return false;   // a borg's Head/Torso are repairable too
   const max = Number(actor?.system?.sdp?.sum?.[zone]) || 0;
   // Restore SDP + remove ONLY this zone's limbStatus entry. A flag object merges on write, so a
   // deleted key would linger — use Foundry's `-=` deletion path to drop just this zone.
+  // Whole-object write (siblings-safe, see absorbCyberlimbHit) + the sticky-flag `-=` delete.
+  const nextCurrent = { ...(actor.system?.sdp?.current ?? {}), [zone]: max };
   await actor.update({
-    [`system.sdp.current.${zone}`]: max,
+    "system.sdp.current": nextCurrent,
     [`flags.${SCOPE}.limbStatus.-=${zone}`]: null
   }, { render: false, fromCyberpunkDamageSystem: true });
   await postSavePromptCard({
@@ -127,9 +150,12 @@ export async function repairCyberlimb(actor, zone) {
 export function cyberlimbSheetStatus(actor) {
   const out = {};
   const limbStatus = actor?.getFlag?.(SCOPE, "limbStatus") ?? actor?.flags?.[SCOPE]?.limbStatus ?? {};
-  for (const zone of LIMB_ZONES) {
+  // A full borg surfaces status/repair for ALL six zones (Head+Torso included); a normal character
+  // only for the four limb zones that can hold a cyberlimb.
+  const zones = isFullBorg(actor) ? ALL_ZONES : LIMB_ZONES;
+  for (const zone of zones) {
     const { max, current } = cyberlimbSdp(actor, zone);
-    if (max <= 0) continue;   // no cyberlimb in this zone
+    if (max <= 0) continue;   // no structure in this zone
     const flag = limbStatus[zone];
     const status = flag === "destroyed" ? "destroyed"
                  : flag === "disabled"  ? "useless"

@@ -22,7 +22,7 @@ import { DamageDialog }                                       from "./DamageDial
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
-import { isCyberlimbZone } from "../mech/cyberlimb.js";
+import { routesToSdp } from "../mech/cyberlimb.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { rollLocation, localize, localizeParam }              from "../utils.js";
@@ -2004,7 +2004,7 @@ function _hookSocketRelay() {
         await target.sheet?.render(false);
 
         const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-        if (taserEnabled && data.stunSaveOnHit && data.resolvedHits.some(h => h.penetrates && !isCyberlimbZone(target, h.location))) {
+        if (taserEnabled && data.stunSaveOnHit && data.resolvedHits.some(h => h.penetrates && !routesToSdp(target, h.location))) {
           await updateTaserState(target, data);
         }
 
