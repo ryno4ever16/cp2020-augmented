@@ -21,7 +21,8 @@
 import { DamageDialog }                                       from "./DamageDialog.js";
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
-import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, ARMOR_MODES } from "./DamageApplicator.js";
+import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
+import { isCyberlimbZone } from "../mech/cyberlimb.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { rollLocation, localize, localizeParam }              from "../utils.js";
@@ -1106,13 +1107,14 @@ function _hookDotEffects() {
               flavor: `🔥 Fire DOT — ${actor.name} burns at ${location}: ${dmg} dmg (after BTM ${fireBtm}; ${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} left)`,
             });
           }
-          const current = Number(actor.system?.damage) || 0;
-          await actor.update({ "system.damage": current + dmg }, { render: false, fromCyberpunkDamageSystem: true });
+          // Route through the shared seam: a burning cyberlimb takes structural SDP damage (no wound
+          // track, no stun save); flesh burns HP and rolls a stun save.
+          const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: dmg, penetrates: true, token });
           if (fireAblate) {
             try { await ablateLocationOnce(actor, location); } catch (e) { /* no ablatable armor here */ }
           }
           actor.sheet?.render(false);
-          await postStunSavePrompt(actor, token);
+          if (!outcome.cyberlimb) await postStunSavePrompt(actor, token);
 
           const newTurnsLeft = turnsLeft - 1;
           if (newTurnsLeft <= 0) {
@@ -1964,10 +1966,12 @@ function _hookSocketRelay() {
           ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
           dryRun:        false,
         });
-        totalApplied = hits.reduce((s, h) => s + h.netDamage, 0);
+        // Cyberlimb hits are soaked into limb SDP, not the wound track — they don't count toward the
+        // post-hit stun/death prompt or the taser cumulative-save state (RAW: no shock/stun).
+        totalApplied = hits.reduce((s, h) => s + (h.cyberlimb ? 0 : h.netDamage), 0);
 
         const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-        if (taserEnabled && data.stunSaveOnHit && hits.some(h => h.penetrates)) {
+        if (taserEnabled && data.stunSaveOnHit && hits.some(h => h.penetrates && !h.cyberlimb)) {
           await updateTaserState(target, data);
         }
 
@@ -1983,43 +1987,24 @@ function _hookSocketRelay() {
         }
 
       } else if (data.mode === "resolved") {
-        // Apply pre-computed per-hit values from the player's damage dialog
-        let currentDamage = Number(target.system.damage) || 0;
-
+        // Apply pre-computed per-hit values from the player's damage dialog through the shared seam
+        // (cyberlimb zones absorb into their SDP; totalApplied counts only flesh HP so the post-hit
+        // stun/death prompt stays honest).
+        const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
         for (const hit of data.resolvedHits) {
-          if (hit.netDamage > 0) {
-            currentDamage += hit.netDamage;
-            totalApplied  += hit.netDamage;
-            await target.update(
-              { "system.damage": currentDamage },
-              { render: false, fromCyberpunkDamageSystem: true }
-            );
-            // New damage clears stabilization — death saves restart (CP2020 p.105)
-            if (target.getFlag?.("cp2020-augmented", "stabilized")) {
-              await target.unsetFlag("cp2020-augmented", "stabilized");
-              await postSavePromptCard({
-                body: localizeParam("StabilizedLostBody", { name: target.name }),
-                speaker: ChatMessage.getSpeaker({ actor: target }),
-              });
-            }
-          }
+          const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken });
+          totalApplied += outcome.applied;
 
-          // Ablation gates on the bullet penetrating, not on the doubled HP value
+          // Ablation gates on the bullet penetrating, not on the doubled HP value.
           if (data.ablate && data.armorMode === ARMOR_MODES.FULL && hit.btmResult > 0) {
             await ablateLocationOnce(target, hit.location);
-          }
-
-          // Limb / head wound severity (CP2020 p.103 + optional Listen Up crippling) — centralized.
-          if (hit.netDamage > 0) {
-            const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
-            await assessWoundSeverity(target, hit.location, hit.netDamage, { token: liveToken });
           }
         }
 
         await target.sheet?.render(false);
 
         const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-        if (taserEnabled && data.stunSaveOnHit && data.resolvedHits.some(h => h.penetrates)) {
+        if (taserEnabled && data.stunSaveOnHit && data.resolvedHits.some(h => h.penetrates && !isCyberlimbZone(target, h.location))) {
           await updateTaserState(target, data);
         }
 

@@ -13,7 +13,7 @@
  * layer via the proportional table (CP2020 p.99).
  */
 
-import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, assessWoundSeverity, ablateLocationOnce } from "./DamageApplicator.js";
+import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, assessWoundSeverity, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { localizeParam } from "../utils.js";
 
@@ -216,32 +216,22 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       return;
     }
 
-    // GM direct path
-    let currentDamage = Number(this.target.system.damage) || 0;
-
+    // GM direct path — route each hit through the shared seam (cyberlimb zones absorb into their SDP,
+    // flesh advances the wound track + runs the limb/head severity check). `applied` counts only the
+    // flesh HP written, so the notification isn't inflated by damage a cyberlimb soaked.
+    let applied = 0;
     for (const hit of resolvedHits) {
-      if (hit.netDamage > 0) {
-        currentDamage += hit.netDamage;
-        await this.target.update(
-          { "system.damage": currentDamage },
-          { render: false, fromCyberpunkDamageSystem: true }
-        );
-      }
+      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates });
+      applied += outcome.applied;
 
-      // Ablation gates on the bullet penetrating, not on the doubled HP value
+      // Ablation gates on the bullet penetrating, not on the doubled HP value.
       if (ablate && armorMode === ARMOR_MODES.FULL && hit.btmResult > 0) {
         await ablateLocationOnce(this.target, hit.location);
-      }
-
-      // Limb / head wound severity (CP2020 p.103 + optional crippling). Previously this only
-      // ran on the auto-apply / socket paths, so the GM dialog silently skipped it — fixed here.
-      if (hit.netDamage > 0) {
-        await assessWoundSeverity(this.target, hit.location, hit.netDamage);
       }
     }
 
     await this.target.sheet?.render(false);
-    ui.notifications.info(localizeParam("DamageApplied", { amount: totalApplied, name: this.target.name }));
+    ui.notifications.info(localizeParam("DamageApplied", { amount: applied, name: this.target.name }));
 
     // Taser flag must be updated BEFORE the save prompt — threshold calculation reads it
     if (this.payload.stunSaveOnHit && resolvedHits.some(h => h.penetrates)) {

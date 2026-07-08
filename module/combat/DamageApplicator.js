@@ -17,6 +17,7 @@ import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
 import { postDeathSavePrompt } from "./save-rolls.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { localize, localizeParam } from "../utils.js";
+import { isCyberlimbZone, absorbCyberlimbHit } from "../mech/cyberlimb.js";
 
 export const ARMOR_MODES = {
   FULL:   "full",
@@ -151,6 +152,10 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   // vehicle resolver). Defense in depth alongside the applyAreaDamages redirect. Vehicle/ACPA actors
   // are the module sub-type "cp2020-augmented.vehicle" (NOT the bare "vehicle", which is an Item type).
   if (target?.type === "cp2020-augmented.vehicle") return;
+  // A cyberlimb zone takes structural SDP damage, not a flesh wound — no limb-loss / death save and
+  // no shock/stun (RAW, Core p.89). The hit was absorbed into the limb's SDP (mech/cyberlimb.js); the
+  // flesh limb-loss logic below must not run for it. Defense in depth alongside applyLocationDamage.
+  if (isCyberlimbZone(target, location)) return;
   let limbLoss = false;
   try { limbLoss = game.settings.get("cp2020-augmented", "limbLossEnabled"); } catch (e) { /* default */ }
   if (!limbLoss) return;
@@ -244,6 +249,39 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
 }
 
 /**
+ * Apply one hit to a personnel target at a location, routing cyberlimb zones to the limb's own SDP
+ * instead of the character's wound track (RAW, Core p.89: machinery — no BTM, no shock/stun save, no
+ * death save, and per the user's call no overflow). The single seam every apply path funnels through
+ * so the routing is identical everywhere. Returns the FLESH HP actually written (0 for a cyberlimb)
+ * so callers can gate the post-hit stun/death prompt honestly, plus the cyberlimb flag.
+ *   netDamage        — flesh HP (post-armor, post-BTM, post-doubling) for a non-cyberlimb hit.
+ *   structuralDamage — post-armor (pre-BTM) damage a cyberlimb absorbs; falls back to netDamage.
+ *   penetrates       — armor was beaten (a stopped hit does no structural damage).
+ * @returns {Promise<{cyberlimb: boolean, applied: number}>}
+ */
+export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null }) {
+  if (isCyberlimbZone(target, location)) {
+    const sdpDmg = penetrates ? Math.max(0, Math.round(Number(structuralDamage ?? netDamage) || 0)) : 0;
+    if (sdpDmg > 0) await absorbCyberlimbHit(target, location, sdpDmg, { token });
+    return { cyberlimb: true, applied: 0 };
+  }
+  if (netDamage > 0) {
+    const current = Number(target.system.damage) || 0;
+    await target.update({ "system.damage": current + netDamage }, { render: false, fromCyberpunkDamageSystem: true });
+    // New damage clears stabilization — death saves restart (CP2020 p.105).
+    if (target.getFlag?.("cp2020-augmented", "stabilized")) {
+      await target.unsetFlag("cp2020-augmented", "stabilized");
+      await postSavePromptCard({
+        body: localizeParam("StabilizedLostBody", { name: target.name }),
+        speaker: ChatMessage.getSpeaker({ actor: target }),
+      });
+    }
+  }
+  await assessWoundSeverity(target, location, netDamage, { token });
+  return { cyberlimb: false, applied: netDamage > 0 ? netDamage : 0 };
+}
+
+/**
  * Apply all hits in an areaDamages object to a target sequentially.
  * @param {Actor}   p.target
  * @param {object}  p.areaDamages
@@ -316,33 +354,18 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     // netDamage centralizes head doubling (p.103) and the optional Listen Up limb model.
     const netDamage = computeNetDamage(damageAfterSP, btm, penetrates, location);
 
-    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates });
+    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: isCyberlimbZone(target, location) });
 
     if (!dryRun) {
-      if (netDamage > 0) {
-        const current = Number(target.system.damage) || 0;
-        await target.update(
-          { "system.damage": current + netDamage },
-          { render: false, fromCyberpunkDamageSystem: true }
-        );
-        // New damage clears stabilization — death saves restart (CP2020 p.105)
-        if (target.getFlag?.("cp2020-augmented", "stabilized")) {
-          await target.unsetFlag("cp2020-augmented", "stabilized");
-          await postSavePromptCard({
-            body: localizeParam("StabilizedLostBody", { name: target.name }),
-            speaker: ChatMessage.getSpeaker({ actor: target }),
-          });
-        }
-      }
+      const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
+      // The shared seam: a cyberlimb zone absorbs into its SDP; flesh advances the wound track and
+      // runs the limb/head severity check (CP2020 p.103 + optional Listen Up crippling).
+      await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken });
 
       if (ablate && armorMode === ARMOR_MODES.FULL && penetrates && netDamage > 0) {
         await ablateLocationOnce(target, spKey);
         liveSP[location] = _deriveLiveSP(target, spKey);
       }
-
-      // Limb / head wound severity (CP2020 p.103 + optional Listen Up crippling) — centralized.
-      const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
-      await assessWoundSeverity(target, location, netDamage, { token: liveToken });
     }
   }
 
