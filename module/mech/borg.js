@@ -18,6 +18,7 @@
  * No import from cyberlimb.js (it imports isFullBorg from here) — kept one-directional to avoid a cycle.
  */
 import { localize, localizeParam, combineArmorSP } from "../utils.js";
+import { btmFromBT } from "../lookups.js";
 import { postSavePromptCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
@@ -71,7 +72,13 @@ export function isFullBorg(actor) {
  *     proportionally (p.99) exactly as cover is combined at damage time — worn armor over the chassis
  *     still stacks, and AP still halves it (chassis armor is armor). This also surfaces the SP on the
  *     sheet's per-zone armor column for free.
- * A manual-flag borg with no body item keeps whatever `system.sdp`/`hitLocations` already hold.
+ *  3. Physical stats REF/MA/BODY → SET authoritatively on the already-computed totals (`stats.ref`,
+ *     `stats.ma`, `stats.bt`), with the movement/carry/BTM dependents re-derived, when the body item
+ *     carries a `borgBody.stats` block. RAW: a full conversion's physical stats ARE the chassis's
+ *     (baseline REF 10 / MA 10 / BODY 12, bought up per model). Mental stats (INT/COOL/…) untouched.
+ *     This wrap runs after the base AND after the Q7 moddies wrap, so the chassis value is the final
+ *     word. Only bodies with a `stats` block set stats — the SDP/SP-only bodies leave stats alone.
+ * A manual-flag borg with no body item keeps whatever `system.sdp`/`hitLocations`/`stats` already hold.
  */
 export function applyBorgBody(actor) {
   const bb = borgBodyOf(actor);
@@ -95,6 +102,37 @@ export function applyBorgBody(actor) {
     if (limbStatus[zone] === "destroyed") { sdp.current[zone] = 0; continue; }
     const rem = Number(stored[zone]);
     sdp.current[zone] = (Number.isFinite(rem) && rem > 0 && rem <= max) ? rem : max;
+  }
+
+  applyBorgStats(actor, bb.stats);
+}
+
+/**
+ * SET the chassis physical stats onto the actor's already-computed totals and re-derive the movement
+ * and body-type dependents (run/leap, carry/lift, BTM) the base computes from MA/BODY. `stats` is the
+ * body item's `borgBody.stats` block `{ ref, ma, body }` (BODY maps to the `bt` stat key); each is
+ * optional. Pure-ish: mutates prepared data only, never persists. No-op without a stats block.
+ */
+export function applyBorgStats(actor, stats) {
+  if (!stats) return;
+  const s = actor?.system?.stats;
+  if (!s) return;
+  const setStat = (key, val) => {
+    if (val === undefined || val === null || s[key] === undefined) return;
+    const n = Number(val);
+    if (Number.isFinite(n)) s[key].total = n;
+  };
+  setStat("ref", stats.ref);
+  setStat("ma", stats.ma);
+  setStat("bt", stats.body);
+  if (stats.ma !== undefined && s.ma) {
+    s.ma.run = s.ma.total * 3;
+    s.ma.leap = Math.floor(s.ma.run / 4);
+  }
+  if (stats.body !== undefined && s.bt) {
+    s.bt.carry = s.bt.total * 10;
+    s.bt.lift = s.bt.total * 40;
+    s.bt.modifier = btmFromBT(s.bt.total);
   }
 }
 
