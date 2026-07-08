@@ -75,8 +75,85 @@
           "lArm": 3,
           "rLeg": 1,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 15,
+          "ma": 10,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Locator Beacon (100km)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Locator beacon with a 100 km broadcast range.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "Visual Optics Package (Teleoptics, Image Enhancement, Anti-Dazzle, Times Square+)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "4",
+          "description": "Cyberoptic visual suite bundling Teleoptics, Image Enhancement, Anti-Dazzle, and Times Square+.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "Survival Blade (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Retractable survival blade (1D6+7 damage).",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": true
+        },
+        {
+          "name": "Leg Holster (Right)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Concealed leg holster for a sidearm.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": true
+        },
+        {
+          "name": "Parachute",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Deployable body-mounted parachute.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "Gyroscope",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Internal gyroscope for balance stabilization.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "2 Extra Interface-Plug Sets",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Two additional sets of interface plugs.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

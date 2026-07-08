@@ -75,8 +75,145 @@
           "lArm": 0,
           "rLeg": 1,
           "lLeg": 1
+        },
+        "stats": {
+          "ref": 14,
+          "ma": 10,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Cyberoptics (Video Imager, Net-Vision, Times Sq+, MicroVideo)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "",
+          "description": "Cybernetic optics package housing Video Imager, Net-Vision, Times Sq+, and MicroVideo options.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Cyberaudio (Micro Recorder, Phone Splice, Scrambler, Tight-Beam Radio)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "",
+          "description": "Cybernetic audio suite with Micro Recorder, Phone Splice, Scrambler, and Tight-Beam Radio options.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "INT-3 Computer",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "5",
+          "description": "Onboard computer providing an internal INT of 3 for processing.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "DataShielding",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "",
+          "description": "Hardening that shields onboard data and neural systems from intrusion or damage.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Wet-Drive Access",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "",
+          "description": "Neural interface allowing direct wet-drive (brain-to-net) access.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Techscanner + CTD CompuMods",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "0.5",
+          "description": "Techscanner and CTD compumods for internal technical scanning and analysis.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Chip Ports",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Neural chip ports for loading skill and program chips.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Chronometer",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Internal chronometer providing precise timekeeping.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Cybermodem Link",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Built-in link to a cybermodem for net access.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Cellular Cybermodem",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Integrated cellular cybermodem for wireless net connection.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Extra Databanks (20MU/limb)",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "4",
+          "description": "Additional onboard data storage (20MU per limb).",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Auto-Punchout",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "System that automatically jacks the 'borg out of the net in an emergency.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Rip Switch",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Emergency cutoff switch to instantly sever the neural/net connection.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

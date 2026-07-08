@@ -75,8 +75,75 @@
           "lArm": 3,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 11,
+          "ma": 10,
+          "body": 14
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Radar (100m)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Radar detector with 100m range.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Cyberaudio Suite (Radio/Amplified Hearing/Level Damper/Sound Editor)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "3",
+          "description": "Cyberaudio package with Radio, Amplified Hearing, Level Damper, and Sound Editor.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Waterhose System",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Built-in waterhose system.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "CO2 Fire Extinguisher",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Onboard CO2 fire extinguisher.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Pain Editor",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Neural pain editor that suppresses pain response.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Light Bars",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Mounted spotlight light bars.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

@@ -75,8 +75,65 @@
           "lArm": 2,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 10,
+          "ma": 10,
+          "body": 15
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Sonar (1km)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Sonar detection with a 1km range.",
+          "source": "Chromebook 2 p.68",
+          "ambiguous": false
+        },
+        {
+          "name": "Spotlights (100m)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Spotlights with a 100m range.",
+          "source": "Chromebook 2 p.68",
+          "ambiguous": false
+        },
+        {
+          "name": "Electrified Hull",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Electrified hull that shocks anyone touching it (1D6+2 damage plus stun -3).",
+          "source": "Chromebook 2 p.68",
+          "ambiguous": false
+        },
+        {
+          "name": "Caterpillar Drive (Right)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Caterpillar track drive for underwater propulsion (30mph underwater).",
+          "source": "Chromebook 2 p.68",
+          "ambiguous": true
+        },
+        {
+          "name": "Long-Range Radio (50km)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Long-range radio with a 50km range.",
+          "source": "Chromebook 2 p.68",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

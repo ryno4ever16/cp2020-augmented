@@ -81,8 +81,185 @@
           "lArm": 0,
           "rLeg": 0,
           "lLeg": 0
+        },
+        "stats": {
+          "ref": 12,
+          "ma": 20,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Front Optic Mount (5 optics: Lowlight/Thermo/Telescopic/IR/Times Sq+)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "",
+          "description": "Front-mounted optic package housing five cyberoptics (Lowlight, Thermo, Telescopic, IR, Times Square+).",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Head + Shoulder Sensory-Boom (optics/audio)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "",
+          "description": "Head- and shoulder-mounted sensory boom carrying both optics and audio sensors.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Acoustic Alarm",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "6",
+          "description": "Acoustic alarm sensor that alerts to detected sound.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": true
+        },
+        {
+          "name": "Military Radio",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1.5",
+          "description": "Built-in military radio transceiver.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Parabolic Mic",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Parabolic microphone for long-range audio pickup.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Tight-Beam Laser Comm",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Tight-beam laser communicator for secure line-of-sight comms.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Cellular Phone",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Integrated cellular phone.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Satellite Uplink",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1.5",
+          "description": "Satellite uplink for global communications.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Raser Scanner",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "3",
+          "description": "Raser scanner (radar/laser scanning sensor).",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "A/V Recorder",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "0.5",
+          "description": "Audio/visual recorder for capturing the sensory feed.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": true
+        },
+        {
+          "name": "Sniffer",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "4",
+          "description": "Chemical sniffer for detecting airborne substances.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Radiation Detector",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Radiation detector.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Remote Targeting Link",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "0.5",
+          "description": "Remote targeting link for guiding weapons fire.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": true
+        },
+        {
+          "name": "Motion Detectors",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Motion detectors.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Magnetometer",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Magnetometer for detecting magnetic fields and metal.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Quick-Change Weapon Mount (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "CyberArm",
+          "humanityCost": "7",
+          "description": "Quick-change weapon mount in the right forearm for swappable weapons.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "name": "Variable-Spectrum Spotlight",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "",
+          "description": "Variable-spectrum spotlight.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

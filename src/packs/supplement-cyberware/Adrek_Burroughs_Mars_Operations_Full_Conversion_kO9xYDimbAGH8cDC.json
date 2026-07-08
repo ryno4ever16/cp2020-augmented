@@ -75,9 +75,76 @@
           "lArm": 3,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 10,
+          "ma": 10,
+          "body": 12
         }
       },
-      "manufacturer": "Adrek Robotics"
+      "manufacturer": "Adrek Robotics",
+      "loadout": [
+        {
+          "name": "Radio Beacon/Detector (100km)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Radio beacon and detector with a 100km range.",
+          "source": "Chromebook 3 p.98",
+          "ambiguous": false
+        },
+        {
+          "name": "Goop-Ball Launcher (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "An arm-mounted launcher that fires goop balls.",
+          "source": "Chromebook 3 p.98",
+          "ambiguous": true
+        },
+        {
+          "name": "Radiation Shielding (6 RSP)",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Body shielding against radiation (6 RSP).",
+          "source": "Chromebook 3 p.98",
+          "ambiguous": false
+        },
+        {
+          "name": "Sand Feet (Left)",
+          "mountZone": "Leg",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Feet adapted for movement over sand.",
+          "source": "Chromebook 3 p.98",
+          "ambiguous": false
+        },
+        {
+          "name": "Sand Feet (Right)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Feet adapted for movement over sand.",
+          "source": "Chromebook 3 p.98",
+          "ambiguous": false
+        },
+        {
+          "name": "Temperature Control (+5 SP vs heat)",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Body temperature control granting +5 SP versus heat.",
+          "source": "Chromebook 3 p.98",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

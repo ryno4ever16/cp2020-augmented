@@ -75,8 +75,232 @@
           "lArm": 4,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 15,
+          "ma": 25,
+          "body": 20
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Front Optic Mount (5 optics)",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "23",
+          "source": "Chromebook 2 p.82",
+          "description": "Front optic mount carrying five cyberoptics: Night-Vision, Thermal, Long-Range, IR-Vision, and Heads-Up. Each optic also has Image Enhancement, Anti-Dazzle, and a Targeting Scope."
+        },
+        {
+          "name": "Cyberaudio Suite",
+          "mountZone": "Head",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "5",
+          "source": "Chromebook 2 p.82",
+          "description": "Amplified Hearing, Level Damper, and Enhanced Range; Long-Range Radio (25km, 6-freq, Scrambler); Radar Detector."
+        },
+        {
+          "name": "Right Sensory Boom",
+          "mountZone": "Head",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.82",
+          "description": "Right extensible sensory boom: video and audio transmitter."
+        },
+        {
+          "name": "Left Sensory Boom",
+          "mountZone": "Head",
+          "humanityCost": "3",
+          "source": "Chromebook 2 p.82",
+          "description": "Left extensible sensory boom: video imager and tight-beam comm."
+        },
+        {
+          "name": "Sniffer",
+          "mountZone": "Head",
+          "humanityCost": "4",
+          "source": "Chromebook 2 p.82",
+          "description": "Olfactory Booster and Chemical Analyzer."
+        },
+        {
+          "name": "Sonar Scanner",
+          "mountZone": "Head",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.82",
+          "description": "120m motion-sensing sonar scanner."
+        },
+        {
+          "name": "Radar Sensor",
+          "mountZone": "Head",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.82",
+          "description": "1km radar sensor."
+        },
+        {
+          "name": "Radiation Detector",
+          "mountZone": "Head",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.82",
+          "description": "10m radiation detector."
+        },
+        {
+          "name": "Quick-Change Weapon Mount (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "CyberArm",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Right-arm quick-change weapon mount (.22 through grenade launcher / railcannon). No weapon pre-installed."
+        },
+        {
+          "name": "Quick-Change Weapon Mount (Left Arm)",
+          "mountZone": "Arm",
+          "side": "Left",
+          "cyberwareType": "CyberArm",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Left-arm quick-change weapon mount (.22 through grenade launcher / railcannon). No weapon pre-installed."
+        },
+        {
+          "name": "Quick-Change Weapon Mount (Right Leg)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "CyberLeg",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Right-leg quick-change weapon mount. No weapon pre-installed."
+        },
+        {
+          "name": "Quick-Change Weapon Mount (Left Leg)",
+          "mountZone": "Leg",
+          "side": "Left",
+          "cyberwareType": "CyberLeg",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Left-leg quick-change weapon mount. No weapon pre-installed."
+        },
+        {
+          "name": "Interchangeable Biopod + Behavioral Inhibitor",
+          "mountZone": "Nervous",
+          "humanityCost": "3D6",
+          "source": "Chromebook 2 p.83",
+          "description": "Interchangeable biopod (transferable brain housing) with a behavioral inhibitor."
+        },
+        {
+          "name": "Chipware Socket",
+          "mountZone": "Nervous",
+          "humanityCost": "1",
+          "source": "Chromebook 2 p.83",
+          "description": "Chipware socket."
+        },
+        {
+          "name": "Pain Editor",
+          "mountZone": "Nervous",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Pain editor."
+        },
+        {
+          "name": "Ambidexterity Sub-Processor",
+          "mountZone": "Nervous",
+          "humanityCost": "1",
+          "source": "Chromebook 2 p.83",
+          "description": "Ambidexterity sub-processor."
+        },
+        {
+          "name": "Combat Crystal",
+          "mountZone": "Nervous",
+          "humanityCost": "4",
+          "source": "Chromebook 2 p.83",
+          "description": "Coordinates 5+ Dragoons: +1 Initiative/Attack, +2 Awareness/Defense when linked."
+        },
+        {
+          "name": "IR Thermal Dampening",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Infrared thermal dampening."
+        },
+        {
+          "name": "Black Box Recorder",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "1",
+          "source": "Chromebook 2 p.83",
+          "description": "Black-box event recorder."
+        },
+        {
+          "name": "Environmental Assimilation",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "24 camouflage patterns; -2 to others' Awareness to spot."
+        },
+        {
+          "name": "Autoinjector",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "1",
+          "source": "Chromebook 2 p.83",
+          "description": "Autoinjector loaded with psychoactives."
+        },
+        {
+          "name": "Ammo Hopper",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Ammo hopper (20x magazine capacity)."
+        },
+        {
+          "name": "Locator Beacon",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "1",
+          "source": "Chromebook 2 p.83",
+          "description": "100km locator beacon."
+        },
+        {
+          "name": "IFF Transponder",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "0",
+          "source": "Chromebook 2 p.83",
+          "description": "Identify-friend-or-foe transponder."
+        },
+        {
+          "name": "Satellite Link + GPS",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "3",
+          "source": "Chromebook 2 p.83",
+          "description": "Satellite uplink with GPS."
+        },
+        {
+          "name": "Micro-Computer",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.83",
+          "description": "Onboard micro-computer."
+        },
+        {
+          "name": "EMP/Microwave Shielding",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "6",
+          "source": "Chromebook 2 p.83",
+          "description": "EMP and microwave shielding."
+        },
+        {
+          "name": "Chronometer",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberTorso",
+          "humanityCost": "0",
+          "source": "Chromebook 2 p.83",
+          "description": "Internal chronometer."
+        }
+      ]
     }
   },
   "_stats": {},

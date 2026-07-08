@@ -75,8 +75,95 @@
           "lArm": 1,
           "rLeg": 1,
           "lLeg": 1
+        },
+        "stats": {
+          "ref": 12,
+          "ma": 15,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Cyberoptic Package (Targeting/Video/Thermo/Lowlite/AntiDazzle)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "4",
+          "description": "Cyberoptic package with Targeting, Video, Thermographic, Lowlite, and AntiDazzle options.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Cyberaudio Package (VSA/Radio/Digital Recorder)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "3",
+          "description": "Cyberaudio package with Voice Stress Analyzer, Radio, and Digital Recorder.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Leg Holster (Right)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Concealed leg holster for storing a weapon.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": true
+        },
+        {
+          "name": "Grenade Storage",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Internal storage compartment for grenades.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Taser Grips (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Taser grips built into the hand to deliver a stunning electric shock.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": true
+        },
+        {
+          "name": "Black Book Micro-Computer",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Onboard Black Book micro-computer for data processing and storage.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Striptape Dispenser",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Body-mounted striptape dispenser.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Light Bars",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Built-in light bars (spotlights) for illumination.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": true
+        }
+      ]
     }
   },
   "_stats": {},

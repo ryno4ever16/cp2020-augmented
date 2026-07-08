@@ -75,8 +75,175 @@
           "lArm": 1,
           "rLeg": 0,
           "lLeg": 0
+        },
+        "stats": {
+          "ref": 11,
+          "ma": 10,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Radar (2km)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Radar detector/scanner with a 2km range.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": false
+        },
+        {
+          "name": "Radio Beacon (100km)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Radio beacon with a 100km range.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": false
+        },
+        {
+          "name": "Flare Compensation",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Flare compensation to protect vision against sudden bright light.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": false
+        },
+        {
+          "name": "Spotlights (500m)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Spotlights with a 500m throw.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": false
+        },
+        {
+          "name": "Toolhand (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Tool-equipped cyberhand mounted on the arm.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Dual-Purpose Limb (Left Leg)",
+          "mountZone": "Leg",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Leg that doubles as an arm/manipulator (legs as arms, -3 REF).",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Dual-Purpose Limb (Right Leg)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "",
+          "description": "Leg that doubles as an arm/manipulator (legs as arms, -3 REF).",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Goop-Ball Launcher (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Arm-mounted goop-ball launcher.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Gyroscope",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Internal gyroscope for balance stabilization.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": false
+        },
+        {
+          "name": "Maneuver Verniers + Back Thruster (Right Leg)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Maneuver verniers paired with a back thruster for propulsion and attitude control.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Grapple Line (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Arm-mounted grapple line.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Magnetic Hand (Left Arm)",
+          "mountZone": "Arm",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Magnetic hand for gripping ferrous surfaces.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Magnetic Hand (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Magnetic hand for gripping ferrous surfaces.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Magnetic Foot (Left Leg)",
+          "mountZone": "Leg",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Magnetic foot for clinging to ferrous surfaces.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "Magnetic Foot (Right Leg)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Magnetic foot for clinging to ferrous surfaces.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": true
+        },
+        {
+          "name": "EM Shielding",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "EM shielding to protect internal systems against electromagnetic interference.",
+          "source": "Chromebook 2 p.70",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

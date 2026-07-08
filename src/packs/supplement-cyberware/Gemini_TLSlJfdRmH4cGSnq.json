@@ -75,8 +75,35 @@
           "lArm": 1,
           "rLeg": 1,
           "lLeg": 1
+        },
+        "stats": {
+          "ref": 10,
+          "ma": 10,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Sexual Implant",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Sexual implant for the realskin infiltration body.",
+          "source": "Chromebook 2 p.77",
+          "ambiguous": true
+        },
+        {
+          "name": "Disguise Option (+5 Disguise)",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Disguise option granting +5 to Disguise (1000eb).",
+          "source": "Chromebook 2 p.77",
+          "ambiguous": true
+        }
+      ]
     }
   },
   "_stats": {},

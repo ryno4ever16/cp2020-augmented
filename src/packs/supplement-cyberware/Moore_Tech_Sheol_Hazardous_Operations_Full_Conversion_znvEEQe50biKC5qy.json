@@ -75,9 +75,96 @@
           "lArm": 2,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 10,
+          "ma": 10,
+          "body": 18
         }
       },
-      "manufacturer": "Moore Technologies"
+      "manufacturer": "Moore Technologies",
+      "loadout": [
+        {
+          "name": "Times Square Plus",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "2",
+          "description": "Times Square Plus optical display option (in-eye scrolling text/graphic marquee).",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Radiation Detector (10m)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "",
+          "description": "Radiation detector with a 10m detection range.",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Toxin Scanner (+3 chem)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Toxin scanner giving +3 to chemical analysis.",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Radiation Shielding (RSP 10)",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Radiation shielding (RSP 10).",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Toxin Shielding",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Toxin shielding for the body hull.",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Acid Shielding",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Acid shielding for the body hull.",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Squirters (Left Arm, chemical weapon)",
+          "mountZone": "Arm",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Left-arm squirter firing a chemical weapon.",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        },
+        {
+          "name": "Squirters (Right Arm, chemical weapon)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Right-arm squirter firing a chemical weapon.",
+          "source": "Chromebook 3 p.93",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

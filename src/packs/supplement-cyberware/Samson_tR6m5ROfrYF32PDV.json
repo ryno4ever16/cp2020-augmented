@@ -75,8 +75,95 @@
           "lArm": 2,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 10,
+          "ma": 10,
+          "body": 18
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Times Sq+",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "2",
+          "description": "Times Square Plus cyberoptic display/readout option.",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": false
+        },
+        {
+          "name": "Anti-Dazzle",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "1",
+          "description": "Anti-Dazzle cyberoptic option (protection against blinding flashes/glare).",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": false
+        },
+        {
+          "name": "Radiation Detector",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Radiation detector sensor housed in the sensor suite.",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": false
+        },
+        {
+          "name": "Arc-Welder (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Arm-mounted arc-welder (4D6+2 damage, halves SP).",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": true
+        },
+        {
+          "name": "Techscanner",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Techscanner compumod (+3 TECH).",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": true
+        },
+        {
+          "name": "Toolhand (Left)",
+          "mountZone": "Arm",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Toolhand attachment (multi-tool hand).",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": false
+        },
+        {
+          "name": "Toolhand (Right)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Toolhand attachment (multi-tool hand).",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": false
+        },
+        {
+          "name": "Radiation Shielding",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Radiation shielding for the body/hull.",
+          "source": "Chromebook 2 p.80",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

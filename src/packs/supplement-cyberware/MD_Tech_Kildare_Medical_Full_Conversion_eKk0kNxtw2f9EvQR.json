@@ -75,8 +75,165 @@
           "lArm": 2,
           "rLeg": 2,
           "lLeg": 2
+        },
+        "stats": {
+          "ref": 10,
+          "ma": 10,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Medical Scanner (+2 Diagnose)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Onboard medical scanner granting +2 to the Diagnose skill.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": true
+        },
+        {
+          "name": "Times Square Marquee",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "2",
+          "description": "Times Square Marquee scrolling-text cyberoptic display.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Micro-Optics",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "1",
+          "description": "Micro-optics cyberoptic mount.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Enhanced Thermographic",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "1",
+          "description": "Enhanced thermographic (thermal-imaging) cyberoptic.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Phone Splice",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "1",
+          "description": "Phone splice routing phone comms through the cyberaudio suite.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Radio Link",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "1",
+          "description": "Radio link comm option in the cyberaudio suite.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Image Enhancement (+2 Awareness)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "2",
+          "description": "Image-enhancement cyberoptic granting +2 to Awareness.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Amplified Hearing (+2)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "1",
+          "description": "Amplified-hearing cyberaudio option (+2).",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Stim System",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Onboard stimulant system.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Medical Shielding",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Medical shielding protecting the body/hull systems.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Medical Hands (Left)",
+          "mountZone": "Arm",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "4",
+          "description": "Left medical cyberhand (laser scalpel/bone saw/injector).",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Medical Hands (Right)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "4",
+          "description": "Right medical cyberhand (laser scalpel/bone saw/injector).",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        },
+        {
+          "name": "Injector Reservoir (Left, 4/arm)",
+          "mountZone": "Arm",
+          "side": "Left",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Left-arm injector reservoir holding 4 doses per arm.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": true
+        },
+        {
+          "name": "Injector Reservoir (Right, 4/arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Right-arm injector reservoir holding 4 doses per arm.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": true
+        },
+        {
+          "name": "Blood/IV Supply",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Onboard blood/IV supply.",
+          "source": "Chromebook 3 p.95",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},

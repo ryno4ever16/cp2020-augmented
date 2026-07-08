@@ -75,8 +75,175 @@
           "lArm": 2,
           "rLeg": 1,
           "lLeg": 1
+        },
+        "stats": {
+          "ref": 13,
+          "ma": 13,
+          "body": 12
         }
-      }
+      },
+      "loadout": [
+        {
+          "name": "Audio Package (Amp Hearing / Level Damper / Radio+Scrambler / Homing Tracer)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "humanityCost": "4",
+          "description": "Audio package: Amplified Hearing, Level Damper, Radio + Scrambler, and Homing Tracer.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Optic Package (Thermo / Targeting / Low-Lite / AntiDazzle / Times Sq+)",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "humanityCost": "6",
+          "description": "Optic package: Thermograph, Targeting, Low-Lite, Anti-Dazzle, and Times Square Plus.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Sensory Boom",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "3",
+          "description": "Extendable sensory boom.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Retractable Monoblade (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Retractable monoblade (2d6+7 damage).",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": true
+        },
+        {
+          "name": "Silenced Pop-up 10mm (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Silenced pop-up 10mm pistol.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": true
+        },
+        {
+          "name": "Modular Cyberhand (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Modular cyberhand.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": true
+        },
+        {
+          "name": "Venomhand (Right Arm)",
+          "mountZone": "Arm",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Venomhand poison-injector hand.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": true
+        },
+        {
+          "name": "Secret Spaces",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Hidden secret storage spaces.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Gyro-Balancer",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Gyro-balancer for stability.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Grip Foot (Right Leg)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Grip foot.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": true
+        },
+        {
+          "name": "Stealth Foot (Right Leg)",
+          "mountZone": "Leg",
+          "side": "Right",
+          "cyberwareType": "",
+          "humanityCost": "1",
+          "description": "Stealth foot.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": true
+        },
+        {
+          "name": "Pain Editor",
+          "mountZone": "Nervous",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Pain editor.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Chameleon Covering",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "0",
+          "description": "Chameleon covering (-4 to Awareness to spot).",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "ECM Generator",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "ECM generator.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "Sound Canceller",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "Sound canceller.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        },
+        {
+          "name": "IR Thermal Dampening",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "humanityCost": "2",
+          "description": "IR thermal dampening.",
+          "source": "Chromebook 2 p.72",
+          "ambiguous": false
+        }
+      ]
     }
   },
   "_stats": {},
