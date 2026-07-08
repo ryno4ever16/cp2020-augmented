@@ -45,6 +45,7 @@ import { registerMechContainer } from "./mech/container.js";
 import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
+import { registerMechLoadout } from "./mech/loadout.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
 
@@ -326,6 +327,9 @@ Hooks.once("ready", function () {
   registerMechChipGrant();
   // Q6 containers: uninstall cascade — deleting a container detaches its children to loose gear.
   registerMechContainer();
+  // Loadouts: a body carrying a `loadout` manifest (e.g. a full 'borg) materializes its prebuilt
+  // options as real cyberware on install, and removes them on uninstall/delete. Initiating-owner writes.
+  registerMechLoadout();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the
