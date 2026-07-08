@@ -468,15 +468,23 @@ export async function rollMartialAttack(actor, {
     const target = (game.user?.targets?.size === 1) ? game.user.targets.first() : null;
     const targetActor = target?.actor ?? null;
     if (targetActor) {
-      const def = await rollMeleeDefense(targetActor);
+      // A grapple/hold/sweep is an attack AGAINST the target, so a declared dodge helps evade it just
+      // like a struck blow (Core p.102: "-2 to any attacks made against them" — with the defender's
+      // martial style Dodge bonus, same as the damaging path). Escape is the actor freeing THEMSELVES,
+      // not an attack on the target, so the target's dodge does not apply to it. Parry is intentionally
+      // not applied here: RAW parry "expends damage against the parrying object", and these maneuvers
+      // deal no damage, so there is nothing to parry — only a dodge evades a grab.
+      const isDodging = action !== martialActions.escape && !!targetActor.getFlag?.(SCOPE, "dodging");
+      const def = await rollMeleeDefense(targetActor, { dodging: isDodging });
       rolls.push(def.roll);
-      const hits = attackRoll.total > def.total;
+      const dodgeBonus = declaredDodgeBonus(isDodging, def.dodgeKeyBonus);
+      const hits = attackRoll.total > def.total + dodgeBonus;
       cardData.contested = {
         defenderName: targetActor.name,
         skillName: def.skillName,
         skillVal: def.skillVal,
         ref: def.ref,
-        dodgeBonus: 0,
+        dodgeBonus,
         parried: false,
         hits,
         defenseRender: await def.roll.render(),
