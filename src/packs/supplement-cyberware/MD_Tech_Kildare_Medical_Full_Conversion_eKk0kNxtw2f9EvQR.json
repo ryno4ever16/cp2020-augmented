@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 3). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 25 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 0&1, audio 4; Torso 3; R.Arm 1/L.Arm 2; R.Leg 2/L.Leg 2.</p><p><strong>Prebuilt options:</strong> medical scanner/micro-optics/thermographic/image-enh/amp-hearing; times-sq+; phone splice + radio; stim system; medical shielding; L+R medical hands (laser scalpel/bone saw/injectors); injector reservoirs (4/arm); blood/IV supply.</p>",
     "cost": 46000,
     "weight": 0,
     "equipped": false,
@@ -46,6 +46,36 @@
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
         "dirty": true
+      },
+      "borgBody": {
+        "sp": {
+          "Head": 25,
+          "Torso": 25,
+          "lArm": 25,
+          "rArm": 25,
+          "lLeg": 25,
+          "rLeg": 25
+        },
+        "sdp": {
+          "Head": 30,
+          "Torso": 40,
+          "lArm": 30,
+          "rArm": 30,
+          "lLeg": 30,
+          "rLeg": 30
+        },
+        "optionSpaces": {
+          "optic": [
+            0,
+            1
+          ],
+          "audio": 4,
+          "Torso": 3,
+          "rArm": 1,
+          "lArm": 2,
+          "rLeg": 2,
+          "lLeg": 2
+        }
       }
     }
   },

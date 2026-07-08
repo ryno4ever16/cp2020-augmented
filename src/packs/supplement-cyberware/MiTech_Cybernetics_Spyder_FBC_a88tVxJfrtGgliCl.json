@@ -5,14 +5,14 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Full-body conversion; index ✓118,110. Spec pp.~98-102: BODY 12, MA 12/20 versions, run 40mph, 6 limbs w/ SP25-30; sensor + cyberoptic packages. | [Audit row +223 — Chromebook 3 p.101]</p>",
-    "cost": 118110,
+    "notes": "<p>Full-body conversion; index ✓118,110. Spec pp.~98-102: BODY 12, MA 12/20 versions, run 40mph, 6 limbs w/ SP25-30; sensor + cyberoptic packages. | [Audit row +223 — Chromebook 3 p.101]</p><p><strong>Full Body Conversion</strong> (Chromebook 3 p.101). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 30 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 0&0, audio 0; Torso 4; R.Arm 0/L.Arm 0; R.Leg 0/L.Leg 0.</p><p><strong>Prebuilt options:</strong> Maximum-Metal recon suite: 5-optic front mount; head + shoulder sensory booms; acoustic alarm; military radio; parabolic mic; tight-beam laser comm; cellular phone; satellite uplink; raser scanner; A/V recorder; sniffer; radiation detector; remote targeting link; motion detectors; magnetometer; quick-change mount.</p>",
+    "cost": 118105,
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 3 p.101",
     "lastOwnerId": "",
     "surgCode": "",
-    "humanityCost": "",
+    "humanityCost": "39D6",
     "cyberwareType": "",
     "cyberwareSubtype": "",
     "abbrev": "",
@@ -52,6 +52,36 @@
         "weightSkimNotReviewed": true,
         "ledger": "AUDIT-WALK-2026-07",
         "dirty": true
+      },
+      "borgBody": {
+        "sp": {
+          "Head": 30,
+          "Torso": 30,
+          "lArm": 30,
+          "rArm": 30,
+          "lLeg": 30,
+          "rLeg": 30
+        },
+        "sdp": {
+          "Head": 30,
+          "Torso": 40,
+          "lArm": 30,
+          "rArm": 30,
+          "lLeg": 30,
+          "rLeg": 30
+        },
+        "optionSpaces": {
+          "optic": [
+            0,
+            0
+          ],
+          "audio": 0,
+          "Torso": 4,
+          "rArm": 0,
+          "lArm": 0,
+          "rLeg": 0,
+          "lLeg": 0
+        }
       }
     }
   },

@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 25 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 4&4, audio 6; Torso 2; R.Arm 1/L.Arm 1; R.Leg 1/L.Leg 1.</p><p><strong>Prebuilt options:</strong> realskin/exoderm infiltration body; sexual implant; +5 Disguise option (1000eb).</p>",
     "cost": 55000,
     "weight": 0,
     "equipped": false,
@@ -46,6 +46,36 @@
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
         "dirty": true
+      },
+      "borgBody": {
+        "sp": {
+          "Head": 25,
+          "Torso": 25,
+          "lArm": 25,
+          "rArm": 25,
+          "lLeg": 25,
+          "rLeg": 25
+        },
+        "sdp": {
+          "Head": 30,
+          "Torso": 40,
+          "lArm": 30,
+          "rArm": 30,
+          "lLeg": 30,
+          "rLeg": 30
+        },
+        "optionSpaces": {
+          "optic": [
+            4,
+            4
+          ],
+          "audio": 6,
+          "Torso": 2,
+          "rArm": 1,
+          "lArm": 1,
+          "rLeg": 1,
+          "lLeg": 1
+        }
       }
     }
   },

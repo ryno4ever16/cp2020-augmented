@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 40 all zones; SDP disabled/destroyed = Head/limbs 40/50, Torso 50/60.</p><p><strong>Option spaces:</strong> Head optic 0&0, audio 0; Torso 0; R.Arm 4/L.Arm 4; R.Leg 2/L.Leg 2.</p><p><strong>Prebuilt options:</strong> 5-optic front mount; twin sensory booms; sniffer/sonar/radar/radiation detector; ALL FOUR limbs on Quick-Change weapon mounts (.22 -> railcannon); interchangeable biopod + behavioral inhibitor; chipware socket; pain editor; ambidexterity sub-processor; combat crystal; IR thermal dam; black-box recorder; environmental assimilation (24 camo); autoinjector; ammo hopper (20x mag); locator beacon; IFF transponder; satellite link + GPS; micro-computer; EMP shielding.</p>",
     "cost": 120000,
     "weight": 0,
     "equipped": false,
@@ -46,6 +46,36 @@
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
         "dirty": true
+      },
+      "borgBody": {
+        "sp": {
+          "Head": 40,
+          "Torso": 40,
+          "lArm": 40,
+          "rArm": 40,
+          "lLeg": 40,
+          "rLeg": 40
+        },
+        "sdp": {
+          "Head": 50,
+          "Torso": 60,
+          "lArm": 50,
+          "rArm": 50,
+          "lLeg": 50,
+          "rLeg": 50
+        },
+        "optionSpaces": {
+          "optic": [
+            0,
+            0
+          ],
+          "audio": 0,
+          "Torso": 0,
+          "rArm": 4,
+          "lArm": 4,
+          "rLeg": 2,
+          "lLeg": 2
+        }
       }
     }
   },

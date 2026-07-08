@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 3). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 35 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 4&4, audio 4; Torso 4; R.Arm 3/L.Arm 3; R.Leg 2/L.Leg 2.</p><p><strong>Prebuilt options:</strong> radio beacon/detector 100km; goop-ball launcher; radiation shielding (6 RSP); sand feet; temperature control (+5 SP vs heat).</p>",
     "cost": 42000,
     "weight": 0,
     "equipped": false,
@@ -46,7 +46,38 @@
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
         "dirty": true
-      }
+      },
+      "borgBody": {
+        "sp": {
+          "Head": 35,
+          "Torso": 35,
+          "lArm": 35,
+          "rArm": 35,
+          "lLeg": 35,
+          "rLeg": 35
+        },
+        "sdp": {
+          "Head": 30,
+          "Torso": 40,
+          "lArm": 30,
+          "rArm": 30,
+          "lLeg": 30,
+          "rLeg": 30
+        },
+        "optionSpaces": {
+          "optic": [
+            4,
+            4
+          ],
+          "audio": 4,
+          "Torso": 4,
+          "rArm": 3,
+          "lArm": 3,
+          "rLeg": 2,
+          "lLeg": 2
+        }
+      },
+      "manufacturer": "Adrek Robotics"
     }
   },
   "_stats": {},
