@@ -12,7 +12,22 @@
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechStatMods": {
+      "enabled": true,
+      "mods": [
+        {
+          "stat": "attr",
+          "mod": 1,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": false,
+          "set": 0
+        }
+      ]
+    }
   },
   "effects": [],
   "folder": null,

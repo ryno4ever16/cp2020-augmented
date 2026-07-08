@@ -12,7 +12,14 @@
     "source": "Chromebook 2",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "Perform",
+      "skillMod": 1,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,

@@ -12,7 +12,14 @@
     "source": "Solo of Fortune 2",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 1,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,

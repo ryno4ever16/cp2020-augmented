@@ -12,7 +12,14 @@
     "source": "Brainware Blowout",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "Diagnose Illness",
+      "skillMod": 1,
+      "auto": true
+    }
   },
   "effects": [],
   "folder": null,

@@ -12,7 +12,14 @@
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "CyberTech",
+      "skillMod": 2,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,
