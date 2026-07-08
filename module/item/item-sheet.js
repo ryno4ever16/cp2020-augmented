@@ -1,9 +1,9 @@
-import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, getCalibers, AMMO_MODIFIERS, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice, VEHICLE_TYPE_SUGGESTIONS } from "../lookups.js";
+import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, getCalibers, AMMO_MODIFIERS, modifiersForCaliber, modifierAppliesToCaliber, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice, VEHICLE_TYPE_SUGGESTIONS } from "../lookups.js";
 import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
 import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
-import { deleteFieldUpdate, localize, cwHasType, getSkillIndex } from "../utils.js";
+import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex } from "../utils.js";
 import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { useConsumable } from "../mech/consumable.js";
 import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
@@ -351,8 +351,16 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     sheet.caliberChoices = Object.entries(calibers)
       .map(([id, c]) => ({ value: id, label: (c && c.label) ? c.label : id }))
       .sort((a, b) => a.label.localeCompare(b.label));
-    sheet.modifierChoices = Object.entries(AMMO_MODIFIERS)
-      .map(([id, m]) => ({ value: id, label: (m && m.label) ? m.label : id }));
+    // Modifier dropdown, scoped to this ammo's caliber family (arrow loads never appear on a bullet
+    // and vice versa). The currently-stored modifier is always kept in the list so a legacy/mismatched
+    // item still shows its value and can be changed away from it.
+    const ammoCaliber = this.item.system?.caliber;
+    const currentMod = this.item.system?.modifier ?? "standard";
+    const validMods = modifiersForCaliber(ammoCaliber);
+    if (!validMods.some(([id]) => id === currentMod) && AMMO_MODIFIERS[currentMod]) {
+      validMods.push([currentMod, AMMO_MODIFIERS[currentMod]]);
+    }
+    sheet.modifierChoices = validMods.map(([id, m]) => ({ value: id, label: (m && m.label) ? m.label : id }));
 
     // Spread mode selector (Single / Spread)
     sheet.ammoSpreadModes = [
@@ -1934,11 +1942,18 @@ async _prepareCyberware(sheet) {
         return;
       }
 
-      // Modifier (load) select: seed the mechanical fields from the modifier definition.
+      // Modifier (load) select: seed the mechanical fields from the modifier definition. Reject a
+      // modifier that doesn't fit this ammo's caliber family (an arrow load on a bullet, or vice
+      // versa) — warn and re-render to snap the select back to the stored value.
       const modifier = target.closest("select.cp-ammo-modifier");
       if (modifier && root.contains(modifier)) {
         event.preventDefault();
         const modId = String(modifier.value ?? "standard");
+        if (!modifierAppliesToCaliber(modId, this.item.system?.caliber)) {
+          ui.notifications?.warn(localizeParam("AmmoModifierWrongFamily", { modifier: AMMO_MODIFIERS[modId]?.label ?? modId }));
+          this.render(false);
+          return;
+        }
         await this.item.update(applyAmmoModifierUpdate(modId));
         return;
       }

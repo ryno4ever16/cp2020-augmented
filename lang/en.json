@@ -1126,6 +1126,7 @@
     "AmmoBuyPreview": "{boxes} box(es) x {per} rounds = {rounds} rounds for {cost}eb",
     "AmmoBuyTitle": "Buy Ammunition",
     "AmmoModifier": "Load (modifier)",
+    "AmmoModifierWrongFamily": "{modifier} doesn't fit this ammo's family — arrow loads and firearm loads aren't interchangeable.",
     "AmmoRoundsPerBox": "Rounds per box (the buy quantity is in boxes)",
     "CatalogBookVisibleHint": "Eye on = players can see & buy this book's items in the catalog. Eye off = GM-only. (This is catalog-wide visibility; stock custom shops to sell per-shop.)",
     "CatalogBooks": "Books",

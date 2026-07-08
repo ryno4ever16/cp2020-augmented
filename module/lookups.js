@@ -193,17 +193,56 @@ export const CALIBERS = {
 
 // Ammo modifiers (loads). costMult = ×basic ammo cost. mech values are applied as DEFAULTS
 // to an ammo item when its modifier is chosen, and remain editable on the item afterward.
+// `families` scopes a modifier to compatible ammo families (see caliberFamily): a firearm load
+// can't be put on arrows and an arrow load can't be put on a bullet (user constraint). A modifier
+// with NO families is universal (Standard). D4: the arrow/shell variants (Broadhead/Spinner/Target/
+// Stundart) are wired here as modifiers rather than as their own items (numbers from captured prose).
 export const AMMO_MODIFIERS = {
   standard:    { label: "Standard",          costMult: 1,     mech: { armorMultSoft: 1,   armorMultHard: 1,   penDamageMult: 1,   bonusDamageFormula: "" } },
-  ap:          { label: "Armor-Piercing",    costMult: 3,     mech: { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, bonusDamageFormula: "" } },
-  hollowPoint: { label: "Hollow-Point",      costMult: 1.125, mech: { armorMultSoft: 2,   armorMultHard: 2,   penDamageMult: 1.5, bonusDamageFormula: "" } },
-  api:         { label: "Armor-Piercing Incendiary", costMult: 4, mech: { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, dotEnabled: true, dotTurns: 2, dotDamageFormula: "1d6", dotType: "fire" } },
-  dualPurpose: { label: "Dual-Purpose",      costMult: 4,     mech: { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, bonusDamageFormula: "" } },
-  rubber:      { label: "Rubber",            costMult: 0.333, mech: { armorMultSoft: 1,   armorMultHard: 1,   penDamageMult: 0.5, stunSaveOnHit: true } },
-  flechette:   { label: "Flechette",         costMult: 5,     mech: { armorMultSoft: 0.25, armorMultHard: 0.25, penDamageMult: 0.5, spreadMode: "flechette" } },
-  safety:      { label: "Safety",            costMult: 6,     mech: { armorMultSoft: 2,   armorMultHard: 2,   penDamageMult: 3 } },
-  brassCased:  { label: "Brass-cased",       costMult: 2, costMultBlackhands: 3, mech: {} }
+  ap:          { label: "Armor-Piercing",    costMult: 3,     families: ["firearm", "shotgun"], mech: { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, bonusDamageFormula: "" } },
+  hollowPoint: { label: "Hollow-Point",      costMult: 1.125, families: ["firearm", "shotgun"], mech: { armorMultSoft: 2,   armorMultHard: 2,   penDamageMult: 1.5, bonusDamageFormula: "" } },
+  api:         { label: "Armor-Piercing Incendiary", costMult: 4, families: ["firearm", "shotgun"], mech: { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, dotEnabled: true, dotTurns: 2, dotDamageFormula: "1d6", dotType: "fire" } },
+  dualPurpose: { label: "Dual-Purpose",      costMult: 4,     families: ["firearm", "shotgun"], mech: { armorMultSoft: 0.5, armorMultHard: 0.5, penDamageMult: 0.5, bonusDamageFormula: "" } },
+  rubber:      { label: "Rubber",            costMult: 0.333, families: ["firearm", "shotgun"], mech: { armorMultSoft: 1,   armorMultHard: 1,   penDamageMult: 0.5, stunSaveOnHit: true } },
+  flechette:   { label: "Flechette",         costMult: 5,     families: ["firearm", "shotgun"], mech: { armorMultSoft: 0.25, armorMultHard: 0.25, penDamageMult: 0.5, spreadMode: "flechette" } },
+  safety:      { label: "Safety",            costMult: 6,     families: ["firearm", "shotgun"], mech: { armorMultSoft: 2,   armorMultHard: 2,   penDamageMult: 3 } },
+  brassCased:  { label: "Brass-cased",       costMult: 2, costMultBlackhands: 3, families: ["firearm", "shotgun"], mech: {} },
+  // D4 arrow loads (arrow/crossbow family only). Broadhead/Spinner "act as a knife for armor
+  // penetration" → past-armor damage ×2 / ×3; Target arrows halve all armor SP.
+  broadhead:   { label: "Broadhead",         costMult: 1,     families: ["arrow"], mech: { penDamageMult: 2 } },
+  spinner:     { label: "Spinner",           costMult: 1,     families: ["arrow"], mech: { penDamageMult: 3 } },
+  target:      { label: "Target",            costMult: 1,     families: ["arrow"], mech: { armorMultSoft: 0.5, armorMultHard: 0.5 } },
+  // D4 shotgun load (shotgun family only). Stundart shell: -2 to the target's Stun save.
+  stundart:    { label: "Stundart",          costMult: 1,     families: ["shotgun"], mech: { stunSaveOnHit: true, stunSaveMod: -2 } }
 };
+
+// Ammo families for modifier compatibility. A caliber's family comes from its costClass; a modifier
+// (above) lists the families it fits. Bows/crossbows share the "arrow" family; 00/slug is "shotgun";
+// every cartridge caliber is "firearm".
+const CALIBER_FAMILY = { arrows: "arrow", crossbow: "arrow", shotgun: "shotgun" };
+
+/** The ammo family for a caliber id ("arrow" | "shotgun" | "firearm"), or "" for an unset/unknown caliber. Pure-ish. */
+export function caliberFamily(caliberId) {
+  const id = normalizeCaliber(caliberId);
+  if (!id) return "";
+  const cal = getCalibers()[id];
+  return CALIBER_FAMILY[cal?.costClass] ?? "firearm";
+}
+
+/** True if `modifierId` can be loaded onto ammo of `caliberId`. Universal modifiers + unset calibers fit all. Pure-ish. */
+export function modifierAppliesToCaliber(modifierId, caliberId) {
+  const mod = AMMO_MODIFIERS[modifierId];
+  if (!mod) return false;
+  if (!Array.isArray(mod.families) || !mod.families.length) return true;   // universal (Standard)
+  const fam = caliberFamily(caliberId);
+  if (!fam) return true;   // unset caliber → don't restrict yet
+  return mod.families.includes(fam);
+}
+
+/** The modifiers valid for a caliber, as [id, def] entries (universal + family-matched). Pure-ish. */
+export function modifiersForCaliber(caliberId) {
+  return Object.entries(AMMO_MODIFIERS).filter(([id]) => modifierAppliesToCaliber(id, caliberId));
+}
 
 /** Merge built-in CALIBERS with any GM-registered custom calibers (world setting). */
 export function getCalibers() {

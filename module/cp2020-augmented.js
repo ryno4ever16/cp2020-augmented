@@ -36,6 +36,7 @@ import { PresetPicker } from "./dialog/preset-picker.js";
 import { registerPinnedSubwindows } from "./pin-window.js";
 import { registerDataCorrections } from "./data-corrections.js";
 import { makeMechAugmentedData } from "./data/mech-item-data.js";
+import { makeAmmoAugmentedData } from "./data/ammo-item-data.js";
 import { registerMechLight } from "./mech/light.js";
 import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
 import { registerMechConsumable } from "./mech/consumable.js";
@@ -165,6 +166,10 @@ Hooks.once("init", function () {
     // cyberware gain mechLight (P3 light emitters). Same extend-the-registered-model pattern.
     misc:             makeMechAugmentedData(CONFIG.Item.dataModels.misc),
     cyberware:        makeMechAugmentedData(CONFIG.Item.dataModels.cyberware),
+    // Ammo two-axis fields (caliber/modifier/…): the base model strips them on vanilla, which broke
+    // the caliber-scoped modifier picker. Extend it, adding only the fields the base lacks (no-op on
+    // the fork). See module/data/ammo-item-data.js.
+    ammo:             makeAmmoAugmentedData(CONFIG.Item.dataModels.ammo),
   });
 
   // Q7 personality moddies: wrap the actor's prepareDerivedData so stat mods with caps/combat

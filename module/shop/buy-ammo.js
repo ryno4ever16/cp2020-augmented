@@ -1,4 +1,4 @@
-import { getCalibers, AMMO_MODIFIERS, getCaliberBox, getAmmoBoxPrice, normalizeCaliber } from "../lookups.js";
+import { getCalibers, AMMO_MODIFIERS, modifierAppliesToCaliber, getCaliberBox, getAmmoBoxPrice, normalizeCaliber } from "../lookups.js";
 import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -68,6 +68,10 @@ export async function purchaseAmmo(actor, { caliber, modifier = "standard", boxe
   if (!actor) { ui.notifications.warn(localize("AmmoBuyNoActor")); return false; }
   caliber = String(caliber ?? "").trim();
   if (!caliber) { ui.notifications.warn(localize("AmmoBuyNoCaliber")); return false; }
+
+  // Guard the arrow/bullet family rule: a modifier that doesn't fit this caliber falls back to
+  // Standard (an arrow load can't be bought onto a bullet caliber, or vice versa).
+  if (!modifierAppliesToCaliber(modifier, caliber)) modifier = "standard";
 
   // Re-validate access at execution time (settings could have changed since the UI opened).
   const gate = canBuyAmmo();
