@@ -8,7 +8,7 @@ import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-
 import { useConsumable } from "../mech/consumable.js";
 import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
-import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds } from "../mech/container.js";
+import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds, usedSlots } from "../mech/container.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -679,21 +679,11 @@ async _prepareCyberware(sheet) {
       pickType(this.item.system?.Module?.AllowedParentCyberwareType) ||
       String(this.item.system?.Module?.AllowedParentCyberwareType || "");
 
-    // Implant: free/taken options with automatic module accounting (only equipped modules count)
+    // Implant: free/taken options — the engine's accessors, so this display always agrees with
+    // checkInstall enforcement and the actor-sheet badges (they also count non-module children:
+    // stowed misc gear, slotted chips).
     const provided = Number(this.item.system?.CyberWorkType?.OptionsAvailable) || 0;
-    let used = 0;
-    if (this.actor) {
-      const all = this.actor.items?.contents || [];
-      const selfId = this.item.id;
-      used = all
-        .filter(i =>
-          i.type === "cyberware" &&
-          i.system?.Module?.IsModule &&
-          i.system?.Module?.ParentId === selfId &&
-          !!i.system?.equipped
-        )
-        .reduce((sum, m) => sum + (Number(m.system?.Module?.SlotsTaken) || 0), 0);
-    }
+    const used = this.actor ? usedSlots(this.actor.items?.contents || [], this.item.id) : 0;
     sheet.cw.implantSlotsUsed = used;
     sheet.cw.implantSlotsTotal = provided;
     sheet.cw.implantSlotsLeft = Math.max(0, provided - used);
@@ -709,19 +699,8 @@ async _prepareCyberware(sheet) {
       const needZone = zoneOf(this.item);
       const needSide = sideOf(this.item);
 
-      // Count available slots of a candidate implant (only equipped modules count)
-      const leftFor = (p) => {
-        const provided = Number(p.system?.CyberWorkType?.OptionsAvailable || 0);
-        const used = all
-          .filter(i =>
-            i.type === "cyberware" &&
-            i.system?.Module?.IsModule &&
-            i.system?.Module?.ParentId === p.id &&
-            !!i.system?.equipped
-          )
-          .reduce((sum, m) => sum + (Number(m.system?.Module?.SlotsTaken) || 0), 0);
-        return Math.max(0, provided - used);
-      };
+      // Available slots of a candidate implant — same engine accessor as the display above.
+      const leftFor = (p) => freeSlots(p, all);
 
       sheet.cw.parentImplants = all
         .filter(i =>
@@ -738,28 +717,10 @@ async _prepareCyberware(sheet) {
       sheet.cw.parentImplants = [];
     }
 
-    // Implant: free/taken options (ONLY equipped modules count)
+    // Implant: free/taken options — engine accessors (see the note on the block above).
     if (cwHasType(this.item, "Implant")) {
       const provided = Number(this.item.system?.CyberWorkType?.OptionsAvailable) || 0;
-      let used = 0;
-
-      if (this.actor) {
-        const all = this.actor.items?.contents || [];
-        const selfId = this.item.id;
-        used = all.reduce((sum, it) => {
-          const mod = it.system?.Module;
-          if (
-            it.type === "cyberware" &&
-            mod?.IsModule &&
-            mod?.ParentId === selfId &&
-            !!it.system?.equipped
-          ) {
-            return sum + (Number(mod.SlotsTaken) || 0);
-          }
-          return sum;
-        }, 0);
-      }
-
+      const used = this.actor ? usedSlots(this.actor.items?.contents || [], this.item.id) : 0;
       sheet.cw.implantSlotsUsed = used;
       sheet.cw.implantSlotsTotal = provided;
       sheet.cw.implantSlotsLeft = Math.max(0, provided - used);

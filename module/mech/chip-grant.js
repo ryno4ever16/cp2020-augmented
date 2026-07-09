@@ -242,7 +242,40 @@ function chipActiveChange(changes) {
   return v === true ? "on" : v === false ? "off" : null;
 }
 
+/** Active chips on the actor, excluding `exceptId` (the one being toggled). Pure. */
+export function activeChipCount(actor, exceptId = null) {
+  const items = actor?.items?.contents ?? actor?.items ?? [];
+  return items.filter((i) => (i.id ?? i._id) !== exceptId && isActiveChip(i)).length;
+}
+
 export function registerMechChipGrant() {
+  // The book's running cap: "You may 'run' as many separate chip programs at one time as your
+  // current INT stat" (Core p.82). An activation past the cap is refused on the initiating
+  // client, with a confirm that re-issues the same update as an override — so the limit is one
+  // click to accept and one click to wave through.
+  Hooks.on("preUpdateItem", (item, changes, options, userId) => {
+    if (userId !== game.user.id) return;
+    if (options?.cp2020ChipCapOverride) return;
+    if (chipActiveChange(changes) !== "on") return;
+    if (item.type !== "cyberware" || !cwHasType(item, "Chip")) return;
+    const actor = item.actor;
+    if (!actor?.system?.stats) return;
+    const cap = Number(actor.system.stats.int?.total);
+    if (!Number.isFinite(cap) || cap <= 0) return;   // no honest INT value → no cap to enforce
+    const running = activeChipCount(actor, item.id);
+    if (running < cap) return;
+    const redo = foundry.utils.deepClone(changes);
+    (async () => {
+      const ok = await foundry.applications.api.DialogV2.confirm({
+        window: { title: localize("ChipCapTitle") },
+        content: `<p>${localizeParam("ChipCapBody", { name: item.name, cap, count: running })}</p>`,
+        rejectClose: false,
+      });
+      if (ok) await item.update(redo, { cp2020ChipCapOverride: true }).catch(() => {});
+    })();
+    return false;
+  });
+
   Hooks.on("updateItem", async (item, changes, options, userId) => {
     const change = chipActiveChange(changes);
     if (!change) return;

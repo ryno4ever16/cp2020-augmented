@@ -1021,6 +1021,8 @@
     "ChipChooseAny": "Choose a skill for this chip (pick one or type a name):",
     "ChipChoiceReset": "Reset chip choice",
     "ChipChoiceResetHint": "Clear the chosen skill so the chip can be slotted for a different one.",
+    "ChipCapTitle": "Chip Limit",
+    "ChipCapBody": "{count} chip programs are already running — the limit is your INT ({cap}). Activate {name} anyway?",
     "MechContainerCapacity": "Container slots",
     "MechContainerInstalledIn": "Installed in",
     "MechContainerInstalledInHint": "Install this item into a container (a limb compartment, a skin pouch, another container) with free slots. Number in parentheses = slots free.",

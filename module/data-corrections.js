@@ -304,6 +304,16 @@ export const DATA_CORRECTIONS = {
     // untick when firing a non-smart weapon. Its Characteristic tag ships with empty payloads,
     // so this is the item's first live mechanic, not a double-apply.
     GWnQ3KQVL6PZpedS: { patch: mechRollMods({ attackMod: 2 }) },  // Smartgun Link
+    // Q6 + the book's chip capacity: "Chipware Socket … Holds 10 chips." (Core p.83). AcceptsTypes
+    // admits chips by type (they carry no Module block); the count stays GM-editable on the item.
+    vfctuWRZxDfVxzV1: {   // Chipware Socket
+      patch: { "CyberWorkType.OptionsAvailable": 10, "CyberWorkType.AcceptsTypes": ["Chip"] },
+      notesAppend: "Container: holds 10 chips (Core p.83) — drag chips onto the installed socket to slot them. The count is editable on this item (Options Available).",
+    },
+    // The book also lets chips sit directly in the plugs but prints no count — notes only.
+    x3bHNmrZaN3ZVssf: {   // Interface Plugs
+      notesAppend: "Chips can be inserted directly into the plugs (Core p.82); the book prints no count. Set Options Available on this item if you want the plugs to hold chips as a container.",
+    },
   },
 
   // ── P5 roll-mod tools (Security p.70): each prints a flat check bonus against ONE lock type,

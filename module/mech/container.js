@@ -101,9 +101,15 @@ export function checkInstall(child, parent, items) {
   if (wouldCycle(child, parent, items)) return { ok: false, reason: "cycle" };
 
   if (child.type === "cyberware" && parent.type === "cyberware") {
-    if (!child.system?.Module?.IsModule) return { ok: false, reason: "not-module" };
-    if (!cwHasType(parent, "Implant")) return { ok: false, reason: "not-implant" };
     const accepts = (parent.system?.CyberWorkType?.AcceptsTypes ?? []).map(pickCwType).filter(Boolean);
+    // Chips carry no Module block, so the module gate below could never admit them; a host that
+    // explicitly lists Chip in AcceptsTypes (the chipware socket) admits them by TYPE instead —
+    // the zone/side match is already skipped for AcceptsTypes mounts, and capacity still applies.
+    const chipHosted = accepts.includes("Chip") && cwHasType(child, "Chip");
+    if (!chipHosted) {
+      if (!child.system?.Module?.IsModule) return { ok: false, reason: "not-module" };
+      if (!cwHasType(parent, "Implant")) return { ok: false, reason: "not-implant" };
+    }
     const needType = String(child.system?.Module?.AllowedParentCyberwareType || "");
     if (needType) {
       const need = pickCwType(needType);
