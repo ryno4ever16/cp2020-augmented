@@ -63,8 +63,8 @@ function mechProtection(hazards) {
 }
 /** P5 roll-mod-provider patch (numbers straight from the item's own printed text; `auto:false` =
  *  suggested UNTICKED, for gear whose bonus only applies in a narrow situation). */
-function mechRollMods({ attackMod = 0, skillName = "", skillMod = 0, auto = true } = {}) {
-  return { mechRollMods: { enabled: true, attackMod, skillName, skillMod, auto } };
+function mechRollMods({ attackMod = 0, skillName = "", skillMod = 0, auto = true, skillMods = [] } = {}) {
+  return { mechRollMods: { enabled: true, attackMod, skillName, skillMod, auto, skillMods } };
 }
 /** P7 timed-consumable patch (doses/duration from the item's own printed text; duration may be a
  *  roll formula, rolled at use time). */

@@ -24,15 +24,31 @@
   },
   "documentTypes": {
     "Actor": {
-      "vehicle": { "htmlFields": ["notes"] }
+      "vehicle": {
+        "htmlFields": [
+          "notes"
+        ]
+      }
     },
     "Item": {
-      "vehicleWeapon": { "htmlFields": ["notes"] },
-      "acpaSystem": { "htmlFields": ["notes"] }
+      "vehicleWeapon": {
+        "htmlFields": [
+          "notes"
+        ]
+      },
+      "acpaSystem": {
+        "htmlFields": [
+          "notes"
+        ]
+      }
     }
   },
-  "esmodules": ["module/cp2020-augmented.js"],
-  "styles": ["css/cp2020-augmented.css"],
+  "esmodules": [
+    "module/cp2020-augmented.js"
+  ],
+  "styles": [
+    "css/cp2020-augmented.css"
+  ],
   "languages": [
     {
       "lang": "en",
@@ -124,6 +140,13 @@
       "system": "cyberpunk2020"
     },
     {
+      "name": "supplement-skills",
+      "label": "Supplements — Skills",
+      "path": "packs/supplement-skills",
+      "type": "Item",
+      "system": "cyberpunk2020"
+    },
+    {
       "name": "supplement-cyberware",
       "label": "Supplements — Cyberware",
       "path": "packs/supplement-cyberware",
@@ -160,29 +183,47 @@
         {
           "name": "Equipment",
           "sorting": "m",
-          "packs": ["supplement-armor"],
+          "packs": [
+            "supplement-armor"
+          ],
           "folders": [
             {
               "name": "Weapons",
               "sorting": "m",
-              "packs": ["supplement-pistols", "supplement-submachineguns", "supplement-rifles", "supplement-shotguns", "supplement-heavy", "supplement-melee", "supplement-exotics"]
+              "packs": [
+                "supplement-pistols",
+                "supplement-submachineguns",
+                "supplement-rifles",
+                "supplement-shotguns",
+                "supplement-heavy",
+                "supplement-melee",
+                "supplement-exotics"
+              ]
             },
             {
               "name": "Cyberware",
               "sorting": "m",
-              "packs": ["supplement-cyberware", "supplement-chipware"]
+              "packs": [
+                "supplement-cyberware",
+                "supplement-chipware"
+              ]
             }
           ]
         },
         {
           "name": "Gear",
           "sorting": "m",
-          "packs": ["supplement-gear", "supplement-vehicles"]
+          "packs": [
+            "supplement-gear",
+            "supplement-vehicles"
+          ]
         },
         {
           "name": "Netrunning",
           "sorting": "m",
-          "packs": ["supplement-programs"]
+          "packs": [
+            "supplement-programs"
+          ]
         }
       ]
     }

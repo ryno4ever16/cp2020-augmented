@@ -81,10 +81,18 @@ export function skillModProviders(items, skillName) {
   const out = [];
   for (const it of items ?? []) {
     const rm = rollModsOf(it);
-    const mod = Number(rm?.skillMod) || 0;
-    const name = String(rm?.skillName ?? "").trim().toLowerCase();
-    if (!mod || name !== want || !isRollModActive(it)) continue;
-    out.push({ id: it.id ?? it._id, name: it.name, mod, auto: rm.auto !== false });
+    if (!rm || !isRollModActive(it)) continue;
+    const id = it.id ?? it._id;
+    const auto = rm.auto !== false;
+    const mod = Number(rm.skillMod) || 0;
+    const name = String(rm.skillName ?? "").trim().toLowerCase();
+    if (mod && name === want) out.push({ id, name: it.name, mod, auto });
+    // The skillMods list (multi-skill items): one row per matching entry, sharing the item's auto.
+    for (const e of rm.skillMods ?? []) {
+      const emod = Number(e?.mod) || 0;
+      const ename = String(e?.skillName ?? "").trim().toLowerCase();
+      if (emod && ename === want) out.push({ id, name: it.name, mod: emod, auto });
+    }
   }
   return out;
 }

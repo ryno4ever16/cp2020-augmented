@@ -5,14 +5,31 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Maneuver: +2 to Parachuting and/or Hang-Gliding skill; MRAM chips available; SDP 10 — at 0 it is non-functional (Firestorm: Stormfront). The two skills ship in the Supplements — Skills pack (custom REF skills; no book defines them). The +2 suggestions render unticked — claim the one for the skill you're flying with.</p>",
     "cost": 2300,
     "weight": 14.3,
     "equipped": false,
     "source": "Firestorm: Stormfront",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false,
+      "skillMods": [
+        {
+          "skillName": "Parachuting",
+          "mod": 2
+        },
+        {
+          "skillName": "Hang-Gliding",
+          "mod": 2
+        }
+      ]
+    }
   },
   "effects": [],
   "folder": null,

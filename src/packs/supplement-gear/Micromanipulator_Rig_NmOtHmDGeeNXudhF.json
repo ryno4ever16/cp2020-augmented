@@ -5,14 +5,39 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Game notes (Chromebook 3 p.5): eliminates the 'Complex Repair/Lock', 'Don't have right tools' and 'Hostile environment' difficulty penalties based on size/scale, and gives +1 to Cyber Tech, Electronics, Cybermodem Design and Weaponsmith rolls in situations of appropriate size/scale. Requires an MLINK neural processor module; non-portable. Four skills share the +1, so apply it in the modifiers window for the skill in use.</p>",
+    "notes": "<p>Game notes (Chromebook 3 p.5): eliminates the 'Complex Repair/Lock', 'Don't have right tools' and 'Hostile environment' difficulty penalties based on size/scale, and gives +1 to Cyber Tech, Electronics, Cybermodem Design and Weaponsmith rolls in situations of appropriate size/scale. Requires an MLINK neural processor module; non-portable. The +1 renders as an unticked suggestion on each of the four skills (the book's Cybermodem Design = the system's Cyberdeck Design) — claim it in size/scale situations.</p>",
     "cost": 3000,
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false,
+      "skillMods": [
+        {
+          "skillName": "CyberTech",
+          "mod": 1
+        },
+        {
+          "skillName": "Electronics",
+          "mod": 1
+        },
+        {
+          "skillName": "Cyberdeck Design",
+          "mod": 1
+        },
+        {
+          "skillName": "Weaponsmith",
+          "mod": 1
+        }
+      ]
+    }
   },
   "effects": [],
   "folder": null,

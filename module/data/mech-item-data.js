@@ -227,6 +227,15 @@ function mechRollModsField() {
     skillName: new f.StringField({ initial: d.skillName }),
     skillMod:  new f.NumberField({ initial: d.skillMod }),
     auto:      new f.BooleanField({ initial: d.auto }),
+    // Multi-skill providers (the widening the one-slot comment reserved, now demanded by two
+    // printed payloads: ParaDactyl's +2 to two skills, Micromanipulator's +1 across four): one
+    // dialog row per entry, all sharing the item's `auto`. Additive beside the one-slot pair —
+    // existing data and the sheet fields keep working; an ArrayField replaces wholesale on
+    // update, so the partial-merge hazard doesn't apply.
+    skillMods: new f.ArrayField(new f.SchemaField({
+      skillName: new f.StringField({ initial: "" }),
+      mod:       new f.NumberField({ initial: 0 })
+    })),
     statName:  new f.StringField({ initial: d.statName }),
     statMod:   new f.NumberField({ initial: d.statMod }),
     facedownMod: new f.NumberField({ initial: d.facedownMod }),

@@ -1,0 +1,30 @@
+{
+  "_id": "CPAEHangGliding1",
+  "name": "Hang-Gliding",
+  "type": "skill",
+  "img": "systems/cyberpunk2020/img/skill-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Flying and landing unpowered gliders and microlights (REF). Referenced by gear such as the Techjager ParaDactyl; no sourcebook defines it as a printed skill — shipped as a custom REF skill.</p>",
+    "level": 0,
+    "chipLevel": 0,
+    "ip": 0,
+    "diffMod": 1,
+    "isChipped": false,
+    "isRoleSkill": false,
+    "stat": "ref"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1000100,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "skill",
+      "provenance": "Referenced by Firestorm: Stormfront (ParaDactyl '+2 to Parachuting and/or Hang-Gliding skill'); no book defines the skill, created as a REF custom skill per the 2026-07-10 ruling."
+    }
+  },
+  "_key": "!items!CPAEHangGliding1"
+}
