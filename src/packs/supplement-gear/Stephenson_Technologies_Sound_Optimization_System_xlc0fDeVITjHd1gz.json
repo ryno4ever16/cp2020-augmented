@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Setup: a Very Difficult TECH roll (Electronics and Play Instrument add) maps the venue; on a success the band gets +1 Perform while in that venue (Chromebook 4 p.70). The suggestion renders unticked — claim it in the mapped venue.</p>",
     "cost": 1000,
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 4",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "Perform",
+      "skillMod": 1,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,

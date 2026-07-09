@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Base 900eb model (Chromebook 2 p.14): portable CPU (INT 2), 25 MU, runs two programs, no netrunning. The factory Cyber-PCX variant (1200eb) adds +1 to any INT or TECH skill roll that can be computer-assisted — GM-applied; no single skill to auto-wire.</p>",
     "cost": 900,
     "weight": 1,
     "equipped": false,

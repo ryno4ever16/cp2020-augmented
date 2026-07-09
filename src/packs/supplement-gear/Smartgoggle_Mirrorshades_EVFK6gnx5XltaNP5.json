@@ -5,14 +5,19 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Functions as smartgoggles but holds only 2 options (Chromebook 3 p.3) — the 2 container slots are the fitted options. All options cost 10% less than their cyberoptic versions.</p>",
     "cost": 450,
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 3",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechContainer": {
+      "installedIn": "",
+      "capacity": 2,
+      "slotsTaken": 1
+    }
   },
   "effects": [],
   "folder": null,

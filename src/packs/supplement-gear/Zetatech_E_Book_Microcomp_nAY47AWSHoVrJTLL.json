@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Base pocket microcomp (Chromebook 2 p.14): CPU (INT 1), 12 MU, one program at a time, no netrunning. The cybernetic version (+40% price) adds +2 to any INT/TECH skill roll — GM-applied; no single skill to auto-wire.</p>",
     "cost": 100,
     "weight": 0,
     "equipped": false,

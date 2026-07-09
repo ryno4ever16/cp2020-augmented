@@ -126,12 +126,19 @@ export const DATA_CORRECTIONS = {
       notesAppend: note("425eb for a set of 10 nails, or 45eb per single nail. A 90eb coloring nail pen is sold separately. The nails may be permanently implanted as cyberware for 2 Humanity Cost per pair of hands or feet. (Chromebook 3 p.36)"),
     },
     // The Chromebook 3 p.22 Dynalar cyberfinger options (7 products): option requirement + limit.
-    oC2Znx4VqJKXvTYD: { notesAppend: note(FINGER_NOTE) },   // Probe Link
+    // Probe Link prints "-1 to all actions with vehicles" (spans Drive/Pilot rolls — nothing to
+    // auto-wire onto one skill, so the penalty stays a note for the modifiers window).
+    oC2Znx4VqJKXvTYD: { notesAppend: note(FINGER_NOTE) + note("Book note: −1 to all actions with vehicles. Apply the −1 in the modifiers window when operating a vehicle through the plug. Cannot be used with the Quick-Change option.") },
     JRjY6m94O54GmMas: { notesAppend: note(FINGER_NOTE) },   // Parabolic Microphone
     vIS7tLKn2knqwZYJ: { notesAppend: note(FINGER_NOTE) },   // Flasher
     atR26dOPGVwYD9nv: { notesAppend: note(FINGER_NOTE) },   // IR/UV Flashlight
     SIUDnA5V2TsKt8iE: { notesAppend: note(FINGER_NOTE) },   // Flare
-    "6nlw0wJmhdg1z9wu": { notesAppend: note(FINGER_NOTE) }, // Storage Compartment
+    // Storage Compartment prints no capacity ("a small storage space inside the finger") →
+    // default 1 stowed-item slot, GM-editable on the item.
+    "6nlw0wJmhdg1z9wu": {
+      patch: { "CyberWorkType.OptionsAvailable": 1 },
+      notesAppend: note(FINGER_NOTE) + note("Container: 1 stowed-item slot — the book prints no capacity; the count is editable on this item (Options Available). What fits inside a finger is the GM's call."),
+    },
     Go9manEx2jk02j8i: { notesAppend: note(FINGER_NOTE) },   // Laser Pointer
 
     // ── PR #41 (upstream, unmerged): typo + malformed Humanity Cost ──

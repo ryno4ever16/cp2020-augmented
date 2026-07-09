@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>+2 to Persuasion/Seduction skills against members of the opposite sex (Chromebook 2 p.11). The suggestion renders unticked — claim it when the condition applies.</p>",
     "cost": 200,
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 2",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "Persuasion & Fast Talk",
+      "skillMod": 2,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,
