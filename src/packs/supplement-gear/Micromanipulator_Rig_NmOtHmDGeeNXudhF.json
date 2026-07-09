@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Game notes (Chromebook 3 p.5): eliminates the 'Complex Repair/Lock', 'Don't have right tools' and 'Hostile environment' difficulty penalties based on size/scale, and gives +1 to Cyber Tech, Electronics, Cybermodem Design and Weaponsmith rolls in situations of appropriate size/scale. Requires an MLINK neural processor module; non-portable. Four skills share the +1, so apply it in the modifiers window for the skill in use.</p>",
     "cost": 3000,
     "weight": 0,
     "equipped": false,

@@ -5,7 +5,7 @@
   "img": "icons/svg/shield.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Upgraded worksuit with limited exoskeletal support: +1 to STR/BOD to a maximum of 11 (Deep Space) — wired as Body +1, capped at 11 (CP2020 folds strength into BOD). The suit's radiation protection joins the typed-SP treatment separately.</p>",
     "cost": 50000,
     "weight": 0,
     "equipped": false,
@@ -21,7 +21,22 @@
     },
     "encumbrance": 0,
     "armorType": "",
-    "clothingWeight": ""
+    "clothingWeight": "",
+    "mechStatMods": {
+      "enabled": true,
+      "mods": [
+        {
+          "stat": "bt",
+          "mod": 1,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 11,
+          "floor": 0,
+          "isSet": false,
+          "set": 0
+        }
+      ]
+    }
   },
   "effects": [],
   "folder": null,
