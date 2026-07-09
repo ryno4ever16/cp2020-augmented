@@ -69,12 +69,13 @@
             4,
             4
           ],
-          "audio": 6,
-          "Torso": 4,
+          "audio": 10,
+          "Torso": 6,
           "rArm": 3,
           "lArm": 3,
           "rLeg": 2,
-          "lLeg": 2
+          "lLeg": 2,
+          "head": 2
         },
         "stats": {
           "ref": 11,
@@ -94,12 +95,50 @@
           "ambiguous": false
         },
         {
-          "name": "Cyberaudio Suite (Radio/Amplified Hearing/Level Damper/Sound Editor)",
+          "name": "Radio Link",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
           "humanityCost": "3",
-          "description": "Cyberaudio package with Radio, Amplified Hearing, Level Damper, and Sound Editor.",
+          "description": "Radio link. Part of the factory cyberaudio package (Radio/Amplified Hearing/Level Damper/Sound Editor); the book gives HC 3 for the whole package, carried on this item.",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Amplified Hearing",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "description": "Amplified hearing. Part of the factory cyberaudio package (HC carried on Radio Link).",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Level Damper",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "description": "Level damper. Part of the factory cyberaudio package (HC carried on Radio Link).",
+          "source": "Chromebook 2 p.75",
+          "ambiguous": false
+        },
+        {
+          "name": "Sound Editor",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "description": "Sound editor. Part of the factory cyberaudio package (HC carried on Radio Link).",
           "source": "Chromebook 2 p.75",
           "ambiguous": false
         },

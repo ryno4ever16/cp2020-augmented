@@ -66,11 +66,11 @@
         },
         "optionSpaces": {
           "optic": [
-            0,
-            0
+            2,
+            2
           ],
-          "audio": 2,
-          "Torso": 0,
+          "audio": 6,
+          "Torso": 1,
           "rArm": 0,
           "lArm": 0,
           "rLeg": 1,
@@ -84,22 +84,98 @@
       },
       "loadout": [
         {
-          "name": "Cyberoptics (Video Imager, Net-Vision, Times Sq+, MicroVideo)",
+          "name": "Video Imager",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
           "humanityCost": "",
-          "description": "Cybernetic optics package housing Video Imager, Net-Vision, Times Sq+, and MicroVideo options.",
+          "description": "Video Imager cyberoptic option - projects video feeds directly to the optic. Socket optic from the Wiseman's netrunner rig (the book lists no separate HC for the optics package).",
           "source": "Chromebook 3 p.105",
           "ambiguous": false
         },
         {
-          "name": "Cyberaudio (Micro Recorder, Phone Splice, Scrambler, Tight-Beam Radio)",
+          "name": "Net-Vision",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "",
+          "description": "Net-Vision cyberoptic option - displays the Net interface through the optic. Socket optic from the Wiseman's netrunner rig.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Times Sq+",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "",
+          "description": "Times Square Plus cyberoptic option - scrolling text/data display across the field of vision. Socket optic from the Wiseman's netrunner rig.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "MicroVideo",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "",
+          "description": "MicroVideo cyberoptic option - miniature video camera built into the optic. Socket optic from the Wiseman's netrunner rig.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Micro Recorder",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
           "humanityCost": "",
-          "description": "Cybernetic audio suite with Micro Recorder, Phone Splice, Scrambler, and Tight-Beam Radio options.",
+          "description": "Micro Recorder cyberaudio option - records heard audio. Socket audio option from the Wiseman's netrunner rig (the book lists no separate HC for the audio package).",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Phone Splice",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "",
+          "description": "Phone Splice cyberaudio option - taps into phone lines for calls through the cyberaudio. Socket audio option from the Wiseman's netrunner rig.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Scrambler",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "",
+          "description": "Scrambler cyberaudio option - encrypts outgoing radio/phone communications. Socket audio option from the Wiseman's netrunner rig.",
+          "source": "Chromebook 3 p.105",
+          "ambiguous": false
+        },
+        {
+          "name": "Tight-Beam Radio",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "",
+          "description": "Tight-Beam Radio cyberaudio option - secure line-of-sight radio link. Socket audio option from the Wiseman's netrunner rig.",
           "source": "Chromebook 3 p.105",
           "ambiguous": false
         },

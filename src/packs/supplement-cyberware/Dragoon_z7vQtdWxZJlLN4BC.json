@@ -66,15 +66,16 @@
         },
         "optionSpaces": {
           "optic": [
-            0,
+            1,
             0
           ],
-          "audio": 0,
-          "Torso": 0,
-          "rArm": 4,
-          "lArm": 4,
-          "rLeg": 2,
-          "lLeg": 2
+          "audio": 3,
+          "Torso": 11,
+          "rArm": 5,
+          "lArm": 5,
+          "rLeg": 3,
+          "lLeg": 3,
+          "head": 6
         },
         "stats": {
           "ref": 15,
@@ -84,34 +85,162 @@
       },
       "loadout": [
         {
-          "name": "Front Optic Mount (5 optics)",
+          "key": "dragoon-optic-mount",
+          "name": "Front Optic Mount",
           "mountZone": "Head",
           "cyberwareType": "CyberOptic",
+          "types": [
+            "Implant"
+          ],
+          "optionsAvailable": 5,
           "humanityCost": "23",
           "source": "Chromebook 2 p.82",
-          "description": "Front optic mount carrying five cyberoptics: Night-Vision, Thermal, Long-Range, IR-Vision, and Heads-Up. Each optic also has Image Enhancement, Anti-Dazzle, and a Targeting Scope."
+          "description": "Front optic mount — holds up to five cyberoptics. Ships with Night-Vision, Thermal, Long-Range, IR-Vision, and Heads-Up (each also carries Image Enhancement, Anti-Dazzle, and a Targeting Scope). Swap optics in and out via the mount."
         },
         {
-          "name": "Cyberaudio Suite",
+          "parentKey": "dragoon-optic-mount",
+          "name": "Night-Vision Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 2 p.82",
+          "description": "Night-Vision cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+        },
+        {
+          "parentKey": "dragoon-optic-mount",
+          "name": "Thermal Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 2 p.82",
+          "description": "Thermal cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+        },
+        {
+          "parentKey": "dragoon-optic-mount",
+          "name": "Long-Range Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 2 p.82",
+          "description": "Long-Range cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+        },
+        {
+          "parentKey": "dragoon-optic-mount",
+          "name": "IR-Vision Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 2 p.82",
+          "description": "IR-Vision cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+        },
+        {
+          "parentKey": "dragoon-optic-mount",
+          "name": "Heads-Up Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 2 p.82",
+          "description": "Heads-Up Display cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+        },
+        {
+          "name": "Amplified Hearing (Level Damper, Enhanced Range)",
           "mountZone": "Head",
           "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
           "humanityCost": "5",
           "source": "Chromebook 2 p.82",
-          "description": "Amplified Hearing, Level Damper, and Enhanced Range; Long-Range Radio (25km, 6-freq, Scrambler); Radar Detector."
+          "description": "Amplified Hearing with Level Damper and Enhanced Range, in a chassis audio socket. Carries the HC 5 for the whole factory cyberaudio package (this suite, the Long-Range Radio, and the Radar Detector)."
         },
         {
+          "name": "Long-Range Radio (25km, 6-freq, Scrambler)",
+          "mountZone": "Head",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "source": "Chromebook 2 p.82",
+          "description": "Long-Range Radio: 25km range, 6 frequencies, Scrambler. HC shared with the factory cyberaudio package (carried by the Amplified Hearing suite)."
+        },
+        {
+          "name": "Radar Detector",
+          "mountZone": "Head",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "source": "Chromebook 2 p.82",
+          "description": "Radar detector. HC shared with the factory cyberaudio package (carried by the Amplified Hearing suite)."
+        },
+        {
+          "key": "dragoon-boom-r",
           "name": "Right Sensory Boom",
           "mountZone": "Head",
-          "humanityCost": "2",
+          "types": [
+            "Implant"
+          ],
+          "acceptsTypes": [
+            "CyberOptic",
+            "CyberAudio"
+          ],
+          "optionsAvailable": 3,
+          "humanityCost": "1",
           "source": "Chromebook 2 p.82",
-          "description": "Right extensible sensory boom: video and audio transmitter."
+          "description": "Right extensible sensory boom — holds up to three optic/audio options (ships with the Video/Audio Transmitter; one space free). Twin Sensory Booms package HC 6 total: the boom pair carries 1 here; the factory contents carry the rest."
         },
         {
+          "parentKey": "dragoon-boom-r",
+          "name": "Video/Audio Transmitter",
+          "mountZone": "Head",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "2",
+          "source": "Chromebook 2 p.82",
+          "description": "Video and audio transmitter mounted in the right sensory boom."
+        },
+        {
+          "key": "dragoon-boom-l",
           "name": "Left Sensory Boom",
           "mountZone": "Head",
+          "types": [
+            "Implant"
+          ],
+          "acceptsTypes": [
+            "CyberOptic",
+            "CyberAudio"
+          ],
+          "optionsAvailable": 3,
+          "humanityCost": "0",
+          "source": "Chromebook 2 p.82",
+          "description": "Left extensible sensory boom — holds up to three optic/audio options (ships with the Video Imager and Tight-Beam Radio Link; one space free). HC shared with the Twin Sensory Booms package (carried by the right boom)."
+        },
+        {
+          "parentKey": "dragoon-boom-l",
+          "name": "Video Imager",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
           "humanityCost": "3",
           "source": "Chromebook 2 p.82",
-          "description": "Left extensible sensory boom: video imager and tight-beam comm."
+          "description": "Video imager mounted in the left sensory boom. Carries the HC 3 for the left boom's factory pair (Video Imager + Tight-Beam Radio Link)."
+        },
+        {
+          "parentKey": "dragoon-boom-l",
+          "name": "Tight-Beam Radio Link",
+          "mountZone": "Head",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "source": "Chromebook 2 p.82",
+          "description": "Tight-beam radio link mounted in the left sensory boom. HC shared with the Video Imager (left-boom factory pair)."
         },
         {
           "name": "Sniffer",

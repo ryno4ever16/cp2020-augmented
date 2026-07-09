@@ -66,15 +66,16 @@
         },
         "optionSpaces": {
           "optic": [
-            1,
-            1
+            4,
+            3
           ],
-          "audio": 3,
-          "Torso": 4,
-          "rArm": 1,
+          "audio": 6,
+          "Torso": 6,
+          "rArm": 2,
           "lArm": 1,
-          "rLeg": 1,
-          "lLeg": 1
+          "rLeg": 2,
+          "lLeg": 1,
+          "head": 1
         },
         "stats": {
           "ref": 12,
@@ -84,22 +85,98 @@
       },
       "loadout": [
         {
-          "name": "Cyberoptic Package (Targeting/Video/Thermo/Lowlite/AntiDazzle)",
+          "name": "Targeting Scope Optic",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
           "humanityCost": "4",
-          "description": "Cyberoptic package with Targeting, Video, Thermographic, Lowlite, and AntiDazzle options.",
+          "description": "Targeting scope cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (Targeting/Video/Thermo/Lowlite/AntiDazzle); the book's package HC 4 is carried on this item, its four package-mates list 0.",
           "source": "Chromebook 2 p.74",
           "ambiguous": false
         },
         {
-          "name": "Cyberaudio Package (VSA/Radio/Digital Recorder)",
+          "name": "Video Camera Optic",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Video camera cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Thermograph Optic",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Thermographic cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Low-Lite Optic",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Low-Lite cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Anti-Dazzle Optic",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Anti-Dazzle cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Voice Stress Analyzer",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
           "humanityCost": "3",
-          "description": "Cyberaudio package with Voice Stress Analyzer, Radio, and Digital Recorder.",
+          "description": "Voice stress analyzer cyberaudio in a chassis audio socket. Split from the factory Cyberaudio Package (VSA/Radio/Digital Recorder); the book's package HC 3 is carried on this item, its two package-mates list 0.",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Radio Link",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "description": "Radio link cyberaudio in a chassis audio socket. Split from the factory Cyberaudio Package (package HC 3 carried on the Voice Stress Analyzer).",
+          "source": "Chromebook 2 p.74",
+          "ambiguous": false
+        },
+        {
+          "name": "Digital Recorder",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "humanityCost": "0",
+          "description": "Digital recorder cyberaudio in a chassis audio socket. Split from the factory Cyberaudio Package (package HC 3 carried on the Voice Stress Analyzer).",
           "source": "Chromebook 2 p.74",
           "ambiguous": false
         },

@@ -70,11 +70,12 @@
             4
           ],
           "audio": 4,
-          "Torso": 2,
+          "Torso": 3,
           "rArm": 2,
           "lArm": 2,
-          "rLeg": 2,
-          "lLeg": 2
+          "rLeg": 3,
+          "lLeg": 2,
+          "head": 3
         },
         "stats": {
           "ref": 10,

@@ -66,15 +66,16 @@
         },
         "optionSpaces": {
           "optic": [
-            0,
-            1
+            2,
+            3
           ],
-          "audio": 4,
-          "Torso": 3,
-          "rArm": 1,
-          "lArm": 2,
+          "audio": 7,
+          "Torso": 5,
+          "rArm": 3,
+          "lArm": 4,
           "rLeg": 2,
-          "lLeg": 2
+          "lLeg": 2,
+          "head": 1
         },
         "stats": {
           "ref": 10,

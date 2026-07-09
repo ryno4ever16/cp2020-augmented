@@ -72,15 +72,16 @@
         },
         "optionSpaces": {
           "optic": [
-            0,
+            1,
             0
           ],
           "audio": 0,
-          "Torso": 4,
-          "rArm": 0,
+          "Torso": 5,
+          "rArm": 1,
           "lArm": 0,
           "rLeg": 0,
-          "lLeg": 0
+          "lLeg": 0,
+          "head": 15
         },
         "stats": {
           "ref": 12,
@@ -90,24 +91,151 @@
       },
       "loadout": [
         {
-          "name": "Front Optic Mount (5 optics: Lowlight/Thermo/Telescopic/IR/Times Sq+)",
+          "key": "spyder-optic-mount",
+          "name": "Front Optic Mount",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberOptic",
+          "types": [
+            "Implant"
+          ],
+          "optionsAvailable": 5,
           "humanityCost": "",
-          "description": "Front-mounted optic package housing five cyberoptics (Lowlight, Thermo, Telescopic, IR, Times Square+).",
+          "description": "Front-mounted optic package — holds up to five cyberoptics. Ships with Lowlight, Thermo, Telescopic, IR, and Times Square+. Swap optics in and out via the mount.",
           "source": "Chromebook 3 p.101",
           "ambiguous": false
         },
         {
-          "name": "Head + Shoulder Sensory-Boom (optics/audio)",
+          "parentKey": "spyder-optic-mount",
+          "name": "Lowlight Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Lowlight cyberoptic mounted in the front optic mount."
+        },
+        {
+          "parentKey": "spyder-optic-mount",
+          "name": "Thermo Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Thermographic cyberoptic mounted in the front optic mount."
+        },
+        {
+          "parentKey": "spyder-optic-mount",
+          "name": "Telescopic Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Telescopic cyberoptic mounted in the front optic mount."
+        },
+        {
+          "parentKey": "spyder-optic-mount",
+          "name": "IR Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Infrared cyberoptic mounted in the front optic mount."
+        },
+        {
+          "parentKey": "spyder-optic-mount",
+          "name": "Times Square+ Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Times Square Marquee+ cyberoptic mounted in the front optic mount."
+        },
+        {
+          "key": "spyder-boom-head",
+          "name": "Head Sensory Boom",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "",
+          "types": [
+            "Implant"
+          ],
+          "acceptsTypes": [
+            "CyberOptic",
+            "CyberAudio"
+          ],
+          "optionsAvailable": 3,
           "humanityCost": "",
-          "description": "Head- and shoulder-mounted sensory boom carrying both optics and audio sensors.",
+          "description": "Head-mounted extensible sensory boom carrying both optic and audio sensors (split from the bundled Head + Shoulder Sensory-Boom package; the book lists no separate humanity cost for the booms). Hosts mixed cyberoptic/cyberaudio modules, with one free space beyond the fitted sensors.",
           "source": "Chromebook 3 p.101",
           "ambiguous": false
+        },
+        {
+          "parentKey": "spyder-boom-head",
+          "name": "Head Boom Optic",
+          "mountZone": "Head",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Optic sensor carried on the head sensory boom. The book does not itemize the boom's sensors beyond \"optics/audio\".",
+          "ambiguous": true
+        },
+        {
+          "parentKey": "spyder-boom-head",
+          "name": "Head Boom Audio Sensor",
+          "mountZone": "Head",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "source": "Chromebook 3 p.101",
+          "description": "Audio sensor carried on the head sensory boom. The book does not itemize the boom's sensors beyond \"optics/audio\".",
+          "ambiguous": true
+        },
+        {
+          "key": "spyder-boom-shoulder",
+          "name": "Shoulder Sensory Boom",
+          "mountZone": "Torso",
+          "side": "",
+          "cyberwareType": "",
+          "types": [
+            "Implant"
+          ],
+          "acceptsTypes": [
+            "CyberOptic",
+            "CyberAudio"
+          ],
+          "optionsAvailable": 3,
+          "humanityCost": "",
+          "description": "Shoulder-mounted extensible sensory boom carrying both optic and audio sensors (split from the bundled Head + Shoulder Sensory-Boom package; the book lists no separate humanity cost for the booms). Hosts mixed cyberoptic/cyberaudio modules, with one free space beyond the fitted sensors.",
+          "source": "Chromebook 3 p.101",
+          "ambiguous": false
+        },
+        {
+          "parentKey": "spyder-boom-shoulder",
+          "name": "Shoulder Boom Optic",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "source": "Chromebook 3 p.101",
+          "description": "Optic sensor carried on the shoulder sensory boom. The book does not itemize the boom's sensors beyond \"optics/audio\".",
+          "ambiguous": true
+        },
+        {
+          "parentKey": "spyder-boom-shoulder",
+          "name": "Shoulder Boom Audio Sensor",
+          "mountZone": "Torso",
+          "cyberwareType": "CyberAudio",
+          "isModule": true,
+          "allowedParent": "CyberAudio",
+          "source": "Chromebook 3 p.101",
+          "description": "Audio sensor carried on the shoulder sensory boom. The book does not itemize the boom's sensors beyond \"optics/audio\".",
+          "ambiguous": true
         },
         {
           "name": "Acoustic Alarm",

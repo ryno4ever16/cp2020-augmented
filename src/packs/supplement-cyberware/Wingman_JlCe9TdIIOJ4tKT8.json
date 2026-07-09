@@ -66,15 +66,16 @@
         },
         "optionSpaces": {
           "optic": [
-            0,
-            0
+            2,
+            2
           ],
           "audio": 5,
-          "Torso": 3,
-          "rArm": 2,
+          "Torso": 5,
+          "rArm": 3,
           "lArm": 3,
-          "rLeg": 1,
-          "lLeg": 2
+          "rLeg": 2,
+          "lLeg": 2,
+          "head": 1
         },
         "stats": {
           "ref": 15,
@@ -94,12 +95,50 @@
           "ambiguous": false
         },
         {
-          "name": "Visual Optics Package (Teleoptics, Image Enhancement, Anti-Dazzle, Times Square+)",
+          "name": "Teleoptics",
           "mountZone": "Head",
           "side": "",
           "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
           "humanityCost": "4",
-          "description": "Cyberoptic visual suite bundling Teleoptics, Image Enhancement, Anti-Dazzle, and Times Square+.",
+          "description": "Teleoptic cyberoptic (long-range magnified vision). Part of the factory visual package (Teleoptics, Image Enhancement, Anti-Dazzle, Times Square Plus); the book's HC 4 for the whole package is carried on this item.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "Image Enhancement",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Image Enhancement cyberoptic. Part of the factory visual package; HC carried on Teleoptics.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "Anti-Dazzle",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Anti-Dazzle cyberoptic (protection against flash blinding). Part of the factory visual package; HC carried on Teleoptics.",
+          "source": "Chromebook 2 p.78",
+          "ambiguous": false
+        },
+        {
+          "name": "Times Square Plus",
+          "mountZone": "Head",
+          "side": "",
+          "cyberwareType": "CyberOptic",
+          "isModule": true,
+          "allowedParent": "CyberOptic",
+          "humanityCost": "0",
+          "description": "Times Square Plus cyberoptic (data display overlay). Part of the factory visual package; HC carried on Teleoptics.",
           "source": "Chromebook 2 p.78",
           "ambiguous": false
         },
