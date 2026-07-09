@@ -495,6 +495,10 @@ body.cp-carolingian .cyberpunk .field > input,
 body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc; border: unset; background-color: unset; }
 body.cp-carolingian .cyberpunk .field .stat { border: 1px solid var(--restyler-border); }
 body.cp-carolingian .cyberpunk .field { border: unset; background-color: unset; }
+/* Module CSS loads in a later cascade layer than the system's, so the generic reset above beats the
+   base amber chip face despite its lower specificity. Hand background-color back to the system layer
+   for the chip tile (black caps text needs the amber); the border reset above still applies to it. */
+body.cp-carolingian .cyberpunk .field.chipware { background-color: revert-layer; }
 /* …but keep an outline on the skill-search box so it's visible against the dark terminal surface. */
 body.cp-carolingian .cyberpunk .field.skill-search-field { border: 1px solid var(--restyler-border); }
 body.cp-carolingian .cyberpunk label,
@@ -556,10 +560,12 @@ body.cp-carolingian .cyberpunk .field.skill label.chip-toggle > * { font-variant
 body.cp-carolingian .cyberpunk .field.skill input[type=checkbox] { display: none; }
 body.cp-carolingian .cyberpunk .field.skill input[type=checkbox]:checked + .chip-icon::before { opacity: 1; }
 
-/* Lists / images / controls / selects */
+/* Lists / images / controls / selects.
+   .chipware is excluded from the gear-row flattening: the chip tile shares .field.gear but its black
+   caps text needs the base amber chip face, and the row border reads as a stray line under the tile. */
 body.cp-carolingian .cyberpunk .field.skill,
 body.cp-carolingian .cyberpunk .field.action,
-body.cp-carolingian .cyberpunk .field.gear,
+body.cp-carolingian .cyberpunk .field.gear:not(.chipware),
 body.cp-carolingian .cyberpunk .field.item-edit,
 body.cp-carolingian .cyberpunk .field.netrun-program { background-color: unset; border-bottom: 1px solid var(--color-highlights-50); }
 body.cp-carolingian .cyberpunk .roll-image { height: 32px; }
