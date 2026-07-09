@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Language +1; Culture +1; General Knowledge +1",
-    "notes": "",
+    "notes": "<p>Per-country: Language+1, Culture+1, General Knowledge+1. | [Audit row +88 — Chromebook 1 p.74]</p>",
     "cost": 750,
     "weight": 0,
     "equipped": false,

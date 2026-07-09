@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Over 300 games available",
-    "notes": "",
+    "notes": "<p>40eb/gamechip; 300 video games in-mind; multiplayer via plug cables. | [Audit row +86 — Chromebook 1 p.74]</p>",
     "cost": 40,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

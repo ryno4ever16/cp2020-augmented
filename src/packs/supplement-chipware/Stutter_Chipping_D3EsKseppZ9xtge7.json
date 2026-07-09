@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Won't shoot designated (1 turn) friendlies",
-    "notes": "",
+    "notes": "<p>Chipware (Neuralware Processor). Smartgun skips mentally-designated non-targets, even Suppressive Fire. Req. cyberoptic w/ TimesSquare Plus + Targeting. 1 combat turn (10s) per 'friendly'. No help on critical fumble. | [Audit row +5 — Chromebook 3 p.38]</p>",
     "cost": 310,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Requires Phone Splice/Radio Link; accurate 5m",
-    "notes": "",
+    "notes": "<p>OCR '2SOeb'=250eb. Chipware. Requires Phone Splice or Radio Link + cyberaudio; 5m fix via WorldSat; display TimesSquare/Subdermal. | [Audit row +2 — Chromebook 3 p.37]</p>",
     "cost": 250,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

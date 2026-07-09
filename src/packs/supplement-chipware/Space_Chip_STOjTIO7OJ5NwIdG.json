@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Space Survival +2; Highrider Culture +1",
-    "notes": "",
+    "notes": "<p>Space Survival+2, Highrider Culture+1. | [Audit row +89 — Chromebook 1 p.74]</p>",
     "cost": 900,
     "weight": 0,
     "equipped": false,

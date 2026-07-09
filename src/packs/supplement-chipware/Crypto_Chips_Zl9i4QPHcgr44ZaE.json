@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Randomly generated substitution word code 600 per",
-    "notes": "",
+    "notes": "<p>USER-VERIFIED: 600eb per set of two; sets of 2/4/6/8 (each set a unique word-substitution code, covert speech). [OCR showed 'SOOeb' — S was a 6.] | [Audit row +4 — Chromebook 3 p.37]</p>",
     "cost": 600,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

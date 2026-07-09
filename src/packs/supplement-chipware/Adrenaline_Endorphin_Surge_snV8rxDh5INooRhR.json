@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Ignore Pain/Exhaustion; +1 BOD 3 times in 24 hrs",
-    "notes": "",
+    "notes": "<p>Blanks pain/exhaustion 48hrs (not head wounds); 3×/24hr adrenaline (BOD+1 for BTM/saves/skills, 1 min). Afterward sleep 2hr per 1hr over; stats halved. | [Audit row +92 — Chromebook 1 p.75]</p>",
     "cost": 800,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

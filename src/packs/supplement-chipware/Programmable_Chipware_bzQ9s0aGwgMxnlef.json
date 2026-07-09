@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Provides basic knowledge of a procedure",
-    "notes": "",
+    "notes": "<p>50eb/chip (400eb/10); Chip Programming Module (CPM) 1000eb. Job routines/policies — knowledge, not skill levels. | [Audit row +85 — Chromebook 1 p.74]</p>",
     "cost": 50,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

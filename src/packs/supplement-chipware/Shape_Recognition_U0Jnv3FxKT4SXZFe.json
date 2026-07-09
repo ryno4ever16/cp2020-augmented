@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Picks out chosen object; requires Time Square +",
-    "notes": "",
+    "notes": "<p>Reverse-VR chip: halo programmed object classes (semi- to hyper-specific); up to 3 chips at once; needs TimesSquare Plus. | [Audit row +266 — Chromebook 4 p.15]</p>",
     "cost": 500,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

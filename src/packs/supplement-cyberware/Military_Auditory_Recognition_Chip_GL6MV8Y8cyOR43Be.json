@@ -13,7 +13,7 @@
     "lastOwnerId": "",
     "surgCode": "",
     "humanityCost": "",
-    "cyberwareType": "",
+    "cyberwareType": "CHIPWARE",
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,
@@ -22,7 +22,13 @@
     "EffectActive": false,
     "Module": {},
     "CyberBodyType": {},
-    "CyberWorkType": {},
+    "CyberWorkType": {
+      "Type": "Chip",
+      "Types": [
+        "Chip"
+      ],
+      "ChipActive": false
+    },
     "slots": 0,
     "spaces": 0,
     "cwTypeLabel": "",

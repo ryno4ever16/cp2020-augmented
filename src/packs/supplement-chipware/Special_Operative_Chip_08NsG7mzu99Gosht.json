@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Language +1; Geography; and one other skill",
-    "notes": "",
+    "notes": "<p>Per-country: Language+1, Spec.Know[geography]+1, + choice of Wilderness Survival+1 / SK[police]+1 / Culture+1 / SK[military org]+1. | [Audit row +81 — Chromebook 1 p.73]</p>",
     "cost": 900,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

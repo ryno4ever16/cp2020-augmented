@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Imprints data on users brain",
-    "notes": "",
+    "notes": "<p>CPM chip imprints data on courier's brain; recall only on spoken 10-char code; courier trance-delivers, no memory after. VD-Near Impossible Interrogation to extract early. | [Audit row +78 — Chromebook 1 p.73]</p>",
     "cost": 600,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,

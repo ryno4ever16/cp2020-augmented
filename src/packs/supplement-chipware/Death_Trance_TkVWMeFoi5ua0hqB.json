@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "1-3 minutes to enter. Medtech 25+ to detect life",
-    "notes": "",
+    "notes": "<p>APTR death-like trance (timer recovery); 1-3 min to enter; Medtech 25+ to detect life. | [Audit row +95 — Chromebook 1 p.75]</p>",
     "cost": 1000,
     "weight": 0,
     "equipped": false,
@@ -23,11 +23,12 @@
     "Module": {},
     "CyberBodyType": {},
     "CyberWorkType": {
-      "Type": "Descriptive",
+      "Type": "Chip",
       "Types": [
-        "Descriptive"
+        "Chip"
       ],
-      "ChipSkills": {}
+      "ChipSkills": {},
+      "ChipActive": false
     },
     "slots": 0,
     "spaces": 0,
