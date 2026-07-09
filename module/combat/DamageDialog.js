@@ -27,6 +27,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     this.target     = target;
     this._overrides = {};   // { flatIndex: after-SP override }
     this._armorMode = null;
+    this._damageType = null;   // "" / null = a normal hit; "fire" | "radiation" | "heat"
     this._ablate    = null;
     this._coverSP   = 0;
   }
@@ -68,6 +69,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       penDamageMult: Number(this.payload.penDamageMult ?? 1.0),
       armorMode,
       coverSP,
+      damageType: this._damageType ?? "",
     });
 
     const btm = Number(this.target.system.stats?.bt?.modifier) || 0;
@@ -91,6 +93,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       armorMode,
       ablate,
       armorModes:   Object.values(ARMOR_MODES),
+      damageType:   this._damageType ?? "",
       ap:           Boolean(this.payload.ap),
       coverSP,
     };
@@ -103,6 +106,12 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     root.querySelector("select[name='armorMode']")?.addEventListener("change", ev => {
       this._armorMode = ev.currentTarget.value;
+      this._overrides = {};
+      this.render(false);
+    });
+
+    root.querySelector("select[name='damageType']")?.addEventListener("change", ev => {
+      this._damageType = ev.currentTarget.value;
       this._overrides = {};
       this.render(false);
     });
@@ -148,6 +157,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       penDamageMult: Number(this.payload.penDamageMult ?? 1.0),
       armorMode,
       coverSP:     this._coverSP,
+      damageType: this._damageType ?? "",
     });
     let total = 0;
     base.forEach((hit, i) => {
@@ -179,6 +189,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       penDamageMult: Number(this.payload.penDamageMult ?? 1.0),
       armorMode,
       coverSP,
+      damageType: this._damageType ?? "",
     });
 
     // Pre-compute all per-hit final values (shared between socket relay and direct paths).

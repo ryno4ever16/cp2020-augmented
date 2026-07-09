@@ -366,11 +366,19 @@ export function makeArmorAugmentedData(SystemModel) {
   };
 }
 
-/** The layer's SP against `damageType` ("" = a normal hit). Pure — see mechTypedSPField's rule. */
+/** The layer's SP against `damageType` ("" = a normal hit). Two shapes share the field. Pure.
+ *  - sp > 0 (dual-value armor, e.g. the Radsuit): a matching hit uses the typed value IN PLACE of
+ *    the conventional SP; any other hit uses the conventional SP.
+ *  - sp == 0 with a type set (fully-typed garments, e.g. the Salamanders): the coverage map IS the
+ *    typed SP — a matching hit uses the conventional (coverage) value, any other hit gets 0, so
+ *    the layer is skipped by the caller's sp>0 filter. Coverage keeps the garment's anatomy. */
 export function typedLayerSP(item, conventionalSP, damageType = "") {
   const t = item?.system?.mechTypedSP;
   const typedType = String(t?.type ?? "").trim();
+  const conv = Number(conventionalSP) || 0;
+  if (!typedType) return conv;
+  const matches = typedType === String(damageType ?? "").trim();
   const typedSP = Number(t?.sp) || 0;
-  if (typedType && typedSP > 0 && typedType === String(damageType ?? "").trim()) return typedSP;
-  return Number(conventionalSP) || 0;
+  if (typedSP > 0) return matches ? typedSP : conv;
+  return matches ? conv : 0;
 }

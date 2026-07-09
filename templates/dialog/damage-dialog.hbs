@@ -105,6 +105,17 @@
     </div>
 
     <div class="field">
+      <label>{{CPLocal "DamageDlgType"}}</label>
+      <span class="flex-pad"></span>
+      <select name="damageType" class="nogrow">
+        <option value=""          {{#if (equals damageType "")}}selected{{/if}}>{{CPLocal "DamageDlgTypeNormal"}}</option>
+        <option value="fire"      {{#if (equals damageType "fire")}}selected{{/if}}>{{CPLocal "DamageDlgTypeFire"}}</option>
+        <option value="radiation" {{#if (equals damageType "radiation")}}selected{{/if}}>{{CPLocal "DamageDlgTypeRadiation"}}</option>
+        <option value="heat"      {{#if (equals damageType "heat")}}selected{{/if}}>{{CPLocal "DamageDlgTypeHeat"}}</option>
+      </select>
+    </div>
+
+    <div class="field">
       <label>{{CPLocal "DamageDlgAblate"}}</label>
       <span class="flex-pad"></span>
       <input type="checkbox" name="ablate" {{#if ablate}}checked{{/if}}>

@@ -288,7 +288,7 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {boolean} p.dryRun        If true: runs math only, does not write HP or ablate
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
-export async function applyAreaDamages({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, dryRun = false }) {
+export async function applyAreaDamages({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, damageType = "", dryRun = false }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -310,7 +310,11 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
   // Keyed by the SP location (Groin → Torso), so a Groin hit draws on torso armor.
   const getLiveSP = (key) => {
     if (liveSP[key] !== undefined) return liveSP[key];
-    liveSP[key] = Number(target.system.hitLocations?.[spLocationKey(key)]?.stoppingPower) || 0;
+    // Typed hits — and any wearer of typed layers, even on normal hits — re-derive SP per layer
+    // (the prepared fold is type-blind); plain wearers keep the prepared value (ablation included).
+    liveSP[key] = (damageType || _wearsTypedLayers(target))
+      ? _deriveLiveSP(target, spLocationKey(key), damageType)
+      : Number(target.system.hitLocations?.[spLocationKey(key)]?.stoppingPower) || 0;
     return liveSP[key];
   };
 
@@ -359,7 +363,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
 
       if (ablate && armorMode === ARMOR_MODES.FULL && penetrates && netDamage > 0) {
         await ablateLocationOnce(target, spKey);
-        liveSP[location] = _deriveLiveSP(target, spKey);
+        liveSP[location] = _deriveLiveSP(target, spKey, damageType);
       }
     }
   }
@@ -379,13 +383,16 @@ export async function resolveAreaDamages({ target, areaDamages, ap, edged = fals
  * BTM is not applied here — the dialog shows damageAfterSP so the GM can override it,
  * then applies BTM at click time.
  */
-export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0 }) {
+export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0, damageType = "" }) {
   const results = [];
   const liveSP  = {};
 
   const getLiveSP = (key) => {
     if (liveSP[key] !== undefined) return liveSP[key];
-    liveSP[key] = Number(target.system.hitLocations?.[spLocationKey(key)]?.stoppingPower) || 0;
+    // Mirrors applyAreaDamages: typed hits and typed-layer wearers re-derive per layer.
+    liveSP[key] = (damageType || _wearsTypedLayers(target))
+      ? _deriveLiveSP(target, spLocationKey(key), damageType)
+      : Number(target.system.hitLocations?.[spLocationKey(key)]?.stoppingPower) || 0;
     return liveSP[key];
   };
 
@@ -477,6 +484,15 @@ export async function ablateLocationByAmount(target, location, amount) {
     // fromCyberpunkDamageSystem lets the live-sheet hook refresh open sheets on every client.
     await target.updateEmbeddedDocuments("Item", updates, { render: false, fromCyberpunkDamageSystem: true });
   }
+}
+
+
+/** Does the target wear any typed-SP layer (armor or cyberware)? Such actors always take the
+ *  type-aware per-layer derivation — the base prepared fold sums coverage type-blindly, so a
+ *  fire-only garment would wrongly harden them against normal hits. Pure. */
+function _wearsTypedLayers(target) {
+  return (target?.items?.contents ?? []).some(i =>
+    !!i.system?.equipped && String(i.system?.mechTypedSP?.type ?? "").trim() !== "");
 }
 
 function _deriveLiveSP(target, location, damageType = "") {
