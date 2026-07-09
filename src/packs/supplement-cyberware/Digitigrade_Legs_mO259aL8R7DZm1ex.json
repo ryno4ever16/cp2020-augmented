@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>OCR 'A,OOO'=4000. Surgery CR. | [Audit row +142 — Chromebook 2 p.102]</p>",
+    "notes": "<p>OCR 'A,OOO'=4000. Surgery CR. | [Audit row +142 — Chromebook 2 p.102]</p><p>Animal-style hind legs, replaces both legs (Chromebook 2 p.102-103): without a tail the recipient is at −2 MA and −1 REF whenever on their feet (wired as the default); acquired WITH a tail they instead increase MA by 1 — edit the stat mods on this item to +1 MA if a tail is installed.</p>",
     "cost": 4000,
     "weight": 0,
     "equipped": false,
@@ -31,7 +31,32 @@
     "cwSubtypeLabel": "",
     "effectTypes": [
       "None"
-    ]
+    ],
+    "mechStatMods": {
+      "enabled": true,
+      "mods": [
+        {
+          "stat": "ma",
+          "mod": -2,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": false,
+          "set": 0
+        },
+        {
+          "stat": "ref",
+          "mod": -1,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": false,
+          "set": 0
+        }
+      ]
+    }
   },
   "effects": [],
   "folder": null,

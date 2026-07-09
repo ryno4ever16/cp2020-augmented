@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Chip socket for cyber-animals (Chromebook 3): holds and runs chips up to the animal's INT in concurrent programs (max +3 skill). The capacity is the animal's INT — set Options Available on this item to that value to use it as a chip container; the count is not a fixed book number.</p>",
     "cost": 100,
     "weight": 0,
     "equipped": false,
@@ -24,7 +24,11 @@
     "CyberBodyType": {
       "Type": "Nervous"
     },
-    "CyberWorkType": {},
+    "CyberWorkType": {
+      "AcceptsTypes": [
+        "Chip"
+      ]
+    },
     "slots": 0,
     "spaces": 0,
     "cwTypeLabel": "",

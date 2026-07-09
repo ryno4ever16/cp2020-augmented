@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Connects a smartgun on grasp — no interface cable needed; the weapon needs matching pads (+200eb on the smartchipping cost) and your plug must be in the wrist (Chromebook 3 p.14). On a failed Average REF roll when first grasping the gun, the glove gives a −1 WA penalty — conditional, so apply it in the modifiers window when it happens.</p>",
     "cost": 110,
     "weight": 0,
     "equipped": false,
