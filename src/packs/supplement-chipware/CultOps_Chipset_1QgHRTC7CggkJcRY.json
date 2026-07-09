@@ -4,8 +4,8 @@
   "type": "cyberware",
   "img": "icons/svg/biohazard.svg",
   "system": {
-    "flavor": "",
-    "notes": "",
+    "flavor": "Language +3; Specific Culture +2; Local Geography +1",
+    "notes": "<p>A set of two chips: one has the language at +3, the other Specific Culture at +2 and Local Geography at +1 — enough to prevent basic faux pas (Solo of Fortune 2). Pick the language on first activation; the culture/geography skills are created for the chosen region.</p>",
     "cost": 1500,
     "weight": 0,
     "equipped": false,
@@ -27,7 +27,12 @@
       "Types": [
         "Chip"
       ],
-      "ChipActive": false
+      "ChipActive": false,
+      "ChipSkills": {
+        "(choose:Language)": 3,
+        "Culture": 2,
+        "Local Geography": 1
+      }
     },
     "slots": 0,
     "spaces": 0,
