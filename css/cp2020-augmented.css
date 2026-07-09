@@ -292,6 +292,12 @@
    label instead of being stretched to fill the .field row, mirroring the fork's own .cyber-install. --- */
 .cyberpunk .field button.cp2020ae-cyber-install { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
 
+/* --- Install-into pickers (cyberware parent implant / misc container) list ITEM NAMES, so the
+   longest option would otherwise set the select's flex auto-minimum (min-content) and shove it
+   over the row label. A fixed min-width replaces that auto-minimum: the select shares leftover
+   row space like every other field control and clips long names instead of overflowing. --- */
+.cyberpunk .field select.cp2020ae-install-picker { flex: 1 1 0; min-width: 6em; }
+
 /* --- In-sheet Recurring Services panel (injected into the gear tab body; NOT a nav tab). --- */
 .cp2020ae-services-panel { margin-top: 8px; border-top: 1px solid rgba(184,145,106,0.4); padding-top: 6px; }
 .cp2020ae-services-header .larger { font-weight: bold; }

@@ -189,7 +189,7 @@
     <div class="field" title="{{CPLocal 'MechContainerInstalledInHint'}}">
         <label>{{CPLocal "MechContainerInstalledIn"}}</label>
         <span class="flex-pad"></span>
-        <select name="system.mechContainer.installedIn">
+        <select name="system.mechContainer.installedIn" class="cp2020ae-install-picker">
             <option value="" {{#unless @root.mechContainerInstalledIn}}selected{{/unless}}>{{CPLocal "MechContainerLoose"}}</option>
             {{#each @root.mechContainerTargets}}
             <option value="{{id}}" {{#if (equals @root.mechContainerInstalledIn id)}}selected{{/if}}>{{name}} ({{free}})</option>
