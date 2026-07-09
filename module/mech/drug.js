@@ -269,6 +269,15 @@ export async function takeDrug(item) {
     ui.notifications?.warn(localizeParam("DrugNoActor", { name: item.name }));
     return false;
   }
+  // One active dose per drug: the book's re-dose rule stacks only the side-effect PENALTIES,
+  // never the benefits (Core, drug side effects — "the penalty is cumulative"), so a second Take
+  // while a dose runs is refused instead of silently refreshing the timer. Deliberate re-dosing
+  // stays possible: end the dose (Wear-off) and take again — the crash overlay does not block.
+  const activeDose = drugMarkersFor(actor).find(m => m.itemId === (item.id ?? item._id) && !m.isPenalty);
+  if (activeDose) {
+    ui.notifications?.warn(localizeParam("DrugAlreadyActive", { name: item.name }));
+    return false;
+  }
   const turns = await rollDurationTurns(drug.durationTurns);
   const marker = drugMarker(item, drug, turns);
   await setDrugMarker(actor, marker);

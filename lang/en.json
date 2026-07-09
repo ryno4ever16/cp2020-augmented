@@ -981,6 +981,7 @@
     "DrugSaveResultLose": "<span class=\"result-fail\">CRASH</span> — the after-effects hit {actor}.",
     "DrugSaveResultPenalty": "{penalty}",
     "DrugNoActor": "{name} must be carried by a character to take.",
+    "DrugAlreadyActive": "{name} is already active — a new dose waits until the current one wears off (or use Wear-off now).",
     "StatusStripKindLight": "Light",
     "StatusStripKindVision": "Vision",
     "StatusStripKindProtection": "Protection",
