@@ -5,7 +5,7 @@
   "img": "icons/svg/shield.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Radiation-hardened suit (Deep Space): radiation-SP 6 — against a radiation hit this layer contributes 6 (its ballistic SP does not stop radiation); against conventional damage its normal SP applies.</p>",
     "cost": 30000,
     "weight": 0,
     "equipped": false,
@@ -21,7 +21,11 @@
     },
     "encumbrance": 0,
     "armorType": "",
-    "clothingWeight": ""
+    "clothingWeight": "",
+    "mechTypedSP": {
+      "type": "radiation",
+      "sp": 6
+    }
   },
   "effects": [],
   "folder": null,

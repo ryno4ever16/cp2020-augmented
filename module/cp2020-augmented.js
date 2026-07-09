@@ -35,7 +35,7 @@ import { openIpTracker } from "./ip/tracker.js";
 import { PresetPicker } from "./dialog/preset-picker.js";
 import { registerPinnedSubwindows } from "./pin-window.js";
 import { registerDataCorrections } from "./data-corrections.js";
-import { makeMechAugmentedData } from "./data/mech-item-data.js";
+import { makeMechAugmentedData, makeArmorAugmentedData } from "./data/mech-item-data.js";
 import { makeAmmoAugmentedData } from "./data/ammo-item-data.js";
 import { registerMechLight } from "./mech/light.js";
 import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
@@ -169,6 +169,9 @@ Hooks.once("init", function () {
     // cyberware gain mechLight (P3 light emitters). Same extend-the-registered-model pattern.
     misc:             makeMechAugmentedData(CONFIG.Item.dataModels.misc),
     cyberware:        makeMechAugmentedData(CONFIG.Item.dataModels.cyberware),
+    // Typed SP (fire/radiation/heat garments -- the D5 conditional-SP model): armor gains only the
+    // mechTypedSP slot; misc/cyberware get it through makeMechAugmentedData above.
+    armor:            makeArmorAugmentedData(CONFIG.Item.dataModels.armor),
     // Ammo two-axis fields (caliber/modifier/…): the base model strips them on vanilla, which broke
     // the caliber-scoped modifier picker. Extend it, adding only the fields the base lacks (no-op on
     // the fork). See module/data/ammo-item-data.js.

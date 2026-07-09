@@ -5,7 +5,7 @@
   "img": "systems/cyberpunk2020/img/armor-icon.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Typed armor (Chromebook 1): SP 20 against FIRE damage only — no protection against any other damage type. On a fire hit this layer contributes 20; on any other hit it is skipped (its conventional SP is 0).</p>",
     "cost": 65,
     "weight": 0,
     "equipped": false,
@@ -37,7 +37,11 @@
         "ablation": 0
       }
     },
-    "encumbrance": 0
+    "encumbrance": 0,
+    "mechTypedSP": {
+      "type": "fire",
+      "sp": 20
+    }
   },
   "effects": [],
   "folder": null,

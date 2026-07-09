@@ -322,6 +322,19 @@ function mechDrugField() {
  * @param {typeof foundry.abstract.TypeDataModel} SystemModel  the system's registered model to extend
  * @returns {typeof foundry.abstract.TypeDataModel}
  */
+/** Damage-type-conditional SP (the D5 typed-SP model, user-ruled 2026-07-10): a layer whose typed
+ *  entry MATCHES the incoming damage type contributes `sp` in place of its conventional SP
+ *  (Radsuit vs radiation = 6, not its ballistic 16); a non-matching typed layer falls back to its
+ *  conventional SP, so a fire-only garment (conventional 0) is SKIPPED by the existing sp>0 filter
+ *  before the proportional combine. One flat slot — no wired item carries two typed entries. */
+function mechTypedSPField() {
+  const f = foundry.data.fields;
+  return new f.SchemaField({
+    type: new f.StringField({ initial: "" }),   // "" = none; "fire" | "radiation" | "heat"
+    sp:   new f.NumberField({ initial: 0 })
+  });
+}
+
 export function makeMechAugmentedData(SystemModel) {
   return class CyberpunkMechAugmentedData extends SystemModel {
     static defineSchema() {
@@ -334,8 +347,30 @@ export function makeMechAugmentedData(SystemModel) {
         mechConsumable: mechConsumableField(),
         mechContainer: mechContainerField(),
         mechStatMods: mechStatModsField(),
-        mechDrug: mechDrugField()
+        mechDrug: mechDrugField(),
+        mechTypedSP: mechTypedSPField()
       };
     }
   };
+}
+
+/** Armor items need only the typed-SP slot (their other mechanics live in the base armor model). */
+export function makeArmorAugmentedData(SystemModel) {
+  return class CyberpunkArmorAugmentedData extends SystemModel {
+    static defineSchema() {
+      return {
+        ...super.defineSchema(),
+        mechTypedSP: mechTypedSPField()
+      };
+    }
+  };
+}
+
+/** The layer's SP against `damageType` ("" = a normal hit). Pure — see mechTypedSPField's rule. */
+export function typedLayerSP(item, conventionalSP, damageType = "") {
+  const t = item?.system?.mechTypedSP;
+  const typedType = String(t?.type ?? "").trim();
+  const typedSP = Number(t?.sp) || 0;
+  if (typedType && typedSP > 0 && typedType === String(damageType ?? "").trim()) return typedSP;
+  return Number(conventionalSP) || 0;
 }

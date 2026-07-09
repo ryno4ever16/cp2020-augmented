@@ -19,6 +19,7 @@ import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { localize, localizeParam, combineArmorSP } from "../utils.js";
 import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
 import { isFullBorg, borgArmorSP, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
+import { typedLayerSP } from "../data/mech-item-data.js";
 
 export const ARMOR_MODES = {
   FULL:   "full",
@@ -478,14 +479,17 @@ export async function ablateLocationByAmount(target, location, amount) {
   }
 }
 
-function _deriveLiveSP(target, location) {
+function _deriveLiveSP(target, location, damageType = "") {
   const contributors = getArmorContributors(target, location);
   const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
+  // Typed SP: a layer whose mechTypedSP matches the hit's damage type contributes its typed value
+  // in place of the conventional one; a non-matching typed layer falls back to conventional, so a
+  // fire-only garment (conventional 0) is skipped by the sp>0 filter before the combine.
   const sps = allItems.map(item => {
     if (item.type === "cyberware") {
-      return Number(item.system?.CyberWorkType?.Locations?.[location]) || 0;
+      return typedLayerSP(item, Number(item.system?.CyberWorkType?.Locations?.[location]) || 0, damageType);
     }
-    return Number(item.system?.coverage?.[location]?.stoppingPower) || 0;
+    return typedLayerSP(item, Number(item.system?.coverage?.[location]?.stoppingPower) || 0, damageType);
   }).filter(sp => sp > 0);
   let combined = sps.reduce((acc, sp) => combineArmorSP(acc, sp), 0);
   // A full-conversion borg's chassis SP is intrinsic (no armor item), so fold it in here too — this
