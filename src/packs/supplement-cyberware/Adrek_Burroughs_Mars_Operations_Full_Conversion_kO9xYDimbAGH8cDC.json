@@ -113,7 +113,13 @@
           "humanityCost": "1",
           "description": "Body shielding against radiation (6 RSP).",
           "source": "Chromebook 3 p.98",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechTypedSP": {
+              "type": "radiation",
+              "sp": 6
+            }
+          }
         },
         {
           "name": "Sand Feet (Left)",
@@ -143,7 +149,13 @@
           "humanityCost": "1",
           "description": "Body temperature control granting +5 SP versus heat.",
           "source": "Chromebook 3 p.98",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechTypedSP": {
+              "type": "heat",
+              "sp": 5
+            }
+          }
         }
       ]
     }

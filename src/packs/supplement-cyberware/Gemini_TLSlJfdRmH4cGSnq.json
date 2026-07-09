@@ -101,7 +101,18 @@
           "humanityCost": "2",
           "description": "Disguise option granting +5 to Disguise (1000eb).",
           "source": "Chromebook 2 p.77",
-          "ambiguous": true
+          "ambiguous": true,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Disguise",
+              "skillMod": 5,
+              "auto": false,
+              "statName": "",
+              "statMod": 0
+            }
+          }
         }
       ]
     }

@@ -102,7 +102,18 @@
           "humanityCost": "2",
           "description": "Spotlights with a 100m range.",
           "source": "Chromebook 2 p.68",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechLight": {
+              "enabled": true,
+              "on": false,
+              "shape": "cone",
+              "bright": 50,
+              "dim": 100,
+              "angle": 45,
+              "color": ""
+            }
+          }
         },
         {
           "name": "Electrified Hull",
@@ -110,7 +121,7 @@
           "side": "",
           "cyberwareType": "",
           "humanityCost": "1",
-          "description": "Electrified hull that shocks anyone touching it (1D6+2 damage plus stun -3).",
+          "description": "Electrified hull that shocks anyone touching it (1D6+2 damage plus stun -3). Printed numbers kept descriptive — a contact-damage mechanic for one item isn't wired; MARKED for possible post-release review (user ruling 2026-07-10, non-blocking).",
           "source": "Chromebook 2 p.68",
           "ambiguous": false
         },

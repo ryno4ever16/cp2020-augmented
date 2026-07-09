@@ -102,7 +102,15 @@
           "humanityCost": "1",
           "description": "Anti-Dazzle cyberoptic option (protection against blinding flashes/glare).",
           "source": "Chromebook 2 p.80",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            }
+          }
         },
         {
           "name": "Radiation Detector",
@@ -132,7 +140,18 @@
           "humanityCost": "1",
           "description": "Techscanner compumod (+3 TECH).",
           "source": "Chromebook 2 p.80",
-          "ambiguous": true
+          "ambiguous": true,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "",
+              "skillMod": 0,
+              "auto": false,
+              "statName": "TECH",
+              "statMod": 3
+            }
+          }
         },
         {
           "name": "Toolhand (Left)",

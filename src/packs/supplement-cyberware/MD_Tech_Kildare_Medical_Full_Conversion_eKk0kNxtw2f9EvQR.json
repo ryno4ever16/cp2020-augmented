@@ -92,7 +92,18 @@
           "humanityCost": "1",
           "description": "Onboard medical scanner granting +2 to the Diagnose skill.",
           "source": "Chromebook 3 p.95",
-          "ambiguous": true
+          "ambiguous": true,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Diagnose Illness",
+              "skillMod": 2,
+              "auto": true,
+              "statName": "",
+              "statMod": 0
+            }
+          }
         },
         {
           "name": "Times Square Marquee",
@@ -122,7 +133,16 @@
           "humanityCost": "1",
           "description": "Enhanced thermographic (thermal-imaging) cyberoptic.",
           "source": "Chromebook 3 p.95",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "thermograph",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "name": "Phone Splice",
@@ -152,7 +172,18 @@
           "humanityCost": "2",
           "description": "Image-enhancement cyberoptic granting +2 to Awareness.",
           "source": "Chromebook 3 p.95",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true,
+              "statName": "",
+              "statMod": 0
+            }
+          }
         },
         {
           "name": "Amplified Hearing (+2)",
@@ -162,7 +193,18 @@
           "humanityCost": "1",
           "description": "Amplified-hearing cyberaudio option (+2).",
           "source": "Chromebook 3 p.95",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true,
+              "statName": "",
+              "statMod": 0
+            }
+          }
         },
         {
           "name": "Stim System",

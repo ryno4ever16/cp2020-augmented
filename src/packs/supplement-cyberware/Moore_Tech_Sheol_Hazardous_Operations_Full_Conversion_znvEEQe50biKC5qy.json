@@ -113,7 +113,18 @@
           "humanityCost": "1",
           "description": "Toxin scanner giving +3 to chemical analysis.",
           "source": "Chromebook 3 p.93",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Chemistry",
+              "skillMod": 3,
+              "auto": false,
+              "statName": "",
+              "statMod": 0
+            }
+          }
         },
         {
           "name": "Radiation Shielding (RSP 10)",
@@ -123,7 +134,13 @@
           "humanityCost": "1",
           "description": "Radiation shielding (RSP 10).",
           "source": "Chromebook 3 p.93",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechTypedSP": {
+              "type": "radiation",
+              "sp": 10
+            }
+          }
         },
         {
           "name": "Toxin Shielding",
