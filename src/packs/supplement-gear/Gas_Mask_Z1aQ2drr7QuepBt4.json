@@ -5,14 +5,20 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>US Army mask: filters most impurities and many airborne agents (Neo Tribes p.55). Filters 10eb, change at intervals; two filters swap sequentially in toxic environments. With an Army MOPP suit: complete protection from all but very expensive nerve agents — exotic agents are the GM's call.</p>",
     "cost": 200,
     "weight": 0,
     "equipped": false,
     "source": "Neo Tribes",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechProtection": {
+      "enabled": true,
+      "gas": {
+        "immune": true
+      }
+    }
   },
   "effects": [],
   "folder": null,

@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Cyberoptic Triangulation scope, the obsolete-generation model: +1 to WA (Solo of Fortune). Requires a wired shooter (cyberoptic interface) — the suggestion renders unticked; claim it when wired and sighting through the unit.</p>",
     "cost": 7000,
     "weight": null,
     "equipped": false,
     "source": "Solo of Fortune",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 1,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,
