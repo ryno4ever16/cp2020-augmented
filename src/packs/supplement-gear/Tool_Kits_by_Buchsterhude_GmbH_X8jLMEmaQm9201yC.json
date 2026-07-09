@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Bespoke tool kits fitted to their owner (Chromebook 3 p.13): +1 to repair & construction skill rolls for the designated owner, −1 for anyone else using them. Owner-relative and multi-skill — apply the ±1 in the modifiers window; nothing is auto-wired.</p>",
     "cost": 1000,
     "weight": 0,
     "equipped": false,

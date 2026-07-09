@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Index-priced. | [Audit row +46 — Chromebook 1 p.93]</p>",
+    "notes": "<p>Index-priced. | [Audit row +46 — Chromebook 1 p.93]</p><p>Smartgun diagnostic option (Chromebook 1 p.12): monitors the weapon and, on a jam, automatically identifies the problem — printed as '+2 to his TECH roll to unjam the gun'. Wired as an unticked Weaponsmith suggestion (the TECH-stat weapon-repair skill); claim it on the unjam roll, whatever the table rolls it with. Requires the TimesSquare Marquee cyberoptic for readouts.</p>",
     "cost": 500,
     "weight": 0,
     "equipped": false,
     "source": "Chromebook 1 p.93",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 0,
+      "skillName": "Weaponsmith",
+      "skillMod": 2,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,
