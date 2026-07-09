@@ -225,6 +225,19 @@ export const DATA_CORRECTIONS = {
     tyrJCuKZ85jdTU4q: cwAttackSkill("Драка"),        // Ripper Hand → Brawling
     // Web Foot: Swimming +3 was keyed by the RU skill pack's _id → add the EN name key.
     rLCoPPiA8FLcLLdm: skillAlias("VP45FA534hCM3PdM", "Swimming", 3),
+    // Cyberarm compartments: the pack ships them as inert Descriptive options (OptionsAvailable 0),
+    // so they can't actually HOLD anything. Giving them slots makes them containers in the Q6
+    // engine: install into a cyberarm as usual, then stow gear inside (drag onto the option, or the
+    // gear item's "installed into" picker). WHAT fits is deliberately not type-gated — size is the
+    // GM's call (the slot count is a soft default, editable on the item as Options Available).
+    "84GMoHFhEThjcYTi": {   // Hidden Holster — holds the one holstered weapon
+      patch: { "CyberWorkType.OptionsAvailable": 1 },
+      notesAppend: "Container: 1 stowed-item slot for the holstered weapon (drag it onto this option once the holster is installed). Weapon size based on Body Type — what fits is the GM's call.",
+    },
+    I5jT46ciWO4jF1pQ: {     // Storage Space — a small lockable 2"x6" compartment
+      patch: { "CyberWorkType.OptionsAvailable": 2 },
+      notesAppend: "Container: 2 stowed-item slots (2\"x6\" lockable space). What fits is the GM's call; the slot count is editable on this item (Options Available).",
+    },
   },
   "cyberpunk2020.cyberweapons": {
     "32q2BsXIyO3zzNP2": cwAttackSkill("Драка"),        // Scratchers → Brawling
