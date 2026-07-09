@@ -36,7 +36,10 @@ export const MODE_TABLE = {
   lowlight:    { prefs: ["lightAmplification", "darkvision", "basic"], heat: false },
   infrared:    { prefs: ["darkvision", "basic"], heat: true },
   thermograph: { prefs: ["basic"], heat: true },
-  uv:          { prefs: ["darkvision", "basic"], heat: false }
+  uv:          { prefs: ["darkvision", "basic"], heat: false },
+  // Sonic imaging (CB4 p.13 processor + the Tritech goggles): sees in pitch-blackness regardless
+  // of the EM spectrum — darkvision, no heat sense (sound, not IR).
+  echolocation: { prefs: ["darkvision", "basic"], heat: false }
 };
 /** Back-compat alias (pre-upgrade name, consumed by resolveVisionMode + older specs). */
 export const MODE_VISION_PREFS = Object.fromEntries(

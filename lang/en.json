@@ -919,6 +919,7 @@
     "MechVisionModeInfrared": "Infrared",
     "MechVisionModeThermograph": "Thermograph",
     "MechVisionModeUv": "Ultraviolet",
+    "MechVisionModeEcholocation": "Echolocation",
     "MechVisionRange": "Range (m)",
     "MechVisionRequires": "Requires item",
     "MechVisionRequiresHint": "Illuminator dependency: the device only works while the actor carries one of these items, equipped and switched on. Exact item names, several separated by | — leave empty for a self-sufficient device.",

@@ -173,6 +173,9 @@ export const DATA_CORRECTIONS = {
     // PR #41 name fixes + P4 vision profiles (their own text: IR / light amplification).
     j8D1o1qngrZDsmaB: { name: "IR Goggles", patch: mechVision("infrared") },       // was "Googles"
     cok1ozJSd3VniVAt: { name: "Light Booster Goggles", patch: mechVision("lowlight") },
+    // Invisible illumination can't be a token light (everyone would see it); the engine instead
+    // recognizes this item BY NAME as an equipped illuminator for requiresItem-gated viewers.
+    "79Nyt0GU3pYGu7BF": { notesAppend: note("Invisible infrared illuminator — lights a scene only for IR/UV viewers (Core). Carrying it equipped satisfies devices that require an IR source (e.g. UV optics list it by name); it never paints a visible token light.") },  // IR Flash
   },
   "cyberpunk2020.tools": {
     gkjBAKUHKs4pd9uE: { name: "Protective Goggles" },

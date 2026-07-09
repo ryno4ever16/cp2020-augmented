@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Works identically to the cybernetic echolocation processor system (Chromebook 4 p.68, processor on p.13): emitters and microphones build a 3-D sonic image — see in pitch-blackness regardless of the EM spectrum. Printed caveats: −1 Awareness for visual detail while in use (−2 for colors/textures), and a white-noise generator jams it. The book prints no range; 20 m is the engine's standard device default.</p>",
     "cost": 1500,
     "weight": 0.5,
     "equipped": false,
     "source": "Chromebook 4",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechVision": {
+      "enabled": true,
+      "on": false,
+      "mode": "echolocation",
+      "range": 20,
+      "requiresItem": ""
+    }
   },
   "effects": [],
   "folder": null,
