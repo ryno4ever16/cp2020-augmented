@@ -84,6 +84,10 @@ export function loadoutItemData(spec, parentId, bodyId = parentId) {
         IsModule: !!spec?.isModule,
       },
       CyberWorkType: cwt,
+      // Mech engine payloads ride the spec verbatim (mechVision / mechRollMods / mechTypedSP /
+      // mechProtection / ...): the borg-option wiring pass stores each stub's payload in its
+      // manifest entry, and materialization copies it onto the created item unchanged.
+      ...(spec?.mech && typeof spec.mech === "object" ? foundry.utils.deepClone(spec.mech) : {}),
     },
     flags: { [SCOPE]: { [SOURCE_FLAG]: bodyId } },
   };
