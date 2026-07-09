@@ -105,7 +105,29 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 2 p.82",
-          "description": "Night-Vision cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+          "description": "Night-Vision cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount.",
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "lowlight",
+              "range": 20,
+              "requiresItem": ""
+            },
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            },
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true
+            }
+          }
         },
         {
           "parentKey": "dragoon-optic-mount",
@@ -115,7 +137,29 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 2 p.82",
-          "description": "Thermal cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+          "description": "Thermal cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount.",
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "thermograph",
+              "range": 20,
+              "requiresItem": ""
+            },
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            },
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true
+            }
+          }
         },
         {
           "parentKey": "dragoon-optic-mount",
@@ -125,7 +169,22 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 2 p.82",
-          "description": "Long-Range cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+          "description": "Long-Range cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount.",
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            },
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true
+            }
+          }
         },
         {
           "parentKey": "dragoon-optic-mount",
@@ -135,7 +194,29 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 2 p.82",
-          "description": "IR-Vision cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+          "description": "IR-Vision cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount.",
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "infrared",
+              "range": 20,
+              "requiresItem": ""
+            },
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            },
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true
+            }
+          }
         },
         {
           "parentKey": "dragoon-optic-mount",
@@ -145,7 +226,22 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 2 p.82",
-          "description": "Heads-Up Display cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount."
+          "description": "Heads-Up Display cyberoptic (with Image Enhancement, Anti-Dazzle, Targeting Scope) mounted in the front optic mount.",
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            },
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true
+            }
+          }
         },
         {
           "name": "Amplified Hearing (Level Damper, Enhanced Range)",
@@ -155,7 +251,22 @@
           "allowedParent": "CyberAudio",
           "humanityCost": "5",
           "source": "Chromebook 2 p.82",
-          "description": "Amplified Hearing with Level Damper and Enhanced Range, in a chassis audio socket. Carries the HC 5 for the whole factory cyberaudio package (this suite, the Long-Range Radio, and the Radar Detector)."
+          "description": "Amplified Hearing with Level Damper and Enhanced Range, in a chassis audio socket. Carries the HC 5 for the whole factory cyberaudio package (this suite, the Long-Range Radio, and the Radar Detector).",
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Awareness/Notice",
+              "skillMod": 1,
+              "auto": true
+            },
+            "mechProtection": {
+              "enabled": true,
+              "sonic": {
+                "damageMult": 0.75
+              }
+            }
+          }
         },
         {
           "name": "Long-Range Radio (25km, 6-freq, Scrambler)",
@@ -339,7 +450,16 @@
           "mountZone": "Nervous",
           "humanityCost": "4",
           "source": "Chromebook 2 p.83",
-          "description": "Coordinates 5+ Dragoons: +1 Initiative/Attack, +2 Awareness/Defense when linked."
+          "description": "Coordinates 5+ Dragoons: +1 Initiative/Attack, +2 Awareness/Defense when linked.",
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": false
+            }
+          }
         },
         {
           "name": "IR Thermal Dampening",

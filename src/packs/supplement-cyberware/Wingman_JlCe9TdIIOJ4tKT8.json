@@ -116,7 +116,16 @@
           "humanityCost": "0",
           "description": "Image Enhancement cyberoptic. Part of the factory visual package; HC carried on Teleoptics.",
           "source": "Chromebook 2 p.78",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Awareness/Notice",
+              "skillMod": 2,
+              "auto": true
+            }
+          }
         },
         {
           "name": "Anti-Dazzle",
@@ -128,7 +137,15 @@
           "humanityCost": "0",
           "description": "Anti-Dazzle cyberoptic (protection against flash blinding). Part of the factory visual package; HC carried on Teleoptics.",
           "source": "Chromebook 2 p.78",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            }
+          }
         },
         {
           "name": "Times Square Plus",

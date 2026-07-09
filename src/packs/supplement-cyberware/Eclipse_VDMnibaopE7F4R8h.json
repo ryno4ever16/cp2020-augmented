@@ -94,7 +94,16 @@
           "humanityCost": "4",
           "description": "Amplified Hearing cyberaudio. Humanity cost 4 covers the whole factory audio package (Amplified Hearing, Level Damper, Radio with Scrambler, Homing Tracer).",
           "source": "Chromebook 2 p.72",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 0,
+              "skillName": "Awareness/Notice",
+              "skillMod": 1,
+              "auto": true
+            }
+          }
         },
         {
           "name": "Level Damper",
@@ -106,7 +115,15 @@
           "humanityCost": "0",
           "description": "Level Damper cyberaudio (humanity cost shared with the factory audio package).",
           "source": "Chromebook 2 p.72",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "sonic": {
+                "damageMult": 0.75
+              }
+            }
+          }
         },
         {
           "name": "Radio with Scrambler",
@@ -162,7 +179,16 @@
           "humanityCost": "6",
           "description": "Thermograph cyberoptic mounted in the sensory boom. Humanity cost 6 covers the whole factory optic package (Thermograph, Targeting, Low-Lite, Anti-Dazzle, Times Square Plus).",
           "source": "Chromebook 2 p.72",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "thermograph",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "parentKey": "eclipse-sensory-boom",
@@ -175,7 +201,16 @@
           "humanityCost": "0",
           "description": "Targeting cyberoptic mounted in the sensory boom (humanity cost shared with the factory optic package).",
           "source": "Chromebook 2 p.72",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "",
+              "skillMod": 0,
+              "auto": true
+            }
+          }
         },
         {
           "parentKey": "eclipse-sensory-boom",
@@ -188,7 +223,16 @@
           "humanityCost": "0",
           "description": "Low-Lite cyberoptic mounted in the sensory boom (humanity cost shared with the factory optic package).",
           "source": "Chromebook 2 p.72",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "lowlight",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "parentKey": "eclipse-sensory-boom",
@@ -201,7 +245,15 @@
           "humanityCost": "0",
           "description": "Anti-Dazzle cyberoptic mounted in the sensory boom (humanity cost shared with the factory optic package).",
           "source": "Chromebook 2 p.72",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            }
+          }
         },
         {
           "parentKey": "eclipse-sensory-boom",

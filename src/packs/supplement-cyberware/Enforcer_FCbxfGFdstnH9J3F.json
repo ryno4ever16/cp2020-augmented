@@ -94,7 +94,16 @@
           "humanityCost": "4",
           "description": "Targeting scope cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (Targeting/Video/Thermo/Lowlite/AntiDazzle); the book's package HC 4 is carried on this item, its four package-mates list 0.",
           "source": "Chromebook 2 p.74",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechRollMods": {
+              "enabled": true,
+              "attackMod": 1,
+              "skillName": "",
+              "skillMod": 0,
+              "auto": true
+            }
+          }
         },
         {
           "name": "Video Camera Optic",
@@ -118,7 +127,16 @@
           "humanityCost": "0",
           "description": "Thermographic cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
           "source": "Chromebook 2 p.74",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "thermograph",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "name": "Low-Lite Optic",
@@ -130,7 +148,16 @@
           "humanityCost": "0",
           "description": "Low-Lite cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
           "source": "Chromebook 2 p.74",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "lowlight",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "name": "Anti-Dazzle Optic",
@@ -142,7 +169,15 @@
           "humanityCost": "0",
           "description": "Anti-Dazzle cyberoptic in a chassis optic socket. Split from the factory Cyberoptic Package (package HC 4 carried on the Targeting Scope Optic).",
           "source": "Chromebook 2 p.74",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechProtection": {
+              "enabled": true,
+              "flash": {
+                "immune": true
+              }
+            }
+          }
         },
         {
           "name": "Voice Stress Analyzer",
@@ -238,7 +273,18 @@
           "humanityCost": "1",
           "description": "Built-in light bars (spotlights) for illumination.",
           "source": "Chromebook 2 p.74",
-          "ambiguous": true
+          "ambiguous": true,
+          "mech": {
+            "mechLight": {
+              "enabled": true,
+              "on": false,
+              "shape": "cone",
+              "bright": 10,
+              "dim": 20,
+              "angle": 45,
+              "color": ""
+            }
+          }
         }
       ]
     }

@@ -113,7 +113,16 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 3 p.101",
-          "description": "Lowlight cyberoptic mounted in the front optic mount."
+          "description": "Lowlight cyberoptic mounted in the front optic mount.",
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "lowlight",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "parentKey": "spyder-optic-mount",
@@ -123,7 +132,16 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 3 p.101",
-          "description": "Thermographic cyberoptic mounted in the front optic mount."
+          "description": "Thermographic cyberoptic mounted in the front optic mount.",
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "thermograph",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "parentKey": "spyder-optic-mount",
@@ -143,7 +161,16 @@
           "isModule": true,
           "allowedParent": "CyberOptic",
           "source": "Chromebook 3 p.101",
-          "description": "Infrared cyberoptic mounted in the front optic mount."
+          "description": "Infrared cyberoptic mounted in the front optic mount.",
+          "mech": {
+            "mechVision": {
+              "enabled": true,
+              "on": false,
+              "mode": "infrared",
+              "range": 20,
+              "requiresItem": ""
+            }
+          }
         },
         {
           "parentKey": "spyder-optic-mount",
@@ -385,7 +412,18 @@
           "humanityCost": "",
           "description": "Variable-spectrum spotlight.",
           "source": "Chromebook 3 p.101",
-          "ambiguous": false
+          "ambiguous": false,
+          "mech": {
+            "mechLight": {
+              "enabled": true,
+              "on": false,
+              "shape": "cone",
+              "bright": 10,
+              "dim": 20,
+              "angle": 45,
+              "color": ""
+            }
+          }
         }
       ]
     }
