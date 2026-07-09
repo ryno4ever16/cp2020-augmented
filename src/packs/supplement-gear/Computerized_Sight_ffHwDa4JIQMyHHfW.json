@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Range-band attack bonus (Home of the Brave): +2 at Medium range, +3 at Long or Extreme; includes low-light optics and a rangefinder (thermographic optional). The bonus depends on the resolved range band, which no provider models yet — read the band off the fire dialog's rangefinding line and add the matching value as a free modifier. Earmarked: a band-conditional provider is feasible on the rangefinding seam.</p>",
     "cost": 500,
     "weight": 0,
     "equipped": false,

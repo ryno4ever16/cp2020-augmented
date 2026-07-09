@@ -5,7 +5,7 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Range-band attack bonus (Home of the Brave): +1 at Medium range, +2 at Long or Extreme, and only after an Aiming action; optional low-light. Band- and aim-conditional, so nothing is auto-wired — add the matching value as a free modifier when the conditions hold. Earmarked with the Computerized Sight for a band-conditional provider.</p>",
     "cost": 200,
     "weight": 0,
     "equipped": false,
