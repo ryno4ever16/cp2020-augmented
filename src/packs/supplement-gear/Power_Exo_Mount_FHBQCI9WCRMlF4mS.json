@@ -5,14 +5,46 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Exo-skeleton weapon mount (Sigma-class frame): carries and fires 50-cal HMGs, 40mm Auto-GLs, or 20mm autocannon the wearer could not normally lift; compensates recoil and mass. When worn: −2 REF, −1 MA, −1 WA (Home of the Brave) — wired as REF/MA stat penalties plus an always-on −1 attack modifier while equipped.</p>",
     "cost": 5000,
     "weight": 0,
     "equipped": false,
     "source": "Home of the Brave",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechStatMods": {
+      "enabled": true,
+      "mods": [
+        {
+          "stat": "ref",
+          "mod": -2,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": false,
+          "set": 0
+        },
+        {
+          "stat": "ma",
+          "mod": -1,
+          "combatMod": 0,
+          "context": "any",
+          "cap": 0,
+          "floor": 0,
+          "isSet": false,
+          "set": 0
+        }
+      ]
+    },
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": -1,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": true
+    }
   },
   "effects": [],
   "folder": null,

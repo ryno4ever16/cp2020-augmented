@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Laser rangefinder + ballistics computer (1 kg): +3 to any artillery to-hit roll used by a spotter; Heavy Weapons skill is required to use it (Home of the Brave). The suggestion renders unticked — claim it when spotting. +500eb upgrade makes the rangefinder a painting laser.</p>",
     "cost": 1500,
     "weight": 1,
     "equipped": false,
     "source": "Home of the Brave",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 3,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,

@@ -5,14 +5,19 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Carries up to 30 kg of materials (Home of the Brave). The 30 container slots map one slot ≈ one kg — set an item's 'Slots taken' to its weight class; what fits is the GM's call.</p>",
     "cost": 50,
     "weight": 0,
     "equipped": false,
     "source": "Home of the Brave",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechContainer": {
+      "installedIn": "",
+      "capacity": 30,
+      "slotsTaken": 1
+    }
   },
   "effects": [],
   "folder": null,

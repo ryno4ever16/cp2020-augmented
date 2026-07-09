@@ -5,14 +5,21 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>+2 to shooting when the firer remains stationary and braces the weapon on a solid object (Home of the Brave). The suggestion renders unticked — claim it when braced. Fits under a rifle barrel.</p>",
     "cost": 10,
     "weight": 0,
     "equipped": false,
     "source": "Home of the Brave",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechRollMods": {
+      "enabled": true,
+      "attackMod": 2,
+      "skillName": "",
+      "skillMod": 0,
+      "auto": false
+    }
   },
   "effects": [],
   "folder": null,
