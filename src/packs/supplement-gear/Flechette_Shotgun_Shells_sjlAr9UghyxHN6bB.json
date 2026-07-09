@@ -1,0 +1,41 @@
+{
+  "_id": "sjlAr9UghyxHN6bB",
+  "name": "Flechette Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "8eb apiece. Fires needles instead of shot: 4D6AP, armor and damage x1/4.",
+    "cost": 8,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 / Home of the Brave",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!sjlAr9UghyxHN6bB"
+}

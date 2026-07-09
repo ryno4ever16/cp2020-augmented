@@ -1,0 +1,41 @@
+{
+  "_id": "XIpg2Y3y4YPH6FIU",
+  "name": "HE Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "5eb apiece. High Explosive: 4D6 damage in a 1/2m radius per shell.",
+    "cost": 5,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 / Home of the Brave",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!XIpg2Y3y4YPH6FIU"
+}

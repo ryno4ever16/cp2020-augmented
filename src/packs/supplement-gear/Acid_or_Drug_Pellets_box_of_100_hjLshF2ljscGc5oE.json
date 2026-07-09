@@ -1,0 +1,41 @@
+{
+  "_id": "hjLshF2ljscGc5oE",
+  "name": "Acid or Drug Pellets (box of 100)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 44,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Acid, drug or poison payload pellets for airguns (e.g. Nelspot 'Wombat'). 30eb per box of 100.",
+    "cost": 30,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!hjLshF2ljscGc5oE"
+}

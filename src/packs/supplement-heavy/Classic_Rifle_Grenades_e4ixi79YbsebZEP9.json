@@ -1,0 +1,67 @@
+{
+  "_id": "e4ixi79YbsebZEP9",
+  "name": "Classic Rifle Grenades",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 17000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 42,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "50eb apiece; fitted on a rifle muzzle (one action) and propelled by firing the rifle (bullet-trap); printed ROF 1/2, Heavy Weapons skill. Types: Chemical (gas/smoke, 10m radius), HE 8D6 (5m radius), HEAT 8D10AP to target + 4D6 within 1m.",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Home of the Brave",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": -3,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "rifle grenade",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 100,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!e4ixi79YbsebZEP9"
+}

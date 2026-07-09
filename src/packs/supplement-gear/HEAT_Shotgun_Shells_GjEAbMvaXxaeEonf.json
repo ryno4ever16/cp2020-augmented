@@ -1,0 +1,41 @@
+{
+  "_id": "GjEAbMvaXxaeEonf",
+  "name": "HEAT Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": true
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Shaped-charge shell: 4D6AP; damage exceeding target SP passes through at full value. No price printed in the book.",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 / Home of the Brave",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!GjEAbMvaXxaeEonf"
+}

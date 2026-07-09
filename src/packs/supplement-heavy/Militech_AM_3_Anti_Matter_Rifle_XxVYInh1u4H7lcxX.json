@@ -1,0 +1,69 @@
+{
+  "_id": "XxVYInh1u4H7lcxX",
+  "name": "Militech AM-3 \"Anti-Matter Rifle\"",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 15300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "weapon",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 36,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "30mm recoilless rifle firing rocket-boosted depleted-uranium shells (100eb each). WA 0/+1 by range band: 0-160m Acc 0 and 1/3 damage; 160-800m Acc +1 and 1/2 damage; 800m+ Acc 0, full damage. Average BOD roll (15) or 1D6/2 bruise damage; do not fire standing without a Beta+ linear frame. Smartgun interlock and 2-10x scope included.",
+    "cost": 6000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.41",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "30mm EHI",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D10+12",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 5,
+    "shots": 5,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 1600,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!XxVYInh1u4H7lcxX"
+}

@@ -1,0 +1,68 @@
+{
+  "_id": "TuxfhkzmnnQmNbt5",
+  "name": "Beretta M-24 Advanced Submachine Gun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 12500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Beretta Euroarms",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 19,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Interpol's standard-issue SMG, developed from the M-12: integral smart link, 50-round magazine, recoil compensator. Smartchipped 1250eb.",
+    "cost": 950,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": 2,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "9mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 50,
+    "shots": 50,
+    "rof": 25,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 200,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "_stats": {},
+  "_key": "!items!TuxfhkzmnnQmNbt5"
+}

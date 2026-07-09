@@ -1,0 +1,68 @@
+{
+  "_id": "TnAKBVA7cNFiDQUK",
+  "name": "Nomad Hand Crossbow",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 2500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 6,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Hand-made 20-kilo pistol-form crossbow (can strap to the forearm with a string trigger); used to flatten tires and distract drivers. AP, but damage is not halved. Ineffective beyond 20m.",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "quarrels",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": true,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 20,
+    "attackType": "",
+    "attackSkill": "Archery"
+  },
+  "_stats": {},
+  "_key": "!items!TnAKBVA7cNFiDQUK"
+}

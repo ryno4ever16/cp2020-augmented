@@ -1,0 +1,41 @@
+{
+  "_id": "gUAYRqZrrd9QFwzE",
+  "name": "APFSDS Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "10eb per round. Armor-Piercing Fin-Stabilized Discarding Sabot: 5.5mm penetrator from a 12/10ga shotgun, 6D6AP, effective range 25m.",
+    "cost": 10,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 / Home of the Brave",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!gUAYRqZrrd9QFwzE"
+}

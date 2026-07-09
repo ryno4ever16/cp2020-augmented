@@ -1,0 +1,42 @@
+{
+  "_id": "N1OZRhLgeTOObG7m",
+  "name": "Electrothermal Ammo Enhancement",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Weapon conversion, price = 50% of the weapon's base cost. +50% damage and range; 100-shot battery (150eb per Blackhand's; Chromebook 2 lists 10eb); cased-ammo semi-auto/manual actions only; ET ammo costs 2x (AP available). Poor availability, Weaponsmith 25+ to install.",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.50",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!N1OZRhLgeTOObG7m"
+}

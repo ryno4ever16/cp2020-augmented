@@ -1,0 +1,69 @@
+{
+  "_id": "gKuPmVNaidLBZ2XF",
+  "name": "Tsunami Arms Type-17 \"Raijin\" Anti-Armor Rifle",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 16000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Pacific Rim",
+      "importCategory": "weapon",
+      "manufacturer": "Tsunami Arms",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 38,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Japanese SDF anti-ACPA/vehicle 'personal cannon'; bipod (+1 WA at Long/Extreme), computerized sights, smartgun rig (to +3). BOD 14 minimum (or linear frame / full conversion) to fire without bipod and brace. Blackhand's lists it as the Type-17; Pacific Rim prints WA +2 and the nickname Raijin.",
+    "cost": 7500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.19",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "20mm EHI cased",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "8D10AP",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": true,
+    "isEdged": false,
+    "shotsLeft": 12,
+    "shots": 12,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 1200,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!gKuPmVNaidLBZ2XF"
+}

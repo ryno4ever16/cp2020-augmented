@@ -1,0 +1,42 @@
+{
+  "_id": "798hGGUyG3Z2XKPU",
+  "name": "Gas Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Gas pellet affects targets within 1-2m of burst; acts as a dose of the loaded agent. Blackhand's per-round pricing: tear/nausea 5eb, hallucinogen/sleep 10eb, biotoxin 25eb (military only).",
+    "cost": 20,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.47",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!798hGGUyG3Z2XKPU"
+}

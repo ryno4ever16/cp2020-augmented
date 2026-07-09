@@ -1,0 +1,68 @@
+{
+  "_id": "dn1249EuFkSNDxSY",
+  "name": "M-205 Grenade Launcher",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 15100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Home of the Brave",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 36,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "The military's single-shot breech-loading 40mm GL; usable under-barrel on a rifle or standalone.",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Home of the Brave p.83",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 1,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "40mm grenade",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies (40mm)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 200,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!dn1249EuFkSNDxSY"
+}

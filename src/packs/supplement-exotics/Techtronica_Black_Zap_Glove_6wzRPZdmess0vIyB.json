@@ -1,0 +1,68 @@
+{
+  "_id": "6wzRPZdmess0vIyB",
+  "name": "Techtronica Black-Zap Glove",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 3400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Techtronica",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 10,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Electrified mesh glove with taser effect, powered by an armband battery pack; works with a grab or punch attack.",
+    "cost": 90,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Common",
+    "ammoType": "battery",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Stun",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "_stats": {},
+  "_key": "!items!6wzRPZdmess0vIyB"
+}

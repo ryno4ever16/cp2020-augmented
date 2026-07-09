@@ -1,0 +1,70 @@
+{
+  "_id": "uqtdmxvtGEEzrbAc",
+  "name": "Beretta 1010 Machine Pistol",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 12400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "UK",
+      "importCategory": "weapon",
+      "recovered": true,
+      "manufacturer": "Beretta",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 19,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Compact machine pistol for undercover security work; inaccurate without a laser or smart-rig. 15-round magazine + shroud removal lowers concealment to large-pocket.",
+    "cost": 475,
+    "weight": 0,
+    "equipped": false,
+    "source": "Rough Guide to the UK",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": -2,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "10mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 30,
+    "shots": 30,
+    "rof": 15,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 100,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "_stats": {},
+  "_key": "!items!uqtdmxvtGEEzrbAc"
+}

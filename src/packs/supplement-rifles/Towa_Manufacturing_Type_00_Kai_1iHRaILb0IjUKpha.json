@@ -1,0 +1,69 @@
+{
+  "_id": "1iHRaILb0IjUKpha",
+  "name": "Towa Manufacturing Type-00-Kai",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 13500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Pacific Rim",
+      "importCategory": "weapon",
+      "manufacturer": "Towa Manufacturing",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 31,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Redesigned Type 00 sniper rifle of Japan's SDF and police SWAT; Electrothermal Ammo Enhancement cased AP rounds; smartchipping and computerized sights included (+3 WA already in the stat line).",
+    "cost": 3000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.18",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 3,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "7.62mm EAE cased",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "9D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": true,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 1200,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "_stats": {},
+  "_key": "!items!1iHRaILb0IjUKpha"
+}

@@ -1,0 +1,43 @@
+{
+  "_id": "F6f2X1oZL0JylDOF",
+  "name": "Kendachi Fragmentation Flechettes",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "manufacturer": "Kendachi",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Ammo load, 5x basic ammo cost, any weapon. Explosive saboted flechettes: soft armor SP x1/2, normal damage to flesh. Rare availability, very illegal (Orbital).",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.46",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!F6f2X1oZL0JylDOF"
+}

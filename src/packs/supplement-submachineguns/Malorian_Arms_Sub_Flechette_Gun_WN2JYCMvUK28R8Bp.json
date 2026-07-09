@@ -1,0 +1,68 @@
+{
+  "_id": "WN2JYCMvUK28R8Bp",
+  "name": "Malorian Arms Sub-Flechette Gun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 12600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Malorian Arms",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 20,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Semi-bullpup flechette SMG; each 10mm caseless round holds six steel penetrators: roll 1D6 penetrators per round, 1D6 each, armor x1/4, all in the same body area. 10- or 30-round clips; 3-round burst or full-auto (ROF 3/35).",
+    "cost": 795,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": 2,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "10mm caseless flechette",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1D6x1D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 30,
+    "shots": 30,
+    "rof": 35,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 200,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "_stats": {},
+  "_key": "!items!WN2JYCMvUK28R8Bp"
+}

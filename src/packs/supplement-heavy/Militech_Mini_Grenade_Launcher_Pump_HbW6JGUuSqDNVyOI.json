@@ -1,0 +1,68 @@
+{
+  "_id": "HbW6JGUuSqDNVyOI",
+  "name": "Militech Mini-Grenade Launcher (Pump)",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 15600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 36,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Pump-action shotgun-style launcher, 4-round tube; mates onto the M-31a1 AICW or Militech 10 SMG; also fires 10ga shotgun ammo. Munitions (30eb/round): HEP 5D6 (1/2 real 1/2 stun, ignores armor, -2 SP), Frag 2D6+1 (5m), AP Flechette 1D6AP (1D6+2 hits), Smoke/Tear Gas (5m).",
+    "cost": 255,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": -1,
+    "concealability": "ConcealLongcoat",
+    "availability": "Common",
+    "ammoType": "25mm mini-grenade",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies (25mm/10ga)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 150,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!HbW6JGUuSqDNVyOI"
+}

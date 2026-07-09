@@ -1,0 +1,69 @@
+{
+  "_id": "YmMOYnIfOwOumpxa",
+  "name": "Arasaka Restraint Caster",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 2700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Protect & Serve",
+      "importCategory": "weapon",
+      "manufacturer": "Arasaka",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 7,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Fires a reactive-polymer capsule that entangles the target: Very Difficult BOD (or linear-frame strength) to break free; dissolves in ~20 min +/-1D10, or use solvent. Polymer shells 60eb per case of 20; solvent spray 10eb (both already in the gear pack).",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve p.33",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": -1,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": "polymer capsule",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Tangle (15mm)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 4,
+    "shots": 4,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 25,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "_stats": {},
+  "_key": "!items!YmMOYnIfOwOumpxa"
+}

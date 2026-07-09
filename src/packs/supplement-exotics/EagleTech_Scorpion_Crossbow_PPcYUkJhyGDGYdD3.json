@@ -1,0 +1,69 @@
+{
+  "_id": "PPcYUkJhyGDGYdD3",
+  "name": "EagleTech \"Scorpion\" Crossbow",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 2400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune 2",
+      "importCategory": "weapon",
+      "manufacturer": "EagleTech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 6,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "120-kilo pull, power winch (printed ROF 1/2); manual cocking needs two cyberarms (or full 'borg) plus spinal bracing, raising ROF to 1. Barret-Arasaka-sized. Targets hit must pass Acrobatics 20+ or be knocked down.",
+    "cost": 1500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2 p.39",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "quarrels",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "7D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 6,
+    "shots": 6,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 200,
+    "attackType": "",
+    "attackSkill": "Archery"
+  },
+  "_stats": {},
+  "_key": "!items!PPcYUkJhyGDGYdD3"
+}

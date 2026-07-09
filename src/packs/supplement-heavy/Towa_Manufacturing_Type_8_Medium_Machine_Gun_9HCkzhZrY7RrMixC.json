@@ -1,0 +1,69 @@
+{
+  "_id": "9HCkzhZrY7RrMixC",
+  "name": "Towa Manufacturing Type-8 Medium Machine Gun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 14900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Pacific Rim",
+      "importCategory": "weapon",
+      "manufacturer": "Towa Manufacturing",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 35,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "GSDF standard support weapon; 100-round caseless belt pack, 1000-round backpack available. Pacific Rim prints 200 shots / ROF 33 and types it RIF; Blackhand's values used.",
+    "cost": 2500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.19",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "7.62mm caseless",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 100,
+    "shots": 100,
+    "rof": 35,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 500,
+    "attackType": "Auto",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!9HCkzhZrY7RrMixC"
+}

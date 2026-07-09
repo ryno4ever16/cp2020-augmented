@@ -1,0 +1,42 @@
+{
+  "_id": "IqzQqd0zEJ7yWtTT",
+  "name": "API - Armor-Piercing Incendiary",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Ammo load, 4x basic ammo cost. Acts as AP (armor SP halved, damage vs flesh halved); if it penetrates armor, +1D6 burn damage first turn and 1D6/2 the second; 50% chance to ignite flammables. Cannot be fired from Electrothermal-enhanced guns.",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.46",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!IqzQqd0zEJ7yWtTT"
+}

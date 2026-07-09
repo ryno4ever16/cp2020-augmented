@@ -1,0 +1,69 @@
+{
+  "_id": "mG4u8xoeJetmbBCp",
+  "name": "Dynatech Industries Hand Taser",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 2800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Deep Space",
+      "importCategory": "weapon",
+      "manufacturer": "Dynatech Industries",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 7,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Most common taser in space; must touch bare skin. Stun Save at -2 or unconscious 1D10 minutes; on a made save REF & COOL still halved for 1D10 minutes. Price printed in Blackhand's (50eb).",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Deep Space p.59",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Excellent",
+    "ammoType": "battery",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Stun",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 12,
+    "shots": 12,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Brawling"
+  },
+  "_stats": {},
+  "_key": "!items!mG4u8xoeJetmbBCp"
+}

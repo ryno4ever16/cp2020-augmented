@@ -1,0 +1,70 @@
+{
+  "_id": "V0ZFUEPkepcd6BnA",
+  "name": "Stolbovoy StS Submachinegun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 12800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "weaponBackbone": "CB3",
+      "importCategory": "weapon",
+      "recovered": true,
+      "manufacturer": "Stolbovoy",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 21,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Smartchipped version 1200eb. Stolbovoy weapons jam only on a 1 on the FNFF reliability table; Common in the Soviet Union and Eastern Europe, Rare in the US/UK. Uses cased ammo.",
+    "cost": 600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 3",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": -1,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "10mm cased",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 35,
+    "shots": 35,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 100,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "_stats": {},
+  "_key": "!items!V0ZFUEPkepcd6BnA"
+}

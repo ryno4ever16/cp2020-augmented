@@ -1,0 +1,68 @@
+{
+  "_id": "ly50OpbJMqbSCrVR",
+  "name": "Militech Urban Missile Launcher",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 15800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 37,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Magazine-fed launcher firing self-guided heat-seeking micromissiles (50eb; anti-armor +50%; HEP 4x). Distinct from the cyberarm Micro-missile Launcher; see Micromissiles rules.",
+    "cost": 900,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.41",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 2,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "micromissile",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6 (micromissile)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 12,
+    "shots": 12,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 200,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!ly50OpbJMqbSCrVR"
+}

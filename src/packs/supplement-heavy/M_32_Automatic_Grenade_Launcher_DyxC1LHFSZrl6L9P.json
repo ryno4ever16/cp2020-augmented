@@ -1,0 +1,68 @@
+{
+  "_id": "DyxC1LHFSZrl6L9P",
+  "name": "M-32 Automatic Grenade Launcher",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 15000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Home of the Brave",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 36,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Tripod/vehicle-mounted auto-GL firing high-velocity 40mm grenades (100eb each); can fire normal 40mm grenades single-shot only. Cost printed in Blackhand's (2500eb); Home of the Brave prints no price.",
+    "cost": 2500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Home of the Brave p.84",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "40mm grenade",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies (40mm)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 50,
+    "shots": 50,
+    "rof": 20,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 1600,
+    "attackType": "Auto",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!DyxC1LHFSZrl6L9P"
+}

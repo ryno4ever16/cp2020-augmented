@@ -1,0 +1,41 @@
+{
+  "_id": "l65IWGv5NCmJ4doG",
+  "name": "Airgun Pellets (box of 100)",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 44,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Standard airgun/paintball pellets (e.g. Nelspot 'Wombat'). 6eb per box of 100.",
+    "cost": 6,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!l65IWGv5NCmJ4doG"
+}

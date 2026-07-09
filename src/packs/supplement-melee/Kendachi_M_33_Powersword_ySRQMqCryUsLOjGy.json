@@ -1,0 +1,68 @@
+{
+  "_id": "ySRQMqCryUsLOjGy",
+  "name": "Kendachi M-33 Powersword",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 12500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Kendachi",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 4,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Powered vibro-blade: chews through armor (soft armor SP x1/4, hard armor SP x1/2). Blade takes 1 combat turn to warm up; heavy (3kg) and fragile (breaks on a fumble; shatters on a parry check of 5 or less on 1D10).",
+    "cost": 860,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "lastOwnerId": "",
+    "weaponType": "Melee",
+    "accuracy": 0,
+    "concealability": "ConcealLongcoat",
+    "availability": "Rare",
+    "ammoType": "",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": true,
+    "shotsLeft": 0,
+    "shots": 0,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 1,
+    "attackType": "Melee",
+    "attackSkill": "Melee"
+  },
+  "_stats": {},
+  "_key": "!items!ySRQMqCryUsLOjGy"
+}

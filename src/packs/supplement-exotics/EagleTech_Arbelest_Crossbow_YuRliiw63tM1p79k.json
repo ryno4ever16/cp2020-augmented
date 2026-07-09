@@ -1,0 +1,69 @@
+{
+  "_id": "YuRliiw63tM1p79k",
+  "name": "EagleTech \"Arbelest\" Crossbow",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 2300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Solo of Fortune 2",
+      "importCategory": "weapon",
+      "manufacturer": "EagleTech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 6,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "60-kilo pull, built-in winch (printed ROF 1/2); a cyberarm plus internal bracing allows manual reload at ROF 1. 50% bulkier than an assault rifle. Quarrel damage treated as Knife for AP.",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2 p.39",
+    "lastOwnerId": "",
+    "weaponType": "Exotic",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "quarrels",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "5D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 12,
+    "shots": 12,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 150,
+    "attackType": "",
+    "attackSkill": "Archery"
+  },
+  "_stats": {},
+  "_key": "!items!YuRliiw63tM1p79k"
+}

@@ -1,0 +1,42 @@
+{
+  "_id": "6XYBqXDaf0uXCerv",
+  "name": "Flash-Bang Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "30-35eb per box of 25. Acts as a small flash-bang grenade: within 2m (5m indoors) Stun/Shock Save + Difficulty 20 REF test or stunned 1 turn / blinded 2 turns; anti-dazzle negates. Max range 25m (self-detonates).",
+    "cost": 30,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.47",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!6XYBqXDaf0uXCerv"
+}

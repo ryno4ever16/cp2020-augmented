@@ -1,0 +1,67 @@
+{
+  "_id": "9ytPhNCrSFftIaUJ",
+  "name": "Military 40mm Launched Grenades",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 17100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 43,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "40mm GL rounds: availability R, 50eb apiece; high-velocity Auto-GL rounds 100eb. Types: Bean Bag (2D6 bruise + Stun Save -5 + knockdown), Chemical (10m), Flash-Bang, Flechette (1-3x2D6AP, 3m-wide 25m line), Grapnel, HE 7D6 (5m), HEAT 4D10AP + 4D6 (1m), HEP 7D6 (WA -1, armor -5 SP), Illumination, Net, Splatshell, White Phosphorous 4D6 x3 turns (10m).",
+    "cost": 50,
+    "weight": 0,
+    "equipped": false,
+    "source": "Home of the Brave",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "40mm grenade",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies (40mm)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 1,
+    "shots": 1,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 0,
+    "attackType": "",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!9ytPhNCrSFftIaUJ"
+}

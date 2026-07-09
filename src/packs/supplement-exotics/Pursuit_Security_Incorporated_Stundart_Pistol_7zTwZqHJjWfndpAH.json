@@ -1,0 +1,68 @@
+{
+  "_id": "7zTwZqHJjWfndpAH",
+  "name": "Pursuit Security, Incorporated Stundart Pistol",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 3300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "weapon",
+      "manufacturer": "Pursuit Security, Inc.",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 9,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Over-and-under double-barrel break-open pistol firing low-velocity .45 capacitor darts (70,000V): Stun Save at -1; penetrates soft armor up to 5 SP; incapacitation is instantaneous and lasts up to an hour.",
+    "cost": 109,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": -1,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": ".45 LVD stundart",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Stun (.45 LVD)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 2,
+    "shots": 2,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "_stats": {},
+  "_key": "!items!7zTwZqHJjWfndpAH"
+}

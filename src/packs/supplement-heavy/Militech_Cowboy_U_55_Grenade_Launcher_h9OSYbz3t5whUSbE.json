@@ -1,0 +1,69 @@
+{
+  "_id": "h9OSYbz3t5whUSbE",
+  "name": "Militech \"Cowboy\" U-55 Grenade Launcher",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 15400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Corpbook 2",
+      "importCategory": "weapon",
+      "manufacturer": "Militech",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 36,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Semi-auto or 3-round-burst 25mm urban GL, rotating drum, any load mix; smart-linkable, integral optical sight. Loads (30eb per round): Fragmentation 3D6/3m, Flash (50% -5 REF & Awareness, 3 turns/5m), Incendiary 4/2/1D6 x3 turns, Concussion 3D6/4m (armor x1/3), plus gas and smoke. Blackhand's prints 900eb (Corpbook 2 prints 800eb).",
+    "cost": 900,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 2 p.62",
+    "lastOwnerId": "",
+    "weaponType": "Heavy",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "25mm grenades",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies (25mm)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 12,
+    "shots": 12,
+    "rof": 3,
+    "fullAutoCapable": false,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 150,
+    "attackType": "Auto",
+    "attackSkill": "Heavy Weapons"
+  },
+  "_stats": {},
+  "_key": "!items!h9OSYbz3t5whUSbE"
+}

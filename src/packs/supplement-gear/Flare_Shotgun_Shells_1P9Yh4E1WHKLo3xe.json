@@ -1,0 +1,42 @@
+{
+  "_id": "1P9Yh4E1WHKLo3xe",
+  "name": "Flare Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "25-30eb per box of 25. Lights a 30m diameter area; fired as a regular shell causes 2D6+2 plus 1D6/2 per-round fire damage.",
+    "cost": 25,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.47",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!1P9Yh4E1WHKLo3xe"
+}

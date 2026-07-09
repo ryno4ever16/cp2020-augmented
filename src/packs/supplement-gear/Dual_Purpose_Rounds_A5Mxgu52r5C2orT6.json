@@ -1,0 +1,42 @@
+{
+  "_id": "A5Mxgu52r5C2orT6",
+  "name": "Dual-Purpose Rounds",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 48100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Chromebook 2",
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Ammo load, 4x basic ammo cost. Tungsten penetrator in soft lead sheath: vs armor treat SP x1/2 with 1/2 damage to flesh; vs unarmored targets 1.5x normal damage.",
+    "cost": 0,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.46",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!A5Mxgu52r5C2orT6"
+}

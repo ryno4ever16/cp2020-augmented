@@ -1,0 +1,41 @@
+{
+  "_id": "wIRD5XABHLjKEWaS",
+  "name": "Thermite Shotgun Shells",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 49400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "gear",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 45,
+        "promotedFromStaging": false
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "30eb apiece. Narrow burning-metal spray: 8D6AP, wounds heal at 1/3 rate; every shell over five fired through a barrel adds a cumulative 1-in-10 chance of ruining it.",
+    "cost": 30,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 / Home of the Brave",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month"
+  },
+  "_stats": {},
+  "_key": "!items!wIRD5XABHLjKEWaS"
+}

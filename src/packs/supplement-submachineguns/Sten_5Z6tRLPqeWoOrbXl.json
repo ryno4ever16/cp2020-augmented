@@ -1,0 +1,68 @@
+{
+  "_id": "5Z6tRLPqeWoOrbXl",
+  "name": "Sten",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "effects": [],
+  "folder": null,
+  "sort": 12700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "agentMerge": "Neo Tribes",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "blackhands-coverage-report",
+        "dirty": false
+      },
+      "blackhands": {
+        "batch": "blackhands-coverage-import-2026-07-09",
+        "pdfIdx": 20,
+        "promotedFromStaging": true
+      }
+    }
+  },
+  "system": {
+    "flavor": "",
+    "notes": "Generic Nomad term for a homemade/modified SMG ('zipper-gun'); ~200eb; typical stats shown, reliability ST/UR, range 50-100m, ROF 3/30. Chamberings: .22LR 1D6, 9mm 2D6+1, .357 Magnum 2D6+3, 12mm Caseless 4D6+1.",
+    "cost": 200,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes",
+    "lastOwnerId": "",
+    "weaponType": "SMG",
+    "accuracy": -2,
+    "concealability": "ConcealLongcoat",
+    "availability": "Excellent",
+    "ammoType": "varies (.22LR to 12mm CL)",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "Varies",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 30,
+    "shots": 30,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 100,
+    "attackType": "Auto",
+    "attackSkill": "Submachinegun"
+  },
+  "_stats": {},
+  "_key": "!items!5Z6tRLPqeWoOrbXl"
+}
