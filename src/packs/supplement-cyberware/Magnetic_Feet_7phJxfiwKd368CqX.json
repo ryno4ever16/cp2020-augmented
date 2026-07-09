@@ -1,11 +1,11 @@
 {
-  "_id": "BzDwk0VfU5jVFw3s",
-  "name": "Magnetic Feet/Hands",
+  "_id": "7phJxfiwKd368CqX",
+  "name": "Magnetic Feet",
   "type": "cyberware",
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Per pair (index ✓60; page 'SDeb' S→6). Electrostatic soles/palms for Low Earth Orbit wall-walking. | [Audit row +75 — Chromebook 1 p.34]</p>",
+    "notes": "<p>Electrostatic soles for Low Earth Orbit wall-walking. Per pair. (Split from the original \"Magnetic Feet/Hands\" catalog entry.)</p>",
     "cost": 60,
     "weight": 0,
     "equipped": false,
@@ -17,11 +17,14 @@
     "cyberwareSubtype": "",
     "abbrev": "",
     "humanityLoss": 0,
-    "MountZone": "",
+    "MountZone": "Leg",
     "EffectMode": "Permanent",
     "EffectActive": false,
     "Module": {},
-    "CyberBodyType": {},
+    "CyberBodyType": {
+      "Type": "Leg",
+      "Location": ""
+    },
     "CyberWorkType": {},
     "slots": 0,
     "spaces": 0,
@@ -55,5 +58,5 @@
     }
   },
   "_stats": {},
-  "_key": "!items!BzDwk0VfU5jVFw3s"
+  "_key": "!items!7phJxfiwKd368CqX"
 }

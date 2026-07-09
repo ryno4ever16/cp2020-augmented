@@ -1,18 +1,18 @@
 {
-  "_id": "s1P1ZcS5vaFLEuMS",
-  "name": "CyberPillow Cases",
+  "_id": "27E07G1R4KgGCCoF",
+  "name": "Magnetic Hands",
   "type": "cyberware",
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "",
-    "cost": 10,
+    "notes": "<p>Electrostatic palms for Low Earth Orbit wall-walking. Per pair. (Split from the original \"Magnetic Feet/Hands\" catalog entry.)</p>",
+    "cost": 60,
     "weight": 0,
     "equipped": false,
-    "source": "Chromebook 3",
+    "source": "Chromebook 1 p.34",
     "lastOwnerId": "",
     "surgCode": "",
-    "humanityCost": "",
+    "humanityCost": "0",
     "cyberwareType": "",
     "cyberwareSubtype": "",
     "abbrev": "",
@@ -22,7 +22,8 @@
     "EffectActive": false,
     "Module": {},
     "CyberBodyType": {
-      "Type": "Arm"
+      "Type": "Arm",
+      "Location": ""
     },
     "CyberWorkType": {},
     "slots": 0,
@@ -35,22 +36,27 @@
   },
   "effects": [],
   "folder": null,
-  "sort": 1100000,
+  "sort": 3700000,
   "ownership": {
     "default": 0
   },
   "flags": {
     "cp2020-augmented": {
-      "agentMerge": "Chromebook 3",
+      "auditWalk": {
+        "row": "+75",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "book": "Chromebook 1",
+        "page": 34
+      },
       "importCategory": "cyberware",
       "importReview": {
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
-        "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
+        "ledger": "AUDIT-WALK-2026-07",
         "dirty": true
       }
     }
   },
   "_stats": {},
-  "_key": "!items!s1P1ZcS5vaFLEuMS"
+  "_key": "!items!27E07G1R4KgGCCoF"
 }
