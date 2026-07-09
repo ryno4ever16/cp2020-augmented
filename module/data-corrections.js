@@ -183,6 +183,8 @@ export const DATA_CORRECTIONS = {
     yqmogdOnO4BpGlHl: mechLight({ shape: "circle", bright: 0, dim: 2 }),                  // Flash Tape (6h)
     // ── P6 protection: a filter mask seals breathing while worn ("Contains 2 Filters") ──
     iQcJpq8LofSYbPJO: { patch: mechProtection({ gas: { immune: true } }) },               // Breathing Mask
+    // Core p.69 prints prose only (diagnostic microcomp) — no game number to wire.
+    mIH2I6fOI5iwj7wa: { notesAppend: note("Handheld diagnostic microcomp with I/O connectors and probes: runs diagnostics, identifies malfunctioning components, displays internal schematics (Core p.69). The book prints no roll bonus — any repair help is the GM's call.") },  // Techscanner
   },
   "cyberpunk2020.furnishing": {
     nlf3SoNWrlRZLwEM: mechLight({ shape: "circle", bright: 5, dim: 10 }),                 // Lamp

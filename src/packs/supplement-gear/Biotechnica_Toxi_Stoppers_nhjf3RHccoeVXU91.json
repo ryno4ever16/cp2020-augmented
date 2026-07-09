@@ -5,14 +5,27 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Anti-chemical nanite injection (Firestorm: Shockwave): +4 to Body Type saves vs. drugs and gases, 40% chance of avoiding nerve toxin damage altogether; lifespan about five minutes (the dose timer tracks ~100 turns). Keep the item equipped while a dose runs so the save engines see the protection; it also dismantles all internal foreign chemicals (instant-sober).</p>",
     "cost": 2000,
     "weight": 0,
     "equipped": false,
     "source": "Firestorm: Shockwave",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechConsumable": {
+      "enabled": true,
+      "doses": 1,
+      "durationTurns": "100",
+      "note": "+4 saves vs drugs/gases; 40% negate nerve toxin"
+    },
+    "mechProtection": {
+      "enabled": true,
+      "gas": {
+        "mod": 4,
+        "percent": 40
+      }
+    }
   },
   "effects": [],
   "folder": null,

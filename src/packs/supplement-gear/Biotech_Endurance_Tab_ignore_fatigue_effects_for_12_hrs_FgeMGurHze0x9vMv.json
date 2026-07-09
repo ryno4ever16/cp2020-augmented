@@ -5,14 +5,20 @@
   "img": "icons/svg/item-bag.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Designer bioenhancement tab, once per day: ignore fatigue effects for 12 hours (Eurosource Plus). Fatigue negation is narrative — the timer tracks the 12-hour window (14,400 turns); the once-per-day reset is the GM's.</p>",
     "cost": 1200,
     "weight": 0,
     "equipped": false,
     "source": "Eurosource Plus",
     "lastOwnerId": "",
     "serviceMode": "",
-    "servicePeriod": "month"
+    "servicePeriod": "month",
+    "mechConsumable": {
+      "enabled": true,
+      "doses": 1,
+      "durationTurns": "14400",
+      "note": "Ignore fatigue effects"
+    }
   },
   "effects": [],
   "folder": null,
