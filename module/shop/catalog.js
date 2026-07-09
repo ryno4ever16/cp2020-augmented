@@ -25,7 +25,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 // (categories) or "" (style), matching the pre-i18n behavior.
 const SHOP_CAT_LABEL_KEYS = {
   Weapons: "CYBERPUNK.ShopCatWeapons", Armor: "CYBERPUNK.ShopCatArmor", Ammo: "CYBERPUNK.ShopCatAmmo",
-  Cyberware: "CYBERPUNK.ShopCatCyberware", Gear: "CYBERPUNK.ShopCatGear", Netrunning: "CYBERPUNK.ShopCatNetrunning",
+  Cyberware: "CYBERPUNK.ShopCatCyberware", FBC: "CYBERPUNK.ShopCatFBC", Gear: "CYBERPUNK.ShopCatGear", Netrunning: "CYBERPUNK.ShopCatNetrunning",
   Programs: "CYBERPUNK.ShopCatPrograms", Vehicles: "CYBERPUNK.ShopCatVehicles",
 };
 const SHOP_SUB_LABEL_KEYS = {
@@ -98,7 +98,7 @@ async function buildCatalogIndex() {
     const mapped = isMappedPack(packName);          // legacy packs: one cat/sub for the whole pack
     const packCat = categoryOfPack(packName);
     let idx;
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "type", "img"] }); }
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {
@@ -107,7 +107,7 @@ async function buildCatalogIndex() {
       // Type-grouped supplement packs (and any other unmapped pack) categorize per-item from item data.
       // Vehicles ALWAYS categorize per-item: their class sub-filter reads system.vehicleType (the soft
       // enum), which a mapped pack's one-cat/sub-per-pack identity can't carry.
-      const { category, sub } = (mapped && type !== "vehicle") ? packCat : categoryOfItem(type, e.system);
+      const { category, sub } = (mapped && type !== "vehicle") ? packCat : categoryOfItem(type, e.system, e.flags);
       const { supplement, canon } = classifySupplement(e.system?.source);
       // Book-verified corrections to base-pack data (name/cost/priceRange) — data-corrections.js.
       const corr = correctionFor(pack.collection, e._id);

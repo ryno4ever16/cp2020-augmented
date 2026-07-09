@@ -20,12 +20,20 @@
 import { localize, localizeParam, combineArmorSP } from "../utils.js";
 import { btmFromBT } from "../lookups.js";
 import { postSavePromptCard } from "../compat.js";
+import { equippedChange } from "./loadout.js";
 
 const SCOPE = "cp2020-augmented";
 const ZONES = ["Head", "Torso", "lArm", "rArm", "lLeg", "rLeg"];
 
 /** The core zones whose destruction ends the borg: Head (brain) and Torso (biosystem/life-support). */
 export const BORG_CORE_ZONES = new Set(["Head", "Torso"]);
+
+/** True when the item is a full-conversion borg body (carries a valid `borgBody` flag). Pure. Keyed on
+ *  `.sdp` to match borgBodyOf's own validity test. */
+export function isBorgBody(item) {
+  const bb = (item?.getFlag?.(SCOPE, "borgBody")) ?? item?.flags?.[SCOPE]?.borgBody;
+  return !!bb?.sdp;
+}
 
 /** The `borgBody` block from the actor's equipped full-borg body item, else null. First equipped wins. */
 export function borgBodyOf(actor) {
@@ -44,6 +52,50 @@ export function borgBodyOf(actor) {
  */
 export function borgArmorSP(actor, zone) {
   return Number(borgBodyOf(actor)?.sp?.[zone]) || 0;
+}
+
+/**
+ * Per-zone option-space CAPACITY for a full borg, keyed by the cyberware-tab AREA ids
+ * (head/body/nervous/l-arm/r-arm/l-leg/r-leg), from the body item's `borgBody.optionSpaces`
+ * (shape `{ optic:[L,R], audio, head?, Torso, rArm, lArm, rLeg, lLeg }`). Head aggregates the two
+ * optic sockets + audio + the optional `head` pool (non-socket head fixtures — light bars, a sensory
+ * boom root); the borg data has no separate Nervous pool (0). The pools are TOTAL capacity (factory
+ * fit-out + the book's free spaces) — the sheet's zone tally counts every zone-root item against
+ * them, factory or aftermarket alike. Null when the actor is not a full borg or the body carries no
+ * optionSpaces. Pure.
+ */
+export function borgOptionSpaces(actor) {
+  const os = borgBodyOf(actor)?.optionSpaces;
+  if (!os) return null;
+  const optic = Array.isArray(os.optic) ? os.optic.reduce((s, n) => s + (Number(n) || 0), 0) : (Number(os.optic) || 0);
+  return {
+    head: optic + (Number(os.audio) || 0) + (Number(os.head) || 0),
+    body: Number(os.Torso) || 0,
+    nervous: 0,
+    "l-arm": Number(os.lArm) || 0,
+    "r-arm": Number(os.rArm) || 0,
+    "l-leg": Number(os.lLeg) || 0,
+    "r-leg": Number(os.rLeg) || 0,
+  };
+}
+
+/**
+ * The cyberware-tab AREA id a cyberware item occupies (head/body/nervous/l-arm/r-arm/l-leg/r-leg),
+ * from its MountZone + Location — the sheet groups the body map by this same area id so a zone's
+ * used-slots tally matches what the zone displays. "" when the item has no placeable zone (a sideless Arm/Leg, or a
+ * zoneless body item). Pure.
+ */
+export function cyberAreaOf(item) {
+  const zone = String(item?.system?.MountZone || item?.system?.CyberBodyType?.Type || "");
+  const side = String(item?.system?.CyberBodyType?.Location || "");
+  switch (zone) {
+    case "Head":    return "head";
+    case "Torso":   return "body";
+    case "Nervous": return "nervous";
+    case "Arm":     return side === "Right" ? "r-arm" : side === "Left" ? "l-arm" : "";
+    case "Leg":     return side === "Right" ? "r-leg" : side === "Left" ? "l-leg" : "";
+    default:        return "";
+  }
 }
 
 /**
@@ -167,4 +219,17 @@ export function registerBorg() {
     };
     _wrapped = true;
   }
+
+  // At most one full conversion installed at a time: veto equipping a second borg body. Without this a
+  // second body silently materializes its loadout while borgBodyOf ("first equipped wins") ignores it.
+  // Sync preUpdateItem returning false cancels the write before it commits (mirrors consumable.js).
+  Hooks.on("preUpdateItem", (item, changes) => {
+    if (equippedChange(changes) !== "on" || !isBorgBody(item)) return;
+    const actor = item.actor;
+    if (!actor) return;
+    const other = actor.items.find(it => it.id !== item.id && it.system?.equipped === true && isBorgBody(it));
+    if (!other) return;
+    ui.notifications?.warn(localizeParam("BorgBodyAlreadyInstalled", { name: other.name }));
+    return false;
+  });
 }

@@ -42,8 +42,19 @@
     {{/if}}
   </div>
 </div>
-<header class="cyberware-header">
+{{!-- Active Cyberware header. For a full borg the whole body map IS the chassis, so the chassis name
+      and its controls fold into this header (no dedicated segment): click the name to open the chassis
+      item, ⊗ clears the whole loadout (options → Carried, non-destructive), 🗑 removes the chassis
+      (prompting what to do with its attached options). The chassis part is absent for a normal char. --}}
+<header class="cyberware-header cp-active-cyber-header">
     <h2>{{CPLocal "ActiveCyberware"}}</h2>
+    {{#if borgChassis}}
+    <span class="cp-chassis-inline">
+        <span class="cp-chassis-name item-edit" data-item-id="{{borgChassis.id}}" title="{{CPLocal 'BorgChassisTip'}}">{{borgChassis.name}}</span>
+        {{#if borgChassis.loadoutCount}}<a class="cp-group-remove" data-item-id="{{borgChassis.id}}" title="{{CPLocal 'BorgChassisClearTip'}}">&#8855;</a>{{/if}}
+        <a class="cp-chassis-delete" data-item-id="{{borgChassis.id}}" title="{{CPLocal 'BorgChassisDeleteTip'}}">&#128465;</a>
+    </span>
+    {{/if}}
 </header>
 
 
@@ -52,16 +63,9 @@
         {{#each cyberwareSegmentsRight}}
             <section class="field-list cyberware-field-list active-cyberware-segment"
             data-drop-target="zone:{{this.area}}">
-            <button type="button">{{this.areaLabel}}</button>
-            {{#each (lookup ../cyberZones this.area) as |cyber|}}
-                <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
-                <label>{{cyber.name}}</label>
-                {{#with (lookup @root.cpActiveBadges cyber.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
-                {{#with cyber.system}}
-                    <span>{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>
-                {{/with}}
-                <span class="item-unequip" data-item-id="{{cyber.id}}" draggable="false">X</span>
-                </div>
+            <button type="button">{{this.areaLabel}}{{#if this.slotTotal}} <span class="cp-capacity-badge" title="{{CPLocal 'ZoneOptionSpacesTip'}}">{{this.slotUsed}}/{{this.slotTotal}}</span>{{/if}}</button>
+            {{#each (lookup ../cyberZoneTrees this.area) as |node|}}
+                {{> "modules/cp2020-augmented/templates/actor/parts/cyber-zone-node.hbs" node=node}}
             {{/each}}
             </section>
         {{/each}}
@@ -82,34 +86,49 @@
         {{#each cyberwareSegmentsLeft}}
             <section class="field-list cyberware-field-list active-cyberware-segment"
                 data-drop-target="zone:{{this.area}}">
-                <button type="button">{{this.areaLabel}}</button>
-                {{#each (lookup ../cyberZones this.area) as |cyber|}}
-                    <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
-                    <label>{{cyber.name}}</label>
-                    {{#with (lookup @root.cpActiveBadges cyber.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
-                    {{#with cyber.system}}
-                        <span>{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>
-                    {{/with}}
-                    <span class="item-unequip" data-item-id="{{cyber.id}}" draggable="false">X</span>
-                    </div>
+                <button type="button">{{this.areaLabel}}{{#if this.slotTotal}} <span class="cp-capacity-badge" title="{{CPLocal 'ZoneOptionSpacesTip'}}">{{this.slotUsed}}/{{this.slotTotal}}</span>{{/if}}</button>
+                {{#each (lookup ../cyberZoneTrees this.area) as |node|}}
+                    {{> "modules/cp2020-augmented/templates/actor/parts/cyber-zone-node.hbs" node=node}}
                 {{/each}}
             </section>
          {{/each}}
     </div>
 </div>
 
-<div class="cyberware-header">
-    <header>
-        <h2>{{CPLocal "Cyberware"}}</h2>
-    </header>
+{{!-- Carried Options: the parts bin — cyberware owned but not installed (equipped=false). Distinct
+      from the active body map above; this is also where a new implant lands. Drop a piece here to
+      uninstall (carry) it, drag one onto a limb zone or a host implant to (re)install it. Nothing here
+      is destroyed unless the player deletes it deliberately. Always shown so it's a stable drop target. --}}
+<header class="cyberware-header">
+    <h2>{{CPLocal "CarriedOptions"}}</h2>
+</header>
+<div class="carried-options field-list" data-drop-target="cyber-inventory" title="{{CPLocal 'CarriedOptionsTip'}}">
+    {{#each carriedCyber as |cyber|}}
+        <div class="field gear item-edit full-width item cp-carried" data-item-id="{{cyber.id}}" draggable="true">
+            <label>{{cyber.name}}</label>
+            {{#with cyber.system}}<span>{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>{{/with}}
+            <span class="flex-pad"></span>
+            <span class="item-delete" data-item-id="{{cyber.id}}" title="{{CPLocal 'Delete'}}">X</span>
+        </div>
+    {{/each}}
+    {{#unless carriedCyber.length}}<div class="inactive cp-carried-empty">{{CPLocal "DragItemsPrompt"}}</div>{{/unless}}
 </div>
-{{#if (equals items.length 0)}}
-<div class="inactive">{{CPLocal "DragItemsPrompt"}}</div>
-{{/if}}
-{{!-- Q6: the cyberware inventory telescopes — loose cyberware as roots with their installed options
-      (and any misc in a limb compartment) nested underneath, one level deeper than before. --}}
-<div class="field-list" data-drop-target="cyber-inventory">
-    {{#each cyberTree}}
-        {{> "modules/cp2020-augmented/templates/actor/parts/container-node.hbs"}}
+
+{{!-- Internal / other: installed cyberware with no anatomical zone (e.g. an implant with no MountZone).
+      Shown so nothing installed is hidden; uninstall (⏏) sends it to Carried Options like any implant. --}}
+{{#if cyberOther.length}}
+<header class="cyberware-header">
+    <h2>{{CPLocal "CyberInternal"}}</h2>
+</header>
+<div class="cyber-internal field-list">
+    {{#each cyberOther as |cyber|}}
+        <div class="field gear item-edit full-width item" data-item-id="{{cyber.id}}" draggable="true">
+            <label>{{cyber.name}}</label>
+            {{#with (lookup @root.cpActiveBadges cyber.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
+            {{#with cyber.system}}<span class="cp-hl">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>{{/with}}
+            <span class="flex-pad"></span>
+            <span class="item-unequip cp-uninstall" data-item-id="{{cyber.id}}" draggable="false" title="{{CPLocal 'CyberUninstall'}}">&#9167;</span>
+        </div>
     {{/each}}
 </div>
+{{/if}}

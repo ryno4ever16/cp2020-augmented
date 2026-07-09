@@ -65,6 +65,7 @@ export const CATEGORIES = [
   { key: "Armor",      subs: [] },
   { key: "Ammo",       subs: [] },
   { key: "Cyberware",  subs: ["Cyberlimbs", "Cyberoptics", "Cyberaudio", "Neuralware", "Implants", "Bioware", "Fashionware", "Cyberweapons", "Chipware", "Other"] },
+  { key: "FBC",        subs: [] },
   { key: "Gear",       subs: ["Communication", "Electronics", "Entertainment", "Fashion", "Furnishing", "Medical", "Security", "Surveillance", "Tools", "Rentals & Services"] },
   { key: "Netrunning", subs: [] },
   { key: "Programs",   subs: [] },
@@ -121,7 +122,11 @@ const WEAPON_TYPE_SUB = {
  * identity. Weapons sub-categorize by system.weaponType; everything else maps from the item type.
  * This is strictly finer than the old blanket Gear/Other fallback for unmapped packs.
  */
-export function categoryOfItem(type, system = {}) {
+export function categoryOfItem(type, system = {}, flags = {}) {
+  // A full-conversion borg body (the borgBody flag) gets its own top-level category — checked ahead of
+  // the by-type switch so the body lands in FBC regardless of how its cyberware type is set. Keyed on
+  // `.sdp` to match borg.js borgBodyOf's own validity test.
+  if (flags?.["cp2020-augmented"]?.borgBody?.sdp) return { category: "FBC", sub: "" };
   switch (type) {
     case "weapon":    return { category: "Weapons", sub: WEAPON_TYPE_SUB[system?.weaponType] ?? "Other" };
     case "armor":     return { category: "Armor", sub: "" };

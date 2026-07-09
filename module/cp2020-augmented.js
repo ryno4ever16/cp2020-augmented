@@ -80,6 +80,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/parts/woundtracker.hbs",
   "modules/cp2020-augmented/templates/actor/parts/status-strip.hbs",
   "modules/cp2020-augmented/templates/actor/parts/container-node.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/cyber-zone-node.hbs",
   "modules/cp2020-augmented/templates/actor/parts/skills.hbs",
   "modules/cp2020-augmented/templates/actor/parts/skill.hbs",
   "modules/cp2020-augmented/templates/actor/parts/combat.hbs",

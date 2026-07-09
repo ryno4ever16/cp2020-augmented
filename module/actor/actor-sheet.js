@@ -10,9 +10,10 @@ import { attackModProviders, skillModProviders, statModProviders, gearModGroup, 
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { clearAddiction } from "../mech/drug.js";
 import { cyberlimbSheetStatus, repairCyberlimb } from "../mech/cyberlimb.js";
-import { isFullBorg, borgBodyOf } from "../mech/borg.js";
+import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
-import { buildContainerTree, uninstallItem, installedInOf } from "../mech/container.js";
+import { buildContainerTree, buildZoneTrees, uninstallItem, installItem, canInstall, checkInstall, isContainer, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
+import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
@@ -52,7 +53,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    * satisfies the V2 "one root element per part" rule (the <form> is now provided by tag:"form").
    */
   static PARTS = {
-    main: { template: "modules/cp2020-augmented/templates/actor/actor-sheet.hbs", scrollable: [""] },
+    // scrollable = the in-part scroll container AppV2 saves/restores across re-renders. It must be an
+    // element INSIDE the part; "" (the part root) doesn't scroll and the real scroller (the frame's
+    // section.window-content) is an ancestor the framework can't reach — so scroll reset to top on every
+    // re-render. The paired CSS moves the scroll onto .sheet-body so this preserves it. See css scroll fix.
+    main: { template: "modules/cp2020-augmented/templates/actor/actor-sheet.hbs", scrollable: [".sheet-body"] },
   };
 
   /** V1 tab config, reused by the manual Tabs binding in _onRender (V2 has no auto-tab option). */
@@ -131,13 +136,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       "head": "Head", "body": "Torso", "nervous": "Nervous",
       "l-arm": "lArm", "r-arm": "rArm", "l-leg": "lLeg", "r-leg": "rLeg"
     };
-    for (const seg of sheetData.cyberwareSegmentsRight) {
+    for (const seg of [...sheetData.cyberwareSegmentsRight, ...sheetData.cyberwareSegmentsLeft]) {
       const k = ZONE_I18N[seg.area] ?? seg.area;
       seg.areaLabel = game.i18n.localize(`CYBERPUNK.${k}`);
-    }
-    for (const seg of sheetData.cyberwareSegmentsLeft) {
-      const k = ZONE_I18N[seg.area] ?? seg.area;
-      seg.areaLabel = game.i18n.localize(`CYBERPUNK.${k}`);
+      // Per-zone option-slot used/total, computed earlier in _prepareCharacterItems (which runs first).
+      const cap = sheetData.zoneCapacity?.[seg.area];
+      seg.slotUsed = cap?.used ?? 0;
+      seg.slotTotal = cap?.total ?? 0;
     }
 
 
@@ -204,8 +209,27 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     this._cpActivateNotesEditor(root);
     // Drag-drop (drop-target dragover, gear sort, owned-item drag sources) — upstream-aligned helper (Stage A2).
     this._cpActivateActorDragDrop(root);
-    // NOTE: the old jQuery activateListeners is gone — every handler is now a native _cpActivate*
-    // helper above (Stage A2 complete for the actor sheet).
+    // Restore the tab-body scroll LAST — after the active tab is switched on above, so the tall content
+    // is laid out and the position isn't clamped. AppV2's own `scrollable` restore runs before this tab
+    // activation, so it can't preserve scroll for our manual tabs; this does. Stage A2 complete otherwise.
+    this._cpRestoreScroll(root);
+  }
+
+  /**
+   * Preserve the tab-body scroll position across re-renders (a drop/edit re-renders the whole part and
+   * would otherwise snap scroll to the top). A live scroll listener records the position on `this`
+   * (survives re-renders); this runs at the end of _onRender — after the active tab is shown — to put it
+   * back. Paired with PARTS.main scrollable:[".sheet-body"] + the CSS that makes .sheet-body the scroller.
+   */
+  _cpRestoreScroll(root) {
+    const sb = root?.querySelector?.(".sheet-body");
+    if (!sb) return;
+    if (Number.isFinite(this._cpScrollTop)) sb.scrollTop = this._cpScrollTop;
+    // Bind once per (replaced) element: record the user's scroll so the next re-render can restore it.
+    if (sb.dataset.cpScrollBound !== "1") {
+      sb.dataset.cpScrollBound = "1";
+      sb.addEventListener("scroll", () => { this._cpScrollTop = sb.scrollTop; }, { passive: true });
+    }
   }
 
   /**
@@ -301,6 +325,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       await item.update({ [path]: false });
     });
 
+    // Persist the collapsible strip's open/closed state across re-renders (the `toggle` event does not
+    // bubble, so listen in the capture phase). _prepareContext reads _cpStatusOpen back onto the <details>.
+    root.addEventListener("toggle", (event) => {
+      const d = event.target;
+      if (d?.classList?.contains?.("cp-status-details")) this._cpStatusOpen = d.open;
+    }, true);
+
     // Q5 vision picker: persist the governor choice ("" auto / "natural" / item id) on the actor.
     root.addEventListener("change", async (event) => {
       if (!event.target?.matches?.("select.cp-vision-pick")) return;
@@ -321,10 +352,10 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       else await this.actor.unsetFlag("cp2020-augmented", "fullBorg");
     });
 
-    // Q6 container: the ⏏ on a nested (installed) row detaches it to loose inventory. Mousedown
-    // swallowed first so it can't start a drag; the click runs the detach.
+    // Q6 container: the ⏏ on a nested (installed) row detaches it to loose inventory; the ⊗ on a
+    // group anchor removes the whole group at once. Mousedown swallowed first so neither starts a drag.
     root.addEventListener("mousedown", (event) => {
-      if (event.target?.closest?.(".cp-container-uninstall")) { event.preventDefault(); event.stopPropagation(); }
+      if (event.target?.closest?.(".cp-container-uninstall, .cp-group-remove")) { event.preventDefault(); event.stopPropagation(); }
     });
     root.addEventListener("click", async (event) => {
       const btn = event.target?.closest?.(".cp-container-uninstall");
@@ -333,6 +364,80 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       event.stopPropagation();
       const item = this.actor.items.get(btn.dataset.itemId);
       if (item) await uninstallItem(item);
+    });
+
+    // ⊗ Clear a whole group from its anchor row — NON-DESTRUCTIVE: a loadout body UNEQUIPS its options
+    // (they become carried, kept in inventory); a generic container detaches its children to loose
+    // inventory. Nothing is deleted (deletion stays a deliberate per-item action).
+    root.addEventListener("click", async (event) => {
+      const btn = event.target?.closest?.(".cp-group-remove");
+      if (!btn || !root.contains(btn)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const item = this.actor.items.get(btn.dataset.itemId);
+      if (!item) return;
+      // The member set the ⊗ acts on must equal the count shown, or it "removes only some": a loadout
+      // body's members are the options it spawned (by source flag), a generic container's are its nested
+      // children (by ParentId). Use the same set for the confirm count and the action.
+      const isLoad = hasLoadout(item);
+      const members = isLoad
+        ? loadoutOptionsOf(this.actor, item.id)
+        : childrenOf(this.actor.items.contents ?? [], item.id);
+      if (!members.length) return;
+      const ok = await foundry.applications.api.DialogV2.confirm({
+        window: { title: localize("MechGroupRemoveTitle") },
+        content: `<p>${localizeParam("MechGroupRemoveConfirm", { count: members.length, name: item.name })}</p>`,
+        rejectClose: false,
+      });
+      if (!ok) return;
+      if (isLoad) await deactivateLoadout(this.actor, item.id);
+      else for (const c of members) await uninstallItem(c);
+    });
+
+    // Chassis delete (the 🗑 on the chassis strip): remove the full-borg body, deciding at delete-time
+    // what happens to its currently-ATTACHED options — delete them with the chassis, or unequip them to
+    // Carried Options (kept). Options already shelved to Carried aren't touched (pruneLoadout is
+    // equipped-only). A bare chassis (no attached options) just confirms.
+    root.addEventListener("click", async (event) => {
+      const btn = event.target?.closest?.(".cp-chassis-delete");
+      if (!btn || !root.contains(btn)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const body = this.actor.items.get(btn.dataset.itemId);
+      if (!body) return;
+      const attached = loadoutOptionsOf(this.actor, body.id).filter(it => it.system?.equipped === true);
+      const DialogV2 = foundry.applications.api.DialogV2;
+      let choice = "delete-body";
+      if (attached.length) {
+        choice = await DialogV2.wait({
+          window: { title: localize("BorgDeleteTitle") },
+          content: `<p>${localizeParam("BorgDeleteAttachedPrompt", { name: body.name, count: attached.length })}</p>`,
+          buttons: [
+            { action: "unequip", label: localize("BorgDeleteOptionsUnequip"), icon: "fas fa-box", default: true, callback: () => "unequip" },
+            { action: "delete", label: localize("BorgDeleteOptionsDelete"), icon: "fas fa-trash", callback: () => "delete" },
+            { action: "cancel", label: localize("Cancel"), icon: "fas fa-times", callback: () => "cancel" },
+          ],
+          rejectClose: false,
+        }).catch(() => "cancel");
+      } else {
+        const ok = await DialogV2.confirm({
+          window: { title: localize("BorgDeleteTitle") },
+          content: `<p>${localizeParam("BorgDeleteBarePrompt", { name: body.name })}</p>`,
+          rejectClose: false,
+        });
+        if (!ok) return;
+      }
+      if (choice === "cancel" || !choice) return;
+      if (choice === "unequip") {
+        // Keep the attached options: unequip + clear their host links → Carried, before the body delete
+        // (so pruneLoadout's equipped-only sweep finds nothing of theirs to take).
+        await this.actor.updateEmbeddedDocuments("Item", attached.map(it => ({
+          _id: it.id, "system.equipped": false, "system.Module.ParentId": "", "system.CyberBodyType.Location": "",
+        })));
+      } else if (choice === "delete") {
+        await this.actor.deleteEmbeddedDocuments("Item", attached.map(it => it.id));
+      }
+      await body.delete();
     });
   }
 
@@ -514,8 +619,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       const itemEdit = target.closest(".item-edit");
       if (itemEdit) {
-        // The container uninstall control lives inside the (item-edit) row — let its own handler run.
-        if (target.closest(".item-unequip, .cp-container-uninstall")) return;
+        // The uninstall / clear / chassis-delete controls live inside an (item-edit) row — let their own
+        // handlers run instead of opening the item sheet.
+        if (target.closest(".item-unequip, .cp-container-uninstall, .cp-group-remove, .cp-chassis-delete")) return;
         event.stopPropagation();
         this._cpGetItemFromTarget(itemEdit)?.sheet?.render(true);
         return;
@@ -1607,8 +1713,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // Living flag (heat-sense target gate): explicit flag wins, else the actor-type default.
     sheetData.cpLiving = isLivingActor(actor);
 
-    // The strip renders when it has pills OR the picker (no `or` helper in this stack).
+    // The strip renders when it has pills OR the picker (no `or` helper in this stack). It's a collapsible
+    // <details> (summary by default, expands to the pills) so a long list doesn't crowd the header; the
+    // open/closed choice persists across re-renders via _cpStatusOpen (a drug tick re-renders the sheet).
     sheetData.cpShowStrip = !!(sheetData.cpStatusRows.length || sheetData.cpVisionPick);
+    sheetData.cpStatusOpen = !!this._cpStatusOpen;
 
     const PART_LABEL = {
       base: "StatBreakdownBase", temp: "StatBreakdownTemp", encumbrance: "StatBreakdownEncumbrance",
@@ -1728,13 +1837,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     sheetData.gear.cyberware = allCyber;
     sheetData.gear.cyberwareInventory = allCyber;
 
-    // Q6 telescoping container trees: the cyberware inventory list + the gear list render as trees
-    // (loose items as roots, installed items nested under their container of any type). Roots are
-    // filtered per tab; children (installedIn a node) are included regardless, so an item installed
-    // in a cyberware shows under it in the cyber tab, one in a misc pouch shows in the gear tab, and
-    // neither double-lists at the top level (buildContainerTree keeps only loose items as roots).
+    // Q6 telescoping: the GEAR list still renders as a flat tree (loose items as roots, installed
+    // items nested). The CYBERWARE tab telescopes INSIDE the anatomy body map instead (cyberZoneTrees
+    // below) — each host implant shows its options nested under it in the right zone — so it has no
+    // separate flat tree.
     const allItems = sheetData.actor.items?.contents ?? [];
-    sheetData.cyberTree = buildContainerTree(allItems, (it) => it.type === "cyberware");
     const gearRootIds = new Set((sheetData.gearTabItems ?? []).map((i) => i.id));
     sheetData.gearTree = buildContainerTree(allItems, (it) => gearRootIds.has(it.id));
 
@@ -1747,23 +1854,73 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     const isEnabled = (it) => !!it.system?.equipped && cwIsEnabled(it);
     const activeCyber = allCyber.filter(isEnabled);
-
-    const zoneOf = (it) => String(it.system?.MountZone || it.system?.CyberBodyType?.Type || "");
-    const sideOf = (it) => String(it.system?.CyberBodyType?.Location || "");
-
-    sheetData.cyberZones = {
-      head: activeCyber.filter(it => zoneOf(it) === "Head"),
-      body: activeCyber.filter(it => zoneOf(it) === "Torso"),
-      nervous: activeCyber.filter(it => zoneOf(it) === "Nervous"),
-      "l-arm": activeCyber.filter(it => zoneOf(it) === "Arm" && sideOf(it) === "Left"),
-      "r-arm": activeCyber.filter(it => zoneOf(it) === "Arm" && sideOf(it) === "Right"),
-      "l-leg": activeCyber.filter(it => zoneOf(it) === "Leg" && sideOf(it) === "Left"),
-      "r-leg": activeCyber.filter(it => zoneOf(it) === "Leg" && sideOf(it) === "Right"),
-    };
     const isChip = (it) => {
       const cwt = it.system?.CyberWorkType ?? {};
       return Array.isArray(cwt?.Types) ? cwt.Types.includes("Chip") : cwt?.Type === "Chip";
     };
+
+    const AREAS = ["head", "body", "nervous", "l-arm", "r-arm", "l-leg", "r-leg"];
+
+    // Equipped cyberware grouped by anatomy area (the flat per-zone tally, used for the zone badges).
+    const activeByArea = {};
+    for (const area of AREAS) activeByArea[area] = activeCyber.filter(it => cyberAreaOf(it) === area);
+
+    // The anatomy body map now telescopes: each zone renders a tree of its equipped cyberware — host
+    // implants (a cyberarm, a cybereye) with their installed options nested underneath, one per zone.
+    // A full borg's options land as flat roots in their zones (their host is the zoneless chassis).
+    sheetData.cyberZoneTrees = buildZoneTrees(activeCyber, cyberAreaOf);
+
+    // Catch-all: equipped cyberware with no anatomy zone (and not the chassis or a chip) — so nothing
+    // installed vanishes when it lacks a MountZone. Anything already shown in a zone tree is excluded.
+    const inZoneIds = new Set();
+    const collectIds = (n) => { inZoneIds.add(n.item.id); (n.children ?? []).forEach(collectIds); };
+    for (const area of Object.keys(sheetData.cyberZoneTrees)) sheetData.cyberZoneTrees[area].forEach(collectIds);
+    sheetData.cyberOther = activeCyber.filter(it => !inZoneIds.has(it.id) && !isBorgBody(it) && !isChip(it));
+
+    // The equipped full-borg chassis (zoneless, so not a row in the map itself). Its pinned strip is
+    // built after the per-zone slot tallies below, so its badge can sum them. Null for a normal char.
+    const borgBody = activeCyber.find(it => isBorgBody(it)) ?? null;
+
+    // Per-zone option-slot capacity for the anatomy body-map badges (surface each limb's option spaces).
+    // Borg: the chassis's fixed per-zone pool (borgBody.optionSpaces) — TOTAL capacity (factory fit-out
+    // + the book's free spaces), consumed by the zone's ROOT items only. An item consumes its IMMEDIATE
+    // parent's capacity: the zone pool when it sits in the chassis directly, its container's own
+    // OptionsAvailable when nested — so a mount's contents never double-count against the zone.
+    // Normal character: the summed option capacity of any container-cyberware mounted in that zone
+    // (each cyberlimb/eye's own OptionsAvailable). A zone with no capacity gets no badge (gated by
+    // slotTotal in the template).
+    const borgSpaces = borgOptionSpaces(this.actor);
+    const zoneRoot = (it) => {
+      const pid = installedInOf(it);
+      const host = pid ? allItems.find((x) => x.id === pid) : null;
+      return !host || isBorgBody(host);
+    };
+    const zoneCapacity = (area) => {
+      const inZone = activeByArea[area] ?? [];
+      if (borgSpaces) {
+        return { used: inZone.filter(zoneRoot).reduce((s, it) => s + slotsTakenOf(it), 0), total: Number(borgSpaces[area]) || 0 };
+      }
+      let used = 0, total = 0;
+      for (const it of inZone) {
+        const cap = capacityOf(it);
+        if (cap > 0) { total += cap; used += usedSlots(allItems, it.id); }
+      }
+      return { used, total };
+    };
+    // Store as a per-area map: the anatomy segments are built later in _prepareContext (after this
+    // method returns), so they read their used/total from here rather than being mutated in place.
+    sheetData.zoneCapacity = {};
+    for (const area of AREAS) {
+      sheetData.zoneCapacity[area] = zoneCapacity(area);
+    }
+
+    // The full-borg chassis folds into the Active Cyberware header (no dedicated segment): just its name
+    // + the loadout-option count that gates the ⊗ clear-all control. Per-zone slot usage is already shown
+    // by the zone badges, so no chassis-wide number (it would conflate option slots with built-in
+    // systems). The delete-prompt count is computed live in the handler.
+    sheetData.borgChassis = borgBody
+      ? { id: borgBody.id, name: borgBody.name, loadoutCount: loadoutOptionsOf(this.actor, borgBody.id).length }
+      : null;
 
     sheetData.chipsActive = allCyber.filter(it =>
       isChip(it) &&
@@ -1772,6 +1929,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     );
 
     sheetData.gear.cyberwareActive = activeCyber;
+
+    // Carried options: cyberware the player owns but hasn't installed (equipped=false) — the parts bin,
+    // rendered in a dedicated Carried Options area distinct from the active body map. A carried chip is
+    // "owned but not installed" too, so it lives here (the Active Chipware section shows only running
+    // chips); drag one onto Active Chipware or a limb to re-install it. An uninstalled/spare full-borg
+    // chassis lives here too (the equipped one is the chassis strip) so it isn't hidden.
+    sheetData.carriedCyber = allCyber.filter(it => it.system?.equipped !== true);
 
     // ── Cyberware-tab anatomy image (player-chosen body type; see ANATOMY_IMAGES) ──
     const anatomyKey = this.actor.getFlag?.("cyberpunk2020", "anatomyImage") || DEFAULT_ANATOMY_KEY;
@@ -2064,7 +2228,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     foundry.applications.api.DialogV2.confirm({
       window: { title: localize("ItemDeleteConfirmTitle") },
       content: `<p>${localizeParam("ItemDeleteConfirmText", { itemName: item.name })}</p>`,
-      yes: { label: localize("Yes"), callback: () => item.delete() },
+      // Guard the delete: DialogV2 disables its buttons, awaits this callback, and only re-enables +
+      // closes the dialog when the callback RESOLVES. A raw `() => item.delete()` that rejects (or
+      // hangs) leaves the dialog stuck open with dead buttons. Swallow-and-report so it always resolves.
+      yes: { label: localize("Yes"), callback: async () => {
+        try { await item.delete(); }
+        catch (e) {
+          console.error(`cp2020-augmented | delete failed for "${item.name}"`, e);
+          ui.notifications?.error(localizeParam("ItemDeleteFailed", { itemName: item.name }));
+        }
+      } },
       no: { label: localize("No"), default: true },
       rejectClose: false,
     });
@@ -2323,20 +2496,35 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
             || target?.closest?.('[data-item-id]')?.dataset?.itemId;
 
     if (!id) return;
+    if (await this._cpUninstallCyber(id)) this.render(true);
+  }
+
+  /**
+   * Uninstall an installed cyberware and everything nested inside it → Carried Options, non-destructively:
+   * unequip + clear the host link (Module.ParentId) + clear the body side + drop the chip-active flag, for
+   * the item AND all its descendants. Taking a container off the body takes its contents off with it (kept
+   * in inventory, re-installable) so nothing is left equipped-but-hostless. This is the single uninstall
+   * path shared by the per-row control (_onActiveUnequip) and the drag-off-the-body gesture (_onDropItem).
+   * Returns true when something was uninstalled. Does not re-render (the caller decides).
+   * @param {string} id  the cyberware item id
+   */
+  async _cpUninstallCyber(id) {
     const item = this.actor.items.get(id);
-    if (!item) return;
-
-    const updates = {
+    if (!item) return false;
+    const items = this.actor.items?.contents ?? [];
+    const ids = [id, ...descendantIds(items, id)];
+    const updates = ids.map((i) => ({
+      _id: i,
       "system.equipped": false,
-      "system.CyberWorkType.ChipActive": false
-    };
-
-    await item.update(updates, { render: false });
+      "system.CyberWorkType.ChipActive": false,
+      "system.Module.ParentId": "",
+      "system.CyberBodyType.Location": "",
+    }));
+    await this.actor.updateEmbeddedDocuments("Item", updates, { render: false });
     await this._cp_syncChipLevelsToSkills();
     await this._cp_syncActiveFlagsToSkills();
-
     if (item.sheet?.rendered) item.sheet.render(true);
-    this.render(true);
+    return true;
   }
 
   /** @override */
@@ -2360,7 +2548,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const sameActorDrop = this._cpIsSameActorItemDrop(data);
 
     if (!dropTarget) {
-      if (sameActorDrop) return false;
+      if (sameActorDrop) {
+        // Drag-off-the-body → uninstall: an equipped cyberware row dragged out of the anatomy map and
+        // dropped on empty sheet space (or off the window) comes off the body → Carried Options,
+        // mirroring the per-row ⏏. Any other same-actor drop with no target is a no-op sort.
+        const owned = this._cpGetOwnedDropItem(data);
+        if (owned?.type === "cyberware" && owned.system?.equipped === true) {
+          if (await this._cpUninstallCyber(owned.id)) this.render(true);
+        }
+        return false;
+      }
       await this._cpWarnDuplicateSkillDrop(data);
       return super._onDropItem(event, data);
     }
@@ -2460,18 +2657,54 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const { item } = await this._cpEnsureDroppedItemOwned(data, resolved);
       if (!item) return;
 
-      await item.update({
-        "system.equipped": false,
-        "system.CyberBodyType.Location": "",
-        "system.CyberWorkType.ChipActive": false
-      }, { render: false });
-
-      await this._cp_syncChipLevelsToSkills();
-      await this._cp_syncActiveFlagsToSkills();
-
-      if (item.sheet?.rendered) item.sheet.render(true);
+      // Dropped on Carried Options → uninstall to the parts bin (cascade the item + its nested options
+      // off the body). Same non-destructive path as the ⏏ control; a newly-added external drop simply
+      // lands here carried.
+      await this._cpUninstallCyber(item.id);
       this.render(true);
       return;
+    }
+
+    // Dropped onto a HOST implant row in the body map → nest the option inside it (Q6 container link),
+    // when the host has room. This is what makes telescoping work for a normal character (a scope into a
+    // cybereye), not just materialized borg loadouts. Falls back to a standalone in the host's own zone
+    // when the host can't contain it, so the drop is never silently lost.
+    if (target?.startsWith("host:")) {
+      const hostId = target.split(":")[1];
+      const host = this.actor.items.get(hostId);
+      const resolved = await this._cpResolveDroppedItem(data);
+      const { itemData } = resolved;
+
+      if (itemData.type !== "cyberware") return warn(localize("OnlyCyberwareHere"));
+
+      const { item } = await this._cpEnsureDroppedItemOwned(data, resolved);
+      if (!item || !host || item.id === host.id) return;
+
+      const items = this.actor.items?.contents ?? [];
+      const check = checkInstall(item, host, items);
+      if (check.ok) {
+        // Nest: link to the host + inherit its zone/side so the option sits in the right place.
+        await item.update({
+          "system.equipped": true,
+          "system.Module.ParentId": host.id,
+          "system.MountZone": host.system?.MountZone || item.system?.MountZone || "",
+          "system.CyberBodyType.Location": host.system?.CyberBodyType?.Location || ""
+        }, { render: false });
+        if (item.sheet?.rendered) item.sheet.render(true);
+        return this.render(true);
+      }
+      // Can't nest here (the base cyberware rules) — say WHY, then install it standalone in the host's
+      // zone so the drop isn't lost. This is what blocks e.g. an optic mount from nesting inside an optic.
+      let msg;
+      switch (check.reason) {
+        case "not-module":    msg = localizeParam("CyberNestNotModule", { item: item.name }); break;
+        case "wrong-type":    msg = localizeParam("CyberNestWrongType", { item: item.name, type: check.param?.type ?? "" }); break;
+        case "full":          msg = localizeParam("CyberNestFull", { host: host.name }); break;
+        case "not-container": msg = localizeParam("CyberNestNoSlots", { host: host.name }); break;
+        default:              msg = localizeParam("CyberNestGeneric", { item: item.name, host: host.name });
+      }
+      warn(msg);
+      return this._cpEquipCyberIntoZone(item, itemData, cyberAreaOf(host));
     }
 
     if (target?.startsWith("zone:")) {
@@ -2481,50 +2714,87 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       if (itemData.type !== "cyberware") return warn(localize("OnlyCyberwareHere"));
 
-      const cwt = itemData.system?.CyberWorkType ?? {};
-      const types = Array.isArray(cwt.Types) ? cwt.Types : (cwt.Type ? [cwt.Type] : []);
       const { item } = await this._cpEnsureDroppedItemOwned(data, resolved);
       if (!item) return;
 
-      if (types.includes("Chip")) {
-        await item.update({
-          "system.equipped": true,
-          "system.CyberWorkType.ChipActive": true,
-          "system.CyberBodyType.Location": ""
-        }, { render: false });
-
-        await this._cp_syncChipLevelsToSkills();
-        await this._cp_syncActiveFlagsToSkills();
-
-        if (item.sheet?.rendered) item.sheet.render(true);
-        this.render(true);
-        return;
-      }
-
-      const mount = String(itemData.system?.MountZone || itemData.system?.CyberBodyType?.Type || "");
-      const updates = { "system.equipped": true };
-
-      const sideFromDrop = (key) => ({
-        "l-arm": "Left", "r-arm": "Right",
-        "l-leg": "Left", "r-leg": "Right"
-      })[key];
-
-      if (mount === "Arm" || mount === "Leg") {
-        const dropSide = sideFromDrop(zoneKey);
-        updates["system.CyberBodyType.Location"] =
-          dropSide || (itemData.system?.CyberBodyType?.Location || "Left");
-      } else {
-        updates["system.CyberBodyType.Location"] = "";
-      }
-
-      await item.update(updates);
-      return this.render(true);
+      return this._cpEquipCyberIntoZone(item, itemData, zoneKey);
     }
 
     if (sameActorDrop) return false;
     await this._cpWarnDuplicateSkillDrop(data);
     return super._onDropItem(event, data);
   }
+
+  /**
+   * Equip a cyberware as a STANDALONE implant in an anatomy zone (a root in that limb, not nested in a
+   * host). A chip activates instead; a mount-zone implant takes the dropped side and is checked against a
+   * full borg's per-zone option pool. Clears any stale host link so it renders as a zone root. Renders on
+   * success. Shared by the `zone:` drop target and the `host:` fallback when the host can't contain it.
+   * @param {Item} item        the owned cyberware being equipped
+   * @param {object} itemData  its source data (type/CyberWorkType/MountZone), pre-resolved
+   * @param {string} zoneKey   the anatomy area id (head/body/nervous/l-arm/r-arm/l-leg/r-leg)
+   */
+  async _cpEquipCyberIntoZone(item, itemData, zoneKey) {
+    const warn = (msg) => ui.notifications?.warn(msg);
+    const cwt = itemData.system?.CyberWorkType ?? {};
+    const types = Array.isArray(cwt.Types) ? cwt.Types : (cwt.Type ? [cwt.Type] : []);
+
+    if (types.includes("Chip")) {
+      await item.update({
+        "system.equipped": true,
+        "system.CyberWorkType.ChipActive": true,
+        "system.CyberBodyType.Location": "",
+        "system.Module.ParentId": ""
+      }, { render: false });
+      await this._cp_syncChipLevelsToSkills();
+      await this._cp_syncActiveFlagsToSkills();
+      if (item.sheet?.rendered) item.sheet.render(true);
+      return this.render(true);
+    }
+
+    const mount = String(itemData.system?.MountZone || itemData.system?.CyberBodyType?.Type || "");
+    const updates = { "system.equipped": true, "system.Module.ParentId": "" };
+
+    const sideFromDrop = (key) => ({
+      "l-arm": "Left", "r-arm": "Right",
+      "l-leg": "Left", "r-leg": "Right"
+    })[key];
+
+    if (mount === "Arm" || mount === "Leg") {
+      const dropSide = sideFromDrop(zoneKey);
+      updates["system.CyberBodyType.Location"] =
+        dropSide || (itemData.system?.CyberBodyType?.Location || "Left");
+    } else {
+      updates["system.CyberBodyType.Location"] = "";
+    }
+
+    // Borg option-space limit: block a drop that would exceed the chassis's per-zone option pool.
+    // Only positive per-zone caps enforce (0/undefined = unconstrained, so imperfect data can't lock
+    // a zone). The zone the item lands in follows its MountZone + the resolved side. Only the zone's
+    // ROOT items consume the pool — container-nested items consume their container's capacity instead
+    // (an item counts against its immediate parent, never both).
+    const spaces = borgOptionSpaces(this.actor);
+    if (spaces) {
+      const destArea = cyberAreaOf({ system: { MountZone: mount, CyberBodyType: { Type: mount, Location: updates["system.CyberBodyType.Location"] } } });
+      const cap = Number(spaces[destArea]) || 0;
+      if (cap > 0) {
+        const list = this.actor.items?.contents ?? [];
+        const isRoot = (it) => {
+          const pid = installedInOf(it);
+          const host = pid ? list.find((x) => x.id === pid) : null;
+          return !host || isBorgBody(host);
+        };
+        const used = list
+          .filter(it => it.id !== item.id && it.system?.equipped && cwIsEnabled(it) && cyberAreaOf(it) === destArea && isRoot(it))
+          .reduce((s, it) => s + slotsTakenOf(it), 0);
+        if (used + slotsTakenOf(item) > cap) return warn(localizeParam("ZoneOptionSpacesFull", { used, total: cap }));
+      }
+    }
+
+    await item.update(updates);
+    return this.render(true);
+  }
+
   async _cp_syncChipLevelsToSkills() {
     const actor = this.actor;
     if (!actor) return;

@@ -336,6 +336,26 @@ export function cwHasType(obj, type) {
   return types.includes(type) || cwt?.Type === type;
 }
 
+// Cyberware TYPE normalizer — collapses the many spellings/casings of a cyberware base type to one
+// canonical key (CYBEROPTIC/Eye → CyberOptic, CYBERARM/CYBERHAND/Arm → CyberArm, …) so a module's
+// Module.AllowedParentCyberwareType can be compared to a host implant's cyberwareType. This is the single
+// source for that mapping — the item-sheet parent-picker AND the container install-check both use it
+// (base-system infrastructure reused, not re-invented). Pure.
+const CW_TYPE_ALIASES = {
+  "CYBERARM": "CyberArm", "CYBERHAND": "CyberArm", "CYBERLEG": "CyberLeg", "CYBERFOOT": "CyberLeg",
+  "CYBEREAR": "CyberAudio", "CYBEROPTIC": "CyberOptic", "IMPLANT": "CyberTorso",
+  "Arm": "CyberArm", "Leg": "CyberLeg", "Ear": "CyberAudio", "Eye": "CyberOptic", "Torso": "CyberTorso",
+};
+export function pickCwType(t) {
+  if (!t) return null;
+  if (typeof t === "string") { const k = t.trim(); return CW_TYPE_ALIASES[k] || k; }
+  if (typeof t === "object") {
+    const k = (t.key ?? t.value ?? t.name);
+    if (typeof k === "string") { const s = k.trim(); return CW_TYPE_ALIASES[s] || s; }
+  }
+  return null;
+}
+
 // Is the implant active, taking into account the mode (Permanent/Activated) and the “Active” flag
 export function cwIsEnabled(obj) {
   const sys = obj?.system ?? obj;

@@ -3,7 +3,7 @@ import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
 import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
-import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex } from "../utils.js";
+import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex, pickCwType } from "../utils.js";
 import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { useConsumable } from "../mech/consumable.js";
 import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
@@ -667,33 +667,9 @@ async _prepareCyberware(sheet) {
     { value: "CyberTorso", localKey: "CWT_ImplantType_CyberTorso" }
   ];
 
-  const typeAliases = {
-    "CYBERARM": "CyberArm",
-    "CYBERHAND": "CyberArm",
-    "CYBERLEG": "CyberLeg",
-    "CYBERFOOT": "CyberLeg",
-    "CYBEREAR": "CyberAudio",
-    "CYBEROPTIC":"CyberOptic",
-    "IMPLANT": "CyberTorso",
-    "Arm": "CyberArm", "Leg": "CyberLeg",
-    "Ear": "CyberAudio", "Eye": "CyberOptic", "Torso": "CyberTorso"
-  };
-
-  const pickType = (t) => {
-    if (!t) return null;
-    if (typeof t === "string") {
-      const k = t.trim();
-      return typeAliases[k] || k;
-    }
-    if (typeof t === "object") {
-      const k = (t.key ?? t.value ?? t.name);
-      if (typeof k === "string") {
-        const s = k.trim();
-        return typeAliases[s] || s;
-      }
-    }
-    return null;
-  };
+  // Cyberware type normalizer — now the shared utils.pickCwType (single source; the container
+  // install-check reuses the same mapping). Aliased locally so the rest of this method is unchanged.
+  const pickType = pickCwType;
 
     // Only module-capable implant base types (no dynamic extras)
     sheet.cw.parentCwTypeChoices = TYPE_CHOICES_BASE;

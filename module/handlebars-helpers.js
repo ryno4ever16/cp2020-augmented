@@ -26,4 +26,15 @@ export function registerAugmentedHandlebarsHelpers() {
   Handlebars.registerHelper("augVarTemplate", function (path, replaceWith) {
     return "modules/cp2020-augmented/templates/" + String(path).replace("[VAR]", replaceWith);
   });
+
+  // Display floor for a stat total. CP2020's global rule floors a modified value <=0 to 1; EMP is the
+  // one exception — it can legitimately reach 0 (full cyberpsychosis, from cumulative Humanity loss), so
+  // EMP floors at 0 and every other stat at 1. Display-ONLY: the roll (data-stat-name -> @stats) and the
+  // tooltip read the true derived value, so the underlying math is unchanged — only the readout is capped.
+  Handlebars.registerHelper("cpStatDisplay", function (key, total) {
+    const n = Number(total);
+    if (!Number.isFinite(n)) return total;
+    const floor = key === "emp" ? 0 : 1;
+    return n < floor ? floor : n;
+  });
 }

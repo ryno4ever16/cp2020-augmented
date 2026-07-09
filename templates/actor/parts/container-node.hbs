@@ -9,6 +9,7 @@
         {{#if isContainer}}<span class="cp-capacity-badge" title="{{CPLocal 'MechContainerCapacityTip'}}">{{used}}/{{capacity}}</span>{{/if}}
         <span class="flex-pad"></span>
         {{#if installed}}<a class="cp-container-uninstall" data-item-id="{{item.id}}" title="{{CPLocal 'MechContainerUninstall'}}">&#9167;</a>{{/if}}
+        {{#if children.length}}<a class="cp-group-remove" data-item-id="{{item.id}}" title="{{CPLocal 'MechGroupRemove'}}">&#8855;</a>{{/if}}
         <span><p class="inactive">{{item.type}}</p></span>
         <span class="item-delete" data-item-id="{{item.id}}" title="{{CPLocal 'Delete'}}">X</span>
     </div>

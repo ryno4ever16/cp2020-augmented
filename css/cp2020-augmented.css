@@ -739,6 +739,14 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   min-height: 0;
 }
 
+/* Scroll fix: the base system makes section.window-content (the AppV2 FRAME, outside the part) the
+   scroller, so AppV2's per-part scroll save/restore can't reach it → every re-render (a drop, an edit)
+   snapped scroll to the top. Move the scroller INSIDE the part onto .sheet-body (registered in
+   PARTS.main scrollable) so the framework preserves scrollTop across re-renders; only the tab body
+   scrolls, and the header/stats/wound-track no longer scroll away. */
+.application.cyberpunk.sheet.actor .window-content { overflow-y: hidden; }
+.application.cyberpunk.sheet.actor .sheet-body { overflow-y: auto; }
+
 .application.cyberpunk.sheet.actor .sheet-body > .tab.life.active,
 .cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .sheet-body > .tab.life.active {
   display: flex;
@@ -1261,14 +1269,16 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .cyberpunk .tab[data-tab="services"] .cp-header-action > label { display: none; }
 
 .cyberpunk .armor-display {
-  max-height: 200px;
+  /* Content-sized rows (was 1fr 1fr 1fr + max-height 200px): a zone that shows the SDP number-pair
+     row is taller, so the row must grow to it — a fixed height clipped the SDP boxes below the card. */
+  max-height: none;
   max-width: 25em;
   padding-left: 10%;
   padding-right: 10%;
   margin-bottom: 10px;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  grid-template-rows: 1fr 1fr 1fr;
+  grid-template-rows: auto auto auto;
   grid-template-areas: ". Head ." "lArm Torso rArm" "lLeg . rLeg";
   column-gap: 3px;
   row-gap: 3px;
@@ -1280,14 +1290,32 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   border: solid var(--cp-line, black);
   border-width: 2px 2px 0px 2px;
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  /* Named `sdp` track for the SDP number-pair row (between sp and name); without it the row auto-placed
+     into an implicit track outside the card and overflowed the bottom border. `name` fills the slack so
+     siblings with/without an SDP row keep their borders aligned. */
+  grid-template-rows: auto auto auto 1fr;
   grid-template-columns: 1fr 2fr 1fr;
-  grid-template-areas: "loc loc loc" "ablate sp repair" "name name name";
+  grid-template-areas: "loc loc loc" "ablate sp repair" "sdp sdp sdp" "name name name";
 }
 
 /* Cyberlimb SDP status badge + repair control (armor-display SDP row; mech/cyberlimb.js). The badge
    reports the TRUE limb state from the sticky limbStatus flag; the wrench repairs SDP + clears it. */
-.cyberpunk .armor-display .segment-sdp-row { align-items: center; }
+/* The SDP number-pair row: sits in the named `sdp` grid track, centered, the two number fields sized
+   so the pair fits the card. (Self-contained here — this layout previously lived only in a hand-patch
+   to the base system's compiled CSS, which does not ship with the module and is wiped on base update.) */
+.cyberpunk .armor-display .segment-sdp-row {
+  grid-area: sdp;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+}
+.cyberpunk .armor-display .segment-sdp-row .smallnumber {
+  width: 2.2em;
+  text-align: center;
+  padding: 0;
+  box-sizing: border-box;
+}
 .cyberpunk .segment-limb-status {
   font-size: 0.58rem;
   text-transform: uppercase;
@@ -1314,14 +1342,17 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   height: 18px;
   width: 100%;
   box-sizing: border-box;
-  border: 1px dashed var(--cp-line, rgba(0, 0, 0, 0.35));
+  border: none;   /* no drop-hint outline whether empty or not (user, 2026-07-09) — stays a drop target */
 }
 
 .active-cyberware .active-cyberware-segment {
   margin-top: 0px;
   padding: 6px 6px 6px 6px;
   position: relative;
-  border: 3px solid var(--cp-line, black);
+  /* Default = black border; hovering brings up the line/highlight colour (see the :hover rule below).
+     Inverted from the old behaviour (highlight by default, black on hover), which read as un-highlighting
+     the segment on hover. User request 2026-07-09. */
+  border: 3px solid black;
 }
 
 .anatomy-container {
@@ -1394,8 +1425,10 @@ img#anatomy-img {
 
 .cp-automation-notice .notice-btn { width: auto; flex: 0 0 auto; }
 
-.active-cyberware .active-cyberware-segment:hover {
-  border-color: var(--cp-line, black) !important;
+/* Hover = the line/highlight colour (inverts the old highlight-by-default). Extra specificity
+   (.application.cyberpunk) so it wins over the base system's black-on-hover !important rule. */
+.application.cyberpunk .active-cyberware .active-cyberware-segment:hover {
+  border-color: var(--cp-line, #4493ad) !important;
   box-shadow: none !important;
 }
 
@@ -2064,11 +2097,31 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
 /* Status strip (§3c visibility hybrid, actor-sheet header): one compact pill per ACTIVE influence
    (status-strip.hbs). Wraps; renders nothing when idle. Pills reuse the sheet ink/line tokens so
    both themes read; the quick-off × mirrors the item-unequip affordance. */
+/* Collapsible status strip: a compact summary by default (so a long list doesn't crowd the header);
+   click the summary to expand to the full pill list. */
+.cp-status-details { margin: 3px 0 0; }
+.cp-status-details > .cp-status-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;                 /* hide the default disclosure marker; we prepend our own icon */
+  font-size: 0.78rem;
+  opacity: 0.85;
+  padding: 1px 6px;
+  border: 1px solid var(--cp-line, #8886);
+  border-radius: 10px;
+  width: fit-content;
+}
+.cp-status-details > .cp-status-summary::-webkit-details-marker { display: none; }
+.cp-status-details > .cp-status-summary:hover { opacity: 1; }
+.cp-status-details[open] > .cp-status-summary { margin-bottom: 3px; }
+.cp-status-icon { color: var(--color-warm-3, #c0791a); }
 .cp-status-strip {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
-  margin: 3px 0 0;
+  margin: 0;
 }
 .cp-status-pill {
   display: inline-flex;
@@ -2144,4 +2197,66 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
 }
 .cp-container-uninstall:hover {
   opacity: 1;
+}
+/* ⊗ remove-whole-group control on a container/loadout anchor row (mirrors the ⏏ uninstall glyph). */
+.cp-group-remove {
+  cursor: pointer;
+  opacity: 0.6;
+  margin-right: 4px;
+  font-weight: bold;
+}
+.cp-group-remove:hover {
+  opacity: 1;
+  color: var(--cp-danger, #d1502f);
+}
+
+/* Carried Options — the parts bin: cyberware owned but not installed (equipped=false). A recessed,
+   dashed list distinct from the active body map; rows are draggable back onto a limb to re-install. */
+.cyberpunk .carried-options {
+  border: 1px dashed var(--cp-line, #8886);
+  border-radius: 4px;
+  padding: 3px;
+  margin-bottom: 8px;
+}
+.cyberpunk .carried-options .cp-carried { opacity: 0.72; cursor: grab; }
+.cyberpunk .carried-options .cp-carried:hover { opacity: 1; }
+.cyberpunk .carried-options .cp-carried-empty { padding: 4px 2px; opacity: 0.55; font-style: italic; }
+
+/* ── Cyberware body-map telescoping (diegetic redesign 2026-07-09) ─────────────────────────
+   Each anatomy zone renders a tree: a host implant then its installed options, indented beneath it,
+   INSIDE the diegetic body map (no separate flat list). One ⏏ per row uninstalls to Carried Options;
+   the ⊗ on the borg chassis strip clears the whole loadout. */
+.active-cyberware .cp-zone-children {
+  margin-left: 0.7rem;
+  border-left: 2px solid var(--cp-line, #8884);
+  padding-left: 0.3rem;
+}
+.active-cyberware .cp-zone-host > label { font-weight: bold; }
+.cp-zone-node .cp-hl { opacity: 0.75; font-size: 0.85em; }
+
+/* Uninstall (⏏) control on a body-map / internal row — mirrors the container ⏏ glyph and colour. */
+.cp-uninstall { cursor: pointer; opacity: 0.65; font-weight: bold; }
+.cp-uninstall:hover { opacity: 1; color: var(--cp-danger, #d1502f); }
+
+/* Full-borg chassis: folded into the Active Cyberware header (only one is ever installed, so no
+   dedicated segment). The header becomes a row: title left, chassis name + its controls right. */
+.cyberpunk .cp-active-cyber-header { display: flex; align-items: center; gap: 8px; }
+.cyberpunk .cp-chassis-inline {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+.cyberpunk .cp-chassis-name { opacity: 0.85; cursor: pointer; }
+.cyberpunk .cp-chassis-name:hover { opacity: 1; }
+.cp-chassis-delete { cursor: pointer; opacity: 0.6; font-weight: bold; }
+.cp-chassis-delete:hover { opacity: 1; color: var(--cp-danger, #d1502f); }
+
+/* Internal / other: installed cyberware with no anatomy zone (kept visible so nothing hides). */
+.cyberpunk .cyber-internal {
+  border: 1px dashed var(--cp-line, #8886);
+  border-radius: 4px;
+  padding: 3px;
+  margin-bottom: 8px;
 }

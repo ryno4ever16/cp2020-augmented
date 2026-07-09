@@ -15,7 +15,7 @@
  * and the delete-cascade hook touch documents.
  */
 
-import { cwHasType } from "../utils.js";
+import { cwHasType, pickCwType } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -76,15 +76,60 @@ export function wouldCycle(child, parent, items) {
   return false;
 }
 
-/** Can `child` be installed into `parent`? Pure. */
-export function canInstall(child, parent, items) {
-  if (!child || !parent) return false;
+/**
+ * The reasoned install check — can `child` be installed into `parent`? Returns `{ ok, reason, param }`
+ * where `reason` is a stable key for a localized warning. Enforces the base system's cyberware nesting
+ * model (REUSED, not re-invented — see utils.pickCwType + the item-sheet parent-picker): a cyberware
+ * child must be a MODULE (`Module.IsModule`); its host must be an Implant whose `cyberwareType` matches
+ * the child's `Module.AllowedParentCyberwareType` (when the child declares one), in the same MountZone
+ * (and same side for a limb). That IsModule gate is what stops an optic mount (a host, not a module)
+ * from nesting inside an optic. Misc↔container nesting keeps only the capacity/cycle rules (misc items
+ * carry none of these cyberware fields, so cross-type compartments still work). Pure.
+ *
+ * Mixed-family mounts: a container may declare `CyberWorkType.AcceptsTypes` (an array of cyberware
+ * families, e.g. a sensory boom hosting optics AND audio). When present it replaces the host's own
+ * `cyberwareType` in the family match — children stay truthfully typed (an audio option still refuses
+ * a cybereye) while the mount accepts every listed family. Such a mount also places its contents
+ * wherever the mount itself lives, so the anatomy zone/side match is skipped for its children.
+ */
+export function checkInstall(child, parent, items) {
+  if (!child || !parent) return { ok: false, reason: "invalid" };
   const childId = child.id ?? child._id;
   const parentId = parent.id ?? parent._id;
-  if (childId === parentId) return false;
-  if (!isContainer(parent)) return false;
-  if (wouldCycle(child, parent, items)) return false;
-  return freeSlots(parent, items) >= slotsTakenOf(child);
+  if (childId === parentId) return { ok: false, reason: "self" };
+  if (!isContainer(parent)) return { ok: false, reason: "not-container" };
+  if (wouldCycle(child, parent, items)) return { ok: false, reason: "cycle" };
+
+  if (child.type === "cyberware" && parent.type === "cyberware") {
+    if (!child.system?.Module?.IsModule) return { ok: false, reason: "not-module" };
+    if (!cwHasType(parent, "Implant")) return { ok: false, reason: "not-implant" };
+    const accepts = (parent.system?.CyberWorkType?.AcceptsTypes ?? []).map(pickCwType).filter(Boolean);
+    const needType = String(child.system?.Module?.AllowedParentCyberwareType || "");
+    if (needType) {
+      const need = pickCwType(needType);
+      const typeOk = accepts.length ? accepts.includes(need)
+        : pickCwType(parent.system?.cyberwareType) === need;
+      if (!typeOk) return { ok: false, reason: "wrong-type", param: { type: need || needType } };
+    }
+    if (!accepts.length) {
+      const zoneOf = (it) => String(it.system?.MountZone || it.system?.CyberBodyType?.Type || "");
+      const sideOf = (it) => String(it.system?.CyberBodyType?.Location || "");
+      const cz = zoneOf(child), pz = zoneOf(parent);
+      if (cz && pz && cz !== pz) return { ok: false, reason: "wrong-zone", param: { zone: pz } };
+      if (pz === "Arm" || pz === "Leg") {
+        const cs = sideOf(child), ps = sideOf(parent);
+        if (cs && ps && cs !== ps) return { ok: false, reason: "wrong-side" };
+      }
+    }
+  }
+
+  if (freeSlots(parent, items) < slotsTakenOf(child)) return { ok: false, reason: "full" };
+  return { ok: true, reason: null };
+}
+
+/** Can `child` be installed into `parent`? Pure. (Boolean facade over checkInstall.) */
+export function canInstall(child, parent, items) {
+  return checkInstall(child, parent, items).ok;
 }
 
 /**
@@ -103,6 +148,42 @@ export function buildContainerTree(items, filterRoot = () => true) {
     children: childrenOf(list, item.id ?? item._id).map(node)
   });
   return list.filter(it => !installedInOf(it) && filterRoot(it)).map(node);
+}
+
+/**
+ * Group items into per-zone telescoping trees for the anatomy body map. `areaOf(item)` returns the
+ * zone-area id an item occupies ("" = not placeable in the map). A tree ROOT is a placeable item whose
+ * container-parent is NOT another placeable item on this actor — so a normal cyberarm is a root in its
+ * arm zone with its options nested underneath, while a full-borg option (parented to the zoneless
+ * chassis) is a root in its own zone (the chassis isn't placeable, so the option isn't nested under it).
+ * Children (any depth) attach via the container link regardless of their own area, so each item appears
+ * exactly once. Returns `{ [area]: [node, …] }`, node = `{ item, area, capacity, used, isContainer,
+ * children }`. Pass the already-filtered set you want shown (e.g. the equipped/enabled cyberware). Pure.
+ */
+export function buildZoneTrees(items, areaOf) {
+  const list = items ?? [];
+  const idOf = (it) => it?.id ?? it?._id;
+  const placeable = (it) => String(areaOf(it) || "") !== "";
+  const byId = new Map(list.map(it => [idOf(it), it]));
+  const node = (item) => ({
+    item,
+    area: areaOf(item),
+    capacity: capacityOf(item),
+    used: usedSlots(list, idOf(item)),
+    isContainer: isContainer(item),
+    children: childrenOf(list, idOf(item)).map(node),
+  });
+  const isRoot = (it) => {
+    if (!placeable(it)) return false;
+    const parent = byId.get(installedInOf(it));
+    return !(parent && placeable(parent));   // nested under a visible host ⇒ not a root
+  };
+  const zones = {};
+  for (const it of list) {
+    if (!isRoot(it)) continue;
+    (zones[areaOf(it)] ??= []).push(node(it));
+  }
+  return zones;
 }
 
 /** Ids of all items nested (any depth) under `parentId`. Pure. */

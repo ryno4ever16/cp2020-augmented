@@ -1,7 +1,14 @@
 {{!-- Status strip (§3c hybrid): one pill per ACTIVE influence, assembled in _prepareContext
       (cpStatusRows — JS owns the data, this template only lays it out). Renders nothing while
-      idle. The × quick-toggle carries the boolean path _cpActivateStatusStrip writes false. --}}
+      idle. The × quick-toggle carries the boolean path _cpActivateStatusStrip writes false.
+      Collapsible (native <details>): a compact summary by default so a long list doesn't crowd the
+      header; expands to the pills on click. Open state persists via cpStatusOpen. --}}
 {{#if cpShowStrip}}
+<details class="cp-status-details" {{#if cpStatusOpen}}open{{/if}}>
+<summary class="cp-status-summary">
+    <span class="cp-status-icon">&#9888;</span>
+    <span class="cp-status-count">{{#if cpStatusRows.length}}{{CPLocal "StatusStripSummary" count=cpStatusRows.length}}{{else}}{{CPLocal "StatusStripSummaryEmpty"}}{{/if}}</span>
+</summary>
 <div class="cp-status-strip">
     {{#each cpStatusRows}}
     <span class="cp-status-pill cp-kind-{{kind}}" title="{{title}}">
@@ -30,4 +37,5 @@
     </span>
     {{/if}}
 </div>
+</details>
 {{/if}}

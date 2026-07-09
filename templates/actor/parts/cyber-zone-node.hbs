@@ -1,0 +1,20 @@
+{{!-- Recursive anatomy body-map node. One host (or standalone) implant row — a drag source, opens the
+      item on click (item-edit), accepts a dropped option to nest it (data-drop-target="host:id"), and
+      carries the single uninstall control (⏏ → Carried Options, non-destructive) — then its installed
+      options indented underneath. `node` = { item, area, capacity, used, isContainer, children }. --}}
+<div class="field gear item-edit full-width item cp-zone-node{{#if node.children.length}} cp-zone-host{{/if}}"
+     data-item-id="{{node.item.id}}" data-drop-target="host:{{node.item.id}}" draggable="true">
+    <label>{{node.item.name}}</label>
+    {{#with (lookup @root.cpActiveBadges node.item.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
+    {{#if node.isContainer}}<span class="cp-capacity-badge" title="{{CPLocal 'CyberHostCapacityTip'}}">{{node.used}}/{{node.capacity}}</span>{{/if}}
+    {{#with node.item.system}}<span class="cp-hl">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>{{/with}}
+    <span class="flex-pad"></span>
+    <span class="item-unequip cp-uninstall" data-item-id="{{node.item.id}}" draggable="false" title="{{CPLocal 'CyberUninstall'}}">&#9167;</span>
+</div>
+{{#if node.children.length}}
+<div class="cp-zone-children">
+    {{#each node.children as |child|}}
+        {{> "modules/cp2020-augmented/templates/actor/parts/cyber-zone-node.hbs" node=child}}
+    {{/each}}
+</div>
+{{/if}}

@@ -9,7 +9,7 @@
                 <div class="stat-mod">+</div>
                 <input class="stat-temp" type="number" name="system.stats.{{key}}.tempMod" value="{{stat.tempMod}}"/>
             </div>
-            <input class="stat-total action stat-roll" data-stat-name="{{key}}" value="{{stat.total}}" title="{{lookup @root.cpStatTips key}}" readonly>
+            <input class="stat-total action stat-roll" data-stat-name="{{key}}" value="{{cpStatDisplay key stat.total}}" title="{{lookup @root.cpStatTips key}}" readonly>
         </div>
         {{/each}}
     </div>
