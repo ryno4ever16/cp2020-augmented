@@ -16,7 +16,7 @@
 import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
 import { postDeathSavePrompt } from "./save-rolls.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
-import { localize, localizeParam, combineArmorSP } from "../utils.js";
+import { localize, localizeParam, combineArmorSP, foldArmorSP } from "../utils.js";
 import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
 import { isFullBorg, borgArmorSP, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
 import { typedLayerSP } from "../data/mech-item-data.js";
@@ -130,6 +130,9 @@ export function computeNetDamage(afterSP, btm, penetrates, location) {
  * Limb / head wound severity check (CP2020 p.103, optional Listen Up crippling).
  * Gated by limbLossEnabled; the granular variant by limbModel = "listenup".
  * Posts chat + applies status/death-save. Runs after netDamage is written, on every apply path.
+ * FLESH limb state is recorded under the `fleshLimbStatus` flag — deliberately NOT the cyberlimb
+ * engine's `limbStatus` (mech/cyberlimb.js, mech/borg.js), whose "destroyed"/"disabled" vocabulary
+ * would otherwise be read as structural SDP state and make a fresh cyberlimb soak zero (M18).
  * @param {Actor}  target
  * @param {string} location
  * @param {number} netDamage   Final HP applied (already includes any doubling)
@@ -181,9 +184,9 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
     if (netDamage >= 6) {
       const destroyed = netDamage >= 13;
       const status = destroyed ? "destroyed" : "crippled";
-      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "limbStatus") ?? {});
+      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
       cur[location] = status;
-      await liveTarget.setFlag("cp2020-augmented", "limbStatus", cur).catch(() => {});
+      await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
       const content = await renderChatCard("limb-wound.hbs", {
         title:  localizeParam(destroyed ? "LimbWoundDestroyedTitle" : "LimbWoundCrippledTitle", { name: liveTarget.name }),
         detail: localizeParam(destroyed ? "LimbWoundLuDestroyedDetail" : "LimbWoundLuCrippledDetail", { net: netDamage, limb: limbName }),
@@ -198,13 +201,13 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
 
   if (model === "W4RST4R") {
     // W4RST4R: >8 net disables the limb, >12 severs it; either way an immediate Death Save at
-    // Mortal 0. Damage is NOT doubled (handled in computeNetDamage). The limbStatus flag is reused.
+    // Mortal 0. Damage is NOT doubled (handled in computeNetDamage). Recorded under fleshLimbStatus.
     if (netDamage > 8) {
       const severed = netDamage > 12;
       const status = severed ? "severed" : "disabled";
-      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "limbStatus") ?? {});
+      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
       cur[location] = status;
-      await liveTarget.setFlag("cp2020-augmented", "limbStatus", cur).catch(() => {});
+      await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
       const content = await renderChatCard("limb-wound.hbs", {
         title:           localizeParam(severed ? "LimbWoundSeveredTitle" : "LimbWoundDisabledTitle", { name: liveTarget.name }),
         locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
@@ -250,7 +253,7 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
 export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null }) {
   if (routesToSdp(target, location)) {
     const sdpDmg = penetrates ? Math.max(0, Math.round(Number(structuralDamage ?? netDamage) || 0)) : 0;
-    const outcome = sdpDmg > 0 ? await absorbCyberlimbHit(target, location, sdpDmg, { token }) : null;
+    const outcome = sdpDmg > 0 ? await absorbCyberlimbHit(target, location, sdpDmg) : null;
     // A full borg's Head (brain) or Torso (biosystem) destroyed ends the actor — the one death the
     // limb model omits (Chromebook 2 p.64,66). A limb just goes useless, so this only fires for a borg.
     if (outcome?.status === "destroyed" && BORG_CORE_ZONES.has(location) && isFullBorg(target)) {
@@ -362,7 +365,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
       await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken });
 
       if (ablate && armorMode === ARMOR_MODES.FULL && penetrates && netDamage > 0) {
-        await ablateLocationOnce(target, spKey);
+        await ablateLocationOnce(target, spKey, damageType);
         liveSP[location] = _deriveLiveSP(target, spKey, damageType);
       }
     }
@@ -429,7 +432,7 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
   return results;
 }
 
-export async function ablateLocationOnce(target, location) {
+export async function ablateLocationOnce(target, location, damageType = "") {
   const contributors = getArmorContributors(target, location);
   const toAblate = [...contributors.orderedLayers, ...contributors.unassigned];
 
@@ -437,6 +440,10 @@ export async function ablateLocationOnce(target, location) {
   for (const item of toAblate) {
     const liveItem = target.items.get(item.id);
     if (!liveItem) continue;
+    // A layer whose TYPED rating stopped this hit (mechTypedSP matches the damage type) is protecting
+    // by material property, not consumable plating — it does not ablate. A non-matching typed layer
+    // that contributed nothing (conventional 0) is skipped by the itemSP<=0 gate just below.
+    if (damageType && String(liveItem.system?.mechTypedSP?.type ?? "").trim() === String(damageType).trim()) continue;
     const itemSP = Number(liveItem.system?.coverage?.[location]?.stoppingPower) || 0;
     if (itemSP <= 0) continue;
     // Full coverage object write — dot-notation paths may wipe the DataModel
@@ -459,7 +466,7 @@ export async function ablateLocationOnce(target, location) {
  * @param {string} location
  * @param {number} amount   Total SP to remove
  */
-export async function ablateLocationByAmount(target, location, amount) {
+export async function ablateLocationByAmount(target, location, amount, damageType = "") {
   if (amount <= 0) return;
   const contributors = getArmorContributors(target, location);
   const toAblate = [...contributors.orderedLayers, ...contributors.unassigned];
@@ -470,6 +477,8 @@ export async function ablateLocationByAmount(target, location, amount) {
     if (remaining <= 0) break;
     const liveItem = target.items.get(item.id);
     if (!liveItem) continue;
+    // Typed protection matching the damage type is a material property, not consumable plating (M15).
+    if (damageType && String(liveItem.system?.mechTypedSP?.type ?? "").trim() === String(damageType).trim()) continue;
     const itemSP = Number(liveItem.system?.coverage?.[location]?.stoppingPower) || 0;
     if (itemSP <= 0) continue;
     const reduction = Math.min(itemSP, remaining);
@@ -507,11 +516,15 @@ function _deriveLiveSP(target, location, damageType = "") {
     }
     return typedLayerSP(item, Number(item.system?.coverage?.[location]?.stoppingPower) || 0, damageType);
   }).filter(sp => sp > 0);
-  let combined = sps.reduce((acc, sp) => combineArmorSP(acc, sp), 0);
-  // A full-conversion borg's chassis SP is intrinsic (no armor item), so fold it in here too — this
-  // re-derivation feeds the ablation refresh (a penetrated burst) and the Maximum Metal anti-vehicle
-  // armor value, both of which would otherwise drop the naked chassis's SP. prepareData already folds
-  // the same SP into hitLocations.stoppingPower (the first-read path); combined proportionally, once.
+  // ONE proportional fold of the armor/cyberware layers — the same optimal-over-order combination the
+  // base uses for the prepared per-location SP (actor.js maxLayeredSP) — so the live value matches what
+  // the sheet shows and a typed layer's mere presence never silently changes a wearer's conventional
+  // armor math (M16: a fixed-order reduce here diverged from the base's DP).
+  let combined = foldArmorSP(sps);
+  // A full-conversion borg's chassis SP is intrinsic (no armor item); it feeds the ablation refresh (a
+  // penetrated burst) and the Maximum Metal anti-vehicle armor value. prepareData folds it into
+  // hitLocations.stoppingPower via combineArmorSP AFTER the layered fold (mech/borg.js) — mirror that
+  // exact two-step so an armored borg's live value equals its prepared one.
   const borgSP = borgArmorSP(target, location);
   if (borgSP > 0) combined = combineArmorSP(combined, borgSP);
   return combined;

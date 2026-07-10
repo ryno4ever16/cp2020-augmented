@@ -13,8 +13,9 @@
  * layer via the proportional table (CP2020 p.99).
  */
 
-import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, assessWoundSeverity, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
+import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
+import { routesToSdp } from "../mech/cyberlimb.js";
 import { localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -210,10 +211,12 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         mode:             "resolved",
         requesterId:      game.user.id,
         targetActorId:    this.target.id,
+        targetTokenId:    this.payload?.targetTokenId ?? null,
         resolvedHits,
         totalApplied,
         ablate,
         armorMode,
+        damageType:       this._damageType ?? "",
         stunSaveOnHit:    Boolean(this.payload.stunSaveOnHit),
         stunSaveMod:      Number(this.payload.stunSaveMod     ?? 0),
         dotEnabled:       Boolean(this.payload.dotEnabled),
@@ -230,22 +233,28 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // GM direct path — route each hit through the shared seam (cyberlimb zones absorb into their SDP,
     // flesh advances the wound track + runs the limb/head severity check). `applied` counts only the
     // flesh HP written, so the notification isn't inflated by damage a cyberlimb soaked.
+    // Resolve the actual target token (the shot's payload carries its id) so a destroyed borg core and
+    // the post-hit prompts use the RIGHT token, not the first canvas token of a multi-token actor.
+    const token = this.payload?.targetTokenId ? (canvas?.tokens?.get(this.payload.targetTokenId) ?? null)
+                : (canvas?.tokens?.placeables?.find(t => t.actor?.id === this.target.id) ?? null);
     let applied = 0;
     for (const hit of resolvedHits) {
-      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates });
+      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token });
       applied += outcome.applied;
 
       // Ablation gates on the bullet penetrating, not on the doubled HP value.
       if (ablate && armorMode === ARMOR_MODES.FULL && hit.btmResult > 0) {
-        await ablateLocationOnce(this.target, hit.location);
+        await ablateLocationOnce(this.target, hit.location, this._damageType);
       }
     }
 
     await this.target.sheet?.render(false);
     ui.notifications.info(localizeParam("DamageApplied", { amount: applied, name: this.target.name }));
 
-    // Taser flag must be updated BEFORE the save prompt — threshold calculation reads it
-    if (this.payload.stunSaveOnHit && resolvedHits.some(h => h.penetrates)) {
+    // Taser flag must be updated BEFORE the save prompt — threshold calculation reads it. Cyberlimb-
+    // routed hits carry no shock/stun (RAW), so they don't accumulate the cumulative-save penalty
+    // (mirrors the relay-compute branch's `!routesToSdp` gate).
+    if (this.payload.stunSaveOnHit && resolvedHits.some(h => h.penetrates && !routesToSdp(this.target, h.location))) {
       const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
       if (taserEnabled) await updateTaserState(this.target, this.payload);
     }
@@ -253,8 +262,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js.
     await applyDotFromPayload(this.target, rawHits[0]?.location ?? null, this.payload, resolvedHits.some(h => h.penetrates));
 
-    if (totalApplied > 0) {
-      await _postSavePrompts(this.target);
+    // Gate the stun/death prompt on FLESH HP actually written — a hit fully soaked by a cyberlimb's
+    // SDP raises no consciousness check (H7: was `totalApplied`, which counted cyberlimb-soaked damage).
+    if (applied > 0) {
+      await _postSavePrompts(this.target, token);
     }
 
     this.close();
@@ -268,13 +279,13 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   static async _formHandler(event, form, formData) {}
 }
 
-async function _postSavePrompts(actor) {
+async function _postSavePrompts(actor, token = null) {
   const woundState = actor.woundState?.() ?? 0;
   if (woundState === 0) return;
-  const token = canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id) ?? null;
+  const tok = token ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id) ?? null;
   if (woundState >= 4) {
-    await postDeathSavePrompt(actor, token);
+    await postDeathSavePrompt(actor, tok);
   } else {
-    await postStunSavePrompt(actor, token);
+    await postStunSavePrompt(actor, tok);
   }
 }

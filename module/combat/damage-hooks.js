@@ -21,11 +21,12 @@
 import { DamageDialog }                                       from "./DamageDialog.js";
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
-import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, assessWoundSeverity, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
+import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
 import { routesToSdp } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
+import { mechRoundTickEnabled } from "../settings.js";
 import { rollLocation, localize, localizeParam }              from "../utils.js";
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
@@ -1101,16 +1102,17 @@ function _hookDotEffects() {
             rolled = Math.max(1, Math.floor(mult));
           }
           // Floored at 1 like a penetrating hit (applyBTM semantics): a burn still stings.
-          const dmg = Math.max(1, rolled - fireBtm);
+          const dmg = Math.max(1, rolled - fireBtm);        // flesh HP (BTM applies to the body)
+          const fireStructural = Math.max(1, rolled);       // cyberlimb SDP (pre-BTM: machinery has no body toughness)
           if (roll) {
             await roll.toMessage({
               speaker: ChatMessage.getSpeaker({ actor }),
               flavor: `🔥 Fire DOT — ${actor.name} burns at ${location}: ${dmg} dmg (after BTM ${fireBtm}; ${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} left)`,
             });
           }
-          // Route through the shared seam: a burning cyberlimb takes structural SDP damage (no wound
-          // track, no stun save); flesh burns HP and rolls a stun save.
-          const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: dmg, penetrates: true, token });
+          // Route through the shared seam: a burning cyberlimb takes structural SDP damage pre-BTM (no
+          // wound track, no stun save); flesh burns HP post-BTM and rolls a stun save.
+          const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: fireStructural, penetrates: true, token });
           if (fireAblate) {
             try { await ablateLocationOnce(actor, location); } catch (e) { /* no ablatable armor here */ }
           }
@@ -1267,6 +1269,9 @@ function _hookGasCloudPerTurn() {
     // moment the GM clicks Begin Combat. Missing `previous` falls through.
     const gasPrevRound = combat.previous?.round;
     if (gasPrevRound !== undefined && gasPrevRound < 1) return;
+    // Round-tick automation master (settings): the per-turn cloud adjudication is a sub-toggle of the
+    // gas-cloud feature — a table that turns off round-tick automation runs saves manually.
+    if (!mechRoundTickEnabled()) return;
     if (!gasEnabled()) return;
 
     const scene = canvas?.scene;
@@ -1417,24 +1422,23 @@ async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize(
   const gotThrough = Math.max(1, falloffDmg - btm);          // SP ignored; BTM applies
   const permanent  = Math.max(1, Math.floor(gotThrough / 2)); // half permanent, half stun
 
-  const current = Number(actor.system.damage) || 0;
-  await actor.update({ "system.damage": current + permanent }, { render: false, fromCyberpunkDamageSystem: true });
-  if (actor.getFlag?.("cp2020-augmented", "stabilized")) {
-    await actor.unsetFlag("cp2020-augmented", "stabilized");
-    await postSavePromptCard({
-      body: localizeParam("StabilizedLostBody", { name: actor.name }),
-      speaker: ChatMessage.getSpeaker({ actor }),
-    });
-  }
+  // Route through the shared seam so a full borg's Torso concussion hits its SDP (and can destroy the
+  // biosystem) instead of the flesh wound track; flesh advances system.damage, loses stabilization,
+  // and runs wound severity — all inside applyLocationDamage. BTM is already applied above (concussion
+  // applies BTM even to machinery, Listen Up p.105), so pass the same permanent value as structural.
+  const outcome = await applyLocationDamage({ target: actor, location: "Torso", netDamage: permanent, structuralDamage: permanent, penetrates: true, token: tok });
   await ablateLocationByAmount(actor, "Torso", 2).catch(() => {}); // concussion wears soft armor −2 SP
-  await assessWoundSeverity(actor, "Torso", permanent, { token: tok });
   await postSavePromptCard({
     body: localizeParam("ConcussionBody", { name: actor.name, weapon: weaponName, permanent, gotThrough }),
     speaker: ChatMessage.getSpeaker({ actor }),
   });
-  const ws = actor.woundState?.() ?? 0;  // half is stun/blunt → always a consciousness check
-  if (ws >= 4) await postDeathSavePrompt(actor, tok);
-  else await postStunSavePrompt(actor, tok);
+  // Half the blow is stun/blunt → a consciousness check, but only for flesh: a cyberlimb/borg zone
+  // that soaked the hit into SDP takes no stun (a destroyed core already ran its own death via the seam).
+  if (!outcome.cyberlimb) {
+    const ws = actor.woundState?.() ?? 0;
+    if (ws >= 4) await postDeathSavePrompt(actor, tok);
+    else await postStunSavePrompt(actor, tok);
+  }
   return permanent;
 }
 
@@ -1997,14 +2001,15 @@ function _hookSocketRelay() {
         // Apply pre-computed per-hit values from the player's damage dialog through the shared seam
         // (cyberlimb zones absorb into their SDP; totalApplied counts only flesh HP so the post-hit
         // stun/death prompt stays honest).
-        const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
+        const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
+                        : (canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null);
         for (const hit of data.resolvedHits) {
           const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken });
           totalApplied += outcome.applied;
 
           // Ablation gates on the bullet penetrating, not on the doubled HP value.
           if (data.ablate && data.armorMode === ARMOR_MODES.FULL && hit.btmResult > 0) {
-            await ablateLocationOnce(target, hit.location);
+            await ablateLocationOnce(target, hit.location, data.damageType);
           }
         }
 
@@ -2089,11 +2094,14 @@ async function _autoApply(payload, target) {
     dryRun: false,
   });
 
-  const total = hits.reduce((s, h) => s + h.netDamage, 0);
+  // Cyberlimb hits soak into limb SDP, not the wound track — they don't count toward the
+  // notification, the taser cumulative-save state, or the post-hit stun/death prompt (RAW: no
+  // shock/stun). Mirrors the relay-compute branch in _hookSocketRelay's "auto" mode.
+  const total = hits.reduce((s, h) => s + (h.cyberlimb ? 0 : h.netDamage), 0);
   ui.notifications.info(localizeParam("DamageApplied", { amount: total, name: target.name }));
 
   // Taser flag must be set BEFORE the save prompt — threshold reads it
-  if (payload.stunSaveOnHit && hits.some(h => h.penetrates)) {
+  if (payload.stunSaveOnHit && hits.some(h => h.penetrates && !h.cyberlimb)) {
     const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
     if (taserEnabled) await updateTaserState(target, payload);
   }

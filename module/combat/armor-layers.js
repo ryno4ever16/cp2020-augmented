@@ -124,6 +124,16 @@ export function getArmorContributors(actor, locationKey) {
   const cwCovers = (cw) =>
     (Number(cw.system?.CyberWorkType?.Locations?.[locationKey]) || 0) > 0;
 
+  // Typed-SP cyberware (a borg's printed radiation shielding): the printed rating guards the
+  // wearer on MATCHING damage-type hits only. Such items carry no conventional Locations SP, so
+  // the cwCovers gate would drop them before typedLayerSP (module/data/mech-item-data.js) ever
+  // saw them — admit them here; their conventional 0 keeps them out of every normal-hit fold.
+  // The mount zone is where the device occupies space; the printed "body shielding" covers the body.
+  const typedCw = allItems.filter(i =>
+    i.type === "cyberware" && i.system?.equipped &&
+    String(i.system?.mechTypedSP?.type ?? "").trim() !== "" &&
+    !(cwArmorItems.includes(i) && cwCovers(i)));
+
   const coveringArmor = equippedArmor.filter(coversSP);
 
   const manualSlots = actor.system.armorLayers?.[locationKey] ?? [];
@@ -145,7 +155,7 @@ export function getArmorContributors(actor, locationKey) {
 
   return {
     orderedLayers,
-    cwItems: cwArmorItems.filter(cwCovers),
+    cwItems: [...cwArmorItems.filter(cwCovers), ...typedCw],
     // keep for backward compat with any callers using .unassigned
     get unassigned() { return []; },
   };

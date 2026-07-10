@@ -46,6 +46,57 @@ export function combineArmorSP(a, b) {
     return Math.max(a, b) + mod;
 }
 
+/**
+ * Optimal proportional combination of a set of armor SP layers (CP2020 p.99). Because the pairwise
+ * `combineArmorSP` is order-dependent across three or more layers, a fixed-order left-fold can land
+ * below the best achievable SP. This finds the MAXIMUM over every layering order — a subset DP, with
+ * a greedy fallback past 16 layers — mirroring the base system's own `maxLayeredSP` (actor.js). It is
+ * the SINGLE multi-layer fold: the live damage re-derivation (DamageApplicator `_deriveLiveSP`) reuses
+ * it so a wearer's combined SP is identical to the base's prepared per-location value, whether or not
+ * a typed layer forces the live path.
+ * @param {number[]} layers   Per-layer SP values (0 / falsy ignored).
+ * @returns {number}
+ */
+export function foldArmorSP(layers) {
+    const sp = (layers ?? []).map(v => Number(v) || 0).filter(v => v > 0);
+    const n = sp.length;
+    if (!n) return 0;
+    if (n === 1) return sp[0];
+
+    const MAX_EXACT_LAYERS = 16;
+    if (n <= MAX_EXACT_LAYERS) {
+        const size = 1 << n;
+        const dp = new Array(size);
+        dp[0] = 0;
+        for (let mask = 1; mask < size; mask++) {
+            let best = 0;
+            for (let i = 0; i < n; i++) {
+                const bit = 1 << i;
+                if (!(mask & bit)) continue;
+                const val = combineArmorSP(dp[mask ^ bit], sp[i]);
+                if (val > best) best = val;
+            }
+            dp[mask] = best;
+        }
+        return dp[size - 1];
+    }
+
+    // Too many layers for the exact DP: greedily add the layer that maximizes the running SP.
+    let current = 0;
+    const remaining = sp.slice();
+    while (remaining.length) {
+        let bestIdx = 0;
+        let bestVal = combineArmorSP(current, remaining[0]);
+        for (let i = 1; i < remaining.length; i++) {
+            const val = combineArmorSP(current, remaining[i]);
+            if (val > bestVal) { bestVal = val; bestIdx = i; }
+        }
+        current = bestVal;
+        remaining.splice(bestIdx, 1);
+    }
+    return current;
+}
+
 /* ------------------------------------------------------------------ *
  *  Singleton popups — one instance of a given dialog at a time.       *
  *  Clicking a "Fire"/"Roll"/etc. button again brings the open dialog  *
