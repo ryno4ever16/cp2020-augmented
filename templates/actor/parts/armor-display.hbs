@@ -42,10 +42,10 @@
                   {{#if cl.statusLabel}}
                   <span class="segment-limb-status cp-limb-{{cl.status}}" title="{{cl.statusLabel}}">{{cl.statusLabel}}</span>
                   {{/if}}
-                  {{#if cl.damaged}}
+                  {{#if cl.damaged}}{{#if @root.cpCanRepairLimb}}
                   <a class="segment-repair cp-cyberlimb-repair action" data-zone="{{name}}"
                      title="{{CPLocal "CyberlimbRepairTooltip"}}">&#9874;</a>
-                  {{/if}}
+                  {{/if}}{{/if}}
                 {{/with}}
               </div>
             {{/unless}}

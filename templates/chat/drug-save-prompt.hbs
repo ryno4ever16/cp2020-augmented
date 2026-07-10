@@ -12,6 +12,10 @@
     {{#if penalty}}<br><span>{{{CPLocal "DrugSaveFailClause" penalty=penalty}}}</span>{{/if}}
   </div>
   <div class="save-buttons">
-    <button class="cp-drug-save-roll" data-actor-id="{{actorId}}" data-item-id="{{itemId}}">{{CPLocal "DrugSaveRollBtn" stat=stat difficulty=difficulty}}</button>
+    {{!-- data-save carries the marker's snapshot so the Roll outlives the item; token/scene ids
+          land the roll on an unlinked combatant's own token actor (save-rolls.js wiring). --}}
+    <button class="cp-drug-save-roll" data-actor-id="{{actorId}}" data-item-id="{{itemId}}"
+            data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}"
+            data-save="{{saveJson}}">{{CPLocal "DrugSaveRollBtn" stat=stat difficulty=difficulty}}</button>
   </div>
 </div>

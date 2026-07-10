@@ -2246,6 +2246,10 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
 .active-cyberware .cp-zone-host > label { font-weight: bold; }
 .cp-zone-node .cp-hl { opacity: 0.75; font-size: 0.85em; }
 
+/* Installed-but-switched-off implant: stays in its zone (its row is the re-enable path), dimmed. */
+.cp-zone-node.cp-cyber-off { opacity: 0.55; }
+.cp-zone-node.cp-cyber-off > label { font-style: italic; }
+
 /* Uninstall (⏏) control on a body-map / internal row — mirrors the container ⏏ glyph and colour. */
 .cp-uninstall { cursor: pointer; opacity: 0.65; font-weight: bold; }
 .cp-uninstall:hover { opacity: 1; color: var(--cp-danger, #d1502f); }

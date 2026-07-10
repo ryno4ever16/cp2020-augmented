@@ -4,11 +4,12 @@ import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
 import { installCyberware } from "../cyberware/install.js";
 import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex, pickCwType } from "../utils.js";
-import { VISION_DEVICE_MODES, MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
+import { MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
+import { VISION_DEVICE_MODES } from "../mech/vision.js";
 import { useConsumable } from "../mech/consumable.js";
 import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
-import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds, usedSlots } from "../mech/container.js";
+import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds, usedSlots, checkInstall } from "../mech/container.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -688,42 +689,26 @@ async _prepareCyberware(sheet) {
     sheet.cw.implantSlotsTotal = provided;
     sheet.cw.implantSlotsLeft = Math.max(0, provided - used);
 
-    // Module: implants available on the actor that match the type (only equipped, same zone/side, exclude self)
+    // Module: host candidates enumerated by the SAME engine gate the drag-install uses
+    // (container.checkInstall: module/implant rules, AllowedParent type matching, zone/side,
+    // capacity, AND the AcceptsTypes mixed-family mounts the old hand-rolled filter never
+    // learned) — so the picker can never offer a host the drop would refuse, and never hides
+    // one it would accept. Full hosts are withheld (nothing can be selected into them); the
+    // CURRENT host stays listed so the select keeps reflecting reality.
     const isModule = !!this.item.system?.Module?.IsModule;
     if (isModule && this.actor) {
-      const needType = this.item.system?.Module?.AllowedParentCyberwareType || "";
       const all = this.actor.items?.contents || [];
-
-      const zoneOf = (it) => String(it.system?.MountZone || it.system?.CyberBodyType?.Type || "");
-      const sideOf = (it) => String(it.system?.CyberBodyType?.Location || "");
-      const needZone = zoneOf(this.item);
-      const needSide = sideOf(this.item);
-
-      // Available slots of a candidate implant — same engine accessor as the display above.
+      const current = String(this.item.system?.Module?.ParentId ?? "");
       const leftFor = (p) => freeSlots(p, all);
-
       sheet.cw.parentImplants = all
-        .filter(i =>
-          i.type === "cyberware" &&
-          cwHasType(i, "Implant") &&
-          i.id !== this.item.id &&
-          !!i.system?.equipped &&
-          (!needType || pickType(i.system?.cyberwareType) === pickType(needType)) &&
-          (zoneOf(i) === needZone) &&
-          (needZone === "Arm" || needZone === "Leg" ? (!needSide || sideOf(i) === needSide) : true)
-        )
+        .filter(i => {
+          if (i.type !== "cyberware" || i.id === this.item.id || !i.system?.equipped) return false;
+          if (i.id === current) return true;
+          return checkInstall(this.item, i, all).ok && leftFor(i) > 0;
+        })
         .map(i => ({ id: i.id, name: i.name, left: leftFor(i) }));
     } else {
       sheet.cw.parentImplants = [];
-    }
-
-    // Implant: free/taken options — engine accessors (see the note on the block above).
-    if (cwHasType(this.item, "Implant")) {
-      const provided = Number(this.item.system?.CyberWorkType?.OptionsAvailable) || 0;
-      const used = this.actor ? usedSlots(this.actor.items?.contents || [], this.item.id) : 0;
-      sheet.cw.implantSlotsUsed = used;
-      sheet.cw.implantSlotsTotal = provided;
-      sheet.cw.implantSlotsLeft = Math.max(0, provided - used);
     }
 }
 

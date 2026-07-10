@@ -8,17 +8,17 @@ import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
-import { clearAddiction } from "../mech/drug.js";
-import { cyberlimbSheetStatus, repairCyberlimb } from "../mech/cyberlimb.js";
+import { clearAddiction, clearDrugMarker } from "../mech/drug.js";
+import { cyberlimbSheetStatus, repairCyberlimb, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
-import { buildContainerTree, buildZoneTrees, uninstallItem, installItem, canInstall, checkInstall, isContainer, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
+import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
 import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout.js";
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipCost, ipLockState, canEditSkillLevels, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
-import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled } from "../settings.js";
+import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -314,9 +314,23 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (!off || !root.contains(off)) return;
       event.preventDefault();
       event.stopPropagation();
-      // The addiction pill's × clears the whole tally (no boolean path; per-actor flag write).
+      // The addiction pill's × clears the WHOLE tally (per-drug history included, no undo) —
+      // GM-only (the control renders only for the GM) and confirmed, unlike the reversible
+      // quick-off ×s that share its look.
       if (off.dataset.action === "clear-addiction") {
-        await clearAddiction(this.actor);
+        if (game.user?.isGM !== true) return;
+        const ok = await foundry.applications.api.DialogV2.confirm({
+          window: { title: localize("AddictionClearTitle") },
+          content: `<p>${localizeParam("AddictionClearConfirm", { name: this.actor.name })}</p>`,
+          rejectClose: false,
+        });
+        if (ok) await clearAddiction(this.actor);
+        return;
+      }
+      // Orphaned drug marker (source item deleted): clear it from the strip — the marker is the
+      // only thing left to act on, so this goes through the engine, not an item update.
+      if (off.dataset.action === "clear-drug") {
+        await clearDrugMarker(this.actor, off.dataset.itemId, off.dataset.penalty === "1");
         return;
       }
       const item = this.actor.items.get(off.dataset.itemId);
@@ -391,7 +405,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       });
       if (!ok) return;
       if (isLoad) await deactivateLoadout(this.actor, item.id);
-      else for (const c of members) await uninstallItem(c);
+      // Generic container (user-ruled 2026-07-10): the control's wording promises UNEQUIP, so
+      // cyberware members leave the body for Carried (the full uninstall cascade — detach-only
+      // left them equipped, popping back into the zone as standalone roots); stowed non-cyberware
+      // just detaches to loose inventory (it has no equipped state to shed).
+      else for (const c of members) {
+        if (c.type === "cyberware") await this._cpUninstallCyber(c.id);
+        else await uninstallItem(c);
+      }
     });
 
     // Chassis delete (the 🗑 on the chassis strip): remove the full-borg body, deciding at delete-time
@@ -673,7 +694,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const skill = this.actor.items.get(id);
     if (!skill) return;
 
-    const gearProviders = skillModProviders(this.actor.items, skill.name);
+    // Zone gate (M19): providers hosted in a destroyed limb don't reach the roll dialog.
+    const gearProviders = skillModProviders(contributingItems(this.actor), skill.name);
 
     return this._cpRollWithProviders(gearProviders, skill.system?.askMods,
       () => this.actor.rollSkill(id),
@@ -758,7 +780,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // P5 mechRollMods: equipped gear advertising a ranged-attack bonus (smartgun link, targeting
     // scope) becomes a suggestion row in the dialog; checked rows fold into extraMod on confirm.
     // Ranged only — every wired attack provider is a ranged aid (see mech/roll-mods.js).
-    const gearProviders = isRanged ? attackModProviders(this.actor.items) : [];
+    // Zone gate (M19): providers hosted in a destroyed limb don't reach the dialog.
+    const gearProviders = isRanged ? attackModProviders(contributingItems(this.actor)) : [];
 
     if(isRanged) {
       modifierGroups = rangedModifiers(item, targetTokens, savedAttackOptions);
@@ -1642,6 +1665,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
             ? localizeParam("StatusStripDualWieldMod", { mod: signed(r.detail.attackMod) })
             : localizeParam("StatusStripRangedMod", { mod: signed(r.detail.attackMod) }));
           if (r.detail.skillMod && r.detail.skillName) parts.push(`${r.detail.skillName} ${signed(r.detail.skillMod)}`);
+          for (const e of r.detail.skillMods ?? []) parts.push(`${e.skillName} ${signed(e.mod)}`);
           if (r.detail.statMod && r.detail.statName) parts.push(`${r.detail.statName.toUpperCase()} ${signed(r.detail.statMod)}`);
           if (r.detail.facedownMod) parts.push(localizeParam("StatusStripFacedownMod", { mod: signed(r.detail.facedownMod) }));
           return parts.join(", ");
@@ -1650,7 +1674,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const st = m.stat.toUpperCase();
           if (m.isSet) return `${st} =${m.set}`;
           if (m.context === "split") return `${st} ${signed(m.mod)}/${signed(m.combatMod)}`;
-          const ctx = m.context === "combat" ? " (cbt)" : m.context === "noncombat" ? " (non-cbt)" : "";
+          const ctx = m.context === "combat" ? ` ${localize("StatusStripCtxCombat")}`
+            : m.context === "noncombat" ? ` ${localize("StatusStripCtxNoncombat")}` : "";
           return `${st} ${signed(m.mod)}${ctx}`;
         }).join(", ");
         case "drug": {
@@ -1683,8 +1708,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         text: r.name ? (detail ? `${r.name} (${detail})` : r.name) : detail,
         title: r.name ? `${kindLabel}: ${r.name}${detail ? ` — ${detail}` : ""}${noteClause}` : `${kindLabel}: ${detail}`,
         togglePath: r.togglePath ?? "",
-        // The GM clears the addiction tally from the strip when a character kicks the habit.
-        clearAddiction: r.kind === "addiction"
+        // The GM clears the addiction tally from the strip when a character kicks the habit —
+        // GM-ONLY: the tally is a GM-side consequence tracker, and its × wipes the whole history.
+        clearAddiction: r.kind === "addiction" && game.user?.isGM === true,
+        // Orphan escape: a drug marker whose source item is gone (no Wear-off control anywhere else).
+        clearDrug: r.kind === "drug" && !!r.detail?.orphan,
+        drugPenalty: r.kind === "drug" && r.detail?.isPenalty ? "1" : "0"
       };
     });
 
@@ -1746,6 +1775,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       clOut[zone] = { ...info, statusLabel: info.status !== "ok" ? localize(CL_STATUS_LABEL[info.status] ?? CL_STATUS_LABEL.damaged) : "" };
     }
     sheetData.cpCyberlimb = clOut;
+    // Repair permission scoping (world setting): hide the control from non-GMs when restricted —
+    // repairCyberlimb re-checks, so a stale render can't bypass it.
+    sheetData.cpCanRepairLimb = !cyberlimbRepairGmOnly() || game.user?.isGM === true;
 
     // Full-conversion borg mode: a 3-state override (auto / on / off) mirroring isFullBorg's flag
     // logic. Shown only for actors that are or could be a borg (a body item, the explicit flag, or any
@@ -1842,8 +1874,17 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // below) — each host implant shows its options nested under it in the right zone — so it has no
     // separate flat tree.
     const allItems = sheetData.actor.items?.contents ?? [];
-    const gearRootIds = new Set((sheetData.gearTabItems ?? []).map((i) => i.id));
-    sheetData.gearTree = buildContainerTree(allItems, (it) => gearRootIds.has(it.id));
+    const gearIds = new Set((sheetData.gearTabItems ?? []).map((i) => i.id));
+    // Real compartments: a cyberware container holding NON-cyberware children joins the gear tree
+    // too — the body map is cyberware-only, so without this row the stowed gear (a holstered
+    // pistol) renders nowhere once its own sheet closes. The compartment's HOST (the arm) isn't
+    // in this list, so the tree's tolerant root rule (parent absent ⇒ loose) roots it here.
+    for (const it of allItems) {
+      if (it.type !== "cyberware") continue;
+      if (childrenOf(allItems, it.id).some((c) => c.type !== "cyberware")) gearIds.add(it.id);
+    }
+    const gearList = allItems.filter((it) => gearIds.has(it.id));
+    sheetData.gearTree = buildContainerTree(gearList, (it) => gearIds.has(it.id));
 
     for (const it of allCyber) {
       const t  = it.system?.cyberwareType;
@@ -1852,8 +1893,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       it.system.cwSubtypeLabel = st ? game.i18n.localize(`CYBERPUNK.CWT_ImplantSubtype_${st}`) : "";
     }
 
+    // PLACEMENT vs POWER: an equipped implant renders in its zone even while switched OFF —
+    // hiding a disabled Activatable removed its only re-enable affordance (the zone row is how
+    // you reach its sheet). `placedCyber` drives WHERE things render; `activeCyber` (equipped +
+    // enabled) keeps driving the "active" tallies; cpCyberOff drives the dimmed row style.
+    const placedCyber = allCyber.filter(it => !!it.system?.equipped);
     const isEnabled = (it) => !!it.system?.equipped && cwIsEnabled(it);
     const activeCyber = allCyber.filter(isEnabled);
+    sheetData.cpCyberOff = Object.fromEntries(
+      placedCyber.filter(it => !cwIsEnabled(it)).map(it => [it.id, true]));
     const isChip = (it) => {
       const cwt = it.system?.CyberWorkType ?? {};
       return Array.isArray(cwt?.Types) ? cwt.Types.includes("Chip") : cwt?.Type === "Chip";
@@ -1861,25 +1909,25 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     const AREAS = ["head", "body", "nervous", "l-arm", "r-arm", "l-leg", "r-leg"];
 
-    // Equipped cyberware grouped by anatomy area (the flat per-zone tally, used for the zone badges).
+    // Installed cyberware grouped by anatomy area (the flat per-zone tally, used for the zone badges).
     const activeByArea = {};
-    for (const area of AREAS) activeByArea[area] = activeCyber.filter(it => cyberAreaOf(it) === area);
+    for (const area of AREAS) activeByArea[area] = placedCyber.filter(it => cyberAreaOf(it) === area);
 
-    // The anatomy body map now telescopes: each zone renders a tree of its equipped cyberware — host
+    // The anatomy body map now telescopes: each zone renders a tree of its installed cyberware — host
     // implants (a cyberarm, a cybereye) with their installed options nested underneath, one per zone.
     // A full borg's options land as flat roots in their zones (their host is the zoneless chassis).
-    sheetData.cyberZoneTrees = buildZoneTrees(activeCyber, cyberAreaOf);
+    sheetData.cyberZoneTrees = buildZoneTrees(placedCyber, cyberAreaOf);
 
-    // Catch-all: equipped cyberware with no anatomy zone (and not the chassis or a chip) — so nothing
+    // Catch-all: installed cyberware with no anatomy zone (and not the chassis or a chip) — so nothing
     // installed vanishes when it lacks a MountZone. Anything already shown in a zone tree is excluded.
     const inZoneIds = new Set();
     const collectIds = (n) => { inZoneIds.add(n.item.id); (n.children ?? []).forEach(collectIds); };
     for (const area of Object.keys(sheetData.cyberZoneTrees)) sheetData.cyberZoneTrees[area].forEach(collectIds);
-    sheetData.cyberOther = activeCyber.filter(it => !inZoneIds.has(it.id) && !isBorgBody(it) && !isChip(it));
+    sheetData.cyberOther = placedCyber.filter(it => !inZoneIds.has(it.id) && !isBorgBody(it) && !isChip(it));
 
     // The equipped full-borg chassis (zoneless, so not a row in the map itself). Its pinned strip is
     // built after the per-zone slot tallies below, so its badge can sum them. Null for a normal char.
-    const borgBody = activeCyber.find(it => isBorgBody(it)) ?? null;
+    const borgBody = placedCyber.find(it => isBorgBody(it)) ?? null;
 
     // Per-zone option-slot capacity for the anatomy body-map badges (surface each limb's option spaces).
     // Borg: the chassis's fixed per-zone pool (borgBody.optionSpaces) — TOTAL capacity (factory fit-out
@@ -2513,13 +2561,21 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     if (!item) return false;
     const items = this.actor.items?.contents ?? [];
     const ids = [id, ...descendantIds(items, id)];
-    const updates = ids.map((i) => ({
-      _id: i,
-      "system.equipped": false,
-      "system.CyberWorkType.ChipActive": false,
-      "system.Module.ParentId": "",
-      "system.CyberBodyType.Location": "",
-    }));
+    // Type-aware cascade: cyberware descendants unequip + shed their host links; NON-cyberware
+    // stowed in a compartment clears its OWN containment field (mechContainer.installedIn) —
+    // pushing cyberware-shaped keys at a misc item would be stripped by its DataModel while the
+    // stale link kept it hidden and its slots consumed.
+    const updates = ids.map((i) => {
+      const it = this.actor.items.get(i);
+      if (it?.type !== "cyberware") return { _id: i, "system.mechContainer.installedIn": "" };
+      return {
+        _id: i,
+        "system.equipped": false,
+        "system.CyberWorkType.ChipActive": false,
+        "system.Module.ParentId": "",
+        "system.CyberBodyType.Location": "",
+      };
+    });
     await this.actor.updateEmbeddedDocuments("Item", updates, { render: false });
     await this._cp_syncChipLevelsToSkills();
     await this._cp_syncActiveFlagsToSkills();
