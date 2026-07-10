@@ -29,15 +29,15 @@ export const MECH_LIGHT_DEFAULTS = {
 
 /**
  * `mechVision` (pattern P4 — vision devices): IR/low-light/thermograph/UV optics that change how
- * the wearer's token SEES (where mechLight changes how it is seen). `mode` is a soft enum
- * (VISION_DEVICE_MODES); the Foundry mapping lives in module/mech/vision.js and is deliberately a
- * small upgradeable table — the fidelity question (plain see-in-dark vs live-target detection for
+ * the wearer's token SEES (where mechLight changes how it is seen). `mode` is a soft enum — the
+ * single source of the mode list AND the Foundry mapping is MODE_TABLE in module/mech/vision.js
+ * (which exports VISION_DEVICE_MODES = its keys, so the sheet's <select> can never diverge from
+ * the engine again). The fidelity question (plain see-in-dark vs live-target detection for
  * thermograph) is an OPEN QUESTION in SPECIAL-MECHANICS-PROPOSAL.md, and the default is the simple
  * darkvision-class approximation. `range` is the device's effective sight range in scene units
  * (the books print absolutes like "see in total darkness", so the default is a playable 20).
  */
 export const MECH_VISION_DEFAULTS = { enabled: false, on: false, mode: "lowlight", range: 20, requiresItem: "" };
-export const VISION_DEVICE_MODES = ["lowlight", "infrared", "thermograph", "uv"];
 
 /**
  * `mechProtection` (pattern P6 — protection tags): passive gear the save engines consult.
@@ -206,15 +206,16 @@ function mechVisionField() {
 
 function mechProtectionField() {
   const f = foundry.data.fields;
-  const hazard = () => new f.SchemaField({
-    immune:     new f.BooleanField({ initial: false }),
-    mod:        new f.NumberField({ initial: 0 }),
-    percent:    new f.NumberField({ initial: 0 }),
-    damageMult: new f.NumberField({ initial: 0 })
+  const d = MECH_PROTECTION_DEFAULTS;
+  const hazard = (h) => new f.SchemaField({
+    immune:     new f.BooleanField({ initial: h.immune }),
+    mod:        new f.NumberField({ initial: h.mod }),
+    percent:    new f.NumberField({ initial: h.percent }),
+    damageMult: new f.NumberField({ initial: h.damageMult })
   });
   return new f.SchemaField({
-    enabled: new f.BooleanField({ initial: false }),
-    gas: hazard(), flash: hazard(), sonic: hazard()
+    enabled: new f.BooleanField({ initial: d.enabled }),
+    gas: hazard(d.gas), flash: hazard(d.flash), sonic: hazard(d.sonic)
   });
 }
 
@@ -354,12 +355,16 @@ export function makeMechAugmentedData(SystemModel) {
   };
 }
 
-/** Armor items need only the typed-SP slot (their other mechanics live in the base armor model). */
+/** Armor items carry the typed-SP slot plus stat moddies (the Battlesuit's printed +1 BOD is a
+ *  worn-armor stat mod — a field absent from the schema is silently stripped at item creation,
+ *  which is exactly how that payload got lost before this slot existed). Armor's other mechanics
+ *  live in the base armor model. */
 export function makeArmorAugmentedData(SystemModel) {
   return class CyberpunkArmorAugmentedData extends SystemModel {
     static defineSchema() {
       return {
         ...super.defineSchema(),
+        mechStatMods: mechStatModsField(),
         mechTypedSP: mechTypedSPField()
       };
     }

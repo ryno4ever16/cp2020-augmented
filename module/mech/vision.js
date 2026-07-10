@@ -24,7 +24,9 @@
  */
 
 import { tokensOf, iAmTheApplier, enqueueApply } from "./light.js";
+import { contributingItems } from "./cyberlimb.js";
 import { cwIsEnabled } from "../utils.js";
+import { mechTokenWritesEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 const BASE_FLAG = "mechBaseSight";
@@ -41,9 +43,9 @@ export const MODE_TABLE = {
   // of the EM spectrum — darkvision, no heat sense (sound, not IR).
   echolocation: { prefs: ["darkvision", "basic"], heat: false }
 };
-/** Back-compat alias (pre-upgrade name, consumed by resolveVisionMode + older specs). */
-export const MODE_VISION_PREFS = Object.fromEntries(
-  Object.entries(MODE_TABLE).map(([k, v]) => [k, v.prefs]));
+/** The sheet's mode <select> list — derived from MODE_TABLE so the two can never diverge
+ *  (a mode missing from the select gets silently rewritten on the next sheet submit). */
+export const VISION_DEVICE_MODES = Object.keys(MODE_TABLE);
 
 /** Living gate for heat sense: explicit actor flag wins; else the actor-type default. Pure-ish. */
 export function isLivingActor(actor) {
@@ -173,7 +175,8 @@ function heatSensePatch(tokenDoc, wanted, range) {
 }
 
 async function _applyActorVision(actor) {
-  const items = actor.items?.contents ?? actor.items ?? [];
+  // Zone gate (M19): a device whose host limb is destroyed no longer governs sight.
+  const items = contributingItems(actor);
   const desired = desiredVisionFor(items, visionPickOf(actor));
   for (const tokenDoc of tokensOf(actor)) {
     try {
@@ -216,27 +219,38 @@ function visionRelevant(item, changed) {
   return !!item.system?.mechVision?.enabled || anyDependent;
 }
 
-/** Hook wiring — called once from the module's ready hook. */
+/** Hook wiring — called once from the module's ready hook. Every reaction is gated by the same
+ *  token-writes toggle as the light engine (settings.js mechTokenWritesEnabled): with it off,
+ *  vision devices never rewrite token sight/detection — the GM's token settings stand. */
 export function registerMechVision() {
   Hooks.on("updateItem", (item, changed) => {
+    if (!mechTokenWritesEnabled()) return;
     if (visionRelevant(item, changed) && iAmTheApplier(item.actor)) applyActorVision(item.actor);
   });
   Hooks.on("createItem", (item) => {
+    if (!mechTokenWritesEnabled()) return;
     if (visionRelevant(item) && iAmTheApplier(item.actor)) applyActorVision(item.actor);
   });
   Hooks.on("deleteItem", (item) => {
+    if (!mechTokenWritesEnabled()) return;
     if (visionRelevant(item) && iAmTheApplier(item.actor)) applyActorVision(item.actor);
   });
   Hooks.on("createToken", (tokenDoc) => {
+    if (!mechTokenWritesEnabled()) return;
     const actor = tokenDoc?.actor;
     if (!actor) return;
     const items = actor.items?.contents ?? [];
     if (items.some(i => isViewing(i, items)) && iAmTheApplier(actor)) applyActorVision(actor);
   });
-  // The Q5 picker: changing the actor's visionPick flag re-resolves the governor.
+  // The Q5 picker: changing the actor's visionPick flag re-resolves the governor. Zone-state
+  // changes (limbStatus, M19) re-resolve too — a device in a newly destroyed limb stops governing.
   Hooks.on("updateActor", (actor, changed) => {
+    if (!mechTokenWritesEnabled()) return;
     const flags = changed?.flags?.[SCOPE];
-    if (!flags || !(PICK_FLAG in flags || `-=${PICK_FLAG}` in flags)) return;
+    if (!flags) return;
+    const relevant = Object.keys(flags).some(k =>
+      k === PICK_FLAG || k === `-=${PICK_FLAG}` || k === "limbStatus" || k === "-=limbStatus");
+    if (!relevant) return;
     if (iAmTheApplier(actor)) applyActorVision(actor);
   });
 }

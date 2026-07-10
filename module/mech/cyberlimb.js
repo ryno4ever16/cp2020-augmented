@@ -20,6 +20,7 @@
 import { localize, localizeParam } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 import { isFullBorg } from "./borg.js";
+import { cyberlimbRepairGmOnly } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 const LIMB_ZONES = new Set(["rArm", "lArm", "rLeg", "lLeg"]);
@@ -46,6 +47,60 @@ export function isCyberlimbZone(actor, location) {
 export function routesToSdp(actor, location) {
   if (isCyberlimbZone(actor, location)) return true;
   return isFullBorg(actor) && (Number(actor?.system?.sdp?.sum?.[location]) || 0) > 0;
+}
+
+/**
+ * The status zone ANY cyberware item occupies, or "" — the base's own fold mapping (actor.js:
+ * MountZone Head/Torso direct; Arm/Leg pick the side from CyberBodyType.Location, a module's
+ * side from its parent). Mirrored, not invented, so install-time zone resolution always agrees
+ * with the pool the base builds. `items` supplies the parent lookup for modules. Zone-less
+ * mounts (Nervous, a zoneless chassis) return "". Pure.
+ */
+export function implantZoneOf(item, items = []) {
+  const mz = item?.system?.MountZone || "";
+  if (mz === "Head" || mz === "Torso") return mz;
+  if (mz !== "Arm" && mz !== "Leg") return "";
+  let side = item?.system?.CyberBodyType?.Location || "";
+  if (!side && item?.system?.Module?.IsModule) {
+    const pid = item.system?.Module?.ParentId;
+    const parent = pid ? (items.find?.(i => (i.id ?? i._id) === pid) ?? null) : null;
+    side = parent?.system?.CyberBodyType?.Location || "";
+  }
+  if (side === "Left") return mz === "Arm" ? "lArm" : "lLeg";
+  if (side === "Right") return mz === "Arm" ? "rArm" : "rLeg";
+  return "";
+}
+
+/** The SDP zone a STRUCTURAL implant occupies (SDP > 0), or "" — the SDP-pool subset of
+ *  implantZoneOf, used by install-time state clearing and the damage routing. Pure. */
+export function cyberlimbZoneOf(item, items = []) {
+  if ((Number(item?.system?.CyberWorkType?.SDP) || 0) <= 0) return "";
+  return implantZoneOf(item, items);
+}
+
+/**
+ * True when a cyberware item sits in a DESTROYED zone — its host limb is wrecked, so the item's
+ * mechanical contribution is gone with it (M19, the user's "in-limb gate" ruling: destroyed only;
+ * a "useless" limb keeps its contributions and is surfaced by the attack-time notice instead).
+ * Non-cyberware gear and zone-less mounts (Nervous sockets, a zoneless chassis) never gate. Pure-ish.
+ */
+export function inDestroyedZone(actor, item, items = actor?.items?.contents ?? []) {
+  if (item?.type !== "cyberware") return false;
+  const zone = implantZoneOf(item, items);
+  if (!zone) return false;
+  return limbStatusOf(actor, zone) === "destroyed";
+}
+
+/**
+ * The actor's items minus cyberware whose zone is destroyed — the single list the contribution
+ * engines (roll/stat mods, vision, light, the status strip) enumerate, so "installed in a wrecked
+ * limb" reads as non-contributing everywhere at once. NOT used by the armor-SP folds: the base's
+ * prepared per-location fold can't see this filter, and the module's live fold must stay equal to
+ * it (the M16 lesson) — a wrecked limb's plating is inert wreckage still covering the location.
+ */
+export function contributingItems(actor) {
+  const items = actor?.items?.contents ?? [];
+  return items.filter(it => !inDestroyedZone(actor, it, items));
 }
 
 /** { max, current } SDP for a zone; current defaults to max when unset. Pure-ish. */
@@ -80,7 +135,7 @@ export function limbStatusOf(actor, zone) {
  * further (and RAW routes nothing to the human). `dmg` is the post-armor structural damage.
  * Returns { remaining, max, status }.
  */
-export async function absorbCyberlimbHit(actor, zone, dmg, { token = null } = {}) {
+export async function absorbCyberlimbHit(actor, zone, dmg) {
   const { max, current } = cyberlimbSdp(actor, zone);
   const prior = limbStatusOf(actor, zone);
   const alreadyDestroyed = prior === "destroyed";
@@ -124,6 +179,11 @@ export async function absorbCyberlimbHit(actor, zone, dmg, { token = null } = {}
  * `limbStatus`). The GM/owner action behind the sheet's repair button. Returns true when it ran.
  */
 export async function repairCyberlimb(actor, zone) {
+  // Optional permission scoping: some tables run limb repair as a GM-adjudicated Tech/cost flow.
+  if (cyberlimbRepairGmOnly() && !game.user?.isGM) {
+    ui.notifications?.warn(localize("CyberlimbRepairGmOnlyWarn"));
+    return false;
+  }
   if (!routesToSdp(actor, zone)) return false;   // a borg's Head/Torso are repairable too
   const max = Number(actor?.system?.sdp?.sum?.[zone]) || 0;
   // Restore SDP + remove ONLY this zone's limbStatus entry. A flag object merges on write, so a
@@ -163,4 +223,61 @@ export function cyberlimbSheetStatus(actor) {
     out[zone] = { status, damaged: status !== "ok", current, max };
   }
   return out;
+}
+
+/**
+ * Hooks: installing a structural implant into a zone clears that zone's sticky `limbStatus` entry.
+ * A fresh limb replaces whatever cyberlimb was there: a replaced wreck's destroyed/useless state must
+ * leave with the wreck, or the new limb would read destroyed and soak nothing. (Flesh limb wounds
+ * live under a separate `fleshLimbStatus` flag now — M18 — so they no longer poison this path; this
+ * clear is the cyberlimb-swap guard.) Its SDP pool also restarts at full (the base re-derives `sum`;
+ * `current` is whole-object-rewritten to keep the siblings, the same quirk-safe shape
+ * absorbCyberlimbHit uses).
+ */
+export function registerMechCyberlimb() {
+  const clearZoneOnInstall = async (item, userId) => {
+    if (userId !== game.user?.id) return;
+    const actor = item.actor;
+    if (!actor?.isOwner) return;
+    if (item.type !== "cyberware" || !item.system?.equipped) return;
+    const zone = cyberlimbZoneOf(item, actor.items?.contents ?? []);
+    if (!zone) return;
+    if (!limbStatusOf(actor, zone)) return;
+    const nextCurrent = { ...(actor.system?.sdp?.current ?? {}) };
+    delete nextCurrent[zone];   // unset → the base prep re-seeds it to the new sum
+    await actor.update({
+      "system.sdp.current": nextCurrent,
+      [`flags.${SCOPE}.limbStatus.-=${zone}`]: null
+    }, { render: false, fromCyberpunkDamageSystem: true }).catch(() => {});
+  };
+  Hooks.on("createItem", (item, options, userId) => clearZoneOnInstall(item, userId));
+  Hooks.on("updateItem", (item, changes, options, userId) => {
+    if (foundry.utils.getProperty(changes ?? {}, "system.equipped") !== true) return;
+    return clearZoneOnInstall(item, userId);
+  });
+
+  // M19 notice: the roll pipeline has no held-in-which-hand model, so when an actor with a
+  // destroyed/useless ARM zone uses a weapon, post an informational card naming the arm and its
+  // state — the GM adjudicates whether that hand was the holding one (notice, never a block).
+  // The hook is local to the initiating client, so the card posts exactly once per use.
+  Hooks.on("cyberpunk2020.weaponFired", (payload) => {
+    try {
+      const actor = game.actors.get(payload?.attackerId ?? payload?.actorId ?? "");
+      if (!actor || actor.type === "cp2020-augmented.vehicle") return;
+      for (const zone of ["rArm", "lArm"]) {
+        const st = limbStatusOf(actor, zone);
+        if (st !== "destroyed" && st !== "disabled") continue;
+        const stateWord = localize(st === "destroyed" ? "CyberlimbStatusDestroyed" : "CyberlimbStatusUseless");
+        postSavePromptCard({
+          title: localize("CyberlimbArmNoticeTitle"),
+          body: localizeParam("CyberlimbArmNoticeBody", {
+            name: actor.name, limb: localize(zone), state: stateWord,
+          }),
+          speaker: ChatMessage.getSpeaker({ actor }),
+        });
+      }
+    } catch (err) {
+      console.warn(`${SCOPE} | arm state notice failed:`, err);
+    }
+  });
 }

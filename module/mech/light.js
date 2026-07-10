@@ -13,6 +13,9 @@
  * Pure pieces (profile read + merge) are exported for tests; only register/apply touch the world.
  */
 
+import { mechTokenWritesEnabled } from "../settings.js";
+import { contributingItems } from "./cyberlimb.js";
+
 const SCOPE = "cp2020-augmented";
 const BASE_FLAG = "mechBaseLight";
 
@@ -86,7 +89,8 @@ export function applyActorLight(actor) {
 }
 
 async function _applyActorLight(actor) {
-  const desired = desiredLightFor(actor.items?.contents ?? actor.items ?? []);
+  // Zone gate (M19): an emitter whose host limb is destroyed goes dark with it.
+  const desired = desiredLightFor(contributingItems(actor));
   for (const tokenDoc of tokensOf(actor)) {
     try {
       const base = tokenDoc.getFlag(SCOPE, BASE_FLAG);
@@ -128,21 +132,36 @@ function lightRelevant(item, changed) {
   return !!item.system?.mechLight?.enabled;
 }
 
-/** Hook wiring — called once from the module's ready hook. */
+/** Hook wiring — called once from the module's ready hook. Every reaction is gated by the
+ *  token-writes toggle (settings.js mechTokenWritesEnabled): with it off, gear toggles never
+ *  touch token documents — GMs who hand-author token lighting keep full ownership. */
 export function registerMechLight() {
   Hooks.on("updateItem", (item, changed) => {
+    if (!mechTokenWritesEnabled()) return;
     if (lightRelevant(item, changed) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
   });
   Hooks.on("createItem", (item) => {
+    if (!mechTokenWritesEnabled()) return;
     if (lightRelevant(item) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
   });
   Hooks.on("deleteItem", (item) => {
+    if (!mechTokenWritesEnabled()) return;
     if (lightRelevant(item) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
   });
   // A freshly placed token for an actor with a lit emitter starts lit.
   Hooks.on("createToken", (tokenDoc) => {
+    if (!mechTokenWritesEnabled()) return;
     const actor = tokenDoc?.actor;
     if (!actor) return;
     if ((actor.items?.contents ?? []).some(isEmitting) && iAmTheApplier(actor)) applyActorLight(actor);
+  });
+  // Zone-state changes (limbStatus, M19) re-resolve the merged light — an emitter in a newly
+  // destroyed limb goes dark; a repaired limb's emitter comes back. Mirrors the vision engine.
+  Hooks.on("updateActor", (actor, changed) => {
+    if (!mechTokenWritesEnabled()) return;
+    const flags = changed?.flags?.[SCOPE];
+    if (!flags) return;
+    if (!Object.keys(flags).some(k => k === "limbStatus" || k === "-=limbStatus")) return;
+    if (iAmTheApplier(actor)) applyActorLight(actor);
   });
 }

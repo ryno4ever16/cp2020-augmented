@@ -9,6 +9,8 @@
  * among equipped items — protective gear doesn't stack (a mask over nose filters isn't double).
  */
 
+import { cwIsEnabled } from "../utils.js";
+
 /** The item's protection entry for `hazard` when tagged, else null. Pure. */
 export function protectionEntryOf(item, hazard) {
   const mp = item?.system?.mechProtection;
@@ -24,8 +26,12 @@ export function protectionEntryOf(item, hazard) {
   return { immune, mod, percent, damageMult };
 }
 
-/** Aggregate protection vs `hazard` across EQUIPPED items: { immune, mod, percent, damageMult }.
- *  No stacking anywhere: best mod, best percent, best (lowest) damage multiplier. Pure. */
+/** Aggregate protection vs `hazard` across EQUIPPED, enabled items:
+ *  { immune, mod, percent, damageMult }. No stacking anywhere: best mod, best percent, best
+ *  (lowest) damage multiplier. A switched-off Activatable implant protects nothing (the same
+ *  gate the roll-mod/stat-mod/chip providers use). A percent-gated item protects through its
+ *  per-exposure gate — the caller SKIPS the save entirely when the gate holds — so only UNGATED
+ *  items feed the always-on save-mod aggregate (a failed gate must not soften the save). Pure. */
 export function hazardProtectionFor(items, hazard) {
   let immune = false;
   let mod = 0;
@@ -33,11 +39,15 @@ export function hazardProtectionFor(items, hazard) {
   let damageMult = 0;
   for (const it of items ?? []) {
     if (!it?.system?.equipped) continue;
+    if (it.type === "cyberware" && !cwIsEnabled(it)) continue;
     const e = protectionEntryOf(it, hazard);
     if (!e) continue;
     if (e.immune) immune = true;
-    if (e.mod > mod) mod = e.mod;
-    if (e.percent > percent) percent = e.percent;
+    if (e.percent > 0) {
+      if (e.percent > percent) percent = e.percent;
+    } else if (e.mod > mod) {
+      mod = e.mod;
+    }
     if (e.damageMult && (!damageMult || e.damageMult < damageMult)) damageMult = e.damageMult;
   }
   return { immune, mod, percent, damageMult };

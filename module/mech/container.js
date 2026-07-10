@@ -16,8 +16,7 @@
  */
 
 import { cwHasType, pickCwType } from "../utils.js";
-
-const SCOPE = "cp2020-augmented";
+import { mechDocumentAutomationEnabled } from "../settings.js";
 
 /** The id of the item this one is installed in ("" = loose). Cyberware → Module.ParentId. Pure. */
 export function installedInOf(item) {
@@ -145,6 +144,7 @@ export function canInstall(child, parent, items) {
  */
 export function buildContainerTree(items, filterRoot = () => true) {
   const list = items ?? [];
+  const ids = new Set(list.map(it => it.id ?? it._id));
   const node = (item) => ({
     item,
     capacity: capacityOf(item),
@@ -153,7 +153,13 @@ export function buildContainerTree(items, filterRoot = () => true) {
     installed: !!installedInOf(item),
     children: childrenOf(list, item.id ?? item._id).map(node)
   });
-  return list.filter(it => !installedInOf(it) && filterRoot(it)).map(node);
+  // Roots: loose items AND items whose recorded parent is NOT in the list — an unresolvable link
+  // (stale copy, parent filtered out of this view) must surface the item, never hide it (the same
+  // tolerance buildZoneTrees applies).
+  return list.filter(it => {
+    const p = installedInOf(it);
+    return (!p || !ids.has(p)) && filterRoot(it);
+  }).map(node);
 }
 
 /**
@@ -235,20 +241,45 @@ export async function uninstallItem(child) {
 /** Register the uninstall cascade: deleting a container detaches its DIRECT children (they become
  *  loose, keeping their own subtrees). Owner/initiating-client only, so it runs once. */
 export function registerMechContainer() {
-  Hooks.on("preDeleteItem", async (item, options, userId) => {
+  // Delete cascade bookkeeping. NOT Hooks.once: a once-listener is consumed by the FIRST
+  // deleteItem event regardless of its id guard, so a batch delete of two containers would run
+  // only the first cascade and orphan the second's children. A persistent listener keyed by the
+  // pending container id survives interleaved deletions from any source.
+  const pendingDetach = new Map();   // container item id → { actor, kidIds }
+
+  Hooks.on("preDeleteItem", (item, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;   // the cascade rewrites child documents
     const actor = item.actor;
     if (!actor || userId !== game.user?.id || !actor.isOwner) return;
     if (!isContainer(item)) return;
     const items = actor.items?.contents ?? [];
     const kids = childrenOf(items, item.id).map(c => c.id);
     if (!kids.length) return;
-    // Detach after the delete resolves, so the child updates don't fight the delete transaction.
-    Hooks.once("deleteItem", async (deleted) => {
-      if (deleted.id !== item.id) return;
-      for (const id of kids) {
-        const child = actor.items.get(id);
-        if (child) await child.update(detachPatch(child)).catch(() => {});
-      }
-    });
+    pendingDetach.set(item.id, { actor, kidIds: kids });
+  });
+
+  // Detach after the delete resolves, so the child updates don't fight the delete transaction.
+  Hooks.on("deleteItem", async (deleted) => {
+    const entry = pendingDetach.get(deleted.id);
+    if (!entry) return;
+    pendingDetach.delete(deleted.id);
+    for (const id of entry.kidIds) {
+      const child = entry.actor.items.get(id);
+      if (child) await child.update(detachPatch(child)).catch(() => {});
+    }
+  });
+
+  // Containment links reference item ids on ONE actor. An item copied/dragged to another actor
+  // carries its old links verbatim — the tree would then hide it (not a root, nobody's child).
+  // Clear any link that doesn't resolve on the RECEIVING actor at creation time.
+  Hooks.on("preCreateItem", (doc, data) => {
+    const actor = doc?.parent;
+    if (!actor?.items?.get) return;
+    const patch = {};
+    const inId = data?.system?.mechContainer?.installedIn;
+    if (inId && !actor.items.get(inId)) patch["system.mechContainer.installedIn"] = "";
+    const pid = data?.system?.Module?.ParentId;
+    if (pid && !actor.items.get(pid)) patch["system.Module.ParentId"] = "";
+    if (Object.keys(patch).length) doc.updateSource(patch);
   });
 }

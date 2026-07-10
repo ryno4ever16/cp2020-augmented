@@ -19,6 +19,7 @@
  */
 
 import { cwHasType, cwIsEnabled } from "../utils.js";
+import { contributingItems } from "./cyberlimb.js";
 import { btmFromBT } from "../lookups.js";
 
 const SCOPE = "cp2020-augmented";
@@ -91,7 +92,8 @@ export function applyMechStatMods(actor) {
   if (!actor || (actor.type !== "character" && actor.type !== "npc")) return;
   const stats = actor.system?.stats;
   if (!stats) return;
-  const entries = activeStatMods(actor.items?.contents ?? actor.items ?? []);
+  // Zone gate (M19): a mod source whose host limb is destroyed no longer contributes.
+  const entries = activeStatMods(contributingItems(actor));
   if (!entries.length) { actor._mechStatMods = null; return; }
   const inCombat = inCombatFor(actor);
 

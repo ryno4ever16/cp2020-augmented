@@ -23,7 +23,8 @@
  * Pure helpers are exported for the rig spec; hooks are wired by registerMechChipGrant().
  */
 
-import { cwHasType, cwIsEnabled, localize, localizeParam } from "../utils.js";
+import { cwHasType, cwIsEnabled, localize, localizeParam, getSkillIndex, getSkillsPackNames, deleteFieldUpdate } from "../utils.js";
+import { mechDocumentAutomationEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 const GRANTED_FLAG = "chipGranted";       // on the SKILL item: true when this engine created it
@@ -37,11 +38,26 @@ function esc(s) {
 
 /** REPLACE (not merge) the chip's ChipSkills map. `update` deep-merges an ObjectField, so a plain
  *  `{ChipSkills: next}` update keeps stale keys (e.g. the resolved "(choose)" marker) — delete the
- *  whole object first, then set it fresh. Keys carry colons/spaces (skill names), which the `-=`
- *  per-key deletion path can't express cleanly, so the whole-object swap is the robust route. */
+ *  whole object first, then set it fresh. Keys carry colons/spaces (skill names), which per-skill
+ *  `-=` paths can't express cleanly, so the whole-object swap is the robust route; the delete goes
+ *  through deleteFieldUpdate (utils) so it uses the core's supported deletion form on every build. */
 async function replaceChipSkills(chipItem, next) {
-  await chipItem.update({ "system.CyberWorkType.-=ChipSkills": null });
+  await chipItem.update(deleteFieldUpdate("system.CyberWorkType.ChipSkills"));
   await chipItem.update({ "system.CyberWorkType.ChipSkills": foundry.utils.deepClone(next) });
+}
+
+/** ChipSkills keys are skill NAMES in the pack catalog but skill-item _IDs when written through
+ *  the item sheets (ours and the base's — the base override resolves `chipMap[si.id] ??
+ *  chipMap[si.name]` the same way). Grant/prune reason in NAMES, so map id-keys back to names:
+ *  compendium skill ids from the language-aware index, then the actor's own skill items (the
+ *  actor's current name wins). Unknown keys pass through as literal names. Impure (index). */
+async function chipKeyNameResolver(actor) {
+  const byId = new Map();
+  try {
+    for (const e of await getSkillIndex()) byId.set(e.id, e.name);
+  } catch (_e) { /* the actor's own skills below still resolve */ }
+  for (const it of actor?.items ?? []) if (it?.type === "skill") byId.set(it.id, it.name);
+  return (key) => byId.get(key) ?? key;
 }
 
 /** A ChipSkills key parsed as a choose-marker: { choose, category } (category "" = any). Pure. */
@@ -71,8 +87,10 @@ export function unresolvedChooseKeys(item) {
   return out;
 }
 
-/** RESOLVED skill grants (name → max level) across all active chips, skipping choose-markers. Pure. */
-export function resolvedGrantsFor(items) {
+/** RESOLVED skill grants (name → max level) across all active chips, skipping choose-markers.
+ *  `resolveKey` maps id-form ChipSkills keys to skill names (see chipKeyNameResolver); the
+ *  default identity keeps the function pure for callers/specs that deal in name keys only. */
+export function resolvedGrantsFor(items, resolveKey = (k) => k) {
   const out = {};
   for (const it of items ?? []) {
     if (!isActiveChip(it)) continue;
@@ -80,7 +98,8 @@ export function resolvedGrantsFor(items) {
       if (parseChooseKey(key).choose) continue;
       const n = Number(lvl) || 0;
       if (!n) continue;
-      out[key] = Math.max(out[key] ?? 0, n);
+      const name = resolveKey(key);
+      out[name] = Math.max(out[name] ?? 0, n);
     }
   }
   return out;
@@ -92,8 +111,8 @@ export function actorHasSkill(items, name) {
 }
 
 /** Skill names still granted by SOME active chip (the deactivate keep-set). Pure. */
-export function stillGrantedNames(items) {
-  return new Set(Object.keys(resolvedGrantsFor(items)));
+export function stillGrantedNames(items, resolveKey = (k) => k) {
+  return new Set(Object.keys(resolvedGrantsFor(items, resolveKey)));
 }
 
 /** True when THIS client should perform the grant writes: it initiated the change and owns the actor. */
@@ -132,11 +151,7 @@ async function chooseSuggestions(actor, category) {
   const names = new Set();
   for (const it of actor?.items ?? []) if (it?.type === "skill") names.add(it.name);
   try {
-    const pack = game.packs?.get("cyberpunk2020.default-skills-en") ?? game.packs?.get("cyberpunk2020.default-skills");
-    if (pack) {
-      const idx = await pack.getIndex();
-      for (const e of idx) names.add(e.name);
-    }
+    for (const e of await getSkillIndex()) names.add(e.name);
   } catch (_e) { /* index unavailable — the actor's own skills still seed it */ }
   const cat = String(category ?? "").trim().toLowerCase();
   const all = [...names];
@@ -186,25 +201,30 @@ export async function resetChipChoice(chipItem) {
 }
 
 /** Build a new skill item's data for `name`: copy a matching default skill (correct stat/diffMod)
- *  or a neutral generic (stat int) — flagged chip-granted. Impure (pack lookup). */
+ *  or a neutral generic (stat int) — flagged chip-granted. Impure (pack lookup; walks the
+ *  language-aware skills packs from utils.getSkillsPackNames, not a hardcoded EN pack id). */
 async function grantedSkillData(actor, name) {
   let base = { level: 0, chipLevel: 0, ip: 0, diffMod: 1, isChipped: false, isRoleSkill: false, stat: "int", flavor: "", notes: "" };
   try {
-    const pack = game.packs?.get("cyberpunk2020.default-skills-en") ?? game.packs?.get("cyberpunk2020.default-skills");
-    const idx = pack ? await pack.getIndex() : null;
-    const hit = idx?.find(e => e.name === name);
-    if (hit) {
+    for (const packName of getSkillsPackNames(game.i18n.lang)) {
+      const pack = game.packs?.get(packName);
+      if (!pack) continue;
+      const idx = await pack.getIndex();
+      const hit = idx?.find(e => e.name === name);
+      if (!hit) continue;
       const doc = await pack.getDocument(hit._id);
       base = { ...foundry.utils.deepClone(doc.system), level: 0, chipLevel: 0, isChipped: false, ip: 0 };
+      break;
     }
   } catch (_e) { /* fall back to the generic */ }
   return { name, type: "skill", system: base, flags: { [SCOPE]: { [GRANTED_FLAG]: true } } };
 }
 
 /** Create skill items for resolved grants the actor lacks (idempotent). */
-async function grantMissingSkills(actor) {
+async function grantMissingSkills(actor, resolveKey) {
   const items = actor.items?.contents ?? actor.items ?? [];
-  const grants = resolvedGrantsFor(items);
+  const resolve = resolveKey ?? await chipKeyNameResolver(actor);
+  const grants = resolvedGrantsFor(items, resolve);
   const toCreate = [];
   for (const name of Object.keys(grants)) {
     if (!actorHasSkill(items, name)) toCreate.push(await grantedSkillData(actor, name));
@@ -212,18 +232,24 @@ async function grantMissingSkills(actor) {
   if (toCreate.length) await actor.createEmbeddedDocuments("Item", toCreate);
 }
 
-/** Delete / unflag chip-granted skills no longer granted by any active chip (idempotent). */
-async function pruneGrantedSkills(actor) {
+/** Delete / unflag chip-granted skills no longer granted by any active chip (idempotent).
+ *  "Trained since" = a bought level OR accrued IP — deleting a skill the player has been
+ *  earning improvement points on would destroy those points. */
+async function pruneGrantedSkills(actor, resolveKey) {
   const items = actor.items?.contents ?? actor.items ?? [];
-  const keep = stillGrantedNames(items);
+  const resolve = resolveKey ?? await chipKeyNameResolver(actor);
+  const keep = stillGrantedNames(items, resolve);
   const toDelete = [];
   const toUnflag = [];
   for (const it of items) {
     if (it.type !== "skill") continue;
     if (!it.getFlag?.(SCOPE, GRANTED_FLAG)) continue;
     if (keep.has(it.name)) continue;                        // still granted → leave it
-    if ((Number(it.system?.level) || 0) > 0) toUnflag.push(it.id);  // trained → keep, drop flag
-    else toDelete.push(it.id);                              // untrained → remove
+    if ((Number(it.system?.level) || 0) > 0 || (Number(it.system?.ip) || 0) > 0) {
+      toUnflag.push(it.id);                                 // trained (level or IP) → keep, drop flag
+    } else {
+      toDelete.push(it.id);                                 // untrained → remove
+    }
   }
   if (toDelete.length) await actor.deleteEmbeddedDocuments("Item", toDelete);
   for (const id of toUnflag) await actor.items.get(id)?.unsetFlag(SCOPE, GRANTED_FLAG);
@@ -232,8 +258,9 @@ async function pruneGrantedSkills(actor) {
 /** Full pass: create missing grants + prune orphans. Owner/initiating-client only. */
 export async function applyChipGrants(actor) {
   if (!actor) return;
-  await grantMissingSkills(actor);
-  await pruneGrantedSkills(actor);
+  const resolve = await chipKeyNameResolver(actor);
+  await grantMissingSkills(actor, resolve);
+  await pruneGrantedSkills(actor, resolve);
 }
 
 /** Did this item update flip ChipActive? Returns "on" | "off" | null. */
@@ -277,11 +304,21 @@ export function registerMechChipGrant() {
   });
 
   Hooks.on("updateItem", async (item, changes, options, userId) => {
-    const change = chipActiveChange(changes);
-    if (!change) return;
+    if (!mechDocumentAutomationEnabled()) return;   // grant/prune create+delete skill items
     if (item.type !== "cyberware" || !cwHasType(item, "Chip")) return;
     const actor = item.actor;
     if (!actor || !iAmTheGranter(actor, userId)) return;
+    // isActiveChip is a three-axis gate (equipped + enabled + ChipActive): a chip enters or
+    // leaves the running set through ANY axis — unequipping it or switching EffectActive off
+    // strands its granted skill just as surely as a ChipActive flip — so any gate-axis change
+    // re-runs the grant/prune pass. Choose-marker resolution stays tied to the explicit
+    // ChipActive toggle (the deliberate "activate this chip" gesture).
+    const change = chipActiveChange(changes);
+    const sys = changes?.system ?? {};
+    const gateTouched = change !== null
+      || Object.prototype.hasOwnProperty.call(sys, "equipped")
+      || Object.prototype.hasOwnProperty.call(sys, "EffectActive");
+    if (!gateTouched) return;
     if (change === "on") {
       // Resolve any choose-markers first; a cancelled prompt rolls the activation back.
       const resolved = await resolveChooseKeys(item);
@@ -292,6 +329,7 @@ export function registerMechChipGrant() {
 
   // A chip removed while active: prune the skills it granted.
   Hooks.on("deleteItem", async (item, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;
     if (item.type !== "cyberware" || !cwHasType(item, "Chip")) return;
     const actor = item.actor;
     if (!actor || !iAmTheGranter(actor, userId)) return;
@@ -300,6 +338,7 @@ export function registerMechChipGrant() {
 
   // A chip imported already-active (e.g. a pre-configured drop) should grant on arrival.
   Hooks.on("createItem", async (item, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;
     if (!isActiveChip(item)) return;
     const actor = item.actor;
     if (!actor || !iAmTheGranter(actor, userId)) return;

@@ -164,15 +164,33 @@ export function applyBorgBody(actor) {
  * and body-type dependents (run/leap, carry/lift, BTM) the base computes from MA/BODY. `stats` is the
  * body item's `borgBody.stats` block `{ ref, ma, body }` (BODY maps to the `bt` stat key); each is
  * optional. Pure-ish: mutates prepared data only, never persists. No-op without a stats block.
+ *
+ * The chassis value replaces the MEAT stat as the base, but the situational penalties the base
+ * prep already folded still degrade a borg (user-ruled 2026-07-10): worn-armor encumbrance
+ * (stat.armorMod, REF), cyber-armor stat penalties (stat.armorImplantMod), and the wound-state
+ * REF reduction — recomputed against the chassis value, because the deep-wound bands are
+ * fractions of the CURRENT total (base actor.js woundStat), not flat deltas, and the base's
+ * recorded woundMod was derived from the meat total this SET just replaced. INT/COOL keep the
+ * base's own wound fold untouched (the chassis never writes them).
  */
 export function applyBorgStats(actor, stats) {
   if (!stats) return;
   const s = actor?.system?.stats;
   if (!s) return;
+  const woundState = Number(actor?.woundState?.() ?? 0);
   const setStat = (key, val) => {
     if (val === undefined || val === null || s[key] === undefined) return;
     const n = Number(val);
-    if (Number.isFinite(n)) s[key].total = n;
+    if (!Number.isFinite(n)) return;
+    let total = n
+      + (key === "ref" ? (Number(s.ref?.armorMod) || 0) : 0)
+      + (Number(s[key].armorImplantMod) || 0);
+    if (key === "ref") {
+      if (woundState >= 4)      { s[key].woundMod = -(total - Math.ceil(total / 3)); total = Math.ceil(total / 3); }
+      else if (woundState === 3){ s[key].woundMod = -(total - Math.ceil(total / 2)); total = Math.ceil(total / 2); }
+      else if (woundState === 2){ s[key].woundMod = -2; total -= 2; }
+    }
+    s[key].total = total;
   };
   setStat("ref", stats.ref);
   setStat("ma", stats.ma);
@@ -231,5 +249,19 @@ export function registerBorg() {
     if (!other) return;
     ui.notifications?.warn(localizeParam("BorgBodyAlreadyInstalled", { name: other.name }));
     return false;
+  });
+
+  // The same rule on the CREATE path (a copied/imported body arrives with equipped baked in and
+  // never passes preUpdateItem): a second chassis lands as CARRIED instead — spare bodies are
+  // legitimate property; only the equipped slot is exclusive. The loadout createItem hook then
+  // sees equipped:false and correctly skips materialization.
+  Hooks.on("preCreateItem", (doc, data) => {
+    if (data?.system?.equipped !== true || !isBorgBody(doc)) return;
+    const actor = doc?.parent;
+    if (!actor?.items?.find) return;
+    const other = actor.items.find(it => it.system?.equipped === true && isBorgBody(it));
+    if (!other) return;
+    ui.notifications?.warn(localizeParam("BorgBodyAlreadyInstalled", { name: other.name }));
+    doc.updateSource({ "system.equipped": false });
   });
 }

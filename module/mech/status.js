@@ -17,6 +17,7 @@
  */
 
 import { cwHasType, cwIsEnabled } from "../utils.js";
+import { contributingItems } from "./cyberlimb.js";
 import { isEmitting, lightProfileOf } from "./light.js";
 import { isViewing, visionProfileOf, desiredVisionFor } from "./vision.js";
 import { protectionEntryOf } from "./protection.js";
@@ -176,10 +177,16 @@ export function rollModRows(items) {
     const statMod = Number(rm.statMod) || 0;
     const statName = String(rm.statName ?? "").trim();
     const facedownMod = Number(rm.facedownMod) || 0;
-    if (!attackMod && !(skillMod && skillName) && !(statMod && statName) && !facedownMod) continue;
+    // Multi-skill items carry their mods in the skillMods LIST — an item whose only mods live
+    // there is just as active as one using the flat pair, so the list counts toward the gate
+    // and rides along in detail for the pill text.
+    const skillMods = (rm.skillMods ?? [])
+      .map(e => ({ skillName: String(e?.skillName ?? "").trim(), mod: Number(e?.mod) || 0 }))
+      .filter(e => e.skillName && e.mod);
+    if (!attackMod && !(skillMod && skillName) && !(statMod && statName) && !facedownMod && !skillMods.length) continue;
     out.push({
       itemId: it.id ?? it._id, kind: "roll", name: it.name,
-      detail: { attackMod, skillName, skillMod, statName, statMod, facedownMod, dualWieldOnly: !!rm.dualWieldOnly },
+      detail: { attackMod, skillName, skillMod, statName, statMod, facedownMod, skillMods, dualWieldOnly: !!rm.dualWieldOnly },
       togglePath: quickTogglePathOf(it)
     });
   }
@@ -192,9 +199,13 @@ export function drugRows(actor) {
     itemId: m.itemId, kind: "drug", name: m.name,
     detail: {
       statBoosts: m.statBoosts ?? [], rollBoosts: m.rollBoosts ?? [],
-      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? "", isPenalty: !!m.isPenalty
+      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? "", isPenalty: !!m.isPenalty,
+      // A marker whose source item is GONE (deleted before the delete-cleanup hook existed, or
+      // imported state) has no item-sheet Wear-off control left — the strip offers the escape.
+      orphan: !actor?.items?.get?.(m.itemId)
     },
-    // Worn off via the item sheet "Wear off" control (fires the wear-off save) — the strip is display-only.
+    // Worn off via the item sheet "Wear off" control (fires the wear-off save) — the strip is
+    // display-only while the item exists.
     togglePath: null
   }));
 }
@@ -228,7 +239,10 @@ export function statModRows(items) {
  * id to its name (payload Skill/ChipSkills keys may be either — the base engine's own fallback).
  */
 export function activeInfluencesFor(actor) {
-  const items = actor?.items?.contents ?? actor?.items ?? [];
+  // Zone gate (M19): sources in a destroyed limb are non-contributing, so their pills drop too —
+  // the strip mirrors the engines. (statContributionsFor stays UNfiltered: it breaks down the
+  // BASE system's own stat fold, which the module cannot gate — showing it raw is the honest read.)
+  const items = contributingItems(actor);
   const pick = String(actor?.getFlag?.(SCOPE, "visionPick") ?? "");
   const resolveSkillName = (key) => {
     const byId = actor?.items?.get?.(key);

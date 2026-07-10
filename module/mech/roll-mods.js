@@ -88,10 +88,12 @@ export function skillModProviders(items, skillName) {
     const name = String(rm.skillName ?? "").trim().toLowerCase();
     if (mod && name === want) out.push({ id, name: it.name, mod, auto });
     // The skillMods list (multi-skill items): one row per matching entry, sharing the item's auto.
-    for (const e of rm.skillMods ?? []) {
+    // Each row gets its OWN provider id (item id + entry ordinal): the dialog's checkbox dataPath
+    // is gearMod_<id>, so a list entry sharing the flat pair's id would collide with its row.
+    for (const [i, e] of (rm.skillMods ?? []).entries()) {
       const emod = Number(e?.mod) || 0;
       const ename = String(e?.skillName ?? "").trim().toLowerCase();
-      if (emod && ename === want) out.push({ id, name: it.name, mod: emod, auto });
+      if (emod && ename === want) out.push({ id: `${id}-${i + 1}`, name: it.name, mod: emod, auto });
     }
   }
   return out;

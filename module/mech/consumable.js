@@ -20,6 +20,7 @@
  */
 
 import { localizeParam } from "../utils.js";
+import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
@@ -62,12 +63,26 @@ export async function rollDurationTurns(spec) {
   }
 }
 
-/** Append a timer to the actor's marker flag. */
+/** Add/REPLACE the item's timer (one timer per item): re-use/re-activation restarts the clock —
+ *  stacking a second marker would let the OLDER sibling's expiry switch the fresh dose off early. */
 async function addMarker(actor, marker) {
   const raw = actor.getFlag?.(SCOPE, FLAG);
   const list = Array.isArray(raw) ? raw.slice() : (raw ? [raw] : []);
-  list.push(marker);
-  await actor.setFlag(SCOPE, FLAG, list);
+  const rest = list.filter(m => m.itemId !== marker.itemId);
+  await actor.setFlag(SCOPE, FLAG, [...rest, marker]);
+}
+
+/** Drop an item's timer marker(s) + icon (manual switch-off, item deletion). Owner-side. */
+async function clearMarkersFor(actor, itemId) {
+  if (!actor) return;
+  const raw = actor.getFlag?.(SCOPE, FLAG);
+  const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  const rest = list.filter(m => m.itemId !== itemId);
+  if (rest.length !== list.length) {
+    if (rest.length) await actor.setFlag(SCOPE, FLAG, rest);
+    else await actor.unsetFlag(SCOPE, FLAG);
+  }
+  await pruneTimerIcons(actor, new Set(rest.map(m => m.itemId)));
 }
 
 /**
@@ -78,6 +93,11 @@ async function addMarker(actor, marker) {
  */
 async function addTimerIcon(actor, item, turns) {
   try {
+    // One icon per item: a restart replaces the old icon rather than stacking a twin.
+    const prior = (actor.effects?.contents ?? [])
+      .filter(e => e.getFlag?.(SCOPE, "consumableItemId") === item.id)
+      .map(e => e.id);
+    if (prior.length) await actor.deleteEmbeddedDocuments("ActiveEffect", prior);
     await actor.createEmbeddedDocuments("ActiveEffect", [{
       name: item.name, img: item.img,
       duration: { rounds: turns },
@@ -154,15 +174,24 @@ export function registerMechConsumable() {
     return false;
   });
 
-  // Activating a consumable-tagged Activatable cyberware spends a dose + starts its timer.
+  // Activating a consumable-tagged Activatable cyberware spends a dose + starts its timer;
+  // switching it OFF (manually or via the tick's own off-flip) ends the timer with the payload,
+  // so a re-activation starts fresh instead of inheriting a stale countdown.
   // Initiating client only (it holds owner rights); the dose decrement's own update carries no
   // EffectActive key, so this never re-enters.
   Hooks.on("updateItem", async (item, changes, options, userId) => {
     if (userId !== game.user.id) return;
-    if (!activationInChanges(changes)) return;
     if (item.type !== "cyberware") return;
     const mc = consumableOf(item);
     if (!mc) return;
+    if (foundry.utils.getProperty(changes ?? {}, "system.EffectActive") === false) {
+      // A tick-expiry flip already owns the marker + icon cleanup (below); re-clearing here would
+      // race it into a double ActiveEffect delete ("does not exist"). Only a MANUAL switch-off cleans.
+      if (options?.cp2020TimerExpiry) return;
+      await clearMarkersFor(item.actor, item.id);
+      return;
+    }
+    if (!activationInChanges(changes)) return;
     const dosesAfter = Math.max(0, dosesLeft(item) - 1);
     await item.update({ "system.mechConsumable.doses": dosesAfter });
     const turns = await rollDurationTurns(mc.durationTurns);
@@ -173,9 +202,20 @@ export function registerMechConsumable() {
     await postUseCard(item, { turns, dosesAfter });
   });
 
+  // A consumable item deleted while its timer runs would orphan the marker + icon (out of combat
+  // nothing ever ticks them out) — clear them with the item, like the sibling engines do.
+  Hooks.on("deleteItem", async (item, options, userId) => {
+    if (userId !== game.user?.id) return;
+    if (!item.actor?.isOwner) return;
+    if (!consumableOf(item)) return;
+    await clearMarkersFor(item.actor, item.id ?? item._id);
+  });
+
   // Round tick — the ACTIVE GM processes the CURRENT combatant's timers when their turn comes up
   // (mirrors the acid/fire per-turn block in combat/damage-hooks.js, including the multi-GM guard).
+  // Gated by the round-tick toggle: off = timers wait; Use/activation and the cards still work.
   Hooks.on("updateCombat", async (combat, updateData) => {
+    if (!mechRoundTickEnabled()) return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
@@ -193,9 +233,11 @@ export function registerMechConsumable() {
     const { surviving, expired } = tickMarkers(markers);
     for (const m of expired) {
       // A cyberware timer switches the item back off — the base engine drops its payload with it.
+      // Tag the update so the EffectActive-off hook doesn't ALSO clear (the tick prunes below); the
+      // hook only cleans a manual switch-off, so the icon isn't deleted twice.
       const item = actor.items.get(m.itemId);
       if (item?.type === "cyberware" && item.system?.EffectActive) {
-        await item.update({ "system.EffectActive": false }).catch(() => {});
+        await item.update({ "system.EffectActive": false }, { cp2020TimerExpiry: true }).catch(() => {});
       }
       const noteClause = m.note ? localizeParam("ConsumableNoteClause", { note: m.note }) : "";
       await postSavePromptCard({

@@ -24,6 +24,8 @@
  * Pure helpers are exported for the rig spec; hooks are wired by registerMechLoadout().
  */
 
+import { mechDocumentAutomationEnabled } from "../settings.js";
+
 const SCOPE = "cp2020-augmented";
 const MANIFEST_FLAG = "loadout";          // on the BODY: the array of option specs
 const INSTALLED_FLAG = "loadoutInstalled"; // on the BODY: true once its loadout has been materialized
@@ -89,7 +91,11 @@ export function loadoutItemData(spec, parentId, bodyId = parentId) {
       // manifest entry, and materialization copies it onto the created item unchanged.
       ...(spec?.mech && typeof spec.mech === "object" ? foundry.utils.deepClone(spec.mech) : {}),
     },
-    flags: { [SCOPE]: { [SOURCE_FLAG]: bodyId } },
+    // loadoutKey lets materialization map CREATED docs back to their specs by identity —
+    // createEmbeddedDocuments' return order is NOT guaranteed to match its input order
+    // (rig-proven on multi-creates), so index-based mapping could nest a child under the
+    // wrong parent.
+    flags: { [SCOPE]: { [SOURCE_FLAG]: bodyId, ...(spec?.key ? { loadoutKey: spec.key } : {}) } },
   };
 }
 
@@ -142,7 +148,12 @@ async function createLoadoutTree(actor, bodyItem, manifest) {
     if (!ready.length) break;   // remaining specs reference an unresolved parentKey → handle as fallback
     const created = await actor.createEmbeddedDocuments("Item",
       ready.map((s) => loadoutItemData(placed(s), s?.parentKey ? keyToId[s.parentKey] : bodyItem.id, bodyItem.id)));
-    ready.forEach((s, i) => { if (s?.key) keyToId[s.key] = created[i].id; });
+    // Map by the stamped loadoutKey flag, not by index — the returned array's order is not
+    // guaranteed to match the input on multi-creates.
+    for (const doc of created) {
+      const k = doc.getFlag?.(SCOPE, "loadoutKey");
+      if (k) keyToId[k] = doc.id;
+    }
     pending = pending.filter((s) => !ready.includes(s));
   }
   if (pending.length) {
@@ -155,13 +166,12 @@ async function createLoadoutTree(actor, bodyItem, manifest) {
  *  Carried Options are their own kept property and SURVIVE (never destroy carried chrome). The
  *  chassis-strip delete offers an explicit "delete the options too" choice; this is the safe default
  *  for any other delete path. */
-export async function pruneLoadout(actor, bodyId, body = null) {
+export async function pruneLoadout(actor, bodyId) {
   if (!actor) return;
   const toDelete = loadoutOptionsOf(actor, bodyId)
     .filter((it) => it.system?.equipped === true)
     .map((it) => it.id);
   if (toDelete.length) await actor.deleteEmbeddedDocuments("Item", toDelete);
-  if (body && body.getFlag?.(SCOPE, INSTALLED_FLAG)) await body.unsetFlag(SCOPE, INSTALLED_FLAG);
 }
 
 /**
@@ -193,8 +203,11 @@ export function equippedChange(changes) {
 }
 
 export function registerMechLoadout() {
+  // All loadout automation bulk-creates/deletes embedded items — gated by the document-automation
+  // toggle so a GM who curates chrome by hand can install bodies without the factory fit-out.
   // Install / uninstall a body via its `equipped` flag: materialize on install, prune on removal.
   Hooks.on("updateItem", async (item, changes, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;
     if (!hasLoadout(item)) return;
     const change = equippedChange(changes);
     if (!change) return;
@@ -206,14 +219,25 @@ export function registerMechLoadout() {
 
   // A body deleted (equipped or not) takes its whole loadout with it.
   Hooks.on("deleteItem", async (item, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;
     if (!hasLoadout(item)) return;
     const actor = item.actor;
     if (!actor || !iAmTheOwner(actor, userId)) return;
     await pruneLoadout(actor, item.id);
   });
 
+  // The materialized-guard flag refers to the OPTION ITEMS of one specific body document — a
+  // copy is a NEW document whose options never followed it (source flags point at the old id),
+  // so an arriving copy must shed the flag or it lands "installed" with nothing materialized.
+  Hooks.on("preCreateItem", (doc, data) => {
+    if (foundry.utils.getProperty(data ?? {}, `flags.${SCOPE}.${INSTALLED_FLAG}`) === undefined) return;
+    if (!hasLoadout(doc)) return;
+    doc.updateSource({ [`flags.${SCOPE}.-=${INSTALLED_FLAG}`]: null });
+  });
+
   // A body imported already-installed (e.g. a pre-configured drop) materializes on arrival.
   Hooks.on("createItem", async (item, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;
     if (!hasLoadout(item) || item.system?.equipped !== true) return;
     const actor = item.actor;
     if (!actor || !iAmTheOwner(actor, userId)) return;

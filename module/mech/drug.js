@@ -24,7 +24,8 @@
  * registerMechDrug().
  */
 
-import { localize, localizeParam } from "../utils.js";
+import { localizeParam } from "../utils.js";
+import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard, renderChatCard } from "../compat.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { rollDurationTurns } from "./consumable.js";
@@ -66,7 +67,13 @@ export function drugMarker(item, drug, turns) {
     expireSave: {
       stat: String(drug.expireSave?.stat ?? ""),
       difficulty: Number(drug.expireSave?.difficulty) || 0,
-      penalty: String(drug.expireSave?.penalty ?? "")
+      penalty: String(drug.expireSave?.penalty ?? ""),
+      // The crash payload snapshots WITH the dose — the save must stay resolvable (and honest to
+      // the dose actually taken) even if the item is edited or deleted before the card's Roll.
+      penaltyBoosts: (drug.expireSave?.penaltyBoosts ?? [])
+        .map(b => ({ stat: String(b.stat ?? "").toLowerCase(), mod: Number(b.mod) || 0 }))
+        .filter(b => b.mod),
+      penaltyTurns: String(drug.expireSave?.penaltyTurns ?? "")
     },
     psychosis: String(drug.psychosis ?? ""),
     turnsLeft: Number(turns) || 0
@@ -96,9 +103,12 @@ export function boostSummary(marker) {
   return parts.join(", ");
 }
 
-/** Replace any existing marker for this item, then store. */
+/** Replace any existing marker of the same KIND for this item, then store. A dose marker and its
+ *  crash (isPenalty) marker are separate slots — the book's re-dose rule keeps the penalties
+ *  running while a fresh dose starts, so writing one kind must never erase the other. */
 async function setDrugMarker(actor, marker) {
-  const rest = drugMarkersFor(actor).filter(m => m.itemId !== marker.itemId);
+  const rest = drugMarkersFor(actor)
+    .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
   await actor.setFlag(SCOPE, DRUG_FLAG, [...rest, marker]);
 }
 
@@ -188,10 +198,22 @@ async function postWoreOffCard(actor, marker) {
   }
   const es = marker.expireSave ?? {};
   if (es.stat && es.difficulty && marker.itemId) {
+    // The card must outlive the marker (already dropped) AND the item (may be deleted before the
+    // Roll click), so the button carries the SNAPSHOT payload itself; tokenId/sceneId make the
+    // roll land on an unlinked combatant's own token actor, not the world prototype (the same
+    // wiring as the stun/death save cards in save-rolls.js).
     const content = await renderChatCard("drug-save-prompt.hbs", {
       name: marker.name, actorName: actor.name,
       stat: String(es.stat).toUpperCase(), difficulty: es.difficulty, penalty: es.penalty ?? "",
-      actorId: actor.id, itemId: marker.itemId
+      actorId: actor.id, itemId: marker.itemId,
+      tokenId: actor.isToken ? (actor.token?.id ?? "") : "",
+      sceneId: actor.isToken ? (actor.token?.parent?.id ?? "") : "",
+      saveJson: JSON.stringify({
+        name: marker.name,
+        stat: String(es.stat ?? ""), difficulty: Number(es.difficulty) || 0,
+        penalty: String(es.penalty ?? ""),
+        penaltyBoosts: es.penaltyBoosts ?? [], penaltyTurns: String(es.penaltyTurns ?? "")
+      })
     });
     await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
     return;
@@ -209,18 +231,26 @@ async function postWoreOffCard(actor, marker) {
  * is applied as a timed "crash" overlay (reusing the boost machinery, negated) and the result card
  * shows the full printed consequence for the GM. Owner/GM only (mirrors the stun/death save gate).
  */
-export async function executeDrugExpireSave({ actorId, itemId }) {
-  const actor = game.actors.get(actorId);
+export async function executeDrugExpireSave({ actorId, itemId, tokenId, sceneId, save = null }) {
+  // Token-first resolution: an unlinked combatant's drug state lives on its token's own actor.
+  const tokenActor = tokenId && sceneId ? game.scenes.get(sceneId)?.tokens?.get(tokenId)?.actor : null;
+  const actor = tokenActor ?? game.actors.get(actorId);
   if (!actor) return;
   if (!(game.user.isGM || actor.isOwner)) {
     ui.notifications?.warn(localizeParam("SaveNotOwned", { name: actor.name }));
     return;
   }
+  // The card's own snapshot payload is the source of truth (it survives item deletion/edits);
+  // the live item is the fallback for cards posted before the snapshot rode along.
   const item = actor.items?.get?.(itemId);
-  const es = item?.system?.mechDrug?.expireSave ?? {};
+  const es = (save?.stat && Number(save?.difficulty) > 0) ? save : (item?.system?.mechDrug?.expireSave ?? {});
   const statKey = String(es.stat ?? "").toLowerCase();
   const difficulty = Number(es.difficulty) || 0;
-  if (!statKey || !difficulty) return;
+  const drugName = save?.name ?? item?.name ?? "";
+  if (!statKey || !difficulty) {
+    ui.notifications?.warn(localizeParam("DrugSaveUnresolvable", { name: drugName || itemId }));
+    return;
+  }
 
   const statVal = Number(actor.system?.stats?.[statKey]?.total) || 0;
   const roll = await new Roll("1d10").evaluate();
@@ -228,13 +258,13 @@ export async function executeDrugExpireSave({ actorId, itemId }) {
   const success = total >= difficulty;
 
   const content = await renderChatCard("drug-save-result.hbs", {
-    name: item?.name ?? "", actorName: actor.name,
+    name: drugName, actorName: actor.name,
     stat: statKey.toUpperCase(), statVal, die: roll.total, total, difficulty, success,
     penalty: es.penalty ?? ""
   });
   await roll.toMessage({
     speaker: ChatMessage.getSpeaker({ actor }),
-    flavor: localizeParam("DrugSaveFlavor", { name: item?.name ?? "", stat: statKey.toUpperCase(), difficulty }),
+    flavor: localizeParam("DrugSaveFlavor", { name: drugName, stat: statKey.toUpperCase(), difficulty }),
     content
   });
 
@@ -243,17 +273,27 @@ export async function executeDrugExpireSave({ actorId, itemId }) {
   if (!penaltyBoosts.length) return;   // penalty is prose-only → the card states it, the GM applies it
   const turns = await rollDurationTurns(es.penaltyTurns);
   await setDrugMarker(actor, {
-    itemId, name: item?.name ?? "", note: "", statBoosts: penaltyBoosts, rollBoosts: [],
+    itemId, name: drugName, note: "", statBoosts: penaltyBoosts, rollBoosts: [],
     expireSave: { stat: "", difficulty: 0, penalty: "" }, psychosis: "", turnsLeft: turns, isPenalty: true
   });
 }
 
-/** Drop a marker, post the wear-off card, and re-prepare so the boost lifts. GM/owner-side. */
+/** Drop a marker (only the matching KIND — a dose's wear-off leaves its crash running and vice
+ *  versa), post the wear-off card, and re-prepare so the boost lifts. GM/owner-side. */
 async function wearOffMarker(actor, marker) {
-  const rest = drugMarkersFor(actor).filter(m => m.itemId !== marker.itemId);
+  const rest = drugMarkersFor(actor)
+    .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
   if (rest.length) await actor.setFlag(SCOPE, DRUG_FLAG, rest);
   else await actor.unsetFlag(SCOPE, DRUG_FLAG);
   await postWoreOffCard(actor, marker);
+}
+
+/** Clear a marker whose source item may no longer exist (the strip's orphan escape — endDrug
+ *  needs the live item, this needs only the marker). Owner/GM-side via the sheet. */
+export async function clearDrugMarker(actor, itemId, isPenalty = false) {
+  const marker = drugMarkersFor(actor)
+    .find(m => m.itemId === itemId && !!m.isPenalty === !!isPenalty);
+  if (marker) await wearOffMarker(actor, marker);
 }
 
 /**
@@ -286,11 +326,15 @@ export async function takeDrug(item) {
   return true;
 }
 
-/** Manually wear a drug off now (the item-sheet "Wear off" button). No-op when it isn't active. */
+/** Manually wear a drug off now (the item-sheet "Wear off" button). The DOSE ends first; with
+ *  only a crash left, the same control clears the crash. No-op when neither is active. */
 export async function endDrug(item) {
   const actor = item.actor;
   if (!actor) return false;
-  const marker = drugMarkersFor(actor).find(m => m.itemId === (item.id ?? item._id));
+  const id = item.id ?? item._id;
+  const markers = drugMarkersFor(actor);
+  const marker = markers.find(m => m.itemId === id && !m.isPenalty)
+    ?? markers.find(m => m.itemId === id && m.isPenalty);
   if (!marker) return false;
   await wearOffMarker(actor, marker);
   return true;
@@ -315,12 +359,32 @@ export function registerMechDrug() {
     const btn = ev.target?.closest?.(".cp-drug-save-roll");
     if (!btn || btn.disabled) return;
     ev.preventDefault();
-    await executeDrugExpireSave({ actorId: btn.dataset.actorId, itemId: btn.dataset.itemId });
+    let save = null;
+    try { save = btn.dataset.save ? JSON.parse(btn.dataset.save) : null; } catch (_e) { /* legacy card */ }
+    await executeDrugExpireSave({
+      actorId: btn.dataset.actorId, itemId: btn.dataset.itemId,
+      tokenId: btn.dataset.tokenId ?? "", sceneId: btn.dataset.sceneId ?? "", save
+    });
+  });
+
+  // A drug item deleted while its dose (or an untimed crash) runs would orphan the marker — the
+  // only wear-off control lives on the deleted item's own sheet, so wear matching markers off with
+  // the item (the same lifecycle cleanup every sibling mech engine's deleteItem hook does).
+  Hooks.on("deleteItem", async (item, options, userId) => {
+    if (userId !== game.user?.id) return;
+    const actor = item.actor;
+    if (!actor || !actor.isOwner) return;
+    const id = item.id ?? item._id;
+    for (const m of drugMarkersFor(actor).filter(m => m.itemId === id)) {
+      await wearOffMarker(actor, m);
+    }
   });
 
   // Round tick — the ACTIVE GM counts down the CURRENT combatant's timed drugs when their turn comes
   // up (the acid/fire/consumable per-turn pattern, including the multi-GM + begin-combat guards).
+  // Gated by the round-tick toggle: off = durations run narratively, the sheet controls still work.
   Hooks.on("updateCombat", async (combat, updateData) => {
+    if (!mechRoundTickEnabled()) return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
