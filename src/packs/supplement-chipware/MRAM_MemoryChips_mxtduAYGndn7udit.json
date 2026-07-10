@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "Chips INT and other cognitive skills",
-    "notes": "",
+    "notes": "<p>The MRAM chip CLASS (Core p.83): information-only chips rated +1 to +3, applied as a skill of the chip's type. Priced per specific chip and level — see the individual +1/+2/+3 knowledge chips in this catalog; this generic entry carries no single price.</p>",
     "cost": 0,
     "weight": 0,
     "equipped": false,

@@ -4,7 +4,7 @@
   "img": "icons/svg/chest.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Printed price: <b>10% of the chassis cost</b> (Maximum Metal, ACPA systems) — GM-entered per suit. Reduces IR signature only; takes no spaces, has no SDP or SP.</p>",
     "cost": 0,
     "weight": 0,
     "equipped": true,

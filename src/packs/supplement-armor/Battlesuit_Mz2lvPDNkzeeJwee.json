@@ -36,6 +36,10 @@
           "set": 0
         }
       ]
+    },
+    "mechTypedSP": {
+      "type": "radiation",
+      "sp": 6
     }
   },
   "effects": [],

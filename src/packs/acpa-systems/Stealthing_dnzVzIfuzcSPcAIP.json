@@ -17,7 +17,7 @@
     "catalogKey": "STEALTHING",
     "source": "Maximum Metal",
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Printed price: <b>10× the suit's total cost</b> (Maximum Metal, ACPA systems) — GM-entered per suit. Reduces maximum capacity by 10% and external spaces by one per body area. Automatically fools civilian radar and basic IR; military radar is baffled on 1–9, thermographs on 1–8 (d10).</p>",
     "equipped": true,
     "lastOwnerId": "",
     "sdpDamage": 0,
