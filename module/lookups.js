@@ -122,6 +122,16 @@ export let fireModes = {
     semiAuto: "SemiAuto"
 }
 
+// Vehicle class suggestions for the item sheet's soft-enum datalist (VEHICLE-SPEC.md §4/§6:
+// `vehicleType` is a free string so the books' own type vocabulary survives — "Super-heavy
+// Construction Vehicle" stays intact — while these common values keep filtering consistent).
+// Stored raw (data, not UI labels), same as the mph/kph unit designations.
+export const VEHICLE_TYPE_SUGGESTIONS = [
+  "Car", "Cycle", "Truck", "Hovercraft", "AV (Aerodyne)", "Helicopter", "Fixed-Wing",
+  "Osprey", "Dirigible", "Boat", "Submarine", "Spacecraft", "Tank", "APC/IFV",
+  "RPV/Drone", "Ultralight", "Construction", "ACPA (Powered Armor)"
+];
+
 /* ──────────────────────────────────────────────────────────────────────────
  * AMMUNITION: types (calibers) + modifiers (loads)
  *
@@ -137,16 +147,6 @@ export let fireModes = {
  * ────────────────────────────────────────────────────────────────────────── */
 
 // Per-class box size / price. Core defaults; Blackhand's Guide alternative.
-// Vehicle class suggestions for the item sheet's soft-enum datalist (VEHICLE-SPEC.md §4/§6:
-// `vehicleType` is a free string so the books' own type vocabulary survives — "Super-heavy
-// Construction Vehicle" stays intact — while these common values keep filtering consistent).
-// Stored raw (data, not UI labels), same as the mph/kph unit designations.
-export const VEHICLE_TYPE_SUGGESTIONS = [
-  "Car", "Cycle", "Truck", "Hovercraft", "AV (Aerodyne)", "Helicopter", "Fixed-Wing",
-  "Osprey", "Dirigible", "Boat", "Submarine", "Spacecraft", "Tank", "APC/IFV",
-  "RPV/Drone", "Ultralight", "Construction", "ACPA (Powered Armor)"
-];
-
 export const AMMO_COST_CLASSES = {
   lightPistol:     { label: "Light Pistol / Lt. SMG",  core: { box: 100, price: 15 }, blackhands: { box: 100, price: 15 } },
   mediumPistol:    { label: "Medium Pistol / SMG",     core: { box: 50,  price: 15 }, blackhands: { box: 100, price: 30 } },

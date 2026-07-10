@@ -45,6 +45,7 @@ import { registerMechContainer } from "./mech/container.js";
 import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
+import { registerMechCyberlimb } from "./mech/cyberlimb.js";
 import { registerMechLoadout } from "./mech/loadout.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
@@ -178,9 +179,11 @@ Hooks.once("init", function () {
     ammo:             makeAmmoAugmentedData(CONFIG.Item.dataModels.ammo),
   });
 
-  // Q7 personality moddies: wrap the actor's prepareDerivedData so stat mods with caps/combat
-  // context apply on top of the base totals. Wrapped at INIT (before any actor prepares) so the
-  // first world-load prep already reflects them; also wires the combat-context refresh hooks.
+  // Q7 personality moddies: wrap the actor's prepareData so stat mods with caps/combat context
+  // apply on top of the base totals (prepareData, NOT prepareDerivedData — the base computes its
+  // stats in prepareData; see the DataModel hazard note in data/mech-item-data.js). Wrapped at
+  // INIT (before any actor prepares) so the first world-load prep already reflects them; also
+  // wires the combat-context refresh hooks.
   registerMechStatMods();
   // D4 combat drugs: wrap prepareData (AFTER the Q7 wrap above, so active-drug boosts overlay last)
   // and wire the round-tick that expires timed drugs. Init-time for the same first-prep reason.
@@ -188,6 +191,10 @@ Hooks.once("init", function () {
   // Full-conversion borgs: wrap prepareData to seed the borg body's per-zone SDP into system.sdp
   // (independent of the stat wraps above — touches sdp, not stats). Init-time for the same reason.
   registerBorg();
+  // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
+  // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
+  // wreck it replaces).
+  registerMechCyberlimb();
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
   // namespaced collection, falling back to the bare global on cores that lack it (v13).

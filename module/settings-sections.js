@@ -33,6 +33,9 @@ const SECTIONS = [
     "acidDotStackMode", "fireDotEnabled", "fireDotStackMode",
   ] },
   { key: "SectionOptionalRules", keys: ["fnff2Enabled"] },
+  { key: "SectionMechAutomation", keys: [
+    "mechTokenWrites", "mechRoundTickAutomation", "mechDocumentAutomation", "cyberlimbRepairGmOnly",
+  ] },
   { key: "SectionImprovementPoints", keys: [
     "ipRawTracking", "ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode",
     "ipHideUI", "ipShowPending",

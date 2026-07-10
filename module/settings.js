@@ -35,6 +35,38 @@ export function registerAugmentedSettings() {
     requiresReload: true
   });
 
+  // ── Mech-automation toggles (1.1.0 pre-release review §J; user-scoped to these groups) ──
+  // Group 1: item-driven TOKEN writes — light emission, sight override, the heat-sense
+  // detection entry. The biggest "the module touched my tokens" surface; GMs who hand-author
+  // token lighting/vision switch it off and gear toggles become sheet-only.
+  game.settings.register(SCOPE, "mechTokenWrites", {
+    name: "SETTINGS.MechTokenWrites",
+    hint: "SETTINGS.MechTokenWritesHint",
+    scope: "world", config: true, type: Boolean, default: true
+  });
+  // Group 2: ROUND-TICK automation — drug/consumable countdowns, expiry cards, the wear-off
+  // save prompt and its crash overlay. Off = durations run narratively; the sheet controls
+  // (Take / Wear-off / Use) keep working.
+  game.settings.register(SCOPE, "mechRoundTickAutomation", {
+    name: "SETTINGS.MechRoundTick",
+    hint: "SETTINGS.MechRoundTickHint",
+    scope: "world", config: true, type: Boolean, default: true
+  });
+  // Group 3: DOCUMENT automation — chip skill grant/prune, loadout materialize/prune, the
+  // container delete-cascade detach. The most invasive class (creates/deletes embedded items).
+  game.settings.register(SCOPE, "mechDocumentAutomation", {
+    name: "SETTINGS.MechDocumentAutomation",
+    hint: "SETTINGS.MechDocumentAutomationHint",
+    scope: "world", config: true, type: Boolean, default: true
+  });
+  // Permission scoping: restrict the sheet's cyberlimb Repair control to the GM (many tables run
+  // repair as a Tech-skill/cost/downtime flow). Default OFF = current owner behavior.
+  game.settings.register(SCOPE, "cyberlimbRepairGmOnly", {
+    name: "SETTINGS.CyberlimbRepairGmOnly",
+    hint: "SETTINGS.CyberlimbRepairGmOnlyHint",
+    scope: "world", config: true, type: Boolean, default: false
+  });
+
   // --- automationNoticeHide ---
   // config:false — driven by the notice's own "Don't show this again" checkbox, not a menu toggle.
   game.settings.register(SCOPE, "automationNoticeHide", {
@@ -814,4 +846,21 @@ export function shopShowSource() {
 /** Bundled config for the supplement-visibility helpers in shop/supplements.js. */
 export function shopSourceConfig() {
   return { allowHomebrew: shopAllowHomebrew(), enabledSources: shopEnabledSources() };
+}
+
+/** Group 1 — item-driven token light/vision/detection writes (default ON). */
+export function mechTokenWritesEnabled() {
+  try { return game.settings.get(SCOPE, "mechTokenWrites") !== false; } catch { return true; }
+}
+/** Group 2 — round-tick automation: drug/consumable countdowns, expiry cards, wear-off saves (default ON). */
+export function mechRoundTickEnabled() {
+  try { return game.settings.get(SCOPE, "mechRoundTickAutomation") !== false; } catch { return true; }
+}
+/** Group 3 — document automation: chip grant/prune, loadout materialize/prune, delete-cascade detach (default ON). */
+export function mechDocumentAutomationEnabled() {
+  try { return game.settings.get(SCOPE, "mechDocumentAutomation") !== false; } catch { return true; }
+}
+/** Permission scoping — cyberlimb Repair restricted to the GM (default OFF = owners may repair). */
+export function cyberlimbRepairGmOnly() {
+  try { return game.settings.get(SCOPE, "cyberlimbRepairGmOnly") === true; } catch { return false; }
 }
