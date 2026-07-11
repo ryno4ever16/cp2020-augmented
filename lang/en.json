@@ -1446,6 +1446,8 @@
     "DamageDlgTypeFire": "Fire",
     "DamageDlgTypeRadiation": "Radiation",
     "DamageDlgTypeHeat": "Heat",
+    "ConditionalArmorHeader": "Conditional Armor",
+    "ConditionalArmorHint": "Extra SP a worn typed layer (fire / radiation / heat) grants ONLY against that damage type. The main panel above shows the conventional SP a normal hit meets.",
     "DamageDlgArmorMode": "Armor mode",
     "DamageDlgArmorFull": "Full (SP + Ablation)",
     "DamageDlgArmorSimple": "Simple (SP, no Ablation)",

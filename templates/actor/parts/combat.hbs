@@ -60,6 +60,13 @@
 
         {{> "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs" hitLocations=system.hitLocations hitLocsName="hitLocations"}}
 
+        {{!-- Conditional (typed) armor: per-damage-type SP the damage pipeline grants ONLY against that
+              type (fire/radiation/heat garments). Present only when a worn typed layer adds protection
+              somewhere — system.conditionalSP is built by module/mech/typed-armor-display.js. --}}
+        {{#if system.conditionalSP}}
+        {{> "modules/cp2020-augmented/templates/actor/parts/conditional-armor.hbs" conditionalSP=system.conditionalSP}}
+        {{/if}}
+
         {{!-- Armor layer compliance panel. Only rendered when damageLayersEnabled setting is on. --}}
         {{#if showArmorLayers}}
         {{> "modules/cp2020-augmented/templates/actor/parts/armor-layers-panel.hbs"}}

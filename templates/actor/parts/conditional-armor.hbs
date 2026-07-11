@@ -1,0 +1,36 @@
+{{!--
+  conditional-armor.hbs  —  Honest per-damage-type ("conditional") stopping power.
+
+  The main armor panel (armor-display.hbs) now shows the CONVENTIONAL SP a normal hit meets (typed-only
+  layers excluded). This sub-panel surfaces the EXTRA protection a worn typed layer (Chromebook fire
+  armor, a radiation-hardened suit, …) grants ONLY against its own damage type — the same per-type value
+  module/combat/DamageApplicator.js `_deriveLiveSP` feeds the damage math, so display and resolved hit
+  always agree. Built by module/mech/typed-armor-display.js.
+
+  Context:
+    conditionalSP = { <type>: { <HitLoc>: SP, … }, … }  — only types/locations that ADD protection.
+  The include (combat.hbs) is guarded on system.conditionalSP, so this partial renders only when a worn
+  typed layer beats the conventional total somewhere. The type keys are the closed fire/radiation/heat
+  enum the damage dialog offers; label each with its existing dialog label.
+--}}
+<section class="cp-conditional-armor">
+  <header>
+    <h3 title="{{CPLocal 'ConditionalArmorHint'}}">{{CPLocal "ConditionalArmorHeader"}}</h3>
+  </header>
+
+  {{#each conditionalSP as |locs type|}}
+  <div class="field cp-conditional-row">
+    <label class="cp-conditional-type">
+      {{~#if (equals type "fire")}}{{CPLocal "DamageDlgTypeFire"}}{{/if~}}
+      {{~#if (equals type "radiation")}}{{CPLocal "DamageDlgTypeRadiation"}}{{/if~}}
+      {{~#if (equals type "heat")}}{{CPLocal "DamageDlgTypeHeat"}}{{/if~}}
+    </label>
+    <span class="flex-pad"></span>
+    <span class="cp-conditional-locs">
+      {{#each locs as |sp loc|}}
+      <span class="cp-conditional-loc" title="{{CPLocal 'SPFull'}}">{{shortCPLocal loc}}&nbsp;{{sp}}</span>
+      {{/each}}
+    </span>
+  </div>
+  {{/each}}
+</section>

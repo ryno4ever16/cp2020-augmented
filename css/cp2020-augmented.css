@@ -871,6 +871,18 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   padding: 0;
 }
 
+/* Conditional (typed) armor sub-panel: the per-damage-type SP the damage pipeline grants ONLY against
+ * that type. Built by module/mech/typed-armor-display.js, rendered by conditional-armor.hbs — class-
+ * driven (no inline style=) to mirror armor-display. */
+.cp-conditional-armor { margin-top: 4px; }
+.cp-conditional-armor > header h3 { margin: 0; font-size: 0.9em; }
+.cp-conditional-armor .cp-conditional-row { gap: 4px; align-items: baseline; }
+/* Same reason as the armor-layers spacer above: keep the flex filler off the opaque field background. */
+.cp-conditional-armor .field .flex-pad { background-color: transparent; padding: 0; }
+.cp-conditional-armor .cp-conditional-type { font-weight: bold; min-width: 52px; }
+.cp-conditional-armor .cp-conditional-locs { display: flex; flex-wrap: wrap; gap: 1px 6px; justify-content: flex-end; }
+.cp-conditional-armor .cp-conditional-loc { white-space: nowrap; }
+
 /**
 * A convenience class to prevent boilerplate
 * Best used like so, in its basic form:

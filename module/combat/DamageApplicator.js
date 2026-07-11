@@ -509,13 +509,19 @@ export async function ablateLocationByAmount(target, location, amount, damageTyp
 
 /** Does the target wear any typed-SP layer (armor or cyberware)? Such actors always take the
  *  type-aware per-layer derivation — the base prepared fold sums coverage type-blindly, so a
- *  fire-only garment would wrongly harden them against normal hits. Pure. */
-function _wearsTypedLayers(target) {
+ *  fire-only garment would wrongly harden them against normal hits. Pure.
+ *  Exported so the honest-armor-display prepareData wrap (module/mech/typed-armor-display.js) gates
+ *  on the SAME "wears typed?" definition the damage resolver uses — one source of truth, no drift. */
+export function _wearsTypedLayers(target) {
   return (target?.items?.contents ?? []).some(i =>
     !!i.system?.equipped && String(i.system?.mechTypedSP?.type ?? "").trim() !== "");
 }
 
-function _deriveLiveSP(target, location, damageType = "") {
+// Exported (the leading underscore is kept for churn-free git history) so the honest conditional-armor
+// display wraps prepareData around this EXACT function — the single source of truth the damage pipeline
+// uses — instead of re-folding SP itself: `_deriveLiveSP(actor, loc, "")` is the conventional total and
+// `_deriveLiveSP(actor, loc, type)` the typed total, guaranteeing display == damage math.
+export function _deriveLiveSP(target, location, damageType = "") {
   const contributors = getArmorContributors(target, location);
   const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
   // Typed SP: a layer whose mechTypedSP matches the hit's damage type contributes its typed value

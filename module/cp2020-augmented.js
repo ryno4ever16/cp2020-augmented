@@ -45,6 +45,7 @@ import { registerMechContainer } from "./mech/container.js";
 import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
+import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
 import { registerPaSkillBackfill } from "./mech/pa-skills.js";
 import { registerMartialDefense } from "./martial/martial.js";
@@ -89,6 +90,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/parts/skill.hbs",
   "modules/cp2020-augmented/templates/actor/parts/combat.hbs",
   "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/conditional-armor.hbs",
   "modules/cp2020-augmented/templates/actor/parts/armor-layers-panel.hbs",
   "modules/cp2020-augmented/templates/actor/parts/gear.hbs",
   "modules/cp2020-augmented/templates/actor/parts/services.hbs",
@@ -194,6 +196,11 @@ Hooks.once("init", function () {
   // Full-conversion borgs: wrap prepareData to seed the borg body's per-zone SDP into system.sdp
   // (independent of the stat wraps above — touches sdp, not stats). Init-time for the same reason.
   registerBorg();
+  // Honest conditional-armor display: wrap prepareData to re-derive the armor panel from the damage
+  // system's own type-aware SP (so a fire-only garment stops inflating the panel vs bullets) and build
+  // system.conditionalSP for the per-damage-type sub-panel. Registered AFTER registerBorg so it runs
+  // after the borg chassis-SP seed (see typed-armor-display.js). Init-time for the first-prep reason.
+  registerTypedArmorDisplay();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).
