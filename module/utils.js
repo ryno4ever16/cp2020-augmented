@@ -461,3 +461,15 @@ function _skillIdInSet(skill, ids) {
 export function isCombatSenseSkill(skill) {
   return skill?.type === "skill" && _skillIdInSet(skill, _COMBAT_SENSE_SKILL_IDS);
 }
+
+// PA Combat Sense (the Powered Armor Trooper's special ability, Maximum Metal p.52): its level is
+// added to a powered-armor suit's Initiative (and caps the in-suit Martial Arts skill). Distinct from
+// a Solo's ordinary Combat Sense, which does NOT apply while in powered armor. Keyed by the stable
+// compendium _id (module supplement-skills pack), never name — renames/localization can't break it.
+const _PA_COMBAT_SENSE_SKILL_IDS = new Set(["PACombatSense001"]);
+
+/** True if `skill` is the PA Combat Sense special ability (by stable _id, or its compendium
+ *  sourceId). Read by the ACPA initiative code — a suit's Initiative gains this skill's level. */
+export function isPACombatSenseSkill(skill) {
+  return skill?.type === "skill" && _skillIdInSet(skill, _PA_COMBAT_SENSE_SKILL_IDS);
+}

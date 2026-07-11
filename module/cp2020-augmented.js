@@ -46,6 +46,7 @@ import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
+import { registerPaSkillBackfill } from "./mech/pa-skills.js";
 import { registerMartialDefense } from "./martial/martial.js";
 import { registerFreeFire } from "./mech/free-fire.js";
 import { registerMechLoadout } from "./mech/loadout.js";
@@ -401,6 +402,10 @@ Hooks.once("ready", function () {
   // Loadouts: a body carrying a `loadout` manifest (e.g. a full 'borg) materializes its prebuilt
   // options as real cyberware on install, and removes them on uninstall/delete. Initiating-owner writes.
   registerMechLoadout();
+  // PA (Powered Armor) skills: linking a character as an ACPA suit's pilot backfills the three Maximum
+  // Metal powered-armor skills (PA Combat Sense / PA Tech / Expert (PA Design)) at level 0 from the
+  // module skills compendium. Idempotent; only the initiating client that owns the pilot writes.
+  registerPaSkillBackfill();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the

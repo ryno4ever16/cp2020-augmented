@@ -1,0 +1,30 @@
+{
+  "_id": "ExpertPADesign01",
+  "name": "Expert (PA Design)",
+  "type": "skill",
+  "img": "systems/cyberpunk2020/img/skill-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Design and construction knowledge for powered armor — chassis inventory, armor and system layout, and build tradeoffs (Maximum Metal).</p>",
+    "level": 0,
+    "chipLevel": 0,
+    "ip": 0,
+    "diffMod": 1,
+    "isChipped": false,
+    "isRoleSkill": false,
+    "stat": "int"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "skill",
+      "provenance": "Maximum Metal — powered-armor design/construction knowledge. Added as an INT (Expert) skill for the Augmented ACPA rules."
+    }
+  },
+  "_key": "!items!ExpertPADesign01"
+}

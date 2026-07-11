@@ -1,0 +1,30 @@
+{
+  "_id": "PATechSkill00001",
+  "name": "PA Tech",
+  "type": "skill",
+  "img": "systems/cyberpunk2020/img/skill-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>Repair and maintenance of powered armor suits — field diagnosis, patching frame damage, and servicing the reflex/control and reality-interface systems (Maximum Metal p.53).</p>",
+    "level": 0,
+    "chipLevel": 0,
+    "ip": 0,
+    "diffMod": 2,
+    "isChipped": false,
+    "isRoleSkill": false,
+    "stat": "tech"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "skill",
+      "provenance": "Maximum Metal p.53 — powered-armor repair/maintenance skill. Added as a TECH skill for the Augmented ACPA rules."
+    }
+  },
+  "_key": "!items!PATechSkill00001"
+}
