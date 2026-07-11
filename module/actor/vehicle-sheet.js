@@ -1,11 +1,12 @@
 import { openControlRollDialog } from "../vehicle/vehicle-control.js";
-import { openVehicleDamageDialog } from "../vehicle/vehicle-damage.js";
+import { openVehicleDamageDialog, acpaResolveMode } from "../vehicle/vehicle-damage.js";
 import { openVehicleFireDialog } from "../vehicle/vehicle-weapons.js";
 import { openAcpaMeleeDialog, repairAcpa } from "../vehicle/vehicle-acpa-combat.js";
 import { REALITY_INTERFACES, REFLEX_CONTROLS } from "../vehicle/vehicle-acpa.js";
 import { COUNTERMEASURES } from "../vehicle/vehicle-missiles.js";
 import { acpaSystemsSummary, acpaAreaSpaces, acpaSpacesOver, acpaBuildIssues } from "../vehicle/vehicle-acpa-systems.js";
 import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
+import { localize } from "../utils.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -167,6 +168,15 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaBuildValid = issues.length === 0;
     } catch (e) { /* defaults above */ }
 
+    // Effective ACPA combat pole for display (Unit D): the stored override, else the pilot-based default.
+    const acpaModeEffective = system?.isACPA ? acpaResolveMode(system) : null;
+    // Ready-made localized label for the read-only "Active model" field (avoids concat/capitalize helpers
+    // that may not be registered). localize() prepends the shared "CYBERPUNK." namespace (utils.js).
+    const _modeLabelKey = acpaModeEffective
+      ? ("Vehicle.AcpaMode" + (acpaModeEffective === "quickkill" ? "QuickKill" : "Detailed"))
+      : null;
+    const acpaModeEffectiveLabel = _modeLabelKey ? localize(_modeLabelKey) : "";
+
     return {
       actor,
       system,
@@ -186,6 +196,10 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       pilotChoices,
       linkedPilotName,
       linkedPilotRef,
+      // ACPA combat pole (Unit D): stored value + effective mode + its localized label.
+      acpaCombatModel: system?.acpaCombatModel ?? "",
+      acpaModeEffective,
+      acpaModeEffectiveLabel,
       acpaSystems,
       acpaSpaceRows,
       acpaSystemsCost,
@@ -202,6 +216,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
   async _onRender(context, options) {
     await super._onRender(context, options);
     this._cpActivateCountermeasures(this.element);
+    this._cpActivateAcpaMode(this.element);
   }
 
   /**
@@ -221,6 +236,51 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       const selected = [...root.querySelectorAll("input.cp-cm-box:checked")].map(b => b.dataset.cm).filter(Boolean);
       await this.actor.update({ "system.countermeasures": selected });
     });
+  }
+
+  /**
+   * ACPA combat-mode select (Unit D). Only the GM changes it. Flipping the pole on a suit that is
+   * damaged or in an active combat can leave inconsistent damage tracking (the two poles record
+   * damage in different fields), so confirm first; on cancel, re-render to revert the select.
+   */
+  _cpActivateAcpaMode(root) {
+    if (!root || root.dataset.cpAcpaModeBound === "1") return;
+    root.dataset.cpAcpaModeBound = "1";
+    root.addEventListener("change", async (ev) => {
+      const sel = ev.target?.closest?.("select[name='system.acpaCombatModel']");
+      if (!sel) return;
+      ev.stopPropagation();                              // pre-empt the form's submitOnChange
+      if (!game.user?.isGM || !this.isEditable) { this.render(false); return; }
+      const next = sel.value;
+      const prev = this.actor.system?.acpaCombatModel ?? "";
+      if (next === prev) return;
+      if (this._acpaSuitAtRisk()) {
+        const ok = await foundry.applications.api.DialogV2.confirm({
+          window: { title: localize("Vehicle.AcpaModeChangeTitle") },
+          content: `<p>${localize("Vehicle.AcpaModeChangeWarn")}</p>`,
+          rejectClose: false, modal: true,
+        });
+        if (!ok) {
+          // The named <select> + submitOnChange may have written `next` before this confirm resolved,
+          // so cancel is made authoritative: force the stored value back (a no-op if nothing raced),
+          // then re-render to snap the select back to `prev`.
+          await this.actor.update({ "system.acpaCombatModel": prev });
+          this.render(false);
+          return;
+        }
+      }
+      await this.actor.update({ "system.acpaCombatModel": next });
+    });
+  }
+
+  /** True when the suit shows combat damage or is in an active combat (mode-flip guardrail). */
+  _acpaSuitAtRisk() {
+    const s = this.actor.system ?? {};
+    const damaged = (Number(s.strDamage) || 0) > 0 || (Number(s.refDamage) || 0) > 0
+      || (Array.isArray(s.damagedSystems) && s.damagedSystems.length > 0)
+      || s.destroyed === true || s.immobilized === true;
+    const inCombat = !!game.combat && (game.combat.combatants?.some(c => c.actorId === this.actor.id || (s.pilotId && c.actorId === s.pilotId)) ?? false);
+    return damaged || inCombat;
   }
 
   // ── Action handlers (static; V2 binds `this` to the sheet instance) ─────

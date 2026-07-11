@@ -96,6 +96,11 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       trooperCapacity:  numberField(114),       // pilot+gear weight set aside for SIB (114 std; Russian 136; elite 80-91)
       systemsWeight:    numberField(0),          // aggregate weight of mounted systems (D-4d computes this; manual for now)
 
+      // ACPA combat pole (Unit D). "" = auto (a linked pilot ⇒ detailed MM p.52, no pilot ⇒ quick-kill
+      // MM p.6); "detailed" / "quickkill" force a pole. Additive default → existing suits load as auto,
+      // no migration. Read by acpaResolveMode in vehicle-damage.js.
+      acpaCombatModel:  stringField(""),
+
       // Derived (recomputed each prepare; stored so they're available to templates/rolls)
       armorValue: objectField({ front: 0, side: 0, rear: 0, top: 0, bottom: 0 }),
       bodyValue:  numberField(0),

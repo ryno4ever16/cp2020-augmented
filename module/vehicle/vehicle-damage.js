@@ -307,7 +307,7 @@ const _ACPA_AREA_TO_CHAR_LOC = { "Head": "Head", "Torso": "Torso", "Right Arm": 
 // small-vehicle severity table) is the squishy pole for an unpiloted suit or when the GM sets it.
 // A per-suit override (system.acpaCombatModel — added in Unit D) wins; otherwise a linked pilot ⇒
 // detailed, no pilot ⇒ quickkill (MM p.6 is the "increase survivability → use the detailed rules" note inverted).
-function _acpaResolveMode(sys) {
+export function acpaResolveMode(sys) {
   const flag = sys?.acpaCombatModel;
   if (flag === "quickkill" || flag === "detailed") return flag;
   return sys?.pilotId ? "detailed" : "quickkill";
@@ -629,9 +629,9 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
   const damaged = Array.isArray(sys.damagedSystems) ? [...sys.damagedSystems] : [];
 
   if (isACPA) {
-    // Powered armor resolves by one of two book poles (see _acpaResolveMode): the faithful SDP-damage
+    // Powered armor resolves by one of two book poles (see acpaResolveMode): the faithful SDP-damage
     // flow (MM p.54-56) or the Quick Kill small-vehicle severity table (MM p.6).
-    const mode = _acpaResolveMode(sys);
+    const mode = acpaResolveMode(sys);
     const r = (mode === "quickkill")
       ? await _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0, basePen }, rolls)
       : await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0 }, rolls);

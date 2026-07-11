@@ -137,6 +137,23 @@
             <div class="field" title="{{CPLocal 'Vehicle.EffectiveRefTip'}}">
                 <label>{{CPLocal "Vehicle.EffectiveRefLabel"}}</label><input type="number" class="not-editable" value="{{system.effectiveRef}}" readonly/></div>
         </div>
+        {{!-- ACPA combat-model pole (Unit D): the GM sets it; everyone sees the read-only effective model. --}}
+        <div class="field-list">
+            {{#if userIsGM}}
+            <div class="field" title="{{CPLocal 'Vehicle.AcpaCombatModelTip'}}">
+                <label>{{CPLocal "Vehicle.AcpaCombatModelLabel"}}</label>
+                <select name="system.acpaCombatModel">
+                    <option value="" {{#unless system.acpaCombatModel}}selected{{/unless}}>{{CPLocal "Vehicle.AcpaModeAuto"}}</option>
+                    <option value="detailed" {{#if (equals system.acpaCombatModel "detailed")}}selected{{/if}}>{{CPLocal "Vehicle.AcpaModeDetailed"}}</option>
+                    <option value="quickkill" {{#if (equals system.acpaCombatModel "quickkill")}}selected{{/if}}>{{CPLocal "Vehicle.AcpaModeQuickKill"}}</option>
+                </select>
+            </div>
+            {{/if}}
+            {{#if acpaModeEffective}}
+            <div class="field" title="{{CPLocal 'Vehicle.AcpaModeEffectiveTip'}}">
+                <label>{{CPLocal "Vehicle.AcpaModeEffectiveLabel"}}</label><input type="text" class="not-editable" value="{{acpaModeEffectiveLabel}}" readonly/></div>
+            {{/if}}
+        </div>
         <div class="field-list">
             <div class="field" title="{{CPLocal 'Vehicle.CommandComputerTip'}}">
                 <label>{{CPLocal "Vehicle.CommandComputerLabel"}}</label><input type="checkbox" name="system.commandComputer" {{#if system.commandComputer}}checked{{/if}}/></div>
