@@ -23,7 +23,7 @@
  * default (character/npc yes; vehicles/ACPA/others no).
  */
 
-import { tokensOf, iAmTheApplier, enqueueApply } from "./light.js";
+import { tokensOf, iAmTheApplier, enqueueApply, updateTokenDoc } from "./light.js";
 import { contributingItems } from "./cyberlimb.js";
 import { cwIsEnabled } from "../utils.js";
 import { mechTokenWritesEnabled } from "../settings.js";
@@ -90,6 +90,7 @@ export function visionProfileOf(item) {
 export function isViewing(item, allItems) {
   const p = visionProfileOf(item);
   if (!p?.on || !item?.system?.equipped) return false;
+  if (item.type === "cyberware" && !cwIsEnabled(item)) return false;   // switched-off optic doesn't govern
   return illuminatorSatisfied(p.requiresItem, allItems);
 }
 
@@ -190,9 +191,9 @@ async function _applyActorVision(actor) {
         };
         // Snapshot the SOURCE sight (token.sight is a plain object on some cores — no toObject()).
         if (base === undefined) patch[`flags.${SCOPE}.${BASE_FLAG}`] = foundry.utils.deepClone(tokenDoc._source?.sight ?? {});
-        await tokenDoc.update(patch);
+        await updateTokenDoc(tokenDoc, patch);
       } else if (base !== undefined) {
-        await tokenDoc.update({
+        await updateTokenDoc(tokenDoc, {
           sight: base,
           [`flags.${SCOPE}.-=${BASE_FLAG}`]: null,
           ...heatSensePatch(tokenDoc, false, 0)
@@ -200,6 +201,57 @@ async function _applyActorVision(actor) {
       }
     } catch (err) {
       console.warn("cp2020-augmented | mech-vision token update failed:", err);
+    }
+  }
+}
+
+/** Force-restore ONE token's own saved sight + strip our heat-sense entry (base flag → sight, flag
+ *  removed), independent of whether the actor still has an active device. Used when the write gate
+ *  turns off. Whole-object `sight:` write is the established restore pattern — `base` is the
+ *  complete _source snapshot. */
+async function restoreTokenVision(tokenDoc) {
+  try {
+    const base = tokenDoc.getFlag(SCOPE, BASE_FLAG);
+    if (base === undefined) return;
+    await updateTokenDoc(tokenDoc, {
+      sight: base,
+      [`flags.${SCOPE}.-=${BASE_FLAG}`]: null,
+      ...heatSensePatch(tokenDoc, false, 0)
+    });
+  } catch (err) {
+    console.warn("cp2020-augmented | mech-vision restore failed:", err);
+  }
+}
+
+/** Apply-or-restore the governing device's sight for every actor on `scene` that owns a vision-enabled
+ *  item or still carries our base-sight flag (deduped per actor — linked tokens are covered by one
+ *  applyActorVision). Applier-scoped. Shared by the canvasReady resync and the ON settings sweep. */
+async function reconcileSceneVision(scene) {
+  const seen = new Set();
+  for (const tokenDoc of scene?.tokens ?? []) {
+    const actor = tokenDoc.actor;
+    if (!actor || !iAmTheApplier(actor)) continue;
+    const key = actor.uuid ?? actor.id;
+    if (seen.has(key)) continue;
+    const hasDevice = (actor.items?.contents ?? []).some(i => i.system?.mechVision?.enabled);
+    const staleFlag = tokenDoc.getFlag?.(SCOPE, BASE_FLAG) !== undefined;
+    if (hasDevice || staleFlag) { seen.add(key); applyActorVision(actor); }
+  }
+}
+
+/** Settings-toggle reconcile for mechTokenWrites (settings.js onChange). OFF → force-restore every
+ *  token still carrying our base-sight flag (the gear-off restore is now gated out). ON → one
+ *  apply-or-restore sweep across all scenes. Applier-scoped; safe to fire on every client. */
+export async function reconcileTokenWrites(enabled) {
+  if (enabled) {
+    for (const scene of game.scenes ?? []) await reconcileSceneVision(scene);
+    return;
+  }
+  for (const scene of game.scenes ?? []) {
+    for (const tokenDoc of scene.tokens ?? []) {
+      const actor = tokenDoc.actor;
+      if (!actor || !iAmTheApplier(actor)) continue;
+      if (tokenDoc.getFlag?.(SCOPE, BASE_FLAG) !== undefined) await restoreTokenVision(tokenDoc);
     }
   }
 }
@@ -213,7 +265,10 @@ function visionRelevant(item, changed) {
     const sys = changed.system ?? {};
     if ("mechVision" in sys) return true;
     if ("equipped" in sys && (item.system?.mechVision?.enabled || anyDependent)) return true;
-    if (("mechLight" in sys || "EffectActive" in sys) && anyDependent) return true;
+    // EffectActive re-evaluates the DEVICE itself (a switched-off cyberware optic stops governing)
+    // as well as any dependent (an illuminator implant gating a UV device).
+    if ("EffectActive" in sys && (item.system?.mechVision?.enabled || anyDependent)) return true;
+    if ("mechLight" in sys && anyDependent) return true;
     return false;
   }
   return !!item.system?.mechVision?.enabled || anyDependent;
@@ -235,12 +290,22 @@ export function registerMechVision() {
     if (!mechTokenWritesEnabled()) return;
     if (visionRelevant(item) && iAmTheApplier(item.actor)) applyActorVision(item.actor);
   });
+  // A token PASTED from an overridden original carries stale sight values + our base flag but nothing
+  // may govern — apply anyway (its else-branch restores) so the copy sheds the stale sight.
   Hooks.on("createToken", (tokenDoc) => {
     if (!mechTokenWritesEnabled()) return;
     const actor = tokenDoc?.actor;
-    if (!actor) return;
+    if (!actor || !iAmTheApplier(actor)) return;
     const items = actor.items?.contents ?? [];
-    if (items.some(i => isViewing(i, items)) && iAmTheApplier(actor)) applyActorVision(actor);
+    const views = items.some(i => isViewing(i, items));
+    const staleFlag = tokenDoc.getFlag?.(SCOPE, BASE_FLAG) !== undefined;
+    if (views || staleFlag) applyActorVision(actor);
+  });
+  // Newly readied scene: reconcile tokens the applier may never have updated (a device toggled while
+  // it viewed another scene) or whose override went stale — apply-or-restore per actor.
+  Hooks.on("canvasReady", (canvas) => {
+    if (!mechTokenWritesEnabled()) return;
+    if (canvas?.scene) reconcileSceneVision(canvas.scene);
   });
   // The Q5 picker: changing the actor's visionPick flag re-resolves the governor. Zone-state
   // changes (limbStatus, M19) re-resolve too — a device in a newly destroyed limb stops governing.

@@ -1,0 +1,21 @@
+{{!--
+  Offered contested defense (martial status maneuvers). Rendered from postMartialDefenseOffer() in
+  module/martial/martial.js when a hold/grapple/choke/throw/sweep is declared on a single target —
+  the status is NOT applied yet. The buttons + data-* attrs are read verbatim by the delegated
+  handler in registerMartialDefense(): the roll is the target owner's (or GM's) CHOICE, and
+  [apply] is the GM's skip-the-contest call. Reuses the shared save-prompt CSS classes.
+--}}
+<div class="cyberpunk save-prompt martial-defense-offer">
+  <h3>{{title}}</h3>
+  <div class="save-info">
+    <span>{{{body}}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-martial-defense-roll" data-action="{{action}}"
+            data-attacker-actor-id="{{attackerActorId}}" data-target-actor-id="{{targetActorId}}"
+            data-target-token-id="{{targetTokenId}}">{{CPLocal "MartialDefenseRollBtn"}}</button>
+    <button class="cp-martial-defense-apply" data-action="{{action}}"
+            data-attacker-actor-id="{{attackerActorId}}" data-target-actor-id="{{targetActorId}}"
+            data-target-token-id="{{targetTokenId}}">{{CPLocal "MartialDefenseApplyBtn"}}</button>
+  </div>
+</div>

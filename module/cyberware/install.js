@@ -2,6 +2,7 @@ import { formulaHasDice } from "../dice.js";
 import { localize, tryLocalize } from "../utils.js";
 import { canShop } from "../settings.js";
 import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage } from "../compat.js";
+import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
 
 /**
  * Cyberware buy-and-install flow (Shopping #14 — [[shopping-design]]).
@@ -214,6 +215,14 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
 
   const { confirm = true } = opts;
   const data = (source && typeof source.toObject === "function") ? source.toObject() : foundry.utils.deepClone(source ?? {});
+  // Shop-bought copy of a base-compendium item: stamp its origin uuid (toObject drops it) AND apply the
+  // book corrections up front, so the surgery below prices from the CORRECTED Surgery Code and the created
+  // item carries the corrected data. Stamped so the preCreateItem hook (data-corrections.js) won't re-apply.
+  if (source?.pack && typeof source.uuid === "string") {
+    data._stats = { ...(data._stats ?? {}), compendiumSource: source.uuid };
+    const corr = correctionFor(source.pack, source.id);
+    if (corr) { applyCorrectionToItemData(data, corr); markCorrectionApplied(data); }
+  }
   const partPrice = Math.max(0, Math.round(Number(opts.partPrice ?? data.system?.cost ?? 0)));
   const surgery = getSurgery(data.system?.surgCode);
   const surgeryCost = surgery.cost;

@@ -32,6 +32,19 @@ const ALL_ZONES = ["Head", "Torso", "rArm", "lArm", "rLeg", "lLeg"];
 // constant to revisit (the user flagged supplements may differ; the amounts flow through via SDP).
 export const CYBERLIMB_USELESS_MARGIN = 10;
 
+// The flesh-limb wound store (M18): the OPTIONAL limb-damage models record their threshold outcomes
+// here — "crippled"/"destroyed" (Listen Up) and "disabled"/"severed" (W4RST4R) — under a key SEPARATE
+// from the structural `limbStatus`, so a flesh wound is never misread as cyberlimb structure. Written
+// by combat/DamageApplicator.js for non-structural zones; read here for the sheet badge + arm notice.
+const FLESH_STATUS_FLAG = "fleshLimbStatus";
+// Flesh wound state → localize key (mechanism words, not fiction). Used by the sheet label + the notice.
+const FLESH_STATUS_LABEL = {
+  crippled:  "FleshLimbStatusCrippled",
+  destroyed: "FleshLimbStatusDestroyed",
+  disabled:  "FleshLimbStatusDisabled",
+  severed:   "FleshLimbStatusSevered",
+};
+
 /** True when `location` is a limb zone carrying cyberlimb structure (SDP sum > 0). Pure-ish. */
 export function isCyberlimbZone(actor, location) {
   if (!LIMB_ZONES.has(location)) return false;
@@ -93,10 +106,13 @@ export function inDestroyedZone(actor, item, items = actor?.items?.contents ?? [
 
 /**
  * The actor's items minus cyberware whose zone is destroyed — the single list the contribution
- * engines (roll/stat mods, vision, light, the status strip) enumerate, so "installed in a wrecked
- * limb" reads as non-contributing everywhere at once. NOT used by the armor-SP folds: the base's
- * prepared per-location fold can't see this filter, and the module's live fold must stay equal to
- * it (the M16 lesson) — a wrecked limb's plating is inert wreckage still covering the location.
+ * engines (roll/stat mods, vision, light, hazard protection, the status strip) enumerate, so
+ * "installed in a wrecked limb" reads as non-contributing everywhere at once (the gas-save engine
+ * adopts this same gate at its resolution site, so strip and engine agree). NOT used by the armor-SP
+ * folds: the base's prepared per-location fold can't see this filter, and the module's live fold must
+ * stay equal to it (the M16 lesson) — a wrecked limb's plating is inert wreckage still covering the
+ * location. Flesh-limb wound state (the separate `fleshLimbStatus` store) is NOT gated through this
+ * filter — a flesh zone carries no structural pool — it is read via fleshLimbStatusOf/…Label.
  */
 export function contributingItems(actor) {
   const items = actor?.items?.contents ?? [];
@@ -111,10 +127,16 @@ export function cyberlimbSdp(actor, zone) {
   return { max, current };
 }
 
-/** Classify a remaining-SDP value: "ok" | "useless" | "destroyed". Pure. */
-export function cyberlimbStatus(remaining) {
+/**
+ * Classify a remaining-SDP value against the pool's `max`: "ok" | "useless" | "destroyed". The
+ * "useless" band exists only when the pool is LARGER than the margin (Core 20/30, hydraulic ram
+ * 30/40 — always a 10-point band below a bigger max); a pool no bigger than the margin has no
+ * useless band and steps straight ok→destroyed. `max` defaults to Infinity so a context-free
+ * classify still reports the ordinary band. Pure.
+ */
+export function cyberlimbStatus(remaining, max = Infinity) {
   if (remaining <= 0) return "destroyed";
-  if (remaining <= CYBERLIMB_USELESS_MARGIN) return "useless";
+  if (remaining <= CYBERLIMB_USELESS_MARGIN && max > CYBERLIMB_USELESS_MARGIN) return "useless";
   return "ok";
 }
 
@@ -126,6 +148,25 @@ export function cyberlimbStatus(remaining) {
  */
 export function limbStatusOf(actor, zone) {
   return (actor?.getFlag?.(SCOPE, "limbStatus") ?? actor?.flags?.[SCOPE]?.limbStatus ?? {})[zone] ?? "";
+}
+
+/**
+ * The recorded FLESH-limb wound state for a zone ("crippled"/"destroyed" from Listen Up,
+ * "disabled"/"severed" from W4RST4R), or "" when none is recorded. A zone that carries a structural
+ * SDP pool is answered by the cyberlimb store instead — its `limbStatus` is authoritative once a
+ * cyberlimb covers the zone — so the flesh store reports "" there and the two never double-badge the
+ * same zone. Reads the M18 `fleshLimbStatus` flag; never the shared structural key. Pure-ish.
+ */
+export function fleshLimbStatusOf(actor, zone) {
+  if (cyberlimbSdp(actor, zone).max > 0) return "";
+  const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
+  return store[zone] ?? "";
+}
+
+/** Localized label for a zone's flesh-limb wound state, or "" when nothing is recorded. Pure-ish. */
+export function fleshLimbStatusLabel(actor, zone) {
+  const key = FLESH_STATUS_LABEL[fleshLimbStatusOf(actor, zone)];
+  return key ? localize(key) : "";
 }
 
 /**
@@ -150,7 +191,7 @@ export async function absorbCyberlimbHit(actor, zone, dmg) {
     const nextCurrent = { ...(actor.system?.sdp?.current ?? {}), [zone]: remaining };
     await actor.update({ "system.sdp.current": nextCurrent }, { render: false, fromCyberpunkDamageSystem: true });
   }
-  const status = alreadyDestroyed ? "destroyed" : cyberlimbStatus(remaining);
+  const status = alreadyDestroyed ? "destroyed" : cyberlimbStatus(remaining, max);
 
   // Flag the limb the moment it becomes useless/destroyed (sticky; survives the current-reset quirk).
   const flagged = status === "destroyed" ? "destroyed" : status === "useless" ? "disabled" : "";
@@ -256,26 +297,36 @@ export function registerMechCyberlimb() {
     return clearZoneOnInstall(item, userId);
   });
 
-  // M19 notice: the roll pipeline has no held-in-which-hand model, so when an actor with a
-  // destroyed/useless ARM zone uses a weapon, post an informational card naming the arm and its
-  // state — the GM adjudicates whether that hand was the holding one (notice, never a block).
+  // M19 notice: the roll pipeline has no held-in-which-hand model, so when an actor with a wrecked
+  // ARM uses a weapon, post an informational card naming each affected arm and its state — the GM
+  // adjudicates whether that hand was the holding one (notice, never a block). Both a STRUCTURAL
+  // cyberlimb arm (destroyed/useless) and a FLESH arm (severed/disabled/destroyed) qualify; a
+  // structural pool supersedes flesh for the same zone (fleshLimbStatusOf already reports "" there).
+  // All affected arms collect into a SINGLE card per use event (both arms down = one card, not two).
   // The hook is local to the initiating client, so the card posts exactly once per use.
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
     try {
       const actor = game.actors.get(payload?.attackerId ?? payload?.actorId ?? "");
       if (!actor || actor.type === "cp2020-augmented.vehicle") return;
+      const lines = [];
       for (const zone of ["rArm", "lArm"]) {
         const st = limbStatusOf(actor, zone);
-        if (st !== "destroyed" && st !== "disabled") continue;
-        const stateWord = localize(st === "destroyed" ? "CyberlimbStatusDestroyed" : "CyberlimbStatusUseless");
-        postSavePromptCard({
-          title: localize("CyberlimbArmNoticeTitle"),
-          body: localizeParam("CyberlimbArmNoticeBody", {
-            name: actor.name, limb: localize(zone), state: stateWord,
-          }),
-          speaker: ChatMessage.getSpeaker({ actor }),
-        });
+        if (st === "destroyed" || st === "disabled") {
+          const stateWord = localize(st === "destroyed" ? "CyberlimbStatusDestroyed" : "CyberlimbStatusUseless");
+          lines.push(localizeParam("CyberlimbArmNoticeBody", { name: actor.name, limb: localize(zone), state: stateWord }));
+          continue;   // structural pool is authoritative for this zone
+        }
+        const fs = fleshLimbStatusOf(actor, zone);
+        if (fs === "severed" || fs === "disabled" || fs === "destroyed") {
+          lines.push(localizeParam("FleshArmNoticeBody", { name: actor.name, limb: localize(zone), state: localize(FLESH_STATUS_LABEL[fs]) }));
+        }
       }
+      if (!lines.length) return;
+      postSavePromptCard({
+        title: localize("CyberlimbArmNoticeTitle"),
+        body: lines.join("<br>"),
+        speaker: ChatMessage.getSpeaker({ actor }),
+      });
     } catch (err) {
       console.warn(`${SCOPE} | arm state notice failed:`, err);
     }

@@ -47,7 +47,11 @@
     "module/cp2020-augmented.js"
   ],
   "styles": [
-    "css/cp2020-augmented.css"
+    "css/cp2020-augmented.css",
+    {
+      "src": "css/cp2020-augmented-system-layer.css",
+      "layer": "system"
+    }
   ],
   "languages": [
     {

@@ -30,6 +30,7 @@
  */
 
 const CYBERWARE_OLD = "cyberpunk2020.cyberware-old";
+const SCOPE = "cp2020-augmented";
 
 // Embedded-weapon skill fixes: the payload stores the skill NAME (matching what real weapon items
 // store: "Handgun", "Melee", "Brawling", "Heavy Weapons"); the shipped values are Russian.
@@ -63,8 +64,8 @@ function mechProtection(hazards) {
 }
 /** P5 roll-mod-provider patch (numbers straight from the item's own printed text; `auto:false` =
  *  suggested UNTICKED, for gear whose bonus only applies in a narrow situation). */
-function mechRollMods({ attackMod = 0, skillName = "", skillMod = 0, auto = true, skillMods = [] } = {}) {
-  return { mechRollMods: { enabled: true, attackMod, skillName, skillMod, auto, skillMods } };
+function mechRollMods({ attackMod = 0, skillName = "", skillMod = 0, auto = true } = {}) {
+  return { mechRollMods: { enabled: true, attackMod, skillName, skillMod, auto } };
 }
 /** P7 timed-consumable patch (doses/duration from the item's own printed text; duration may be a
  *  roll formula, rolled at use time). */
@@ -379,14 +380,33 @@ export function applyCorrectionToItemData(data, c) {
   return true;
 }
 
-/** Hook: copies created from a corrected compendium item carry the corrected data. */
+/**
+ * Stamp already-corrected item data so re-creations skip re-applying (the preCreate hook AND the
+ * buy-and-install path both check/set it). Flag name kept exactly as `correctionApplied`.
+ */
+export function markCorrectionApplied(data) {
+  data.flags ??= {};
+  data.flags[SCOPE] = { ...(data.flags[SCOPE] ?? {}), correctionApplied: true };
+}
+/** True when item data already carries the applied-correction stamp. */
+export function isCorrectionApplied(data) {
+  return data?.flags?.[SCOPE]?.correctionApplied === true;
+}
+
+/** Hook: a copy created from a corrected compendium item carries the corrected data — applied ONCE. */
 export function registerDataCorrections() {
   Hooks.on("preCreateItem", (doc, data) => {
+    // Stamp-once: the FIRST create from a corrected compendium item applies the book values and stamps the
+    // copy; every later re-creation (copy, import, re-buy of an owned copy) is skipped so notesAppend can't
+    // double-append. (The buy-and-install path stamps up front — see cyberware/install.js.)
+    if (isCorrectionApplied(doc) || isCorrectionApplied(data)) return;
     const src = parseCompendiumSource(doc?._stats?.compendiumSource ?? data?._stats?.compendiumSource);
     if (!src) return;
     const c = correctionFor(src.packId, src.itemId);
     if (!c) return;
-    const patch = { name: data.name, system: foundry.utils.deepClone(data.system ?? {}) };
-    if (applyCorrectionToItemData(patch, c)) doc.updateSource({ name: patch.name, system: patch.system });
+    const patch = { name: data.name, system: foundry.utils.deepClone(data.system ?? {}), flags: foundry.utils.deepClone(data.flags ?? {}) };
+    applyCorrectionToItemData(patch, c);
+    markCorrectionApplied(patch);
+    doc.updateSource({ name: patch.name, system: patch.system, flags: patch.flags });
   });
 }

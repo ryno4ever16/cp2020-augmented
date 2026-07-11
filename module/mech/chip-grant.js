@@ -25,6 +25,7 @@
 
 import { cwHasType, cwIsEnabled, localize, localizeParam, getSkillIndex, getSkillsPackNames, deleteFieldUpdate } from "../utils.js";
 import { mechDocumentAutomationEnabled } from "../settings.js";
+import { enqueueApply } from "./light.js";
 
 const SCOPE = "cp2020-augmented";
 const GRANTED_FLAG = "chipGranted";       // on the SKILL item: true when this engine created it
@@ -42,22 +43,49 @@ function esc(s) {
  *  `-=` paths can't express cleanly, so the whole-object swap is the robust route; the delete goes
  *  through deleteFieldUpdate (utils) so it uses the core's supported deletion form on every build. */
 async function replaceChipSkills(chipItem, next) {
-  await chipItem.update(deleteFieldUpdate("system.CyberWorkType.ChipSkills"));
-  await chipItem.update({ "system.CyberWorkType.ChipSkills": foundry.utils.deepClone(next) });
+  const path = "system.CyberWorkType.ChipSkills";
+  const value = foundry.utils.deepClone(next);
+  const del = deleteFieldUpdate(path);
+  // Combine the clear + re-set into ONE write when the core's deletion form uses a distinct `-=`
+  // key (it clears then re-sets within a single update). The ForcedDeletion / DeleteField form is a
+  // value on the SAME key, which would collide with the set in one object literal, so those cores
+  // keep the proven clear-then-set pair.
+  if (Object.prototype.hasOwnProperty.call(del, path)) {
+    await chipItem.update(del);
+    await chipItem.update({ [path]: value });
+  } else {
+    await chipItem.update({ ...del, [path]: value });
+  }
+}
+
+/** A Foundry document-id shape: exactly 16 characters from the base-62 id alphabet. Pure. */
+function looksLikeDocumentId(key) {
+  return /^[A-Za-z0-9]{16}$/.test(String(key ?? ""));
 }
 
 /** ChipSkills keys are skill NAMES in the pack catalog but skill-item _IDs when written through
  *  the item sheets (ours and the base's — the base override resolves `chipMap[si.id] ??
  *  chipMap[si.name]` the same way). Grant/prune reason in NAMES, so map id-keys back to names:
  *  compendium skill ids from the language-aware index, then the actor's own skill items (the
- *  actor's current name wins). Unknown keys pass through as literal names. Impure (index). */
+ *  actor's current name wins). A key shaped like a document id that resolves via NEITHER source is
+ *  a stale embedded-skill reference (the skill was re-created with a fresh id) — return null so it
+ *  is dropped, never created as a skill literally named the id string. Non-id unknown keys pass
+ *  through as literal names. Impure (index). */
 async function chipKeyNameResolver(actor) {
   const byId = new Map();
   try {
     for (const e of await getSkillIndex()) byId.set(e.id, e.name);
   } catch (_e) { /* the actor's own skills below still resolve */ }
   for (const it of actor?.items ?? []) if (it?.type === "skill") byId.set(it.id, it.name);
-  return (key) => byId.get(key) ?? key;
+  return (key) => {
+    const name = byId.get(key);
+    if (name !== undefined) return name;
+    if (looksLikeDocumentId(key)) {
+      console.warn(`${SCOPE} | chip skill grant: dropping unresolved id-form ChipSkills key "${key}"`);
+      return null;
+    }
+    return key;
+  };
 }
 
 /** A ChipSkills key parsed as a choose-marker: { choose, category } (category "" = any). Pure. */
@@ -99,6 +127,7 @@ export function resolvedGrantsFor(items, resolveKey = (k) => k) {
       const n = Number(lvl) || 0;
       if (!n) continue;
       const name = resolveKey(key);
+      if (!name) continue;                     // dropped: an unresolved id-form key (see chipKeyNameResolver)
       out[name] = Math.max(out[name] ?? 0, n);
     }
   }
@@ -129,7 +158,7 @@ export async function promptChooseSkill(actor, category) {
   const DialogV2 = foundry.applications?.api?.DialogV2;
   const suggestions = await chooseSuggestions(actor, category);
   const listId = `cp-chip-choose-${foundry.utils.randomID()}`;
-  const catLabel = category ? localizeParam("ChipChooseForCategory", { category }) : localize("ChipChooseAny");
+  const catLabel = category ? localizeParam("ChipChooseForCategory", { category: esc(category) }) : localize("ChipChooseAny");
   const content = `<div class="cp-chip-choose"><p>${catLabel}</p>`
     + `<input type="text" name="skill" list="${listId}" style="width:100%" autofocus />`
     + `<datalist id="${listId}">${suggestions.map(s => `<option value="${esc(s)}"></option>`).join("")}</datalist></div>`;
@@ -191,12 +220,16 @@ export async function resolveChooseKeys(chipItem) {
 export async function resetChipChoice(chipItem) {
   const original = chipItem?.getFlag?.(SCOPE, ORIGINAL_FLAG);
   if (original === undefined) return false;
+  // Restore the "(choose)" markers FIRST; only once that write lands do we deactivate and drop the
+  // stash — a failure mid-sequence then leaves the stash intact to retry, never stranded with no
+  // ChipSkills and no stash. Deactivating fires the updateItem gate, whose grant/prune pass removes
+  // the now-orphaned granted skill, so no explicit prune is needed here (and none runs with document
+  // automation off, which is the intended "module manages nothing" behaviour).
+  await replaceChipSkills(chipItem, original);
   await chipItem.update({
     "system.CyberWorkType.ChipActive": false,
     [`flags.${SCOPE}.-=${ORIGINAL_FLAG}`]: null
   });
-  await replaceChipSkills(chipItem, original);
-  if (chipItem.actor) await pruneGrantedSkills(chipItem.actor);
   return true;
 }
 
@@ -255,9 +288,17 @@ async function pruneGrantedSkills(actor, resolveKey) {
   for (const id of toUnflag) await actor.items.get(id)?.unsetFlag(SCOPE, GRANTED_FLAG);
 }
 
-/** Full pass: create missing grants + prune orphans. Owner/initiating-client only. */
-export async function applyChipGrants(actor) {
-  if (!actor) return;
+/** Full pass: create missing grants + prune orphans. Owner/initiating-client only.
+ *  Routed through the shared per-actor apply queue (light.js enqueueApply): two gate events in quick
+ *  succession would otherwise each snapshot the item set before either write lands (duplicate skill
+ *  creates or two in-flight deletes). Chaining per actor serializes the passes — the same rig-proven
+ *  idiom the light/vision engines use. */
+export function applyChipGrants(actor) {
+  if (!actor) return Promise.resolve();
+  return enqueueApply(actor, () => _applyChipGrants(actor));
+}
+
+async function _applyChipGrants(actor) {
   const resolve = await chipKeyNameResolver(actor);
   await grantMissingSkills(actor, resolve);
   await pruneGrantedSkills(actor, resolve);
@@ -275,12 +316,31 @@ export function activeChipCount(actor, exceptId = null) {
   return items.filter((i) => (i.id ?? i._id) !== exceptId && isActiveChip(i)).length;
 }
 
+/** Other chips co-activating in the SAME batch update as `item`: each preUpdateItem sees only
+ *  COMMITTED state, so N chips flipped on at once would each read the cap as un-breached and all
+ *  pass. Count the sibling chip updates in the operation's `updates` array so the batch can't slip
+ *  the running cap. Best-effort: cores that don't expose the array degrade to committed-only. Pure. */
+function coActivatingSiblings(actor, item, options) {
+  const updates = options?.updates;
+  if (!Array.isArray(updates)) return 0;
+  let n = 0;
+  for (const raw of updates) {
+    const id = raw?._id;
+    if (!id || id === item.id) continue;
+    if (chipActiveChange(foundry.utils.expandObject(raw)) !== "on") continue;
+    const sib = actor.items?.get?.(id);
+    if (sib?.type === "cyberware" && cwHasType(sib, "Chip")) n++;
+  }
+  return n;
+}
+
 export function registerMechChipGrant() {
   // The book's running cap: "You may 'run' as many separate chip programs at one time as your
   // current INT stat" (Core p.82). An activation past the cap is refused on the initiating
   // client, with a confirm that re-issues the same update as an override — so the limit is one
   // click to accept and one click to wave through.
   Hooks.on("preUpdateItem", (item, changes, options, userId) => {
+    if (!mechDocumentAutomationEnabled()) return;   // gated with the grant/prune pass: automation off = no intercept
     if (userId !== game.user.id) return;
     if (options?.cp2020ChipCapOverride) return;
     if (chipActiveChange(changes) !== "on") return;
@@ -289,13 +349,13 @@ export function registerMechChipGrant() {
     if (!actor?.system?.stats) return;
     const cap = Number(actor.system.stats.int?.total);
     if (!Number.isFinite(cap) || cap <= 0) return;   // no honest INT value → no cap to enforce
-    const running = activeChipCount(actor, item.id);
+    const running = activeChipCount(actor, item.id) + coActivatingSiblings(actor, item, options);
     if (running < cap) return;
     const redo = foundry.utils.deepClone(changes);
     (async () => {
       const ok = await foundry.applications.api.DialogV2.confirm({
         window: { title: localize("ChipCapTitle") },
-        content: `<p>${localizeParam("ChipCapBody", { name: item.name, cap, count: running })}</p>`,
+        content: `<p>${localizeParam("ChipCapBody", { name: esc(item.name), cap, count: running })}</p>`,
         rejectClose: false,
       });
       if (ok) await item.update(redo, { cp2020ChipCapOverride: true }).catch(() => {});
@@ -308,16 +368,18 @@ export function registerMechChipGrant() {
     if (item.type !== "cyberware" || !cwHasType(item, "Chip")) return;
     const actor = item.actor;
     if (!actor || !iAmTheGranter(actor, userId)) return;
-    // isActiveChip is a three-axis gate (equipped + enabled + ChipActive): a chip enters or
-    // leaves the running set through ANY axis — unequipping it or switching EffectActive off
-    // strands its granted skill just as surely as a ChipActive flip — so any gate-axis change
-    // re-runs the grant/prune pass. Choose-marker resolution stays tied to the explicit
-    // ChipActive toggle (the deliberate "activate this chip" gesture).
+    // cwIsEnabled + isActiveChip gate on equipped + EffectMode/EffectActive + ChipActive: a chip
+    // enters or leaves the running set through ANY axis — unequipping it, switching EffectActive
+    // off, or flipping EffectMode Activatable→Permanent (which makes cwIsEnabled true regardless of
+    // EffectActive) strands or reveals its granted skill just as surely as a ChipActive flip — so
+    // any gate-axis change re-runs the grant/prune pass. Choose-marker resolution stays tied to the
+    // explicit ChipActive toggle (the deliberate "activate this chip" gesture).
     const change = chipActiveChange(changes);
     const sys = changes?.system ?? {};
     const gateTouched = change !== null
       || Object.prototype.hasOwnProperty.call(sys, "equipped")
-      || Object.prototype.hasOwnProperty.call(sys, "EffectActive");
+      || Object.prototype.hasOwnProperty.call(sys, "EffectActive")
+      || Object.prototype.hasOwnProperty.call(sys, "EffectMode");
     if (!gateTouched) return;
     if (change === "on") {
       // Resolve any choose-markers first; a cancelled prompt rolls the activation back.
@@ -327,13 +389,14 @@ export function registerMechChipGrant() {
     await applyChipGrants(actor);
   });
 
-  // A chip removed while active: prune the skills it granted.
+  // A chip removed while active: prune the skills it granted (serialized on the same per-actor queue
+  // as the grant pass, so a delete-prune can't race a concurrent activation-grant).
   Hooks.on("deleteItem", async (item, options, userId) => {
     if (!mechDocumentAutomationEnabled()) return;
     if (item.type !== "cyberware" || !cwHasType(item, "Chip")) return;
     const actor = item.actor;
     if (!actor || !iAmTheGranter(actor, userId)) return;
-    await pruneGrantedSkills(actor);
+    await enqueueApply(actor, () => pruneGrantedSkills(actor));
   });
 
   // A chip imported already-active (e.g. a pre-configured drop) should grant on arrival.
@@ -345,4 +408,15 @@ export function registerMechChipGrant() {
     if (unresolvedChooseKeys(item).length) return;   // choose-chips resolve on an explicit toggle
     await applyChipGrants(actor);
   });
+
+  // Reconciliation at ready: a granted skill can be orphaned by a hook-less path (a bulk import, or a
+  // core that suppressed the delete hook), leaving a stray chip-granted flag with no active chip
+  // behind it. Prune once per OWNED actor so those flags self-heal — owner-gated and behind the same
+  // document-automation setting as the live passes, on the shared per-actor queue.
+  if (mechDocumentAutomationEnabled()) {
+    for (const actor of game.actors ?? []) {
+      if (!actor?.isOwner) continue;
+      enqueueApply(actor, () => pruneGrantedSkills(actor)).catch(() => {});
+    }
+  }
 }

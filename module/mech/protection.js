@@ -9,7 +9,7 @@
  * among equipped items — protective gear doesn't stack (a mask over nose filters isn't double).
  */
 
-import { cwIsEnabled } from "../utils.js";
+import { cwHasType, cwIsEnabled } from "../utils.js";
 
 /** The item's protection entry for `hazard` when tagged, else null. Pure. */
 export function protectionEntryOf(item, hazard) {
@@ -39,7 +39,10 @@ export function hazardProtectionFor(items, hazard) {
   let damageMult = 0;
   for (const it of items ?? []) {
     if (!it?.system?.equipped) continue;
-    if (it.type === "cyberware" && !cwIsEnabled(it)) continue;
+    if (it.type === "cyberware") {
+      if (!cwIsEnabled(it)) continue;
+      if (cwHasType(it, "Chip") && !it.system?.CyberWorkType?.ChipActive) continue;   // three-axis gate (roll-mods parity)
+    }
     const e = protectionEntryOf(it, hazard);
     if (!e) continue;
     if (e.immune) immune = true;

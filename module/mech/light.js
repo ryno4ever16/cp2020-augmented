@@ -15,6 +15,7 @@
 
 import { mechTokenWritesEnabled } from "../settings.js";
 import { contributingItems } from "./cyberlimb.js";
+import { cwIsEnabled } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 const BASE_FLAG = "mechBaseLight";
@@ -33,10 +34,14 @@ export function lightProfileOf(item) {
   };
 }
 
-/** True when the item is currently emitting (equipped + enabled + on). Pure. */
+/** True when the item is currently emitting (equipped + enabled + on; cyberware also switched on —
+ *  the same activation gate illuminatorLit/roll-mods/protection apply, so a switched-off Activatable
+ *  emitter goes dark). Pure. */
 export function isEmitting(item) {
   const p = lightProfileOf(item);
-  return !!(p?.on && item?.system?.equipped);
+  if (!p?.on || !item?.system?.equipped) return false;
+  if (item.type === "cyberware" && !cwIsEnabled(item)) return false;
+  return true;
 }
 
 /**
@@ -56,18 +61,38 @@ export function desiredLightFor(items) {
   };
 }
 
-/** The actor's tokens on the viewed scene (token DOCUMENTS; handles synthetic token-actors).
- *  Shared by the mech/ engines (vision.js imports it).
- *  ⚠ getActiveTokens resolves through canvas PLACEABLES, which draw async after the token
- *  document exists — an apply fired in that window (fresh scene load, just-dropped token) would
- *  see zero tokens and silently skip. Fall back to the viewed scene's linked token DOCUMENTS,
- *  which exist as soon as the document does. */
+/** The actor's tokens as token DOCUMENTS, across ALL scenes. Shared by the mech/ engines (vision.js
+ *  imports it).
+ *  A synthetic token-actor carries its one token directly. A linked actor's tokens are enumerated
+ *  through getDependentTokens({linked:true}) — DOCUMENTS that exist regardless of which scene the
+ *  applier is viewing, so apply AND restore reach tokens on scenes the active-GM applier isn't
+ *  looking at (and it subsumes the async canvas-draw window that getActiveTokens missed). Falls back
+ *  to drawn placeables, then the viewed scene's linked documents, on cores without getDependentTokens. */
 export function tokensOf(actor) {
-  if (actor?.isToken) return actor.token ? [actor.token] : [];
-  const active = actor?.getActiveTokens?.(true, true) ?? [];
+  if (!actor) return [];
+  if (actor.isToken) return actor.token ? [actor.token] : [];
+  const dependents = actor.getDependentTokens?.({ linked: true }) ?? [];
+  if (dependents.length) return dependents;
+  const active = actor.getActiveTokens?.(true, true) ?? [];
   if (active.length) return active;
   const scene = game.scenes?.viewed ?? game.scenes?.active;
-  return scene?.tokens?.filter?.(t => t.actorLink && t.actorId === actor?.id) ?? [];
+  return scene?.tokens?.filter?.(t => t.actorLink && t.actorId === actor.id) ?? [];
+}
+
+/** Write `patch` to ONE token through its OWNING scene, as an explicit-`_id` embedded update. Shared
+ *  by both mech/ engines (vision.js imports it).
+ *  tokensOf reaches across scenes via getDependentTokens, whose IterableWeakSet can still surface a
+ *  token whose document has gone stale — a deleted/detached placeable weakly held after its removal,
+ *  or a canvas placeable rather than its document. Such an entry has no usable `_id`/parent, so a
+ *  bare tokenDoc.update() feeds the DB an update object with `_id: undefined` and the core rejects the
+ *  whole batch ("You must provide an _id for every object in the update data Array"). Normalize a
+ *  placeable to its document, skip an entry with no id/parent, and route the write through the owning
+ *  scene (tokenDoc.parent.updateEmbeddedDocuments) so every update object carries its own `_id` and
+ *  lands on the correct scene's Token collection. */
+export function updateTokenDoc(tokenDoc, patch) {
+  const doc = tokenDoc?.document ?? tokenDoc;
+  if (!doc?.id || !doc.parent) return Promise.resolve();
+  return doc.parent.updateEmbeddedDocuments("Token", [{ _id: doc.id, ...patch }]);
 }
 
 /** Per-actor apply queue shared by the mech/ engines: rapid toggles fire overlapping async applies,
@@ -104,12 +129,59 @@ async function _applyActorLight(actor) {
         // is a DataModel here but plain elsewhere, and a failed toObject() would store {} and
         // silently break the restore, the exact defect the sight engine hit).
         if (base === undefined) patch[`flags.${SCOPE}.${BASE_FLAG}`] = foundry.utils.deepClone(tokenDoc._source?.light ?? {});
-        await tokenDoc.update(patch);
+        await updateTokenDoc(tokenDoc, patch);
       } else if (base !== undefined) {
-        await tokenDoc.update({ light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
+        await updateTokenDoc(tokenDoc, { light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
       }
     } catch (err) {
       console.warn("cp2020-augmented | mech-light token update failed:", err);
+    }
+  }
+}
+
+/** Force-restore ONE token's own saved light (base flag → light, flag removed), independent of
+ *  whether the actor still emits. Used when the write gate turns off, where the normal apply path
+ *  (which would re-apply a live emitter) is no longer what we want. Whole-object `light:` write is
+ *  the established restore pattern — `base` is the complete _source snapshot. */
+async function restoreTokenLight(tokenDoc) {
+  try {
+    const base = tokenDoc.getFlag(SCOPE, BASE_FLAG);
+    if (base === undefined) return;
+    await updateTokenDoc(tokenDoc, { light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
+  } catch (err) {
+    console.warn("cp2020-augmented | mech-light restore failed:", err);
+  }
+}
+
+/** Apply-or-restore the merged emitter light for every actor on `scene` that owns a light-enabled
+ *  item or still carries our base-light flag (deduped per actor — linked tokens are covered by one
+ *  applyActorLight). Applier-scoped. Shared by the canvasReady resync and the ON settings sweep. */
+async function reconcileSceneLight(scene) {
+  const seen = new Set();
+  for (const tokenDoc of scene?.tokens ?? []) {
+    const actor = tokenDoc.actor;
+    if (!actor || !iAmTheApplier(actor)) continue;
+    const key = actor.uuid ?? actor.id;
+    if (seen.has(key)) continue;
+    const hasEmitter = (actor.items?.contents ?? []).some(i => i.system?.mechLight?.enabled);
+    const staleFlag = tokenDoc.getFlag?.(SCOPE, BASE_FLAG) !== undefined;
+    if (hasEmitter || staleFlag) { seen.add(key); applyActorLight(actor); }
+  }
+}
+
+/** Settings-toggle reconcile for mechTokenWrites (settings.js onChange). OFF → force-restore every
+ *  token still carrying our base-light flag (the gear-off restore is now gated out). ON → one
+ *  apply-or-restore sweep across all scenes. Applier-scoped; safe to fire on every client. */
+export async function reconcileTokenWrites(enabled) {
+  if (enabled) {
+    for (const scene of game.scenes ?? []) await reconcileSceneLight(scene);
+    return;
+  }
+  for (const scene of game.scenes ?? []) {
+    for (const tokenDoc of scene.tokens ?? []) {
+      const actor = tokenDoc.actor;
+      if (!actor || !iAmTheApplier(actor)) continue;
+      if (tokenDoc.getFlag?.(SCOPE, BASE_FLAG) !== undefined) await restoreTokenLight(tokenDoc);
     }
   }
 }
@@ -127,7 +199,9 @@ function lightRelevant(item, changed) {
   if (!item?.actor || item.actor.documentName !== "Actor") return false;
   if (changed) {
     const sys = changed.system ?? {};
-    return ("mechLight" in sys) || ("equipped" in sys && !!item.system?.mechLight?.enabled);
+    return ("mechLight" in sys)
+      || ("equipped" in sys && !!item.system?.mechLight?.enabled)
+      || ("EffectActive" in sys && !!item.system?.mechLight?.enabled);   // Activatable emitter toggled
   }
   return !!item.system?.mechLight?.enabled;
 }
@@ -148,12 +222,22 @@ export function registerMechLight() {
     if (!mechTokenWritesEnabled()) return;
     if (lightRelevant(item) && iAmTheApplier(item.actor)) applyActorLight(item.actor);
   });
-  // A freshly placed token for an actor with a lit emitter starts lit.
+  // A freshly placed token for an actor with a lit emitter starts lit. A token PASTED from an
+  // overridden original carries stale override values + our base flag but nothing may emit — apply
+  // anyway (its else-branch restores) so the copy sheds the stale light instead of keeping it.
   Hooks.on("createToken", (tokenDoc) => {
     if (!mechTokenWritesEnabled()) return;
     const actor = tokenDoc?.actor;
-    if (!actor) return;
-    if ((actor.items?.contents ?? []).some(isEmitting) && iAmTheApplier(actor)) applyActorLight(actor);
+    if (!actor || !iAmTheApplier(actor)) return;
+    const emits = (actor.items?.contents ?? []).some(isEmitting);
+    const staleFlag = tokenDoc.getFlag?.(SCOPE, BASE_FLAG) !== undefined;
+    if (emits || staleFlag) applyActorLight(actor);
+  });
+  // Newly readied scene: reconcile tokens the applier may never have updated (an emitter toggled
+  // while it viewed another scene) or whose override went stale — apply-or-restore per actor.
+  Hooks.on("canvasReady", (canvas) => {
+    if (!mechTokenWritesEnabled()) return;
+    if (canvas?.scene) reconcileSceneLight(canvas.scene);
   });
   // Zone-state changes (limbStatus, M19) re-resolve the merged light — an emitter in a newly
   // destroyed limb goes dark; a repaired limb's emitter comes back. Mirrors the vision engine.

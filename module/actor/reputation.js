@@ -15,6 +15,7 @@
 import { makeD10Roll } from "../dice.js";
 import { createCyberpunkRollCard, renderChatCard } from "../compat.js";
 import { facedownModFor } from "../mech/roll-mods.js";
+import { contributingItems } from "../mech/cyberlimb.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -25,7 +26,9 @@ function getReputation(actor) {
 
 /** The active Facedown chip bonus (Q9, Facedown Chip +1) for an actor. */
 function facedownChipBonus(actor) {
-  return facedownModFor(actor?.items?.contents ?? actor?.items ?? []);
+  // Zone gate (M19): a chip hosted in a destroyed limb doesn't fold — mirror the strip's gated rows so
+  // the pill and the bonus agree. contributingItems returns [] for a null actor, so this stays safe.
+  return facedownModFor(contributingItems(actor));
 }
 
 /** Per-combatant Facedown line: split the rolled total back into die + COOL + Reputation (+ chip). */

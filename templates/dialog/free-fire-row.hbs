@@ -1,0 +1,11 @@
+{{!--
+  Free Fire opt-out row, injected into the base system's V1 Attack Modifiers window by
+  registerFreeFire() (module/mech/free-fire.js). Checked = ammo tracking (the vanilla behavior);
+  unchecked = Free Fire (the module keeps magazines topped so vanilla's hardcoded consumption and
+  its block-on-empty never see a depleted magazine). The label flips with the state, mirroring the
+  fork's own dialog row.
+--}}
+<div class="field full-width cp-free-fire-row" title="{{CPLocal 'AmmoTrackingHint'}}">
+  <label class="cp-ammo-tracking-label">{{#if tracking}}{{CPLocal "AmmoTracking"}}{{else}}{{CPLocal "FreeFire"}}{{/if}}</label>
+  <input type="checkbox" class="cp-ammo-tracking" {{#if tracking}}checked{{/if}}/>
+</div>

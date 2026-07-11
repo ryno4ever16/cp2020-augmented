@@ -647,8 +647,15 @@ export let W4RST4R_AREA_LOOKUP = {
 };
 
 export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
-    let range = weapon.system.range || 50;
+    // Read through the weapon-system indirection so a Weapon-typed cyberware reports its OWN range/rof/
+    // shotsLeft (the nested CyberWorkType.Weapon block), not the item's bare system fallback.
+    const sys = weapon._getWeaponSystem?.() ?? weapon.system ?? {};
+    let range = sys.range || 50;
     let fireModes = weapon.__getFireModes() || [];
+    const rof = Math.max(0, Math.floor(Number(sys.rof) || 0));
+    const shotsLeft = Math.max(0, Math.floor(Number(sys.shotsLeft) || 0));
+    // Suppressive/rounds-fired can never exceed the loaded rounds (base semantics): cap at min(rof, shotsLeft).
+    const roundsFiredMax = Math.min(rof, shotsLeft);
     // Saved attack options: pre-fill the weapon's last-used fire mode, if still a valid choice.
     const savedFireMode = savedOptions?.fireMode;
     const fireModeDefault = fireModes.includes(savedFireMode) ? savedFireMode : fireModes[0];
@@ -697,9 +704,9 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
         // Full-auto only: how many rounds of the burst to fire (1..ROF). Shown for fullAuto, hidden otherwise.
         // min/max constrain the input itself so the player can't enter more than ROF (it was only
         // silently capped at fire time before, which was confusing).
-        {localKey:"AutofireRounds", dataPath:"autoRounds", dtype:"Number", defaultValue: weapon.system.rof, min: 1, max: weapon.system.rof},
+        {localKey:"AutofireRounds", dataPath:"autoRounds", dtype:"Number", defaultValue: rof, min: 1, max: rof},
         {localKey:"FireZoneWidth",  dataPath:"zoneWidth",  dtype:"Number", defaultValue: 2},
-        {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: weapon.system.rof},
+        {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: roundsFiredMax, min: 1, max: roundsFiredMax},
         {
             localKey: "TargetsCount",
             dataPath:"targetsCount",

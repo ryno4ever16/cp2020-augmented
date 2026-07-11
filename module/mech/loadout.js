@@ -25,11 +25,17 @@
  */
 
 import { mechDocumentAutomationEnabled } from "../settings.js";
+import { descendantIds, detachPatch } from "./container.js";
 
 const SCOPE = "cp2020-augmented";
 const MANIFEST_FLAG = "loadout";          // on the BODY: the array of option specs
 const INSTALLED_FLAG = "loadoutInstalled"; // on the BODY: true once its loadout has been materialized
 const SOURCE_FLAG = "loadoutSource";       // on each OPTION: the id of the body that spawned it
+
+// Per-body in-flight materialize promises (02-CONTAINERS-UI #6). A deactivate that races a still-
+// running materialize must await it, or it sweeps a half-created set and late options land equipped-
+// but-orphaned. Keyed by body id.
+const materializing = new Map();
 
 /** The loadout manifest array from an item's flags (never null). Pure. */
 export function loadoutManifestOf(item) {
@@ -120,9 +126,23 @@ export async function materializeLoadout(bodyItem) {
   const actor = bodyItem?.actor;
   if (!actor) return;
   if (bodyItem.getFlag?.(SCOPE, INSTALLED_FLAG)) return;
-  const manifest = loadoutManifestOf(bodyItem);
-  if (manifest.length) await createLoadoutTree(actor, bodyItem, manifest);
-  await bodyItem.setFlag(SCOPE, INSTALLED_FLAG, true);
+  if (materializing.has(bodyItem.id)) return materializing.get(bodyItem.id);
+  const run = (async () => {
+    // Set the guard BEFORE the awaited creates (not after) so a re-entrant trigger — e.g. a cross-
+    // actor drop whose uninstall flips equipped→off mid-flight — can't open a second materialize
+    // window; roll it back if creation throws so a later install can retry (02-CONTAINERS-UI #6).
+    await bodyItem.setFlag(SCOPE, INSTALLED_FLAG, true);
+    try {
+      const manifest = loadoutManifestOf(bodyItem);
+      if (manifest.length) await createLoadoutTree(actor, bodyItem, manifest);
+    } catch (err) {
+      await bodyItem.unsetFlag(SCOPE, INSTALLED_FLAG).catch(() => {});
+      throw err;
+    }
+  })();
+  materializing.set(bodyItem.id, run);
+  try { await run; }
+  finally { materializing.delete(bodyItem.id); }
 }
 
 /**
@@ -178,21 +198,32 @@ export async function pruneLoadout(actor, bodyId) {
  * Uninstall (do NOT delete) every option this body spawned, so removing them is non-destructive — the
  * options become CARRIED (kept in inventory, no Humanity hit, re-equippable). Used when the body is
  * UNINSTALLED, or when the player clears the loadout from the sheet. Matches the sheet's per-item
- * uninstall exactly: unequip + clear the host link (ParentId) + clear the body side, so a cleared
- * option is fully loose in Carried Options rather than a still-nested-but-unequipped ghost. Acts on the
- * WHOLE member set (not just the currently-equipped ones) so a bulk ⊗ clears all of it — already-carried
- * members are a harmless no-op. The `loadoutInstalled` guard is KEPT set so re-installing the body
- * doesn't re-materialize duplicates (the options are still there, just carried; the player re-equips
- * what they want). Expensive chrome is never destroyed by removal.
+ * uninstall exactly (container.detachPatch): unequip + clear the host link (ParentId) + clear the body
+ * side + drop ChipActive (+ restore a stashed native MountZone), so a cleared option is fully loose in
+ * Carried Options rather than a still-nested-but-unequipped ghost. Acts on the WHOLE member set PLUS
+ * anything nested under a member — a user-added option installed into a materialized mount is NOT
+ * source-flagged, so without the descendant sweep it stays equipped and linked to a now-carried host
+ * (02-CONTAINERS-UI #5). already-carried items are a harmless no-op. The `loadoutInstalled` guard is
+ * KEPT set so re-installing the body doesn't re-materialize duplicates (the options are still there,
+ * just carried; the player re-equips what they want). Expensive chrome is never destroyed by removal.
  */
 export async function deactivateLoadout(actor, bodyId) {
   if (!actor) return;
-  const updates = loadoutOptionsOf(actor, bodyId).map((it) => ({
-    _id: it.id,
-    "system.equipped": false,
-    "system.Module.ParentId": "",
-    "system.CyberBodyType.Location": "",
-  }));
+  // If the body is still materializing, wait so we sweep the COMPLETE option set — a deactivate that
+  // races a half-done materialize would leave late-created options equipped (02-CONTAINERS-UI #6).
+  if (materializing.has(bodyId)) await materializing.get(bodyId).catch(() => {});
+  const items = actor.items?.contents ?? actor.items ?? [];
+  const members = loadoutOptionsOf(actor, bodyId);
+  const byId = new Map(members.map((m) => [m.id, m]));   // dedup members + their subtrees by id
+  for (const m of members) {
+    for (const did of descendantIds(items, m.id)) {
+      const d = actor.items.get(did);
+      if (d) byId.set(did, d);
+    }
+  }
+  // Type-aware detach per item (misc keeps link-only; cyberware gets the full uninstall incl. the
+  // ChipActive clear the doc claims parity with — 02-CONTAINERS-UI #7).
+  const updates = [...byId.values()].map((it) => ({ _id: it.id, ...detachPatch(it) }));
   if (updates.length) await actor.updateEmbeddedDocuments("Item", updates);
 }
 

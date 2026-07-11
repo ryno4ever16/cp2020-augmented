@@ -1,18 +1,18 @@
 {
-  "_id": "QPHWRJEkJJYWojWf",
-  "name": "Full Borg: Increased SDP",
+  "_id": "p42d1vtllMPKf5vA",
+  "name": "Full Borg: Increased REF",
   "type": "cyberware",
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Per +5 overall SDP, max +20; +55 lbs. | [Audit row +126 — Chromebook 2 p.84] Equip one copy per +5 SDP step (all zones, printed max +20).</p>",
-    "cost": 1500,
+    "notes": "<p>+1 REF per purchase (equip one copy per +1), to the printed maximum of 15. 2000eb and 2 Humanity per +1. Whole-body chassis upgrade — applies through the borg engine. | [Chromebook 2 p.85]</p>",
+    "cost": 2000,
     "weight": 0,
     "equipped": false,
-    "source": "Chromebook 2 p.84",
+    "source": "Chromebook 2 p.85",
     "lastOwnerId": "",
     "surgCode": "",
-    "humanityCost": "0",
+    "humanityCost": "2",
     "cyberwareType": "",
     "cyberwareSubtype": "",
     "abbrev": "",
@@ -35,18 +35,12 @@
   },
   "effects": [],
   "folder": null,
-  "sort": 7200000,
+  "sort": 7310000,
   "ownership": {
     "default": 0
   },
   "flags": {
     "cp2020-augmented": {
-      "auditWalk": {
-        "row": "+126",
-        "ledger": "CP2020-Checklists 05JUL26 Lee",
-        "book": "Chromebook 2",
-        "page": 84
-      },
       "importCategory": "cyberware",
       "importReview": {
         "level": "claude-text-layer",
@@ -55,10 +49,10 @@
         "dirty": true
       },
       "borgStatDelta": {
-        "sdp": 5
+        "ref": 1
       }
     }
   },
   "_stats": {},
-  "_key": "!items!QPHWRJEkJJYWojWf"
+  "_key": "!items!p42d1vtllMPKf5vA"
 }

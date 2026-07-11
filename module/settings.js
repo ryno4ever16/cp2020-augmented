@@ -6,6 +6,8 @@
  * helpers that return a safe default. Augmented features are opt-in (default off).
  */
 import { enhanceSettingsConfig } from "./settings-sections.js";
+import { reconcileTokenWrites as reconcileLightTokenWrites } from "./mech/light.js";
+import { reconcileTokenWrites as reconcileVisionTokenWrites } from "./mech/vision.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -42,7 +44,15 @@ export function registerAugmentedSettings() {
   game.settings.register(SCOPE, "mechTokenWrites", {
     name: "SETTINGS.MechTokenWrites",
     hint: "SETTINGS.MechTokenWritesHint",
-    scope: "world", config: true, type: Boolean, default: true
+    scope: "world", config: true, type: Boolean, default: true,
+    // Lifecycle reconcile: flipping OFF while an override is live must restore the token (the
+    // gear-off restore is otherwise gated out); flipping ON re-applies live emitters/devices. Each
+    // client runs it; only the active-GM applier actually writes (the sweeps are applier-scoped).
+    onChange: (value) => {
+      const enabled = value !== false;
+      try { reconcileLightTokenWrites(enabled); } catch (e) { /* scenes not ready */ }
+      try { reconcileVisionTokenWrites(enabled); } catch (e) { /* scenes not ready */ }
+    }
   });
   // Group 2: ROUND-TICK automation — drug/consumable countdowns, expiry cards, the wear-off
   // save prompt and its crash overlay. Off = durations run narratively; the sheet controls

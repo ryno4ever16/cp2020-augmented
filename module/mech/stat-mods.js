@@ -4,10 +4,13 @@
  * express — Kick Ass "COOL +2 (11)", Perfect Soldier "INT −2/+2 non-/combat", Xarghis Khan sets.
  *
  * WHY a prepareDerivedData WRAPPER (not a Characteristic-Stat payload): a cap like "max 11" clamps
- * the FINAL stat, which is only known after the base has summed base+temp+cyber+wound. The base
- * actor.js (Tilt's, un-editable) offers no mid-prep hook, so the module wraps the actor's
- * prepareDerivedData and applies moddies as a post-step. Consequences, all deliberate:
- *   - cap/floor clamp the FINAL total — the RAW reading of "COOL +2 (max 11)".
+ * the stat AFTER the base has summed base+temp+cyber+wound. The base actor.js (Tilt's, un-editable)
+ * offers no mid-prep hook, so the module wraps the actor's prepareDerivedData and applies moddies as
+ * a post-step. Consequences, all deliberate:
+ *   - cap/floor clamp THIS engine's folded total (the RAW reading of "COOL +2 (max 11)"). It is NOT
+ *     the actor's final printed total: a wrap registered LATER (e.g. the drug-boost fold, drug.js)
+ *     adds AFTER this clamp, so a capped moddy plus a boost on the same stat can exceed the printed
+ *     cap — the clamp bounds this engine's contribution, not the whole stack.
  *   - movement/body derived values (run/leap/carry/lift/BTM) are RE-DERIVED here if a mod touches
  *     MA/BT (none of the shipped chips do, but the engine stays general).
  *   - the humanity pool is NOT recomputed from a moddy'd EMP — a personality overlay is transient,
@@ -57,11 +60,20 @@ export function resolveEntryMod(entry, inCombat) {
   }
 }
 
+/** True when the entry's combat/non-combat context excludes it from the current context. Mirrors the
+ *  null-return arms of resolveEntryMod so set-entries honour context the same way mod-entries do
+ *  (split never fully excludes — it only picks a value, and a set has just the one). Pure. */
+function contextExcludes(entry, inCombat) {
+  return (entry?.context === "combat" && !inCombat)
+      || (entry?.context === "noncombat" && inCombat);
+}
+
 /** Apply one entry to a running stat total: { value, delta } (delta = 0 when the context excludes it). Pure. */
 export function applyEntry(total, entry, inCombat) {
   const before = Number(total) || 0;
   let value = before;
   if (entry?.isSet) {
+    if (contextExcludes(entry, inCombat)) return { value: before, delta: 0 };
     value = Number(entry.set) || 0;
   } else {
     const mod = resolveEntryMod(entry, inCombat);
@@ -75,11 +87,19 @@ export function applyEntry(total, entry, inCombat) {
   return { value, delta: value - before };
 }
 
-/** Is the actor a participant in the active combat? Pure-ish (reads game.combats). */
+/** Is the actor a participant in ANY active/started combat? Pure-ish (reads game.combats).
+ *  Scans all combats, not `game.combats.active` — that getter is scoped to the VIEWED scene, so two
+ *  clients on different scenes would compute different contexts (and different roll totals) for the
+ *  same actor. Membership across every started/active combat is client-independent. */
 export function inCombatFor(actor) {
   try {
     const id = actor?.id;
-    return !!game.combats?.active?.combatants?.some(c => c.actorId === id);
+    if (!id) return false;
+    for (const combat of game.combats ?? []) {
+      if (!(combat.started || combat.active)) continue;
+      if (combat.combatants?.some(c => c.actorId === id)) return true;
+    }
+    return false;
   } catch (_e) { return false; }
 }
 
@@ -132,15 +152,43 @@ function refreshActor(actor) {
   } catch (_e) { /* non-fatal */ }
 }
 
-/** All actors that carry a combat/split-context moddy (the only ones a combat change affects). */
-function contextSensitiveActors() {
-  const out = [];
-  for (const actor of game.actors ?? []) {
-    const has = (actor.items?.contents ?? []).some(it =>
-      isStatModActive(it) && (it.system?.mechStatMods?.mods ?? []).some(m => m.context === "combat" || m.context === "noncombat" || m.context === "split"));
-    if (has) out.push(actor);
+/** Does this actor carry a combat/non-combat/split-context moddy (the only ones a combat change
+ *  affects)? Pure-ish (reads the actor's items). */
+function actorHasContextModdy(actor) {
+  return (actor?.items?.contents ?? actor?.items ?? []).some(it =>
+    isStatModActive(it) && (it.system?.mechStatMods?.mods ?? []).some(m =>
+      m.context === "combat" || m.context === "noncombat" || m.context === "split"));
+}
+
+/** Resolve the Combat a combat/combatant event concerns, or null. */
+function combatOf(doc) {
+  if (!doc) return null;
+  return doc.documentName === "Combat" ? doc : (doc.combat ?? doc.parent ?? null);
+}
+
+/** Re-prepare every actor whose combat context may have flipped for this event. Restrict the scan to
+ *  the changed combat's combatants when it is resolvable (cheap + exact — only combatants of THAT
+ *  combat can change their in-combat state), falling back to every world actor otherwise. Unlinked
+ *  token actors live on the scene, not in game.actors, so also walk the relevant scene's tokens. */
+function refreshContextActors(doc) {
+  const combat = combatOf(doc);
+  const scene = combat?.scene ?? game.scenes?.viewed ?? game.scenes?.active;
+  const seen = new Set();
+  const refresh = (actor) => {
+    if (!actor) return;
+    const key = actor.uuid ?? actor.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (actorHasContextModdy(actor)) refreshActor(actor);
+  };
+  if (combat?.combatants?.size) {
+    for (const c of combat.combatants) refresh(c.actor);
+    if (doc?.documentName === "Combatant" && doc.actor) refresh(doc.actor);   // a just-removed combatant is already gone from the set
+  } else {
+    for (const a of game.actors ?? []) refresh(a);
+    if (doc?.actor) refresh(doc.actor);
   }
-  return out;
+  for (const t of scene?.tokens ?? []) if (!t.actorLink) refresh(t.actor);
 }
 
 let _wrapped = false;
@@ -159,8 +207,9 @@ export function registerMechStatMods() {
     _wrapped = true;
   }
   // Combat context is not reactive on its own — re-prepare context-sensitive actors when combat
-  // starts/ends or its combatants change, so split/combat moddies switch live.
-  const onCombatChange = () => { for (const a of contextSensitiveActors()) refreshActor(a); };
+  // starts/ends or its combatants change, so split/combat moddies switch live. The event doc (a
+  // Combat or a Combatant) scopes the scan to that combat's participants and scene.
+  const onCombatChange = (doc) => refreshContextActors(doc);
   Hooks.on("updateCombat", onCombatChange);
   Hooks.on("deleteCombat", onCombatChange);
   Hooks.on("createCombatant", onCombatChange);

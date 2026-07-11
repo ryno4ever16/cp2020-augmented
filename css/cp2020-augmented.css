@@ -516,6 +516,9 @@ body.cp-carolingian .cyberpunk button[type=submit]:hover {
 /* Stats row + armor-display grid */
 body.cp-carolingian .cyberpunk .statsrow > div.stat,
 body.cp-carolingian .cyberpunk .armor-display .armor-segment { border: 1px solid var(--color-highlights-50); min-width: 55px; }
+/* A touch more cell width so the SDP number-pair and the widest status word ("DESTROYED") both sit
+   inside the body-map cell in the compact Carolingian theme. */
+body.cp-carolingian .cyberpunk .armor-display .armor-segment { min-width: 60px; }
 body.cp-carolingian .cyberpunk .statsrow > div.stat label { color: var(--color-highlights) !important; }
 body.cp-carolingian .cyberpunk .statsrow > div.stat .flexrow input,
 body.cp-carolingian .cyberpunk .statsrow > div.stat .flexrow .stat-mod { color: var(--color-text-subtle) !important; }
@@ -1302,40 +1305,68 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   border: solid var(--cp-line, black);
   border-width: 2px 2px 0px 2px;
   display: grid;
-  /* Named `sdp` track for the SDP number-pair row (between sp and name); without it the row auto-placed
-     into an implicit track outside the card and overflowed the bottom border. `name` fills the slack so
-     siblings with/without an SDP row keep their borders aligned. */
-  grid-template-rows: auto auto auto 1fr;
+  /* Named `sdp` + `status` tracks (between sp and name); without them those rows auto-placed into
+     implicit tracks outside the card and overflowed the border. `status` gives the limb badge its own
+     row so a long word never collides with the SDP number-pair. `name` (1fr) fills the slack so
+     siblings with/without an SDP or status row keep their borders aligned. Empty rows collapse to 0. */
+  grid-template-rows: auto auto auto auto 1fr;
   grid-template-columns: 1fr 2fr 1fr;
-  grid-template-areas: "loc loc loc" "ablate sp repair" "sdp sdp sdp" "name name name";
+  grid-template-areas: "loc loc loc" "ablate sp repair" "sdp sdp sdp" "status status status" "name name name";
 }
 
-/* Cyberlimb SDP status badge + repair control (armor-display SDP row; mech/cyberlimb.js). The badge
-   reports the TRUE limb state from the sticky limbStatus flag; the wrench repairs SDP + clears it. */
-/* The SDP number-pair row: sits in the named `sdp` grid track, centered, the two number fields sized
-   so the pair fits the card. (Self-contained here — this layout previously lived only in a hand-patch
-   to the base system's compiled CSS, which does not ship with the module and is wiped on base update.) */
+/* The SDP number-pair row: sits in the named `sdp` grid track, centered. The two number fields drop
+   their spin buttons and size down so the pair fits inside the narrow body-map cell (~55px in the
+   Carolingian theme) instead of spilling past it. (Self-contained here — this layout previously lived
+   only in a hand-patch to the base system's compiled CSS, which does not ship with the module and is
+   wiped on base update.) */
 .cyberpunk .armor-display .segment-sdp-row {
   grid-area: sdp;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
 }
 .cyberpunk .armor-display .segment-sdp-row .smallnumber {
-  width: 2.2em;
+  flex: 0 1 auto;
+  width: 1.6em;
+  min-width: 0;
   text-align: center;
   padding: 0;
   box-sizing: border-box;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.cyberpunk .armor-display .segment-sdp-row .smallnumber::-webkit-outer-spin-button,
+.cyberpunk .armor-display .segment-sdp-row .smallnumber::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Cyberlimb/flesh limb status badge + repair control (mech/cyberlimb.js). Its own centered `status`
+   row under the SDP pair; the badge reports the TRUE limb state (sticky limbStatus flag), the wrench
+   repairs SDP + clears it. Wraps if a badge+wrench pair can't fit one line of the narrow cell. */
+.cyberpunk .armor-display .segment-status-row {
+  grid-area: status;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
 }
 .cyberpunk .segment-limb-status {
-  font-size: 0.58rem;
+  font-size: 0.48rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 0 3px;
+  letter-spacing: 0.02em;
+  padding: 0 2px;
   border-radius: 3px;
-  line-height: 1.5;
+  line-height: 1.4;
   white-space: nowrap;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 .cyberpunk .segment-limb-status.cp-limb-destroyed { color: #fff; background: #d1502f; }
 .cyberpunk .segment-limb-status.cp-limb-useless   { color: #1a1a1a; background: #c0791a; }
@@ -1437,12 +1468,9 @@ img#anatomy-img {
 
 .cp-automation-notice .notice-btn { width: auto; flex: 0 0 auto; }
 
-/* Hover = the line/highlight colour (inverts the old highlight-by-default). Extra specificity
-   (.application.cyberpunk) so it wins over the base system's black-on-hover !important rule. */
-.application.cyberpunk .active-cyberware .active-cyberware-segment:hover {
-  border-color: var(--cp-line, #4493ad) !important;
-  box-shadow: none !important;
-}
+/* Segment hover override lives in css/cp2020-augmented-system-layer.css now — this file's
+   stylesheet loads in the `modules` cascade layer, which always loses !important ties to the
+   base system's `system`-layer rule, regardless of specificity. */
 
 /* Compact inline icon button for the ammo quantity lock (and similar). Strips the default
    button chrome so it reads as a small lock toggle aligned with the number it guards. */

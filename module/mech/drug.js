@@ -29,6 +29,8 @@ import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard, renderChatCard } from "../compat.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { rollDurationTurns } from "./consumable.js";
+import { enqueueApply } from "./light.js";
+import { isFullBorg } from "./borg.js";
 import { btmFromBT } from "../lookups.js";
 
 const SCOPE = "cp2020-augmented";
@@ -105,11 +107,15 @@ export function boostSummary(marker) {
 
 /** Replace any existing marker of the same KIND for this item, then store. A dose marker and its
  *  crash (isPenalty) marker are separate slots — the book's re-dose rule keeps the penalties
- *  running while a fresh dose starts, so writing one kind must never erase the other. */
+ *  running while a fresh dose starts, so writing one kind must never erase the other. Serialized
+ *  per actor through the shared apply queue (light.js): the flag is a read-modify-write, so two
+ *  activations landing quickly would otherwise interleave and drop the first-written marker. */
 async function setDrugMarker(actor, marker) {
-  const rest = drugMarkersFor(actor)
-    .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
-  await actor.setFlag(SCOPE, DRUG_FLAG, [...rest, marker]);
+  return enqueueApply(actor, async () => {
+    const rest = drugMarkersFor(actor)
+      .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
+    await actor.setFlag(SCOPE, DRUG_FLAG, [...rest, marker]);
+  });
 }
 
 /** Increment the addiction counter for a drug by name. */
@@ -128,8 +134,10 @@ export async function clearAddiction(actor) {
 /**
  * The prepareData post-step: apply active drug statBoosts on top of the actor's already-computed
  * stat totals, record the contributions (for the strip tooltips), and re-derive movement/body if a
- * boost touches MA/BT. A plain temp overlay added last — NOT subject to Q7 caps (a transient drug
- * bonus, the RAW "temporary" reading). Mutates prepared data only; never persists.
+ * boost touches MA/BT. The overlay is added AFTER the base stat pass AND after the Q7 moddy cap pass
+ * (this wrap registers after stat-mods.js), i.e. on top of the already-capped total: a boosted final
+ * total can legitimately exceed a moddy's cap — the transient drug bonus is not itself subject to
+ * those caps (the RAW "temporary" reading). Mutates prepared data only; never persists.
  */
 export function applyMechDrugBoosts(actor) {
   if (!actor || (actor.type !== "character" && actor.type !== "npc")) return;
@@ -146,6 +154,8 @@ export function applyMechDrugBoosts(actor) {
       const stat = stats[key];
       const mod = Number(b.mod) || 0;
       if (!stat || !mod) continue;
+      // Fold on top of the already-capped total (this wrap runs after the Q7 moddy cap pass), so a
+      // boosted final total can exceed a moddy's cap — the boost itself is not cap-limited.
       stat.total = (Number(stat.total) || 0) + mod;
       (contrib[key] ??= []).push({ name: m.name, value: mod });
       if (key === "ma") touchedMA = true;
@@ -166,7 +176,9 @@ export function applyMechDrugBoosts(actor) {
   actor._mechDrugMods = Object.keys(contrib).length ? contrib : null;
 }
 
-/** The "took" chat card (JS-assembled clauses, the ConsumableUsedBody pattern). */
+/** The "took" chat card (JS-assembled clauses, the ConsumableUsedBody pattern). Rendered through
+ *  drug-took.hbs so the full-conversion advisory can ride the card conditionally (fbc): the printed
+ *  rules are silent on combat chemistry for a full-body cyborg, so the card flags GM's discretion. */
 async function postTookCard(item, drug, marker) {
   const boosts = boostSummary(marker);
   const boostClause = boosts ? localizeParam("DrugBoostClause", { boosts }) : "";
@@ -174,12 +186,13 @@ async function postTookCard(item, drug, marker) {
   const addictionClause = Number(drug.addictionDifficulty) > 0
     ? localizeParam("DrugAddictionClause", { difficulty: Number(drug.addictionDifficulty) }) : "";
   const psychosisClause = drug.psychosis ? localizeParam("DrugPsychosisClause", { note: drug.psychosis }) : "";
-  await postSavePromptCard({
-    body: localizeParam("DrugTookBody", {
-      name: item.name, boostClause, durationClause, addictionClause, psychosisClause
-    }),
-    speaker: item.actor ? ChatMessage.getSpeaker({ actor: item.actor }) : undefined
+  const body = localizeParam("DrugTookBody", {
+    name: item.name, boostClause, durationClause, addictionClause, psychosisClause
   });
+  const content = await renderChatCard("drug-took.hbs", { body, fbc: isFullBorg(item.actor) });
+  const cardData = { content };
+  if (item.actor) cardData.speaker = ChatMessage.getSpeaker({ actor: item.actor });
+  await ChatMessage.create(cardData);
 }
 
 /**
@@ -281,10 +294,14 @@ export async function executeDrugExpireSave({ actorId, itemId, tokenId, sceneId,
 /** Drop a marker (only the matching KIND — a dose's wear-off leaves its crash running and vice
  *  versa), post the wear-off card, and re-prepare so the boost lifts. GM/owner-side. */
 async function wearOffMarker(actor, marker) {
-  const rest = drugMarkersFor(actor)
-    .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
-  if (rest.length) await actor.setFlag(SCOPE, DRUG_FLAG, rest);
-  else await actor.unsetFlag(SCOPE, DRUG_FLAG);
+  // Serialize the flag read-modify-write per actor (light.js queue) so a wear-off never races a
+  // concurrent dose write and drops the survivor; the card post follows outside the write.
+  await enqueueApply(actor, async () => {
+    const rest = drugMarkersFor(actor)
+      .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
+    if (rest.length) await actor.setFlag(SCOPE, DRUG_FLAG, rest);
+    else await actor.unsetFlag(SCOPE, DRUG_FLAG);
+  });
   await postWoreOffCard(actor, marker);
 }
 
@@ -340,6 +357,28 @@ export async function endDrug(item) {
   return true;
 }
 
+/**
+ * Count down the CURRENT combatant's timed drugs by one turn: decrement every timed marker, wear off
+ * any that reach zero (posting the wear-off card + firing its save flow), and persist the survivors.
+ * Untimed markers (turnsLeft ≤ 0 — the ones that wear off manually) are left untouched. No settings
+ * gate here: the updateCombat handler gates before calling, and the GM manual-tick button (another
+ * lane) gates on its own. Exported for that button.
+ */
+export async function runDrugTickOnce(combat) {
+  const actor = combat?.combatant?.actor;
+  if (!actor) return;
+  const markers = drugMarkersFor(actor);
+  if (!markers.length) return;
+  const { surviving, expired } = tickDrugMarkers(markers);
+  // Persist whenever a timed marker exists (its turnsLeft just changed) so multi-turn doses count
+  // down and the wear-off flow fires; early-out ONLY when there is nothing timed to count down
+  // (every marker is untimed) — mirrors consumable.js's unconditional persist for its all-timed set.
+  if (!expired.length && !markers.some(m => (Number(m?.turnsLeft) || 0) > 0)) return;
+  if (surviving.length) await actor.setFlag(SCOPE, DRUG_FLAG, surviving);
+  else await actor.unsetFlag(SCOPE, DRUG_FLAG);
+  for (const m of expired) await postWoreOffCard(actor, m);
+}
+
 let _wrapped = false;
 export function registerMechDrug() {
   // Wrap prepareData once so active drug boosts apply after the base's stat pass (and after the Q7
@@ -390,16 +429,6 @@ export function registerMechDrug() {
     if (updateData.turn === undefined && updateData.round === undefined) return;
     const prevRound = combat.previous?.round;
     if (prevRound !== undefined && prevRound < 1) return;   // Begin Combat is not a turn elapsing
-
-    const actor = combat.combatant?.actor;
-    if (!actor) return;
-    const markers = drugMarkersFor(actor);
-    if (!markers.length) return;
-
-    const { surviving, expired } = tickDrugMarkers(markers);
-    if (!expired.length) return;   // nothing timed out this tick
-    if (surviving.length) await actor.setFlag(SCOPE, DRUG_FLAG, surviving);
-    else await actor.unsetFlag(SCOPE, DRUG_FLAG);
-    for (const m of expired) await postWoreOffCard(actor, m);
+    await runDrugTickOnce(combat);
   });
 }

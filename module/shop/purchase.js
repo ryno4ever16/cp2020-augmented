@@ -123,6 +123,11 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
   if (!canShop()) { ui.notifications?.warn(localize("ShopNotAllowed")); return false; }
 
   const data = (source && typeof source.toObject === "function") ? source.toObject() : foundry.utils.deepClone(source ?? {});
+  // A copy bought from a base-compendium item must carry its origin uuid so the preCreateItem corrections
+  // hook (data-corrections.js) recognizes it and applies the book values — toObject() doesn't include it.
+  if (source?.pack && typeof source.uuid === "string") {
+    data._stats = { ...(data._stats ?? {}), compendiumSource: source.uuid };
+  }
   const name = data?.name ?? "item";
   const n = Math.max(1, Math.floor(Number(qty) || 1));
   const base = Number(unitPrice ?? data.system?.cost ?? 0);

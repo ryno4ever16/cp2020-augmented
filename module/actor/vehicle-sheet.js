@@ -192,6 +192,9 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaBuildIssues: acpaBuildIssuesArr,
       acpaBuildValid,
       countermeasureOptions,
+      // The operating-REF cap override input is a GM adjudication control (the interlocked-cyborg
+      // exception) — rendered for the GM only.
+      userIsGM: game.user?.isGM === true,
     };
   }
 

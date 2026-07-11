@@ -69,9 +69,14 @@ export async function purchaseAmmo(actor, { caliber, modifier = "standard", boxe
   caliber = String(caliber ?? "").trim();
   if (!caliber) { ui.notifications.warn(localize("AmmoBuyNoCaliber")); return false; }
 
-  // Guard the arrow/bullet family rule: a modifier that doesn't fit this caliber falls back to
-  // Standard (an arrow load can't be bought onto a bullet caliber, or vice versa).
-  if (!modifierAppliesToCaliber(modifier, caliber)) modifier = "standard";
+  // Guard the arrow/bullet family rule: a load that doesn't fit this caliber is rejected outright (an
+  // arrow load can't be bought onto a bullet caliber, or vice versa) — warn and abort rather than
+  // silently substituting Standard, so the charged/delivered load always matches the selection. The
+  // catalog now emits per-caliber load lists (modifiersForCaliber), so this should be unreachable.
+  if (!modifierAppliesToCaliber(modifier, caliber)) {
+    ui.notifications.warn(game.i18n.format("CYBERPUNK.AmmoModifierWrongFamily", { modifier: AMMO_MODIFIERS[modifier]?.label ?? modifier }));
+    return false;
+  }
 
   // Re-validate access at execution time (settings could have changed since the UI opened).
   const gate = canBuyAmmo();

@@ -22,7 +22,7 @@ import { DamageDialog }                                       from "./DamageDial
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
-import { routesToSdp } from "../mech/cyberlimb.js";
+import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
@@ -48,11 +48,23 @@ function _getActionCount(actor) {
   if (round > 0 && countRound !== round) return 0;
   return count;
 }
-async function _incrementActionCount(actor) {
-  const round = game?.combat?.round ?? 0;
-  const current = _getActionCount(actor);
-  await actor.setFlag("cp2020-augmented", "actionCount", current + 1);
-  await actor.setFlag("cp2020-augmented", "actionCountRound", round);
+// Per-actor serialization for the action counter: two quick actions must not both read the same count
+// and each write count+1 (one increment lost). Each increment chains after the prior write for that
+// actor, so the read sees the committed value; the pair (count + its round stamp) goes in ONE update
+// instead of two sequential setFlags. Callers may still fire-and-forget — the returned promise carries
+// the chain, so a trailing .catch() is enough.
+const _actionCountChains = new WeakMap();
+function _incrementActionCount(actor) {
+  const next = (_actionCountChains.get(actor) ?? Promise.resolve()).catch(() => {}).then(() => {
+    const round   = game?.combat?.round ?? 0;
+    const current = _getActionCount(actor);
+    return actor.update({
+      "flags.cp2020-augmented.actionCount":      current + 1,
+      "flags.cp2020-augmented.actionCountRound": round,
+    });
+  });
+  _actionCountChains.set(actor, next);
+  return next;
 }
 function _getMultiActionPenalty(actor) {
   if (!_isMultiActionEnabled()) return 0;
@@ -75,6 +87,7 @@ export function registerDamageHooks() {
   _hookDotEffects();
   _hookGasCloud();
   _hookGasCloudPerTurn();
+  _hookManualRoundTick();
   _hookExplosion();
   _hookSpread();
   _hookMultiActionPenalty();
@@ -94,6 +107,7 @@ export function registerDamageHooks() {
     const dodgeBtn      = ev.target.closest(".cp-dodge-btn");
     const parryBtn      = ev.target.closest(".cp-parry-btn");
     const addActionBtn  = ev.target.closest(".cp-add-action-btn");
+    const manualTickBtn = ev.target.closest(".cp-manual-tick-btn");
 
     const scatterBtn = ev.target.closest(".cp-confirm-explosion-scatter");
     if (scatterBtn && !scatterBtn.disabled) {
@@ -267,6 +281,13 @@ export function registerDamageHooks() {
       ui.notifications.info(localizeParam("ActionRecorded", { name: actor.name, count }) + (penalty < 0 ? localizeParam("ActionPenaltyClause", { penalty }) : ""));
       ui.combat?.render();
     }
+
+    if (manualTickBtn && !manualTickBtn.disabled) {
+      ev.preventDefault();
+      manualTickBtn.disabled = true;   // claim synchronously so a double-click can't run two passes
+      try { await _runManualRoundTick(game.combat); }
+      finally { ui.combat?.render(); } // the re-render re-injects a fresh (enabled) control
+    }
   });
 }
 
@@ -340,8 +361,18 @@ function _hookWeaponFired() {
 function _hookCreateChatMessage() {
   Hooks.on("createChatMessage", async (message) => {
     if (!_pendingPayload) return;
-    // Any user who owns the attacker can write the flag to their own message.
-    // _pendingPayload is client-local, so only the client that queued it will proceed.
+    // createChatMessage fires on this client for EVERY message, including ones authored by other users
+    // (broadcast). The pending payload belongs to THIS user's shot, so only attach it to a message this
+    // user authored — an interleaved message from someone else must not receive the apply flag, nor spend
+    // the payload on a message we don't own. When the author can't be determined we fall through rather
+    // than block the whole flow.
+    const authorId = message.author?.id ?? message.user?.id ?? null;
+    if (authorId && authorId !== game.user.id) return;
+    // Prefer the shot's own card: if the message names a speaker actor and we know the attacker, require
+    // them to match so a same-user message about a different actor doesn't claim this shot's payload.
+    const attackerId     = _pendingPayload.attackerId ?? _pendingPayload.actorId ?? null;
+    const speakerActorId = message.speaker?.actor ?? null;
+    if (attackerId && speakerActorId && speakerActorId !== attackerId) return;
 
     const payload = _pendingPayload;
     _pendingPayload = null;
@@ -820,7 +851,7 @@ function _hookAimTracking() {
 
   Hooks.on("renderModifiersDialog", (app, html) => {
     if (!isEnabled()) return;
-    const actor = app.options.weapon?.actor;
+    const actor = (app._weapon ?? app.options?.weapon)?.actor;
     if (!actor) return;
     const savedAim = actor.getFlag("cp2020-augmented", "aimRounds") ?? 0;
     if (savedAim <= 0) return;
@@ -1022,171 +1053,183 @@ function _hookDotEffects() {
     // damage the moment the GM clicks Begin Combat). Missing `previous` falls through.
     const dotPrevRound = combat.previous?.round;
     if (dotPrevRound !== undefined && dotPrevRound < 1) return;
+    // Round-tick automation master (settings): the over-time DOT/ablation tick is a sub-toggle of the
+    // round-tick automation, exactly like the gas per-turn hook — a table that turns off round-tick
+    // automation runs these ticks manually (the combat-tracker control), not on every turn advance.
+    if (!mechRoundTickEnabled()) return;
+    await _runOverTimeTick(combat);
+  });
+}
 
-    const combatant = combat.combatant;
-    if (!combatant?.actor) return;
-    const actor = combatant.actor;
-    const token = canvas?.tokens?.placeables?.find(t => t.id === combatant.tokenId) ?? null;
+/** One over-time (DOT / ablation / choke / hold-grapple) pass for the combat's current combatant.
+ *  Ungated by the round-tick master so both the per-turn hook (gated above) and the manual combat-tracker
+ *  control run it; the per-feature toggles (acid/fire/melee) stay inline. */
+async function _runOverTimeTick(combat) {
+  const combatant = combat.combatant;
+  if (!combatant?.actor) return;
+  const actor = combatant.actor;
+  const token = canvas?.tokens?.placeables?.find(t => t.id === combatant.tokenId) ?? null;
 
-    // ── Acid armor DOT ────────────────────────────────────────────────────────
-    const acidEnabled = (() => {
-      try { return game.settings.get("cp2020-augmented", "acidArmorDotEnabled"); }
-      catch { return true; }
-    })();
-    if (acidEnabled && !actor.statuses?.has("dead")) {
-      const rawDot = actor.getFlag?.("cp2020-augmented", "dotState");
-      // Migrate legacy single-object format to array
-      const dotStates = Array.isArray(rawDot) ? rawDot : (rawDot ? [rawDot] : []);
-      if (dotStates.length > 0) {
-        const surviving = [];
-        for (const ds of dotStates) {
-          const { location, turnsLeft, formula } = ds;
-          if (!location || turnsLeft <= 0) continue;
-          let spReduction = 0;
-          try {
-            const roll = await new Roll(formula || "1d6").evaluate();
-            spReduction = roll.total;
-            await roll.toMessage({
-              speaker: ChatMessage.getSpeaker({ actor }),
-              flavor: `Acid DOT — SP degradation at ${location} (${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} remaining)`,
-            });
-          } catch {
-            spReduction = 3;
-          }
-          if (spReduction > 0) {
-            await ablateLocationByAmount(actor, location, spReduction);
-            actor.sheet?.render(false);
-          }
-          const newTurnsLeft = turnsLeft - 1;
-          if (newTurnsLeft <= 0) {
-            await postSavePromptCard({
-              body: localizeParam("AcidExpiredBody", { name: actor.name, location }),
-              speaker: ChatMessage.getSpeaker({ actor }),
-            });
-          } else {
-            surviving.push({ location, turnsLeft: newTurnsLeft, formula });
-          }
-        }
-        if (surviving.length > 0) {
-          await actor.setFlag("cp2020-augmented", "dotState", surviving);
-        } else {
-          await actor.unsetFlag("cp2020-augmented", "dotState");
-        }
-      }
-    }
-
-    // ── Fire / Incendiary DOT (burns HP at the hit location, not armor) ───────
-    const fireEnabled = (() => {
-      try { return game.settings.get("cp2020-augmented", "fireDotEnabled"); }
-      catch { return true; }
-    })();
-    if (fireEnabled && !actor.statuses?.has("dead")) {
-      const rawFire = actor.getFlag?.("cp2020-augmented", "fireDotState");
-      const fireStates = Array.isArray(rawFire) ? rawFire : (rawFire ? [rawFire] : []);
-      if (fireStates.length > 0) {
-        const surviving = [];
-        // BTM reduces ALL damage that reaches the target — fire bypasses armor SP, not body toughness.
-        const fireBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
-        // Fire also chars worn armor: one ablation per turn at the location (optional-rule gated).
-        const fireAblate = (() => { try { return game.settings.get("cp2020-augmented", "damageAblation"); } catch { return false; } })();
-        for (const fs of fireStates) {
-          const { location, turnsLeft, formula } = fs;
-          const mult = Number(fs.mult ?? 1);   // halves each turn (burn diminishes: 1d6, then 1d6/2…)
-          if (!location || turnsLeft <= 0) continue;
-          let rolled = 0;
-          let roll = null;
-          try {
-            roll = await new Roll(formula || "1d6").evaluate();
-            rolled = Math.floor((Number(roll.total) || 0) * mult);
-          } catch {
-            rolled = Math.max(1, Math.floor(mult));
-          }
-          // Floored at 1 like a penetrating hit (applyBTM semantics): a burn still stings.
-          const dmg = Math.max(1, rolled - fireBtm);        // flesh HP (BTM applies to the body)
-          const fireStructural = Math.max(1, rolled);       // cyberlimb SDP (pre-BTM: machinery has no body toughness)
-          if (roll) {
-            await roll.toMessage({
-              speaker: ChatMessage.getSpeaker({ actor }),
-              flavor: `🔥 Fire DOT — ${actor.name} burns at ${location}: ${dmg} dmg (after BTM ${fireBtm}; ${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} left)`,
-            });
-          }
-          // Route through the shared seam: a burning cyberlimb takes structural SDP damage pre-BTM (no
-          // wound track, no stun save); flesh burns HP post-BTM and rolls a stun save.
-          const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: fireStructural, penetrates: true, token });
-          if (fireAblate) {
-            try { await ablateLocationOnce(actor, location); } catch (e) { /* no ablatable armor here */ }
-          }
-          actor.sheet?.render(false);
-          if (!outcome.cyberlimb) await postStunSavePrompt(actor, token);
-
-          const newTurnsLeft = turnsLeft - 1;
-          if (newTurnsLeft <= 0) {
-            await postSavePromptCard({
-              body: localizeParam("FireExpiredBody", { name: actor.name, location }),
-              speaker: ChatMessage.getSpeaker({ actor }),
-            });
-          } else {
-            surviving.push({ location, turnsLeft: newTurnsLeft, formula, mult: mult / 2 });
-          }
-        }
-        if (surviving.length > 0) {
-          await actor.setFlag("cp2020-augmented", "fireDotState", surviving);
-        } else {
-          await actor.unsetFlag("cp2020-augmented", "fireDotState");
-        }
-      }
-    }
-
-    // ── Choke DOT ────────────────────────────────────────────────────────────
-    const meleeEnabled = (() => {
-      try { return game.settings.get("cp2020-augmented", "specialMeleeEffectsEnabled"); }
-      catch { return true; }
-    })();
-    if (meleeEnabled) {
-      const isDead = actor.statuses?.has("dead");
-
-      const chokeState = actor.getFlag?.("cp2020-augmented", "chokeState");
-      if (chokeState) {
-        if (isDead) {
-          // Dead actor: clear the flag; don't apply damage they can't receive
-          await actor.unsetFlag("cp2020-augmented", "chokeState").catch(() => {});
-        } else {
-          const formula = chokeState.formula || "1d6";
-          const roll = await new Roll(formula).evaluate();
-          // BTM reduces ALL damage that reaches the target (CP2020 p.99) — choke included.
-          const chokeBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
-          const damage = Math.max(1, (Number(roll.total) || 0) - chokeBtm);
-          const current = Number(actor.system?.damage) || 0;
-          await actor.update({ "system.damage": current + damage }, { render: false, fromCyberpunkDamageSystem: true });
+  // ── Acid armor DOT ────────────────────────────────────────────────────────
+  const acidEnabled = (() => {
+    try { return game.settings.get("cp2020-augmented", "acidArmorDotEnabled"); }
+    catch { return true; }
+  })();
+  if (acidEnabled && !actor.statuses?.has("dead")) {
+    const rawDot = actor.getFlag?.("cp2020-augmented", "dotState");
+    // Migrate legacy single-object format to array
+    const dotStates = Array.isArray(rawDot) ? rawDot : (rawDot ? [rawDot] : []);
+    if (dotStates.length > 0) {
+      const surviving = [];
+      for (const ds of dotStates) {
+        const { location, turnsLeft, formula } = ds;
+        if (!location || turnsLeft <= 0) continue;
+        let spReduction = 0;
+        try {
+          const roll = await new Roll(formula || "1d6").evaluate();
+          spReduction = roll.total;
           await roll.toMessage({
             speaker: ChatMessage.getSpeaker({ actor }),
-            flavor: `Choke — ${actor.name} takes ${damage} damage (after BTM ${chokeBtm}). Must make Stun Save.`,
+            flavor: `Acid DOT — SP degradation at ${location} (${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} remaining)`,
           });
+        } catch {
+          spReduction = 3;
+        }
+        if (spReduction > 0) {
+          await ablateLocationByAmount(actor, location, spReduction);
           actor.sheet?.render(false);
-          await postStunSavePrompt(actor, token);
+        }
+        const newTurnsLeft = turnsLeft - 1;
+        if (newTurnsLeft <= 0) {
+          await postSavePromptCard({
+            body: localizeParam("AcidExpiredBody", { name: actor.name, location }),
+            speaker: ChatMessage.getSpeaker({ actor }),
+          });
+        } else {
+          surviving.push({ location, turnsLeft: newTurnsLeft, formula });
         }
       }
-
-      // ── Hold/Grapple turn reminders ──────────────────────────────────────
-      if (!isDead) {
-        const heldBy      = actor.getFlag?.("cp2020-augmented", "heldBy");
-        const grappledBy  = actor.getFlag?.("cp2020-augmented", "grappledBy");
-        if (heldBy) {
-          const holder = game.actors.get(heldBy);
-          await postSavePromptCard({
-            body: localizeParam("StillHeldBody", { name: actor.name, holder: holder?.name ?? localize("Attacker") }),
-            speaker: ChatMessage.getSpeaker({ actor }),
-          });
-        } else if (grappledBy) {
-          const grappler = game.actors.get(grappledBy);
-          await postSavePromptCard({
-            body: localizeParam("GrappledReminderBody", { name: actor.name, grappler: grappler?.name ?? localize("Attacker") }),
-            speaker: ChatMessage.getSpeaker({ actor }),
-          });
-        }
+      if (surviving.length > 0) {
+        await actor.setFlag("cp2020-augmented", "dotState", surviving);
+      } else {
+        await actor.unsetFlag("cp2020-augmented", "dotState");
       }
     }
-  });
+  }
+
+  // ── Fire / Incendiary DOT (burns HP at the hit location, not armor) ───────
+  const fireEnabled = (() => {
+    try { return game.settings.get("cp2020-augmented", "fireDotEnabled"); }
+    catch { return true; }
+  })();
+  if (fireEnabled && !actor.statuses?.has("dead")) {
+    const rawFire = actor.getFlag?.("cp2020-augmented", "fireDotState");
+    const fireStates = Array.isArray(rawFire) ? rawFire : (rawFire ? [rawFire] : []);
+    if (fireStates.length > 0) {
+      const surviving = [];
+      // BTM reduces ALL damage that reaches the target — fire bypasses armor SP, not body toughness.
+      const fireBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
+      // Fire also chars worn armor: one ablation per turn at the location (optional-rule gated).
+      const fireAblate = (() => { try { return game.settings.get("cp2020-augmented", "damageAblation"); } catch { return false; } })();
+      for (const fs of fireStates) {
+        const { location, turnsLeft, formula } = fs;
+        const mult = Number(fs.mult ?? 1);   // halves each turn (burn diminishes: 1d6, then 1d6/2…)
+        if (!location || turnsLeft <= 0) continue;
+        let rolled = 0;
+        let roll = null;
+        try {
+          roll = await new Roll(formula || "1d6").evaluate();
+          rolled = Math.floor((Number(roll.total) || 0) * mult);
+        } catch {
+          rolled = Math.max(1, Math.floor(mult));
+        }
+        // Floored at 1 like a penetrating hit (applyBTM semantics): a burn still stings.
+        const dmg = Math.max(1, rolled - fireBtm);        // flesh HP (BTM applies to the body)
+        const fireStructural = Math.max(1, rolled);       // cyberlimb SDP (pre-BTM: machinery has no body toughness)
+        if (roll) {
+          await roll.toMessage({
+            speaker: ChatMessage.getSpeaker({ actor }),
+            flavor: `🔥 Fire DOT — ${actor.name} burns at ${location}: ${dmg} dmg (after BTM ${fireBtm}; ${turnsLeft} turn${turnsLeft !== 1 ? "s" : ""} left)`,
+          });
+        }
+        // Route through the shared seam: a burning cyberlimb takes structural SDP damage pre-BTM (no
+        // wound track, no stun save); flesh burns HP post-BTM and rolls a stun save.
+        const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: fireStructural, penetrates: true, token });
+        if (fireAblate) {
+          // Pass the "fire" type so a fire-typed garment (material property, not consumable plating) is
+          // spared the char — consistent with the typed-skip principle applied at the point of impact.
+          try { await ablateLocationOnce(actor, location, "fire"); } catch (e) { /* no ablatable armor here */ }
+        }
+        actor.sheet?.render(false);
+        if (!outcome.cyberlimb) await postStunSavePrompt(actor, token);
+
+        const newTurnsLeft = turnsLeft - 1;
+        if (newTurnsLeft <= 0) {
+          await postSavePromptCard({
+            body: localizeParam("FireExpiredBody", { name: actor.name, location }),
+            speaker: ChatMessage.getSpeaker({ actor }),
+          });
+        } else {
+          surviving.push({ location, turnsLeft: newTurnsLeft, formula, mult: mult / 2 });
+        }
+      }
+      if (surviving.length > 0) {
+        await actor.setFlag("cp2020-augmented", "fireDotState", surviving);
+      } else {
+        await actor.unsetFlag("cp2020-augmented", "fireDotState");
+      }
+    }
+  }
+
+  // ── Choke DOT ────────────────────────────────────────────────────────────
+  const meleeEnabled = (() => {
+    try { return game.settings.get("cp2020-augmented", "specialMeleeEffectsEnabled"); }
+    catch { return true; }
+  })();
+  if (meleeEnabled) {
+    const isDead = actor.statuses?.has("dead");
+
+    const chokeState = actor.getFlag?.("cp2020-augmented", "chokeState");
+    if (chokeState) {
+      if (isDead) {
+        // Dead actor: clear the flag; don't apply damage they can't receive
+        await actor.unsetFlag("cp2020-augmented", "chokeState").catch(() => {});
+      } else {
+        const formula = chokeState.formula || "1d6";
+        const roll = await new Roll(formula).evaluate();
+        // BTM reduces ALL damage that reaches the target (CP2020 p.99) — choke included.
+        const chokeBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
+        const damage = Math.max(1, (Number(roll.total) || 0) - chokeBtm);
+        const current = Number(actor.system?.damage) || 0;
+        await actor.update({ "system.damage": current + damage }, { render: false, fromCyberpunkDamageSystem: true });
+        await roll.toMessage({
+          speaker: ChatMessage.getSpeaker({ actor }),
+          flavor: `Choke — ${actor.name} takes ${damage} damage (after BTM ${chokeBtm}). Must make Stun Save.`,
+        });
+        actor.sheet?.render(false);
+        await postStunSavePrompt(actor, token);
+      }
+    }
+
+    // ── Hold/Grapple turn reminders ──────────────────────────────────────
+    if (!isDead) {
+      const heldBy      = actor.getFlag?.("cp2020-augmented", "heldBy");
+      const grappledBy  = actor.getFlag?.("cp2020-augmented", "grappledBy");
+      if (heldBy) {
+        const holder = game.actors.get(heldBy);
+        await postSavePromptCard({
+          body: localizeParam("StillHeldBody", { name: actor.name, holder: holder?.name ?? localize("Attacker") }),
+          speaker: ChatMessage.getSpeaker({ actor }),
+        });
+      } else if (grappledBy) {
+        const grappler = game.actors.get(grappledBy);
+        await postSavePromptCard({
+          body: localizeParam("GrappledReminderBody", { name: actor.name, grappler: grappler?.name ?? localize("Attacker") }),
+          speaker: ChatMessage.getSpeaker({ actor }),
+        });
+      }
+    }
+  }
 }
 
 function _hookGasCloud() {
@@ -1254,11 +1297,6 @@ async function _placeGasCloud(payload) {
 
 /** Per-turn: prompt saves for tokens in a gas cloud; decrement turns; delete when expired. */
 function _hookGasCloudPerTurn() {
-  const gasEnabled = () => {
-    try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); }
-    catch { return true; }
-  };
-
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!game.user.isGM) return;
     // Only the primary GM runs the per-turn cloud logic, else duplicate prompts/updates.
@@ -1270,103 +1308,158 @@ function _hookGasCloudPerTurn() {
     const gasPrevRound = combat.previous?.round;
     if (gasPrevRound !== undefined && gasPrevRound < 1) return;
     // Round-tick automation master (settings): the per-turn cloud adjudication is a sub-toggle of the
-    // gas-cloud feature — a table that turns off round-tick automation runs saves manually.
+    // gas-cloud feature — a table that turns off round-tick automation runs saves manually (via the
+    // combat-tracker control, which calls _runGasCloudTick directly).
     if (!mechRoundTickEnabled()) return;
-    if (!gasEnabled()) return;
+    await _runGasCloudTick(combat);
+  });
+}
 
-    const scene = canvas?.scene;
-    if (!scene) return;
+/** One per-turn gas-cloud adjudication pass over the scene's clouds: prompt saves for tokens inside,
+ *  decrement each cloud's turns, delete when expired. Ungated by the round-tick master so both the
+ *  per-turn hook (gated above) and the manual combat-tracker control run it; still respects the
+ *  gas-cloud feature toggle. */
+async function _runGasCloudTick(combat) {
+  const gasEnabled = (() => { try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); } catch { return true; } })();
+  if (!gasEnabled) return;
 
-    const clouds = areasByFlag(scene, "isGasCloud");
+  const scene = canvas?.scene;
+  if (!scene) return;
 
-    for (const cloud of clouds) {
-      const flags = cloud.doc.flags["cp2020-augmented"];
-      const turnsLeft    = Number(flags.turnsLeft   ?? 0);
-      const stunSaveMod  = Number(flags.stunSaveMod ?? 0);
-      const weaponName   = flags.weaponName ?? localize("WpnGasGrenade");
+  const clouds = areasByFlag(scene, "isGasCloud");
 
-      if (turnsLeft <= 0) {
-        await deleteArea(cloud);
-        continue;
-      }
+  for (const cloud of clouds) {
+    const flags = cloud.doc.flags["cp2020-augmented"];
+    const turnsLeft    = Number(flags.turnsLeft   ?? 0);
+    const stunSaveMod  = Number(flags.stunSaveMod ?? 0);
+    const weaponName   = flags.weaponName ?? localize("WpnGasGrenade");
 
-      // Tokens inside the cloud (shim: RegionDocument#testPoint on v14, shape.contains on v13).
-      const tokensInCloud = tokensInArea(cloud, scene.tokens?.contents ?? []);
+    if (turnsLeft <= 0) {
+      await deleteArea(cloud);
+      continue;
+    }
 
-      if (tokensInCloud.length > 0) {
-        // P6 protection tags (mech/protection.js): sealed breathing gear (mask / independent air)
-        // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0); Q8
-        // percent-effective gear (nasal filters "70% effective") rolls one d10 per exposure —
-        // at or under percent/10 the wearer is protected this turn, and the card shows the roll.
-        const decisions = [];
-        for (const tokDoc of tokensInCloud) {
-          const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
-          const items = liveActor?.items?.contents ?? [];
-          const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod, { isFullBorg: isFullBorg(liveActor) }) };
-          if (d.liveActor && !d.skip && d.percent > 0) {
-            const gateRoll = await new Roll("1d10").evaluate();
-            const gate = percentGateOutcome(d.percent, gateRoll.total);
-            d.gateRoll = gateRoll.total;
-            d.gateThreshold = gate.threshold;
-            d.gated = gate.gated;
-          }
-          decisions.push(d);
+    // Tokens inside the cloud (shim: RegionDocument#testPoint on v14, shape.contains on v13).
+    const tokensInCloud = tokensInArea(cloud, scene.tokens?.contents ?? []);
+
+    if (tokensInCloud.length > 0) {
+      // P6 protection tags (mech/protection.js): sealed breathing gear (mask / independent air)
+      // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0); Q8
+      // percent-effective gear (nasal filters "70% effective") rolls one d10 per exposure —
+      // at or under percent/10 the wearer is protected this turn, and the card shows the roll.
+      const decisions = [];
+      for (const tokDoc of tokensInCloud) {
+        const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
+        // Zone gate: protection gear installed in a destroyed cyberlimb zone is inert wreckage and must
+        // not count toward the gas-save decision — the same enumeration every other contribution engine uses.
+        const items = liveActor ? contributingItems(liveActor) : [];
+        const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod, { isFullBorg: isFullBorg(liveActor) }) };
+        if (d.liveActor && !d.skip && d.percent > 0) {
+          const gateRoll = await new Roll("1d10").evaluate();
+          const gate = percentGateOutcome(d.percent, gateRoll.total);
+          d.gateRoll = gateRoll.total;
+          d.gateThreshold = gate.threshold;
+          d.gated = gate.gated;
         }
-        const affected = decisions.filter(d => d.liveActor && !d.skip && !d.gated);
-        // A full borg is sealed by its own biosystem, not by gear — report it as an immunity, separate
-        // from the "sealed breathing gear" group, so the flavour is honest.
-        const sealed = decisions.filter(d => d.liveActor && d.skip && !d.borgSealed);
-        const borgSealed = decisions.filter(d => d.liveActor && d.skip && d.borgSealed);
-        const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
-        const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
-        const sealedClause = sealed.length
-          ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
-          : "";
-        const borgClause = borgSealed.length
-          ? ((affected.length || sealed.length) ? " " : "") + localizeParam("GasCloudBorgImmuneClause", { names: borgSealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
-          : "";
-        // Q8 clauses — one per rolled gate, held or failed, always naming the roll vs threshold.
-        const gateClauses = decisions.filter(d => d.gateRoll !== undefined).map(d =>
-          " " + localizeParam(d.gated ? "GasCloudFilterHeldClause" : "GasCloudFilterFailClause",
-            { name: `<b>${d.tokDoc.name}</b>`, roll: d.gateRoll, threshold: d.gateThreshold })
-        ).join("");
-        await postSavePromptCard({
-          title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
-          body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + borgClause + gateClauses,
-        });
-        for (const d of affected) {
-          // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path
-          if (d.effMod < 0) {
-            const existingState = d.liveActor.getFlag?.("cp2020-augmented", "taserState");
-            const round = game?.combat?.round ?? 0;
-            const count = existingState && (existingState.round === 0 || round <= existingState.round + 2)
-              ? (existingState.count ?? 0) + 1 : 1;
-            await d.liveActor.setFlag("cp2020-augmented", "taserState", { count, round, mod: d.effMod });
-          }
-          await postStunSavePrompt(d.liveActor, d.tokDoc);
+        decisions.push(d);
+      }
+      const affected = decisions.filter(d => d.liveActor && !d.skip && !d.gated);
+      // A full borg is sealed by its own biosystem, not by gear — report it as an immunity, separate
+      // from the "sealed breathing gear" group, so the flavour is honest.
+      const sealed = decisions.filter(d => d.liveActor && d.skip && !d.borgSealed);
+      const borgSealed = decisions.filter(d => d.liveActor && d.skip && d.borgSealed);
+      const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
+      const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
+      const sealedClause = sealed.length
+        ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
+        : "";
+      const borgClause = borgSealed.length
+        ? ((affected.length || sealed.length) ? " " : "") + localizeParam("GasCloudBorgImmuneClause", { names: borgSealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
+        : "";
+      // Q8 clauses — one per rolled gate, held or failed, always naming the roll vs threshold.
+      const gateClauses = decisions.filter(d => d.gateRoll !== undefined).map(d =>
+        " " + localizeParam(d.gated ? "GasCloudFilterHeldClause" : "GasCloudFilterFailClause",
+          { name: `<b>${d.tokDoc.name}</b>`, roll: d.gateRoll, threshold: d.gateThreshold })
+      ).join("");
+      await postSavePromptCard({
+        title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
+        body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + borgClause + gateClauses,
+      });
+      for (const d of affected) {
+        // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path
+        if (d.effMod < 0) {
+          const existingState = d.liveActor.getFlag?.("cp2020-augmented", "taserState");
+          const round = game?.combat?.round ?? 0;
+          const count = existingState && (existingState.round === 0 || round <= existingState.round + 2)
+            ? (existingState.count ?? 0) + 1 : 1;
+          await d.liveActor.setFlag("cp2020-augmented", "taserState", { count, round, mod: d.effMod });
         }
-      }
-
-      const autoMove = (() => { try { return game.settings.get("cp2020-augmented", "gasCloudAutoMove"); } catch { return false; } })();
-      await cloud.doc.update({ ["flags.cp2020-augmented.turnsLeft"]: turnsLeft - 1 }).catch(() => {});
-
-      if (autoMove) {
-        // Drift 2m in a random direction (wind) — shifts the template (v13) or region shape (v14).
-        const gridDist = scene.grid?.distance ?? 1;
-        const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
-        const movePx   = (2 / gridDist) * gridSize;
-        const angle    = Math.random() * 2 * Math.PI;
-        await moveArea(cloud, Math.cos(angle) * movePx, Math.sin(angle) * movePx);
-      }
-
-      if (turnsLeft - 1 <= 0) {
-        await deleteArea(cloud);
-        await postSavePromptCard({
-          body: localizeParam("GasDispersedBody", { name: weaponName }),
-        });
+        await postStunSavePrompt(d.liveActor, d.tokDoc);
       }
     }
+
+    const autoMove = (() => { try { return game.settings.get("cp2020-augmented", "gasCloudAutoMove"); } catch { return false; } })();
+    await cloud.doc.update({ ["flags.cp2020-augmented.turnsLeft"]: turnsLeft - 1 }).catch(() => {});
+
+    if (autoMove) {
+      // Drift 2m in a random direction (wind) — shifts the template (v13) or region shape (v14).
+      const gridDist = scene.grid?.distance ?? 1;
+      const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
+      const movePx   = (2 / gridDist) * gridSize;
+      const angle    = Math.random() * 2 * Math.PI;
+      await moveArea(cloud, Math.cos(angle) * movePx, Math.sin(angle) * movePx);
+    }
+
+    if (turnsLeft - 1 <= 0) {
+      await deleteArea(cloud);
+      await postSavePromptCard({
+        body: localizeParam("GasDispersedBody", { name: weaponName }),
+      });
+    }
+  }
+}
+
+/**
+ * Manual round-tick control (GM-only). When the round-tick master (mechRoundTickEnabled) is OFF, the
+ * per-turn hooks stand down, so this ⏭ control on the combat tracker lets the GM run one per-turn pass on
+ * demand: the drug + consumable timers, this file's over-time (DOT/ablation/choke) tick, and the gas-cloud
+ * adjudication. Placed on the active combatant's controls (or the first combatant before the encounter
+ * starts) via the same renderCombatTracker idiom the aim/wait/dodge controls use.
+ */
+function _hookManualRoundTick() {
+  Hooks.on("renderCombatTracker", (tracker, html) => {
+    if (!game.user.isGM || mechRoundTickEnabled()) return;
+    const combat = game.combat;
+    if (!combat) return;
+    const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
+    if (!root) return;
+
+    const combatant = combat.combatant ?? combat.combatants.contents[0];
+    if (!combatant) return;
+    const li = root.querySelector?.(`[data-combatant-id="${combatant.id}"]`);
+    if (!li) return;
+    li.querySelectorAll(".cp-manual-tick-btn").forEach(e => e.remove()); // idempotent across re-renders
+
+    const controls = li.querySelector(".combatant-controls") ?? li.querySelector("menu") ?? li;
+    const btn = document.createElement("a");
+    btn.classList.add("cp-manual-tick-btn", "combatant-control");
+    btn.title = localize("ManualRoundTickTitle");
+    btn.innerHTML = "⏭";
+    controls.prepend(btn);
   });
+}
+
+/** Run one manual per-turn pass for `combat` (the GM-only combat-tracker control, used when the round-tick
+ *  master is off): drug + consumable timers, then this file's over-time and gas-cloud ticks. The timer
+ *  exports are ungated inside; this path is reached only from the GM-only button. */
+async function _runManualRoundTick(combat) {
+  if (!combat || !game.user.isGM) return;
+  const { runDrugTickOnce }       = await import("../mech/drug.js");
+  const { runConsumableTickOnce } = await import("../mech/consumable.js");
+  await runDrugTickOnce(combat);
+  await runConsumableTickOnce(combat);
+  await _runOverTimeTick(combat);
+  await _runGasCloudTick(combat);
 }
 
 /** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct). */
@@ -1790,7 +1883,7 @@ function _hookMultiActionPenalty() {
 
   Hooks.on("renderModifiersDialog", (app, html) => {
     if (!_isMultiActionEnabled()) return;
-    const actor = app.options.weapon?.actor;
+    const actor = (app._weapon ?? app.options?.weapon)?.actor;
     if (!actor) return;
     const penalty = _getMultiActionPenalty(actor);
     if (penalty === 0) return;
@@ -1975,6 +2068,7 @@ function _hookSocketRelay() {
           penDamageMult: Number(data.penDamageMult ?? 1.0),
           armorMode:     game.settings.get("cp2020-augmented", "damageArmorMode"),
           ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
+          targetTokenId: data.targetTokenId ?? null,
           dryRun:        false,
         });
         // Cyberlimb hits are soaked into limb SDP, not the wound track — they don't count toward the
@@ -1991,10 +2085,13 @@ function _hookSocketRelay() {
 
         if (totalApplied > 0) {
           const liveTarget = game.actors.get(target.id) ?? target;
-          const token = canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id) ?? null;
+          // Resolve the target token from the threaded id (falls back to actor lookup) so the post-hit
+          // prompt/status lands on the token that was hit, not an arbitrary same-actor token.
+          const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
+                          : (canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id) ?? null);
           const woundState = liveTarget.woundState?.() ?? 0;
-          if (woundState >= 4) await postDeathSavePrompt(liveTarget, token);
-          else if (woundState > 0) await postStunSavePrompt(liveTarget, token);
+          if (woundState >= 4) await postDeathSavePrompt(liveTarget, liveToken);
+          else if (woundState > 0) await postStunSavePrompt(liveTarget, liveToken);
         }
 
       } else if (data.mode === "resolved") {
@@ -2025,10 +2122,11 @@ function _hookSocketRelay() {
 
         if (totalApplied > 0) {
           const liveTarget = game.actors.get(target.id) ?? target;
-          const token = canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id) ?? null;
+          // Reuse liveToken (resolved above from data.targetTokenId) — re-deriving by actor id would drop
+          // the threaded token and land the prompt/status on the wrong token for a multi-token actor.
           const woundState = liveTarget.woundState?.() ?? 0;
-          if (woundState >= 4) await postDeathSavePrompt(liveTarget, token);
-          else if (woundState > 0) await postStunSavePrompt(liveTarget, token);
+          if (woundState >= 4) await postDeathSavePrompt(liveTarget, liveToken);
+          else if (woundState > 0) await postStunSavePrompt(liveTarget, liveToken);
         }
       }
 
@@ -2091,6 +2189,7 @@ async function _autoApply(payload, target) {
     penDamageMult: Number(payload.penDamageMult ?? 1.0),
     armorMode,
     ablate,
+    targetTokenId: payload.targetTokenId ?? null,
     dryRun: false,
   });
 
@@ -2110,7 +2209,10 @@ async function _autoApply(payload, target) {
   await applyDotFromPayload(target, hits[0]?.location ?? null, payload, hits.some(h => h.penetrates));
 
   if (total > 0) {
-    const token = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
+    // Honor the shot's target token (also threaded into applyAreaDamages above) so the post-hit prompt
+    // lands on the token that was hit, not an arbitrary same-actor token.
+    const token = payload.targetTokenId ? (canvas?.tokens?.get(payload.targetTokenId) ?? null)
+                : (canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null);
     const woundState = target.woundState?.() ?? 0;
     if (woundState >= 4) {
       await postDeathSavePrompt(target, token);

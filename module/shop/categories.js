@@ -85,11 +85,12 @@ const VEHICLE_SUB_RULES = [
   ["Military",   /\btank\b|\bapc\b|\bifv\b|\bafv\b|\bmbt\b|acav|artillery/],
   ["AVs",        /aerodyne|\bavs?\b|aircar/],
   ["Aircraft",   /helicopter|gunship|chopper|tilt.?rotor|tilt.?wing|osprey|dirigible|airship|blimp|zeppelin|ultralight|microlight|autogyro|fixed.?wing|plane\b|\bjet\b|fighter|bomber|aircraft|vtol/],
-  ["Watercraft", /submarine|submersible|\bsub\b|boat|\bship\b|watercraft|hydrofoil|jet.?ski|yacht|naval/],
+  ["Watercraft", /submarine|submersible|battlesub|\bsub\b|aqua|boat|\bship\b|watercraft|hydrofoil|jet.?ski|yacht|naval/],
   ["Spacecraft", /space|orbit|shuttle/],
   ["Cycles",     /cycle|\bbike\b|trike/],
-  ["Trucks",     /truck|\bsemi\b|hauler|prime mover|tractor|bulldozer|construction|crane|earthmover|\b\dx\d\b/],
-  ["Cars",       /car\b|sedan|coupe|limo|taxi|\bcab\b|\bvan\b|wagon|jeep|buggy|roadster|convertible|hatchback|pickup|\batv\b|utility/],
+  // "pickup" lives with Trucks (runs before Cars) so a bare "Pickup" and a "Pickup truck" file together.
+  ["Trucks",     /truck|pickup|\bsemi\b|hauler|prime mover|tractor|bulldozer|construction|crane|earthmover|\b\dx\d\b/],
+  ["Cars",       /car\b|sedan|coupe|limo|taxi|\bcab\b|\bvan\b|wagon|jeep|buggy|roadster|convertible|hatchback|\brv\b|\batv\b|utility/],
 ];
 export function vehicleSubOf(vehicleType) {
   const t = String(vehicleType ?? "").trim().toLowerCase();

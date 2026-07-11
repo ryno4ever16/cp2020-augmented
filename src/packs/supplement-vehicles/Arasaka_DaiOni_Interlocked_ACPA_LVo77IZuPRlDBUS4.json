@@ -1,0 +1,61 @@
+{
+  "_id": "LVo77IZuPRlDBUS4",
+  "name": "Arasaka DaiOni Interlocked ACPA",
+  "type": "vehicle",
+  "img": "icons/svg/explosion.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><b>The first interlocked cyborg body/ACPA</b> — a 3.4m, 1.12-ton deep-black Arasaka prototype. Only a handful exist; none are fully proven, and deploying one would be an act of desperation. STR 52, SP 80, SDP 52; 810,000eb (the interlocked pair; 16D6+30 total Humanity Cost).</p><p><b>No human pilot:</b> there is no life support at all. The suit requires an Alpha-class full-body conversion wired directly into it (buildable from the shipped Alpha Class body + Full Borg: Increased REF to 15, plus pain editors, combat programming, and sensor preprocessors). Because the pilot is hardwired rather than plugged in, the Reflex/Control operating caps do not apply: the suit boosts the pilot&#39;s REF 15 by +2 to an operating <b>REF 17</b> (set the GM REF-cap override to 17 on a deployed suit actor), with <b>MA 20</b> and <b>+6 Initiative</b>.</p><p><b>Special equipment (suit systems):</b> VR interface, high reflex boost, comm suite (military radio, cell, scrambler, laser communicator), sensor suite (backup visual sensors, TV camera, two 67cm horn periscope extensions), IR baffling, ECM and ECCM (right/left legs), 2 EMP capacitors (50% short chance on absorb), climber claws on hands and feet (7D10; 8D10 kick), laser and radar detectors, 4 ribbon + IR smoke canisters.</p><p><b>Stock armament:</b> Tsunami GL in the right arm (3 extra clips); Oni autoshotgun in the left arm (1 extra clip); retractable mono-sword in each arm (MELEE +1, 8D10 AP, shatters 30% on a fumble); 12.7mm MG on the right arm exterior (2 belts); light ATGM on the left arm exterior (HW +2, 12D10 HEAT, 4m burst, 1000m; 2 extra shots); hand-held EMG-83 railgun (5D10+10 AP, 10 shots, 1000m).</p><p><i>Reference Book collation (secondary; cross-check at table): SIB +6 / DFB +3; punch 6D10, crush 7D10, kick 9D10; Toughness −12; per-zone SDP head/arms 13, legs 26, torso 39.</i></p>",
+    "cost": 810000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Firestorm: Shockwave p.78-79",
+    "lastOwnerId": "",
+    "sdp": {
+      "value": 52,
+      "max": 52
+    },
+    "sp": 80,
+    "passengers": 0,
+    "speed": {
+      "value": 0,
+      "max": 0,
+      "maneuver": 0,
+      "acceleration": 0
+    },
+    "maneuverability": {
+      "value": 0,
+      "condition": ""
+    },
+    "fuel": {
+      "type": "",
+      "efficiency": 0,
+      "max": 0,
+      "value": 0
+    },
+    "range": 0,
+    "vehicleType": "ACPA (Powered Armor)",
+    "mass": {
+      "value": 1120.0,
+      "unit": "kg"
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 0,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "vehicles",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "PRE-RELEASE-BUILD-2026-07",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!LVo77IZuPRlDBUS4"
+}

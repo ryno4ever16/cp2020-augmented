@@ -1,0 +1,11 @@
+{{!--
+  Drug dose ("took") card (D4 combat-drug engine). Rendered from postTookCard() in module/mech/drug.js.
+  `body` is the pre-localized dose summary (DrugTookBody + its clauses, assembled in JS exactly like the
+  other mech "used"/"took" cards). `fbc` is set when the taker is a full-conversion cyborg and adds the
+  advisory that the printed rules are silent on combat chemistry for a full conversion (GM's discretion).
+  i18n via CPLocal; reuses the shared save-prompt CSS classes.
+--}}
+<div class="cyberpunk save-prompt drug-took">
+  {{{body}}}
+  {{#if fbc}}<div class="save-info drug-fbc-advisory"><span>{{CPLocal "DrugFbcAdvisory"}}</span></div>{{/if}}
+</div>

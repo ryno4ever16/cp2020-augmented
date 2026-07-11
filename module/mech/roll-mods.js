@@ -14,7 +14,7 @@
  * the base system's own payload engine uses. All functions are pure over plain item shapes.
  */
 
-import { cwHasType, cwIsEnabled } from "../utils.js";
+import { cwHasType, cwIsEnabled, getSkillsPackNames } from "../utils.js";
 
 /** The item's roll-mods block when enabled, else null. Pure. */
 export function rollModsOf(item) {
@@ -74,10 +74,59 @@ export function facedownModFor(items) {
   return { total, sources };
 }
 
-/** Active providers for rolls of the skill named `skillName` (case-insensitive). Pure. */
+const _skillAliasCache = new Map();
+
+/** EN-skill-name → active-language-skill-name alias map, joined on the stable compendium _id, so a
+ *  provider's canonical-EN `skillName` (pack data) still matches a localized skill item's displayed
+ *  name. Read-only, synchronous over the already-loaded pack indices (reuses the base pack-discovery
+ *  helper getSkillsPackNames); EN worlds short-circuit to empty (exact match already works). Returns
+ *  an empty map if indices aren't loaded yet — the caller then just falls back to the exact match. */
+function _buildSkillAliasMap(lang) {
+  const alias = new Map();
+  try {
+    if (String(lang).toLowerCase().startsWith("en")) return alias;
+    const nameById = (packNames) => {
+      const m = new Map();
+      for (const pn of packNames ?? []) {
+        const idx = game.packs?.get?.(pn)?.index;
+        if (!idx) continue;
+        for (const e of idx) if (e?._id && e?.name) m.set(e._id, String(e.name).trim().toLowerCase());
+      }
+      return m;
+    };
+    const enById = nameById(getSkillsPackNames("en"));
+    const locById = nameById(getSkillsPackNames(lang));
+    for (const [id, en] of enById) {
+      const loc = locById.get(id);
+      if (loc && loc !== en) alias.set(en, loc);
+    }
+  } catch (e) { /* compendium indices not ready — exact match only */ }
+  return alias;
+}
+
+/** Memoized per active language (skill packs don't change mid-session). A transient empty result
+ *  before indices finish loading is NOT cached, so it self-heals once the compendium is ready. */
+function _skillAliasMap() {
+  const lang = String(game?.i18n?.lang || "en");
+  const cached = _skillAliasCache.get(lang);
+  if (cached) return cached;
+  const alias = _buildSkillAliasMap(lang);
+  if (alias.size || lang.toLowerCase().startsWith("en")) _skillAliasCache.set(lang, alias);
+  return alias;
+}
+
+/** Active providers for rolls of the skill named `skillName` (case-insensitive). Pure over `items`
+ *  (the alias map is read once per call, not per item). */
 export function skillModProviders(items, skillName) {
   const want = String(skillName ?? "").trim().toLowerCase();
   if (!want) return [];
+  // A provider's skillName is canonical-EN pack data; the rolled skill item's name is localized.
+  // Match on either the exact (case-folded) name OR the EN name's active-language alias.
+  const alias = _skillAliasMap();
+  const matches = (providerSkillName) => {
+    const n = String(providerSkillName ?? "").trim().toLowerCase();
+    return !!n && (n === want || alias.get(n) === want);
+  };
   const out = [];
   for (const it of items ?? []) {
     const rm = rollModsOf(it);
@@ -85,15 +134,13 @@ export function skillModProviders(items, skillName) {
     const id = it.id ?? it._id;
     const auto = rm.auto !== false;
     const mod = Number(rm.skillMod) || 0;
-    const name = String(rm.skillName ?? "").trim().toLowerCase();
-    if (mod && name === want) out.push({ id, name: it.name, mod, auto });
+    if (mod && matches(rm.skillName)) out.push({ id, name: it.name, mod, auto });
     // The skillMods list (multi-skill items): one row per matching entry, sharing the item's auto.
     // Each row gets its OWN provider id (item id + entry ordinal): the dialog's checkbox dataPath
     // is gearMod_<id>, so a list entry sharing the flat pair's id would collide with its row.
     for (const [i, e] of (rm.skillMods ?? []).entries()) {
       const emod = Number(e?.mod) || 0;
-      const ename = String(e?.skillName ?? "").trim().toLowerCase();
-      if (emod && ename === want) out.push({ id: `${id}-${i + 1}`, name: it.name, mod: emod, auto });
+      if (emod && matches(e?.skillName)) out.push({ id: `${id}-${i + 1}`, name: it.name, mod: emod, auto });
     }
   }
   return out;

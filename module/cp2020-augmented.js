@@ -45,7 +45,9 @@ import { registerMechContainer } from "./mech/container.js";
 import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
-import { registerMechCyberlimb } from "./mech/cyberlimb.js";
+import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
+import { registerMartialDefense } from "./martial/martial.js";
+import { registerFreeFire } from "./mech/free-fire.js";
 import { registerMechLoadout } from "./mech/loadout.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { hostProvides } from "./system-api.js";
@@ -119,10 +121,10 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",
-  // Martial-arts chat fragments (the on-declare effect card + the attack resolution card).
-  "modules/cp2020-augmented/templates/chat/martial-attack.hbs",
+  // Martial-arts chat fragments (the on-declare effect card).
   "modules/cp2020-augmented/templates/chat/martial-effect.hbs",
-  "modules/cp2020-augmented/templates/chat/fumble-card.hbs",
+  // Drug dose card (carries the conditional full-conversion advisory clause).
+  "modules/cp2020-augmented/templates/chat/drug-took.hbs",
 ];
 
 Hooks.once("init", function () {
@@ -195,6 +197,12 @@ Hooks.once("init", function () {
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).
   registerMechCyberlimb();
+  // Offered contested defense: the delegated click wiring for the martial defense-offer/result
+  // chat cards (the roll is the defender's choice; the outcome is the GM's adjudication).
+  registerMartialDefense();
+  // Free Fire (the ammo-tracking opt-out) on vanilla: the Modifiers-window row + the keep-topped
+  // magazine hook that bypasses the base's hardcoded consumption from outside.
+  registerFreeFire();
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
   // namespaced collection, falling back to the bare global on cores that lack it (v13).
@@ -308,6 +316,55 @@ async function migrateAugmentedSettings() {
   }
 }
 
+/**
+ * One-time, GM-only world migration for the M18 flesh/structural limb-state split. Before M18 both
+ * kinds of limb wound shared `flags.cp2020-augmented.limbStatus`; the flesh models now write a
+ * separate `fleshLimbStatus`, but any state a pre-M18 build persisted still sits under the old shared
+ * key and is misread as structural cyberlimb state. This pass moves every `limbStatus` entry whose
+ * zone carries NO structural SDP pool into `fleshLimbStatus` and deletes it from the old key (the
+ * `-=` idiom); zones that DO carry a structural pool (a real cyberlimb / borg chassis) keep their
+ * `limbStatus` untouched. World actors AND unlinked scene-token actor deltas are both swept. Guarded
+ * by a world flag so it runs exactly once. Safe to fail — a missed actor just keeps its old flags.
+ */
+async function migrateFleshLimbStatus() {
+  const DONE = "fleshLimbStatusMigrated";
+  if (!game.settings.settings.has(`${SCOPE}.${DONE}`)) {
+    game.settings.register(SCOPE, DONE, { scope: "world", config: false, type: Boolean, default: false });
+  }
+  if (game.settings.get(SCOPE, DONE)) return;
+
+  // "Has a structural pool" reuses cyberlimb.js's own SDP helper, so the decision matches the damage
+  // routing exactly (borg Head/Torso count too — their status is structural and must NOT move).
+  const migrateActor = async (actor) => {
+    const old = actor?.flags?.[SCOPE]?.limbStatus;
+    if (!old || typeof old !== "object") return;
+    const flesh = { ...(actor.flags?.[SCOPE]?.fleshLimbStatus ?? {}) };
+    const update = {};
+    let moved = false;
+    for (const [zone, state] of Object.entries(old)) {
+      if (!state || cyberlimbSdp(actor, zone).max > 0) continue;   // structural pool → leave as-is
+      flesh[zone] = state;
+      update[`flags.${SCOPE}.limbStatus.-=${zone}`] = null;
+      moved = true;
+    }
+    if (!moved) return;
+    update[`flags.${SCOPE}.fleshLimbStatus`] = flesh;
+    await actor.update(update, { render: false })
+      .catch((e) => console.warn(`${SCOPE} | flesh-status migration failed for actor ${actor.id}`, e));
+  };
+
+  for (const actor of game.actors ?? []) await migrateActor(actor);
+  for (const scene of game.scenes ?? []) {
+    for (const token of scene.tokens ?? []) {
+      if (token.actorLink) continue;      // linked tokens share the world actor migrated above
+      await migrateActor(token.actor);    // the unlinked token's synthetic delta actor
+    }
+  }
+
+  await game.settings.set(SCOPE, DONE, true);
+  console.log(`${SCOPE} | flesh-limb-status migration complete.`);
+}
+
 Hooks.once("ready", function () {
   // Hard guard: the Augmented Edition only works on the cyberpunk2020 system.
   if (game.system.id !== SYSTEM_ID) {
@@ -326,6 +383,9 @@ Hooks.once("ready", function () {
   // so the fork's setting-merge migrations live here. Each reads the orphaned legacy key straight from
   // world storage, writes the merged value once, then deletes the legacy doc so it never re-runs.
   if (game.user?.isGM) migrateAugmentedSettings().catch((e) => console.warn(`${SCOPE} | settings migration failed`, e));
+  // One-time flesh/structural limb-state flag split (M18) — moves stale pre-split entries off the
+  // shared key so they stop reading as structural state. World-flag-gated; GM applies.
+  if (game.user?.isGM) migrateFleshLimbStatus().catch((e) => console.warn(`${SCOPE} | flesh-limb-status migration failed`, e));
 
   // P3 light emitters + P4 vision devices: item toggles drive the bearer's token light/sight
   // (the active GM applies the token writes).
@@ -375,7 +435,10 @@ Hooks.once("ready", function () {
   // See system-api.js + Data/_seamwork/FOLLOWUP-cherrypick-hardening.md.
   const doCombat   = combatAutomationEnabled() && !hostProvides("combatAutomation");
   const doVehicles = combatAutomationEnabled() && !hostProvides("vehicles");
-  if (doCombat || doVehicles) registerPopoutCompat();
+  // PopOut! chat rebinding registers UNCONDITIONALLY: the delegated chat-card listeners (drug
+  // wear-off, martial defense offer/result) register at init regardless of the combat gate, so
+  // their PopOut rebinding must too. Inert when PopOut! is absent.
+  registerPopoutCompat();
   if (doCombat) {
     registerDamageHooks();
     registerMovementGate();

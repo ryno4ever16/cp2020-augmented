@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Per +5 overall SP (arms/legs/head/torso), max SP40; +10-50 lbs by step. Whole body only. | [Audit row +125 — Chromebook 2 p.84]</p>",
+    "notes": "<p>Per +5 overall SP (arms/legs/head/torso), max SP40; +10-50 lbs by step. Whole body only. | [Audit row +125 — Chromebook 2 p.84] Equip one copy per +5 SP step (all zones, printed max SP 40).</p>",
     "cost": 2000,
     "weight": 0,
     "equipped": false,
@@ -53,6 +53,9 @@
         "weightSkimNotReviewed": true,
         "ledger": "AUDIT-WALK-2026-07",
         "dirty": true
+      },
+      "borgStatDelta": {
+        "sp": 5
       }
     }
   },

@@ -19,7 +19,8 @@
         value="{{hitLoc.stoppingPower}}"
         {{#unless ../edit}}readonly{{/unless}}>
 
-        {{!-- SDP: show ONLY on actors (system.sdp.sum exists) and ONLY if zone sum != 0 --}}
+        {{!-- SDP number-pair (borg/cyberlimb structural HP): sum (readonly max) + current (editable).
+             Shown ONLY on actors (system.sdp.sum exists) and ONLY if this zone's sum != 0. --}}
         {{#if ../system.sdp.sum}}
           {{#unless (equals (lookup ../system.sdp.sum name) 0)}}
             {{#unless (equals (lookup ../system.sdp.sum name) "0")}}
@@ -36,21 +37,32 @@
                   title="{{CPLocal "SDPCurrentTooltip"}}"
                   name="system.sdp.current.{{name}}"
                   value="{{lookup ../system.sdp.current name}}">
-                {{!-- Cyberlimb true status (from the sticky limbStatus flag) + repair. A destroyed
-                     limb reads "destroyed" even though the base prep resets its current to full. --}}
-                {{#with (lookup ../cpCyberlimb name) as |cl|}}
-                  {{#if cl.statusLabel}}
-                  <span class="segment-limb-status cp-limb-{{cl.status}}" title="{{cl.statusLabel}}">{{cl.statusLabel}}</span>
-                  {{/if}}
-                  {{#if cl.damaged}}{{#if @root.cpCanRepairLimb}}
-                  <a class="segment-repair cp-cyberlimb-repair action" data-zone="{{name}}"
-                     title="{{CPLocal "CyberlimbRepairTooltip"}}">&#9874;</a>
-                  {{/if}}{{/if}}
-                {{/with}}
               </div>
             {{/unless}}
           {{/unless}}
         {{/if}}
+
+        {{!-- Limb status badge + repair on its OWN row (below the SDP pair) so a long word like
+             "DESTROYED" never collides with the number boxes or spills past the narrow body-map cell.
+             A zone is either a cyberlimb (cpCyberlimb: the sticky limbStatus flag — a destroyed limb
+             reads "destroyed" even though the base prep resets its current to full) OR a flesh limb
+             (cpFleshLimb, M18 fleshLimbStatus for zones with no structural pool); only one fills it. --}}
+        <div class="segment-status-row">
+          {{#with (lookup ../cpCyberlimb name) as |cl|}}
+            {{#if cl.statusLabel}}
+            <span class="segment-limb-status cp-limb-{{cl.status}}" title="{{cl.statusLabel}}">{{cl.statusLabel}}</span>
+            {{/if}}
+            {{#if cl.damaged}}{{#if @root.cpCanRepairLimb}}
+            <a class="segment-repair cp-cyberlimb-repair action" data-zone="{{name}}"
+               title="{{CPLocal "CyberlimbRepairTooltip"}}">&#9874;</a>
+            {{/if}}{{/if}}
+          {{/with}}
+          {{#with (lookup ../cpFleshLimb name) as |fl|}}
+            {{#if fl.fleshStatusLabel}}
+            <span class="segment-limb-status cp-limb-flesh" title="{{fl.fleshStatusLabel}}">{{fl.fleshStatusLabel}}</span>
+            {{/if}}
+          {{/with}}
+        </div>
 
       <label class="segment-name">{{shortCPLocal name}}</label>
     </div>

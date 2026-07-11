@@ -84,6 +84,11 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       // Wideband (SIB 0, so no surprise to existing suits) + Advanced reflex/control (full REF, max 10).
       realityInterface: stringField("FULL_HUD_WIDEBAND"),
       reflexControl:    stringField("ADVANCED"),
+      // GM override on the operating-REF cap (0 = RAW, the Reflex/Control system's own maxRef).
+      // Exists for the printed interlocked cyborg/ACPA exception (Firestorm: Shockwave — a
+      // directly-wired full-conversion pilot is not subject to the plug/vehicle-link caps; the
+      // DaiOni's REF 15 + 2 = 17). The construction picker itself stays RAW-capped.
+      refCapOverride:   numberField(0),
       commandComputer:  booleanField(false),   // C3: +1 initiative/awareness while linked (integrable with any)
       pilotId:          stringField(""),        // linked pilot character actor (its REF + takes overflow damage)
       pilotRef:         numberField(0),         // fallback pilot base REF when no pilot actor is linked
@@ -160,7 +165,10 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       this.dfb = ri.dfb;
       this.interfaceSib = ri.sib;
       this.interfaceSdp = ri.sdp;
-      this.maxRef = rc.maxRef;
+      // The GM cap override (the interlocked-cyborg exception) replaces the system's maxRef when
+      // set; 0 keeps RAW. Folded here so the stored maxRef always shows the EFFECTIVE cap.
+      const capOverride = Number(this.refCapOverride) || 0;
+      this.maxRef = capOverride > 0 ? capOverride : rc.maxRef;
       // Basic control on a military STR42+ frame is stricter (REF−3 not −2) — acpaReflexMod handles it.
       this.refMod = acpaReflexMod(this.reflexControl, str);
       // A linked pilot actor supplies the base REF; otherwise the manual pilotRef field is the fallback.
@@ -173,7 +181,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
         }
       } catch (e) { /* actors not ready */ }
       this.effectiveRef = acpaEffectiveRef({
-        pilotRef, refMod: this.refMod, maxRef: rc.maxRef, refDamage: this.refDamage
+        pilotRef, refMod: this.refMod, maxRef: this.maxRef, refDamage: this.refDamage
       });
 
       // Weight budget + Suit Initiative Bonus (Maximum Metal p.61-62). Total loaded weight = chassis

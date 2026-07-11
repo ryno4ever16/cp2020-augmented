@@ -20,8 +20,9 @@
  */
 
 import { localizeParam } from "../utils.js";
-import { mechRoundTickEnabled } from "../settings.js";
+import { mechRoundTickEnabled, mechDocumentAutomationEnabled } from "../settings.js";
 import { postSavePromptCard } from "../compat.js";
+import { enqueueApply } from "./light.js";
 
 const SCOPE = "cp2020-augmented";
 const FLAG = "consumableState";
@@ -64,25 +65,33 @@ export async function rollDurationTurns(spec) {
 }
 
 /** Add/REPLACE the item's timer (one timer per item): re-use/re-activation restarts the clock —
- *  stacking a second marker would let the OLDER sibling's expiry switch the fresh dose off early. */
+ *  stacking a second marker would let the OLDER sibling's expiry switch the fresh dose off early.
+ *  Serialized per actor through the shared apply queue (light.js): the flag is a read-modify-write,
+ *  so two activations landing quickly would otherwise interleave and drop the first-written marker. */
 async function addMarker(actor, marker) {
-  const raw = actor.getFlag?.(SCOPE, FLAG);
-  const list = Array.isArray(raw) ? raw.slice() : (raw ? [raw] : []);
-  const rest = list.filter(m => m.itemId !== marker.itemId);
-  await actor.setFlag(SCOPE, FLAG, [...rest, marker]);
+  return enqueueApply(actor, async () => {
+    const raw = actor.getFlag?.(SCOPE, FLAG);
+    const list = Array.isArray(raw) ? raw.slice() : (raw ? [raw] : []);
+    const rest = list.filter(m => m.itemId !== marker.itemId);
+    await actor.setFlag(SCOPE, FLAG, [...rest, marker]);
+  });
 }
 
-/** Drop an item's timer marker(s) + icon (manual switch-off, item deletion). Owner-side. */
+/** Drop an item's timer marker(s) + icon (manual switch-off, item deletion). Owner-side. The flag
+ *  read-modify-write (and the follow-on icon prune) is serialized per actor (light.js queue) so it
+ *  never races a concurrent add and drops the survivor. */
 async function clearMarkersFor(actor, itemId) {
   if (!actor) return;
-  const raw = actor.getFlag?.(SCOPE, FLAG);
-  const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-  const rest = list.filter(m => m.itemId !== itemId);
-  if (rest.length !== list.length) {
-    if (rest.length) await actor.setFlag(SCOPE, FLAG, rest);
-    else await actor.unsetFlag(SCOPE, FLAG);
-  }
-  await pruneTimerIcons(actor, new Set(rest.map(m => m.itemId)));
+  return enqueueApply(actor, async () => {
+    const raw = actor.getFlag?.(SCOPE, FLAG);
+    const list = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    const rest = list.filter(m => m.itemId !== itemId);
+    if (rest.length !== list.length) {
+      if (rest.length) await actor.setFlag(SCOPE, FLAG, rest);
+      else await actor.unsetFlag(SCOPE, FLAG);
+    }
+    await pruneTimerIcons(actor, new Set(rest.map(m => m.itemId)));
+  });
 }
 
 /**
@@ -92,6 +101,9 @@ async function clearMarkersFor(actor, itemId) {
  * the effect registers as temporary (that's what token overlays render).
  */
 async function addTimerIcon(actor, item, turns) {
+  // Embedded-document write: gated by the document-automation toggle (settings.js) like the sibling
+  // create/delete engines — a GM who disabled it gets no module-authored token effects.
+  if (!mechDocumentAutomationEnabled()) return;
   try {
     // One icon per item: a restart replaces the old icon rather than stacking a twin.
     const prior = (actor.effects?.contents ?? [])
@@ -111,6 +123,8 @@ async function addTimerIcon(actor, item, turns) {
 
 /** Remove the timer icons whose markers are gone (expiry + stray reconciliation). GM-side. */
 async function pruneTimerIcons(actor, survivingItemIds) {
+  // Embedded-document write: same document-automation gate as addTimerIcon (settings.js taxonomy).
+  if (!mechDocumentAutomationEnabled()) return;
   try {
     const stale = (actor.effects?.contents ?? []).filter(e => {
       const tag = e.getFlag?.(SCOPE, "consumableItemId");
@@ -162,6 +176,40 @@ export async function useConsumable(item) {
 /** True when this update flips EffectActive on (diffed updates only carry changed keys). */
 function activationInChanges(changes) {
   return foundry.utils.getProperty(changes ?? {}, "system.EffectActive") === true;
+}
+
+/**
+ * Process the CURRENT combatant's consumable timers by one turn: expire any that reach zero (switch a
+ * cyberware payload back off + post the wear-off card), persist the survivors, and drop the expired
+ * token icons. No settings gate here: the updateCombat handler gates before calling, and the GM
+ * manual-tick button (another lane) gates on its own. Exported for that button.
+ */
+export async function runConsumableTickOnce(combat) {
+  const actor = combat?.combatant?.actor;
+  if (!actor) return;
+  const raw = actor.getFlag?.(SCOPE, FLAG);
+  const markers = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  if (!markers.length) return;
+
+  const { surviving, expired } = tickMarkers(markers);
+  for (const m of expired) {
+    // A cyberware timer switches the item back off — the base engine drops its payload with it.
+    // Tag the update so the EffectActive-off hook doesn't ALSO clear (the tick prunes below); the
+    // hook only cleans a manual switch-off, so the icon isn't deleted twice.
+    const item = actor.items.get(m.itemId);
+    if (item?.type === "cyberware" && item.system?.EffectActive) {
+      await item.update({ "system.EffectActive": false }, { cp2020TimerExpiry: true }).catch(() => {});
+    }
+    const noteClause = m.note ? localizeParam("ConsumableNoteClause", { note: m.note }) : "";
+    await postSavePromptCard({
+      body: localizeParam("ConsumableExpiredBody", { name: m.name, actor: actor.name, noteClause }),
+      speaker: ChatMessage.getSpeaker({ actor })
+    });
+  }
+  if (surviving.length) await actor.setFlag(SCOPE, FLAG, surviving);
+  else await actor.unsetFlag(SCOPE, FLAG);
+  // Drop the expired timers' token icons (and any stray icon whose marker is gone).
+  await pruneTimerIcons(actor, new Set(surviving.map(m => m.itemId)));
 }
 
 export function registerMechConsumable() {
@@ -223,31 +271,6 @@ export function registerMechConsumable() {
     // effect running when the GM clicks Begin Combat keeps its full remaining duration.
     const prevRound = combat.previous?.round;
     if (prevRound !== undefined && prevRound < 1) return;
-
-    const actor = combat.combatant?.actor;
-    if (!actor) return;
-    const raw = actor.getFlag?.(SCOPE, FLAG);
-    const markers = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-    if (!markers.length) return;
-
-    const { surviving, expired } = tickMarkers(markers);
-    for (const m of expired) {
-      // A cyberware timer switches the item back off — the base engine drops its payload with it.
-      // Tag the update so the EffectActive-off hook doesn't ALSO clear (the tick prunes below); the
-      // hook only cleans a manual switch-off, so the icon isn't deleted twice.
-      const item = actor.items.get(m.itemId);
-      if (item?.type === "cyberware" && item.system?.EffectActive) {
-        await item.update({ "system.EffectActive": false }, { cp2020TimerExpiry: true }).catch(() => {});
-      }
-      const noteClause = m.note ? localizeParam("ConsumableNoteClause", { note: m.note }) : "";
-      await postSavePromptCard({
-        body: localizeParam("ConsumableExpiredBody", { name: m.name, actor: actor.name, noteClause }),
-        speaker: ChatMessage.getSpeaker({ actor })
-      });
-    }
-    if (surviving.length) await actor.setFlag(SCOPE, FLAG, surviving);
-    else await actor.unsetFlag(SCOPE, FLAG);
-    // Drop the expired timers' token icons (and any stray icon whose marker is gone).
-    await pruneTimerIcons(actor, new Set(surviving.map(m => m.itemId)));
+    await runConsumableTickOnce(combat);
   });
 }

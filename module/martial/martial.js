@@ -21,11 +21,10 @@ import {
   martialArtDisplayName,
   martialActions,
   getMartialActionBonus,
-  getFnff2DamageBonusSymbol,
-  strengthDamageBonus,
 } from "../lookups.js";
-import { localize, localizeParam, rollLocation } from "../utils.js";
-import { renderChatCard } from "../compat.js";
+import { localize, localizeParam } from "../utils.js";
+import { renderChatCard, postSavePromptCard } from "../compat.js";
+import { onGlobalClick } from "../popout-compat.js";
 import { specialMeleeEffectsEnabled } from "../settings.js";
 
 // Module flag / settings scope (per-file convention used across the module).
@@ -213,7 +212,10 @@ export function trainedMartials(actor) {
 export async function rollMeleeDefense(targetActor, { dodging = false } = {}) {
   const ref = Number(targetActor?.system?.stats?.ref?.total) || 0;
 
-  const CANDIDATES = ["Melee", "Fencing", "Brawling", "Dodge", "Athletics"];
+  // "DodgeEscape" resolves the base's canonical skill (CYBERPUNK.SkillDodgeEscape → "Dodge & Escape");
+  // the bare "Dodge" candidate had no i18n key, so the canonical skill contributed 0 (review H3's
+  // latent defect). "Dodge" is kept for custom skills literally named that — consider() takes the best.
+  const CANDIDATES = ["Melee", "Fencing", "Brawling", "DodgeEscape", "Dodge", "Athletics"];
   let best = { name: localize("NoSkill"), val: 0, dodgeKeyBonus: 0 };
   // Rank by effective defense value (level + Dodge key when dodging); ties keep the earlier candidate.
   const consider = (name, val, dodgeKeyBonus) => {
@@ -290,215 +292,149 @@ export async function applyMartialHitEffects(action, targetActor, attackerActor)
 }
 
 // ---------------------------------------------------------------------------
-// Attack resolver.
+// Offered contested defense (the GM-choice model — user directive: never a silent auto-resolve).
 //
-// Faithful port of the initiation half of the fork's CyberpunkItem.__martialBonk (item.js):
-// build the to-hit + damage rolls (Core or FNFF2 damage-bonus rules, CyberTerminus ×2/×3), post a
-// chat card, and emit cyberpunk2020.weaponFired so the module's combat engine applies the damage.
-// Operates on a plain actor so it runs on his vanilla, where item.js has no such method.
-//
-// Contested defense + special MA hit-effects are intentionally NOT here (see the martial slice
-// plan): v1 emits the resolved strike and the GM confirms the hit via the engine's Apply-Damage
-// path; contested defense is added as the final v1 step.
+// The status maneuvers (hold / grapple / choke / throw / sweep) used to apply ON-DECLARE; now the
+// declare posts an OFFER card instead: the target's owner (or the GM) may roll the opposed defense
+// (rollMeleeDefense + the declared-dodge fold — the same engine the keeper proves), and the GM
+// adjudicates the outcome against the attack roll already on the table — [effect lands] applies the
+// status, [evaded] posts the miss. [Apply effect] skips the contest entirely (the old on-declare
+// behavior, one click away). Escape never contests: it is the actor freeing themselves.
+// Card buttons carry their context in data-* attrs (the drug/stun save-card idiom) and are wired
+// by ONE delegated handler registered at init (registerMartialDefense).
 // ---------------------------------------------------------------------------
 
+/** Apply a status effect to the target — directly when this client may write it, else relayed to
+ *  the active GM over the socket (the martialEffect relay in combat/damage-hooks.js). Single home:
+ *  the sheet's on-declare path and the offer card's buttons both call this. */
+export async function applyOrRelayMartialEffect(action, targetActor, attackerActor) {
+  if (!targetActor) return;
+  if (game.user.isGM || targetActor.isOwner) {
+    await applyMartialHitEffects(action, targetActor, attackerActor);
+  } else if (game.users.activeGM) {
+    game.socket.emit("module.cp2020-augmented", {
+      type: "martialEffect", action,
+      targetActorId: targetActor.id, attackerActorId: attackerActor?.id ?? null,
+    });
+  }
+}
+
+/** The status maneuvers whose application is offered as a contest (escape excluded — self-directed). */
+export const CONTESTED_MARTIAL_ACTIONS = new Set([
+  martialActions.hold, martialActions.grapple, martialActions.choke,
+  martialActions.throw, martialActions.sweepTrip,
+]);
+
 /**
- * @param {Actor}  actor
- * @param {object} opts
- * @param {string} opts.martialArt        "Brawling" or a trainedMartials() value
- * @param {string} opts.action            a martialActions value; the combat-tab button chooses it
- * @param {string} [opts.cyberTerminus]   "NoCyberlimb" | "CyberTerminusX2" | "CyberTerminusX3"
- * @param {number} [opts.extraMod]        extra to-hit modifier from the dialog
- * @param {Item}   [opts.weaponItem]      optional melee/cyber weapon backing the strike (WA + base damage)
- * @returns {Promise<{attackRoll: Roll}|null>}
+ * Post the defense-offer card for a declared status maneuver. Gated like the effects themselves
+ * (specialMeleeEffectsEnabled) — with the feature off there is no effect to contest.
  */
-export async function rollMartialAttack(actor, {
-  martialArt,
-  action = martialActions.strike,
-  cyberTerminus = "NoCyberlimb",
-  extraMod = 0,
-  weaponItem = null,
-} = {}) {
-  if (!actor) return null;
-
-  const isMartial = !!martialArt && martialArt !== "Brawling";
-  const martialSkillLevel = getSkillVal(actor, martialArt);
-  const keyTechniqueBonus = 0;
-
-  // Resolve the backing skill so custom styles can supply per-action bonuses + a clean title.
-  const maSkill = getMartialArtSkill(actor, martialArt);
-  const skillBonuses = martialBonusesFor(maSkill);
-  const martialTitle = (martialArt === "Brawling")
-    ? localize("SkillBrawling")
-    : (maSkill ? martialArtDisplayName(maSkill.name)
-               : (game.i18n.has(`CYBERPUNK.Skill${martialArt}`) ? localize("Skill" + martialArt) : martialArt));
-
-  const actionBonus = getMartialActionBonus(martialArt, action, skillBonuses);
-  const extra = Number(extraMod || 0);
-
-  // FNFF2 martial damage-bonus rules (mirror of item.js): the bonus applies only to a Key Variant
-  // (a style that has an action bonus) whose damage symbol is * or $; PanzerFaust uses level ×1.5.
-  const fnff2 = isFnff2Enabled();
-  let martialDamageBonusValue = 0;
-  if (isMartial) {
-    if (!fnff2) {
-      martialDamageBonusValue = martialSkillLevel;
-    } else {
-      const symbol = getFnff2DamageBonusSymbol(action);
-      const isKeyVariant = actionBonus > 0;
-      const levelForDamage = (martialArt === "Martial Arts: PanzerFaust")
-        ? Math.floor(martialSkillLevel * 1.5)
-        : martialSkillLevel;
-      martialDamageBonusValue = ((symbol === "*" || symbol === "$") && isKeyVariant) ? levelForDamage : 0;
-    }
-  }
-
-  // Accuracy from a backing weapon, if any (unarmed = 0).
-  const sysWeapon = weaponItem?.system ?? null;
-  const weaponAccuracy = Number(sysWeapon?.accuracy ?? 0) || 0;
-
-  const attackRoll = await new Roll(
-    `1d10x10 + @stats.ref.total + @attackBonus + @keyTechniqueBonus + @actionBonus + @extraMod${weaponAccuracy !== 0 ? " + @weaponAccuracy" : ""}`,
-    {
-      stats: actor.system.stats,
-      attackBonus: martialSkillLevel,
-      keyTechniqueBonus,
-      actionBonus,
-      extraMod: extra,
-      weaponAccuracy,
-    },
-  ).evaluate();
-
-  // Damage formula: a backing weapon's damage if present, else the unarmed strike/kick dice.
-  // Non-damaging actions (block/dodge/grapple/hold/sweep/disarm/escape) deal no damage.
-  const baseWeaponDamage = (sysWeapon?.damage && String(sysWeapon.damage).trim()) ? String(sysWeapon.damage).trim() : "";
-  let damageFormula = "";
-  if (baseWeaponDamage) {
-    damageFormula = `${baseWeaponDamage}+@strengthBonus+@martialDamageBonus`;
-  } else if (action === martialActions.strike) {
-    damageFormula = "1d3+@strengthBonus+@martialDamageBonus";
-  } else if ([martialActions.kick, martialActions.throw, martialActions.choke].includes(action)) {
-    damageFormula = "1d6+@strengthBonus+@martialDamageBonus";
-  }
-  if (damageFormula) {
-    if (cyberTerminus === "CyberTerminusX2") damageFormula = `(${damageFormula})*2`;
-    else if (cyberTerminus === "CyberTerminusX3") damageFormula = `(${damageFormula})*3`;
-  }
-
-  const rolls = [attackRoll];
-  const cardData = {
-    actorName: actor.name,
-    img: actor.img,
-    title: localizeParam("MartialTitle", { action: localize(action), martialArt: martialTitle }),
-    attackRender: await attackRoll.render(),
-    hasDamage: false,
-  };
-
-  if (damageFormula) {
-    // Resolve the target (if exactly one) so the hit lands on their body + the engine can target them.
-    const target = (game.user?.targets?.size === 1) ? game.user.targets.first() : null;
-    const targetActor = target?.actor ?? null;
-
-    const loc = await rollLocation(targetActor, null);
-    const damageRoll = await new Roll(damageFormula, {
-      strengthBonus: strengthDamageBonus(Number(actor.system?.stats?.bt?.total) || 0),
-      martialDamageBonus: martialDamageBonusValue,
-    }).evaluate();
-    damageRoll._total = Math.floor(damageRoll.total);   // CP2020: any fractional damage rounds down
-
-    rolls.push(loc.roll, damageRoll);
-    cardData.hasDamage = true;
-    cardData.areaHit = loc.areaHit;
-    cardData.damageRender = await damageRoll.render();
-
-    // Contested resolution (mirror of __martialBonk): when there is exactly one target, the defender
-    // rolls REF + best defense skill; the attack lands only if it beats that total. A declared Dodge
-    // adds a generic +2 to the defense PLUS the defender's martial style Dodge key-attack bonus (Core
-    // p.100 — additive per the user's ruling); a held Parry blocks outright. Those flags are set by the
-    // module's own Dodge/Parry actions under the module scope (see damage-hooks.js); on plain vanilla
-    // they are simply absent, so this reduces to a straight opposed roll.
-    let doEmit = true;
-    if (targetActor) {
-      const isDodging = !!targetActor.getFlag?.(SCOPE, "dodging");
-      const def = await rollMeleeDefense(targetActor, { dodging: isDodging });
-      rolls.push(def.roll);
-
-      // def.dodgeKeyBonus is the Dodge key of the SAME art rollMeleeDefense chose for the roll (0 for a
-      // non-martial dodge), so the generic stance and the style bonus stack without composing two skills.
-      const dodgeBonus = declaredDodgeBonus(isDodging, def.dodgeKeyBonus);
-      const parried = !!targetActor.getFlag?.(SCOPE, "parrying");
-      const hits = !parried && (attackRoll.total > def.total + dodgeBonus);
-
-      cardData.contested = {
-        defenderName: targetActor.name,
-        skillName: def.skillName,
-        skillVal: def.skillVal,
-        ref: def.ref,
-        dodgeBonus,
-        parried,
-        hits,
-        defenseRender: await def.roll.render(),
-      };
-      doEmit = hits;
-    }
-
-    // Emit so the module's combat engine applies damage. With a target, only on a contested hit;
-    // with no target, always (the engine surfaces an Apply-Damage control for the GM to adjudicate).
-    if (doEmit) {
-      const payload = {
-        areaDamages: { [loc.areaHit]: [{ damage: damageRoll.total }] },
-        ap: Boolean(sysWeapon?.ap),
-        edged: Boolean(sysWeapon?.isEdged),
-        weaponName: cardData.title,
-      };
-      if (targetActor) {
-        payload.targetTokenId = target.id;
-        payload.targetActorId = targetActor.id;
-      }
-      Hooks.callAll("cyberpunk2020.weaponFired", payload);
-      // Damage actions that also carry an effect (Throw knockdown, Choke status) apply it on a hit.
-      if (targetActor) await applyMartialHitEffects(action, targetActor, actor);
-    }
-  }
-
-  // Non-damaging special maneuvers (Hold / Grapple / Sweep-Trip / Escape): opposed roll, and on a hit
-  // the status effect is applied (mirror of __martialBonk's T4-B block). No damage, no weaponFired.
-  const SPECIAL_NO_DAMAGE = [martialActions.hold, martialActions.grapple, martialActions.sweepTrip, martialActions.escape];
-  if (!damageFormula && specialMeleeEffectsEnabled() && SPECIAL_NO_DAMAGE.includes(action)) {
-    const target = (game.user?.targets?.size === 1) ? game.user.targets.first() : null;
-    const targetActor = target?.actor ?? null;
-    if (targetActor) {
-      // A grapple/hold/sweep is an attack AGAINST the target, so a declared dodge helps evade it just
-      // like a struck blow (Core p.102: "-2 to any attacks made against them" — with the defender's
-      // martial style Dodge bonus, same as the damaging path). Escape is the actor freeing THEMSELVES,
-      // not an attack on the target, so the target's dodge does not apply to it. Parry is intentionally
-      // not applied here: RAW parry "expends damage against the parrying object", and these maneuvers
-      // deal no damage, so there is nothing to parry — only a dodge evades a grab.
-      const isDodging = action !== martialActions.escape && !!targetActor.getFlag?.(SCOPE, "dodging");
-      const def = await rollMeleeDefense(targetActor, { dodging: isDodging });
-      rolls.push(def.roll);
-      const dodgeBonus = declaredDodgeBonus(isDodging, def.dodgeKeyBonus);
-      const hits = attackRoll.total > def.total + dodgeBonus;
-      cardData.contested = {
-        defenderName: targetActor.name,
-        skillName: def.skillName,
-        skillVal: def.skillVal,
-        ref: def.ref,
-        dodgeBonus,
-        parried: false,
-        hits,
-        defenseRender: await def.roll.render(),
-      };
-      if (hits) await applyMartialHitEffects(action, targetActor, actor);
-    }
-  }
-
-  const content = await renderChatCard("martial-attack.hbs", cardData);
-  await ChatMessage.create({
-    speaker: ChatMessage.getSpeaker({ actor }),
-    content,
-    rolls,
+export async function postMartialDefenseOffer({ attackerActor, targetActor, targetTokenId = "", action }) {
+  if (!specialMeleeEffectsEnabled() || !targetActor || !CONTESTED_MARTIAL_ACTIONS.has(action)) return false;
+  const content = await renderChatCard("martial-defense-offer.hbs", {
+    title: localizeParam("MartialDefenseOfferTitle", { target: targetActor.name }),
+    body: localizeParam("MartialDefenseOfferBody", {
+      attacker: attackerActor?.name ?? "", target: targetActor.name, action: localize(action),
+    }),
+    action,
+    attackerActorId: attackerActor?.id ?? "",
+    targetActorId: targetActor.id,
+    targetTokenId,
   });
+  await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor: targetActor }) });
+  return true;
+}
 
-  return { attackRoll };
+/** Roll the offered defense and post the result card (breakdown + the GM's outcome buttons). */
+async function _rollOfferedDefense({ targetActor, targetTokenId = "", attackerActorId, action }) {
+  const isDodging = !!targetActor.getFlag?.(SCOPE, "dodging");
+  const def = await rollMeleeDefense(targetActor, { dodging: isDodging });
+  const dodgeBonus = declaredDodgeBonus(isDodging, def.dodgeKeyBonus);
+  const total = def.total + dodgeBonus;
+  // Render edge: the pure roll reports the stable candidate KEY (e.g. "DodgeEscape"); the card
+  // shows its localized skill name when one exists (value-is-key convention), else the raw label.
+  const skillLabel = game.i18n.has(`CYBERPUNK.Skill${def.skillName}`)
+    ? localize(`Skill${def.skillName}`) : def.skillName;
+  const content = await renderChatCard("martial-defense-result.hbs", {
+    title: localizeParam("MartialDefenseResultTitle", { target: targetActor.name }),
+    breakdown: localizeParam("MartialDefenseBreakdown", {
+      skill: skillLabel, val: def.skillVal, ref: def.ref, total,
+    }),
+    dodgeClause: dodgeBonus > 0 ? localizeParam("MartialDefenseDodgeClause", { bonus: dodgeBonus }) : "",
+    action,
+    attackerActorId: attackerActorId ?? "",
+    targetActorId: targetActor.id,
+    targetTokenId,
+  });
+  await ChatMessage.create({
+    content,
+    speaker: ChatMessage.getSpeaker({ actor: targetActor }),
+    rolls: [def.roll],
+  });
+}
+
+/** Resolve an actor from a card's data-* pair token-first: an unlinked token shares no state with the
+ *  world prototype, so the opposed roll must read — and the status flags must write to — the TOKEN's
+ *  actor, not `game.actors.get(id)`. Mirrors the combat subsystem's target resolution (damage-hooks.js). */
+function _resolveCardActor(tokenId, actorId) {
+  const tokenActor = tokenId ? canvas.tokens?.get(tokenId)?.actor : null;
+  if (tokenActor) return tokenActor;
+  return (actorId ? game.actors.get(actorId) : null) ?? null;
+}
+
+// Per-client claim of an offer/result card: the first adjudication click (or defense roll) disables the
+// card's button row and stamps the message id, so a repeat click is a no-op — no duplicate contest rolls
+// or effect cards. Keyed by message id so a chat re-render (which restores the DOM) still no-ops. The
+// AREA_CONFIRMERS claim idiom (combat/damage-hooks.js).
+const _claimedMartialCards = new Set();
+function _claimMartialCard(btn, messageId) {
+  if (messageId) {
+    if (_claimedMartialCards.has(messageId)) return false;
+    _claimedMartialCards.add(messageId);
+  }
+  btn.closest(".save-buttons")?.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+  return true;
+}
+
+/** Delegated click wiring for the offer/result card buttons — called once from the module's init. */
+export function registerMartialDefense() {
+  onGlobalClick(async (ev) => {
+    const btn = ev.target?.closest?.(
+      ".cp-martial-defense-roll, .cp-martial-defense-apply, .cp-martial-defense-lands, .cp-martial-defense-evaded");
+    if (!btn) return;
+    ev.preventDefault();
+    const messageId = btn.closest?.("[data-message-id]")?.dataset?.messageId ?? "";
+    const targetTokenId = btn.dataset.targetTokenId ?? "";
+    const targetActor = _resolveCardActor(targetTokenId, btn.dataset.targetActorId);
+    const attackerActor = _resolveCardActor("", btn.dataset.attackerActorId);
+    const action = btn.dataset.action ?? "";
+    if (!targetActor || !action) return;
+
+    if (btn.classList.contains("cp-martial-defense-roll")) {
+      // The defender's owner (or the GM) chooses to roll — the offer, not an auto-resolve.
+      if (!game.user.isGM && !targetActor.isOwner) {
+        ui.notifications?.warn(localize("MartialDefenseNotAllowed"));
+        return;
+      }
+      if (!_claimMartialCard(btn, messageId)) return;
+      await _rollOfferedDefense({ targetActor, targetTokenId, attackerActorId: btn.dataset.attackerActorId, action });
+      return;
+    }
+
+    // The outcome calls (apply-without-contest / lands / evaded) are the GM's adjudication.
+    if (!game.user.isGM) {
+      ui.notifications?.warn(localize("MartialDefenseGmOnly"));
+      return;
+    }
+    if (!_claimMartialCard(btn, messageId)) return;
+    if (btn.classList.contains("cp-martial-defense-evaded")) {
+      await postSavePromptCard({
+        body: localizeParam("MartialDefenseEvadedBody", { target: targetActor.name, action: localize(action) }),
+        speaker: ChatMessage.getSpeaker({ actor: targetActor }),
+      });
+      return;   // nothing was applied at declare time, so an evade writes no state
+    }
+    // cp-martial-defense-apply (skip the contest) and cp-martial-defense-lands (contest won) both apply.
+    await applyOrRelayMartialEffect(action, targetActor, attackerActor);
+  });
 }

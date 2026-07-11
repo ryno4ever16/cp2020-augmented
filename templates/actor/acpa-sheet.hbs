@@ -114,6 +114,10 @@
                 <label>{{CPLocal "Vehicle.InterfaceSibLabel"}}</label><input type="number" class="not-editable" value="{{system.interfaceSib}}" readonly/></div>
             <div class="field" title="{{CPLocal 'Vehicle.MaxRefTip'}}">
                 <label>{{CPLocal "Vehicle.MaxRefLabel"}}</label><input type="number" class="not-editable" value="{{system.maxRef}}" readonly/></div>
+            {{#if userIsGM}}
+            <div class="field" title="{{CPLocal 'Vehicle.RefCapOverrideTip'}}">
+                <label>{{CPLocal "Vehicle.RefCapOverrideLabel"}}</label><input type="number" name="system.refCapOverride" value="{{system.refCapOverride}}" min="0"/></div>
+            {{/if}}
         </div>
         <div class="field-list">
             <div class="field" title="{{CPLocal 'Vehicle.PilotLinkTip'}}">

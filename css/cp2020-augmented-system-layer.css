@@ -1,0 +1,26 @@
+/*
+ * Cyberpunk 2020: Augmented Edition — system-layer overrides.
+ *
+ * Foundry v13 cascade layers, in priority order: reset, variables, elements,
+ * blocks, applications, compatibility, layouts, system, modules, exceptions.
+ * Later layers beat earlier ones for ordinary rules — but for !important
+ * declarations that resolution REVERSES: the EARLIER layer wins. Module
+ * styles load in the `modules` layer by default, so a module can never
+ * out-rank a `!important` rule the base system ships in its `system` layer,
+ * no matter how specific the module's selector is.
+ *
+ * This file is registered in module.json's styles array with
+ * `"layer": "system"`, so its rules share the base system's cascade layer
+ * instead. It loads after the base system's own CSS, so within that shared
+ * layer normal source order/specificity applies and this file wins. Anything
+ * that needs to beat a system `!important` rule belongs here, not in
+ * css/cp2020-augmented.css.
+ */
+
+/* Hover = the line/highlight colour (inverts the old highlight-by-default);
+   overrides the base system's black-on-hover !important rule
+   (css/cyberpunk2020.css:1217-1219). */
+.application.cyberpunk .active-cyberware .active-cyberware-segment:hover {
+  border-color: var(--cp-line, #4493ad) !important;
+  box-shadow: none !important;
+}

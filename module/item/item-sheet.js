@@ -109,16 +109,25 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
         const items = this.actor.items?.contents ?? [];
         const banned = new Set([this.item.id, ...descendantIds(items, this.item.id)]);
         const selfSlots = slotsTakenOf(this.item);
-        data.mechContainerTargets = items
+        const currentParent = installedInOf(this.item);
+        const targets = items
           .filter(it => isContainer(it) && !banned.has(it.id))
           .map(it => ({
             id: it.id, name: it.name,
             free: freeSlots(it, items),
-            fits: freeSlots(it, items) >= selfSlots || installedInOf(this.item) === it.id
+            fits: freeSlots(it, items) >= selfSlots || currentParent === it.id
           }))
-          .filter(t => t.fits)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        data.mechContainerInstalledIn = installedInOf(this.item);
+          .filter(t => t.fits);
+        // Unconditionally keep the CURRENT parent in the list even when it no longer qualifies as a
+        // container (its capacity was zeroed with this item still installed) — otherwise the select
+        // drops the selected option and a routine submit would blank installedIn.
+        if (currentParent && !targets.some(t => t.id === currentParent)) {
+          const p = items.find(it => it.id === currentParent);
+          if (p) targets.push({ id: p.id, name: p.name, free: freeSlots(p, items) });
+        }
+        targets.sort((a, b) => a.name.localeCompare(b.name));
+        data.mechContainerTargets = targets;
+        data.mechContainerInstalledIn = currentParent;
       }
       // D4 combat drug: is a dose of THIS drug currently active on the owning actor? Drives the
       // "Wear off now" control (shown only while active); "Take" is always available.
@@ -358,8 +367,8 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     const ammoCaliber = this.item.system?.caliber;
     const currentMod = this.item.system?.modifier ?? "standard";
     const validMods = modifiersForCaliber(ammoCaliber);
-    if (!validMods.some(([id]) => id === currentMod) && AMMO_MODIFIERS[currentMod]) {
-      validMods.push([currentMod, AMMO_MODIFIERS[currentMod]]);
+    if (!validMods.some(([id]) => id === currentMod)) {
+      validMods.push([currentMod, AMMO_MODIFIERS[currentMod] ?? { label: currentMod }]);
     }
     sheet.modifierChoices = validMods.map(([id, m]) => ({ value: id, label: (m && m.label) ? m.label : id }));
 
@@ -702,8 +711,11 @@ async _prepareCyberware(sheet) {
       const leftFor = (p) => freeSlots(p, all);
       sheet.cw.parentImplants = all
         .filter(i => {
-          if (i.type !== "cyberware" || i.id === this.item.id || !i.system?.equipped) return false;
+          if (i.type !== "cyberware" || i.id === this.item.id) return false;
+          // Keep the CURRENT host before the equipped test — an unequipped current host must stay
+          // listed so the select keeps its selected option; otherwise a routine submit blanks ParentId.
           if (i.id === current) return true;
+          if (!i.system?.equipped) return false;
           return checkInstall(this.item, i, all).ok && leftFor(i) > 0;
         })
         .map(i => ({ id: i.id, name: i.name, left: leftFor(i) }));
@@ -1837,6 +1849,11 @@ async _prepareCyberware(sheet) {
       const target = event.target;
       if (!target?.closest) return;
 
+      // Event-flow policy (capture-phase listener): a branch that owns its own write calls
+      // stopPropagation so AppV2's submitOnChange full-form submit can't re-render over our scoped
+      // render:false or race a stale form snapshot over seeded values (name-bound modifier select).
+      // Branches with no name-bound control (the effect menu) may fall through harmlessly.
+
       // Blast multiplier input (no name=; persisted manually).
       const blast = target.closest("input.ammo-blast-mult");
       if (blast && root.contains(blast)) {
@@ -1870,6 +1887,7 @@ async _prepareCyberware(sheet) {
       const modifier = target.closest("select.cp-ammo-modifier");
       if (modifier && root.contains(modifier)) {
         event.preventDefault();
+        event.stopPropagation();
         const modId = String(modifier.value ?? "standard");
         if (!modifierAppliesToCaliber(modId, this.item.system?.caliber)) {
           ui.notifications?.warn(localizeParam("AmmoModifierWrongFamily", { modifier: AMMO_MODIFIERS[modId]?.label ?? modId }));

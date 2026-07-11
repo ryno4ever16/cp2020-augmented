@@ -291,7 +291,7 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {boolean} p.dryRun        If true: runs math only, does not write HP or ablate
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
-export async function applyAreaDamages({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, damageType = "", dryRun = false }) {
+export async function applyAreaDamages({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, damageType = "", token = null, targetTokenId = null, dryRun = false }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -359,7 +359,12 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location) });
 
     if (!dryRun) {
-      const liveToken = canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
+      // Prefer the caller's token (the shot's actual target token, threaded from the auto-apply call
+      // sites); fall back to the passed id, then the first canvas token of this actor. A multi-token
+      // actor's core-kill / limb-loss seam must fire on the token that was hit, not an arbitrary one.
+      const liveToken = token
+        ?? (targetTokenId ? (canvas?.tokens?.get(targetTokenId) ?? null) : null)
+        ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
       // The shared seam: a cyberlimb zone absorbs into its SDP; flesh advances the wound track and
       // runs the limb/head severity check (CP2020 p.103 + optional Listen Up crippling).
       await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken });
@@ -446,6 +451,10 @@ export async function ablateLocationOnce(target, location, damageType = "") {
     if (damageType && String(liveItem.system?.mechTypedSP?.type ?? "").trim() === String(damageType).trim()) continue;
     const itemSP = Number(liveItem.system?.coverage?.[location]?.stoppingPower) || 0;
     if (itemSP <= 0) continue;
+    // A FULLY-typed garment whose typed rating doesn't match this hit contributes 0 SP (typedLayerSP → 0)
+    // even though its coverage SP is >0 — it stopped nothing here, so it must not erode. (The dual-value
+    // and no-type layers return their conventional SP and still ablate.)
+    if (typedLayerSP(liveItem, itemSP, damageType) <= 0) continue;
     // Full coverage object write — dot-notation paths may wipe the DataModel
     const fullCoverage = foundry.utils.deepClone(liveItem.system.coverage || {});
     if (!fullCoverage[location]) fullCoverage[location] = {};
@@ -481,6 +490,8 @@ export async function ablateLocationByAmount(target, location, amount, damageTyp
     if (damageType && String(liveItem.system?.mechTypedSP?.type ?? "").trim() === String(damageType).trim()) continue;
     const itemSP = Number(liveItem.system?.coverage?.[location]?.stoppingPower) || 0;
     if (itemSP <= 0) continue;
+    // A fully-typed garment that contributed nothing to this typed hit (typedLayerSP → 0) does not erode.
+    if (typedLayerSP(liveItem, itemSP, damageType) <= 0) continue;
     const reduction = Math.min(itemSP, remaining);
     remaining -= reduction;
     const fullCoverage = foundry.utils.deepClone(liveItem.system.coverage || {});
@@ -517,9 +528,12 @@ function _deriveLiveSP(target, location, damageType = "") {
     return typedLayerSP(item, Number(item.system?.coverage?.[location]?.stoppingPower) || 0, damageType);
   }).filter(sp => sp > 0);
   // ONE proportional fold of the armor/cyberware layers — the same optimal-over-order combination the
-  // base uses for the prepared per-location SP (actor.js maxLayeredSP) — so the live value matches what
-  // the sheet shows and a typed layer's mere presence never silently changes a wearer's conventional
-  // armor math (M16: a fixed-order reduce here diverged from the base's DP).
+  // base uses for the prepared per-location SP (actor.js maxLayeredSP), so a typed layer's mere presence
+  // never silently changes a wearer's conventional armor math (M16: a fixed-order reduce here diverged
+  // from the base's DP). Equality with the DISPLAYED sheet SP holds for ordinary and dual-value layers;
+  // it does NOT hold for a FULLY-typed garment on a NON-matching hit — typedLayerSP returns 0 and the
+  // sp>0 filter above drops it, so this live/preview value is intentionally LOWER than the base-prepared
+  // sheet value (base prepareData folds coverage.stoppingPower type-blindly and still counts that garment).
   let combined = foldArmorSP(sps);
   // A full-conversion borg's chassis SP is intrinsic (no armor item); it feeds the ablation refresh (a
   // penetrated burst) and the Maximum Metal anti-vehicle armor value. prepareData folds it into

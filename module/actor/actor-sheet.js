@@ -9,7 +9,7 @@ import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { clearAddiction, clearDrugMarker } from "../mech/drug.js";
-import { cyberlimbSheetStatus, repairCyberlimb, contributingItems } from "../mech/cyberlimb.js";
+import { cyberlimbSheetStatus, repairCyberlimb, contributingItems, fleshLimbStatusLabel } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
@@ -304,6 +304,19 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    */
   _cpActivateStatusStrip(root) {
     if (!root?.addEventListener) return;
+
+    // Persist the collapsible strip's open/closed state across re-renders (the `toggle` event does not
+    // bubble, so listen in the capture phase). This records DISPLAY state, not a document write, so it
+    // must bind BEFORE the editable gate below — an observer (read-only) sheet keeps its open state too.
+    // Its own bind-once guard, since the editable section's guard is skipped on a read-only sheet.
+    if (root.dataset.cpStatusToggleBound !== "1") {
+      root.dataset.cpStatusToggleBound = "1";
+      root.addEventListener("toggle", (event) => {
+        const d = event.target;
+        if (d?.classList?.contains?.("cp-status-details")) this._cpStatusOpen = d.open;
+      }, true);
+    }
+
     const editable = this.isEditable ?? this.options?.editable ?? false;
     if (!editable) return;
     if (root.dataset.cpStatusStripBound === "1") return;
@@ -339,13 +352,6 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       await item.update({ [path]: false });
     });
 
-    // Persist the collapsible strip's open/closed state across re-renders (the `toggle` event does not
-    // bubble, so listen in the capture phase). _prepareContext reads _cpStatusOpen back onto the <details>.
-    root.addEventListener("toggle", (event) => {
-      const d = event.target;
-      if (d?.classList?.contains?.("cp-status-details")) this._cpStatusOpen = d.open;
-    }, true);
-
     // Q5 vision picker: persist the governor choice ("" auto / "natural" / item id) on the actor.
     root.addEventListener("change", async (event) => {
       if (!event.target?.matches?.("select.cp-vision-pick")) return;
@@ -377,7 +383,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       event.preventDefault();
       event.stopPropagation();
       const item = this.actor.items.get(btn.dataset.itemId);
-      if (item) await uninstallItem(item);
+      if (!item) return;
+      // A cyberware compartment ⏏ routes through the type-aware cascade (unequip + shed host links for
+      // the item AND its whole nested subtree) — the link-only detach left a cyberware container equipped,
+      // popping back into the body map as a standalone zone root (RULED unification with ⊗ / the body ⏏).
+      // _cpUninstallCyber updates {render:false}, so re-render here; uninstallItem re-renders on its own.
+      if (item.type === "cyberware") { await this._cpUninstallCyber(item.id); this.render(true); }
+      else await uninstallItem(item);
     });
 
     // ⊗ Clear a whole group from its anchor row — NON-DESTRUCTIVE: a loadout body UNEQUIPS its options
@@ -394,13 +406,27 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       // body's members are the options it spawned (by source flag), a generic container's are its nested
       // children (by ParentId). Use the same set for the confirm count and the action.
       const isLoad = hasLoadout(item);
+      const items = this.actor.items.contents ?? [];
       const members = isLoad
         ? loadoutOptionsOf(this.actor, item.id)
-        : childrenOf(this.actor.items.contents ?? [], item.id);
+        : childrenOf(items, item.id);
       if (!members.length) return;
+      // Confirm-count parity: the generic ⊗ cascades each cyberware member with its whole nested
+      // subtree (the per-item uninstall set), so count that acted set — not just the direct children —
+      // or the dialog under-reports. Loadout members are already the flagged full set deactivateLoadout
+      // removes, so their count stands as-is.
+      let count = members.length;
+      if (!isLoad) {
+        const acted = new Set();
+        for (const c of members) {
+          acted.add(c.id);
+          if (c.type === "cyberware") for (const d of descendantIds(items, c.id)) acted.add(d);
+        }
+        count = acted.size;
+      }
       const ok = await foundry.applications.api.DialogV2.confirm({
         window: { title: localize("MechGroupRemoveTitle") },
-        content: `<p>${localizeParam("MechGroupRemoveConfirm", { count: members.length, name: item.name })}</p>`,
+        content: `<p>${localizeParam("MechGroupRemoveConfirm", { count, name: item.name })}</p>`,
         rejectClose: false,
       });
       if (!ok) return;
@@ -413,6 +439,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         if (c.type === "cyberware") await this._cpUninstallCyber(c.id);
         else await uninstallItem(c);
       }
+      // _cpUninstallCyber updates {render:false}, so nothing repaints until an unrelated re-render —
+      // repaint now. (The loadout branch's deactivateLoadout re-renders itself; a second is harmless.)
+      this.render(true);
     });
 
     // Chassis delete (the 🗑 on the chassis strip): remove the full-borg body, deciding at delete-time
@@ -426,7 +455,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       event.stopPropagation();
       const body = this.actor.items.get(btn.dataset.itemId);
       if (!body) return;
+      const items = this.actor.items.contents ?? [];
       const attached = loadoutOptionsOf(this.actor, body.id).filter(it => it.system?.equipped === true);
+      // The acted set for the delete-time choice is the flagged attached members PLUS anything
+      // personally nested inside them (descendantIds) — a user-added option in an attached mount must
+      // not survive equipped + pointing at the deleted/carried host (mirrors the per-item cascade).
+      const actedIds = new Set();
+      for (const it of attached) { actedIds.add(it.id); for (const d of descendantIds(items, it.id)) actedIds.add(d); }
       const DialogV2 = foundry.applications.api.DialogV2;
       let choice = "delete-body";
       if (attached.length) {
@@ -450,13 +485,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       }
       if (choice === "cancel" || !choice) return;
       if (choice === "unequip") {
-        // Keep the attached options: unequip + clear their host links → Carried, before the body delete
-        // (so pruneLoadout's equipped-only sweep finds nothing of theirs to take).
-        await this.actor.updateEmbeddedDocuments("Item", attached.map(it => ({
-          _id: it.id, "system.equipped": false, "system.Module.ParentId": "", "system.CyberBodyType.Location": "",
+        // Keep the attached options + their nested extras: unequip + clear host links → Carried, before
+        // the body delete (so pruneLoadout's equipped-only sweep finds nothing of theirs to take). The
+        // cyberware keys are stripped on a stowed non-cyberware descendant (a no-op), so it travels with
+        // its carried mount rather than detaching loose.
+        await this.actor.updateEmbeddedDocuments("Item", [...actedIds].map(id => ({
+          _id: id, "system.equipped": false, "system.Module.ParentId": "", "system.CyberBodyType.Location": "",
         })));
       } else if (choice === "delete") {
-        await this.actor.deleteEmbeddedDocuments("Item", attached.map(it => it.id));
+        await this.actor.deleteEmbeddedDocuments("Item", [...actedIds]);
       }
       await body.delete();
     });
@@ -711,7 +748,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   _cpRollStatFromElement(el) {
     const statName = el?.dataset?.statName;
     if (!statName) return;
-    const gearProviders = statModProviders(this.actor.items, statName);
+    // Zone gate (M19): a stat provider hosted in a destroyed limb doesn't reach the roll (matches the
+    // skill path :698 and the attack path :784, which both pass contributingItems).
+    const gearProviders = statModProviders(contributingItems(this.actor), statName);
     return this._cpRollWithProviders(gearProviders, false,
       () => this.actor.rollStat(statName),
       (mod) => this._cpRollStatWithMod(statName, mod),
@@ -1512,16 +1551,24 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       modifierGroups: martialOptions(this.actor),
       onConfirm: async (fireOptions) => {
         await item.__weaponRoll({ ...fireOptions, action }, targetTokens);
-        // On-declare special martial hit-effect (A6): a hold / grapple / choke / throw / sweep / escape
-        // action applies its status to a single target, activating the already-live per-turn enforcement
-        // (choke DOT + Stun Save, hold/grapple reminders in damage-hooks). The system has no automatic
-        // melee hit/miss — the GM confirms the hit via Apply-Damage, and the escape action clears a
-        // mis-adjudicated grab. Contested defensive rolls are an earmarked future extension (GM-choice,
-        // not fully automatic). applyMartialHitEffects self-gates: it no-ops for non-status actions and
-        // when specialMeleeEffectsEnabled is off.
+        // Special martial hit-effect (A6 → the offered contest): a hold / grapple / choke / throw /
+        // sweep on a single target no longer applies on-declare — it posts the defense-offer card
+        // (martial.js postMartialDefenseOffer): the target's owner may roll the opposed defense, and
+        // the GM adjudicates [lands / evaded / apply-without-contest]. Escape stays immediate — it is
+        // the actor freeing themselves, not an attack on the target. Damage adjudication is unchanged
+        // (Apply-Damage). Both paths self-gate on specialMeleeEffectsEnabled.
         if (targetTokens.length === 1) {
           const targetActor = canvas?.tokens?.get(targetTokens[0].id)?.actor ?? null;
-          if (targetActor) await this._cpApplyOrRelayMartialEffect(action, targetActor);
+          if (targetActor) {
+            const M = await import("../martial/martial.js");
+            const offered = M.CONTESTED_MARTIAL_ACTIONS.has(action)
+              ? await M.postMartialDefenseOffer({
+                  attackerActor: this.actor, targetActor,
+                  targetTokenId: targetTokens[0].id, action,
+                })
+              : false;
+            if (!offered) await this._cpApplyOrRelayMartialEffect(action, targetActor);
+          }
         }
       },
     });
@@ -1529,19 +1576,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   }
 
   /** Apply a special martial hit-effect to the target — directly if this client can write the target,
-   *  else relayed to the active GM (mirrors the damage / vehicle relays; the target's held/grapple/
-   *  choke flags are a GM-owned write). (A6) */
+   *  else relayed to the active GM. Delegates to the single home in martial.js (the offer card's
+   *  buttons use the same helper), so the two paths can never drift. (A6) */
   async _cpApplyOrRelayMartialEffect(action, targetActor) {
-    if (!targetActor) return;
-    if (game.user.isGM || targetActor.isOwner) {
-      const { applyMartialHitEffects } = await import("../martial/martial.js");
-      await applyMartialHitEffects(action, targetActor, this.actor);
-    } else if (game.users.activeGM) {
-      game.socket.emit("module.cp2020-augmented", {
-        type: "martialEffect", action,
-        targetActorId: targetActor.id, attackerActorId: this.actor?.id ?? null,
-      });
-    }
+    const { applyOrRelayMartialEffect } = await import("../martial/martial.js");
+    await applyOrRelayMartialEffect(action, targetActor, this.actor);
   }
 
   _prepareSkills(sheetData) {
@@ -1775,6 +1814,17 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       clOut[zone] = { ...info, statusLabel: info.status !== "ok" ? localize(CL_STATUS_LABEL[info.status] ?? CL_STATUS_LABEL.damaged) : "" };
     }
     sheetData.cpCyberlimb = clOut;
+    // M18 CONTRACT (flesh-limb lane): per-zone FLESH state for the armor display's non-cyberlimb rows —
+    // a recorded severed/wounded FLESH limb shows a status the way the cyberlimb SDP row shows its badge
+    // one row up. Keyed by the hitLocation zone so armor-display.hbs can `lookup` it by the same `name`
+    // it uses for cpCyberlimb; fleshLimbStatusLabel (mech/cyberlimb.js, owned by the limb lane) returns
+    // "" for a cyberlimb'd or unrecorded zone, so only genuine flesh rows get an entry.
+    const fleshOut = {};
+    for (const zone of Object.keys(actor.system?.hitLocations ?? {})) {
+      const label = fleshLimbStatusLabel(actor, zone);
+      if (label) fleshOut[zone] = { fleshStatusLabel: label };
+    }
+    sheetData.cpFleshLimb = fleshOut;
     // Repair permission scoping (world setting): hide the control from non-GMs when restricted —
     // repairCyberlimb re-checks, so a stale render can't bypass it.
     sheetData.cpCanRepairLimb = !cyberlimbRepairGmOnly() || game.user?.isGM === true;
@@ -1874,24 +1924,25 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // below) — each host implant shows its options nested under it in the right zone — so it has no
     // separate flat tree.
     const allItems = sheetData.actor.items?.contents ?? [];
-    const gearIds = new Set((sheetData.gearTabItems ?? []).map((i) => i.id));
+    const gearTabItems = sheetData.gearTabItems ?? [];
+    const gearIds = new Set(gearTabItems.map((i) => i.id));
     // Real compartments: a cyberware container holding NON-cyberware children joins the gear tree
     // too — the body map is cyberware-only, so without this row the stowed gear (a holstered
     // pistol) renders nowhere once its own sheet closes. The compartment's HOST (the arm) isn't
     // in this list, so the tree's tolerant root rule (parent absent ⇒ loose) roots it here.
+    const compartmentHosts = [];
     for (const it of allItems) {
       if (it.type !== "cyberware") continue;
-      if (childrenOf(allItems, it.id).some((c) => c.type !== "cyberware")) gearIds.add(it.id);
+      if (childrenOf(allItems, it.id).some((c) => c.type !== "cyberware")) { gearIds.add(it.id); compartmentHosts.push(it); }
     }
-    const gearList = allItems.filter((it) => gearIds.has(it.id));
-    sheetData.gearTree = buildContainerTree(gearList, (it) => gearIds.has(it.id));
-
-    for (const it of allCyber) {
-      const t  = it.system?.cyberwareType;
-      const st = it.system?.cyberwareSubtype;
-      it.system.cwTypeLabel    = t  ? game.i18n.localize(`CYBERPUNK.CWT_ImplantType_${t}`)    : "";
-      it.system.cwSubtypeLabel = st ? game.i18n.localize(`CYBERPUNK.CWT_ImplantSubtype_${st}`) : "";
-    }
+    // Build the root list in the gear tab's SORTED order (drag-reorder persists `sort`; name is the
+    // tiebreak) — buildContainerTree keeps its input order for roots, so ordering gearList here is what
+    // restores the persisted sort AND the alphabetical default. gearTabItems is already sorted; append
+    // the compartment hosts (cyberware, absent from gearTabItems) in the same comparator order.
+    const gearNameSorter = new Intl.Collator();
+    compartmentHosts.sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0) || gearNameSorter.compare(a.name, b.name));
+    const gearList = [...gearTabItems.filter((it) => gearIds.has(it.id)), ...compartmentHosts];
+    sheetData.gearTree = buildContainerTree(gearList, (it) => gearIds.has(it.id), allItems);
 
     // PLACEMENT vs POWER: an equipped implant renders in its zone even while switched OFF —
     // hiding a disabled Activatable removed its only re-enable affordance (the zone row is how
@@ -1916,7 +1967,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // The anatomy body map now telescopes: each zone renders a tree of its installed cyberware — host
     // implants (a cyberarm, a cybereye) with their installed options nested underneath, one per zone.
     // A full borg's options land as flat roots in their zones (their host is the zoneless chassis).
-    sheetData.cyberZoneTrees = buildZoneTrees(placedCyber, cyberAreaOf);
+    sheetData.cyberZoneTrees = buildZoneTrees(placedCyber, cyberAreaOf, allItems);
 
     // Catch-all: installed cyberware with no anatomy zone (and not the chassis or a chip) — so nothing
     // installed vanishes when it lacks a MountZone. Anything already shown in a zone tree is excluded.
@@ -2235,14 +2286,17 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
   /** Grey out the nav tabs whose content is currently popped out into its own window (and un-grey the
    *  rest). Driven on render and whenever a tab window opens/closes. */
-  _refreshDetachedTabs() {
+  _refreshDetachedTabs(exclude = null) {
     // this.element is the native element on ApplicationV2; the old `?.[0]` indexed it like a V1
     // jQuery wrapper and always yielded undefined, so this whole method silently no-op'd.
     const root = getHtmlElement(this.element);
     if (!root) return;
+    // `exclude` = a popout that is CLOSING right now: its registry entry / rendered flag can settle
+    // a tick after its close() resolves, so it must be dropped from the open set explicitly or the
+    // nav mark sticks forever (the tear-out keeper's recovery leg).
     const open = new Set(
       Object.values(this.actor?.apps ?? {})
-        .filter((a) => a.constructor?.name === "CyberpunkActorTabSheet" && a.rendered)
+        .filter((a) => a !== exclude && !a._cpClosing && a.constructor?.name === "CyberpunkActorTabSheet" && a.rendered)
         .map((a) => a.tabKey)
     );
     const items = [...root.querySelectorAll("nav.sheet-tabs .item[data-tab]")];
@@ -2568,13 +2622,22 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const updates = ids.map((i) => {
       const it = this.actor.items.get(i);
       if (it?.type !== "cyberware") return { _id: i, "system.mechContainer.installedIn": "" };
-      return {
+      const patch = {
         _id: i,
         "system.equipped": false,
         "system.CyberWorkType.ChipActive": false,
         "system.Module.ParentId": "",
         "system.CyberBodyType.Location": "",
       };
+      // Restore a MountZone that host-nesting overwrote (stashed under the origMountZone flag), then
+      // drop the stash with the `-=` deletion idiom — otherwise the freed option stays routed to the
+      // now-detached host's zone. No stash flag ⇒ never nested cross-zone ⇒ leave MountZone alone.
+      const orig = it?.getFlag?.("cp2020-augmented", "origMountZone");
+      if (orig !== undefined) {
+        patch["system.MountZone"] = orig;
+        patch["flags.cp2020-augmented.-=origMountZone"] = null;
+      }
+      return patch;
     });
     await this.actor.updateEmbeddedDocuments("Item", updates, { render: false });
     await this._cp_syncChipLevelsToSkills();
@@ -2739,13 +2802,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const items = this.actor.items?.contents ?? [];
       const check = checkInstall(item, host, items);
       if (check.ok) {
-        // Nest: link to the host + inherit its zone/side so the option sits in the right place.
-        await item.update({
+        // Nest: link to the host + inherit its zone/side so the option sits in the right place. Stash
+        // the option's OWN MountZone first (only once — a re-nest onto another host must not overwrite
+        // the true original with a host-inherited value) so uninstall can restore it instead of leaving
+        // the freed option re-routed to the detached host's zone.
+        const nestUpdate = {
           "system.equipped": true,
           "system.Module.ParentId": host.id,
           "system.MountZone": host.system?.MountZone || item.system?.MountZone || "",
           "system.CyberBodyType.Location": host.system?.CyberBodyType?.Location || ""
-        }, { render: false });
+        };
+        if (item.getFlag("cp2020-augmented", "origMountZone") === undefined) {
+          nestUpdate["flags.cp2020-augmented.origMountZone"] = item.system?.MountZone ?? "";
+        }
+        await item.update(nestUpdate, { render: false });
         if (item.sheet?.rendered) item.sheet.render(true);
         return this.render(true);
       }
@@ -2841,7 +2911,10 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           return !host || isBorgBody(host);
         };
         const used = list
-          .filter(it => it.id !== item.id && it.system?.equipped && cwIsEnabled(it) && cyberAreaOf(it) === destArea && isRoot(it))
+          // Placement, not power, consumes zone space (the PLACEMENT-vs-POWER design comment above the
+          // placedCyber tally): a switched-OFF implant still holds its slot, so the gate counts every
+          // PLACED root — no cwIsEnabled — to match the zone badge (which tallies placedCyber roots).
+          .filter(it => it.id !== item.id && it.system?.equipped && cyberAreaOf(it) === destArea && isRoot(it))
           .reduce((s, it) => s + slotsTakenOf(it), 0);
         if (used + slotsTakenOf(item) > cap) return warn(localizeParam("ZoneOptionSpacesFull", { used, total: cap }));
       }

@@ -185,7 +185,7 @@
          Module.ParentId UI; this section is misc-only. --}}
     {{#if (equals item.type "misc")}}
     {{> (template "fields/number") label="MechContainerCapacity" edit="system.mechContainer.capacity"}}
-    {{#if @root.mechContainerTargets}}
+    {{#if (or @root.mechContainerTargets.length @root.mechContainerInstalledIn)}}
     <div class="field" title="{{CPLocal 'MechContainerInstalledInHint'}}">
         <label>{{CPLocal "MechContainerInstalledIn"}}</label>
         <span class="flex-pad"></span>

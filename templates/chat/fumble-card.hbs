@@ -1,8 +1,0 @@
-{{!--
-  Fumble result body (CP2020 fumble / control-loss tables). Rendered from the fumble builders in
-  utils.js. `lines` is an array of pre-localized strings — each may carry light <b> emphasis and an
-  inline-roll die fragment — and the template owns the <p> wrapping so the i18n values stay
-  structure-free. Triple-stash because the lines carry HTML.
---}}
-{{#each lines}}<p>{{{this}}}</p>
-{{/each}}

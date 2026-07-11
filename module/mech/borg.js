@@ -46,12 +46,27 @@ export function borgBodyOf(actor) {
 }
 
 /**
- * The full-borg chassis stopping power for a zone (the intrinsic full-body armor, Chr2 p.64 — SP 25
- * baseline, per-borg from the body item's `borgBody.sp` map), else 0. Pure. Read by the damage
- * resolver's live-SP re-derivation so a naked borg's chassis SP survives ablation + Maximum Metal AV.
+ * The live full-borg chassis stopping power for a zone: the intrinsic full-body armor (Chr2 p.64 —
+ * SP 25 baseline, per-borg from the body item's `borgBody.sp` map) PLUS the equipped Increased-SP
+ * steps (+5/step, never past the printed SP 40), else 0. The ONE clamp both applyBorgBody's prepared
+ * armor fold and the damage resolver's live-SP re-derivation must agree on — so the live number
+ * includes the same equipped Increased-SP steps the prepared number does. Negative delta payloads
+ * are floored at 0 (a whole-body SP upgrade only adds). Pure.
+ */
+export function borgZoneSP(actor, zone) {
+  const baseSp = Number(borgBodyOf(actor)?.sp?.[zone]) || 0;
+  if (baseSp <= 0) return 0;
+  const deltas = borgDeltasOf(actor);
+  return Math.min(baseSp + Math.max(0, deltas.sp), Math.max(baseSp, BORG_SP_CAP));
+}
+
+/**
+ * The full-borg chassis stopping power for a zone, read by the damage resolver's live-SP
+ * re-derivation so a naked borg's chassis SP survives ablation + Maximum Metal AV. Delegates to
+ * borgZoneSP so the live SP matches the prepared fold — equipped Increased-SP steps included. Pure.
  */
 export function borgArmorSP(actor, zone) {
-  return Number(borgBodyOf(actor)?.sp?.[zone]) || 0;
+  return borgZoneSP(actor, zone);
 }
 
 /**
@@ -109,6 +124,30 @@ export function isFullBorg(actor) {
   return !!borgBodyOf(actor);
 }
 
+// The printed FULL-BORG upgrade ceilings (Chromebook 2 p.84-85): stats REF 15 / MA 25 / BODY 20;
+// whole-body SP max 40; SDP max +20 over the chassis. The Increased-option items carry their step
+// in a `borgStatDelta` flag; the folds below clamp the summed steps at these maxima.
+const BORG_STAT_CAPS = { ref: 15, ma: 25, body: 20 };
+const BORG_SP_CAP = 40;
+const BORG_SDP_DELTA_CAP = 20;
+
+/**
+ * Sum the equipped Increased-option steps: every equipped cyberware item's `borgStatDelta` flag
+ * (`{ ref?: n, ma?: n, body?: n, sp?: n, sdp?: n }` — one step per item; buy N copies for +N).
+ * This is the mechanism that makes the purchased "Full Borg: Increased …" options DO the printed
+ * thing — the chassis payload stays the factory baseline and the options stack on top. Pure.
+ */
+export function borgDeltasOf(actor) {
+  const out = { ref: 0, ma: 0, body: 0, sp: 0, sdp: 0 };
+  for (const it of (actor?.items?.contents ?? actor?.items ?? [])) {
+    if (it?.type !== "cyberware" || it.system?.equipped !== true) continue;
+    const d = (it.getFlag?.(SCOPE, "borgStatDelta")) ?? it?.flags?.[SCOPE]?.borgStatDelta;
+    if (!d) continue;
+    for (const k of Object.keys(out)) out[k] += Number(d[k]) || 0;
+  }
+  return out;
+}
+
 /**
  * prepareData post-step. Two seeds, both from the equipped body item's `borgBody` block:
  *  1. Per-zone SDP → `system.sdp.sum/current` for all six zones, so the shared cyberlimb SDP path
@@ -142,21 +181,59 @@ export function applyBorgBody(actor) {
   const stored = actor?._source?.system?.sdp?.current ?? {};
   const limbStatus = actor?.flags?.[SCOPE]?.limbStatus ?? {};
   const hitLocations = actor?.system?.hitLocations ?? {};
+  // Equipped Increased-option steps (Chr2 whole-body upgrades), clamped at the printed maxima.
+  const deltas = borgDeltasOf(actor);
   for (const zone of ZONES) {
     // Fold the chassis SP into the derived per-zone armor SP before the SDP seed's early-continue.
-    const sp = Number(bb.sp?.[zone]) || 0;
+    // Increased SP is a whole-body upgrade: +5/step on every zone, never past the printed SP 40 —
+    // the shared borgZoneSP applies that clamp so the live-SP re-derivation stays in lockstep.
+    const sp = borgZoneSP(actor, zone);
     const loc = hitLocations[zone];
     if (sp > 0 && loc) loc.stoppingPower = combineArmorSP(Number(loc.stoppingPower) || 0, sp);
 
-    const max = Number(bb.sdp[zone]) || 0;
-    if (max <= 0) continue;
+    // Increased SDP: +5/step on every zone, never more than +20 over the chassis's own rating —
+    // and a negative flag payload is floored at 0, so a structural upgrade can't drop below chassis.
+    const baseMax = Number(bb.sdp[zone]) || 0;
+    if (baseMax <= 0) continue;
+    const max = baseMax + Math.min(Math.max(0, deltas.sdp), BORG_SDP_DELTA_CAP);
     sdp.sum[zone] = max;
     if (limbStatus[zone] === "destroyed") { sdp.current[zone] = 0; continue; }
+    // Clamp a persisted remaining that exceeds the recomputed max (an Increased-SDP copy unequipped
+    // after damage) DOWN to max — resetting to full would make the taken damage vanish.
     const rem = Number(stored[zone]);
-    sdp.current[zone] = (Number.isFinite(rem) && rem > 0 && rem <= max) ? rem : max;
+    sdp.current[zone] = (Number.isFinite(rem) && rem > 0) ? Math.min(rem, max) : max;
   }
 
-  applyBorgStats(actor, bb.stats);
+  // Increased Stats: +1/step per stat on the chassis baseline, clamped at the printed maxima —
+  // but never BELOW the chassis's own printed value (a factory REF 15 chassis stays 15).
+  let stats = bb.stats;
+  if (stats && (deltas.ref || deltas.ma || deltas.body)) {
+    const upg = (base, delta, cap) => {
+      const b = Number(base);
+      if (!Number.isFinite(b) || !delta) return base;
+      return Math.max(b, Math.min(b + delta, Math.max(b, cap)));
+    };
+    stats = {
+      ...stats,
+      ref: upg(stats.ref, deltas.ref, BORG_STAT_CAPS.ref),
+      ma: upg(stats.ma, deltas.ma, BORG_STAT_CAPS.ma),
+      body: upg(stats.body, deltas.body, BORG_STAT_CAPS.body),
+    };
+  }
+  applyBorgStats(actor, stats);
+}
+
+/**
+ * Sum the transient stat overlays the drug/moddy prepare wraps recorded earlier in the chain, for one
+ * base stat key (`ref`/`ma`/`bt`): the drug boosts (`actor._mechDrugMods`) and the personality-moddy
+ * contributions (`actor._mechStatMods`), each a `{ stat → [{ value }] }` contribution map whose
+ * `value` is the delta the status-strip tooltip already advertises. Pure.
+ */
+function recordedStatDelta(actor, key) {
+  let d = 0;
+  for (const c of (actor?._mechStatMods?.[key] ?? [])) d += Number(c?.value) || 0;
+  for (const c of (actor?._mechDrugMods?.[key] ?? [])) d += Number(c?.value) || 0;
+  return d;
 }
 
 /**
@@ -172,12 +249,20 @@ export function applyBorgBody(actor) {
  * fractions of the CURRENT total (base actor.js woundStat), not flat deltas, and the base's
  * recorded woundMod was derived from the meat total this SET just replaced. INT/COOL keep the
  * base's own wound fold untouched (the chassis never writes them).
+ *
+ * The SET also discards the drug-boost + stat-moddy deltas the earlier wraps applied to ref/ma/bt
+ * (their contribution records still render, so the tooltip lists a delta the total lacked) — so the
+ * refold list above is extended: re-apply the recorded deltas (recordedStatDelta) on top of the
+ * chassis value here. The printed rules are silent on drugs/moddies over a chassis, so this is
+ * PERMISSIVE by design (favors the borg): clamped never above the printed cap (BORG_STAT_CAPS) and
+ * never below the chassis base; GMs restrict at the table.
  */
 export function applyBorgStats(actor, stats) {
   if (!stats) return;
   const s = actor?.system?.stats;
   if (!s) return;
   const woundState = Number(actor?.woundState?.() ?? 0);
+  const capFor = { ref: BORG_STAT_CAPS.ref, ma: BORG_STAT_CAPS.ma, bt: BORG_STAT_CAPS.body };
   const setStat = (key, val) => {
     if (val === undefined || val === null || s[key] === undefined) return;
     const n = Number(val);
@@ -189,6 +274,13 @@ export function applyBorgStats(actor, stats) {
       if (woundState >= 4)      { s[key].woundMod = -(total - Math.ceil(total / 3)); total = Math.ceil(total / 3); }
       else if (woundState === 3){ s[key].woundMod = -(total - Math.ceil(total / 2)); total = Math.ceil(total / 2); }
       else if (woundState === 2){ s[key].woundMod = -2; total -= 2; }
+    }
+    // Refold the drug/moddy overlays the SET just discarded — permissive: clamp above at the printed
+    // cap, below at the chassis base (never let a crash/negative moddy drop below the machine's rating).
+    const delta = recordedStatDelta(actor, key);
+    if (delta) {
+      const cap = capFor[key] ?? 0;
+      total = Math.max(n, cap > 0 ? Math.min(total + delta, Math.max(n, cap)) : total + delta);
     }
     s[key].total = total;
   };
@@ -212,14 +304,18 @@ export function applyBorgStats(actor, stats) {
  * a core zone's SDP reaches destroyed.
  */
 export async function killBorgCore(actor, zone, token = null) {
-  const live = game.actors.get(actor.id) ?? actor;
-  const liveToken = token ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === live.id) ?? null;
+  // Resolve the token from the DAMAGED actor: a synthetic (unlinked) actor carries its own
+  // TokenDocument, so prefer actor.token?.object before the first-placeable scan — the placeable
+  // scan maps a synthetic actor back to the world prototype and picks the wrong token for a
+  // multi-token/unlinked actor. The card names/speaks as the damaged actor, not the world one.
+  const liveToken = token ?? actor?.token?.object
+    ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id) ?? null;
   await postSavePromptCard({
-    title: localizeParam("BorgCoreDestroyedTitle", { name: live.name }),
+    title: localizeParam("BorgCoreDestroyedTitle", { name: actor.name }),
     body: localize(zone === "Head" ? "BorgHeadDestroyedBody" : "BorgTorsoDestroyedBody"),
-    speaker: ChatMessage.getSpeaker({ actor: live }),
+    speaker: ChatMessage.getSpeaker({ actor }),
   });
-  const deadActor = liveToken?.actor ?? live;
+  const deadActor = liveToken?.actor ?? actor;
   if (deadActor?.toggleStatusEffect) {
     await deadActor.toggleStatusEffect("dead", { active: true }).catch(() => {});
   }
@@ -251,12 +347,31 @@ export function registerBorg() {
     return false;
   });
 
+  // Batch guard: a single updateEmbeddedDocuments flipping TWO chassis to equipped at once passes both
+  // preUpdate checks (neither sibling is committed when either check runs), landing two equipped
+  // bodies. Re-verify post-commit and demote all but the first — borgBodyOf's own "first equipped
+  // wins" order (collection order), so the retained body is the one the rest of the engine already
+  // treats as authoritative. The demote write flips equipped:false (equippedChange "off" → no re-entry).
+  Hooks.on("updateItem", async (item, changes, options, userId) => {
+    if (userId !== game.user?.id) return;
+    if (equippedChange(changes) !== "on" || !isBorgBody(item)) return;
+    const actor = item.actor;
+    if (!actor || !actor.isOwner) return;
+    const equipped = actor.items.filter(it => it.system?.equipped === true && isBorgBody(it));
+    if (equipped.length <= 1) return;
+    const [keep, ...extra] = equipped;
+    ui.notifications?.warn(localizeParam("BorgBodyAlreadyInstalled", { name: keep.name }));
+    await actor.updateEmbeddedDocuments("Item", extra.map(it => ({ _id: it.id, "system.equipped": false })));
+  });
+
   // The same rule on the CREATE path (a copied/imported body arrives with equipped baked in and
   // never passes preUpdateItem): a second chassis lands as CARRIED instead — spare bodies are
   // legitimate property; only the equipped slot is exclusive. The loadout createItem hook then
   // sees equipped:false and correctly skips materialization.
   Hooks.on("preCreateItem", (doc, data) => {
-    if (data?.system?.equipped !== true || !isBorgBody(doc)) return;
+    // Read the POST-CLEAN document, not raw creation data: the schema default is equipped:true, so a
+    // create that omits the key still lands equipped and must be caught by the demote rule.
+    if (doc?.system?.equipped !== true || !isBorgBody(doc)) return;
     const actor = doc?.parent;
     if (!actor?.items?.find) return;
     const other = actor.items.find(it => it.system?.equipped === true && isBorgBody(it));

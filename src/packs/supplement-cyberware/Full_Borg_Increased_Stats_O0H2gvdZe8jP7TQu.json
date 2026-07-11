@@ -5,7 +5,7 @@
   "img": "icons/svg/biohazard.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>REF 2000eb/+1 (max 15); MA 1500eb/+1 (max 25); BOD 1000eb/+1 (max 20). HC 2 per +1. | [Audit row +127 — Chromebook 2 p.85]</p>",
+    "notes": "<p>Class entry: the per-stat upgrades are the separate items \"Full Borg: Increased REF / MA / BODY\" — equip one copy per +1 (REF 2000eb max 15; MA 1500eb max 25; BOD 1000eb max 20; HC 2 per +1). This generic entry carries no bonus of its own. | [Audit row +127 — Chromebook 2 p.85]</p>",
     "cost": 2000,
     "weight": 0,
     "equipped": false,

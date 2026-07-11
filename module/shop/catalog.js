@@ -7,7 +7,7 @@ import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPE
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
 import { renderChatCard } from "../compat.js";
-import { getCalibers, getCaliberBox, getAmmoBoxPrice, AMMO_MODIFIERS } from "../lookups.js";
+import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber } from "../lookups.js";
 import { purchaseAmmo } from "./buy-ammo.js";
 import {
   getShop, listShops, shopsVisibleTo, createShop, updateShop, deleteShop, duplicateShop,
@@ -244,9 +244,9 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    *  official, then homebrew). Each chip is a display filter; on the GM's catalog/build view each official
    *  /homebrew chip also carries an eye toggle for player visibility (the old per-source curation). */
   _booksPanel(all, { isGM, cfg, canCurate }) {
-    const present = new Set(all.map(i => i.supplement + " " + i.canon));
+    const present = new Set(all.map(i => i.supplement + " " + i.canon));
     const enabled = cfg.enabledSources ?? {};
-    const seen = (name, canon) => present.has(name + " " + canon) && (isGM || isVisibleTo(name, canon, cfg, false));
+    const seen = (name, canon) => present.has(name + " " + canon) && (isGM || isVisibleTo(name, canon, cfg, false));
     const mk = (names, canon) => names.filter(n => seen(n, canon)).map(n => ({
       key: n, name: n, short: shortSupplement(n),
       active: this._books.has(n), curate: canCurate, enabled: enabled[n] === true
@@ -295,6 +295,9 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       ammo: true, caliber: id,
       name: (c && c.label) ? c.label : id,
       img, cost: getAmmoBoxPrice(id, "standard"), boxSize: Number(getCaliberBox(id).box) || 1,
+      // Load dropdown scoped to THIS caliber's family (arrow loads never appear on a bullet and vice
+      // versa) — the same helper the item sheet uses. Standard is first (universal), matching `cost`.
+      loads: modifiersForCaliber(id).map(([mid, m]) => ({ id: mid, label: (m && m.label) ? m.label : mid })),
       type: "ammo", category: "Ammo", sub: "",
       supplement: "Untagged", supplementShort: "", canon: "core",
       key: ""   // not a compendium doc → no source key (keeps it out of drag-to-buy / shop curation)
@@ -346,7 +349,6 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     return {
       showFilters: true, showJump: true, showSearch: true,
       rows, rowCount: rows.length, letters, cats: this._catTree(),
-      ammoLoads: Object.entries(AMMO_MODIFIERS).map(([id, m]) => ({ id, label: (m && m.label) ? m.label : id })),
       booksPanel: this._booksPanel(all, { isGM, cfg, canCurate: isGM })
     };
   }
@@ -787,7 +789,7 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   if (doc.type === "cyberware") { await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice }); return; }
   const svc = classifyService(doc, game.packs.get(packId)?.metadata?.name ?? "");
   if (svc === "oneoff") await payOneOffService(buyer, doc, { unitPrice, priceLabel: label });
-  else if (svc === "recurring") await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, systemPatch: { serviceMode: "recurring" } });
+  else if (svc === "recurring") await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } });
   else await buyItem(buyer, doc, { qty, unitPrice, priceLabel: label });
 }
 
@@ -817,7 +819,7 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
   else {
     const svc = classifyService(doc, game.packs.get(packId)?.metadata?.name ?? "");
     if (svc === "oneoff") ok = await payOneOffService(buyer, doc, { unitPrice, priceLabel: label });
-    else if (svc === "recurring") ok = await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, systemPatch: { serviceMode: "recurring" } });
+    else if (svc === "recurring") ok = await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } });
     else ok = await buyItem(buyer, doc, { qty: n, unitPrice, priceLabel: label });
   }
   if (ok !== false && !e.unlimited) {
@@ -855,44 +857,64 @@ async function requestPurchase(buyer, { packId, itemId, name, qty = 1, unitPrice
   ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopRequestSent"));
 }
 
+// Purchase requests already being resolved on THIS client — a synchronous claim (add before the first
+// await) makes a double-click / a re-fire a no-op; the shared pending flag (flipped early below) guards a
+// concurrent second GM. Mirrors the area-confirm claim idiom (combat/damage-hooks.js).
+const _resolvingPurchaseRequests = new Set();
+
 /** GM resolves a pending purchase request: Approve runs the buy as GM; Deny whispers the requester.
  *  For a price-request (needsPrice), `price` is the GM-entered value: it's saved as a self-disengaging
  *  override (never written to the compendium) BEFORE the buy, so purchaseCatalogItem resolves to it.
  *  For a variable-price request (priceRange) the input is OPTIONAL: a GM-entered price is saved as the
  *  item's override (which WINS for range items — see resolveCatalogPrice preferOverride); left blank,
- *  the buy runs at the listed price. */
+ *  the buy runs at the listed price.
+ *  @returns {Promise<boolean>} false only when the GM should be able to retry (e.g. a price is still
+ *    needed); true once claimed/resolved (or already gone) so the caller can keep the buttons disabled. */
 async function resolvePurchaseRequest(message, approve, price) {
-  if (!game.user.isGM) return;
+  if (!game.user.isGM) return true;
   const req = message?.getFlag?.("cp2020-augmented", "purchaseRequest");
-  if (!req || req.status !== "pending") return;
+  if (!req || req.status !== "pending") return true;   // already resolved / claimed elsewhere
   const buyer = game.actors.get(req.buyerId);
+  // Pre-claim validation (non-destructive, retriable): a missing buyer or an unset price mustn't burn the
+  // request — warn and let the GM fix it and click again.
   if (approve) {
-    if (!buyer) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopNoActor")); return; }
-    if (req.needsPrice) {
-      if (!isValidPrice(price)) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopPriceNeeded")); return; }
-      await setShopPriceOverride(req.itemId, price);   // self-disengaging: compendium cost always wins later
-    } else if (req.priceRange && isValidPrice(price)) {
-      await setShopPriceOverride(req.itemId, price);   // range item: the GM's price becomes the standing final price
-    }
-    await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel });
-  } else {
-    const player = game.users.get(req.requesterId);
-    if (player) ChatMessage.create({
-      whisper: [player.id],
-      content: game.i18n.format("CYBERPUNK.ShopRequestDeniedWhisper", { name: foundry.utils.escapeHTML(req.name ?? "") }),
-    });
+    if (!buyer) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopNoActor")); return false; }
+    if (req.needsPrice && !isValidPrice(price)) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopPriceNeeded")); return false; }
   }
-  const label = req.styleLabel && req.styleMult !== 1 ? `${req.styleLabel} ×${req.styleMult}` : "";
-  // After a price-request approval the total is now known (price × qty); a range request the GM
-  // repriced recomputes the same way; otherwise keep the original.
-  const gmPriced = approve && (req.needsPrice || (req.priceRange && isValidPrice(price)));
-  const total = gmPriced ? Math.max(0, Math.round((Number(price) || 0) * req.qty)) : req.total;
-  const content = await renderChatCard("shop/purchase-request.hbs", {
-    requester: game.users.get(req.requesterId)?.name ?? "", buyer: buyer?.name ?? req.buyerId,
-    name: req.name, qty: req.qty, total, label,
-    pending: false, approved: approve, resolvedBy: game.user.name,
-  });
-  await message.update({ content, "flags.cp2020-augmented.purchaseRequest.status": approve ? "approved" : "denied" });
+  // Claim synchronously (before any await) so a double-click / a second click on this client can't
+  // double-charge; a concurrent second GM is caught by the early status flip below.
+  if (_resolvingPurchaseRequests.has(message.id)) return true;
+  _resolvingPurchaseRequests.add(message.id);
+  try {
+    // Flip the shared pending flag as early as possible — before the awaited buy — so another client's
+    // `status !== "pending"` guard fails and only one resolution charges + stocks.
+    await message.update({ "flags.cp2020-augmented.purchaseRequest.status": approve ? "approved" : "denied" });
+    if (approve) {
+      if (req.needsPrice) await setShopPriceOverride(req.itemId, price);   // self-disengaging: compendium cost always wins later
+      else if (req.priceRange && isValidPrice(price)) await setShopPriceOverride(req.itemId, price);   // range item: the GM's price becomes the standing final price
+      await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel });
+    } else {
+      const player = game.users.get(req.requesterId);
+      if (player) ChatMessage.create({
+        whisper: [player.id],
+        content: game.i18n.format("CYBERPUNK.ShopRequestDeniedWhisper", { name: foundry.utils.escapeHTML(req.name ?? "") }),
+      });
+    }
+    const label = req.styleLabel && req.styleMult !== 1 ? `${req.styleLabel} ×${req.styleMult}` : "";
+    // After a price-request approval the total is now known (price × qty); a range request the GM
+    // repriced recomputes the same way; otherwise keep the original.
+    const gmPriced = approve && (req.needsPrice || (req.priceRange && isValidPrice(price)));
+    const total = gmPriced ? Math.max(0, Math.round((Number(price) || 0) * req.qty)) : req.total;
+    const content = await renderChatCard("shop/purchase-request.hbs", {
+      requester: game.users.get(req.requesterId)?.name ?? "", buyer: buyer?.name ?? req.buyerId,
+      name: req.name, qty: req.qty, total, label,
+      pending: false, approved: approve, resolvedBy: game.user.name,
+    });
+    await message.update({ content });
+  } finally {
+    _resolvingPurchaseRequests.delete(message.id);
+  }
+  return true;
 }
 
 /** A small Buy/Cancel confirm for drag-to-buy. Resolves to the chosen qty, or null on cancel. */
@@ -1071,10 +1093,16 @@ export function registerShopHooks() {
     if (game.user.isGM) root?.querySelectorAll?.(".cp-shop-request-btn").forEach(btn => {
       if (btn.dataset.cpBound === "1") return;
       btn.dataset.cpBound = "1";
-      btn.addEventListener("click", (ev) => {
+      btn.addEventListener("click", async (ev) => {
         ev.preventDefault();
-        const price = btn.closest(".cp-shop-request")?.querySelector(".cp-shop-request-price")?.value;
-        resolvePurchaseRequest(message, btn.dataset.action === "approve", price);
+        // Disable both buttons synchronously on click so a double-click can't fire a second resolution
+        // (the async race is guarded by the in-memory claim + status flip in resolvePurchaseRequest).
+        const card = btn.closest(".cp-shop-request");
+        const btns = card ? [...card.querySelectorAll(".cp-shop-request-btn")] : [btn];
+        btns.forEach(b => b.disabled = true);
+        const price = card?.querySelector(".cp-shop-request-price")?.value;
+        const resolved = await resolvePurchaseRequest(message, btn.dataset.action === "approve", price);
+        if (resolved === false) btns.forEach(b => b.disabled = false);   // retriable bail (e.g. a price is still needed)
       });
     });
   });

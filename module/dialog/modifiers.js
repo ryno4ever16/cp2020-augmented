@@ -1,6 +1,7 @@
 import { deepSet, localize, localizeParam } from "../utils.js"
 import { fireModes, caliberMatches, normalizeCaliber, isEnergyAttackType } from "../lookups.js"
 import { createCyberpunkChatMessage, getGMUserIds } from "../compat.js";
+import { ammoTrackingOn, setAmmoTracking } from "../mech/free-fire.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -137,8 +138,9 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       defaultValues,
       isRanged: this._weapon?.isRanged?.() ?? false,
       // Per-actor ammo-tracking flag (default ON). Unchecked here = Free Fire (weapon ignores ammo).
-      // Relocated from the combat-tab Weapons header; the toggle lives in this dialog now.
-      ammoTracking: (this._weapon?.actor?.getFlag?.("cyberpunk2020", "ammoTracking")) ?? true,
+      // Read via the single source in mech/free-fire.js (module flag scope) so the native row and the
+      // keep-topped engine agree. Resolve the actor pre-submit off the private weapon field.
+      ammoTracking: ammoTrackingOn(this._weapon?.actor ?? this.options?.weapon?.actor),
       shotsLeft: (this._weapon?._getWeaponSystem?.().shotsLeft) ?? (this._weapon?.system.shotsLeft) ?? 0,
       showAdvDis: this._showAdvDis,
       advantage: this._advantage,
@@ -160,14 +162,15 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // ── AMMO TRACKING / FREE FIRE ───────────────────────────────────────────
     // Per-actor toggle, relocated here from the combat-tab Weapons header. Unchecked = Free Fire
-    // (the weapon ignores ammo). Writes the same flags.cyberpunk2020.ammoTracking the fire/reload
-    // paths read, so the behaviour is unchanged — only the control moved. The label flips to match.
+    // (the weapon ignores ammo). Reads/writes the module-scope flag via the single source in
+    // mech/free-fire.js, so this native row and the injected V1 row and the keep-topped engine all
+    // agree. Turning it OFF also tops every magazine (setAmmoTracking). The label flips to match.
     root.querySelector(".cp-ammo-tracking")?.addEventListener("change", async (ev) => {
       const on = !!ev.target.checked;
       const label = root.querySelector(".cp-ammo-tracking-label");
       if (label) label.textContent = localize(on ? "AmmoTracking" : "FreeFire");
       try {
-        await this._weapon?.actor?.setFlag("cyberpunk2020", "ammoTracking", on);
+        await setAmmoTracking(this._weapon?.actor ?? this.options?.weapon?.actor, on);
       } catch (e) {
         console.warn("Cyberpunk2020 | ammo-tracking toggle failed", e);
       }
@@ -235,7 +238,7 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         root.querySelectorAll("input.number[readonly]").forEach(el => { el.value = String(shotsLeftAfter); });
       };
 
-      const ammoTracking = weapon.actor?.getFlag?.("cyberpunk2020", "ammoTracking") ?? true;
+      const ammoTracking = ammoTrackingOn(weapon.actor);
       const ammoItemId = String(sys.ammoItemId ?? "");
 
       if (!ammoTracking) {

@@ -24,9 +24,13 @@ const SUPPRESSIVE_FIRE = "cyberpunk2020.suppressiveFire";
 const SKILL_ROLLED = "cyberpunkSkillRolled";
 const MULTI_HIT_TEMPLATE = "systems/cyberpunk2020/templates/chat/multi-hit.hbs";
 const SUPPRESSIVE_TEMPLATE = "systems/cyberpunk2020/templates/chat/suppressive.hbs";
-// The base system's four ranged/melee fire resolvers; each builds the per-location areaDamages and
-// renders multi-hit.hbs. Matches the seam PR (item.js: __fullAuto/__threeRoundBurst/__semiAuto/__meleeBonk).
-const FIRE_METHODS = ["__fullAuto", "__threeRoundBurst", "__semiAuto", "__meleeBonk"];
+// The base system's five ranged/melee fire resolvers; each builds the per-location areaDamages and
+// renders multi-hit.hbs. Matches the seam PR (item.js: __fullAuto/__threeRoundBurst/__semiAuto/__meleeBonk),
+// plus __martialBonk — item.__weaponRoll routes a martial strike there and it renders multi-hit.hbs the same
+// way, so it MUST set _fireCtx too; otherwise the render wrap would emit weaponFired with a stale prior
+// context (mis-attributing the martial strike — and thus its attackerId — to the last ranged fire, which
+// starved the action counter / aim clear / arm-use notice that key on it).
+const FIRE_METHODS = ["__fullAuto", "__threeRoundBurst", "__semiAuto", "__meleeBonk", "__martialBonk"];
 
 /* ─── Pure decision logic (no Foundry globals → unit-testable) ─────────────────────────────────── */
 
@@ -237,6 +241,17 @@ function installSkillRolledShim(ActorProto) {
           if (done) return;
           const total = msg?.rolls?.[0]?.total;
           if (typeof total !== "number") return;   // wait for the actual rolled card
+          // Consume ONLY this user's own roll card — another user's card in the window would mis-attribute
+          // its total to this queue row. Author is the reliable owner signal at creation and is
+          // authoritative; only when it's unavailable (msg.author can be absent on v14+) fall back to
+          // matching the card's speaker actor to the rolled actor.
+          const authorId = msg?.author?.id ?? msg?._source?.author ?? null;
+          if (authorId) {
+            if (authorId !== game.user?.id) return;            // another user's card
+          } else {
+            const speakerActorId = msg?.speaker?.actor ?? null; // author unknown → prefer a speaker match
+            if (speakerActorId && speakerActorId !== actorId) return;
+          }
           done = true;
           Hooks.off("createChatMessage", hookId);
           try { Hooks.callAll(SKILL_ROLLED, { actorId, skillId: rolledSkillId, actorName, skillName, total }); }

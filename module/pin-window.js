@@ -8,10 +8,16 @@
  * open pinned window is re-raised above it. Among themselves, pinned windows keep normal click order;
  * the wrap only intervenes when a non-pinned window would otherwise cover them.
  *
- * A window counts as "pinned" if it is a DialogV2 — covering every DialogV2.confirm/prompt/wait the
- * module spawns (the IP level-up/neglect and shop buy/install/request confirms) with no per-call wiring
- * — or if its class opts in with `static CP_PIN_ON_TOP = true` (e.g. the system's Attack Modifiers
- * window when the module runs alongside the base system).
+ * The LEGACY (V1) Application framework raises via `bringToTop()` and tracks windows in `ui.windows` —
+ * both stacks share one z-order pool, so the sweep covers BOTH: raised-by-either re-floats pinned
+ * windows of either kind. On the ship target (vanilla + module) the base system's Attack Modifiers
+ * window is a V1 FormApplication (id "weapon-modifier"), reachable through base fire paths the
+ * module's sheets don't own — the V1 side is what keeps it above a clicked V2 actor sheet.
+ *
+ * A window counts as "pinned" if it is a DialogV2 / core V1 Dialog (covering every confirm either
+ * framework spawns, with no per-call wiring), if its class opts in with `static CP_PIN_ON_TOP = true`,
+ * or if it is the base system's V1 Attack Modifiers window (matched by its stable id — the module
+ * never edits the base class).
  */
 
 /** @param {ApplicationV2} app */
@@ -21,25 +27,55 @@ function isPinnedWindow(app) {
   return app?.constructor?.CP_PIN_ON_TOP === true;
 }
 
+/** Pinned test for LEGACY (V1) Application windows (ui.windows). */
+function isPinnedV1Window(app) {
+  if (globalThis.Dialog && app instanceof globalThis.Dialog) return true;   // core V1 confirms
+  if (app?.constructor?.CP_PIN_ON_TOP === true) return true;
+  return app?.options?.id === "weapon-modifier";   // the base system's V1 Attack Modifiers window
+}
+
 /** Install the "pinned subwindows float above ordinary windows" behaviour (call once, at init). */
 export function registerPinnedSubwindows() {
-  const proto = foundry.applications?.api?.ApplicationV2?.prototype;
-  if (!proto?.bringToFront || proto.bringToFront.__cpPinWrapped) return;
-  const orig = proto.bringToFront;
-  function wrapped(...args) {
-    const result = orig.apply(this, args);
-    // When an ordinary window is brought forward, re-float every open pinned window above it. Call the
-    // ORIGINAL bringToFront on each child (never the wrapper) so this never re-enters itself, and guard
-    // the whole sweep so z-order bookkeeping can never break a window interaction.
-    if (!isPinnedWindow(this)) {
-      try {
+  const protoV2 = foundry.applications?.api?.ApplicationV2?.prototype;
+  const protoV1 = globalThis.Application?.prototype;
+  const origV2 = protoV2?.bringToFront;
+  const origV1 = protoV1?.bringToTop;
+
+  // Re-float every open pinned window (both frameworks) above the just-raised ordinary one. Always
+  // call the ORIGINALS (never the wrappers) so the sweep can never re-enter itself, and guard the
+  // whole pass so z-order bookkeeping can never break a window interaction.
+  const refloatPinned = (raised) => {
+    try {
+      if (origV2) {
         for (const app of foundry.applications.instances.values()) {
-          if (app !== this && app.rendered && isPinnedWindow(app)) orig.apply(app, []);
+          if (app !== raised && app.rendered && isPinnedWindow(app)) origV2.apply(app, []);
         }
-      } catch (_) { /* non-fatal */ }
+      }
+      if (origV1) {
+        for (const app of Object.values(ui.windows ?? {})) {
+          if (app !== raised && app.rendered && isPinnedV1Window(app)) origV1.apply(app, []);
+        }
+      }
+    } catch (_) { /* non-fatal */ }
+  };
+
+  if (origV2 && !origV2.__cpPinWrapped) {
+    function wrappedV2(...args) {
+      const result = origV2.apply(this, args);
+      if (!isPinnedWindow(this)) refloatPinned(this);
+      return result;
     }
-    return result;
+    wrappedV2.__cpPinWrapped = true;
+    protoV2.bringToFront = wrappedV2;
   }
-  wrapped.__cpPinWrapped = true;
-  proto.bringToFront = wrapped;
+
+  if (origV1 && !origV1.__cpPinWrapped) {
+    function wrappedV1(...args) {
+      const result = origV1.apply(this, args);
+      if (!isPinnedV1Window(this)) refloatPinned(this);
+      return result;
+    }
+    wrappedV1.__cpPinWrapped = true;
+    protoV1.bringToTop = wrappedV1;
+  }
 }

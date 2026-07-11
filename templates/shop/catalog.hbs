@@ -162,7 +162,7 @@
                         {{#if r.inShop}}<span class="cp-inshop-mark" title="{{localize "CYBERPUNK.ShopInShop"}}">✓</span>
                         {{else}}<button type="button" class="cp-shop-add" title="{{localize "CYBERPUNK.ShopAdd"}}">＋</button>{{/if}}
                     {{else}}
-                        {{#if @root.isCatalog}}{{#if r.ammo}}<select class="cp-catalog-ammo-load" title="{{localize "CYBERPUNK.AmmoModifier"}}">{{#each @root.ammoLoads}}<option value="{{this.id}}">{{this.label}}</option>{{/each}}</select>{{else if r.fashion}}<select class="cp-catalog-style" title="{{localize "CYBERPUNK.ShopStyle"}}">{{#each @root.fashionStyles}}<option value="{{this.key}}">{{this.label}} ×{{this.mult}}</option>{{/each}}</select>{{/if}}{{/if}}
+                        {{#if @root.isCatalog}}{{#if r.ammo}}<select class="cp-catalog-ammo-load" title="{{localize "CYBERPUNK.AmmoModifier"}}">{{#each r.loads}}<option value="{{this.id}}">{{this.label}}</option>{{/each}}</select>{{else if r.fashion}}<select class="cp-catalog-style" title="{{localize "CYBERPUNK.ShopStyle"}}">{{#each @root.fashionStyles}}<option value="{{this.key}}">{{this.label}} ×{{this.mult}}</option>{{/each}}</select>{{/if}}{{/if}}
                         {{#if r.styleLabel}}<span class="cp-style-tag" title="{{localize "CYBERPUNK.ShopStyle"}}">{{r.styleLabel}}</span>{{/if}}
                         {{#if @root.isCatalog}}{{#if @root.isGM}}{{#unless r.ammo}}
                         <button type="button" class="cp-add-to-shop-btn" title="{{localize "CYBERPUNK.ShopAddTo"}}"><i class="fa-solid fa-cart-plus"></i></button>

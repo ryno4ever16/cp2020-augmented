@@ -18,6 +18,8 @@
 import { cwHasType, pickCwType } from "../utils.js";
 import { mechDocumentAutomationEnabled } from "../settings.js";
 
+const SCOPE = "cp2020-augmented";
+
 /** The id of the item this one is installed in ("" = loose). Cyberware → Module.ParentId. Pure. */
 export function installedInOf(item) {
   if (item?.type === "cyberware") return String(item.system?.Module?.ParentId ?? "");
@@ -32,6 +34,12 @@ export function capacityOf(item) {
 
 /** Slots this item occupies in its parent (min 1). Cyberware → Module.SlotsTaken. Pure. */
 export function slotsTakenOf(item) {
+  // Whole-chassis stat upgrades (the "Increased …" full-borg options) ARE the body, not an option
+  // occupying a zone space — an item carrying a `borgStatDelta` flag consumes 0 zone slots so the
+  // zone badge/gate never over-counts or blocks the shipped recipe (07-BORG-VEHICLE #2). Everything
+  // else keeps the min-1 floor.
+  const delta = item?.getFlag?.(SCOPE, "borgStatDelta") ?? item?.flags?.[SCOPE]?.borgStatDelta;
+  if (delta != null) return 0;
   const raw = item?.type === "cyberware"
     ? Number(item.system?.Module?.SlotsTaken)
     : Number(item?.system?.mechContainer?.slotsTaken);
@@ -128,7 +136,11 @@ export function checkInstall(child, parent, items) {
     }
   }
 
-  if (freeSlots(parent, items) < slotsTakenOf(child)) return { ok: false, reason: "full" };
+  // A re-drop into the child's CURRENT host isn't a new occupant — its slots are already counted in
+  // usedSlots, so add them back before the fits check. Without this a child in a full host reports
+  // "full" against itself and the drop path's relocate fallback silently unmounts it.
+  const ownSlots = installedInOf(child) === parentId ? slotsTakenOf(child) : 0;
+  if (freeSlots(parent, items) + ownSlots < slotsTakenOf(child)) return { ok: false, reason: "full" };
   return { ok: true, reason: null };
 }
 
@@ -142,13 +154,18 @@ export function canInstall(child, parent, items) {
  * children recursively. `filterRoot` selects which loose items become roots (e.g. only cyberware
  * for the cyber tab). Children of any type are included regardless of the root filter. Pure.
  */
-export function buildContainerTree(items, filterRoot = () => true) {
+export function buildContainerTree(items, filterRoot = () => true, allItems = items) {
   const list = items ?? [];
+  // Capacity/used are tallied over the FULL actor list (default = the display list, so old call
+  // sites are unchanged) — a mixed-type host's badge must match what checkInstall counts, or a
+  // drop fails "full" while the badge still shows free slots (02-CONTAINERS-UI #2). Tree SHAPE
+  // stays on the filtered `list`.
+  const all = allItems ?? list;
   const ids = new Set(list.map(it => it.id ?? it._id));
   const node = (item) => ({
     item,
     capacity: capacityOf(item),
-    used: usedSlots(list, item.id ?? item._id),
+    used: usedSlots(all, item.id ?? item._id),
     isContainer: isContainer(item),
     installed: !!installedInOf(item),
     children: childrenOf(list, item.id ?? item._id).map(node)
@@ -172,8 +189,11 @@ export function buildContainerTree(items, filterRoot = () => true) {
  * exactly once. Returns `{ [area]: [node, …] }`, node = `{ item, area, capacity, used, isContainer,
  * children }`. Pass the already-filtered set you want shown (e.g. the equipped/enabled cyberware). Pure.
  */
-export function buildZoneTrees(items, areaOf) {
+export function buildZoneTrees(items, areaOf, allItems = items) {
   const list = items ?? [];
+  // used tallied over the FULL actor list (default = display list) so a host badge matches the drop
+  // gate's own count — see buildContainerTree (02-CONTAINERS-UI #2). Tree shape stays on `list`.
+  const all = allItems ?? list;
   const idOf = (it) => it?.id ?? it?._id;
   const placeable = (it) => String(areaOf(it) || "") !== "";
   const byId = new Map(list.map(it => [idOf(it), it]));
@@ -181,7 +201,7 @@ export function buildZoneTrees(items, areaOf) {
     item,
     area: areaOf(item),
     capacity: capacityOf(item),
-    used: usedSlots(list, idOf(item)),
+    used: usedSlots(all, idOf(item)),
     isContainer: isContainer(item),
     children: childrenOf(list, idOf(item)).map(node),
   });
@@ -201,9 +221,15 @@ export function buildZoneTrees(items, areaOf) {
 /** Ids of all items nested (any depth) under `parentId`. Pure. */
 export function descendantIds(items, parentId) {
   const out = [];
+  // Guard against a stored parent-link cycle (legacy/API data — wouldCycle only guards new UI
+  // installs); without this the walk recurses to stack overflow and takes uninstall/⊗ down with it
+  // (02-CONTAINERS-UI #9). Mirrors wouldCycle's seen-set.
+  const seen = new Set([parentId]);
   const walk = (pid) => {
     for (const c of childrenOf(items, pid)) {
       const id = c.id ?? c._id;
+      if (seen.has(id)) continue;
+      seen.add(id);
       out.push(id);
       walk(id);
     }
@@ -212,11 +238,31 @@ export function descendantIds(items, parentId) {
   return out;
 }
 
-/** The update patch that clears an item's installed-in link (type-aware). Pure. */
-function detachPatch(item) {
-  return item?.type === "cyberware"
-    ? { "system.Module.ParentId": "" }
-    : { "system.mechContainer.installedIn": "" };
+/**
+ * The update patch that detaches an item from its host (type-aware). A CYBERWARE child gets the full
+ * uninstall shape — unequip + shed the host link + clear the body side + drop the chip-active flag,
+ * and restore its stashed native MountZone when present — so a detached implant lands truly loose in
+ * Carried Options rather than lingering equipped-but-hostless as a standalone zone root
+ * (02-CONTAINERS-UI #4; mirrors the sheet's _cpUninstallCyber). A MISC child just clears its own
+ * containment field (pushing cyberware keys at it would be stripped by its DataModel). Pure.
+ */
+export function detachPatch(item) {
+  if (item?.type !== "cyberware") return { "system.mechContainer.installedIn": "" };
+  const patch = {
+    "system.equipped": false,
+    "system.Module.ParentId": "",
+    "system.CyberBodyType.Location": "",
+    "system.CyberWorkType.ChipActive": false,
+  };
+  // The nest gesture stashes the option's own MountZone (before overwriting it with the host's zone)
+  // in `flags["cp2020-augmented"].origMountZone`; restore it on detach so the freed option returns to
+  // its native zone, then drop the stash. Absent (a materialized/never-nested option) ⇒ leave zone.
+  const orig = item.getFlag?.(SCOPE, "origMountZone") ?? item.flags?.[SCOPE]?.origMountZone;
+  if (orig != null) {
+    patch["system.MountZone"] = orig;
+    patch[`flags.${SCOPE}.-=origMountZone`] = null;
+  }
+  return patch;
 }
 
 /** The update patch that sets an item's installed-in link to `parentId` (type-aware). Pure. */
@@ -245,17 +291,16 @@ export function registerMechContainer() {
   // deleteItem event regardless of its id guard, so a batch delete of two containers would run
   // only the first cascade and orphan the second's children. A persistent listener keyed by the
   // pending container id survives interleaved deletions from any source.
-  const pendingDetach = new Map();   // container item id → { actor, kidIds }
+  const pendingDetach = new Map();   // container item id → { actor }
 
   Hooks.on("preDeleteItem", (item, options, userId) => {
     if (!mechDocumentAutomationEnabled()) return;   // the cascade rewrites child documents
     const actor = item.actor;
     if (!actor || userId !== game.user?.id || !actor.isOwner) return;
     if (!isContainer(item)) return;
-    const items = actor.items?.contents ?? [];
-    const kids = childrenOf(items, item.id).map(c => c.id);
-    if (!kids.length) return;
-    pendingDetach.set(item.id, { actor, kidIds: kids });
+    if (!childrenOf(actor.items?.contents ?? [], item.id).length) return;   // nothing to cascade
+    // Mark only — the child SET is re-derived at delete time, not snapshotted here (see below).
+    pendingDetach.set(item.id, { actor });
   });
 
   // Detach after the delete resolves, so the child updates don't fight the delete transaction.
@@ -263,10 +308,14 @@ export function registerMechContainer() {
     const entry = pendingDetach.get(deleted.id);
     if (!entry) return;
     pendingDetach.delete(deleted.id);
-    for (const id of entry.kidIds) {
-      const child = entry.actor.items.get(id);
-      if (child) await child.update(detachPatch(child)).catch(() => {});
-    }
+    // Re-derive the children NOW rather than replay a preDelete snapshot: a kid re-parented between
+    // the snapshot and here no longer links to this id, so childrenOf leaves it with its NEW host —
+    // a stale snapshot would wrongly detach it (02-CONTAINERS-UI #8). Deleted parents leave their
+    // children's links intact, so the match still resolves. One batched update, not N (LANE-C #10).
+    const kids = childrenOf(entry.actor.items?.contents ?? [], deleted.id);
+    if (!kids.length) return;
+    const updates = kids.map((c) => ({ _id: c.id ?? c._id, ...detachPatch(c) }));
+    await entry.actor.updateEmbeddedDocuments("Item", updates).catch(() => {});
   });
 
   // Containment links reference item ids on ONE actor. An item copied/dragged to another actor

@@ -69,11 +69,14 @@ export class CyberpunkActorTabSheet extends CyberpunkActorSheet {
   }
 
   /** Re-grey the parent character sheet's nav whenever this tab window appears or closes, so a
-   *  popped-out tab shows as detached on the main sheet. */
-  _syncParentNav() {
+   *  popped-out tab shows as detached on the main sheet. `exclude` names a window the refresh must
+   *  treat as GONE: at close() time this window's registry entry / rendered flag can settle a tick
+   *  AFTER close() resolves, so the one-shot refresh would still count it as open and the parent
+   *  nav would stay marked forever (caught by the tear-out keeper's recovery leg). */
+  _syncParentNav(exclude = null) {
     Object.values(this.actor?.apps ?? {})
       .find((a) => a.constructor?.name === "CyberpunkActorSheet" && a.rendered)
-      ?._refreshDetachedTabs?.();
+      ?._refreshDetachedTabs?.(exclude);
   }
 
   /** @override */
@@ -84,8 +87,12 @@ export class CyberpunkActorTabSheet extends CyberpunkActorSheet {
 
   /** @override */
   async close(options) {
+    // Mark BEFORE awaiting super.close: a parent sheet that re-renders during the close window reads the
+    // rendered-popout set, and this window's registry entry / rendered flag can still look open for a
+    // tick after close() resolves — the flag drops it so the nav mark can't get re-stuck (finding 7).
+    this._cpClosing = true;
     const r = await super.close(options);
-    this._syncParentNav();
+    this._syncParentNav(this);   // the closing window no longer counts as open, whatever its state
     return r;
   }
 
