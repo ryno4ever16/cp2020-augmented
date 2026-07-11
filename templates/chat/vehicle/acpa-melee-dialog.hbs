@@ -13,9 +13,20 @@
       <option value="kick">{{CPLocal "Vehicle.AcpaKick"}}</option>
     </select>
   </label>
+  {{!-- Melee skill STYLE (MM p.60): the pilot's own Brawling / Melee / Martial Arts. Martial Arts is offered
+        only when the suit's Reflex/Control is at least Low Boost (maAllowed); its level is capped at the pilot's
+        PA Combat Sense at strike time. The level field auto-pulls the picked skill's pilot value (still editable). --}}
+  <label title="{{CPLocal "Vehicle.MeleeSkillKindTip"}}">{{CPLocal "Vehicle.MeleeSkillKind"}}
+    <select id="cp-am-skillkind">
+      <option value="brawling">{{CPLocal "SkillBrawling"}}</option>
+      <option value="melee">{{CPLocal "SkillMelee"}}</option>
+      {{#if maAllowed}}<option value="martial">{{CPLocal "SkillMartialArts"}}</option>{{/if}}
+    </select>
+  </label>
   <div class="field-row">
     <label title="{{CPLocal "Vehicle.PilotRefTip"}}">{{CPLocal "Vehicle.PilotRef"}} <input type="number" id="cp-am-ref" value="{{effRef}}"></label>
-    <label>{{CPLocal "Vehicle.MeleeSkill"}} <input type="number" id="cp-am-skill" value="0"></label>
+    <label>{{CPLocal "Vehicle.MeleeSkill"}} <input type="number" id="cp-am-skill" value="{{skillDefault}}"></label>
     <label>{{CPLocal "Vehicle.TargetDV"}} <input type="number" id="cp-am-dv" value="15"></label>
   </div>
+  <div id="cp-am-capnote" class="result-note" hidden></div>
 </div>

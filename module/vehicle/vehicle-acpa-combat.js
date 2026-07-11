@@ -12,10 +12,16 @@ import { penetrationFactor } from "./vehicle-weapons.js";
 import { postStunSavePrompt } from "../combat/save-rolls.js";
 import { openSingletonDialog, localize, localizeParam } from "../utils.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
+import { getSkillVal, trainedMartials } from "../martial/martial.js";
 
 const SCOPE = "cp2020-augmented";
 const _enabled = (k, d = true) => { try { return game.settings.get(SCOPE, k); } catch { return d; } };
 let _rollDataWrapped = false;
+
+// MM p.60: in powered armor a PA Trooper may use Martial Arts ONLY if the Reflex/Control system is at
+// least Low Boost, and never above their PA Combat Sense level. Brawling & Melee are always allowed.
+// (The Reflex/Control enum lives in vehicle-acpa.js REFLEX_CONTROLS: BASIC / ADVANCED / LOW_BOOST / HIGH_BOOST.)
+const MA_REFLEX_CONTROLS = new Set(["LOW_BOOST", "HIGH_BOOST"]);
 
 /** The acting suit's token: prefer the selected one, else any of its tokens. */
 function _firerTokenOf(actor) {
@@ -45,10 +51,29 @@ export async function openAcpaMeleeDialog(actor) {
   const effStr = Math.max(0, (Number(actor.system?.str) || 0) - strDmg);
   const effRef = Number(actor.system?.effectiveRef) || 0;   // pilot REF capped by the Reflex/Control system
 
+  // Melee-skill auto-pull + Martial-Arts cap/gate (Maximum Metal p.60). The PA Trooper strikes with the
+  // LINKED PILOT's own melee skill. Brawling/Melee are always available; Martial Arts is available only
+  // when the Reflex/Control system is at least Low Boost (maAllowed) and, even then, is used at no higher
+  // than the pilot's PA Combat Sense level (pilotPACS, already derived on the suit each prepare).
+  // Read skills through the module's vendored getSkillVal/trainedMartials (base-agnostic; the same
+  // readers the module uses elsewhere) — martial arts are per-STYLE skills ("Martial Arts: Karate", …),
+  // so a plain getSkillVal("MartialArts") misses them; take the best trained style instead.
+  const pilot = actor.system?.pilotId ? game.actors?.get(actor.system.pilotId) : null;
+  const readSkill = (name) => pilot ? (Number(getSkillVal(pilot, name)) || 0) : 0;
+  let bestMA = 0;
+  if (pilot) {
+    for (const m of (trainedMartials(pilot) ?? [])) bestMA = Math.max(bestMA, Number(getSkillVal(pilot, m.value)) || 0);
+    bestMA = Math.max(bestMA, readSkill("MartialArts"));   // also honor a literal generic "Martial Arts" skill
+  }
+  const skillByKind = { brawling: readSkill("Brawling"), melee: readSkill("Melee"), martial: bestMA };
+  const pacs = Math.max(0, Number(actor.system?.pilotPACS) || 0);                 // pilot's PA Combat Sense (derived)
+  const maAllowed = MA_REFLEX_CONTROLS.has(String(actor.system?.reflexControl || ""));
+
   const content = await renderChatCard("vehicle/acpa-melee-dialog.hbs", {
     actorName: actor.name, effStr,
     strDmgClause: strDmg ? localizeParam("Vehicle.AcpaStrDmgClause", { strDmg }) : "",
     targetName: targetActor?.name ?? targetTok.name, effRef,
+    maAllowed, skillDefault: skillByKind.brawling,   // template renders the skill-style picker; seed its default Brawling auto-pull
   });
 
   const dialog = new foundry.applications.api.DialogV2({
@@ -61,9 +86,25 @@ export async function openAcpaMeleeDialog(actor) {
         default: true,
         callback: async (ev, btn, dlg) => {
           const root = dlg.element;
-          const kind = root.querySelector("#cp-am-kind")?.value || "punch";
+          const kind = root.querySelector("#cp-am-kind")?.value || "punch";   // strike TYPE (punch/crush/kick) → damage
           const ref = Number(root.querySelector("#cp-am-ref")?.value) || 0;
-          const skill = Number(root.querySelector("#cp-am-skill")?.value) || 0;
+          // Skill KIND (brawling/melee/martial) drives the to-hit skill + the Martial-Arts cap/gate (MM p.60);
+          // it is independent of the strike TYPE above. Defaults to Brawling if the picker didn't render.
+          const skillKind = root.querySelector("#cp-am-skillkind")?.value || "brawling";
+          let skill = Number(root.querySelector("#cp-am-skill")?.value) || 0;
+          let capClause = "";
+          if (skillKind === "martial") {
+            if (!maAllowed) {
+              // Reflex/Control below Low Boost: Martial Arts is not applied (the option is normally omitted
+              // from the picker — this guards a tampered DOM). Brawling/Melee are never blocked.
+              skill = 0;
+              capClause = ` — ${localize("Vehicle.AcpaMaBlocked")}`;
+            } else if (skill > pacs) {
+              // Never above PA Combat Sense (MM p.60). The CAPPED value flows into the to-hit + the card.
+              capClause = ` — ${localizeParam("Vehicle.AcpaMaCapNote", { skill, pacs })}`;
+              skill = pacs;
+            }
+          }
           const dv = Number(root.querySelector("#cp-am-dv")?.value) || 15;
           const dmg = acpaMeleeDamage(effStr, kind);
           const pen = _meleePen(dmg.dice);
@@ -78,7 +119,7 @@ export async function openAcpaMeleeDialog(actor) {
           });
           await ChatMessage.create({
             speaker: ChatMessage.getSpeaker({ actor }),
-            flavor: localizeParam("Vehicle.AcpaFlavor", { actor: actor.name, kind: kindName }),
+            flavor: localizeParam("Vehicle.AcpaFlavor", { actor: actor.name, kind: kindName }) + capClause,
             rolls: [d10], content,
           });
           if (hit && targetActor) {
@@ -93,6 +134,34 @@ export async function openAcpaMeleeDialog(actor) {
       { action: "cancel", label: localize("Cancel") },
     ],
   });
+  // The template renders the skill-style picker (#cp-am-skillkind) + the cap note (#cp-am-capnote). Foundry
+  // v14 doesn't fire DialogV2's render: config callback, so WIRE them from a patched _onRender (the same seam
+  // vehicle-weapons.js uses for its fire dialog): picking a style auto-pulls that skill's pilot value into the
+  // still-editable level field, and the PA Combat Sense cap note updates live while Martial Arts exceeds it.
+  const _origOnRender = dialog._onRender?.bind(dialog);
+  dialog._onRender = function (context, options) {
+    _origOnRender?.(context, options);
+    if (this._cpMeleeWired) return;
+    this._cpMeleeWired = true;
+    const root = this.element;
+    const picker = root?.querySelector("#cp-am-skillkind");
+    const skillInput = root?.querySelector("#cp-am-skill");
+    const capNote = root?.querySelector("#cp-am-capnote");
+    if (!picker || !skillInput) return;
+    const refreshCap = () => {
+      const raw = Number(skillInput.value) || 0;
+      const over = picker.value === "martial" && raw > pacs;
+      if (capNote) {
+        if (over) capNote.textContent = localizeParam("Vehicle.AcpaMaCapNote", { skill: raw, pacs });
+        capNote.hidden = !over;
+      }
+    };
+    // Picking a style auto-pulls that skill's pilot value (still hand-editable afterwards).
+    picker.addEventListener("change", () => { skillInput.value = skillByKind[picker.value] ?? 0; refreshCap(); });
+    skillInput.addEventListener("input", refreshCap);
+    refreshCap();
+  };
+
   return openSingletonDialog(`acpa-melee:${actor.id}`, () => dialog);
 }
 
