@@ -322,7 +322,13 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   const acpaDfb = isAcpaFirer ? (Number(actor.system?.dfb) || 0) : 0;
   // An ACPA fires with the pilot's capped effective REF when no separate gunner is boarded.
   const ref0 = Number(firstGunner?.system?.stats?.ref?.total) || (isAcpaFirer ? (Number(actor.system?.effectiveRef) || 0) : 0);
-  const skill0 = firstGunner ? (firstGunner.getSkillVal?.(GUNNER_SKILL) ?? 0) : 0;
+  // ...and with the linked PILOT's weapon skill when no gunner is boarded (MM p.52). GUNNER_SKILL is
+  // already "HeavyWeapons"; the field is user-editable, so the book's optional "Rifle for a two-handed
+  // rifled weapon" case is left to a GM override rather than auto-detected here.
+  const pilot = actor.system?.pilotId ? game.actors?.get(actor.system.pilotId) : null;
+  const skill0 = firstGunner
+    ? (firstGunner.getSkillVal?.(GUNNER_SKILL) ?? 0)
+    : (isAcpaFirer && pilot ? (pilot.getSkillVal?.("HeavyWeapons") ?? 0) : 0);
 
   // Intro sentence assembled from localized clauses (target present/absent, WA auto-applied).
   const targetClause = targetActor ? localizeParam("Vehicle.FireTargetClause", { target: targetActor.name }) : localize("Vehicle.FireNoTargetClause");

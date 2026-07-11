@@ -25,6 +25,7 @@ import { effectiveVehicleRuleSystem } from "../settings.js";
 import { renderChatCard } from "../compat.js";
 import { acpaBodyArea, externalSystemHit, acpaSystemHit, acpaRollAgain, acpaCriticalEffect, acpaCriticalUpdate, acpaAreaSDP, systemIntegrity } from "./vehicle-acpa.js";
 import { acpaHitSystem, acpaSystemSdp } from "./vehicle-acpa-systems.js";
+import { computeNetDamage, applyLocationDamage } from "../combat/DamageApplicator.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -295,6 +296,12 @@ export async function applyVehicleDamageCore(actor, { rawDamage = 0, ap = false,
 
 const _ACPA_AREA_KEY = { "Head": "head", "Right Arm": "rArm", "Left Arm": "lArm", "Right Leg": "rLeg", "Left Leg": "lLeg", "Torso": "torso" };
 
+// Struck ACPA area → the character hit-location string the personnel damage pipeline expects. Head/Torso
+// stay CAPITALIZED (computeNetDamage keys head-doubling on location === "Head"); limbs use the camelCase
+// zone keys (LIMB_LOCATIONS = rArm/lArm/rLeg/lLeg). Distinct from _ACPA_AREA_KEY above, whose head/torso
+// are lowercase frameSDP object keys.
+const _ACPA_AREA_TO_CHAR_LOC = { "Head": "Head", "Torso": "Torso", "Right Arm": "rArm", "Left Arm": "lArm", "Right Leg": "rLeg", "Left Leg": "lLeg" };
+
 /**
  * Faithful ACPA (powered-armor) damage (Maximum Metal p.54-56): SDP damage = incoming damage − armor
  * SP − Toughness Mod. If it gets through, roll a body area → 50% external system → System Hit Table
@@ -456,7 +463,7 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
       }
     }
   }
-  return { body, lines, updates, itemUpdates, pilotDamage, pilotStun };
+  return { body, lines, updates, itemUpdates, pilotDamage, pilotStun, areaName };
 }
 
 /**
@@ -516,10 +523,23 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
     Object.assign(updates, r.updates);
     // Per-system SDP: apply damage/destruction to the struck embedded acpaSystem Item(s).
     if (r.itemUpdates?.length) await actor.updateEmbeddedDocuments("Item", r.itemUpdates);
-    // Frame-breach overflow wounds the linked pilot (fires the normal stun/death saves via updateActor).
+    // Frame-breach overflow wounds the linked pilot through the REAL personnel damage pipeline
+    // (− pilot's BTM, wound-severity, stun/death saves — MM p.56), NOT a raw HP write. This resolver
+    // already runs GM-side (player→active-GM relay), the same context applyLocationDamage's cross-actor
+    // write expects, so no extra gating is needed. applyLocationDamage/routesToSdp also handle a
+    // full-borg pilot's SDP routing on their own — we just pass target + location.
     if (r.pilotDamage > 0 && sys.pilotId) {
       const pilot = game.actors?.get(sys.pilotId);
-      if (pilot) await pilot.update({ "system.damage": (Number(pilot.system?.damage) || 0) + r.pilotDamage });
+      if (pilot) {
+        const pilotBtm = Number(pilot.system?.stats?.bt?.modifier) || 0;
+        const charLoc = _ACPA_AREA_TO_CHAR_LOC[r.areaName] ?? "Torso";
+        // penetrates=true → applyBTM floors the wound at 1 (it got through the frame).
+        const netDamage = computeNetDamage(r.pilotDamage, pilotBtm, true, charLoc);
+        // structuralDamage = the pre-BTM overflow: a full-borg PILOT (e.g. the DaiOni's Alpha) routes it
+        // to zone SDP, which absorbs machinery-style with NO BTM (Core p.89); a flesh pilot ignores it and
+        // takes the post-BTM netDamage on the wound track. Mirrors the personnel path (DamageApplicator).
+        await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: r.pilotDamage, penetrates: true });
+      }
     }
     // A Mechanical Shock critical stuns the pilot → post their Stun/Shock Save (no damage, so the
     // updateActor hook above wouldn't fire it).
