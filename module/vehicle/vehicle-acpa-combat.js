@@ -7,7 +7,7 @@
  * by criticals (strDamage) reduces the effective STR.
  */
 
-import { acpaMeleeDamage, acpaTickStatus } from "./vehicle-acpa.js";
+import { acpaMeleeDamage, acpaTickStatus, acpaInitiativeRollData } from "./vehicle-acpa.js";
 import { penetrationFactor } from "./vehicle-weapons.js";
 import { postStunSavePrompt } from "../combat/save-rolls.js";
 import { openSingletonDialog, localize, localizeParam } from "../utils.js";
@@ -15,6 +15,7 @@ import { renderChatCard, postSavePromptCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
 const _enabled = (k, d = true) => { try { return game.settings.get(SCOPE, k); } catch { return d; } };
+let _rollDataWrapped = false;
 
 /** The acting suit's token: prefer the selected one, else any of its tokens. */
 function _firerTokenOf(actor) {
@@ -145,7 +146,29 @@ export async function tickAcpaCombatant(actor) {
   }
 }
 
+// An ACPA suit is a `vehicle` actor with no native stats, so Foundry's initiative formula
+// (1d10 + @stats.ref.total + @CombatSenseMod + @initiativeMod + @initiativeImplantMod) evaluates
+// to 1d10 alone. Map the suit's derived init terms into getRollData ONLY for ACPA vehicles — every
+// other actor (characters, plain vehicles) is returned untouched. Weapon to-hit builds literal-number
+// formulas (not @-terms), so it is unaffected by these keys.
+function wrapAcpaRollData() {
+  const proto = CONFIG?.Actor?.documentClass?.prototype;
+  if (!proto || _rollDataWrapped) return;
+  const orig = proto.getRollData;
+  proto.getRollData = function () {
+    const data = orig.call(this);
+    try {
+      if (this.type === "cp2020-augmented.vehicle" && this.system?.isACPA) {
+        return Object.assign({ ...data }, acpaInitiativeRollData(this.system));
+      }
+    } catch (e) { console.warn(`${SCOPE} | ACPA getRollData wrap failed`, e); }
+    return data;
+  };
+  _rollDataWrapped = true;
+}
+
 export function registerAcpaCombatHooks() {
+  wrapAcpaRollData();
   Hooks.on("updateCombat", async (combat, changed) => {
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
     if (changed.round === undefined) return;   // once per round
@@ -154,13 +177,15 @@ export function registerAcpaCombatHooks() {
     }
   });
 
-  // An ACPA's effective REF is DERIVED from its linked pilot's REF (prepareDerivedData reads the pilot
-  // actor). Foundry only re-derives a suit when the SUIT itself changes, not when the PILOT does — so a
-  // pilot REF change left the suit's effectiveRef stale until an unrelated re-prepare. Re-derive + refresh
-  // any suit linked to a pilot whose REF just changed. Derived data is per-client, so every client runs it.
+  // An ACPA's effective REF + run/jump are DERIVED from its linked pilot's REF and MA (prepareDerivedData
+  // reads the pilot actor). Foundry only re-derives a suit when the SUIT itself changes, not when the
+  // PILOT does — so a pilot REF or MA change left the suit's derived stats stale until an unrelated
+  // re-prepare. Re-derive + refresh any suit linked to a pilot whose stats just changed. (A PA Combat
+  // Sense skill-item add/remove is NOT caught here — the suit picks it up on its next prepare/reset.)
+  // Derived data is per-client, so every client runs it.
   Hooks.on("updateActor", (actor, changed) => {
     if (!actor || actor.type === "cp2020-augmented.vehicle") return;   // pilots (non-suit actors) only
-    if (!foundry.utils.hasProperty(changed, "system.stats.ref")) return;
+    if (!foundry.utils.hasProperty(changed, "system.stats")) return;
     for (const suit of game.actors ?? []) {
       if (suit.type !== "cp2020-augmented.vehicle" || suit.system?.pilotId !== actor.id) continue;
       suit.reset();                                        // recompute derived data (effectiveRef)

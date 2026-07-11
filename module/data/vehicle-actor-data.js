@@ -8,7 +8,8 @@ import {
   stringField
 } from "./schema-helpers.js";
 
-import { acpaAreaSDP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib } from "../vehicle/vehicle-acpa.js";
+import { acpaAreaSDP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib, acpaRunM, acpaJumpM } from "../vehicle/vehicle-acpa.js";
+import { isPACombatSenseSkill } from "../utils.js";
 
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
@@ -172,14 +173,24 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       // Basic control on a military STR42+ frame is stricter (REF−3 not −2) — acpaReflexMod handles it.
       this.refMod = acpaReflexMod(this.reflexControl, str);
       // A linked pilot actor supplies the base REF; otherwise the manual pilotRef field is the fallback.
+      // The same pilot also supplies MA (for run/jump) and PA Combat Sense (its initiative bonus).
       let pilotRef = Number(this.pilotRef) || 0;
+      let pilotPACS = 0, pilotMA = 0;
       try {
         if (this.pilotId) {
           const pilot = game.actors?.get(this.pilotId);
           const r = Number(pilot?.system?.stats?.ref?.total);
           if (Number.isFinite(r)) pilotRef = r;
+          pilotMA = Number(pilot?.system?.stats?.ma?.total) || 0;
+          // PA Combat Sense is matched by _id (isPACombatSenseSkill), never by skill name — a Solo's
+          // generic "Combat Sense" must NOT count as the ACPA-specific implant.
+          const paItem = pilot?.itemTypes?.skill?.find(isPACombatSenseSkill);
+          if (paItem && typeof pilot.constructor?.realSkillValue === "function") {
+            pilotPACS = Number(pilot.constructor.realSkillValue(paItem)) || 0;
+          }
         }
       } catch (e) { /* actors not ready */ }
+      this.pilotPACS = pilotPACS;
       this.effectiveRef = acpaEffectiveRef({
         pilotRef, refMod: this.refMod, maxRef: this.maxRef, refDamage: this.refDamage
       });
@@ -203,6 +214,10 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       this.mountedSystemsCost = mountedSystemsCost;
       this.totalWeight = cs.weight + this.armorWeight + trooper + ri.weight + mountedSystemsWeight + sysW + cmdW;
       this.sib = acpaSib({ chassisCapacity: cs.lift, totalWeight: this.totalWeight, interfaceSib: ri.sib });
+      // Movement (MM p.57): Run = (SIB + pilot MA) × 3; standing jump = Run/6, running jump = Run/4.
+      this.runM = acpaRunM({ sib: this.sib, ma: pilotMA });
+      this.jumpStanding = acpaJumpM(this.runM, {});
+      this.jumpRunning = acpaJumpM(this.runM, { running: true });
       // Total build cost (chassis + armor shell + interface + reflex/control + Command Computer + systems).
       this.buildCost = (Number(cs.cost) || 0) + this.armorCost + (Number(ri.cost) || 0) + (Number(rc.cost) || 0)
         + (this.commandComputer ? 5000 : 0) + mountedSystemsCost;

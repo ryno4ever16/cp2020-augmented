@@ -375,16 +375,20 @@ export function acpaSib({ chassisCapacity = 0, totalWeight = 0, interfaceSib = 0
 /**
  * Roll-data terms so the shared system initiative formula
  *   "1d10 + @stats.ref.total + @CombatSenseMod + @initiativeMod + @initiativeImplantMod"
- * evaluates, for an ACPA suit, to 1d10 + effective REF + SIB (+1 Command Computer). Vehicles have
- * none of these stats natively, so the actor's getRollData() maps the suit's derived values here. PURE.
- * @param {object} sys  the ACPA actor's system (reads effectiveRef / sib / commandComputer)
+ * evaluates, for an ACPA suit, to 1d10 + effective REF + SIB + PA Combat Sense (+1 Command Computer).
+ * Vehicles have none of these stats natively, so the actor's getRollData() maps the suit's derived
+ * values here. PA Combat Sense feeds @CombatSenseMod but is capped so SIB + PA Combat Sense ≤ 20
+ * (MM p.53). PURE.
+ * @param {object} sys  the ACPA actor's system (reads effectiveRef / sib / pilotPACS / commandComputer)
  */
 export function acpaInitiativeRollData(sys) {
   const s = sys ?? {};
+  const sib = Number(s.sib) || 0;
+  const pacs = Math.max(0, Math.min(Number(s.pilotPACS) || 0, 20 - sib));   // MM p.53: SIB + PA Combat Sense ≤ 20
   return {
     stats: { ref: { total: Number(s.effectiveRef) || 0 } },
-    CombatSenseMod: 0,
-    initiativeMod: Number(s.sib) || 0,
+    CombatSenseMod: pacs,
+    initiativeMod: sib,
     initiativeImplantMod: s.commandComputer ? 1 : 0,
   };
 }
