@@ -42,6 +42,9 @@
  *                                      drug-save-prompt.hbs's .cp-drug-save-roll + data-save).
  *   • radiation-death-result.hbs  — the death-check RESULT card. Context:
  *                                    { actorName, result, chance, deathPct, btm, over, died, outcomeClause }.
+ *   • radiation-longterm.hbs      — the LONG-TERM effects REFERENCE card (the GM roller; Deep Space p.22).
+ *                                    Context: { actorName, history, hasEffects, rows:[{name,detail}],
+ *                                    offspring:{roll,result}|null }. Never auto-applies.
  *   • save-prompt.hbs             — EXISTING (reused via postSavePromptCard) for the wear-off / cleared /
  *                                    cured NOTICE cards. Not created here.
  *
@@ -52,7 +55,10 @@
  *   RadDeathSurvivesClause, RadEffectPassedBody, RadExposureClearedBody, RadCuredBody,
  *   RadiationSourceDefault.  (Reused EXISTING key: SaveNotOwned.)  The card templates above will also
  *   need their own static label keys (card titles, the Roll-button label) — those belong to the
- *   template author.
+ *   template author.  The long-term roller adds: RadLongTermTitle, RadLongTermIntro, RadLongTermNone,
+ *   RadLt<Effect> + RadLt<Effect>Effect (Mutations/MinorCancers/Cataracts/Stillbirths/Leukemia/
+ *   ModerateCancers/Sterility/SevereCancers/FatalCancers), RadOffspring<Result> (Favorable/Harmless/
+ *   Deformed/Stillbirth), RadOffspringRolled.
  */
 
 import { localize, localizeParam } from "../utils.js";
@@ -584,6 +590,132 @@ export async function executeRadiationDeathCheck({ actorId, tokenId, sceneId, ch
     content
   });
   // Deliberately NO status change — the GM decides how the timeframe plays out.
+}
+
+/* ══════════════════════════════════ Long-term effects (GM roller) ══════════════════════════════════ */
+
+/**
+ * The LONG-TERM Radiation Effects table (Deep Space p.22, user-confirmed 2026-07-11), keyed by LIFETIME
+ * radiation history (the monotonic radHistory flag). Unlike the immediate effects table, this one is
+ * EXPLICITLY Referee's judgment (p.19: "depend more on Referee discretion than on dice rolling") and
+ * unfolds over game-YEARS — so the roller is a REFERENCE card: it lists which effects have onset at the
+ * actor's lifetime dose (with the book's dynamic odds) and rolls the one concrete sub-table (offspring
+ * mutation). It NEVER auto-applies a stat/status change (the ratified automation boundary: immediate
+ * effects automated, long-term effects a GM roller). Onset doses transcribed EXACTLY; the two rows the
+ * book prints with a BLANK dose column (Stillbirths, Moderate Cancers) are grouped under the dose
+ * directly above them (300 / 400) per the user's 2026-07-11 confirmation. `offspring:true` marks the row
+ * whose "See below" points at the Offspring Mutation Table. Ordered ascending by onset `min`.
+ */
+export const RAD_LONGTERM = [
+  { min: 100, key: "Mutations", offspring: true },
+  { min: 200, key: "MinorCancers"    },
+  { min: 300, key: "Cataracts"       },
+  { min: 300, key: "Stillbirths"     },
+  { min: 400, key: "Leukemia"        },
+  { min: 400, key: "ModerateCancers" },
+  { min: 450, key: "Sterility"       },
+  { min: 600, key: "SevereCancers"   },
+  { min: 750, key: "FatalCancers"    },
+];
+
+/**
+ * The Offspring Mutation Table (Deep Space p.22, user-confirmed): a 1d10 rolled when a character with
+ * ≥100 rads of lifetime history has offspring. Half-open bands by roll; transcribed exactly. The
+ * "Deformed" result's stat loss is Referee-determined and applies to the OFFSPRING (an NPC) — never to
+ * the irradiated character — so this roller only REPORTS the rolled result.
+ */
+export const OFFSPRING_MUTATION = [
+  { min: 1, max:  1, key: "Favorable"  },
+  { min: 2, max:  3, key: "Harmless"   },
+  { min: 4, max:  7, key: "Deformed"   },
+  { min: 8, max: 10, key: "Stillbirth" },
+];
+
+/** Long-term rows whose onset dose ≤ the lifetime history. Pure (exported for the keeper). */
+export function longTermEffectsFor(history) {
+  const h = Number(history) || 0;
+  return RAD_LONGTERM.filter((r) => h >= r.min);
+}
+
+/** Permanent-sterility chance % at a lifetime history (Deep Space p.22 step function). Pure. */
+export function sterilityChancePct(history) {
+  const h = Number(history) || 0;
+  if (h >= 750) return 100;
+  if (h >= 650) return 99;
+  if (h >= 600) return 90;
+  if (h >= 550) return 50;
+  if (h >= 500) return 25;
+  if (h >= 450) return 10;
+  return 0;
+}
+
+/** Leukemia odds at a lifetime history: 1-in-300 at 400 rads, DOUBLING every +50 (Deep Space p.22).
+ *  Returns { denom, pct } (1-in-`denom`, ≈`pct`%), or null below the 400-rad onset. Pure. */
+export function leukemiaOdds(history) {
+  const h = Number(history) || 0;
+  if (h < 400) return null;
+  const doublings = Math.floor((h - 400) / 50);
+  const denom = 300 / Math.pow(2, doublings);      // 1 in `denom`; halves each doubling as the chance doubles
+  const pct = Math.min(100, 100 / denom);
+  return { denom: Math.max(1, Math.round(denom)), pct: Math.round(pct * 10) / 10 };
+}
+
+/** The offspring-mutation band containing a 1d10 roll. Pure. */
+export function offspringResultFor(roll) {
+  const r = Number(roll) || 0;
+  return OFFSPRING_MUTATION.find((b) => r >= b.min && r <= b.max) ?? OFFSPRING_MUTATION[OFFSPRING_MUTATION.length - 1];
+}
+
+/** Roll the Offspring Mutation Table (1d10) → { roll, band }. Impure (dice). */
+async function rollOffspringMutation() {
+  const roll = await new Roll("1d10").evaluate();
+  const total = Number(roll.total) || 0;
+  return { roll: total, band: offspringResultFor(total) };
+}
+
+/**
+ * Post the LONG-TERM effects REFERENCE card for an actor (the panel's "Long-Term Effects" button / a GM
+ * tool). Lists every long-term effect whose onset dose ≤ the actor's LIFETIME history — the dynamic book
+ * odds (sterility %, leukemia 1-in-N) assembled as clauses in JS, the template just loops (Tilt's way) —
+ * and, once the character has reached the Mutations threshold (≥100 lifetime rads), rolls the Offspring
+ * Mutation Table once and reports it. NEVER auto-applies a stat/status change: long-term radiation is
+ * Referee-adjudicated over game-years. GM/owner gated (mirrors the other radiation controls).
+ */
+export async function postLongTermCard(actor) {
+  if (!actor) return;
+  if (!(game.user.isGM || actor.isOwner)) return;
+  const history = actorHistory(actor);
+  const effects = longTermEffectsFor(history);
+
+  // Localized rows built here (dynamic content assembled in JS; the template only loops).
+  const rows = effects.map((r) => {
+    let detail;
+    if (r.key === "Sterility") {
+      detail = localizeParam("RadLtSterilityEffect", { pct: sterilityChancePct(history) });
+    } else if (r.key === "Leukemia") {
+      const o = leukemiaOdds(history);
+      detail = localizeParam("RadLtLeukemiaEffect", { denom: o?.denom ?? 300, pct: o?.pct ?? 0.3 });
+    } else {
+      detail = localize(`RadLt${r.key}Effect`);
+    }
+    return { name: localize(`RadLt${r.key}`), detail };
+  });
+
+  // Offspring mutation: rolled once when the character has reached the Mutations onset. Reported, never applied.
+  let offspring = null;
+  if (history >= 100) {
+    const { roll, band } = await rollOffspringMutation();
+    offspring = { roll, result: localize(`RadOffspring${band.key}`) };
+  }
+
+  const content = await renderChatCard("radiation-longterm.hbs", {
+    actorName: actor.name,
+    history,
+    hasEffects: rows.length > 0,
+    rows,
+    offspring,
+  });
+  await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
 }
 
 /* ══════════════════════════════════ Registration ══════════════════════════════════ */

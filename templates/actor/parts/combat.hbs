@@ -90,8 +90,16 @@
             </div>
             {{/each}}
         </div>
-        
+
     </section>
+
+    {{!-- GM-only Deep Space radiation hub (R3b): dose readout + apply/long-term/clear/cure controls.
+          Present only when the radiation subsystem is enabled AND the viewer is a GM (radiation.show is
+          built in _prepareContext#_cpPrepareRadiation). --}}
+    {{#if radiation.show}}
+    {{> "modules/cp2020-augmented/templates/actor/parts/radiation-panel.hbs" radiation=radiation}}
+    {{/if}}
+
     <section class="weapons-list">
         <header>
             <h2>{{CPLocal "Weapons"}}</h2>

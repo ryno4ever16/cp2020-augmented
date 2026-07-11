@@ -18,7 +18,9 @@ import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipCost, ipLockState, canEditSkillLevels, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
-import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
+import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled, cyberlimbRepairGmOnly, radiationEnabled } from "../settings.js";
+import { actorExposure, actorHistory, actorRSP, radMarkersFor, clearExposure, cureRadiation, postLongTermCard } from "../radiation/radiation.js";
+import { openApplyDoseDialog } from "../radiation/radiation-tools.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -117,6 +119,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       // §3c visibility hybrid: status-strip rows + item-row badges + stat tooltips. mech/status.js
       // supplies mechanism rows; this is their render edge (labels localized here, names literal).
       this._cpPrepareStatusVisibility(sheetData);
+
+      // GM-only Deep Space radiation hub (R3b): a readout of the running exposure / lifetime history / RSP
+      // / active stat loss + the GM controls. Shown only to a GM while the subsystem is enabled — inert
+      // otherwise, so the sheet is byte-identical for players and for a world with radiation off.
+      this._cpPrepareRadiation(sheetData);
     }
 
     sheetData.cyberwareSegmentsRight = [
@@ -205,6 +212,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     this._cpActivateNetrunningControls(root);
     // CP2020-specific controls (ammo toggle / shop / services / IP / martial) — Stage A2.
     this._cpActivateActorCustomControls(root);
+    // GM-only Deep Space radiation panel controls (R3b): apply-dose / long-term / clear / cure.
+    this._cpActivateRadiationControls(root);
     // Life-tab (system.notes) ProseMirror autosave — extracted to an upstream-aligned helper (Stage A2).
     this._cpActivateNotesEditor(root);
     // Drag-drop (drop-target dragover, gear sort, owned-item drag sources) — upstream-aligned helper (Stage A2).
@@ -1440,6 +1449,81 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    * martial-action panel. Same native bind-once dispatch shape as the upstream-mirrored clusters
    * (Stage A2); covered by tests/v14/actor-custom-controls.spec.js.
    */
+  /**
+   * Build the GM-only radiation panel context (R3b): the running exposure, lifetime history, the actor's
+   * RSP, and a compact aggregate of the active radiation stat loss ("BT −2, REF −1"). Populated only for a
+   * GM while the subsystem is enabled — otherwise `radiation.show` is false and combat.hbs skips the whole
+   * panel, keeping the sheet byte-identical for players / radiation-off worlds. Mirrors
+   * _cpPrepareStatusVisibility (a render-edge helper off _prepareContext).
+   */
+  _cpPrepareRadiation(sheetData) {
+    if (!(radiationEnabled() && game.user.isGM)) { sheetData.radiation = { show: false }; return; }
+    const actor = this.actor;
+
+    // Aggregate every active marker's stat mods into one signed-per-stat summary for the readout.
+    const agg = {};
+    for (const m of radMarkersFor(actor)) {
+      for (const b of m?.statBoosts ?? []) {
+        const key = String(b?.stat ?? "").toUpperCase();
+        if (!key) continue;
+        agg[key] = (agg[key] || 0) + (Number(b?.mod) || 0);
+      }
+    }
+    const statLoss = Object.entries(agg)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k} ${v >= 0 ? "+" : ""}${v}`)
+      .join(", ");
+
+    sheetData.radiation = {
+      show: true,
+      exposure: actorExposure(actor),
+      history: actorHistory(actor),
+      rsp: actorRSP(actor),
+      statLoss,
+    };
+  }
+
+  /**
+   * Wire the GM-only radiation panel buttons (R3b) — native bind-once on the persistent root (the
+   * _cpActivate* idiom). The buttons only exist in the DOM for a GM (combat.hbs guards on radiation.show),
+   * and every action re-checks GM/owner in the radiation API, so this is defence-in-depth. Apply opens the
+   * dose dialog for THIS actor; long-term posts the reference card; clear/cure mutate + let the flag write
+   * re-render the sheet (the readout refreshes off the updated flags).
+   */
+  _cpActivateRadiationControls(root) {
+    if (!root?.addEventListener) return;
+    const editable = this.isEditable ?? this.options?.editable ?? false;
+    if (!editable) return;
+    if (root.dataset.cpRadiationControlsBound === "1") return;
+    root.dataset.cpRadiationControlsBound = "1";
+
+    root.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!target?.closest) return;
+
+      if (target.closest(".cp-rad-apply")) {
+        event.preventDefault();
+        await openApplyDoseDialog([this.actor]);
+        return;
+      }
+      if (target.closest(".cp-rad-longterm")) {
+        event.preventDefault();
+        await postLongTermCard(this.actor);
+        return;
+      }
+      if (target.closest(".cp-rad-clear")) {
+        event.preventDefault();
+        await clearExposure(this.actor);
+        return;
+      }
+      if (target.closest(".cp-rad-cure")) {
+        event.preventDefault();
+        await cureRadiation(this.actor);
+        return;
+      }
+    });
+  }
+
   _cpActivateActorCustomControls(root) {
     if (!root?.addEventListener) return;
     // Editable check before the bound flag (so a non-editable first render can't consume the binding).

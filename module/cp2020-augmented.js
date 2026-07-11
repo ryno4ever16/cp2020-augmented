@@ -48,6 +48,7 @@ import { registerBorg } from "./mech/borg.js";
 import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
 import { registerRadiation } from "./radiation/radiation.js";
 import { registerRadiationZones } from "./radiation/radiation-zones.js";
+import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
 import { registerPaSkillBackfill } from "./mech/pa-skills.js";
 import { registerMartialDefense } from "./martial/martial.js";
@@ -93,6 +94,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/parts/combat.hbs",
   "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs",
   "modules/cp2020-augmented/templates/actor/parts/conditional-armor.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/radiation-panel.hbs",
   "modules/cp2020-augmented/templates/actor/parts/armor-layers-panel.hbs",
   "modules/cp2020-augmented/templates/actor/parts/gear.hbs",
   "modules/cp2020-augmented/templates/actor/parts/services.hbs",
@@ -213,6 +215,9 @@ Hooks.once("init", function () {
   // the whole subsystem stays inert unless the radiationEnabled world setting is on.
   registerRadiation();
   registerRadiationZones();
+  // R3b GM tools: the apply-dose / place-zone / environmental scene-control buttons (shown to a GM while
+  // radiation is enabled). The per-actor panel controls are wired by the actor sheet itself.
+  registerRadiationTools();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).

@@ -1,0 +1,26 @@
+{{!--
+  Long-term radiation effects REFERENCE card (R3b — Deep Space radiation subsystem, p.22). Rendered from
+  postLongTermCard() in module/radiation/radiation.js. Long-term radiation is Referee-adjudicated over
+  game-years and is NEVER auto-applied — this card only LISTS the effects whose onset dose ≤ the actor's
+  lifetime radiation history and reports one Offspring Mutation roll. `rows` (name + dynamic-odds detail)
+  and `offspring` are assembled/localized in JS; this template just presents them. i18n via CPLocal;
+  triple-stash the intro / offspring line (they carry <b>). Reuses the shared save-prompt CSS classes.
+--}}
+<div class="cyberpunk save-prompt radiation-longterm">
+  <h3>{{CPLocal "RadLongTermTitle" name=actorName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "RadLongTermIntro" history=history}}}</span>
+  </div>
+  {{#if hasEffects}}
+  <ul class="cp-rad-lt-list">
+    {{#each rows}}
+    <li><b>{{name}}</b> — {{detail}}</li>
+    {{/each}}
+  </ul>
+  {{else}}
+  <div class="save-info"><span>{{CPLocal "RadLongTermNone"}}</span></div>
+  {{/if}}
+  {{#if offspring}}
+  <div class="cp-rad-lt-offspring">{{{CPLocal "RadOffspringRolled" roll=offspring.roll result=offspring.result}}}</div>
+  {{/if}}
+</div>

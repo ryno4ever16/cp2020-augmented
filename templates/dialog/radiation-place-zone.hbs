@@ -1,0 +1,28 @@
+{{!--
+  Place radiation-zone form (R3b — Deep Space radiation). Fields read by openPlaceZoneDialog() in
+  module/radiation/radiation-tools.js via the .cp-rad-* classes. The zone drops at a selected token (if
+  exactly one is selected) else the centre of the current view. i18n via CPLocal.
+--}}
+<form class="cp-rad-dialog">
+  {{#if atToken}}
+  <p class="cp-rad-targets">{{CPLocal "RadZoneAtToken"}}</p>
+  {{else}}
+  <p class="cp-rad-targets">{{CPLocal "RadZoneAtView"}}</p>
+  {{/if}}
+  <div class="form-group">
+    <label>{{CPLocal "RadFieldRadius"}}</label>
+    <input type="number" class="cp-rad-radius" value="3" min="1" step="1" autofocus>
+  </div>
+  <div class="form-group">
+    <label title="{{CPLocal 'RadFieldFormulaHint'}}">{{CPLocal "RadFieldFormula"}}</label>
+    <input type="text" class="cp-rad-formula" value="1d10">
+  </div>
+  <div class="form-group">
+    <label>{{CPLocal "RadFieldSource"}}</label>
+    <input type="text" class="cp-rad-source" placeholder="{{CPLocal 'RadFieldSourcePlaceholder'}}">
+  </div>
+  <div class="form-group">
+    <label title="{{CPLocal 'RadFieldTurnsHint'}}">{{CPLocal "RadFieldTurns"}}</label>
+    <input type="number" class="cp-rad-turns" value="0" min="0" step="1">
+  </div>
+</form>

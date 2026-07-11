@@ -883,6 +883,11 @@ export function mechRoundTickEnabled() {
 export function mechDocumentAutomationEnabled() {
   try { return game.settings.get(SCOPE, "mechDocumentAutomation") !== false; } catch { return true; }
 }
+/** Opt-in Deep Space radiation subsystem — the canonical reader for the dose engine, zones, and R3b GM
+ *  tools/panel (default OFF; the passive overlay/tick/zone automation is gated on it). */
+export function radiationEnabled() {
+  try { return game.settings.get(SCOPE, "radiationEnabled") === true; } catch { return false; }
+}
 /** Permission scoping — cyberlimb Repair restricted to the GM (default OFF = owners may repair). */
 export function cyberlimbRepairGmOnly() {
   try { return game.settings.get(SCOPE, "cyberlimbRepairGmOnly") === true; } catch { return false; }
