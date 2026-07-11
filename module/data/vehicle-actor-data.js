@@ -153,7 +153,12 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
     // Body Value = SDP/20; ACPA uses chassis STR as its SDP source.
     const sdpMax = this.isACPA ? (Number(this.str) || 0) : (Number(this.sdp?.max) || 0);
     this.bodyValue = Math.round(sdpMax / 20);
-    this.destroyed = sdpMax > 0 && (Number(this.sdp?.value) || 0) <= 0;
+    // An ACPA does NOT track the vehicle-level sdp.value (its structure is per-area frameSDP), so deriving
+    // "destroyed" from sdp.value would flag every pristine suit as destroyed (sdpMax = STR > 0, sdp.value = 0).
+    // ACPA destruction is set EXPLICITLY by the damage resolvers (torso frame gone / catastrophic) and cleared
+    // by Repair, so for a suit we keep that stored flag; only a plain vehicle uses the sdp.value derivation.
+    const storedDestroyed = this.destroyed === true;
+    this.destroyed = this.isACPA ? storedDestroyed : (sdpMax > 0 && (Number(this.sdp?.value) || 0) <= 0);
 
     // ACPA frame derivations (Maximum Metal p.61-62): per-area frame SDP max + Chassis Inventory stats.
     if (this.isACPA) {

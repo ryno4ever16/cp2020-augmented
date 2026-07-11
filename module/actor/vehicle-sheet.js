@@ -246,10 +246,14 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
   _cpActivateAcpaMode(root) {
     if (!root || root.dataset.cpAcpaModeBound === "1") return;
     root.dataset.cpAcpaModeBound = "1";
+    // CAPTURE phase (the `true`): this listener must run BEFORE ApplicationV2's bubble-phase
+    // submitOnChange handler on the same form, so stopPropagation() actually suppresses the auto-write
+    // for this NAMED <select>. A bubble-phase listener fires too late — submitOnChange writes `next`
+    // first and the confirm/cancel can no longer control the value (the confirm becomes cosmetic).
     root.addEventListener("change", async (ev) => {
       const sel = ev.target?.closest?.("select[name='system.acpaCombatModel']");
       if (!sel) return;
-      ev.stopPropagation();                              // pre-empt the form's submitOnChange
+      ev.stopPropagation();                              // suppress the form's submitOnChange (capture → it hasn't fired yet)
       if (!game.user?.isGM || !this.isEditable) { this.render(false); return; }
       const next = sel.value;
       const prev = this.actor.system?.acpaCombatModel ?? "";
@@ -260,17 +264,10 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
           content: `<p>${localize("Vehicle.AcpaModeChangeWarn")}</p>`,
           rejectClose: false, modal: true,
         });
-        if (!ok) {
-          // The named <select> + submitOnChange may have written `next` before this confirm resolved,
-          // so cancel is made authoritative: force the stored value back (a no-op if nothing raced),
-          // then re-render to snap the select back to `prev`.
-          await this.actor.update({ "system.acpaCombatModel": prev });
-          this.render(false);
-          return;
-        }
+        if (!ok) { this.render(false); return; }         // cancel: nothing was written (capture suppressed it) — just revert the DOM select
       }
       await this.actor.update({ "system.acpaCombatModel": next });
-    });
+    }, true);
   }
 
   /** True when the suit shows combat damage or is in an active combat (mode-flip guardrail). */
