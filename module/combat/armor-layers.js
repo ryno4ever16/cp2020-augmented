@@ -104,7 +104,7 @@ export function getAutoLayerOrder(armorItems) {
  * @param {string} locationKey   e.g. "Head", "Torso", "lArm"
  * @returns {{
  *   orderedLayers: Item[],   inside-out, assigned or auto-ordered
- *   cwItems:       Item[],   innermost contributors: cyberware armor + zero-coverage typed layers (cw/armor)
+ *   cwItems:       Item[],   innermost contributors: cyberware armor + zero-coverage typed cyberware (typedCw)
  * }}
  */
 export function getArmorContributors(actor, locationKey) {
@@ -134,15 +134,10 @@ export function getArmorContributors(actor, locationKey) {
     String(i.system?.mechTypedSP?.type ?? "").trim() !== "" &&
     !(cwArmorItems.includes(i) && cwCovers(i)));
 
-  // Typed-SP ARMOR (radiation suits — the Radsuit / Battlesuit): the rating lives in mechTypedSP with
-  // all-false (zero) conventional coverage, so the coversSP gate below would drop it before typedLayerSP
-  // ever saw it — the identical trap typedCw rescues for cyberware. Admit it on the SAME basis: its
-  // conventional 0 keeps it out of every normal-hit fold, and on a matching typed hit typedLayerSP returns
-  // its rating. These suits are full-body typed-only (all-false coverage); a future PARTIAL-coverage
-  // dual-value garment would instead be admitted at its covered locations by coversSP.
-  const typedArmor = equippedArmor.filter(i =>
-    String(i.system?.mechTypedSP?.type ?? "").trim() !== "" && !coversSP(i));
-
+  // (A zero-coverage typed ARMOR admission once lived here for the Radsuit/Battlesuit — commit 78bdcae —
+  // so a rad-suit contributed its typed rating against a per-hit "radiation" damage type. Radiation has
+  // since left the per-hit SP model for the Deep Space DOSE subsystem (module/radiation/), where a
+  // rad-suit's mechTypedSP{radiation}.sp is read as its RSP; the admission was therefore reverted.)
   const coveringArmor = equippedArmor.filter(coversSP);
 
   const manualSlots = actor.system.armorLayers?.[locationKey] ?? [];
@@ -165,10 +160,8 @@ export function getArmorContributors(actor, locationKey) {
   return {
     orderedLayers,
     // cwItems = the innermost non-layered contributors: conventional cyberware armor + zero-coverage typed
-    // layers (typed cyberware AND typed armor). Consumers dispatch on item.type, so a typed ARMOR item here
-    // is read via its coverage like any armor; its conventional 0 keeps it out of the normal-hit fold, and
-    // the ablation paths (orderedLayers only) correctly leave a zero-coverage typed suit untouched.
-    cwItems: [...cwArmorItems.filter(cwCovers), ...typedCw, ...typedArmor],
+    // CYBERWARE (typedCw — a borg's printed radiation/typed shielding). Consumers dispatch on item.type.
+    cwItems: [...cwArmorItems.filter(cwCovers), ...typedCw],
     // keep for backward compat with any callers using .unassigned
     get unassigned() { return []; },
   };

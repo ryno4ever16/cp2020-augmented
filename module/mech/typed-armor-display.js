@@ -33,7 +33,10 @@ const ARMOR_LOCATIONS = ["Head", "Torso", "rArm", "lArm", "rLeg", "lLeg"];
 // The typed damage-types a hit can carry — the SAME closed enum the damage dialog offers
 // (templates/dialog/damage-dialog.hbs) and the conditional-armor partial labels. A garment typed
 // against anything else can never be selected as a hit type, so it is (correctly) never surfaced.
-const TYPED_DAMAGE_TYPES = ["fire", "radiation", "heat"];
+// "radiation" is deliberately EXCLUDED: radiation left the per-hit SP model for the Deep Space dose
+// subsystem (module/radiation/), where a rad-suit's mechTypedSP{radiation} value is read as its RSP
+// (rads/turn) instead of a conditional SP — so a rad-suit no longer shows in this conditional panel.
+const TYPED_DAMAGE_TYPES = ["fire", "heat"];
 
 /**
  * prepareData post-step for a character/NPC (borgs are characters): make the armor panel honest.

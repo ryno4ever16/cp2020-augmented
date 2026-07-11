@@ -1,0 +1,10 @@
+{{!--
+  Radiation dose summary card (R1 — Deep Space radiation subsystem). Rendered from
+  postRadiationSummaryCard() in module/radiation/radiation.js. `body` is the pre-localized dose
+  summary (RadDoseBody + its RSP / bands / disease / damage / death clauses, assembled in JS exactly
+  like drug-took.hbs's DrugTookBody). i18n via CPLocal upstream; reuses the shared save-prompt CSS
+  classes.
+--}}
+<div class="cyberpunk save-prompt radiation-dose">
+  {{{body}}}
+</div>

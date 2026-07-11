@@ -1,0 +1,14 @@
+{{!--
+  Radiation chance-of-death result (R1 — Deep Space radiation subsystem). Rendered from
+  executeRadiationDeathCheck() and passed as the content of roll.toMessage() (the 1d100 attaches as
+  the message roll). `outcomeClause` is the pre-localized win/lose line, carrying a
+  result-success / result-fail span (coloured via CSS, not inline style). i18n via CPLocal (mirrors
+  drug-save-result.hbs).
+--}}
+<div class="cyberpunk save-result radiation-death-result">
+  <h3>{{CPLocal "RadDeathResultTitle" name=actorName}}</h3>
+  <div>{{{CPLocal "RadDeathResultDetail" result=result chance=chance}}}</div>
+  <div class="result-line">
+    {{{outcomeClause}}}
+  </div>
+</div>

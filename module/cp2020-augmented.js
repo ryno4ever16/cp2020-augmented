@@ -46,6 +46,8 @@ import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
 import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
+import { registerRadiation } from "./radiation/radiation.js";
+import { registerRadiationZones } from "./radiation/radiation-zones.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
 import { registerPaSkillBackfill } from "./mech/pa-skills.js";
 import { registerMartialDefense } from "./martial/martial.js";
@@ -128,6 +130,10 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/chat/martial-effect.hbs",
   // Drug dose card (carries the conditional full-conversion advisory clause).
   "modules/cp2020-augmented/templates/chat/drug-took.hbs",
+  // Radiation dose subsystem cards (Deep Space): dose summary + interactive chance-of-death + result.
+  "modules/cp2020-augmented/templates/chat/radiation-dose.hbs",
+  "modules/cp2020-augmented/templates/chat/radiation-death-prompt.hbs",
+  "modules/cp2020-augmented/templates/chat/radiation-death-result.hbs",
 ];
 
 Hooks.once("init", function () {
@@ -201,6 +207,12 @@ Hooks.once("init", function () {
   // system.conditionalSP for the per-damage-type sub-panel. Registered AFTER registerBorg so it runs
   // after the borg chassis-SP seed (see typed-armor-display.js). Init-time for the first-prep reason.
   registerTypedArmorDisplay();
+  // Deep Space radiation dose subsystem: wrap prepareData for the radiation stat-loss overlay, wire the
+  // chance-of-death button + the per-round dose tick, and install the radiation-zone hooks. Registered
+  // AFTER registerMechDrug so the overlay stacks on the drug boosts (order base → moddy → drug → radiation);
+  // the whole subsystem stays inert unless the radiationEnabled world setting is on.
+  registerRadiation();
+  registerRadiationZones();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).

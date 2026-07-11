@@ -1,0 +1,20 @@
+{{!--
+  Radiation chance-of-death prompt (R1 — Deep Space radiation subsystem). Rendered from
+  postRadiationDeathCard() in module/radiation/radiation.js when a crossed dose band carries a death
+  chance. The cp-rad-death-roll button + its data-* attrs are read verbatim by the global click
+  handler in registerRadiation() (→ executeRadiationDeathCheck); data-check carries the band snapshot
+  so the Roll outlives the card, and token/scene ids land the roll on an unlinked combatant's own
+  token actor. i18n via CPLocal; triple-stash on values that carry <b>. Reuses the shared save-prompt
+  CSS classes (mirrors drug-save-prompt.hbs).
+--}}
+<div class="cyberpunk save-prompt radiation-death-prompt">
+  <h3>{{CPLocal "RadDeathTitle" name=actorName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "RadDeathPrompt" name=actorName pct=deathPct btmClause=btmClause over=over}}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-rad-death-roll" data-actor-id="{{actorId}}"
+            data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}"
+            data-check="{{checkJson}}">{{CPLocal "RadDeathRollBtn" pct=deathPct}}</button>
+  </div>
+</div>

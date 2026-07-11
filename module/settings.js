@@ -236,6 +236,19 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
+  // --- radiationEnabled (Deep Space radiation subsystem, opt-in) ---
+  // The optional cumulative-dose radiation model (radiation.js) + its per-turn rad zones
+  // (radiation-zones.js). Default OFF — an opt-in Deep Space subsystem, not core play; every passive
+  // behaviour (the stat-loss overlay, the round tick, the death button, the zone tick) is gated on it.
+  game.settings.register(SCOPE, "radiationEnabled", {
+    name: "SETTINGS.RadiationEnabled",
+    hint: "SETTINGS.RadiationEnabledHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
+  });
+
   // --- taserCumPenaltyEnabled ---
   game.settings.register(SCOPE, "taserCumPenaltyEnabled", {
     name: "SETTINGS.TaserCumPenaltyEnabled",

@@ -110,8 +110,10 @@
       <select name="damageType" class="nogrow">
         <option value=""          {{#if (equals damageType "")}}selected{{/if}}>{{CPLocal "DamageDlgTypeNormal"}}</option>
         <option value="fire"      {{#if (equals damageType "fire")}}selected{{/if}}>{{CPLocal "DamageDlgTypeFire"}}</option>
-        <option value="radiation" {{#if (equals damageType "radiation")}}selected{{/if}}>{{CPLocal "DamageDlgTypeRadiation"}}</option>
         <option value="heat"      {{#if (equals damageType "heat")}}selected{{/if}}>{{CPLocal "DamageDlgTypeHeat"}}</option>
+        {{!-- "Radiation" removed as a per-hit SP damage type: radiation is now the Deep Space dose subsystem
+              (module/radiation/), reduced by an RSP suit rather than by armor SP. Fire/heat stay (armor DOES
+              stop + ablate under thermal). --}}
       </select>
     </div>
 
