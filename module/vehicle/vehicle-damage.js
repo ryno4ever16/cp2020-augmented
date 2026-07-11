@@ -302,6 +302,17 @@ const _ACPA_AREA_KEY = { "Head": "head", "Right Arm": "rArm", "Left Arm": "lArm"
 // are lowercase frameSDP object keys.
 const _ACPA_AREA_TO_CHAR_LOC = { "Head": "Head", "Torso": "Torso", "Right Arm": "rArm", "Left Arm": "lArm", "Right Leg": "rLeg", "Left Leg": "lLeg" };
 
+// An ACPA resolves damage by one of two book poles selected per suit. Detailed (MM p.52-56,
+// pilot-wired SOP + System-Hit) is the faithful default for a piloted suit; Quick Kill (MM p.6,
+// small-vehicle severity table) is the squishy pole for an unpiloted suit or when the GM sets it.
+// A per-suit override (system.acpaCombatModel — added in Unit D) wins; otherwise a linked pilot ⇒
+// detailed, no pilot ⇒ quickkill (MM p.6 is the "increase survivability → use the detailed rules" note inverted).
+function _acpaResolveMode(sys) {
+  const flag = sys?.acpaCombatModel;
+  if (flag === "quickkill" || flag === "detailed") return flag;
+  return sys?.pilotId ? "detailed" : "quickkill";
+}
+
 /**
  * Faithful ACPA (powered-armor) damage (Maximum Metal p.54-56): SDP damage = incoming damage − armor
  * SP − Toughness Mod. If it gets through, roll a body area → 50% external system → System Hit Table
@@ -467,6 +478,108 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
 }
 
 /**
+ * Quick Kill ACPA damage (Maximum Metal p.6, "PA in the Vehicle Combat System"): the deliberately
+ * lethal pole that treats the suit like a small vehicle. Combat resolves exactly like a vehicle
+ * (Penetration vs an all-around Armor Value → the small-vehicle severity table) EXCEPT hit location
+ * (the ACPA location table) and damage application — ALL systems in a struck location are affected,
+ * crew damage lands on the torso/head, and the power cell can be knocked out outright. Drop-in
+ * interchangeable with _resolveAcpaSopDamage: identical return shape (the surface early-return omits
+ * pilotDamage/pilotStun/areaName, exactly like the detailed resolver's no-penetration return).
+ */
+async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen }, rolls) {
+  const roll = async (f) => { const r = await new Roll(f).evaluate(); rolls.push(r); return r; };
+  const d10 = async () => (await roll("1d10")).total;
+  const updates = {};
+  const itemUpdates = [];   // quick-kill tracks damage abstractly (system.damagedSystems), not per-item SDP
+  let pilotDamage = 0;      // crew damage on a torso/head hit → the linked pilot (via the shared post-block)
+  let pilotStun = false;    // quick-kill has no stun-critical path; kept for return-shape parity
+  let areaName = "";
+  const damaged = Array.isArray(sys.damagedSystems) ? [...sys.damagedSystems] : [];
+
+  // Treated like a small vehicle: Body = STR/20 (already derived), Armor Value equal all directions.
+  const av = Number(sys.armorValue?.front) || 0;
+  const bodyValue = Number(sys.bodyValue) || 0;
+  const sev = mmDamageSeverity({ pen, effectiveArmorValue: av, bodyValue, d10: await d10() });
+  const body = `Pen <b>${pen}</b> vs AV <b>${av}</b> − Body ${bodyValue} <span style="opacity:0.7">(Quick Kill)</span>`;
+
+  // No penetration, or a penetrating-but-surface result: only an exposed-item surface effect (as vehicles).
+  if (!sev.penetrated || sev.severity === "surface") {
+    const surf = mmSurfaceDamage(await d10(), basePen);
+    const itemClause = surf.itemDamaged
+      ? `an exposed item is ${surf.destroyed ? "destroyed" : "damaged (50% repairable)"}`
+      : `no exposed item hit`;
+    const lines = sev.penetrated
+      ? `Roll ${sev.score} → <b>Surface</b>: ${itemClause}.`
+      : `No penetration — <b>surface</b>: ${itemClause}.`;
+    return { body, lines, updates, itemUpdates };
+  }
+
+  // Penetrating Minor/Major/Catastrophic → ACPA hit location + the location's damage effects (MM p.6).
+  areaName = acpaHitLocation(await d10());
+  const crit = MM_CRIT[sev.severity];
+  let lines = `Roll ${sev.score} → <b>${sev.severity.toUpperCase()}</b> · location: <b>${areaName}</b>`;
+
+  // Power Cell: 1d6, 1-4 the cell is destroyed and the suit goes powerless (MM p.6).
+  if (areaName === "Power Cell") {
+    const cell = (await roll("1d6")).total;
+    if (cell <= 4) {
+      // A dead cell leaves the suit inert (not wrecked): drop the power counter AND immobilize it —
+      // powerHours is only a display/tick counter, so it does not disable the suit on its own. Not
+      // `destroyed` (the chassis is intact; a Replace/repair restocks the cell).
+      updates["system.powerHours"] = 0;
+      updates["system.immobilized"] = true;
+      lines += `<br><span class="result-fail">Power cell destroyed (rolled ${cell} ≤ 4) — the suit is powerless and cannot move.</span>`;
+    } else {
+      lines += `<br>Power cell hit but held (rolled ${cell} > 4).`;
+    }
+  }
+
+  // Crew damage on a torso/head hit lands on the pilot (MM p.6). The shared post-block routes it through the
+  // pilot's BTM/wound/save pipeline; _ACPA_AREA_TO_CHAR_LOC has no "Torso/Head" key, so it falls back to Torso.
+  if (areaName === "Torso/Head") {
+    const crew = (await roll(crit.crewDice)).total;
+    pilotDamage = crew;
+    lines += `<br>Crew (pilot) takes <b>${crit.crewDice}</b> = ${crew} to the torso.`;
+  }
+
+  // TODO(acpa-quickkill): ammo gang-fire on weapon-location hits (MM p.6) not modelled yet.
+  // "ALL systems in a location are affected" (MM p.6): every acpaSystem in the struck location is hit as a
+  // group. Map the location to acpaSystem area keys, then a single 1d100 vs the severity's destroy% decides
+  // destroyed-vs-damaged for the whole location. Tracked abstractly in system.damagedSystems (a copy assigned
+  // whole), like a regular vehicle — no per-item itemUpdates (that is the detailed pole's job).
+  const LOC_AREAS = { "Legs": ["rLeg", "lLeg"], "Arms": ["rArm", "lArm"], "Torso/Head": ["torso", "head"], "Power Cell": ["torso"] };
+  const areaKeys = LOC_AREAS[areaName] ?? [];
+  const struckSystems = actor.items?.filter(it => it.type === "cp2020-augmented.acpaSystem" && areaKeys.includes(it.system?.area)) ?? [];
+  if (struckSystems.length) {
+    // One 1d100 vs the severity's destroy% decides the whole location's systems (roll only when some are
+    // mounted, so an empty location leaves no stray die in the log).
+    const sysRoll = (await roll("1d100")).total;
+    const wrecked = sysRoll <= crit.destroyPct;
+    const names = [];
+    let pushedAny = false;
+    for (const it of struckSystems) {
+      const dn = wrecked ? `${it.name} (destroyed)` : it.name;
+      names.push(dn);
+      if (!damaged.includes(dn)) { damaged.push(dn); pushedAny = true; }
+    }
+    if (pushedAny) updates["system.damagedSystems"] = damaged;
+    lines += `<br>All systems in the ${areaName} ${wrecked ? `<span class="result-warn">DESTROYED</span> (rolled ${sysRoll} ≤ ${crit.destroyPct}%)` : `damaged (rolled ${sysRoll} > ${crit.destroyPct}%)`}: ${names.join(", ")}.`;
+  } else {
+    lines += `<br>Systems in the ${areaName}: no systems mounted there.`;
+  }
+
+  // Catastrophic → the suit is demolished. Write the WHOLE sdp object (a dot-path would wipe sdp.max).
+  if (sev.severity === "catastrophic") {
+    updates["system.destroyed"] = true;
+    updates["system.immobilized"] = true;
+    updates["system.sdp"] = { value: 0, max: Number(sys.sdp?.max) || 0 };
+    lines += `<br><span class="result-fail">Catastrophic — the suit is DEMOLISHED.</span>`;
+  }
+
+  return { body, lines, updates, itemUpdates, pilotDamage, pilotStun, areaName };
+}
+
+/**
  * Apply Maximum Metal damage and post a card. Vehicles use the Penetration → severity → hit-location
  * flow; powered armor (isACPA) uses the faithful SDP-damage flow (MM p.54-56). `rawDamage` is the
  * actual rolled weapon damage when the caller has it (used for ACPA); else ACPA estimates it from Pen.
@@ -516,8 +629,12 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
   const damaged = Array.isArray(sys.damagedSystems) ? [...sys.damagedSystems] : [];
 
   if (isACPA) {
-    // Powered armor uses the faithful SDP-damage flow (MM p.54-56), not the vehicle severity table.
-    const r = await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0 }, rolls);
+    // Powered armor resolves by one of two book poles (see _acpaResolveMode): the faithful SDP-damage
+    // flow (MM p.54-56) or the Quick Kill small-vehicle severity table (MM p.6).
+    const mode = _acpaResolveMode(sys);
+    const r = (mode === "quickkill")
+      ? await _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0, basePen }, rolls)
+      : await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0 }, rolls);
     body = r.body;
     lines = r.lines;
     Object.assign(updates, r.updates);
