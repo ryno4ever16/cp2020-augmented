@@ -25,7 +25,7 @@ const SECTIONS = [
   { key: "SectionCombatAutomation", keys: [
     "combatAutomationEnabled", "autoDeathSavePerTurn", "autoSaveRePrompt", "activeDodgeParryEnabled",
     "aimTrackingEnabled", "waitForTurnEnabled", "specialMeleeEffectsEnabled", "multiActionPenaltyEnabled",
-    "multiActionAutoTrack", "suppressiveFireSaves", "restrictMovementOncePerTurn",
+    "multiActionAutoTrack", "suppressiveFireSaves", "restrictMovementOncePerTurn", "autoRangefinding",
   ] },
   { key: "SectionWeaponEffects", keys: [
     "shotgunSpreadEnabled", "explosivesEnabled", "explosivesDetailed", "areaEffectOcclusion",

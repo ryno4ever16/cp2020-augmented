@@ -87,7 +87,12 @@ export function _multiActionPenaltyFor(actor, count) {
 }
 function _getMultiActionPenalty(actor) {
   if (!_isMultiActionEnabled()) return 0;
-  return _multiActionPenaltyFor(actor, _getActionCount(actor));
+  // The attack dialog pre-fills the penalty for the action being DECLARED — i.e. count+1. The shared
+  // action counter is incremented AFTER the roll (on the weaponFired hook), so at dialog-render it still
+  // holds only the PRIOR actions' count; without the +1 the 2nd action would show −0 instead of −3 (and
+  // every later action one step too lenient). The combat-tracker BADGE, by contrast, shows the count of
+  // actions already taken and uses _multiActionPenaltyFor(count) directly — that is correct as-is.
+  return _multiActionPenaltyFor(actor, _getActionCount(actor) + 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -1323,8 +1328,11 @@ function _hookGasCloudPerTurn() {
     if (!game.user.isGM) return;
     // Only the primary GM runs the per-turn cloud logic, else duplicate prompts/updates.
     if (game.users.activeGM?.id !== game.user.id) return;
-    if (updateData.turn === undefined && updateData.round === undefined) return;
-    // Starting combat is not a turn elapsing (matches the DOT block): tokens already standing
+    // Per-ROUND, not per-combatant-turn: a cloud adjudicates its tokens ONCE per combat round (a CP2020
+    // turn = one 3-second round), and its duration counts down once per round. Firing on every turn
+    // advance would prompt each token N× per round (N = combatant count) and expire the cloud N× too fast.
+    if (updateData.round === undefined) return;
+    // Starting combat is not a round elapsing (matches the DOT block): tokens already standing
     // in a cloud must not be prompted for saves — and the cloud must not lose a turn — the
     // moment the GM clicks Begin Combat. Missing `previous` falls through.
     const gasPrevRound = combat.previous?.round;

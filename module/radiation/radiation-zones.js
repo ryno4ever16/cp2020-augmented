@@ -207,9 +207,13 @@ function _hookRadZonePerTurn() {
     if (!mechRoundTickEnabled()) return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;
-    if (updateData.turn === undefined && updateData.round === undefined) return;
+    // Per-ROUND, not per-combatant-turn: a zone doses everyone inside ONCE per combat round (Deep Space
+    // "for every turn of exposure" — a CP2020 turn = one 3-second round), and a finite zone counts down
+    // once per round. Firing on every turn advance would dose each token N× per round (N = combatant
+    // count) and expire a finite zone N× too fast. Fire only on a real round advance.
+    if (updateData.round === undefined) return;
     const prevRound = combat.previous?.round;
-    if (prevRound !== undefined && prevRound < 1) return;   // Begin Combat is not a turn elapsing
+    if (prevRound !== undefined && prevRound < 1) return;   // Begin Combat is not a round elapsing
     await runRadZoneTick(combat);
   });
 }

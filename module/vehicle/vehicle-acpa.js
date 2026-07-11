@@ -200,9 +200,11 @@ export function acpaMeleeDamage(str, kind = "punch") {
 
 /* --------------------------------- Movement (MM p.57) --------------------------------- */
 
-/** Running speed in metres/combat round: (SIB + MA) × 3 (MM p.57). PURE. */
+/** Running speed in metres/combat round: (SIB + MA) × 3 (MM p.57), floored at 0 (a badly overloaded /
+ *  aperture-interface suit can drive SIB+MA negative — Run must not display below 0, matching acpaJumpM
+ *  which already floors run at 0). PURE. */
 export function acpaRunM({ sib = 0, ma = 0 } = {}) {
-  return ((Number(sib) || 0) + (Number(ma) || 0)) * 3;
+  return Math.max(0, ((Number(sib) || 0) + (Number(ma) || 0)) * 3);
 }
 
 /** Jump distance in metres (MM p.57): stationary = run/6, running = run/4, vertical = horizontal/3. PURE. */

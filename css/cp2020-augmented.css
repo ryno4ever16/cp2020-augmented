@@ -1192,8 +1192,8 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   grid-template-columns: 1fr 1fr;
   /* rolls + rep size to their content; weapons/armor take the remaining height.
      (A `1fr` rolls row used to stretch and open a big gap above Reputation.) */
-  grid-template-rows: auto auto 1fr auto;
-  grid-template-areas: "rolls rolls" "rep rep" "weapons armor" "rad rad";
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: "rolls rolls" "rep rep" "weapons armor";
   column-gap: 10px;
   row-gap: 6px;
   align-items: start;
@@ -1201,7 +1201,7 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 /* GM-only Deep Space radiation hub (R3b) — a full-width row under weapons/armor, present only for a GM
    while the radiation subsystem is enabled. */
-.combat-tab .radiation-section { grid-area: rad; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 4px; }
+.combat-tab .radiation-section { grid-column: 1 / -1; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 4px; }
 .combat-tab .radiation-section .cp-rad-readout { font-variant-numeric: tabular-nums; font-weight: 600; }
 .combat-tab .radiation-section .radiation-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .cyberpunk .combat-tab .radiation-section .radiation-actions button { width: auto; flex: 0 0 auto; padding: 1px 8px; }

@@ -174,21 +174,29 @@ export async function routeWeaponFiredToVehicle(payload, vehicleActor) {
   const enabled = (() => { try { return game.settings.get(SCOPE, "vehicleDamageEnabled"); } catch { return true; } })();
   if (!enabled) return false;
 
-  let total = 0;
-  for (const hits of Object.values(payload?.areaDamages ?? {})) {
-    for (const h of (hits ?? [])) total += Number(h.damage ?? h.dmg) || 0;
+  // Resolve each ROUND/hit SEPARATELY against the vehicle's armor. Summing all hits and subtracting SP /
+  // comparing Penetration once over-penetrates: a burst that can't beat SP with one round must not beat it
+  // by pooling rounds (3×10 vs SP 20 should penetrate 0, not 30−20=10). Flatten to a per-hit damage list;
+  // a single hit behaves exactly as before, a burst resolves round-by-round (armor state carries between).
+  const hits = [];
+  for (const arr of Object.values(payload?.areaDamages ?? {})) {
+    for (const h of (arr ?? [])) { const d = Number(h.damage ?? h.dmg) || 0; if (d > 0) hits.push(d); }
   }
+  if (!hits.length) return false;
   const ap = !!payload?.ap;
 
   const ruleSystem = effectiveVehicleRuleSystem();
   // Imported lazily to keep the pure-math top of this module free of Phase 4 UI deps in tests.
   const VD = await import("./vehicle-damage.js");
-  if (ruleSystem === "MaximumMetal") {
-    const pen = _payloadPenetration(payload, total, ap);
-    // ACPA's faithful SDP flow uses the actual rolled damage; pass it through (vehicles ignore it).
-    await VD.applyVehicleDamageMM(vehicleActor, { basePen: pen, facing: "front", rawDamage: total });
-  } else {
-    await VD.applyVehicleDamageCore(vehicleActor, { rawDamage: total, ap, facing: "front" });
+  for (const dmg of hits) {
+    if (ruleSystem === "MaximumMetal") {
+      // Penetration is the weapon's own value when the weapon resolves (independent of this round's roll);
+      // the per-hit dmg only feeds the no-weapon fallback. ACPA's SDP flow uses the actual rolled damage.
+      const pen = _payloadPenetration(payload, dmg, ap);
+      await VD.applyVehicleDamageMM(vehicleActor, { basePen: pen, facing: "front", rawDamage: dmg });
+    } else {
+      await VD.applyVehicleDamageCore(vehicleActor, { rawDamage: dmg, ap, facing: "front" });
+    }
   }
   return true;
 }

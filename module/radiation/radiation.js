@@ -257,10 +257,14 @@ async function buildBandStatMarkers(band, sourceLabel, seq) {
     // A book hour/day duration is stored as a bare dice string → counts down in combat rounds (drug.js's
     // short-drug path); a "" dur (the >5000 recurring loss) yields 0 turns → an untimed marker.
     const turns = await rollDurationTurns(band.tempBody.dur);
+    // A POSITIVE printed duration must never collapse into the untimed (permanent-until-cured) sentinel:
+    // a small dice string like "1D6/2" can floor to 0 (a 1D6 of 1 → 0.5 → 0), which would silently turn a
+    // TEMPORARY BODY loss permanent. Only an EMPTY dur (the >5000 recurring loss) is intentionally untimed.
+    const turnsLeft = band.tempBody.dur ? Math.max(1, turns) : turns;
     out.push({
       source, band: band.min, seq,
       statBoosts: [{ stat: STAT_KEY.body, mod: -band.tempBody.amt }],   // BODY loss is NEGATIVE
-      turnsLeft: turns
+      turnsLeft
     });
   }
   for (const friendly of ["body", "ref", "att", "int", "cool"]) {

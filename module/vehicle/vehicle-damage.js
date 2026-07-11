@@ -577,25 +577,30 @@ async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen,
   // group. Map the location to acpaSystem area keys, then a single 1d100 vs the severity's destroy% decides
   // destroyed-vs-damaged for the whole location. Tracked abstractly in system.damagedSystems (a copy assigned
   // whole), like a regular vehicle — no per-item itemUpdates (that is the detailed pole's job).
-  const LOC_AREAS = { "Legs": ["rLeg", "lLeg"], "Arms": ["rArm", "lArm"], "Torso/Head": ["torso", "head"], "Power Cell": ["torso"] };
-  const areaKeys = LOC_AREAS[areaName] ?? [];
-  const struckSystems = actor.items?.filter(it => it.type === "cp2020-augmented.acpaSystem" && areaKeys.includes(it.system?.area)) ?? [];
-  if (struckSystems.length) {
-    // One 1d100 vs the severity's destroy% decides the whole location's systems (roll only when some are
-    // mounted, so an empty location leaves no stray die in the log).
-    const sysRoll = (await roll("1d100")).total;
-    const wrecked = sysRoll <= crit.destroyPct;
-    const names = [];
-    let pushedAny = false;
-    for (const it of struckSystems) {
-      const dn = wrecked ? `${it.name} (destroyed)` : it.name;
-      names.push(dn);
-      if (!damaged.includes(dn)) { damaged.push(dn); pushedAny = true; }
+  // The Power Cell is its OWN hit location (MM p.6) — a cell hit resolves the 1d6 cell check above and
+  // nothing else. It must NOT also roll destruction of the torso-mounted systems (which only follows a
+  // Torso/Head location hit); so it is deliberately absent from LOC_AREAS and skips this block entirely.
+  const LOC_AREAS = { "Legs": ["rLeg", "lLeg"], "Arms": ["rArm", "lArm"], "Torso/Head": ["torso", "head"] };
+  if (areaName !== "Power Cell") {
+    const areaKeys = LOC_AREAS[areaName] ?? [];
+    const struckSystems = actor.items?.filter(it => it.type === "cp2020-augmented.acpaSystem" && areaKeys.includes(it.system?.area)) ?? [];
+    if (struckSystems.length) {
+      // One 1d100 vs the severity's destroy% decides the whole location's systems (roll only when some are
+      // mounted, so an empty location leaves no stray die in the log).
+      const sysRoll = (await roll("1d100")).total;
+      const wrecked = sysRoll <= crit.destroyPct;
+      const names = [];
+      let pushedAny = false;
+      for (const it of struckSystems) {
+        const dn = wrecked ? `${it.name} (destroyed)` : it.name;
+        names.push(dn);
+        if (!damaged.includes(dn)) { damaged.push(dn); pushedAny = true; }
+      }
+      if (pushedAny) updates["system.damagedSystems"] = damaged;
+      lines += `<br>All systems in the ${areaName} ${wrecked ? `<span class="result-warn">DESTROYED</span> (rolled ${sysRoll} ≤ ${crit.destroyPct}%)` : `damaged (rolled ${sysRoll} > ${crit.destroyPct}%)`}: ${names.join(", ")}.`;
+    } else {
+      lines += `<br>Systems in the ${areaName}: no systems mounted there.`;
     }
-    if (pushedAny) updates["system.damagedSystems"] = damaged;
-    lines += `<br>All systems in the ${areaName} ${wrecked ? `<span class="result-warn">DESTROYED</span> (rolled ${sysRoll} ≤ ${crit.destroyPct}%)` : `damaged (rolled ${sysRoll} > ${crit.destroyPct}%)`}: ${names.join(", ")}.`;
-  } else {
-    lines += `<br>Systems in the ${areaName}: no systems mounted there.`;
   }
 
   // Catastrophic → the suit is demolished. Write the WHOLE sdp object (a dot-path would wipe sdp.max).

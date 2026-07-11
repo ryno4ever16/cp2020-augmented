@@ -54,22 +54,31 @@ export function isPilotingAcpa(actor) {
   return false;
 }
 
-/** Outside-suit initiative bonus (MM p.52): ½ the pilot's PA Combat Sense, rounded down. 0 for the suit
- *  actor / a pilot without the skill. Exported for the keeper. */
+/** Outside-suit initiative bonus (MM p.52): ½ the pilot's PA Combat Sense, rounded down. Applies ONLY
+ *  when the pilot is NOT currently in a suit — while piloting, the ACPA vehicle actor rolls initiative
+ *  with FULL PACS, so a pilot combatant fielded alongside it must not also get the ½ (double-apply). 0
+ *  for the suit actor / a pilot without the skill. "In a suit" = the linked pilot of an ACPA (the same
+ *  proxy the Awareness bonus uses). Exported for the keeper. */
 export function paInitBonus(actor) {
   if (!isPilotActor(actor)) return 0;
+  if (isPilotingAcpa(actor)) return 0;
   return Math.floor(paCombatSenseLevel(actor) / 2);
 }
 
-/** In-suit Awareness bonus (MM p.52): the pilot's FULL PA Combat Sense, added to Awareness/Notice rolls
- *  only while piloting an ACPA. 0 otherwise. `skill` is the skill being rolled. Exported for the keeper. */
+/** In-suit Awareness bonus (MM p.52): while piloting an ACPA, PA Combat Sense REPLACES the Solo's
+ *  ordinary Combat Sense on Awareness/Notice ("don't go thinking you're a Solo"). The base rollSkill
+ *  unconditionally adds @CombatSenseMod (= the Solo Combat Sense level) for Awareness/Notice and we can't
+ *  remove that from inside it, so we NET it out: add full PACS and subtract the CombatSenseMod the base
+ *  will add — leaving Awareness + PACS (never Awareness + Solo-CS + PACS). 0 unless piloting + this is the
+ *  Awareness/Notice skill. `skill` is the skill being rolled. Exported for the keeper. */
 export function paAwarenessBonus(actor, skill) {
   if (!isPilotActor(actor) || !skill) return 0;
   // The system's rollSkill matches the Awareness/Notice skill by its localized name for @CombatSenseMod;
   // mirror that here so the two stay in lockstep (same skill, same detection).
   if (skill.name !== localize("SkillAwarenessNotice")) return 0;
   if (!isPilotingAcpa(actor)) return 0;
-  return paCombatSenseLevel(actor);
+  const soloCS = Number(actor.system?.CombatSenseMod) || 0;   // what the base rollSkill will add for Awareness
+  return paCombatSenseLevel(actor) - soloCS;                   // net → Awareness ends at + full PACS only
 }
 
 let _wrapped = false;
