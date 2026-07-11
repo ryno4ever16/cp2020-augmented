@@ -1156,8 +1156,10 @@ async function _runOverTimeTick(combat) {
         // wound track, no stun save); flesh burns HP post-BTM and rolls a stun save.
         const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: fireStructural, penetrates: true, token });
         if (fireAblate) {
-          // Pass the "fire" type so a fire-typed garment (material property, not consumable plating) is
-          // spared the char — consistent with the typed-skip principle applied at the point of impact.
+          // Pass the "fire" type so the burning tick erodes armor by the SAME typed rule as a point-of-impact
+          // hit: every layer that actually stopped this fire ablates — a fire garment via its typed rating,
+          // a plain layer via its normal SP (RAW, per the ablation ruling 2026-07-11) — while only a
+          // fully-typed garment of a DIFFERENT type, which contributed nothing here, is left untouched.
           try { await ablateLocationOnce(actor, location, "fire"); } catch (e) { /* no ablatable armor here */ }
         }
         actor.sheet?.render(false);
