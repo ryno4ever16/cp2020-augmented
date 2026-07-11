@@ -2,7 +2,6 @@ import {
   arrayField,
   booleanField,
   htmlField,
-  mergeDefaults,
   numberField,
   objectField,
   stringField
@@ -28,15 +27,29 @@ function hasOwn(source, key) {
  */
 export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
   static defineSchema() {
+    const f = foundry.data.fields;
     return {
       vehicleType: stringField("car"),   // car/sportscar/limo/AV-4/AV-6/AV-7/cycle/truck/rotor/osprey/boat/tank/APC/acpa
       isACPA:      booleanField(false),
       str:         numberField(0),        // ACPA chassis STR — drives Body Value when isACPA
 
-      // Armor SP per facing. Core mode edits only `front` (its single SP).
-      sp:  objectField({ front: 0, side: 0, rear: 0, top: 0, bottom: 0 }),
-      // Structure (no hit locations in the simple system).
-      sdp: objectField({ value: 0, max: 0 }),
+      // Armor SP per facing + structure, as nested SchemaFields (NOT bare objectField): Foundry applies
+      // migrateData to UPDATE CHANGES too, so a mergeDefaults floor over a bare objectField expanded a
+      // partial dotted update (e.g. {"system.sp.front": 10} from a future armor-repair/API path) into a
+      // full object of defaults, WIPING the other facings. SchemaFields give per-key merge on partial
+      // updates AND fill missing keys on legacy sources at clean time — both floors, no fills over
+      // changes. Mirrors the fix already applied to vehicle-item-data (speed/fuel).
+      sp: new f.SchemaField({
+        front:  new f.NumberField({ initial: 0 }),
+        side:   new f.NumberField({ initial: 0 }),
+        rear:   new f.NumberField({ initial: 0 }),
+        top:    new f.NumberField({ initial: 0 }),
+        bottom: new f.NumberField({ initial: 0 }),
+      }),
+      sdp: new f.SchemaField({
+        value: new f.NumberField({ initial: 0 }),
+        max:   new f.NumberField({ initial: 0 }),
+      }),
 
       // Movement
       topSpeed:   numberField(0),
@@ -133,8 +146,10 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
 
   static migrateData(source) {
     source ??= {};
-    if (hasOwn(source, "sp"))  source.sp  = mergeDefaults(source.sp,  { front: 0, side: 0, rear: 0, top: 0, bottom: 0 });
-    if (hasOwn(source, "sdp")) source.sdp = mergeDefaults(source.sdp, { value: 0, max: 0 });
+    // sp/sdp are nested SchemaFields now (per-key merge on partial updates + legacy-key fill at clean
+    // time), so the old mergeDefaults floors here — which expanded a partial dotted sp/sdp update into a
+    // full object of defaults and WIPED the un-named facings/keys (the documented partial-update wipe) —
+    // are removed. Only the value-preserving SOP→SDP renames remain below.
     // Renamed the ACPA frame structural fields SOP→SDP (the book's term is Structural Damage Points;
     // "SOP" was an OCR artifact in the Maximum Metal scan). Carry pre-1.0.3 stored values forward.
     if (hasOwn(source, "frameSOP")    && !hasOwn(source, "frameSDP"))    source.frameSDP    = source.frameSOP;
