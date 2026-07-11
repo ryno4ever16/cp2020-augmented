@@ -172,9 +172,14 @@ export function mmSubLocation(d10, table = "Hull", facing = "front") {
   return "Empty Space";
 }
 
-/** ACPA hit location (MM p.5). PURE: 1d10. */
-export function acpaHitLocation(d10) {
-  const r = Number(d10) || 0;
+/** ACPA hit location (MM p.5-6). PURE: 1d10 with the same facing shift as the vehicle table
+ *  (+2 top, −1 side, −2 rear/bottom); the book's ACPA table spans −1..12, so a rear/bottom/side
+ *  hit can reach the Power Cell (roll ≤0) and a top hit skews toward Torso/Head. */
+export function acpaHitLocation(d10, facing = "front") {
+  let r = Number(d10) || 0;
+  if (facing === "top") r += 2;
+  else if (facing === "side") r -= 1;
+  else if (facing === "rear" || facing === "back" || facing === "bottom") r -= 2;
   if (r <= 0) return "Power Cell";
   if (r <= 3) return "Legs";
   if (r <= 6) return "Arms";
@@ -334,6 +339,9 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
   let pilotDamage = 0;   // frame-breach overflow that reaches the wearer (applied to a linked pilot)
   let pilotStun = false; // a Mechanical Shock critical stuns the pilot → Stun/Shock Save
   const damaged = Array.isArray(sys.damagedSystems) ? [...sys.damagedSystems] : [];
+  // A Mechanical-Shock critical (MM p.56) also deals its rolled 1d6 to a RANDOM frame area — captured here
+  // and applied in the frame-consumption block below (ACPAs never track the vehicle-level sdp.value).
+  let mechShockDamage = 0, mechShockAreaName = "", mechShockAreaKey = "";
 
   const incoming = (rawDamage != null) ? Math.max(0, Number(rawDamage) || 0) : Math.max(0, pen * 10);
   const armorSP = Number(sys.sp?.front) || 0;
@@ -405,9 +413,17 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
       const eff = acpaCriticalEffect(await d10());
       const amt = eff.formula ? (await roll(eff.formula)).total : 0;
       const { updates: cu, note } = acpaCriticalUpdate(sys, eff, amt);
-      Object.assign(updates, cu);
       lines += `<br><span class="result-fail">CRITICAL</span> — ${eff.label}: ${note}.`;
-      if (eff.type === "mechShock") pilotStun = true;   // mechanical shock stuns the pilot
+      if (eff.type === "mechShock") {
+        pilotStun = true;   // mechanical shock stuns the pilot
+        // MM p.56: the shock also deals its 1d6 to a RANDOM frame area (applied in the frame block below).
+        // acpaCriticalUpdate's sdp.value write is deliberately NOT merged for mechShock — ACPAs don't use it.
+        mechShockDamage = amt;
+        mechShockAreaName = acpaBodyArea(await d10());
+        mechShockAreaKey = _ACPA_AREA_KEY[mechShockAreaName] ?? "torso";
+      } else {
+        Object.assign(updates, cu);   // other criticals (seize/cooling/STR/REF/power/interface) write real fields
+      }
     } else if (cat === "enclosed") {
       // Per-system SDP (D-4d): the SDP damages a specific mounted, enclosed system in the struck area.
       const r = hitMountedSystem(i => i.type === "cp2020-augmented.acpaSystem" && i.system?.mount !== "external");
@@ -449,30 +465,44 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
     }
   }
 
-  // Consume the area's FRAME SDP with whatever damage reached it; overflow spills to the pilot.
+  // Consume FRAME SDP: the struck area takes whatever reached the frame; a Mechanical-Shock critical adds its
+  // 1d6 to a RANDOM area. Both consume the SAME frameSDP object, and each area's overflow spills to the pilot.
   // Initialize current SDP to full on the first hit (a freshly built/repaired suit has frameSDP = max).
-  if (frameDamage > 0) {
+  if (frameDamage > 0 || mechShockDamage > 0) {
     const max = sys.frameSDPMax ?? acpaAreaSDP(str);
     let cur = { ...(sys.frameSDP ?? {}) };
     if (Object.values(cur).every(v => !Number(v))) cur = { ...max };
-    const before = Number(cur[areaKey]) || 0;
-    const remaining = before - frameDamage;
-    cur[areaKey] = Math.max(0, remaining);
-    updates["system.frameSDP"] = cur;
-    if (remaining < 0) { pilotDamage = -remaining; lines += `<br>${areaName} frame SDP ${before} → 0; <b>${-remaining}</b> overflows to the <b>pilot</b>.`; }
-    else lines += `<br>${areaName} frame SDP ${before} → ${cur[areaKey]}.`;
-
-    if (cur[areaKey] === 0) {
-      lines += `<br><span class="result-warn">${areaName} frame destroyed — its systems are inoperable.</span>`;
-      if (areaKey === "torso") {
-        updates["system.destroyed"] = true;
-        updates["system.immobilized"] = true;
-        updates["system.sdp"] = { value: 0, max: Number(sys.sdp?.max) || 0 };
-        lines += ` <span class="result-fail">TORSO DESTROYED — the suit SHUTS DOWN.</span>`;
-      } else if (areaKey === "rLeg" || areaKey === "lLeg") {
-        updates["system.immobilized"] = true;
+    const applyFrame = (key, dmg, label) => {
+      if (!(dmg > 0)) return;
+      const before = Number(cur[key]) || 0;
+      const remaining = before - dmg;
+      cur[key] = Math.max(0, remaining);
+      if (remaining < 0) { pilotDamage += -remaining; lines += `<br>${label} frame SDP ${before} → 0; <b>${-remaining}</b> overflows to the <b>pilot</b>.`; }
+      else lines += `<br>${label} frame SDP ${before} → ${cur[key]}.`;
+      if (cur[key] === 0) {
+        lines += `<br><span class="result-warn">${label} frame destroyed — its systems are inoperable.</span>`;
+        // A destroyed area knocks out the systems/weapons mounted there (MM p.61).
+        for (const it of actor.items ?? []) {
+          if ((it.type === "cp2020-augmented.acpaSystem" || it.type === "cp2020-augmented.vehicleWeapon")
+              && it.system?.area === key && !it.system?.destroyed && !itemUpdates.some(u => u._id === it.id)) {
+            itemUpdates.push({ _id: it.id, "system.destroyed": true });
+            const dn = `${it.name} (destroyed)`;
+            if (!damaged.includes(dn)) { damaged.push(dn); updates["system.damagedSystems"] = damaged; }
+          }
+        }
+        if (key === "torso") {
+          updates["system.destroyed"] = true;
+          updates["system.immobilized"] = true;
+          updates["system.sdp"] = { value: 0, max: Number(sys.sdp?.max) || 0 };
+          lines += ` <span class="result-fail">TORSO DESTROYED — the suit SHUTS DOWN.</span>`;
+        } else if (key === "rLeg" || key === "lLeg") {
+          updates["system.immobilized"] = true;
+        }
       }
-    }
+    };
+    applyFrame(areaKey, frameDamage, areaName);
+    applyFrame(mechShockAreaKey, mechShockDamage, mechShockAreaName);
+    updates["system.frameSDP"] = cur;
   }
   return { body, lines, updates, itemUpdates, pilotDamage, pilotStun, areaName };
 }
@@ -486,7 +516,7 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
  * interchangeable with _resolveAcpaSopDamage: identical return shape (the surface early-return omits
  * pilotDamage/pilotStun/areaName, exactly like the detailed resolver's no-penetration return).
  */
-async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen }, rolls) {
+async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen, facing }, rolls) {
   const roll = async (f) => { const r = await new Roll(f).evaluate(); rolls.push(r); return r; };
   const d10 = async () => (await roll("1d10")).total;
   const updates = {};
@@ -515,7 +545,7 @@ async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen 
   }
 
   // Penetrating Minor/Major/Catastrophic → ACPA hit location + the location's damage effects (MM p.6).
-  areaName = acpaHitLocation(await d10());
+  areaName = acpaHitLocation(await d10(), facing);
   const crit = MM_CRIT[sev.severity];
   let lines = `Roll ${sev.score} → <b>${sev.severity.toUpperCase()}</b> · location: <b>${areaName}</b>`;
 
@@ -633,7 +663,7 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
     // flow (MM p.54-56) or the Quick Kill small-vehicle severity table (MM p.6).
     const mode = acpaResolveMode(sys);
     const r = (mode === "quickkill")
-      ? await _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0, basePen }, rolls)
+      ? await _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0, basePen, facing }, rolls)
       : await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0 }, rolls);
     body = r.body;
     lines = r.lines;
@@ -641,21 +671,27 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
     // Per-system SDP: apply damage/destruction to the struck embedded acpaSystem Item(s).
     if (r.itemUpdates?.length) await actor.updateEmbeddedDocuments("Item", r.itemUpdates);
     // Frame-breach overflow wounds the linked pilot through the REAL personnel damage pipeline
-    // (− pilot's BTM, wound-severity, stun/death saves — MM p.56), NOT a raw HP write. This resolver
-    // already runs GM-side (player→active-GM relay), the same context applyLocationDamage's cross-actor
-    // write expects, so no extra gating is needed. applyLocationDamage/routesToSdp also handle a
-    // full-borg pilot's SDP routing on their own — we just pass target + location.
+    // (− pilot's BTM, wound-severity, stun/death saves — MM p.56), NOT a raw HP write. dispatchAttack now
+    // relays to the GM whenever this client can't write the pilot (G1: _canModifyAcpaPilot), so this normally
+    // runs on a client that CAN — but it's wrapped defensively so a permission failure on any OTHER entry path
+    // can't abort the suit-frame write + chat card below (a silent total failure); it degrades to a warning.
+    // applyLocationDamage/routesToSdp also handle a full-borg pilot's SDP routing on their own.
     if (r.pilotDamage > 0 && sys.pilotId) {
       const pilot = game.actors?.get(sys.pilotId);
       if (pilot) {
-        const pilotBtm = Number(pilot.system?.stats?.bt?.modifier) || 0;
-        const charLoc = _ACPA_AREA_TO_CHAR_LOC[r.areaName] ?? "Torso";
-        // penetrates=true → applyBTM floors the wound at 1 (it got through the frame).
-        const netDamage = computeNetDamage(r.pilotDamage, pilotBtm, true, charLoc);
-        // structuralDamage = the pre-BTM overflow: a full-borg PILOT (e.g. the DaiOni's Alpha) routes it
-        // to zone SDP, which absorbs machinery-style with NO BTM (Core p.89); a flesh pilot ignores it and
-        // takes the post-BTM netDamage on the wound track. Mirrors the personnel path (DamageApplicator).
-        await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: r.pilotDamage, penetrates: true });
+        try {
+          const pilotBtm = Number(pilot.system?.stats?.bt?.modifier) || 0;
+          const charLoc = _ACPA_AREA_TO_CHAR_LOC[r.areaName] ?? "Torso";
+          // penetrates=true → applyBTM floors the wound at 1 (it got through the frame).
+          const netDamage = computeNetDamage(r.pilotDamage, pilotBtm, true, charLoc);
+          // structuralDamage = the pre-BTM overflow: a full-borg PILOT (e.g. the DaiOni's Alpha) routes it
+          // to zone SDP, which absorbs machinery-style with NO BTM (Core p.89); a flesh pilot ignores it and
+          // takes the post-BTM netDamage on the wound track. Mirrors the personnel path (DamageApplicator).
+          await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: r.pilotDamage, penetrates: true });
+        } catch (e) {
+          console.warn(`${SCOPE} | ACPA pilot-overflow write failed on this client — suit damage + card still applied`, e);
+          lines += `<br><span class="result-warn">Pilot overflow (${r.pilotDamage}) could not be applied on this client — a GM must apply it to the pilot.</span>`;
+        }
       }
     }
     // A Mechanical Shock critical stuns the pilot → post their Stun/Shock Save (no damage, so the

@@ -250,6 +250,19 @@ function _canModifyTarget(target) {
 }
 
 /**
+ * For an ACPA suit, the damage resolution ALSO writes the linked pilot (frame-breach overflow → the pilot's
+ * wound track). A client that owns the suit but NOT the pilot would fail that cross-actor write silently and
+ * abort the whole resolution (no suit damage, no card — G1). So the pilot must be writable too, else relay to
+ * the GM. A non-ACPA vehicle, or an ACPA with no linked pilot, imposes no such requirement.
+ */
+function _canModifyAcpaPilot(target) {
+  if (!target?.system?.isACPA || !target.system?.pilotId) return true;
+  if (game.user?.isGM) return true;
+  const pilot = game.actors?.get(target.system.pilotId);
+  return pilot?.isOwner ?? false;
+}
+
+/**
  * Relay a resolved vehicle attack to the active GM, who applies it. Mirrors the personnel damage
  * relay (damage-hooks `_autoApply` → `_hookSocketRelay`): a player firing at a GM-owned vehicle
  * cannot call `actor.update()` on it, so the attack is sent over the socket and the active GM runs
@@ -280,7 +293,7 @@ export async function dispatchAttack(payload, target) {
     // vehicle can't write it (permission error → damage silently lost), so relay to the active GM.
     // GMs (and owners of the vehicle) apply directly. The weaponFired hook is gated to the active GM,
     // and a fire dialog runs only on the clicking client, so exactly one client applies → no double.
-    if (!_canModifyTarget(target)) { _relayVehicleAttack(payload, target); return true; }
+    if (!_canModifyTarget(target) || !_canModifyAcpaPilot(target)) { _relayVehicleAttack(payload, target); return true; }
     if (isPen) {
       const VD = await import("./vehicle-damage.js");
       const ruleSystem = effectiveVehicleRuleSystem();
