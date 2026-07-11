@@ -445,15 +445,14 @@ export async function ablateLocationOnce(target, location, damageType = "") {
   for (const item of toAblate) {
     const liveItem = target.items.get(item.id);
     if (!liveItem) continue;
-    // A layer whose TYPED rating stopped this hit (mechTypedSP matches the damage type) is protecting
-    // by material property, not consumable plating — it does not ablate. A non-matching typed layer
-    // that contributed nothing (conventional 0) is skipped by the itemSP<=0 gate just below.
-    if (damageType && String(liveItem.system?.mechTypedSP?.type ?? "").trim() === String(damageType).trim()) continue;
+    // Typed armor ablates like any other layer: the book's armor-degradation (staged-penetration) system
+    // does not exempt typed SP, so a layer whose typed rating STOPPED this hit erodes normally (RAW, per
+    // user ruling 2026-07-11 — overrides the earlier "material property, not consumable plating" reading).
     const itemSP = Number(liveItem.system?.coverage?.[location]?.stoppingPower) || 0;
     if (itemSP <= 0) continue;
-    // A FULLY-typed garment whose typed rating doesn't match this hit contributes 0 SP (typedLayerSP → 0)
-    // even though its coverage SP is >0 — it stopped nothing here, so it must not erode. (The dual-value
-    // and no-type layers return their conventional SP and still ablate.)
+    // A typed layer that contributed 0 to THIS hit (a fully-typed garment whose type doesn't match, e.g. a
+    // fire coat struck by a bullet: typedLayerSP → 0) stopped nothing here, so it must not erode. Dual-value
+    // and no-type layers return their conventional SP and still ablate.
     if (typedLayerSP(liveItem, itemSP, damageType) <= 0) continue;
     // Full coverage object write — dot-notation paths may wipe the DataModel
     const fullCoverage = foundry.utils.deepClone(liveItem.system.coverage || {});
@@ -486,11 +485,12 @@ export async function ablateLocationByAmount(target, location, amount, damageTyp
     if (remaining <= 0) break;
     const liveItem = target.items.get(item.id);
     if (!liveItem) continue;
-    // Typed protection matching the damage type is a material property, not consumable plating (M15).
-    if (damageType && String(liveItem.system?.mechTypedSP?.type ?? "").trim() === String(damageType).trim()) continue;
+    // Typed armor ablates like any other layer (RAW, per user ruling 2026-07-11 — the staged-penetration
+    // degradation system does not exempt typed SP; overrides the earlier M15 "material property" reading).
     const itemSP = Number(liveItem.system?.coverage?.[location]?.stoppingPower) || 0;
     if (itemSP <= 0) continue;
-    // A fully-typed garment that contributed nothing to this typed hit (typedLayerSP → 0) does not erode.
+    // A fully-typed garment that contributed nothing to this hit (typedLayerSP → 0) stopped nothing, so it
+    // does not erode; dual-value and no-type layers return their conventional SP and still ablate.
     if (typedLayerSP(liveItem, itemSP, damageType) <= 0) continue;
     const reduction = Math.min(itemSP, remaining);
     remaining -= reduction;
