@@ -1173,6 +1173,8 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .cp-add-action-btn { cursor: pointer; color: #888; }
 
 .cp-action-count-badge { font-size: 0.74em; padding: 1px 4px; border-radius: 3px; background: rgba(80, 80, 80, 0.7); color: var(--color-text-light-primary, #ccc); margin-right: 2px; line-height: 1.6; pointer-events: none; }
+/* ACPA pilot has declared more actions than ½ REF allows (MM p.54) — advisory highlight, not a block. */
+.cp-action-count-badge.cp-over-cap { background: rgba(209, 80, 47, 0.85); color: #fff; }
 
 /* "Missiles in Flight" combat-tracker panel (replaces the inline h4/ul/li/span/button styles). */
 .cp-missiles-panel .cp-missiles-head { margin: 6px 0 2px; border-top: 1px solid var(--color-border-dark-tertiary); padding-top: 4px; }

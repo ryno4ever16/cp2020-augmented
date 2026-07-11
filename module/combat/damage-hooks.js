@@ -66,10 +66,28 @@ function _incrementActionCount(actor) {
   _actionCountChains.set(actor, next);
   return next;
 }
+/** True for an ACPA / powered-armor actor — the Maximum Metal multi-action rules apply to these. */
+export function _isAcpa(actor) {
+  return actor?.system?.isACPA === true;
+}
+/** Max actions a PA pilot may take in a round (MM p.54): ½ the suit's modified REF, floored, min 1.
+ *  ACPA actors expose their modified reflex as system.effectiveRef. Advisory only (we don't hard-block). */
+export function _acpaMaxActions(actor) {
+  return Math.max(1, Math.floor((Number(actor?.system?.effectiveRef) || 0) / 2));
+}
+/**
+ * The multi-action penalty on the Nth declared action this round. CP2020 p.105: a flat −3 per additional
+ * action (−3, −6, −9…). ACPA / PA (MM p.54): the pilot's brain + the suit's control system soften it —
+ * the 2nd action is −3, and each action AFTER the second adds only −1 more (−3, −4, −5, −6…), i.e.
+ * −(count+1). Pure of the feature toggle (callers gate). Exported for the keeper. */
+export function _multiActionPenaltyFor(actor, count) {
+  if (count <= 1) return 0;
+  if (_isAcpa(actor)) return -(count + 1);
+  return -(count - 1) * 3;
+}
 function _getMultiActionPenalty(actor) {
   if (!_isMultiActionEnabled()) return 0;
-  const count = _getActionCount(actor);
-  return count <= 1 ? 0 : -(count - 1) * 3;
+  return _multiActionPenaltyFor(actor, _getActionCount(actor));
 }
 
 // ---------------------------------------------------------------------------
@@ -277,8 +295,10 @@ export function registerDamageHooks() {
       if (!actor) return;
       await _incrementActionCount(actor);
       const count   = _getActionCount(actor);
-      const penalty = count <= 1 ? 0 : -(count - 1) * 3;
-      ui.notifications.info(localizeParam("ActionRecorded", { name: actor.name, count }) + (penalty < 0 ? localizeParam("ActionPenaltyClause", { penalty }) : ""));
+      const penalty = _multiActionPenaltyFor(actor, count);
+      let msg = localizeParam("ActionRecorded", { name: actor.name, count }) + (penalty < 0 ? localizeParam("ActionPenaltyClause", { penalty }) : "");
+      if (_isAcpa(actor) && count > _acpaMaxActions(actor)) msg += localizeParam("ActionAcpaOverCapClause", { max: _acpaMaxActions(actor) });
+      ui.notifications.info(msg);
       ui.combat?.render();
     }
 
@@ -1861,13 +1881,20 @@ function _hookMultiActionPenalty() {
 
       const actor   = combatant.actor;
       const count   = _getActionCount(actor);
-      const penalty = count <= 1 ? 0 : -(count - 1) * 3;
+      const penalty = _multiActionPenaltyFor(actor, count);
+      // ACPA ½-REF action cap (MM p.54) — advisory: flag when a pilot declares more actions than allowed.
+      const maxActions = _isAcpa(actor) ? _acpaMaxActions(actor) : 0;
+      const overCap    = maxActions > 0 && count > maxActions;
       const controls = li.querySelector(".combatant-controls") ?? li.querySelector("menu") ?? li;
 
       if (count > 0) {
         const badge = document.createElement("span");
         badge.classList.add("cp-action-count-badge");
-        badge.title = localizeParam("MultiActionBadgeTitle", { count, penalty: penalty || localize("MultiActionPenaltyNone") });
+        const penaltyText = penalty || localize("MultiActionPenaltyNone");
+        badge.title = maxActions > 0
+          ? localizeParam(overCap ? "MultiActionAcpaOverCap" : "MultiActionAcpaBadgeTitle", { count, penalty: penaltyText, max: maxActions })
+          : localizeParam("MultiActionBadgeTitle", { count, penalty: penaltyText });
+        if (overCap) badge.classList.add("cp-over-cap");
         badge.textContent = penalty < 0 ? `×${count} (${penalty})` : `×${count}`;
         controls.prepend(badge);
       }

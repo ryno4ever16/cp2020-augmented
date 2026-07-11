@@ -37,6 +37,19 @@ const SCOPE = "cp2020-augmented";
 const DRUG_FLAG = "drugState";
 const ADDICTION_FLAG = "addictionState";
 
+/**
+ * A full-conversion cyborg's physical stats are SET by the chassis (borg.js applyBorgStats fixes REF/MA/
+ * BODY to the machine's rating). RAW: those stats can't be pharmaceutically boosted — a drug that would
+ * raise them is ignored, though its OTHER effects (mental/social stats) still apply. These are the stat
+ * keys borg.js sets authoritatively (BODY = Body Type "bt"). Exported for the keeper. */
+export const FBC_SET_STATS = new Set(["ref", "ma", "bt"]);
+
+/** Whether a drug marker/item carries any statBoost to a chassis-set physical stat (→ ignored on a full
+ *  borg, and the trigger for the refined advisory). Pure. */
+export function drugAffectsSetStat(source) {
+  return (source?.statBoosts ?? []).some((b) => FBC_SET_STATS.has(String(b?.stat ?? "").toLowerCase()));
+}
+
 /** The item's drug block when enabled, else null. Pure. */
 export function drugOf(item) {
   const md = item?.system?.mechDrug;
@@ -146,11 +159,18 @@ export function applyMechDrugBoosts(actor) {
   const markers = drugMarkersFor(actor);
   if (!markers.length) { actor._mechDrugMods = null; return; }
 
+  // Full-conversion cyborg: its physical stats (REF/MA/BODY) are fixed by the chassis, so a drug can't
+  // move them (RAW — the "set stats" ignore chemistry). Skip those boosts entirely here; because they are
+  // then never recorded in _mechDrugMods, borg.js's stat re-fold (recordedStatDelta) won't re-apply them
+  // either, so the chassis value stands. Non-physical boosts (INT/COOL/EMP/…) still apply normally.
+  const fbc = isFullBorg(actor);
+
   const contrib = {};   // stat → [{ name, value }]
   let touchedMA = false, touchedBT = false;
   for (const m of markers) {
     for (const b of m.statBoosts ?? []) {
       const key = String(b.stat ?? "").toLowerCase();
+      if (fbc && FBC_SET_STATS.has(key)) continue;   // chassis-set physical stat — pharmacologically inert
       const stat = stats[key];
       const mod = Number(b.mod) || 0;
       if (!stat || !mod) continue;
@@ -177,8 +197,10 @@ export function applyMechDrugBoosts(actor) {
 }
 
 /** The "took" chat card (JS-assembled clauses, the ConsumableUsedBody pattern). Rendered through
- *  drug-took.hbs so the full-conversion advisory can ride the card conditionally (fbc): the printed
- *  rules are silent on combat chemistry for a full-body cyborg, so the card flags GM's discretion. */
+ *  drug-took.hbs so the full-conversion advisory rides the card ONLY when it is relevant — i.e. the
+ *  actor is a full-body cyborg AND this drug targets a chassis-set physical stat (REF/MA/BODY), whose
+ *  boost was ignored (see applyMechDrugBoosts). A drug that only affects mental/social stats applies
+ *  fully to a borg and needs no warning. */
 async function postTookCard(item, drug, marker) {
   const boosts = boostSummary(marker);
   const boostClause = boosts ? localizeParam("DrugBoostClause", { boosts }) : "";
@@ -189,7 +211,9 @@ async function postTookCard(item, drug, marker) {
   const body = localizeParam("DrugTookBody", {
     name: item.name, boostClause, durationClause, addictionClause, psychosisClause
   });
-  const content = await renderChatCard("drug-took.hbs", { body, fbc: isFullBorg(item.actor) });
+  // Advisory only when it MATTERS: a full borg taking a drug that targets a chassis-set physical stat.
+  const fbcIgnored = isFullBorg(item.actor) && drugAffectsSetStat(marker);
+  const content = await renderChatCard("drug-took.hbs", { body, fbc: fbcIgnored });
   const cardData = { content };
   if (item.actor) cardData.speaker = ChatMessage.getSpeaker({ actor: item.actor });
   await ChatMessage.create(cardData);
