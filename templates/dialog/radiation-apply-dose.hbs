@@ -3,7 +3,7 @@
   module/radiation/radiation-tools.js via the .cp-rad-* classes on confirm. i18n via CPLocal; triple-stash
   the target line (it carries <b>). No HTML/CSS built in JS.
 --}}
-<form class="cp-rad-dialog">
+<div class="cp-rad-dialog">
   {{#if multiple}}
   <p class="cp-rad-targets">{{{CPLocal "RadTargetsMulti" names=names}}}</p>
   {{else}}
@@ -21,4 +21,4 @@
     <label title="{{CPLocal 'RadFieldPerTurnHint'}}">{{CPLocal "RadFieldPerTurn"}}</label>
     <input type="checkbox" class="cp-rad-perturn" checked>
   </div>
-</form>
+</div>

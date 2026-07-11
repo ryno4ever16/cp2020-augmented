@@ -4,7 +4,7 @@
   openEnvironmentalDialog() in module/radiation/radiation-tools.js via the .cp-rad-* classes. The Strength
   field is only used in flare mode. i18n via CPLocal; triple-stash the target line (it carries <b>).
 --}}
-<form class="cp-rad-dialog">
+<div class="cp-rad-dialog">
   {{#if multiple}}
   <p class="cp-rad-targets">{{{CPLocal "RadTargetsMulti" names=names}}}</p>
   {{else}}
@@ -25,4 +25,4 @@
     <label title="{{CPLocal 'RadFieldStrengthHint'}}">{{CPLocal "RadFieldStrength"}}</label>
     <input type="number" class="cp-rad-strength" value="1" min="1" step="1">
   </div>
-</form>
+</div>
