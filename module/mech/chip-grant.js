@@ -278,14 +278,22 @@ async function pruneGrantedSkills(actor, resolveKey) {
     if (it.type !== "skill") continue;
     if (!it.getFlag?.(SCOPE, GRANTED_FLAG)) continue;
     if (keep.has(it.name)) continue;                        // still granted → leave it
-    if ((Number(it.system?.level) || 0) > 0 || (Number(it.system?.ip) || 0) > 0) {
-      toUnflag.push(it.id);                                 // trained (level or IP) → keep, drop flag
+    // "Trained" = raised a level, accrued base system.ip, OR banked IP via the module's own IP tracker
+    // (which stores per-skill IP in flags.cp2020-augmented.ip/ipPending — NOT system.ip, since the module
+    // was written for a base with no IP fields). A skill worked only through the tracker must NOT be treated
+    // as untrained and deleted, which would destroy its banked IP.
+    const bankedIp = (Number(it.getFlag?.(SCOPE, "ip")) || 0) + (Number(it.getFlag?.(SCOPE, "ipPending")) || 0);
+    if ((Number(it.system?.level) || 0) > 0 || (Number(it.system?.ip) || 0) > 0 || bankedIp > 0) {
+      toUnflag.push(it.id);                                 // trained → keep, drop the granted flag
     } else {
       toDelete.push(it.id);                                 // untrained → remove
     }
   }
-  if (toDelete.length) await actor.deleteEmbeddedDocuments("Item", toDelete);
+  // Unflag the KEPT skills BEFORE deleting the untrained ones, so a watcher that syncs on the delete
+  // (a downstream hook, or a test polling for the pruned sibling) reliably sees the kept skills already
+  // unflagged — never a half-applied prune (deleted but still flagged).
   for (const id of toUnflag) await actor.items.get(id)?.unsetFlag(SCOPE, GRANTED_FLAG);
+  if (toDelete.length) await actor.deleteEmbeddedDocuments("Item", toDelete);
 }
 
 /** Full pass: create missing grants + prune orphans. Owner/initiating-client only.
