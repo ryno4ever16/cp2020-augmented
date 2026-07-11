@@ -9,7 +9,7 @@ import {
 } from "./schema-helpers.js";
 
 import { acpaAreaSDP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib, acpaRunM, acpaJumpM } from "../vehicle/vehicle-acpa.js";
-import { isPACombatSenseSkill } from "../utils.js";
+import { isPACombatSenseSkill, isPAPilotSkill } from "../utils.js";
 
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
@@ -185,7 +185,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       // A linked pilot actor supplies the base REF; otherwise the manual pilotRef field is the fallback.
       // The same pilot also supplies MA (for run/jump) and PA Combat Sense (its initiative bonus).
       let pilotRef = Number(this.pilotRef) || 0;
-      let pilotPACS = 0, pilotMA = 0;
+      let pilotPACS = 0, pilotMA = 0, pilotPAPilot = 0;
       try {
         if (this.pilotId) {
           const pilot = game.actors?.get(this.pilotId);
@@ -194,13 +194,23 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
           pilotMA = Number(pilot?.system?.stats?.ma?.total) || 0;
           // PA Combat Sense is matched by _id (isPACombatSenseSkill), never by skill name — a Solo's
           // generic "Combat Sense" must NOT count as the ACPA-specific implant.
+          const rsv = pilot.constructor?.realSkillValue;
           const paItem = pilot?.itemTypes?.skill?.find(isPACombatSenseSkill);
-          if (paItem && typeof pilot.constructor?.realSkillValue === "function") {
-            pilotPACS = Number(pilot.constructor.realSkillValue(paItem)) || 0;
+          if (paItem && typeof rsv === "function") {
+            pilotPACS = Number(rsv(paItem)) || 0;
+          }
+          // PA Pilot (MM p.53) grants the MANEUVER bonus (the in-suit Martial-Arts cap) but NOT the
+          // initiative bonus — so it feeds pilotPAManeuver (below), never pilotPACS.
+          const ppItem = pilot?.itemTypes?.skill?.find(isPAPilotSkill);
+          if (ppItem && typeof rsv === "function") {
+            pilotPAPilot = Number(rsv(ppItem)) || 0;
           }
         }
       } catch (e) { /* actors not ready */ }
       this.pilotPACS = pilotPACS;
+      // The in-suit maneuver cap (Martial Arts, MM p.60) is raised by EITHER PA Combat Sense (a Trooper)
+      // OR PA Pilot (a non-Trooper) — take the better. Initiative uses pilotPACS ONLY (PA Pilot gives none).
+      this.pilotPAManeuver = Math.max(pilotPACS, pilotPAPilot);
       this.effectiveRef = acpaEffectiveRef({
         pilotRef, refMod: this.refMod, maxRef: this.maxRef, refDamage: this.refDamage
       });

@@ -51,6 +51,7 @@ import { registerRadiationZones } from "./radiation/radiation-zones.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
 import { registerPaSkillBackfill } from "./mech/pa-skills.js";
+import { registerPaCombatSense } from "./mech/pa-combat-sense.js";
 import { registerMartialDefense } from "./martial/martial.js";
 import { registerFreeFire } from "./mech/free-fire.js";
 import { registerMechLoadout } from "./mech/loadout.js";
@@ -430,6 +431,10 @@ Hooks.once("ready", function () {
   // Metal powered-armor skills (PA Combat Sense / PA Tech / Expert (PA Design)) at level 0 from the
   // module skills compendium. Idempotent; only the initiating client that owns the pilot writes.
   registerPaSkillBackfill();
+  // PA Combat Sense (MM p.52–53) pilot-side bonuses: a Trooper's OWN initiative gains ½ his PA Combat
+  // Sense (out-of-suit) via a Combatant init-roll override, and his Awareness/Notice rolls gain full PACS
+  // while piloting an ACPA via a rollSkill wrap. In-suit full initiative + Solo-suppression already ship.
+  registerPaCombatSense();
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the

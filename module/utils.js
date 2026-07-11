@@ -473,3 +473,14 @@ const _PA_COMBAT_SENSE_SKILL_IDS = new Set(["PACombatSense001"]);
 export function isPACombatSenseSkill(skill) {
   return skill?.type === "skill" && _skillIdInSet(skill, _PA_COMBAT_SENSE_SKILL_IDS);
 }
+
+// PA Pilot (Maximum Metal p.53): the non-Trooper's ACPA skill — it grants the MANEUVER bonuses of PA
+// Combat Sense (the in-suit Martial-Arts cap) but NOT the initiative bonus. Keyed by the stable
+// compendium _id (module supplement-skills pack), never name.
+const _PA_PILOT_SKILL_IDS = new Set(["PAPilotSkill0001"]);
+
+/** True if `skill` is the PA Pilot skill (by stable _id, or its compendium sourceId). Read by the ACPA
+ *  maneuver-cap code — it raises the in-suit Martial-Arts cap like PA Combat Sense, but grants no init. */
+export function isPAPilotSkill(skill) {
+  return skill?.type === "skill" && _skillIdInSet(skill, _PA_PILOT_SKILL_IDS);
+}

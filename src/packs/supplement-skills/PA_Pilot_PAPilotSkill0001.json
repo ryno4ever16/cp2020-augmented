@@ -1,0 +1,29 @@
+{
+  "_id": "PAPilotSkill0001",
+  "name": "PA Pilot",
+  "type": "skill",
+  "img": "systems/cyberpunk2020/img/skill-icon.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p>The non-Trooper's Powered Armor skill (Maximum Metal p.53). Learned by characters who are not Troopers, the same way Streetwise is learned by non-Fixers. It provides the maneuver bonuses of PA Combat Sense (raising the Martial Arts skill usable while operating a suit) but NOT the initiative bonus.</p>",
+    "level": 0,
+    "chipLevel": 0,
+    "ip": 0,
+    "diffMod": 2,
+    "isChipped": false,
+    "stat": "ref"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 1100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "skill",
+      "provenance": "Maximum Metal p.53 — the non-Trooper's ACPA skill (in place of a special ability, like Streetwise for non-Fixers). Grants PA Combat Sense's maneuver bonuses but not its initiative bonus. Added as a REF skill for the Augmented ACPA rules."
+    }
+  },
+  "_key": "!items!PAPilotSkill0001"
+}

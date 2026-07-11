@@ -66,7 +66,9 @@ export async function openAcpaMeleeDialog(actor) {
     bestMA = Math.max(bestMA, readSkill("MartialArts"));   // also honor a literal generic "Martial Arts" skill
   }
   const skillByKind = { brawling: readSkill("Brawling"), melee: readSkill("Melee"), martial: bestMA };
-  const pacs = Math.max(0, Number(actor.system?.pilotPACS) || 0);                 // pilot's PA Combat Sense (derived)
+  // The Martial-Arts cap (MM p.60) is the pilot's MANEUVER rating — PA Combat Sense OR PA Pilot, whichever
+  // is higher (pilotPAManeuver). PA Pilot grants this maneuver cap but no initiative (see vehicle-actor-data.js).
+  const pacs = Math.max(0, Number(actor.system?.pilotPAManeuver ?? actor.system?.pilotPACS) || 0);
   const maAllowed = MA_REFLEX_CONTROLS.has(String(actor.system?.reflexControl || ""));
 
   const content = await renderChatCard("vehicle/acpa-melee-dialog.hbs", {
