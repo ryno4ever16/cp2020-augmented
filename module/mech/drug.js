@@ -67,11 +67,23 @@ export function drugMarkersFor(actor) {
   return Array.isArray(raw) ? raw : (raw ? [raw] : []);
 }
 
-/** The per-actor addiction tally { byDrug:{name:count}, total }. Pure. */
+/** A drug NAME may contain "." (e.g. "Dr. Stim"); Foundry's document update expands a "." inside an
+ *  object-flag KEY into a nested path, which would shatter the flat byDrug map. Encode "." to a one-
+ *  dot leader (U+2024) on every WRITE and decode on every READ through this one pair — callers only
+ *  ever see the real name. Pure. */
+const encDrugKey = (name) => String(name ?? "").replace(/\./g, "․");
+const decDrugKey = (key) => String(key ?? "").replace(/․/g, ".");
+
+/** The per-actor addiction tally { byDrug:{name:count}, total }. Pure. `total` is the recomputed sum
+ *  of byDrug on EVERY read — the stored `total` field (kept for display/back-compat) can desync from
+ *  byDrug after a partial write, so byDrug is the single source of truth and the stored total is never
+ *  trusted here. Keys are decoded (see encDrugKey) so consumers see real drug names. */
 export function addictionStateFor(actor) {
   const raw = actor?.getFlag?.(SCOPE, ADDICTION_FLAG) ?? actor?.flags?.[SCOPE]?.[ADDICTION_FLAG];
-  const byDrug = raw && typeof raw.byDrug === "object" ? raw.byDrug : {};
-  const total = Number(raw?.total) || Object.values(byDrug).reduce((s, n) => s + (Number(n) || 0), 0);
+  const stored = raw && typeof raw.byDrug === "object" ? raw.byDrug : {};
+  const byDrug = {};
+  for (const [k, v] of Object.entries(stored)) byDrug[decDrugKey(k)] = v;
+  const total = Object.values(byDrug).reduce((s, n) => s + (Number(n) || 0), 0);
   return { byDrug, total };
 }
 
@@ -135,31 +147,39 @@ async function setDrugMarker(actor, marker) {
   });
 }
 
-/** Increment the addiction counter for a drug by name. */
+/** Increment the addiction counter for a drug by name. Serialized per actor (light.js queue) — the
+ *  tally is a read-modify-write, so two bumps (or a bump vs a clear) landing quickly would otherwise
+ *  interleave and drop an increment. Reads decoded names, writes encoded keys (see encDrugKey). */
 async function bumpAddiction(actor, name) {
-  const { byDrug } = addictionStateFor(actor);
-  const next = { ...byDrug, [name]: (Number(byDrug[name]) || 0) + 1 };
-  const total = Object.values(next).reduce((s, n) => s + (Number(n) || 0), 0);
-  await actor.setFlag(SCOPE, ADDICTION_FLAG, { byDrug: next, total });
-}
-
-/** GM/owner action: clear the whole addiction tally (a character kicks the habit). */
-export async function clearAddiction(actor) {
-  await actor.unsetFlag(SCOPE, ADDICTION_FLAG);
+  return enqueueApply(actor, async () => {
+    const { byDrug } = addictionStateFor(actor);
+    const next = { ...byDrug, [name]: (Number(byDrug[name]) || 0) + 1 };
+    const total = Object.values(next).reduce((s, n) => s + (Number(n) || 0), 0);
+    const stored = {};
+    for (const [k, v] of Object.entries(next)) stored[encDrugKey(k)] = v;
+    await actor.setFlag(SCOPE, ADDICTION_FLAG, { byDrug: stored, total });
+  });
 }
 
 /** GM action: clear ONE drug's addiction history (the strip's per-drug × — user ruling 2026-07-12:
  *  the pill reads per-drug, so its × must act per-drug). Drops that drug's count, recomputes the
- *  total, and removes the whole flag when the last entry goes. Object flags MERGE on setFlag, so a
- *  deleted key would survive a plain re-set — unset first, then write the survivors. */
+ *  total, and removes the whole flag when the last entry goes. Serialized per actor (light.js queue)
+ *  so a clear never races a concurrent bump. Object flags MERGE on setFlag, so a deleted key would
+ *  survive a plain re-set — unset first, then write the survivors (re-encoding "." in each key). */
 export async function clearAddictionFor(actor, name) {
-  const { byDrug } = addictionStateFor(actor);
-  if (!(name in byDrug)) return;
-  const next = { ...byDrug };
-  delete next[name];
-  const total = Object.values(next).reduce((s, n) => s + (Number(n) || 0), 0);
-  await actor.unsetFlag(SCOPE, ADDICTION_FLAG);
-  if (total > 0) await actor.setFlag(SCOPE, ADDICTION_FLAG, { byDrug: next, total });
+  return enqueueApply(actor, async () => {
+    const { byDrug } = addictionStateFor(actor);
+    if (!(name in byDrug)) return;
+    const next = { ...byDrug };
+    delete next[name];
+    const total = Object.values(next).reduce((s, n) => s + (Number(n) || 0), 0);
+    await actor.unsetFlag(SCOPE, ADDICTION_FLAG);
+    if (total > 0) {
+      const stored = {};
+      for (const [k, v] of Object.entries(next)) stored[encDrugKey(k)] = v;
+      await actor.setFlag(SCOPE, ADDICTION_FLAG, { byDrug: stored, total });
+    }
+  });
 }
 
 /**
@@ -350,14 +370,20 @@ export async function executeDrugExpireSave({ actorId, itemId, tokenId, sceneId,
  *  versa), post the wear-off card, and re-prepare so the boost lifts. GM/owner-side. */
 async function wearOffMarker(actor, marker) {
   // Serialize the flag read-modify-write per actor (light.js queue) so a wear-off never races a
-  // concurrent dose write and drops the survivor; the card post follows outside the write.
-  await enqueueApply(actor, async () => {
-    const rest = drugMarkersFor(actor)
-      .filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
+  // concurrent dose write and drops the survivor. The closure reports whether it actually removed
+  // this marker; the card post follows OUTSIDE the write, and ONLY when something was removed — a
+  // double-click (or a strip × after the tick already expired it) otherwise posts a second, hollow
+  // wear-off card (for an expireSave drug, a second live Roll button).
+  const removed = await enqueueApply(actor, async () => {
+    const all = drugMarkersFor(actor);
+    const rest = all.filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
+    if (rest.length === all.length) return false;   // nothing matched — already worn off
     if (rest.length) await actor.setFlag(SCOPE, DRUG_FLAG, rest);
     else await actor.unsetFlag(SCOPE, DRUG_FLAG);
+    return true;
   });
-  await postWoreOffCard(actor, marker);
+  if (removed) await postWoreOffCard(actor, marker);
+  return removed;
 }
 
 /** Clear a marker whose source item may no longer exist (the strip's orphan escape — endDrug
@@ -381,18 +407,29 @@ export async function takeDrug(item) {
     ui.notifications?.warn(localizeParam("DrugNoActor", { name: item.name }));
     return false;
   }
+  const itemId = item.id ?? item._id;
+  const turns = await rollDurationTurns(drug.durationTurns);
+  const marker = drugMarker(item, drug, turns);
   // One active dose per drug: the book's re-dose rule stacks only the side-effect PENALTIES,
   // never the benefits (Core, drug side effects — "the penalty is cumulative"), so a second Take
   // while a dose runs is refused instead of silently refreshing the timer. Deliberate re-dosing
   // stays possible: end the dose (Wear-off) and take again — the crash overlay does not block.
-  const activeDose = drugMarkersFor(actor).find(m => m.itemId === (item.id ?? item._id) && !m.isPenalty);
-  if (activeDose) {
+  //
+  // The active-dose GUARD and the marker WRITE are ONE serialized step (light.js queue): a rapid
+  // double-Take would otherwise both read "no dose" before either write lands, double-bumping the
+  // addiction tally and posting two "took" cards. The closure reports whether THIS call is the one
+  // that took the dose; only that call bumps addiction + posts the card (at most once per dose).
+  const took = await enqueueApply(actor, async () => {
+    const existing = drugMarkersFor(actor);
+    if (existing.some(m => m.itemId === itemId && !m.isPenalty)) return false;   // a dose already runs
+    const rest = existing.filter(m => m.itemId !== marker.itemId || !!m.isPenalty !== !!marker.isPenalty);
+    await actor.setFlag(SCOPE, DRUG_FLAG, [...rest, marker]);
+    return true;
+  });
+  if (!took) {
     ui.notifications?.warn(localizeParam("DrugAlreadyActive", { name: item.name }));
     return false;
   }
-  const turns = await rollDurationTurns(drug.durationTurns);
-  const marker = drugMarker(item, drug, turns);
-  await setDrugMarker(actor, marker);
   if (Number(drug.addictionDifficulty) > 0) await bumpAddiction(actor, item.name);
   await postTookCard(item, drug, marker);
   return true;
@@ -408,8 +445,7 @@ export async function endDrug(item) {
   const marker = markers.find(m => m.itemId === id && !m.isPenalty)
     ?? markers.find(m => m.itemId === id && m.isPenalty);
   if (!marker) return false;
-  await wearOffMarker(actor, marker);
-  return true;
+  return await wearOffMarker(actor, marker);
 }
 
 /**
@@ -422,15 +458,23 @@ export async function endDrug(item) {
 export async function runDrugTickOnce(combat) {
   const actor = combat?.combatant?.actor;
   if (!actor) return;
-  const markers = drugMarkersFor(actor);
-  if (!markers.length) return;
-  const { surviving, expired } = tickDrugMarkers(markers);
-  // Persist whenever a timed marker exists (its turnsLeft just changed) so multi-turn doses count
-  // down and the wear-off flow fires; early-out ONLY when there is nothing timed to count down
-  // (every marker is untimed) — mirrors consumable.js's unconditional persist for its all-timed set.
-  if (!expired.length && !markers.some(m => (Number(m?.turnsLeft) || 0) > 0)) return;
-  if (surviving.length) await actor.setFlag(SCOPE, DRUG_FLAG, surviving);
-  else await actor.unsetFlag(SCOPE, DRUG_FLAG);
+  if (!drugMarkersFor(actor).length) return;   // fast pre-check; the authoritative read is in the queue
+  // The tick is a read-modify-write on drugState, so serialize it per actor (light.js queue) — an
+  // unqueued setFlag/unsetFlag here can clobber a concurrent take/wear-off. Recompute the surviving/
+  // expired split from a FRESH read INSIDE the closure and write there; return the expired markers so
+  // their wear-off cards post OUTSIDE the write.
+  const expired = await enqueueApply(actor, async () => {
+    const markers = drugMarkersFor(actor);
+    if (!markers.length) return [];
+    const split = tickDrugMarkers(markers);
+    // Persist whenever a timed marker exists (its turnsLeft just changed) so multi-turn doses count
+    // down and the wear-off flow fires; early-out ONLY when there is nothing timed to count down
+    // (every marker is untimed) — mirrors consumable.js's unconditional persist for its all-timed set.
+    if (!split.expired.length && !markers.some(m => (Number(m?.turnsLeft) || 0) > 0)) return [];
+    if (split.surviving.length) await actor.setFlag(SCOPE, DRUG_FLAG, split.surviving);
+    else await actor.unsetFlag(SCOPE, DRUG_FLAG);
+    return split.expired;
+  });
   for (const m of expired) await postWoreOffCard(actor, m);
 }
 

@@ -37,7 +37,9 @@
     {{#unless isAcpaFirer}}<label class="ml8"><input type="checkbox" id="cp-vf-link"{{#if vehicleLink}} checked{{/if}}> {{CPLocal "Vehicle.VehicleLink"}}</label>{{/unless}}<br>
     <label><input type="checkbox" id="cp-vf-moving"> {{CPLocal "Vehicle.FirerMovingUnstab"}}</label><br>
     <label><input type="checkbox" id="cp-vf-dark"> {{CPLocal "Vehicle.DarkObscured"}}</label>
-    <label class="ml8" title="{{CPLocal "Vehicle.FireControlTip"}}">{{CPLocal "Vehicle.FireControl"}} <input type="number" id="cp-vf-other" value="{{fireControl}}"></label>
+    {{!-- Fire-Control computers are likewise vehicle-only (run-4: the 0 prefill alone still left an
+          editable field an ACPA firer could type into, bypassing the to-hit-purity gate). --}}
+    {{#unless isAcpaFirer}}<label class="ml8" title="{{CPLocal "Vehicle.FireControlTip"}}">{{CPLocal "Vehicle.FireControl"}} <input type="number" id="cp-vf-other" value="{{fireControl}}"></label>{{/unless}}
     {{#if isAcpaFirer}}
     <label class="ml8" title="{{CPLocal "Vehicle.DFBTip"}}">{{CPLocal "Vehicle.DFB"}} <input type="number" id="cp-vf-dfb" value="{{acpaDfb}}"></label>
     {{/if}}

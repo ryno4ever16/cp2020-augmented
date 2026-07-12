@@ -199,13 +199,11 @@ export function drugRows(actor) {
     itemId: m.itemId, kind: "drug", name: m.name,
     detail: {
       statBoosts: m.statBoosts ?? [], rollBoosts: m.rollBoosts ?? [],
-      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? "", isPenalty: !!m.isPenalty,
-      // A marker whose source item is GONE (deleted before the delete-cleanup hook existed, or
-      // imported state) has no item-sheet Wear-off control left — the strip offers the escape.
-      orphan: !actor?.items?.get?.(m.itemId)
+      turnsLeft: Number(m.turnsLeft) || 0, psychosis: m.psychosis ?? "", isPenalty: !!m.isPenalty
     },
-    // Worn off via the item sheet "Wear off" control (fires the wear-off save) — the strip is
-    // display-only while the item exists.
+    // Worn off via the strip's own per-pill × (clear-drug) — the SAME wear-off flow as the item
+    // sheet's "Wear off" control (card + save), and the escape when the source item is gone. The
+    // strip is otherwise display-only, so it carries no quick-toggle path.
     togglePath: null
   }));
 }

@@ -210,7 +210,18 @@ export async function decrementShopStock(id, sourceKey, by = 1, { buyerName = ""
   e.qty = Math.max(0, had - want);
   const ok = await _save(map);
   if (ok && want > had) {
-    ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopOversold", { name: sourceKey, buyer: buyerName || "?", had, want }));
+    // Resolve the DISPLAY name for the GM-facing warning (run-4): sourceKey is the opaque
+    // "packId.itemId" storage key (packId itself contains dots — split on the LAST one).
+    let name = sourceKey;
+    try {
+      const cut = sourceKey.lastIndexOf(".");
+      const pack = game.packs.get(sourceKey.slice(0, cut));
+      const itemId = sourceKey.slice(cut + 1);
+      name = pack?.index?.get?.(itemId)?.name
+        ?? (pack ? (await pack.getIndex()).get(itemId)?.name : null)
+        ?? sourceKey;
+    } catch (e) { /* fall back to the raw key */ }
+    ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopOversold", { name, buyer: buyerName || "?", had, want }));
   }
   return ok;
 }

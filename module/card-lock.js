@@ -54,6 +54,12 @@ export async function markCardResolved(messageOrId, note) {
   const data = { resolved: true, at: Date.now(), by: game.user?.id ?? null };
   if (note) data.note = String(note);
 
+  // Synchronous in-DOM lock FIRST (run-4 audit): the flag write / relay is an async round-trip, and
+  // until the updateChatMessage re-render lands the buttons stay clickable — a rapid second click in
+  // that window re-fires the action. Locking every rendered instance of this card right now closes
+  // the local window; the flag stamp below remains the authoritative cross-client lock.
+  _lockRenderedInstances(message.id);
+
   if (_canWriteMessage(message)) {
     try {
       await message.setFlag(SCOPE, FLAG, data);
@@ -63,9 +69,31 @@ export async function markCardResolved(messageOrId, note) {
     }
   } else {
     // Player resolving a GM-authored card: relay the stamp to the active GM (the damage-relay idiom).
+    // ⚠ With NO active GM connected this relay is lost and the OTHER clients' buttons stay live (the
+    // local DOM lock above still holds here) — a known gap, reported in run-4; an offline-GM stamp
+    // queue is the follow-up design.
     game.socket.emit(`module.${SCOPE}`, { type: RELAY_TYPE, messageId: message.id, data });
   }
   return true;
+}
+
+/** Lock every currently-rendered instance of a message's card (main log + any popped-out chat). */
+function _lockRenderedInstances(messageId) {
+  try {
+    document.querySelectorAll(`[data-message-id="${messageId}"]`).forEach((li) => {
+      const card = li.querySelector?.(".cyberpunk-card, .cyberpunk");
+      if (card) _lockCardDom(card);
+    });
+  } catch (e) { /* display-only — the flag stamp is authoritative */ }
+}
+
+/** The DOM half of the lock: the resolved class + every button disabled (except the re-arm control). */
+function _lockCardDom(card) {
+  card.classList.add("cp-card-resolved");
+  card.querySelectorAll("button").forEach((b) => {
+    if (b.classList.contains("cp-card-rearm")) return;   // never disable the re-arm control itself
+    b.disabled = true;
+  });
 }
 
 /** renderChatMessageHTML pass: lock a stamped card's buttons + (GM) inject the re-arm control. */
@@ -75,11 +103,7 @@ function _lockRenderedCard(message, html) {
   const card = root?.querySelector?.(".cyberpunk-card, .cyberpunk");
   if (!card) return;
 
-  card.classList.add("cp-card-resolved");
-  card.querySelectorAll("button").forEach((b) => {
-    if (b.classList.contains("cp-card-rearm")) return;   // never disable the re-arm control itself
-    b.disabled = true;
-  });
+  _lockCardDom(card);
 
   if (ENABLE_REARM && game.user?.isGM) _injectRearm(card, message);
 }

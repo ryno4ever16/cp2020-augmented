@@ -1128,6 +1128,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     if (sys.isChipped || sys.autoChipped) return false;   // chipped = trained
     if ((Number(sys.level) || 0) > 0) return false;        // has a trained level
     if ((Number(sys.ip) || 0) > 0) return false;           // carrying IP toward the first level
+    // The module's IP tracker banks per-skill IP in the FLAG, never system.ip (run-4; same fact as
+    // the chip-grant prune fix) — a discipline being worked via the tracker counts as trained too.
+    if ((Number(skill.getFlag?.("cp2020-augmented", "ip")) || 0) > 0) return false;
     return true;
   }
 
