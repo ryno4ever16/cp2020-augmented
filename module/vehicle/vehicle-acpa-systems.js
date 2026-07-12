@@ -185,7 +185,10 @@ export function acpaSpacesOver(mounted, str) {
  * Apply SDP damage to one mounted system in a struck body area (MM p.55-56). Picks the first LIVE
  * system in the area, adds the damage to its accumulated `sdpDamage`, and marks it destroyed once that
  * meets/exceeds its SDP. PURE — returns a NEW array plus the outcome; if no live system is in the area,
- * nothing is consumed (the caller falls through to frame SDP, per D-3).
+ * nothing is consumed and the full damage is returned as overflow. This function is ROUTING-AGNOSTIC:
+ * it only computes the overflow and hands it back to the caller, which decides where it goes (MM p.55:
+ * a destroyed enclosed system's / internal weapon's unabsorbed damage → the PILOT; only a chassis hit
+ * consumes frame SDP; a no-system-in-area hit → the PILOT).
  * @param {Array}  mounted  [{ key, area, mount, sdpDamage?, destroyed? }]
  * @param {string} area     struck body-area key (head/rArm/lArm/rLeg/lLeg/torso)
  * @param {number} sdpDamage incoming SDP damage
@@ -208,7 +211,8 @@ export function acpaHitSystem(mounted = [], area, sdpDamage = 0) {
   const destroyed = hasSdp ? total >= sdp : true;
   m.sdpDamage = hasSdp ? Math.min(total, sdp) : total;
   m.destroyed = !!destroyed;
-  // Damage beyond what destroying this system absorbs spills back to the caller (→ frame SDP).
+  // Damage beyond what destroying this system absorbs is returned to the caller, which routes it (the
+  // PILOT for an enclosed/internal-weapon hit; only a chassis hit consumes frame SDP). Routing-agnostic here.
   const overflow = destroyed ? Math.max(0, total - (hasSdp ? sdp : 0)) : 0;
   return { index, hitKey: m.key, destroyed, overflow, updated };
 }

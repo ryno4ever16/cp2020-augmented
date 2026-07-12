@@ -25,7 +25,7 @@ import { effectiveVehicleRuleSystem } from "../settings.js";
 import { renderChatCard } from "../compat.js";
 import { acpaBodyArea, externalSystemHit, acpaSystemHit, acpaRollAgain, acpaCriticalEffect, acpaCriticalUpdate, acpaAreaSDP, systemIntegrity } from "./vehicle-acpa.js";
 import { acpaHitSystem, acpaSystemSdp } from "./vehicle-acpa-systems.js";
-import { computeNetDamage, applyLocationDamage } from "../combat/DamageApplicator.js";
+import { computeNetDamage, applyLocationDamage, _deriveLiveSP, ablateLocationOnce, ARMOR_MODES } from "../combat/DamageApplicator.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -321,10 +321,11 @@ export function acpaResolveMode(sys) {
 /**
  * Faithful ACPA (powered-armor) damage (Maximum Metal p.54-56): SDP damage = incoming damage − armor
  * SP − Toughness Mod. If it gets through, roll a body area → 50% external system → System Hit Table
- * → (Critical Hit Chart on a critical). An "enclosed system" hit consumes a specific mounted system's
- * SDP (a destroyed system spills its overflow to the frame); a "chassis"/"weapons" hit goes to the
- * frame. Frame overflow spills to the pilot; a destroyed area knocks out its systems and a destroyed
- * Torso shuts the suit down.
+ * → (Critical Hit Chart on a critical). An "enclosed system" (or internal-weapon) hit consumes a
+ * specific mounted system's SDP; any damage NOT absorbed by that system's SOP passes on to the PILOT
+ * (MM p.55 — internal weapons are treated the same as the other enclosed systems), NOT the frame. Only
+ * a "chassis" hit goes to the frame. Frame overflow spills to the pilot; a destroyed area knocks out
+ * its systems and a destroyed Torso shuts the suit down.
  *
  * `rawDamage` is the actual rolled weapon damage when the payload carries it; otherwise the incoming
  * damage is estimated from the Penetration Factor (Pen ≈ avgDamage/10). Rolls its own dice (pushed to
@@ -484,8 +485,8 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
       if (r) {
         if (r.destroyed) {
           lines += `<br>System Hit: <b>${r.name}</b> (${areaName}) — <span class="result-warn">DESTROYED</span>.`;
-          frameDamage = r.overflow;
-          if (r.overflow > 0) lines += ` ${r.overflow} SDP overflows to the frame.`;
+          pilotDamage += r.overflow;   // MM p.55: damage not absorbed by the system's SOP passes to the PILOT, not the frame
+          if (r.overflow > 0) lines += ` <b>${r.overflow}</b> SDP overflows to the <b>pilot</b>.`;
           await ammoCookoff(r.item, sdp, false);
         } else {
           const inopNote = await integrityCheck(r);
@@ -501,8 +502,8 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
       if (r) {
         if (r.destroyed) {
           lines += `<br>System Hit: <b>${r.name}</b> (weapon, ${areaName}) — <span class="result-warn">DESTROYED</span>.`;
-          frameDamage = r.overflow;
-          if (r.overflow > 0) lines += ` ${r.overflow} SDP overflows to the frame.`;
+          pilotDamage += r.overflow;   // MM p.55: internal weapons are treated as enclosed systems — unabsorbed damage passes to the PILOT
+          if (r.overflow > 0) lines += ` <b>${r.overflow}</b> SDP overflows to the <b>pilot</b>.`;
           const dn = `${r.name} (destroyed)`;
           if (!damaged.includes(dn)) { damaged.push(dn); updates["system.damagedSystems"] = damaged; }
           await ammoCookoff(r.item, sdp, false);
@@ -748,12 +749,33 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
         try {
           const pilotBtm = Number(pilot.system?.stats?.bt?.modifier) || 0;
           const charLoc = _ACPA_AREA_TO_CHAR_LOC[r.areaName] ?? "Torso";
-          // penetrates=true → applyBTM floors the wound at 1 (it got through the frame).
-          const netDamage = computeNetDamage(r.pilotDamage, pilotBtm, true, charLoc);
-          // structuralDamage = the pre-BTM overflow: a full-borg PILOT (e.g. the DaiOni's Alpha) routes it
-          // to zone SDP, which absorbs machinery-style with NO BTM (Core p.89); a flesh pilot ignores it and
-          // takes the post-BTM netDamage on the wound track. Mirrors the personnel path (DamageApplicator).
-          await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: r.pilotDamage, penetrates: true });
+          // Any damage reaching the pilot is first reduced by the pilot's OWN worn armor SP at the struck
+          // location (external designer clarification, user-endorsed). Fold worn layers + cyberware + borg
+          // chassis SP through the SAME personnel derivation the wound pipeline uses (one source of truth);
+          // damageType "" = conventional.
+          const pilotSP = Number(_deriveLiveSP(pilot, charLoc, "")) || 0;
+          const afterSP = Math.max(0, r.pilotDamage - pilotSP);
+          if (afterSP <= 0) {
+            // The pilot's own armor caught the overflow — no wound (mirrors a stopped personnel hit: no
+            // penetration ⇒ no wound track write, no ablation).
+            lines += `<br>The <b>${r.pilotDamage}</b> reaching the pilot was stopped by their own armor (SP ${pilotSP} at ${charLoc}).`;
+          } else {
+            // penetrates=true → applyBTM floors the wound at 1 (it beat both the frame and the pilot's armor).
+            const netDamage = computeNetDamage(afterSP, pilotBtm, true, charLoc);
+            // structuralDamage = the post-armor, pre-BTM overflow — exactly the personnel-path semantics
+            // (DamageApplicator ~L249): a full-borg PILOT (e.g. the DaiOni's Alpha) routes it to zone SDP,
+            // which absorbs machinery-style with NO BTM (Core p.89); a flesh pilot ignores it and takes the
+            // post-BTM netDamage on the wound track.
+            await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: afterSP, penetrates: true });
+            lines += `<br><b>${r.pilotDamage}</b> reaches the pilot − armor SP ${pilotSP} = ${afterSP}, − BTM ${pilotBtm} → <b>${netDamage}</b> to the pilot (${charLoc}).`;
+            // Ablate the pilot's armor on penetration — the EXACT gate the personnel path uses in
+            // applyAreaDamages (ablate setting + FULL armor mode + penetration + a real wound).
+            const _ablate = (() => { try { return game.settings.get(SCOPE, "damageAblation"); } catch { return false; } })();
+            const _armorMode = (() => { try { return game.settings.get(SCOPE, "damageArmorMode"); } catch { return ARMOR_MODES.FULL; } })();
+            if (_ablate && _armorMode === ARMOR_MODES.FULL && afterSP > 0 && netDamage > 0) {
+              await ablateLocationOnce(pilot, charLoc, "");
+            }
+          }
         } catch (e) {
           console.warn(`${SCOPE} | ACPA pilot-overflow write failed on this client — suit damage + card still applied`, e);
           lines += `<br><span class="result-warn">Pilot overflow (${r.pilotDamage}) could not be applied on this client — a GM must apply it to the pilot.</span>`;
