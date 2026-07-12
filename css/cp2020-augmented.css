@@ -2436,3 +2436,16 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   cursor: pointer;
 }
 .cyberpunk .cp-card-rearm:hover { opacity: 1; }
+
+/* Actor-name inputs are type="search" (not text) so password managers stop classifying the lone
+ * "name" field as a username and injecting their fill icon (data-lpignore alone is not honored by
+ * recent LastPass builds). Strip WebKit's search-input chrome so it renders exactly like text. */
+.cyberpunk .title input[type="search"] {
+  -webkit-appearance: textfield;
+  appearance: textfield;
+}
+.cyberpunk .title input[type="search"]::-webkit-search-cancel-button,
+.cyberpunk .title input[type="search"]::-webkit-search-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
