@@ -366,8 +366,14 @@ export async function openVehicleFireDialog(actor, mount = {}) {
     ] : [],
     facingOptions: FACINGS.map(f => ({ value: f, label: localize("Vehicle.Facing_" + f), selected: f === detFacing })),
     rangeOptions: ["normal", "long", "extreme"].map(r => ({ value: r, label: localize("Vehicle.Range" + cap(r)), selected: r === detRange })),
-    isTurret, vehicleLink: !!actor.system?.vehicleLink,
-    fireControl: Number(actor.system?.fireControl) || 0,
+    // ACPA to-hit purity (MM p.61-70): Cyberlinked controls (+2) and Fire-Control computers are
+    // VEHICLE-chapter options absent from PA construction; the suit's own targeting assistance is the
+    // Reality-Interface Direct-Fire Bonus (DFB, "replaces any normal smartgun bonus", MM L6185-6187).
+    // So an ACPA firer gets NEITHER the vehicleLink +2 NOR the fireControl bonus — gate at this single
+    // payload-gather site so every downstream consumer (dialog prefill, modifier math, chat breakdown)
+    // stays consistent. Plain vehicles are unchanged.
+    isTurret, vehicleLink: isAcpaFirer ? false : !!actor.system?.vehicleLink,
+    fireControl: isAcpaFirer ? 0 : (Number(actor.system?.fireControl) || 0),
     isAcpaFirer, acpaDfb,
   });
 

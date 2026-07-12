@@ -168,7 +168,8 @@
         <p style="opacity:0.6; font-size:0.78em; margin:2px 0;">{{CPLocal "Vehicle.SibNote"}}</p>
         <div class="field-list">
             <div class="field" title="{{CPLocal 'Vehicle.SibInitiativeTip'}}">
-                <label>{{CPLocal "Vehicle.SibInitiativeLabel"}}</label><input type="number" class="not-editable" value="{{system.sib}}" readonly/></div>
+                <label>{{CPLocal "Vehicle.SibInitiativeLabel"}}</label><input type="number" class="not-editable" value="{{system.sib}}" readonly/>
+                {{#if system.sibOverloaded}}<span class="cp-sib-overload" style="color:#b00; font-size:0.72em; font-weight:600; margin-left:6px;" title="{{CPLocal 'Vehicle.SibOverloadTip'}}">{{CPLocal "Vehicle.SibOverloadBadge"}}</span>{{/if}}</div>
             <div class="field" title="{{CPLocal 'Vehicle.TotalWtKgTip'}}">
                 <label>{{CPLocal "Vehicle.TotalWtKgLabel"}}</label><input type="number" class="not-editable" value="{{system.totalWeight}}" readonly/></div>
             <div class="field" title="{{CPLocal 'Vehicle.ArmorWtKgTip'}}">
@@ -188,22 +189,20 @@
             <div class="field" title="{{CPLocal 'Vehicle.ExtraSysWtTip'}}">
                 <label>{{CPLocal "Vehicle.ExtraSysWtLabel"}}</label><input type="number" name="system.systemsWeight" value="{{system.systemsWeight}}"/></div>
         </div>
+        <div class="field-list">
+            <div class="field" title="{{CPLocal 'Vehicle.CarriedGearTip'}}">
+                <label>{{CPLocal "Vehicle.CarriedGearLabel"}}</label><input type="number" name="system.carriedGearKg" value="{{system.carriedGearKg}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.ExternalLoadTip'}}">
+                <label>{{CPLocal "Vehicle.ExternalLoadLabel"}}</label><input type="number" class="not-editable" value="{{system.externalLoadKg}}" readonly/></div>
+        </div>
         {{/if}}
 
-        {{!-- Pilot & Systems --}}
+        {{!-- Pilot & Systems. Cyberlinked / Fire Control / Damage Control / Composite Armor are VEHICLE-chapter
+             options absent from PA construction (MM p.61-70) — the suit's book equivalents are the Reality
+             Interface DFB and Reflex/Control systems — so they are not rendered on the ACPA sheet. --}}
         <h2 class="cyber-section-header">{{CPLocal "Vehicle.PilotSystemsHeader"}}</h2>
-        <div class="field-list">
-            <div class="field" title="{{CPLocal 'Vehicle.CyberlinkedTip'}}">
-                <label>{{CPLocal "Vehicle.CyberlinkedLabel"}}</label><input type="checkbox" name="system.vehicleLink" {{#if system.vehicleLink}}checked{{/if}}/></div>
-            <div class="field" title="{{CPLocal 'Vehicle.FireControlTipAcpa'}}">
-                <label>{{CPLocal "Vehicle.FireControl"}}</label><input type="number" name="system.fireControl" value="{{system.fireControl}}"/></div>
-        </div>
         {{#if mmOn}}
         <div class="field-list">
-            <div class="field" title="{{CPLocal 'Vehicle.DamageControlTipAcpa'}}">
-                <label>{{CPLocal "Vehicle.DamageControlLabel"}}</label><input type="checkbox" name="system.damageControl" {{#if system.damageControl}}checked{{/if}}/></div>
-            <div class="field" title="{{CPLocal 'Vehicle.CompositeArmorTipAcpa'}}">
-                <label>{{CPLocal "Vehicle.CompositeArmorLabel"}}</label><input type="checkbox" name="system.compositeArmor" {{#if system.compositeArmor}}checked{{/if}}/></div>
             <div class="field" title="{{CPLocal 'Vehicle.SensorsRadarTipAcpa'}}">
                 <label>{{CPLocal "Vehicle.SensorsRadarLabel"}}</label><input type="checkbox" name="system.sensors" {{#if system.sensors}}checked{{/if}}/></div>
             <div class="field" title="{{CPLocal 'Vehicle.AntiMissileTipAcpa'}}">

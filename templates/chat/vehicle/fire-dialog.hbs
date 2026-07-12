@@ -33,7 +33,8 @@
     <label><input type="checkbox" id="cp-vf-stationary"> {{CPLocal "Vehicle.TargetStationary"}}</label>
     <label class="ml8">{{CPLocal "Vehicle.TargetSpeedMph"}} <input type="number" id="cp-vf-tspeed" value="0"></label><br>
     <label><input type="checkbox" id="cp-vf-turret"{{#if isTurret}} checked{{/if}}> {{CPLocal "Vehicle.TurretMount"}}</label>
-    <label class="ml8"><input type="checkbox" id="cp-vf-link"{{#if vehicleLink}} checked{{/if}}> {{CPLocal "Vehicle.VehicleLink"}}</label><br>
+    {{!-- Cyberlinked controls are a vehicle-only option (MM p.61-70); an ACPA firer's targeting is the DFB, so hide the row for ACPA. --}}
+    {{#unless isAcpaFirer}}<label class="ml8"><input type="checkbox" id="cp-vf-link"{{#if vehicleLink}} checked{{/if}}> {{CPLocal "Vehicle.VehicleLink"}}</label>{{/unless}}<br>
     <label><input type="checkbox" id="cp-vf-moving"> {{CPLocal "Vehicle.FirerMovingUnstab"}}</label><br>
     <label><input type="checkbox" id="cp-vf-dark"> {{CPLocal "Vehicle.DarkObscured"}}</label>
     <label class="ml8" title="{{CPLocal "Vehicle.FireControlTip"}}">{{CPLocal "Vehicle.FireControl"}} <input type="number" id="cp-vf-other" value="{{fireControl}}"></label>

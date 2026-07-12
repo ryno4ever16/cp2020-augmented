@@ -108,6 +108,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       pilotRef:         numberField(0),         // fallback pilot base REF when no pilot actor is linked
       trooperCapacity:  numberField(114),       // pilot+gear weight set aside for SIB (114 std; Russian 136; elite 80-91)
       systemsWeight:    numberField(0),          // aggregate weight of mounted systems (D-4d computes this; manual for now)
+      carriedGearKg:    numberField(0),          // GM-entered hand-held / ejectable external gear weight (MM p.57 overload). Additive default → legacy suits load as 0.
 
       // ACPA combat pole (Unit D). "" = auto (a linked pilot ⇒ detailed MM p.52, no pilot ⇒ quick-kill
       // MM p.6); "detailed" / "quickkill" force a pole. Additive default → existing suits load as auto,
@@ -249,6 +250,20 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       this.mountedSystemsCost = mountedSystemsCost;
       this.totalWeight = cs.weight + this.armorWeight + trooper + ri.weight + mountedSystemsWeight + sysW + cmdW;
       this.sib = acpaSib({ chassisCapacity: cs.lift, totalWeight: this.totalWeight, interfaceSib: ri.sib });
+      // External load & the p.57 overload penalty (MM p.57, L5725-5734): a suit carries external / hand-held
+      // gear up to ½ its chassis Carry rating freely; "If the amount carried is between 1/2 and the full
+      // rating, subtract 2 from the suit's initiative bonus (SIB)." Sum embedded acpaSystem Items flagged
+      // mount:"external" (their weight) + the GM-entered carriedGearKg. (cp2020-augmented.vehicleWeapon Items
+      // carry NO internal/external mount marker — only `mountType` for the vehicle mount style and `area` for
+      // the ACPA body slot — so weapon weight is intentionally left out and no field is invented for it.)
+      let externalLoadKg = Number(this.carriedGearKg) || 0;
+      if (items) for (const it of items) if (it.type === "cp2020-augmented.acpaSystem" && it.system?.mount === "external") {
+        externalLoadKg += Number(it.system?.weight) || 0;
+      }
+      this.externalLoadKg = externalLoadKg;
+      // Boundary: EXACTLY ½ Carry is NOT overloaded — the book penalizes weight "between 1/2 and the full rating".
+      this.sibOverloaded = externalLoadKg > (cs.carry / 2);
+      if (this.sibOverloaded) this.sib -= 2;   // applied BEFORE runM below, so run/jump inherit the −2.
       // Movement (MM p.57): Run = (SIB + pilot MA) × 3; standing jump = Run/6, running jump = Run/4.
       this.runM = acpaRunM({ sib: this.sib, ma: pilotMA });
       this.jumpStanding = acpaJumpM(this.runM, {});
