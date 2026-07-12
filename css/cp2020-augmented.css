@@ -298,6 +298,37 @@
    row space like every other field control and clips long names instead of overflowing. --- */
 .cyberpunk .field select.cp2020ae-install-picker { flex: 1 1 0; min-width: 6em; }
 
+/* --- Item + vehicle/ACPA sheet <select> normalization (proven on the rig 2026-07-12) ----------
+   Two defects the base `.cyberpunk .field select` rule (height:100%; flex:1 1 auto; +the weapon
+   name-based width:100% rule) produces on these sheets:
+     1. HEIGHT — a bare <select>'s intrinsic height is ~39px in Foundry's Chromium, so a grid row
+        that holds ONLY selects sized its track to 39px (uneven, oversized) while number/text rows
+        are pinned to 24px. Pin selects to the same 24px so every row matches.
+     2. WIDTH / LABEL CLIP — flex-basis:auto (or width:100%) let a select claim its longest option's
+        width, squeezing the row <label> until it truncated ("Availabilit", "Concealabilit"). The
+        install-picker idiom (flex-basis 0 + a floor min-width) makes the select share leftover row
+        space so the label keeps its width. Scoped to the item + vehicle sheets only (the character
+        sheet's stat/skill selects are deliberately untouched). The cyberware multi-select is a <div>,
+        not a <select>, so it is unaffected. */
+.cyberpunk.sheet.item .field select,
+.cyberpunk.sheet.vehicle .field select {
+  height: 24px;
+  min-height: 24px;
+  line-height: normal;
+  align-self: center;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 6em;
+  width: auto;
+  max-width: 100%;
+}
+/* The shared field partial puts a growing `.flex-pad` spacer between the label and the control (it
+   right-aligns narrow number/text values). For a <select> we instead want it to CONSUME the row's
+   leftover width so its option text stays readable — so collapse the spacer's grow in select rows.
+   The label keeps its own (content) width either way, so it still never clips. */
+.cyberpunk.sheet.item .field:has(> select) > .flex-pad,
+.cyberpunk.sheet.vehicle .field:has(> select) > .flex-pad { flex-grow: 0; min-width: 0; }
+
 /* --- In-sheet Recurring Services panel (injected into the gear tab body; NOT a nav tab). --- */
 .cp2020ae-services-panel { margin-top: 8px; border-top: 1px solid rgba(184,145,106,0.4); padding-top: 6px; }
 .cp2020ae-services-header .larger { font-weight: bold; }
@@ -762,6 +793,24 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .application.cyberpunk.sheet.actor .window-content { overflow-y: hidden; }
 .application.cyberpunk.sheet.actor .sheet-body { overflow-y: auto; }
 
+/* Vehicle / ACPA sheet scroll chain (proven on the rig 2026-07-12). The sheet carries the `.actor`
+   class, so the two rules above ALSO hid its window-content overflow and relocated scrolling to a
+   `.sheet-body` scroller — but this layout's roots never established the height chain that bounds
+   that scroller, so the (very tall) ACPA sheet was clipped at the window edge with NO scrollbar
+   ("seems like you're seeing the whole thing"). Mirror the character sheet: bound the part element
+   to the window, make each nested root a flex column with min-height:0, and let `.sheet-body` scroll.
+   Paired with PARTS.main scrollable:[".sheet-body"] in vehicle-sheet.js so V2 preserves scrollTop
+   across the submitOnChange re-renders. */
+.cyberpunk.sheet.vehicle [data-application-part="main"] { height: 100%; min-height: 0; }
+.cyberpunk.sheet.vehicle .cp-vehicle-sheet-root,
+.cyberpunk.sheet.vehicle .cp-acpa-sheet-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.cyberpunk.sheet.vehicle .sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
 .application.cyberpunk.sheet.actor .sheet-body > .tab.life.active,
 .cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .sheet-body > .tab.life.active {
   display: flex;
@@ -1130,6 +1179,35 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .vehicle-fire-dialog input.num-wide { width: 64px; }
 
 .vehicle-fire-dialog .ml8 { margin-left: 8px; }
+
+/* --- Maneuver/control dialog (round-2): resizable window support + a proper conditions column.
+   The dialog window is resizable, so the content div is the ONE growing child that scrolls when
+   the window shrinks (the DialogV2 button footer stays pinned). Conditions render one flex row
+   per checkbox — the old free-flow labels + <br> separators wrapped into scattered checkboxes. */
+.vehicle-control-dialog { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-items: stretch; }
+/* Core centers flex children (shrink-wrapped rows at varying indents) — every direct row spans
+   the column so labels/controls share one left edge, like the conditions fieldset. */
+.vehicle-control-dialog > label { width: 100%; }
+/* The scroll chain must pass through DialogV2's wrappers: .window-content (overflow:hidden in core)
+   and its <form> child both become bounded flex columns so the content div above is the ONE grower
+   that scrolls; the button footer keeps its own height. Scoped via :has to this dialog only. */
+.application.dialog:has(.vehicle-control-dialog) .window-content,
+.application.dialog:has(.vehicle-control-dialog) .window-content > form {
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
+/* This core's DialogV2 inserts a .dialog-content wrapper between the form and the module's
+   content div (rig-verified DOM chain); it must be a bounded flex column too or it expands to
+   content height and the clip happens at the form instead of scrolling in the content div. */
+.application.dialog:has(.vehicle-control-dialog) .window-content .dialog-content {
+  display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden;
+}
+.application.dialog:has(.vehicle-control-dialog) .window-content footer,
+.application.dialog:has(.vehicle-control-dialog) .window-content .form-footer { flex: 0 0 auto; }
+/* align-items:stretch + full-width rows — core centers flex children, which shrink-wraps each
+   condition label and staggers its leading checkbox (rig-measured 66px left-x spread). */
+.vehicle-control-dialog fieldset { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.vehicle-control-dialog fieldset label { display: flex; align-items: center; gap: 6px; margin: 0; width: 100%; }
+.vehicle-control-dialog fieldset label input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
 
 .vehicle-fire-dialog fieldset { border: 1px solid var(--color-border-light-tertiary); padding: 4px 6px; }
 
@@ -2327,3 +2405,30 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   padding: 3px;
   margin-bottom: 8px;
 }
+
+/* ── One-shot chat-card lock (module/card-lock.js) ───────────────────────────────────────────────
+   A resolved prompt card gets `.cp-card-resolved`; its buttons are disabled in JS. The rules here are
+   presentation only (classes, no inline styles): dim the spent card + neutralise disabled buttons so a
+   resolved prompt reads as spent. The GM ↺ re-arm control is a small, low-emphasis affordance. */
+.cyberpunk.cp-card-resolved { opacity: 0.72; }
+.cyberpunk.cp-card-resolved .save-buttons button[disabled],
+.cyberpunk.cp-card-resolved button[disabled] {
+  cursor: default;
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
+.cyberpunk.cp-card-resolved .save-buttons { position: relative; }
+
+/* Severable GM re-arm control (delete with the ENABLE_REARM block in card-lock.js). */
+.cyberpunk .cp-card-rearm {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 0 6px;
+  min-width: 0;
+  width: auto;
+  line-height: 1.5;
+  font-size: 0.85rem;
+  opacity: 0.6;
+  cursor: pointer;
+}
+.cyberpunk .cp-card-rearm:hover { opacity: 1; }

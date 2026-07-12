@@ -1,4 +1,7 @@
 {{> "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs" hitLocations=system.coverage edit=true hitLocsName="coverage"}}
 <div class="field-list one-col">
     {{> (template "fields/number") label="Encumbrance" edit="system.encumbrance"}}
+    {{!-- Hard/soft classification (drives the edged/mono SP multipliers). Blank = "Auto" (the
+          name/encumbrance heuristic in getArmorHardness); "soft"/"hard" force it. --}}
+    {{> (template "fields/select") label="ArmorType" edit="system.armorType" choices=armorTypeChoices}}
 </div>

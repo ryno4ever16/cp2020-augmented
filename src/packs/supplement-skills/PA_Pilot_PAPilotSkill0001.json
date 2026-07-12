@@ -11,6 +11,7 @@
     "ip": 0,
     "diffMod": 2,
     "isChipped": false,
+    "isRoleSkill": false,
     "stat": "ref"
   },
   "effects": [],

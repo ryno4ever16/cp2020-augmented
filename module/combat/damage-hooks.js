@@ -21,6 +21,7 @@
 import { DamageDialog }                                       from "./DamageDialog.js";
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
+import { markCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
@@ -41,7 +42,20 @@ function _isMultiActionEnabled() {
 function _isMultiActionAutoTrack() {
   try { return game.settings.get("cp2020-augmented", "multiActionAutoTrack"); } catch { return false; }
 }
+/** True when there is a started combat that this actor is a combatant in. The multi-action counter is
+ *  combat-scoped: only a running combat has the round boundary that resets it (see the round-reset and
+ *  combatStart hooks in _hookMultiActionPenalty), so OUT of combat the counter must neither accumulate
+ *  nor penalize — otherwise it climbs forever with nothing to clear it. The membership set is exactly the
+ *  one the reset hook clears (combat.combatants), so a non-combatant that fired could never be reset
+ *  either — hence it is excluded here too. Reuses the same game.combat.started notion the movement gate
+ *  keys off. */
+function _inActiveCombat(actor) {
+  const combat = game?.combat;
+  if (!combat?.started || !actor) return false;
+  return combat.combatants.some(c => c.actor?.id === actor.id);
+}
 function _getActionCount(actor) {
+  if (!_inActiveCombat(actor)) return 0;   // out of combat / not a combatant → no count, no penalty
   const round = game?.combat?.round ?? 0;
   const count = Number(actor.getFlag?.("cp2020-augmented", "actionCount") ?? 0);
   const countRound = actor.getFlag?.("cp2020-augmented", "actionCountRound") ?? -1;
@@ -55,6 +69,10 @@ function _getActionCount(actor) {
 // the chain, so a trailing .catch() is enough.
 const _actionCountChains = new WeakMap();
 function _incrementActionCount(actor) {
+  // Single choke point for every increment path (weapon fire, aim/dodge/parry, manual +action): the
+  // counter only advances inside a combat this actor is part of. Out of combat it is a no-op so the
+  // penalty never accrues with no round boundary to reset it.
+  if (!_inActiveCombat(actor)) return Promise.resolve();
   const next = (_actionCountChains.get(actor) ?? Promise.resolve()).catch(() => {}).then(() => {
     const round   = game?.combat?.round ?? 0;
     const current = _getActionCount(actor);
@@ -137,18 +155,22 @@ export function registerDamageHooks() {
       ev.preventDefault();
       scatterBtn.disabled = true;
       await _scatterExplosion(scatterBtn.dataset.templateId);
+      // One-shot: scatter + confirm are two buttons on ONE explosion card — either resolves it (card-lock.js).
+      await markCardResolved(scatterBtn.closest("[data-message-id]")?.dataset?.messageId, "explosionScatter");
     }
 
     if (blastBtn && !blastBtn.disabled) {
       ev.preventDefault();
       blastBtn.disabled = true;
       await _confirmExplosion(blastBtn.dataset.templateId);
+      await markCardResolved(blastBtn.closest("[data-message-id]")?.dataset?.messageId, "explosionConfirm");
     }
 
     if (spreadBtn && !spreadBtn.disabled) {
       ev.preventDefault();
       spreadBtn.disabled = true;
       await _confirmSpreadZone(spreadBtn.dataset.templateId);
+      await markCardResolved(spreadBtn.closest("[data-message-id]")?.dataset?.messageId, "spreadConfirm");
     }
 
     if (evasionBtn && !evasionBtn.disabled) {
@@ -162,6 +184,8 @@ export function registerDamageHooks() {
         dmgFormula: evasionBtn.dataset.dmgFormula,
         attackerId: evasionBtn.dataset.attackerId,
       });
+      // One-shot per defender: this token evades once (card-lock.js).
+      await markCardResolved(evasionBtn.closest("[data-message-id]")?.dataset?.messageId, "suppressionEvasion");
     }
 
     // Confirm fire zone — detects tokens in zone and posts evasion prompts
@@ -175,6 +199,7 @@ export function registerDamageHooks() {
         attackerId: confirmBtn.dataset.attackerId,
         weaponName: confirmBtn.dataset.weaponName,
       });
+      await markCardResolved(confirmBtn.closest("[data-message-id]")?.dataset?.messageId, "fireZoneConfirm");
     }
 
     if (takeAimBtn) {
@@ -316,6 +341,25 @@ export function registerDamageHooks() {
   });
 }
 
+/** Mono-edge weapons break on a fumble (a natural 1 on the attack roll, CP2020 p.112). Called from the
+ *  weaponFired handler on the shot's authoritative client so the weapon write + chat note happen exactly
+ *  once. No-op unless the fired weapon is `mono` and the roll fumbled; idempotent (skips an already-broken
+ *  weapon), so a re-emitted payload never double-posts. */
+async function _maybeBreakMonoWeapon(payload, attackerActor) {
+  if (!payload?.mono || !payload?.fumble) return;
+  const weapon = payload.weaponId ? attackerActor?.items?.get(payload.weaponId) : null;
+  if (!weapon || weapon.system?.broken) return;
+  try {
+    await weapon.update({ "system.broken": true });
+    await ChatMessage.create({
+      content: localizeParam("MonoWeaponBroke", { weapon: weapon.name }),
+      speaker: ChatMessage.getSpeaker(attackerActor ? { actor: attackerActor } : {}),
+    });
+  } catch (err) {
+    console.warn("CP2020 | mono break-on-fumble failed:", err);
+  }
+}
+
 function _hookWeaponFired() {
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     // Defense-in-depth: if a co-resident automation layer already claimed this shot (e.g. the base
@@ -349,6 +393,12 @@ function _hookWeaponFired() {
     // double-applying to a vehicle. Single-GM tables are unaffected (the lone GM is the active GM).
     const gmHandles = game.user.isGM && !ownerOnline && game.users.activeGM?.id === game.user.id;
     if (!isMyShot && !gmHandles) return;
+
+    // Mono-edge break-on-fumble (CP2020 p.112): this is the shot's single authoritative client, so mark
+    // the weapon broken + post the note here (exactly once). Runs BEFORE the areaDamages guard so a
+    // damage-less fumble card still breaks the blade; a no-op unless the weapon is mono and it fumbled.
+    await _maybeBreakMonoWeapon(payload, attackerActor);
+
     if (!payload.areaDamages || Object.keys(payload.areaDamages).length === 0) return;
 
     // This client + layer is committing to apply this shot — claim it (synchronously, before any
@@ -1480,20 +1530,25 @@ function _hookManualRoundTick() {
 }
 
 /** Run one manual per-turn pass for `combat` (the GM-only combat-tracker control, used when the round-tick
- *  master is off): drug + consumable timers, then this file's over-time and gas-cloud ticks. The timer
- *  exports are ungated inside; this path is reached only from the GM-only button. */
+ *  master is off): drug + consumable timers, this file's over-time and gas-cloud ticks, and BOTH radiation
+ *  passes (marker count-down + placed-zone dosing/aging) — all of which also stand down when the master is
+ *  off. The timer exports are ungated inside; this path is reached only from the GM-only button. */
 async function _runManualRoundTick(combat) {
   if (!combat || !game.user.isGM) return;
-  const { runDrugTickOnce }       = await import("../mech/drug.js");
-  const { runConsumableTickOnce } = await import("../mech/consumable.js");
+  const { runDrugTickOnce }         = await import("../mech/drug.js");
+  const { runConsumableTickOnce }   = await import("../mech/consumable.js");
+  const { runRadiationTickOnce }    = await import("../radiation/radiation.js");
+  const { runRadZoneTick }          = await import("../radiation/radiation-zones.js");
   await runDrugTickOnce(combat);
   await runConsumableTickOnce(combat);
   await _runOverTimeTick(combat);
   await _runGasCloudTick(combat);
+  await runRadiationTickOnce(combat);
+  await runRadZoneTick(combat);
 }
 
 /** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct). */
-async function _applyAreaHitToToken(tok, dmg, { ap, edged, armorMultSoft, armorMultHard, penDamageMult, weaponName }) {
+async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName }) {
   if (!tok?.actor || dmg <= 0) return 0;
   const loc = (await rollLocation(tok.actor, null)).areaHit;
   const hits = await applyAreaDamages({
@@ -1501,6 +1556,7 @@ async function _applyAreaHitToToken(tok, dmg, { ap, edged, armorMultSoft, armorM
     areaDamages:   { [loc]: [{ damage: dmg }] },
     ap:            Boolean(ap),
     edged:         Boolean(edged),
+    mono:          Boolean(mono),
     armorMultSoft: Number(armorMultSoft ?? 1),
     armorMultHard: Number(armorMultHard ?? 1),
     penDamageMult: Number(penDamageMult ?? 1),
@@ -1623,7 +1679,7 @@ async function _placeExplosion(payload) {
       flags: {
         isExplosion: true, baseDamage, blastRadius: radius, blastFullDamageWithin: fullWithin,
         blastMultipliers: Array.isArray(payload.blastMultipliers) ? payload.blastMultipliers : [0.5, 0.25, 0.125, 0.0625],
-        attackerId, ap: Boolean(payload.ap), edged: Boolean(payload.edged),
+        attackerId, ap: Boolean(payload.ap), edged: Boolean(payload.edged), mono: Boolean(payload.mono),
         armorMultSoft: Number(payload.armorMultSoft ?? 1), armorMultHard: Number(payload.armorMultHard ?? 1),
         penDamageMult: Number(payload.penDamageMult ?? 1), blastShrapnel: Boolean(payload.blastShrapnel),
         weaponName, createdRound: game.combat?.round ?? 0,
@@ -1700,7 +1756,7 @@ async function _confirmExplosion(templateId) {
       if (f.blastShrapnel) {
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
-          { ap: false, edged: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) });
+          { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) });
       }
     } else {
       // Core blast: range-banded damage through normal armor.
@@ -1812,7 +1868,7 @@ async function _placeSpreadZone(payload) {
       color: "#ffaa00", borderColor: "#cc6600",
       flags: {
         isSpreadZone: true, dmgFormula, band, attackerId, originX: ox, originY: oy,
-        ap: Boolean(payload.ap), edged: Boolean(payload.edged),
+        ap: Boolean(payload.ap), edged: Boolean(payload.edged), mono: Boolean(payload.mono),
         armorMultSoft: Number(payload.armorMultSoft ?? 1), armorMultHard: Number(payload.armorMultHard ?? 1),
         penDamageMult: Number(payload.penDamageMult ?? 1), weaponName, createdRound: game.combat?.round ?? 0,
       },
@@ -1945,10 +2001,7 @@ function _hookMultiActionPenalty() {
     _incrementActionCount(actor).catch(() => {});
   });
 
-  Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM || updateData.round === undefined) return;
-    // Active GM only — consistent with the other per-turn handlers (idempotent flag clears).
-    if (game.users.activeGM?.id !== game.user.id) return;
+  const _clearActionCounts = async (combat) => {
     for (const combatant of combat.combatants) {
       if (!combatant.actor) continue;
       if ((combatant.actor.getFlag?.("cp2020-augmented", "actionCount") ?? 0) > 0) {
@@ -1956,6 +2009,22 @@ function _hookMultiActionPenalty() {
         await combatant.actor.unsetFlag("cp2020-augmented", "actionCountRound").catch(() => {});
       }
     }
+  };
+
+  Hooks.on("updateCombat", async (combat, updateData) => {
+    if (!game.user.isGM || updateData.round === undefined) return;
+    // Active GM only — consistent with the other per-turn handlers (idempotent flag clears).
+    if (game.users.activeGM?.id !== game.user.id) return;
+    await _clearActionCounts(combat);
+  });
+
+  // A fresh combat must start from a clean count. The round-stamp guard in _getActionCount can be fooled
+  // when a new combat reuses a round number a stale stamp still matches (e.g. a prior combat left a count
+  // stamped at round 1 and this combat is also at round 1). Clearing on combatStart guarantees the first
+  // in-combat action counts as the first. Active GM only, idempotent — mirrors the round-reset above.
+  Hooks.on("combatStart", async (combat) => {
+    if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+    await _clearActionCounts(combat);
   });
 }
 
@@ -2100,6 +2169,7 @@ function _hookSocketRelay() {
           areaDamages:   data.areaDamages,
           ap:            Boolean(data.ap),
           edged:         Boolean(data.edged),
+          mono:          Boolean(data.mono),
           armorMultSoft: Number(data.armorMultSoft ?? 1.0),
           armorMultHard: Number(data.armorMultHard ?? 1.0),
           penDamageMult: Number(data.penDamageMult ?? 1.0),
@@ -2198,6 +2268,7 @@ async function _autoApply(payload, target) {
       areaDamages:      payload.areaDamages,
       ap:               Boolean(payload.ap),
       edged:            Boolean(payload.edged),
+      mono:             Boolean(payload.mono),
       armorMultSoft:    Number(payload.armorMultSoft   ?? 1.0),
       armorMultHard:    Number(payload.armorMultHard   ?? 1.0),
       penDamageMult:    Number(payload.penDamageMult   ?? 1.0),
@@ -2221,6 +2292,7 @@ async function _autoApply(payload, target) {
     areaDamages: payload.areaDamages,
     ap:            Boolean(payload.ap),
     edged:         Boolean(payload.edged),
+    mono:          Boolean(payload.mono),
     armorMultSoft: Number(payload.armorMultSoft ?? 1.0),
     armorMultHard: Number(payload.armorMultHard ?? 1.0),
     penDamageMult: Number(payload.penDamageMult ?? 1.0),

@@ -455,7 +455,14 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
   }
 
   _prepareArmor(sheet) {
-    
+    // Hard/soft classification select. Value "" = "Auto" (getArmorHardness falls back to its
+    // name/encumbrance heuristic); "soft"/"hard" force the classification. Labels localized here so
+    // the shared select partial renders them directly (JS owns data, labels are i18n).
+    sheet.armorTypeChoices = [
+      { value: "",     label: localize("ArmorTypeAuto") },
+      { value: "soft", label: localize("ArmorTypeSoft") },
+      { value: "hard", label: localize("ArmorTypeHard") }
+    ];
   }
 
 /**

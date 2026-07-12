@@ -1,6 +1,7 @@
 {{!--
   radiation-panel.hbs — GM-only Deep Space radiation hub (R3b). Included from combat.hbs, guarded on
-  `radiation.show` (GM + radiationEnabled + a character/npc). Shows the running exposure, lifetime history,
+  `radiation.show` (GM + the actor actually carries radiation — a marker, current exposure, or lifetime
+  history). Shows the running exposure, lifetime history,
   the actor's RSP, and any active radiation stat loss, plus the four GM controls (apply dose to this actor,
   roll the long-term reference, clear the current exposure, cure the stat loss). The .cp-rad-* buttons are
   handled by _cpActivateRadiationControls in module/actor/actor-sheet.js. Readout values are built in
@@ -39,5 +40,6 @@
     <button type="button" class="cp-rad-longterm" title="{{CPLocal 'RadBtnLongTermHint'}}">🧬 {{CPLocal "RadBtnLongTerm"}}</button>
     <button type="button" class="cp-rad-clear" title="{{CPLocal 'RadBtnClearHint'}}">{{CPLocal "RadBtnClear"}}</button>
     <button type="button" class="cp-rad-cure" title="{{CPLocal 'RadBtnCureHint'}}">{{CPLocal "RadBtnCure"}}</button>
+    <button type="button" class="cp-rad-reset" title="{{CPLocal 'RadBtnResetHint'}}">🗑 {{CPLocal "RadBtnReset"}}</button>
   </div>
 </section>

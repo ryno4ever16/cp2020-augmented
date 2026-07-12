@@ -94,8 +94,36 @@ export function registerVehicleCanvasHooks() {
 
     const scene = doc.parent;
     const crew = scene.tokens.filter(t => t.flags?.[SCOPE]?.boardedVehicle === doc.actorId);
-    const upd = crew.map(t => ({ _id: t.id, x: t.x + delta.dx, y: t.y + delta.dy }));
-    if (upd.length) await scene.updateEmbeddedDocuments("Token", upd, { cp2020VehicleSync: true });
+    // A non-GM driver can move the vehicle but cannot write token docs they don't own (un-owned
+    // passengers) — those updates fail silently and the crew stays behind. Split by writability:
+    // apply the ones this user can modify directly, and relay the rest to the active GM (mirrors the
+    // missile/vehicle-damage socket relay — same scope + active-GM handler applies).
+    const mine = [], relay = [];
+    for (const t of crew) {
+      const u = { _id: t.id, x: t.x + delta.dx, y: t.y + delta.dy };
+      (t.canUserModify(game.user, "update") ? mine : relay).push(u);
+    }
+    if (mine.length) await scene.updateEmbeddedDocuments("Token", mine, { cp2020VehicleSync: true });
+    if (relay.length) {
+      if (game.users?.activeGM) {
+        game.socket.emit("module.cp2020-augmented", {
+          type: "vehicleCrewFollow", sceneId: scene.id, updates: relay, requesterId: game.user.id,
+        });
+      } else {
+        ui.notifications?.warn?.(localizeParam("Vehicle.NoGMForCrewFollow", { name: doc.name ?? "the vehicle" }));
+      }
+    }
+  });
+
+  // GM-side relay: a non-GM driver emits the un-owned crew moves; only the active GM (who can write
+  // any token) applies them. cp2020VehicleSync suppresses the crew-follow hooks so nothing loops.
+  game.socket.on("module.cp2020-augmented", async (data) => {
+    if (data?.type !== "vehicleCrewFollow") return;
+    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    const scene = data.sceneId ? game.scenes?.get(data.sceneId) : canvas?.scene;
+    if (scene && Array.isArray(data.updates) && data.updates.length) {
+      await scene.updateEmbeddedDocuments("Token", data.updates, { cp2020VehicleSync: true });
+    }
   });
 
   // Prototype-token defaults so DRAGGING a vehicle actor onto the canvas behaves exactly like the

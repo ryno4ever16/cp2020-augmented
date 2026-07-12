@@ -346,21 +346,50 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
   const incoming = (rawDamage != null) ? Math.max(0, Number(rawDamage) || 0) : Math.max(0, pen * 10);
   const armorSP = Number(sys.sp?.front) || 0;
   const toughness = Math.abs(Number(sys.toughness) || 0);
-  const sdp = incoming - armorSP - toughness;
   const dmgSrc = (rawDamage != null) ? `${incoming} dmg` : `Pen ${pen} ≈ ${incoming} dmg`;
-  const body = `${dmgSrc} − Armor SP ${armorSP} − Toughness ${toughness} = <b>${sdp}</b> SDP`;
 
-  if (sdp <= 0) return { body, lines: `Armor + frame absorbed it — no penetration.`, updates, itemUpdates };
-
+  // MM p.54 sequence: HIT LOCATION first, THEN the External-System check (an external system carries its
+  // OWN armor and can be struck even when the suit shell fully absorbs), THEN — only on the suit branch —
+  // the suit-penetration test. So roll the body area BEFORE deciding penetration.
   const areaName = acpaBodyArea(await d10());
   const areaKey = _ACPA_AREA_KEY[areaName] ?? "torso";
-  let lines = `<b>${sdp}</b> SDP to the <b>${areaName}</b>`;
-  // How much SDP reaches the FRAME. A struck system (external or enclosed) may absorb it (frame/suit
-  // spared) or, when destroyed, pass its overflow on.
-  let frameDamage = sdp;
+  let lines = `<b>Hit location:</b> ${areaName}`;
+  let frameDamage = 0;
 
-  // Hit the first live mounted Item (acpaSystem or ACPA weapon) matching `filterFn` in the struck
-  // area; records the Item update and returns the outcome (or null if none is there). `sdp` is incoming.
+  // Suit-branch penetration (MM p.56 formula: incoming − Armor SP − Toughness) — consumed ONLY on the suit branch.
+  const sdp = incoming - armorSP - toughness;
+  // Default header = the suit-reduction formula; reassigned on the external-system branch below (where the suit
+  // shell/toughness never govern) so the card doesn't print math that didn't apply.
+  let body = `${dmgSrc} − Armor SP ${armorSP} − Toughness ${toughness} = <b>${sdp}</b> SDP (suit)`;
+
+  // Ammo cook-off (MM p.56): an ammo-bearing item that TAKES DAMAGE may detonate — an independent roll, NOT
+  // gated on destruction (MM p.56: cook-off keys on "damage inflicted on a reload" IN ADDITION to the integrity
+  // check): a 10% chance for every full 10 points of damage it took; on a hit it does (1D6/3, round) × its
+  // Normal Ammo Damage, and the residue reaches the pilot. Reduction per MM p.56 verbatim: "Armor may protect
+  // against this if the reload was externally mounted, otherwise only the Toughness Modifier applies." We read
+  // this as external = Armor SP + Toughness, internal = Toughness only — consistent with the same page's master
+  // pilot-damage formula, which subtracts BOTH armor and toughness. The exclusive reading (external = armor
+  // INSTEAD of toughness) is EARMARKED for post-release review ([[earmark-cookoff-toughness-review]]).
+  // ACPA ammo lives in a weapon's magazine, so `shots > 0` + a damage formula marks an item as ammo-bearing.
+  const ammoCookoff = async (item, dmgTaken, external) => {
+    const shots = Number(item?.system?.shots) || 0;
+    const ammoFormula = String(item?.system?.damage || "").trim();
+    if (shots <= 0 || !ammoFormula) return;
+    const increments = Math.floor(Math.max(0, dmgTaken) / 10);
+    if (increments <= 0) return;
+    const chance = Math.min(100, 10 * increments);                     // 10% per full 10 points of damage
+    if ((await d100()) > chance) { lines += `<br><span class="result-warn">${item.name}'s ammo is wrecked (no cook-off — ${chance}% missed).</span>`; return; }
+    const mult = Math.round((await roll("1d6")).total / 3);            // 1D6/3, round off → 0/1/2
+    let base = 0;
+    try { base = (await roll(ammoFormula)).total; } catch { lines += `<br>${item.name} cook-off skipped (ammo damage "${ammoFormula}" unparseable).`; return; }
+    const ammoDmg = mult * base;
+    const reduced = Math.max(0, ammoDmg - (external ? armorSP : 0) - toughness);
+    pilotDamage += reduced;
+    lines += `<br><span class="result-fail">AMMO COOK-OFF</span> — ${item.name} detonates for ${ammoDmg} (${mult}×${ammoFormula}); ${reduced} reaches the pilot after ${external ? "armor + " : ""}toughness.`;
+  };
+
+  // Hit the first live mounted Item (acpaSystem or ACPA weapon) matching `filterFn` in the struck area;
+  // records the Item update and returns the outcome (or null if none is there). `sdp` (suit-reduced) is incoming.
   const hitMountedSystem = (filterFn) => {
     const sysItems = (actor.items?.filter(i => filterFn(i)) ?? []);
     const mounted = sysItems.map(it => ({ id: it.id, key: it.system?.catalogKey, area: it.system?.area, sdp: it.system?.sdp, sp: it.system?.sp, sdpDamage: it.system?.sdpDamage, destroyed: it.system?.destroyed }));
@@ -371,7 +400,7 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
     // Keep a reference to the pushed Item update so the Integrity Check can flip it to destroyed.
     const iu = { _id: struck.id, "system.sdpDamage": struck.sdpDamage, "system.destroyed": !!struck.destroyed };
     itemUpdates.push(iu);
-    return { name: it?.name ?? "system", struck, destroyed: hit.destroyed, overflow: hit.overflow, total: acpaSystemSdp({ sdp: it?.system?.sdp, sp: it?.system?.sp }), iu };
+    return { name: it?.name ?? "system", item: it, struck, destroyed: hit.destroyed, overflow: hit.overflow, total: acpaSystemSdp({ sdp: it?.system?.sdp, sp: it?.system?.sp }), iu };
   };
 
   // System Integrity Check (MM p.56): a system that ABSORBED a hit without its SDP being fully consumed
@@ -385,30 +414,57 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
     return ` <span class="result-warn">Integrity check failed (${pct}%) — system knocked <b>INOPERABLE</b>.</span>`;
   };
 
-  // 50% (5-in-10): the hit struck an EXTERNAL (unarmored) system instead of the suit proper (MM p.55).
-  if (externalSystemHit(await d10())) {
-    const r = hitMountedSystem(i => i.type === "cp2020-augmented.acpaSystem" && i.system?.mount === "external");
-    if (r) {
-      if (!r.destroyed) {
-        const inopNote = await integrityCheck(r);
-        lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Suit proper spared.${inopNote}`;
-        return { body, lines, updates, itemUpdates };
-      }
-      lines += `<br>An <b>external system</b> (<b>${r.name}</b>) on the ${areaName} was <span class="result-warn">DESTROYED</span>.`;
-      if (r.overflow <= 0) return { body, lines, updates, itemUpdates };
-      frameDamage = r.overflow;
-      lines += ` ${r.overflow} SDP overflows into the suit frame.`;
-      // falls through to frame consumption with frameDamage = overflow
-    } else {
-      // No external system is mounted where the hit landed — it reaches the suit frame (mirrors the
-      // enclosed / weapon "none mounted" branches below). Previously this returned early, so ~half of
-      // penetrating hits silently dealt zero damage. frameDamage stays = sdp → frame consumption below.
-      lines += `<br>The hit struck the ${areaName} where <b>no external system</b> is mounted — it reaches the suit frame.`;
+  // ── EXTERNAL-SYSTEM CHECK (MM p.54): the 50% (5-in-10) roll is made ONLY when the struck area has a live
+  // external system (A1). The external system resolves against its OWN SP — no suit shell, no frame Toughness
+  // (A2). Overflow from a destroyed external system passes THROUGH the suit armor and on to the frame.
+  const externalInArea = (actor.items ?? []).filter(i =>
+    i.type === "cp2020-augmented.acpaSystem" && i.system?.mount === "external"
+    && (i.system?.area ?? "torso") === areaKey && !i.system?.destroyed);
+  if (externalInArea.length && externalSystemHit(await d10())) {
+    const it = externalInArea[0];                 // multiples → PA player's pick; take the first live one
+    const extSP = Number(it.system?.sp) || 0;
+    const extSOP = acpaSystemSdp({ sdp: it.system?.sdp, sp: it.system?.sp });
+    // The hit resolved against the external system's OWN SP — no suit shell, no frame toughness (A2). Replace the
+    // suit-reduction header so the card reflects the branch that actually governed the result.
+    body = `${dmgSrc} → an external system (<b>${it.name}</b>, own SP ${extSP}) on the ${areaName}`;
+    const extPen = incoming - extSP;              // penetration past the system's OWN armor (A2)
+    if (extPen <= 0) {
+      lines += `<br>An <b>external system</b> (<b>${it.name}</b>) on the ${areaName} — its own SP ${extSP} stopped the hit.`;
+      return { body, lines, updates, itemUpdates, pilotDamage, areaName };
     }
+    const total = Math.max(0, Number(it.system?.sdpDamage) || 0) + extPen;
+    const destroyed = extSOP > 0 ? total >= extSOP : true;
+    const iu = { _id: it.id, "system.sdpDamage": Math.min(total, extSOP || total), "system.destroyed": !!destroyed };
+    itemUpdates.push(iu);
+    if (!destroyed) {
+      const chk = systemIntegrity({ sopLost: total, sopTotal: extSOP });
+      const pct = Math.round(chk.inopChance * 100);
+      let inop = "";
+      if ((await d100()) <= pct) { iu["system.destroyed"] = true; inop = ` <span class="result-warn">Integrity check failed (${pct}%) — INOPERABLE.</span>`; }
+      lines += `<br>An <b>external system</b> (<b>${it.name}</b>) on the ${areaName} took <b>${extPen}</b> to its SOP (now ${iu["system.sdpDamage"]}/${extSOP}; own SP ${extSP}). Suit spared.${inop}`;
+      await ammoCookoff(it, extPen, true);
+      return { body, lines, updates, itemUpdates, pilotDamage, areaName };
+    }
+    lines += `<br>An <b>external system</b> (<b>${it.name}</b>) on the ${areaName} was <span class="result-warn">DESTROYED</span> (own SP ${extSP}).`;
+    await ammoCookoff(it, extPen, true);
+    const overflow = Math.max(0, total - extSOP);
+    frameDamage = Math.max(0, overflow - armorSP - toughness);   // overflow passes THROUGH the suit armor to the frame
+    lines += frameDamage > 0 ? ` ${frameDamage} passes through the suit armor into the frame.`
+                             : (overflow > 0 ? ` the suit armor caught the ${overflow} overflow.` : ``);
+    // falls through to frame consumption
+  } else if (sdp <= 0) {
+    return { body, lines: `Armor + frame absorbed it — no penetration.`, updates, itemUpdates };
   } else {
-    // The hit reached the suit proper — roll the System Hit Table (a 10 re-rolls into Critical/System Hit).
+    // ── SUIT BRANCH — System Hit roll (MM p.55). A 10 rolls again: even = Critical, odd = reroll ignoring 10s.
+    lines += `<br><b>${sdp}</b> SDP penetrates to the suit.`;
     let cat = acpaSystemHit(await d10());
-    if (cat === "rollAgain") cat = (acpaRollAgain(await d10()) === "critical") ? "critical" : acpaSystemHit(await d10());
+    if (cat === "rollAgain") {                                // MM p.55: a 10 rolls again — even = Critical, odd = reroll
+      if (acpaRollAgain(await d10()) === "critical") cat = "critical";
+      // A5: odd → "reroll ignoring 10's" — re-roll on the System Hit table alone, DISCARDING any further 10s,
+      // until it yields a real category; never re-entering the even/odd Critical branch on a repeat 10.
+      // (Terminates almost surely — each d10 is 90% a 1-9.)
+      else do { cat = acpaSystemHit(await d10()); } while (cat === "rollAgain");
+    }
     if (cat === "critical") {
       const eff = acpaCriticalEffect(await d10());
       const amt = eff.formula ? (await roll(eff.formula)).total : 0;
@@ -417,7 +473,6 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
       if (eff.type === "mechShock") {
         pilotStun = true;   // mechanical shock stuns the pilot
         // MM p.56: the shock also deals its 1d6 to a RANDOM frame area (applied in the frame block below).
-        // acpaCriticalUpdate's sdp.value write is deliberately NOT merged for mechShock — ACPAs don't use it.
         mechShockDamage = amt;
         mechShockAreaName = acpaBodyArea(await d10());
         mechShockAreaKey = _ACPA_AREA_KEY[mechShockAreaName] ?? "torso";
@@ -425,24 +480,23 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
         Object.assign(updates, cu);   // other criticals (seize/cooling/STR/REF/power/interface) write real fields
       }
     } else if (cat === "enclosed") {
-      // Per-system SDP (D-4d): the SDP damages a specific mounted, enclosed system in the struck area.
       const r = hitMountedSystem(i => i.type === "cp2020-augmented.acpaSystem" && i.system?.mount !== "external");
       if (r) {
         if (r.destroyed) {
           lines += `<br>System Hit: <b>${r.name}</b> (${areaName}) — <span class="result-warn">DESTROYED</span>.`;
           frameDamage = r.overflow;
           if (r.overflow > 0) lines += ` ${r.overflow} SDP overflows to the frame.`;
+          await ammoCookoff(r.item, sdp, false);
         } else {
           const inopNote = await integrityCheck(r);
           lines += `<br>System Hit: <b>${r.name}</b> (${areaName}) absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Frame spared.${inopNote}`;
-          frameDamage = 0;
+          await ammoCookoff(r.item, sdp, false);   // cook-off is independent of destruction (MM p.56); internal ⇒ toughness-only
         }
       } else {
-        lines += `<br>System Hit: <b>an enclosed system</b> in the ${areaName} (none mounted there — hits the frame).`;
+        pilotDamage += sdp;   // A4 (MM p.55): no such system in the area → the hit passes to the PILOT
+        lines += `<br>System Hit (enclosed) in the ${areaName}: <b>no such system here</b> — <b>${sdp}</b> passes to the <b>pilot</b>.`;
       }
     } else if (cat === "weapons") {
-      // Per-weapon SDP (deferral B): a SDP-tracked ACPA weapon (system.sdp > 0) in the struck area
-      // takes the hit; weapons without SDP data fall through to the frame.
       const r = hitMountedSystem(i => i.type === "cp2020-augmented.vehicleWeapon" && (Number(i.system?.sdp) || 0) > 0);
       if (r) {
         if (r.destroyed) {
@@ -451,16 +505,19 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
           if (r.overflow > 0) lines += ` ${r.overflow} SDP overflows to the frame.`;
           const dn = `${r.name} (destroyed)`;
           if (!damaged.includes(dn)) { damaged.push(dn); updates["system.damagedSystems"] = damaged; }
+          await ammoCookoff(r.item, sdp, false);
         } else {
           const inopNote = await integrityCheck(r);
           lines += `<br>System Hit: <b>${r.name}</b> (weapon, ${areaName}) absorbed <b>${sdp}</b> SDP (now ${r.struck.sdpDamage}/${r.total}). Frame spared.${inopNote}`;
-          frameDamage = 0;
           if (inopNote) { const dn = `${r.name} (destroyed)`; if (!damaged.includes(dn)) { damaged.push(dn); updates["system.damagedSystems"] = damaged; } }
+          await ammoCookoff(r.item, sdp, false);   // cook-off is independent of destruction (MM p.56); internal ⇒ toughness-only
         }
       } else {
-        lines += `<br>System Hit: <b>an internal weapon</b> in the ${areaName} (none mounted there — hits the frame).`;
+        pilotDamage += sdp;   // A4: no such internal weapon in the area → the hit passes to the PILOT
+        lines += `<br>System Hit (internal weapon) in the ${areaName}: <b>no such weapon here</b> — <b>${sdp}</b> passes to the <b>pilot</b>.`;
       }
     } else {
+      frameDamage = sdp;      // chassis (1-3): normal frame SDP damage
       lines += `<br>System Hit: <b>frame (chassis)</b> in the ${areaName}.`;
     }
   }
@@ -470,8 +527,12 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
   // Initialize current SDP to full on the first hit (a freshly built/repaired suit has frameSDP = max).
   if (frameDamage > 0 || mechShockDamage > 0) {
     const max = sys.frameSDPMax ?? acpaAreaSDP(str);
-    let cur = { ...(sys.frameSDP ?? {}) };
-    if (Object.values(cur).every(v => !Number(v))) cur = { ...max };
+    // Seed to full ONLY when frameSDP has never been initialized (absent or {} on a freshly built/repaired suit).
+    // An all-zero-but-PRESENT object is a legitimately DESTROYED frame (torso=0 ⇒ already a downed suit) — it must
+    // stay destroyed; re-seeding it here on the next hit would silently heal the frame.
+    const stored = sys.frameSDP;
+    let cur = { ...(stored ?? {}) };
+    if (stored == null || Object.keys(stored).length === 0) cur = { ...max };
     const applyFrame = (key, dmg, label) => {
       if (!(dmg > 0)) return;
       const before = Number(cur[key]) || 0;

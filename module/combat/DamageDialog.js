@@ -65,10 +65,12 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       areaDamages: this.payload.areaDamages,
       ap:            Boolean(this.payload.ap),
       edged:         Boolean(this.payload.edged),
+      mono:          Boolean(this.payload.mono),
       armorMultSoft: Number(this.payload.armorMultSoft ?? 1.0),
       armorMultHard: Number(this.payload.armorMultHard ?? 1.0),
       penDamageMult: Number(this.payload.penDamageMult ?? 1.0),
       armorMode,
+      ablate,
       coverSP,
       damageType: this._damageType ?? "",
     });
@@ -147,16 +149,19 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const root = this.element;
     if (!root) return;
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
+    const ablate    = this._ablate    ?? game.settings.get("cp2020-augmented", "damageAblation");
     const btm = Number(this.target.system.stats?.bt?.modifier) || 0;
     const base = resolveAreaDamagesSync({
       target:      this.target,
       areaDamages: this.payload.areaDamages,
       ap:            Boolean(this.payload.ap),
       edged:         Boolean(this.payload.edged),
+      mono:          Boolean(this.payload.mono),
       armorMultSoft: Number(this.payload.armorMultSoft ?? 1.0),
       armorMultHard: Number(this.payload.armorMultHard ?? 1.0),
       penDamageMult: Number(this.payload.penDamageMult ?? 1.0),
       armorMode,
+      ablate,
       coverSP:     this._coverSP,
       damageType: this._damageType ?? "",
     });
@@ -185,10 +190,12 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       areaDamages: this.payload.areaDamages,
       ap:            Boolean(this.payload.ap),
       edged:         Boolean(this.payload.edged),
+      mono:          Boolean(this.payload.mono),
       armorMultSoft: Number(this.payload.armorMultSoft ?? 1.0),
       armorMultHard: Number(this.payload.armorMultHard ?? 1.0),
       penDamageMult: Number(this.payload.penDamageMult ?? 1.0),
       armorMode,
+      ablate,
       coverSP,
       damageType: this._damageType ?? "",
     });

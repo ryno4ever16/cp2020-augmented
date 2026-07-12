@@ -10,6 +10,7 @@
     "equipped": true,
     "source": "Maximum Metal",
     "weaponClass": "artillery",
+    "indirectKind": "mortar",
     "mountType": "fixed",
     "arc": "front",
     "wa": 0,

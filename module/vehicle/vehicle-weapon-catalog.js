@@ -9,8 +9,6 @@
  * populates the "Vehicle Weapons (MM)" compendium (idempotent) so GMs can drag them onto vehicles.
  */
 
-import { mmEnabled } from "../settings.js";
-
 const ICON = "icons/svg/explosion.svg";
 const SOURCE = "Maximum Metal";
 
@@ -345,13 +343,13 @@ export const SEED_VEHICLE_WEAPONS = [
 
   // ── Artillery / indirect (p.20). Mortars 400 m/turn, howitzers/rockets 600 m/turn; spotter-corrected To-Hit.
   //    Mortars have a minimum range of 1/100 their max. Shell variants cover the artillery ammunition (p.21). ──
-  { name: "60mm Mortar", img: ICON, system: { weaponClass:"artillery", mountType:"fixed", arc:"front",
+  { name: "60mm Mortar", img: ICON, system: { weaponClass:"artillery", indirectKind:"mortar", mountType:"fixed", arc:"front",
       wa:0, penetration:4, hiEx:true, burst:5, rof:2, shots:1, range:2000, minRange:20, reliability:"VR", space:1, cost:750, source:SOURCE,
       shellVariants:[{ name:"60mm WP", pen:0, burst:15, warhead:"wp" }, { name:"60mm Chemical", pen:0, burst:15, warhead:"chemical" }] } },
-  { name: "80mm Mortar", img: ICON, system: { weaponClass:"artillery", mountType:"fixed", arc:"front",
+  { name: "80mm Mortar", img: ICON, system: { weaponClass:"artillery", indirectKind:"mortar", mountType:"fixed", arc:"front",
       wa:0, penetration:5, hiEx:true, burst:6, rof:1, shots:1, range:3500, minRange:35, reliability:"VR", space:1, cost:1500, source:SOURCE,
       shellVariants:[{ name:"80mm WP", pen:0, burst:18, warhead:"wp" }, { name:"80mm Cluster", pen:4, burst:18, warhead:"cluster" }] } },
-  { name: "120mm Mortar", img: ICON, system: { weaponClass:"artillery", mountType:"fixed", arc:"front",
+  { name: "120mm Mortar", img: ICON, system: { weaponClass:"artillery", indirectKind:"mortar", mountType:"fixed", arc:"front",
       wa:0, penetration:7, hiEx:true, burst:6, rof:1, shots:1, range:6000, minRange:60, reliability:"VR", space:3, cost:5000, source:SOURCE,
       shellVariants:[{ name:"120mm Cluster", pen:4, burst:18, warhead:"cluster" }, { name:"120mm Chemical", pen:0, burst:18, warhead:"chemical" }] } },
   // Howitzer AP doubles Pen / triples on 150-200mm and drops the burst to 0 (howitzers only).
@@ -471,21 +469,5 @@ export async function seedVehicleWeaponCompendium({ force = false } = {}) {
     return { ok: false, reason: "error" };
   } finally {
     if (wasLocked) await pack.configure({ locked: true }).catch(() => {});
-  }
-}
-
-/** Ready-time one-shot: seed the compendium if it exists and is empty. Active GM only. */
-export async function ensureVehicleWeaponSeed() {
-  if (!mmEnabled()) return;                                   // Maximum Metal off → don't seed the MM compendium
-  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
-  const pack = game.packs?.get(PACK_ID);
-  if (!pack) return;
-  try {
-    // Idempotent by name: seeds the catalog and back-fills any newly added entries (e.g. when the
-    // catalog gains a weapon like the 250-lb Bomb) without duplicating ones already present. Use
-    // game.cyberpunk.vehicles.seedWeapons({ force: true }) to also refresh existing entries' stats.
-    await seedVehicleWeaponCompendium();
-  } catch (err) {
-    console.warn("Cyberpunk2020 | ensureVehicleWeaponSeed failed", err);
   }
 }

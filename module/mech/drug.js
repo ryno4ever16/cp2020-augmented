@@ -28,9 +28,10 @@ import { localizeParam } from "../utils.js";
 import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard, renderChatCard } from "../compat.js";
 import { onGlobalClick } from "../popout-compat.js";
+import { markCardResolved } from "../card-lock.js";
 import { rollDurationTurns } from "./consumable.js";
 import { enqueueApply } from "./light.js";
-import { isFullBorg } from "./borg.js";
+import { borgSetStatKeys } from "./borg.js";
 import { btmFromBT } from "../lookups.js";
 
 const SCOPE = "cp2020-augmented";
@@ -41,13 +42,16 @@ const ADDICTION_FLAG = "addictionState";
  * A full-conversion cyborg's physical stats are SET by the chassis (borg.js applyBorgStats fixes REF/MA/
  * BODY to the machine's rating). RAW: those stats can't be pharmaceutically boosted — a drug that would
  * raise them is ignored, though its OTHER effects (mental/social stats) still apply. These are the stat
- * keys borg.js sets authoritatively (BODY = Body Type "bt"). Exported for the keeper. */
+ * keys borg.js sets authoritatively (BODY = Body Type "bt"). Exported for the keeper. NOTE: this is the
+ * FULL physical set; whether a given borg actually SETs them depends on its body config — the live gate
+ * is borgSetStatKeys(actor) (an SDP/SP-only body leaves them on the meat value). */
 export const FBC_SET_STATS = new Set(["ref", "ma", "bt"]);
 
-/** Whether a drug marker/item carries any statBoost to a chassis-set physical stat (→ ignored on a full
- *  borg, and the trigger for the refined advisory). Pure. */
-export function drugAffectsSetStat(source) {
-  return (source?.statBoosts ?? []).some((b) => FBC_SET_STATS.has(String(b?.stat ?? "").toLowerCase()));
+/** Whether a drug marker/item carries any statBoost to a chassis-set physical stat (→ ignored on that
+ *  borg, and the trigger for the refined advisory). `keys` is the set the CHASSIS actually sets
+ *  (borgSetStatKeys); defaults to the full physical set for the keeper's pure checks. Pure. */
+export function drugAffectsSetStat(source, keys = FBC_SET_STATS) {
+  return (source?.statBoosts ?? []).some((b) => keys.has(String(b?.stat ?? "").toLowerCase()));
 }
 
 /** The item's drug block when enabled, else null. Pure. */
@@ -159,18 +163,20 @@ export function applyMechDrugBoosts(actor) {
   const markers = drugMarkersFor(actor);
   if (!markers.length) { actor._mechDrugMods = null; return; }
 
-  // Full-conversion cyborg: its physical stats (REF/MA/BODY) are fixed by the chassis, so a drug can't
-  // move them (RAW — the "set stats" ignore chemistry). Skip those boosts entirely here; because they are
-  // then never recorded in _mechDrugMods, borg.js's stat re-fold (recordedStatDelta) won't re-apply them
-  // either, so the chassis value stands. Non-physical boosts (INT/COOL/EMP/…) still apply normally.
-  const fbc = isFullBorg(actor);
+  // Full-conversion cyborg: the physical stats its CHASSIS sets (borgSetStatKeys — a subset of REF/MA/
+  // BODY, per this borg's body config) are fixed by the machine, so a drug can't move them (RAW — the
+  // "set stats" ignore chemistry). Skip only those boosts; because they are then never recorded in
+  // _mechDrugMods, borg.js's stat re-fold (recordedStatDelta) won't re-apply them either, so the chassis
+  // value stands. An SDP/SP-only borg (no stats block) SETs nothing, so this set is empty and its
+  // physical boosts apply normally — as do non-physical boosts (INT/COOL/EMP/…) on any borg.
+  const setStats = borgSetStatKeys(actor);
 
   const contrib = {};   // stat → [{ name, value }]
   let touchedMA = false, touchedBT = false;
   for (const m of markers) {
     for (const b of m.statBoosts ?? []) {
       const key = String(b.stat ?? "").toLowerCase();
-      if (fbc && FBC_SET_STATS.has(key)) continue;   // chassis-set physical stat — pharmacologically inert
+      if (setStats.has(key)) continue;   // chassis-set physical stat — pharmacologically inert
       const stat = stats[key];
       const mod = Number(b.mod) || 0;
       if (!stat || !mod) continue;
@@ -211,8 +217,9 @@ async function postTookCard(item, drug, marker) {
   const body = localizeParam("DrugTookBody", {
     name: item.name, boostClause, durationClause, addictionClause, psychosisClause
   });
-  // Advisory only when it MATTERS: a full borg taking a drug that targets a chassis-set physical stat.
-  const fbcIgnored = isFullBorg(item.actor) && drugAffectsSetStat(marker);
+  // Advisory only when it MATTERS: a borg taking a drug that targets a stat its CHASSIS actually SETs
+  // (borgSetStatKeys) — so an SDP-only borg, whose physical boosts DO apply, shows no spurious warning.
+  const fbcIgnored = drugAffectsSetStat(marker, borgSetStatKeys(item.actor));
   const content = await renderChatCard("drug-took.hbs", { body, fbc: fbcIgnored });
   const cardData = { content };
   if (item.actor) cardData.speaker = ChatMessage.getSpeaker({ actor: item.actor });
@@ -428,6 +435,8 @@ export function registerMechDrug() {
       actorId: btn.dataset.actorId, itemId: btn.dataset.itemId,
       tokenId: btn.dataset.tokenId ?? "", sceneId: btn.dataset.sceneId ?? "", save
     });
+    // One-shot: the wear-off save rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
+    await markCardResolved(btn.closest("[data-message-id]")?.dataset?.messageId, "drugSave");
   });
 
   // A drug item deleted while its dose (or an untimed crash) runs would orphan the marker — the

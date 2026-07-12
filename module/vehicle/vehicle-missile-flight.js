@@ -9,7 +9,7 @@
  */
 
 import { mmEnabled } from "../settings.js";
-import { missileSpeed, turnsToImpact, resolveMissileToHit, resolvePaintHit, countermeasureModifier, interceptResult, electronicDetect, visualDetectDV } from "./vehicle-missiles.js";
+import { missileSpeed, turnsToImpact, resolveMissileToHit, resolvePaintToHit, resolvePaintHit, countermeasureModifier, interceptResult, electronicDetect, visualDetectDV } from "./vehicle-missiles.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { pixelsToMeters } from "./vehicle-grid.js";
 import { localize, localizeParam } from "../utils.js";
@@ -164,18 +164,32 @@ async function _resolveMissileImpact(f, targetDoc, scene, gs) {
     });
     return;
   }
-  const d10 = (await new Roll("1d10").evaluate()).total;
   const dm = Number(f.difficultyMods) || 0;   // accumulated countermeasure / evade +Difficulty
-  const hit = f.guidance === "paint"
-    ? resolvePaintHit(d10)
-    : resolveMissileToHit({ guidance: f.guidance, d10, operatorBonus: f.operatorBonus, missileSkill: f.missileSkill, targetNumber: f.targetNumber, difficultyMods: dm }).hit;
+  let hit, paint = null;
+  if (f.guidance === "paint") {
+    // MM p.9-10: the missile flew FIRST; the painting laser/radar now makes a real to-hit and the
+    // accumulated countermeasure/evade Difficulty applies to THAT roll (that's why the reactions
+    // matter for paint). Only on a paint hit does the missile then strike on an unmodified d10 2-10.
+    const paintRoll = (await new Roll("1d10").evaluate()).total;
+    paint = resolvePaintToHit({ d10: paintRoll, operatorBonus: f.operatorBonus, targetNumber: f.targetNumber, difficultyMods: dm });
+    hit = paint.hit ? resolvePaintHit((await new Roll("1d10").evaluate()).total) : false;
+  } else {
+    const d10 = (await new Roll("1d10").evaluate()).total;
+    hit = resolveMissileToHit({ guidance: f.guidance, d10, operatorBonus: f.operatorBonus, missileSkill: f.missileSkill, targetNumber: f.targetNumber, difficultyMods: dm }).hit;
+  }
 
   if (!hit || !target) {
+    // For paint, surface the painting roll's numbers (total vs DV — the DV already carries the
+    // accumulated reaction Difficulty) in the same miss-card slot the non-paint path uses for its
+    // countermeasure clause.
+    const cmClause = paint
+      ? localizeParam("Vehicle.MissilePaintClause", { total: paint.total, dv: paint.dv })
+      : (dm ? localizeParam("Vehicle.MissileCmClause", { mod: dm }) : "");
     await postSavePromptCard({
       title: localizeParam("Vehicle.MissileMissTitle", { weapon: f.weaponName }),
       body: localizeParam("Vehicle.MissileMissBody", {
         target: targetDoc.name ?? localize("Vehicle.Target"),
-        cm: dm ? localizeParam("Vehicle.MissileCmClause", { mod: dm }) : "",
+        cm: cmClause,
       }),
     });
     return;

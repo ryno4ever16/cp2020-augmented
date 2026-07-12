@@ -1,0 +1,52 @@
+{
+  "_id": "Z1VT6xSVc2WaOaes",
+  "name": "Smash",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Euphoric &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +1 &middot; <strong>Difficulty (to synthesize):</strong> 2 &middot; <strong>Cost:</strong> 100eb per 6-pack &middot; <strong>Duration:</strong> 1D6+1 minutes.</p><p>Smash is 2020's answer to alcohol &mdash; it's yellow, foamy, and comes in cans. It makes you loose, happy and ready to party. The downside is that when it wears off, its psychological addiction component makes you suicidal. If you fail your addiction Save, you sink into total catatonia; a feebly mumbling ball of pain &mdash; a ripe target for some Booster looking for spare change.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.123):</em> a Euphoric (Effects Table pg.124: &ldquo;makes you feel good&rdquo;) has no roll effect &mdash; nothing to wire beyond the duration. Cost is entered as 100 for the printed &ldquo;100 per 6 pk&rdquo; (a 6-pack, not a single dose). The wear-off suicidal spiral / catatonia on a failed addiction save (1D10 higher than Body Type) is recorded as a psychosis note and adjudicated by the GM. Manufacturer: not printed.</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.123",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [],
+      "duration": "1D6+1 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "On wear-off: suicidal; fail the addiction save (1D10 higher than Body Type) and sink into total catatonia.",
+      "note": "Euphoric (2020's alcohol); cost is per 6-pack."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38480000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Z1VT6xSVc2WaOaes"
+}

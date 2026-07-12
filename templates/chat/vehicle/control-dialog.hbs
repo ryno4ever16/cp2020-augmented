@@ -28,12 +28,14 @@
   </div>
   <label>{{CPLocal "Vehicle.HandlingMod"}} <input type="number" id="cp-ctl-handling" value="{{handling0}}"></label>
   {{#if isMM}}
+  {{!-- One flex row per condition (css .vehicle-control-dialog fieldset) — free-flow labels with
+        <br> separators wrapped at dialog width into scattered checkboxes. --}}
   <fieldset>
     <legend>{{CPLocal "Vehicle.ConditionsLegend"}}</legend>
-    <label><input type="checkbox" id="cp-ctl-cantsee"> {{CPLocal "Vehicle.CondCantSee"}}</label><br>
-    <label><input type="checkbox" id="cp-ctl-multitask"> {{CPLocal "Vehicle.CondMultitask"}}</label><br>
+    <label><input type="checkbox" id="cp-ctl-cantsee"> {{CPLocal "Vehicle.CondCantSee"}}</label>
+    <label><input type="checkbox" id="cp-ctl-multitask"> {{CPLocal "Vehicle.CondMultitask"}}</label>
     <label><input type="checkbox" id="cp-ctl-slippery"> {{CPLocal "Vehicle.CondSlippery"}}</label>
-    <label class="ml8"><input type="checkbox" id="cp-ctl-icy"> {{CPLocal "Vehicle.CondIcy"}}</label><br>
+    <label><input type="checkbox" id="cp-ctl-icy"> {{CPLocal "Vehicle.CondIcy"}}</label>
     <label><input type="checkbox" id="cp-ctl-cyberlink"> {{CPLocal "Vehicle.CondCyberlink"}}</label>
   </fieldset>
   <label>{{CPLocal "Vehicle.OtherDVMod"}} <input type="number" id="cp-ctl-otherdv" value="0"></label>

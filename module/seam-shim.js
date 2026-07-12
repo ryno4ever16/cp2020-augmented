@@ -32,6 +32,15 @@ const SUPPRESSIVE_TEMPLATE = "systems/cyberpunk2020/templates/chat/suppressive.h
 // starved the action counter / aim clear / arm-use notice that key on it).
 const FIRE_METHODS = ["__fullAuto", "__threeRoundBurst", "__semiAuto", "__meleeBonk", "__martialBonk"];
 
+// Shared claim registry for the skillRolled listeners. Two overlapping same-user rollSkill calls each
+// register their own createChatMessage listener; author alone can't tell their two cards apart, so both
+// would match the FIRST numeric card and cross-wire (listener B emits skill B's id with card A's total).
+// Every listener records the id of the card it claims here and skips any id already claimed, so the first
+// card goes to the first (oldest) live listener and the second card to the second — order preserved, no
+// two listeners can ever consume the same message. Entries are deleted when a listener unhooks, so the
+// set only ever holds in-flight claims.
+const _claimedSkillCards = new Set();
+
 /* ─── Pure decision logic (no Foundry globals → unit-testable) ─────────────────────────────────── */
 
 /** Does this function's OWN source emit `hookName`? */
@@ -68,6 +77,20 @@ export function shouldPatch(method) {
   return typeof method === "function" && method.__cpSeamShim !== true;
 }
 
+/** Was the attack roll a natural 1 (CP2020 fumble)? Self-contained mirror of the base's isFumbleRoll:
+ *  the first non-discarded/non-rerolled result of the first Die term. Drives the mono break-on-fumble
+ *  rule independently of the optional fumble-crit-table setting. Pure; false on any unreadable roll. */
+export function rollIsNaturalOne(roll) {
+  try {
+    const DieClass = foundry?.dice?.terms?.Die;
+    const dieTerm = roll?.terms?.find(t => (DieClass ? t instanceof DieClass : t?.faces === 10));
+    const res = dieTerm?.results?.find(r => !r.discarded && !r.rerolled);
+    return Number(res?.result) === 1;
+  } catch (_e) {
+    return false;
+  }
+}
+
 /* ─── weaponFired: identity from the fire method, areaDamages from the render ──────────────────── */
 
 // Set while a SHIM-wrapped fire method runs, so the renderTemplate wrap below knows the attacker/weapon
@@ -87,7 +110,7 @@ let _suppressiveCtx = null;
 // spread / DOT / taser / armor-piercing / penetration branches never fire. They live on the loaded ammo
 // item's system.* (seeded by ammoModifierSystemFields + the ammo sheet); `edged` is weapon-level for melee.
 const AMMO_EFFECT_FIELDS = [
-  "ap", "edged", "effectTypes", "blastRadius", "blastFullDamageWithin", "blastMultipliers", "blastShrapnel",
+  "ap", "edged", "mono", "effectTypes", "blastRadius", "blastFullDamageWithin", "blastMultipliers", "blastShrapnel",
   "penDamageMult", "armorMultSoft", "armorMultHard",
   "spreadMode", "spreadDamageShort", "spreadDamageMedium", "spreadDamageLong",
   "spreadWidthShort", "spreadWidthMedium", "spreadWidthLong",
@@ -163,6 +186,9 @@ function installRenderEmit() {
           areaDamages: data?.areaDamages ?? {},
           targetTokenId: target?.id ?? null,
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
+          // Natural-1 on the attack roll (the multi-hit card carries it) — drives the mono
+          // break-on-fumble rule in the weaponFired handler. Absent on non-melee cards → false.
+          fumble: rollIsNaturalOne(data?.attackRoll),
           ...(_fireCtx.effectFields ?? {}),   // explosion/gas/spread/DOT/taser/AP/pen fields from the ammo
         });
       } else if (_suppressiveCtx && path === SUPPRESSIVE_TEMPLATE) {
@@ -237,6 +263,7 @@ function installSkillRolledShim(ActorProto) {
       if (skill) {
         const actorId = this.id, actorName = this.name, rolledSkillId = skill.id, skillName = skill.name;
         let done = false;
+        let claimedId = null;   // the card id THIS listener consumed (for cleanup)
         const hookId = Hooks.on("createChatMessage", (msg) => {
           if (done) return;
           const total = msg?.rolls?.[0]?.total;
@@ -252,13 +279,26 @@ function installSkillRolledShim(ActorProto) {
             const speakerActorId = msg?.speaker?.actor ?? null; // author unknown → prefer a speaker match
             if (speakerActorId && speakerActorId !== actorId) return;
           }
+          // Two overlapping same-user rolls pass the author check identically; the shared claim set keeps
+          // them apart. Skip a card another live listener already took, and claim this one so a sibling
+          // listener can't take it too. Hooks fire in registration order, so the oldest live listener
+          // claims the first card and the next claims the second → totals stay matched to their skills.
+          const cardId = msg?.id ?? null;
+          if (cardId) {
+            if (_claimedSkillCards.has(cardId)) return;        // already consumed by another live listener
+            _claimedSkillCards.add(cardId);
+            claimedId = cardId;
+          }
           done = true;
           Hooks.off("createChatMessage", hookId);
           try { Hooks.callAll(SKILL_ROLLED, { actorId, skillId: rolledSkillId, actorName, skillName, total }); }
           catch (e) { console.warn(`${SCOPE} | seam-shim skillRolled emit failed`, e); }
         });
-        // Never leak the hook if no rolled card appears (e.g., the skill vanished before the roll).
-        setTimeout(() => { if (!done) { done = true; Hooks.off("createChatMessage", hookId); } }, 8000);
+        // Never leak the hook (or a stale claim) if no rolled card appears (e.g., the skill vanished before the roll).
+        setTimeout(() => {
+          if (!done) { done = true; Hooks.off("createChatMessage", hookId); }
+          if (claimedId) { _claimedSkillCards.delete(claimedId); claimedId = null; }
+        }, 8000);
       }
     } catch (e) {
       console.warn(`${SCOPE} | seam-shim skillRolled setup failed`, e);

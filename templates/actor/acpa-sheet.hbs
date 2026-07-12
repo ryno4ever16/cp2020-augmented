@@ -45,6 +45,30 @@
 
     <div class="sheet-body flexcol" style="overflow-y:auto;">
 
+        {{!-- Pilot — deliberately the FIRST section: linking a pilot is the first thing a user
+              looks for on a suit, and it drives effective REF + the pilot damage route. --}}
+        {{#if mmOn}}
+        <h2 class="cyber-section-header">{{CPLocal "Vehicle.PilotHeader"}}</h2>
+        <div class="field-list">
+            <div class="field" title="{{CPLocal 'Vehicle.PilotLinkTip'}}">
+                <label>{{CPLocal "Vehicle.PilotLabel"}}</label>
+                <select name="system.pilotId">
+                    <option value="" {{#unless system.pilotId}}selected{{/unless}}>{{CPLocal "Vehicle.PilotNoneOption"}}</option>
+                    {{#each pilotChoices}}<option value="{{id}}" {{#if (equals ../system.pilotId id)}}selected{{/if}}>{{name}}</option>{{/each}}
+                </select>
+            </div>
+            {{#if linkedPilotName}}
+            <div class="field" title="{{CPLocal 'Vehicle.LinkedPilotRefTip'}}">
+                <label>{{linkedPilotName}} REF</label><input type="number" class="not-editable" value="{{linkedPilotRef}}" readonly/></div>
+            {{else}}
+            <div class="field" title="{{CPLocal 'Vehicle.PilotRefManualTip'}}">
+                <label>{{CPLocal "Vehicle.PilotRefManualLabel"}}</label><input type="number" name="system.pilotRef" value="{{system.pilotRef}}"/></div>
+            {{/if}}
+            <div class="field" title="{{CPLocal 'Vehicle.EffectiveRefTip'}}">
+                <label>{{CPLocal "Vehicle.EffectiveRefLabel"}}</label><input type="number" class="not-editable" value="{{system.effectiveRef}}" readonly/></div>
+        </div>
+        {{/if}}
+
         {{!-- Chassis & Armor --}}
         <h2 class="cyber-section-header">{{CPLocal "Vehicle.ChassisArmorHeader"}}</h2>
         <div class="field-list">
@@ -119,24 +143,7 @@
                 <label>{{CPLocal "Vehicle.RefCapOverrideLabel"}}</label><input type="number" name="system.refCapOverride" value="{{system.refCapOverride}}" min="0"/></div>
             {{/if}}
         </div>
-        <div class="field-list">
-            <div class="field" title="{{CPLocal 'Vehicle.PilotLinkTip'}}">
-                <label>{{CPLocal "Vehicle.PilotLabel"}}</label>
-                <select name="system.pilotId">
-                    <option value="" {{#unless system.pilotId}}selected{{/unless}}>{{CPLocal "Vehicle.PilotNoneOption"}}</option>
-                    {{#each pilotChoices}}<option value="{{id}}" {{#if (equals ../system.pilotId id)}}selected{{/if}}>{{name}}</option>{{/each}}
-                </select>
-            </div>
-            {{#if linkedPilotName}}
-            <div class="field" title="{{CPLocal 'Vehicle.LinkedPilotRefTip'}}">
-                <label>{{linkedPilotName}} REF</label><input type="number" class="not-editable" value="{{linkedPilotRef}}" readonly/></div>
-            {{else}}
-            <div class="field" title="{{CPLocal 'Vehicle.PilotRefManualTip'}}">
-                <label>{{CPLocal "Vehicle.PilotRefManualLabel"}}</label><input type="number" name="system.pilotRef" value="{{system.pilotRef}}"/></div>
-            {{/if}}
-            <div class="field" title="{{CPLocal 'Vehicle.EffectiveRefTip'}}">
-                <label>{{CPLocal "Vehicle.EffectiveRefLabel"}}</label><input type="number" class="not-editable" value="{{system.effectiveRef}}" readonly/></div>
-        </div>
+        {{!-- (Pilot link / linked REF / effective REF moved to the top-of-sheet Pilot section.) --}}
         {{!-- ACPA combat-model pole (Unit D): the GM sets it; everyone sees the read-only effective model. --}}
         <div class="field-list">
             {{#if userIsGM}}

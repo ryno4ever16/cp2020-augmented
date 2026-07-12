@@ -1,6 +1,7 @@
 import { onGlobalClick } from "../popout-compat.js";
 import { localize, localizeParam } from "../utils.js";
 import { renderChatCard } from "../compat.js";
+import { markCardResolved } from "../card-lock.js";
 
 // The chat-card helpers now live in compat.js so the vehicle module can reuse them without
 // importing the combat module. Re-exported here for back-compat (damage-hooks.js imports
@@ -363,6 +364,10 @@ export async function executeStunSave({ actorId, tokenId, sceneId }) {
 
   if (!success) {
     await _applyStatusEffect(actorId, tokenId, sceneId, "unconscious", true);
+  } else {
+    // recovery check success path restores the movement override that the failed-save
+    // apply side installed: toggle 'unconscious' off, put walk speed back, drop the flag.
+    await _releaseStunMovementOverride(actorId, tokenId, sceneId);
   }
 }
 
@@ -525,6 +530,51 @@ async function _applyStatusEffect(actorId, tokenId, sceneId, statusId, restrictM
   }
 }
 
+/**
+ * Recovery-check success path — the inverse of _applyStatusEffect's 'unconscious' branch.
+ * When the actor still carries the 'unconscious' status this mechanism set, toggle it off,
+ * restore movement.walk on the token doc from the preStunMovement flag, then unset the flag.
+ * Token resolution mirrors _applyStatusEffect exactly (scene/token by id, else the first
+ * placeable). The apply side touches ONE token doc and stashes ONE walk value on the actor
+ * flag, so restoring that same single token doc faithfully undoes the override. No-op when the
+ * actor is not unconscious (nothing for the recovery path to release).
+ */
+async function _releaseStunMovementOverride(actorId, tokenId, sceneId) {
+  try {
+    let tokenDoc = null;
+    if (tokenId && sceneId) {
+      tokenDoc = game.scenes.get(sceneId)?.tokens?.get(tokenId) ?? null;
+    }
+    if (!tokenDoc) {
+      tokenDoc = canvas?.tokens?.placeables
+        ?.find(t => t.actor?.id === actorId)?.document ?? null;
+    }
+    if (!tokenDoc) return;
+
+    const effActor = tokenDoc.actor;
+    // Only release the lock this mechanism installed — an actor that isn't unconscious has
+    // nothing for the recovery path to undo.
+    const isUnconscious = effActor?.statuses?.has("unconscious") ?? false;
+    if (!isUnconscious) return;
+
+    // Toggle the status off via the same API the apply side used.
+    if (effActor?.toggleStatusEffect) {
+      await effActor.toggleStatusEffect("unconscious", { active: false });
+    }
+
+    // Restore the stored walk speed onto the same token doc, then drop the flag.
+    const stored = effActor?.getFlag?.("cp2020-augmented", "preStunMovement");
+    if (stored !== undefined && stored !== null) {
+      await tokenDoc.update({ "movement.walk": stored }).catch(() => {
+        // Older versions may not support the movement update; the status toggle still lifts.
+      });
+    }
+    await effActor?.unsetFlag?.("cp2020-augmented", "preStunMovement");
+  } catch (err) {
+    console.warn("cp2020-augmented | Could not release stun movement override:", err);
+  }
+}
+
 export function registerSaveRollHandlers() {
   // GM-side listener for relayed stabilization writes (non-owner medics).
   _registerStabilizeSocket();
@@ -541,6 +591,8 @@ export function registerSaveRollHandlers() {
         tokenId: stunBtn.dataset.tokenId,
         sceneId: stunBtn.dataset.sceneId,
       });
+      // One-shot: the save rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
+      await markCardResolved(stunBtn.closest("[data-message-id]")?.dataset?.messageId, "stunSave");
     }
 
     if (deathBtn && !deathBtn.disabled) {
@@ -551,6 +603,7 @@ export function registerSaveRollHandlers() {
         sceneId:     deathBtn.dataset.sceneId,
         mortalLevel: Number(deathBtn.dataset.mortalLevel),
       });
+      await markCardResolved(deathBtn.closest("[data-message-id]")?.dataset?.messageId, "deathSave");
     }
 
     if (stabilizeBtn && !stabilizeBtn.disabled) {
@@ -558,6 +611,7 @@ export function registerSaveRollHandlers() {
       await executeStabilize({
         actorId: stabilizeBtn.dataset.actorId,
       });
+      await markCardResolved(stabilizeBtn.closest("[data-message-id]")?.dataset?.messageId, "stabilize");
     }
   });
 

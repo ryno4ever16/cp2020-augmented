@@ -7,7 +7,8 @@
  * stat losses), disease susceptibility (GM-adjudicated note), direct HP damage, and an interactive
  * chance-of-death check. This supersedes the old "radiation as a per-hit typed SP" abstraction; the
  * radsuit's `mechTypedSP{radiation}.sp` is reinterpreted as the actor's RSP (R4 removes the per-hit
- * path — untouched here). Everything is opt-in behind the `radiationEnabled` feature toggle.
+ * path — untouched here). The subsystem has no feature toggle: it is inert until a GM engages it
+ * (placing a rad zone or applying a dose), so every passive path no-ops on an un-irradiated actor/scene.
  *
  * This file MIRRORS module/mech/drug.js almost 1:1 — the same patterns, idioms, and comment density:
  *   - FLAG STATE (no data-model change): `radState` markers ≙ `drugState`; `radExposure`/`radHistory` track
@@ -65,6 +66,7 @@ import { localize, localizeParam } from "../utils.js";
 import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard, renderChatCard } from "../compat.js";
 import { onGlobalClick } from "../popout-compat.js";
+import { markCardResolved } from "../card-lock.js";
 import { rollDurationTurns } from "../mech/consumable.js";
 import { enqueueApply } from "../mech/light.js";
 import { applyLocationDamage } from "../combat/DamageApplicator.js";
@@ -86,16 +88,6 @@ const RAD_FLAG          = "radState";         // marker[] — stat-loss overlays
 // would silently no-op. (Verified against systems/cyberpunk2020 template.json: int/ref/tech/cool/attr/
 // luck/ma/bt/emp.)
 const STAT_KEY = { body: "bt", ref: "ref", att: "attr", int: "int", cool: "cool" };
-
-/**
- * Whether the optional Deep Space radiation subsystem is enabled. Read DEFENSIVELY (try/catch → false),
- * exactly like drug.js reads its toggles: the `radiationEnabled` world setting is registered by R3, so
- * until then (and whenever it is off) the whole subsystem is inert. Default OFF — it is an opt-in
- * subsystem, not core play.
- */
-function radiationEnabled() {
-  try { return game.settings.get(SCOPE, "radiationEnabled") === true; } catch { return false; }
-}
 
 /**
  * ✅ CONFIRMED Radiation Effects Table (RADIATION-PROPOSAL.md, user-confirmed 2026-07-11; Deep Space p.21),
@@ -191,6 +183,12 @@ export function actorHistory(actor)  { return Number(actor?.getFlag?.(SCOPE, HIS
 export function actorBandCrossed(actor) { return Number(actor?.getFlag?.(SCOPE, BAND_CROSSED_FLAG)) || 0; }
 /** The current incident id (bumped each new exposure). Pure. */
 export function actorExposureSeq(actor) { return Number(actor?.getFlag?.(SCOPE, SEQ_FLAG)) || 0; }
+/** Whether an actor carries any radiation state worth surfacing to a GM — an active marker, current
+ *  exposure, or lifetime history (leukemia/sterility odds derive from history, so it stays relevant even
+ *  after the actor has decayed back to zero current exposure). Pure — drives the GM sheet panel's `show`. */
+export function actorHasRadiation(actor) {
+  return radMarkersFor(actor).length > 0 || actorExposure(actor) > 0 || actorHistory(actor) > 0;
+}
 
 /** One tick over rad markers: { surviving, expired }. Untimed markers (turnsLeft ≤ 0) never expire.
  *  Pure — the EXACT mirror of tickDrugMarkers. */
@@ -350,7 +348,7 @@ async function postRadEffectPassedCard(actor, marker) {
 /* ══════════════════════════════════ Engine ══════════════════════════════════ */
 
 /**
- * Apply a radiation dose to an actor (a zone tick, or the GM apply-dose tool). GM/owner-gated. Folds the
+ * Apply a radiation dose to an actor (a zone tick, or the GM apply-dose tool). GM-only. Folds the
  * (RSP-reduced) net rads into exposure + lifetime history, claims every newly-crossed band ONCE, and
  * resolves each band's effects.
  *
@@ -360,12 +358,12 @@ async function postRadEffectPassedCard(actor, marker) {
  * The exposure/history/bandsFired read-modify-write is serialized per actor (light.js queue) and does
  * the "which bands fire THIS call" decision ATOMICALLY — two doses landing quickly can neither
  * double-fire a band nor lose an increment. The dice + cards + marker writes run AFTER, outside the
- * lock. Not feature-gated itself (an explicit dose applies, like drug.js's takeDrug) — only GM/owner
- * gated; the PASSIVE automation (overlay/tick/button) is what the radiationEnabled toggle gates.
+ * lock. Not feature-gated itself (an explicit dose applies, like drug.js's takeDrug) — only GM
+ * gated; the PASSIVE automation (overlay/tick/button) simply no-ops when the actor has no rad markers.
  */
 export async function applyRadiationDose(actor, rawRads, { perTurn = true, sourceLabel = "", announce = true } = {}) {
   if (!actor) return null;
-  if (!(game.user.isGM || actor.isOwner)) return null;   // GM/owner only ever writes (zone ticks run on the active GM)
+  if (!game.user.isGM) return null;   // GM-only: every radiation mutation is a GM action (user ruling); zone ticks run on the active GM
   const raw = Math.max(0, Number(rawRads) || 0);
   if (raw <= 0) return null;
 
@@ -450,7 +448,7 @@ export async function applyRadiationDose(actor, rawRads, { perTurn = true, sourc
  */
 export async function clearExposure(actor) {
   if (!actor) return;
-  if (!(game.user.isGM || actor.isOwner)) return;
+  if (!game.user.isGM) return;   // GM-only (user ruling): matches resetRadiation; no player owner path
   await enqueueApply(actor, async () => {
     // End the incident: reset the running dose + peak band, and BUMP the incident id so the NEXT exposure's
     // stat loss ADDS to this one's (its markers keep the old seq and persist). Lifetime radHistory is KEPT.
@@ -467,11 +465,15 @@ export async function clearExposure(actor) {
 /**
  * Cure radiation stat loss (GM control — drugs / therapy / surgery per the book). By default removes the
  * PERMANENT (untimed) markers and leaves the temporary ones running; { temp:true } also clears the
- * temporaries. Serialized per actor; re-prepares on the flag write so the stats recover.
+ * temporaries. The panel Cure button passes { temp:true, perm:true } so it cures EVERYTHING curable — a
+ * timed stat-loss marker never ticks down out of combat, so a perm-only cure would leave a −BT stuck.
+ * Serialized per actor; re-prepares on the flag write so the stats recover. When nothing was curable, the
+ * flag is left untouched (no spurious re-prepare) and NO chat card is posted — a local warn tells the GM
+ * there was nothing to cure (a cure card would falsely imply something happened).
  */
 export async function cureRadiation(actor, { temp = false, perm = true } = {}) {
   if (!actor) return;
-  if (!(game.user.isGM || actor.isOwner)) return;
+  if (!game.user.isGM) return;   // GM-only (user ruling): matches resetRadiation; no player owner path
   let removed = 0;
   await enqueueApply(actor, async () => {
     const markers = radMarkersFor(actor);
@@ -481,11 +483,39 @@ export async function cureRadiation(actor, { temp = false, perm = true } = {}) {
       if (!timed && perm) { removed++; return false; }   // permanent-until-cured
       return true;
     });
+    if (!removed) return;   // nothing curable — leave the flag as-is (avoid a no-op re-prepare)
     if (kept.length) await actor.setFlag(SCOPE, RAD_FLAG, kept);
     else await actor.unsetFlag(SCOPE, RAD_FLAG);
   });
+  if (!removed) { ui.notifications?.warn(localizeParam("RadNothingToCure", { name: actor.name })); return; }
   await postSavePromptCard({
     body: localizeParam("RadCuredBody", { name: actor.name, count: removed }),
+    speaker: ChatMessage.getSpeaker({ actor })
+  });
+}
+
+/**
+ * FULL reset of an actor's radiation record (GM control — a destructive correction, NOT an in-fiction
+ * cure): clears the running exposure, the peak-band idempotency flag, the incident-id counter, EVERY
+ * stat-loss marker, AND the lifetime radHistory. This is the ONLY path that clears lifetime history — both
+ * Clear (exposure-end) and Cure (stat-loss) keep it by design, so a GM undoing a mistaken dose needs this.
+ * GM-only (it also wipes lifetime history, which Clear/Cure keep by design). Serialized per actor; the
+ * unset writes re-prepare the actor so the stat overlay returns to base AND actorHasRadiation() flips
+ * false, so the panel hides on the next render. Posts one summary card (the shared notice helper).
+ * (Clear/Cure/Dose are now GM-only too — the whole radiation surface is GM-gated per the user ruling.)
+ */
+export async function resetRadiation(actor) {
+  if (!actor) return;
+  if (!game.user.isGM) return;   // GM only — this wipes lifetime history
+  await enqueueApply(actor, async () => {
+    await actor.unsetFlag(SCOPE, EXPOSURE_FLAG);
+    await actor.unsetFlag(SCOPE, HISTORY_FLAG);
+    await actor.unsetFlag(SCOPE, BAND_CROSSED_FLAG);
+    await actor.unsetFlag(SCOPE, SEQ_FLAG);
+    await actor.unsetFlag(SCOPE, RAD_FLAG);
+  });
+  await postSavePromptCard({
+    body: localizeParam("RadResetBody", { name: actor.name }),
     speaker: ChatMessage.getSpeaker({ actor })
   });
 }
@@ -556,8 +586,8 @@ export async function runRadiationTickOnce(combat) {
  * Resolve the chance-of-death check (the death card's Roll button). Rolls 1d100 against the band's death
  * chance; "+BTM" rows adjust the chance by the actor's Body Type Modifier. On a roll ≤ the chance the GM
  * is told death occurs over the printed timeframe — this NEVER auto-kills (radiation death unfolds over
- * days/months; the GM adjudicates). Owner/GM only (mirrors the stun/death save gate); token-first actor
- * resolution so an unlinked combatant resolves on its own token actor.
+ * days/months; the GM adjudicates). GM-only (user ruling): a player click on the posted death card is
+ * warned off. Token-first actor resolution so an unlinked combatant resolves on its own token actor.
  *
  * BTM sign: the table prints the death rows as "N%+BTM". In CP2020 the Body Type Modifier is canonically
  * a NEGATIVE number (a harm-reducer, e.g. −2), so a tougher body LOWERS its death chance. This codebase
@@ -568,8 +598,8 @@ export async function executeRadiationDeathCheck({ actorId, tokenId, sceneId, ch
   const tokenActor = tokenId && sceneId ? game.scenes.get(sceneId)?.tokens?.get(tokenId)?.actor : null;
   const actor = tokenActor ?? game.actors.get(actorId);
   if (!actor) return;
-  if (!(game.user.isGM || actor.isOwner)) {
-    ui.notifications?.warn(localizeParam("SaveNotOwned", { name: actor.name }));
+  if (!game.user.isGM) {   // GM-only (user ruling): a player click on the posted death card warns and does nothing
+    ui.notifications?.warn(localize("RadGmOnly"));
     return;
   }
 
@@ -683,11 +713,11 @@ async function rollOffspringMutation() {
  * odds (sterility %, leukemia 1-in-N) assembled as clauses in JS, the template just loops (Tilt's way) —
  * and, once the character has reached the Mutations threshold (≥100 lifetime rads), rolls the Offspring
  * Mutation Table once and reports it. NEVER auto-applies a stat/status change: long-term radiation is
- * Referee-adjudicated over game-years. GM/owner gated (mirrors the other radiation controls).
+ * Referee-adjudicated over game-years. GM-only (user ruling; mirrors the other radiation controls).
  */
 export async function postLongTermCard(actor) {
   if (!actor) return;
-  if (!(game.user.isGM || actor.isOwner)) return;
+  if (!game.user.isGM) return;   // GM-only (user ruling): the panel button is GM-only; no player owner path
   const history = actorHistory(actor);
   const effects = longTermEffectsFor(history);
 
@@ -735,7 +765,8 @@ export function registerRadiation() {
     const orig = proto.prepareData;
     proto.prepareData = function () {
       orig.call(this);
-      if (!radiationEnabled()) return;
+      // No feature-toggle gate: applyRadiationStatLoss early-returns for any actor without rad markers,
+      // so the overlay is a no-op until a GM has actually irradiated this actor.
       try { applyRadiationStatLoss(this); } catch (e) { console.warn(`${SCOPE} | radiation stat loss failed`, e); }
     };
     _wrapped = true;
@@ -745,7 +776,6 @@ export function registerRadiation() {
   onGlobalClick(async (ev) => {
     const btn = ev.target?.closest?.(".cp-rad-death-roll");
     if (!btn || btn.disabled) return;
-    if (!radiationEnabled()) return;
     ev.preventDefault();
     let check = null;
     try { check = btn.dataset.check ? JSON.parse(btn.dataset.check) : null; } catch (_e) { /* legacy card */ }
@@ -753,6 +783,8 @@ export function registerRadiation() {
       actorId: btn.dataset.actorId,
       tokenId: btn.dataset.tokenId ?? "", sceneId: btn.dataset.sceneId ?? "", check
     });
+    // One-shot: the death check rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
+    await markCardResolved(btn.closest("[data-message-id]")?.dataset?.messageId, "radDeathCheck");
   });
 
   // Round tick — the ACTIVE GM counts the CURRENT combatant's timed radiation markers down when their
@@ -760,7 +792,6 @@ export function registerRadiation() {
   // Gated by the feature toggle AND the round-tick toggle: off = durations run narratively, the GM
   // cure controls still work.
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!radiationEnabled()) return;
     if (!mechRoundTickEnabled()) return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;

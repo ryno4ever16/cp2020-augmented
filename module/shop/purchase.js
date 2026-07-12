@@ -3,6 +3,11 @@ import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 
+// Actors with a buyItem currently in flight on THIS client — a synchronous claim (added before the funds
+// read, removed in finally) makes a same-tick double-buy for one actor a no-op. Mirrors the
+// _resolvingPurchaseRequests claim idiom in catalog.js.
+const _buyingActors = new Set();
+
 /**
  * Is `raw` a usable price? Coerces to a finite, NON-NEGATIVE number from a non-empty source (0 allowed).
  * Used for GM-set values (price overrides / the GM-entered request price), where 0 is a deliberate
@@ -122,6 +127,14 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
   if (!actor) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
   if (!canShop()) { ui.notifications?.warn(localize("ShopNotAllowed")); return false; }
 
+  // Synchronous in-flight claim keyed by actor id (mirrors _resolvingPurchaseRequests): buyItem does
+  // read-funds → check → await update → createEmbeddedDocuments, so two same-tick buys for one actor both
+  // read the same funds and collapse to one charge but two items. Claim BEFORE the funds read and release
+  // in finally so a concurrent second buy for the same actor bails cleanly. (The Buy button is also
+  // disabled during flight — this backstops the drag-to-buy path and second windows.)
+  if (_buyingActors.has(actor.id)) { ui.notifications?.warn(localize("ShopBuyInProgress")); return false; }
+  _buyingActors.add(actor.id);
+  try {
   const data = (source && typeof source.toObject === "function") ? source.toObject() : foundry.utils.deepClone(source ?? {});
   // A copy bought from a base-compendium item must carry its origin uuid so the preCreateItem corrections
   // hook (data-corrections.js) recognizes it and applies the book values — toObject() doesn't include it.
@@ -179,4 +192,7 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
     })
   });
   return true;
+  } finally {
+    _buyingActors.delete(actor.id);
+  }
 }

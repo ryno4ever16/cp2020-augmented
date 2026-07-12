@@ -1,0 +1,52 @@
+{
+  "_id": "SfzLSygEIzZSMqiE",
+  "name": "Speedheal",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Healing Drug &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +2 &middot; <strong>Difficulty (to synthesize):</strong> 33 &middot; <strong>Cost:</strong> 1650eb &middot; <strong>Duration:</strong> 1D6+1 hours.</p><p>Speedheal is designed to enhance the natural healing processes. Side effects are reduced REF by 1D6/3 for a period of 1 week after use.</p><p><strong>Printed healing mechanic</strong> (&ldquo;Speed Healing Drugs&rdquo;, Trauma Team chapter): &ldquo;Drugs can be used to speed the healing rate by 1 additional point per day. Expensive and often proscribed, these drugs have a neural side effect of reducing the patient's REF stat by 1D6/3 for a week after use. Speedheal costs 1650eb per treatment.&rdquo;</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.122&ndash;123):</em> the Effects Table (pg.124, &ldquo;Increase healing rate 1 point per point of Strength&rdquo;, Strength 2) would read +2, but the drug's own printed description gives the concrete mechanic &mdash; <strong>+1 additional healing point per day</strong> &mdash; and wins. Healing rate has no slot in the drug schema: NOT auto-applied; adjudicate per the healing rules. The wear-off penalty (REF &minus;1D6/3 for 1 week) is a random, automatic amount and stays prose. NB: the entry cites the description at &ldquo;pg. 107&rdquo; but in our copy it falls on book p.117 &mdash; page cite left for user eyes. Manufacturer: not printed.</p>",
+    "cost": 1650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.122",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [],
+      "duration": "1D6+1 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Healing drug: +1 healing point per day (printed description; not auto-applied — see notes)."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38420000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!SfzLSygEIzZSMqiE"
+}

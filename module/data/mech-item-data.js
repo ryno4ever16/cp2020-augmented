@@ -358,14 +358,20 @@ export function makeMechAugmentedData(SystemModel) {
 /** Armor items carry the typed-SP slot plus stat moddies (the Battlesuit's printed +1 BOD is a
  *  worn-armor stat mod — a field absent from the schema is silently stripped at item creation,
  *  which is exactly how that payload got lost before this slot existed). Armor's other mechanics
- *  live in the base armor model. */
+ *  live in the base armor model.
+ *
+ *  `armorType` makes the hard/soft classification getArmorHardness() reads player-visible: "hard" or
+ *  "soft" overrides the name/encumbrance heuristic; "" (the default = "Auto") leaves the heuristic in
+ *  charge, so existing armor is unaffected and no migration is needed. */
 export function makeArmorAugmentedData(SystemModel) {
   return class CyberpunkArmorAugmentedData extends SystemModel {
     static defineSchema() {
+      const f = foundry.data.fields;
       return {
         ...super.defineSchema(),
         mechStatMods: mechStatModsField(),
-        mechTypedSP: mechTypedSPField()
+        mechTypedSP: mechTypedSPField(),
+        armorType: new f.StringField({ initial: "" })   // "" = Auto (heuristic) | "soft" | "hard"
       };
     }
   };

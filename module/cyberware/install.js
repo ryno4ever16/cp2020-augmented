@@ -170,6 +170,10 @@ async function _postInstallSummary(actor, item, { surgery, charged, loss, dmg })
 export async function installCyberware(actor, item, opts = {}) {
   const { confirm = true, chargeSurgery = true } = opts;
   if (!actor || !item || item.type !== "cyberware") return false;
+  if (item.system?.equipped === true) {
+    ui.notifications?.warn(localize("CyberAlreadyInstalled", { item: item.name }));
+    return false;
+  }
   const surgery = getSurgery(item.system?.surgCode);
   const surgeryCost = chargeSurgery ? surgery.cost : 0;
 

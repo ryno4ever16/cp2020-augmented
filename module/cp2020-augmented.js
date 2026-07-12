@@ -13,6 +13,7 @@ import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
+import { registerCardLock } from "./card-lock.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -37,6 +38,7 @@ import { registerPinnedSubwindows } from "./pin-window.js";
 import { registerDataCorrections } from "./data-corrections.js";
 import { makeMechAugmentedData, makeArmorAugmentedData } from "./data/mech-item-data.js";
 import { makeAmmoAugmentedData } from "./data/ammo-item-data.js";
+import { makeWeaponAugmentedData } from "./data/weapon-item-data.js";
 import { registerMechLight } from "./mech/light.js";
 import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
 import { registerMechConsumable } from "./mech/consumable.js";
@@ -191,6 +193,10 @@ Hooks.once("init", function () {
     // the caliber-scoped modifier picker. Extend it, adding only the fields the base lacks (no-op on
     // the fork). See module/data/ammo-item-data.js.
     ammo:             makeAmmoAugmentedData(CONFIG.Item.dataModels.ammo),
+    // Melee weapon category flags the base model strips on vanilla (edged/mono armor-multiplier
+    // inputs + the mono break-on-fumble `broken` flag). Extend it, adding only the missing fields
+    // (no-op on a fork that declares them). See module/data/weapon-item-data.js.
+    weapon:           makeWeaponAugmentedData(CONFIG.Item.dataModels.weapon),
   });
 
   // Q7 personality moddies: wrap the actor's prepareData so stat mods with caps/combat context
@@ -212,8 +218,8 @@ Hooks.once("init", function () {
   registerTypedArmorDisplay();
   // Deep Space radiation dose subsystem: wrap prepareData for the radiation stat-loss overlay, wire the
   // chance-of-death button + the per-round dose tick, and install the radiation-zone hooks. Registered
-  // AFTER registerMechDrug so the overlay stacks on the drug boosts (order base → moddy → drug → radiation);
-  // the whole subsystem stays inert unless the radiationEnabled world setting is on.
+  // AFTER registerMechDrug so the overlay stacks on the drug boosts (order base → moddy → drug → radiation).
+  // No feature toggle: every passive path no-ops until a GM places a zone or applies a dose.
   registerRadiation();
   registerRadiationZones();
   // R3b GM tools: the apply-dose / place-zone / environmental scene-control buttons (shown to a GM while
@@ -473,6 +479,10 @@ Hooks.once("ready", function () {
   // wear-off, martial defense offer/result) register at init regardless of the combat gate, so
   // their PopOut rebinding must too. Inert when PopOut! is absent.
   registerPopoutCompat();
+  // One-shot chat-card lock (render pass + GM stamp-relay + severable re-arm). UNCONDITIONAL, like the
+  // PopOut rebinding above: the prompt cards it locks (saves, drug/rad checks, martial defense) post
+  // regardless of the combat gate, so the lock must be live regardless too.
+  registerCardLock();
   if (doCombat) {
     registerDamageHooks();
     registerMovementGate();

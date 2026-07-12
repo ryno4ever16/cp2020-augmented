@@ -24,11 +24,19 @@
 
   {{!-- Install (Surgery) button (our net-new): only on actor-owned cyberware. Handler = _cpActivateCyberwareInstall. --}}
   {{#if item.isEmbedded}}
+  {{#if system.equipped}}
+  <div class="field inactive">
+    <label>{{CPLocal "CyberInstall"}}</label>
+    <span class="flex-pad"></span>
+    <span>{{CPLocal "CyberInstalledLabel"}}</span>
+  </div>
+  {{else}}
   <div class="field">
     <label>{{CPLocal "CyberInstall"}}</label>
     <span class="flex-pad"></span>
     <button type="button" class="cyber-install" title="{{CPLocal "CyberInstallTip"}}">🔧 {{CPLocal "CyberInstall"}}</button>
   </div>
+  {{/if}}
   {{/if}}
   {{> (template "fields/string") label="Abbrev" edit="system.abbrev"}}
 

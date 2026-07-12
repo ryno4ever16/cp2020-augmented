@@ -13,7 +13,7 @@
  *     RSP is the reactor per-turn value; environmental exposure is the Referee's hourly bookkeeping).
  *   • registerRadiationTools()    — adds the three GM tools to the token scene-control group (mirrors the
  *     df-active-lights getSceneControlButtons idiom: augment an existing group's `tools`, don't invent a
- *     canvas layer). Shown only to a GM while `radiationEnabled` is on. Wired from cp2020-augmented.js.
+ *     canvas layer). Shown to any GM (no feature toggle — the tools are the opt-in). Wired from cp2020-augmented.js.
  *
  * All dialog markup lives in templates/dialog/radiation-*.hbs; every string is a CYBERPUNK.Rad* i18n key;
  * the DialogV2.wait + read-fields-in-the-confirm-callback shape mirrors module/dialog/ip-neglect.js. No
@@ -23,7 +23,6 @@
  */
 
 import { localize } from "../utils.js";
-import { radiationEnabled } from "../settings.js";
 import { applyRadiationDose } from "./radiation.js";
 import { placeRadZone } from "./radiation-zones.js";
 
@@ -221,11 +220,11 @@ export async function openEnvironmentalDialog(actors) {
  * Add the three radiation GM tools to the token scene-control group (pure of the hook — exported for the
  * keeper). Mirrors the df-active-lights idiom: augment an EXISTING group's `tools` (v13 `controls` is a
  * Record<string, SceneControl>; each tool is a momentary `button` firing `onChange`) rather than
- * registering a bespoke canvas layer. Added only for a GM while the subsystem is enabled — a clean toolbar
- * when radiation is off. Returns true when the tools were added (for the keeper's negative case).
+ * registering a bespoke canvas layer. Added for any GM (the tools ARE the opt-in; radiation stays inert
+ * until one is used). Returns true when the tools were added (for the keeper's negative case).
  */
 export function addRadiationTools(controls) {
-  if (!game.user?.isGM || !radiationEnabled()) return false;
+  if (!game.user?.isGM) return false;
   const tokens = controls?.tokens;
   if (!tokens?.tools) return false;
   const order = Object.keys(tokens.tools).length;

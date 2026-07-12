@@ -55,6 +55,12 @@
 
     {{#if isMelee}}
         {{> (template "fields/boolean") label="AP" edit="system.ap"}}
+        {{!-- Melee armor-interaction categories (our net-new). Edged: ½ SP vs soft armor (CP2020 p.111).
+              Mono: mono-edge — ⅓ SP vs soft / ⅔ SP vs hard, and breaks on a fumble (p.112). Broken is
+              set by the mono break-on-fumble rule; the checkbox lets a GM clear it (repair). --}}
+        {{> (template "fields/boolean") label="Edged" edit="system.edged"}}
+        {{> (template "fields/boolean") label="Mono" edit="system.mono"}}
+        {{> (template "fields/boolean") label="Broken" edit="system.broken"}}
     {{else}}
         {{> (template "fields/string") label="AmmoType" edit="system.ammoType"}}
     {{/if}}

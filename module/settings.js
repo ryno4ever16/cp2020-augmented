@@ -236,18 +236,10 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
-  // --- radiationEnabled (Deep Space radiation subsystem, opt-in) ---
-  // The optional cumulative-dose radiation model (radiation.js) + its per-turn rad zones
-  // (radiation-zones.js). Default OFF — an opt-in Deep Space subsystem, not core play; every passive
-  // behaviour (the stat-loss overlay, the round tick, the death button, the zone tick) is gated on it.
-  game.settings.register(SCOPE, "radiationEnabled", {
-    name: "SETTINGS.RadiationEnabled",
-    hint: "SETTINGS.RadiationEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-  });
+  // (No radiationEnabled toggle: the Deep Space radiation subsystem has no world-setting gate. It is
+  //  inert until a GM engages it — placing a rad zone or applying a dose IS the opt-in — so a redundant
+  //  on/off switch was removed. Every passive path (the stat-loss overlay, the round tick, the death
+  //  button, the zone tick) no-ops when the actor/scene has no radiation state.)
 
   // --- taserCumPenaltyEnabled ---
   game.settings.register(SCOPE, "taserCumPenaltyEnabled", {
@@ -882,11 +874,6 @@ export function mechRoundTickEnabled() {
 /** Group 3 — document automation: chip grant/prune, loadout materialize/prune, delete-cascade detach (default ON). */
 export function mechDocumentAutomationEnabled() {
   try { return game.settings.get(SCOPE, "mechDocumentAutomation") !== false; } catch { return true; }
-}
-/** Opt-in Deep Space radiation subsystem — the canonical reader for the dose engine, zones, and R3b GM
- *  tools/panel (default OFF; the passive overlay/tick/zone automation is gated on it). */
-export function radiationEnabled() {
-  try { return game.settings.get(SCOPE, "radiationEnabled") === true; } catch { return false; }
 }
 /** Permission scoping — cyberlimb Repair restricted to the GM (default OFF = owners may repair). */
 export function cyberlimbRepairGmOnly() {

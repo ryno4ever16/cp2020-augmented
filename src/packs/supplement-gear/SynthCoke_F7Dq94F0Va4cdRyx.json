@@ -1,0 +1,52 @@
+{
+  "_id": "F7Dq94F0Va4cdRyx",
+  "name": "SynthCoke",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Stimulant &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +1 &middot; <strong>Difficulty (to synthesize):</strong> 20 &middot; <strong>Cost:</strong> 1000eb &middot; <strong>Duration:</strong> 1D6+1 minutes.</p><p>The second generation, synthetic replacement for cocaine. Like the original, its side effects are nasty: paranoia, psychological addiction.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.122):</em> the entry prints no mechanical effect at all &mdash; &ldquo;Strength: +1&rdquo; is the drug-design power rating (pg.124), not a stat bonus, and its Difficulty 20 does not uniquely decode to Effects-Table components, so nothing is derivable without inventing. Paranoia / psychological addiction are GM-run prose. Addiction is the universal core save (1D10 higher than Body Type; pg.124&ndash;125). Manufacturer: not printed.</p>",
+    "cost": 1000,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.122",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [],
+      "duration": "1D6+1 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "2nd-gen synthetic cocaine (stimulant); no printed mechanical effect."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!F7Dq94F0Va4cdRyx"
+}

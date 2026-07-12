@@ -166,7 +166,11 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
             if (simple) { await addToPool(actor, amount); }
             else {
               const skill = actor.items.get(r.querySelector('[name="skill"]')?.value);
-              if (skill) await awardPending(actor, skill, amount);
+              // Explicit GM manual add BYPASSES the anti-grind throttle (R6) — but still records the
+              // award in the cycle bookkeeping. Warn if it fails for any other reason (invalid input).
+              if (skill && !(await awardPending(actor, skill, amount, { bypassThrottle: true }))) {
+                ui.notifications?.warn(localize("IpAwardFailed"));
+              }
             }
             this.render(false);
           },

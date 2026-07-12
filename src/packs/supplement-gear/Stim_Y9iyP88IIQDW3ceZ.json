@@ -1,0 +1,57 @@
+{
+  "_id": "Y9iyP88IIQDW3ceZ",
+  "name": "Stim",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Stimulant &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +3 &middot; <strong>Difficulty (to synthesize):</strong> 10 &middot; <strong>Cost:</strong> 500eb &middot; <strong>Duration:</strong> 1D6+1 minutes.</p><p>Stim increases endurance, allowing the user to stay alert for longer periods. Side effects include mental delusions.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.122):</em> mapped via the Effects Table (pg.124) &mdash; &ldquo;Increased Endurance (+Strength to Endurance checks)&rdquo; at Strength 3 &rarr; +3 to Endurance checks. The &ldquo;mental delusions&rdquo; side effect is GM-run prose. Addiction = universal core save (1D10 &gt; Body Type). Manufacturer: not printed.</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.122",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [
+        {
+          "label": "Endurance",
+          "mod": 3
+        }
+      ],
+      "duration": "1D6+1 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Stimulant: +3 to Endurance checks (Effects Table, Strength 3)."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38410000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Y9iyP88IIQDW3ceZ"
+}

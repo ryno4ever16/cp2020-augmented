@@ -1,0 +1,57 @@
+{
+  "_id": "0xTezL8DvPltcZU6",
+  "name": "Boost",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> INT Booster &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +4 &middot; <strong>Difficulty (to synthesize):</strong> 12 &middot; <strong>Cost:</strong> 600eb &middot; <strong>Duration:</strong> 1D6+1 hours.</p><p>Boost increases INT by +1 for a 2&ndash;7 hour period. A Boost addict has gained full tolerance &mdash; his INT is no longer increased, and he must have more Boost within twelve hours or be reduced to screaming fits and hallucinations.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.123):</em> INT +1 wired per the entry's explicit prose (&ldquo;increases INT by +1 for a 2&ndash;7 hour period&rdquo;), which wins over any Effects-Table &ldquo;Increase INT by Strength&rdquo; reading. &ldquo;Strength: +4&rdquo; is the design-system power rating &mdash; printed outside that system's own 1&ndash;3 range, a book inconsistency worth noting but not a stat bonus. The tolerance / withdrawal mechanic is GM-run prose. Manufacturer: not printed.</p>",
+    "cost": 600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.123",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "int",
+          "mod": 1
+        }
+      ],
+      "rollBoosts": [],
+      "duration": "1D6+1 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "INT booster: +1 INT (the entry's explicit printed effect)."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38430000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!0xTezL8DvPltcZU6"
+}

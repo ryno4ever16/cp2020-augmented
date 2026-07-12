@@ -30,7 +30,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
 
   static DEFAULT_OPTIONS = {
     classes: ["cyberpunk", "sheet", "actor", "vehicle"],
-    position: { width: 560, height: 560 },
+    position: { width: 600, height: 780 },
     window: { resizable: true },
     tag: "form",
     form: {
@@ -65,7 +65,11 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
   // (Handlebars partials) based on system.isACPA. Reliable per-instance — no runtime PARTS
   // mutation (which V2 does not honour per render).
   static PARTS = {
-    main: { template: "modules/cp2020-augmented/templates/actor/vehicle-sheet-wrapper.hbs" },
+    // scrollable = the in-part scroll container V2 saves/restores across re-renders (submitOnChange
+    // re-renders this sheet on every field edit). The paired CSS establishes the height chain that
+    // makes `.sheet-body` the bounded scroller — without it the tall ACPA/vehicle sheet is clipped
+    // at the window edge with no scrollbar. Mirrors the character sheet's PARTS.main. See css scroll fix.
+    main: { template: "modules/cp2020-augmented/templates/actor/vehicle-sheet-wrapper.hbs", scrollable: [".sheet-body"] },
   };
 
   /** @override */

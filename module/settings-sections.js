@@ -29,7 +29,7 @@ const SECTIONS = [
   ] },
   { key: "SectionWeaponEffects", keys: [
     "shotgunSpreadEnabled", "explosivesEnabled", "explosivesDetailed", "areaEffectOcclusion",
-    "gasGrenadeCloudEnabled", "gasCloudAutoMove", "radiationEnabled", "taserCumPenaltyEnabled",
+    "gasGrenadeCloudEnabled", "gasCloudAutoMove", "taserCumPenaltyEnabled",
     "acidArmorDotEnabled", "acidDotStackMode", "fireDotEnabled", "fireDotStackMode",
   ] },
   { key: "SectionOptionalRules", keys: ["fnff2Enabled"] },

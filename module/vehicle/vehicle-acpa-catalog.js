@@ -7,7 +7,6 @@
  */
 
 import { ACPA_SYSTEMS } from "./vehicle-acpa-systems.js";
-import { mmEnabled } from "../settings.js";
 
 const PACK_ID = "cp2020-augmented.acpa-systems";
 const ICON = "icons/svg/chest.svg";
@@ -57,18 +56,5 @@ export async function seedAcpaSystemCompendium({ force = false } = {}) {
     return { ok: false, reason: "error" };
   } finally {
     if (wasLocked) await pack.configure({ locked: true }).catch(() => {});
-  }
-}
-
-/** Ready-time one-shot: seed the compendium if it exists and is missing entries. Active GM only. */
-export async function ensureAcpaSystemSeed() {
-  if (!mmEnabled()) return;                                   // Maximum Metal off → don't seed the MM compendium
-  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
-  const pack = game.packs?.get(PACK_ID);
-  if (!pack) return;
-  try {
-    await seedAcpaSystemCompendium();
-  } catch (err) {
-    console.warn("Cyberpunk2020 | ensureAcpaSystemSeed failed", err);
   }
 }

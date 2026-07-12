@@ -283,6 +283,7 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {object}  p.areaDamages
  * @param {boolean} p.ap             Armor-piercing: halves SP equally across all armor types
  * @param {boolean} p.edged          Edged weapon: equivalent to armorMultSoft 0.5 (soft only)
+ * @param {boolean} p.mono           Mono-edge weapon: ⅓ SP vs soft armor, ⅔ SP vs hard (CP2020 p.112)
  * @param {number}  p.armorMultSoft  SP multiplier for soft armor (1.0 = no change)
  * @param {number}  p.armorMultHard  SP multiplier for hard armor (1.0 = no change)
  * @param {string}  p.armorMode
@@ -291,7 +292,7 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {boolean} p.dryRun        If true: runs math only, does not write HP or ablate
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
-export async function applyAreaDamages({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, damageType = "", token = null, targetTokenId = null, dryRun = false }) {
+export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, damageType = "", token = null, targetTokenId = null, dryRun = false }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -334,11 +335,12 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     const spKey = spLocationKey(location);   // armor/ablation location (Groin → Torso)
     let currentSP = getLiveSP(location);
 
-    // Asymmetric armor multipliers: edged weapon (isEdged) and/or ammo armor mults.
+    // Asymmetric armor multipliers: edged/mono weapon and/or ammo armor mults.
     // edged flag = armorMultSoft: 0.5, armorMultHard: 1.0.
-    // Combined: take the minimum (most aggressive) of edged and ammo mults per type.
-    const effectiveSoftMult = edged ? Math.min(0.5, armorMultSoft) : armorMultSoft;
-    const effectiveHardMult = armorMultHard;
+    // mono flag (mono-edge, CP2020 p.112) = armorMultSoft: ⅓, armorMultHard: ⅔ — it wins over edged.
+    // Combined: take the minimum (most aggressive) of the weapon-category and ammo mults per type.
+    const effectiveSoftMult = mono ? Math.min(1 / 3, armorMultSoft) : (edged ? Math.min(0.5, armorMultSoft) : armorMultSoft);
+    const effectiveHardMult = mono ? Math.min(2 / 3, armorMultHard) : armorMultHard;
     if ((effectiveSoftMult !== 1.0 || effectiveHardMult !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
       const contributors = getArmorContributors(target, spKey);
       const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
@@ -382,18 +384,27 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
 
 // Dry-run variants return damageAfterSP (pre-BTM) without writing any data.
 
-export async function resolveAreaDamages({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0 }) {
-  return applyAreaDamages({ target, areaDamages, ap, edged, armorMultSoft, armorMultHard, penDamageMult, armorMode, ablate: false, coverSP, dryRun: true });
+export async function resolveAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0 }) {
+  return applyAreaDamages({ target, areaDamages, ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, armorMode, ablate: false, coverSP, dryRun: true });
 }
 
 /**
  * Synchronous dry-run for dialog preview. Returns damageAfterSP per hit.
  * BTM is not applied here — the dialog shows damageAfterSP so the GM can override it,
  * then applies BTM at click time.
+ *
+ * Between-hit SP degradation MUST match the async auto-apply path (applyAreaDamages) so the dialog
+ * Apply button and auto-apply produce identical totals: the cached per-location SP is the
+ * UN-multiplied base (the armor mono/edged/ammo multiplier is applied FRESH each hit off that base),
+ * and degradation between hits is the SAME ablation model gated behind the SAME `damageAblation`
+ * setting (threaded in as `ablate`). This is a pure resolver — it SIMULATES the ablation the async
+ * path performs via real document writes (ablateLocationOnce → _deriveLiveSP re-derive); the actual
+ * writes happen in DamageDialog._onApply's apply loop.
  */
-export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0, damageType = "" }) {
+export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate = false, coverSP = 0, damageType = "" }) {
   const results = [];
-  const liveSP  = {};
+  const liveSP  = {};        // cached UN-multiplied per-location base SP (mirrors applyAreaDamages)
+  const ablations = {};      // per-location count of simulated staged-penetration ablations
 
   const getLiveSP = (key) => {
     if (liveSP[key] !== undefined) return liveSP[key];
@@ -408,12 +419,13 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
     for (const hit of hits) {
       const baseRaw    = Number(hit.damage ?? hit.dmg) || 0;
       const rawDamage  = baseRaw;
-      let currentSP    = getLiveSP(location);
+      const spKey      = spLocationKey(location);
+      let currentSP    = getLiveSP(location);   // un-multiplied base; mult applied fresh below
 
-      const effSoftSync = edged ? Math.min(0.5, armorMultSoft) : armorMultSoft;
-      const effHardSync = armorMultHard;
+      const effSoftSync = mono ? Math.min(1 / 3, armorMultSoft) : (edged ? Math.min(0.5, armorMultSoft) : armorMultSoft);
+      const effHardSync = mono ? Math.min(2 / 3, armorMultHard) : armorMultHard;
       if ((effSoftSync !== 1.0 || effHardSync !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
-        const contributors = getArmorContributors(target, spLocationKey(location));
+        const contributors = getArmorContributors(target, spKey);
         const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
         // Borg chassis is hard metal (mirror of the async path) — soft-only mults never halve it.
         const hasHardArmor = isFullBorg(target) || allItems.some(item => getArmorHardness(item) === "hard");
@@ -427,14 +439,55 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
 
       results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates });
 
-      // Simulate SP degradation for next bullet (staged penetration)
-      if (penetrates && damageAfterSP > 0) {
-        liveSP[location] = Math.max(0, currentSP - 1);
+      // Between-hit SP degradation: same model + same gate as the async path's per-layer ablation.
+      // async (applyAreaDamages): `ablate && armorMode===FULL && penetrates && netDamage>0` →
+      // ablateLocationOnce then liveSP[loc] = _deriveLiveSP(reduced docs). netDamage>0 ⟺ penetrates
+      // (applyBTM floors penetrating hits at 1). Here we SIMULATE that re-derive without writing, and
+      // cache the un-multiplied result so the next same-location hit multiplies it fresh (fixes the
+      // old flat −1 which both degraded unconditionally AND cached the POST-multiplier value —
+      // compounding the mono/edged mult across hits). When ablation is OFF, neither path degrades.
+      if (ablate && armorMode === ARMOR_MODES.FULL && penetrates) {
+        ablations[location] = (ablations[location] || 0) + 1;
+        liveSP[location] = _simulateAblatedLiveSP(target, spKey, damageType, ablations[location]);
       }
     }
   }
 
   return results;
+}
+
+/**
+ * Pure simulation of the between-hit SP the async path derives after `nAblations` staged-penetration
+ * ablations at a location — WITHOUT writing any document. Mirrors ablateLocationOnce (each contributing
+ * armor layer's CONVENTIONAL SP drops by 1 per ablation while it still has SP and still contributes to
+ * this hit; cyberware layers and the borg chassis never ablate) followed by the _deriveLiveSP
+ * proportional fold, so resolveAreaDamagesSync's simulated cache equals applyAreaDamages' re-derived
+ * one on a penetrating same-location burst. Pure.
+ */
+function _simulateAblatedLiveSP(target, location, damageType, nAblations) {
+  const contributors = getArmorContributors(target, location);
+  const ablatableIds = new Set([...contributors.orderedLayers, ...contributors.unassigned].map(i => i.id));
+  const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
+  const sps = allItems.map(item => {
+    if (item.type === "cyberware") {
+      // Cyberware never ablates (ablateLocationOnce touches only armor layers).
+      return typedLayerSP(item, Number(item.system?.CyberWorkType?.Locations?.[location]) || 0, damageType);
+    }
+    let itemSP = Number(item.system?.coverage?.[location]?.stoppingPower) || 0;
+    if (ablatableIds.has(item.id)) {
+      // Replay nAblations sequential −1s under ablateLocationOnce's own guards (SP>0 AND the layer
+      // still contributes to this hit's type — a fully-typed non-matching garment never erodes).
+      for (let k = 0; k < nAblations && itemSP > 0; k++) {
+        if (typedLayerSP(item, itemSP, damageType) <= 0) break;
+        itemSP = Math.max(0, itemSP - 1);
+      }
+    }
+    return typedLayerSP(item, itemSP, damageType);
+  }).filter(sp => sp > 0);
+  let combined = foldArmorSP(sps);
+  const borgSP = borgArmorSP(target, location);
+  if (borgSP > 0) combined = combineArmorSP(combined, borgSP);
+  return combined;
 }
 
 export async function ablateLocationOnce(target, location, damageType = "") {

@@ -278,6 +278,19 @@ export function realityInterface(key) {
   return REALITY_INTERFACES[key] ?? REALITY_INTERFACES.FULL_HUD_WIDEBAND;
 }
 
+/** The three Aperture interfaces provide NO HUD or VR (MM p.60). */
+const _NO_HUD_INTERFACES = new Set(["APERTURE_BASED", "ENHANCED_APERTURE", "WIDEBAND_APERTURE"]);
+
+/**
+ * Whether a suit's Reality Interface includes a HUD or VR (MM p.60). Only HUD/VR-equipped suits may fire
+ * TARGETED (unguided rockets/GLs used indirectly) or GUIDED (missile) weapons for INDIRECT fire — an
+ * Aperture-only suit lacks the target designation to do so. Defaults to true for an unknown key (the
+ * neutral Full-HUD baseline). PURE.
+ */
+export function interfaceHasHud(key) {
+  return !_NO_HUD_INTERFACES.has(realityInterface(key).key);
+}
+
 /**
  * Reflex/Control systems (MM p.65). They regulate how the pilot drives the suit: a REF modifier
  * (`refMod`) plus a hard cap (`maxRef`) on the operating Reflex. They take NO spaces. Basic is the

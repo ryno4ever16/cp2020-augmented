@@ -1,0 +1,52 @@
+{
+  "_id": "b2vntZGg88OnNmyB",
+  "name": "Blue Glass",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Hallucinogenic &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +1 &middot; <strong>Difficulty (to synthesize):</strong> 18 &middot; <strong>Cost:</strong> 900eb &middot; <strong>Duration:</strong> 1D6+1 minutes.</p><p>Blue Glass was originally developed as a biological weapon. Under stress, you will have a 3 in 10 chance of &ldquo;flashing out&rdquo; &mdash; reduced to staring blankly at the pretty colors in your mind (reduce INT by 1 per dose). Roll 1D10 and hope.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.123):</em> a hallucinogen with no beneficial stat/roll boost (&ldquo;Strength: +1&rdquo; is the power rating, not a bonus); the &ldquo;flashing out&rdquo; / per-dose INT loss is recorded on the drug card as a psychosis note and adjudicated by the GM (not auto-applied). Manufacturer: not printed.</p>",
+    "cost": 900,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.123",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [],
+      "duration": "1D6+1 minutes",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "Under stress, 3-in-10 chance (roll 1D10) of flashing out: catatonic; reduce INT by 1 per dose.",
+      "note": "Hallucinogen (former bioweapon)."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38440000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!b2vntZGg88OnNmyB"
+}

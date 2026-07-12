@@ -57,15 +57,6 @@ import { applyRadiationDose } from "./radiation.js";
 const SCOPE = "cp2020-augmented";
 
 /**
- * Whether the optional Deep Space radiation subsystem is enabled. Read DEFENSIVELY (try/catch → false),
- * exactly like radiation.js reads it: the `radiationEnabled` world setting is registered by R3, so until
- * then (and whenever it is off) the passive zone automation is inert. Default OFF — opt-in, not core play.
- */
-function radiationEnabled() {
-  try { return game.settings.get(SCOPE, "radiationEnabled") === true; } catch { return false; }
-}
-
-/**
  * Roll a rads dice string ("1d10", "2d6+1") → a non-negative integer (0 floor). Impure (dice). The
  * rollDamageAmount shape from radiation.js: a bad/empty formula falls back to the book's 1D10 rate and a
  * non-rollable string warns and yields 0 rather than throwing mid-tick.
@@ -83,8 +74,8 @@ async function rollRads(formula) {
 
 /**
  * Place a radiation zone on the viewed scene and post its placement notice. GM action (like
- * applyRadiationDose / _placeGasCloud it is NOT itself feature-gated — placing a zone is a deliberate
- * act; only the passive per-round tick is gated by radiationEnabled). Mirrors _placeGasCloud.
+ * applyRadiationDose / _placeGasCloud it is a deliberate GM act — placing a zone IS the opt-in). Mirrors
+ * _placeGasCloud.
  *
  *   { x, y }        origin in PIXELS (canvas coords), as the area-shapes descriptor expects.
  *   radiusM         zone radius in METRES (default 3).
@@ -95,6 +86,7 @@ async function rollRads(formula) {
  * @returns {Promise<object|null>} the created area handle, or null on failure.
  */
 export async function placeRadZone({ x, y, radiusM = 3, radsFormula = "1d10", sourceLabel = "", turnsLeft = 0 } = {}) {
+  if (!game.user?.isGM) return null;   // GM-only (user ruling): defence-in-depth behind the GM scene tool
   const scene = canvas?.scene;
   if (!scene) return null;
 
@@ -131,12 +123,11 @@ export async function placeRadZone({ x, y, radiusM = 3, radsFormula = "1d10", so
 
 /**
  * One per-round pass over every radiation zone on the viewed scene: dose each token standing inside, then
- * age/remove any FINITE zone. Gated by the feature toggle at the top (so a future manual-tick caller also
- * respects it, exactly as _runGasCloudTick re-checks gasEnabled). Mirrors _runGasCloudTick.
+ * age/remove any FINITE zone. No feature-toggle gate — `areasByFlag(scene, "isRadZone")` is empty on any
+ * scene where a GM has not placed a zone, so this is a no-op until radiation is actually in play. Mirrors
+ * _runGasCloudTick.
  */
 export async function runRadZoneTick(combat) {
-  if (!radiationEnabled()) return;
-
   const scene = canvas?.scene;
   if (!scene) return;
 
@@ -203,7 +194,6 @@ export async function runRadZoneTick(combat) {
  */
 function _hookRadZonePerTurn() {
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!radiationEnabled()) return;
     if (!mechRoundTickEnabled()) return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;

@@ -124,6 +124,24 @@ export function isFullBorg(actor) {
   return !!borgBodyOf(actor);
 }
 
+/**
+ * The actor stat keys (a subset of `ref`/`ma`/`bt`) a full-borg chassis ACTUALLY sets authoritatively
+ * this prepare — derived from the equipped body item's `borgBody.stats` block (BODY→`bt`). Empty when
+ * there is no such block (an SDP/SP-only body, or a manual-flag borg with no body item): those configs
+ * leave the physical stats on the meat value, so a drug/moddy still moves them. The FBC drug-skip and
+ * the "boost ignored" advisory gate on THIS, not on isFullBorg — an SDP-only borg never SETs ref/ma/bt,
+ * so its physical-stat boosts must NOT be dropped. Pure.
+ */
+export function borgSetStatKeys(actor) {
+  const stats = borgBodyOf(actor)?.stats;
+  const keys = new Set();
+  if (!stats) return keys;
+  if (stats.ref !== undefined && stats.ref !== null) keys.add("ref");
+  if (stats.ma !== undefined && stats.ma !== null) keys.add("ma");
+  if (stats.body !== undefined && stats.body !== null) keys.add("bt");
+  return keys;
+}
+
 // The printed FULL-BORG upgrade ceilings (Chromebook 2 p.84-85): stats REF 15 / MA 25 / BODY 20;
 // whole-body SP max 40; SDP max +20 over the chassis. The Increased-option items carry their step
 // in a `borgStatDelta` flag; the folds below clamp the summed steps at these maxima.
@@ -255,7 +273,8 @@ function recordedStatDelta(actor, key) {
  * refold list above is extended: re-apply the recorded deltas (recordedStatDelta) on top of the
  * chassis value here. The printed rules are silent on drugs/moddies over a chassis, so this is
  * PERMISSIVE by design (favors the borg): clamped never above the printed cap (BORG_STAT_CAPS) and
- * never below the chassis base; GMs restrict at the table.
+ * never below the PENALTY-REDUCED total (so the wound/encumbrance reductions folded just above always
+ * survive the refold — flooring at the raw chassis value would erase them); GMs restrict at the table.
  */
 export function applyBorgStats(actor, stats) {
   if (!stats) return;
@@ -276,11 +295,14 @@ export function applyBorgStats(actor, stats) {
       else if (woundState === 2){ s[key].woundMod = -2; total -= 2; }
     }
     // Refold the drug/moddy overlays the SET just discarded — permissive: clamp above at the printed
-    // cap, below at the chassis base (never let a crash/negative moddy drop below the machine's rating).
+    // cap, below at the PENALTY-REDUCED total (never the raw chassis n — flooring there would cancel
+    // the wound/encumbrance reductions folded just above). A positive delta stacks on the degraded
+    // value; a negative moddy can't push below it.
     const delta = recordedStatDelta(actor, key);
     if (delta) {
       const cap = capFor[key] ?? 0;
-      total = Math.max(n, cap > 0 ? Math.min(total + delta, Math.max(n, cap)) : total + delta);
+      const floor = total;
+      total = Math.max(floor, cap > 0 ? Math.min(floor + delta, Math.max(floor, cap)) : floor + delta);
     }
     s[key].total = total;
   };

@@ -15,7 +15,9 @@
 import { applyAreaDamages, ablateLocationByAmount, personnelArmorValue, ARMOR_MODES } from "../combat/DamageApplicator.js";
 import { rollLocation, localize, localizeParam } from "../utils.js";
 import { onGlobalClick } from "../popout-compat.js";
+import { markCardResolved } from "../card-lock.js";
 import { effectiveVehicleRuleSystem } from "../settings.js";
+import { pxPerMeter, metersPerUnit } from "./vehicle-grid.js";
 import { renderChatCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
@@ -54,6 +56,15 @@ export function computeFacing({ dx = 0, dy = 0, dz = 0, rotationDeg = 0 } = {}) 
   return "side";
 }
 
+/**
+ * Elevation delta (scene grid-distance units, as `token.document.elevation` reports) → PIXELS, so a
+ * vertical delta shares the same scale as the horizontal dx/dy computeFacing compares it against.
+ * px-per-unit = (units→metres) × (metres→pixels) = grid.size / grid.distance. Reuses vehicle-grid.js.
+ */
+function _elevationDeltaToPixels(scene, dzUnits) {
+  return (Number(dzUnits) || 0) * metersPerUnit(scene) * pxPerMeter(scene);
+}
+
 /** Read two tokens and return the struck facing of the target. Falls back to "front". */
 export function detectFacingFromTokens(attackerToken, targetToken) {
   if (!attackerToken || !targetToken) return "front";
@@ -61,8 +72,9 @@ export function detectFacingFromTokens(attackerToken, targetToken) {
   const tc = targetToken.center ?? { x: targetToken.x, y: targetToken.y };
   const aElev = Number(attackerToken.document?.elevation ?? attackerToken.elevation) || 0;
   const tElev = Number(targetToken.document?.elevation ?? targetToken.elevation) || 0;
+  const scene = attackerToken.document?.parent ?? targetToken.document?.parent ?? canvas?.scene;
   return computeFacing({
-    dx: ac.x - tc.x, dy: ac.y - tc.y, dz: aElev - tElev,
+    dx: ac.x - tc.x, dy: ac.y - tc.y, dz: _elevationDeltaToPixels(scene, aElev - tElev),
     rotationDeg: Number(targetToken.document?.rotation ?? targetToken.rotation) || 0
   });
 }
@@ -116,8 +128,9 @@ export function bearingFromFirer(firerToken, targetToken) {
   const tc = targetToken.center ?? { x: targetToken.x, y: targetToken.y };
   const fElev = Number(firerToken.document?.elevation ?? firerToken.elevation) || 0;
   const tElev = Number(targetToken.document?.elevation ?? targetToken.elevation) || 0;
+  const scene = firerToken.document?.parent ?? targetToken.document?.parent ?? canvas?.scene;
   return computeFacing({
-    dx: tc.x - fc.x, dy: tc.y - fc.y, dz: tElev - fElev,
+    dx: tc.x - fc.x, dy: tc.y - fc.y, dz: _elevationDeltaToPixels(scene, tElev - fElev),
     rotationDeg: Number(firerToken.document?.rotation ?? firerToken.rotation) || 0
   });
 }
@@ -228,6 +241,8 @@ export function registerVehicleTargetingHandlers() {
       actorId: btn.dataset.actorId, tokenId: btn.dataset.tokenId,
       pen: Number(btn.dataset.pen) || 0, weaponName: btn.dataset.weapon || "anti-vehicle weapon"
     });
+    // One-shot: the LUCK save rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
+    await markCardResolved(btn.closest("[data-message-id]")?.dataset?.messageId, "luckSave");
   });
 
   // GM-side relay: a player firing at a GM-owned vehicle can't write it, so they emit a vehicleDamage

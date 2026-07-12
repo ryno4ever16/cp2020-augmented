@@ -147,7 +147,7 @@ export async function openIndirectFireDialog(actor, mount = {}) {
   const w = item?.system ?? {};
   const wName = item?.name ?? mount.name ?? "artillery";
   const shells = _shellOptions(w, wName);
-  const kind = (w.weaponClass === "artillery") ? "artillery" : "mortar";   // 600 vs 400 m/turn
+  const kind = (w.indirectKind === "mortar") ? "mortar" : "artillery";   // 400 vs 600 m/turn
 
   const targets = [...(game.user?.targets ?? [])];
   const targetTok = targets.length === 1 ? targets[0] : null;

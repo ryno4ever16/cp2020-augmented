@@ -195,13 +195,24 @@ export async function setAllShopStock(id, patch = {}) {
   return keys.length;
 }
 
-/** Decrement a stocked item's quantity (used by the GM relay when a player buys) (GM only). */
-export async function decrementShopStock(id, sourceKey, by = 1) {
+/** Decrement a stocked item's quantity (used by the GM relay when a player buys) (GM only).
+ *  Authoritative oversell guard: the buyer's Buy gate reads the buyer's LOCAL (possibly stale) copy of
+ *  the shops setting, so two buyers can both pass it for the last unit. This is the ONE writer, so when
+ *  the requested `by` exceeds what we actually hold we still clamp to 0 (never negative) but SURFACE the
+ *  oversell to the GM (naming the item + buyer) for adjudication — the least-invasive close of the
+ *  otherwise-silent both-buyers-keep-the-item case (no cross-socket refund needed). */
+export async function decrementShopStock(id, sourceKey, by = 1, { buyerName = "" } = {}) {
   const map = _rawMap();
   const e = map[id]?.items?.[sourceKey];
   if (!e || e.unlimited === true) return false;
-  e.qty = Math.max(0, (Math.floor(Number(e.qty)) || 0) - (Math.floor(Number(by)) || 1));
-  return _save(map);
+  const want = Math.floor(Number(by)) || 1;
+  const had = Math.floor(Number(e.qty)) || 0;
+  e.qty = Math.max(0, had - want);
+  const ok = await _save(map);
+  if (ok && want > had) {
+    ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopOversold", { name: sourceKey, buyer: buyerName || "?", had, want }));
+  }
+  return ok;
 }
 
 /**

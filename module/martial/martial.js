@@ -25,6 +25,7 @@ import {
 import { localize, localizeParam } from "../utils.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { onGlobalClick } from "../popout-compat.js";
+import { markCardResolved } from "../card-lock.js";
 import { specialMeleeEffectsEnabled } from "../settings.js";
 
 // Module flag / settings scope (per-file convention used across the module).
@@ -418,6 +419,9 @@ export function registerMartialDefense() {
       }
       if (!_claimMartialCard(btn, messageId)) return;
       await _rollOfferedDefense({ targetActor, targetTokenId, attackerActorId: btn.dataset.attackerActorId, action });
+      // One-shot persistence: the in-memory claim above disables the buttons for this session; the stamp
+      // survives reload + drives the render-pass lock for every client (card-lock.js).
+      await markCardResolved(messageId, "martialDefenseRoll");
       return;
     }
 
@@ -432,9 +436,11 @@ export function registerMartialDefense() {
         body: localizeParam("MartialDefenseEvadedBody", { target: targetActor.name, action: localize(action) }),
         speaker: ChatMessage.getSpeaker({ actor: targetActor }),
       });
+      await markCardResolved(messageId, "martialDefenseEvaded");
       return;   // nothing was applied at declare time, so an evade writes no state
     }
     // cp-martial-defense-apply (skip the contest) and cp-martial-defense-lands (contest won) both apply.
     await applyOrRelayMartialEffect(action, targetActor, attackerActor);
+    await markCardResolved(messageId, "martialDefenseApplied");
   });
 }

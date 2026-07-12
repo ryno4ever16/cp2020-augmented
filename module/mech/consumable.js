@@ -187,11 +187,30 @@ function activationInChanges(changes) {
 export async function runConsumableTickOnce(combat) {
   const actor = combat?.combatant?.actor;
   if (!actor) return;
-  const raw = actor.getFlag?.(SCOPE, FLAG);
-  const markers = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-  if (!markers.length) return;
 
-  const { surviving, expired } = tickMarkers(markers);
+  // Route the marker read + survivor persist through the shared per-actor apply queue (light.js) — the
+  // SAME serialization addMarker/clearMarkersFor use — so a dose activation or a manual switch-off that
+  // lands mid-tick can't be clobbered by this write (the tick was the one writer outside the queue). The
+  // job re-reads the flag fresh at run time and writes it in one shot; its only await is that single
+  // setFlag, so it never holds the queue across the unrelated expiry side-effects below (item off-flip,
+  // wear-off card, icon prune) — those touch the item / chat / ActiveEffects, never the consumableState
+  // flag, so running them outside the queue can lose no write. A concurrent add now either runs fully
+  // before this job (its marker is read + ticked) or fully after (it re-reads the survivors we wrote and
+  // appends) — never interleaved, so the lost write is impossible.
+  let expired = [];
+  let surviving = [];
+  await enqueueApply(actor, async () => {
+    const raw = actor.getFlag?.(SCOPE, FLAG);
+    const markers = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+    if (!markers.length) return;
+    const res = tickMarkers(markers);
+    expired = res.expired;
+    surviving = res.surviving;
+    if (surviving.length) await actor.setFlag(SCOPE, FLAG, surviving);
+    else await actor.unsetFlag(SCOPE, FLAG);
+  });
+  if (!expired.length && !surviving.length) return;   // no markers this turn
+
   for (const m of expired) {
     // A cyberware timer switches the item back off — the base engine drops its payload with it.
     // Tag the update so the EffectActive-off hook doesn't ALSO clear (the tick prunes below); the
@@ -206,9 +225,8 @@ export async function runConsumableTickOnce(combat) {
       speaker: ChatMessage.getSpeaker({ actor })
     });
   }
-  if (surviving.length) await actor.setFlag(SCOPE, FLAG, surviving);
-  else await actor.unsetFlag(SCOPE, FLAG);
-  // Drop the expired timers' token icons (and any stray icon whose marker is gone).
+  // Drop the expired timers' token icons (and any stray icon whose marker is gone). Outside the queue:
+  // an ActiveEffect delete, not a consumableState write — it races no marker persist.
   await pruneTimerIcons(actor, new Set(surviving.map(m => m.itemId)));
 }
 

@@ -130,6 +130,14 @@ async function setQueue(q) {
 
 function _isActiveGM() { return game.user.isGM && game.users.activeGM?.id === game.user.id; }
 
+/** Relay a queue mutation to the active GM (mirrors recordSkillRoll's `ipSkillRolled` relay). Called by
+ *  the queue mutators when the current user is a NON-active GM, so all queue writes funnel through the
+ *  single active-GM client (no last-write-wins clobber on the ipQueue world setting). The active GM
+ *  re-broadcasts the resulting setting change, which re-renders every open tracker (see updateSetting). */
+function _relayToActiveGM(type, payload) {
+  if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type, payload });
+}
+
 /** Re-render an open IP tracker (if any) after queue/pending changes. V2 apps live in
  *  foundry.applications.instances (a Map), not the legacy ui.windows registry. */
 function _rerenderTracker() {
@@ -265,15 +273,17 @@ async function _enqueue(row) {
   await _maybeNudgeNeglect(q.length);
 }
 
-/** Remove a queue row without awarding (skip). */
+/** Remove a queue row without awarding (skip). Active-GM only; a non-active GM relays. */
 export async function dismissQueueRow(rowId) {
+  if (!_isActiveGM()) { _relayToActiveGM("ipDismissRow", { rowId }); return; }
   await setQueue(getQueue().filter(r => r.id !== rowId));
   await _rearmNeglectIfBelow();
   _rerenderTracker();
 }
 
-/** Patch a queue row in place (e.g. the GM-entered IP amount or success tick). */
+/** Patch a queue row in place (e.g. the GM-entered IP amount or success tick). Active-GM only; relay. */
 export async function updateQueueRow(rowId, patch) {
+  if (!_isActiveGM()) { _relayToActiveGM("ipUpdateRow", { rowId, patch }); return; }
   const q = getQueue();
   const row = q.find(r => r.id === rowId);
   if (!row) return;
@@ -281,8 +291,9 @@ export async function updateQueueRow(rowId, patch) {
   await setQueue(q);
 }
 
-/** Resolve every queued row (award each row's current IP/success), emptying the queue. */
+/** Resolve every queued row (award each row's current IP/success), emptying the queue. Active-GM only. */
 export async function resolveAllQueue() {
+  if (!_isActiveGM()) { _relayToActiveGM("ipResolveAll", {}); return; }
   for (const row of getQueue()) await resolveQueueRow(row.id);
 }
 
@@ -300,19 +311,24 @@ export async function resetThrottle() {
   await setThrottleCounts({});
 }
 
-/** Apply the throttle to a proposed award for a skill, updating the per-cycle counter. */
-async function _throttleAward(skillId, amount) {
+/** Apply the throttle to a proposed award for a skill, updating the per-cycle counter. With
+ *  `bypass` (an explicit GM manual add, R6): the reduction is skipped (award = full amount), BUT the
+ *  per-cycle counter is STILL incremented exactly as a normal award would — so subsequent automatic
+ *  awards throttle as if the manual award had gone through normally (no counter corruption). */
+async function _throttleAward(skillId, amount, { bypass = false } = {}) {
   const mode = ipThrottle();
   if (mode === "off" || amount <= 0) return amount;
   const counts = getThrottleCounts();
   const n = Number(counts[skillId]) || 0;
   let award;
-  if (mode === "hardcap") {
+  if (bypass) {
+    award = amount;                     // explicit GM add: full amount regardless of prior awards...
+  } else if (mode === "hardcap") {
     award = n >= 1 ? 0 : amount;
   } else { // diminishing: halve per prior award this cycle, floor 1
     award = Math.max(1, Math.floor(amount / Math.pow(2, n)));
   }
-  counts[skillId] = n + 1;
+  counts[skillId] = n + 1;              // ...but the cycle counter advances identically either way.
   await setThrottleCounts(counts);
   return award;
 }
@@ -323,11 +339,13 @@ async function _throttleAward(skillId, amount) {
 
 /**
  * Add pending IP to a skill (GM action). Honors the throttle. Used by the tracker (per row) and the
- * manual add. `amount` is the raw figure the GM entered (or the auto-baseline amount).
+ * manual add. `amount` is the raw figure the GM entered (or the auto-baseline amount). Pass
+ * `{ bypassThrottle: true }` for an explicit GM manual add (R6): the throttle reduction is skipped but
+ * the per-cycle counter still advances, so later automatic awards throttle normally.
  */
-export async function awardPending(actor, skill, amount) {
+export async function awardPending(actor, skill, amount, { bypassThrottle = false } = {}) {
   if (!actor || !skill) return false;
-  const award = await _throttleAward(skill.id, Math.max(0, Math.floor(Number(amount) || 0)));
+  const award = await _throttleAward(skill.id, Math.max(0, Math.floor(Number(amount) || 0)), { bypass: bypassThrottle });
   if (award <= 0) return false;
   await skill.setFlag(SCOPE, "ipPending", skillPending(skill) + award);
   return true;
@@ -338,8 +356,8 @@ export async function awardPending(actor, skill, amount) {
  * plus any typed bonus) to the rolled skill's pending, then drop the row.
  */
 export async function resolveQueueRow(rowId) {
-  const q = getQueue();
-  const row = q.find(r => r.id === rowId);
+  if (!_isActiveGM()) { _relayToActiveGM("ipResolveRow", { rowId }); return; }
+  const row = getQueue().find(r => r.id === rowId);
   if (!row) return;
   const actor = game.actors.get(row.actorId);
   const skill = actor?.items.get(row.skillId);
@@ -348,7 +366,9 @@ export async function resolveQueueRow(rowId) {
     if (ipAwardModel() === "autoBaseline" && row.success) amount += ipAutoBaselineAmount();
     if (amount > 0) await awardPending(actor, skill, amount);
   }
-  await setQueue(q.filter(r => r.id !== rowId));
+  // Re-read at write time (not the pre-await snapshot): a row enqueued during awardPending's await
+  // window must survive — only THIS row is removed. Mirrors dismissQueueRow.
+  await setQueue(getQueue().filter(r => r.id !== rowId));
   await _rearmNeglectIfBelow();
   _rerenderTracker();
 }
@@ -466,11 +486,27 @@ export function registerIpHooks() {
     try { recordSkillRoll(payload); } catch (e) { console.warn("cp2020-augmented | IP queue failed", e); }
   });
 
-  // GM-side: receive relayed rolls from players and enqueue them.
+  // GM-side: receive relayed skill rolls (from players) AND relayed queue mutations (from a non-active
+  // GM whose tracker is open) — every queue write funnels through the single active-GM client.
   game.socket.on("module.cp2020-augmented", async (data) => {
-    if (data?.type !== "ipSkillRolled") return;
     if (!_isActiveGM()) return;
-    try { await _enqueue(data.payload); } catch (e) { console.warn("cp2020-augmented | IP relay enqueue failed", e); }
+    try {
+      switch (data?.type) {
+        case "ipSkillRolled": await _enqueue(data.payload); break;
+        case "ipDismissRow":  await dismissQueueRow(data.payload?.rowId); break;
+        case "ipUpdateRow":   await updateQueueRow(data.payload?.rowId, data.payload?.patch); break;
+        case "ipResolveRow":  await resolveQueueRow(data.payload?.rowId); break;
+        case "ipResolveAll":  await resolveAllQueue(); break;
+      }
+    } catch (e) { console.warn("cp2020-augmented | IP relay action failed", e); }
+  });
+
+  // A remote ipQueue change (the active GM applying a relayed mutation) must re-render a NON-active GM's
+  // open tracker. Foundry broadcasts world-setting writes as updateSetting; our own writes already call
+  // _rerenderTracker (and the deliberate no-re-render on amount edits stays intact), so skip self-writes.
+  Hooks.on("updateSetting", (setting, _changes, _options, userId) => {
+    if (userId === game.user.id) return;
+    if (setting?.key === `${SCOPE}.ipQueue`) _rerenderTracker();
   });
 
   // Deleting an actor orphans its queued skill-roll rows (the queue snapshots actorId/name in a world

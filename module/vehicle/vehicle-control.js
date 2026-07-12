@@ -320,7 +320,8 @@ export async function openControlRollDialog(actor, opts = {}) {
   const driversById = Object.fromEntries(drivers.map(a => [a.id, a]));
 
   const dialog = new foundry.applications.api.DialogV2({
-    window: { title: localizeParam("Vehicle.ControlRollTitle", { mode: localize(isMM ? "Vehicle.ModeManeuver" : "Vehicle.ModeControl"), actor: actor.name }) },
+    window: { title: localizeParam("Vehicle.ControlRollTitle", { mode: localize(isMM ? "Vehicle.ModeManeuver" : "Vehicle.ModeControl"), actor: actor.name }), resizable: true },
+    position: { width: 440 },
     content,
     buttons: [
       {

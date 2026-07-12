@@ -47,6 +47,17 @@ export function resolveMissileToHit({ guidance = "semiActive", d10 = 0, operator
   return { total, dv, hit: total >= dv };
 }
 
+/**
+ * Paint-guidance painting to-hit (MM p.9-10). PURE. The missile is fired FIRST, then the painting
+ * laser/radar makes a real to-hit — and the accumulated countermeasure/evade Difficulty applies to
+ * THIS roll (chaff/jamming/stealth/evade all raise its DV). Only on a paint hit does each missile
+ * then strike on an unmodified d10 of 2-10 (resolvePaintHit). Uses the operator's bonus vs the
+ * target number, so it mirrors semi-active to-hit math; returns { total, dv, hit }.
+ */
+export function resolvePaintToHit({ d10 = 0, operatorBonus = 0, targetNumber = 0, rollMods = 0, difficultyMods = 0 } = {}) {
+  return resolveMissileToHit({ guidance: "semiActive", d10, operatorBonus, targetNumber, rollMods, difficultyMods });
+}
+
 /** Paint missile (Hellfire): once the painting laser hits, each missile hits on a d10 of 2-10. PURE. */
 export function resolvePaintHit(d10) {
   return (Number(d10) || 0) >= 2;

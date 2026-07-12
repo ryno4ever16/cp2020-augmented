@@ -525,14 +525,24 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     // Buy (catalog + storefront).
     root.querySelectorAll(".cp-catalog-buy").forEach(btn => btn.addEventListener("click", async (ev) => {
       ev.preventDefault();
-      const rowEl = ev.currentTarget.closest("[data-ammo-caliber], [data-item-id], [data-source-key]"); if (!rowEl) return;
-      const qty = qtyOf(rowEl);
-      // Ammo rows: box pricing via the selected load. qty = number of boxes.
-      if (rowEl.dataset.ammoCaliber) { await this._buyAmmo(rowEl.dataset.ammoCaliber, rowEl.querySelector(".cp-catalog-ammo-load")?.value ?? "standard", qty); this.render(); return; }
-      // Storefront items use the GM-set style (handled in _shopBuy); the open catalog lets the buyer pick.
-      if (this.view === "storefront" && rowEl.dataset.curated === "1") await this._shopBuy(rowEl.dataset.sourceKey, { qty });
-      else { const { styleMult, styleLabel } = styleOf(rowEl); await this._directBuy(rowEl.dataset.packId, rowEl.dataset.itemId, { qty, styleMult, styleLabel }); }
-      this.render();
+      // Disable the clicked button for the whole async buy so a double-click can't fire two purchases
+      // (buyItem's per-actor claim is the authoritative backstop; the re-render below also rebuilds a
+      // fresh, enabled button). Re-enable in finally in case the flow bails before re-rendering.
+      const button = ev.currentTarget;
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        const rowEl = button.closest("[data-ammo-caliber], [data-item-id], [data-source-key]"); if (!rowEl) return;
+        const qty = qtyOf(rowEl);
+        // Ammo rows: box pricing via the selected load. qty = number of boxes.
+        if (rowEl.dataset.ammoCaliber) { await this._buyAmmo(rowEl.dataset.ammoCaliber, rowEl.querySelector(".cp-catalog-ammo-load")?.value ?? "standard", qty); this.render(); return; }
+        // Storefront items use the GM-set style (handled in _shopBuy); the open catalog lets the buyer pick.
+        if (this.view === "storefront" && rowEl.dataset.curated === "1") await this._shopBuy(rowEl.dataset.sourceKey, { qty });
+        else { const { styleMult, styleLabel } = styleOf(rowEl); await this._directBuy(rowEl.dataset.packId, rowEl.dataset.itemId, { qty, styleMult, styleLabel }); }
+        this.render();
+      } finally {
+        button.disabled = false;
+      }
     }));
 
     this._activateBuildControls(root, isGM);
@@ -802,6 +812,11 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
   const e = normalizeShopItem(def.items[sourceKey]);
   const n = Math.max(1, Math.floor(Number(qty) || 1));
   if (!e.unlimited && e.qty < n) { ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopOutOfStock", { name: sourceKey, qty: e.qty })); return; }
+  // Limited stock can only be depleted GM-side (the GM owns the setting) — directly if we ARE the GM,
+  // else via the shopBuyRelay socket to an ACTIVE GM. With neither, the charge would land but stock
+  // would never move (silent oversell). Refuse the buy BEFORE charging — mirror the unpriced-buy refusal.
+  // Unlimited-stock items have no decrement to drop and stay buyable.
+  if (!e.unlimited && !game.user.isGM && !game.users.activeGM) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopNoGmForStock")); return; }
   const [packId, itemId] = splitSourceKey(sourceKey);
   const doc = await game.packs.get(packId)?.getDocument(itemId);
   if (!doc) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopItemUnavailable")); return; }
@@ -823,8 +838,8 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
     else ok = await buyItem(buyer, doc, { qty: n, unitPrice, priceLabel: label });
   }
   if (ok !== false && !e.unlimited) {
-    if (game.user.isGM) await decrementShopStock(def.id, sourceKey, n);
-    else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "shopBuyRelay", shopId: def.id, sourceKey, qty: n });
+    if (game.user.isGM) await decrementShopStock(def.id, sourceKey, n, { buyerName: buyer?.name ?? "" });
+    else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "shopBuyRelay", shopId: def.id, sourceKey, qty: n, buyerName: buyer?.name ?? "" });
   }
 }
 
@@ -1110,7 +1125,7 @@ export function registerShopHooks() {
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "shopBuyRelay") return;
     if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
-    try { await decrementShopStock(data.shopId, data.sourceKey, data.qty); }
+    try { await decrementShopStock(data.shopId, data.sourceKey, data.qty, { buyerName: data.buyerName ?? "" }); }
     catch (e) { console.warn("cp2020-augmented | shopBuyRelay failed", e); }
   });
 

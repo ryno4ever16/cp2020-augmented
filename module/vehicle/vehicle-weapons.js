@@ -20,8 +20,8 @@ import { openSingletonDialog, localize, localizeParam } from "../utils.js";
 import { effectiveVehicleRuleSystem, vehicleArcEnforcement } from "../settings.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { gridDistanceBetween } from "../combat/rangefinding.js";
-import { renderChatCard } from "../compat.js";
-import { acpaMeleeDamage } from "./vehicle-acpa.js";
+import { renderChatCard, postSavePromptCard } from "../compat.js";
+import { acpaMeleeDamage, interfaceHasHud } from "./vehicle-acpa.js";
 
 /** Average of a CP2020 damage formula ("2d6+1", "5d6", "1d10", "3d6+2"). PURE. */
 export function averageDamageFromFormula(formula) {
@@ -256,6 +256,14 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   const coneAngle = Number(w.coneAngle) || 0;     // Class F scatter-packs
   const scatterDice = Number(w.scatterDice) || 0; // Class F: XD6 rolled per hit target for # munitions that strike (MM p.72)
   const weaponClass = w.weaponClass ?? "directFire";
+  // MM p.60: an ACPA whose Reality Interface lacks a HUD or VR (an Aperture-only suit) may not fire
+  // GUIDED (missile) or INDIRECT (artillery) weapons — those need HUD/VR target designation. Block it
+  // before the fire dialog opens. Direct-fire weapons are unaffected (a smart-linked cannon needs no HUD).
+  if (actor.system?.isACPA && (weaponClass === "missile" || weaponClass === "artillery")
+      && !interfaceHasHud(actor.system?.realityInterface)) {
+    ui.notifications?.warn?.(localizeParam("Vehicle.AcpaNoHudIndirect", { weapon: wName }));
+    return;
+  }
   // Indirect artillery and bombs use their own guided helpers (5g) — delegate before building the
   // direct-fire dialog.
   if (weaponClass === "artillery") { const { openIndirectFireDialog } = await import("./vehicle-ordnance.js"); return openIndirectFireDialog(actor, mount); }
@@ -511,6 +519,30 @@ async function _executeVehicleFire(actor, targetActor, p) {
       return { launched: true };
     }
     ui.notifications?.warn?.(localize("Vehicle.MissileNeedTokensDirect"));
+    // No tracked flight (a token was missing), so we fall through to a direct shot below. But the
+    // flight path duds a missile fired inside its minimum arming range (MM p.9) — mirror that gate
+    // here so the fallback can't deliver a full-penetration hit inside minRange. Recover positions
+    // from the actors' active tokens when the ids weren't passed.
+    const armRange = Number(p.minRange) || 0;
+    if (armRange > 0) {
+      const fTok = firerTok ?? actor?.getActiveTokens?.()?.[0] ?? null;
+      const tTok = targetTok ?? targetActor?.getActiveTokens?.()?.[0] ?? null;
+      let distM = null;
+      if (fTok && tTok) { try { distM = gridDistanceBetween(fTok.center, tTok.center); } catch { distM = null; } }
+      if (distM !== null && distM < armRange) {
+        await postSavePromptCard({
+          title: localizeParam("Vehicle.MissileDudTitle", { weapon: p.mountName }),
+          body: localizeParam("Vehicle.MissileDudBody", { target: targetActor?.name ?? localize("Vehicle.Target") }),
+        });
+        return { dud: true, reason: "insideMinRange" };
+      }
+      if (distM === null) {
+        // Cannot measure firer→target distance without both tokens/positions, so we cannot verify
+        // arming. Rather than deliver an unverifiable full-penetration hit that may be inside the
+        // minimum range, we do NOT resolve the direct shot here.
+        return { hit: false, note: "missile min-range arming not verified: firer/target distance unmeasurable without both tokens; direct shot suppressed" };
+      }
+    }
   }
   const d10 = (await new Roll("1d10").evaluate());
   const res = resolveVehicleToHit({ d10: d10.total, ref: p.ref, skill: p.skill, mods: p.mods, targetNumber: p.targetNumber });
@@ -555,6 +587,16 @@ async function _executeVehicleFire(actor, targetActor, p) {
   return res;
 }
 
+/**
+ * Normalize a catalog damage string into a valid Foundry Roll formula. Catalog entries carry AP
+ * inline ("6D10AP", "5D10+10AP") and the dice-multiplier form with `x` ("1D6x1D6AP") — neither
+ * parses in `new Roll`. AP is already tracked separately as `system.ap`, so strip a trailing AP and
+ * convert the `x` multiplier to `*`. Returns "" for empty/absent formulas. PURE.
+ */
+function _normalizeDamageFormula(formula) {
+  return String(formula ?? "").trim().replace(/\s*AP\s*$/i, "").replace(/\s*x\s*/gi, "*").trim();
+}
+
 /** Apply an area weapon's shot: burst (circle, centered on the target) or cone (from the firer). */
 async function _applyAreaShot(p, res, extraRounds) {
   const { resolveAreaShot } = await import("./vehicle-area.js");
@@ -563,7 +605,7 @@ async function _applyAreaShot(p, res, extraRounds) {
   const center = (t) => t ? (t.center ?? { x: t.x, y: t.y }) : null;
   // One damage roll for the whole burst/cone (one shell), so an ACPA caught in it uses real damage.
   let rawDamage = null;
-  if (p.damageFormula) { try { rawDamage = (await new Roll(String(p.damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
+  if (p.damageFormula) { try { rawDamage = (await new Roll(_normalizeDamageFormula(p.damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
   const payload = {
     scale: "penetration", penetration: p.penetration, range: p.range,
     goodShotSteps: res.goodShotSteps, extraRounds, ap: p.ap, hefPenetrator: p.hefPenetrator, heat: p.heat, highDensityAP: p.highDensityAP, railgun: p.railgun, weaponName: p.mountName, rawDamage
@@ -592,7 +634,7 @@ async function _applyVehicleShot(targetActor, { penetration = 0, facing = "front
   const { dispatchAttack } = await import("./vehicle-targeting.js");
   // Roll the weapon's real damage when known so an ACPA target's SDP flow uses it (not the Pen×10 estimate).
   let rawDamage = null;
-  if (damageFormula) { try { rawDamage = (await new Roll(String(damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
+  if (damageFormula) { try { rawDamage = (await new Roll(_normalizeDamageFormula(damageFormula)).evaluate()).total; } catch (e) { rawDamage = null; } }
   await dispatchAttack({
     scale: "penetration", penetration, facing, range, goodShotSteps, extraRounds, ap, hefPenetrator, heat, highDensityAP, railgun, weaponName, rawDamage
   }, targetActor);

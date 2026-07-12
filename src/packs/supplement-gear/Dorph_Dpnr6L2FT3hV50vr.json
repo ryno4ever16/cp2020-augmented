@@ -1,0 +1,57 @@
+{
+  "_id": "Dpnr6L2FT3hV50vr",
+  "name": "'Dorph",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Pain Negation &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +2 &middot; <strong>Difficulty (to synthesize):</strong> 5 &middot; <strong>Cost:</strong> 250eb &middot; <strong>Duration:</strong> 1D6+1 turns.</p><p>Designed as a combat drug and painkiller, endorphins reduce pain and stress effects. 'Dorph allows you to reduce the effects of stun or shock. 'Dorph also has a nasty cost in nervous system damage. Each time you use 'Dorph, roll an additional 1D10. On a 1, you have lost 1 point of REF &mdash; permanently.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.123):</em> mapped via the Effects Table (pg.124) &mdash; &ldquo;Negate Pain Effects (+Strength to Stun Saves)&rdquo; at Strength 2 &rarr; +2 to Stun Saves. Duration is in combat TURNS, so the round-tick timer counts it down. The 1-in-10 permanent REF loss per use is GM-run prose (not auto-applied). Manufacturer: not printed.</p>",
+    "cost": 250,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.123",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [],
+      "rollBoosts": [
+        {
+          "label": "Stun Saves",
+          "mod": 2
+        }
+      ],
+      "duration": "1D6+1 turns",
+      "durationTurns": "1d6+1",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Painkiller / combat drug: +2 to Stun Saves (Effects Table, Strength 2)."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38450000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Dpnr6L2FT3hV50vr"
+}

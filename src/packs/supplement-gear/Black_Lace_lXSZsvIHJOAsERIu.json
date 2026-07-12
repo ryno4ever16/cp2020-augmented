@@ -1,0 +1,62 @@
+{
+  "_id": "lXSZsvIHJOAsERIu",
+  "name": "Black Lace",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Pain Negation &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +3 &middot; <strong>Difficulty (to synthesize):</strong> 13 &middot; <strong>Cost:</strong> 650eb &middot; <strong>Duration:</strong> 1D6+1 hours.</p><p>A high powered version of 'Dorph which imparts euphoria, adrenal rush, and invulnerability to pain. Your CL is raised by 2, and you are resistant to stun or shock effects. Lace is deadly. Lace users become fearless, cold-blooded killing machines &mdash; exactly what its military designers were looking for. If you fail your addiction save (1D10 roll higher than Body Type) roll an additional 1D6 and subtract the result from your EMP stat. Treat the result as if suffering from cyberpsychosis. If you go over the line, too bad. Roll up another character.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.123):</em> two effects wired &mdash; (1) COOL +2, the entry's explicit &ldquo;CL is raised by 2&rdquo;; (2) +3 to Stun Saves, the Effects-Table derivation of &ldquo;resistant to stun or shock effects&rdquo; (&ldquo;Negate Pain Effects (+Strength to Stun Saves)&rdquo; at Strength 3 &mdash; the same reading applied to 'Dorph at Strength 2). The &ldquo;invulnerability to pain&rdquo; flavor beyond that stays narrative. The addiction-failure EMP loss / cyberpsychosis is recorded as a psychosis note and adjudicated by the GM. Manufacturer: not printed.</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.123",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "cool",
+          "mod": 2
+        }
+      ],
+      "rollBoosts": [
+        {
+          "label": "Stun Saves",
+          "mod": 3
+        }
+      ],
+      "duration": "1D6+1 hours",
+      "durationTurns": "",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "Fail addiction save (1D10 higher than Body Type): roll 1D6, subtract from EMP; treat as cyberpsychosis.",
+      "note": "Combat drug: COOL +2 (printed) and +3 to Stun Saves (Effects Table, Strength 3)."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38460000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!lXSZsvIHJOAsERIu"
+}

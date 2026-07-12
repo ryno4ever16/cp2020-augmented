@@ -1,4 +1,4 @@
-import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY } from "../lookups.js"
+import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY } from "../lookups.js"
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, properCase } from "../utils.js"
 import { makeD10Roll } from "../dice.js"
 import { ModifiersDialog } from "../dialog/modifiers.js"
@@ -18,8 +18,8 @@ import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipCost, ipLockState, canEditSkillLevels, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
-import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled, cyberlimbRepairGmOnly, radiationEnabled } from "../settings.js";
-import { actorExposure, actorHistory, actorRSP, radMarkersFor, clearExposure, cureRadiation, postLongTermCard } from "../radiation/radiation.js";
+import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
+import { actorExposure, actorHistory, actorRSP, radMarkersFor, actorHasRadiation, clearExposure, cureRadiation, resetRadiation, postLongTermCard } from "../radiation/radiation.js";
 import { openApplyDoseDialog } from "../radiation/radiation-tools.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -277,7 +277,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       fp.render(true);
     };
 
-    root.addEventListener("pointerdown", cpAvatarCapture, { capture: true });
+    // Bind the opener to click ONLY — a pointerdown+click double-bind opens two FilePickers per
+    // click (cancelling the pointerdown event does not cancel the subsequent click event).
     root.addEventListener("click", cpAvatarCapture, { capture: true });
     this._cpAvatarCapture = cpAvatarCapture;
 
@@ -1106,8 +1107,25 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const skill = this.actor.items.get(row.dataset.itemId);
       const haystack = String(skill?.name ?? "").toUpperCase();
       const match = !normalized || haystack.includes(normalized);
-      row.classList.toggle("cp-hidden", !match);
+      // "Hide; search reveals" (user ruling): an UNTRAINED martial-arts discipline is hidden while the
+      // search box is empty, yet still rendered — so a non-empty query reveals it by the ordinary
+      // substring match ("aikido" shows the row). Once trained/chipped/IP'd it stops being hidden and
+      // stays visible with no search. All other skills follow the plain search match.
+      const hide = normalized ? !match : this._cpIsUntrainedMartial(skill);
+      row.classList.toggle("cp-hidden", hide);
     }
+  }
+
+  /** "Hide; search reveals" predicate: true for a martial-arts discipline the actor has NOT trained —
+   *  level 0 AND banked IP 0 AND not chipped. A chipped or IP-carrying discipline counts as trained and
+   *  stays visible (user ruling). Only martial-arts skills are affected; every other item returns false. */
+  _cpIsUntrainedMartial(skill) {
+    if (!isMartialArtSkillItem(skill)) return false;
+    const sys = skill.system ?? {};
+    if (sys.isChipped || sys.autoChipped) return false;   // chipped = trained
+    if ((Number(sys.level) || 0) > 0) return false;        // has a trained level
+    if ((Number(sys.ip) || 0) > 0) return false;           // carrying IP toward the first level
+    return true;
   }
 
   /** Re-apply the current skill filter to the DOM + toggle the clear (×) button's visibility. Called
@@ -1452,12 +1470,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   /**
    * Build the GM-only radiation panel context (R3b): the running exposure, lifetime history, the actor's
    * RSP, and a compact aggregate of the active radiation stat loss ("BT −2, REF −1"). Populated only for a
-   * GM while the subsystem is enabled — otherwise `radiation.show` is false and combat.hbs skips the whole
-   * panel, keeping the sheet byte-identical for players / radiation-off worlds. Mirrors
-   * _cpPrepareStatusVisibility (a render-edge helper off _prepareContext).
+   * GM AND only when the actor actually carries radiation (a marker, current exposure, or lifetime history)
+   * — otherwise `radiation.show` is false and combat.hbs skips the whole panel, keeping the sheet
+   * byte-identical for players and for anyone who has never been irradiated. There is no world toggle: the
+   * panel simply appears once a GM has dosed this actor. Mirrors _cpPrepareStatusVisibility.
    */
   _cpPrepareRadiation(sheetData) {
-    if (!(radiationEnabled() && game.user.isGM)) { sheetData.radiation = { show: false }; return; }
+    if (!game.user.isGM || !actorHasRadiation(this.actor)) { sheetData.radiation = { show: false }; return; }
     const actor = this.actor;
 
     // Aggregate every active marker's stat mods into one signed-per-stat summary for the readout.
@@ -1518,7 +1537,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       }
       if (target.closest(".cp-rad-cure")) {
         event.preventDefault();
-        await cureRadiation(this.actor);
+        // Cure everything curable — timed stat-loss markers never tick down out of combat, so a
+        // perm-only cure would leave a −BT stuck (the reported compounding bug).
+        await cureRadiation(this.actor, { temp: true, perm: true });
+        return;
+      }
+      if (target.closest(".cp-rad-reset")) {
+        event.preventDefault();
+        if (game.user?.isGM !== true) return;   // GM only — a full wipe of lifetime history
+        const ok = await foundry.applications.api.DialogV2.confirm({
+          window: { title: localize("RadResetTitle") },
+          content: `<p>${localizeParam("RadResetConfirm", { name: this.actor.name })}</p>`,
+          rejectClose: false,
+        });
+        if (ok) await resetRadiation(this.actor);
         return;
       }
     });

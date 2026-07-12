@@ -1,0 +1,62 @@
+{
+  "_id": "hExXOquW3Hy2Yazj",
+  "name": "Syncomp 15",
+  "type": "misc",
+  "img": "icons/svg/item-bag.svg",
+  "system": {
+    "flavor": "",
+    "notes": "<p><strong>Type:</strong> Antidote &middot; <strong>Strength (drug power rating, design system pg.124):</strong> +3 &middot; <strong>Difficulty (to synthesize):</strong> 13 &middot; <strong>Cost:</strong> 650eb &middot; <strong>Duration:</strong> 1D6+1 turns.</p><p>Syncomp is a broad spectrum poison antidote, used to treat nerve and biotoxins. REF is reduced at the rate of 1 point per dose.</p><p><em>Wiring note (Cyberpunk 2020 2nd ed. pg.122):</em> two effects wired &mdash; (1) +3 to Poison/Toxin Saves, the Effects-Table derivation (&ldquo;Antidote (+1 to Save per Strength)&rdquo; at Strength 3; the printed Difficulty even reconciles: 15 Antidote + 3 Strength &minus; 5 Reduced-REF = 13). The module's rollBoost labels are advisory display text, not auto-folded into rolls &mdash; the same mechanism as every Stun-Saves boost. (2) REF &minus;1, the entry's printed &ldquo;REF is reduced at the rate of 1 point per dose&rdquo; (the Effects-Table Reduced-REF side effect: per dose, for the dose's duration, cumulative if re-dosed). Duration is in combat TURNS, so the round-tick timer counts it down. Addiction = universal core save (1D10 &gt; Body Type). Manufacturer: not printed.</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Cyberpunk 2020 2nd ed. pg.122",
+    "lastOwnerId": "",
+    "serviceMode": "",
+    "servicePeriod": "month",
+    "mechDrug": {
+      "enabled": true,
+      "statBoosts": [
+        {
+          "stat": "ref",
+          "mod": -1
+        }
+      ],
+      "rollBoosts": [
+        {
+          "label": "Poison/Toxin Saves",
+          "mod": 3
+        }
+      ],
+      "duration": "1D6+1 turns",
+      "durationTurns": "1d6+1",
+      "expireSave": {
+        "stat": "",
+        "difficulty": 0,
+        "penalty": "",
+        "penaltyBoosts": [],
+        "penaltyTurns": ""
+      },
+      "addictionDifficulty": 0,
+      "psychosis": "",
+      "note": "Broad-spectrum antidote: +3 to poison/toxin saves (Effects Table, Strength 3); REF -1 per dose."
+    }
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 38470000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "importCategory": "drug",
+      "importReview": {
+        "level": "claude-text-layer",
+        "ledger": "CORE-DRUGS",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!hExXOquW3Hy2Yazj"
+}

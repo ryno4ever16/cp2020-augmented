@@ -85,6 +85,10 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
       weaponClass: stringField("directFire"),  // directFire|burst|rocket|missile|artillery|bomb|cone|melee|special
       mountType:   stringField("turret"),       // turret|fixed|articulated|open|pintle|pod|juryRigged
       arc:         stringField("turret"),       // turret(360)|front|side|rear — firing arc
+      // Indirect shell ballistics (weaponClass "artillery"): mortars travel 400 m/turn, artillery/
+      // howitzers/rockets 600 m/turn (MM p.20). weaponClass alone can't distinguish them. Additive;
+      // default artillery, no migration hazard.
+      indirectKind: stringField("artillery"),   // artillery | mortar
       // To-hit.
       wa:          numberField(0),               // Weapon Accuracy modifier
       // Damage scale. MM lists Vehicle Penetration directly; `damage` dice kept for vs-personnel (p.8 alt).
