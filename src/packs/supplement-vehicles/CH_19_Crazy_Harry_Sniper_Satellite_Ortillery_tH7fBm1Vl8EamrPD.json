@@ -5,7 +5,7 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>CH-19 'Crazy Harry' commercial sniper satellite (ortillery) from the Neo-Soviet Rocket Korps: a simple orbital box launcher.</p><p>Carries 30 rounds (single-use launcher): ten 'crowbar' (5kg kinetic penetrator, automatically defeats any armor, 40% chance to disable any vehicle smaller than a naval vessel, kills any person hit); ten 'frag' (frangible, 10D6AP to everything within 50m radius); ten 'bomb' (time-delayed hi-ex penetrator, punches into a building and devastates three floors, 5D10 blast to everything within 20m). Fire control: CzechElec INT 2 computer with pseudo-intelligent targeting, GPS array and optics; 95% accuracy. Works in the 100 x 30 mile orbit band. Cost 900,000 eb (not counting launch vehicle).</p><p>The book prints no standard vehicle armor/SDP/speed for the satellite; only the cost, round loadout and accuracy above are captured. [Firestorm: Shockwave p.56]</p>",
     "cost": 900000,
     "weight": 0,
     "equipped": false,
@@ -15,8 +15,8 @@
       "value": 0,
       "max": 0
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,8 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "Neo-Soviet box-launcher sniper satellite, 30 rounds"
+    "vehicleType": "spacecraft (sniper satellite / ortillery)",
+    "crew": 0
   },
   "effects": [],
   "folder": null,
@@ -49,7 +50,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

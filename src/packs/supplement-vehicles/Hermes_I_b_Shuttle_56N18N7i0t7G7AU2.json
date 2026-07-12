@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>ESA mini-shuttle designed primarily for carrying construction crews.</p><p>Spacecraft code (Deep Space p.29): Hermes I-b Shuttle · 120 · 2 · 12 · Chemical · 5 · Battery · 50% · 2 · 20m3 · 2 · 4 · 1 · 7 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 120 million eb; Crew 2; Passengers 12; Drive Type Chemical; Burn Elements 5; Power Type Battery; Sensors 50%; Computers 2; Cargo 20m3; Actions 2; Weapon Spaces 4; Armor (max SP) 1; Damage Points 7; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 120000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 7,
+      "max": 7
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 1,
+    "passengers": 12,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 2,
+    "cargo": {
+      "value": 20,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

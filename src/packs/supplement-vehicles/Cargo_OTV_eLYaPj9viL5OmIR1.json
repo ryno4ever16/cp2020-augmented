@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Egg-shaped Orbital Transfer Vehicle (cargo) with wide docking rings; moves cargo between orbital points.</p><p>Spacecraft code (Deep Space p.34): Cargo OTV · 40 · 2 · 1 · Chemical · 10 · Batteries, Fuel Cell or Solar Arrays · 50% · 2(10MU) · 2x30m3 · 1 · 3 · 1-3 · 5 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 40 million eb; Crew 2; Passengers 1; Drive Type Chemical; Burn Elements 10; Power Type Batteries, Fuel Cell or Solar Arrays; Sensors 50%; Computers 2 (10MU); Cargo 2 x 30m3; Actions 1; Weapon Spaces 3; Armor (max SP) 1-3; Damage Points 5; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 40000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 5,
+      "max": 5
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 1,
+    "passengers": 1,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 2,
+    "cargo": {
+      "value": 60,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,11 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill",
+        "needsEyes": [
+          "sp: book prints Armor '1-3' (variable). Set sp to low bound 1; max supportable 1-3 noted -- confirm."
+        ]
       }
     }
   },

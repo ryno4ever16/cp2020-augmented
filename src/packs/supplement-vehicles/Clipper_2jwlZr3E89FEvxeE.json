@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Fast cargo ship of engine, fuel and minimal life support carrying high-priority cargo; proposed, none yet operational.</p><p>Spacecraft code (Deep Space p.38): Clipper · 70 · 2 · 2 · Chemical, Nuclear · 6, 12 · Batteries, Fuel Cell, Solar · 60% · 2 · 50m3 · 2 · None · 0 · 6 · 2 · 1 cargo OTV</p><p>Decoded (Deep Space p.28 legend): Cost 70 million eb; Crew 2; Passengers 2; Drive Type Chemical, Nuclear; Burn Elements 6, 12; Power Type Batteries, Fuel Cell, Solar; Sensors 60%; Computers 2; Cargo 50m3; Actions 2; Weapon Spaces None; Armor (max SP) 0; Damage Points 6; Overkill Points 2; Shuttlecraft 1 cargo OTV.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 70000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 6,
+      "max": 6
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 2,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 2,
+    "cargo": {
+      "value": 50,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

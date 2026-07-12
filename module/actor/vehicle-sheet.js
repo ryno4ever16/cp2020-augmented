@@ -187,6 +187,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       owner,
       editable,
       ruleSystem: rule,
+      ruleSystemLabel: localize(isMM ? "Vehicle.RulesetNameMM" : "Vehicle.RulesetNameCore"),
       isMM,
       mmOn,
       controlEnabled,

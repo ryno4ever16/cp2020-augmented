@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Unmanned weapons platform controlled from the ground, with some programmed autonomy and initiative.</p><p>Spacecraft code (Deep Space p.35): Battle Sat · 40 · none · none · Chemical · 3 · Batteries, Solar · 65% · 2 · 0m3 · 1 · 10 · 4 · 6 · 2 · none</p><p>Decoded (Deep Space p.28 legend): Cost 40 million eb; Crew none; Passengers none; Drive Type Chemical; Burn Elements 3; Power Type Batteries, Solar; Sensors 65%; Computers 2; Cargo 0m3; Actions 1; Weapon Spaces 10; Armor (max SP) 4; Damage Points 6; Overkill Points 2; Shuttlecraft none.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 40000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 6,
+      "max": 6
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 4,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 0,
+    "cargo": {
+      "value": 0,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

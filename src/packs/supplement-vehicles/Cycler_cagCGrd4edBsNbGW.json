@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Massive open-structure craft permanently cycling between Earth and Mars; code is for one half.</p><p>Spacecraft code (Deep Space p.37): Cycler (one half) · 250 · 4 · 20 (up to 200 in proposed models) · Chemical, Ion · 6, 2 · Batteries, Solar · 60% · 3 · 1000m3 · 2 · None · 0 · 8 · 4 · 3-4 OTVs, 2 Landers</p><p>Decoded (Deep Space p.28 legend): Cost 250 million eb; Crew 4; Passengers 20 (up to 200 in proposed models); Drive Type Chemical, Ion; Burn Elements 6, 2; Power Type Batteries, Solar; Sensors 60%; Computers 3; Cargo 1000m3; Actions 2; Weapon Spaces None; Armor (max SP) 0; Damage Points 8; Overkill Points 4; Shuttlecraft 3-4 OTVs, 2 Landers.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 250000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 8,
+      "max": 8
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 20,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 4,
+    "cargo": {
+      "value": 1000,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

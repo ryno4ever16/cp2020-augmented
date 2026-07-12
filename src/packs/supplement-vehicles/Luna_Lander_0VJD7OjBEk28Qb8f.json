@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Luna-certified lander able to take off and land on Luna or any body no larger than Luna; cannot land on Earth.</p><p>Spacecraft code (Deep Space p.31): Luna Lander · 50 · 2 · 6 · Chemical · 8 · Batteries, Fuel Cell · 50% · 2 · 15m3 · 1 · 3 · 2 · 5 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 50 million eb; Crew 2; Passengers 6; Drive Type Chemical; Burn Elements 8; Power Type Batteries, Fuel Cell; Sensors 50%; Computers 2; Cargo 15m3; Actions 1; Weapon Spaces 3; Armor (max SP) 2; Damage Points 5; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 50000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 5,
+      "max": 5
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 2,
+    "passengers": 6,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 2,
+    "cargo": {
+      "value": 15,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

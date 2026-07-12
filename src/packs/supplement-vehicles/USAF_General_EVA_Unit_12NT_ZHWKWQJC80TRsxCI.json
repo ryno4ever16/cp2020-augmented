@@ -5,7 +5,7 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>U.S. armed-forces powered armor (game rules in Maximum Metal; stats printed in Home of the Brave).</p><p>Manufacturer: Hughes/GE. Chassis: Highwayman, STR 35. Chassis weight: 180 kg. Capacity/carry: 1750 kg / 525 kg. Reflexes: High-Boost Reflexes. SIB/DFB: +3/+2. Punch 4D10, Kick 6D10, Crush 5D10. Toughness mod: -9. Trooper size: 115 kg. Total weight: 824 kg. Total cost: 211,600 eb.</p><p>Per-limb armor: all locations SP 40. Main/loadout: M-99 EVAW (SP 15 / SDP 10 / 10 kg); self-sealing compression suit; photon laser cannon; maneuver jets.</p><p>The per-location internal/external SDP and full weapon-slot loadout are printed as an interleaved grid; only cleanly readable cells are transcribed here. See Home of the Brave p.89 image for the complete grid.</p>",
     "cost": 211600,
     "weight": 0,
     "equipped": false,
@@ -15,8 +15,8 @@
       "value": 0,
       "max": 0
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 40,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -32,7 +32,13 @@
       "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "crew": 1,
+    "mass": {
+      "value": 824,
+      "unit": "kg"
+    },
+    "vehicleType": "powered armor (ACPA)"
   },
   "effects": [],
   "folder": null,
@@ -48,7 +54,12 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill",
+        "needsEyes": [
+          "Per-location internal/external SDP and full weapon-slot loadout: printed grid is column-interleaved in the text layer; not transcribed. Read from Home of the Brave p.89 image.",
+          "EVA per-limb SP: OCR text layer prints a truncated '4'; read as 40 (all sibling suits are SP 40-65; SP 4 is not viable for PA) per launch directive. Confirm at Home of the Brave p.89 image."
+        ]
       }
     }
   },

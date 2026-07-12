@@ -288,6 +288,14 @@ export async function openControlRollDialog(actor, opts = {}) {
 
   const sys = actor.system ?? {};
   const drivers = _candidateDrivers(actor);
+  // The sheet's linked pilot is the default driver: pull it to the front of the candidate list
+  // (adding it if boarded/owned discovery missed it) so the dialog preselects the linked actor.
+  const linkedPilot = sys.pilotId ? game.actors.get(sys.pilotId) : null;
+  if (linkedPilot) {
+    const i = drivers.findIndex(a => a.id === linkedPilot.id);
+    if (i > 0) drivers.unshift(drivers.splice(i, 1)[0]);
+    else if (i < 0) drivers.unshift(linkedPilot);
+  }
   const firstDriver = drivers[0] ?? null;
   // An ACPA pilots with the suit's capped effective REF when no separate driver is boarded.
   const ref0 = Number(firstDriver?.system?.stats?.ref?.total) || (sys.isACPA ? (Number(sys.effectiveRef) || 0) : 0);

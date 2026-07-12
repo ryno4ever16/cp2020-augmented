@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>One-man construction capsule with manipulator arms and rocket thrusters; very limited range.</p><p>Spacecraft code (Deep Space p.35): Work Module · 5 · 1 · 0 · Chemical · 2 · Batteries, Solar Arrays · 30% · 1 · 4m3 · 1 · 7 · 1 · 4 · 2 · None</p><p>Decoded (Deep Space p.28 legend): Cost 5 million eb; Crew 1; Passengers 0; Drive Type Chemical; Burn Elements 2; Power Type Batteries, Solar Arrays; Sensors 30%; Computers 1; Cargo 4m3; Actions 1; Weapon Spaces 7; Armor (max SP) 1; Damage Points 4; Overkill Points 2; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 5000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 4,
+      "max": 4
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 1,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 1,
+    "cargo": {
+      "value": 4,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

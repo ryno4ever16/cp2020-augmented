@@ -1180,6 +1180,10 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 .vehicle-fire-dialog .ml8 { margin-left: 8px; }
 
+/* Ruleset = a read-only world-setting indicator; render as a badge, never an input look-alike
+   (the input box read as editable + clipped the value). Field base rules supply the skin. */
+.cyberpunk.sheet.vehicle .cp-ruleset-badge { white-space: nowrap; align-self: center; opacity: 0.85; }
+
 /* --- Maneuver/control dialog (round-2): resizable window support + a proper conditions column.
    The dialog window is resizable, so the content div is the ONE growing child that scrolls when
    the window shrinks (the DialogV2 button footer stays pinned). Conditions render one flex row

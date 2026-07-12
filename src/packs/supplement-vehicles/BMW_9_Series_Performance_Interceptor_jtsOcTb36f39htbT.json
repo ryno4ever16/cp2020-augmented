@@ -5,7 +5,7 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>BMW 9-Series Performance Interceptor: high-speed police pursuit car, top speed 350kph on road. Two cab seats only; the rear two seats are replaced by a pair of reserve fuel tanks, giving roughly double the range of most performance vehicles.</p><p>Factory features: protective airbags, auto-fire extinguishers, crash cage, 600m LowLite and Radar suite. No weaponry fitted, but space is provided under the hood; popular add-ons are a Light 20mm Cannon or a Scorpion 16 missile launcher (auto-feed, 3 rounds, front-left wing.) Standard inventory: Interface Link, Computer SatMap w/transponder, First Aid/survival kit, weapons locker.</p><p>The book prints no armor SP or SDP for this vehicle (unlike the other P&S cruisers, whose SP/SDP are stated); SP and SDP left at 0. Cost 55,000 eb. [Protect &amp; Serve p.35]</p>",
     "cost": 55000,
     "weight": 0,
     "equipped": false,
@@ -15,8 +15,8 @@
       "value": 0,
       "max": 0
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 1,
     "speed": {
       "value": 0,
       "max": 350,
@@ -30,10 +30,12 @@
     },
     "fuel": {
       "type": "",
-      "efficiency": 30,
+      "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "crew": 1,
+    "vehicleType": "ground (performance interceptor)"
   },
   "effects": [],
   "folder": null,
@@ -49,7 +51,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

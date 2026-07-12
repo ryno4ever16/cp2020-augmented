@@ -5,7 +5,7 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>U.S. armed-forces powered armor (game rules in Maximum Metal; stats printed in Home of the Brave).</p><p>Manufacturer: Militech/GE. Chassis: Gunslinger, STR 25. Chassis weight: 138 kg. Capacity/carry: 1250 kg / 375 kg. Reflexes: Low-Boost Reflexes. SIB/DFB: 0/+2. Punch 3D10, Kick 5D10, Crush 4D10. Toughness mod: -7. Trooper size: 115 kg. Total weight: 885 kg. Total cost: 139,400 eb.</p><p>Per-limb armor: all locations SP 40. Main/loadout: 25mm autocannon (PA monosword; 7.62mm LMG; 40mm auto grenade launcher; Dragon flamer).</p><p>The per-location internal/external SDP and full weapon-slot loadout are printed as an interleaved grid; only cleanly readable cells are transcribed here. See Home of the Brave p.90 image for the complete grid.</p>",
     "cost": 139400,
     "weight": 0,
     "equipped": false,
@@ -15,8 +15,8 @@
       "value": 0,
       "max": 0
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 40,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -32,7 +32,13 @@
       "efficiency": 0,
       "max": 0,
       "value": 0
-    }
+    },
+    "crew": 1,
+    "mass": {
+      "value": 885,
+      "unit": "kg"
+    },
+    "vehicleType": "powered armor (ACPA)"
   },
   "effects": [],
   "folder": null,
@@ -48,7 +54,11 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill",
+        "needsEyes": [
+          "Per-location internal/external SDP and full weapon-slot loadout: printed grid is column-interleaved in the text layer; not transcribed. Read from Home of the Brave p.90 image."
+        ]
       }
     }
   },

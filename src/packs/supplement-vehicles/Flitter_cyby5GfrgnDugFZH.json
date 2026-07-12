@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Small short-range craft holding up to four people; used for transport between habitats. Cannot land.</p><p>Spacecraft code (Deep Space p.35): Flitter · 10 · 2 · 2 · Chemical · 3 · Batteries · 30% · 1(10MU) · 4m3 · 1 · None · 0 · 3 · 1 · None</p><p>Decoded (Deep Space p.28 legend): Cost 10 million eb; Crew 2; Passengers 2; Drive Type Chemical; Burn Elements 3; Power Type Batteries; Sensors 30%; Computers 1 (10MU); Cargo 4m3; Actions 1; Weapon Spaces None; Armor (max SP) 0; Damage Points 3; Overkill Points 1; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 10000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 3,
+      "max": 3
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 2,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 2,
+    "cargo": {
+      "value": 4,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

@@ -5,7 +5,7 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Militech M-010 Minelayer: a self-mobile minelayer RPV that looks like a suitcase-sized box on wheels, weighing 10kg (plus 10kg cargo), with a hamburger-sized sensor turret on top.</p><p>Carries 10 anti-personnel mines, or one large anti-tank mine, or a satchel/demolitions charge in its cargo bay. Features a retractable light servo arm (can operate doors and elevators) and complete antiradar/IR stealth plus chameleon camouflage (like the Militech Ghostsuit, Chromebook 2 p.27). Usually programmed to reach an area, lay its mine(s) and return, or to wait for specific targets, or to act as a remote demolition bomb. Cost 10,000 eb. (Mine damage is a property of the mines, not the vehicle: AP mines = frag/HE hand grenade stats; AT mine = 6D10AP to the triggering vehicle's underside + 6D6 within 10m; demo charge = 10D10 within 50m.) [Firestorm: Shockwave p.58]</p>",
     "cost": 10000,
     "weight": 0,
     "equipped": false,
@@ -15,8 +15,8 @@
       "value": 0,
       "max": 0
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,16 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "self-mobile minelayer RPV (suitcase on wheels, 10kg + 10kg cargo)"
+    "vehicleType": "remote (minelayer RPV)",
+    "crew": 0,
+    "mass": {
+      "value": 10,
+      "unit": "kg"
+    },
+    "cargo": {
+      "value": 10,
+      "unit": "kg"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +58,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

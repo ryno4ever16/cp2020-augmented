@@ -5,26 +5,28 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>'Drifter' Mobile Environment: a netrunning-optimized version of the Drifter Recreational Vehicle (base RV detailed in Chromebook 1, p.88-89). It adds a comprehensive communications suite including a sat-linker and the same drive-by-wire control features as the Nasuko DataCycle, so a netrunner strapped into the bed (or in the front seat) can drive the RV while running the Net.</p><p>Printed stats (Brainware Blowout p.96): Top Speed 80mph; Acc/Dec 15/40mph; Crew 1; Passengers 1; Range 700 miles; Cargo 3.5 spaces (640kg); Maneuver -2; SDP 80 (body 4); SP 10 (armor 0); Mass 3,200kg; Type pick-up; Cost 80,000eb. Special equipment: crash-control systems for 3, 2 beds, mini-galley, shower, toilet, cellular phone, radio, satellite uplink, auto-pilot and civilian navigation, cybernetic linkage, TV/stereo.</p>",
     "cost": 80000,
     "weight": 0,
     "equipped": false,
     "source": "Brainware Blowout",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 80,
+      "max": 80
     },
     "sp": 10,
-    "passengers": 4,
+    "passengers": 1,
     "speed": {
       "value": 0,
-      "max": 0,
+      "max": 80,
       "maneuver": 0,
-      "acceleration": 0
+      "acceleration": 15,
+      "deceleration": 40,
+      "unit": "mph"
     },
     "maneuverability": {
-      "value": 0,
+      "value": -2,
       "condition": ""
     },
     "fuel": {
@@ -33,9 +35,15 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "RV",
+    "vehicleType": "ground (RV / pick-up)",
     "mass": {
       "value": 3200,
+      "unit": "kg"
+    },
+    "crew": 1,
+    "range": 700,
+    "cargo": {
+      "value": 640,
       "unit": "kg"
     }
   },
@@ -53,7 +61,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>High-speed suborbital spaceplane designed for combat and interception (Delta/Cruiser); armed with chemical lasers, space-to-space and ASAT missiles, and kinetic-kill mines.</p><p>Spacecraft code (Deep Space p.30): Delta · 80 · 1-2 · 0 · Chemical · 7 · Batteries, Fuel Cell · 55% · 2 · 2m3 · 2 · 8 · 1 · 5 · 2 · None</p><p>Decoded (Deep Space p.28 legend): Cost 80 million eb; Crew 1-2; Passengers 0; Drive Type Chemical; Burn Elements 7; Power Type Batteries, Fuel Cell; Sensors 55%; Computers 2; Cargo 2m3; Actions 2; Weapon Spaces 8; Armor (max SP) 1; Damage Points 5; Overkill Points 2; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 80000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 5,
+      "max": 5
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 1,
+    "passengers": 0,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 1,
+    "cargo": {
+      "value": 2,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },

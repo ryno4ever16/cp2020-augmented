@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Orbital Transfer Vehicle (passenger); moves between LEO, higher orbits and the LaGrange points.</p><p>Spacecraft code (Deep Space p.34): Passenger OTV · 50 · 4 · 16 · Chemical · 10 · Batteries, Fuel Cell or Solar Arrays · 50% · 2(10MU) · 2x10m3 · 1 · None · 1-3 · 5 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 50 million eb; Crew 4; Passengers 16; Drive Type Chemical; Burn Elements 10; Power Type Batteries, Fuel Cell or Solar Arrays; Sensors 50%; Computers 2 (10MU); Cargo 2 x 10m3; Actions 1; Weapon Spaces None; Armor (max SP) 1-3; Damage Points 5; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 50000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 5,
+      "max": 5
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 1,
+    "passengers": 16,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 4,
+    "cargo": {
+      "value": 20,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,11 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill",
+        "needsEyes": [
+          "sp: book prints Armor '1-3' (variable). Set sp to low bound 1; max supportable 1-3 noted -- confirm."
+        ]
       }
     }
   },

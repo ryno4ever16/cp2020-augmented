@@ -5,18 +5,18 @@
   "img": "icons/svg/explosion.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>ESA-built Aries-series spaceplane (TAV); reaches low Earth orbit via jet, scramjet and rocket. Not designed for deep-space travel.</p><p>Spacecraft code (Deep Space p.32): Aries II · 350 · 5 · 48 · Chemical · 8 · Batteries, Fuel Cell · 50% · 3 · 30m3 · 3 · 40 · 0 · 7 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 350 million eb; Crew 5; Passengers 48; Drive Type Chemical; Burn Elements 8; Power Type Batteries, Fuel Cell; Sensors 50%; Computers 3; Cargo 30m3; Actions 3; Weapon Spaces 40; Armor (max SP) 0; Damage Points 7; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",
     "cost": 350000000,
     "weight": 0,
     "equipped": false,
     "source": "Deep Space",
     "lastOwnerId": "",
     "sdp": {
-      "value": 0,
-      "max": 0
+      "value": 7,
+      "max": 7
     },
-    "sp": 10,
-    "passengers": 4,
+    "sp": 0,
+    "passengers": 48,
     "speed": {
       "value": 0,
       "max": 0,
@@ -33,7 +33,12 @@
       "max": 0,
       "value": 0
     },
-    "vehicleType": "spacecraft"
+    "vehicleType": "spacecraft",
+    "crew": 5,
+    "cargo": {
+      "value": 30,
+      "unit": "m3"
+    }
   },
   "effects": [],
   "folder": null,
@@ -49,7 +54,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "SUPPLEMENT-IMPORT-CHECKLIST",
-        "dirty": true
+        "dirty": true,
+        "backfill": "2026-07-12 placeholder-stat backfill"
       }
     }
   },
