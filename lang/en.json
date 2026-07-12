@@ -993,6 +993,7 @@
     "ConsumableExpiredBody": "<b>{name}</b>{noteClause} wears off — {actor} is no longer under its effect.",
     "DrugTookBody": "<b>{name}</b> taken.{boostClause}{durationClause}{addictionClause}{psychosisClause}",
     "DrugBoostClause": " Grants {boosts}.",
+    "DrugBoostBlockedClause": " <b>{boosts}</b> ignored — fixed by the chassis.",
     "DrugDurationClause": " Lasts {duration}.",
     "DrugAddictionClause": " Addiction risk (TN {difficulty}).",
     "DrugPsychosisClause": " {note}",

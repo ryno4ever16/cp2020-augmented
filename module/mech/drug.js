@@ -208,8 +208,18 @@ export function applyMechDrugBoosts(actor) {
  *  boost was ignored (see applyMechDrugBoosts). A drug that only affects mental/social stats applies
  *  fully to a borg and needs no warning. */
 async function postTookCard(item, drug, marker) {
-  const boosts = boostSummary(marker);
-  const boostClause = boosts ? localizeParam("DrugBoostClause", { boosts }) : "";
+  // A full-borg's chassis-set stats make some boosts inert (applyMechDrugBoosts). The card must not
+  // announce those inside the Grants clause — the old card said "Grants REF +3, …" and only
+  // contradicted itself in the trailing advisory, which reads as the boost applying. Split the
+  // summary: Grants carries what actually applies; blocked boosts get their own explicit clause.
+  const setKeys = borgSetStatKeys(item.actor);
+  const isSet = (b) => setKeys.has(String(b?.stat ?? "").toLowerCase());
+  const applied = { ...marker, statBoosts: (marker.statBoosts ?? []).filter(b => !isSet(b)) };
+  const blocked = { statBoosts: (marker.statBoosts ?? []).filter(isSet), rollBoosts: [] };
+  const boosts = boostSummary(applied);
+  const blockedBoosts = boostSummary(blocked);
+  const boostClause = (boosts ? localizeParam("DrugBoostClause", { boosts }) : "")
+    + (blockedBoosts ? localizeParam("DrugBoostBlockedClause", { boosts: blockedBoosts }) : "");
   const durationClause = drug.duration ? localizeParam("DrugDurationClause", { duration: drug.duration }) : "";
   const addictionClause = Number(drug.addictionDifficulty) > 0
     ? localizeParam("DrugAddictionClause", { difficulty: Number(drug.addictionDifficulty) }) : "";
@@ -219,7 +229,7 @@ async function postTookCard(item, drug, marker) {
   });
   // Advisory only when it MATTERS: a borg taking a drug that targets a stat its CHASSIS actually SETs
   // (borgSetStatKeys) — so an SDP-only borg, whose physical boosts DO apply, shows no spurious warning.
-  const fbcIgnored = drugAffectsSetStat(marker, borgSetStatKeys(item.actor));
+  const fbcIgnored = drugAffectsSetStat(marker, setKeys);
   const content = await renderChatCard("drug-took.hbs", { body, fbc: fbcIgnored });
   const cardData = { content };
   if (item.actor) cardData.speaker = ChatMessage.getSpeaker({ actor: item.actor });
