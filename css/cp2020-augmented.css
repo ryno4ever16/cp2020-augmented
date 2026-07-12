@@ -2437,17 +2437,18 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
 }
 .cyberpunk .cp-card-rearm:hover { opacity: 1; }
 
-/* The ACPA sheet's name input is type="search" (not text) so password managers stop classifying the
- * lone "name" field as a username and injecting their fill icon there (data-lpignore alone is not
- * honored by recent LastPass builds; user-confirmed on the ACPA sheet). The character sheet mirrors
- * the base construction and the vehicle sheet stays stock (type="text") by user choice — this rule
- * matches only the ACPA header. Strip WebKit's search-input chrome so it renders exactly like text. */
-.cyberpunk .title input[type="search"] {
+/* Name inputs on the ACPA sheet and BOTH item sheets are type="search" (not text) so password
+ * managers stop classifying the lone "name" field as a username and injecting their fill icon
+ * (data-lpignore alone is not honored by recent LastPass builds; user-confirmed on the ACPA and
+ * gear item sheets). The character sheet mirrors the base construction and the vehicle sheet stays
+ * stock (type="text") by user choice. Keyed on the input itself so any future opt-in is one
+ * template attribute. Strip WebKit's search-input chrome so it renders exactly like text. */
+.cyberpunk input[type="search"][name="name"] {
   -webkit-appearance: textfield;
   appearance: textfield;
 }
-.cyberpunk .title input[type="search"]::-webkit-search-cancel-button,
-.cyberpunk .title input[type="search"]::-webkit-search-decoration {
+.cyberpunk input[type="search"][name="name"]::-webkit-search-cancel-button,
+.cyberpunk input[type="search"][name="name"]::-webkit-search-decoration {
   -webkit-appearance: none;
   display: none;
 }

@@ -11,7 +11,7 @@
         <div class="flexcol item-info">
             <span class="infoline">
                 <h1 class="title">
-                    <input class="field-value fillwidth" name="name" type="text" value="{{item.name}}" placeholder="{{CPLocal 'ItemName'}}"/>
+                    <input class="field-value fillwidth" name="name" type="search" value="{{item.name}}" placeholder="{{CPLocal 'ItemName'}}" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore/>
                 </h1>
                 <span class="summary inactive">{{> (augVarTemplate "item/parts/[VAR]/summary.hbs" item.type)}}</span>
             </span>

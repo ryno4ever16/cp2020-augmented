@@ -7,7 +7,7 @@
     <header class="flexrow nowrap">
         <img class="profile-img" src="{{item.img}}" title="{{item.name}}" width="48" height="48"/>
         <div class="header-fields flexcol">
-            <h1 class="charname"><input name="name" type="text" value="{{item.name}}" placeholder="{{CPLocal 'ItemName'}}"/></h1>
+            <h1 class="charname"><input name="name" type="search" value="{{item.name}}" placeholder="{{CPLocal 'ItemName'}}" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore/></h1>
             <span class="summary inactive">
                 {{#if (equals partType "vehicleWeapon")}}
                 {{> "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/summary.hbs"}}
