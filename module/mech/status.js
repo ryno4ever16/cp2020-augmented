@@ -210,14 +210,13 @@ export function drugRows(actor) {
   }));
 }
 
-/** The addiction tally (D4): a single row when the counter is non-zero, breakdown in detail. Pure. */
+/** The addiction tally (D4): ONE row per drug with its dose count (user ruling 2026-07-12 — the
+ *  old single whole-tally row read as a per-drug list but its × wiped the entire history). Pure. */
 export function addictionRow(actor) {
-  const { byDrug, total } = addictionStateFor(actor);
-  if (!total) return [];
-  const breakdown = Object.entries(byDrug)
+  const { byDrug } = addictionStateFor(actor);
+  return Object.entries(byDrug)
     .filter(([, n]) => Number(n) > 0)
-    .map(([name, count]) => ({ name, count: Number(count) }));
-  return [{ itemId: null, kind: "addiction", name: "", detail: { total, byDrug: breakdown }, togglePath: null }];
+    .map(([name, count]) => ({ itemId: null, kind: "addiction", name, detail: { count: Number(count) }, togglePath: null }));
 }
 
 /** Personality-moddy providers (Q7): one row per active mechStatMods item, its entries in detail. Pure. */

@@ -148,6 +148,20 @@ export async function clearAddiction(actor) {
   await actor.unsetFlag(SCOPE, ADDICTION_FLAG);
 }
 
+/** GM action: clear ONE drug's addiction history (the strip's per-drug × — user ruling 2026-07-12:
+ *  the pill reads per-drug, so its × must act per-drug). Drops that drug's count, recomputes the
+ *  total, and removes the whole flag when the last entry goes. Object flags MERGE on setFlag, so a
+ *  deleted key would survive a plain re-set — unset first, then write the survivors. */
+export async function clearAddictionFor(actor, name) {
+  const { byDrug } = addictionStateFor(actor);
+  if (!(name in byDrug)) return;
+  const next = { ...byDrug };
+  delete next[name];
+  const total = Object.values(next).reduce((s, n) => s + (Number(n) || 0), 0);
+  await actor.unsetFlag(SCOPE, ADDICTION_FLAG);
+  if (total > 0) await actor.setFlag(SCOPE, ADDICTION_FLAG, { byDrug: next, total });
+}
+
 /**
  * The prepareData post-step: apply active drug statBoosts on top of the actor's already-computed
  * stat totals, record the contributions (for the strip tooltips), and re-derive movement/body if a

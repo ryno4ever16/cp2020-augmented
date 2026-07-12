@@ -8,7 +8,7 @@ import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML
 import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
-import { clearAddiction, clearDrugMarker } from "../mech/drug.js";
+import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
 import { cyberlimbSheetStatus, repairCyberlimb, contributingItems, fleshLimbStatusLabel } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
@@ -337,21 +337,24 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (!off || !root.contains(off)) return;
       event.preventDefault();
       event.stopPropagation();
-      // The addiction pill's × clears the WHOLE tally (per-drug history included, no undo) —
-      // GM-only (the control renders only for the GM) and confirmed, unlike the reversible
-      // quick-off ×s that share its look.
+      // A per-drug addiction pill's × clears THAT drug's history (no undo) — GM-only (the control
+      // renders only for the GM) and confirmed, unlike the reversible quick-off ×s that share its
+      // look. (Was a whole-tally wipe; per-drug per the user ruling 2026-07-12.)
       if (off.dataset.action === "clear-addiction") {
         if (game.user?.isGM !== true) return;
+        const drug = off.dataset.drug ?? "";
+        const count = Number(addictionStateFor(this.actor).byDrug?.[drug]) || 0;
         const ok = await foundry.applications.api.DialogV2.confirm({
           window: { title: localize("AddictionClearTitle") },
-          content: `<p>${localizeParam("AddictionClearConfirm", { name: this.actor.name })}</p>`,
+          content: `<p>${localizeParam("AddictionClearConfirm", { name: this.actor.name, drug, count })}</p>`,
           rejectClose: false,
         });
-        if (ok) await clearAddiction(this.actor);
+        if (ok) await clearAddictionFor(this.actor, drug);
         return;
       }
-      // Orphaned drug marker (source item deleted): clear it from the strip — the marker is the
-      // only thing left to act on, so this goes through the engine, not an item update.
+      // Drug pill × = the same wear-off flow as the item sheet's control (card + save); also the
+      // orphan escape when the source item is gone — the marker is the only thing left to act on,
+      // so this goes through the engine, not an item update.
       if (off.dataset.action === "clear-drug") {
         await clearDrugMarker(this.actor, off.dataset.itemId, off.dataset.penalty === "1");
         return;
@@ -1842,12 +1845,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const body = parts.join(", ");
           return r.detail.isPenalty ? `${localize("DrugCrashLabel")}: ${body}` : body;
         }
-        case "addiction": {
-          const breakdown = r.detail.byDrug.map(d => `${d.name} ×${d.count}`).join(", ");
-          return breakdown
-            ? localizeParam("StatusStripAddiction", { total: r.detail.total, breakdown })
-            : String(r.detail.total);
-        }
+        case "addiction": return localizeParam("StatusStripAddictionCount", { count: r.detail.count });
         default: return "";
       }
     };
@@ -1863,11 +1861,15 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         text: r.name ? (detail ? `${r.name} (${detail})` : r.name) : detail,
         title: r.name ? `${kindLabel}: ${r.name}${detail ? ` — ${detail}` : ""}${noteClause}` : `${kindLabel}: ${detail}`,
         togglePath: r.togglePath ?? "",
-        // The GM clears the addiction tally from the strip when a character kicks the habit —
-        // GM-ONLY: the tally is a GM-side consequence tracker, and its × wipes the whole history.
+        // Per-drug addiction ×: the GM clears ONE drug's history when a character kicks that habit
+        // — GM-ONLY (a GM-side consequence tracker), confirmed, scoped to the pill's own drug
+        // (user ruling 2026-07-12: the old single × wiped the whole tally).
         clearAddiction: r.kind === "addiction" && game.user?.isGM === true,
-        // Orphan escape: a drug marker whose source item is gone (no Wear-off control anywhere else).
-        clearDrug: r.kind === "drug" && !!r.detail?.orphan,
+        drugName: r.kind === "addiction" ? r.name : "",
+        // Every drug pill carries the wear-off × (the strip's "quick-off on each pill" contract):
+        // it runs the SAME wear-off flow as the item sheet's control (card + save), and doubles as
+        // the orphan escape when the source item is gone.
+        clearDrug: r.kind === "drug",
         drugPenalty: r.kind === "drug" && r.detail?.isPenalty ? "1" : "0"
       };
     });
