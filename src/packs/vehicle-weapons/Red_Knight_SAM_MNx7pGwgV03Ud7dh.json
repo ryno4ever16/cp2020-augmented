@@ -10,7 +10,7 @@
     "mountType": "pod",
     "arc": "front",
     "guidance": "active",
-    "homingMethod": "radar",
+    "homingMethod": "thermal",
     "guidanceSkill": 15,
     "wa": 0,
     "penetration": 5,

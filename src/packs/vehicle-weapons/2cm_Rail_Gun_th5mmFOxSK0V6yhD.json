@@ -39,7 +39,8 @@
     "area": "torso",
     "sdp": 0,
     "sdpDamage": 0,
-    "destroyed": false
+    "destroyed": false,
+    "railgun": true
   },
   "_id": "th5mmFOxSK0V6yhD",
   "effects": [],
