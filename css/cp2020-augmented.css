@@ -2437,9 +2437,11 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
 }
 .cyberpunk .cp-card-rearm:hover { opacity: 1; }
 
-/* Actor-name inputs are type="search" (not text) so password managers stop classifying the lone
- * "name" field as a username and injecting their fill icon (data-lpignore alone is not honored by
- * recent LastPass builds). Strip WebKit's search-input chrome so it renders exactly like text. */
+/* The ACPA sheet's name input is type="search" (not text) so password managers stop classifying the
+ * lone "name" field as a username and injecting their fill icon there (data-lpignore alone is not
+ * honored by recent LastPass builds; user-confirmed on the ACPA sheet). The character sheet mirrors
+ * the base construction and the vehicle sheet stays stock (type="text") by user choice — this rule
+ * matches only the ACPA header. Strip WebKit's search-input chrome so it renders exactly like text. */
 .cyberpunk .title input[type="search"] {
   -webkit-appearance: textfield;
   appearance: textfield;
