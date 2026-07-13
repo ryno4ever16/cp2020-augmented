@@ -2037,16 +2037,19 @@ function _hookAutomationMigrationNotice() {
   // directly. Registering another Hooks.on("ready") here was too late to ever fire (Foundry does not
   // re-fire "ready" for listeners added during the ready emission); that is why this notice never appeared.
     if (!game.user.isGM) return;
-    let hide = false;
+    let hide = false, seenVersion = "";
     try { hide = game.settings.get("cp2020-augmented", "automationNoticeHide"); } catch { return; }
-    if (hide) return;
-    // Not a one-time flag: the notice shows on every load until the GM ticks "Don't show this again"
-    // (its checkbox sets `automationNoticeHide`), so the expanded notice reaches users who already
-    // dismissed an earlier version.
+    try { seenVersion = game.settings.get("cp2020-augmented", "automationNoticeVersion"); } catch { /* new setting */ }
+    const currentVersion = game.modules.get("cp2020-augmented")?.version ?? "";
+    // Version-aware gate: the notice shows on every load UNTIL the GM ticks "Don't show this again"
+    // (which sets `automationNoticeHide` AND stamps the current version into `automationNoticeVersion`).
+    // A dismissed notice re-surfaces once the module version changes — so an updated notice reaches
+    // GMs who dismissed an older one. Suppress only when dismissed AND still on the dismissed version.
+    if (hide && seenVersion === currentVersion) return;
 
-    // The notice UI now lives in module/dialog/automation-notice.js — an ApplicationV2 whose markup is a
+    // The notice UI lives in module/dialog/automation-notice.js — an ApplicationV2 whose markup is a
     // template, whose strings live in lang/*.json (translatable), and whose styling lives in
-    // css/cyberpunk2020.css. Shown until the GM ticks "Don't show this again" (sets automationNoticeHide).
+    // css/cyberpunk2020.css.
     new AutomationNotice().render({ force: true });
 }
 

@@ -88,6 +88,19 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
+  // --- automationNoticeVersion ---
+  // config:false — the module version at which the GM last dismissed the notice. Empty by default
+  // so the first version-aware load re-shows the (now updated) notice to everyone who had already
+  // dismissed an older one; thereafter the notice re-surfaces only when the module version changes.
+  game.settings.register(SCOPE, "automationNoticeVersion", {
+    name: "SETTINGS.AutomationNoticeVersion",
+    hint: "SETTINGS.AutomationNoticeVersionHint",
+    scope: "world",
+    config: false,
+    type: String,
+    default: "",
+  });
+
   // --- presetFirstRunDone ---
   // config:false — first-run flag for the one-time Settings Presets picker (see the ready hook in
   // cp2020-augmented.js). Flipped true the first time a GM loads, so the picker is offered once only.

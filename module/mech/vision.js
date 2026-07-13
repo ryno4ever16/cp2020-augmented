@@ -10,9 +10,13 @@
  * override and restored exactly when the override ends — same discipline as the light engine, whose
  * applier/token helpers this module shares.
  *
- * MODE TABLE (the user-approved Q1 fidelity):
+ * MODE TABLE:
  *   lowlight    — light amplification (or darkvision fallback); no heat sense.
- *   infrared    — its own text "total darkness, using heat emissions": darkvision AND heat sense.
+ *   infrared    — heat vision: basic sight + heat sense, no terrain darkvision. Its own text is
+ *                 "total darkness, using heat emissions" — cold terrain emits no heat, so it shows
+ *                 living/warm sources in the dark, not walls. Deliberately IDENTICAL to thermograph
+ *                 (2026-07-12 balance call): both are heat-only, so IR no longer strictly dominates
+ *                 thermograph at the same 200eb/1 humanity price.
  *   thermograph — heat patterns only: BASIC vision + heat sense (no terrain darkvision — in the
  *                 dark it shows living heat sources, not walls).
  *   uv          — darkvision, but only while its ILLUMINATOR is carried (requiresItem — the
@@ -36,8 +40,11 @@ export const HEAT_SENSE_ID = "cpHeatSense";
 /** mode → { prefs: ordered vision-mode preferences (first the core ships wins), heat: heat sense } */
 export const MODE_TABLE = {
   lowlight:    { prefs: ["lightAmplification", "darkvision", "basic"], heat: false },
-  infrared:    { prefs: ["darkvision", "basic"], heat: true },
-  thermograph: { prefs: ["basic"], heat: true },
+  // terrainSight false: core renders sight.range as "distance seen in total darkness" — a
+  // heat-only device must not grant that (lit areas stay visible regardless; the heat-sense
+  // detection entry keeps the device range). IR and thermograph share this profile by design.
+  infrared:    { prefs: ["basic"], heat: true, terrainSight: false },
+  thermograph: { prefs: ["basic"], heat: true, terrainSight: false },
   uv:          { prefs: ["darkvision", "basic"], heat: false },
   // Sonic imaging (CB4 p.13 processor + the Tritech goggles): sees in pitch-blackness regardless
   // of the EM spectrum — darkvision, no heat sense (sound, not IR).
@@ -186,7 +193,7 @@ async function _applyActorVision(actor) {
         const patch = {
           "sight.enabled": true,
           "sight.visionMode": resolveVisionMode(desired.mode),
-          "sight.range": desired.range,
+          "sight.range": MODE_TABLE[desired.mode]?.terrainSight === false ? 0 : desired.range,
           ...heatSensePatch(tokenDoc, !!MODE_TABLE[desired.mode]?.heat, desired.range)
         };
         // Snapshot the SOURCE sight (token.sight is a plain object on some cores — no toObject()).

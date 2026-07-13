@@ -1562,6 +1562,7 @@ img#anatomy-img {
 
 .cp-automation-notice .notice-nav {
   display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 8px;
+  flex-wrap: wrap; row-gap: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -1569,7 +1570,9 @@ img#anatomy-img {
 
 .cp-automation-notice .notice-spacer { flex: 1; }
 
-.cp-automation-notice .notice-count { font-size: 0.82em; opacity: 0.7; }
+/* nowrap + no-shrink: with the Back button present the footer gets tight, and without this the
+   "N / N" page count shrinks and wraps at its spaces into a vertical stack. */
+.cp-automation-notice .notice-count { font-size: 0.82em; opacity: 0.7; white-space: nowrap; flex: 0 0 auto; }
 
 .cp-automation-notice .notice-btn { width: auto; flex: 0 0 auto; }
 

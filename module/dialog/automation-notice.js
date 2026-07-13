@@ -48,6 +48,20 @@ const PAGES = [
       },
     ],
   },
+  {
+    intro: "CYBERPUNK.AutoNotice.NewIn110Intro",
+    boxes: [
+      {
+        headingKey: "CYBERPUNK.AutoNotice.NewSystemsHeading",
+        bullets: Array.from({ length: 10 }, (_, i) => `CYBERPUNK.AutoNotice.NewSystemsItem${i + 1}`),
+      },
+      {
+        headingKey: "CYBERPUNK.AutoNotice.NewContentHeading",
+        variant: "gold",
+        bullets: Array.from({ length: 3 }, (_, i) => `CYBERPUNK.AutoNotice.NewContentItem${i + 1}`),
+      },
+    ],
+  },
 ];
 
 export class AutomationNotice extends HandlebarsApplicationMixin(ApplicationV2) {
@@ -97,9 +111,17 @@ export class AutomationNotice extends HandlebarsApplicationMixin(ApplicationV2) 
   _onRender(context, options) {
     super._onRender?.(context, options);
     // "Don't show again" is a checkbox → dynamic state, wired here (not markup). Persists to the setting.
+    // Ticking it also stamps the current module version, so the notice re-surfaces only when the
+    // module updates (the version-aware gate in _hookAutomationMigrationNotice).
     const cb = this.element?.querySelector?.(".cp-notice-hide");
     cb?.addEventListener("change", () => {
-      try { game.settings.set("cp2020-augmented", "automationNoticeHide", cb.checked); } catch { /* setting not ready */ }
+      try {
+        game.settings.set("cp2020-augmented", "automationNoticeHide", cb.checked);
+        if (cb.checked) {
+          const v = game.modules.get("cp2020-augmented")?.version ?? "";
+          game.settings.set("cp2020-augmented", "automationNoticeVersion", v);
+        }
+      } catch { /* setting not ready */ }
     });
   }
 
