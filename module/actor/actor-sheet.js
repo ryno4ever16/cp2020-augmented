@@ -9,7 +9,7 @@ import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
-import { cyberlimbSheetStatus, repairCyberlimb, contributingItems, fleshLimbStatusLabel } from "../mech/cyberlimb.js";
+import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
@@ -1033,6 +1033,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         event.preventDefault();
         const zone = repairLimb.dataset.zone;
         if (zone) repairCyberlimb(this.actor, zone);
+        return;
+      }
+
+      // Flesh-limb injury clear (armor-display status row): remove a recorded severed/crippled/
+      // disabled/destroyed FLESH state — the medical counterpart to cyberlimb repair.
+      const clearFlesh = target.closest(".cp-flesh-clear");
+      if (clearFlesh) {
+        event.preventDefault();
+        const zone = clearFlesh.dataset.zone;
+        if (zone) clearFleshLimb(this.actor, zone);
         return;
       }
     });
