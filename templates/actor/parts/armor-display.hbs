@@ -60,6 +60,10 @@
           {{#with (lookup ../cpFleshLimb name) as |fl|}}
             {{#if fl.fleshStatusLabel}}
             <span class="segment-limb-status cp-limb-flesh" title="{{fl.fleshStatusLabel}}">{{fl.fleshStatusLabel}}</span>
+            {{#if @root.cpCanRepairLimb}}
+            <a class="segment-repair cp-flesh-clear action" data-zone="{{name}}"
+               title="{{CPLocal "FleshLimbClearTooltip"}}">&#9877;</a>
+            {{/if}}
             {{/if}}
           {{/with}}
         </div>
