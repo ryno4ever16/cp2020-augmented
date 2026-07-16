@@ -286,6 +286,26 @@ export async function clearFleshLimb(actor, zone) {
 }
 
 /**
+ * Record the flesh limb under a zone as SEVERED — the meat counterpart to installing a cyberlimb.
+ * Fitting an SDP-bearing cyberlimb means the limb it replaces is gone, so the true state of the flesh
+ * beneath is "severed" (not merely absent). Masked while the cyberlimb covers the zone (fleshLimbStatusOf
+ * returns "" when a structural pool is present) and surfaced only if that cyberlimb is later removed — a
+ * severed stump, not a limb that grew back. Called from the sheet install handler, where the chosen side
+ * is authoritative (the create/equip hook fires before the side is finalized). Direct flag write: no save,
+ * no death check, no notice — installing chrome is not an attack. Limb zones only (Head/Torso are not
+ * flesh limbs). Overwrites a lesser prior meat wound (a crippled arm that gets chromed is now severed);
+ * idempotent when already severed. Forward-only — no migration backfills limbs installed before this. */
+export async function severFleshUnder(actor, zone) {
+  if (!LIMB_ZONES.has(zone)) return false;
+  const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
+  if (store[zone] === "severed") return false;   // already recorded — nothing to write
+  await actor.update({
+    [`flags.${SCOPE}.${FLESH_STATUS_FLAG}.${zone}`]: "severed"
+  }, { render: false, fromCyberpunkDamageSystem: true }).catch(() => {});
+  return true;
+}
+
+/**
  * Per-zone cyberlimb state for the sheet: `{ rArm: { status, damaged, current, max }, … }` for every
  * limb zone that carries a cyberlimb. `status` is the TRUE state — from the sticky `limbStatus` flag
  * ("destroyed"/"useless") when set (so a destroyed limb reads correctly even though the base prep
@@ -316,7 +336,9 @@ export function cyberlimbSheetStatus(actor) {
  * live under a separate `fleshLimbStatus` flag now — M18 — so they no longer poison this path; this
  * clear is the cyberlimb-swap guard.) Its SDP pool also restarts at full (the base re-derives `sum`;
  * `current` is whole-object-rewritten to keep the siblings, the same quirk-safe shape
- * absorbCyberlimbHit uses).
+ * absorbCyberlimbHit uses). (The MEAT-limb sever on install is written from the sheet install handler
+ * `_cpEquipCyberIntoZone` via severFleshUnder, where the chosen side is authoritative — the create/equip
+ * hook fires before the side is finalized, so it cannot target the correct zone.)
  */
 /**
  * Post-prep truth pass: a DESTROYED zone's derived `current` reads 0.
@@ -382,7 +404,8 @@ export function registerMechCyberlimb() {
   // M19 notice: the roll pipeline has no held-in-which-hand model, so when an actor with a wrecked
   // ARM uses a weapon, post an informational card naming each affected arm and its state — the GM
   // adjudicates whether that hand was the holding one (notice, never a block). Both a STRUCTURAL
-  // cyberlimb arm (destroyed/useless) and a FLESH arm (severed/disabled/destroyed) qualify; a
+  // cyberlimb arm (destroyed/useless) and any wounded FLESH arm (crippled/disabled/severed/destroyed)
+  // qualify; a
   // structural pool supersedes flesh for the same zone (fleshLimbStatusOf already reports "" there).
   // All affected arms collect into a SINGLE card per use event (both arms down = one card, not two).
   // The hook is local to the initiating client, so the card posts exactly once per use.
@@ -399,7 +422,7 @@ export function registerMechCyberlimb() {
           continue;   // structural pool is authoritative for this zone
         }
         const fs = fleshLimbStatusOf(actor, zone);
-        if (fs === "severed" || fs === "disabled" || fs === "destroyed") {
+        if (fs === "severed" || fs === "disabled" || fs === "destroyed" || fs === "crippled") {
           lines.push(localizeParam("FleshArmNoticeBody", { name: actor.name, limb: localize(zone), state: localize(FLESH_STATUS_LABEL[fs]) }));
         }
       }

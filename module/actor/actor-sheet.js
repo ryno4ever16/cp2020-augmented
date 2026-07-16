@@ -9,7 +9,7 @@ import { resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
-import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel } from "../mech/cyberlimb.js";
+import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel, severFleshUnder, cyberlimbZoneOf } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
@@ -3052,6 +3052,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     }
 
     await item.update(updates);
+    // Fitting an SDP-bearing cyberlimb severs the meat limb it replaces — record it now, where the chosen
+    // side is authoritative (the model create/equip hook fires before the side is finalized, so it cannot
+    // target the correct zone). Non-limb / non-SDP / Head-Torso mounts resolve to "" and no-op inside.
+    try { await severFleshUnder(this.actor, cyberlimbZoneOf(item, this.actor.items?.contents ?? [])); }
+    catch (e) { console.warn(`cp2020-augmented | flesh sever on install failed`, e); }
     return this.render(true);
   }
 
