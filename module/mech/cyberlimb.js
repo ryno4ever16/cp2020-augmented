@@ -26,6 +26,8 @@ const SCOPE = "cp2020-augmented";
 const LIMB_ZONES = new Set(["rArm", "lArm", "rLeg", "lLeg"]);
 // Every zone, in sheet order — the routing/status set for a full-conversion borg (whole-body machinery).
 const ALL_ZONES = ["Head", "Torso", "rArm", "lArm", "rLeg", "lLeg"];
+// prepareData is wrapped once per client (mirrors mech/borg.js's _wrapped guard).
+let _sdpWrapped = false;
 
 // The "useless" band is the final SDP before "destroyed": Core prints 20/30 and hydraulic rams 30/40
 // — both a consistent 10-point gap. If a supplement ever prints a different band, this is the single
@@ -142,9 +144,17 @@ export function cyberlimbStatus(remaining, max = Infinity) {
 
 /**
  * The limb's destroyed/disabled state, from the persisted `limbStatus` flag (the AUTHORITATIVE state).
- * Note: the base actor's prepareData resets `system.sdp.current` back to `sum` whenever it reads exactly
- * 0 (it treats 0 as an unset sheet default — actor.js), so a DESTROYED limb's `current` can't stay 0.
- * The module flag is immune to that, so useless/destroyed lives here, not in `current`. Pure-ish.
+ *
+ * WHY a flag and not the number (mechanism verified against base actor.js, 2026-07-16): the base's
+ * prepareData resets a `current` of exactly 0 back to `sum` — it reads 0 as "unset sheet default". It
+ * MEANS to do that only once, guarding on `system.sdp._lastSum`… but `_lastSum` is written to the
+ * DERIVED layer and is absent from the stored schema (source carries only sum/current/touched), so the
+ * guard never holds and the reset fires on EVERY prepare. Net: the base cannot represent "0 SDP left",
+ * so useless/destroyed lives in this flag, not in `current`. (`system.sdp.touched` is declared in
+ * template.json but the base's actor code never reads it — vestigial, not a usable lever.)
+ * ⚑ UPSTREAM CANDIDATE: the never-persisting `_lastSum` guard is a base defect worth reporting to Tilt.
+ * We do NOT patch the base (its files are restored on update) — `applyDestroyedLimbSdp` re-asserts the
+ * truth onto the derived number instead. Pure-ish.
  */
 export function limbStatusOf(actor, zone) {
   return (actor?.getFlag?.(SCOPE, "limbStatus") ?? actor?.flags?.[SCOPE]?.limbStatus ?? {})[zone] ?? "";
@@ -243,6 +253,39 @@ export async function repairCyberlimb(actor, zone) {
 }
 
 /**
+ * Clear a flesh limb's recorded injury — the medical counterpart to repairCyberlimb, and the missing
+ * half of the M18 flesh-limb model. The damage pipeline WRITES `fleshLimbStatus`
+ * (crippled/destroyed/disabled/severed) but nothing ever removed it: a cyberlimb only MASKS the badge
+ * (fleshLimbStatusOf returns "" once a structural pool covers the zone — the stale flag survives and
+ * reappears if the cyberlimb is pulled), and a cloned/meat limb was never a system operation at all.
+ * So a recovered limb stayed marked forever with no in-UI way back. This removes the zone's entry.
+ * Like repairCyberlimb it is the neutral STATE clear only — the medical event itself (healing time,
+ * cost, a cloned limb, a Trauma Team bill) stays the GM's adjudication — and it shares the same
+ * optional GM-only gate. Returns true when it ran.
+ */
+export async function clearFleshLimb(actor, zone) {
+  if (cyberlimbRepairGmOnly() && !game.user?.isGM) {
+    ui.notifications?.warn(localize("CyberlimbRepairGmOnlyWarn"));
+    return false;
+  }
+  // Read the RAW store (not fleshLimbStatusOf, which suppresses under a cyberlimb) so a masked-but-
+  // stale entry is also cleared. The sheet control only appears when the badge shows, but the API
+  // should clear whatever is recorded.
+  const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
+  if (!(zone in store)) return false;   // nothing recorded for this zone
+  // Flag objects MERGE on write, so a deleted key would linger — drop just this zone via the `-=`
+  // path (siblings survive), the same shape repairCyberlimb uses for limbStatus.
+  await actor.update({
+    [`flags.${SCOPE}.${FLESH_STATUS_FLAG}.-=${zone}`]: null
+  }, { render: false, fromCyberpunkDamageSystem: true });
+  await postSavePromptCard({
+    body: localizeParam("FleshLimbClearedBody", { limb: localize(zone) }),
+    speaker: ChatMessage.getSpeaker({ actor })
+  });
+  return true;
+}
+
+/**
  * Per-zone cyberlimb state for the sheet: `{ rArm: { status, damaged, current, max }, … }` for every
  * limb zone that carries a cyberlimb. `status` is the TRUE state — from the sticky `limbStatus` flag
  * ("destroyed"/"useless") when set (so a destroyed limb reads correctly even though the base prep
@@ -275,7 +318,46 @@ export function cyberlimbSheetStatus(actor) {
  * `current` is whole-object-rewritten to keep the siblings, the same quirk-safe shape
  * absorbCyberlimbHit uses).
  */
+/**
+ * Post-prep truth pass: a DESTROYED zone's derived `current` reads 0.
+ *
+ * The base's prep resets any `current` of exactly 0 back to `sum` on every pass (see limbStatusOf for
+ * the mechanism), so a destroyed limb rendered its FULL pool — "30 / 30" sitting next to a red
+ * DESTROYED badge. That is a straight contradiction on the sheet, and players read the number first.
+ * `limbStatus` already holds the truth, so re-assert it onto the derived value here: every reader —
+ * the sheet's SDP pair, cyberlimbSdp, cyberlimbStatus — then agrees that a wrecked limb has 0 left.
+ *
+ * Derived-only: this never writes the document (the stored `current` is already 0 — the base's reset
+ * lives in the prepared layer, not on disk), so there is nothing to migrate and nothing to undo. A
+ * repair clears the flag, so the next prep leaves the restored number alone. Pure-ish (mutates the
+ * actor's prepared data, like the base's own prep does).
+ */
+export function applyDestroyedLimbSdp(actor) {
+  const current = actor?.system?.sdp?.current;
+  if (!current) return;
+  const store = actor?.getFlag?.(SCOPE, "limbStatus") ?? actor?.flags?.[SCOPE]?.limbStatus ?? {};
+  for (const [zone, state] of Object.entries(store)) {
+    if (state !== "destroyed") continue;
+    if (!(zone in current)) continue;
+    current[zone] = 0;
+  }
+}
+
 export function registerMechCyberlimb() {
+  // Wrap prepareData so a destroyed limb's SDP reads 0 instead of the base's reset-to-full (mirrors
+  // mech/borg.js's wrap shape). Registered AFTER registerBorg/registerTypedArmorDisplay in
+  // cp2020-augmented.js, so `orig` already includes the base prep + the borg chassis-SDP seed and this
+  // truth pass lands last.
+  const proto = CONFIG?.Actor?.documentClass?.prototype;
+  if (proto && !_sdpWrapped) {
+    const orig = proto.prepareData;
+    proto.prepareData = function () {
+      orig.call(this);
+      try { applyDestroyedLimbSdp(this); } catch (e) { console.warn(`${SCOPE} | destroyed-limb SDP pass failed`, e); }
+    };
+    _sdpWrapped = true;
+  }
+
   const clearZoneOnInstall = async (item, userId) => {
     if (userId !== game.user?.id) return;
     const actor = item.actor;
