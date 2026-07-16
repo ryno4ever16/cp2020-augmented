@@ -2044,6 +2044,8 @@
     "HeadHitDoublingHint": "When enabled, a hit to the Head doubles the FINAL damage — after armor (SP) and BTM are applied. RAW: 'A head hit always doubles damage' (CP2020 p.103, the optional 'He Shrugs Off Head Hits' rule); the book gives no timing, so the wound that actually gets through is what doubles. Disable for groups that skip this rule.",
     "LimbLossEnabled": "Combat: Limb Loss & Head Wound Checks",
     "LimbLossEnabledHint": "When enabled, a single hit dealing more than 8 net damage to a limb triggers an immediate Death Save at Mortal 0 (severed/crushed). A head wound of the same severity kills automatically (CP2020 p.103 RAW).",
+    "RerollGoneLimbLocation": "Combat: Re-roll Hits on Missing Limbs",
+    "RerollGoneLimbLocationHint": "When a random hit-location roll lands on a limb that is no longer there to hit — a severed or destroyed flesh limb, or a destroyed cyberlimb wreck — the location is re-rolled among the remaining valid areas instead of wasting the shot (extends CP2020 p.100 \"…that roll is pretty silly, ignore it and re-roll\"). Head and torso are always valid. Aimed shots and GM-chosen locations are never re-rolled. Default: on.",
     "SuppressiveFireSaves": "Combat: Suppressive Fire Zone & Evasion",
     "SuppressiveFireSavesHint": "When enabled, suppressive fire automatically places a ray template (fire zone) on the canvas and prompts all tokens within it to roll an Evasion check: Athletics + REF + 1d10 vs DC = rounds / zone width (CP2020 p.101 RAW). Failures take 1d6 random hits.",
     "AutoDeathSavePerTurn": "Combat: Death Save Each Turn (Mortal)",

@@ -28,7 +28,7 @@ import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { mechRoundTickEnabled } from "../settings.js";
-import { rollLocation, localize, localizeParam }              from "../utils.js";
+import { rollLocation, rerollGoneLimbAreaDamages, localize, localizeParam } from "../utils.js";
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegions, moveArea } from "./area-shapes.js";
@@ -414,6 +414,15 @@ function _hookWeaponFired() {
         _pendingPayload = payload;
         return;
       }
+
+      // Re-roll any hit that landed on a limb that isn't there to be hit (a severed/destroyed flesh limb
+      // or a destroyed cyberlimb wreck). Single-shot/burst/melee location is rolled in the BASE system's
+      // item.js, which has no concept of a gone limb (that state lives in THIS module's M18/M19 flags), so
+      // the module re-checks it here — the one point where both the resolved target and the rolled
+      // locations are in hand, before the dialog or auto-apply reads them. No-ops off-toggle / non-actor /
+      // when nothing hit a gone limb. (Module-rolled paths — suppressive/area/vehicle — re-roll at the
+      // rollLocation source instead.)
+      payload.areaDamages = await rerollGoneLimbAreaDamages(target, payload.areaDamages);
 
       // Unified dispatcher (4-way: source scale × target type). Vehicle targets → vehicle resolver
       // (SP→SDP / Penetration vs Armor Value); a Penetration weapon vs a person → MM p.8. Returns

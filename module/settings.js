@@ -166,6 +166,16 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
+  // --- rerollGoneLimbLocation ---
+  game.settings.register(SCOPE, "rerollGoneLimbLocation", {
+    name: "SETTINGS.RerollGoneLimbLocation",
+    hint: "SETTINGS.RerollGoneLimbLocationHint",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: true,
+  });
+
   // --- suppressiveFireSaves ---
   game.settings.register(SCOPE, "suppressiveFireSaves", {
     name: "SETTINGS.SuppressiveFireSaves",

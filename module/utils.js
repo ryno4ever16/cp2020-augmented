@@ -187,10 +187,73 @@ function _hitLocationLookup(targetActor) {
     return (targetActor?.hitLocLookup) ? targetActor.hitLocLookup : defaultAreaLookup;
 }
 
+// The four limb zones that can be "gone" (arms/legs). Head/Torso — and W4RST4R's Groin — are never
+// limbs, so they never trigger a re-roll and always remain a valid location (which is what keeps the
+// re-roll bounded and non-empty).
+const GONE_LIMB_ZONES = new Set(["rArm", "lArm", "rLeg", "lLeg"]);
+
+/** True when a limb zone has no limb left to meaningfully take a hit: a destroyed CYBERLIMB wreck
+ *  (limbStatus destroyed, SDP pool present) OR a severed/destroyed FLESH limb (no SDP pool). Reads the
+ *  M18/M19 flags directly (not the mech/cyberlimb.js helpers) to avoid an import cycle — cyberlimb.js
+ *  imports this module. A crippled/useless/disabled limb is still THERE and stays hittable. Pure-ish. */
+function _isGoneLimbZone(targetActor, zone) {
+    if (!GONE_LIMB_ZONES.has(zone)) return false;
+    const SCOPE = "cp2020-augmented";
+    const limbStatus = targetActor?.getFlag?.(SCOPE, "limbStatus")      ?? targetActor?.flags?.[SCOPE]?.limbStatus      ?? {};
+    const flesh      = targetActor?.getFlag?.(SCOPE, "fleshLimbStatus") ?? targetActor?.flags?.[SCOPE]?.fleshLimbStatus ?? {};
+    const sdpSum     = Number(targetActor?.system?.sdp?.sum?.[zone]) || 0;
+    const cyberGone  = sdpSum > 0 && limbStatus[zone] === "destroyed";
+    const fleshGone  = sdpSum === 0 && (flesh[zone] === "severed" || flesh[zone] === "destroyed");
+    return cyberGone || fleshGone;
+}
+
+/** World toggle for the missing-limb re-roll (default ON). */
+function _rerollGoneLimbEnabled() {
+    try { return game.settings.get("cp2020-augmented", "rerollGoneLimbLocation") === true; }
+    catch (e) { return false; }
+}
+
+/** Pick a still-valid location for `targetActor` by re-rolling over the faces of `lookup` whose location
+ *  is NOT a gone limb. ONE weighted roll (rejection sampling collapsed): because Head/Torso (and Groin)
+ *  are never gone, the valid set is always non-empty, so this is O(1) and preserves the table's relative
+ *  odds among the surviving locations. */
+async function _pickValidLocation(targetActor, lookup) {
+    const faces = Object.keys(lookup);
+    const validFaces = faces.filter(f => !_isGoneLimbZone(targetActor, lookup[f]));
+    if (!validFaces.length) return lookup[faces[0]];   // unreachable (Head/Torso always valid) — stay safe
+    const pick = await new Roll(`1d${validFaces.length}`).evaluate();
+    return lookup[validFaces[pick.total - 1]];
+}
+
+/**
+ * Re-roll every hit in an `areaDamages` map that landed on a limb that isn't there — the module-side
+ * counterpart for shots whose location was rolled OUTSIDE this module (the base system's item.js rolls
+ * single-shot/burst location; the base has no concept of a "gone limb", which is defined by this module's
+ * M18/M19 flags, so the check has to happen here). Each hit on a gone limb re-rolls its OWN location
+ * (per-bullet, RAW). No-ops when the toggle is off, the actor is unknown, or nothing hit a gone limb.
+ * Accepts a Token or an Actor. Returns a NEW map (never mutates the input); shape: `{ loc: [{damage},…] }`.
+ */
+export async function rerollGoneLimbAreaDamages(targetActorOrToken, areaDamages) {
+    const targetActor = targetActorOrToken?.actor ?? targetActorOrToken;
+    if (!targetActor || !areaDamages || !_rerollGoneLimbEnabled()) return areaDamages;
+    const keys = Object.keys(areaDamages);
+    if (!keys.some(k => _isGoneLimbZone(targetActor, k))) return areaDamages;   // fast path: nothing gone
+    const lookup = _hitLocationLookup(targetActor);
+    const out = {};
+    const add = (loc, hit) => { (out[loc] ??= []).push(hit); };
+    for (const loc of keys) {
+        const hits = areaDamages[loc] ?? [];
+        if (!_isGoneLimbZone(targetActor, loc)) { for (const h of hits) add(loc, h); continue; }
+        for (const h of hits) add(await _pickValidLocation(targetActor, lookup), h);
+    }
+    return out;
+}
+
 async function _rollLocation(targetActor, targetArea) {
     if(targetArea) {
         // Area name to number lookup. Tolerate areas (e.g. W4RST4R "Groin") absent from the actor's
-        // hitLocations by still reporting the targeted area.
+        // hitLocations by still reporting the targeted area. An AIMED shot is deliberate — never
+        // re-rolled, even at a limb that is gone (the shooter chose the target).
         const hitLocs = (!!targetActor) ? targetActor.hitLocations : defaultHitLocations();
         const targetNum = hitLocs?.[targetArea]?.location?.[0];
         let roll = await new Roll(`${Number.isFinite(targetNum) ? targetNum : 1}`).evaluate();
@@ -203,9 +266,24 @@ async function _rollLocation(targetActor, targetArea) {
     let hitAreaLookup = _hitLocationLookup(targetActor);
 
     let roll = await new Roll("1d10").evaluate();
+    let areaHit = hitAreaLookup[roll.total];
+    let rerolledFrom = null;
+
+    // Re-roll a hit that lands on a limb that isn't there — CP2020 p.100: "…a roll of 7-8 (R.Leg) is
+    // pretty silly. Ignore it and re-roll." Done as ONE weighted pick over the still-valid faces, NOT a
+    // loop: because Head/Torso (and Groin) are never gone limbs, the valid set is always non-empty, so
+    // this is O(1) and can never hang or empty out even if every limb is severed. Only on a random roll
+    // (aimed shots return above), only when the target actor is known, and only when the world toggle is
+    // on. rerolledFrom lets the caller show WHY the location moved.
+    if (targetActor && _rerollGoneLimbEnabled() && _isGoneLimbZone(targetActor, areaHit)) {
+        rerolledFrom = areaHit;
+        areaHit = await _pickValidLocation(targetActor, hitAreaLookup);
+    }
+
     return {
         roll: roll,
-        areaHit: hitAreaLookup[roll.total]
+        areaHit: areaHit,
+        rerolledFrom: rerolledFrom
     };
 }
 
