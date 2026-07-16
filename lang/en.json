@@ -112,7 +112,7 @@
       "OptInHeading": "⚙ Opt-in automation — OFF by default; enable what you want",
       "StunDesc": "Unconscious characters are prompted to recover each turn.",
       "StunName": "Stun Recovery",
-      "NewIn110Intro": "Version <b>1.1.0</b> is the biggest update yet — the headlines, on top of everything above:",
+      "NewIn110Intro": "Version <b>1.1.0</b> is the biggest update yet — the headlines:",
       "NewSystemsHeading": "✦ New in 1.1.0 — systems",
       "NewSystemsItem1": "Combat drugs & addiction: take a dose, its boosts apply, and the crash hits when it wears off — addiction is tracked per drug",
       "NewSystemsItem2": "Chipware: skill chips grant their skills when slotted, with the book's socket and INT program limits",
