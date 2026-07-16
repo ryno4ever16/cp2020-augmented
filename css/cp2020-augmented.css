@@ -1560,13 +1560,20 @@ img#anatomy-img {
 
 .cp-automation-notice .feat-bullet { margin-bottom: 2px; break-inside: avoid; }
 
+/* ONE row, always: Back and Next/Got-it must sit together beside the page count (user, 2026-07-16).
+   nowrap is load-bearing — flexbox breaks LINES before it shrinks anything, so with wrap the last
+   button dropped to a second row no matter how shrinkable the other children were. With nowrap the
+   overflow is absorbed by the two shrinkable children (.notice-hide, .notice-spacer) instead. */
 .cp-automation-notice .notice-nav {
   display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 8px;
-  flex-wrap: wrap; row-gap: 8px;
+  flex-wrap: nowrap;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.cp-automation-notice .notice-hide { display: flex; align-items: center; gap: 5px; font-size: 0.82em; cursor: pointer; flex: 0 0 auto; }
+/* The shrink sink: this label is the longest child ("Don't show this again (until the next update)")
+   and at flex 0 0 auto it held 255px of a 518px row, pushing the buttons off. It shrinks and wraps its
+   own text so the fixed-size controls keep their row. min-width:0 defeats the flex auto-minimum. */
+.cp-automation-notice .notice-hide { display: flex; align-items: center; gap: 5px; font-size: 0.82em; cursor: pointer; flex: 0 1 auto; min-width: 0; }
 
 .cp-automation-notice .notice-spacer { flex: 1; }
 
