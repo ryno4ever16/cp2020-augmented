@@ -1476,7 +1476,21 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .cyberpunk .segment-limb-status.cp-limb-destroyed { color: #fff; background: #d1502f; }
 .cyberpunk .segment-limb-status.cp-limb-useless   { color: #1a1a1a; background: #c0791a; }
 .cyberpunk .segment-limb-status.cp-limb-damaged   { opacity: 0.65; }
-.cyberpunk .segment-repair.cp-cyberlimb-repair {
+/* Flesh-limb wound (M18: crippled / destroyed / disabled / severed) — a deeper blood red than the
+   cyberlimb-destroyed orange-red above, so a wrecked meat limb reads as an alert badge like its
+   cyberlimb cousin instead of plain text, yet is not mistaken for structural SDP state. */
+.cyberpunk .segment-limb-status.cp-limb-flesh     { color: #fff; background: #8f2f2f; }
+/* Both limb-recovery controls (cyberlimb ⚒ repair, flesh ⚕ clear) opt back IN to being visible. The
+   base hides `.segment-repair` outright and reveals it only on `.armor-segment:hover` — its idiom for
+   the ablate control, which is itself commented out of the base template, so nothing else uses it. Our
+   controls aren't hover affordances: recovering a wrecked limb is an infrequent, deliberate action the
+   player has to be able to FIND, and a 15x14 glyph that only exists while the cursor sits on the limb
+   is undiscoverable (rig-proven: display none/0x0 at rest, block/15x14 on hover). We inherited that
+   purely by reusing the `.segment-repair` class name. Declaring `display` here is what overrides it —
+   the base wins any property we simply don't set, so the opacity rule was dead code until now. */
+.cyberpunk .segment-repair.cp-cyberlimb-repair,
+.cyberpunk .segment-repair.cp-flesh-clear {
+  display: inline-block;
   cursor: pointer;
   font-size: 0.85rem;
   line-height: 1;
@@ -1484,7 +1498,8 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
   opacity: 0.7;
   text-decoration: none;
 }
-.cyberpunk .segment-repair.cp-cyberlimb-repair:hover { opacity: 1; color: #4a8f3c; }
+.cyberpunk .segment-repair.cp-cyberlimb-repair:hover,
+.cyberpunk .segment-repair.cp-flesh-clear:hover { opacity: 1; color: #4a8f3c; }
 
 .chipware-container.is-empty .chipware-dropzone {
   height: 18px;
