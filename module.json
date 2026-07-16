@@ -2,7 +2,7 @@
   "id": "cp2020-augmented",
   "title": "Cyberpunk 2020: Augmented Edition",
   "description": "A companion expansion for the Cyberpunk 2020 system: vehicles & ACPA (Maximum Metal), combat automation, shopping, and Improvement Point tracking — added as opt-in features on top of the base system. Cyberpunk 2020: Augmented Edition is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "compatibility": {
     "minimum": 13,
     "verified": 14,
