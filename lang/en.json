@@ -90,6 +90,7 @@
       "CombatItem9": "Stabilization system",
       "CombatItem10": "Canvas or list target selection",
       "CombatItem11": "Automated rangefinding: range category set from token distance — ON by default (toggle in the module settings)",
+      "CombatItem12": "Hits on a missing limb (severed flesh / destroyed cyberlimb) re-roll to a location still there — ON by default (toggle in the module settings)",
       "BeyondItem1": "Vehicles & ACPA: drive/pilot, vehicle combat, weapon mounts (+ optional Maximum Metal rules)",
       "BeyondItem2": "Shopping: searchable catalog, GM custom shops, drag an item onto a sheet to buy",
       "BeyondItem3": "Ammunition: buy by caliber + load right from the catalog (box pricing)",

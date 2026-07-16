@@ -39,7 +39,7 @@ const PAGES = [
     boxes: [
       {
         headingKey: "CYBERPUNK.AutoNotice.CombatHeading",
-        bullets: Array.from({ length: 11 }, (_, i) => `CYBERPUNK.AutoNotice.CombatItem${i + 1}`),
+        bullets: Array.from({ length: 12 }, (_, i) => `CYBERPUNK.AutoNotice.CombatItem${i + 1}`),
       },
       {
         headingKey: "CYBERPUNK.AutoNotice.BeyondHeading",
