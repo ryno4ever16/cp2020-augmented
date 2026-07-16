@@ -39,7 +39,11 @@ export const HEAT_SENSE_ID = "cpHeatSense";
 
 /** mode → { prefs: ordered vision-mode preferences (first the core ships wins), heat: heat sense } */
 export const MODE_TABLE = {
-  lowlight:    { prefs: ["lightAmplification", "darkvision", "basic"], heat: false },
+  // Low Lite deliberately does NOT use core's "lightAmplification": that preset ships tint
+  // [0.38,0.8,0.38] (green) at brightness 1 with EXPOSURE post-processing, which reads as a
+  // blinding green wash rather than amplified natural light. darkvision (brightness 0,
+  // saturation -1) gives the same see-in-the-dark result with a calm greyscale image.
+  lowlight:    { prefs: ["darkvision", "basic"], heat: false },
   // terrainSight false: core renders sight.range as "distance seen in total darkness" — a
   // heat-only device must not grant that (lit areas stay visible regardless; the heat-sense
   // detection entry keeps the device range). IR and thermograph share this profile by design.
