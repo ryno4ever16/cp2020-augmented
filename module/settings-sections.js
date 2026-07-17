@@ -34,7 +34,7 @@ const SECTIONS = [
   ] },
   { key: "SectionOptionalRules", keys: ["fnff2Enabled"] },
   { key: "SectionMechAutomation", keys: [
-    "mechTokenWrites", "mechRoundTickAutomation", "mechDocumentAutomation", "cyberlimbRepairGmOnly",
+    "mechTokenWrites", "mechRoundTickAutomation", "mechDocumentAutomation",
   ] },
   { key: "SectionImprovementPoints", keys: [
     "ipRawTracking", "ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode",
@@ -42,7 +42,7 @@ const SECTIONS = [
   ] },
   { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
-  { key: "SectionAccess", keys: ["playersCanBuyAmmo"] },
+  { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly"] },
   { key: "SectionDisplay", keys: ["carolingianSkin"] },
 ];
 

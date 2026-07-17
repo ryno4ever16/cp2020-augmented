@@ -69,12 +69,13 @@ export function registerAugmentedSettings() {
     hint: "SETTINGS.MechDocumentAutomationHint",
     scope: "world", config: true, type: Boolean, default: true
   });
-  // Permission scoping: restrict the sheet's cyberlimb Repair control to the GM (many tables run
-  // repair as a Tech-skill/cost/downtime flow). Default OFF = current owner behavior.
+  // Permission scoping: the sheet's limb-recovery controls (cyberlimb Repair + flesh-limb Clear)
+  // are GM-only by default — recovery is an outcome the GM adjudicates (Tech roll, cost, clinic,
+  // downtime), not a button a player presses on their own wounds. OFF = owners may use them.
   game.settings.register(SCOPE, "cyberlimbRepairGmOnly", {
     name: "SETTINGS.CyberlimbRepairGmOnly",
     hint: "SETTINGS.CyberlimbRepairGmOnlyHint",
-    scope: "world", config: true, type: Boolean, default: false
+    scope: "world", config: true, type: Boolean, default: true
   });
 
   // --- automationNoticeHide ---
@@ -898,7 +899,7 @@ export function mechRoundTickEnabled() {
 export function mechDocumentAutomationEnabled() {
   try { return game.settings.get(SCOPE, "mechDocumentAutomation") !== false; } catch { return true; }
 }
-/** Permission scoping — cyberlimb Repair restricted to the GM (default OFF = owners may repair). */
+/** Permission scoping — limb-recovery controls restricted to the GM (default ON; fail-closed). */
 export function cyberlimbRepairGmOnly() {
-  try { return game.settings.get(SCOPE, "cyberlimbRepairGmOnly") === true; } catch { return false; }
+  try { return game.settings.get(SCOPE, "cyberlimbRepairGmOnly") !== false; } catch { return true; }
 }
