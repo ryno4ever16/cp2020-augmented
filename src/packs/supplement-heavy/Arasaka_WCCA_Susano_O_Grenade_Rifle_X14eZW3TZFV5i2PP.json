@@ -5,7 +5,7 @@
   "img": "icons/svg/sword.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Stat line backfilled from Firestorm: Shockwave p.33 text layer: HVY +0 N P Varies (25mm) 9 2 VR 200m. Revolver-cylinder grenade rifle — choose the grenade type per shot. [Backfill 2026-07-17]</p>",
     "cost": 450,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "Varies (25mm)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",

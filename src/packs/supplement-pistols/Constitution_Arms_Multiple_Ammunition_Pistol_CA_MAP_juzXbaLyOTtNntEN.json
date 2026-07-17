@@ -5,7 +5,7 @@
   "img": "icons/svg/sword.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Stat line backfilled from Protect & Serve p.32 text layer: P 0 J P Varies (12mm) 6 1 VR 50m. Standard round 4D6+1 (50m); Hyper-Penetration, chemical, taser and other special shells per the book. [Backfill 2026-07-17]</p>",
     "cost": 525,
     "weight": 0,
     "equipped": false,
@@ -15,11 +15,11 @@
     "accuracy": 0,
     "concealability": "ConcealJacket",
     "availability": "Poor",
-    "ammoType": "",
+    "ammoType": "12mm",
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "Varies (12mm)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",

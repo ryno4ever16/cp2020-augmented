@@ -5,7 +5,7 @@
   "img": "icons/svg/sword.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Damage backfilled from the Reference Book (Chromebook 2): Special — IR-defeating chaff cloud over 5m for 5 turns; no direct damage. [Backfill 2026-07-17]</p>",
     "cost": 70,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "Special (5m)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",

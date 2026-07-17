@@ -5,7 +5,7 @@
   "img": "icons/svg/sword.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Damage backfilled from Chromebook 2 p.47 text layer: submunitions shell (12/10ga, 25mm, 30mm, 40mm) — treated as a shotgun blast with all pattern sizes doubled; any target in the pattern is hit by 1D6 splatballs (each as a splatball round, incl. chemical loads). [Backfill 2026-07-17]</p>",
     "cost": 10,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "Special (1D6 splatballs)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -31,7 +31,7 @@
     "ap": false,
     "isEdged": false,
     "shotsLeft": 0,
-    "shots": 0,
+    "shots": 1,
     "rof": 1,
     "fullAutoCapable": false,
     "burstCapable": false,

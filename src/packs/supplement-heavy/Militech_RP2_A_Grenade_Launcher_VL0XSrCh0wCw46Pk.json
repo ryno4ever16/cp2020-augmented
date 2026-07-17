@@ -5,21 +5,21 @@
   "img": "systems/cyberpunk2020/img/weapon-icon.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>👁 designation OCR 'RPii-A' = RP2-A (RPG-A?). 1500eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +300 — Blackhand's Street Weapons p.37]</p>",
+    "notes": "<p>👁 designation OCR 'RPii-A' = RP2-A (RPG-A?). 1500eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +300 — Blackhand's Street Weapons p.37]</p><p>Stat line backfilled from Blackhand's p.37 text layer: HVY -2 N R 6D10 1 1 VR 750m, tagged [Cyberpunk 2020]. SUSPECTED DUPLICATE: identical stats + prose to the base pack's 'Militech Arms RPG-A' (BH designation 'RPii-A' = OCR of RPG-A) — pending a keep/delete ruling. [Backfill 2026-07-17]</p><p>👁 RULING PENDING: suspected duplicate of the base pack's Militech Arms RPG-A (identical stats/prose; BH 'RPii-A' + [Cyberpunk 2020] tag). Keep or delete. [Marked 2026-07-17]</p>",
     "cost": 1500,
     "weight": 0,
     "equipped": false,
     "source": "Blackhand's Street Weapons p.37",
     "lastOwnerId": "",
     "weaponType": "Heavy",
-    "accuracy": 0,
+    "accuracy": -2,
     "concealability": "ConcealNoHide",
     "availability": "Rare",
     "ammoType": "",
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "6D10",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -31,12 +31,12 @@
     "ap": false,
     "isEdged": false,
     "shotsLeft": 0,
-    "shots": 0,
+    "shots": 1,
     "rof": 1,
     "fullAutoCapable": false,
     "burstCapable": false,
-    "reliability": "Standard",
-    "range": 0,
+    "reliability": "VeryReliable",
+    "range": 750,
     "attackType": "",
     "attackSkill": "Heavy Weapons"
   },
@@ -60,7 +60,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "AUDIT-WALK-2026-07",
-        "dirty": true
+        "dirty": true,
+        "needsEyes": true
       }
     }
   },

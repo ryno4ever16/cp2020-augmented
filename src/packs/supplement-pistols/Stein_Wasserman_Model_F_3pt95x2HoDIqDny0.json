@@ -5,7 +5,7 @@
   "img": "systems/cyberpunk2020/img/weapon-icon.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Index-priced. | [Audit row +114 — Chromebook 1 p.93]</p>",
+    "notes": "<p>Index-priced. | [Audit row +114 — Chromebook 1 p.93]</p><p>Stat line backfilled from Chromebook 1 p.54 text layer: RIF 0 L P 13mm Mixed 8 1 VR. 'Cyborg Assault' weapon system — fires a selection of special 13mm rounds; muzzle-adapted for DCR rifle grenades. NOTE: the CB1 entry prints 1650eb and type RIF; the CB1 price index (and this item) say 650eb, and the item is filed as a pistol — needs eyes. [Backfill 2026-07-17]</p><p>👁 BOOK SELF-CONTRADICTION: CB1 entry prints 1650eb + type RIF; CB1's own price index (and this item) say 650eb + filed as Pistol. Needs printed-page eyes. [Marked 2026-07-17]</p>",
     "cost": 650,
     "weight": 0,
     "equipped": false,
@@ -13,13 +13,13 @@
     "lastOwnerId": "",
     "weaponType": "Pistol",
     "accuracy": 0,
-    "concealability": "ConcealNoHide",
-    "availability": "Rare",
-    "ammoType": "",
+    "concealability": "ConcealLongCoat",
+    "availability": "Poor",
+    "ammoType": "13mm mixed",
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "Varies (13mm)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -31,11 +31,11 @@
     "ap": false,
     "isEdged": false,
     "shotsLeft": 0,
-    "shots": 0,
+    "shots": 8,
     "rof": 1,
     "fullAutoCapable": false,
     "burstCapable": false,
-    "reliability": "Standard",
+    "reliability": "VeryReliable",
     "range": 0,
     "attackType": "",
     "attackSkill": "Handgun"
@@ -60,7 +60,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "AUDIT-WALK-2026-07",
-        "dirty": true
+        "dirty": true,
+        "needsEyes": true
       }
     }
   },

@@ -5,7 +5,7 @@
   "img": "systems/cyberpunk2020/img/weapon-icon.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Blackhand's idx44 + Reference Book: FEN Dz 25 'Det Card' 120eb (RB: 1d10 HE, Chr1-sourced). | Index-priced. | [Audit row +110 — Chromebook 1 p.93]</p>",
+    "notes": "<p>Blackhand's idx44 + Reference Book: FEN Dz 25 'Det Card' 120eb (RB: 1d10 HE, Chr1-sourced). | Index-priced. | [Audit row +110 — Chromebook 1 p.93]</p><p>Damage 1D10 HE per the Reference Book collation (REF-ONLY: the Chromebook 1 entry prints no damage number — needs eyes if it matters). Credit-card wafer of C-4, 20-second delay after snapping. [Backfill 2026-07-17]</p><p>👁 Damage 1D10 (HE) is Reference-Book-ONLY — the Chromebook 1 entry prints no damage number. Verify against a printed page if it matters. [Marked 2026-07-17]</p>",
     "cost": 120,
     "weight": 0,
     "equipped": false,
@@ -13,13 +13,13 @@
     "lastOwnerId": "",
     "weaponType": "Exotic",
     "accuracy": 0,
-    "concealability": "ConcealNoHide",
-    "availability": "Rare",
+    "concealability": "ConcealPocket",
+    "availability": "Poor",
     "ammoType": "",
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "1D10 (HE)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -31,7 +31,7 @@
     "ap": false,
     "isEdged": false,
     "shotsLeft": 0,
-    "shots": 0,
+    "shots": 1,
     "rof": 1,
     "fullAutoCapable": false,
     "burstCapable": false,
@@ -60,7 +60,8 @@
         "level": "claude-text-layer",
         "weightSkimNotReviewed": true,
         "ledger": "AUDIT-WALK-2026-07",
-        "dirty": true
+        "dirty": true,
+        "needsEyes": true
       }
     }
   },

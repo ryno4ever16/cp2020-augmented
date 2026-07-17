@@ -5,7 +5,7 @@
   "img": "icons/svg/sword.svg",
   "system": {
     "flavor": "",
-    "notes": "",
+    "notes": "<p>Damage backfilled 2026-07-17: grenade family — Varies by type (REF: Concussion 3D6 Stun SP1/3 4m - Def.Frag 2D6+1 3m - FlashBomb Stun save - HEP 5D6 - Incendiary 4/3/2D6 - Off.Frag 5D6 3m - Chemical). Fired from a Militech muzzle adaptor (200eb) on any pistol/SMG. [Backfill 2026-07-17]</p>",
     "cost": 15,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "",
+    "damage": "Varies (25mm)",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -31,7 +31,7 @@
     "ap": false,
     "isEdged": false,
     "shotsLeft": 0,
-    "shots": 0,
+    "shots": 1,
     "rof": 1,
     "fullAutoCapable": false,
     "burstCapable": false,
