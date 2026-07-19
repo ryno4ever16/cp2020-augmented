@@ -562,3 +562,32 @@ const _PA_PILOT_SKILL_IDS = new Set(["PAPilotSkill0001"]);
 export function isPAPilotSkill(skill) {
   return skill?.type === "skill" && _skillIdInSet(skill, _PA_PILOT_SKILL_IDS);
 }
+
+/**
+ * Resolve an actor reference token-first. An UNLINKED token's synthetic actor shares its `id` with
+ * the world ("prototype") actor, so `game.actors.get(id)` on a mook silently retargets the shared
+ * base actor — every same-base token then bleeds one pool of HP/flags. The scene-qualified token
+ * (works even when this client views another scene) and the actor UUID are the only unambiguous
+ * handles; the bare actorId stays as the last resort so old chat cards that carry nothing else keep
+ * working (they behave as before — base actor — rather than dying).
+ * @param {object} ref
+ * @param {string} [ref.tokenId]
+ * @param {string} [ref.sceneId]   Pairs with tokenId; falls back to the viewed scene when absent.
+ * @param {string} [ref.actorUuid] `Scene.X.Token.Y.Actor.Z` for a synthetic actor, `Actor.Z` linked.
+ * @param {string} [ref.actorId]
+ * @returns {Actor|null}
+ */
+export function resolveActorRef({ tokenId = null, sceneId = null, actorUuid = null, actorId = null } = {}) {
+  if (tokenId) {
+    const scene = (sceneId ? game.scenes?.get(sceneId) : null) ?? canvas?.scene ?? null;
+    const tokActor = scene?.tokens?.get(tokenId)?.actor ?? null;
+    if (tokActor) return tokActor;
+  }
+  if (actorUuid) {
+    try {
+      const doc = fromUuidSync(actorUuid);
+      if (doc?.documentName === "Actor") return doc;
+    } catch (e) { /* fall through to the id lookup */ }
+  }
+  return (actorId ? game.actors?.get(actorId) : null) ?? null;
+}

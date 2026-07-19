@@ -313,9 +313,14 @@ export async function applyOrRelayMartialEffect(action, targetActor, attackerAct
   if (game.user.isGM || targetActor.isOwner) {
     await applyMartialHitEffects(action, targetActor, attackerActor);
   } else if (game.users.activeGM) {
+    // Unambiguous refs: a synthetic (unlinked-token) actor's id collides with its world actor's —
+    // the uuid + scene-qualified token keep the GM-side flag write on the token that was grabbed.
     game.socket.emit("module.cp2020-augmented", {
       type: "martialEffect", action,
       targetActorId: targetActor.id, attackerActorId: attackerActor?.id ?? null,
+      targetActorUuid: targetActor.uuid ?? null,
+      targetTokenId: targetActor.token?.id ?? null,
+      targetSceneId: targetActor.token?.parent?.id ?? null,
     });
   }
 }

@@ -218,7 +218,11 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         mode:             "resolved",
         requesterId:      game.user.id,
         targetActorId:    this.target.id,
+        // Unambiguous refs (see _autoApply's emit): a synthetic actor's id collides with its world
+        // actor's — the uuid + scene-qualified token keep the GM-side write on the token that was hit.
+        targetActorUuid:  this.target.uuid ?? null,
         targetTokenId:    this.payload?.targetTokenId ?? null,
+        targetSceneId:    (this.payload?.targetTokenId ? canvas?.tokens?.get(this.payload.targetTokenId)?.document?.parent?.id : null) ?? canvas?.scene?.id ?? null,
         resolvedHits,
         totalApplied,
         ablate,
@@ -243,7 +247,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // Resolve the actual target token (the shot's payload carries its id) so a destroyed borg core and
     // the post-hit prompts use the RIGHT token, not the first canvas token of a multi-token actor.
     const token = this.payload?.targetTokenId ? (canvas?.tokens?.get(this.payload.targetTokenId) ?? null)
-                : (canvas?.tokens?.placeables?.find(t => t.actor?.id === this.target.id) ?? null);
+                : (canvas?.tokens?.placeables?.find(t => t.actor === this.target) ?? null);
     let applied = 0;
     for (const hit of resolvedHits) {
       const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token });

@@ -1,5 +1,5 @@
 import { onGlobalClick } from "../popout-compat.js";
-import { localize, localizeParam } from "../utils.js";
+import { localize, localizeParam, resolveActorRef } from "../utils.js";
 import { renderChatCard } from "../compat.js";
 import { markCardResolved } from "../card-lock.js";
 
@@ -67,12 +67,12 @@ function _canModifyActor(actor) {
  * chat), but writing the patient's `stabilized` flag needs ownership — so a non-owner's
  * success is relayed to the primary GM, who performs the write. Only the GM listens.
  */
-function _relayStabilizedFlag(actorId) {
+function _relayStabilizedFlag({ actorId, tokenId = null, sceneId = null }) {
   if (!game.users.activeGM) {
     ui.notifications.warn(localize("StabilizeNoGM"));
     return;
   }
-  game.socket.emit("module.cp2020-augmented", { type: "stabilizeFlag", actorId, requesterId: game.user.id });
+  game.socket.emit("module.cp2020-augmented", { type: "stabilizeFlag", actorId, tokenId, sceneId, requesterId: game.user.id });
   ui.notifications.info(localize("StabilizeRelayed"));
 }
 
@@ -86,7 +86,8 @@ function _registerStabilizeSocket() {
     if (data?.type !== "stabilizeFlag") return;
     if (!game.user.isGM) return;
     if (game.users.activeGM?.id !== game.user.id) return;
-    const actor = game.actors.get(data.actorId);
+    // Token-first: stabilizing an unlinked token's patient must flag THAT token's synthetic actor.
+    const actor = resolveActorRef({ tokenId: data.tokenId, sceneId: data.sceneId, actorId: data.actorId });
     if (!actor) return;
     try {
       await actor.setFlag("cp2020-augmented", "stabilized", true);
@@ -320,12 +321,16 @@ export async function postDeathSavePrompt(actor, token = null, forcedMortalLevel
  * @param {Token|null} token
  */
 export async function postSavePrompts(actor, token = null) {
-  // Refresh the actor from the collection to get the latest damage value
-  const liveActor = game.actors.get(actor.id) ?? actor;
+  // `actor` is a live document — an id re-fetch would swap an unlinked token's synthetic actor for
+  // the shared world actor (they collide on id) and read the WRONG damage value.
+  const liveActor = actor;
   const woundState = liveActor.woundState?.() ?? 0;
   if (woundState === 0) return;
 
-  const liveToken = token ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === liveActor.id) ?? null;
+  const liveToken = token
+    ?? canvas?.tokens?.placeables?.find(t => t.actor === liveActor)
+    ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === liveActor.id)
+    ?? null;
 
   if (woundState >= 4) {
     // Death Save before Stun Save at Mortal (p.99: both required, death is more urgent)
@@ -340,7 +345,9 @@ export async function postSavePrompts(actor, token = null) {
 }
 
 export async function executeStunSave({ actorId, tokenId, sceneId }) {
-  const actor = game.actors.get(actorId);
+  // Token-first: the card's tokenId names WHICH body took the wound — an unlinked token's save
+  // reads and writes its own synthetic actor, never the shared world actor its id also matches.
+  const actor = resolveActorRef({ tokenId, sceneId, actorId });
   if (!actor) return;
 
   // Only the actor's owner or the GM may resolve this save (see _assertCanResolveSave).
@@ -372,7 +379,8 @@ export async function executeStunSave({ actorId, tokenId, sceneId }) {
 }
 
 export async function executeDeathSave({ actorId, tokenId, sceneId, mortalLevel }) {
-  const actor = game.actors.get(actorId);
+  // Token-first (matches executeStunSave) — see resolveActorRef.
+  const actor = resolveActorRef({ tokenId, sceneId, actorId });
   if (!actor) return;
 
   // Only the actor's owner or the GM may resolve this save (see _assertCanResolveSave).
@@ -430,8 +438,10 @@ export async function executeDeathSave({ actorId, tokenId, sceneId, mortalLevel 
  * this is intentionally NOT owner-gated like stun/death saves. The roll runs locally;
  * if the medic doesn't own the patient, the stabilized flag write is relayed to the GM.
  */
-export async function executeStabilize({ actorId }) {
-  const actor = game.actors.get(actorId);
+export async function executeStabilize({ actorId, tokenId, sceneId }) {
+  // Token-first: the patient is the TOKEN whose death-save card offered stabilization — an unlinked
+  // token's damage total and stabilized flag live on its synthetic actor.
+  const actor = resolveActorRef({ tokenId, sceneId, actorId });
   if (!actor) return;
 
   const totalDamage = Number(actor.system?.damage) || 0;
@@ -485,7 +495,7 @@ export async function executeStabilize({ actorId }) {
             if (_canModifyActor(actor)) {
               await actor.setFlag("cp2020-augmented", "stabilized", true);
             } else {
-              _relayStabilizedFlag(actorId);
+              _relayStabilizedFlag({ actorId, tokenId, sceneId });
             }
           }
         },
@@ -610,6 +620,8 @@ export function registerSaveRollHandlers() {
       ev.preventDefault();
       await executeStabilize({
         actorId: stabilizeBtn.dataset.actorId,
+        tokenId: stabilizeBtn.dataset.tokenId,
+        sceneId: stabilizeBtn.dataset.sceneId,
       });
       await markCardResolved(stabilizeBtn.closest("[data-message-id]")?.dataset?.messageId, "stabilize");
     }

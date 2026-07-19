@@ -152,8 +152,14 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   if (!limbLoss) return;
   const model = activeLimbModel();   // "W4RST4R" | "ListenUp" | "Core"
 
-  const liveTarget = game.actors.get(target.id) ?? target;
-  const liveToken  = token ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id) ?? null;
+  // `target` is a live document — re-fetching by id would send an unlinked token's limb flags and
+  // death status to the shared world actor (synthetic actors share their base actor's id). The token
+  // fallback matches by IDENTITY first so a multi-token actor resolves the token that was actually hit.
+  const liveTarget = target;
+  const liveToken  = token
+    ?? canvas?.tokens?.placeables?.find(t => t.actor === liveTarget)
+    ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id)
+    ?? null;
 
   // Head wound > 8 net = automatic death (Listen Up does not change the head; always Core here).
   if (location === "Head") {

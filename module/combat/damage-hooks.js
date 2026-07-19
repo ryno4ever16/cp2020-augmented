@@ -28,7 +28,7 @@ import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { mechRoundTickEnabled } from "../settings.js";
-import { rollLocation, rerollGoneLimbAreaDamages, localize, localizeParam } from "../utils.js";
+import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, localizeParam } from "../utils.js";
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegions, moveArea } from "./area-shapes.js";
@@ -768,7 +768,9 @@ function _hookSuppressiveFirePerTurn() {
  * On failure: roll 1d6 hits with the weapon's dmgFormula, apply via PATH B.
  */
 async function _executeSuppressionEvasion({ actorId, tokenId, sceneId, saveDC, dmgFormula, attackerId }) {
-  const actor = game.actors.get(actorId);
+  // Token-first: the evader is the TOKEN caught in the zone — an unlinked token's REF/Athletics
+  // (and the follow-up hits) belong to its synthetic actor, not the shared world actor.
+  const actor = resolveActorRef({ tokenId, sceneId, actorId });
   if (!actor) return;
 
   const ref       = Number(actor.system?.stats?.ref?.total) || 0;
@@ -1438,7 +1440,9 @@ async function _runGasCloudTick(combat) {
       // at or under percent/10 the wearer is protected this turn, and the card shows the roll.
       const decisions = [];
       for (const tokDoc of tokensInCloud) {
-        const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
+        // The token's own actor — for an unlinked token that's its synthetic actor, and preferring
+        // the world actor here would read the wrong gear/borg state and write saves to the prototype.
+        const liveActor = tokDoc.actor ?? null;
         // Zone gate: protection gear installed in a destroyed cyberlimb zone is inert wreckage and must
         // not count toward the gas-save decision — the same enumeration every other contribution engine uses.
         const items = liveActor ? contributingItems(liveActor) : [];
@@ -2151,7 +2155,10 @@ function _hookSocketRelay() {
     // posts the effect card), else N GMs each apply it N times.
     if (data.type === "martialEffect") {
       if (game.users.activeGM?.id !== game.user.id) return;
-      const tgt = game.actors.get(data.targetActorId);
+      // Token-first: an unlinked token's grapple/choke flags belong to THAT token's synthetic
+      // actor, not the shared world actor its id also resolves to.
+      const tgt = resolveActorRef({ tokenId: data.targetTokenId, sceneId: data.targetSceneId,
+                                    actorUuid: data.targetActorUuid, actorId: data.targetActorId });
       if (tgt) {
         const { applyMartialHitEffects } = await import("../martial/martial.js");
         const atk = data.attackerActorId ? game.actors.get(data.attackerActorId) : null;
@@ -2166,7 +2173,11 @@ function _hookSocketRelay() {
     // applies the damage, otherwise N connected GMs would each apply it N times.
     if (game.users.activeGM?.id !== game.user.id) return;
 
-    const target = game.actors.get(data.targetActorId);
+    // Token-first (the player-relay path is where prototype bleed-through hurt most): a hit on an
+    // unlinked token must write that token's synthetic actor. The bare-actorId fallback keeps
+    // pre-fix cards in the log working.
+    const target = resolveActorRef({ tokenId: data.targetTokenId, sceneId: data.targetSceneId,
+                                     actorUuid: data.targetActorUuid, actorId: data.targetActorId });
     if (!target) {
       console.warn("CP2020 | Socket applyDamage: target actor not found:", data.targetActorId);
       return;
@@ -2203,14 +2214,13 @@ function _hookSocketRelay() {
         await applyDotFromPayload(target, hits[0]?.location ?? null, data, hits.some(h => h.penetrates));
 
         if (totalApplied > 0) {
-          const liveTarget = game.actors.get(target.id) ?? target;
-          // Resolve the target token from the threaded id (falls back to actor lookup) so the post-hit
-          // prompt/status lands on the token that was hit, not an arbitrary same-actor token.
+          // `target` is a live document (token-first resolved) — re-fetching by id here would
+          // retarget an unlinked token's hit back to the shared world actor.
           const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
-                          : (canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id) ?? null);
-          const woundState = liveTarget.woundState?.() ?? 0;
-          if (woundState >= 4) await postDeathSavePrompt(liveTarget, liveToken);
-          else if (woundState > 0) await postStunSavePrompt(liveTarget, liveToken);
+                          : (canvas?.tokens?.placeables?.find(t => t.actor === target) ?? null);
+          const woundState = target.woundState?.() ?? 0;
+          if (woundState >= 4) await postDeathSavePrompt(target, liveToken);
+          else if (woundState > 0) await postStunSavePrompt(target, liveToken);
         }
 
       } else if (data.mode === "resolved") {
@@ -2218,7 +2228,7 @@ function _hookSocketRelay() {
         // (cyberlimb zones absorb into their SDP; totalApplied counts only flesh HP so the post-hit
         // stun/death prompt stays honest).
         const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
-                        : (canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null);
+                        : (canvas?.tokens?.placeables?.find(t => t.actor === target) ?? null);
         for (const hit of data.resolvedHits) {
           const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken });
           totalApplied += outcome.applied;
@@ -2240,12 +2250,12 @@ function _hookSocketRelay() {
         await applyDotFromPayload(target, data.firstHitLocation ?? null, data, (data.resolvedHits ?? []).some(h => h.penetrates));
 
         if (totalApplied > 0) {
-          const liveTarget = game.actors.get(target.id) ?? target;
           // Reuse liveToken (resolved above from data.targetTokenId) — re-deriving by actor id would drop
           // the threaded token and land the prompt/status on the wrong token for a multi-token actor.
-          const woundState = liveTarget.woundState?.() ?? 0;
-          if (woundState >= 4) await postDeathSavePrompt(liveTarget, liveToken);
-          else if (woundState > 0) await postStunSavePrompt(liveTarget, liveToken);
+          // `target` stays as resolved (token-first) — no id re-fetch, see the auto branch.
+          const woundState = target.woundState?.() ?? 0;
+          if (woundState >= 4) await postDeathSavePrompt(target, liveToken);
+          else if (woundState > 0) await postStunSavePrompt(target, liveToken);
         }
       }
 
@@ -2276,7 +2286,12 @@ async function _autoApply(payload, target) {
       mode:             "auto",
       requesterId:      game.user.id,
       targetActorId:    target.id,
+      // Unambiguous refs for the GM-side resolve: a synthetic (unlinked-token) actor's id collides
+      // with its world actor's, so the uuid + scene-qualified token are what keep the hit on the
+      // token that was shot. sceneId comes from the token itself (the GM may view another scene).
+      targetActorUuid:  target.uuid ?? null,
       targetTokenId:    payload.targetTokenId ?? null,
+      targetSceneId:    (payload.targetTokenId ? canvas?.tokens?.get(payload.targetTokenId)?.document?.parent?.id : null) ?? canvas?.scene?.id ?? null,
       areaDamages:      payload.areaDamages,
       ap:               Boolean(payload.ap),
       edged:            Boolean(payload.edged),
