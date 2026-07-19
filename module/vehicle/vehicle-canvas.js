@@ -50,7 +50,9 @@ export async function deployVehicleToScene(actor, opts = {}) {
   const py = opts.y ?? Math.round(((scene.height ?? 2000) - hpx) / 2);
 
   const [tokenDoc] = await scene.createEmbeddedDocuments("Token", [{
-    name: actor.name, actorId: actor.id, actorLink: true,
+    // Link mode follows the actor's prototype token — the user's choice (linked = THE vehicle,
+    // unlinked = independent copies), not a hardcoded override. New vehicles seed linked at creation.
+    name: actor.name, actorId: actor.id, actorLink: actor.prototypeToken?.actorLink ?? true,
     x: px, y: py, width: gw, height: gh,
     sort: VEHICLE_SORT,                              // crew tokens render on top
     texture: { src: actor.img, fit: "contain" },     // art scales to the footprint

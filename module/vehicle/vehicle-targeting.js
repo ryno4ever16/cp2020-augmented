@@ -13,7 +13,7 @@
  */
 
 import { applyAreaDamages, ablateLocationByAmount, personnelArmorValue, ARMOR_MODES } from "../combat/DamageApplicator.js";
-import { rollLocation, localize, localizeParam } from "../utils.js";
+import { rollLocation, resolveActorRef, localize, localizeParam } from "../utils.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { markCardResolved } from "../card-lock.js";
 import { effectiveVehicleRuleSystem } from "../settings.js";
@@ -167,13 +167,16 @@ export async function postLuckSavePrompt(targetActor, payload = {}) {
   const content = await renderChatCard("vehicle/luck-save-prompt.hbs", {
     targetName: targetActor.name, weaponName, pen, luck,
     actorId: targetActor.id, tokenId: tok?.id ?? payload.targetTokenId ?? "",
+    sceneId: tok?.document?.parent?.id ?? targetActor.token?.parent?.id ?? canvas?.scene?.id ?? "",
   });
   await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor: targetActor }) });
 }
 
 /** Execute the LUCK save + apply the p.8 result. Called by the chat-button handler. */
-async function _executeLuckSave({ actorId, tokenId, pen, weaponName }) {
-  const actor = game.actors.get(actorId);
+async function _executeLuckSave({ actorId, tokenId, sceneId, pen, weaponName }) {
+  // Token-first: the victim is the TOKEN the anti-vehicle round struck — an unlinked token's
+  // damage/armor writes belong to its synthetic actor, not the shared world actor its id matches.
+  const actor = resolveActorRef({ tokenId, sceneId, actorId });
   if (!actor) return;
   // Only the victim's owner or the GM may roll/apply this save — it writes the actor's damage/armor.
   // Mirrors the stun/death-save owner gate (save-rolls.js _assertCanResolveSave); without it a
@@ -238,7 +241,7 @@ export function registerVehicleTargetingHandlers() {
     ev.preventDefault();
     btn.disabled = true;
     await _executeLuckSave({
-      actorId: btn.dataset.actorId, tokenId: btn.dataset.tokenId,
+      actorId: btn.dataset.actorId, tokenId: btn.dataset.tokenId, sceneId: btn.dataset.sceneId,
       pen: Number(btn.dataset.pen) || 0, weaponName: btn.dataset.weapon || "anti-vehicle weapon"
     });
     // One-shot: the LUCK save rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
@@ -251,7 +254,11 @@ export function registerVehicleTargetingHandlers() {
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "vehicleDamage") return;
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
-    const target = game.actors.get(data.targetActorId);
+    // Token-first: an unlinked vehicle/ACPA copy's damage belongs to THAT token's synthetic actor —
+    // resolving by actor id here sent every player-relayed hit to the shared world actor, which all
+    // pristine copies then displayed (the mass-damage report). Bare id stays as the legacy fallback.
+    const target = resolveActorRef({ tokenId: data.targetTokenId, sceneId: data.targetSceneId,
+                                     actorUuid: data.targetActorUuid, actorId: data.targetActorId });
     if (!target) return;
     await dispatchAttack(data.payload ?? {}, target);
   });
@@ -287,8 +294,15 @@ function _canModifyAcpaPilot(target) {
 function _relayVehicleAttack(payload, target) {
   if (!game.users?.activeGM) { ui.notifications?.warn?.(localizeParam("Vehicle.NoGMForDamage", { name: target?.name ?? "the vehicle" })); return; }
   const facing = resolveFacing(payload, target);
+  // Unambiguous refs (matches the personnel relay): a synthetic (unlinked-token) actor's id collides
+  // with its world actor's — the uuid + scene-qualified token keep the GM-side write on the token hit.
+  const tokDoc = payload.targetTokenId ? (canvas?.tokens?.get(payload.targetTokenId)?.document ?? null)
+               : (target.token ?? null);
   game.socket.emit("module.cp2020-augmented", {
     type: "vehicleDamage", targetActorId: target.id,
+    targetActorUuid: target.uuid ?? null,
+    targetTokenId: tokDoc?.id ?? payload.targetTokenId ?? null,
+    targetSceneId: tokDoc?.parent?.id ?? canvas?.scene?.id ?? null,
     payload: { ...payload, facing }, requesterId: game.user.id,
   });
   ui.notifications?.info?.(localizeParam("Vehicle.DamageSentToGM", { name: target?.name ?? "target" }));
