@@ -58,6 +58,7 @@ import { registerMartialDefense } from "./martial/martial.js";
 import { registerFreeFire } from "./mech/free-fire.js";
 import { registerMechLoadout } from "./mech/loadout.js";
 import { registerSeamShim } from "./seam-shim.js";
+import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js";
 import { hostProvides } from "./system-api.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
@@ -465,6 +466,13 @@ Hooks.once("ready", function () {
   // the base system lacks native emission (the seam PRs aren't merged). Self-disengages the instant the
   // base system emits them — including on a fork+module install (the fork emits natively). See seam-shim.js.
   registerSeamShim();
+
+  // Martial-art id-resolution repair: the base system recovers a skill's canonical compendium id
+  // only from the legacy flags.core.sourceId, so styles dragged onto a sheet under Foundry v12+
+  // lose their Key-Attack bonuses (and a level-0 seeded row can shadow a leveled dragged copy).
+  // The candidate half self-disengages when the base reads _stats.compendiumSource itself (the
+  // pending upstream fix). See martial/id-resolution-shim.js.
+  registerMartialIdResolutionShim();
 
   // combatAutomationEnabled is the master gate for the Augmented combat layer (damage application,
   // saves, area effects, combat-tracker controls, vehicle/ACPA weapon fire + targeting + missiles);

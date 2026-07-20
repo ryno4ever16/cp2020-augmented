@@ -91,15 +91,22 @@ function normalizeSkillName(value) {
     .trim();
 }
 
-/** Find an owned skill Item by the stable id used in the lookup tables. */
+/** Find an owned skill Item by the stable id used in the lookup tables. Among multiple matches
+ *  (actor creation seeds every built-in style at level 0 under its canonical _id, so a seeded
+ *  row can coexist with a leveled compendium-dragged copy) the highest effective level wins —
+ *  the old first-match returned the seeded 0 and shadowed the real skill. Ties go to the
+ *  direct embedded-id match, the previous behavior's preference. */
 function getSkillByStableId(actor, stableId) {
   if (!actor || !stableId) return null;
-  const direct = actor.items.get(stableId);
-  if (direct?.type === "skill") return direct;
-  return actor.items.find((item) => {
-    if (item.type !== "skill") return false;
-    return getItemIdCandidates(item).includes(stableId);
-  }) ?? null;
+  const matches = actor.items.filter((item) =>
+    item.type === "skill" && getItemIdCandidates(item).includes(stableId));
+  if (!matches.length) return null;
+  let best = matches[0];
+  for (const s of matches.slice(1)) {
+    const d = realSkillValue(s) - realSkillValue(best);
+    if (d > 0 || (d === 0 && s.id === stableId && best.id !== stableId)) best = s;
+  }
+  return best;
 }
 
 // ---------------------------------------------------------------------------
