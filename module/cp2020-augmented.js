@@ -59,6 +59,7 @@ import { registerFreeFire } from "./mech/free-fire.js";
 import { registerMechLoadout } from "./mech/loadout.js";
 import { registerSeamShim } from "./seam-shim.js";
 import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js";
+import { registerIconNormalizationShim } from "./icon-normalization-shim.js";
 import { hostProvides } from "./system-api.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
@@ -199,6 +200,14 @@ Hooks.once("init", function () {
     // (no-op on a fork that declares them). See module/data/weapon-item-data.js.
     weapon:           makeWeaponAugmentedData(CONFIG.Item.dataModels.weapon),
   });
+
+  // Actor icon repair: a legacy `system.icon` string without a recognized image extension makes
+  // the whole actor fail validation at load ("unavailable" documents — the bug upstream PR #39
+  // fixes). Wrap the actor data models' migrateData to coerce unusable values to "" before
+  // validation. Self-disengaging: inert when the field isn't a strict FilePathField (hand-patched
+  // or fork installs) or when the base carries the upstream normalizer. Init-time, before world
+  // documents construct. See icon-normalization-shim.js.
+  registerIconNormalizationShim();
 
   // Q7 personality moddies: wrap the actor's prepareData so stat mods with caps/combat context
   // apply on top of the base totals (prepareData, NOT prepareDerivedData — the base computes its
