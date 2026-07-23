@@ -6,25 +6,24 @@
  *   • openApplyDoseDialog(actors) — a DialogV2 form (rads / source / honor-RSP) that feeds
  *     radiation.js#applyRadiationDose. Opened per-actor from the sheet radiation panel, or against the
  *     selected tokens from the scene-control tool.
- *   • openPlaceZoneDialog()       — a DialogV2 form (radius / rads-formula / source / duration) that
- *     drops a radiation-zones.js#placeRadZone at a selected token, else the centre of the current view.
  *   • openEnvironmentalDialog(actors) — the out-of-combat time tool: cosmic (1D6 millirad/hr) or a solar
  *     flare (Strength × D6 rads/hr) over N hours (Deep Space p.21/23), applied raw (no per-turn RSP —
  *     RSP is the reactor per-turn value; environmental exposure is the Referee's hourly bookkeeping).
- *   • registerRadiationTools()    — adds the three GM tools to the token scene-control group (mirrors the
+ *   • Placing a radiation ZONE is NATIVE — the GM draws a Region and adds the "Radiation Zone" behavior
+ *     (radiation-zone-behavior.js). There is no module dialog / tool for zone placement.
+ *   • registerRadiationTools()    — adds the two GM tools to the token scene-control group (mirrors the
  *     df-active-lights getSceneControlButtons idiom: augment an existing group's `tools`, don't invent a
  *     canvas layer). Shown to any GM (no feature toggle — the tools are the opt-in). Wired from cp2020-augmented.js.
  *
  * All dialog markup lives in templates/dialog/radiation-*.hbs; every string is a CYBERPUNK.Rad* i18n key;
  * the DialogV2.wait + read-fields-in-the-confirm-callback shape mirrors module/dialog/ip-neglect.js. No
- * HTML/CSS is built in JS. The tools are NOT feature-gated at the action layer (an explicit dose/zone is a
- * deliberate act, like applyRadiationDose/placeRadZone themselves) — only their VISIBILITY follows the
- * toggle, and the passive zone/overlay automation stays gated inside radiation.js/radiation-zones.js.
+ * HTML/CSS is built in JS. The tools are NOT feature-gated at the action layer (an explicit dose is a
+ * deliberate act, like applyRadiationDose itself) — only their VISIBILITY follows the toggle, and the
+ * passive zone/overlay automation stays gated inside radiation.js/radiation-zones.js.
  */
 
 import { localize } from "../utils.js";
 import { applyRadiationDose } from "./radiation.js";
-import { placeRadZone } from "./radiation-zones.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -78,55 +77,6 @@ export async function openApplyDoseDialog(actors) {
           for (const actor of targets) {
             await applyRadiationDose(actor, rads, { perTurn, sourceLabel: source, announce: true });
           }
-        },
-      },
-      { action: "cancel", icon: "fa-solid fa-xmark", label: localize("Cancel") },
-    ],
-  });
-}
-
-/* ══════════════════════════════════ Place zone ══════════════════════════════════ */
-
-/** Placement origin in PIXELS: the centre of the single selected token, else the centre of the current
- *  canvas view (stage pivot). Null when there is no canvas. */
-function zoneOrigin() {
-  if (!canvas?.ready) return null;
-  const controlled = canvas.tokens?.controlled ?? [];
-  if (controlled.length === 1 && controlled[0]?.center) {
-    return { x: controlled[0].center.x, y: controlled[0].center.y };
-  }
-  const pivot = canvas.stage?.pivot;
-  if (pivot) return { x: pivot.x, y: pivot.y };
-  return null;
-}
-
-/**
- * The GM place-zone control: prompt for radius / per-turn rads formula / source / duration, then drop a
- * radiation zone (radiation-zones.js#placeRadZone) at the selected token or the view centre. A finite
- * duration self-removes; 0 = persistent (a reactor breach / standing field).
- */
-export async function openPlaceZoneDialog() {
-  const origin = zoneOrigin();
-  if (!origin) { ui.notifications?.warn(localize("RadNoCanvas")); return; }
-
-  const content = await renderTpl("modules/cp2020-augmented/templates/dialog/radiation-place-zone.hbs", {
-    atToken: (canvas.tokens?.controlled ?? []).length === 1,
-  });
-
-  await foundry.applications.api.DialogV2.wait({
-    window: { title: localize("RadPlaceZoneTitle"), icon: "fa-solid fa-radiation" },
-    content,
-    rejectClose: false,
-    buttons: [
-      {
-        action: "place", default: true, icon: "fa-solid fa-radiation", label: localize("RadPlaceZoneBtn"),
-        callback: async (ev, btn, dialog) => {
-          const root = dialog?.element;
-          const radiusM     = Number(root?.querySelector?.(".cp-rad-radius")?.value) || 3;
-          const radsFormula = String(root?.querySelector?.(".cp-rad-formula")?.value ?? "").trim() || "1d10";
-          const sourceLabel = String(root?.querySelector?.(".cp-rad-source")?.value ?? "").trim();
-          const turnsLeft   = Number(root?.querySelector?.(".cp-rad-turns")?.value) || 0;
-          await placeRadZone({ x: origin.x, y: origin.y, radiusM, radsFormula, sourceLabel, turnsLeft });
         },
       },
       { action: "cancel", icon: "fa-solid fa-xmark", label: localize("Cancel") },
@@ -229,19 +179,17 @@ export function addRadiationTools(controls) {
   if (!tokens?.tools) return false;
   const order = Object.keys(tokens.tools).length;
 
-  tokens.tools["cp-rad-zone"] = {
-    name: "cp-rad-zone", title: "CYBERPUNK.RadToolPlaceZone", icon: "fa-solid fa-radiation",
-    button: true, order: order + 1,
-    onChange: () => openPlaceZoneDialog(),
-  };
+  // Placing a radiation ZONE is now native: the GM draws a Region and adds the "Radiation Zone" behavior
+  // (radiation-zone-behavior.js) — no module tool for it. These two tools apply a one-off dose / run the
+  // out-of-combat environmental exposure to the selected tokens.
   tokens.tools["cp-rad-dose"] = {
     name: "cp-rad-dose", title: "CYBERPUNK.RadToolApplyDose", icon: "fa-solid fa-person-rays",
-    button: true, order: order + 2,
+    button: true, order: order + 1,
     onChange: () => openApplyDoseDialog(selectedActors()),
   };
   tokens.tools["cp-rad-env"] = {
     name: "cp-rad-env", title: "CYBERPUNK.RadToolEnvironmental", icon: "fa-solid fa-sun",
-    button: true, order: order + 3,
+    button: true, order: order + 2,
     onChange: () => openEnvironmentalDialog(selectedActors()),
   };
   return true;

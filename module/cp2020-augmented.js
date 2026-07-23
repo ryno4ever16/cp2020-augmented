@@ -51,6 +51,7 @@ import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
 import { registerRadiation } from "./radiation/radiation.js";
 import { registerRadiationZones } from "./radiation/radiation-zones.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
+import { registerRadiationZoneBehavior, registerRadiationZoneVisibilityDefault } from "./radiation/radiation-zone-behavior.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
 import { registerPaSkillBackfill } from "./mech/pa-skills.js";
 import { registerPaCombatSense } from "./mech/pa-combat-sense.js";
@@ -230,10 +231,16 @@ Hooks.once("init", function () {
   // chance-of-death button + the per-round dose tick, and install the radiation-zone hooks. Registered
   // AFTER registerMechDrug so the overlay stacks on the drug boosts (order base → moddy → drug → radiation).
   // No feature toggle: every passive path no-ops until a GM places a zone or applies a dose.
+  // Radiation zones are native Regions carrying a custom "Radiation Zone" behavior: register the behavior
+  // TYPE here at init (before scenes load — the manifest declares it under documentTypes.RegionBehavior),
+  // plus the hook that defaults a fresh rad-zone region to GM-visible.
+  registerRadiationZoneBehavior();
+  registerRadiationZoneVisibilityDefault();
   registerRadiation();
   registerRadiationZones();
-  // R3b GM tools: the apply-dose / place-zone / environmental scene-control buttons (shown to a GM while
-  // radiation is enabled). The per-actor panel controls are wired by the actor sheet itself.
+  // R3b GM tools: the apply-dose / environmental scene-control buttons (shown to a GM while radiation is
+  // enabled). Zone placement is native (draw a Region + add the behavior). Per-actor panel controls are
+  // wired by the actor sheet itself.
   registerRadiationTools();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the

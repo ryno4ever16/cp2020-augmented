@@ -1,58 +1,51 @@
 /**
- * R? — Radiation ZONES: a per-turn area hazard that irradiates every token standing inside it.
+ * R? — Radiation ZONES: a per-round area hazard that irradiates every token standing inside it.
  *
- * The book's reactor/rad-field model (Deep Space "for every turn of exposure, roll 1D10... rads"): a
- * circular zone on the canvas that, each combat round, rolls its rads formula PER token inside and feeds
- * the result to the confirmed dose subsystem (radiation.js#applyRadiationDose) — which already owns the
- * RSP suit subtraction, the Radiation Effects Table, and its own per-actor summary / death cards. This
- * file adds NONE of that; it is purely the "area + per-round tick" shell around it.
+ * The book's reactor/rad-field model (Deep Space "for every turn of exposure, roll 1D10... rads"): an
+ * area on the canvas that, each combat round, rolls its rads formula PER token inside and feeds the result
+ * to the confirmed dose subsystem (radiation.js#applyRadiationDose) — which already owns the RSP suit
+ * subtraction, the Radiation Effects Table, and its own per-actor summary / death cards. This file adds
+ * NONE of that; it is purely the "area + per-round tick" shell around it.
  *
- * This file MIRRORS the GAS-CLOUD region system in module/combat/damage-hooks.js almost 1:1 — the same
- * patterns, idioms, and comment density:
- *   - PLACEMENT — `placeRadZone` ≙ `_placeGasCloud`: build a circle via the core-agnostic area-shapes
- *     shim (MeasuredTemplate on v13, Region on v14), tag it with cyberpunk2020-scoped flags, and post a
- *     placement notice through postSavePromptCard.
- *   - ROUND TICK — `runRadZoneTick` ≙ `_runGasCloudTick`: find every flagged zone on the viewed scene,
- *     gather the tokens inside (the shim's testPoint/shape.contains), act on each, then age/remove the
- *     zone. One SHORT per-round card names the zone + who's inside, on TOP of applyRadiationDose's cards.
- *   - PER-TURN HOOK — `_hookRadZonePerTurn` ≙ `_hookGasCloudPerTurn`: the updateCombat handler with the
- *     EXACT gas-cloud + drug + radiation.js gating chain (feature toggle, round-tick master, GM, the
- *     single active GM, a real turn/round change, and the Begin-Combat guard).
- *   - `registerRadiationZones` ≙ the gas-cloud registration — installs the hook. (A later agent wires
- *     this into cp2020-augmented.js — that file is NOT edited here.)
+ * ZONES ARE NATIVE FOUNDRY REGIONS carrying a custom "Radiation Zone" behavior (radiation-zone-behavior.js).
+ * The GM draws / reshapes / moves / deletes / hides a zone with Foundry's own region tools — there is no
+ * module placement dialog. The behavior holds the two data fields (radsFormula + sourceLabel); this file
+ * reads them each round and doses the tokens the region reports inside itself (its native `tokens` Set).
+ * Regions + custom behaviors exist v12+, so this needs none of the area-shapes MeasuredTemplate/Region
+ * shim (that shim stays for the TRANSIENT combat areas — gas cloud, suppressive fire).
  *
- * THE ONE DELIBERATE DIVERGENCE from the gas cloud: the gas cloud always has a finite duration and its
- * tick opens with `if (turnsLeft <= 0) deleteArea`. A rad zone treats `turnsLeft <= 0` as PERSISTENT — a
- * reactor breach / standing rad field does not disperse on its own — so a persistent zone is NEVER
- * decremented or auto-deleted; only a zone placed with a FINITE `turnsLeft > 0` counts down and self-
- * removes when it hits 0. (Resolved ambiguity — see the build report.)
+ *   - ROUND TICK — `runRadZoneTick`: dose every native region zone, then every LEGACY flag zone (below).
+ *   - PER-TURN HOOK — `_hookRadZonePerTurn`: the updateCombat handler with the gas-cloud + drug gating
+ *     chain (feature toggle, round-tick master, GM, the single active GM, a real round change, the
+ *     Begin-Combat guard).
+ *   - `registerRadiationZones` — installs the tick hook + the one-time legacy migration (ready). The
+ *     behavior TYPE is registered separately at init by registerRadiationZoneBehavior.
  *
- * Flags live under scope "cp2020-augmented" (area-shapes namespaces the descriptor's `flags` for us):
- *   { isRadZone: true, radsFormula, sourceLabel, turnsLeft, createdRound }
- * `sourceLabel` is stored RAW (may be "") and its generic fallback is localized at DISPLAY time, so a
- * stored flag never freezes the UI language — the radiation.js `sourceName` discipline.
+ * BACK-COMPAT: pre-behavior zones tagged `flags.cp2020-augmented.isRadZone` (v13 MeasuredTemplates, or a
+ * v14 region not yet migrated) still tick through the legacy path and keep their old FINITE-countdown
+ * behavior (a persistent legacy zone, turnsLeft ≤ 0, never auto-disperses). `migrateLegacyRadZones` (ready,
+ * active GM) upgrades legacy v14 regions to the native behavior and drops the flag so they are not
+ * double-dosed. `sourceLabel` is stored RAW (may be "") and its generic fallback is localized at DISPLAY
+ * time, so a stored value never freezes the UI language — the radiation.js `sourceName` discipline.
  *
  * ── Handlebars card templates referenced (NAME only) ──
- *   • save-prompt.hbs  — EXISTING generic notice card, reused via postSavePromptCard (title/body). NOT
- *                        created here; NO new hbs template is introduced by this file.
+ *   • save-prompt.hbs  — EXISTING generic notice card, reused via postSavePromptCard (title/body). No new
+ *                        hbs template is introduced by this file.
  *
- * ── i18n keys referenced (CYBERPUNK.* namespace — a later agent adds these to lang/en.json; NOT edited
- *    here) ──
- *   RadZoneTitle            (params { source })                  — placement card title
- *   RadZonePlacedBody       (params { radius, rads, source, durationClause }) — placement card body
- *   RadZoneDurationClause   (params { turns })                   — placement clause for a FINITE zone
- *   RadZonePersistentClause (no params)                          — placement clause for a PERSISTENT zone
- *   RadZoneTurnTitle        (params { source })                  — per-round card title
- *   RadZoneTurnBody         (params { names })                   — per-round card body (who's inside)
- *   RadZoneDispersedBody    (params { source })                  — a FINITE zone's expiry notice
+ * ── i18n keys referenced (CYBERPUNK.* namespace) ──
+ *   RadZoneTurnTitle     (params { source })   — per-round card title
+ *   RadZoneTurnBody      (params { names })     — per-round card body (who suffered an effect)
+ *   RadZoneDispersedBody (params { source })    — a legacy FINITE zone's expiry notice
+ *   RadZoneBehaviorLabel (no params)            — the migrated behavior's document name
  *   Reused EXISTING key (from radiation.js): RadiationSourceDefault — the generic source-label fallback.
  */
 
 import { localize, localizeParam } from "../utils.js";
 import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard } from "../compat.js";
-import { createArea, areasByFlag, tokensInArea, deleteArea } from "../combat/area-shapes.js";
+import { areasByFlag, tokensInArea, deleteArea } from "../combat/area-shapes.js";
 import { applyRadiationDose } from "./radiation.js";
+import { RAD_ZONE_BEHAVIOR, radiationZoneBehaviorClass } from "./radiation-zone-behavior.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -73,113 +66,131 @@ async function rollRads(formula) {
 }
 
 /**
- * Place a radiation zone on the viewed scene and post its placement notice. GM action (like
- * applyRadiationDose / _placeGasCloud it is a deliberate GM act — placing a zone IS the opt-in). Mirrors
- * _placeGasCloud.
- *
- *   { x, y }        origin in PIXELS (canvas coords), as the area-shapes descriptor expects.
- *   radiusM         zone radius in METRES (default 3).
- *   radsFormula     per-turn rads roll, PER token inside (default "1d10" — the book reactor rate).
- *   sourceLabel     free-text hazard name (stored raw; its fallback is localized at display time).
- *   turnsLeft       FINITE turns before it self-removes; 0 / absent = PERSISTENT (never counts down).
- *
- * @returns {Promise<object|null>} the created area handle, or null on failure.
+ * Dose every token in ONE zone this round and post the single per-round zone card. Shared by the native
+ * region-behavior path and the legacy flag path. `tokenDocs` is the array of TokenDocuments inside the
+ * zone this round.
+ *   - applyRadiationDose owns the RSP subtraction, the effects table, and its own per-actor summary /
+ *     death cards — we only feed it the rolled rads. perTurn:true so the equipped rad-suit's RSP applies.
+ *   - announce:false → routine accrual is silent; a token appears on the zone card ONLY when something
+ *     happened this round (a new dose band, HP damage, or a death check), so a field merely accruing dose
+ *     doesn't spam a card per token per round.
  */
-export async function placeRadZone({ x, y, radiusM = 3, radsFormula = "1d10", sourceLabel = "", turnsLeft = 0 } = {}) {
-  if (!game.user?.isGM) return null;   // GM-only (user ruling): defence-in-depth behind the GM scene tool
-  const scene = canvas?.scene;
-  if (!scene) return null;
-
-  const radius  = Number(radiusM) || 3;
-  const formula = String(radsFormula ?? "").trim() || "1d10";
-  const turns   = Number(turnsLeft) || 0;   // 0 / absent = PERSISTENT (a reactor breach does not expire)
-  const source  = String(sourceLabel ?? "").trim() || localize("RadiationSourceDefault");
-
-  const handle = await createArea(scene, {
-    kind: "circle", x, y, radiusM: radius,
-    // A sickly yellow-green, deliberately distinct from the gas cloud's green, so the two area hazards
-    // read apart at a glance on the canvas.
-    color: "#ccff33", borderColor: "#88aa22",
-    flags: {
-      isRadZone: true, radsFormula: formula, sourceLabel: String(sourceLabel ?? ""),
-      turnsLeft: turns, createdRound: game.combat?.round ?? 0,
-    },
-  });
-  if (!handle?.doc) { console.warn("CP2020 | Rad zone creation failed"); return null; }
-
-  // Placement notice (the _placeGasCloud postSavePromptCard pattern): radius, the per-turn rads rate, the
-  // source name, and whether it persists or counts down — the latter as a JS-assembled clause so the two
-  // cases share one body key.
-  const durationClause = turns > 0
-    ? localizeParam("RadZoneDurationClause", { turns })
-    : localize("RadZonePersistentClause");
-  await postSavePromptCard({
-    title: localizeParam("RadZoneTitle", { source }),
-    body: localizeParam("RadZonePlacedBody", { radius, rads: formula, source, durationClause }),
-  });
-
-  return handle;
+async function _doseZoneTokens({ radsFormula, sourceLabel, tokenDocs }) {
+  const source = String(sourceLabel ?? "").trim() || localize("RadiationSourceDefault");   // display only
+  const dosed = [];
+  for (const tokDoc of tokenDocs) {
+    // Live actor: prefer the world document over the token's synthetic copy — the gas-cloud idiom, so the
+    // dose lands on (and re-prepares) the real actor.
+    const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
+    if (!liveActor) continue;
+    const rads = await rollRads(radsFormula);
+    const res = await applyRadiationDose(liveActor, rads, { perTurn: true, sourceLabel, announce: false });
+    if (res && (res.bandFired != null || res.damageDealt > 0 || res.deathPosted)) dosed.push(tokDoc);
+  }
+  // ONE short per-round zone card naming the field + who suffered an effect this round, IN ADDITION to
+  // applyRadiationDose's own per-actor cards. Posted only when someone crossed a band / took damage.
+  if (dosed.length) {
+    const names = dosed.map((t) => `<b>${t.name}</b>`).join(", ");
+    await postSavePromptCard({
+      title: localizeParam("RadZoneTurnTitle", { source }),
+      body: localizeParam("RadZoneTurnBody", { names }),
+    });
+  }
 }
 
 /**
- * One per-round pass over every radiation zone on the viewed scene: dose each token standing inside, then
- * age/remove any FINITE zone. No feature-toggle gate — `areasByFlag(scene, "isRadZone")` is empty on any
- * scene where a GM has not placed a zone, so this is a no-op until radiation is actually in play. Mirrors
- * _runGasCloudTick.
+ * Native radiation zones on the viewed scene: every Region carrying an ENABLED Radiation Zone behavior,
+ * normalized to { radsFormula, sourceLabel, tokenDocs }. Tokens come from the region's native live
+ * `tokens` Set (Foundry maintains who is inside). Empty on any scene with no such region.
+ */
+function regionRadZones(scene) {
+  const out = [];
+  for (const region of scene?.regions ?? []) {
+    const behavior = region.behaviors?.find((b) => !b.disabled && b.type === RAD_ZONE_BEHAVIOR);
+    if (!behavior) continue;
+    const sys = behavior.system ?? {};
+    out.push({
+      radsFormula: String(sys.radsFormula ?? "1d10"),
+      sourceLabel: String(sys.sourceLabel ?? ""),
+      tokenDocs: [...(region.tokens ?? [])],
+    });
+  }
+  return out;
+}
+
+/**
+ * One per-round pass over every radiation zone on the viewed scene, from TWO sources:
+ *   1) NATIVE region zones — Regions carrying the Radiation Zone behavior (the model since this rework;
+ *      the GM draws / hides / removes them with Foundry's own region tools).
+ *   2) LEGACY flag zones — pre-behavior zones still tagged `flags.cp2020-augmented.isRadZone` (v13
+ *      MeasuredTemplates, or a v14 region not yet migrated). These keep their old finite-countdown
+ *      behavior. A region that ALSO carries the behavior is skipped here so it is never dosed twice.
+ * No feature-toggle gate — both sources are empty until a GM actually places a zone, so this is a no-op
+ * until radiation is in play.
  */
 export async function runRadZoneTick(combat) {
   const scene = canvas?.scene;
   if (!scene) return;
 
-  const zones = areasByFlag(scene, "isRadZone");
+  // 1) Native region zones.
+  for (const zone of regionRadZones(scene)) {
+    await _doseZoneTokens(zone);
+  }
 
-  for (const zone of zones) {
+  // 2) Legacy flag zones (back-compat).
+  for (const zone of areasByFlag(scene, "isRadZone")) {
+    if (zone.doc?.behaviors?.some?.((b) => b.type === RAD_ZONE_BEHAVIOR)) continue;   // owned by path 1
     const flags       = zone.doc.flags[SCOPE];
     const radsFormula = String(flags.radsFormula ?? "1d10");
-    const sourceLabel = String(flags.sourceLabel ?? "");   // RAW label passed straight to applyRadiationDose
+    const sourceLabel = String(flags.sourceLabel ?? "");
     const turnsLeft   = Number(flags.turnsLeft ?? 0);
-    const source      = sourceLabel.trim() || localize("RadiationSourceDefault");   // localized only for display
+    const source      = sourceLabel.trim() || localize("RadiationSourceDefault");
 
-    // Tokens inside the zone (shim: RegionDocument#testPoint on v14, shape.contains on v13).
-    const tokensInZone = tokensInArea(zone, scene.tokens?.contents ?? []);
+    await _doseZoneTokens({
+      radsFormula, sourceLabel,
+      tokenDocs: tokensInArea(zone, scene.tokens?.contents ?? []),
+    });
 
-    const dosed = [];
-    for (const tokDoc of tokensInZone) {
-      // Live actor: prefer the world document over the token's synthetic copy — the gas-cloud idiom, so
-      // the dose lands on (and re-prepares) the real actor.
-      const liveActor = tokDoc.actor ? (game.actors.get(tokDoc.actor.id) ?? tokDoc.actor) : null;
-      if (!liveActor) continue;
-      const rads = await rollRads(radsFormula);
-      // applyRadiationDose owns the RSP subtraction, the effects table, and its own per-actor summary /
-      // death cards — we only feed it the rolled rads. perTurn:true so the equipped rad-suit's RSP applies.
-      // announce:false → routine accrual is silent; the dose card fires only on a band-crossing (or HP
-      // damage / death), so a persistent field doesn't spam a card per token per round while doses climb.
-      const res = await applyRadiationDose(liveActor, rads, { perTurn: true, sourceLabel, announce: false });
-      // Surface a token on the zone card ONLY when something happened this round (a new dose band, HP
-      // damage, or a death check) — mirroring the dose card's own silence on routine accrual.
-      if (res && (res.bandFired != null || res.damageDealt > 0 || res.deathPosted)) dosed.push(tokDoc);
-    }
-
-    // ONE short per-round zone card naming the field + who suffered an effect this round, IN ADDITION to
-    // applyRadiationDose's own per-actor cards (mirrors _runGasCloudTick's per-turn card). Posted only when
-    // someone crossed a band / took damage — a field that is merely accruing dose is silent.
-    if (dosed.length) {
-      const names = dosed.map((t) => `<b>${t.name}</b>`).join(", ");
-      await postSavePromptCard({
-        title: localizeParam("RadZoneTurnTitle", { source }),
-        body: localizeParam("RadZoneTurnBody", { names }),
-      });
-    }
-
-    // Countdown / removal. Unlike the gas cloud (which always expires), a rad zone ages ONLY when it was
-    // placed FINITE (turnsLeft > 0): decrement, and delete + post the dispersal notice when it reaches 0.
-    // A PERSISTENT zone (turnsLeft ≤ 0 from placement) is never decremented or auto-deleted here — a
-    // standing rad field only goes away when the GM removes it.
+    // Legacy finite countdown (native zones are removed by the GM with region tools instead). A PERSISTENT
+    // legacy zone (turnsLeft ≤ 0) is never auto-removed here.
     if (turnsLeft > 0) {
       await zone.doc.update({ [`flags.${SCOPE}.turnsLeft`]: turnsLeft - 1 }).catch(() => {});
       if (turnsLeft - 1 <= 0) {
         await deleteArea(zone);
         await postSavePromptCard({ body: localizeParam("RadZoneDispersedBody", { source }) });
+      }
+    }
+  }
+}
+
+/**
+ * One-time upgrade of legacy flag-tagged radiation REGIONS to the native behavior. On a v14 world where
+ * zones were placed as flagged regions before the behavior existed, add the Radiation Zone behavior from
+ * the stored flag data, then drop the legacy `isRadZone` flag so the tick's legacy path no longer also
+ * sees them (no double dose). v13 legacy zones are MeasuredTemplates (not regions) and are untouched — they
+ * keep working through the tick's legacy path. Runs once at ready, on the single active GM. Idempotent: a
+ * region that already carries the behavior is skipped.
+ */
+export async function migrateLegacyRadZones() {
+  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+  if (!radiationZoneBehaviorClass()) return;   // pre-region core → nothing to migrate onto
+  for (const scene of game.scenes ?? []) {
+    for (const region of scene.regions ?? []) {
+      const flags = region.flags?.[SCOPE];
+      if (!flags?.isRadZone) continue;
+      if (region.behaviors?.some((b) => b.type === RAD_ZONE_BEHAVIOR)) continue;
+      try {
+        await region.createEmbeddedDocuments("RegionBehavior", [{
+          name: localize("RadZoneBehaviorLabel"),
+          type: RAD_ZONE_BEHAVIOR,
+          system: {
+            radsFormula: String(flags.radsFormula ?? "1d10"),
+            sourceLabel: String(flags.sourceLabel ?? ""),
+          },
+        }]);
+        await region.update({ [`flags.${SCOPE}.-=isRadZone`]: null });
+      } catch (e) {
+        console.warn(`${SCOPE} | rad-zone migration failed for a region`, e);
       }
     }
   }
@@ -208,8 +219,12 @@ function _hookRadZonePerTurn() {
   });
 }
 
-/** Install the radiation-zone hooks. Called once at init (wired by a later agent — cp2020-augmented.js is
- *  NOT edited here). Mirrors the gas-cloud registration. */
+/** Install the radiation-zone hooks: the per-round dosing tick, plus a one-time ready migration that
+ *  upgrades legacy flag-tagged regions to the native behavior. Called once at init from cp2020-augmented.js.
+ *  (The behavior TYPE itself is registered separately, at init, by registerRadiationZoneBehavior.) */
 export function registerRadiationZones() {
   _hookRadZonePerTurn();
+  Hooks.once("ready", () => {
+    migrateLegacyRadZones().catch((e) => console.warn(`${SCOPE} | rad-zone migration error`, e));
+  });
 }

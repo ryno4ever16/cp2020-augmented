@@ -1054,10 +1054,11 @@
     "RadDeathResultDetail": "1d100 ({result}) vs {chance}% chance of death.",
     "RadDeathOccursClause": "<span class=\"result-fail\">DEATH</span> — the radiation proves fatal over {over}.",
     "RadDeathSurvivesClause": "<span class=\"result-success\">SURVIVED</span> — the character pulls through this exposure.",
-    "RadZoneTitle": "Radiation Zone — {source}",
-    "RadZonePlacedBody": "A {radius}m radiation zone ({source}) is active — {rads} rads per turn to everyone inside.{durationClause}",
-    "RadZoneDurationClause": " It disperses in {turns} turn(s).",
-    "RadZonePersistentClause": " It persists until removed.",
+    "RadZoneBehaviorLabel": "Radiation Zone",
+    "RadZoneBehaviorFormula": "Rads per round",
+    "RadZoneBehaviorFormulaHint": "Dice rolled for each token in the zone every combat round (e.g. 1d10, 2d6).",
+    "RadZoneBehaviorSource": "Source label",
+    "RadZoneBehaviorSourceHint": "Optional name for the hazard (e.g. Reactor breach), shown on the round summary card.",
     "RadZoneTurnTitle": "Radiation Zone — {source}",
     "RadZoneTurnBody": "Irradiated this turn: {names}.",
     "RadZoneDispersedBody": "The radiation zone ({source}) disperses.",
@@ -1088,7 +1089,6 @@
     "RadOffspringStillbirth": "Stillbirth",
     "RadOffspringRolled": "Offspring Mutation (1d10): <b>{roll}</b> — {result}",
     "RadNoTargets": "Select at least one token first.",
-    "RadNoCanvas": "No active scene to place a radiation zone on.",
     "RadApplyDoseTitle": "Apply Radiation Dose",
     "RadApplyDoseBtn": "Apply Dose",
     "RadDoseNonPositive": "Enter a positive number of rads.",
@@ -1099,15 +1099,6 @@
     "RadFieldSourcePlaceholder": "e.g. reactor breach",
     "RadFieldPerTurn": "Honor RSP (per-turn dose)",
     "RadFieldPerTurnHint": "On: subtract each target's rad-suit RSP, as for a per-turn reactor exposure. Off: apply the full rads regardless of shielding.",
-    "RadPlaceZoneTitle": "Place Radiation Zone",
-    "RadPlaceZoneBtn": "Place Zone",
-    "RadZoneAtToken": "The zone will be centered on the selected token.",
-    "RadZoneAtView": "The zone will be centered on the current view.",
-    "RadFieldRadius": "Radius (m)",
-    "RadFieldFormula": "Rads per turn",
-    "RadFieldFormulaHint": "A dice formula rolled per token inside the zone each turn (e.g. 1d10 = a nuclear reactor).",
-    "RadFieldTurns": "Duration (turns)",
-    "RadFieldTurnsHint": "Turns before the zone disperses. 0 = persistent (a reactor breach / standing field).",
     "RadEnvTitle": "Environmental Radiation",
     "RadEnvBtn": "Apply Exposure",
     "RadHoursNonPositive": "Enter a positive number of hours.",
@@ -1119,7 +1110,6 @@
     "RadFieldHours": "Hours exposed",
     "RadFieldStrength": "Flare Strength",
     "RadFieldStrengthHint": "Solar-flare Strength: the number of D6 rolled per hour, per character (flare mode only).",
-    "RadToolPlaceZone": "Place Radiation Zone",
     "RadToolApplyDose": "Apply Radiation Dose to Selected",
     "RadToolEnvironmental": "Environmental Radiation (Cosmic / Flare)",
     "RadPanelHeader": "Radiation",
@@ -2143,6 +2133,9 @@
       "program": "Program",
       "cp2020-augmented.vehicleWeapon": "Vehicle Weapon",
       "cp2020-augmented.acpaSystem": "ACPA System"
+    },
+    "RegionBehavior": {
+      "cp2020-augmented.radiationZone": "Radiation Zone"
     }
   }
 }
