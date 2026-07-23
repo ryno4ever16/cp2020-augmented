@@ -10,6 +10,7 @@
 import { registerAugmentedSettings, combatAutomationEnabled, ipHideUI, applyCarolingianSkinClass } from "./settings.js";
 import { registerAugmentedHandlebarsHelpers } from "./handlebars-helpers.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
+import { registerGasCloudBehavior, registerGasCloudVisibilityDefault } from "./combat/gas-cloud-behavior.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
@@ -236,6 +237,10 @@ Hooks.once("init", function () {
   // plus the hook that defaults a fresh rad-zone region to GM-visible.
   registerRadiationZoneBehavior();
   registerRadiationZoneVisibilityDefault();
+  // Gas clouds ride the same native-region rail on v14: spawned clouds (damage-hooks.js) attach the
+  // "Gas Cloud" behavior so the GM manages them with region tools, and a GM can hand-author one too.
+  registerGasCloudBehavior();
+  registerGasCloudVisibilityDefault();
   registerRadiation();
   registerRadiationZones();
   // R3b GM tools: the apply-dose / environmental scene-control buttons (shown to a GM while radiation is

@@ -75,7 +75,13 @@ export function buildAreaData(useRegions, d, scene) {
     } else { // circle
       shape = circleEllipseShape(x, y, metersToPixels(scene, d.radiusM));
     }
-    return { name: d.name ?? "CP2020 Area", color, shapes: [shape], visibility: 1, flags };
+    const regionData = { name: d.name ?? "CP2020 Area", color, shapes: [shape], visibility: 1, flags };
+    // Optional inline RegionBehaviors (e.g. a gas cloud's own `cp2020-augmented.gasCloud` behavior). Creating
+    // them WITH the region keeps the spawn atomic — no window where a per-round tick sees a behavior-less
+    // region. Inline behaviors do NOT fire the createRegionBehavior hook, which is why the region carries its
+    // own `visibility: 1` (GAMEMASTER) above rather than relying on the visibility-default hook.
+    if (Array.isArray(d.behaviors) && d.behaviors.length) regionData.behaviors = d.behaviors;
+    return regionData;
   }
 
   // MeasuredTemplate (v13): distance/width are in scene grid-distance UNITS.
@@ -117,7 +123,8 @@ function tokenCenter(tokenDoc, scene) {
  * Create an area on a scene. Descriptor (core-agnostic; METRES + pixel origin):
  *   { kind: "circle"|"cone"|"ray", x, y,                              // origin in PIXELS
  *     radiusM | {dirDeg, angleDeg, rangeM} | {dirDeg, lengthM, widthM},
- *     color?, borderColor?, name?, segments?, flags? }                // flags = cyberpunk2020-scoped
+ *     color?, borderColor?, name?, segments?, flags?,                  // flags = cyberpunk2020-scoped
+ *     behaviors? }                                                     // inline RegionBehaviors (v14 only)
  * @returns {Promise<object|null>} handle, or null on failure (never throws).
  */
 export async function createArea(scene, descriptor) {

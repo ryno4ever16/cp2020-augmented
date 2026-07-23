@@ -32,6 +32,7 @@ import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, loc
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegions, moveArea } from "./area-shapes.js";
+import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 
 // Payload waiting to be attached to the next chat message created
 let _pendingPayload = null;
@@ -1365,15 +1366,33 @@ async function _placeGasCloud(payload) {
     const radius      = Number(payload.blastRadius) || 3;
     const duration    = Number(payload.dotTurns)    || 3;
     const stunSaveMod = Number(payload.stunSaveMod) || 0;
+    const weaponName  = payload.weaponName ?? localize("WpnGasGrenade");
 
-    const handle = await createArea(scene, {
+    // On v14 the area is a Region: carry the cloud's data on a native Gas Cloud behavior, attached INLINE so
+    // the spawn stays atomic (no window where the tick sees a behavior-less region). The behavior then OWNS
+    // the countdown / penalty / weapon name — the tick reads it first, and the GM manages the cloud with
+    // Foundry's own region tools (reshape, hide, delete, edit the fields) — so we do NOT also write the
+    // legacy `isGasCloud`/turnsLeft/… flags here. On v13 the area is a MeasuredTemplate, which cannot carry a
+    // behavior; it keeps the full legacy flag set the tick's back-compat path reads. Region visibility is
+    // fixed to GAMEMASTER inside buildAreaData (the GM-only-default ruling).
+    const descriptor = {
       kind: "circle", x: cloudX, y: cloudY, radiusM: radius,
       color: "#88ff44", borderColor: "#44aa22",
-      flags: {
+    };
+    if (usesRegions()) {
+      descriptor.behaviors = [{
+        type: GAS_CLOUD_BEHAVIOR,
+        name: localize("GasCloudBehaviorLabel"),
+        system: { turnsLeft: duration, stunSaveMod, weaponName },
+      }];
+    } else {
+      descriptor.flags = {
         isGasCloud: true, turnsLeft: duration, stunSaveMod,
-        createdRound: game.combat?.round ?? 0, weaponName: payload.weaponName ?? localize("WpnGasGrenade"),
-      },
-    });
+        createdRound: game.combat?.round ?? 0, weaponName,
+      };
+    }
+
+    const handle = await createArea(scene, descriptor);
     if (!handle?.doc) { console.warn("CP2020 | Gas cloud creation failed"); return; }
 
     await postSavePromptCard({
@@ -1406,10 +1425,85 @@ function _hookGasCloudPerTurn() {
   });
 }
 
-/** One per-turn gas-cloud adjudication pass over the scene's clouds: prompt saves for tokens inside,
- *  decrement each cloud's turns, delete when expired. Ungated by the round-tick master so both the
- *  per-turn hook (gated above) and the manual combat-tracker control run it; still respects the
- *  gas-cloud feature toggle. */
+/**
+ * Adjudicate ONE gas cloud for a round: prompt saves for the tokens standing inside it, honoring the
+ * protection engine (sealed breathing gear skips the save; save-mod tags offset the penalty; Q8
+ * percent-effective filters roll a per-turn gate) and full-borg biosystem immunity, then post the single
+ * per-round cloud card. Shared by the native region-behavior path and the legacy flag path — the countdown /
+ * drift / expiry stay with each caller (the count lives on the behavior for native clouds, on the flags for
+ * legacy ones). `tokenDocs` is the array of TokenDocuments inside the cloud this round. Impure (dice + cards
+ * + actor flag writes).
+ */
+async function _adjudicateGasCloud({ turnsLeft, stunSaveMod, weaponName, tokenDocs }) {
+  if (!tokenDocs?.length) return;
+
+  // P6 protection tags (mech/protection.js): sealed breathing gear (mask / independent air)
+  // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0); Q8
+  // percent-effective gear (nasal filters "70% effective") rolls one d10 per exposure —
+  // at or under percent/10 the wearer is protected this turn, and the card shows the roll.
+  const decisions = [];
+  for (const tokDoc of tokenDocs) {
+    // The token's own actor — for an unlinked token that's its synthetic actor, and preferring
+    // the world actor here would read the wrong gear/borg state and write saves to the prototype.
+    const liveActor = tokDoc.actor ?? null;
+    // Zone gate: protection gear installed in a destroyed cyberlimb zone is inert wreckage and must
+    // not count toward the gas-save decision — the same enumeration every other contribution engine uses.
+    const items = liveActor ? contributingItems(liveActor) : [];
+    const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod, { isFullBorg: isFullBorg(liveActor) }) };
+    if (d.liveActor && !d.skip && d.percent > 0) {
+      const gateRoll = await new Roll("1d10").evaluate();
+      const gate = percentGateOutcome(d.percent, gateRoll.total);
+      d.gateRoll = gateRoll.total;
+      d.gateThreshold = gate.threshold;
+      d.gated = gate.gated;
+    }
+    decisions.push(d);
+  }
+  const affected = decisions.filter(d => d.liveActor && !d.skip && !d.gated);
+  // A full borg is sealed by its own biosystem, not by gear — report it as an immunity, separate
+  // from the "sealed breathing gear" group, so the flavour is honest.
+  const sealed = decisions.filter(d => d.liveActor && d.skip && !d.borgSealed);
+  const borgSealed = decisions.filter(d => d.liveActor && d.skip && d.borgSealed);
+  const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
+  const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
+  const sealedClause = sealed.length
+    ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
+    : "";
+  const borgClause = borgSealed.length
+    ? ((affected.length || sealed.length) ? " " : "") + localizeParam("GasCloudBorgImmuneClause", { names: borgSealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
+    : "";
+  // Q8 clauses — one per rolled gate, held or failed, always naming the roll vs threshold.
+  const gateClauses = decisions.filter(d => d.gateRoll !== undefined).map(d =>
+    " " + localizeParam(d.gated ? "GasCloudFilterHeldClause" : "GasCloudFilterFailClause",
+      { name: `<b>${d.tokDoc.name}</b>`, roll: d.gateRoll, threshold: d.gateThreshold })
+  ).join("");
+  await postSavePromptCard({
+    title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
+    body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + borgClause + gateClauses,
+  });
+  for (const d of affected) {
+    // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path
+    if (d.effMod < 0) {
+      const existingState = d.liveActor.getFlag?.("cp2020-augmented", "taserState");
+      const round = game?.combat?.round ?? 0;
+      const count = existingState && (existingState.round === 0 || round <= existingState.round + 2)
+        ? (existingState.count ?? 0) + 1 : 1;
+      await d.liveActor.setFlag("cp2020-augmented", "taserState", { count, round, mod: d.effMod });
+    }
+    await postStunSavePrompt(d.liveActor, d.tokDoc);
+  }
+}
+
+/** One per-turn adjudication pass over every gas cloud on the viewed scene, from TWO sources:
+ *   1) NATIVE region clouds — Regions carrying an ENABLED `cp2020-augmented.gasCloud` behavior (the model
+ *      since the region rework: the GM draws / reshapes / hides / removes them with Foundry's own tools, and
+ *      the countdown lives on `behavior.system.turnsLeft`). Regions exist v12+, so this also lets a v13 GM
+ *      hand-author a lingering cloud even though v13 spawns are templates.
+ *   2) LEGACY flag clouds — areas tagged `flags.cp2020-augmented.isGasCloud` (v13 spawn templates, the
+ *      vehicle-ordnance chemical clouds, and any pre-behavior cloud). A region that ALSO carries the
+ *      behavior is owned by path 1 and skipped here so it is never adjudicated twice.
+ *  Ungated by the round-tick master so both the per-turn hook (gated above) and the manual combat-tracker
+ *  control run it; still respects the gas-cloud feature toggle. */
 async function _runGasCloudTick(combat) {
   const gasEnabled = (() => { try { return game.settings.get("cp2020-augmented", "gasGrenadeCloudEnabled"); } catch { return true; } })();
   if (!gasEnabled) return;
@@ -1417,9 +1511,42 @@ async function _runGasCloudTick(combat) {
   const scene = canvas?.scene;
   if (!scene) return;
 
-  const clouds = areasByFlag(scene, "isGasCloud");
+  const autoMove = (() => { try { return game.settings.get("cp2020-augmented", "gasCloudAutoMove"); } catch { return false; } })();
+  // Drift a cloud 2m in a random direction (wind) — shifts the template (v13) or region shape (v14). The
+  // handle just needs { doc, isRegion } for moveArea; a native region cloud passes { doc: region, isRegion: true }.
+  const drift = async (handle) => {
+    const gridDist   = scene.grid?.distance ?? 1;
+    const gridSizePx = scene.grid?.size ?? canvas?.grid?.size ?? 100;
+    const movePx     = (2 / gridDist) * gridSizePx;
+    const angle      = Math.random() * 2 * Math.PI;
+    await moveArea(handle, Math.cos(angle) * movePx, Math.sin(angle) * movePx);
+  };
 
-  for (const cloud of clouds) {
+  // 1) Native region clouds (behavior owns the countdown).
+  for (const region of scene.regions ?? []) {
+    const behavior = region.behaviors?.find((b) => !b.disabled && b.type === GAS_CLOUD_BEHAVIOR);
+    if (!behavior) continue;
+    const sys = behavior.system ?? {};
+    const turnsLeft   = Number(sys.turnsLeft   ?? 0);
+    const stunSaveMod = Number(sys.stunSaveMod ?? 0);
+    const weaponName  = String(sys.weaponName ?? "").trim() || localize("WpnGasGrenade");
+
+    if (turnsLeft <= 0) { await region.delete().catch(() => {}); continue; }
+
+    // Tokens inside come from the region's native live `tokens` Set (Foundry maintains membership).
+    await _adjudicateGasCloud({ turnsLeft, stunSaveMod, weaponName, tokenDocs: [...(region.tokens ?? [])] });
+
+    await behavior.update({ "system.turnsLeft": turnsLeft - 1 }).catch(() => {});
+    if (autoMove) await drift({ doc: region, isRegion: true });
+    if (turnsLeft - 1 <= 0) {
+      await region.delete().catch(() => {});
+      await postSavePromptCard({ body: localizeParam("GasDispersedBody", { name: weaponName }) });
+    }
+  }
+
+  // 2) Legacy flag clouds (back-compat: v13 templates, vehicle-ordnance clouds, pre-behavior regions).
+  for (const cloud of areasByFlag(scene, "isGasCloud")) {
+    if (cloud.doc?.behaviors?.some?.((b) => b.type === GAS_CLOUD_BEHAVIOR)) continue;   // owned by path 1
     const flags = cloud.doc.flags["cp2020-augmented"];
     const turnsLeft    = Number(flags.turnsLeft   ?? 0);
     const stunSaveMod  = Number(flags.stunSaveMod ?? 0);
@@ -1431,78 +1558,10 @@ async function _runGasCloudTick(combat) {
     }
 
     // Tokens inside the cloud (shim: RegionDocument#testPoint on v14, shape.contains on v13).
-    const tokensInCloud = tokensInArea(cloud, scene.tokens?.contents ?? []);
+    await _adjudicateGasCloud({ turnsLeft, stunSaveMod, weaponName, tokenDocs: tokensInArea(cloud, scene.tokens?.contents ?? []) });
 
-    if (tokensInCloud.length > 0) {
-      // P6 protection tags (mech/protection.js): sealed breathing gear (mask / independent air)
-      // skips the save entirely; a save-mod tag offsets the gas penalty (never past 0); Q8
-      // percent-effective gear (nasal filters "70% effective") rolls one d10 per exposure —
-      // at or under percent/10 the wearer is protected this turn, and the card shows the roll.
-      const decisions = [];
-      for (const tokDoc of tokensInCloud) {
-        // The token's own actor — for an unlinked token that's its synthetic actor, and preferring
-        // the world actor here would read the wrong gear/borg state and write saves to the prototype.
-        const liveActor = tokDoc.actor ?? null;
-        // Zone gate: protection gear installed in a destroyed cyberlimb zone is inert wreckage and must
-        // not count toward the gas-save decision — the same enumeration every other contribution engine uses.
-        const items = liveActor ? contributingItems(liveActor) : [];
-        const d = { tokDoc, liveActor, ...gasSaveDecisionFor(items, stunSaveMod, { isFullBorg: isFullBorg(liveActor) }) };
-        if (d.liveActor && !d.skip && d.percent > 0) {
-          const gateRoll = await new Roll("1d10").evaluate();
-          const gate = percentGateOutcome(d.percent, gateRoll.total);
-          d.gateRoll = gateRoll.total;
-          d.gateThreshold = gate.threshold;
-          d.gated = gate.gated;
-        }
-        decisions.push(d);
-      }
-      const affected = decisions.filter(d => d.liveActor && !d.skip && !d.gated);
-      // A full borg is sealed by its own biosystem, not by gear — report it as an immunity, separate
-      // from the "sealed breathing gear" group, so the flavour is honest.
-      const sealed = decisions.filter(d => d.liveActor && d.skip && !d.borgSealed);
-      const borgSealed = decisions.filter(d => d.liveActor && d.skip && d.borgSealed);
-      const gasNames = affected.map(d => `<b>${d.tokDoc.name}</b>`).join(", ");
-      const gasPenalty = stunSaveMod < 0 ? localizeParam("GasCloudPenaltyClause", { mod: stunSaveMod }) : "";
-      const sealedClause = sealed.length
-        ? (affected.length ? " " : "") + localizeParam("GasCloudProtectedClause", { names: sealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
-        : "";
-      const borgClause = borgSealed.length
-        ? ((affected.length || sealed.length) ? " " : "") + localizeParam("GasCloudBorgImmuneClause", { names: borgSealed.map(d => `<b>${d.tokDoc.name}</b>`).join(", ") })
-        : "";
-      // Q8 clauses — one per rolled gate, held or failed, always naming the roll vs threshold.
-      const gateClauses = decisions.filter(d => d.gateRoll !== undefined).map(d =>
-        " " + localizeParam(d.gated ? "GasCloudFilterHeldClause" : "GasCloudFilterFailClause",
-          { name: `<b>${d.tokDoc.name}</b>`, roll: d.gateRoll, threshold: d.gateThreshold })
-      ).join("");
-      await postSavePromptCard({
-        title: localizeParam("GasCloudTurnTitle", { weapon: weaponName, turnsLeft }),
-        body: (affected.length ? localizeParam("GasCloudTurnBody", { names: gasNames, penalty: gasPenalty }) : "") + sealedClause + borgClause + gateClauses,
-      });
-      for (const d of affected) {
-        // Temporarily apply the (protection-offset) penalty via the taser additive-threshold path
-        if (d.effMod < 0) {
-          const existingState = d.liveActor.getFlag?.("cp2020-augmented", "taserState");
-          const round = game?.combat?.round ?? 0;
-          const count = existingState && (existingState.round === 0 || round <= existingState.round + 2)
-            ? (existingState.count ?? 0) + 1 : 1;
-          await d.liveActor.setFlag("cp2020-augmented", "taserState", { count, round, mod: d.effMod });
-        }
-        await postStunSavePrompt(d.liveActor, d.tokDoc);
-      }
-    }
-
-    const autoMove = (() => { try { return game.settings.get("cp2020-augmented", "gasCloudAutoMove"); } catch { return false; } })();
     await cloud.doc.update({ ["flags.cp2020-augmented.turnsLeft"]: turnsLeft - 1 }).catch(() => {});
-
-    if (autoMove) {
-      // Drift 2m in a random direction (wind) — shifts the template (v13) or region shape (v14).
-      const gridDist = scene.grid?.distance ?? 1;
-      const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
-      const movePx   = (2 / gridDist) * gridSize;
-      const angle    = Math.random() * 2 * Math.PI;
-      await moveArea(cloud, Math.cos(angle) * movePx, Math.sin(angle) * movePx);
-    }
-
+    if (autoMove) await drift(cloud);
     if (turnsLeft - 1 <= 0) {
       await deleteArea(cloud);
       await postSavePromptCard({

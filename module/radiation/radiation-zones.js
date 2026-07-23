@@ -188,7 +188,15 @@ export async function migrateLegacyRadZones() {
             sourceLabel: String(flags.sourceLabel ?? ""),
           },
         }]);
-        await region.update({ [`flags.${SCOPE}.-=isRadZone`]: null });
+        // Drop the tag AND its now-inert data flags (the behavior owns the values from here on); a
+        // `-=` delete of a key that was never set is a harmless no-op.
+        await region.update({
+          [`flags.${SCOPE}.-=isRadZone`]: null,
+          [`flags.${SCOPE}.-=radsFormula`]: null,
+          [`flags.${SCOPE}.-=sourceLabel`]: null,
+          [`flags.${SCOPE}.-=turnsLeft`]: null,
+          [`flags.${SCOPE}.-=createdRound`]: null,
+        });
       } catch (e) {
         console.warn(`${SCOPE} | rad-zone migration failed for a region`, e);
       }

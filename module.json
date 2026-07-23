@@ -43,7 +43,8 @@
       }
     },
     "RegionBehavior": {
-      "radiationZone": {}
+      "radiationZone": {},
+      "gasCloud": {}
     }
   },
   "esmodules": [

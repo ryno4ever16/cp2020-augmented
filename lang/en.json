@@ -47,6 +47,13 @@
     "Attacker": "attacker",
     "GasCloudTitle": "☠ Gas Cloud — {weapon}",
     "GasGrenade": "Gas Grenade",
+    "GasCloudBehaviorLabel": "Gas Cloud",
+    "GasCloudBehaviorTurns": "Rounds remaining",
+    "GasCloudBehaviorTurnsHint": "Combat rounds until the cloud disperses. Counts down each round — edit it to extend or cut short the cloud.",
+    "GasCloudBehaviorStunMod": "Stun save modifier",
+    "GasCloudBehaviorStunModHint": "Penalty applied to the stun save of anyone caught inside (usually negative, e.g. -2).",
+    "GasCloudBehaviorWeapon": "Weapon name",
+    "GasCloudBehaviorWeaponHint": "Optional name shown on the per-round cards (e.g. Tear Gas Grenade).",
     "ExplosionTemplateNotFound": "Explosion template not found — it may have been removed.",
     "NoTokensInBlast": "No tokens in the blast (or all behind cover).",
     "BlastTemplateNotFound": "Blast template not found.",
@@ -2135,7 +2142,8 @@
       "cp2020-augmented.acpaSystem": "ACPA System"
     },
     "RegionBehavior": {
-      "cp2020-augmented.radiationZone": "Radiation Zone"
+      "cp2020-augmented.radiationZone": "Radiation Zone",
+      "cp2020-augmented.gasCloud": "Gas Cloud"
     }
   }
 }
