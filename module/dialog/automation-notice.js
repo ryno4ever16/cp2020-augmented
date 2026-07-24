@@ -104,7 +104,7 @@ export class AutomationNotice extends HandlebarsApplicationMixin(ApplicationV2) 
       pageCount: PAGES.length,
       canBack: this._page > 0,
       isLast: this._page === PAGES.length - 1,
-      hideChecked: !!this._noticeHide(),
+      hideChecked: this._effectivelyDismissed(),
     };
   }
 
@@ -125,8 +125,22 @@ export class AutomationNotice extends HandlebarsApplicationMixin(ApplicationV2) 
     });
   }
 
-  _noticeHide() {
-    try { return game.settings.get("cp2020-augmented", "automationNoticeHide"); } catch { return false; }
+  /**
+   * Whether the notice is effectively dismissed FOR THE CURRENT VERSION — the state the checkbox must
+   * render, not the raw hide flag. A world that dismissed an older version has hide=true with a stale
+   * (or pre-gate empty) version stamp; rendering the raw flag drew the box ALREADY TICKED on the
+   * re-surfaced notice, so there was no change event left to fire and the version could never be
+   * re-stamped — the notice returned on every load with no way to dismiss it (the reported bug).
+   * Rendering effective dismissal keeps the box ticked across page flips after a real tick, and
+   * unticked whenever the notice was shown because the stamp doesn't match.
+   */
+  _effectivelyDismissed() {
+    try {
+      const hide = game.settings.get("cp2020-augmented", "automationNoticeHide");
+      const seen = game.settings.get("cp2020-augmented", "automationNoticeVersion");
+      const cur = game.modules.get("cp2020-augmented")?.version ?? "";
+      return !!hide && seen === cur;
+    } catch { return false; }
   }
 
   static _onPrev() {
