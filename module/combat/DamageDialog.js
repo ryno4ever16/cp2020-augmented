@@ -15,7 +15,7 @@
 
 import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
-import { routesToSdp } from "../mech/cyberlimb.js";
+import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 import { localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -77,21 +77,40 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     const btm = Number(this.target.system.stats?.bt?.modifier) || 0;
 
-    const resolvedHits = rawHits.map((hit, i) => ({
-      ...hit,
-      afterSP:    this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP,
-      overridden: this._overrides[i] !== undefined,
-    }));
+    const resolvedHits = rawHits.map((hit, i) => {
+      const afterSP = this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP;
+      // A machine-zone (SDP) row exposes its zone's remaining/max pool for the tag tooltip. This is a
+      // pure synchronous lookup — cyberlimbSdp reads the same sdp.sum/current pool the seam reduces,
+      // and it already covers a full borg's Head/Torso zones as well as ordinary cyberlimbs.
+      const pool = hit.sdp ? cyberlimbSdp(this.target, hit.location) : null;
+      return {
+        ...hit,
+        afterSP,
+        overridden:   this._overrides[i] !== undefined,
+        btm,   // per-row so the flesh after-SP tooltip needs no fragile parent-path lookup
+        sdpRemaining: pool ? pool.current : null,
+        sdpMax:       pool ? pool.max : null,
+      };
+    });
 
+    // Two honest summaries, each mirroring EXACTLY what Apply does to its row (applyLocationDamage):
+    //  - flesh rows → computeNetDamage (BTM subtraction, min-1 floor, head/limb doubling)
+    //  - SDP rows   → the structural value a machine zone absorbs: penetrating afterSP, rounded, NO BTM
     const totalNet = resolvedHits.reduce(
-      (s, h) => s + computeNetDamage(h.afterSP, btm, h.penetrates, h.location), 0
+      (s, h) => s + (h.sdp ? 0 : computeNetDamage(h.afterSP, btm, h.penetrates, h.location)), 0
     );
+    const totalSdp = resolvedHits.reduce(
+      (s, h) => s + (h.sdp && h.penetrates ? Math.max(0, Math.round(h.afterSP)) : 0), 0
+    );
+    const hasSdpRows = resolvedHits.some(h => h.sdp);
 
     return {
       weaponName:   this.payload.weaponName,
       targetName:   this.target.name,
       resolvedHits,
       totalNet,
+      totalSdp,
+      hasSdpRows,
       btm,
       armorMode,
       ablate,
@@ -165,13 +184,23 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       coverSP:     this._coverSP,
       damageType: this._damageType ?? "",
     });
-    let total = 0;
+    // Keep the two displayed totals in exact parity with _prepareContext: flesh HP (BTM math) on
+    // non-SDP rows, structural SDP (penetrating afterSP, rounded, no BTM) on machine-zone rows.
+    let fleshTotal = 0;
+    let sdpTotal   = 0;
     base.forEach((hit, i) => {
       const afterSP = this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP;
-      total += computeNetDamage(afterSP, btm, hit.penetrates, hit.location);
+      if (hit.sdp) {
+        sdpTotal += hit.penetrates ? Math.max(0, Math.round(afterSP)) : 0;
+      } else {
+        fleshTotal += computeNetDamage(afterSP, btm, hit.penetrates, hit.location);
+      }
     });
     const el = root.querySelector(".damage-total-value");
-    if (el) el.textContent = String(total);
+    if (el) el.textContent = String(fleshTotal);
+    // The SDP total line only renders when the volley has machine-zone rows (hasSdpRows) — guard it.
+    const sdpEl = root.querySelector(".damage-sdp-total-value");
+    if (sdpEl) sdpEl.textContent = String(sdpTotal);
   }
 
   static async _onApply(event, target) {

@@ -1480,6 +1480,22 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
    cyberlimb-destroyed orange-red above, so a wrecked meat limb reads as an alert badge like its
    cyberlimb cousin instead of plain text, yet is not mistaken for structural SDP state. */
 .cyberpunk .segment-limb-status.cp-limb-flesh     { color: #fff; background: #8f2f2f; }
+/* Apply-damage dialog: a small tag on a hit row that routes to a machine zone's SDP (a cyberlimb or a
+   full-borg chassis zone) rather than the flesh wound track — the preview then splits flesh HP from
+   structural SDP in the totals. Amber (structural / machinery, not a red alert), scaled and shaped
+   like the .segment-limb-status body-map badges so the two machine-zone markers read as kin. */
+.cyberpunk .damage-sdp-tag {
+  font-size: 0.6em;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0 3px;
+  border-radius: 3px;
+  color: #1a1a1a;
+  background: #c0791a;
+  white-space: nowrap;
+  align-self: center;
+}
 /* Both limb-recovery controls (cyberlimb ⚒ repair, flesh ⚕ clear) opt back IN to being visible. The
    base hides `.segment-repair` outright and reveals it only on `.armor-segment:hover` — its idiom for
    the ablate control, which is itself commented out of the base template, so nothing else uses it. Our

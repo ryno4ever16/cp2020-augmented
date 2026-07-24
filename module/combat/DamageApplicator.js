@@ -443,7 +443,12 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
         currentSP, rawDamage, ap, armorMode, coverSP, penDamageMult,
       });
 
-      results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates });
+      // `sdp` mirrors the async path's `cyberlimb` flag (applyAreaDamages) but is named for what it
+      // means at the seam: routesToSdp covers BOTH a cyberlimb limb zone AND every zone of a full
+      // borg (Head/Torso included), so the preview marks exactly the rows applyLocationDamage will
+      // absorb into a machine zone's SDP (rounded afterSP, no BTM, no doubling) instead of the flesh
+      // wound track — the preview must never disagree with what Apply does.
+      results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location) });
 
       // Between-hit SP degradation: same model + same gate as the async path's per-layer ablation.
       // async (applyAreaDamages): `ablate && armorMode===FULL && penetrates && netDamage>0` →

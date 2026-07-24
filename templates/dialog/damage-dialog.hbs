@@ -47,6 +47,7 @@
     {{#each resolvedHits as |hit i|}}
     <div class="damage-hit field" style="gap:4px;">
       <span style="min-width:60px;">{{hit.location}}</span>
+      {{#if hit.sdp}}<span class="damage-sdp-tag" title="{{CPLocal 'DamageDlgSdpTagTip' remaining=hit.sdpRemaining max=hit.sdpMax}}">{{CPLocal "DamageDlgSdpTag"}}</span>{{/if}}
       <span class="flex-pad"></span>
       <span class="inactive" style="min-width:36px; text-align:right;">{{hit.rawDamage}}</span>
       <span class="inactive" style="width:14px; text-align:center;">−</span>
@@ -60,22 +61,31 @@
         value="{{hit.afterSP}}"
         min="0"
         style="width:52px; text-align:right;"
-        title="{{CPLocal 'DamageDlgAfterSpTip' btm=../../btm}}">
+        title="{{#if hit.sdp}}{{CPLocal 'DamageDlgAfterSpSdpTip'}}{{else}}{{CPLocal 'DamageDlgAfterSpTip' btm=hit.btm}}{{/if}}">
       {{#unless hit.penetrates}}<span class="inactive" style="font-size:0.75em;" title="{{CPLocal 'DamageDlgStopped'}}">✗</span>{{/unless}}
       {{#if hit.overridden}}<span class="inactive" style="font-size:0.75em; color:var(--color-text-hyperlink);" title="{{CPLocal 'DamageDlgOverridden'}}">✎</span>{{/if}}
     </div>
     {{/each}}
   </div>
 
-  {{!-- BTM line + total --}}
+  {{!-- BTM line + totals. When the volley has machine-zone (SDP) rows the BTM note is qualified —
+       it applies to flesh hits only — and a second Structural (SDP) total is shown; a pure-flesh
+       volley keeps the single Total-HP line unchanged. --}}
   <div class="field inactive" style="margin-top:4px; font-size:0.85em;">
-    <span>{{CPLocal "DamageDlgBtmLine" btm=btm}}</span>
+    <span>{{#if hasSdpRows}}{{CPLocal "DamageDlgBtmLineFlesh" btm=btm}}{{else}}{{CPLocal "DamageDlgBtmLine" btm=btm}}{{/if}}</span>
   </div>
   <div class="field" style="margin-top:2px; font-weight:bold;">
     <label>{{CPLocal "DamageDlgTotalHp"}}</label>
     <span class="flex-pad"></span>
     <strong class="damage-total-value">{{totalNet}}</strong>
   </div>
+  {{#if hasSdpRows}}
+  <div class="field" style="margin-top:2px; font-weight:bold;">
+    <label title="{{CPLocal 'DamageDlgSdpTotalTip'}}">{{CPLocal "DamageDlgSdpTotal"}}</label>
+    <span class="flex-pad"></span>
+    <strong class="damage-sdp-total-value">{{totalSdp}}</strong>
+  </div>
+  {{/if}}
 
   <hr>
 
