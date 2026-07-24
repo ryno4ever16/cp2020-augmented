@@ -705,6 +705,10 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
         // min/max constrain the input itself so the player can't enter more than ROF (it was only
         // silently capped at fire time before, which was confusing).
         {localKey:"AutofireRounds", dataPath:"autoRounds", dtype:"Number", defaultValue: rof, min: 1, max: rof},
+        // Suppressive fire declares a zone WIDTH (metres) plus the rounds fired. The width SEEDS the canvas
+        // placement preview's opening corridor (module/combat/suppressive-placement.js) — the shooter can then
+        // re-size it there — and it keeps the base system's own suppressive DC honest when the zone automation
+        // is OFF (base: DC = ceil(rounds / max(2, zoneWidth))), so a wider lane can still be declared.
         {localKey:"FireZoneWidth",  dataPath:"zoneWidth",  dtype:"Number", defaultValue: 2},
         {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: roundsFiredMax, min: 1, max: roundsFiredMax},
         {

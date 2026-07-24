@@ -195,6 +195,10 @@ function installRenderEmit() {
         // suppressive.hbs carries the base method's already-computed saveDC/dmgFormula/weaponName/width;
         // the wrapper supplies the actor/token/range context the render data lacks. Matches the fork's
         // native cyberpunk2020.suppressiveFire payload so damage-hooks.js draws the fire zone identically.
+        // roundsFired is the placement preview's DC numerator (it divides by the player-drawn width to
+        // derive the live evasion DC); zoneWidth is the DECLARED width (dialog field) — it seeds the preview's
+        // opening corridor, and saveDC is the base's DC for that declared width (what the base card quotes and
+        // what stands when the zone automation is off).
         Hooks.callAll(SUPPRESSIVE_FIRE, {
           saveDC: data?.saveDC,
           dmgFormula: data?.dmgFormula,
@@ -203,6 +207,7 @@ function installRenderEmit() {
           attackerTokenId: _suppressiveCtx.attackerTokenId,
           zoneWidth: data?.width,
           weaponRange: _suppressiveCtx.weaponRange,
+          roundsFired: _suppressiveCtx.roundsFired,
         });
       }
     } catch (e) {
@@ -234,10 +239,23 @@ function installSuppressiveFireShim(ItemProto) {
   if (!shouldPatch(orig)) return false;                          // missing or already ours → skip
   function suppressiveWrapper(mods, ...rest) {
     const attackerTok = canvas?.tokens?.placeables?.find(t => t.actor?.id === this.actor?.id) ?? null;
+    const sys = this._getWeaponSystem?.() ?? {};
+    // Rounds actually laid down this burst — recomputed EXACTLY as base item.js __suppressiveFire does
+    // (rof/shotsLeft floored to non-negative ints, requested = mods.roundsFired || maxRounds, clamped
+    // 1..maxRounds, and 0 when the gun is empty). This is the numerator of the base's saveDC =
+    // ceil(rounds ÷ width); the placement preview divides it by the player-DRAWN width to derive the
+    // live evasion DC, so it must equal the base's `rounds` to the round — hence mirroring the base
+    // formula here rather than taking a fresh reading. saveDC itself is NOT recomputed (drift note above).
+    const rof = Math.max(0, Math.floor(Number(sys.rof) || 0));
+    const shotsLeft = Math.max(0, Math.floor(Number(sys.shotsLeft) || 0));
+    const maxRounds = Math.min(rof, shotsLeft);
+    const requested = Math.floor(Number(mods?.roundsFired) || maxRounds);
+    const roundsFired = maxRounds > 0 ? Math.min(Math.max(requested, 1), maxRounds) : 0;
     _suppressiveCtx = {
       actorId: this.actor?.id ?? null,
       attackerTokenId: attackerTok?.id ?? null,
-      weaponRange: Number(this._getWeaponSystem?.()?.range ?? 50),
+      weaponRange: Number(sys.range ?? 50),
+      roundsFired,
     };
     return orig.call(this, mods, ...rest);
   }

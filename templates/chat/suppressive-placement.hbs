@@ -1,22 +1,20 @@
 {{!--
-  Suppressive Fire zone-placement card (CP2020 p.110). Rendered via renderChatCard with
-  { weaponName, saveDC, templateId, dmgFormula, attackerId }. The cp-confirm-fire-zone button
-  + its data-* are kept verbatim so the global click handler fires; the button text must keep
-  the literal "Confirm Fire Zone" (e2e). Mirrors explosion-confirm.hbs. i18n via CPLocal.
+  Suppressive Fire lane-placed card (CP2020 p.101). Rendered via renderChatCard with
+  { weaponName, saveDC, regionId, isGM }. The shooter aimed + sized the lane in the canvas preview and it
+  is now planted (locked); tokens in the beaten zone are prompted to evade by the native region enter
+  events, so there is no Confirm button here. The GM-only Unlock button re-opens the shooter's preview to
+  re-place the lane; its cp-suppressive-unlock class + data-region-id are read by the global click handler.
+  i18n via CPLocal.
 --}}
 <div class="cyberpunk save-prompt">
   <h3>{{CPLocal "SuppPlacementTitle" weapon=weaponName}}</h3>
   <div class="save-info">
     <span>{{{CPLocal "SuppPlacementDC" dc=saveDC}}}</span><br>
-    <span>{{CPLocal "SuppPlacementPlaced"}}</span><br>
-    <span class="save-note">{{{CPLocal "SuppPlacementHint"}}}</span>
+    <span>{{CPLocal "SuppPlacementPlaced"}}</span>
   </div>
+  {{#if isGM}}
   <div class="save-buttons">
-    <button class="cp-confirm-fire-zone"
-      data-template-id="{{templateId}}"
-      data-save-dc="{{saveDC}}"
-      data-dmg-formula="{{dmgFormula}}"
-      data-attacker-id="{{attackerId}}"
-      data-weapon-name="{{weaponName}}">{{CPLocal "ConfirmFireZoneBtn"}}</button>
+    <button class="cp-suppressive-unlock" data-region-id="{{regionId}}" data-scene-id="{{sceneId}}">{{CPLocal "SuppUnlockBtn"}}</button>
   </div>
+  {{/if}}
 </div>

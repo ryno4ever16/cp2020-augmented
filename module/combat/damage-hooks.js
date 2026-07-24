@@ -33,6 +33,8 @@ import { renderChatCard }                                     from "../compat.js
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegions, moveArea } from "./area-shapes.js";
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
+import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
+import { rayPolygonShape } from "./area-geometry.js";
 
 // Payload waiting to be attached to the next chat message created
 let _pendingPayload = null;
@@ -121,8 +123,8 @@ export function registerDamageHooks() {
   _hookCreateChatMessage();
   _hookRenderChatMessage();
   _hookSuppressiveFire();
-  _hookSuppressiveFirePerTurn();
-  _hookSuppressiveTemplateOriginLock();
+  _hookSuppressiveZoneEntered();
+  _hookSuppressiveExpiry();
   _hookAimTracking();
   _hookWaitForTurn();
   _hookDodgeParry();
@@ -140,7 +142,7 @@ export function registerDamageHooks() {
   // Combat action button click handler
   onGlobalClick(async (ev) => {
     const evasionBtn    = ev.target.closest(".cp-suppression-evasion-roll");
-    const confirmBtn    = ev.target.closest(".cp-confirm-fire-zone");
+    const unlockBtn     = ev.target.closest(".cp-suppressive-unlock");
     const blastBtn      = ev.target.closest(".cp-confirm-explosion");
     const spreadBtn     = ev.target.closest(".cp-confirm-spread-zone");
     const takeAimBtn    = ev.target.closest(".cp-take-aim-btn");
@@ -189,18 +191,11 @@ export function registerDamageHooks() {
       await markCardResolved(evasionBtn.closest("[data-message-id]")?.dataset?.messageId, "suppressionEvasion");
     }
 
-    // Confirm fire zone — detects tokens in zone and posts evasion prompts
-    if (confirmBtn && !confirmBtn.disabled) {
+    // Unlock a placed suppressive lane (GM only) — re-opens the shooter's aim/size preview to re-place it.
+    if (unlockBtn && !unlockBtn.disabled) {
       ev.preventDefault();
-      confirmBtn.disabled = true;
-      await _confirmFireZone({
-        templateId: confirmBtn.dataset.templateId,
-        saveDC:     Number(confirmBtn.dataset.saveDc),
-        dmgFormula: confirmBtn.dataset.dmgFormula,
-        attackerId: confirmBtn.dataset.attackerId,
-        weaponName: confirmBtn.dataset.weaponName,
-      });
-      await markCardResolved(confirmBtn.closest("[data-message-id]")?.dataset?.messageId, "fireZoneConfirm");
+      unlockBtn.disabled = true;
+      await _unlockSuppressiveZone(unlockBtn.dataset.regionId, unlockBtn.dataset.sceneId);
     }
 
     if (takeAimBtn) {
@@ -529,93 +524,157 @@ function _hookRenderChatMessage() {
 }
 
 /**
- * Suppressive fire flow:
- *   1. Places a ray MeasuredTemplate (fire zone) at the attacker's token, aimed toward
- *      any currently targeted tokens (or East if none). Posts a "Confirm Fire Zone" button.
- *   2. GM aims the template, then clicks Confirm. All tokens inside receive evasion prompts.
- *   3. Template persists with `isSuppressiveZone` flag for per-turn re-checks, then
- *      auto-expires at the start of the next round (_hookSuppressiveFirePerTurn).
+ * Suppressive fire flow (placement-forward, native-region rail — regions on BOTH cores here):
+ *   1. The shooter's client gets the local `cyberpunk2020.suppressiveFire` seam hook and enters an
+ *      aim/size PREVIEW (module/combat/suppressive-placement.js): a PIXI corridor anchored at the
+ *      shooter's token, aimed with the cursor, widened with the wheel, with a live "width Xm → evasion
+ *      save N" readout (DC = rounds fired ÷ drawn width). The width IS the difficulty, so the player sees
+ *      the tradeoff as they draw it.
+ *   2. Confirm relays the drawn geometry to the active GM (players cannot create Regions), who PLANTS the
+ *      lane: a Region carrying the `cp2020-augmented.suppressiveFire` behavior + an ALWAYS visibility + a
+ *      `suppressiveLocked` flag. Creating the behavior inline fires the native token-enter event for every
+ *      token ALREADY standing in the lane, so "prompt everyone in the beaten zone at confirm" happens with
+ *      no extra pass — the same enter path later crossers take.
+ *   3. Entry (at plant, or by walking in) → the behavior emits SUPPRESSIVE_ZONE_ENTERED_HOOK on the active
+ *      GM → _hookSuppressiveZoneEntered posts the evasion prompt for the entering token.
+ *   4. The GM can UNLOCK a placed lane (card button): clears the lock flag + re-arms the shooter's preview
+ *      with the existing geometry; on re-confirm the GM UPDATES the region's shape + behavior + re-locks.
+ *   5. Expiry: a shooter-owned lane is deleted when the round advances past its createdRound; a blank-shooter
+ *      lane is a permanent hand-authored kill lane and never auto-expires.
  *
- * Evasion: Athletics + REF + 1d10 vs saveDC (CP2020 p.101).
- * Failure: 1d6 random hits with weapon damage formula, routed through PATH A.
+ * Evasion: Athletics + REF + 1d10 vs saveDC (CP2020 p.101). Failure: 1d6 random hits with the weapon's
+ * damage formula, routed back through the weaponFired pipeline. The whole feature is gated by the
+ * `suppressiveFireSaves` setting.
  */
+function _suppressiveSavesEnabled() {
+  try { return game.settings.get("cp2020-augmented", "suppressiveFireSaves"); }
+  catch { return false; }
+}
+
 function _hookSuppressiveFire() {
   Hooks.on("cyberpunk2020.suppressiveFire", async (payload) => {
-    const suppressiveSaves = (() => {
-      try { return game.settings.get("cp2020-augmented", "suppressiveFireSaves"); }
-      catch { return false; }
-    })();
-    if (!suppressiveSaves) return;
-
-    // Hooks.callAll is LOCAL to the firing client. Placing the fire-zone template requires the GM,
-    // so if we're the active GM place it directly; otherwise relay to the GM over the socket
-    // (mirrors the damage relay). Without this, a player firing suppressive produced no template.
-    if (game.users.activeGM?.id === game.user.id) {
-      await _placeSuppressiveZone(payload);
-    } else {
-      game.socket.emit("module.cp2020-augmented", { type: "suppressiveFire", payload });
-    }
+    if (!_suppressiveSavesEnabled()) return;
+    // Hooks.callAll is LOCAL to the firing client, so this runs on the SHOOTER's client (player or GM).
+    // Placement-forward: enter the aim/size preview here instead of auto-placing; the preview seeds its
+    // opening width from the DECLARED zoneWidth and relays the confirmed geometry to the active GM to plant.
+    // The base suppressive card (posted just before this) quotes the DC for the DECLARED width, so with zones
+    // ON it matches the planted lane's card unless the shooter re-sizes on the canvas (a visible, expected
+    // divergence); with zones OFF (this handler bails on the setting gate) the base flow is untouched.
+    const { armSuppressivePreview } = await import("./suppressive-placement.js");
+    await armSuppressivePreview(payload);
   });
 }
 
-/** Place the suppressive-fire ray template + post the Confirm prompt. Runs on the GM's client. */
-async function _placeSuppressiveZone(payload) {
-  if (!payload) return;
-  const { saveDC, dmgFormula, weaponName, actorId, attackerTokenId, zoneWidth, weaponRange } = payload;
-  const scene       = canvas?.scene;
-  const attackerTok = attackerTokenId ? canvas?.tokens?.placeables?.find(t => t.id === attackerTokenId) : null;
+/**
+ * GM-side PLANT of a suppressive lane from the geometry the shooter's preview confirmed (relayed over the
+ * module socket, or called directly when the shooter IS the active GM). Creates — or, when the geometry
+ * carries a `regionId` (a re-confirm after an unlock), UPDATES — a Region carrying the suppressiveFire
+ * behavior. Regions on BOTH cores for this feature, so this does NOT route through createArea/usesRegions.
+ * Exported for the preview's direct-plant path and the keeper. Runs on the active GM.
+ */
+export async function placeSuppressiveZoneFromGeometry(geo) {
+  // Plant on the scene the shooter aimed on (its grid computed the pixel geometry), NOT the GM's currently
+  // viewed scene — the two can differ when the GM is looking elsewhere at confirm time. Fall back to the
+  // viewed scene only when no sceneId rode along (older payloads).
+  const scene = (geo?.sceneId ? game.scenes?.get(geo.sceneId) : null) ?? canvas?.scene;
+  if (!scene || !geo?.origin) { ui.notifications?.warn?.(localize("SuppFireNoToken")); return null; }
 
-  if (!attackerTok || !scene) {
-    ui.notifications.warn(localize("SuppFireNoToken"));
-    return;
+  const V = CONST?.REGION_VISIBILITY ?? {};
+  // Same pure geometry the preview drew (rayPolygonShape off the same origin/angle/length/width) → the
+  // planted lane is pixel-identical to what the player saw.
+  const shape = rayPolygonShape(geo.origin.x, geo.origin.y, geo.angleDeg, geo.lengthPx, geo.widthPx);
+  const saveDC = Math.max(1, Number(geo.saveDC) || 1);
+  const name = localize("SuppZoneBehaviorLabel");
+  const dmgFormula = geo.dmgFormula || "1d6";
+  const weaponName = geo.weaponName || "";
+  // The full geometry rides on the region's flags so an Unlock can re-prime the preview with this lane (the
+  // sceneId is carried so a re-confirm UPDATE lands on this same scene).
+  const geometryFlag = {
+    sceneId: scene.id,
+    origin: geo.origin, angleDeg: geo.angleDeg, widthM: geo.widthM,
+    lengthPx: geo.lengthPx, widthPx: geo.widthPx, weaponRange: geo.weaponRange,
+    roundsFired: geo.roundsFired, userId: geo.userId ?? "", attackerTokenId: geo.attackerTokenId ?? "",
+    actorId: geo.actorId ?? "", dmgFormula, weaponName,
+  };
+
+  // UPDATE path — a re-confirm after unlock rewrites the existing lane's shape + behavior and re-locks it.
+  if (geo.regionId) {
+    const region = scene.regions?.get?.(geo.regionId);
+    if (region) {
+      await region.update({
+        shapes: [shape],
+        flags: { "cp2020-augmented": { suppressiveLocked: true, suppressiveGeometry: geometryFlag } },
+      }).catch(() => {});
+      const behavior = region.behaviors?.find((b) => b.type === SUPPRESSIVE_ZONE_BEHAVIOR);
+      if (behavior) await behavior.update({ "system.saveDC": saveDC, "system.dmgFormula": dmgFormula, "system.weaponName": weaponName }).catch(() => {});
+      await _postSuppressivePlacementCard({ weaponName, saveDC, regionId: region.id, sceneId: scene.id, actorId: geo.actorId });
+      return region;
+    }
+    // The region vanished (deleted meanwhile) — fall through to a fresh create.
   }
 
-  {
-    // Initial direction: toward centroid of currently-targeted tokens, or East (0°)
-    let angleDeg = 0;
-    const targetedTokens = Array.from(game.user.targets ?? []);
-    if (targetedTokens.length > 0) {
-      const cx = targetedTokens.reduce((s, t) => s + (t.center?.x ?? t.x), 0) / targetedTokens.length;
-      const cy = targetedTokens.reduce((s, t) => s + (t.center?.y ?? t.y), 0) / targetedTokens.length;
-      const dx = cx - (attackerTok.center?.x ?? attackerTok.x);
-      const dy = cy - (attackerTok.center?.y ?? attackerTok.y);
-      angleDeg = Math.round((Math.atan2(dy, dx) * 180) / Math.PI);
-    }
-
-    // Create the fire zone through the area shim: MeasuredTemplate ray on v13, Region polygon
-    // on v14. The direction is already auto-aimed at the target(s) above (the v14 "#1 auto-aim");
-    // on v13 the GM can still rotate the template before confirming.
-    const origin = {
-      x: attackerTok.center?.x ?? attackerTok.x,
-      y: attackerTok.center?.y ?? attackerTok.y,
-    };
-    const handle = await createArea(scene, {
-      kind: "ray",
-      x: origin.x, y: origin.y,
-      dirDeg: angleDeg,
-      lengthM: Math.max(1, weaponRange ?? 50),
-      widthM:  Math.max(2, zoneWidth ?? 2),
-      color: "#ff4400",
-      flags: {
-        isSuppressiveZone: true, saveDC, dmgFormula, weaponName, actorId,
-        maxDistance: weaponRange ?? 50, minWidth: zoneWidth ?? 2,
-        originX: origin.x, originY: origin.y, createdRound: game.combat?.round ?? 0,
+  const [region] = await scene.createEmbeddedDocuments("Region", [{
+    name,
+    color: "#ff4400",
+    shapes: [shape],
+    visibility: V.ALWAYS ?? 2,
+    flags: { "cp2020-augmented": { suppressiveLocked: true, suppressiveGeometry: geometryFlag } },
+    behaviors: [{
+      type: SUPPRESSIVE_ZONE_BEHAVIOR,
+      name,
+      system: {
+        saveDC,
+        dmgFormula,
+        attackerId: geo.actorId || "",
+        weaponName,
+        createdRound: game.combat?.round ?? 0,
       },
-    });
-    if (!handle?.doc) {
-      ui.notifications.warn(localize("SuppFireZoneFail"));
-      return;
-    }
-    const created = handle.doc;
+    }],
+  }]);
+  if (!region) { ui.notifications?.warn?.(localize("SuppFireZoneFail")); return null; }
 
-    const content = await renderChatCard("suppressive-placement.hbs", {
-      weaponName, saveDC, templateId: created.id, dmgFormula, attackerId: actorId,
-    });
+  await _postSuppressivePlacementCard({ weaponName, saveDC, regionId: region.id, sceneId: scene.id, actorId: geo.actorId });
+  return region;
+}
 
-    await ChatMessage.create({
-      content,
-      speaker: ChatMessage.getSpeaker({ actor: game.actors.get(actorId) ?? undefined }),
-    });
+/** Post the "lane placed" card (states the DC + carries the GM-only Unlock control). */
+async function _postSuppressivePlacementCard({ weaponName, saveDC, regionId, sceneId, actorId }) {
+  const content = await renderChatCard("suppressive-placement.hbs", {
+    weaponName, saveDC, regionId, sceneId, isGM: game.user?.isGM === true,
+  });
+  await ChatMessage.create({
+    content,
+    speaker: ChatMessage.getSpeaker({ actor: (actorId ? game.actors.get(actorId) : null) ?? undefined }),
+  });
+}
+
+/**
+ * GM UNLOCK: re-open the shooter's aim/size preview for a placed lane. Clears the region's lock flag and
+ * re-arms the preview (locally if the shooter is this GM, else relayed to the shooter's client) primed with
+ * the lane's stored geometry + its regionId, so a re-confirm UPDATES this same region. Gated to the active
+ * GM (only it owns the region write; a stray click on another GM client is a no-op). The lane keeps firing
+ * while unlocked — the enter listener is not gated on the lock.
+ */
+export async function _unlockSuppressiveZone(regionId, sceneId) {
+  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+  // Resolve the lane's OWN scene (the card carries it), not necessarily the GM's viewed scene.
+  const scene = (sceneId ? game.scenes?.get(sceneId) : null) ?? canvas?.scene;
+  const region = scene?.regions?.get?.(regionId);
+  if (!region) { ui.notifications?.warn?.(localize("SuppFireZoneFail")); return; }
+  const geo = foundry.utils.deepClone(region.flags?.["cp2020-augmented"]?.suppressiveGeometry ?? null);
+  await region.update({ flags: { "cp2020-augmented": { suppressiveLocked: false } } }).catch(() => {});
+  if (!geo) return;
+  await _relaySuppressiveRearm({ ...geo, regionId: region.id, saveDC: Math.ceil((Number(geo.roundsFired) || 0) / Math.max(1, Number(geo.widthM) || 2)) });
+}
+
+/** Send the re-arm to the shooter's client (arm locally if that client is this GM — a socket never reaches
+ *  its own sender). */
+async function _relaySuppressiveRearm(geo) {
+  if (geo.userId && geo.userId === game.user?.id) {
+    const { armSuppressivePreview } = await import("./suppressive-placement.js");
+    await armSuppressivePreview({ ...geo, rearm: true });
+  } else {
+    game.socket.emit("module.cp2020-augmented", { type: "suppressiveZoneRearm", payload: geo });
   }
 }
 
@@ -642,124 +701,77 @@ function _claimAreaConfirm(relayType, relayData, templateId) {
   return true;
 }
 
-/**
- * After the player has aimed the fire zone template, detect all tokens inside it
- * and post evasion prompts for each (excluding the attacker).
- */
-async function _confirmFireZone({ templateId, saveDC, dmgFormula, attackerId, weaponName }) {
-  const scene = canvas?.scene;
-  if (!scene) return;
-  if (!_claimAreaConfirm("confirmFireZone", { args: { templateId, saveDC, dmgFormula, attackerId, weaponName } }, templateId)) return;
+/** Post an evasion prompt for one token caught in a suppressive lane. `sceneId` lets the evasion executor
+ *  resolve the exact (possibly unlinked) token later. Shared by the enter listener. */
+async function _postEvasionPrompt(tokDoc, { saveDC, dmgFormula, weaponName, attackerId, sceneId }) {
+  const actor = tokDoc?.actor;
+  if (!actor) return;
+  const ref       = Number(actor.system?.stats?.ref?.total) || 0;
+  const athletics = Number(actor.getSkillVal?.("Athletics") ?? 0);
 
-  const handle = areaById(scene, templateId);
-  if (!handle) {
-    ui.notifications.warn(localize("FireZoneNotFound"));
-    return;
-  }
+  const content = await renderChatCard("suppression-evasion-prompt.hbs", {
+    actorName: actor.name, saveDC, weaponName, ref, athletics,
+    actorId: actor.id, tokenId: tokDoc.id, sceneId, dmgFormula, attackerId,
+  });
 
-  // Tokens whose centre is inside the zone (excluding the attacker). The shim uses
-  // RegionDocument#testPoint on v14 and the template's shape.contains on v13.
-  const candidates = (scene.tokens?.contents ?? []).filter(td => td.actor?.id !== attackerId);
-  const tokensInZone = tokensInArea(handle, candidates);
-
-  if (!tokensInZone.length) {
-    ui.notifications.info(localize("NoTokensInFireZone"));
-    return;
-  }
-
-  await _postEvasionPrompts(tokensInZone, { saveDC, dmgFormula, weaponName, attackerId });
-}
-
-/** Post evasion prompts for a set of tokens. Shared by initial confirm and per-turn hook. */
-async function _postEvasionPrompts(tokens, { saveDC, dmgFormula, weaponName, attackerId }) {
-  const sceneId = canvas?.scene?.id ?? "";
-  for (const tok of tokens) {
-    const actor = tok.actor;
-    if (!actor) continue;
-    const ref       = Number(actor.system?.stats?.ref?.total) || 0;
-    const athletics = Number(actor.getSkillVal?.("Athletics") ?? 0);
-
-    const content = await renderChatCard("suppression-evasion-prompt.hbs", {
-      actorName: actor.name, saveDC, weaponName, ref, athletics,
-      actorId: actor.id, tokenId: tok.id, sceneId, dmgFormula, attackerId,
-    });
-
-    await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
-  }
+  await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
 }
 
 /**
- * Enforce fire zone template constraints:
- *   - Origin cannot be moved (only direction/angle can change).
- *   - Distance cannot exceed maxDistance.
- *   - Width cannot drop below minWidth.
+ * Native-region ENTER → evasion prompt. The suppressiveFire behavior fires SUPPRESSIVE_ZONE_ENTERED_HOOK
+ * (on the active GM only) for a token crossing INTO the lane AND for every token already standing in it at
+ * plant/re-enable, so this one path covers "in the beaten zone at confirm" and "walked in later". The
+ * shooter is never prompted by their own lane; the lane's lock state is irrelevant (an unlocked lane is
+ * still firing). Values come off the behavior's system data (weapon name falls back to a localized generic
+ * at display time so a stored blank never freezes the UI language).
  */
-function _hookSuppressiveTemplateOriginLock() {
-  // The drag-to-aim origin lock only applies to MeasuredTemplates (v13). On v14 the zone is a
-  // Region created already-aimed (not drag-rotated), so there is no draggable origin to lock.
-  if (usesRegions()) return;
-  Hooks.on("preUpdateMeasuredTemplate", (doc, change) => {
-    const flags = doc.flags?.["cp2020-augmented"];
-    if (!flags?.isSuppressiveZone) return;
-
-    // Lock origin position
-    if (change.x !== undefined) change.x = flags.originX ?? doc.x;
-    if (change.y !== undefined) change.y = flags.originY ?? doc.y;
-
-    // Cap distance at weapon range
-    if (change.distance !== undefined && flags.maxDistance) {
-      change.distance = Math.min(change.distance, flags.maxDistance);
-    }
-
-    // Floor width at minimum zone width
-    if (change.width !== undefined && flags.minWidth) {
-      change.width = Math.max(change.width, flags.minWidth);
+function _hookSuppressiveZoneEntered() {
+  Hooks.on(SUPPRESSIVE_ZONE_ENTERED_HOOK, async ({ behavior, region, tokenDoc }) => {
+    try {
+      if (!_suppressiveSavesEnabled()) return;
+      const sys = behavior?.system ?? {};
+      const attackerId = String(sys.attackerId ?? "").trim();
+      if (attackerId && tokenDoc?.actor?.id === attackerId) return;   // never prompt the shooter's own lane
+      if (!tokenDoc?.actor) return;
+      const weaponName = String(sys.weaponName ?? "").trim() || localize("SuppZoneBehaviorLabel");
+      const sceneId = region?.parent?.id ?? tokenDoc?.parent?.id ?? canvas?.scene?.id ?? "";
+      await _postEvasionPrompt(tokenDoc, {
+        saveDC: Number(sys.saveDC) || 1,
+        dmgFormula: sys.dmgFormula || "1d6",
+        weaponName,
+        attackerId,
+        sceneId,
+      });
+    } catch (e) {
+      console.warn("cp2020-augmented | suppressive zone-entered handler failed", e);
     }
   });
 }
 
 /**
- * Per-turn evasion: when a combatant's turn starts, check if their token is
- * inside any active suppressive fire zone template and prompt them to evade.
- * Also removes zones that were created in a previous round (auto-expiry).
+ * Expiry tick: when the combat round advances, delete every shooter-owned suppressive lane laid on an
+ * earlier round (its shooter's turn has passed). A blank-shooter lane is a permanent hand-authored kill
+ * lane and is left alone. Regions on both cores. Same gating chain as the gas/radiation ticks + the
+ * whole-feature setting gate. The old per-turn standing re-test is dropped by design (entry now drives the
+ * saves).
  */
-function _hookSuppressiveFirePerTurn() {
+function _hookSuppressiveExpiry() {
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!game.user.isGM) return;
-    // Active GM only — otherwise every connected GM posts a duplicate per-turn
-    // evasion prompt and races on template deletion.
-    if (game.users.activeGM?.id !== game.user.id) return;
-    if (updateData.turn === undefined && updateData.round === undefined) return;
+    if (game.users.activeGM?.id !== game.user.id) return;   // one GM only, else a delete race
+    if (updateData.round === undefined) return;             // round advance only
+    if (!_suppressiveSavesEnabled()) return;
     const scene = canvas?.scene;
     if (!scene) return;
 
     const currentRound = combat.round ?? 0;
-
-    // Expire zones created in a previous round (fire zones last 1 round), via the shim.
-    let zones = areasByFlag(scene, "isSuppressiveZone");
-    for (const z of zones) {
-      const createdRound = z.doc.flags?.["cp2020-augmented"]?.createdRound ?? 0;
-      if (currentRound > createdRound) await deleteArea(z);
-    }
-    zones = areasByFlag(scene, "isSuppressiveZone");   // refresh after any deletions
-    if (!zones.length) return;
-
-    const combatant = combat.combatant;
-    if (!combatant) return;
-    const tokDoc = scene.tokens.get(combatant.tokenId);
-    if (!tokDoc?.actor) return;
-
-    for (const z of zones) {
-      const zf = z.doc.flags?.["cp2020-augmented"];
-      if (tokDoc.actor.id === zf?.actorId) continue;        // skip the attacker
-      if (!tokensInArea(z, [tokDoc]).length) continue;
-
-      await _postEvasionPrompts([tokDoc], {
-        saveDC:     zf.saveDC,
-        dmgFormula: zf.dmgFormula,
-        weaponName: localizeParam("WpnVariantPerTurn", { name: zf.weaponName ?? "" }),
-        attackerId: zf.actorId,
-      });
+    for (const region of [...(scene.regions ?? [])]) {
+      const behavior = region.behaviors?.find((b) => !b.disabled && b.type === SUPPRESSIVE_ZONE_BEHAVIOR);
+      if (!behavior) continue;
+      const attackerId = String(behavior.system?.attackerId ?? "").trim();
+      if (!attackerId) continue;                            // permanent lane — never auto-expires
+      const createdRound = Number(behavior.system?.createdRound ?? 0);
+      if (currentRound > createdRound) await region.delete().catch(() => {});
     }
   });
 }
@@ -768,7 +780,7 @@ function _hookSuppressiveFirePerTurn() {
  * Execute a suppressive fire evasion roll. Called by the button click handler.
  * On failure: roll 1d6 hits with the weapon's dmgFormula, apply via PATH B.
  */
-async function _executeSuppressionEvasion({ actorId, tokenId, sceneId, saveDC, dmgFormula, attackerId }) {
+export async function _executeSuppressionEvasion({ actorId, tokenId, sceneId, saveDC, dmgFormula, attackerId }) {
   // Token-first: the evader is the TOKEN caught in the zone — an unlinked token's REF/Athletics
   // (and the follow-up hits) belong to its synthetic actor, not the shared world actor.
   const actor = resolveActorRef({ tokenId, sceneId, actorId });
@@ -2165,10 +2177,10 @@ function _hookLiveSheetUpdate() {
 }
 
 function _hookSocketRelay() {
-  // Area/zone placements relayed from a non-GM firer. weaponFired/suppressiveFire fire only on the
-  // firing client, so the active GM places the area on their behalf — one shape for all four effects.
+  // Area/zone placements relayed from a non-GM firer. gasCloud/explosion/spread fire only on the firing
+  // client, so the active GM places the area on their behalf. (Suppressive is placement-forward — its
+  // geometry relay is handled separately as `suppressiveZonePlace` below.)
   const AREA_PLACERS = {
-    suppressiveFire: _placeSuppressiveZone,
     gasCloudFired:   _placeGasCloud,
     explosionFired:  _placeExplosion,
     spreadFired:     _placeSpreadZone,
@@ -2178,16 +2190,33 @@ function _hookSocketRelay() {
   const AREA_CONFIRMERS = {
     confirmExplosion:  (d) => _confirmExplosion(d.templateId),
     confirmSpreadZone: (d) => _confirmSpreadZone(d.templateId),
-    confirmFireZone:   (d) => _confirmFireZone(d.args),
   };
 
   game.socket.on("module.cp2020-augmented", async (data) => {
+    // Re-arm a suppressive-fire preview on the SHOOTER's client (a GM unlocked their placed lane). This
+    // must reach a non-GM shooter, so it is handled BEFORE the GM gate; only the matching user acts.
+    if (data.type === "suppressiveZoneRearm") {
+      if (data.payload?.userId && data.payload.userId === game.user.id) {
+        const { armSuppressivePreview } = await import("./suppressive-placement.js");
+        await armSuppressivePreview({ ...data.payload, rearm: true });
+      }
+      return;
+    }
+
     if (!game.user.isGM) {
       if (data.type === "damageApplied" && data.requesterId === game.user.id) {
         ui.notifications.info(localizeParam("DamageApplied", { amount: data.totalApplied, name: data.targetName }));
       } else if (data.type === "damageError" && data.requesterId === game.user.id) {
         ui.notifications.error(localizeParam("DamageApplyFailed", { message: data.message ?? localize("UnknownError") }));
       }
+      return;
+    }
+
+    // Suppressive lane geometry relayed from a non-GM shooter's confirmed preview → the active GM plants
+    // (or, with a regionId, updates) the lane.
+    if (data.type === "suppressiveZonePlace") {
+      if (game.users.activeGM?.id !== game.user.id) return;
+      await placeSuppressiveZoneFromGeometry(data.payload);
       return;
     }
 

@@ -11,6 +11,7 @@ import { registerAugmentedSettings, combatAutomationEnabled, ipHideUI, applyCaro
 import { registerAugmentedHandlebarsHelpers } from "./handlebars-helpers.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerGasCloudBehavior, registerGasCloudVisibilityDefault } from "./combat/gas-cloud-behavior.js";
+import { registerSuppressiveZoneBehavior, registerSuppressiveZoneVisibilityDefault } from "./combat/suppressive-zone-behavior.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
@@ -241,6 +242,11 @@ Hooks.once("init", function () {
   // "Gas Cloud" behavior so the GM manages them with region tools, and a GM can hand-author one too.
   registerGasCloudBehavior();
   registerGasCloudVisibilityDefault();
+  // Suppressive-fire lanes: the first EVENT-driven behavior (native token-enter triggers the evasion
+  // save via the module hook seam; damage-hooks.js listens). Player-visible by ruling — hand-authored
+  // lanes default to ALWAYS; the placement-forward spawn sets ALWAYS in its creation data.
+  registerSuppressiveZoneBehavior();
+  registerSuppressiveZoneVisibilityDefault();
   registerRadiation();
   registerRadiationZones();
   // R3b GM tools: the apply-dose / environmental scene-control buttons (shown to a GM while radiation is

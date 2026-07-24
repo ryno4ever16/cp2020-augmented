@@ -1043,6 +1043,25 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 .cyberpunk .save-prompt .save-buttons { margin-top: 6px; }
 
+/* Suppressive-fire placement preview readout — a floating label pinned to the cursor while the shooter
+   aims + sizes the fire lane (module/combat/suppressive-placement.js). left/top are set in JS to follow
+   the pointer; pointer-events:none so it never intercepts the confirming click. Fire-lane orange on a
+   dark plate, matching the corridor's #ff4400 family. */
+.cp-supp-preview-readout {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  color: #ffd9a0;
+  background: rgba(20, 12, 8, 0.88);
+  border: 1px solid #ff6622;
+  border-radius: 3px;
+  text-shadow: 0 1px 2px #000;
+}
+
 /* Chat-card action buttons (confirm / scatter / save-roll / apply, across our .cyberpunk,
    .cyberpunk-card and .cp-shop-request cards). These carry no button styling of their own, so they
    INHERIT `user-select: text` from Foundry's `.message-content` (the copy-chat-log feature) — which

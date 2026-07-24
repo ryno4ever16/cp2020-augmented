@@ -415,7 +415,8 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       'select[name="fields.fireMode"], select[name="fireMode"], .field[data-path="fireMode"] select'
     );
 
-    // Collect the parent row elements for suppression-only fields.
+    // Collect the parent row elements for suppression-only fields. (zoneWidth seeds the canvas placement
+    // preview's opening width; the shooter can re-size it on the map.)
     const supSelectors = [
       '.field[data-path="zoneWidth"]',
       '.field[data-path="roundsFired"]',
