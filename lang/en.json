@@ -1229,6 +1229,8 @@
     "Delete": "Delete",
     "ManeuverSpeed": "Maneuver",
     "ManeuverSpeedFull": "Maneuver (safe) speed — the fastest speed that needs no control roll. Not the Maneuverability modifier.",
+    "VehicleAccelBtnTip": "Apply one round of acceleration to the current speed (capped at top speed)",
+    "VehicleDecelBtnTip": "Apply one round of braking to the current speed (never below 0)",
     "ManeuverabilityFull": "Maneuverability",
     "ManeuverabilityHint": "Maneuverability (MV) — the vehicle's control-roll modifier. Not a speed.",
     "Passengers": "Passengers",

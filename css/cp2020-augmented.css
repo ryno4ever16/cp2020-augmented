@@ -1929,22 +1929,24 @@ img#anatomy-img {
    their inputs. Restore the actor-sheet treatment, scoped to the vehicle partial's display:contents
    wrapper so no OTHER item sheet's labels are affected (their min-width:0 column-shrink stays). */
 .cp-vehicle-item-fields { display: contents; }
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field > label {
-  flex: 1 1 auto;
-  min-width: max-content;
-  white-space: nowrap;
-}
 /* Boundaries + spacers (user report: at narrow widths inputs wrapped AWAY from their labels —
    Accel's box floated up beside Speed's, the Passengers input shrank to 0px, "Cost90000" ran
    together — and with the Carolingian skin unsetting field borders the whole sheet read as
-   loose numbers). Three guarantees, scoped to the vehicle partial:
+   loose numbers). Three guarantees, scoped via the root's cp-item-vehicle type class so they
+   cover the vehicle partial AND the shared Equipped/Cost/Weight/Source footer (which sits
+   outside the partial's wrapper — the footer four were the last fields still overlapping):
    1. every field is a contained unit — its own border+padding, content clipped at its edge,
       so nothing can visually merge with a neighbouring cell;
    2. real gutters between cells (the base grid's 3px gap reads as none once borders are gone);
    3. the value row (input / input unit ≈conv) wraps BELOW the label as one coherent block —
       never element-by-element — and inputs keep a readable floor instead of shrinking to 0. */
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list { column-gap: 8px; row-gap: 6px; }
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field {
+.cyberpunk.sheet.item.cp-item-vehicle .field-list .field > label {
+  flex: 1 1 auto;
+  min-width: max-content;
+  white-space: nowrap;
+}
+.cyberpunk.sheet.item.cp-item-vehicle .field-list { column-gap: 8px; row-gap: 6px; }
+.cyberpunk.sheet.item.cp-item-vehicle .field-list .field {
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
@@ -1952,27 +1954,46 @@ img#anatomy-img {
   padding: 2px 4px;
   overflow: hidden;
 }
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field > span.flexrow {
+.cyberpunk.sheet.item.cp-item-vehicle .field-list .field > span.flexrow {
   flex: 1 1 8em;
   min-width: 0;
 }
 /* Value rows stay one line (the bug photo showed them scattering element-by-element) — EXCEPT
    rows carrying the "≈ conversion" hint, which keep the earlier rule's wrap so the hint drops
    to its own line instead of clipping at the field edge. */
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field > span.flexrow:not(:has(.cp-unit-conv)) {
+.cyberpunk.sheet.item.cp-item-vehicle .field-list .field > span.flexrow:not(:has(.cp-unit-conv)) {
   flex-wrap: nowrap;
 }
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=number] {
+.cyberpunk.sheet.item.cp-item-vehicle .field-list .field input[type=number] {
   min-width: 2.2em;
 }
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=text] {
+.cyberpunk.sheet.item.cp-item-vehicle .field-list .field input[type=text] {
   min-width: 4em;
 }
 /* The skin unsets .field borders globally (terminal look); on this dense numeric sheet that is
    what made it unreadable — restore a subtle containment border, same idiom as the skill-search
    exception above. Stock (skin-off) keeps the base 2px black chip border untouched. */
-body.cp-carolingian .cyberpunk.sheet.item .cp-vehicle-item-fields .field {
+body.cp-carolingian .cyberpunk.sheet.item.cp-item-vehicle .field {
   border: 1px solid var(--restyler-border);
+}
+/* Header: the fixed-size portrait sits beside the title/summary/flavor column in a nowrap
+   flexrow; below a certain width the text column slid UNDER the image (user report: the image
+   overlaps the summary's SDP readout). Let the text column shrink-and-clip inside its own box
+   and pin the image out of the overlap. Generic to item sheets — pure anti-overlap, no visual
+   change at normal widths. */
+.cyberpunk.sheet.item .cp-item-sheet-root header .item-info {
+  min-width: 0;
+  overflow: hidden;
+}
+.cyberpunk.sheet.item .cp-item-sheet-root header .item-img { flex: 0 0 auto; }
+/* …and the title-strip summary ellipsizes inside the remaining room instead of running its
+   layout box under the image and getting clipped mid-glyph. */
+.cyberpunk.sheet.item .cp-item-sheet-root header .infoline { min-width: 0; }
+.cyberpunk.sheet.item .cp-item-sheet-root header .infoline .summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* Generic, gentle: a 4px gap between a field's label and its value on ALL item sheets — the
    shared Equipped/Cost footer row (outside the vehicle partial) rendered "Cost90000". */

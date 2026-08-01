@@ -6,7 +6,10 @@
  --}}
 {{!-- V2 single-root part: <form> is now provided by the sheet's tag:"form"; this div is the part's
       single root element. flex:1 fills the V2 form; inner content keeps its original block flow. --}}
-<div class="cyberpunk {{cssClass}} cp-item-sheet-root" style="flex:1;min-height:0;">
+{{!-- cp-item-<type> lets css scope per item type — the root otherwise carries no type class, so
+      e.g. the vehicle sheet's field containment could not reach the shared Equipped/Cost/Weight/
+      Source footer (it lives outside the vehicle partial's wrapper). --}}
+<div class="cyberpunk {{cssClass}} cp-item-sheet-root cp-item-{{item.type}}" style="flex:1;min-height:0;">
     <header class="flexrow nowrap">
         <div class="flexcol item-info">
             <span class="infoline">
