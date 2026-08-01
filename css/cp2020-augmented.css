@@ -1360,6 +1360,15 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .chat-message .cyberpunk h3,
 .chat-message .cyberpunk h4 { color: #e7d1b1; }
 
+/* Pin the card headings to the stock core sizes (h2 32px / h3 28px). Core sizes them via the
+ * global --font-h2/h3-size variables, so a theme module that retunes those variables (e.g.
+ * Carolingian UI's font settings) shrinks every card title with them. The user prefers the
+ * stock look on our cards, so state it in px, out of the variables' reach. Chat-scoped only. */
+.chat-message .cyberpunk h2,
+.chat-message .cyberpunk-card h2 { font-size: 32px; }
+.chat-message .cyberpunk h3,
+.chat-message .cyberpunk-card h3 { font-size: 28px; }
+
 /* Facedown / Recognition chat card */
 .cp-facedown-card .cp-facedown-line { padding: 1px 0; }
 
