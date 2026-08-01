@@ -1986,11 +1986,17 @@ body.cp-carolingian .cyberpunk.sheet.item.cp-item-vehicle .field {
   overflow: hidden;
 }
 .cyberpunk.sheet.item .cp-item-sheet-root header .item-img { flex: 0 0 auto; }
-/* …and the title-strip summary ellipsizes inside the remaining room instead of running its
-   layout box under the image and getting clipped mid-glyph. */
-.cyberpunk.sheet.item .cp-item-sheet-root header .infoline { min-width: 0; }
-.cyberpunk.sheet.item .cp-item-sheet-root header .infoline .summary {
+/* …and the title-strip summary WRAPS to its own full-width line when it can't fit beside the
+   name (user ruling: the tag carries subtype/SDP and was invisible at the default open width —
+   truncation hid information nobody knew was there). min(max-content, 100%) means: refuse to be
+   squeezed beside the name (wrap instead), but once alone on a line, cap at the row and
+   ellipsize as the last resort. */
+.cyberpunk.sheet.item .cp-item-sheet-root header .infoline {
   min-width: 0;
+  flex-wrap: wrap;
+}
+.cyberpunk.sheet.item .cp-item-sheet-root header .infoline .summary {
+  min-width: min(max-content, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
