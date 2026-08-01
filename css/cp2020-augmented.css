@@ -1934,9 +1934,49 @@ img#anatomy-img {
   min-width: max-content;
   white-space: nowrap;
 }
-.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=number] {
+/* Boundaries + spacers (user report: at narrow widths inputs wrapped AWAY from their labels —
+   Accel's box floated up beside Speed's, the Passengers input shrank to 0px, "Cost90000" ran
+   together — and with the Carolingian skin unsetting field borders the whole sheet read as
+   loose numbers). Three guarantees, scoped to the vehicle partial:
+   1. every field is a contained unit — its own border+padding, content clipped at its edge,
+      so nothing can visually merge with a neighbouring cell;
+   2. real gutters between cells (the base grid's 3px gap reads as none once borders are gone);
+   3. the value row (input / input unit ≈conv) wraps BELOW the label as one coherent block —
+      never element-by-element — and inputs keep a readable floor instead of shrinking to 0. */
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list { column-gap: 8px; row-gap: 6px; }
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field {
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  padding: 2px 4px;
+  overflow: hidden;
+}
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field > span.flexrow {
+  flex: 1 1 8em;
   min-width: 0;
 }
+/* Value rows stay one line (the bug photo showed them scattering element-by-element) — EXCEPT
+   rows carrying the "≈ conversion" hint, which keep the earlier rule's wrap so the hint drops
+   to its own line instead of clipping at the field edge. */
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field > span.flexrow:not(:has(.cp-unit-conv)) {
+  flex-wrap: nowrap;
+}
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=number] {
+  min-width: 2.2em;
+}
+.cyberpunk.sheet.item .cp-vehicle-item-fields .field-list .field input[type=text] {
+  min-width: 4em;
+}
+/* The skin unsets .field borders globally (terminal look); on this dense numeric sheet that is
+   what made it unreadable — restore a subtle containment border, same idiom as the skill-search
+   exception above. Stock (skin-off) keeps the base 2px black chip border untouched. */
+body.cp-carolingian .cyberpunk.sheet.item .cp-vehicle-item-fields .field {
+  border: 1px solid var(--restyler-border);
+}
+/* Generic, gentle: a 4px gap between a field's label and its value on ALL item sheets — the
+   shared Equipped/Cost footer row (outside the vehicle partial) rendered "Cost90000". */
+.cyberpunk.sheet.item .field { column-gap: 4px; }
 /* Unit selects (mph/kph, mi/km) on the vehicle ITEM sheet: compact inline controls sized to their
    content, not full-width chips. The actor-sheet select-sizing rules below are scoped to
    .cyberpunk.vehicle, which the item sheet's class set (.cyberpunk.sheet.item) does not include, so

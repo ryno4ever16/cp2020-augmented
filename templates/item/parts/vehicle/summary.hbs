@@ -1,1 +1,4 @@
-<span>{{#if system.vehicleType}}{{system.vehicleType}}{{/if}}{{#if system.speed.value}} · {{system.speed.value}} {{system.speed.unit}}{{/if}}{{#if system.sdp}} · {{CPLocal "Vehicle.SysSDP"}} {{system.sdp}}{{/if}}</span>
+{{!-- system.sdp is an OBJECT ({value,max}) — printing it bare rendered "SDP [object Object]"
+      in every vehicle title strip, and the bare {{#if}} on an object is always true. Print the
+      numbers, and only when there are any. --}}
+<span>{{#if system.vehicleType}}{{system.vehicleType}}{{/if}}{{#if system.speed.value}} · {{system.speed.value}} {{system.speed.unit}}{{/if}}{{#if (compare system.sdp.max ">" 0)}} · {{CPLocal "Vehicle.SysSDP"}} {{system.sdp.value}}/{{system.sdp.max}}{{else}}{{#if (compare system.sdp.value ">" 0)}} · {{CPLocal "Vehicle.SysSDP"}} {{system.sdp.value}}{{/if}}{{/if}}</span>
