@@ -793,6 +793,21 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .application.cyberpunk.sheet.actor .window-content { overflow-y: hidden; }
 .application.cyberpunk.sheet.actor .sheet-body { overflow-y: auto; }
 
+/* ── Character/NPC sheet: keep the stat block BESIDE the portrait ─────────────────────
+   The header row is core's .flexrow (flex-wrap:wrap), and the stat column's min-content
+   width is ~559px (9 stat cells at the Carolingian 55px minimum + the wound tracker), so
+   below a ~650px window the whole stat block wrapped underneath the portrait — doubling
+   the header height and squeezing the tab body to ~166px. Clamp the window above that
+   breakpoint (Foundry does not clamp resizes itself; paired with the raised 680px default
+   in actor-sheet.js), and make the row nowrap with the portrait yielding first so the
+   stats can never drop below the image. Scoped off the vehicle/ACPA sheet and the tab
+   pop-outs, which merge these same classes. */
+.application.cyberpunk.sheet.actor:not(.vehicle):not(.cp-tab-popout) {
+  min-width: 660px;
+}
+.cp-actor-sheet-root header.cyberheader > .flexrow { flex-wrap: nowrap; }
+.cp-actor-sheet-root header.cyberheader .profile-img { min-width: 48px; }
+
 /* Vehicle / ACPA sheet scroll chain (proven on the rig 2026-07-12). The sheet carries the `.actor`
    class, so the two rules above ALSO hid its window-content overflow and relocated scrolling to a
    `.sheet-body` scroller — but this layout's roots never established the height chain that bounds

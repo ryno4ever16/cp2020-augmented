@@ -41,7 +41,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
   static DEFAULT_OPTIONS = {
     classes: ["cyberpunk", "sheet", "actor"],
-    position: { width: 590, height: 600 },
+    // 680×660: wide enough that the header row holds the stat block BESIDE the portrait
+    // (its min-content is ~650px under the Carolingian skin — at the old 590 default the
+    // sheet opened with the stats already wrapped below the image, eating the tab body).
+    // Paired with the css min-width clamp on the application (cp2020-augmented.css).
+    position: { width: 680, height: 660 },
     window: { resizable: true },
     tag: "form",
     form: { submitOnChange: true, closeOnSubmit: false },
