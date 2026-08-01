@@ -23,9 +23,10 @@ const _moveDeltas = new Map();
  * like any other actor) or it carries the legacy vehicleHandle flag (tokens placed by an older
  * deploy). Detecting by actor type is what lets a plain drag-to-canvas behave like Deploy did.
  */
-function _isVehicleToken(doc) {
+export function isVehicleTokenDoc(doc) {
   return doc?.actor?.type === "cp2020-augmented.vehicle" || doc?.flags?.[SCOPE]?.vehicleHandle === true;
 }
+const _isVehicleToken = isVehicleTokenDoc;
 
 /**
  * Place a vehicle on a scene as a single visible, scalable handle token.

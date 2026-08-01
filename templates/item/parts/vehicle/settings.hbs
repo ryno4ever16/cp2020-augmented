@@ -4,6 +4,17 @@
       rules and its long labels (Speed/Fuel/Passengers/Maneuverability/Efficiency) otherwise
       collapse to ~0 width and overprint their inputs. --}}
 <div class="cp-vehicle-item-fields">
+{{!-- Deploy: bridge this inventory item to a vehicle ACTOR (GM-approved for players; the GM
+      places tokens later like any other actor). Hidden on locked sheets (compendium). --}}
+{{#if @root.editable}}
+<div class="field-list one-col">
+    <div class="field">
+        <label title="{{CPLocal "VehicleDeployTip"}}">{{CPLocal "VehicleDeployHint"}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-vehicle-deploy nogrow" title="{{CPLocal "VehicleDeployTip"}}">{{CPLocal "VehicleDeploy"}}</button>
+    </div>
+</div>
+{{/if}}
 {{!-- Identity / capacity (audit-walk schema upgrade — VEHICLE-SPEC.md §4). vehicleType is a SOFT
       enum: free text + a suggestions datalist, so the books' own class vocabulary survives. The
       datalist id is per-item to avoid the fixed-id singleton clash across two open sheets. --}}

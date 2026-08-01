@@ -766,6 +766,7 @@ async _prepareCyberware(sheet) {
     this._cpActivateTabs(root);
     this._cpActivateNotesEditor(root);
     this._cpActivateVehicleSpeedControls(root);
+    this._cpActivateVehicleDeployControls(root);
     this._cpActivateBasicItemActions(root);
     this._cpActivateCyberwareBasicControls(root);
     this._cpActivateCyberwareMechanicTypeControls(root);
@@ -808,6 +809,20 @@ async _prepareCyberware(sheet) {
         event.preventDefault();
         await resetChipChoice(this.item);
       }
+    });
+  }
+
+  /** Deploy button (vehicle items): item → vehicle-actor bridge, GM-approved for players. */
+  _cpActivateVehicleDeployControls(root) {
+    if (!root?.ownerDocument) return;
+    if (this.item.type !== "vehicle" || !this.isEditable) return;
+    if (root.dataset.cpVehicleDeployBound === "1") return;
+    root.dataset.cpVehicleDeployBound = "1";
+    root.addEventListener("click", async (event) => {
+      if (!event.target?.closest?.(".cp-vehicle-deploy")) return;
+      event.preventDefault();
+      const { requestVehicleDeploy } = await import("../vehicle/vehicle-deploy-request.js");
+      await requestVehicleDeploy(this.item);
     });
   }
 

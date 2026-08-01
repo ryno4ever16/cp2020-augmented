@@ -23,6 +23,8 @@ import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData, makeVehicleItemDat
 import { CyberpunkVehicleSheet } from "./actor/vehicle-sheet.js";
 import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
+import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFromItem } from "./vehicle/vehicle-deploy-request.js";
+import { registerVehicleBoardingHud } from "./vehicle/vehicle-boarding-hud.js";
 import { openControlRollDialog } from "./vehicle/vehicle-control.js";
 import { openVehicleDamageDialog } from "./vehicle/vehicle-damage.js";
 import { weaponToPenetration, vehicleToHitModifier, openVehicleFireDialog, registerVehicleFireHandlers } from "./vehicle/vehicle-weapons.js";
@@ -315,12 +317,17 @@ Hooks.once("init", function () {
   // Vehicle canvas: tile→token+crew movement coupling. Type-discriminated on the module sub-type,
   // so it coexists with the system's own vehicle-canvas hook (each fires only for its own type).
   registerVehicleCanvasHooks();
+  // Item→actor deploy requests (player asks, active GM approves + creates) and the
+  // embark/disembark token-HUD gesture.
+  registerVehicleDeploySocket();
+  registerVehicleBoardingHud();
 
   // Public API surface for macros and other modules. Mirrors the system's game.cyberpunk.vehicles
   // shape under the module's own namespace so it never clobbers the system API.
   game.cpAugmented = {
     vehicles: {
       deploy: deployVehicleToScene, board: boardVehicle, disembark,
+      requestDeploy: requestVehicleDeploy, createFromItem: createVehicleActorFromItem,
       controlRoll: openControlRollDialog, applyDamage: openVehicleDamageDialog,
       weaponToPen: weaponToPenetration, toHitMod: vehicleToHitModifier, fire: openVehicleFireDialog,
       acpaMelee: openAcpaMeleeDialog, acpaRepair: repairAcpa,

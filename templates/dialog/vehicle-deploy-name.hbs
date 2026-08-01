@@ -1,0 +1,9 @@
+{{!-- Name-entry step of the vehicle deploy flow: the actor name is settable BEFORE creation
+      (user ruling). Prefilled "[player]'s [vehicle]". --}}
+<div class="cp-deploy-name-body">
+    <p class="cp-deploy-name-hint">{{CPLocal "VehicleDeployNameHint"}}</p>
+    <div class="field">
+        <label for="cp-deploy-name">{{CPLocal "VehicleDeployNameLabel"}}</label>
+        <input type="text" name="cp-deploy-name" value="{{proposed}}" autofocus/>
+    </div>
+</div>
