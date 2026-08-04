@@ -62,6 +62,31 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       crewSlots:      numberField(1),
       passengerSlots: numberField(0),
 
+      // ── Whole-vehicle (catalog) layer — additive (unified-sheet plan Phase 1). The civilian
+      // sheet mirrors the vehicle ITEM sheet, and these carry what the actor lacked. The combat
+      // scalars above (topSpeed/safeSpeed/acc/dec) remain canonical — resolvers untouched.
+      speedValue: numberField(0),        // CURRENT speed; the sheet's +/− buttons write this
+      speedUnit:  stringField("mph"),    // display unit for the speed scalars (mph|kph)
+      range:      numberField(0),
+      rangeUnit:  stringField("mi"),     // mi|km
+      fuel: new f.SchemaField({
+        value:      new f.NumberField({ initial: 0 }),
+        max:        new f.NumberField({ initial: 0 }),
+        unit:       new f.StringField({ initial: "gal" }),
+        type:       new f.StringField({ initial: "" }),
+        efficiency: new f.NumberField({ initial: 0 }),
+      }),
+      mass:  new f.SchemaField({ value: new f.NumberField({ initial: 0 }), unit: new f.StringField({ initial: "tons" }) }),
+      cargo: new f.SchemaField({ value: new f.NumberField({ initial: 0 }), unit: new f.StringField({ initial: "kg" }) }),
+      bodyRating: numberField(0),        // the PRINTED Body rating (bodyValue stays derived SDP/20)
+      flavor: stringField(""),
+      vehicleTypeText: stringField(""),  // the book's verbatim class string ("Hovercraft", "spacecraft", …)
+      // Per-vehicle combat-sheet designation: with the world MM gate on, true renders the Maximum
+      // Metal combat sheet, false the civilian (item-mirror) sheet. Existing actors are migrated to
+      // true once (registerCivilianSheetMigration) so nothing changes for current worlds; deploys
+      // and fresh creates default false.
+      isMMVehicle: booleanField(false),
+
       // Systems
       vehicleLink:   booleanField(false),
       damageControl: booleanField(false),

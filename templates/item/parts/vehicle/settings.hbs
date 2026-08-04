@@ -5,13 +5,21 @@
       collapse to ~0 width and overprint their inputs. --}}
 <div class="cp-vehicle-item-fields">
 {{!-- Deploy: bridge this inventory item to a vehicle ACTOR (GM-approved for players; the GM
-      places tokens later like any other actor). Hidden on locked sheets (compendium). --}}
+      places tokens later like any other actor). Once THIS user has deployed it, the row shows
+      where the vehicle went and opens it — the pink slip visibly points at the machine.
+      Hidden on locked sheets (compendium). --}}
 {{#if @root.editable}}
 <div class="field-list one-col">
     <div class="field">
+        {{#if @root.veh.deployedActor}}
+        <label title="{{CPLocal "VehicleOpenActorTip"}}">{{CPLocal "VehicleDeployedAs" name=@root.veh.deployedActor.name}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-vehicle-open nogrow" data-actor-id="{{@root.veh.deployedActor.id}}" title="{{CPLocal "VehicleOpenActorTip"}}">{{CPLocal "VehicleOpenActor"}}</button>
+        {{else}}
         <label title="{{CPLocal "VehicleDeployTip"}}">{{CPLocal "VehicleDeployHint"}}</label>
         <span class="flex-pad"></span>
         <button type="button" class="cp-vehicle-deploy nogrow" title="{{CPLocal "VehicleDeployTip"}}">{{CPLocal "VehicleDeploy"}}</button>
+        {{/if}}
     </div>
 </div>
 {{/if}}

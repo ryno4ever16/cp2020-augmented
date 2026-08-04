@@ -23,7 +23,7 @@ import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData, makeVehicleItemDat
 import { CyberpunkVehicleSheet } from "./actor/vehicle-sheet.js";
 import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
-import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFromItem } from "./vehicle/vehicle-deploy-request.js";
+import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFromItem, registerCivilianSheetMigration } from "./vehicle/vehicle-deploy-request.js";
 import { registerVehicleBoardingHud } from "./vehicle/vehicle-boarding-hud.js";
 import { openControlRollDialog } from "./vehicle/vehicle-control.js";
 import { openVehicleDamageDialog } from "./vehicle/vehicle-damage.js";
@@ -89,6 +89,7 @@ const ACPA_SYSTEM    = `${SCOPE}.acpaSystem`;
 /** Partial templates the sheets include via {{> path}} (must be preloaded for the includes to resolve). */
 const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs",
+  "modules/cp2020-augmented/templates/actor/vehicle-civilian-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/parts/countermeasures.hbs",
   // Augmented character/NPC actor sheet (Option B) + its parts. The {{> "modules/…/parts/X.hbs"}}
@@ -321,6 +322,8 @@ Hooks.once("init", function () {
   // embark/disembark token-HUD gesture.
   registerVehicleDeploySocket();
   registerVehicleBoardingHud();
+  // One-time stamp: pre-civilian-split vehicle actors keep the MM combat sheet.
+  registerCivilianSheetMigration();
 
   // Public API surface for macros and other modules. Mirrors the system's game.cyberpunk.vehicles
   // shape under the module's own namespace so it never clobbers the system API.

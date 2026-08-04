@@ -6,7 +6,8 @@ import { REALITY_INTERFACES, REFLEX_CONTROLS } from "../vehicle/vehicle-acpa.js"
 import { COUNTERMEASURES } from "../vehicle/vehicle-missiles.js";
 import { acpaSystemsSummary, acpaAreaSpaces, acpaSpacesOver, acpaBuildIssues } from "../vehicle/vehicle-acpa-systems.js";
 import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
-import { localize } from "../utils.js";
+import { localize, localizeParam } from "../utils.js";
+import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -190,6 +191,32 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       ruleSystemLabel: localize(isMM ? "Vehicle.RulesetNameMM" : "Vehicle.RulesetNameCore"),
       isMM,
       mmOn,
+      // ── Civilian (item-mirror) sheet context — unified-sheet plan Phase 2. The civilian layout
+      // renders unless the vehicle is ACPA or designated an MM combat vehicle under the MM gate.
+      useCivilianSheet: !system.isACPA && !(system.isMMVehicle && mmOn),
+      // Unit conversion hints (mirror of the item sheet's veh context; 1 mi = 1.609 km).
+      speedAltMax: system.speedUnit === "kph" ? Math.round((Number(system.topSpeed) || 0) / 1.609)
+                                              : Math.round((Number(system.topSpeed) || 0) * 1.609),
+      speedAltUnit: system.speedUnit === "kph" ? "mph" : "kph",
+      rangeAlt: system.rangeUnit === "km" ? Math.round((Number(system.range) || 0) / 1.609)
+                                          : Math.round((Number(system.range) || 0) * 1.609),
+      rangeAltUnit: system.rangeUnit === "km" ? "mi" : "km",
+      showFuel: !!(Number(system.fuel?.max) || Number(system.fuel?.value) || system.fuel?.type),
+      // Honest handling label: the subtype has no modeled ruleset (submarine/spacecraft/exotics).
+      unmodeledSubtype: !!system.vehicleTypeText && !normalizeVehicleType(system.vehicleTypeText).modeled,
+      // Provenance line back to the source item (flags-only link — rename-proof).
+      sourceItemLine: (() => {
+        const uuid = actor.flags?.["cp2020-augmented"]?.sourceItemUuid;
+        if (!uuid) return "";
+        try {
+          const item = fromUuidSync(uuid);
+          if (!item) return "";
+          const ownerName = item.parent?.name;
+          return ownerName
+            ? localizeParam("VehicleSourceItemOwned", { item: item.name, owner: ownerName })
+            : localizeParam("VehicleSourceItem", { item: item.name });
+        } catch (e) { return ""; }
+      })(),
       controlEnabled,
       damageEnabled,
       reactiveWear,
@@ -222,6 +249,37 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     await super._onRender(context, options);
     this._cpActivateCountermeasures(this.element);
     this._cpActivateAcpaMode(this.element);
+    this._cpActivateCivilianControls(this.element);
+  }
+
+  /**
+   * Civilian-sheet controls: the +/− speed buttons (accelerate by acc, brake by dec — falling
+   * back to acc when no deceleration is recorded — clamped to [0, topSpeed]) and the provenance
+   * link back to the source item. Delegated on the persistent root, bound once.
+   */
+  _cpActivateCivilianControls(root) {
+    if (!root || root.dataset.cpCivBound === "1") return;
+    root.dataset.cpCivBound = "1";
+    root.addEventListener("click", async (ev) => {
+      const src = ev.target?.closest?.(".cp-veh-source");
+      if (src && root.contains(src)) {
+        ev.preventDefault();
+        const uuid = this.actor.flags?.["cp2020-augmented"]?.sourceItemUuid;
+        const item = uuid ? await fromUuid(uuid) : null;
+        item?.sheet?.render(true);
+        return;
+      }
+      const control = ev.target?.closest?.(".field.accel, .field.decel");
+      if (!control || !root.contains(control) || !this.isEditable) return;
+      ev.preventDefault();
+      const sys = this.actor.system;
+      const acc = Number(sys.acc) || 0;
+      const dec = Number(sys.dec) || acc;
+      const cur = Number(sys.speedValue) || 0;
+      const top = Number(sys.topSpeed) || cur;
+      const next = control.classList.contains("decel") ? Math.max(0, cur - dec) : Math.min(top, cur + acc);
+      await this.actor.update({ "system.speedValue": next });
+    });
   }
 
   /**

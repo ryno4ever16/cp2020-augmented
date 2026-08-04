@@ -26,6 +26,38 @@ const { DialogV2 } = foundry.applications.api;
 const renderTemplate = (path, data) =>
   (foundry.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate)(path, data);
 
+/**
+ * Map a book's free-text vehicle class onto the handling enum the control tables read.
+ * `modeled: false` marks families the ingested rulesets (Core p.112 + Maximum Metal) simply do
+ * not cover — submarines, spacecraft, and exotics. Those keep generic (car) handling plus an
+ * honest "rules not modeled" label on the sheet, instead of silently pretending.
+ */
+const VEHICLE_TYPE_MAP = [
+  [/sports?\s*car/i, "sportscar", true],
+  [/limo/i, "limo", true],
+  [/motor\s*cycle|\bcycle\b|\bbike\b/i, "cycle", true],
+  [/pick.?up|\btruck\b|\bvan\b|\bsemi\b/i, "truck", true],
+  [/\btank\b|\bmbt\b/i, "tank", true],
+  [/\bapc\b|\bifv\b/i, "APC", true],
+  [/av-?7/i, "AV-7", true],
+  [/av-?6/i, "AV-6", true],
+  [/\bav\b|av-?4|aerodyne/i, "AV-4", true],
+  [/heli|rotor|gyro/i, "rotor", true],
+  [/osprey|tilt.?rotor/i, "osprey", true],
+  [/\bboat\b|\bship\b|watercraft|jet.?ski/i, "boat", true],
+  [/acpa|powered? armou?r/i, "acpa", true],
+  [/\bcar\b|sedan|coupe|compact/i, "car", true],
+  [/submarine|\bsub\b|space|satellite|orbit|shuttle|\brpv\b|drone|remote|hover|dirigible|airship|ultralight|\bjet\b|plane|glider/i, "car", false],
+];
+export function normalizeVehicleType(text) {
+  const t = String(text ?? "").trim();
+  if (!t) return { type: "car", modeled: true };
+  for (const [re, type, modeled] of VEHICLE_TYPE_MAP) {
+    if (re.test(t)) return { type, modeled };
+  }
+  return { type: "car", modeled: false };
+}
+
 /** The actor this user already created from this item, if any (flags-keyed — rename-proof). */
 export function findDeployedVehicleActor(item, userId) {
   return game.actors.find(a =>
@@ -81,6 +113,13 @@ export async function createVehicleActorFromItem(item, { name, requesterUserId }
   const requester = requesterUserId ? game.users.get(requesterUserId) : null;
   if (requester && !requester.isGM) ownership[requesterUserId] = CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
 
+  // Handling normalization + the whole-vehicle catalog layer (unified-sheet plan Phase 3):
+  // the seed is essentially verbatim now — the civilian sheet mirrors the item sheet, so the
+  // data must travel. ACPA items deploy straight onto the ACPA sheet.
+  const norm = normalizeVehicleType(sys.vehicleType);
+  const isAcpa = norm.type === "acpa";
+  const topSpeed = num(sys.speed?.max) || num(sys.speed?.value);
+
   return Actor.create({
     name: name || item.name,
     type: VEHICLE_ACTOR_TYPE,
@@ -92,18 +131,61 @@ export async function createVehicleActorFromItem(item, { name, requesterUserId }
     prototypeToken: { actorLink: true, texture: { src: item.img } },
     flags: { [SCOPE]: { sourceItemUuid: item.uuid, createdBy: requesterUserId ?? game.user.id } },
     system: {
-      vehicleType: String(sys.vehicleType || "car"),
+      vehicleType: isAcpa ? "car" : norm.type,
+      vehicleTypeText: String(sys.vehicleType ?? ""),
+      isACPA: isAcpa,
+      isMMVehicle: isAcpa,          // civilians open on the item-mirror sheet
       sp: { front: sp, side: sp, rear: sp, top: sp, bottom: sp },
       sdp: { value: num(sys.sdp?.value) || sdpMax, max: sdpMax },
-      topSpeed: num(sys.speed?.max) || num(sys.speed?.value),
+      topSpeed,
+      speedValue: num(sys.speed?.value) || topSpeed,
+      speedUnit: sys.speed?.unit === "kph" ? "kph" : "mph",
       safeSpeed: num(sys.speed?.maneuver),
       acc: num(sys.speed?.acceleration),
       dec: num(sys.speed?.deceleration),
       controlMod: num(sys.maneuverability?.value),
       crewSlots: Math.max(1, num(sys.crew)),
       passengerSlots: num(sys.passengers),
+      range: num(sys.range),
+      rangeUnit: sys.rangeUnit === "km" ? "km" : "mi",
+      fuel: {
+        value: num(sys.fuel?.value), max: num(sys.fuel?.max),
+        unit: sys.fuel?.unit === "liters" ? "liters" : "gal",
+        type: String(sys.fuel?.type ?? ""), efficiency: num(sys.fuel?.efficiency),
+      },
+      mass: { value: num(sys.mass?.value), unit: sys.mass?.unit === "kg" ? "kg" : "tons" },
+      cargo: { value: num(sys.cargo?.value), unit: sys.cargo?.unit === "tons" ? "tons" : "kg" },
+      bodyRating: num(sys.body),
+      flavor: String(sys.flavor ?? ""),
       notes: String(sys.notes ?? ""),
     },
+  });
+}
+
+/**
+ * One-time migration for the civilian-sheet split: vehicle actors that predate isMMVehicle keep
+ * the combat sheet (stamped true) so existing worlds change nothing; new creates/deploys default
+ * to the civilian layout. World-setting stamped; GM client only; NEVER via migrateData (Foundry
+ * applies migrateData to update changes too — a fill there would wipe a civilian's false on any
+ * unrelated partial update; see the recorded ObjectField/mergeDefaults hazards).
+ */
+export function registerCivilianSheetMigration() {
+  game.settings.register(SCOPE, "civilianSheetMigrated", {
+    scope: "world", config: false, type: Boolean, default: false,
+  });
+  Hooks.once("ready", async () => {
+    if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+    if (game.settings.get(SCOPE, "civilianSheetMigrated")) return;
+    // Every vehicle actor that exists when this first runs predates the civilian sheet (deploy-
+    // created civilians can only appear after ready) — stamp them all onto the combat sheet.
+    // NOTE: a source-absence check would never fire here — DataModel cleaning fills schema
+    // initials into _source at load, so isMMVehicle reads false even on pre-split docs.
+    for (const a of game.actors.filter(x => x.type === VEHICLE_ACTOR_TYPE)) {
+      const updates = { "system.isMMVehicle": true };
+      if (!a.system.vehicleTypeText) updates["system.vehicleTypeText"] = a.system.vehicleType ?? "";
+      await a.update(updates);
+    }
+    await game.settings.set(SCOPE, "civilianSheetMigrated", true);
   });
 }
 
@@ -176,7 +258,7 @@ async function _handleDeployRequest(data) {
       name: data.proposedName, requesterUserId: data.requesterId,
     });
     game.socket.emit(`module.${SCOPE}`, {
-      type: MSG_RESULT, requesterId: data.requesterId, approved: true, actorName: actor.name,
+      type: MSG_RESULT, requesterId: data.requesterId, approved: true, actorName: actor.name, actorId: actor.id,
     });
   } else {
     game.socket.emit(`module.${SCOPE}`, {
@@ -185,11 +267,19 @@ async function _handleDeployRequest(data) {
   }
 }
 
-/** Requester side: surface the GM's verdict. */
+/** Requester side: surface the GM's verdict — and open the new vehicle's sheet (the moment that
+ *  teaches the pink-slip → vehicle model: the player watches the item become an actor). */
 function _handleDeployResult(data) {
   if (data.requesterId !== game.user.id) return;
   if (data.approved) {
     ui.notifications?.info?.(localizeParam("VehicleDeployApproved", { name: data.actorName }));
+    // The actor may arrive over the world sync a beat after the socket message — retry briefly.
+    const tryOpen = (attempt = 0) => {
+      const actor = game.actors.get(data.actorId);
+      if (actor) return actor.sheet?.render(true);
+      if (attempt < 20) setTimeout(() => tryOpen(attempt + 1), 250);
+    };
+    tryOpen();
   } else {
     ui.notifications?.warn?.(tryLocalize("VehicleDeployDeclined", "The GM declined the vehicle deploy request."));
   }

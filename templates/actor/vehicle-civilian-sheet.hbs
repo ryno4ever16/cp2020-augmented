@@ -1,0 +1,275 @@
+{{!-- Civilian vehicle actor layout — a mirror of the vehicle ITEM sheet (templates/item/parts/
+     vehicle/settings.hbs) bound to the ACTOR's fields, plus the play controls (Control Roll /
+     Damage / ruleset). Deployed vehicles look like the sheet users already know; the MM combat
+     layout (vehicle-sheet.hbs) is the specialist view. Reuses .cp-vehicle-item-fields so the
+     containment/boundary CSS covers both sheets. --}}
+<div class="cp-vehicle-sheet-root flexcol">
+    <header class="cyberheader">
+        <div class="flexrow">
+            <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64"/>
+            <div class="flexcol" style="flex:1; margin-left:8px;">
+                <h1 class="title"><input type="text" class="field-value" name="name" value="{{actor.name}}"/></h1>
+                <div class="fieldrow">
+                    <div class="field" title="{{CPLocal 'Vehicle.RulesetTip'}}">
+                        <label>{{CPLocal "Vehicle.RulesetLabel"}}</label>
+                        <span class="cp-ruleset-badge">{{ruleSystemLabel}}</span>
+                    </div>
+                    {{#if controlEnabled}}
+                    <div class="field cp-header-action">
+                        <button type="button" data-action="controlRoll" title="{{CPLocal 'Vehicle.ControlRollTipVehicle'}}">{{CPLocal "Vehicle.ControlRollBtn"}}</button>
+                    </div>
+                    {{/if}}
+                    {{#if damageEnabled}}
+                    <div class="field cp-header-action">
+                        <button type="button" data-action="vehicleDamage" title="{{CPLocal 'Vehicle.DamageTipVehicle'}}">{{CPLocal "Vehicle.DamageBtn"}}</button>
+                    </div>
+                    {{/if}}
+                </div>
+                {{#if sourceItemLine}}
+                <div class="fieldrow">
+                    <a class="cp-veh-source" title="{{CPLocal 'VehicleSourceItemTip'}}">{{sourceItemLine}}</a>
+                </div>
+                {{/if}}
+            </div>
+        </div>
+    </header>
+
+    <div class="sheet-body flexcol" style="overflow-y:auto;">
+    <div class="cp-vehicle-item-fields">
+
+    {{!-- Identity / capacity — mirrors the item sheet's first block. The book's verbatim class
+         string is kept; the handling select drives control-roll modifiers. --}}
+    <div class="field-list">
+        <div class="field">
+            <label for="system.vehicleTypeText">{{CPLocal "VehicleClass"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="text" name="system.vehicleTypeText" value="{{system.vehicleTypeText}}">
+            </span>
+        </div>
+        <div class="field" title="{{CPLocal 'VehicleHandlingTip'}}">
+            <label for="system.vehicleType">{{CPLocal "VehicleHandling"}}</label>
+            <span class="flexrow flex-pad">
+                <select name="system.vehicleType">
+                    {{#each vehicleTypes}}<option value="{{this}}" {{#if (equals ../system.vehicleType this)}}selected{{/if}}>{{CPLocal this}}</option>{{/each}}
+                </select>
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.crewSlots">{{CPLocal "Crew"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.crewSlots" value="{{system.crewSlots}}">
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.bodyRating" title="{{CPLocal "BodyRatingFull"}}">{{CPLocal "Body"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.bodyRating" value="{{system.bodyRating}}">
+            </span>
+        </div>
+        {{#if unmodeledSubtype}}
+        <div class="field span-two-cells">
+            <label class="cp-veh-unmodeled" title="{{CPLocal 'VehicleUnmodeledTip'}}">{{CPLocal "VehicleUnmodeled" subtype=system.vehicleTypeText}}</label>
+        </div>
+        {{/if}}
+        {{#if mmOn}}
+        <div class="field" title="{{CPLocal 'VehicleMMSheetTip'}}">
+            <label>{{CPLocal "VehicleMMSheet"}}</label>
+            <input type="checkbox" name="system.isMMVehicle" {{#if system.isMMVehicle}}checked{{/if}}/>
+        </div>
+        {{/if}}
+    </div>
+
+    {{!-- SDP + SP — same shape as the item sheet. --}}
+    <div class="field-list">
+        {{#with system.sdp}}
+        <div class="flexcol fillwidth span-two-cells" title="{{CPLocal "SDPFull"}}">
+            <div class="meter-gauge fillwidth">
+                <span style="width: calc(100% * ({{value}}/{{max}}));" class="
+                {{#if (compare value "<=" (math max "/" 2))}}
+                danger
+                {{/if}}"></span>
+            </div>
+            <div class="field">
+                <label class="larger" for="system.sdp.value" title="{{CPLocal "SDPFull"}}">{{CPLocal "SDP"}}</label>
+                <span class="flexrow flex-pad">
+                    <input type="number" name="system.sdp.value" value="{{value}}">
+                    <span class="nogrow">/</span>
+                    <input type="number" name="system.sdp.max" value="{{max}}">
+                </span>
+            </div>
+        </div>
+        {{/with}}
+        <div class="field">
+            <label for="system.sp.front" title="{{CPLocal "SPFull"}}">{{CPLocal "SP"}}</label>
+            <span class="flex-pad"></span>
+            <input type="number" class="number nogrow" name="system.sp.front" value="{{system.sp.front}}">
+        </div>
+        {{#if system.destroyed}}
+        <div class="field"><label class="cp-vehicle-destroyed">{{CPLocal "Vehicle.Destroyed"}}</label></div>
+        {{/if}}
+    </div>
+
+    {{!-- Speed — current/top with unit + conversion, accel/decel pair, the +/− buttons, maneuver. --}}
+    <div class="field-list">
+        <div class="flexcol fillwidth span-two-cells">
+            <div class="meter-gauge fillwidth">
+                <span style="width: calc(100% * ({{system.speedValue}}/{{system.topSpeed}}));" class="
+                {{#if (compare system.speedValue ">" system.safeSpeed)}}
+                danger
+                {{/if}}"></span>
+            </div>
+        </div>
+        <div class="field">
+            <label class="larger" for="system.speedValue">{{CPLocal "Speed"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.speedValue" value="{{system.speedValue}}">
+                <span class="nogrow">/</span>
+                <input type="number" name="system.topSpeed" value="{{system.topSpeed}}">
+                {{#if editable}}
+                <select name="system.speedUnit" class="nogrow cp-unit-select">
+                    <option value="mph" {{#if (equals system.speedUnit "mph")}}selected{{/if}}>mph</option>
+                    <option value="kph" {{#if (equals system.speedUnit "kph")}}selected{{/if}}>kph</option>
+                </select>
+                {{else}}
+                <span class="nogrow cp-unit-static">{{system.speedUnit}}</span>
+                {{/if}}
+                <span class="nogrow cp-unit-conv"><small>≈ {{speedAltMax}} {{speedAltUnit}}</small></span>
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.acc">{{CPLocal "Accel"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.acc" value="{{system.acc}}">
+                <span class="nogrow">{{system.speedUnit}}</span>
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.dec">{{CPLocal "Decel"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.dec" value="{{system.dec}}">
+                <span class="nogrow">{{system.speedUnit}}</span>
+            </span>
+        </div>
+        {{#if editable}}
+        <div class="flexrow">
+            <div class="field decel" title="{{CPLocal "VehicleDecelBtnTip"}}"><label class="fillwidth" style="text-align: center; font-size: larger">-</label></div>
+            <div class="field accel" title="{{CPLocal "VehicleAccelBtnTip"}}"><label class="fillwidth" style="text-align: center; font-size: larger">+</label></div>
+        </div>
+        {{/if}}
+        <div class="field">
+            <label for="system.safeSpeed" title="{{CPLocal "ManeuverSpeedFull"}}">{{CPLocal "ManeuverSpeed"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.safeSpeed" value="{{system.safeSpeed}}">
+                <span class="nogrow">{{system.speedUnit}}</span>
+            </span>
+        </div>
+    </div>
+
+    {{!-- Passengers / maneuverability / range / mass / cargo — item-sheet mirror. --}}
+    <div class="field-list">
+        <div class="field">
+            <label for="system.passengerSlots">{{CPLocal "Passengers"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}">
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.controlMod" title="{{CPLocal 'ManeuverabilityHint'}}">{{CPLocal "ManeuverabilityFull"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.controlMod" value="{{system.controlMod}}">
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.range">{{CPLocal "Range"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.range" value="{{system.range}}">
+                {{#if editable}}
+                <select name="system.rangeUnit" class="nogrow cp-unit-select">
+                    <option value="mi" {{#if (equals system.rangeUnit "mi")}}selected{{/if}}>mi</option>
+                    <option value="km" {{#if (equals system.rangeUnit "km")}}selected{{/if}}>km</option>
+                </select>
+                {{else}}
+                <span class="nogrow cp-unit-static">{{system.rangeUnit}}</span>
+                {{/if}}
+                <span class="nogrow cp-unit-conv"><small>≈ {{rangeAlt}} {{rangeAltUnit}}</small></span>
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.mass.value">{{CPLocal "Mass"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.mass.value" value="{{system.mass.value}}">
+                {{#if editable}}
+                <select name="system.mass.unit" class="nogrow cp-unit-select">
+                    <option value="tons" {{#if (equals system.mass.unit "tons")}}selected{{/if}}>tons</option>
+                    <option value="kg" {{#if (equals system.mass.unit "kg")}}selected{{/if}}>kg</option>
+                </select>
+                {{else}}
+                <span class="nogrow cp-unit-static">{{system.mass.unit}}</span>
+                {{/if}}
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.cargo.value">{{CPLocal "Cargo"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.cargo.value" value="{{system.cargo.value}}">
+                {{#if editable}}
+                <select name="system.cargo.unit" class="nogrow cp-unit-select">
+                    <option value="kg" {{#if (equals system.cargo.unit "kg")}}selected{{/if}}>kg</option>
+                    <option value="tons" {{#if (equals system.cargo.unit "tons")}}selected{{/if}}>tons</option>
+                </select>
+                {{else}}
+                <span class="nogrow cp-unit-static">{{system.cargo.unit}}</span>
+                {{/if}}
+            </span>
+        </div>
+    </div>
+
+    {{!-- Fuel — demoted like the item sheet: renders only once fuel data exists. --}}
+    {{#if showFuel}}
+    <div class="field-list">
+        {{#with system.fuel}}
+        {{#if max}}
+        <div class="flexcol fillwidth span-two-cells">
+            <div class="meter-gauge fillwidth">
+                <span style="width: calc(100% * ({{value}}/{{max}}));" class="
+                {{#if (compare value "<" (math max "/" 3))}}
+                danger
+                {{/if}}"></span>
+            </div>
+        </div>
+        {{/if}}
+        <div class="field">
+            <label class="larger" for="system.fuel.value">{{CPLocal "Fuel"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.fuel.value" value="{{value}}">
+                <span class="nogrow">/</span>
+                <input type="number" name="system.fuel.max" value="{{max}}">
+                {{#if @root.editable}}
+                <select name="system.fuel.unit" class="nogrow cp-unit-select">
+                    <option value="gal" {{#if (equals unit "gal")}}selected{{/if}}>gal</option>
+                    <option value="liters" {{#if (equals unit "liters")}}selected{{/if}}>L</option>
+                </select>
+                {{else}}
+                <span class="nogrow cp-unit-static">{{unit}}</span>
+                {{/if}}
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.fuel.type">{{CPLocal "Type"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="text" name="system.fuel.type" value="{{type}}">
+            </span>
+        </div>
+        <div class="field">
+            <label for="system.fuel.efficiency">{{CPLocal "Efficiency"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="system.fuel.efficiency" value="{{efficiency}}">
+            </span>
+        </div>
+        {{/with}}
+    </div>
+    {{/if}}
+
+    </div>{{!-- /.cp-vehicle-item-fields --}}
+    </div>{{!-- /.sheet-body --}}
+</div>

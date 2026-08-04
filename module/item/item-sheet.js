@@ -11,6 +11,7 @@ import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
 import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds, usedSlots, checkInstall } from "../mech/container.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
+import { findDeployedVehicleActor } from "../vehicle/vehicle-deploy-request.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const { ItemSheetV2 } = foundry.applications.sheets;
@@ -218,7 +219,15 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       showFuel: !!sheet.editable || !!(Number(sys.fuel?.max) || Number(sys.fuel?.value)
         || Number(sys.fuel?.efficiency) || String(sys.fuel?.type ?? "").trim()),
       // Soft-enum suggestions for the class datalist (VEHICLE_TYPE_SUGGESTIONS, module/lookups.js).
-      vehicleTypeSuggestions: VEHICLE_TYPE_SUGGESTIONS
+      vehicleTypeSuggestions: VEHICLE_TYPE_SUGGESTIONS,
+      // Deploy discoverability: the vehicle ACTOR this user already created from this item
+      // (flags-keyed, rename-proof) — the Deploy row shows "Deployed as X" + Open instead.
+      deployedActor: (() => {
+        try {
+          const a = findDeployedVehicleActor(sheet.item, game.user.id);
+          return a ? { id: a.id, name: a.name } : null;
+        } catch (e) { return null; }
+      })()
     };
   }
 
@@ -819,10 +828,18 @@ async _prepareCyberware(sheet) {
     if (root.dataset.cpVehicleDeployBound === "1") return;
     root.dataset.cpVehicleDeployBound = "1";
     root.addEventListener("click", async (event) => {
+      const open = event.target?.closest?.(".cp-vehicle-open");
+      if (open) {
+        event.preventDefault();
+        game.actors.get(open.dataset.actorId)?.sheet?.render(true);
+        return;
+      }
       if (!event.target?.closest?.(".cp-vehicle-deploy")) return;
       event.preventDefault();
       const { requestVehicleDeploy } = await import("../vehicle/vehicle-deploy-request.js");
       await requestVehicleDeploy(this.item);
+      // Re-render so a GM's direct create flips the row to "Deployed as …" immediately.
+      this.render();
     });
   }
 
@@ -867,10 +884,13 @@ async _prepareCyberware(sheet) {
 
       const current = readNumber('input[name="system.speed.value"]', "speed.value", 0);
       const acceleration = readNumber('input[name="system.speed.acceleration"]', "speed.acceleration", 0);
+      // The books print ACC/DEC as separate values — the brake uses deceleration when the
+      // vehicle records one, falling back to acceleration (long-standing behavior) when not.
+      const deceleration = readNumber('input[name="system.speed.deceleration"]', "speed.deceleration", 0) || acceleration;
       const max = readNumber('input[name="system.speed.max"]', "speed.max", current);
 
-      const direction = control.classList.contains("decel") ? -1 : 1;
-      const rawNext = current + (acceleration * direction);
+      const isDecel = control.classList.contains("decel");
+      const rawNext = isDecel ? current - deceleration : current + acceleration;
       const upperLimit = Number.isFinite(max) ? max : rawNext;
       const next = Math.max(0, Math.min(rawNext, upperLimit));
 
