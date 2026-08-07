@@ -18,6 +18,7 @@ import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
+import { registerCombatFx } from "./fx/effects.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -539,6 +540,11 @@ Hooks.once("ready", function () {
   // PopOut rebinding above: the prompt cards it locks (saves, drug/rad checks, martial defense) post
   // regardless of the combat gate, so the lock must be live regardless too.
   registerCardLock();
+  // Combat FX rail (muzzle flash light + shot audio, optional Sequencer/JB2A sprites). UNCONDITIONAL
+  // for the same reason as the two above: it is presentation of a shot the base system resolved, not
+  // automation, so it must run even where the combat-automation layer stands down. Its own world
+  // setting (combatFxEnabled) is read per event, so the switch applies without a reload.
+  registerCombatFx();
   if (doCombat) {
     registerDamageHooks();
     registerMovementGate();

@@ -765,6 +765,19 @@ export function registerAugmentedSettings() {
     onChange: () => applyCarolingianSkinClass()
   });
 
+  // --- Combat FX (Animation Rail A1) — muzzle flash + shot audio ---
+  // One master switch for the whole presentation rail: the native muzzle-flash light, the shot
+  // audio, and the optional Sequencer/JB2A sprites. On by default; a table that wants silence
+  // (or a GM who hand-authors lighting) turns it off here. Read per event, so it applies live.
+  game.settings.register(SCOPE, "combatFxEnabled", {
+    name: "SETTINGS.CombatFx",
+    hint: "SETTINGS.CombatFxHint",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: true,
+  });
+
   // --- Native System Settings page organizer (section headers + reorder + master-gating) ---
   // One data-driven pass (module/settings-sections.js) replacing the per-feature MM + IP grey-out
   // hooks: labelled section headers, contiguous reorder, and grey/disable of each master's sub-settings.
@@ -912,4 +925,9 @@ export function mechDocumentAutomationEnabled() {
 /** Permission scoping — limb-recovery controls restricted to the GM (default ON; fail-closed). */
 export function cyberlimbRepairGmOnly() {
   try { return game.settings.get(SCOPE, "cyberlimbRepairGmOnly") !== false; } catch { return true; }
+}
+
+/** Combat FX rail — muzzle flash light, shot audio, optional Sequencer sprites (default ON). */
+export function combatFxEnabled() {
+  try { return game.settings.get(SCOPE, "combatFxEnabled") !== false; } catch { return true; }
 }

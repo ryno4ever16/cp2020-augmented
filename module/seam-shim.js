@@ -184,6 +184,12 @@ function installRenderEmit() {
           weaponName: _fireCtx.weaponName,
           weaponId: _fireCtx.weaponId,
           areaDamages: data?.areaDamages ?? {},
+          // Rounds spent and rounds that landed for THIS card. areaDamages counts only the rounds
+          // that hit, so a listener that needs the full round count (the per-shot fx fan-out) cannot
+          // derive it — the card's own computed values carry it. Undefined on cards that don't set
+          // them; consumers fall back to the hit count.
+          shotsFired: data?.fired,
+          shotsHit: data?.hits,
           targetTokenId: target?.id ?? null,
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
           // Natural-1 on the attack roll (the multi-hit card carries it) — drives the mono

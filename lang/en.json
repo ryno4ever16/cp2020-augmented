@@ -2212,7 +2212,9 @@
     "AmmoBlackhandsPricingChoiceOff": "Off (Core rulebook)",
     "AmmoBlackhandsPricingChoiceBoxes": "Box prices only",
     "AmmoBlackhandsPricingChoiceBrass": "Brass cost ×3 only",
-    "AmmoBlackhandsPricingChoiceBoth": "Both (box prices + brass ×3)"
+    "AmmoBlackhandsPricingChoiceBoth": "Both (box prices + brass ×3)",
+    "CombatFx": "Display: Weapon-Fire Effects (flash + sound)",
+    "CombatFxHint": "When enabled, a resolved ranged shot plays a short muzzle-flash light on the shooter's token and a shot sound on the interface channel (so each player's own interface-volume slider controls it). Automatic weapons play one shot sound per round fired, under a single sustained flash. Melee attacks produce neither. If the optional Sequencer and JB2A modules are installed, matching muzzle and tracer sprites are added as well — without them the flash and sound work on their own. Turn off for a silent, unlit table."
   },
   "TYPES": {
     "Actor": {
