@@ -1,0 +1,10 @@
+{{!-- Cover chew card: posted by chewCoverZone on every structure debit (cover.js). --}}
+<div class="cyberpunk cp-cover-chew">
+    <h3>{{#if destroyed}}{{CPLocal "CoverDestroyedTitle"}}{{else}}{{CPLocal "CoverChewTitle"}}{{/if}}</h3>
+    <p>{{CPLocal "CoverChewLine" name=label damage=damage}}{{#if weaponName}} ({{weaponName}}){{/if}}</p>
+    {{#if destroyed}}
+    <p class="cp-cover-destroyed-line">{{#if doorOpened}}{{CPLocal "CoverDoorOpenedLine" name=label}}{{else}}{{CPLocal "CoverDestroyedLine" name=label}}{{/if}}</p>
+    {{else}}
+    <p class="cp-cover-pool-line">{{CPLocal "CoverPoolLine" pool=pool poolMax=poolMax}}</p>
+    {{/if}}
+</div>

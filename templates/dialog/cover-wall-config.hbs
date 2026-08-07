@@ -1,0 +1,31 @@
+{{!-- Cover fields injected into the NATIVE Wall configuration sheet (cover.js Unit 3).
+      Inputs are named flags.<scope>.* so the sheet's own form submit persists them.
+      Field meanings mirror the cover-zone behavior schema (same i18n labels). --}}
+<fieldset class="cp-cover-wall-fields">
+    <legend>{{CPLocal "CoverZoneFallbackName"}}</legend>
+    <p class="hint">{{#if isDoor}}{{CPLocal "CoverWallDoorHint"}}{{else}}{{CPLocal "CoverWallHint"}}{{/if}}</p>
+    <div class="form-group">
+        <label title="{{CPLocal 'CoverZoneSPHint'}}">{{CPLocal "CoverZoneSP"}}</label>
+        <div class="form-fields">
+            <input type="number" name="flags.{{scope}}.coverSp" value="{{sp}}" min="0" step="1"/>
+        </div>
+    </div>
+    <div class="form-group">
+        <label title="{{CPLocal 'CoverZonePoolHint'}}">{{CPLocal "CoverZonePool"}}</label>
+        <div class="form-fields">
+            <input type="number" name="flags.{{scope}}.coverPool" value="{{pool}}" min="0" step="1"/>
+        </div>
+    </div>
+    <div class="form-group">
+        <label title="{{CPLocal 'CoverWallPoolMaxHint'}}">{{CPLocal "CoverZonePoolMax"}}</label>
+        <div class="form-fields">
+            <input type="number" name="flags.{{scope}}.coverPoolMax" value="{{poolMax}}" min="0" step="1"/>
+        </div>
+    </div>
+    <div class="form-group">
+        <label title="{{CPLocal 'CoverWallMaterialHint'}}">{{CPLocal "CoverZoneMaterial"}}</label>
+        <div class="form-fields">
+            <input type="text" name="flags.{{scope}}.coverMaterial" value="{{material}}"/>
+        </div>
+    </div>
+</fieldset>

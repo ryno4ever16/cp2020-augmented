@@ -91,6 +91,18 @@
 
   {{!-- Options --}}
   <div class="field-list one-col damage-options">
+    {{#if hasCoverChoices}}
+    <div class="field">
+      <label title="{{CPLocal 'DamageDlgCoverZoneTip'}}">{{CPLocal "DamageDlgCoverZone"}}</label>
+      <span class="flex-pad"></span>
+      <select name="coverZone" class="nogrow">
+        <option value="">{{CPLocal "DamageDlgCoverManual"}}</option>
+        {{#each coverChoices}}
+        <option value="{{uuid}}" {{#if selected}}selected{{/if}} {{#if destroyed}}disabled{{/if}}>{{label}} — SP {{sp}} · {{pool}}/{{poolMax}}</option>
+        {{/each}}
+      </select>
+    </div>
+    {{/if}}
     <div class="field">
       <label title="{{CPLocal 'DamageDlgCoverSpTip'}}">{{CPLocal "DamageDlgCoverSp"}}</label>
       <span class="flex-pad"></span>

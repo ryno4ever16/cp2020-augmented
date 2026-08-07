@@ -1,0 +1,26 @@
+{{!-- Cover placement dialog: pick a book preset (Core "Common Cover SPs"), tune SP/structure,
+      place a ready-made region at the view centre — then reshape with the native Region tools. --}}
+<div class="cp-cover-place-body">
+    <p class="cp-cover-place-hint">{{CPLocal "CoverPlaceHint"}}</p>
+    <div class="field">
+        <label for="cp-cover-preset">{{CPLocal "CoverPreset"}}</label>
+        <select name="cp-cover-preset">
+            <option value="">{{CPLocal "CoverPresetCustom"}}</option>
+            {{#each presets}}
+            <option value="{{key}}">{{label}} — SP {{sp}}</option>
+            {{/each}}
+        </select>
+    </div>
+    <div class="field">
+        <label for="cp-cover-label">{{CPLocal "CoverLabel"}}</label>
+        <input type="text" name="cp-cover-label" value=""/>
+    </div>
+    <div class="field">
+        <label for="cp-cover-sp" title="{{CPLocal "CoverZoneSPHint"}}">{{CPLocal "CoverZoneSP"}}</label>
+        <input type="number" name="cp-cover-sp" value="10" min="0"/>
+    </div>
+    <div class="field">
+        <label for="cp-cover-pool" title="{{CPLocal "CoverZonePoolMaxHint"}}">{{CPLocal "CoverZonePoolMax"}}</label>
+        <input type="number" name="cp-cover-pool" value="30" min="1"/>
+    </div>
+</div>

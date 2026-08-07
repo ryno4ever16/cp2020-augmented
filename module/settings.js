@@ -385,6 +385,16 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
+  // --- autoCoverDetection (cover Unit 4 — opt-in ray auto-detect, default OFF) ---
+  game.settings.register(SCOPE, "autoCoverDetection", {
+    name: "SETTINGS.AutoCoverDetection",
+    hint: "SETTINGS.AutoCoverDetectionHint",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: false,
+  });
+
   // --- explosivesDetailed ---
   game.settings.register(SCOPE, "explosivesDetailed", {
     name: "SETTINGS.ExplosivesDetailed",

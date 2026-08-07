@@ -45,7 +45,8 @@
     "RegionBehavior": {
       "radiationZone": {},
       "gasCloud": {},
-      "suppressiveFire": {}
+      "suppressiveFire": {},
+      "coverZone": {}
     }
   },
   "esmodules": [

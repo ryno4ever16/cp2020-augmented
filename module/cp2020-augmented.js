@@ -12,6 +12,8 @@ import { registerAugmentedHandlebarsHelpers } from "./handlebars-helpers.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerGasCloudBehavior, registerGasCloudVisibilityDefault } from "./combat/gas-cloud-behavior.js";
 import { registerSuppressiveZoneBehavior, registerSuppressiveZoneVisibilityDefault } from "./combat/suppressive-zone-behavior.js";
+import { registerCoverZoneBehavior, registerCoverZoneVisibilityDefault } from "./combat/cover-zone-behavior.js";
+import { registerCoverSocket, registerCoverTools, registerCoverWallConfig } from "./combat/cover.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
@@ -250,6 +252,15 @@ Hooks.once("init", function () {
   // lanes default to ALWAYS; the placement-forward spawn sets ALWAYS in its creation data.
   registerSuppressiveZoneBehavior();
   registerSuppressiveZoneVisibilityDefault();
+  // Cover zones (fourth zone vertical — passive/queried; the damage dialog reads them, the
+  // applicator chews them). Placement = GM scene tool + native Region tools.
+  registerCoverZoneBehavior();
+  registerCoverZoneVisibilityDefault();
+  registerCoverSocket();
+  registerCoverTools();
+  // Unit 3: native Wall documents carry the same cover data via flags; the fields live on the
+  // native Wall configuration sheet, and flagged walls join the damage dialog's cover picker.
+  registerCoverWallConfig();
   registerRadiation();
   registerRadiationZones();
   // R3b GM tools: the apply-dose / environmental scene-control buttons (shown to a GM while radiation is
