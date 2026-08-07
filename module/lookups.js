@@ -294,7 +294,34 @@ const CALIBER_ALIASES = {
   "7.56":  "7.62",
   "7.565": "7.62sov",
   "7.62s": "7.62sov",
-  "7.62S": "7.62sov"
+  "7.62S": "7.62sov",
+
+  // Spelling variants shipped by the -add and supplement packs (import-staging/PACK-DATA-ROT-SWEEP.md
+  // class A1). In every case the cartridge IS in CALIBERS above — the item just writes it with a
+  // space, a leading dot, a trailing "mm", or in lower case. Aliasing here fixes every item that
+  // spells it that way at once: both the reload match (caliberMatches) and the shop's box pricing
+  // (getCaliberBox) read through normalizeCaliber. No item data is mutated.
+  "5 mm":  "5mm",
+  "6 mm":  "6mm",
+  "9 mm":  "9mm",
+  "10 mm": "10mm",
+  "11 mm": "11mm",
+  "12 mm": "12mm",
+  ".30-06": "30-06",
+  // The -add packs mark a cartridge's origin with a trailing letter ("S", "N", "C", …); CALIBERS
+  // models one entry per bore, so the suffixed spelling resolves onto the same bore. Only the two
+  // "S" spellings the sweep found are aliased — the rest of that vocabulary is an open registry
+  // question (sweep class A2), deliberately left unaliased.
+  "10 mm S": "10mm",
+  "11 mm S": "11mm",
+  // Trailing-"mm" spellings. 7.62 has two registry entries (NATO "7.62" / Soviet "7.62sov") and the
+  // bare "7.62mm" spelling does not say which — it resolves to NATO, the sweep's suggestion; the
+  // three items that use it are on the book-verification list.
+  "5.56mm": "5.56",
+  "7.62mm": "7.62",
+  // Lower-cased, pluralized projectile names.
+  "arrows": "Arrow",
+  "bolt":   "Bolt"
 };
 
 /** Canonical caliber id for a stored value (resolves known typos/aliases). Never throws. */

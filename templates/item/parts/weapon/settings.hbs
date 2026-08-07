@@ -46,12 +46,17 @@
             </select>
         {{/if}}
     </div>
-    {{> (template "fields/select") label="Concealability" edit="system.concealability" choices=concealabilities}}
+    {{!-- allowBlank so a weapon whose stored value is blank (or otherwise outside the enum) renders
+          as blank instead of silently displaying — and, on the next save, silently STORING — the
+          first option. Same treatment as AttackType above. --}}
+    {{> (template "fields/select") label="Concealability" edit="system.concealability" choices=concealabilities allowBlank=true}}
 </div>
 
 {{!-- Market stuff --}}
 <div class="field-list">
-    {{> (template "fields/select") label="Availability" edit="system.availability" choices=availabilities}}
+    {{!-- allowBlank: same reason as Concealability — the corrections layer normalizes the packs'
+          placeholder availability to a blank, which needs a blank option to round-trip a save. --}}
+    {{> (template "fields/select") label="Availability" edit="system.availability" choices=availabilities allowBlank=true}}
 
     {{#if isMelee}}
         {{> (template "fields/boolean") label="AP" edit="system.ap"}}
