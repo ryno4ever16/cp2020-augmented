@@ -13,7 +13,7 @@
     "lastOwnerId": "",
     "weaponType": "SMG",
     "accuracy": 2,
-    "concealability": "ConcealLongCoat",
+    "concealability": "ConcealLongcoat",
     "availability": "Poor",
     "ammoType": "12mm",
     "ammoItemId": "",

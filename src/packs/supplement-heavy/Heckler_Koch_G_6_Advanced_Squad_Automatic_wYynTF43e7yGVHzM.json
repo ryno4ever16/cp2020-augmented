@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "5D6 AP",
+    "damage": "5D6",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
@@ -28,7 +28,7 @@
       "short": "",
       "extreme": ""
     },
-    "ap": false,
+    "ap": true,
     "isEdged": false,
     "shotsLeft": 0,
     "shots": 100,

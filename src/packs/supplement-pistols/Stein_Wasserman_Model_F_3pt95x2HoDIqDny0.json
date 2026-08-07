@@ -13,7 +13,7 @@
     "lastOwnerId": "",
     "weaponType": "Pistol",
     "accuracy": 0,
-    "concealability": "ConcealLongCoat",
+    "concealability": "ConcealLongcoat",
     "availability": "Poor",
     "ammoType": "13mm mixed",
     "ammoItemId": "",

@@ -73,6 +73,13 @@ function mechConsumable({ doses = 1, durationTurns = "", note = "" } = {}) {
   return { mechConsumable: { enabled: true, doses, durationTurns, note } };
 }
 
+/** Correction entry for a damage string that glued an " AP" marker onto the roll formula (e.g.
+ *  "3D6 AP"): `Roll.validate` rejects the whole string, so the formula alone goes back into
+ *  `damage`, and the marker moves to the `ap` boolean the SP math actually reads
+ *  (combat/DamageApplicator.js resolveHitMath halves SP when it is set). The pack shipped these
+ *  items with `ap: false`, so the property was lost as well as breaking the roll. */
+function apDamage(formula) { return { patch: { damage: formula, ap: true } }; }
+
 /** One `<p>` block appended to a corrected item's notes. */
 function note(text) { return `<p>${text}</p>`; }
 
@@ -223,6 +230,41 @@ export const DATA_CORRECTIONS = {
   },
   "cyberpunk2020.rifles-add": {
     qzZ9KgXMqlWkfZ8B: { patch: { accuracy: 4 } },  // FR-F6 (book WA 4)
+    // Federated Arms Tech-Assault (Solo of Fortune: "SMG +1 J E 1D6 (.22) 30 10/30 UR 100m",
+    // community-reported 2026-08-06, verified against the printed line). Pack shipped it as a
+    // 6mm rifle: type/skill/caliber/damage all diverge, concealability was blank, and
+    // availability was the literal string "undefined". attackSkill is a STORED field, so it
+    // must move together with weaponType or the item keeps an out-of-list skill. The old
+    // "6 mm" (with space) matched no registry caliber at all; ".22" is the exact registry id.
+    i5fKapFKJhgx3ia2: { patch: {
+      weaponType: "SMG",
+      attackSkill: "Submachinegun",
+      ammoType: ".22",
+      damage: "1D6",
+      concealability: "ConcealJacket",
+      availability: "Excellent",
+    } },
+    // ── " AP"-suffixed damage strings (sweep class E1) ──
+    Ff2yM36UEUKEgC5b: apDamage("4D6"),  // Arasaka WSSA Sniper System — was "4D6 AP"
+    EqupdgO5LXciazY8: apDamage("4D6"),  // OTs-14 Groza — was "4D6 AP"
+    xoAhnFlX6ejjClzs: apDamage("4D6"),  // Tsunami Arms King-Snip — was "4D6 AP"
+  },
+  "cyberpunk2020.pistols-add": {
+    // ── " AP"-suffixed damage strings (sweep class E1) ──
+    jHCXRRomdgY4mdgY: apDamage("3D6+1"),  // Armalite Poly .41 — was "3D6+1 AP"
+    yXpTaNDwOdjkCC8d: apDamage("3D6"),    // Beretta DI-57 Ferro — was "3D6 AP"
+    "8b4SZbjbsBtnBjL5": apDamage("3D6"),  // FN Five-seveN — was "3D6 AP"
+    HxBwgUlehNY9i6dH: apDamage("3D6"),    // FN M8 Ghosthawk — was "3D6 AP"
+    Juv0gu2yUtSPxCUt: apDamage("3D6"),    // KBP Udar — was "3D6 AP"
+    "3WHvBR8eQl29lABE": apDamage("5D6"),  // Militech Boomer Buster .477 — was "5D6 AP"
+    "0plHCzWiYgjpWuZj": apDamage("3D6"),  // OTs-20 Gnome — was "3D6 AP"
+  },
+  "cyberpunk2020.smgs-add": {
+    // Concealability was authored as free text; these are the enum values (lookups.js
+    // `concealability`) the sheet's select and every other pack use.
+    Ubxx6nrlV5OVOrDS: { patch: { concealability: "ConcealJacket" } },     // H&K MP-2013 — was "jacket"
+    VCNhTdWnVoPTYYzi: { patch: { concealability: "ConcealJacket" } },     // H&K MPK-9 — was "jacket"
+    tUw3deoRLKzUbQEI: { patch: { concealability: "ConcealLongcoat" } },   // H&K MPK-11 — was "long coat"
   },
   "cyberpunk2020.pistols": {
     ghAVVP4pbH2zOIx6: { name: "Llama Comanche" },  // PR #43: was "Commanche"
@@ -337,6 +379,54 @@ export const DATA_CORRECTIONS = {
   },
 };
 
+/* ── Pack-scoped normalization RULES ────────────────────────────────────────────────────────────
+ * Two base packs were authored with placeholder or free text where an enum value belongs. 717 of
+ * their items store the literal string "undefined" in `availability`, and 192 store
+ * `reliability: "very reliable"` — the spaced spelling, which the system's jam-threshold lookup
+ * (utils.js reliabilityThreshold) does not recognise, so weapons the pack advertises as very
+ * reliable jam on 1–5 instead of 1–3. (Both counts from import-staging/PACK-DATA-ROT-SWEEP.md,
+ * classes B and F.)
+ *
+ * 717 per-item entries would not be a readable artifact, so these two fields are normalized BY
+ * RULE. The rule is deliberately narrow — only the two packs the sweep flagged, only the exact
+ * values it flagged — so it can never reach data it was not written for.
+ *
+ * Availability normalizes to a BLANK, not to a value: what these weapons' availability actually is
+ * is a book question nobody has answered, and a blank is honest where an invented "Common" is not.
+ * Reliability normalizes to the enum spelling the legal items already use (lookups.js
+ * `reliability`), which is what the threshold lookup matches on.
+ */
+const RULE_PACKS = new Set(["cyberpunk2020.pistols-add", "cyberpunk2020.rifles-add"]);
+
+/** Placeholder text meaning "no value was authored here" → a clean blank. */
+const AVAILABILITY_PLACEHOLDERS = new Set(["undefined", "null"]);
+
+/** Non-canonical reliability spellings → the enum value legal items store. Keyed lower-case. */
+const RELIABILITY_CANONICAL = {
+  "very reliable": "VeryReliable",
+  "standard":      "Standard",
+  "unreliable":    "Unreliable",
+};
+
+/**
+ * Apply the pack-scoped normalization rules to an item's `system` block (mutates it; returns true
+ * when something changed). Pure given (packId, system) — exported for the rig test.
+ */
+export function applyPackRulesToItemSystem(packId, system) {
+  if (!RULE_PACKS.has(packId) || !system) return false;
+  let changed = false;
+  if (AVAILABILITY_PLACEHOLDERS.has(String(system.availability ?? "").toLowerCase())) {
+    system.availability = "";
+    changed = true;
+  }
+  const rel = RELIABILITY_CANONICAL[String(system.reliability ?? "").toLowerCase()];
+  if (rel !== undefined && system.reliability !== rel) {
+    system.reliability = rel;
+    changed = true;
+  }
+  return changed;
+}
+
 /** The correction entry for a compendium item, or null. */
 export function correctionFor(packId, itemId) {
   return DATA_CORRECTIONS[packId]?.[itemId] ?? null;
@@ -403,9 +493,15 @@ export function registerDataCorrections() {
     const src = parseCompendiumSource(doc?._stats?.compendiumSource ?? data?._stats?.compendiumSource);
     if (!src) return;
     const c = correctionFor(src.packId, src.itemId);
-    if (!c) return;
     const patch = { name: data.name, system: foundry.utils.deepClone(data.system ?? {}), flags: foundry.utils.deepClone(data.flags ?? {}) };
-    applyCorrectionToItemData(patch, c);
+    // Pack RULES and per-item ENTRIES share ONE pass and ONE stamp. The rule normalizes first and
+    // the entry patches over it, so a book-verified entry always wins on a field both touch (e.g.
+    // the Tech-Assault's "Excellent" beats the rule's blank). The copy is stamped when EITHER
+    // changed something, so a rule-only item is corrected exactly once, same as an entry-only one;
+    // an item with neither is left byte-identical and unstamped.
+    let changed = applyPackRulesToItemSystem(src.packId, patch.system);
+    if (c) changed = applyCorrectionToItemData(patch, c) || changed;
+    if (!changed) return;
     markCorrectionApplied(patch);
     doc.updateSource({ name: patch.name, system: patch.system, flags: patch.flags });
   });
