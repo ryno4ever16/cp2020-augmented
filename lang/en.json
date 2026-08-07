@@ -144,7 +144,17 @@
       "NewContentHeading": "✦ New in 1.1.0 — content & controls",
       "NewContentItem1": "540+ new compendium items: ~200 chips, 15 borg chassis, Blackhand's Street Weapons, gear, heavy weapons, and 70+ vehicles",
       "NewContentItem2": "A new \"Gear & Cyberware Automation\" settings section — turn off any automation your table doesn't want (all default ON)",
-      "NewContentItem3": "A manual round-tick button for tables that turn per-turn automation off"
+      "NewContentItem3": "A manual round-tick button for tables that turn per-turn automation off",
+      "NewIn120Intro": "Version <b>1.2.0</b> brings destructible cover, deployable vehicles, and weapon-fire effects:",
+      "NewIn120SystemsHeading": "✦ New in 1.2.0 — systems",
+      "NewIn120SystemsItem1": "Destructible cover: GMs paint cover zones onto a scene; the damage dialog offers them on a shot, and fire chews through cover until it's gone",
+      "NewIn120SystemsItem2": "Walls and doors can carry cover values too — a door chewed to zero swings open",
+      "NewIn120SystemsItem3": "Optional automatic cover detection along the shot line (world setting, off by default)",
+      "NewIn120SystemsItem4": "Vehicles deploy to the map: send an owned vehicle to the scene as a drivable token and board or dismount with a click — the deployed vehicle mirrors its item sheet",
+      "NewIn120SystemsItem5": "Weapon-fire effects: a muzzle flash lights the shooter's token and each weapon class has its own gunshot sound; full-auto plays every round. Master switch: \"Display: Weapon-Fire Effects\"",
+      "NewIn120FxHeading": "✦ Optional cinematic add-ons",
+      "NewIn120FxItem1": "Install the free Sequencer and JB2A modules to add muzzle sprites and bullet tracers — detected automatically, nothing to configure",
+      "NewIn120FxItem2": "Without them the flash and sound still work on their own; all shipped audio is license-clean and credited"
     },
     "ExplosionConfirmTitle": "💥 Explosion — {weapon}",
     "ExplosionConfirmSummary": "Blast radius <b>{radius}m</b>, base damage <b>{damage}</b>, full damage within <b>{within}m</b>.",

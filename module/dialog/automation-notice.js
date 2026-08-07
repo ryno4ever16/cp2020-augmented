@@ -62,6 +62,20 @@ const PAGES = [
       },
     ],
   },
+  {
+    intro: "CYBERPUNK.AutoNotice.NewIn120Intro",
+    boxes: [
+      {
+        headingKey: "CYBERPUNK.AutoNotice.NewIn120SystemsHeading",
+        bullets: Array.from({ length: 5 }, (_, i) => `CYBERPUNK.AutoNotice.NewIn120SystemsItem${i + 1}`),
+      },
+      {
+        headingKey: "CYBERPUNK.AutoNotice.NewIn120FxHeading",
+        variant: "gold",
+        bullets: Array.from({ length: 2 }, (_, i) => `CYBERPUNK.AutoNotice.NewIn120FxItem${i + 1}`),
+      },
+    ],
+  },
 ];
 
 export class AutomationNotice extends HandlebarsApplicationMixin(ApplicationV2) {
