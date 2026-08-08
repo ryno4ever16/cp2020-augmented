@@ -336,7 +336,119 @@ const CALIBER_ALIASES = {
   "7.62mm": "7.62",
   // Lower-cased, pluralized projectile names.
   "arrows": "Arrow",
-  "bolt":   "Bolt"
+  "bolt":   "Bolt",
+
+  /* ── Designation vocabulary (import-staging/CALIBER-REGISTRY-PROPOSAL.md §7a, ratified) ────────
+   * The packs write a cartridge as bore + a designation suffix — origin ("N" NATO, "SOV"/"S"
+   * Soviet), case type ("C"/"CL"/"L" caseless / long caseless, "cased"), propellant or projectile
+   * ("ET" electrothermal, "G" gyrojet, "R" rocket, "H" hybrid, "FF" frag-flechette, "EHI" extra
+   * high impact, "LP" liquid propellant, "ramjet", "flechette"), or a load name ("M" magnum,
+   * "ACP", "WM"). CALIBERS models ONE entry per BORE, and the module already models case type and
+   * load on the MODIFIER axis (brassCased, flechette, ap, stundart …) — so every one of these
+   * spellings resolves onto the bore its weapon actually fires. Book attestation per group is in
+   * the proposal's §5a/§7a tables; nothing here invents a cartridge the registry does not have.
+   *
+   * Cost-neutral by construction: each group's observed weapon damage sits inside the band its
+   * target entry's costClass already covers (proposal §4), so no item's ammo price moves into a
+   * class its own damage does not already sit in.
+   *
+   * ⚠ normalizeCaliber is an EXACT, case-sensitive lookup after trim() — each spelling needs its
+   * own key ("10mm Caseless" and "10mm caseless flechette" are two keys, not one pattern).
+   * Deliberately NOT here: the bores the registry has no entry for (proposal §7b), the strings the
+   * book sweep could not decode (§7c), and the values that are not cartridges at all (§7d).
+   */
+
+  // 7.62 NATO — the largest group. "N" is a printed RTG token (Solo of Fortune p74 prints 7.62N,
+  // 7.62SOV and 7.62 NATO on one page); the rest are case-type/propellant suffixes on the same bore.
+  "7.62N":            "7.62",
+  "7.62C":            "7.62",
+  "7.62E":            "7.62",
+  "7.62x37 mm":       "7.62",
+  "7.62mm EAE cased": "7.62",
+  "7.62mm ETU":       "7.62",
+  "7.62mm caseless":  "7.62",
+  // 7.62 Soviet — the registry's own NATO/Soviet split. The x54R / SP-3 / SP-4 spellings are
+  // real-world Russian designations the scrape imported; the bore is the Soviet one either way.
+  "7.62x54R":         "7.62sov",
+  "7.62 mm SP-3":     "7.62sov",
+  "7.62 mm SP-4":     "7.62sov",
+
+  // 9mm — "C"/"CL"/"L" case types; "M" (Makarov) and "SP-5"/"SP-6" are real-world 9x18/9x39 the
+  // scrape imported, still a 9mm bore.
+  "9 mm C":           "9mm",
+  "9 mm M":           "9mm",
+  "9 mm SP-5":        "9mm",
+  "9 mm SP-6":        "9mm",
+  "9mm CL":           "9mm",
+  "9 mm CL":          "9mm",
+  "9mm L":            "9mm",
+  "9mm caseless":     "9mm",
+
+  // 5.56
+  "5.56C":            "5.56",
+  "5.56 C":           "5.56",
+  "5.56mm caseless":  "5.56",
+
+  // .357 — "M"/"mag" = Magnum, "P" undecoded but the bore is not in doubt.
+  ".357M":            ".357",
+  ".357P":            ".357",
+  ".357mag":          ".357",
+  ".357 C":           ".357",
+
+  // .44 — Magnum / caseless / electrothermal spellings; ".445" and ".44B" are scrape corruptions
+  // of the same bore (the ".44B" weapon is literally named ".44 Bulldog").
+  ".44M":             ".44",
+  ".44 Mag":          ".44",
+  ".44 C":            ".44",
+  ".44 ET":           ".44",
+  ".44B":             ".44",
+  ".445":             ".44",
+
+  // .45
+  ".45 ACP":          ".45",
+  ".45 ACPC":         ".45",
+  ".45 LVD stundart": ".45",
+
+  // 10mm
+  "10 mm C":                "10mm",
+  "10mm Caseless":          "10mm",
+  "10mm cased":             "10mm",
+  "10mm ramjet":            "10mm",
+  "10mm caseless flechette":"10mm",
+
+  // 11mm / 12mm
+  "11 mm C":            "11mm",
+  "12 mm C":            "12mm",
+  "12mm R":             "12mm",
+  "12mm Long Caseless": "12mm",
+
+  // 5mm / 6mm / .22 / 20mm
+  "5 mm C":         "5mm",
+  "6 mm C":         "6mm",
+  "6mm R":          "6mm",
+  ".22LR":          ".22",
+  "20/9mm":         "20mm",
+  "20mm EHI":       "20mm",
+  "20mm EHI cased": "20mm",
+
+  // Shotgun gauges → the registry's single shotgun entry ("00" = 00 Buck / Slug). Every gauge is
+  // priced identically (12 shells / 15eb), and resolving them also restores the SHOTGUN load list
+  // (Stundart, spread) that caliberFamily hands out — these weapons were being offered firearm loads.
+  "12ga":   "00",
+  "10ga":   "00",
+  "4ga":    "00",
+  ".410ga": "00",
+  "20ga":   "00",
+  "28ga":   "00",
+  "CAL12":  "00",
+  "CAL10":  "00",
+  "CAL20":  "00",
+  "CAL28":  "00",
+  "CAL410": "00",
+
+  // Non-cartridge projectiles that already have a registry entry.
+  "quarrels":       "Bolt",     // three crossbows — were being offered firearm loads
+  "fuel (4 shots)": "Napalm"
 };
 
 /** Canonical caliber id for a stored value (resolves known typos/aliases). Never throws. */
