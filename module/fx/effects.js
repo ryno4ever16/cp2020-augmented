@@ -19,7 +19,7 @@
  */
 
 import { tokensOf } from "../mech/light.js";
-import { combatFxEnabled } from "../settings.js";
+import { combatFxEnabled, faceTargetOnFireEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -47,20 +47,40 @@ export const MAX_FX_SHOTS = 30;
 
 /**
  * How the flash is SHAPED — one of the three shapes muzzleSourceSpecs below can build.
- *  - "cone"   frontal wedge toward the aimed-at point only (the shipped default)
+ *  - "cone"   a wedge of `coneDegrees` about the shot's axis (the shipped default). At the measured
+ *             width that wedge is most of the circle with a NOTCH cut out behind the shooter, not a
+ *             narrow forward beam — see the measurement note under MUZZLE_LIGHT.
  *  - "omni"   one circle, no direction needed (what the first build did)
- *  - "hybrid" the frontal wedge plus a faint circular spill
- * A shot with no known aim has no direction to point a wedge at, so it falls back to "omni"
- * whatever this says — see muzzleSourceSpecs.
+ *  - "hybrid" the wedge plus a faint circular companion
  *
- * WHY THE DEFAULT IS THE PURE CONE. The reference frame settles it by measurement rather than by
- * taste: the floor BEHIND the shooter, sampled in the 150°–210° arc at 150–400px out, reads a median
- * luminance of 5.7/255 and a median red-minus-blue of −8 — that is unlit floor, not dimly lit floor.
- * A circular spill of any strength would put light there. So the omni companion the previous default
- * carried is off, and every knob it needs (spillLevel, the three shapes) is kept so the choice stays
- * a one-word edit rather than a rebuild.
+ * EVERY shot has an axis. Where none is named, one is synthesized from the shooter token's own
+ * facing before any shape is built (aimPointOf / facingRad below), so the shape a viewer gets does
+ * NOT change with whether a target happened to be picked — the two cases are the same effect. The
+ * previous build fell back to the circle here, and a shot fired at nothing therefore drew a plain
+ * radius; that is the behaviour this note replaces.
+ *
+ * WHY THE DEFAULT IS THE PURE WEDGE. The reference frame settles it by measurement rather than by
+ * taste: the floor is LIT in every direction except one narrow sector directly behind the shooter,
+ * where it reads a median luminance of about 4/255 and a median red-minus-blue of −6 — unlit floor,
+ * not dimly lit floor. A circle of any strength would put light in that notch, and only a limited
+ * angle can cut it. The other two shapes and `spillLevel` are kept so the choice stays a one-word
+ * edit rather than a rebuild.
  */
 export const MUZZLE_MODE = "cone";
+
+/**
+ * How far down the facing axis the SYNTHESIZED aim point is planted, in grid squares, for a shot
+ * that names nothing to aim at (aimPointOf). It is a DISTANCE only — the direction is the token's
+ * own rotation — and it exists because the sprite, the tracer and the mote spray all need a point to
+ * travel toward, not just a heading.
+ *
+ * Three squares because it has to be far enough that the tracer reads as leaving the muzzle and
+ * crossing ground, and near enough that a shot at nothing does not throw a bolt across half the map
+ * toward whatever happens to lie along that axis. It sits just past the mote spray's own far edge
+ * (MUZZLE_MOTES.farSquares, 2.1 squares), so the spray lands short of the endpoint rather than
+ * beyond it, which is the same relationship an aimed shot at ordinary battle-map range has.
+ */
+export const FACING_AIM_SQUARES = 3;
 
 /**
  * Muzzle-flash light spec (design doc §2.3) — THE one editable block for the flash.
@@ -80,45 +100,107 @@ export const MUZZLE_MODE = "cone";
  * grows and then shrinks draws a visible expanding ring, and at the ~1.3s the old document-write
  * transport actually took, that ring was the whole effect. A flash that snaps to full size and fades
  * in place cannot read that way at any frame rate, including a client running far below 60fps.
+ *
+ * ILLUMINATION ONLY — `color` IS NULL. ⚠ THIS IS THE ONE PLACE WE DELIBERATELY DIVERGE FROM THE
+ * REFERENCE, and the reason is a measured engine difference, not a preference.
+ *
+ * The reference DOES carry a colour: "#943400" at alpha 0.5, and on ITS engine that reads as
+ * near-neutral and stays invisible in a lit area (both confirmed on the reproduction rig). The
+ * requirement it satisfies is the one that was reported here: "theirs seems to only light up dark
+ * rooms, and when the animations were showcased in a light area there was no visible muzzle flash,
+ * not even faintly."
+ *
+ * That requirement does NOT survive the colour on this engine. Rendered on our own rig at the shipped
+ * geometry, varying only this field, patches of floor sampled at fixed distances along the aim:
+ *                                       LIT (darkness 0, global light on)      DARK (darkness 1)
+ *   colour null,  2.5 squares out       delta (0.0, 0.0, 0.0)                  (+86, +86, +86)
+ *   colour null,  5 squares out         delta (0.0, 0.0, 0.0)                  (+61, +61, +61)
+ *   "#943400",    2.5 squares out       delta (+79, +28, 0.0)                  (+149, +108, +86)
+ *   "#943400",    5 squares out         delta (+57, +20, 0.0)                  (+107, +77, +61)
+ * Over the whole canvas the coloured source moved 44.8% of the lit frame's pixels; the uncoloured one
+ * moved 0.2% (and 0.09 of a level on average, i.e. nothing). So on this core a coloured flash paints
+ * a lit room orange where the reference's does not — the coloration layer blends SCREEN over whatever
+ * is already there, while the illumination layer blends MAX_COLOR against the scene's own lighting and
+ * therefore contributes exactly nothing once the ambient already exceeds it. The user's requirement is
+ * the hard one, so the colour is dropped and the neutral half of the reference's look is kept.
+ *
+ * The suppression is NOT done with an opacity. Core decides per layer whether to render it at all —
+ * the coloration shader's own `isRequired` returns `hasColor`, and `hasColor` is set from
+ * `data.color !== null` — so a null colour takes the coloration layer OUT of the render entirely
+ * (`layers.coloration.active === false`), where `alpha: 0` would merely make a layer that still runs
+ * contribute nothing. The keeper asserts the layer flag, not the opacity.
+ *
+ * Both alternatives stay one edit away: "#943400" is the reference's own value, "#ffae42" the warm
+ * yellow-orange this shipped before. Either restores a tinted flash with no other change.
  */
 export const MUZZLE_LIGHT = Object.freeze({
-  color: "#ffae42",       // warm yellow-orange
-  brightSquares: 1.5,
-  dimSquares: 3,
-  alpha: 0.5,             // colour intensity at full
-  luminosity: 0.5,        // illumination strength at full
+  color: null,            // ILLUMINATION ONLY on this engine — measured divergence, see the note.
+                          // Knobs: "#943400" (reference) / "#ffae42" (previous)
+  brightSquares: 12.5,    // reference-exact: bright == dim, so attenuation does ALL the falloff
+  dimSquares: 12.5,
+  attenuation: 1,         // reference-exact, and core's maximum: the fade spans the whole radius
+  alpha: 0.5,             // reference-exact; the coloration layer's intensity, inert while color is null
+  luminosity: 0.5,        // reference-exact (confirmed against the guide's own module)
   nominalFrameMs: 17,     // one frame at 60fps — reporting only, nothing is scheduled on it
   attackFrames: 1,
   holdFrames: 2,
   decayFrames: 2,
   attackLevel: 0.6,       // intensity of the ramp-in frame(s), as a fraction of the held value
   decayLevel: 0.4,        // intensity of the final fall-off frame, as a fraction of the held value
-  coneDegrees: 110,       // the frontal wedge — see the note below for where the number comes from
+  coneDegrees: 270,       // the LIT wedge — reference-exact; see the note below
   spillLevel: 0.35,       // hybrid mode only: the circular companion's intensity, as a fraction
 });
 
 /**
- * WHERE coneDegrees COMES FROM, and what could NOT be measured (recorded so the number is not read
- * as more precise than it is).
+ * WHERE THE LIGHT VALUES COME FROM — the reference's OWN CONFIGURATION, read out of the module that
+ * creates it. This supersedes the frame measurements that stood here before; those were the best
+ * available until the guide's setup was reproduced, and they are kept below as corroboration because
+ * they agree with the configuration to within a degree.
  *
- * NOT measurable from the reference frame: the light cone's own angle. The reference is a single
- * still of a scene that carries its own ambient lighting, and there is no unlit control frame to
- * difference against — sampling brightness by angle around the muzzle returns the SCENE's geometry
- * (a lit wall band above, a second token to the side), not the flash's contribution. Reporting a
- * measured light angle off that image would be inventing a number.
+ * ⚠ WHAT ACTUALLY MAKES THE REFERENCE FLASH (the open question, now closed): not the animation
+ * module, not the sequencer, not the asset pack, and not the RED system. A bridge module
+ * (`diwako-cpred-additions`, `scripts/dfAmbientLights.js`) listens for the animation workflow and
+ * CREATES A TEMPORARY AMBIENT LIGHT on the scene, pre-loaded with keyframes that strobe it, then
+ * deletes it. Every value below is hard-coded there — the animation export carries no light
+ * configuration at all. The reproduction is recorded in import-staging/RED-REFERENCE-RIG.md.
  *
- * What the frame DOES measure, on the flash-attributable pixels alone (warm and bright, with the UI
- * chrome and the two tokens masked out):
- *   - the starburst's ray fan, 80–150px out from the muzzle, spans −24°…+33° → about 45–55° across
- *   - the mote spray, 150–340px out, spans −18°…+16° → about 34° across
- *   - behind the shooter: unlit (the numbers in the MUZZLE_MODE note above)
+ * THE VALUES, verbatim from that module and confirmed live:
+ *   angle 270 · attenuation 1 · luminosity 0.5 · alpha 0.5 · colour "#943400" · animation type null
+ *   dim and bright are BOTH keyframed 0 ↔ 25 SCENE UNITS — measured live at 1250px on a 100px/2m
+ *   grid, i.e. 12.5 grid squares.
  *
- * So the constraints on the light are: strictly wider than the sprite fan it is supposed to be
- * illuminating BEYOND (or the pool just traces the sprite and reads as part of it), and narrow enough
- * that the rear stays black by a clear margin. 110° is ~2.3× the measured ray fan and ~3× the mote
- * spray, and puts the wedge edges 55° off the aim line — still 35° short of the shooter's own flanks,
- * so an imprecise aim cannot leak light behind them. It also sits inside the 90–120° band the reported
- * look was described in. Tune-by-eye knob; the value is one line.
+ * ⭐ bright EQUALS dim, which is the structural point and not an accident: with no bright/dim split
+ * there is no inner plateau and no bright→dim boundary, so `attenuation` (at core's maximum, 1) does
+ * ALL of the falloff across the whole radius. That is what "smooth" means here — one gradient from
+ * the middle to nothing, with no edge anywhere to see. Our earlier 3/6 split with attenuation 0.63
+ * approximated the same look with two overlapping gradients; this is the thing itself.
+ *
+ * THE CORROBORATION (the earlier measurement off the reference FRAME, which stands):
+ *  - Radial luminance/warmth binning about the shooter, in three annuli with the interface masked,
+ *    put the unlit notch at 91–96° wide, centred within about 5° of directly opposite the shot —
+ *    against the configured 90° notch that angle 270 produces. The frame agreed to a degree or two.
+ *    The edges were RADIAL from the shooter and held the same angle across a 260px change in radius,
+ *    which is a limited-angle source at that point and not a shadow cast by scene geometry.
+ *  - Radial falloff, same frame: a plateau of about 46/255 out to ~2.7 squares, then a monotonic
+ *    decay — 38 at 2.9, 31 at 3.2, 27 at 3.9, 25 at 4.6, 22 at 5.3, ~19 at 5.8 squares — still clear
+ *    of the ~5 unlit floor at six squares, with no step anywhere. That profile is what a single
+ *    attenuation-1 gradient over a 12.5-square radius looks like once it has been through a video
+ *    frame; it is also why the provisional 3/6 read as "about twice what we were drawing" rather
+ *    than as the whole answer.
+ *
+ * The sprite measurements from the same frame are unchanged and are what the wedge must exceed: the
+ * starburst's ray fan spans about 45–55° across and the mote spray about 34°, so at 270° the pool is
+ * several times either and cannot read as part of the sprite.
+ *
+ * ⚠ WHAT WE DO DIFFERENTLY, DELIBERATELY — the strobe. The reference flashes by animating the
+ * RADIUS: its keyframes drive dim and bright 0 → 25 → 0, about 50ms on per shot, repeated at the
+ * animation's own cadence (ten times for autofire). We hold the radii CONSTANT and animate INTENSITY
+ * instead (muzzleFrameLevels, restarted per round at classCadenceMs). The two read the same at a true
+ * frame rate — a light that appears and vanishes inside three frames does not show which parameter
+ * moved — and the intensity form is the one that CANNOT reproduce the "radiates out visibly" ring
+ * this transport was rewritten to remove: a radius that grows and shrinks draws an expanding ring the
+ * moment the client cannot deliver those frames on time, which is exactly the failure that was
+ * reported here before. So the equivalence is on purpose, and the divergence is the safer half of it.
  */
 
 /**
@@ -189,10 +271,76 @@ export const MUZZLE_SPRITE = Object.freeze({
  * NO TRIM on this one, unlike the lance: the clip is 0.267s end to end (measured off the installed
  * file) and its rays only form in the back half, so trimming it is trimming the spikes off. The lance
  * is trimmed because its clip is three times longer and its tail is the plume; this one has no tail.
+ * That untrimmed length is named here as `clipMs` because it is the LONGEST thing a single round puts
+ * on screen, which makes it the floor for how long one round's presentation lasts (presentationTailMs).
  */
 export const MUZZLE_SPARK = Object.freeze({
   key: "jb2a.impact.006.yellow",
   squares: 0.8,
+  clipMs: 267,
+});
+
+/**
+ * How high the rail's SELF-LUMINOUS sprites are drawn — the fix for "the tracer renders dark".
+ *
+ * ⚠ THE MEASUREMENT THAT FOUND IT. A sprite drawn at ordinary elevation sits UNDER the lighting
+ * layer, so an unlit floor darkens it like any other object. Photographed on a darkness-1 scene,
+ * luminance change in a band along the shot line: a single round's bolt moved the band by 0.13 of a
+ * level (0.4% of its pixels), while the SAME bolt with the muzzle light held open moved it by 70.6
+ * (100%). The rifle read 0.68 and the shell — the one class carrying no colour filter at all — read
+ * 0.12, so neither the class nor the colour matrix was ever the cause.
+ *
+ * That also explains the shape of the report ("pistols are dark, full auto is fine"): it is not a
+ * class difference, it is SHOTS. On automatic fire the flash restarts every cadence and keeps the
+ * pool lit for the whole burst, so every bolt is lit; a single round's flash is five frames against a
+ * bolt that lives about a second, so almost all of that bolt's life is unlit floor.
+ *
+ * The reference does the same thing we do here — its projectile is created at elevation 999 and the
+ * animation layer that drives it uses 1000 — which is above the lighting and therefore self-lit.
+ *
+ * WHAT GETS IT, and what deliberately does NOT: everything the rail draws that is supposed to EMIT
+ * light (the muzzle lance, the spark, the tracer/pellets, the mote spray) is drawn above the
+ * lighting. The SMOKE WISP is not — smoke does not glow, and a wisp that stayed bright inside an
+ * unlit room would read as a lamp rather than as smoke. That split is the rule to apply to anything
+ * added later: self-luminous goes up, lit-by-the-world stays down.
+ */
+export const LIT_SPRITE_ELEVATION = 999;
+
+/**
+ * The HIT CONFIRMATION — one impact drawn at the aimed-at point for each round that LANDS.
+ *
+ * The rail could already say a round was fired; nothing on the canvas said whether it arrived, and
+ * the fan-out has always known (it assigns hits to the leading rounds of the burst and hands each
+ * shot its own `hit`). So this is the miss/hit distinction becoming visible rather than a new fact.
+ *
+ * `key` is a radial impact from the free tier, deliberately a DIFFERENT family from the muzzle
+ * spark's so the two ends of the shot do not read as the same mark; per-class width is the row field
+ * `impactSquares`, on the same footing as `muzzleSquares`. `delayFollowsTracer` waits for a travelled
+ * dash to arrive before the impact is drawn — a class whose tracer crosses in `dashMs` would
+ * otherwise confirm the hit while its own pellets were still in the air. A painted (stretched) tracer
+ * is drawn across the whole line at once and needs no delay.
+ */
+export const HIT_CONFIRM = Object.freeze({
+  key: "jb2a.impact.005.orange",
+  delayFollowsTracer: true,
+});
+
+/**
+ * FACE THE TARGET — the shooter turns to look at what it is shooting at, before the first round.
+ *
+ * `durationMs` is the sweep. It is a visible TURN and not a snap on purpose: a token that changes
+ * heading between two frames reads as a glitch, where a short sweep reads as the character bringing
+ * the weapon round. Short enough that it is a lead-in rather than a wait.
+ *
+ * `minDegrees` is the dead zone. A token already pointed at its target must not jitter, and a turn
+ * of a couple of degrees is not visible anyway — under this, nothing is written and nothing is waited
+ * for. That matters beyond the look: the turn is a DOCUMENT WRITE (unlike everything else this rail
+ * draws), so the dead zone is also what stops a burst of shots at one target writing the token over
+ * and over.
+ */
+export const FACE_TARGET = Object.freeze({
+  durationMs: 220,
+  minDegrees: 5,
 });
 
 /**
@@ -277,10 +425,10 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * install), so the sprites appear for a user who installed nothing beyond the free module:
  *  - muzzle: the free tier carries exactly ONE muzzle-flash family, and it is labelled yellow — there
  *    is no orange variant below the paid tier. The key holds two interchangeable files, so the engine
- *    picks between them per play and a burst does not repeat one frame. The warm-orange cast a viewer
- *    reads comes from the native muzzle LIGHT (MUZZLE_LIGHT.color), which runs with or without any
- *    asset module, so the yellow sprite sits inside an orange pool rather than reading as a colour
- *    mismatch. Weapon weight is carried by `muzzleSquares` — the DRAWN WIDTH in grid units, not a
+ *    picks between them per play and a burst does not repeat one frame. The warm cast a viewer reads
+ *    is the SPRITE's own, not the light's: the muzzle light is illumination-only now (MUZZLE_LIGHT
+ *    carries a null colour), so it reveals the floor in the floor's own colours and the sprite
+ *    supplies all of the heat. Weapon weight is carried by `muzzleSquares` — the DRAWN WIDTH in grid units, not a
  *    scale factor — because one family is all the tier has and its size is the difference a viewer
  *    can see. Sizing in grid units rather than by `scale` (which is what the previous build used) is
  *    what makes the number a spec: it is the same fraction of a square on any scene.
@@ -356,11 +504,11 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * reduction (`scale: 0.7` drew 4.2 squares), which is the reported "too large" answered by value.
  */
 export const FX_CLASSES = Object.freeze({
-  pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, spark: true, motes: 8,  smokeSquares: 0.4 },
-  smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, spark: true, motes: 12, smokeSquares: 0.45 },
-  rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, spark: true, motes: 13, smokeSquares: 0.5 },
-  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", muzzleSquares: 1.9, spark: true, motes: 10, smokeSquares: 0.6, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
-  heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, spark: true, motes: 16, smokeSquares: 0.65 },
+  pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, spark: true, motes: 8,  smokeSquares: 0.4,  impactSquares: 0.7 },
+  smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, spark: true, motes: 12, smokeSquares: 0.45, impactSquares: 0.75 },
+  rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, spark: true, motes: 13, smokeSquares: 0.5,  impactSquares: 0.95 },
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", muzzleSquares: 1.9, spark: true, motes: 10, smokeSquares: 0.6, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
+  heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, spark: true, motes: 16, smokeSquares: 0.65, impactSquares: 1.3 },
 });
 
 /**
@@ -427,12 +575,33 @@ export function jb2aActive() {
   }
 }
 
+/**
+ * Test seam: stand a controlled answer in front of the installed asset database, for the one question
+ * this adapter ever asks it. Null restores the install's own answer; nothing ships with it armed.
+ *
+ * ⚠ WHY THIS EXISTS RATHER THAN THE OBVIOUS ALTERNATIVE. The two outcomes a rig carrying every mapped
+ * key CANNOT produce — nothing resolves, and only one key of a pair resolves — used to be driven by
+ * replacing the engine's whole `Sequencer` global with a stub carrying just a database. That takes the
+ * ENGINE AWAY FROM ANY EFFECT STILL RUNNING: a queued section reads `Sequencer.SectionManager` while it
+ * starts and `Sequencer.EffectManager` while it plays, both out of that same global, so a shot queued
+ * moments earlier throws mid-flight ("Cannot read properties of undefined") from inside the engine.
+ * Isolated on the rig: a real sequence played and then the global swapped throws every time; the same
+ * sequence with the global left alone is clean, and so is the whole shipped fan-out. This answers the
+ * one question instead, so the engine keeps its own namespace and only the answer under test moves.
+ */
+let _dbProbe = null;
+export function _setDbProbe(fn) {
+  _dbProbe = typeof fn === "function" ? fn : null;
+}
+
 /** Does the Sequencer database resolve this key on THIS install? A key the installed asset tier
  *  lacks (free tier vs patreon tier) must be skipped, not played — that is the silent-degrade rule. */
 export function fxDbEntryExists(key) {
   try {
+    if (!key) return false;
+    if (_dbProbe) return !!_dbProbe(key);
     const db = globalThis.Sequencer?.Database;
-    if (!db || !key) return false;
+    if (!db) return false;
     if (typeof db.entryExists === "function") return !!db.entryExists(key);
     if (typeof db.getEntry === "function") return !!db.getEntry(key);
     return false;
@@ -653,7 +822,17 @@ export function muzzleEnvelopeDurationMs() {
  * wedge pointed along `aimRad` carries `rotation = degrees(aimRad) - 90`. That is the same
  * conversion core applies to its own placeables.
  *
- * Mode fallback: a wedge needs a direction, so with no aim every mode resolves to the circle.
+ * ⚠ THE MODE IS NO LONGER OVERRIDDEN BY A MISSING AIM. This function used to answer a null `aimRad`
+ * with the circle whatever mode it was asked for, which is why a shot fired at nothing drew a plain
+ * radius instead of the shape every other shot draws. The direction is resolved BEFORE this point
+ * now (aimPointOf / facingRad, from the shooter's own facing), so the caller always has a heading to
+ * hand over; a null here means only that a pure caller supplied none, and the wedge is then built at
+ * the zero heading rather than silently becoming a different shape.
+ *
+ * ⚠ `angle` MAY EXCEED 180 and the shipped value does. Core supports it directly: a limited-angle
+ * shape is built from `rotation + 90 ± angle/2` and its edge test inverts itself above 180 degrees
+ * (LimitedAnglePolygon.pointBetweenRays), and nothing on the source path clamps the field. So 269
+ * builds one wedge with a 91-degree notch behind the shooter, not two mirrored halves.
  */
 export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad = null, mode = MUZZLE_MODE } = {}) {
   const m = MUZZLE_LIGHT;
@@ -662,19 +841,23 @@ export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad 
   const px = (squares) => Number((squares * grid * ppu).toFixed(3));
   const bright = px(m.brightSquares);
   const dim = px(m.dimSquares);
-  const shape = (Number.isFinite(aimRad) ? mode : "omni");
+  const shape = mode;
   const rotation = Number.isFinite(aimRad) ? Number(((aimRad * 180) / Math.PI - 90).toFixed(3)) : 0;
 
   const circle = (key, level) => ({
     key, angle: 360, rotation: 0,
     bright: key === "spill" ? 0 : bright,          // the companion glows, it does not light brightly
     dim,
+    color: m.color,
+    attenuation: m.attenuation,
     alpha: Number((m.alpha * level).toFixed(3)),
     luminosity: Number((m.luminosity * level).toFixed(3)),
   });
   const wedge = () => ({
     key: "cone", angle: m.coneDegrees, rotation,
     bright, dim,
+    color: m.color,
+    attenuation: m.attenuation,
     alpha: m.alpha,
     luminosity: m.luminosity,
   });
@@ -759,9 +942,11 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
 
   const origin = placeable.center ?? centerOf(placeable);
   if (!origin) return false;
+  // The heading the wedge is built on. A point to point at where one was announced; otherwise the
+  // token's OWN facing, which every drawn token carries — so this never falls back to a shape.
   const aimRad = (aim && Number.isFinite(aim.x) && Number.isFinite(aim.y))
     ? Math.atan2(aim.y - origin.y, aim.x - origin.x)
-    : null;
+    : facingRad(placeable.document?.rotation);
 
   // Already flashing → restart the envelope in place and re-point it. One source set per token.
   const running = _flashes.get(id);
@@ -791,7 +976,9 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
       source.initialize({
         x: origin.x, y: origin.y, elevation,
         dim: spec.dim, bright: spec.bright,
-        color: MUZZLE_LIGHT.color,
+        // A null colour is what takes the coloration layer out of the render — see MUZZLE_LIGHT.
+        color: spec.color,
+        attenuation: spec.attenuation,
         alpha: spec.alpha, luminosity: spec.luminosity,
         angle: spec.angle, rotation: spec.rotation,
         walls: true,          // the flash is clipped by walls and line of sight like any other light
@@ -828,6 +1015,12 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
     try {
       for (let i = 0; i < state.sources.length; i++) {
         const spec = state.specs[i];
+        // A partial initialize MERGES — core only writes the keys it is handed — so the radii, the
+        // wedge, the colour and the attenuation all survive every frame of the envelope untouched.
+        // LUMINOSITY is what the viewer sees move while the flash is illumination-only: core derives
+        // its exposure from it (`luminosity * 2 − 1`), so the held frames sit at neutral exposure and
+        // the ramp and decay frames darken from there. `alpha` is driven alongside it so the envelope
+        // still works unchanged for a table that puts a colour back in the spec.
         state.sources[i].initialize({
           alpha: Number((spec.alpha * level).toFixed(4)),
           luminosity: Number((spec.luminosity * level).toFixed(4)),
@@ -939,8 +1132,9 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
  * aiming at. Pure.
  *
  * WHY THIS EXISTS: every sprite used to be planted on the shooter's CENTRE, which draws the flash out
- * of the middle of the token. The reference puts it at the forward EDGE. With no aim there is no line
- * to walk along, so the centre is returned unchanged — the same fallback the wedge takes.
+ * of the middle of the token. The reference puts it at the forward EDGE. Given no point to walk
+ * toward it returns the centre unchanged; its callers resolve one first (aimPointOf), so in the
+ * shipped paths there is always a line.
  */
 export function muzzlePoint(from, to, offsetPx = 0) {
   if (!from) return null;
@@ -950,6 +1144,73 @@ export function muzzlePoint(from, to, offsetPx = 0) {
   const dist = Math.hypot(dx, dy);
   if (!dist) return { x: from.x, y: from.y };
   return { x: from.x + (dx / dist) * offsetPx, y: from.y + (dy / dist) * offsetPx };
+}
+
+/**
+ * The canvas heading a token's own facing points along, in radians. Pure.
+ *
+ * The conversion is core's, not ours: core builds a limited-angle shape centred on `rotation + 90`
+ * degrees and hands a token's light source the token document's `rotation` unchanged, so a token at
+ * rotation 0 faces 90° in canvas terms — down the +y axis, which is screen-south. Reading it back
+ * the same way is what keeps a synthesized heading agreeing with the wedge the same rotation would
+ * produce if the token carried a real light.
+ */
+export function facingRad(rotationDeg) {
+  const deg = Number(rotationDeg);
+  return (((Number.isFinite(deg) ? deg : 0) + 90) * Math.PI) / 180;
+}
+
+/**
+ * The token ROTATION that points a token at a canvas point — the inverse of facingRad, in the
+ * degrees a token document stores. Pure. Returns null when there is no line to face along.
+ */
+export function faceTargetRotation(from, to) {
+  if (!from || !to) return null;
+  const dx = to.x - from.x, dy = to.y - from.y;
+  if (!Math.hypot(dx, dy)) return null;
+  return ((Math.atan2(dy, dx) * 180) / Math.PI - 90 + 360) % 360;
+}
+
+/** The SHORTEST signed turn from one heading to another, in degrees (−180…180]. Pure. */
+export function rotationDeltaDeg(fromDeg, toDeg) {
+  const a = Number(fromDeg) || 0, b = Number(toDeg) || 0;
+  return ((((b - a) % 360) + 540) % 360) - 180;
+}
+
+/** A point `distancePx` along a facing from an origin. Pure, so the axis is asserted by value. */
+export function facingAimPoint(origin, rotationDeg, distancePx) {
+  if (!origin || !Number.isFinite(origin.x) || !Number.isFinite(origin.y)) return null;
+  const reach = Number(distancePx) > 0 ? Number(distancePx) : 0;
+  const rad = facingRad(rotationDeg);
+  return { x: origin.x + Math.cos(rad) * reach, y: origin.y + Math.sin(rad) * reach };
+}
+
+/**
+ * THE ONE ANSWER TO "WHICH WAY IS THIS SHOT POINTED" — the aimed-at token's centre where there is
+ * one, else a point synthesized FACING_AIM_SQUARES squares along the shooter's own facing.
+ *
+ * WHY IT IS ONE POINT AND NOT A PER-EFFECT FALLBACK: the light wedge, the muzzle sprite and its edge
+ * offset, the spark, the tracer or pellet fan and the burst ambience all take their direction from
+ * this one value, so a shot fired at nothing is drawn along a SINGLE axis and looks like a shot
+ * fired at something. The previous build answered the question separately in each place and answered
+ * it "unknown" — the light became a plain radius, the sprites were suppressed, and the ambience was
+ * skipped — which is the reported difference between the two cases.
+ *
+ * ⚠ THE HONEST LIMIT ON THE SYNTHESIZED AXIS: it is only as good as the token's rotation, and these
+ * are top-down portraits that a table may never turn, so an untargeted shot from a token left at
+ * rotation 0 is drawn toward screen-south. That is a real constraint and it is the reason the axis
+ * is taken from the token rather than invented: rotation is the only heading a token actually
+ * carries, it is visible to whoever set it, and turning the token corrects the effect. The LIGHT is
+ * nearly indifferent to it either way — at 269° the wedge is wrong only in where the 91° notch sits.
+ */
+export function aimPointOf(shooterToken, targetToken, gridSizePx = 100) {
+  const aimed = centerOf(targetToken);
+  if (aimed && Number.isFinite(aimed.x) && Number.isFinite(aimed.y)) return aimed;
+  const from = centerOf(shooterToken);
+  if (!from) return null;
+  const doc = shooterToken?.document ?? shooterToken;
+  const px = (Number(gridSizePx) > 0 ? Number(gridSizePx) : 100) * FACING_AIM_SQUARES;
+  return facingAimPoint(from, doc?.rotation, px);
 }
 
 /** How far a token's edge is from its own centre, in pixels — a token's own width, not a constant. */
@@ -1048,38 +1309,41 @@ function _held(effect) {
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
 export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE } = {}) {
-  const out = { light: false, muzzle: false, spark: false, tracer: false, pellets: 0 };
+  const out = { light: false, muzzle: false, spark: false, tracer: false, pellets: 0, impact: false };
   const entry = FX_CLASSES[weaponClass];
   if (!entry) return out;
   const from = centerOf(shooterToken);
-  const to = centerOf(targetToken);
-  // Where the sprites are planted: the shooter's forward edge, walked along the aim line by a
-  // fraction of the token's OWN width. With no aim this is the centre, which is where the previous
-  // build put everything unconditionally.
   const gridPx = Number(canvas?.dimensions?.size) || 100;
+  // The axis this whole shot is drawn along — the aimed-at token's centre, or the shooter's own
+  // facing when nothing was aimed at (aimPointOf). Resolved ONCE, so the light, the sprite, the
+  // spark and the tracer cannot disagree about where the shot is pointed.
+  const to = aimPointOf(shooterToken, targetToken, gridPx);
+  // Where the sprites are planted: the shooter's forward edge, walked along that axis by a fraction
+  // of the token's OWN width. The previous build put everything on the centre unconditionally.
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
   // The flash is announced and drawn first because it costs nothing to wait for — it is synchronous.
-  // The aim is what makes it a wedge; with none it is a circle (muzzleSourceSpecs).
+  // It takes the SAME axis as the sprites, so the notch behind the shooter lines up with the bolt.
   if (light && shooterToken) out.light = fxMuzzleFlash(shooterToken, to, { mode });
 
   if (sequencerActive() && shooterToken) {
     try {
       const seq = new globalThis.Sequence();
-      // The muzzle sprite is DIRECTIONAL — a bolt drawn along one axis — so it is drawn only when the
-      // aim direction is known. Played unrotated it points its own baked direction no matter where the
-      // shooter is aiming, which is what a viewer reads as a bullet stuck on the shooter aiming away
-      // from the target (the reported defect). With no target there is no direction to give it: the
-      // shooter token's own facing is not a stand-in, because these tokens are top-down portraits that
-      // sit at rotation 0 and are never turned, so it would substitute one fixed wrong direction for
-      // another. The shot still reads without it — the native muzzle LIGHT is omnidirectional and needs
-      // no aim. rotateTowards accounts for the asset's own baked orientation (measured on
-      // jb2a.muzzle_flash.single.01.yellow: it lands along the shooter→target line with NO additional
+      // The muzzle sprite is DIRECTIONAL — a bolt drawn along one axis — so it is never played
+      // unrotated: unrotated it points its own baked direction no matter where the shooter is
+      // aiming, which is what a viewer reads as a bullet stuck on the shooter aiming away from the
+      // target (an earlier reported defect). It is always given an axis instead. An earlier build
+      // SUPPRESSED it when nothing was aimed at, on the reasoning that a token's own facing is not a
+      // stand-in for an aim; that produced two visibly different effects for the same trigger pull
+      // and was rejected on report. The facing IS the stand-in now, resolved once in `to` above.
+      // rotateTowards accounts for the asset's own baked orientation (measured on
+      // jb2a.muzzle_flash.single.01.yellow: it lands along the shooter→aim line with NO additional
       // sprite-rotation offset, so none is applied; the keeper pins that by value).
       if (to && fxDbEntryExists(entry.muzzle)) {
         // Sized in GRID UNITS (a spec, not a scale factor — see MUZZLE_SPRITE), planted at the
         // token's forward edge, and cut short of the clip's smoke-and-fire phase.
         _held(seq.effect().file(entry.muzzle)).atLocation(muzzle)
           .size({ width: entry.muzzleSquares }, { gridUnits: true })
+          .elevation(LIT_SPRITE_ELEVATION)
           .timeRange(0, MUZZLE_SPRITE.endMs)
           .rotateTowards(to);
         out.muzzle = true;
@@ -1088,7 +1352,8 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       // point, which puts its rear rays over the shooter exactly as the reference shows.
       if (to && entry.spark && fxDbEntryExists(MUZZLE_SPARK.key)) {
         _held(seq.effect().file(MUZZLE_SPARK.key)).atLocation(muzzle)
-          .size({ width: MUZZLE_SPARK.squares }, { gridUnits: true });
+          .size({ width: MUZZLE_SPARK.squares }, { gridUnits: true })
+          .elevation(LIT_SPRITE_ELEVATION);
         out.spark = true;
       }
       if (to && fxDbEntryExists(entry.tracer)) {
@@ -1113,7 +1378,8 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // proportioned rather than squashed. Rotation is set once, explicitly, and the movement is told
         // not to rotate again, so there is a single source of the sprite's heading.
         for (const end of ends) {
-          const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken);
+          const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken)
+            .elevation(LIT_SPRITE_ELEVATION);
           // The colour shift, where the class asks for one. A ColorMatrix and not a tint — see
           // TRACER_COLOR for the measurement that rules the tint out.
           if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor);
@@ -1129,7 +1395,20 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         out.tracer = true;
         out.pellets = ends.length;
       }
-      if (out.muzzle || out.tracer) await seq.play();
+      // The HIT CONFIRMATION — one impact at the aimed-at point, and only for a round that LANDED.
+      // The miss branch draws nothing on purpose: a miss already says so by where its tracer goes,
+      // and marking it would make every shot look like a hit. Held back by the tracer's own crossing
+      // time where the class travels one, so the impact does not precede its own pellets.
+      if (hit && to && entry.impactSquares > 0 && fxDbEntryExists(HIT_CONFIRM.key)) {
+        const impact = _held(seq.effect().file(HIT_CONFIRM.key)).atLocation(to)
+          .size({ width: entry.impactSquares }, { gridUnits: true })
+          .elevation(LIT_SPRITE_ELEVATION);
+        const travel = HIT_CONFIRM.delayFollowsTracer && entry.dashSquares > 0
+          ? (_dashMsOverride ?? entry.dashMs) : 0;
+        if (travel > 0) impact.delay(travel);
+        out.impact = true;
+      }
+      if (out.muzzle || out.tracer || out.impact) await seq.play();
     } catch (err) {
       console.warn(`${SCOPE} | sequencer shot effect failed`, err);
     }
@@ -1156,10 +1435,14 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
   const entry = FX_CLASSES[weaponClass];
   if (!entry || !sequencerActive() || !shooterToken) return out;
   const from = centerOf(shooterToken);
-  const to = centerOf(targetToken);
-  if (!from || !to) return out;          // no aim → no cone to spray down and no heading for the wisp
-
   const gridPx = Number(canvas?.dimensions?.size) || 100;
+  // The same axis every other part of the shot takes (aimPointOf) — the aimed-at token's centre, or
+  // the shooter's own facing. This used to bail outright when nothing was aimed at, so a burst fired
+  // at no target lost its specks and its wisp along with its wedge; that was the reported defect.
+  // What remains of the guard is a shooter with no position at all, which has no muzzle to draw from.
+  const to = aimPointOf(shooterToken, targetToken, gridPx);
+  if (!from || !to) return out;
+
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
 
   try {
@@ -1175,6 +1458,7 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
       for (const end of ends) {
         _held(seq.effect().file(MUZZLE_MOTES.key)).atLocation(muzzle)
           .size({ width: MUZZLE_MOTES.sizeSquares }, { gridUnits: true })
+          .elevation(LIT_SPRITE_ELEVATION)
           .moveTowards(end, { ease: "easeOutQuad", rotate: false })
           .duration(MUZZLE_MOTES.travelMinMs + Math.random() * span);
       }
@@ -1266,6 +1550,112 @@ export function shooterTokenOf(actor) {
 }
 
 /**
+ * The turn this payload's shooter would make before firing, or null when it would make none.
+ *
+ * Answers one question for two callers that must agree: the fan-out, which performs the turn, and the
+ * presentation arithmetic, which has to include the time it takes. Both read it from here so a shot
+ * cannot be waited out for a turn that never happens, or fired before a turn that does.
+ *
+ * Null when the feature is off, when this client does not own the token (only the owner may write
+ * it), when there is no aim, or when the token is already pointed within the spec's dead zone.
+ */
+export function faceTargetTurn(shooterToken, aimPoint) {
+  if (!faceTargetOnFireEnabled() || !shooterToken || !aimPoint) return null;
+  const doc = shooterToken?.document ?? shooterToken;
+  if (doc?.isOwner === false) return null;
+  const from = centerOf(shooterToken);
+  const to = faceTargetRotation(from, aimPoint);
+  if (to === null) return null;
+  const delta = rotationDeltaDeg(Number(doc?.rotation) || 0, to);
+  if (Math.abs(delta) < FACE_TARGET.minDegrees) return null;
+  return { rotation: Number(to.toFixed(3)), deltaDeg: Number(delta.toFixed(3)), durationMs: FACE_TARGET.durationMs };
+}
+
+/**
+ * Turn the shooter to face what it is shooting at, and RESOLVE WHEN THE TURN IS DONE — the fan-out
+ * awaits this, so the first round leaves the muzzle from a token already pointed the right way.
+ *
+ * ⚠ This is the ONE document write the rail performs. Everything else it draws is client-local and
+ * transient; a heading is a fact about the token that should outlive the shot, so it is written and
+ * broadcast like any other token change. The dead zone in faceTargetTurn is what keeps a ten-round
+ * burst at one target from writing the token ten times — only the first round can turn it.
+ */
+export async function faceTarget(shooterToken, aimPoint) {
+  const turn = faceTargetTurn(shooterToken, aimPoint);
+  if (!turn) return null;
+  const doc = shooterToken?.document ?? shooterToken;
+  try {
+    await doc.update({ rotation: turn.rotation }, { animation: { duration: turn.durationMs } });
+  } catch (err) {
+    console.warn(`${SCOPE} | face-target turn failed`, err);
+    return null;
+  }
+  return turn;
+}
+
+/**
+ * How long the LAST round of a payload stays on screen after it leaves the muzzle, in milliseconds.
+ * Pure. The longest of the four things one round draws, because they all start together and the round
+ * is not finished being looked at until the slowest of them is:
+ *   - the muzzle LIGHT envelope (muzzleEnvelopeDurationMs — five frames, 85ms at the reference rate)
+ *   - the muzzle SPRITE, trimmed to its opening lance (MUZZLE_SPRITE.endMs, 110ms)
+ *   - the SPARK, which is untrimmed and is the longest of them (MUZZLE_SPARK.clipMs, 267ms measured)
+ *   - a travelled tracer's crossing time, for a class that draws one (`dashMs`) — 150ms on the shell
+ *     class, i.e. shorter than the spark, but it is read from the row rather than assumed so a class
+ *     given a slower dash later is covered without another edit here.
+ * A painted (stretched) tracer contributes no travel time — it is drawn along the whole line at once.
+ */
+export function presentationTailMs(weaponClass) {
+  const entry = FX_CLASSES[weaponClass];
+  const travel = Number(entry?.dashMs) > 0 ? Number(entry.dashMs) : 0;
+  return Math.max(muzzleEnvelopeDurationMs(), MUZZLE_SPRITE.endMs, MUZZLE_SPARK.clipMs, travel);
+}
+
+/**
+ * How long a payload of `shots` rounds of `weaponClass` takes to present, in milliseconds. Pure, so
+ * the arithmetic is asserted by value rather than by watching a window.
+ *
+ * The rounds are spaced by the class's own cadence and the last one still has to finish, so the span
+ * is (shots − 1) gaps plus one tail. A single round is one tail, which is the whole span for a
+ * semi-automatic shot — small, but not zero, and deliberately not special-cased: a viewer looking at
+ * one discharge is looking at something for as long as a viewer looking at the last round of ten.
+ *
+ * BOUNDED by MAX_FX_SHOTS, the same bound the fan-out itself applies, so a payload claiming a corrupt
+ * round count can no more park a wait than it can queue that many rounds.
+ */
+export function presentationMs(shots, weaponClass) {
+  const n = Math.min(Math.max(Math.trunc(Number(shots) || 0), 1), MAX_FX_SHOTS);
+  return (n - 1) * classCadenceMs(weaponClass) + presentationTailMs(weaponClass);
+}
+
+/**
+ * How long THIS payload's presentation runs on screen, in milliseconds — the number a caller waits out
+ * before putting a window over the canvas. Resolves the class the way the fan-out does, then defers to
+ * the pure arithmetic above.
+ *
+ * ZERO means "nothing is being presented, do not wait": the rail is switched off, or the fired weapon
+ * resolves to no FX class at all (melee, an unmapped type, a payload carrying no weapon). It does NOT
+ * depend on the optional effect engine — the muzzle light and the cadence are native and run whether or
+ * not any sprite module is installed, so a client without one still has a presentation to wait out.
+ */
+export function payloadPresentationMs(payload) {
+  if (!combatFxEnabled()) return 0;
+  const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
+  const weaponClass = weaponFxClass(resolveFiredWeapon(payload, actor));
+  if (!weaponClass) return 0;
+  // The LEAD-IN. When the shooter turns first, the rounds do not start until the turn finishes, so
+  // the span a caller waits out has to include it — otherwise the apply window would open a turn's
+  // worth of time early, which is the whole thing the wait exists to prevent. Read from the same
+  // helper the fan-out uses, so a shot that will not turn adds nothing.
+  const shooter = shooterTokenOf(actor);
+  const aimTokenId = payload?.targetTokenId ?? payload?.fxTargetTokenId ?? null;
+  const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
+  const gridPx = Number(canvas?.dimensions?.size) || 100;
+  const leadIn = shooter ? (faceTargetTurn(shooter, aimPointOf(shooter, target, gridPx))?.durationMs ?? 0) : 0;
+  return leadIn + presentationMs(shotCountOf(payload), weaponClass);
+}
+
+/**
  * Fan one weaponFired payload out into per-shot effects at the FIRED CLASS's cadence (classCadenceMs
  * — the measured default, or the class's own where the table names one). The returned `cadenceMs` is
  * the value this payload actually ran at, so the pacing is reportable rather than assumed.
@@ -1278,7 +1668,7 @@ export function shooterTokenOf(actor) {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smoke: false, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smoke: false, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -1297,7 +1687,9 @@ export async function fxWeaponFired(payload) {
   // DAMAGE flow routes on, set only where the fire card resolved a target itself; `fxTargetTokenId` is
   // the aim captured for presentation on every fire mode, including the ones deliberately kept off the
   // mid-action damage dialog. Either one answers "which way was this pointed", so read the routing field
-  // first (it is the card's own resolved target) and fall back to the presentation one.
+  // first (it is the card's own resolved target) and fall back to the presentation one. A payload
+  // carrying NEITHER is not a special case any more: the verbs below resolve the axis from the
+  // shooter's own facing instead (aimPointOf), so the same effects are drawn either way.
   const aimTokenId = payload?.targetTokenId ?? payload?.fxTargetTokenId ?? null;
   const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
 
@@ -1305,6 +1697,12 @@ export async function fxWeaponFired(payload) {
   // first round goes out and holds for all of them — every round of one burst gets the same asset,
   // rather than the first sounding different from the rest.
   const burst = shots > 1;
+
+  // Turn to face the target FIRST, and wait for the turn: the muzzle, the wedge and the tracer all
+  // take their axis from the aim, so a token that is still swinging round when the first round goes
+  // would be drawn firing sideways out of its own portrait. The wait is short by spec and it is
+  // included in payloadPresentationMs, so the apply window still lands after everything.
+  const turn = shooter ? await faceTarget(shooter, aimPointOf(shooter, target, Number(canvas?.dimensions?.size) || 100)) : null;
 
   // The multi-round-only treatments, queued once for the whole burst before the first round leaves.
   // A single shot never reaches this line, which is the whole gate (see fxBurstAmbience).
@@ -1329,7 +1727,8 @@ export async function fxWeaponFired(payload) {
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
     }
   }
-  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smoke: ambience.smoke };
+  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smoke: ambience.smoke,
+    turnedDeg: turn ? turn.deltaDeg : null };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
