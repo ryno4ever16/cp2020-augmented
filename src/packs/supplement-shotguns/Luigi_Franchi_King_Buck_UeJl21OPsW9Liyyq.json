@@ -32,7 +32,7 @@
     "rof": 2,
     "reliability": "VeryReliable",
     "range": 50,
-    "attackType": "Autoshotgun",
+    "attackType": "Shotgun",
     "attackSkill": "Rifle"
   },
   "effects": [],

@@ -37,7 +37,7 @@
     "burstCapable": false,
     "reliability": "Standard",
     "range": 0,
-    "attackType": "",
+    "attackType": "Shotgun",
     "attackSkill": "Rifle"
   },
   "effects": [],
