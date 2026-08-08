@@ -281,30 +281,47 @@ export const MUZZLE_SPARK = Object.freeze({
 });
 
 /**
- * How high the rail's SELF-LUMINOUS sprites are drawn — the fix for "the tracer renders dark".
+ * THE SELF-LUMINOUS ROUTE — how the rail's own sprites are kept out of the lighting layer, which is
+ * the fix for "the tracer renders dark".
  *
- * ⚠ THE MEASUREMENT THAT FOUND IT. A sprite drawn at ordinary elevation sits UNDER the lighting
- * layer, so an unlit floor darkens it like any other object. Photographed on a darkness-1 scene,
- * luminance change in a band along the shot line: a single round's bolt moved the band by 0.13 of a
- * level (0.4% of its pixels), while the SAME bolt with the muzzle light held open moved it by 70.6
- * (100%). The rifle read 0.68 and the shell — the one class carrying no colour filter at all — read
- * 0.12, so neither the class nor the colour matrix was ever the cause.
+ * ⚠ THE FIRST FIX FOR THIS WAS WRONG, AND THE CORRECTION IS THE POINT OF THIS BLOCK. It set a high
+ * `elevation` (999) on every lit sprite, on the reading that the reference "creates its projectile at
+ * elevation 999". Elevation does not do that job. Read off the engine's own source, the layer an
+ * effect is parented to is chosen ONLY by its route flags — `_addToContainer()` picks
+ * `screenSpaceAboveUI` / `screenSpace` / `aboveInterface` / `aboveLighting`, and otherwise
+ * `canvas.primary`, with elevation never consulted. `canvas.primary` IS the group the darkness is
+ * multiplied over, so an elevated sprite is darkened exactly like an unelevated one; elevation only
+ * sorts it within that group.
  *
- * That also explains the shape of the report ("pistols are dark, full auto is fine"): it is not a
- * class difference, it is SHOTS. On automatic fire the flash restarts every cadence and keeps the
- * pool lit for the whole burst, so every bolt is lit; a single round's flash is five frames against a
- * bolt that lives about a second, so almost all of that bolt's life is unlit floor.
+ * ⚠ MEASURED ON THE RIG, darkness 1.0, luminance in a band along the shot line, muzzle light off,
+ * against the same band before the shot (mean delta / peak delta / share of the band lit):
+ *   pistol, elevation only .............  0.30 /  15 / 0.8%     ← invisible
+ *   pistol, aboveLighting ..............  4.61 / 232 / 6.5%
+ *   rifle,  elevation only .............  0.84 /  15 / 3.1%     ← invisible too
+ *   rifle,  aboveLighting .............. 17.63 / 232 / 21.4%
+ *   pistol, elevation only, NO filter ...  0.23 /  15 / 0.6%
+ *   control: the muzzle light held open . 83.68 / 179 / 100%
+ * The tell is the PEAK: every elevation-only case crushes to the same ceiling of 15 out of 255
+ * whatever the class or the filter, and the same asset reaches 232 the moment it is routed above the
+ * lighting. So the colour matrix was never the cause (filtered and unfiltered read alike), and it was
+ * never a pistol-only fault — the pistol is just where it shows first, because `bullet.01` is the
+ * thin asset and lights about a fifth of its own frame, so it has the least left to survive the
+ * crush. The report said pistols; the defect was every class.
  *
- * The reference does the same thing we do here — its projectile is created at elevation 999 and the
- * animation layer that drives it uses 1000 — which is above the lighting and therefore self-lit.
+ * WHAT GETS THE ROUTE, and what deliberately does NOT: everything the rail draws that is supposed to
+ * EMIT light (the muzzle lance, the spark, the tracer/pellets, the mote spray, the hit confirmation)
+ * goes above the lighting. The SMOKE WISP does not — smoke does not glow, and a wisp that stayed
+ * bright inside an unlit room would read as a lamp rather than as smoke. That split is the rule to
+ * apply to anything added later: self-luminous goes up, lit-by-the-world stays down.
  *
- * WHAT GETS IT, and what deliberately does NOT: everything the rail draws that is supposed to EMIT
- * light (the muzzle lance, the spark, the tracer/pellets, the mote spray) is drawn above the
- * lighting. The SMOKE WISP is not — smoke does not glow, and a wisp that stayed bright inside an
- * unlit room would read as a lamp rather than as smoke. That split is the rule to apply to anything
- * added later: self-luminous goes up, lit-by-the-world stays down.
+ * ⚠ THE TRADE THIS MAKES, stated so it is a choice and not a surprise: the route parents the sprite
+ * to the interface group, which is above the VISION mask as well as the lighting — so a lifted sprite
+ * is drawn even across ground the viewer cannot see. That is what "self-luminous" costs here; the
+ * engine offers no route that clears the darkness but keeps the vision mask. The muzzle LIGHT is
+ * unaffected and still clips to walls (it is a real light source, not a sprite), so the flash stays
+ * honest about the room even when the bolt is drawn over it.
  */
-export const LIT_SPRITE_ELEVATION = 999;
+export const LIT_SPRITE_ABOVE_LIGHTING = true;
 
 /**
  * The HIT CONFIRMATION — one impact drawn at the aimed-at point for each round that LANDS.
@@ -1343,7 +1360,7 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // token's forward edge, and cut short of the clip's smoke-and-fire phase.
         _held(seq.effect().file(entry.muzzle)).atLocation(muzzle)
           .size({ width: entry.muzzleSquares }, { gridUnits: true })
-          .elevation(LIT_SPRITE_ELEVATION)
+          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
           .timeRange(0, MUZZLE_SPRITE.endMs)
           .rotateTowards(to);
         out.muzzle = true;
@@ -1353,7 +1370,7 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       if (to && entry.spark && fxDbEntryExists(MUZZLE_SPARK.key)) {
         _held(seq.effect().file(MUZZLE_SPARK.key)).atLocation(muzzle)
           .size({ width: MUZZLE_SPARK.squares }, { gridUnits: true })
-          .elevation(LIT_SPRITE_ELEVATION);
+          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
         out.spark = true;
       }
       if (to && fxDbEntryExists(entry.tracer)) {
@@ -1379,7 +1396,7 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // not to rotate again, so there is a single source of the sprite's heading.
         for (const end of ends) {
           const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken)
-            .elevation(LIT_SPRITE_ELEVATION);
+            .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
           // The colour shift, where the class asks for one. A ColorMatrix and not a tint — see
           // TRACER_COLOR for the measurement that rules the tint out.
           if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor);
@@ -1402,7 +1419,7 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       if (hit && to && entry.impactSquares > 0 && fxDbEntryExists(HIT_CONFIRM.key)) {
         const impact = _held(seq.effect().file(HIT_CONFIRM.key)).atLocation(to)
           .size({ width: entry.impactSquares }, { gridUnits: true })
-          .elevation(LIT_SPRITE_ELEVATION);
+          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
         const travel = HIT_CONFIRM.delayFollowsTracer && entry.dashSquares > 0
           ? (_dashMsOverride ?? entry.dashMs) : 0;
         if (travel > 0) impact.delay(travel);
@@ -1458,7 +1475,7 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
       for (const end of ends) {
         _held(seq.effect().file(MUZZLE_MOTES.key)).atLocation(muzzle)
           .size({ width: MUZZLE_MOTES.sizeSquares }, { gridUnits: true })
-          .elevation(LIT_SPRITE_ELEVATION)
+          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
           .moveTowards(end, { ease: "easeOutQuad", rotate: false })
           .duration(MUZZLE_MOTES.travelMinMs + Math.random() * span);
       }
