@@ -9,7 +9,7 @@
     "cost": 60,
     "weight": 0,
     "equipped": false,
-    "source": "Eurosource Plus",
+    "source": "Eurosource p.72",
     "weaponType": "Shotgun",
     "accuracy": 0,
     "concealability": "ConcealJacket",
@@ -36,7 +36,7 @@
     "burstCapable": false,
     "reliability": "Unreliable",
     "range": 25,
-    "attackType": "",
+    "attackType": "Shotgun",
     "attackSkill": "Rifle"
   },
   "effects": [],

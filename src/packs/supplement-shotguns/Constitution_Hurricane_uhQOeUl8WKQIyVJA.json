@@ -36,7 +36,7 @@
     "burstCapable": true,
     "reliability": "Standard",
     "range": 70,
-    "attackType": "Auto",
+    "attackType": "Autoshotgun",
     "attackSkill": "Rifle"
   },
   "effects": [],
