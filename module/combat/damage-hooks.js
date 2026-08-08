@@ -5,7 +5,8 @@
  *
  * PATH A — Targeted full-auto:
  *   item.js emits "cyberpunk2020.weaponFired" with a targetTokenId.
- *   Opens DamageDialog immediately (or auto-applies if setting is on).
+ *   Auto-applies if that setting is on; otherwise opens DamageDialog once the shot has finished
+ *   being presented on the canvas, so the window does not cover the action it reports on.
  *
  * PATH B — Everything else (semi-auto, burst, untargeted full-auto):
  *   We listen for "cyberpunk2020.weaponFired" with no targetTokenId and
@@ -35,9 +36,42 @@ import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegion
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
+// One source of truth for how long a shot is being LOOKED at: the fx adapter owns the cadence, the
+// round count and the envelope, so the wait before the apply window is read from there rather than
+// duplicated here as a constant that would drift the moment either is tuned.
+import { payloadPresentationMs } from "../fx/effects.js";
 
-// Payload waiting to be attached to the next chat message created
+// Payload waiting to be attached to the next chat message created, and WHEN it started waiting.
+//
+// The pairing is the point. The payload is queued from inside the render of the very card it belongs
+// to (the fire's own multi-hit card — see seam-shim.js), so that card's creation follows within one
+// server round trip. A queue entry still waiting long after that is one whose card never arrived —
+// a fire that posted no card, or a card the speaker check ruled out — and handing it to whatever
+// this user says next is how an ORDINARY CHAT LINE ended up carrying an apply button (reproduced on
+// the rig: an unconsumed queue entry, then a plain message, and the plain message came back flagged).
+// So the wait is bounded rather than open-ended.
+//
+// NOT cleared by the next shot instead, deliberately: two fires can legitimately overlap, and the
+// earlier one's card may still be on its way, so a newer shot is no evidence that an older payload
+// is stale. Elapsed time is.
 let _pendingPayload = null;
+let _pendingPayloadAt = 0;
+
+/**
+ * How long a queued payload stays claimable, in milliseconds.
+ *
+ * It is waiting for ONE thing — the creation of the card whose render queued it — which is a single
+ * round trip to the server. Five seconds is many times the worst that has been seen and still far
+ * shorter than the gap between two separate table actions, so a card that has not arrived inside it
+ * is not coming.
+ */
+export const PENDING_PAYLOAD_TTL_MS = 5000;
+
+/** Queue a payload for the card of the shot that produced it, stamped with its start of waiting. */
+function _queuePendingPayload(payload) {
+  _pendingPayload = payload;
+  _pendingPayloadAt = Date.now();
+}
 
 function _isMultiActionEnabled() {
   try { return game.settings.get("cp2020-augmented", "multiActionPenaltyEnabled"); } catch { return false; }
@@ -401,13 +435,22 @@ function _hookWeaponFired() {
     // await) so a co-resident layer's later weaponFired listener stands down (see the top guard).
     payload.handled = "cp2020-augmented";
 
-    // PATH A: we have a target — open dialog (or auto-apply) immediately
-    if (payload.targetTokenId || payload.targetActorId) {
+    // PATH A: we know what this shot was aimed at — auto-apply, or open the (deferred) dialog.
+    //
+    // ⚠ THE AIM FIELD IS NOW A ROUTING FIELD TOO, and that is a reversal of an earlier decision worth
+    // stating. The base system only attaches `targetTokenId` on FULL AUTO, so every single and
+    // semi-automatic shot arrived here looking untargeted and fell to PATH B — the reader got a chat
+    // button where a burst got a window, for the same trigger pull at the same target. The seam's own
+    // `fxTargetTokenId` is captured on EVERY fire mode, so it answers "what was this aimed at" for the
+    // modes the base field does not cover. It was deliberately kept OUT of this branch before, because
+    // routing on it opened a window instantly, mid-action — that objection is answered: the dialog now
+    // waits out the shot's presentation. PATH B is left for shots genuinely aimed at nothing.
+    if (payload.targetTokenId || payload.targetActorId || payload.fxTargetTokenId) {
       const target = _resolveTarget(payload);
       if (!target) {
         console.warn("CP2020 | weaponFired: could not resolve target", payload);
         // Still queue for PATH B so GM can use the chat button
-        _pendingPayload = payload;
+        _queuePendingPayload(payload);
         return;
       }
 
@@ -428,19 +471,39 @@ function _hookWeaponFired() {
       if (game.settings.get("cp2020-augmented", "damageAutoApply")) {
         await _autoApply(payload, target);
       } else {
+        // Wait out the shot's own presentation before putting a window over the canvas. The dialog
+        // used to open the instant the shot resolved, which is while the rail is still fanning the
+        // rounds out — so the window covered the action it was reporting on, centre-screen, for the
+        // whole burst. The wait is the presentation's own length (payloadPresentationMs: the rounds'
+        // spacing plus the last one's tail), so it tracks the cadence and the round count instead of
+        // being a guessed constant, and it is zero when there is nothing being presented (rail off,
+        // or a weapon with no muzzle fx) — those open as promptly as they always did.
+        // Only THIS branch waits: auto-apply opens no window, so damage landing mid-burst is fine,
+        // and the chat-button path (PATH B) is opened by the reader when the reader chooses.
+        // The claim above is already set synchronously, so a second layer still stands down at once,
+        // and two payloads in flight each wait out their own span without any queue between them.
+        const presentationMs = payloadPresentationMs(payload);
+        if (presentationMs > 0) await new Promise((resolve) => setTimeout(resolve, presentationMs));
         new DamageDialog(payload, target).render(true);
       }
       return;
     }
 
     // PATH B: no target — queue payload for the next createChatMessage hook
-    _pendingPayload = payload;
+    _queuePendingPayload(payload);
   });
 }
 
 function _hookCreateChatMessage() {
   Hooks.on("createChatMessage", async (message) => {
     if (!_pendingPayload) return;
+    // The card this payload is waiting for is created within a round trip of the shot that queued it.
+    // Past that, the card is not coming, and this message — whatever it is — is not the one. Drop the
+    // entry rather than just skipping it, so it cannot claim a later message either.
+    if (Date.now() - _pendingPayloadAt > PENDING_PAYLOAD_TTL_MS) {
+      _pendingPayload = null;
+      return;
+    }
     // createChatMessage fires on this client for EVERY message, including ones authored by other users
     // (broadcast). The pending payload belongs to THIS user's shot, so only attach it to a message this
     // user authored — an interleaved message from someone else must not receive the apply flag, nor spend
@@ -838,6 +901,13 @@ function _resolveTarget(payload) {
   }
   if (payload.targetActorId) {
     return game.actors.get(payload.targetActorId) ?? null;
+  }
+  // The presentation aim, last: it is set on every fire mode where the routing field is set only on
+  // full auto, so it is what a single or semi-automatic shot at a held target resolves through. Read
+  // after the routing fields so a card that resolved its own target still wins.
+  if (payload.fxTargetTokenId) {
+    const token = canvas.tokens?.get(payload.fxTargetTokenId);
+    if (token?.actor) return token.actor;
   }
   return null;
 }
