@@ -3,9 +3,9 @@
 The audio files in this directory are third-party works redistributed under the licenses
 listed below. Every license used here permits redistribution as part of this module.
 
-License breakdown (41 files):
+License breakdown (44 files):
 
-- **37 × CC0 1.0 Universal (Public Domain Dedication).** Attribution is not legally
+- **40 × CC0 1.0 Universal (Public Domain Dedication).** Attribution is not legally
   required for CC0 but is given below as a courtesy to the original authors.
 - **2 × CC BY 4.0.** Attribution *is* legally required for these; the entries are marked
   **ATTRIBUTION REQUIRED** and carry the exact credit line to reproduce.
@@ -53,12 +53,61 @@ performed by this project.
 
 ## `shot-shotgun.ogg`
 
+- **Title:** Shotgun_Shot.wav
+- **Author:** ken788
+- **Source:** https://freesound.org/people/ken788/sounds/386758/
+- **License:** CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
+- **Modifications:** Renamed only. Original upload is WAV; this is Freesound's
+  site-generated Ogg Vorbis preview of that file (stereo, 44.1 kHz, 2.173 s).
+- **Note:** Replaced the previous 20-gauge recording (now `shot-shotgun-alt.ogg`) as the
+  shotgun class's report. Chosen on measurement rather than description: 73.6% of its
+  energy sits below 500 Hz against 31.2% for the 20-gauge clip and 58.5% for
+  `shot-rifle.ogg`, spectral centroid 1552 Hz against 3773 / 2788 Hz, and 85% rolloff
+  844 Hz against 2712 / 1411 Hz - lower than BOTH on every measure taken. The uploader's
+  page states only "A shotgun being fired"; no gauge or model is named there.
+
+## `shot-shotgun-burst.ogg`
+
+- **Title:** SPAS-12
+- **Author:** duesto
+- **Source:** https://freesound.org/people/duesto/sounds/156904/
+- **License:** CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
+- **Modifications:** Renamed only. Original upload is WAV; this is Freesound's
+  site-generated Ogg Vorbis preview of that file (stereo, 44.1 kHz, 1.449 s).
+- **Note:** The second report a multi-round payload plays, so a string of rounds is not
+  one waveform repeated (see module/fx/effects.js, shotSoundSrc). Same depth class as the
+  primary - 72.8% below 500 Hz against its 73.6%, and a heavier 80-400 Hz share (64.3%
+  against 46.5%) - with more high-frequency crack, which is what an outdoor report has.
+  The uploader states it was "recorded from my own weapon in Slovakia" and the upload is
+  geotagged to Kysak, Kosice; it is a real Franchi SPAS-12, which is a 12-gauge weapon.
+
+## `shot-shotgun-alt.ogg`
+
 - **Title:** 20 gauge shotgun gunshot
 - **Author:** michorvath
 - **Source:** https://freesound.org/people/michorvath/sounds/427595/
-- **License:** CC0 1.0 Universal — https://creativecommons.org/publicdomain/zero/1.0/
+- **License:** CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
 - **Modifications:** Renamed only. Original upload is WAV; this is Freesound's
   site-generated Ogg Vorbis preview of that file (mono, 44.1 kHz, 1.742 s).
+- **Note:** RETIRED from the shotgun class but kept on disk for an A/B listen. It is a
+  20-GAUGE recording - a smaller shell with a brighter crack - which is why it read as
+  thin next to the rifle: measured, it is brighter than `shot-rifle.ogg` on every axis
+  (31.2% vs 58.5% below 500 Hz; centroid 3773 vs 2788 Hz). Nothing references it.
+
+## `shot-shotgun-short-alt.ogg`
+
+- **Title:** shotgun-one-shot.wav
+- **Author:** DeltaCode
+- **Source:** https://freesound.org/people/DeltaCode/sounds/668353/
+- **License:** CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
+- **Modifications:** Renamed only. Original upload is WAV; this is Freesound's
+  site-generated Ogg Vorbis preview of that file (mono, 44.1 kHz, 0.719 s).
+- **Note:** RETIRED as the shotgun class's multi-round asset, kept on disk for an A/B
+  listen. Described by the uploader as a "computer-generated shotgun discharge one-shot"
+  - synthetic rather than a recording - and although its FILE is the shortest of the set,
+  its audible body is the LONGEST (0.399 s to -20 dB, against 0.360 s for the clip it was
+  meant to be shorter than), so it never did the job it was selected for. Nothing
+  references it.
 
 ## `shot-heavy.ogg`
 
