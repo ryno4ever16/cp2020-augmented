@@ -1,0 +1,69 @@
+{
+  "_id": "247RwCqlPhdF74eO",
+  "name": "StreetTech \"Burst\"",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "The latest in self-defense weapons from StreetTech. The Burst looks like a small flashlight; unlocking its built-in safety and thumbing the switch electronically detonates the propellant and fires its payload of pellets.",
+    "notes": "<p>Protect &amp; Serve p.34 (PDF idx 34) text layer: SHT Var P E 2d6+1 (28ga.) 1 1 VR 3m 33eb. Confirmed verbatim by Blackhand's Street Weapons p.8 (PDF idx 9): 33eb, SHT VAR P E 2D6+1 (28GA) 1 1 VR 3M.</p><p>The printed WA cell is 'Var' - the pellets lose their destructive power fast: -1 at 0-1m, -2 at 1-2m, -3 at 2-3m, and they are ineffective beyond 3m. Accuracy is stored as 0 with the range band applied by the GM. Designer key-ring models for the executive market are 40eb each.</p>",
+    "cost": 33,
+    "weight": 0,
+    "equipped": false,
+    "source": "Protect & Serve p.34",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": 0,
+    "concealability": "ConcealPocket",
+    "availability": "Excellent",
+    "ammoType": "28ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 1,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 3,
+    "attackType": "Shotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Protect & Serve p.34"
+      },
+      "manufacturer": "StreetTech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!247RwCqlPhdF74eO"
+}

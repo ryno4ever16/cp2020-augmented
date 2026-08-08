@@ -1,0 +1,69 @@
+{
+  "_id": "IDTAIZw4unfw7y10",
+  "name": "Mustang Arms \"Mark II\"",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A powerful autoloader machined to very close tolerances, with a 6.5-inch ported-compensator barrel. Popular with police units for its magazine capacity.",
+    "notes": "<p>Solo of Fortune 2 p.33 text layer: P +1 J/L C 3D6 (11mm) 12/20 3 VR 50m 425eb. Corroborated by Blackhand's Street Weapons p.15 (PDF idx 16): 425eb, P +1 J/L C 3D6 (11MM) 12/20 3 VR 50M.</p><p>Printed shots are 12/20: a standard 12-round clip (Conceal. J) or the 20-round 'banana' magazine that ships with every gun (Conceal. L). SoF2's review warns the tolerances are too tight - if the gun is dropped on a hard surface, gets dirt in the action or overheats it locks up and must be stripped and cleaned before it will fire again.</p>",
+    "cost": 425,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2 p.33",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "11mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "3D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 12,
+    "rof": 3,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune 2 p.33"
+      },
+      "manufacturer": "Mustang Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!IDTAIZw4unfw7y10"
+}

@@ -1,0 +1,69 @@
+{
+  "_id": "lnFZjCir20ilwq60",
+  "name": "Dai Lung Magnum",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Automag copy commonly used by cheap hoods.",
+    "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E .357 caseless 10 2 UR, About $60.</p><p>Damage and range from Blackhand's Street Weapons p.14 (PDF idx 15), citing [Solo of Fortune]: P 1 J E 3D6+1 (.357MAG) 10 2 UR 50M, 60eb. Blackhand's adds: on a jam/fumble the gun has a 60% chance of injuring the firer.</p>",
+    "cost": 60,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.47",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Excellent",
+    "ammoType": ".357mag",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "3D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 10,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Unreliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.47"
+      },
+      "manufacturer": "Dai Lung",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!lnFZjCir20ilwq60"
+}

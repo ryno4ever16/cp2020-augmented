@@ -1,0 +1,69 @@
+{
+  "_id": "9pW3H77f9xO5Pb9R",
+  "name": "Generic 7.62mm Bolt-Action Rifle",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A fourth or fifth-generation copy of an original design, a time-tested survivor of the 20th century differing very little from its predecessors. Examples include the M70 sniper rifles used by the US Army and Marine Corps before the Collapse.",
+    "notes": "<p>Neo Tribes, nomad weapons section, PDF idx 65 text layer (confirmed by a fresh tesseract OCR pass at two zoom levels): RIF +2 N C 6D6+1 (7.62) 6 1 VR 400m 500eb. Neo Tribes prints no recoverable page folio; the PDF index is recorded instead.</p><p>Blackhand's Street Weapons p.31 (PDF idx 32) reprints it as 'Nomad 7.62mm Bolt-Action Rifle' with 6D6+2; Neo Tribes' own printed 6D6+1 is kept.</p>",
+    "cost": 500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes (PDF idx 65)",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 2,
+    "concealability": "ConcealNoHide",
+    "availability": "Common",
+    "ammoType": "7.62",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 6,
+    "rof": 1,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 400,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Neo Tribes (PDF idx 65)"
+      },
+      "manufacturer": "",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!9pW3H77f9xO5Pb9R"
+}

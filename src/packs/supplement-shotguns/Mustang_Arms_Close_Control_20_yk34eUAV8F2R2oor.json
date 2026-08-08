@@ -1,0 +1,69 @@
+{
+  "_id": "yk34eUAV8F2R2oor",
+  "name": "Mustang Arms Close Control 20",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A semi-auto 20-gauge bullpup in lightweight composites, designed as a reliable antipersonnel weapon that will not devastate an enclosed area. Only 26 inches long.",
+    "notes": "<p>Solo of Fortune 2 p.33 text layer: SHG -1 N P 3D6 (20-Gauge) 15 2 STD 50m 350eb. Not reprinted in Blackhand's Street Weapons.</p><p>Loads buckshot, slugs, anti-riot baton rounds or flechette shells from a clear-plastic 15-round box magazine. Built for urban, house-to-house and riot situations.</p>",
+    "cost": 350,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2 p.33",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": -1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "20ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "3D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 15,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "Shotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune 2 p.33"
+      },
+      "manufacturer": "Mustang Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!yk34eUAV8F2R2oor"
+}

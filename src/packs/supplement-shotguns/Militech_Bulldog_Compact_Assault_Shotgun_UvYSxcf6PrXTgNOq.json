@@ -1,0 +1,69 @@
+{
+  "_id": "UvYSxcf6PrXTgNOq",
+  "name": "Militech Bulldog Compact Assault Shotgun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A compact, twelve-gauge selective-fire shotgun fed from a twenty-one round curved magazine, with gas porting and spring compensation to tame the recoil and an integral diffraction laser sight that paints a circle of red light the size of the pattern at the point of impact.",
+    "notes": "<p>Corporate Report 2020: Corpbook 2 p.62 (PDF idx 62) text layer: SHT 0 L P 4D6(00) / 3D6 AP(SLUG) / 2D6 EXPL(GREN) 21 3/10 ST 50M, Price 800eb. Fires single shots, three-round bursts or fully automatically. Factory smartgun mod 500eb extra.</p><p>Load options: jacketed armor-piercing slug (3D6 AP) and a singly-loaded twelve-gauge grenade (2D6, 2m explosion area; on a 1D10 roll of 1-2 the grenade does not detonate but still does 1D6 on a direct hit). Blackhand's Street Weapons p.22 (PDF idx 23), citing [Corpbook 2], prints the price as 1000eb and the damage cell as VARIES (12GA.).</p>",
+    "cost": 800,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 2 p.62",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": 0,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "12ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6 (00)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 21,
+    "rof": 10,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "Autoshotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Corpbook 2 p.62"
+      },
+      "manufacturer": "Militech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!UvYSxcf6PrXTgNOq"
+}

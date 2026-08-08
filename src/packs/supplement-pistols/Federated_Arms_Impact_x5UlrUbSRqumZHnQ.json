@@ -1,0 +1,69 @@
+{
+  "_id": "x5UlrUbSRqumZHnQ",
+  "name": "Federated Arms Impact",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Ten shot, low caliber pistol with good reliability.",
+    "notes": "<p>Solo of Fortune p.48 (PDF idx 49) text layer prints: P 1 J E .22 10 10 VR, $60.</p><p>Damage and range from Blackhand's Street Weapons p.10 (PDF idx 11), citing [Solo of Fortune]: P +1 J E 1D6 (.22) 10 2 VR 50M, 60eb. ROF kept at Blackhand's 2 (SoF's cell scans as 10 for every entry in that column).</p>",
+    "cost": 60,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.48",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Excellent",
+    "ammoType": ".22",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 10,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.48"
+      },
+      "manufacturer": "Federated Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!x5UlrUbSRqumZHnQ"
+}

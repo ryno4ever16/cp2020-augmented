@@ -1,0 +1,69 @@
+{
+  "_id": "JEd5DNAfN9BeCzEZ",
+  "name": "Luigi Franchi P.16",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A short and stubby autoshotgun, generally used for security work and marketed as a 'restraint rifle' since it can also fire incapacitating baton rounds and gas shells. Standard Eurotheatre police issue.",
+    "notes": "<p>Eurosource p.35 (Eurosource_OCR.pdf idx 35) text layer, confirmed by a fresh tesseract pass at four zoom/psm settings: SHG 1 J R 4d6 (00) 20 10 ST. Eurosource's weapon sidebars print no cost and no range column.</p><p>Cost and range from Blackhand's Street Weapons p.21 (PDF idx 22), citing [Eurosource]: 980eb, SHT +1 L R 4D6 (12GA/#00) 20 2/10 ST 50M (Blackhand's prints concealability L; Eurosource's J is kept).</p>",
+    "cost": 980,
+    "weight": 0,
+    "equipped": false,
+    "source": "Eurosource p.35",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Rare",
+    "ammoType": "12ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6 (00)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 20,
+    "rof": 10,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "Autoshotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Eurosource p.35"
+      },
+      "manufacturer": "Luigi Franchi",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!JEd5DNAfN9BeCzEZ"
+}

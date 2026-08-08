@@ -1,0 +1,69 @@
+{
+  "_id": "i8XKWbOn8SrCyUja",
+  "name": "Nova Arms \"Stallone\" .357 Plasmatic Magnum",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Electrothermal wheelgun - the cased-ammunition revolver reborn. Complete with electrical firing system.",
+    "notes": "<p>Solo of Fortune 2 p.37 text layer (the Nova Arms Plasmatic advertisement): 'Nova Arms \"Stallone\" .357 Plasmatic Magnum - 999eb Cheap!!!' / P +1 J P .357/4D6 6 2 VR 60m. Corroborated by Blackhand's Street Weapons p.17 (PDF idx 18): 999EB, P +1 J P 4D6 (.357) 6 2 VR 60M.</p><p>Completes the Plasmatic line already in the packs (Bronson .41 / Eastwood .44 / Arno .454). Plasmatic ammunition is sold only by Nova Arms: 75eb per 50 rounds; 100-shot batteries 200eb each; moisture-proofing and insulation extra.</p>",
+    "cost": 999,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2 p.37",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": ".357 ET",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 6,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 60,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune 2 p.37"
+      },
+      "manufacturer": "Nova Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!i8XKWbOn8SrCyUja"
+}

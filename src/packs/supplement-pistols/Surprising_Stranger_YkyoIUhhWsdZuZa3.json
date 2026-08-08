@@ -1,0 +1,69 @@
+{
+  "_id": "YkyoIUhhWsdZuZa3",
+  "name": "Surprising Stranger",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Four shot, pepperbox design. Loaded by prying the primers out of four 10mm caseless rounds and seating them against the electrical spikes in the chamber; a nine-volt battery goes in the grip. Almost no metal - it will not trip airport detectors.",
+    "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E 10mm caseless (use 9mm) 4 2 UR, About $15. SoF's polymer one-shot table has NO damage and NO range column.</p><p>Damage 2D6+1 follows the book's own instruction '(use 9mm)': 9mm is printed as 2D6+1 in Neo Tribes (Calico 9mm), Pacific Rim p.77 (CCMMC Goaxing) and Blackhand's Street Weapons p.10-12. Range 50m follows the sibling polymer one-shots printed in Blackhand's p.10-12. Not in Blackhand's under this name.</p>",
+    "cost": 15,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.47",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Excellent",
+    "ammoType": "10mm Caseless",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 4,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Unreliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.47"
+      },
+      "manufacturer": "",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!YkyoIUhhWsdZuZa3"
+}

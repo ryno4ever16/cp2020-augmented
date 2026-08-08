@@ -1,0 +1,69 @@
+{
+  "_id": "AdV9J4AHoluDQn77",
+  "name": "Militech Ninja",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A highly reliable caseless design with few moving parts and an integral silencer. A fully plastic magazine and an electrical firing pin make this assault carbine incredibly quiet - perfect for black operations. In grey, camouflage or black.",
+    "notes": "<p>Solo of Fortune p.50 (PDF idx 51) text layer prints: RIF 1 N E .22 30 30 VR, $650-700.</p><p>Damage, range and burst mode from Blackhand's Street Weapons p.31 (PDF idx 32), citing [Solo of Fortune]: RIF +1 L C 1D6 (5MM/.22) 30 3/30 VR 250M, 650eb. Concealability and availability kept at SoF's printed N / E (Blackhand's prints L / C).</p>",
+    "cost": 650,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.50",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Excellent",
+    "ammoType": ".22",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "1D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 30,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 250,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.50"
+      },
+      "manufacturer": "Militech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!AdV9J4AHoluDQn77"
+}

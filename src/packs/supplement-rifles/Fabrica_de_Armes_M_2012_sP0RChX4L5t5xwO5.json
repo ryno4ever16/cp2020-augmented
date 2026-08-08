@@ -1,0 +1,69 @@
+{
+  "_id": "sP0RChX4L5t5xwO5",
+  "name": "Fabrica de Armes M-2012",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Argentine bullpup battle rifle, based on bullpup designs of the late 1990s. Good reliability, easily rechambered for other common round types.",
+    "notes": "<p>Solo of Fortune p.42 (PDF idx 43) stat box (fresh tesseract OCR of the page graphic): RIF 2 N P 6.5 caseless (7.62Sov) 30 4 VR, $1400, 'Squad Auto has a ROF of 30.' SoF's review prose (p.41-43): 6.5x45mm caseless nicknamed 'El Lapiz', 30-round box, 3.7kg empty, no full auto - single shot or a four-round burst only.</p><p>Damage and range from Blackhand's Street Weapons p.28 (PDF idx 29), which prints it complete: RIF +2 N P 5D6+3 (6.5MM) 30 1/4 VR 400M, 1400eb. The heavy-barrel squad-automatic variant already ships as 'Fabrica de Armes M-2012HB SAW'.</p>",
+    "cost": 1400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.42",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 2,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "6.5mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "5D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 30,
+    "rof": 4,
+    "fullAutoCapable": false,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 400,
+    "attackType": "",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.42"
+      },
+      "manufacturer": "Fabrica de Armes",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!sP0RChX4L5t5xwO5"
+}

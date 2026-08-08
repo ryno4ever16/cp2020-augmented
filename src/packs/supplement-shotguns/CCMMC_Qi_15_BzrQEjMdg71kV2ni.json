@@ -1,0 +1,69 @@
+{
+  "_id": "BzrQEjMdg71kV2ni",
+  "name": "CCMMC Qi-15",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "The assault shotgun favoured by the PLA and Public Security for quelling riots. Bullpup configuration, fed from a top-loading helical magazine - full auto preferred.",
+    "notes": "<p>Pacific Rim p.77 (PDF idx 77). The shipped OCR layer renders this stat row unreadable; a fresh tesseract pass over the page image at three zoom/psm settings resolves it consistently: SHT -2 N P 4d6 (00) 15 10 ST 50m. Price printed as 600 YY (150 Eb).</p><p>Confirmed by Blackhand's Street Weapons p.21 (PDF idx 22), citing [Pacific Rim]: 600YY (150eb), SHT -2 N P 4D6 (12GA/#00) 15 2/10 ST 50M. Available only to military police in China.</p>",
+    "cost": 150,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.77",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": -2,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "12ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6 (00)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 15,
+    "rof": 10,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "Autoshotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20400000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Pacific Rim p.77"
+      },
+      "manufacturer": "CCMMC",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!BzrQEjMdg71kV2ni"
+}

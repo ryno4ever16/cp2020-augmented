@@ -1,0 +1,69 @@
+{
+  "_id": "88Ozw8E0cKO922vK",
+  "name": "Nova Model 338 Citygun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Nova Arms' attempt to bring the revolver up to date: instead of a traditional cylinder it uses disposable 'Ammo Cassettes' of superstrong composite ceramic, preloaded with seven .338 Nova cartridges. Twin triple-porting on the octagonal barrel works as a muzzle compensator, which is what lifts the ROF to 3.",
+    "notes": "<p>Chromebook 2 p.40 (PDF idx 137) text layer: P +1 J P 3D6 (.338) 7 3 VR 50M, 460EB. Confirmed verbatim by Blackhand's Street Weapons p.15 (PDF idx 16): 460eb, P +1 J P 3D6 (.338) 7 3 VR 50M.</p><p>Note on .338 Nova: a rimmed, brass-cased cartridge firing a 98-grain bullet at 1695 fps, placing it around the .357 Magnum - an ideal mid-range load. Ammo 15eb per box of 50; empty Ammo Cassettes 5eb each, pre-loaded shrink-wrapped cassettes 7eb each. Two spare cassettes ship with every gun.</p>",
+    "cost": 460,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 2 p.40",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": ".338",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "3D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 7,
+    "rof": 3,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Chromebook 2 p.40"
+      },
+      "manufacturer": "Nova Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!88Ozw8E0cKO922vK"
+}

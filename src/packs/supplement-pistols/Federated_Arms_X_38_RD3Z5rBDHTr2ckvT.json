@@ -1,0 +1,69 @@
+{
+  "_id": "RD3Z5rBDHTr2ckvT",
+  "name": "Federated Arms X-38",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Inexpensive .38 caseless automatic.",
+    "notes": "<p>Solo of Fortune p.48 (PDF idx 49) text layer prints: P 1 J E .38 10 10 R, $35.</p><p>Damage, ROF and reliability from Blackhand's Street Weapons p.10 (PDF idx 11), which cites [Solo of Fortune]: P +1 J E 2D6 (.38) 10 2 ST 50M, 35eb. SoF's ROF/reliability cell scans as '10 R'; Blackhand's resolves it to ROF 2 / ST.</p>",
+    "cost": 35,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.48",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Excellent",
+    "ammoType": ".38",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 10,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20200000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.48"
+      },
+      "manufacturer": "Federated Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!RD3Z5rBDHTr2ckvT"
+}

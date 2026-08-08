@@ -1,0 +1,69 @@
+{
+  "_id": "QhFTIoFI2JpdlzmH",
+  "name": "Colt Enforcement 10 Sidearm",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Colt's latest automatic pistol, aimed at the military and law-enforcement markets. Built on a solid heavy frame to absorb the recoil of the potent 10mm round, with a receiver and slide of Sortex ceramic composite. Standard sidearm for all of Petrochem's security guards, soldiers and naval personnel.",
+    "notes": "<p>Corporate Report 2020: Corpbook 3 p.30 (PDF idx 30) text layer: P +1 J C 2D6+3 (10mm) 14 2 VR 50m. Printed prices: 550eb basic, 600eb camouflaged, 650eb custom camouflaged, +550eb smartchipped.</p><p>Confirmed verbatim by Blackhand's Street Weapons p.11 (PDF idx 12), citing [Corpbook 3].</p>",
+    "cost": 550,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 3 p.30",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "10mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 14,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Corpbook 3 p.30"
+      },
+      "manufacturer": "Colt",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!QhFTIoFI2JpdlzmH"
+}

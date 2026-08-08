@@ -1,0 +1,69 @@
+{
+  "_id": "Sm9ScspQpy1eRc7S",
+  "name": "Militech M-31a1 Advanced Infantry Combat Weapon",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "An over-and-under 4.5mm liquid-propellant assault weapon atop a pump-action mini grenade launcher. A propellant and oxidizer are mixed in the firing chamber and electrically fired, launching a 50-grain copper-jacketed bullet and cycling the action.",
+    "notes": "<p>Chromebook 1 p.45 (PDF idx 46) text layer, cross-checked against a fresh tesseract pass over the page image: RIF 2 N R 4D6 (4.5mm) 150 30 ST/VR, 1695eb. Chromebook 1's table prints no range column; the reliability cell is printed as two values (ST/VR) for the rifle and the underslung launcher.</p><p>Range and the mini-grenade launcher block from Blackhand's Street Weapons p.28 (PDF idx 29), citing [Chromebook 1]: RIF +2 N R 4D6 (4.5MM) 150 3/30 ST 400M, plus MGL -1 VARIES (25MM MINI-GREN) 4 ... The magazine holds 150 projectiles plus the liquid propellant to fire them.</p>",
+    "cost": 1695,
+    "weight": 0,
+    "equipped": false,
+    "source": "Chromebook 1 p.45",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 2,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "4.5mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 150,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 400,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Chromebook 1 p.45"
+      },
+      "manufacturer": "Militech",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!Sm9ScspQpy1eRc7S"
+}

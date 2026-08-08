@@ -1,0 +1,69 @@
+{
+  "_id": "vFYODwQT1P4ousPd",
+  "name": "Tsunami Arms \"Ragnarok\" CAWS",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Tsunami's close assault weapon: special #00 buckshot with Electrothermal Ammo Enhancement, a dual-barrel reciprocating action and hydro-shock recoil compensation. Designed for the 2021 SDF arms trials; Tokyo C-SWAT already has a couple.",
+    "notes": "<p>Pacific Rim p.18 (PDF idx 18). The shipped OCR layer drops the ROF cell; a fresh tesseract pass over the page image at two zoom levels resolves it: SHT 0 N R 6D6 (#00) 40 2/20 ST 70m 4500 Eb. Confirmed by Blackhand's Street Weapons p.22 (PDF idx 23), citing [Pacific Rim]: SHT 0 N R 6D6 (12GA/#00 EAE) 40 2/20 ST 70M, 4500eb.</p><p>Batteries mount on the stock; up to five can be carried.</p>",
+    "cost": 4500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.18",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "12ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D6 (#00)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 40,
+    "rof": 20,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "Standard",
+    "range": 70,
+    "attackType": "Autoshotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20300000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Pacific Rim p.18"
+      },
+      "manufacturer": "Tsunami Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!vFYODwQT1P4ousPd"
+}

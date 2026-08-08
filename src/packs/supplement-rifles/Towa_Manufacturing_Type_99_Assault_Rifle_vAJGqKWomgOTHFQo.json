@@ -1,0 +1,69 @@
+{
+  "_id": "vAJGqKWomgOTHFQo",
+  "name": "Towa Manufacturing Type 99 Assault Rifle",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "The standard assault rifle of the Japanese SDF since 1999.",
+    "notes": "<p>Pacific Rim p.18 (PDF idx 18) text layer, cross-checked by a fresh tesseract pass over the page image: RIF +1 N P 5D6 (5.56mm) 50 25 ST 400m 1500 Eb.</p><p>Smartchipping (raises WA to +3) and a bipod (+1 WA at Long/Extreme range) are standard. Not reprinted in Blackhand's Street Weapons.</p>",
+    "cost": 1500,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.18",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "5.56",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "5D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 50,
+    "rof": 25,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 400,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Pacific Rim p.18"
+      },
+      "manufacturer": "Towa Manufacturing",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!vAJGqKWomgOTHFQo"
+}

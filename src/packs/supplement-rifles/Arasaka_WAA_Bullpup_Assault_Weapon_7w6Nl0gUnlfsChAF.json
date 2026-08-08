@@ -1,0 +1,69 @@
+{
+  "_id": "7w6Nl0gUnlfsChAF",
+  "name": "Arasaka WAA Bullpup Assault Weapon",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A typical bullpup assault rifle. Like all Arasaka weapons it is tough, reliable and comes chipped for smartgun use, with an integral optical sight. Standard issue weapon for Arasaka soldiers.",
+    "notes": "<p>Corporate Report 2020: Corpbook 1 p.24 (PDF idx 24) text layer: RIF +1 N C 5D6 (5.56mm) 30 30 VR 400m, 800eb. Takes 5-, 15- or 30-round magazines.</p><p>Blackhand's Street Weapons p.27 (PDF idx 28), citing [Corpbook 1], prints the magazine cell as 15/30 and the ROF as 3/30.</p>",
+    "cost": 800,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 1 p.24",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Common",
+    "ammoType": "5.56",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "5D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 30,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 400,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20900000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Corpbook 1 p.24"
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!7w6Nl0gUnlfsChAF"
+}

@@ -1,0 +1,69 @@
+{
+  "_id": "nE573diyk910HmvS",
+  "name": "454 Magnum Disposable",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A two-shot disposable holdout, favoured for its extreme reliability. A pull tab opens the over/under barrels and activates the permanently-sealed battery. Electrically-fired caseless ammunition in a reinforced carbon-fibre case; non-reloadable.",
+    "notes": "<p>Interface Magazine Vol.1 Issue 1 p.37 (PDF idx 36) OCR text layer: P 1 J R 454 2 2 VR, $100. The same issue's compiled 'Weapon Specs' table on p.29 (PDF idx 28) prints a variant line - P 1 P P 454 2 2 VR 90 - and a range-damage row for the .454 round: 4D6+3 point/short, 3D6+3 medium, 2D6 long, availability P, suggested cost $50/10.</p><p>Damage and range from Blackhand's Street Weapons p.16 (PDF idx 17), which prints it complete: P -2 P R 4D6+3 (.454) 2 1 VR 40M, 100eb - 'the deadliest of the polymer holdouts, famed for its reliability (and rarity)'. Interface's printed WA/conceal/ROF are kept.</p>",
+    "cost": 100,
+    "weight": 0,
+    "equipped": false,
+    "source": "Interface Vol.1 #1 p.37",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Rare",
+    "ammoType": ".454",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 2,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 40,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 22000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Interface Vol.1 #1 p.37"
+      },
+      "manufacturer": "",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!nE573diyk910HmvS"
+}

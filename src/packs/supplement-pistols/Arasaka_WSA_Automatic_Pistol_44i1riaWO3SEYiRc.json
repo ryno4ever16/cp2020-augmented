@@ -1,0 +1,69 @@
+{
+  "_id": "44i1riaWO3SEYiRc",
+  "name": "Arasaka WSA Automatic Pistol",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Standard issue sidearm for all Arasaka troops, as well as executives who want to pack a little punch.",
+    "notes": "<p>Corporate Report 2020: Corpbook 1 p.25 (PDF idx 25) text layer: P 0 J C 2D6+3 (10mm) 15 2 VR 50m, 400eb.</p><p>Confirmed verbatim by Blackhand's Street Weapons p.10 (PDF idx 11), citing [Corpbook 1].</p>",
+    "cost": 400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 1 p.25",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": "10mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 15,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21500000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Corpbook 1 p.25"
+      },
+      "manufacturer": "Arasaka",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!44i1riaWO3SEYiRc"
+}

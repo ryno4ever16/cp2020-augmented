@@ -1,0 +1,69 @@
+{
+  "_id": "jZ3tSjanmVa1fJrq",
+  "name": "Tsunami Express Racegun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A 5.2mm electrothermal competition pistol built for IPSC shooters - the ammo capacity of a Minor class gun with the muzzle velocity and hitting power of the Major calibers, with a custom barrel compensator and a Zeiss-Nikon COT scope.",
+    "notes": "<p>Solo of Fortune 2 p.65 text layer: PIST +3 L P 2H6+3 5.2mm ET 24 3 VR 75m, 'Tsunami Express racegun 15,300 Euro!'. Two independent OCR channels plus a fresh tesseract pass all read the price as 15,300 and the damage glyph as '2H6+3'.</p><p>Damage resolved to 2D6+3 by Blackhand's Street Weapons p.14 (PDF idx 15), which prints 2D6+3 (5.2MM ET) 24 3 VR - Blackhand's lists the price as 5300eb and the range as 5M (a dropped digit; SoF2 prints 75m). SoF2's printed 15,300 is stored. 5.2mm ammo 50eb per box of 50; a 50-shot battery is 10eb. Cannot be suppressed (barrel compensator); a grip change drops WA to +2 for 125eb and makes it concealable.</p>",
+    "cost": 15300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune 2 p.65",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 3,
+    "concealability": "ConcealLongcoat",
+    "availability": "Poor",
+    "ammoType": "5.2mm ET",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 24,
+    "rof": 3,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 75,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune 2 p.65"
+      },
+      "manufacturer": "Tsunami Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!jZ3tSjanmVa1fJrq"
+}

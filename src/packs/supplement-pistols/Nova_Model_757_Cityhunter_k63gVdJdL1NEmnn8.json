@@ -1,0 +1,69 @@
+{
+  "_id": "k63gVdJdL1NEmnn8",
+  "name": "Nova Model 757 Cityhunter",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "An unusual double-action design from Nova Arms. The Cityhunter fires 11mm caseless 'trounds' - each bullet embedded in a triangular propellant block - from an internal cylinder enclosed in the tubular body of the gun, with an integral laser sight along the centreline.",
+    "notes": "<p>Blackhand's Street Weapons p.15 (PDF idx 16) text layer: 480eb, P +2 J P 3D6 (11MM) 18 2 ST 50M. Page derived from Blackhand's own contents listing, which prints 'Nova Model 757 Cityhunter (p15)'.</p><p>The cylinder's chambers are open on the outer surface; each tround drops into the breach under the cylinder where an electrical igniter fires it. Ahead of the cylinder the shaft carries another two loads (12 rounds), racked forward with the external slider when the cylinder runs dry.</p>",
+    "cost": 480,
+    "weight": 0,
+    "equipped": false,
+    "source": "Blackhand's Street Weapons p.15",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 2,
+    "concealability": "ConcealJacket",
+    "availability": "Poor",
+    "ammoType": "11mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "3D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 18,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 22100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Blackhand's Street Weapons p.15"
+      },
+      "manufacturer": "Nova Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!k63gVdJdL1NEmnn8"
+}

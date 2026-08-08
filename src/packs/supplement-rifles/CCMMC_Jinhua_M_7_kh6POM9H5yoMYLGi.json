@@ -1,0 +1,69 @@
+{
+  "_id": "kh6POM9H5yoMYLGi",
+  "name": "CCMMC Jinhua M-7",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A battle rifle along the lines of the FN-FAL, firing similar caseless cartridges but not as reliable. Identifiable by the gold flower on the stock. The standard rifle of the PLA.",
+    "notes": "<p>Pacific Rim p.77 (PDF idx 77). The shipped OCR layer drops this stat row entirely; a fresh tesseract pass over the page image at two zoom/psm settings resolves it consistently: RIF 0 N P 6d6+2 (7.62) 35 25 ST 400m. Price printed as 500 YY (125 Eb).</p><p>Blackhand's Street Weapons p.27 (PDF idx 28) reprints it, citing [Pacific Rim], under the designation 'CCMMC Jinhua M-9': 500 YY (125eb), RIF 0 N P 6D6+2 (7.62MM) 35 1/25 ST 400M. Pacific Rim's own 'M-7' designation is kept.</p>",
+    "cost": 125,
+    "weight": 0,
+    "equipped": false,
+    "source": "Pacific Rim p.77",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 0,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "7.62",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "6D6+2",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 35,
+    "rof": 25,
+    "fullAutoCapable": true,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 400,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Pacific Rim p.77"
+      },
+      "manufacturer": "CCMMC",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!kh6POM9H5yoMYLGi"
+}

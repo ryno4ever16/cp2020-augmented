@@ -1,0 +1,69 @@
+{
+  "_id": "PUYnx3u2Ctv0NRh8",
+  "name": "Sternmeyer M-95A4 (CG-13B) Assault Weapon",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Highly reliable, well-made plastic composite assault rifle - the U.S. Army's caseless service weapon and the re-engineered Sternmeyer CG-13 export version.",
+    "notes": "<p>Solo of Fortune p.38 (PDF idx 39) carries the stat box as a page graphic; a fresh tesseract OCR pass over it yields RIF ? N P 5.56 caseless 90 48 VR, 'US assault rifle, $695-750' - the WA cell would not resolve. Prices in the SoF review prose: CG-13 $695 list (p.40), M-95A2 civilian $750 (p.41).</p><p>Stat cells taken from Blackhand's Street Weapons p.29 (PDF idx 30), which prints the entry complete: RIF +1 N R 5D6 (5.56MM) 90 3/30 VR 400M, 695-750eb. Model designation 'M-95A4 (CG-13B)' is Corpbook 1 p.66's own spelling. Cross-reference: Interface Vol.1 #1 p.29 compilation table prints RIF 1 N P 5.56 CL 90 48 VR 1400. Cost stored as the low end of the printed 695-750eb range.</p>",
+    "cost": 695,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.38",
+    "lastOwnerId": "",
+    "weaponType": "Rifle",
+    "accuracy": 1,
+    "concealability": "ConcealNoHide",
+    "availability": "Rare",
+    "ammoType": "5.56C",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "5D6",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 90,
+    "rof": 30,
+    "fullAutoCapable": true,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 400,
+    "attackType": "Auto",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.38"
+      },
+      "manufacturer": "Sternmeyer",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!PUYnx3u2Ctv0NRh8"
+}

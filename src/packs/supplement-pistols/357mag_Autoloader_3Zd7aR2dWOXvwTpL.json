@@ -1,0 +1,69 @@
+{
+  "_id": "3Zd7aR2dWOXvwTpL",
+  "name": ".357mag Autoloader",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Based on the Colt M1911, this pistol is sturdy and user-friendly. It uses a standard box magazine; reloading takes one round.",
+    "notes": "<p>Neo Tribes, nomad weapons section, PDF idx 64 text layer: P 0 J C 2D6+3 (.357mag) 8 2 VR 50m 300eb. Neo Tribes prints no page folio in its text layer (and none is recoverable by OCR), so the PDF index is recorded instead.</p><p>Corroborated by Blackhand's Street Weapons p.12 (PDF idx 13), citing [NeoTribes], as 'Nomad .357 Magnum Autoloader': 300eb, P 0 J C 2D6+3 (.357MAG) 8 2 VR 50M, and adding 'standard hot loads do 3D6+1 damage'. Uses cased ammo.</p>",
+    "cost": 300,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes (PDF idx 64)",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 0,
+    "concealability": "ConcealJacket",
+    "availability": "Common",
+    "ammoType": ".357mag",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+3",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 8,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 21000000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Neo Tribes (PDF idx 64)"
+      },
+      "manufacturer": "",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!3Zd7aR2dWOXvwTpL"
+}

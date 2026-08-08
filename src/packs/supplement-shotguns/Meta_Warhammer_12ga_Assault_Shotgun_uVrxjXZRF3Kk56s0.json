@@ -1,0 +1,69 @@
+{
+  "_id": "uVrxjXZRF3Kk56s0",
+  "name": "Meta \"Warhammer\" 12ga. Assault Shotgun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "MetaCorp's improved version of the Pancor Jackhammer, released in 2016 - larger magazine capacity, a more efficient cerametal barrel, and an optional Smartlink targeting system.",
+    "notes": "<p>Neo Tribes, nomad weapons section, PDF idx 65 text layer (confirmed by a fresh tesseract OCR pass): SHT -1 N P See Below (12ga Mag) 16 1/3 VR 75m 700eb. Neo Tribes prints no recoverable page folio.</p><p>Damage is 'See Below' - the WARSHOT ammunition system, printed on the following page (PDF idx 66): 00 Buckshot 4D6+2 (1eb/factory load, 0.5eb to reload); Boomer high-explosive slugs 3D6, 1m radius (2eb/shot); Penetrator AP slugs 3D6HEDP (3eb/shot). The 00 Buckshot value is stored as the base damage.</p>",
+    "cost": 700,
+    "weight": 0,
+    "equipped": false,
+    "source": "Neo Tribes (PDF idx 65)",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": -1,
+    "concealability": "ConcealNoHide",
+    "availability": "Poor",
+    "ammoType": "12ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6+2 (00 Buckshot)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 16,
+    "rof": 3,
+    "fullAutoCapable": false,
+    "burstCapable": true,
+    "reliability": "VeryReliable",
+    "range": 75,
+    "attackType": "Autoshotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20100000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Neo Tribes (PDF idx 65)"
+      },
+      "manufacturer": "MetaCorp",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!uVrxjXZRF3Kk56s0"
+}

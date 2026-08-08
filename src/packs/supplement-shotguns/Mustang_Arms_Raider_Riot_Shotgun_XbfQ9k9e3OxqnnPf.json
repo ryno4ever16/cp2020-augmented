@@ -1,0 +1,69 @@
+{
+  "_id": "XbfQ9k9e3OxqnnPf",
+  "name": "Mustang Arms \"Raider\" Riot Shotgun",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "A standard-design semi-automatic 12-gauge riot shotgun feeding from a five-round tube magazine on blowback. Steel barrel, receiver and magazine; matte-black Sortex stock and forearm.",
+    "notes": "<p>Corporate Report 2020: Corpbook 3 pp.30-31 (PDF idx 30-31) text layer: SHT 0 L C 4D6(00) 5/9 2 ST 50m. Printed prices: 400eb basic, 25eb per magazine, 50eb per barrel, 50eb for the extended magazine, +400eb smartchipped.</p><p>The 5/9 magazine cell is the five-round tube or nine rounds with the four-round extension (which cannot be used with the quick-change replaceable tubes). Blackhand's Street Weapons p.22 (PDF idx 23), citing [Corpbook 3], prints the concealability cell as J/N (the folding-stock model hides under a longcoat).</p>",
+    "cost": 400,
+    "weight": 0,
+    "equipped": false,
+    "source": "Corpbook 3 p.30",
+    "lastOwnerId": "",
+    "weaponType": "Shotgun",
+    "accuracy": 0,
+    "concealability": "ConcealLongcoat",
+    "availability": "Common",
+    "ammoType": "12ga",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "4D6 (00)",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 5,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Standard",
+    "range": 50,
+    "attackType": "Shotgun",
+    "attackSkill": "Rifle"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20600000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Corpbook 3 p.30"
+      },
+      "manufacturer": "Mustang Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!XbfQ9k9e3OxqnnPf"
+}

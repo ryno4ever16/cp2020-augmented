@@ -1,0 +1,69 @@
+{
+  "_id": "F5ayEItTjF1oRZHW",
+  "name": "Sci Fi Starrior 4",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Blaster copy from a 20th century movie called Star Trek Wars.",
+    "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E 9mm 12 2 UR, $60. SoF's polymer one-shot table has NO damage and NO range column, and Blackhand's Street Weapons does not reprint this weapon.</p><p>Damage 2D6+1 = the printed 9mm value in Neo Tribes, Pacific Rim p.77 and Blackhand's p.10-12; range 50m from the sibling polymer one-shots in Blackhand's p.10-12. Both are derivations from other RTG books, not printed in SoF.</p>",
+    "cost": 60,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.47",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Excellent",
+    "ammoType": "9mm",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 12,
+    "rof": 2,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "Unreliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20800000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.47"
+      },
+      "manufacturer": "",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!F5ayEItTjF1oRZHW"
+}

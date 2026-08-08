@@ -1,0 +1,69 @@
+{
+  "_id": "HlkfnZsne7tS3pnG",
+  "name": "Budget Arms C-41",
+  "type": "weapon",
+  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "system": {
+    "flavor": "Ten shot, high-caliber pistol with good reliability.",
+    "notes": "<p>Solo of Fortune p.44 (PDF idx 45) text layer prints: P 1 J E .41 (9mm) 10 3 VR. Price from the same article's prose, SoF p.46 (PDF idx 47): 'The basic pistol is $600.00'. The Nikon COT scope tested with it is a separate 4,000eb item (+3 WA).</p><p>Damage and range from Blackhand's Street Weapons p.11 (PDF idx 12), citing [Solo of Fortune]: P +1 J E 2D6+1 (.41 C) 10 3 VR 50M, 600eb.</p>",
+    "cost": 600,
+    "weight": 0,
+    "equipped": false,
+    "source": "Solo of Fortune p.44",
+    "lastOwnerId": "",
+    "weaponType": "Pistol",
+    "accuracy": 1,
+    "concealability": "ConcealJacket",
+    "availability": "Excellent",
+    "ammoType": ".41 C",
+    "ammoItemId": "",
+    "loadedAmmoId": "",
+    "loadedAmmo": {},
+    "damage": "2D6+1",
+    "rangeDamages": {
+      "pointBlank": "",
+      "close": "",
+      "medium": "",
+      "far": "",
+      "short": "",
+      "extreme": ""
+    },
+    "ap": false,
+    "isEdged": false,
+    "shotsLeft": 0,
+    "shots": 10,
+    "rof": 3,
+    "fullAutoCapable": false,
+    "burstCapable": false,
+    "reliability": "VeryReliable",
+    "range": 50,
+    "attackType": "",
+    "attackSkill": "Handgun"
+  },
+  "effects": [],
+  "folder": null,
+  "sort": 20700000,
+  "ownership": {
+    "default": 0
+  },
+  "flags": {
+    "cp2020-augmented": {
+      "bookMining2026-08": {
+        "batch": "scraped-pack no-twin queue (SCRAPED-PACK-STRATEGY.md 2a)",
+        "ledger": "CP2020-Checklists 05JUL26 Lee",
+        "tab": "Book Mining 2026-08",
+        "source": "Solo of Fortune p.44"
+      },
+      "manufacturer": "Budget Arms",
+      "importCategory": "weapon",
+      "importReview": {
+        "level": "claude-text-layer",
+        "weightSkimNotReviewed": true,
+        "ledger": "BOOK-MINING-2026-08",
+        "dirty": true
+      }
+    }
+  },
+  "_stats": {},
+  "_key": "!items!HlkfnZsne7tS3pnG"
+}
