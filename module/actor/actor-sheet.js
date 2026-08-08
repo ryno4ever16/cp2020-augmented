@@ -926,7 +926,26 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const effective = gearProviders.filter(g => !g.dualWieldOnly || fireOptions.dualWield);
           fireOptions.extraMod = (Number(fireOptions.extraMod) || 0) + gearModSum(fireOptions, effective);
         }
-        return item.__weaponRoll(fireOptions, targetTokens);
+        // Close the moment the shot ACTUALLY GOES OUT, rather than when the whole roll settles.
+        //
+        // WHY: the base dialog closes itself only after `onConfirm` resolves, and that chain awaits an
+        // options-save and then the roll's own chat card — two server round trips. The shot's visuals
+        // start inside the roll, so the dialog sat over the action it had just triggered for the whole
+        // of them. `cyberpunk2020.weaponFired` is emitted from inside the roll and ONLY for a shot that
+        // resolved, so closing on it is early enough to clear the view and late enough to be certain.
+        //
+        // The base's own rule is left intact: a roll that returns false never emits the event, so the
+        // dialog stays open for correction exactly as it does upstream, and the base's later close()
+        // on success is a no-op against an already-closed window. Melee, which emits no such event,
+        // simply keeps the upstream timing. The listener is removed either way.
+        const closeOnFire = Hooks.once("cyberpunk2020.weaponFired", () => {
+          try { dialog.close(); } catch (_e) { /* already closed by the base path */ }
+        });
+        try {
+          return await item.__weaponRoll(fireOptions, targetTokens);
+        } finally {
+          Hooks.off("cyberpunk2020.weaponFired", closeOnFire);
+        }
       }
     });
     dialog.render(true);
