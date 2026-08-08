@@ -7,7 +7,7 @@
  * own init/ready wiring shape: registration functions imported here and called
  * from Hooks.once('init'/'ready').
  */
-import { registerAugmentedSettings, combatAutomationEnabled, ipHideUI, applyCarolingianSkinClass } from "./settings.js";
+import { registerAugmentedSettings, combatAutomationEnabled, ipHideUI, applyCarolingianSkinClass, applyScrapedPackVisibility } from "./settings.js";
 import { registerAugmentedHandlebarsHelpers } from "./handlebars-helpers.js";
 import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerGasCloudBehavior, registerGasCloudVisibilityDefault } from "./combat/gas-cloud-behavior.js";
@@ -510,6 +510,13 @@ Hooks.once("ready", function () {
   // <body> class that gates the skin CSS in cp2020-augmented.css). Client-side cosmetic, so it
   // runs independently of the combat-automation gate below.
   applyCarolingianSkinClass();
+
+  // Player-facing exposure scoping for the base system's two bulk-scraped weapon compendiums
+  // (pistols-add / rifles-add): while `hideScrapedPacks` is on (default), their PLAYER/TRUSTED pack
+  // ownership is set to NONE so they leave the players' Compendium sidebar. Re-asserted here on every
+  // load by the ACTIVE GM client only (a world setting is a GM-only write); the prior ownership is
+  // snapshotted before the first change and restored when the setting is turned off. Self-guarded.
+  applyScrapedPackVisibility();
 
   // TEMPORARY seam shim: emit the weaponFired / skillRolled hooks the module relies on, but ONLY while
   // the base system lacks native emission (the seam PRs aren't merged). Self-disengages the instant the

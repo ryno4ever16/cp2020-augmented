@@ -23,6 +23,78 @@ export function applyCarolingianSkinClass() {
   } catch (e) { /* settings or DOM not ready yet */ }
 }
 
+/**
+ * The two base-system compendium packs the `hideScrapedPacks` setting covers. Both hold the 2021
+ * bulk scrape (726 unreviewed weapons); the shop's source-canonicity gate never reaches the
+ * Compendium sidebar, so at stock pack ownership every player can browse and drag them.
+ */
+const SCRAPED_PACK_IDS = ["cyberpunk2020.pistols-add", "cyberpunk2020.rifles-add"];
+
+/**
+ * Apply (or lift) the player-facing hide on the two scraped base-system packs, per the world
+ * `hideScrapedPacks` setting (default on). Called once on `ready` and again whenever the setting
+ * is toggled.
+ *
+ * MECHANISM — identical on core 13.350 and 14.365 (both build the `core.compendiumConfiguration`
+ * setting from the same `CompendiumCollection.CONFIG_FIELD`, whose `ownership` is a SchemaField of
+ * GAMEMASTER / ASSISTANT / TRUSTED / PLAYER → ownership-level strings): `pack.configure({ownership})`
+ * writes that pack's entry, and `pack.getUserLevel(user)` takes the MAX level over every role the
+ * user holds. Setting PLAYER and TRUSTED to "NONE" therefore puts a player below OBSERVER, which is
+ * exactly what `pack.visible` tests — so the pack leaves the Compendium sidebar for players. The
+ * GAMEMASTER / ASSISTANT entries are carried over untouched, so a GM's own access never changes.
+ * Core's own `_onConfigure` handler re-renders the sidebar on every client but does NOT re-derive the
+ * directory tree that filters on `pack.visible`, so an already-connected client needs the small
+ * updateSetting reconcile registered in registerAugmentedSettings() to drop the stale row.
+ *
+ * SNAPSHOT — the pack's RAW configured ownership (`pack.config.ownership`, undefined when the world
+ * has never configured that pack) is stamped into the world-scoped `hideScrapedPacksPrior` map
+ * BEFORE the first change, with `null` recording "there was no entry at all". Turning the setting
+ * off restores that exact value (a `null` stamp passes `undefined`, which makes `configure` DELETE
+ * the key so the pack falls back to its manifest ownership) and clears the stamp, so a later re-ON
+ * snapshots whatever the GM has chosen since.
+ *
+ * The write is made by the ACTIVE GM client only: `core.compendiumConfiguration` is a world setting
+ * (a player write would be rejected) and one writer avoids N GM clients racing the same map. The
+ * re-assert is idempotent — a pack already carrying PLAYER/TRUSTED "NONE" is not rewritten, so after
+ * the first application every later load is a no-op. Wrapped so a config hiccup cannot break ready.
+ */
+export async function applyScrapedPackVisibility() {
+  try {
+    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    const on = hideScrapedPacks();
+    const prior = { ...(game.settings.get(SCOPE, "hideScrapedPacksPrior") ?? {}) };
+    let priorChanged = false;
+
+    for (const id of SCRAPED_PACK_IDS) {
+      const pack = game.packs?.get(id);
+      if (!pack) continue;                                   // pack absent on this install
+      const configured = pack.config?.ownership;
+      if (on) {
+        if (configured?.PLAYER === "NONE" && configured?.TRUSTED === "NONE") continue;   // already hidden
+        if (!(id in prior)) {
+          prior[id] = configured ? foundry.utils.deepClone(configured) : null;
+          priorChanged = true;
+        }
+        // Carry every OTHER role's level through verbatim (GM/assistant access is untouched), then
+        // pin the two player-facing roles to NONE. Non-string levels are dropped rather than passed
+        // to the SchemaField, which only accepts the level KEYS.
+        const carry = {};
+        for (const [role, level] of Object.entries(pack.ownership ?? {})) {
+          if (role !== "PLAYER" && role !== "TRUSTED" && typeof level === "string") carry[role] = level;
+        }
+        await pack.configure({ ownership: { ...carry, TRUSTED: "NONE", PLAYER: "NONE" } });
+      } else if (id in prior) {
+        await pack.configure({ ownership: prior[id] ?? undefined });
+        delete prior[id];
+        priorChanged = true;
+      }
+    }
+    if (priorChanged) await game.settings.set(SCOPE, "hideScrapedPacksPrior", prior);
+  } catch (e) {
+    console.warn(`${SCOPE} | scraped-pack visibility not applied (compendium ownership left as found)`, e);
+  }
+}
+
 export function registerAugmentedSettings() {
   // Master toggle for the Augmented combat-automation layer (damage application,
   // saves, area effects, combat-tracker controls). On by default once the module is
@@ -76,6 +148,26 @@ export function registerAugmentedSettings() {
     name: "SETTINGS.CyberlimbRepairGmOnly",
     hint: "SETTINGS.CyberlimbRepairGmOnlyHint",
     scope: "world", config: true, type: Boolean, default: true
+  });
+
+  // --- hideScrapedPacks ---
+  // Player-facing exposure scoping for the base system's two bulk-scraped weapon packs
+  // (cyberpunk2020.pistols-add / rifles-add). Those packs ship PLAYER: OBSERVER, so every player can
+  // browse and drag their 726 unreviewed items straight from the Compendium sidebar — a surface the
+  // shop's source-canonicity gate does not cover. ON (default) sets PLAYER/TRUSTED ownership to NONE
+  // for those two packs only; OFF restores the ownership snapshotted before the first change. The GM's
+  // own access is never touched. See applyScrapedPackVisibility() above for the full mechanism.
+  game.settings.register(SCOPE, "hideScrapedPacks", {
+    name: "SETTINGS.HideScrapedPacks",
+    hint: "SETTINGS.HideScrapedPacksHint",
+    scope: "world", config: true, type: Boolean, default: true,
+    onChange: () => { applyScrapedPackVisibility(); }
+  });
+  // config:false companion store — the pack ownership as it stood BEFORE hideScrapedPacks first
+  // changed it, keyed by pack id ({} once nothing is hidden; a `null` entry means the world had no
+  // ownership configured for that pack at all). Written only by the active GM; never shown in the menu.
+  game.settings.register(SCOPE, "hideScrapedPacksPrior", {
+    scope: "world", config: false, type: Object, default: {},
   });
 
   // --- automationNoticeHide ---
@@ -783,6 +875,22 @@ export function registerAugmentedSettings() {
   // hooks: labelled section headers, contiguous reorder, and grey/disable of each master's sub-settings.
   Hooks.on("renderSettingsConfig", (app, html) => enhanceSettingsConfig(html));
 
+  // --- Compendium sidebar reconcile after a pack-ownership change (every client, read-only) ---
+  // Core's own compendiumConfiguration handler rebuilds the changed PACK's document tree and re-renders
+  // the sidebar, but it re-derives the DIRECTORY's tree (game.packs.initializeTree(), the pass that
+  // filters on pack.visible) only for a folder/sort change. So a client that was already connected when
+  // a pack's ownership changed keeps its stale row — rig-measured: after hideScrapedPacks was switched
+  // on mid-session the player's pack.visible read false while the row survived a plain re-render AND the
+  // pack still opened. Re-deriving the tree here fixes both directions. Purely client-local: it re-reads
+  // data the client already holds and writes nothing, so it is safe on a player client.
+  Hooks.on("updateSetting", (setting) => {
+    try {
+      if (setting?.key !== "core.compendiumConfiguration") return;
+      game.packs?.initializeTree?.();
+      ui.compendium?.render();
+    } catch (e) { /* sidebar or packs not ready */ }
+  });
+
   // --- Maximum Metal: hide the MM weapon compendium from the sidebar when MM is off ---
   Hooks.on("renderCompendiumDirectory", (app, html) => {
     const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
@@ -925,6 +1033,10 @@ export function mechDocumentAutomationEnabled() {
 /** Permission scoping — limb-recovery controls restricted to the GM (default ON; fail-closed). */
 export function cyberlimbRepairGmOnly() {
   try { return game.settings.get(SCOPE, "cyberlimbRepairGmOnly") !== false; } catch { return true; }
+}
+/** Permission scoping — hide the two bulk-scraped base packs from players (default ON; fail-closed). */
+export function hideScrapedPacks() {
+  try { return game.settings.get(SCOPE, "hideScrapedPacks") !== false; } catch { return true; }
 }
 
 /** Combat FX rail — muzzle flash light, shot audio, optional Sequencer sprites (default ON). */

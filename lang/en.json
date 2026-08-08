@@ -2129,6 +2129,8 @@
     "ShopShowSource": "Show item sources in the shop",
     "PlayersCanBuyAmmo": "Allow players to purchase ammunition",
     "PlayersCanBuyAmmoHint": "When off, only the GM can buy ammo; players are told they must purchase it at a shop and should ask the GM. Keeps ammo from appearing out of thin air.",
+    "HideScrapedPacks": "Hide the Pistols-Add / Rifles-Add compendiums from players",
+    "HideScrapedPacksHint": "On by default. The base system's Pistols-Add and Rifles-Add compendiums hold 726 weapons bulk-imported from fan sites in 2021; the data is unreviewed and largely broken (wrong weapon types, unresolvable calibers, placeholder availability), and the shop's source filtering does not reach the Compendium sidebar — so at stock settings any player can browse those two packs and drag items onto a sheet. While this is on, the module sets those two packs' player ownership to None and re-applies it each load; your own GM access is unchanged, and everything else in the sidebar is untouched. Turn it off to restore the pack permissions exactly as they stood before the module first changed them.",
     "CarolingianSkin": "Carolingian terminal sheet skin",
     "CarolingianSkinHint": "Give the character and item sheets a dark cyberpunk-terminal look (teal accents, bracketed tabs, prompt-style headers), adapted from DARKNEET's Cyberpunk Restyler and the Carolingian UI palette. Per-user; on by default. Turn it off for the standard light/dark sheet theme. Install the Carolingian UI module for more colour palettes and a matching interface theme.",
     "DamageArmorMode": "Damage: Armor Mode",

@@ -42,7 +42,7 @@ const SECTIONS = [
   ] },
   { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
-  { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly"] },
+  { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
   { key: "SectionDisplay", keys: ["carolingianSkin", "combatFxEnabled"] },
 ];
 
