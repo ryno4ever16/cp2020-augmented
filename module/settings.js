@@ -870,6 +870,19 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
+  // The shooter turns to look at what it is shooting at before the first round goes out. A world
+  // setting because it WRITES the token's rotation (the only part of the fx rail that persists
+  // anything), and tables whose tokens are top-down portraits with a baked-in facing will want it
+  // off. Read per shot, so it applies live.
+  game.settings.register(SCOPE, "faceTargetOnFire", {
+    name: "SETTINGS.FaceTargetOnFire",
+    hint: "SETTINGS.FaceTargetOnFireHint",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: true,
+  });
+
   // --- Native System Settings page organizer (section headers + reorder + master-gating) ---
   // One data-driven pass (module/settings-sections.js) replacing the per-feature MM + IP grey-out
   // hooks: labelled section headers, contiguous reorder, and grey/disable of each master's sub-settings.
@@ -1040,6 +1053,10 @@ export function hideScrapedPacks() {
 }
 
 /** Combat FX rail — muzzle flash light, shot audio, optional Sequencer sprites (default ON). */
+export function faceTargetOnFireEnabled() {
+  try { return game.settings.get(SCOPE, "faceTargetOnFire") !== false; } catch { return true; }
+}
+
 export function combatFxEnabled() {
   try { return game.settings.get(SCOPE, "combatFxEnabled") !== false; } catch { return true; }
 }
