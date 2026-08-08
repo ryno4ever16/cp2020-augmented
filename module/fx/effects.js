@@ -2,28 +2,30 @@
  * Combat FX adapter (Animation Rail, Unit A1) — the ONE seam between the combat pipeline and any
  * visual/audio effect. Everything the rail knows about outside effect engines lives in this file:
  * capability detection, the weapon-class → asset mapping table, and the small verbs the pipeline
- * calls (fxShot / fxMuzzleLight / sfx). A dead or renamed dependency is then one file to re-point.
+ * calls (fxShot / fxMuzzleFlash / sfx). A dead or renamed dependency is then one file to re-point.
  *
  * Dependency policy (design doc §0): Sequencer + JB2A are OPTIONAL. Sprite/tracer verbs silently
  * no-op when they are absent; the muzzle LIGHT and the AUDIO are native and always work.
  *
  * What runs where: `cyberpunk2020.weaponFired` fires only on the client that resolved the shot, so
  * this adapter reaches the other clients the same way the rest of the module does — the audio is
- * emitted with the broadcast flag, the muzzle light is a token-document write (the update itself
- * broadcasts), and Sequencer effects broadcast through Sequencer's own socket.
+ * emitted with the broadcast flag, the muzzle flash is announced on the module's socket channel and
+ * drawn locally by every client that receives it, and Sequencer effects broadcast through
+ * Sequencer's own socket.
  *
  * Numbers are the 60fps frame-study measurements recorded in the design doc §2 (per-shot cadence
  * ~80ms, flash envelope attack 1 frame → hold 2 → decay 2). They are named constants below so the
  * spec is editable in one place.
  */
 
-import { tokensOf, updateTokenDoc, enqueueApply } from "../mech/light.js";
+import { tokensOf } from "../mech/light.js";
 import { combatFxEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 
-/** Token flag holding the token's own light while a flash envelope is running (restore anchor). */
-const FLASH_FLAG = "fxBaseLight";
+/** Socket message announcing one flash. Same channel + type-dispatch shape as every other relay in
+ *  the module (cover chew, IP, missile flight): one `game.socket.on` per feature, filtered by type. */
+const MSG_FLASH = "fxMuzzleFlash";
 
 /** Where the shipped shot sounds live. Not a manifest entry — a plain asset directory. */
 const SOUND_DIR = `modules/${SCOPE}/sounds`;
@@ -34,26 +36,100 @@ const SOUND_EXTENSIONS = ["ogg", "mp3", "wav"];
 /** Interface-channel playback level for a shot sound (each client's own interface slider scales it). */
 const SHOT_VOLUME = 0.8;
 
-/** Per-shot cadence: 10 resolved shots in ~0.67s in the reference (design doc §2.1). */
+/**
+ * DEFAULT per-shot cadence: 10 resolved shots in ~0.67s in the reference (design doc §2.1). A class
+ * may override it with a `cadenceMs` of its own — see FX_CLASSES and classCadenceMs.
+ */
 export const SHOT_CADENCE_MS = 80;
 
 /** Upper bound on per-shot fan-out for one payload — a corrupt/huge shot count can't flood the rail. */
 export const MAX_FX_SHOTS = 30;
 
-/** Muzzle-flash light spec (design doc §2.3). Radii are in GRID SQUARES; token light fields are in
- *  scene distance units, so they are multiplied by the scene's grid distance at apply time. */
+/**
+ * How the flash is SHAPED — one of the three shapes muzzleSourceSpecs below can build.
+ *  - "cone"   frontal wedge toward the aimed-at point only (the shipped default)
+ *  - "omni"   one circle, no direction needed (what the first build did)
+ *  - "hybrid" the frontal wedge plus a faint circular spill
+ * A shot with no known aim has no direction to point a wedge at, so it falls back to "omni"
+ * whatever this says — see muzzleSourceSpecs.
+ *
+ * WHY THE DEFAULT IS THE PURE CONE. The reference frame settles it by measurement rather than by
+ * taste: the floor BEHIND the shooter, sampled in the 150°–210° arc at 150–400px out, reads a median
+ * luminance of 5.7/255 and a median red-minus-blue of −8 — that is unlit floor, not dimly lit floor.
+ * A circular spill of any strength would put light there. So the omni companion the previous default
+ * carried is off, and every knob it needs (spillLevel, the three shapes) is kept so the choice stays
+ * a one-word edit rather than a rebuild.
+ */
+export const MUZZLE_MODE = "cone";
+
+/**
+ * Muzzle-flash light spec (design doc §2.3) — THE one editable block for the flash.
+ *
+ * Radii are in GRID SQUARES and are multiplied by the scene's grid distance, then by the scene's
+ * pixels-per-distance-unit, at build time: a canvas light source takes its radii in PIXELS, where a
+ * token light document takes them in scene distance units.
+ *
+ * The envelope is counted in TRUE RENDER FRAMES, not milliseconds. The reference flash is one to
+ * three frames long, which is below the resolution of any timer this host offers — a setTimeout
+ * chain asked for 17ms and delivered whatever the frame budget happened to be. Counting the frames
+ * the renderer actually produces is both what the reference does and the only way the spec means
+ * anything. `nominalFrameMs` is used for REPORTING the envelope length only; nothing schedules on it.
+ *
+ * INTENSITY is what the envelope animates; the RADII are held constant for the whole flash. That is
+ * deliberate and it is the fix for the reported "radiates out visibly" read: a light whose radius
+ * grows and then shrinks draws a visible expanding ring, and at the ~1.3s the old document-write
+ * transport actually took, that ring was the whole effect. A flash that snaps to full size and fades
+ * in place cannot read that way at any frame rate, including a client running far below 60fps.
+ */
 export const MUZZLE_LIGHT = Object.freeze({
   color: "#ffae42",       // warm yellow-orange
   brightSquares: 1.5,
   dimSquares: 3,
-  alpha: 0.5,
-  frameMs: 17,            // one frame at 60fps
+  alpha: 0.5,             // colour intensity at full
+  luminosity: 0.5,        // illumination strength at full
+  nominalFrameMs: 17,     // one frame at 60fps — reporting only, nothing is scheduled on it
   attackFrames: 1,
   holdFrames: 2,
   decayFrames: 2,
-  attackLevel: 0.6,       // ramp-in fraction of the held values
-  decayLevel: 0.4,        // fall-off fraction of the held values
+  attackLevel: 0.6,       // intensity of the ramp-in frame(s), as a fraction of the held value
+  decayLevel: 0.4,        // intensity of the final fall-off frame, as a fraction of the held value
+  coneDegrees: 110,       // the frontal wedge — see the note below for where the number comes from
+  spillLevel: 0.35,       // hybrid mode only: the circular companion's intensity, as a fraction
 });
+
+/**
+ * WHERE coneDegrees COMES FROM, and what could NOT be measured (recorded so the number is not read
+ * as more precise than it is).
+ *
+ * NOT measurable from the reference frame: the light cone's own angle. The reference is a single
+ * still of a scene that carries its own ambient lighting, and there is no unlit control frame to
+ * difference against — sampling brightness by angle around the muzzle returns the SCENE's geometry
+ * (a lit wall band above, a second token to the side), not the flash's contribution. Reporting a
+ * measured light angle off that image would be inventing a number.
+ *
+ * What the frame DOES measure, on the flash-attributable pixels alone (warm and bright, with the UI
+ * chrome and the two tokens masked out):
+ *   - the starburst's ray fan, 80–150px out from the muzzle, spans −24°…+33° → about 45–55° across
+ *   - the mote spray, 150–340px out, spans −18°…+16° → about 34° across
+ *   - behind the shooter: unlit (the numbers in the MUZZLE_MODE note above)
+ *
+ * So the constraints on the light are: strictly wider than the sprite fan it is supposed to be
+ * illuminating BEYOND (or the pool just traces the sprite and reads as part of it), and narrow enough
+ * that the rear stays black by a clear margin. 110° is ~2.3× the measured ray fan and ~3× the mote
+ * spray, and puts the wedge edges 55° off the aim line — still 35° short of the shooter's own flanks,
+ * so an imprecise aim cannot leak light behind them. It also sits inside the 90–120° band the reported
+ * look was described in. Tune-by-eye knob; the value is one line.
+ */
+
+/**
+ * Hard stop for a flash whose per-frame driver stops getting frames. A browser suspends the renderer
+ * on a hidden tab, and a client whose renderer is suspended mid-flash would otherwise keep a source
+ * in the lighting collection indefinitely — a token permanently lit, which is the one failure mode
+ * this transport must not reintroduce. Enforced from a TIMER as well as from the frame driver,
+ * because a stalled renderer is exactly the case where the frame driver cannot enforce anything.
+ * Well clear of the envelope even on a client rendering at a few frames per second.
+ */
+export const MUZZLE_MAX_MS = 2000;
 
 /** Miss divergence for the tracer (design doc §2.4): angle offset and how far short/wide it lands. */
 export const MISS_SPREAD_RAD = 0.209;   // ≈12°
@@ -61,16 +137,230 @@ export const MISS_REACH_MIN = 0.6;
 export const MISS_REACH_MAX = 1.15;
 
 /**
+ * How the MUZZLE SPRITE is drawn — the block the "too large / a plume of smoke and fire" report
+ * changed. Read with the size fields on the class rows below.
+ *
+ * WHAT THE ASSET ACTUALLY IS (read off the installed free tier, not assumed): the tier's one
+ * muzzle-flash family is `MuzzleFlashSingle01_01_Regular_Yellow_600x300.webm`, declaring a 100px
+ * design grid — so played untouched it draws SIX GRID SQUARES wide, and at the previous build's
+ * `scale: 0.7` it drew 4.2 squares. That alone is the size complaint. The shape complaint is the
+ * other half and it is in the ANIMATION: photographed frame by frame on the rig, the clip opens as a
+ * compact forward lance and then develops into two billowing fire-and-smoke clouds that dwarf the
+ * lance. That later phase IS the reported plume, and no amount of scaling removes it — scaled down it
+ * is simply a small plume. So the fix is two-part: SIZE the sprite in grid units (a spec, the same
+ * idiom the pellet dash uses) and TRIM the clip to its opening.
+ *
+ *  - `endMs` — how much of the clip plays, in CLIP milliseconds. MEASURED, not guessed: the clip runs
+ *    0.833s (read off the installed file), the lance occupies roughly its first 0.10s, and the clouds
+ *    own the rest. 110ms keeps the whole lance, stops before the first cloud, and lands within a few
+ *    milliseconds of the native flash light's own envelope (muzzleEnvelopeDurationMs, 85ms) — so the
+ *    sprite and the light now go out together instead of the sprite billowing on for another 0.7s.
+ *    ⚠ APPLIED AS A TIME RANGE, and that is not interchangeable with the percentage form. The engine's
+ *    `endTimePerc` was tried first and MEASURED TO DO NOTHING on this build: timing how long the effect
+ *    stayed in the engine's own list gave 1752ms with the percentage trim against 1634ms untrimmed,
+ *    i.e. no cut at all, while a time range gave 861ms — the ~770ms saving a 833s→110ms cut predicts.
+ *    The photographs said the same thing before the timing did: the trimmed-away plume was still in
+ *    them. Do not swap this back to a percentage without re-measuring.
+ *  - `edgeFraction` — how far along the aim line the sprite is planted, as a fraction of the shooter
+ *    token's own width, so a bigger token's muzzle sits at ITS edge rather than at a fixed distance.
+ *    The reference puts the flash at the token's forward edge, not at its centre, and a sprite drawn
+ *    from the centre reads as a flash coming out of the shooter's chest.
+ */
+export const MUZZLE_SPRITE = Object.freeze({
+  endMs: 110,
+  edgeFraction: 0.5,
+});
+
+/**
+ * The SPIKY half of the starburst, drawn on top of the aimed lance — optional per class (`spark`).
+ *
+ * The honest finding behind this: the free tier has NO directional spiky starburst. Its muzzle family
+ * is the smooth lance above; its spiky stars (the `impact` family) are RADIAL and carry a thin
+ * shockwave ring. The reference's flash is both — a forward-biased fan of thin rays, measured at
+ * −24°…+33° about the aim line, over a white core. Neither asset delivers that alone, so the shipped
+ * flash is the aimed lance for the direction plus a small radial star for the spikes, planted at the
+ * same muzzle point where the star's rear rays fall on the shooter token itself — which is what the
+ * reference shows too. `impact.006.yellow` is the chosen star: white core, thin yellow rays, the
+ * smallest ring of the yellow impacts on the tier.
+ *
+ * A class that omits `spark` gets the lance alone; setting the key to something the tier does not
+ * carry degrades to the lance alone as well (fxDbEntryExists gates it).
+ *
+ * NO TRIM on this one, unlike the lance: the clip is 0.267s end to end (measured off the installed
+ * file) and its rays only form in the back half, so trimming it is trimming the spikes off. The lance
+ * is trimmed because its clip is three times longer and its tail is the plume; this one has no tail.
+ */
+export const MUZZLE_SPARK = Object.freeze({
+  key: "jb2a.impact.006.yellow",
+  squares: 0.8,
+});
+
+/**
+ * The MOTE SPRAY — the scatter of small hot specks thrown down-range, drawn ONCE PER BURST and only
+ * for a multi-round payload. The geometry is a property of a muzzle, not of a particular gun, so it
+ * lives here as one spec block; only the COUNT is a per-class field (`motes`), because the number of
+ * specks is the part a bore size changes.
+ *
+ * Every number is off the reference frame (flash-attributable pixels, chrome masked):
+ *  - `spreadRad` 0.30 (≈17° half-angle) — the mote field measured −18°…+16° about the aim line, which
+ *    is a good deal TIGHTER than the miss divergence and tighter than the ray fan; the specks follow
+ *    the round, they do not spray sideways.
+ *  - `nearSquares` / `farSquares` — the specks were found between 100 and 340px of a 165px grid, so
+ *    from about 0.6 to about 2.1 squares out. Each mote picks its own distance in that band, which is
+ *    what makes the group read as a scatter at mixed depths rather than as an arc.
+ *  - `sizeSquares` 0.14 — the specks measured 4–7px on that grid. The asset is the same star used for
+ *    the spikes; at this size only its core survives, which is exactly a speck.
+ *  - `travelMinMs` / `travelMaxMs` — each mote crosses in its own time, so they do not arrive as a
+ *    rank. Both are under a burst's own length, so the spray is spent while the burst is still firing.
+ */
+export const MUZZLE_MOTES = Object.freeze({
+  key: "jb2a.impact.006.yellow",
+  sizeSquares: 0.14,
+  spreadRad: 0.30,
+  nearSquares: 0.6,
+  farSquares: 2.1,
+  travelMinMs: 120,
+  travelMaxMs: 260,
+});
+
+/**
+ * The SMOKE WISP — one small puff at the muzzle, angled along the aim, drawn ONCE PER BURST and only
+ * for a multi-round payload. Width is the per-class field (`smokeSquares`); everything else is a
+ * property of the asset and of the burst.
+ *
+ * ⚠ SIZE IS THE THING TO GET RIGHT HERE, and the first values shipped were wrong: at 1.4 squares the
+ * puff photographed as a large tangled cloud filling the space between shooter and target — a second
+ * effect competing with the shot rather than a wisp beside it. The reference's wisp measures about
+ * 30x25px on its 165px grid, i.e. under a fifth of a square. The per-class widths below are a
+ * compromise on that: appreciably under half a square so it reads as a wisp at the muzzle, but not so
+ * small that the asset's own detail disappears into a smudge. Opacity is held low for the same reason
+ * — it is meant to be noticed second, after the flash.
+ *
+ * `key` is the tier's SIDE puff (a directional asset — it drifts one way), which is what lets it
+ * carry an aim at all; the centred puff in the same family has no direction to rotate. LIFETIME is
+ * asked to be the burst's own length (shots × cadence) so the wisp is still there between rounds and
+ * gone shortly after the last one, clamped at both ends: `minMs` so a two-round burst still leaves
+ * something visible, `maxMs` so a thirty-round payload does not park smoke on the map.
+ */
+export const MUZZLE_SMOKE = Object.freeze({
+  key: "jb2a.smoke.puff.side.grey",
+  minMs: 700,
+  maxMs: 2600,
+  fadeOutMs: 450,
+  opacity: 0.35,
+});
+
+/**
+ * The TRACER COLOUR SHIFT — how a class's tracer is pushed from the asset's orange toward the
+ * reference's yellow-near-the-head-fading-to-white comet. Optional per class (`tracerColor`).
+ *
+ * ⚠ THE FINDING THAT PICKED THE MECHANISM, recorded because the obvious lever is the wrong one:
+ * Sequencer's `tint` MULTIPLIES the asset's own colours, so tinting an orange asset with a pale
+ * yellow CANNOT add white — photographed side by side on the rig, `#ffe9a0` and `#fff6d0` both came
+ * back MORE saturated orange than the untinted control, i.e. the opposite of the asked-for shift. A
+ * ColorMatrix filter rotates hue and removes saturation instead, which is the operation that actually
+ * moves orange toward yellow and then toward white. The values below are the ones that read right in
+ * that comparison: the rays go yellow while the head's core stays white. A stronger setting
+ * (hue 25 / saturate −0.6) washed the whole bolt out and was rejected.
+ *
+ * The shell class deliberately carries NO entry — its pellets are a settled look and this is a
+ * per-class field precisely so that stays untouched.
+ */
+export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness: 1.15 });
+
+/**
  * The mapping table: our weapon CLASS → Sequencer database keys + our sound basename + options.
  * Database KEYS, never file paths — a key resolves on whichever JB2A tier the user installed, and a
  * key the installed tier lacks is skipped instead of 404ing (see fxDbEntryExists).
+ *
+ * Every key here is chosen from what the FREE asset tier actually delivers (verified against a real
+ * install), so the sprites appear for a user who installed nothing beyond the free module:
+ *  - muzzle: the free tier carries exactly ONE muzzle-flash family, and it is labelled yellow — there
+ *    is no orange variant below the paid tier. The key holds two interchangeable files, so the engine
+ *    picks between them per play and a burst does not repeat one frame. The warm-orange cast a viewer
+ *    reads comes from the native muzzle LIGHT (MUZZLE_LIGHT.color), which runs with or without any
+ *    asset module, so the yellow sprite sits inside an orange pool rather than reading as a colour
+ *    mismatch. Weapon weight is carried by `muzzleSquares` — the DRAWN WIDTH in grid units, not a
+ *    scale factor — because one family is all the tier has and its size is the difference a viewer
+ *    can see. Sizing in grid units rather than by `scale` (which is what the previous build used) is
+ *    what makes the number a spec: it is the same fraction of a square on any scene.
+ *  - tracer: bullet 01 (thin) for the light classes, bullet 02 (heavier, brighter head) for rifle and
+ *    up. Both are delivered in orange free; the tier's other bullet entries are blue, which would read
+ *    as an energy weapon rather than a slug.
+ *
+ * OPTIONAL per-class fields — a class that omits one simply does not get that treatment, so the table
+ * stays a flat readable row per class and no branch anywhere names a specific class:
+ *  - `pellets` / `spreadRad`: draw the round as a FAN of `pellets` tracers spread over a cone of
+ *    half-angle `spreadRad` instead of one bolt (see pelletEndpoints). Only the shell class carries
+ *    them: a shell round IS a spread of projectiles, and one bolt drew it identically to a rifle.
+ *  - `dashSquares` / `dashMs`: draw each of those tracers as a SHORT SPRITE THAT TRAVELS the shot line
+ *    rather than as a full-length streak painted across it. See the shell-class note below and the
+ *    tracer branch in fxShot — a class without `dashSquares` keeps the painted streak untouched.
+ *  - `cadenceMs`: the class's own spacing between rounds of one automatic payload, overriding
+ *    SHOT_CADENCE_MS. See classCadenceMs.
+ *  - `soundBurst`: a SECOND recording of the same weapon, played when the payload is more than one
+ *    round so a string of rounds is not one waveform repeated. See shotSoundSrc.
+ *  - `spark`: draw the small radial star (MUZZLE_SPARK) over the aimed lance, for the spiky read.
+ *  - `tracerColor`: push this class's tracer toward yellow-then-white with the TRACER_COLOR matrix.
+ *  - `motes` / `smokeSquares`: the MULTI-ROUND-ONLY treatments — a spray of `motes` specks down the
+ *    firing cone and one smoke wisp `smokeSquares` wide at the muzzle, both drawn ONCE PER BURST.
+ *    A class that omits either simply does not get it, and NEITHER is drawn for a single-round
+ *    payload whatever the row says: the gate is the payload's own round count, read in fxWeaponFired,
+ *    because "was this automatic fire" is a property of the shot and not of the weapon. That matches
+ *    the reference, where the automatic weapon threw specks and smoke and the semi-automatic one in
+ *    the same scene threw neither.
+ *
+ * SHELL-CLASS NUMBERS (chosen here, tuned by eye on the rig — see the eyes-on record):
+ *  - `pellets: 6` — enough to read as a spread rather than a doubled bolt. It was 4 while each pellet
+ *    was a full-length streak, where more would have read as a wall; a short travelling dash is a much
+ *    smaller mark on the canvas, so the count can carry the "spread" read that the length used to.
+ *    An EVEN count is deliberate: pelletEndpoints spaces the offsets across the whole cone, so an even
+ *    count leaves no pellet sitting exactly on the aim line and the group cannot read as "one bolt
+ *    plus strays". A burst stays bounded — the fan-out caps at MAX_FX_SHOTS units, so the worst case
+ *    is MAX_FX_SHOTS × pellets tracers.
+ *  - `dashSquares: 1` — the drawn WIDTH of one pellet's sprite, one grid square, height following the
+ *    asset's own aspect (it is sized in grid units, so it is the same fraction of a square on any
+ *    scene: measured 100×40px on a 100px grid, against the rifle bolt's 800×200px on the same shot).
+ *    This is the answer to "the projectiles read as standard bullets": the previous build stretched
+ *    the same asset the rifle uses across the entire shooter→target line, so a shell pellet and a
+ *    rifle round were the same mark at the same length and only their count differed. An eighth of
+ *    the rifle's drawn length is a difference visible in one frame, without needing a second asset
+ *    family — the free tier has only the one.
+ *    ⚠ The NUMBER is bigger than the visible slug, and deliberately so: the asset is a bullet with a
+ *    trail animating ACROSS its own frame, so the lit part is roughly a fifth of the frame's width.
+ *    Sized at half a square (the first value tried) the slug was a few pixels and read as dirt on the
+ *    screen; at one square it is a compact bright slug with a short tail. Checked by eye against
+ *    0.5 / 1 / 1.5 / 2.5 side by side, since no measurement of the FRAME answers how big the lit part
+ *    looks.
+ *  - `dashMs: 150` — how long a pellet takes to cross, whatever the range. Under the class's own
+ *    cadence below, so one discharge's pellets have landed before the next round leaves the muzzle;
+ *    that is what keeps an automatic burst reading as separate discharges rather than a moving stream.
+ *  - `cadenceMs: 180` — see classCadenceMs for why this number.
+ *  - `spreadRad: 0.07` (≈4°) — the half-angle of the HIT cone. Deliberately far tighter than the miss
+ *    divergence (MISS_SPREAD_RAD, ≈12°): a hit has to CONVERGE on the target, and at the ranges a
+ *    battle map actually spans (roughly 4–12 grid squares) this puts the outermost pellet 0.28–0.84
+ *    squares off the aim point — visibly a cone, still landing on a one-square target. A MISS reuses
+ *    the wide miss divergence per pellet instead, so a missed shell splays wide and lands at mixed
+ *    depths rather than fanning neatly past the target.
+ *  - `muzzleSquares: 1.9` — heavier than the rifle's 1.6 so the blast reads as a bigger bore, still
+ *    under the heavy class's 2.1 so the largest flash on the table remains the largest weapon on it.
+ *    (This is the MUZZLE sprite's drawn width; the tracer takes its size from `dashSquares` instead,
+ *    so the two are independent.)
+ *  - `tracer: bullet 01` — the THIN variant, where the rifle takes the heavy 02.
+ *  - NO `tracerColor` — the shell's pellets are a settled look; the colour shift is for the classes
+ *    that draw a single comet.
+ *
+ * MUZZLE SIZES (all five rows): the reference's flash reaches about 0.6 of a grid square forward of
+ * the muzzle. Drawn width 1.6 puts the rifle's lance at roughly that reach, which is where the rifle
+ * row sits; the others are stepped off it by bore. Against the previous build these are a 2.5×–4×
+ * reduction (`scale: 0.7` drew 4.2 squares), which is the reported "too large" answered by value.
  */
 export const FX_CLASSES = Object.freeze({
-  pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.01.orange", tracer: "jb2a.bullet.01.orange", scale: 0.5 },
-  smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.01.orange", tracer: "jb2a.bullet.01.orange", scale: 0.5 },
-  rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.01.orange", tracer: "jb2a.bullet.02.orange", scale: 0.7 },
-  shotgun: { sound: "shot-shotgun", muzzle: "jb2a.muzzle_flash.01.orange", tracer: "jb2a.bullet.02.orange", scale: 0.7 },
-  heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.01.orange", tracer: "jb2a.bullet.02.orange", scale: 0.9 },
+  pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, spark: true, motes: 8,  smokeSquares: 0.4 },
+  smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, spark: true, motes: 12, smokeSquares: 0.45 },
+  rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, spark: true, motes: 13, smokeSquares: 0.5 },
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", muzzleSquares: 1.9, spark: true, motes: 10, smokeSquares: 0.6, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
+  heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, spark: true, motes: 16, smokeSquares: 0.65 },
 });
 
 /**
@@ -88,6 +378,34 @@ export const WEAPON_TYPE_TO_CLASS = Object.freeze({
   shotgun: "shotgun",
   heavy: "heavy",
 });
+
+/**
+ * The spacing between rounds of one automatic payload for a class — its own `cadenceMs` where the
+ * table gives it one, otherwise the default. Pure, and read once per payload, so the audio, the pellet
+ * fan and the flash restart all move together: there is exactly ONE wait in the fan-out loop and every
+ * per-round effect starts after it (see fxWeaponFired).
+ *
+ * WHY A CLASS NEEDS ITS OWN: the default 80ms is the rate the reference footage shows for a machine
+ * gun, and at that spacing ten rounds are one continuous event — which is right for a machine gun and
+ * wrong for a shell. It was reported as "a continuous hail" where "distinct bursts" were expected, and
+ * the cadence is the cause: the flash envelope is muzzleEnvelopeFrames() long (five frames, ~85ms at
+ * the reference rate), so a round arriving every 80ms restarts the envelope BEFORE the previous one
+ * has finished and the light never goes out. The same holds for the ear — each round's report starts
+ * before the last one's transient has passed.
+ *
+ * WHY 180ms FOR THE SHELL CLASS: it is inside the range real automatic shotguns cycle at — 300 rounds
+ * per minute is 200ms and 360 is 167ms, the two rates commonly quoted for the automatic 12-gauge
+ * designs — so 180ms (333 rpm) sits between them rather than being invented. What makes it the right
+ * number HERE, though, is mechanical rather than historical: it is more than twice the flash envelope,
+ * so the light is fully out for ~95ms between rounds and each discharge is separated by darkness
+ * instead of blending into the next; and it is longer than the shell class's `dashMs`, so one
+ * discharge's pellets have landed before the following round leaves the muzzle. Both of those are
+ * checkable against the other constants in this file rather than against taste.
+ */
+export function classCadenceMs(cls) {
+  const own = Number(FX_CLASSES[cls]?.cadenceMs);
+  return Number.isFinite(own) && own > 0 ? own : SHOT_CADENCE_MS;
+}
 
 /* ══════════════════════════ Capability detection ══════════════════════════ */
 
@@ -173,27 +491,73 @@ export function fxSoundsPrimed() {
   return _soundManifestPrimed;
 }
 
-/** The playable source path for a weapon class, or null when nothing is playable for it. */
-export function shotSoundSrc(cls) {
-  const entry = FX_CLASSES[cls];
-  if (!entry) return null;
+/** The first delivered extension for a basename, or null when the listing says none is delivered. */
+function _deliveredSrc(base) {
+  if (!base) return null;
   if (_soundManifest) {
     for (const ext of SOUND_EXTENSIONS) {
-      const name = `${entry.sound}.${ext}`;
+      const name = `${base}.${ext}`;
       if (_soundManifest.has(name)) return `${SOUND_DIR}/${name}`;
     }
     return null;
   }
-  return `${SOUND_DIR}/${entry.sound}.${SOUND_EXTENSIONS[0]}`;
+  return `${SOUND_DIR}/${base}.${SOUND_EXTENSIONS[0]}`;
+}
+
+/**
+ * The playable source path for a weapon class, or null when nothing is playable for it.
+ *
+ * `burst` selects the class's ALTERNATE asset where it carries one (`soundBurst`). Why a class gets
+ * two assets rather than one — the reason CHANGED once the cadence became per-class, and the old one
+ * is recorded here because it is what the field was originally for:
+ *
+ * ORIGINALLY it was about OVERLAP. At the 80ms default spacing a report that stays audible for a third
+ * of a second has five copies of itself running at once, and the pile-up is what a listener hears
+ * instead of five shots — so the alternate asset was simply a shorter one. That job is done: measured
+ * on the shipped clips, the shell class now spaces its rounds 180ms apart (classCadenceMs) and its
+ * report is audible for 0.22s, so barely more than one copy is ever sounding. Nothing overlaps.
+ *
+ * WHAT IT IS FOR NOW is repetition. Ten rounds fired from one asset are ten copies of one identical
+ * waveform, which phase into a single tone rather than reading as ten discharges; the ordinary fix is
+ * a per-round playback-rate wobble, and the note on sfx() below records why this host cannot deliver
+ * one to every client. A SECOND recording of the same weapon is the variation that is available: a
+ * multi-round payload plays it, a single shot keeps the full-bodied one. So the alternate is chosen
+ * for being a different report of the same character — NOT for being shorter, which it no longer needs
+ * to be.
+ *
+ * The alternate is only used when the listing says it is actually delivered — a class whose burst asset
+ * is missing falls back to its ordinary one rather than going silent.
+ */
+export function shotSoundSrc(cls, { burst = false } = {}) {
+  const entry = FX_CLASSES[cls];
+  if (!entry) return null;
+  if (burst && entry.soundBurst) {
+    const alt = _deliveredSrc(entry.soundBurst);
+    if (alt) return alt;
+  }
+  return _deliveredSrc(entry.sound);
 }
 
 /**
  * Play one shot sound for every client. Native audio, no dependency: the interface channel is used
  * so each player's own interface-volume slider governs it, and the broadcast flag reaches the
  * clients the weaponFired hook never ran on. Returns the Sound (or null when nothing was played).
+ *
+ * PER-SHOT PITCH VARIATION IS NOT AVAILABLE HERE, and the finding is recorded rather than worked
+ * around: varying the playback rate a few percent per round is the ordinary way to keep repeated
+ * copies of one clip from phasing into a single tone, but nothing in this host's audio layer carries
+ * a rate. Verified against the core sources on this install (Foundry 14, client/audio/): the word
+ * `playbackRate` and the word `detune` do not occur anywhere in that directory; a Sound's playback
+ * options are exactly {delay, duration, fade, loop, loopStart, loopEnd, offset, onended, volume}; and
+ * the broadcast path is narrower still — the receiving client handles `playAudio` by calling
+ * `game.audio.play(src, {volume, loop, context})`, so ANY extra field put on the emitted object is
+ * discarded on arrival. The underlying buffer node does expose a rate (it is a Web Audio node, and
+ * `Sound#sourceNode` is public), but poking it would vary the sound on the FIRING client only while
+ * every other client heard the unvaried version — a worse result than no variation at all. Making it
+ * uniform would take a bespoke socket channel of our own, which is not worth a de-phasing nicety.
  */
-export function sfx(cls, { volume = SHOT_VOLUME } = {}) {
-  const src = shotSoundSrc(cls);
+export function sfx(cls, { volume = SHOT_VOLUME, burst = false } = {}) {
+  const src = shotSoundSrc(cls, { burst });
   if (!src) return null;
   try {
     return foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, true);
@@ -203,130 +567,317 @@ export function sfx(cls, { volume = SHOT_VOLUME } = {}) {
   }
 }
 
-/* ══════════════════════════ Native muzzle light (keyframe envelope) ══════════════════════════ */
+/* ══════════════════ Native muzzle flash — a client-local transient light source ══════════════════ */
 
-/** Total envelope length in ms — attack + hold + decay frames at the measured frame length. */
-export function muzzleEnvelopeDurationMs() {
-  const m = MUZZLE_LIGHT;
-  return m.frameMs * (m.attackFrames + m.holdFrames + m.decayFrames);
+/**
+ * WHY THIS IS NOT A DOCUMENT WRITE (the defect this shape exists to fix).
+ *
+ * The first build ran the envelope by UPDATING THE SHOOTER'S TOKEN DOCUMENT once per keyframe. Every
+ * one of those is a server round trip that then broadcasts to every client, so the 85ms spec was
+ * delivered in ~1.3s of wall clock — long enough that a viewer watched the light bloom outward and
+ * fade, which is exactly what was reported. Nothing about the values was wrong; the TRANSPORT was.
+ *
+ * What replaces it: the flash is a light source this client builds, adds to the canvas lighting
+ * collection, drives from the render ticker, and destroys. NO document is written at any point, so
+ * there is no round trip, no broadcast of a token update, and nothing to restore if the client dies
+ * mid-flash — a source that is never persisted cannot be left behind. Every other client draws its
+ * own copy from one socket announcement (fxMuzzleFlash below), so latency moves only the instant the
+ * flash STARTS, never its length.
+ *
+ * What it keeps: it is a REAL light source, so walls and line of sight clip it exactly as they clip
+ * any other light (the source computes its own wall-constrained shape from its origin), and a lit
+ * room washes it out for free.
+ *
+ * v13/v14: the source class, its constructor, its `initialize`/`add`/`destroy` lifecycle, the data
+ * fields used below and the cone convention are IDENTICAL on both cores on this machine (read from
+ * the two shipped bundles, not from memory). The class is resolved through the config entry core
+ * itself uses, with the namespace path and the global as fallbacks.
+ */
+
+/** The light-source class this core exposes. Resolved the way core resolves it internally. */
+export function pointLightSourceClass() {
+  try {
+    return CONFIG?.Canvas?.lightSourceClass
+      ?? foundry?.canvas?.sources?.PointLightSource
+      ?? globalThis.PointLightSource
+      ?? null;
+  } catch (_e) {
+    return null;
+  }
+}
+
+/** The per-render-frame driver this core exposes. */
+function _ticker() {
+  return canvas?.app?.ticker ?? globalThis.PIXI?.Ticker?.shared ?? null;
 }
 
 /**
- * The flash envelope as keyframes, for a scene whose grid square is `gridDistance` distance units.
- * Pure — the rig keeper asserts these values directly, and the applier below just writes them.
- * Shape: [{ atMs, light:{ bright, dim, alpha, color, angle } }, …]; the caller restores afterwards.
+ * The intensity of each frame of the envelope, in order. Pure; the keeper asserts it by value.
+ *
+ * Attack frames sit at `attackLevel`, hold frames at full, and the decay frames RAMP from full down
+ * to `decayLevel` so the tail falls off instead of stepping to a plateau and switching off.
  */
-export function muzzleEnvelope(gridDistance = 1) {
+export function muzzleFrameLevels() {
+  const m = MUZZLE_LIGHT;
+  const levels = [];
+  for (let i = 0; i < m.attackFrames; i++) levels.push(m.attackLevel);
+  for (let i = 0; i < m.holdFrames; i++) levels.push(1);
+  for (let i = 1; i <= m.decayFrames; i++) {
+    levels.push(Number((1 + (m.decayLevel - 1) * (i / m.decayFrames)).toFixed(3)));
+  }
+  return levels;
+}
+
+/** How many render frames one flash lasts. */
+export function muzzleEnvelopeFrames() {
+  return muzzleFrameLevels().length;
+}
+
+/** What that many frames comes to on a client rendering at the reference rate. Reporting only. */
+export function muzzleEnvelopeDurationMs() {
+  return muzzleEnvelopeFrames() * MUZZLE_LIGHT.nominalFrameMs;
+}
+
+/**
+ * The light source(s) one flash is made of, at FULL intensity — one entry per source.
+ *
+ * Pure, so the three shapes are asserted by value rather than by eye. `aimRad` is the direction from
+ * the shooter to what it is aiming at, in canvas radians (atan2 of the delta), or null when the shot
+ * is pointed at nothing known.
+ *
+ * Radii come back in PIXELS: `gridDistance` is the scene's distance-per-square and `pixelsPerUnit`
+ * its pixels-per-distance-unit, which is what a canvas source wants (a token light DOCUMENT is the
+ * one that takes distance units).
+ *
+ * The wedge direction: core builds a limited-angle shape centred on `rotation + 90` degrees, so a
+ * wedge pointed along `aimRad` carries `rotation = degrees(aimRad) - 90`. That is the same
+ * conversion core applies to its own placeables.
+ *
+ * Mode fallback: a wedge needs a direction, so with no aim every mode resolves to the circle.
+ */
+export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad = null, mode = MUZZLE_MODE } = {}) {
   const m = MUZZLE_LIGHT;
   const grid = Number(gridDistance) > 0 ? Number(gridDistance) : 1;
-  const bright = m.brightSquares * grid;
-  const dim = m.dimSquares * grid;
-  const at = (level) => ({
-    bright: Number((bright * level).toFixed(3)),
-    dim: Number((dim * level).toFixed(3)),
+  const ppu = Number(pixelsPerUnit) > 0 ? Number(pixelsPerUnit) : 1;
+  const px = (squares) => Number((squares * grid * ppu).toFixed(3));
+  const bright = px(m.brightSquares);
+  const dim = px(m.dimSquares);
+  const shape = (Number.isFinite(aimRad) ? mode : "omni");
+  const rotation = Number.isFinite(aimRad) ? Number(((aimRad * 180) / Math.PI - 90).toFixed(3)) : 0;
+
+  const circle = (key, level) => ({
+    key, angle: 360, rotation: 0,
+    bright: key === "spill" ? 0 : bright,          // the companion glows, it does not light brightly
+    dim,
     alpha: Number((m.alpha * level).toFixed(3)),
-    color: m.color,
-    angle: 360,             // a flash is omnidirectional even on a token carrying a cone light
+    luminosity: Number((m.luminosity * level).toFixed(3)),
   });
-  return [
-    { atMs: 0, light: at(m.attackLevel) },
-    { atMs: m.frameMs * m.attackFrames, light: at(1) },
-    { atMs: m.frameMs * (m.attackFrames + m.holdFrames), light: at(m.decayLevel) },
-  ];
+  const wedge = () => ({
+    key: "cone", angle: m.coneDegrees, rotation,
+    bright, dim,
+    alpha: m.alpha,
+    luminosity: m.luminosity,
+  });
+
+  if (shape === "omni") return [circle("omni", 1)];
+  if (shape === "cone") return [wedge()];
+  return [wedge(), circle("spill", m.spillLevel)];
 }
+
+// Flashes currently drawn on THIS client, keyed by token id. One entry per token is the whole
+// concurrency story: a second shot from a token that is already flashing RESTARTS the running
+// envelope in place (frame counter back to zero, aim re-pointed) rather than adding a second set of
+// sources. At the automatic cadence — a shot every ~80ms against a ~5-frame envelope — that is what
+// produces the continuous flicker the reference shows, and it bounds a burst of any length to one
+// source set per shooter. Nothing here is persisted, so nothing here needs cleaning up on reload.
+const _flashes = new Map();
+
+/** Is a flash currently drawn for this token on this client? (Read by the keeper and diagnostics.) */
+export function flashInFlight(token) {
+  const id = typeof token === "string" ? token : (token?.document ?? token)?.id;
+  return !!id && _flashes.has(id);
+}
+
+/** How many flashes this client is drawing right now. */
+export function liveFlashCount() {
+  return _flashes.size;
+}
+
+// Capture seam: replaces the per-frame level list so a screenshot pass can hold a flash open long
+// enough for a slow software renderer to catch it. Null = the shipped envelope.
+let _levelsOverride = null;
+
+/** Test/capture seam: force the envelope's per-frame levels (null restores the shipped envelope). */
+export function _setFlashLevels(levels) {
+  _levelsOverride = Array.isArray(levels) && levels.length ? levels.slice() : null;
+  return _levelsOverride;
+}
+
+/**
+ * When the stalled-renderer deadline fires. The shipped envelope is a handful of frames, so the flat
+ * cap is orders of magnitude clear of it. A deliberately lengthened envelope (the capture seam) is
+ * given room proportional to the frames it asked for, or the cap meant to catch a stalled renderer
+ * would instead cut short a capture that is working exactly as intended.
+ */
+function _deadlineMs(levels) {
+  return _levelsOverride ? Math.max(MUZZLE_MAX_MS, levels.length * 200) : MUZZLE_MAX_MS;
+}
+
+function _endFlash(id) {
+  const state = _flashes.get(id);
+  if (!state) return;
+  _flashes.delete(id);
+  try { _ticker()?.remove(state.step); } catch (_e) { /* ticker already gone */ }
+  clearTimeout(state.deadline);
+  for (const source of state.sources) {
+    try { source.destroy(); } catch (_e) { /* already detached */ }
+  }
+  try { canvas?.perception?.update?.({ refreshLighting: true }); } catch (_e) { /* canvas torn down */ }
+}
+
+/** Drop every flash this client is drawing (scene change, or the rail being switched off). */
+export function clearFlashes() {
+  for (const id of [..._flashes.keys()]) _endFlash(id);
+}
+
+/**
+ * Draw one flash for a token ON THIS CLIENT. Returns true when a flash is now running for it.
+ *
+ * `tokenRef` may be an id (what the socket carries) or a token/placeable. `aim` is the canvas point
+ * the shot is pointed at, or null. A token that is not drawn on this client's canvas gets nothing —
+ * there is no lighting to affect — and a payload for a scene this client is not viewing is dropped.
+ */
+export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = MUZZLE_MODE } = {}) {
+  const SourceClass = pointLightSourceClass();
+  const ticker = _ticker();
+  if (!SourceClass || !ticker || !canvas?.ready) return false;
+  if (sceneId && canvas.scene?.id && sceneId !== canvas.scene.id) return false;
+
+  const id = typeof tokenRef === "string" ? tokenRef : (tokenRef?.document ?? tokenRef)?.id;
+  const placeable = id ? canvas.tokens?.get(id) : null;
+  if (!placeable) return false;
+
+  const origin = placeable.center ?? centerOf(placeable);
+  if (!origin) return false;
+  const aimRad = (aim && Number.isFinite(aim.x) && Number.isFinite(aim.y))
+    ? Math.atan2(aim.y - origin.y, aim.x - origin.x)
+    : null;
+
+  // Already flashing → restart the envelope in place and re-point it. One source set per token.
+  const running = _flashes.get(id);
+  if (running) {
+    running.levels = _levelsOverride ?? muzzleFrameLevels();
+    running.frame = 0;
+    running.startedAt = performance.now();
+    running.aimRad = aimRad;
+    // The restarted envelope gets its own deadline, or a burst would be cut off by the FIRST round's.
+    clearTimeout(running.deadline);
+    running.deadline = setTimeout(() => _endFlash(id), _deadlineMs(running.levels));
+    return true;
+  }
+
+  const dims = canvas.dimensions ?? {};
+  const ppu = Number(dims.distancePixels) || ((Number(dims.size) || 100) / (Number(dims.distance) || 1));
+  const specs = muzzleSourceSpecs({
+    gridDistance: Number(canvas.scene?.grid?.distance) || 1,
+    pixelsPerUnit: ppu, aimRad, mode,
+  });
+  const elevation = Number(placeable.document?.elevation) || 0;
+
+  const sources = [];
+  try {
+    for (const spec of specs) {
+      const source = new SourceClass({ sourceId: `${SCOPE}.flash.${id}.${spec.key}` });
+      source.initialize({
+        x: origin.x, y: origin.y, elevation,
+        dim: spec.dim, bright: spec.bright,
+        color: MUZZLE_LIGHT.color,
+        alpha: spec.alpha, luminosity: spec.luminosity,
+        angle: spec.angle, rotation: spec.rotation,
+        walls: true,          // the flash is clipped by walls and line of sight like any other light
+        vision: false,        // it lights the scene; it does not grant anyone sight
+        disabled: false,
+      });
+      source.add();
+      sources.push(source);
+    }
+  } catch (err) {
+    for (const s of sources) { try { s.destroy(); } catch (_e) { /* not attached */ } }
+    console.warn(`${SCOPE} | muzzle flash source failed`, err);
+    return false;
+  }
+
+  const state = {
+    sources, specs, aimRad,
+    levels: _levelsOverride ?? muzzleFrameLevels(),
+    frame: 0,
+    startedAt: performance.now(),
+    step: null,
+    deadline: null,
+  };
+
+  // One tick = one rendered frame. The envelope advances by frames because that is the unit the
+  // reference is specified in and the only one a renderer can actually honour; the wall-clock cap is
+  // a backstop for a client that stops rendering entirely (a backgrounded tab) rather than a timer.
+  state.step = () => {
+    const live = _flashes.get(id);
+    if (live !== state) return;
+    if (performance.now() - state.startedAt > _deadlineMs(state.levels)) { _endFlash(id); return; }
+    const level = state.levels[state.frame++];
+    if (level === undefined) { _endFlash(id); return; }
+    try {
+      for (let i = 0; i < state.sources.length; i++) {
+        const spec = state.specs[i];
+        state.sources[i].initialize({
+          alpha: Number((spec.alpha * level).toFixed(4)),
+          luminosity: Number((spec.luminosity * level).toFixed(4)),
+        });
+      }
+      canvas.perception.update({ refreshLighting: true });
+    } catch (err) {
+      console.warn(`${SCOPE} | muzzle flash frame failed`, err);
+      _endFlash(id);
+    }
+  };
+
+  _flashes.set(id, state);
+  ticker.add(state.step);
+  state.deadline = setTimeout(() => _endFlash(id), _deadlineMs(state.levels));
+  // The sources are already at full spec values, so the first drawn frame is a lit flash rather than
+  // a dark one waiting for the ticker; the driver takes over from the frame after.
+  try { canvas.perception.update({ refreshLighting: true }); } catch (_e) { /* canvas torn down */ }
+  return true;
+}
+
+/**
+ * Announce one flash to every client and draw it here.
+ *
+ * Fire-and-forget and synchronous: the emit is one datagram and the local draw is object
+ * construction, so this returns inside the same tick as the shot's audio. There is no permission
+ * question to answer — nothing is written — so a player firing a GM-owned token, or a GM firing
+ * anyone's, all take the identical path.
+ */
+export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MODE } = {}) {
+  const doc = shooterToken?.document ?? shooterToken;
+  const tokenId = typeof shooterToken === "string" ? shooterToken : doc?.id;
+  if (!tokenId) return false;
+  const sceneId = doc?.parent?.id ?? canvas?.scene?.id ?? null;
+  const aim = (aimPoint && Number.isFinite(aimPoint.x) && Number.isFinite(aimPoint.y))
+    ? { x: Math.round(aimPoint.x), y: Math.round(aimPoint.y) }
+    : null;
+  try {
+    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_FLASH, sceneId, tokenId, aim });
+  } catch (err) {
+    console.warn(`${SCOPE} | muzzle flash announce failed`, err);
+  }
+  return muzzleFlashLocal(tokenId, aim, { sceneId, mode });
+}
+
+/* ══════════════════════════ Sequencer verbs (optional-only) ══════════════════════════ */
 
 function _sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
-// Tokens with a flash envelope in flight. Each keyframe is a document write (a server round trip
-// broadcast to every client), so an automatic burst must not queue one envelope PER ROUND: the
-// backlog would outlive the burst, saturate the socket, and delay the per-shot audio timers that
-// carry the cadence a listener actually hears. A shot whose token is already flashing therefore
-// COALESCES into the running envelope — the light reads as a continuous flicker for the burst,
-// which is what the reference shows at this cadence, at a bounded write cost.
-const _flashing = new Set();
-
-/** Claim the flash slot for a token. Synchronous by contract: the fan-out claims before it queues,
- *  so the decision is made at fire time rather than when the queued job eventually runs. */
-export function claimFlash(token) {
-  const id = (token?.document ?? token)?.id;
-  if (!id || _flashing.has(id)) return false;
-  _flashing.add(id);
-  return true;
-}
-
-/** Release a claimed flash slot. Safe to call for a token that holds none. */
-export function releaseFlash(token) {
-  const id = (token?.document ?? token)?.id;
-  if (id) _flashing.delete(id);
-}
-
-/** Is a flash envelope in flight for this token? (Read for tests/diagnostics.) */
-export function flashInFlight(token) {
-  const id = (token?.document ?? token)?.id;
-  return !!id && _flashing.has(id);
-}
-
-/**
- * Run one flash envelope on a token, then restore the token's own light exactly.
- *
- * Permission model: this writes the SHOOTER'S OWN token document — the client that resolved the shot
- * is the shooter's owner in every path that reaches here (a player fires their own character, the GM
- * fires everyone else), so no relay and no AmbientLight creation is needed (players may not create
- * AmbientLight documents at all). A client that does not own the token skips the light silently
- * rather than throwing a permission error.
- *
- * The pre-flash light is snapshotted from `_source` (a complete plain object on every core) and also
- * parked in a token flag, so a client that dies mid-envelope leaves a restorable token rather than a
- * permanently lit one — the canvasReady sweep below picks it up. Writes go through the mech-engine
- * helpers (updateTokenDoc / enqueueApply) so a flash and a flashlight toggle can never interleave.
- */
-export async function fxMuzzleLight(token, { claimed = false } = {}) {
-  const doc = token?.document ?? token;
-  if (!doc?.id || !doc.parent) return false;
-  if (!doc.isOwner) { releaseFlash(doc); return false; }
-  // A caller that did not pre-claim (a direct verb call) claims here; either way the slot is held
-  // for the whole envelope and released once the token's own light is back.
-  if (!claimed && !claimFlash(doc)) return false;
-  const grid = Number(doc.parent?.grid?.distance) || 1;
-  const frames = muzzleEnvelope(grid);
-  const base = foundry.utils.deepClone(doc._source?.light ?? {});
-  try {
-    for (let i = 0; i < frames.length; i++) {
-      const patch = { light: { ...base, ...frames[i].light } };
-      if (i === 0) patch[`flags.${SCOPE}.${FLASH_FLAG}`] = base;
-      await updateTokenDoc(doc, patch);
-      const next = frames[i + 1];
-      await _sleep((next ? next.atMs : muzzleEnvelopeDurationMs()) - frames[i].atMs);
-    }
-  } catch (err) {
-    console.warn(`${SCOPE} | muzzle light envelope failed`, err);
-  }
-  try {
-    await updateTokenDoc(doc, { light: base, [`flags.${SCOPE}.-=${FLASH_FLAG}`]: null });
-  } catch (err) {
-    console.warn(`${SCOPE} | muzzle light restore failed`, err);
-  } finally {
-    releaseFlash(doc);
-  }
-  return true;
-}
-
-/** Restore any token still carrying a flash snapshot (a client that died mid-envelope). Owner-scoped. */
-export async function restoreStaleFlashLights(scene) {
-  for (const doc of scene?.tokens ?? []) {
-    try {
-      const base = doc.getFlag?.(SCOPE, FLASH_FLAG);
-      if (base === undefined || !doc.isOwner) continue;
-      await updateTokenDoc(doc, { light: base, [`flags.${SCOPE}.-=${FLASH_FLAG}`]: null });
-    } catch (err) {
-      console.warn(`${SCOPE} | stale flash-light restore failed`, err);
-    }
-  }
-}
-
-/* ══════════════════════════ Sequencer verbs (optional-only) ══════════════════════════ */
 
 /** Canvas centre of a placeable or a token document. */
 export function centerOf(token) {
@@ -354,34 +905,299 @@ export function missEndpoint(from, to, rng = Math.random) {
 }
 
 /**
- * One shot's visuals: the native muzzle light always, plus the Sequencer sprite + tracer when
- * Sequencer is active AND the installed asset tier actually carries the mapped database entries.
+ * Where each tracer of a FANNED round ends — one endpoint per pellet, for a class carrying `pellets`.
+ *
+ * A HIT fans by ANGLE about the aim line and keeps the aim distance, so the tracers converge on the
+ * aimed-at token: the offsets are spread EVENLY across the full cone (a 4-pellet fan lands at −1, −⅓,
+ * +⅓, +1 of `spreadRad`), which both reads as a cone rather than a random scatter and lets the values
+ * be asserted directly. An even count leaves no pellet exactly on the aim line, which is what keeps the
+ * fan from reading as "one bolt plus some strays".
+ *
+ * A MISS does not fan neatly — it reuses missEndpoint per pellet, so each tracer takes its own wide
+ * divergence AND its own reach and the group splays wide at mixed depths. That is the whole reason the
+ * miss machinery is called per pellet instead of being applied once to the group.
+ *
+ * Pure, and `rng` is injectable, so both branches are value-asserted rather than eyeballed.
+ * Returns [] when there is nothing to fan (no aim, or a class carrying no pellet count).
+ */
+export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = true, rng = Math.random } = {}) {
+  const n = Math.trunc(pellets);
+  if (!from || !to || !(n > 1)) return [];
+  if (!hit) return Array.from({ length: n }, () => missEndpoint(from, to, rng));
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const aim = Math.atan2(dy, dx);
+  return Array.from({ length: n }, (_v, i) => {
+    const offset = spreadRad * ((2 * i) / (n - 1) - 1);   // −1 … +1 of the cone, evenly spaced
+    return { x: from.x + Math.cos(aim + offset) * dist, y: from.y + Math.sin(aim + offset) * dist };
+  });
+}
+
+/**
+ * The point a shot LEAVES from: `offsetPx` along the line from the shooter's centre toward what it is
+ * aiming at. Pure.
+ *
+ * WHY THIS EXISTS: every sprite used to be planted on the shooter's CENTRE, which draws the flash out
+ * of the middle of the token. The reference puts it at the forward EDGE. With no aim there is no line
+ * to walk along, so the centre is returned unchanged — the same fallback the wedge takes.
+ */
+export function muzzlePoint(from, to, offsetPx = 0) {
+  if (!from) return null;
+  if (!to || !(offsetPx > 0)) return { x: from.x, y: from.y };
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy);
+  if (!dist) return { x: from.x, y: from.y };
+  return { x: from.x + (dx / dist) * offsetPx, y: from.y + (dy / dist) * offsetPx };
+}
+
+/** How far a token's edge is from its own centre, in pixels — a token's own width, not a constant. */
+export function tokenRadiusPx(token, gridSizePx = 100) {
+  const doc = token?.document ?? token;
+  const squares = Number(doc?.width) > 0 ? Number(doc.width) : 1;
+  return (squares * (Number(gridSizePx) > 0 ? Number(gridSizePx) : 100)) / 2;
+}
+
+/**
+ * Where each MOTE of one burst's spray ends — one endpoint per speck. Pure, `rng` injectable, so the
+ * scatter is asserted by value rather than eyeballed.
+ *
+ * Each speck takes its OWN angle within the cone and its OWN distance within the band, which is the
+ * difference between a scatter and a rank: spacing the angles evenly (the way the pellet fan does,
+ * deliberately) would draw a neat arc, and a muzzle does not throw a neat arc. The pellet fan wants to
+ * read as an aimed cone converging on a target; this wants to read as debris.
+ *
+ * Returns [] when there is nothing to spray — no aim, or a class carrying no mote count.
+ */
+export function moteEndpoints(from, to, { count = 0, spreadRad = 0, nearPx = 0, farPx = 0, rng = Math.random } = {}) {
+  const n = Math.trunc(count);
+  if (!from || !to || !(n > 0)) return [];
+  const aim = Math.atan2(to.y - from.y, to.x - from.x);
+  const span = Math.max(0, farPx - nearPx);
+  return Array.from({ length: n }, () => {
+    const angle = aim + spreadRad * (rng() * 2 - 1);
+    const reach = nearPx + rng() * span;
+    return { x: from.x + Math.cos(angle) * reach, y: from.y + Math.sin(angle) * reach };
+  });
+}
+
+/**
+ * How long one burst's smoke wisp lives: the burst's own length (rounds × cadence), clamped. Pure.
+ * Asking for the burst length is what makes the wisp still be there between rounds — the thing the
+ * reference shows and a per-shot puff cannot do.
+ */
+export function burstSmokeMs(shots, cadenceMs) {
+  const span = Math.max(0, (Number(shots) || 0)) * (Number(cadenceMs) || 0);
+  return Math.min(MUZZLE_SMOKE.maxMs, Math.max(MUZZLE_SMOKE.minMs, Math.round(span)));
+}
+
+// Capture seam, the same shape as _setFlashLevels above and for the same reason: a pellet crosses in
+// `dashMs`, which is a handful of frames on a client with a graphics card and LESS THAN ONE on a
+// software rasteriser, so a screenshot pass has nothing to catch. Lengthening the crossing lets the
+// fan be photographed; every image taken that way says HELD in its filename, because the geometry is
+// the shipped geometry but the duration is not. Null = the shipped crossing time.
+let _dashMsOverride = null;
+
+/** Test/capture seam: force the pellet crossing time (null restores the mapped value). */
+export function _setDashMs(ms) {
+  _dashMsOverride = Number.isFinite(ms) && ms > 0 ? Number(ms) : null;
+  return _dashMsOverride;
+}
+
+// Capture seam, third of the same family (_setFlashLevels, _setDashMs). The muzzle sprite is trimmed
+// to a third of a short clip and this host takes about two seconds to produce one screenshot, so the
+// whole flash is over several times before a camera exists — every attempt to photograph it at the
+// shipped rate came back empty. Slowing the sprites' PLAYBACK stretches the same frames over a longer
+// wall clock without changing a single value that ships: the sizes, the trim fractions, the geometry
+// and the colour are all untouched, only the clock is. Images taken through it say HELD in the name.
+// Null = the shipped rate.
+let _spriteRateOverride = null;
+
+/** Test/capture seam: force the sprite playback rate (null restores the shipped rate). */
+export function _setSpriteRate(rate) {
+  _spriteRateOverride = Number.isFinite(rate) && rate > 0 ? Number(rate) : null;
+  return _spriteRateOverride;
+}
+
+/**
+ * Apply the capture seam to one queued effect, if it is armed. Returns the effect so the rest of the
+ * chain continues from here — it is applied FIRST, before the size and the trim, deliberately: the
+ * engine reads the playback rate when it works out a trim point, so arming the rate afterwards leaves
+ * a trimmed clip playing past its own trim. That only ever showed up in capture runs (nothing ships
+ * with the seam armed), and it showed up as the trimmed-away plume reappearing in the photographs.
+ */
+function _held(effect) {
+  if (_spriteRateOverride !== null) effect.playbackRate(_spriteRateOverride);
+  return effect;
+}
+
+/**
+ * One shot's visuals: the Sequencer sprite + tracer (when Sequencer is active AND the installed asset
+ * tier actually carries the mapped database entries) plus the native muzzle light.
+ *
+ * ORDERING — both halves start in the SAME tick as the shot's audio. Neither one waits on the other
+ * and neither one waits on a server: the flash is a local object plus one datagram, and Sequencer
+ * broadcasts over its own socket. (The first build routed the flash through the token-write queue and
+ * awaited it before even building the Sequence, which put every sprite a full beat behind the sound
+ * it belonged to — measured on a five-round burst: 1126/1197/1337/1494/1794 ms, widening as the queue
+ * backed up. Nothing in this path queues any more, so the offset is structurally zero.)
+ *
+ * `light` gates the flash for callers that only want the sprite half (the keeper's sprite legs).
+ *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = null } = {}) {
-  const out = { light: false, muzzle: false, tracer: false };
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE } = {}) {
+  const out = { light: false, muzzle: false, spark: false, tracer: false, pellets: 0 };
   const entry = FX_CLASSES[weaponClass];
-  if (!entry) { if (light) releaseFlash(shooterToken); return out; }
-  // `light` is the fan-out's pre-claimed slot (true = this shot owns the envelope, false = another
-  // shot's envelope is already running and this one coalesces into it); null = an unclaimed direct call.
-  if (light !== false) out.light = await fxMuzzleLight(shooterToken, { claimed: light === true });
-  if (!sequencerActive() || !shooterToken) return out;
+  if (!entry) return out;
+  const from = centerOf(shooterToken);
+  const to = centerOf(targetToken);
+  // Where the sprites are planted: the shooter's forward edge, walked along the aim line by a
+  // fraction of the token's OWN width. With no aim this is the centre, which is where the previous
+  // build put everything unconditionally.
+  const gridPx = Number(canvas?.dimensions?.size) || 100;
+  const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
+  // The flash is announced and drawn first because it costs nothing to wait for — it is synchronous.
+  // The aim is what makes it a wedge; with none it is a circle (muzzleSourceSpecs).
+  if (light && shooterToken) out.light = fxMuzzleFlash(shooterToken, to, { mode });
+
+  if (sequencerActive() && shooterToken) {
+    try {
+      const seq = new globalThis.Sequence();
+      // The muzzle sprite is DIRECTIONAL — a bolt drawn along one axis — so it is drawn only when the
+      // aim direction is known. Played unrotated it points its own baked direction no matter where the
+      // shooter is aiming, which is what a viewer reads as a bullet stuck on the shooter aiming away
+      // from the target (the reported defect). With no target there is no direction to give it: the
+      // shooter token's own facing is not a stand-in, because these tokens are top-down portraits that
+      // sit at rotation 0 and are never turned, so it would substitute one fixed wrong direction for
+      // another. The shot still reads without it — the native muzzle LIGHT is omnidirectional and needs
+      // no aim. rotateTowards accounts for the asset's own baked orientation (measured on
+      // jb2a.muzzle_flash.single.01.yellow: it lands along the shooter→target line with NO additional
+      // sprite-rotation offset, so none is applied; the keeper pins that by value).
+      if (to && fxDbEntryExists(entry.muzzle)) {
+        // Sized in GRID UNITS (a spec, not a scale factor — see MUZZLE_SPRITE), planted at the
+        // token's forward edge, and cut short of the clip's smoke-and-fire phase.
+        _held(seq.effect().file(entry.muzzle)).atLocation(muzzle)
+          .size({ width: entry.muzzleSquares }, { gridUnits: true })
+          .timeRange(0, MUZZLE_SPRITE.endMs)
+          .rotateTowards(to);
+        out.muzzle = true;
+      }
+      // The spiky companion. Radial, so it takes no aim of its own; it is planted on the same muzzle
+      // point, which puts its rear rays over the shooter exactly as the reference shows.
+      if (to && entry.spark && fxDbEntryExists(MUZZLE_SPARK.key)) {
+        _held(seq.effect().file(MUZZLE_SPARK.key)).atLocation(muzzle)
+          .size({ width: MUZZLE_SPARK.squares }, { gridUnits: true });
+        out.spark = true;
+      }
+      if (to && fxDbEntryExists(entry.tracer)) {
+        // A class carrying a pellet count draws its round as a FAN of tracers instead of one bolt;
+        // every other class omits the field and takes the single endpoint. `out.tracer` stays the same
+        // boolean either way (did this shot claim a tracer at all) and `out.pellets` reports how many
+        // were queued, so a caller can tell the two shapes apart.
+        const fan = pelletEndpoints(from, to, { pellets: entry.pellets, spreadRad: entry.spreadRad, hit });
+        const ends = fan.length ? fan : [hit ? to : missEndpoint(from, to)];
+        // Two ways to draw one round, chosen by whether the class asked for a dash length:
+        //
+        // STRETCHED (no `dashSquares`) — the mapped asset is a ranged database entry, a streak drawn
+        // for a distance, and stretchTo scales it along the whole shooter→target line. The round
+        // appears as one long mark spanning the shot. This is the rifle read and it stays untouched.
+        //
+        // TRAVELLED (`dashSquares` present) — the same asset is instead pinned to a fixed SIZE in grid
+        // units and moved from muzzle to endpoint over `dashMs`. Sizing in grid units (rather than by
+        // `scale`) is what makes the length a spec instead of an accident: the ranged entry hands back
+        // a different source file per distance band, so a scale factor would draw a different length on
+        // a near shot than a far one, while a grid-unit size is the same fraction of a square every
+        // time. Passing only a width leaves the height on the asset's own aspect, so the dash stays
+        // proportioned rather than squashed. Rotation is set once, explicitly, and the movement is told
+        // not to rotate again, so there is a single source of the sprite's heading.
+        for (const end of ends) {
+          const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken);
+          // The colour shift, where the class asks for one. A ColorMatrix and not a tint — see
+          // TRACER_COLOR for the measurement that rules the tint out.
+          if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor);
+          if (entry.dashSquares > 0) {
+            shot.size({ width: entry.dashSquares }, { gridUnits: true })
+              .rotateTowards(end)
+              .moveTowards(end, { ease: "linear", rotate: false })
+              .duration(_dashMsOverride ?? entry.dashMs);
+          } else {
+            shot.stretchTo(end);
+          }
+        }
+        out.tracer = true;
+        out.pellets = ends.length;
+      }
+      if (out.muzzle || out.tracer) await seq.play();
+    } catch (err) {
+      console.warn(`${SCOPE} | sequencer shot effect failed`, err);
+    }
+  }
+  return out;
+}
+
+/**
+ * The MULTI-ROUND-ONLY muzzle treatments: one spray of hot specks down the firing cone and one smoke
+ * wisp at the muzzle, drawn ONCE for the whole burst rather than once per round.
+ *
+ * WHY ONCE PER BURST. The reference shows roughly a dozen specks and a single wisp for a ten-round
+ * burst — not a dozen per round. Drawing them per round would put a hundred-odd sprites on the canvas
+ * for one trigger pull and would restart the wisp ten times, which is the opposite of the "lingers
+ * between shots" the wisp is here for. So this is called once, from the fan-out, before the rounds go.
+ *
+ * WHY IT IS NOT CALLED FOR A SINGLE SHOT: the caller does not call it. The gate is the payload's round
+ * count, which is a property of the shot rather than of the weapon — the same weapon fires both ways.
+ *
+ * Returns what it queued, so the keeper asserts the gate by value rather than by watching the canvas.
+ */
+export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, shots = 0, cadenceMs = SHOT_CADENCE_MS } = {}) {
+  const out = { motes: 0, smoke: false };
+  const entry = FX_CLASSES[weaponClass];
+  if (!entry || !sequencerActive() || !shooterToken) return out;
+  const from = centerOf(shooterToken);
+  const to = centerOf(targetToken);
+  if (!from || !to) return out;          // no aim → no cone to spray down and no heading for the wisp
+
+  const gridPx = Number(canvas?.dimensions?.size) || 100;
+  const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
+
   try {
     const seq = new globalThis.Sequence();
-    const from = centerOf(shooterToken);
-    const to = centerOf(targetToken);
-    if (fxDbEntryExists(entry.muzzle)) {
-      const effect = seq.effect().file(entry.muzzle).atLocation(shooterToken).scale(entry.scale);
-      if (to) effect.rotateTowards(to);
-      out.muzzle = true;
+    if (entry.motes > 0 && fxDbEntryExists(MUZZLE_MOTES.key)) {
+      const ends = moteEndpoints(muzzle, to, {
+        count: entry.motes,
+        spreadRad: MUZZLE_MOTES.spreadRad,
+        nearPx: MUZZLE_MOTES.nearSquares * gridPx,
+        farPx: MUZZLE_MOTES.farSquares * gridPx,
+      });
+      const span = MUZZLE_MOTES.travelMaxMs - MUZZLE_MOTES.travelMinMs;
+      for (const end of ends) {
+        _held(seq.effect().file(MUZZLE_MOTES.key)).atLocation(muzzle)
+          .size({ width: MUZZLE_MOTES.sizeSquares }, { gridUnits: true })
+          .moveTowards(end, { ease: "easeOutQuad", rotate: false })
+          .duration(MUZZLE_MOTES.travelMinMs + Math.random() * span);
+      }
+      out.motes = ends.length;
     }
-    if (to && fxDbEntryExists(entry.tracer)) {
-      seq.effect().file(entry.tracer).atLocation(shooterToken).stretchTo(hit ? to : missEndpoint(from, to));
-      out.tracer = true;
+    if (entry.smokeSquares > 0 && fxDbEntryExists(MUZZLE_SMOKE.key)) {
+      _held(seq.effect().file(MUZZLE_SMOKE.key)).atLocation(muzzle)
+        .size({ width: entry.smokeSquares }, { gridUnits: true })
+        .rotateTowards(to)
+        .opacity(MUZZLE_SMOKE.opacity)
+        .duration(burstSmokeMs(shots, cadenceMs))
+        .fadeOut(MUZZLE_SMOKE.fadeOutMs);
+      out.smoke = true;
     }
-    if (out.muzzle || out.tracer) await seq.play();
+    // NOT awaited, deliberately. The engine's play promise settles somewhere inside the effect's own
+    // lifetime, and the wisp is asked to live for the whole burst — so awaiting it here would hold the
+    // first round back by up to the wisp's entire duration and the burst would start seconds after the
+    // trigger. Measured on this rig before the change: the fan-out's per-round cost went from tens of
+    // milliseconds to hundreds, all of it this one await. Queuing is synchronous, so the counts below
+    // are already final when this returns.
+    if (out.motes || out.smoke) seq.play().catch((err) => console.warn(`${SCOPE} | burst ambience play failed`, err));
   } catch (err) {
-    console.warn(`${SCOPE} | sequencer shot effect failed`, err);
+    console.warn(`${SCOPE} | burst ambience failed`, err);
   }
   return out;
 }
@@ -450,7 +1266,9 @@ export function shooterTokenOf(actor) {
 }
 
 /**
- * Fan one weaponFired payload out into per-shot effects at the measured cadence.
+ * Fan one weaponFired payload out into per-shot effects at the FIRED CLASS's cadence (classCadenceMs
+ * — the measured default, or the class's own where the table names one). The returned `cadenceMs` is
+ * the value this payload actually ran at, so the pacing is reportable rather than assumed.
  *
  * Hit/miss is per shot in the reference, and the payload knows only HOW MANY rounds hit (not which),
  * so the hits are assigned to the leading shots of the burst — the per-shot divergence a viewer sees
@@ -460,7 +1278,7 @@ export function shooterTokenOf(actor) {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smoke: false, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -470,23 +1288,48 @@ export async function fxWeaponFired(payload) {
   const shots = shotCountOf(payload);
   const hits = Math.min(hitCountOf(payload), shots);
   const shooter = shooterTokenOf(actor);
-  const target = payload?.targetTokenId ? (canvas?.tokens?.get(payload.targetTokenId) ?? null) : null;
+  // Read once, so the audio, the pellet fan and the flash restart of every round of this payload are
+  // paced by the same number — there is one wait in the loop and everything a round does happens after
+  // it. A class that names no cadence of its own gets the default (classCadenceMs).
+  const cadenceMs = classCadenceMs(weaponClass);
+  // Aim for the sprite/tracer. The payload carries the aimed-at token in two places because they mean
+  // two different things (see the note at the emit in seam-shim.js): `targetTokenId` is the field the
+  // DAMAGE flow routes on, set only where the fire card resolved a target itself; `fxTargetTokenId` is
+  // the aim captured for presentation on every fire mode, including the ones deliberately kept off the
+  // mid-action damage dialog. Either one answers "which way was this pointed", so read the routing field
+  // first (it is the card's own resolved target) and fall back to the presentation one.
+  const aimTokenId = payload?.targetTokenId ?? payload?.fxTargetTokenId ?? null;
+  const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
+
+  // One payload = one resolved burst, so whether this is a MULTI-round payload is known before the
+  // first round goes out and holds for all of them — every round of one burst gets the same asset,
+  // rather than the first sounding different from the rest.
+  const burst = shots > 1;
+
+  // The multi-round-only treatments, queued once for the whole burst before the first round leaves.
+  // A single shot never reaches this line, which is the whole gate (see fxBurstAmbience).
+  let ambience = { motes: 0, smoke: false };
+  if (burst && shooter) {
+    ambience = await fxBurstAmbience(shooter, target, { weaponClass, shots, cadenceMs })
+      .catch((err) => { console.warn(`${SCOPE} | burst ambience failed`, err); return { motes: 0, smoke: false }; });
+  }
 
   let flashes = 0;
   for (let i = 0; i < shots; i++) {
-    if (i > 0) await _sleep(SHOT_CADENCE_MS);
-    sfx(weaponClass);
-    // The visual half is queued per actor (mech-engine apply queue) and deliberately NOT awaited:
-    // the audio cadence is what the ear reads, and the light envelope is longer than one cadence
-    // step, so awaiting it would stretch a burst well past its measured length.
+    if (i > 0) await _sleep(cadenceMs);
+    sfx(weaponClass, { burst });
+    // Flash + sprite + tracer all start in the SAME tick as this shot's audio, and none of them is
+    // awaited: the loop's timer is the cadence a viewer and a listener both read. Every round of a
+    // burst announces its own flash — the per-token cap that keeps that bounded lives in the local
+    // runner (one source set per token, each round restarting the envelope), not here, so a round is
+    // never silently dropped on the way out.
     if (shooter) {
-      const light = claimFlash(shooter);   // claimed at FIRE time, not when the queued job runs
-      if (light) flashes++;
-      enqueueApply(actor, () => fxShot(shooter, target, { weaponClass, hit: i < hits, light }))
-        .catch((err) => { releaseFlash(shooter); console.warn(`${SCOPE} | combat fx shot failed`, err); });
+      flashes++;
+      fxShot(shooter, target, { weaponClass, hit: i < hits })
+        .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
     }
   }
-  return { ...result, shots, hits, flashes, weaponClass };
+  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smoke: ambience.smoke };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
@@ -501,12 +1344,22 @@ export function registerCombatFx() {
     if (!combatFxEnabled()) return;
     fxWeaponFired(payload).catch((err) => console.warn(`${SCOPE} | combat fx failed`, err));
   });
-  // A client that died mid-envelope left its snapshot on the token; restore it when the scene draws.
-  Hooks.on("canvasReady", (c) => {
-    if (c?.scene) restoreStaleFlashLights(c.scene).catch(() => { /* nothing restorable */ });
+  // The flash announcement. Same channel and same type-dispatch shape as the module's other relays;
+  // unlike the write relays there is no GM gate, because every client draws its own copy and nothing
+  // is written. `game.socket.emit` never echoes to its sender, so the firing client's own flash comes
+  // from the local call inside fxMuzzleFlash rather than from here.
+  game.socket.on(`module.${SCOPE}`, (data) => {
+    if (data?.type !== MSG_FLASH) return;
+    if (!combatFxEnabled()) return;
+    try {
+      muzzleFlashLocal(data.tokenId, data.aim ?? null, { sceneId: data.sceneId ?? null });
+    } catch (err) {
+      console.warn(`${SCOPE} | muzzle flash relay failed`, err);
+    }
   });
-  // canvasReady has ALREADY fired for the initially-drawn scene by the time ready-hook wiring runs,
-  // so the current scene gets one sweep here as well.
-  if (canvas?.scene) restoreStaleFlashLights(canvas.scene).catch(() => { /* nothing restorable */ });
+  // Nothing is persisted, so there is nothing to sweep up on load — but the sources this client is
+  // drawing belong to the scene it is drawing them on, and its lighting collection is emptied under
+  // us when the scene changes. Drop the drivers with it.
+  Hooks.on("canvasTearDown", () => clearFlashes());
   primeFxSounds().catch(() => { /* listing unavailable → shipped-asset path is used */ });
 }

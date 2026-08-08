@@ -130,6 +130,16 @@ export function ammoEffectFields(weapon) {
   return out;
 }
 
+/** The token this user is currently aiming at (the first, when several are held). Mirrors the reading
+ *  the attack dialog takes when it builds the target list it passes to the base fire methods, so the
+ *  captured id is the same id the full-auto card would have carried. Null when nothing is targeted. */
+function _firstTargetTokenId() {
+  try {
+    for (const t of game.user?.targets ?? []) return t?.id ?? null;
+  } catch (_e) { /* no canvas / no user targets on this client */ }
+  return null;
+}
+
 function installWeaponFiredShim(ItemProto) {
   if (prototypeEmits(ItemProto, WEAPON_FIRED)) return false;   // base system emits it (method or helper) → disengage
   let patchedAny = false, foundAny = false;
@@ -143,6 +153,14 @@ function installWeaponFiredShim(ItemProto) {
         weaponName: this.name,
         weaponId: this.id ?? null,   // resolve the EXACT weapon downstream (two same-named weapons with different ammo)
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
+        // The aimed-at token, captured for PRESENTATION only (see the two-field note at the emit below).
+        // The base system hands its target-token list to __fullAuto ONLY, so the multi-hit card carries a
+        // `target` for that one fire mode; the semi-auto / three-round-burst / melee cards render with no
+        // target at all. The token IS known at fire time — it is the same reading the attack dialog took
+        // to build the list it passes on (the user's current targets) — so capture it here. Read at CALL
+        // time, like the dialog does, so it reflects the token the shot was actually aimed at; null when
+        // nothing is targeted.
+        fxTargetTokenId: _firstTargetTokenId(),
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       return orig.call(this, attackMods, ...rest);
@@ -190,7 +208,24 @@ function installRenderEmit() {
           // them; consumers fall back to the hit count.
           shotsFired: data?.fired,
           shotsHit: data?.hits,
+          // ⭐ TWO TARGET FIELDS, ON PURPOSE — they answer two different questions.
+          //
+          //   targetTokenId  = DAMAGE-FLOW ROUTING. The weaponFired handler branches on it: a payload
+          //     that carries one resolves the target and opens the damage dialog mid-action (PATH A);
+          //     a payload without one is flagged onto the shot's chat card so the GM applies it with a
+          //     button, on their own beat (PATH B). Only the card's OWN target belongs here — full auto
+          //     sets one per resolved target, so a multi-target burst still attributes each card
+          //     correctly. The single-shot / burst / melee cards carry none, which is what keeps them on
+          //     PATH B; the user chose card-then-click for those (a dialog opening in the middle of the
+          //     action interrupts the turn), so folding the aimed-at token in here would silently move
+          //     every one of them onto PATH A.
+          //   fxTargetTokenId = PRESENTATION AIM. The effects rail needs to know which way the shot was
+          //     pointed to draw a tracer and orient the muzzle sprite; that is true of every fire mode,
+          //     including the ones deliberately left off PATH A. Carried separately so knowing the aim
+          //     costs nothing in damage routing — the fx adapter reads targetTokenId first and falls back
+          //     to this, and the damage handler never reads it at all.
           targetTokenId: target?.id ?? null,
+          fxTargetTokenId: _fireCtx.fxTargetTokenId ?? null,
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
           // Natural-1 on the attack roll (the multi-hit card carries it) — drives the mono
           // break-on-fumble rule in the weaponFired handler. Absent on non-melee cards → false.
