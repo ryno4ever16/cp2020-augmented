@@ -475,6 +475,8 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
 | `BLOOD_SPLATTER.clipMs` | 900 | the trim — content is spent by ~700 ms of an 1133 ms file |
 | `BLOOD_SPLATTER.aboveLighting` | `true` | the documented departure from the routing rule (§2) |
+| `goreEnabled` (world setting, `module/settings.js`) | default `false` | the blood master switch — config-visible, fail-closed reader; every splash gate reads it |
+| `shotgunSpreadEnabled` (world setting) | default `true` | the pattern master switch — read ONLY inside `spreadFlowModeOf` (§1.1a); off ⇒ shells take the single-target flow |
 | `MUZZLE_SMOKE.*` | see the block | one puff's size, phase, drift and cap |
 | `MUZZLE_MOTES.*` | see the block | speck geometry, all off the reference frame |
 | `PRESENTATION_CAP_MS` | 8000 | hard ceiling on how long the damage window may be held |
