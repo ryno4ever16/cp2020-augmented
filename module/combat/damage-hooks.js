@@ -7,6 +7,9 @@
  *   item.js emits "cyberpunk2020.weaponFired" with a targetTokenId.
  *   Auto-applies if that setting is on; otherwise opens DamageDialog once the shot has finished
  *   being presented on the canvas, so the window does not cover the action it reports on.
+ *   The card is deliberately NOT flagged here — one path, not both — but the shot's card IS noted as
+ *   it is created, so a window closed without applying can fall back to PATH B's button on that same
+ *   card rather than leaving the shot with no way to apply it at all.
  *
  * PATH B — Everything else (semi-auto, burst, untargeted full-auto):
  *   We listen for "cyberpunk2020.weaponFired" with no targetTokenId and
@@ -19,7 +22,7 @@
  *   right after roll.execute().
  */
 
-import { DamageDialog }                                       from "./DamageDialog.js";
+import { DamageDialog, DAMAGE_DIALOG_DISMISSED_HOOK }         from "./DamageDialog.js";
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { markCardResolved } from "../card-lock.js";
@@ -36,10 +39,10 @@ import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegion
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
-// One source of truth for how long a shot is being LOOKED at: the fx adapter owns the cadence, the
-// round count and the envelope, so the wait before the apply window is read from there rather than
-// duplicated here as a constant that would drift the moment either is tuned.
-import { payloadPresentationMs } from "../fx/effects.js";
+// One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
+// the round count and every clip length, so it reports its own completion rather than having the sum
+// duplicated here — a copy that would drift the moment any of them is tuned.
+import { presentationSettled } from "../fx/effects.js";
 
 // Payload waiting to be attached to the next chat message created, and WHEN it started waiting.
 //
@@ -71,6 +74,52 @@ export const PENDING_PAYLOAD_TTL_MS = 5000;
 function _queuePendingPayload(payload) {
   _pendingPayload = payload;
   _pendingPayloadAt = Date.now();
+}
+
+// WHICH CARD A PATH-A SHOT POSTED — remembered, not flagged.
+//
+// PATH A opens a window INSTEAD of putting the button on the card ("one path, not both"), so it never
+// had any reason to learn the card's id — and that is exactly what went missing when the window is
+// dismissed without applying: the shot had a card, but nothing knew which one, so the affordance was
+// simply thrown away. The card is identified by the SAME matcher PATH B uses to claim one; the only
+// difference is what is done with the match — recorded here, flagged there.
+//
+// TWO STRUCTURES, TWO LIFETIMES, and the split is the whole design:
+//  - _awaitingCard is the MATCHING window, and it is bounded by the same TTL as the PATH-B queue for the
+//    same reason: it waits for ONE thing — the card whose render emitted this shot — which arrives within
+//    a round trip. Past that the card is not coming and no later message is it.
+//  - _cardIdByPayload is the MEMORY, and it must outlive that window by however long the reader leaves
+//    the window open, which can be minutes. It is keyed on the payload OBJECT, which the open dialog
+//    already holds for its own lifetime — so the entry exists for exactly as long as something can still
+//    ask for it, and is collected with the payload when nothing can. No timer, nothing to expire, and no
+//    id kept for a window that has already gone.
+const _cardIdByPayload = new WeakMap();
+let _awaitingCard = null;
+let _awaitingCardAt = 0;
+
+/** Start watching for the card of a PATH-A shot, stamped with its start of waiting. */
+function _rememberCardFor(payload) {
+  _awaitingCard = payload;
+  _awaitingCardAt = Date.now();
+}
+
+/**
+ * Is this newly created message the card of the shot `payload` came from? The two questions that answer
+ * it were previously inline in the PATH-B claim; they are the matcher for both users now.
+ *
+ * createChatMessage fires on this client for EVERY message, including ones authored by other users
+ * (broadcast). The payload belongs to THIS user's shot, so an interleaved message from someone else is
+ * never it. And when the message names a speaker actor and the attacker is known, they must agree, so a
+ * same-user message about a different actor cannot claim this shot. Either signal missing = not
+ * disqualifying (fall through rather than block the whole flow).
+ */
+function _isShotCard(message, payload) {
+  const authorId = message.author?.id ?? message.user?.id ?? null;
+  if (authorId && authorId !== game.user.id) return false;
+  const attackerId     = payload.attackerId ?? payload.actorId ?? null;
+  const speakerActorId = message.speaker?.actor ?? null;
+  if (attackerId && speakerActorId && speakerActorId !== attackerId) return false;
+  return true;
 }
 
 function _isMultiActionEnabled() {
@@ -156,6 +205,7 @@ export function registerDamageHooks() {
   _hookWeaponFired();
   _hookCreateChatMessage();
   _hookRenderChatMessage();
+  _hookDamageDialogDismissed();
   _hookSuppressiveFire();
   _hookSuppressiveZoneEntered();
   _hookSuppressiveExpiry();
@@ -416,13 +466,28 @@ function _hookWeaponFired() {
       u => u.active && attackerActor.testUserPermission(u, "OWNER")
     );
     const isMyShot  = !game.user.isGM && (attackerActor?.isOwner ?? false);
-    // Only the PRIMARY (active) GM handles NPC / offline-owner shots. weaponFired fires on every
-    // connected GM client; without the activeGM check, N GMs each open a DamageDialog (and, with
-    // auto-apply on, each apply the damage → N× HP loss). It also guarantees exactly one client
-    // reaches dispatchAttack per shot, which the vehicle-damage relay below relies on to avoid
-    // double-applying to a vehicle. Single-GM tables are unaffected (the lone GM is the active GM).
+    // Only the PRIMARY (active) GM handles a shot NOBODY here fired — an NPC or offline-owner payload
+    // that arrived by some route other than this client pulling the trigger. Without that rule, every
+    // GM client receiving such a payload would open its own DamageDialog (and, with auto-apply on,
+    // each would apply the damage → N× HP loss); it is also what guarantees exactly one client reaches
+    // dispatchAttack, which the vehicle-damage relay below relies on.
     const gmHandles = game.user.isGM && !ownerOnline && game.users.activeGM?.id === game.user.id;
-    if (!isMyShot && !gmHandles) return;
+
+    // ⚠ THE SEAT IS THE WRONG QUESTION FOR A SHOT THIS CLIENT ITSELF FIRED, and that was a reported
+    // regression: at a table with TWO GM sessions, every fire mode stopped opening the apply window
+    // for the GM who fired. The comment this replaces claimed "weaponFired fires on every connected GM
+    // client" — it does not. The single-target emission is a LOCAL `Hooks.callAll` from the seam
+    // (seam-shim.js), raised only on the client that resolved the shot, so a GM who is not the active
+    // GM was the ONLY client to receive their own shot AND the only one told to stand down. Nobody
+    // opened anything; the reader saw the plain fire card and nothing else.
+    //
+    // So the client that pulled the trigger presents its own shot, whatever seat it holds. That cannot
+    // reintroduce the N-dialog hazard the seat rule defends against: `firedByUserId` names ONE user, so
+    // at most one client can match it however the payload travels — a strictly tighter guarantee than
+    // the seat gave. Payloads WITHOUT the stamp (the suppressive re-emission below, anything relayed,
+    // a future native emitter) are untouched and keep the seat rule exactly.
+    const firedHere = payload.firedByUserId != null && payload.firedByUserId === game.user.id;
+    if (!firedHere && !isMyShot && !gmHandles) return;
 
     // Mono-edge break-on-fumble (CP2020 p.112): this is the shot's single authoritative client, so mark
     // the weapon broken + post the note here (exactly once). Runs BEFORE the areaDamages guard so a
@@ -454,6 +519,16 @@ function _hookWeaponFired() {
         return;
       }
 
+      // Remember which card this shot posts, so a window dismissed without applying can put the apply
+      // button back on it (_hookDamageDialogDismissed). Registered HERE, in the same tick as the shot,
+      // rather than where the window opens: the card is created within a round trip of this emission,
+      // while the dialog branch below is several awaits away — it waits out the whole presentation
+      // first — so by then the card would already have gone past unrecorded. The branches that open no
+      // window (auto-apply, the vehicle resolver) register too, deliberately: it costs one map entry
+      // nobody reads, collected with the payload, and keeps the registration on the one line where the
+      // shot is known to have a target.
+      _rememberCardFor(payload);
+
       // Re-roll any hit that landed on a limb that isn't there to be hit (a severed/destroyed flesh limb
       // or a destroyed cyberlimb wreck). Single-shot/burst/melee location is rolled in the BASE system's
       // item.js, which has no concept of a gone limb (that state lives in THIS module's M18/M19 flags), so
@@ -471,19 +546,23 @@ function _hookWeaponFired() {
       if (game.settings.get("cp2020-augmented", "damageAutoApply")) {
         await _autoApply(payload, target);
       } else {
-        // Wait out the shot's own presentation before putting a window over the canvas. The dialog
-        // used to open the instant the shot resolved, which is while the rail is still fanning the
-        // rounds out — so the window covered the action it was reporting on, centre-screen, for the
-        // whole burst. The wait is the presentation's own length (payloadPresentationMs: the rounds'
-        // spacing plus the last one's tail), so it tracks the cadence and the round count instead of
-        // being a guessed constant, and it is zero when there is nothing being presented (rail off,
-        // or a weapon with no muzzle fx) — those open as promptly as they always did.
+        // Let the shot finish before putting a window over the canvas. The dialog used to open the
+        // instant the shot resolved, which is while the rail is still fanning the rounds out — so the
+        // window covered the action it was reporting on, centre-screen, for the whole burst. It opens
+        // now when the action is OVER: the last round's impact/tracer ending, which is where the user
+        // drew that line (burst smoke and ember motes are dressing and are deliberately not waited on).
         // Only THIS branch waits: auto-apply opens no window, so damage landing mid-burst is fine,
         // and the chat-button path (PATH B) is opened by the reader when the reader chooses.
         // The claim above is already set synchronously, so a second layer still stands down at once,
-        // and two payloads in flight each wait out their own span without any queue between them.
-        const presentationMs = payloadPresentationMs(payload);
-        if (presentationMs > 0) await new Promise((resolve) => setTimeout(resolve, presentationMs));
+        // and two payloads in flight each settle on their own signal without any queue between them.
+        // WAIT FOR THE RAIL TO SAY IT IS DONE, rather than for a sum reproduced here. The rail queues
+        // every duration, so it is the only honest source for "the action has finished"; the arithmetic
+        // this used to sleep on had to be re-derived whenever a cadence, a hold or a clip was tuned and
+        // drifted silently when it was not — the travelled class was the visible case, where the sum
+        // read 150ms against a real 983ms and the window landed on top of the pellets still in flight.
+        // presentationSettled owns all three routes (the signal, the arithmetic when no fan-out ran,
+        // and the hard cap that stops anything parking the window), so this reads as one await.
+        await presentationSettled(payload);
         new DamageDialog(payload, target).render(true);
       }
       return;
@@ -496,26 +575,26 @@ function _hookWeaponFired() {
 
 function _hookCreateChatMessage() {
   Hooks.on("createChatMessage", async (message) => {
-    if (!_pendingPayload) return;
-    // The card this payload is waiting for is created within a round trip of the shot that queued it.
-    // Past that, the card is not coming, and this message — whatever it is — is not the one. Drop the
-    // entry rather than just skipping it, so it cannot claim a later message either.
-    if (Date.now() - _pendingPayloadAt > PENDING_PAYLOAD_TTL_MS) {
-      _pendingPayload = null;
-      return;
+    // The card either entry is waiting for is created within a round trip of the shot behind it. Past
+    // that, the card is not coming, and this message — whatever it is — is not the one. Drop the entry
+    // rather than just skipping it, so it cannot claim a later message either.
+    if (_pendingPayload && Date.now() - _pendingPayloadAt > PENDING_PAYLOAD_TTL_MS) _pendingPayload = null;
+    if (_awaitingCard   && Date.now() - _awaitingCardAt   > PENDING_PAYLOAD_TTL_MS) _awaitingCard   = null;
+
+    // A PATH-A shot's own card is RECORDED and nothing else — its window is already open (or is waiting
+    // out the presentation before it opens), and flagging here would give one shot both affordances at
+    // once. The id is what the dismissal path needs later.
+    //
+    // Read ahead of the PATH-B claim deliberately: when both are live, this message was created by the
+    // shot that is still on screen, not by the older queued one, so handing it to the queue would be the
+    // mis-attribution the TTL exists to prevent. The queued entry stays claimable for its own card.
+    if (_awaitingCard && _isShotCard(message, _awaitingCard)) {
+      _cardIdByPayload.set(_awaitingCard, message.id);
+      _awaitingCard = null;
+      return;   // one card belongs to one shot
     }
-    // createChatMessage fires on this client for EVERY message, including ones authored by other users
-    // (broadcast). The pending payload belongs to THIS user's shot, so only attach it to a message this
-    // user authored — an interleaved message from someone else must not receive the apply flag, nor spend
-    // the payload on a message we don't own. When the author can't be determined we fall through rather
-    // than block the whole flow.
-    const authorId = message.author?.id ?? message.user?.id ?? null;
-    if (authorId && authorId !== game.user.id) return;
-    // Prefer the shot's own card: if the message names a speaker actor and we know the attacker, require
-    // them to match so a same-user message about a different actor doesn't claim this shot's payload.
-    const attackerId     = _pendingPayload.attackerId ?? _pendingPayload.actorId ?? null;
-    const speakerActorId = message.speaker?.actor ?? null;
-    if (attackerId && speakerActorId && speakerActorId !== attackerId) return;
+
+    if (!_pendingPayload || !_isShotCard(message, _pendingPayload)) return;
 
     const payload = _pendingPayload;
     _pendingPayload = null;
@@ -524,6 +603,39 @@ function _hookCreateChatMessage() {
       await message.setFlag("cp2020-augmented", "damagePayload", payload);
     } catch (err) {
       console.warn("CP2020 | Could not set damagePayload flag on chat message", err);
+    }
+  });
+}
+
+/**
+ * A dismissed apply window hands its shot back to the shot's own chat card.
+ *
+ * The window is PATH A's whole affordance: it takes the routing so the card does not get a button ("one
+ * path, not both"). Closing it with the X or Cancel therefore used to discard the only way to apply that
+ * shot — which is the gap reported from the table ("if you close the apply window it doesn't go back to
+ * the chat cards"). The card-first flow always had that fallback; routing to the window orphaned it.
+ *
+ * So on a dismissal the card gets the flag it would have got had the shot gone to PATH B, and the standard
+ * Apply button renders on it from _hookRenderChatMessage. Nothing is queued and no card is searched for at
+ * this point — the card was identified when it was created, while the matcher could still be sure of it.
+ *
+ * Runs on the client that held the window, which is the client that authored the card (the shot's own).
+ * The flag lands on the document, so every permitted reader sees the button; already-flagged cards are
+ * left alone, so a PATH-B window dismissed a second time cannot stack anything.
+ */
+function _hookDamageDialogDismissed() {
+  Hooks.on(DAMAGE_DIALOG_DISMISSED_HOOK, async (payload) => {
+    // No memory for this payload = nothing to restore. That is the normal answer for a PATH-B window
+    // (its payload came OFF a card, which already carries the flag) and for a shot whose card never came.
+    const messageId = payload ? _cardIdByPayload.get(payload) : null;
+    if (!messageId) return;
+    const message = game.messages?.get(messageId);
+    if (!message) return;
+    if (message.getFlag?.("cp2020-augmented", "damagePayload")) return;
+    try {
+      await message.setFlag("cp2020-augmented", "damagePayload", payload);
+    } catch (err) {
+      console.warn("CP2020 | Could not return the damage payload to the shot's chat message", err);
     }
   });
 }
