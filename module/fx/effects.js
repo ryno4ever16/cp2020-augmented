@@ -21,6 +21,11 @@
 import { tokensOf } from "../mech/light.js";
 import { isFullBorg } from "../mech/borg.js";
 import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settings.js";
+// THE EITHER/OR, borrowed rather than re-derived. damage-hooks.js asks this same function twice — once
+// to decide whether the single-target damage flow claims a payload and once to decide whether the shot
+// pattern does — and the burning ground has to land on the same side of that answer as the damage
+// does. Importing the derivation is what makes a third caller impossible to disagree with the first two.
+import { spreadModeForAmmo, SPREAD_MODE_SINGLE } from "../lookups.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -522,18 +527,56 @@ export const HIT_CONFIRM = Object.freeze({
 });
 
 /**
- * THE BURNING GROUND — fire left at the point an incendiary payload landed. Drawn ONCE PER PAYLOAD.
+ * THE BURNING GROUND — small flames left burning ON THE GROUND WHERE THE ROUNDS LANDED, for a payload
+ * carrying a load that sets fires. N flames per payload, one placement event per payload.
  *
- * ⭐ ONCE PER PAYLOAD IS THE WHOLE GATE, and it is the same gate `smokeSingle` and fxBurstAmbience sit
- * behind for the same reason: the fan-out caps at MAX_FX_SHOTS (30) rounds, so a per-round element
- * that lingers for seconds would put thirty overlapping fires on one square for one trigger pull. One
- * burst sets one fire. The call site is outside the round loop, which is what enforces it — there is
- * no counter to get wrong.
+ * ⏪⏪ THE PREVIOUS ANSWER WAS REJECTED OUTRIGHT (user, 2026-08-09), and both halves of it were wrong:
+ * the ASSET and the PLACEMENT. What shipped before was one `jb2a.ground_cracks.orange` at the aim
+ * point, for 3200ms. Verbatim: *"it looks like a ground shock effect of some kind, not fire. It darkens
+ * and cools, making it not look like an active flame. I was picturing something more like little
+ * animated flame decals that stayed burning on the ground in the places the shots landed, not just on
+ * the target."*
  *
- * ⚠ NOT PERSISTENT, and the lifetime is a cap rather than a look: `lifetimeMs` is a few seconds so the
- * fire is a consequence a viewer connects to the shot they just watched. The asset is a TRUE LOOP
- * (GroundCrackLoop_01..03, 2667ms measured on the install), so it runs to the lifetime cleanly instead
- * of ending mid-animation, and the key is the parent path so the three variants rotate per payload.
+ * ⚠ THE "DARKENS AND COOLS" WAS PARTLY OURS, and the measurement says which part. Decoded off the
+ * installed GroundCrackLoop file, its own luminance is FLAT across the clip — mean 55-57/255 and 46% of
+ * the frame lit, at every one of twelve sample points. So the clip does not cool; what cooled was
+ * OUR envelope, a 900ms fade-out on a 3200ms life, i.e. the last 28% of the element was a dim-down.
+ * The other half of the report is the asset itself: it draws glowing FISSURES in the floor, which is
+ * a cooling-magma picture and not a flame however long it is left up. Recorded because the two have
+ * different fixes and only one of them is a knob.
+ *
+ * ⭐ THE ASSET, chosen from a closed enumeration of the installed tier (2061 keys; every family whose
+ * name carries fire/flame/burn/ember/torch/brazier/lava/scorch/crack, decoded frame by frame — the
+ * survey is in the doc's §6 entry). `jb2a.flames.orange.03.1x1` is authored by its own filename as a
+ * 05x05ft GROUND patch, so it is a square top-down plate rather than a side elevation: the two other
+ * genuine loops in the tier that hold their light (`Flames04`, `Campfire03`) are 400x600 and 400x1000
+ * portraits, which is a flame seen from the SIDE and reads as a wall sprite laid flat. It is a true
+ * loop — 5000ms, and the tail third of the clip measures BRIGHTER than its own middle (ratio 1.19),
+ * which is the property the report demands: it cannot decay to dark inside its loop because it does
+ * not decay at all. The rejected candidates and why are in the doc.
+ *
+ * ⭐ N FLAMES, AT THE LANDING POINTS — the ruling's own words, and the reason this block now carries
+ * geometry constants. Where the landing points come from depends on what the class draws, and neither
+ * answer is invented here (see groundFirePoints): a class that draws a FAN already computes real
+ * per-pellet endpoints, so a subset of those IS where its shot landed; a class that draws one bolt
+ * puts every round on the same aim point, so the rounds are scattered around it inside
+ * `scatterSquares`. The scatter is DETERMINISTIC, seeded off the payload — see seededRng.
+ *
+ * ⚠ THE GATE MOVED FROM "ONE FIRE" TO "ONE PLACEMENT EVENT", deliberately, and the bound it was
+ * protecting is unchanged. The old rule existed because the fan-out caps at MAX_FX_SHOTS (30) rounds
+ * and a per-ROUND lingering element would put thirty fires on one square for one trigger pull. That
+ * still holds: the call site is still outside the round loop, so the loop can never multiply this, and
+ * `maxPerPayload` bounds what one placement may draw regardless of how many rounds landed.
+ *
+ * ⚠ AND A SECOND BOUND, because these now live for the best part of a minute: `maxLive` is a cap on
+ * how many flames may be burning on a scene AT ONCE, across bursts, enforced by ending the OLDEST
+ * before placing (fxGroundFire). Evicting the oldest rather than refusing the newest is the right way
+ * round: the shot a viewer is watching is the one that must be drawn.
+ *
+ * `lifetimeMs` IS THE "STAYED BURNING" REQUIREMENT, and it is a look call rather than a measurement —
+ * tens of seconds, on the precedent the scorch already set for a session-bound element with a cap in
+ * place of a persistence ruling. `fadeOutMs` is a burn-DOWN at the very end and not a dim-through: it
+ * is 5.6% of the life here, against the 28% that produced the report.
  *
  * ⚠⚠ THE TRADE, ACCEPTED BY THE USER RATHER THAN HIDDEN: this is self-luminous, so it takes the
  * above-lighting route (LIT_SPRITE_ABOVE_LIGHTING) like every other thing on this rail that emits
@@ -547,16 +590,31 @@ export const HIT_CONFIRM = Object.freeze({
  * settleTag name, and presentationTailMs takes no term for it. The apply window opens when the last
  * ROUND has finished, per the 2026-08-08 ruling; a fire that is meant to go on burning afterwards is
  * scene dressing in exactly the sense that ruling names, and waiting for it would hold the damage
- * window shut for the whole burn.
+ * window shut for three quarters of a minute.
  */
 export const GROUND_FIRE = Object.freeze({
-  key: "jb2a.ground_cracks.orange",
-  squares: 1.6,
-  lifetimeMs: 3200,
+  key: "jb2a.flames.orange.03.1x1",
+  // The drawn FRAME width in grid units, and unusually for this file the ink very nearly fills it —
+  // measured on the dark range against 0.5 / 0.7 / 1.0 / 1.6 side by side, 0.5 reads as a spark and
+  // 1.6 reads as a bonfire covering the square. 0.9 is a fire a body could stand next to.
+  squares: 0.9,
+  lifetimeMs: 45000,
   fadeInMs: 250,
-  fadeOutMs: 900,
-  opacity: 0.85,
+  fadeOutMs: 2500,
+  opacity: 0.9,
+  // How far a landed round may fall from the aim point, in grid units, when the class gives the rail
+  // no per-round geometry of its own. A radius, not a diameter.
+  scatterSquares: 0.8,
+  // The most flames ONE payload may place, however many rounds landed.
+  maxPerPayload: 4,
+  // The most flames one PATTERN may scatter down its own length (the shot-pattern flow).
+  maxPerPattern: 5,
+  // The most flames that may be burning on a scene at once, across bursts. Oldest out.
+  maxLive: 24,
 });
+
+/** The name every burning-ground flame is stamped with, so the scene cap can find and evict them. */
+export const GROUND_FIRE_NAME = `${SCOPE}.groundfire`;
 
 /**
  * THE SCORCH — the mark the fire leaves behind, drawn with it and outliving it by minutes.
@@ -584,6 +642,12 @@ export const GROUND_FIRE = Object.freeze({
  * BELOW THE LIGHTING, unlike the fire above it, and that is the file's own rule applied rather than an
  * exception: self-luminous elements go up, lit-by-the-world elements stay down. A scorch is a black
  * mark on a floor. It has no light of its own and it should be as dark as the room is.
+ *
+ * ⭐ STILL EXACTLY ONE PER PLACEMENT, at the CENTROID of the flames, now that the fire is N flames
+ * (2026-08-09). It did not follow the fire's count, and the asymmetry is the point: a flame lives 45
+ * seconds and a scorch lives three minutes, so four scorches per burst is precisely the accumulation
+ * the once-per-payload rule was written to prevent, where four flames are not. The mark says "a fire
+ * burned here", which is one fact about one burst wherever its rounds fell.
  *
  * ⛔ EXCLUDED FROM THE SETTLE SIGNAL for the same reason as the fire, and much more so.
  */
@@ -2107,6 +2171,121 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
 }
 
 /**
+ * A REPEATABLE random source, and the reason this rail has one at all.
+ *
+ * Every other scatter on this file (the miss splay, the mote spray, the smoke) is drawn once, on one
+ * client, and is gone inside a second — so `Math.random` is the right source for it and the injectable
+ * `rng` those helpers take exists only so a test can assert them. The burning ground is different in
+ * two ways that both argue for a seed:
+ *
+ *  1. IT IS PLACED FROM DATA THAT TWO DIFFERENT CLIENTS MAY HOLD. Sequencer broadcasts the resolved
+ *     sequence rather than the code that built it, so today one client rolls and everyone draws the
+ *     same picture — but a scatter that is only correct because of where it happened to be computed is
+ *     one refactor away from two clients disagreeing about where a fire is burning for the next 45
+ *     seconds. Seeding it off the payload makes the agreement a property of the inputs instead.
+ *  2. IT IS ASSERTABLE BY VALUE. A seeded plan can be computed twice in a test and compared, which is
+ *     the only way to pin a scatter without pinning the pictures.
+ *
+ * The generator is mulberry32 — 32 bits of state, one multiply-xor round, uniform enough for placing
+ * four flames and short enough to read. `fxSeedOf` folds any list of payload fields into that state
+ * with an FNV-1a-shaped walk; it is a SPREADER, not a hash with any security property, and nothing
+ * here depends on it having one.
+ */
+export function fxSeedOf(...parts) {
+  let h = 2166136261 >>> 0;
+  const s = parts.map((p) => String(p ?? "")).join("|");
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+export function seededRng(seed = 0) {
+  let a = (Number(seed) >>> 0) || 1;
+  return function next() {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * WHERE A PAYLOAD'S ROUNDS LANDED, as a list of points to set alight. Pure, seeded, bounded.
+ *
+ * ⭐ NEITHER BRANCH INVENTS A POSITION IT COULD HAVE ASKED FOR. That is the whole design:
+ *
+ *  - A class that draws its round as a FAN has real per-pellet endpoints, computed by the same
+ *    `pelletEndpoints` the tracer uses with the same arguments — so the flames are literally where the
+ *    pellets went. They are picked EVENLY ACROSS the fan rather than taken from one end (`step`
+ *    below), so three flames off six pellets span the cone instead of clustering on one side of it.
+ *  - A class that draws ONE bolt puts every round of the burst on the same aim point, because the
+ *    payload says how many rounds landed and never where — the same limit that makes the fan-out
+ *    assign hits to the leading rounds. So the rounds are SCATTERED around the aim inside a disc of
+ *    `scatterPx`, which is an admission that the exact square is not known rather than a claim that it
+ *    is. sqrt on the radius keeps the disc evenly covered instead of crowding the centre.
+ *
+ * `max` is the payload bound and it is applied to both branches. `landed` is the number of rounds that
+ * actually hit; a payload that landed nothing does not reach here (the call site gates on it).
+ */
+export function groundFirePoints(from, to, {
+  landed = 1, pellets = 0, spreadRad = 0, scatterPx = 0, max = GROUND_FIRE.maxPerPayload, seed = 0,
+} = {}) {
+  if (!from || !to) return [];
+  const want = Math.max(1, Math.min(Math.trunc(max), Math.trunc(landed) || 1));
+  const n = Math.trunc(pellets);
+  if (n > 1) {
+    const fan = pelletEndpoints(from, to, { pellets: n, spreadRad, hit: true });
+    if (!fan.length) return [];
+    const take = Math.min(want, fan.length);
+    const step = fan.length / take;
+    return Array.from({ length: take }, (_v, i) => fan[Math.min(fan.length - 1, Math.round(i * step + step / 2 - 0.5))]);
+  }
+  const rng = seededRng(seed);
+  const reach = Number(scatterPx) > 0 ? Number(scatterPx) : 0;
+  return Array.from({ length: want }, () => {
+    const angle = rng() * Math.PI * 2;
+    const r = Math.sqrt(rng()) * reach;
+    return { x: to.x + Math.cos(angle) * r, y: to.y + Math.sin(angle) * r };
+  });
+}
+
+/**
+ * WHERE A SHOT PATTERN'S FIRES BURN — points scattered inside the p.108 pattern a shell throws. Pure,
+ * seeded, bounded.
+ *
+ * ⭐ BUILT IN THE RAY'S OWN COORDINATES (distance along, offset across) and then rotated out, which is
+ * what makes every point INSIDE the pattern by construction rather than by a containment test that
+ * could be off by a pixel. `pointInPolygon` (combat/area-geometry.js) is the module's containment test
+ * and the keeper uses it to check this against the REAL polygon the pattern was drawn with — the
+ * construction and the check are deliberately two different pieces of arithmetic.
+ *
+ * The first `nearFraction` of the ray is left empty on purpose: that end of the pattern is the muzzle,
+ * and a fire burning on the shooter's own square says something that did not happen. `lateral` is
+ * capped inside the half-width so a flame's own sprite does not hang out of the edge the viewer just
+ * watched being drawn.
+ */
+export function patternFirePoints({
+  x = 0, y = 0, dirDeg = 0, lengthPx = 0, widthPx = 0,
+  count = GROUND_FIRE.maxPerPattern, nearFraction = 0.3, seed = 0,
+} = {}) {
+  const n = Math.max(0, Math.min(Math.trunc(count), GROUND_FIRE.maxPerPattern));
+  if (!(n > 0) || !(lengthPx > 0)) return [];
+  const rad = (Number(dirDeg) || 0) * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const near = Math.min(0.9, Math.max(0, Number(nearFraction) || 0));
+  const half = Math.max(0, (Number(widthPx) || 0) / 2) * 0.9;
+  const rng = seededRng(seed);
+  return Array.from({ length: n }, () => {
+    const along = lengthPx * (near + rng() * (1 - near));
+    const across = (rng() * 2 - 1) * half;
+    return { x: x + cos * along - sin * across, y: y + sin * along + cos * across };
+  });
+}
+
+/**
  * The point a shot LEAVES from: `offsetPx` along the line from the shooter's centre toward what it is
  * aiming at. Pure.
  *
@@ -2753,47 +2932,106 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
 }
 
 /**
- * THE INCENDIARY GROUND ELEMENTS — the burning ground and the scorch it leaves, drawn ONCE for a whole
- * payload at the point that payload landed. The two live in one verb because they are one event: the
- * fire and its mark start together and only their lifetimes differ.
+ * HOW MANY FLAMES ARE BURNING ON THIS SCENE RIGHT NOW, oldest first. The scene cap's only reader.
+ *
+ * Every flame is stamped with a name under one prefix when it is queued, which is what makes this a
+ * query rather than a ledger: the engine already knows what is alive, and a count we kept ourselves
+ * would drift the moment an effect ended for any reason we did not cause (a scene change, a reload, a
+ * GM clearing the canvas). `creationTimestamp` is the engine's own field, so "oldest" is its answer
+ * and not our guess about ordering.
+ */
+export function liveGroundFires() {
+  try {
+    const list = globalThis.Sequencer?.EffectManager?.getEffects?.({ name: `${GROUND_FIRE_NAME}.*` }) ?? [];
+    return [...list].sort((a, b) => (a?.data?.creationTimestamp ?? 0) - (b?.data?.creationTimestamp ?? 0));
+  } catch (_e) {
+    return [];
+  }
+}
+
+/**
+ * THE INCENDIARY GROUND ELEMENTS — N small flames at the points a payload's rounds landed, plus the ONE
+ * scorch those flames share. They live in one verb because they are one event: the fires and their mark
+ * start together and only their lifetimes differ.
  *
  * GATED ON THE ROW, NOT ON A NAME. The caller decides by reading `groundFire` off the resolved entry
  * (ammoFxEntry), so no branch anywhere in this file names the incendiary load — adding the field to a
  * second overlay is all it would take to give another round the same treatment.
  *
- * `delayMs` is the travelled tracer's crossing time, so the fire starts when the round arrives rather
- * than when it leaves. It is the same number the hit confirmation is held back by, read from the same
- * row field, so the two land together.
+ * ⭐ TAKES A LIST OF POINTS (2026-08-09). It used to take one point, which is what put the whole fire
+ * on the target; the caller now hands it wherever the rounds went (groundFirePoints for a fired
+ * payload, patternFirePoints for a shot pattern) and this verb only draws. The list is truncated to
+ * `maxPerPayload` here as well as at the planners, because a bound that only exists in the caller is
+ * a bound the next caller will not have.
+ *
+ * ⭐ THE SCENE CAP IS ENFORCED HERE, BY EVICTION, and only here. These burn for the best part of a
+ * minute, so across a firefight they accumulate in a way a 3-second element never could. Before
+ * placing, enough of the OLDEST live flames are ended to leave room for this placement — never the
+ * newest, because the shot a viewer is watching is the one that must be drawn. Ending is done through
+ * the engine's own manager, which relays the end to every other client exactly as the placement was
+ * relayed, so no client is left with a fire the others have put out.
+ *
+ * ONE SECTION PER FLAME, which is the file's standing answer to the randomiser trap: the engine rolls
+ * a multi-file key once per SECTION, so N flames in one section would be N identical copies of one
+ * roll. Each flame also gets its own name so the cap above can find it.
+ *
+ * `delayMs` is the travelled tracer's crossing time, so the fires start when the rounds arrive rather
+ * than when they leave. It is the same number the hit confirmation is held back by, read from the same
+ * row field, so they land together.
  *
  * NOT AWAITED by its caller and NOT TAGGED for the settle signal — see the two spec blocks above for
- * both rulings. Returns what it queued so the gate and the lifetimes are assertable by value.
+ * both rulings. Returns what it queued so the gates, the counts and the lifetimes are assertable by
+ * value.
  */
-export async function fxGroundFire(point, { delayMs = 0 } = {}) {
-  const out = { fire: false, scorch: false, fireMs: 0, scorchMs: 0 };
-  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !sequencerActive()) return out;
-  const at = { x: point.x, y: point.y };
+export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxPerPayload } = {}) {
+  const out = { fires: 0, scorch: false, fireMs: 0, scorchMs: 0, evicted: 0, at: [] };
+  const list = (Array.isArray(points) ? points : [points])
+    .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
+    .slice(0, Math.max(0, Math.trunc(max)));
+  if (!list.length || !sequencerActive()) return out;
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
   try {
-    const seq = new globalThis.Sequence();
-    // TWO SEPARATE SECTIONS, which is the file's standing answer to the randomiser trap: the engine
-    // rolls a multi-file key once per section, so the fire picking its variant and the scorch picking
-    // its own have to be two sections. They are also two different lifetimes, which one section could
-    // not express anyway.
+    // THE CAP, applied before anything is queued: make room for this placement by ending the oldest.
     if (fxDbEntryExists(GROUND_FIRE.key)) {
-      const fire = _held(seq.effect().file(GROUND_FIRE.key)).atLocation(at)
-        .size({ width: GROUND_FIRE.squares }, { gridUnits: true })
-        // Self-luminous → above the lighting, with the vision-mask trade documented at the spec block.
-        .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
-        .opacity(GROUND_FIRE.opacity)
-        .fadeIn(GROUND_FIRE.fadeInMs)
-        .duration(GROUND_FIRE.lifetimeMs)
-        .fadeOut(GROUND_FIRE.fadeOutMs);
-      if (delay > 0) fire.delay(delay);
-      out.fire = true;
+      const live = liveGroundFires();
+      const overBy = live.length + list.length - GROUND_FIRE.maxLive;
+      if (overBy > 0) {
+        const names = live.slice(0, Math.min(overBy, live.length)).map((e) => e?.data?.name).filter(Boolean);
+        out.evicted = names.length;
+        for (const name of names) {
+          globalThis.Sequencer?.EffectManager?.endEffects?.({ name })
+            ?.catch?.((err) => console.warn(`${SCOPE} | ground fire eviction failed`, err));
+        }
+      }
+    }
+    const seq = new globalThis.Sequence();
+    if (fxDbEntryExists(GROUND_FIRE.key)) {
+      for (const p of list) {
+        const fire = _held(seq.effect().file(GROUND_FIRE.key)).atLocation({ x: p.x, y: p.y })
+          .size({ width: GROUND_FIRE.squares }, { gridUnits: true })
+          // Self-luminous → above the lighting, with the vision-mask trade documented at the spec block.
+          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
+          .opacity(GROUND_FIRE.opacity)
+          // Each flame is turned a different way so a cluster does not read as one picture stamped N
+          // times. The asset is a top-down plate, so a rotation cannot disagree with anything.
+          .randomRotation()
+          .name(`${GROUND_FIRE_NAME}.${foundry.utils.randomID()}`)
+          .fadeIn(GROUND_FIRE.fadeInMs)
+          .duration(GROUND_FIRE.lifetimeMs)
+          .fadeOut(GROUND_FIRE.fadeOutMs);
+        if (delay > 0) fire.delay(delay);
+        out.fires++;
+        out.at.push({ x: Math.round(p.x), y: Math.round(p.y) });
+      }
       out.fireMs = GROUND_FIRE.lifetimeMs;
     }
     if (fxDbEntryExists(GROUND_SCORCH.key)) {
-      const scorch = _held(seq.effect().file(GROUND_SCORCH.key)).atLocation(at)
+      // ONE mark for the whole placement, at the flames' centroid — the ruling is in the GROUND_SCORCH
+      // block: this element lives for minutes, so N of them is the accumulation the payload gate exists
+      // to prevent, where N flames at 45 seconds is not.
+      const cx = list.reduce((s, p) => s + p.x, 0) / list.length;
+      const cy = list.reduce((s, p) => s + p.y, 0) / list.length;
+      const scorch = _held(seq.effect().file(GROUND_SCORCH.key)).atLocation({ x: cx, y: cy })
         .size({ width: GROUND_SCORCH.squares }, { gridUnits: true })
         // NOT above the lighting: a scorch mark is not a light source (the split is stated in the
         // LIT_SPRITE_ABOVE_LIGHTING block — self-luminous up, lit-by-the-world down).
@@ -2808,13 +3046,67 @@ export async function fxGroundFire(point, { delayMs = 0 } = {}) {
       out.scorch = true;
       out.scorchMs = GROUND_SCORCH.lifetimeMs;
     }
-    if (out.fire || out.scorch) {
+    if (out.fires || out.scorch) {
       seq.play().catch((err) => console.warn(`${SCOPE} | ground fire play failed`, err));
     }
   } catch (err) {
     console.warn(`${SCOPE} | ground fire failed`, err);
   }
   return out;
+}
+
+/**
+ * IS THIS PAYLOAD THE SHOT PATTERN'S, RATHER THAN THE SINGLE-TARGET FLOW'S? Pure.
+ *
+ * The identical call damage-hooks.js makes at both of its own gates, and made here for the same reason
+ * it is made there: the two flows never overlap, so an element that belongs to one must not be drawn
+ * for the other. The question is asked of the CARTRIDGE (spreadModeForAmmo), never of a stored flag —
+ * every shotgun ammo item ever seeded carries `spreadMode: "single"`, so reading the field would answer
+ * "not a pattern" for every shell in every existing world.
+ *
+ * ⚠ IT DELIBERATELY DOES NOT CONSULT THE PATTERN'S WORLD SETTING, because neither damage gate does: a
+ * payload's flow is decided by what was in the gun. The consequence — with the pattern switched off a
+ * shell is claimed by neither flow — is a gap in the DAMAGE routing that predates this element and is
+ * recorded as an open item; the presentation follows the mechanics either way, which is the property
+ * worth keeping.
+ */
+export function patternFlowOwns(payload) {
+  return spreadModeForAmmo({
+    spreadMode: payload?.spreadMode, caliber: payload?.caliber, modifier: payload?.modifier,
+  }) !== SPREAD_MODE_SINGLE;
+}
+
+/**
+ * DOES THIS LOAD SET FIRES — the one question the shot-pattern flow asks of this file. Pure.
+ *
+ * The pattern flow (combat/damage-hooks.js) resolves its own ammo key when it places a pattern and asks
+ * this when the GM confirms it, so the fire is decided by the SAME table every other ammo treatment is
+ * decided by. Exported rather than inlined there for the usual reason: a second copy of "which loads
+ * burn" is a second thing to keep in step with AMMO_FX.
+ */
+export function ammoLeavesGroundFire(ammoKey) {
+  return AMMO_FX[ammoKey]?.groundFire === true;
+}
+
+/**
+ * THE SHOT PATTERN'S OWN FIRES — scattered inside a confirmed pattern rather than at one aim point.
+ *
+ * ⚠ WHY THIS IS A SECOND ENTRY POINT AND NOT A BRANCH IN THE FAN-OUT. A payload is resolved by exactly
+ * one of two flows and they never overlap (the either/or is `spreadModeForAmmo`, asked in
+ * damage-hooks.js). For a pattern payload, "where the shot landed" is not the target — the Core rules
+ * say everyone in the 1-3m path is hit, which is a fact the module already asserts by damaging them —
+ * so the fires belong to the PATH. That geometry is computed by the flow that owns it, at the moment
+ * the GM commits to it, and this verb is handed the result. The fan-out correspondingly draws no
+ * ground fire for a pattern payload; the same call decides both halves, so they cannot disagree.
+ *
+ * Placed on CONFIRM rather than on placement, deliberately: an unconfirmed pattern is a GM-only aiming
+ * aid, and a fire is not. Lighting the ground when the GM is still deciding would both leak the aim and
+ * leave fires burning for a shot that was never resolved.
+ */
+export async function fxPatternGroundFire({ x, y, dirDeg, lengthPx, widthPx, count, seed } = {}) {
+  const pts = patternFirePoints({ x, y, dirDeg, lengthPx, widthPx, count, seed });
+  if (!pts.length) return { fires: 0, scorch: false, fireMs: 0, scorchMs: 0, evicted: 0, at: [] };
+  return fxGroundFire(pts, { max: GROUND_FIRE.maxPerPattern });
 }
 
 /**
@@ -3360,19 +3652,40 @@ export async function fxWeaponFired(payload) {
       .catch((err) => { console.warn(`${SCOPE} | burst ambience failed`, err); return { motes: 0 }; });
   }
 
-  // THE INCENDIARY GROUND ELEMENTS, queued ONCE for the whole payload and only when a round LANDED —
-  // a burst that misses sets nothing alight. Placed here, outside the round loop, deliberately: the
-  // loop is what would make it per-round, so keeping the call out of it IS the once-per-payload gate
-  // (the same shape as fxBurstAmbience above). Held back by the class's own crossing time so the fire
-  // starts when the round arrives. Not awaited — it must never delay the first round.
+  // THE INCENDIARY GROUND ELEMENTS — ONE placement event for the whole payload, producing N flames at
+  // the points the rounds landed, and only when a round LANDED (a burst that misses sets nothing
+  // alight). Placed here, outside the round loop, deliberately: the loop is what would make this
+  // per-ROUND, so keeping the call out of it IS the once-per-payload gate (the same shape as
+  // fxBurstAmbience above), and `maxPerPayload` bounds what the one placement may draw. Held back by
+  // the class's own crossing time so the fires start when the rounds arrive. Not awaited — it must
+  // never delay the first round.
+  //
+  // ⭐ A PATTERN PAYLOAD IS NOT DRAWN HERE, and the gate is the same call the damage rail makes
+  // (spreadModeForAmmo — damage-hooks.js asks it twice and this is the third site of the identical
+  // question, not a fourth question). A shell that throws the p.108 pattern did not land its shot on
+  // the target: the rules put it across the whole path, so its fires belong to that path and are
+  // placed by the flow that owns the geometry, when the GM confirms it (fxPatternGroundFire). Drawing
+  // both would set the same shot alight twice.
   let groundFire = null;
-  if (shooter && hits > 0 && ammoEntry?.groundFire) {
+  if (shooter && hits > 0 && ammoEntry?.groundFire && !patternFlowOwns(payload)) {
     const gridPx = Number(canvas?.dimensions?.size) || 100;
     const at = aimPointOf(shooter, target, gridPx);
-    if (at) {
-      groundFire = { queued: true, at: { x: Math.round(at.x), y: Math.round(at.y) } };
-      fxGroundFire(at, { delayMs: Number(ammoEntry.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0 })
-        .catch((err) => console.warn(`${SCOPE} | ground fire failed`, err));
+    const from = centerOf(shooter);
+    if (at && from) {
+      // Seeded off the payload, so the scatter is a property of the shot rather than of which client
+      // happened to compute it — see seededRng. The damage numbers are folded in so two identical
+      // bursts do not stamp the same picture twice.
+      const seed = fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits,
+        Math.round(at.x), Math.round(at.y), JSON.stringify(payload?.areaDamages ?? {}));
+      const pts = groundFirePoints(from, at, {
+        landed: hits, pellets: ammoEntry.pellets, spreadRad: ammoEntry.spreadRad,
+        scatterPx: GROUND_FIRE.scatterSquares * gridPx, max: GROUND_FIRE.maxPerPayload, seed,
+      });
+      if (pts.length) {
+        groundFire = { queued: true, seed, points: pts.length, at: pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) };
+        fxGroundFire(pts, { delayMs: Number(ammoEntry.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0 })
+          .catch((err) => console.warn(`${SCOPE} | ground fire failed`, err));
+      }
     }
   }
 

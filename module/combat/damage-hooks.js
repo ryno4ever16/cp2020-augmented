@@ -44,7 +44,7 @@ import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
-import { presentationSettled } from "../fx/effects.js";
+import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf } from "../fx/effects.js";
 
 // Payload waiting to be attached to the next chat message created, and WHEN it started waiting.
 //
@@ -2195,6 +2195,13 @@ export async function _placeSpreadZone(payload) {
       color: SPREAD_ZONE_LOOK.fillColor, borderColor: SPREAD_ZONE_LOOK.outlineColor,
       flags: {
         isSpreadZone: true, dmgFormula, band, attackerId, originX: ox, originY: oy, shells,
+        // ⭐ THE PATTERN'S OWN GEOMETRY, recorded because the pattern OUTLIVES the payload that threw
+        // it: the fires a burning load leaves are placed when the GM CONFIRMS (fx/effects.js
+        // fxPatternGroundFire), by which point the payload is gone and the region carries no direction
+        // or reach of its own that both cores agree on. Three numbers and the load's presentation key,
+        // written where every other fact about this pattern is already written. Presentation only — no
+        // damage path reads any of them.
+        dirDeg: angleDeg, lengthM, widthM, ammoKey: ammoFxKeyOf(payload),
         ap: Boolean(payload.ap), edged: Boolean(payload.edged), mono: Boolean(payload.mono),
         armorMultSoft: Number(payload.armorMultSoft ?? 1), armorMultHard: Number(payload.armorMultHard ?? 1),
         penDamageMult: Number(payload.penDamageMult ?? 1), weaponName, createdRound: game.combat?.round ?? 0,
@@ -2282,6 +2289,28 @@ export async function _confirmSpreadZone(templateId) {
     await ChatMessage.create({ content: resultCard });
   } else {
     ui.notifications.info(localize("NoTokensInSpread"));
+  }
+
+  // THE FIRES A BURNING LOAD LEAVES ALONG THE PATH — scattered inside the pattern, not put on one
+  // target, because for a pattern shot the path IS where the shot landed (the rows above have just
+  // damaged everyone standing in it). Placed HERE and not at placement time: an unconfirmed pattern is
+  // a GM-only aiming aid and a fire is not, so lighting the ground while the GM is still deciding would
+  // both leak the aim and leave fires burning for a shot nobody resolved.
+  //
+  // Ordered before the delete so the pattern the fires are being scattered inside is still the thing on
+  // screen; not awaited, so a resolved shot is never held up by scene dressing. The load is asked of
+  // the presentation table (ammoLeavesGroundFire), so nothing here knows which loads burn.
+  if (ammoLeavesGroundFire(f.ammoKey)) {
+    const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
+    const gridDist = scene.grid?.distance ?? 1;
+    const pxPerM = gridSize / (gridDist || 1);
+    // Seeded off the pattern's own recorded facts, so every client that computes this agrees and a
+    // keeper can compute it twice — the reasoning is at seededRng in fx/effects.js.
+    fxPatternGroundFire({
+      x: originX, y: originY, dirDeg: Number(f.dirDeg) || 0,
+      lengthPx: (Number(f.lengthM) || 0) * pxPerM, widthPx: (Number(f.widthM) || 0) * pxPerM,
+      seed: fxSeedOf(f.attackerId, f.createdAt, shells, f.band, f.dmgFormula),
+    }).catch((err) => console.warn("CP2020 | spread ground fire failed:", err));
   }
 
   await deleteArea(handle);
