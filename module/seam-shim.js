@@ -110,6 +110,12 @@ let _suppressiveCtx = null;
 // spread / DOT / taser / armor-piercing / penetration branches never fire. They live on the loaded ammo
 // item's system.* (seeded by ammoModifierSystemFields + the ammo sheet); `edged` is weapon-level for melee.
 const AMMO_EFFECT_FIELDS = [
+  // ⭐ THE AMMO'S OWN IDENTITY (FR#24). Everything else in this list is a MECHANICAL consequence of the
+  // loaded modifier; this is the modifier itself. Without it the presentation layer could only guess
+  // which load fired, from the fingerprint its mechanics left behind — and two of the thirteen (ap and
+  // dualPurpose) carry byte-identical mechanics, so they were indistinguishable at any distance. One
+  // string closes that. It is presentation-only downstream: no damage path reads it.
+  "modifier",
   "ap", "edged", "mono", "effectTypes", "blastRadius", "blastFullDamageWithin", "blastMultipliers", "blastShrapnel",
   "penDamageMult", "armorMultSoft", "armorMultHard",
   "spreadMode", "spreadDamageShort", "spreadDamageMedium", "spreadDamageLong",
