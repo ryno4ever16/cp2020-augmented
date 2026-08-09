@@ -88,6 +88,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or a promoted key | the round **hit**, and the row has `impactSquares` | yes |
 | 10 | **Burning ground** | `jb2a.ground_cracks.orange` (GroundCrackLoop) | overlay names `groundFire` **and** ≥ 1 round landed — **once per payload** | yes |
 | 11 | **Scorch** | `jb2a.scorched_earth.black` | with #10 | **no** (a black mark is not a light) |
+| 12 | **Blood splash** | `jb2a.liquid.splash02.red`, trimmed to 900 ms, random rotation | the world setting **and** ≥ 1 round landed **and** there is a target token **and** that token's actor is not structure — **once per payload** | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
 *lit by the world* stays below it. This is not cosmetic: measured on the rig at darkness 1.0, a sprite
@@ -96,6 +97,14 @@ reaches 232 the moment it is routed up. **The cost:** that route is above the *v
 lifted sprite is drawn across ground the viewer cannot see. The engine offers no route that clears the
 darkness and keeps the mask. The muzzle light is unaffected — it is a real light source and still
 clips to walls, so the flash stays honest about the room even when the bolt is drawn over it.
+
+**The one departure from that rule is the blood splash (#12).** Blood is not a light source, so the
+rule as written puts it below — and on the rig's own dark range that is not a dimmer effect, it is no
+effect (capture 58d is the same splash routed below, and there is a smudge where there should be a
+mark). The trade is therefore between an element invisible exactly where a table plays and an element
+drawn over ground the viewer cannot see, and the second is the lesser cost *here only*, because this
+element lives for under a second where the scorch that took the other side of the trade lives for
+minutes. It is a knob (`BLOOD_SPLATTER.aboveLighting`), not a constant in the draw path.
 
 ---
 
@@ -217,6 +226,7 @@ the baton-round treatment. **Known limit:** without an id, `dualPurpose` collaps
 faceTarget()                       ← awaited; the rounds start from a token already pointed
 fxBurstAmbience()                  ← once, multi-round payloads only (mote spray)
 fxGroundFire()                     ← once, incendiary + at least one hit; NOT awaited
+fxBloodSplatter()                  ← once, gore on + a hit + a flesh target token; NOT awaited
 for each round i of shots:
     if i > 0: await cadenceMs      ← the ONE wait in the loop
     sfx()                          ← audio
@@ -258,9 +268,12 @@ the trim here would under-count that element four-fold). Shipped values:
 | pistol / smg / rifle / heavy | 933 ms | 1003 ms | 933 ms |
 | shotgun | 983 ms | 1003 ms | 983 ms |
 
-**Deliberately *not* in the tail:** burst smoke, mote spray, burning ground, scorch. They are scene
-dressing that lingers on purpose; waiting for them would hold the damage window shut for seconds after
-a viewer has already called the action over.
+**Deliberately *not* in the tail:** burst smoke, mote spray, burning ground, scorch, **blood splash**.
+They are scene dressing that lingers on purpose; waiting for them would hold the damage window shut for
+seconds after a viewer has already called the action over. The exclusion is structural rather than a
+flag — none of them is given a settle name, and `presentationTailMs` takes no term for any of them, so
+no setting and no ammo can pull one into the wait. A keeper leg pins the tail across every class with
+the gore switch both ways.
 
 **An impact promotion changes the mark, not the clock.** The two promoted assets are 2267 ms (fire) and
 5033 ms (crack) against the ordinary impact's 833 ms. Every impact is played through
@@ -317,6 +330,10 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `IMPACT_FIRE` / `IMPACT_CRACK` | keys + measured clip lengths | the promoted impacts |
 | `GROUND_FIRE.lifetimeMs` | 3200 | how long the burning ground burns |
 | `GROUND_SCORCH.lifetimeMs` | 180000 | the scorch's cap — **minutes, not forever** |
+| `BLOOD_SPLATTER.key` | `jb2a.liquid.splash02.red` | the splash asset — **natively blood-coloured, no filter is applied** |
+| `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
+| `BLOOD_SPLATTER.clipMs` | 900 | the trim — content is spent by ~700 ms of an 1133 ms file |
+| `BLOOD_SPLATTER.aboveLighting` | `true` | the documented departure from the routing rule (§2) |
 | `MUZZLE_SMOKE.*` | see the block | one puff's size, phase, drift and cap |
 | `MUZZLE_MOTES.*` | see the block | speck geometry, all off the reference frame |
 | `PRESENTATION_CAP_MS` | 8000 | hard ceiling on how long the damage window may be held |
@@ -375,6 +392,15 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **FR#25, 2026-08-09** | The **starburst and the tail were one element** | Reported separately — "shotgun also has this standard starburst in addition to the spiky cone" — and decomposed on the rig: the starburst appears in a sequence carrying *only* the column, with no pellets and no hit mark drawn. It is `bullet.02`'s own baked arrival phase, ~1.5 squares off the barrel. The trim removes it; the hit confirmation at the target is a different asset and is untouched. Capture 57c. |
 | **FR#25, 2026-08-09** | The trim gets a **dwell** (220 ms, rate 0.25) rather than being left at 55 ms of wall clock | Two reasons, and the second is why it cannot be tidied away. (1) FR#21 already ruled that a *single* discharge needs ~220 ms of presence, and this is the one class that draws no lance at all. (2) Measured: the media overshoots its range end by a slice of **wall** time, so a slow rate converts less of it into clip. Rate 1 is the **worst** case, not the safest — 139 ms of clip reached against a 70 ms range. At 55/220 the worst clip reached over 16 real discharges was **59 ms**. |
 | **FR#25, 2026-08-09** | ⏪ The flechette dart's length is raised **0.8 → 1.1 sq** | User approval. 0.8 was an unmeasured guess ("smaller than buckshot's 1.0") and read faint on a painted-bolt class — capture 56e on the rifle, 57f is the same framing at 1.1. The field is the sprite's drawn *frame* width and the lit slug is roughly a fifth of it, which is the same trap the shell's pellet-size note records (0.5 read as dirt on the screen). 1.1 sits just above buckshot; what keeps a dart swarm reading as needles rather than shot is the **count and the spread**, not a shorter mark. `dashMs` is unchanged at 170, and the length is not a tail term, so no apply window moved. |
+| **BLOOD, 2026-08-09** | Blood on flesh hits is **approved, phase 1: transient only** | "Blood splatter is approved." Floor decals are explicitly out of this phase — real persistence is the same open question the scorch has, and it is answered once for both. |
+| **BLOOD, 2026-08-09** | It is **off by default**, on a world switch | This is the one thing the rail draws that a table may object to rather than merely find noisy. World-scoped and not per-player: a table that has agreed to it should not have one player watching a different scene. |
+| **BLOOD, 2026-08-09** | **No blood on a target that takes damage into structure** | Vehicles, powered armour and full-conversion bodies do not bleed. Asked at the ACTOR level (`bearsStructuralSdp`), which is the honest limit — see the next entry. |
+| **BLOOD, 2026-08-09** | The target-type question is asked **of the actor, not of the zone** | `routesToSdp` is the function that really decides, and it takes a hit LOCATION the payload does not carry: the card says how many rounds landed, never where. So a cyberlimbed character reads as flesh and still bleeds when the round in fact struck the arm. The alternative — suppressing blood for anyone wearing chrome — would be wrong far more often. A keeper leg pins both halves: the arm routes to structure, the actor does not. |
+| **BLOOD, 2026-08-09** | ⏪ The free tier **does** carry a blood-coloured asset; no colour filter is used | The unit's own design note said "no blood family, red-tint a liquid splash". Half right: nothing is *named* blood, but `jb2a.liquid.*` ships red variants. Decoded off the installed file, this one means R91 G1 B1 at 113 ms, R95 G1 B2 at 283 ms, R157 G3 B4 at 453 ms — a deep near-black red with the other two channels at zero. A ColorMatrix over that would repaint red with red. |
+| **BLOOD, 2026-08-09** | The **radial** liquid, not the side one | Measured centroids: `splash02.red` holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it is radial about its centre and needs no rotation to agree with the shot; `splash_side02.red` traverses 0.29 → 0.65 and is a directional wave. Rotation is randomised only so two hits are not the same picture. |
+| **BLOOD, 2026-08-09** | Size is the drawn **frame**, 1.5 sq; trim is where the **content** ends, 900 ms | Ink coverage falls from 17.1% of the frame at 283 ms to 0.07% at 680 ms and peak alpha is 5/255 by 963 ms, so 900 keeps every frame that has anything in it. The frame-vs-ink distinction is the same trap the flechette dart length records. |
+| **BLOOD, 2026-08-09** | Drawn **above the lighting**, against this file's own routing rule | Below it, on a dark scene, the mark does not exist (capture 58d). The accepted cost is the vision mask, for under a second. Stated as a departure with a knob rather than folded in silently. |
+| **BLOOD, 2026-08-09** | **Once per payload**, and never part of the settle wait | The same rule and the same reason as the burning ground: the fan-out caps at 30 rounds, and the damage window may not be held for scene dressing. |
 | **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 
 ---
@@ -405,6 +431,16 @@ injectable `rng` or plain arguments precisely so its output is asserted **by val
 no engine and no shot. Anything that cannot be — which asset was queued, how many were emitted, what
 colour a source was built with — is driven live and read back off the engine.
 
+The gore unit added a section of its own, and it is almost entirely negatives, because four
+independent gates each mean "this must NOT be drawn": the switch registered world-scoped and shipping
+OFF · the reader following it both ways · the target-type answer by value for flesh, npc, vehicle,
+powered armour, full conversion and the ruled cyberlimb case (which also asserts that the *zone*
+routes to structure while the *actor* does not) · the asset key resolving on the free tier and the
+installed file measuring the length the trim was chosen against · then live: nothing with the switch
+off, exactly ONE splash from a ten-round burst, nothing on a vehicle, nothing on a full conversion,
+nothing on a ruled fumble, nothing on a burst that misses, nothing when no token was aimed at, and the
+scheduled tail identical with the switch on and off.
+
 **Traps a new leg will hit.** A `timeRange` end is a **budget, not a guarantee** — the media element
 starts after the effect does and can run past the range end, so anything asserting "content X is never
 drawn" must be measured against the video's own `currentTime`, not inferred from the constant · the
@@ -417,7 +453,10 @@ this build (use `timeRange`) · `rotateTowards` sets the movement destination ·
 **numbers** on source data, so compare in core's units · the capture seam must be applied *first* in a
 chain (the engine reads the playback rate when it works out a trim point) · `endAllEffects()` between
 sections can make the engine lose a race with itself, which is why the harness absorbs exactly that one
-third-party signature and nothing else.
+third-party signature and nothing else · **a multi-document create does not guarantee the order of what
+it hands back** — this rig returned four tokens in database order, so a leg that destructured them by
+position read the wrong target's result and two gates looked broken that were not. Create one at a
+time, and assert the handle carries the actor its leg names.
 
 **Capture seams.** Screenshots on a software rasteriser cannot catch a 110 ms sprite or a pellet that
 crosses in under a frame. `_setSpriteRate`, `_setDashMs` and `_setFlashLevels` stretch the *clock*
@@ -437,7 +476,9 @@ twice.
 |---|---|
 | The discharge column's on-screen presence at the new trim | The tail ruling cut the clip from 300 ms to 55 ms and a 220 ms dwell replaces the lost presence, so the blast is now a short bright bloom rather than a developing one. Measured delivery is ~160 ms of wall clock rather than the 220 asked for (media start-up plus rate slippage under load). Nothing is wrong; it is a **look** call the user has not yet made in motion — the dwell is one constant. Captures 57a/57c. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
-| Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice. |
+| Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice, and the blood splash is transient by ruling — floor decals were explicitly held out of phase 1. Both change at the same time, in the same way, whenever that ruling arrives. |
+| Blood asks the ACTOR, not the hit location | A cyberlimbed character bleeds even when the round struck the chrome arm. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. |
+| The blood splash is routed above the lighting | The one departure from the file's own routing rule, taken because below it the mark does not exist on a dark scene. It is a **look** call the user has not yet made in motion: the cost is that a splash is drawn over ground the viewer cannot see, for under a second. One constant (`BLOOD_SPLATTER.aboveLighting`) reverses it. Captures 58a vs 58d. |
 | Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
 | Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
 | Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
