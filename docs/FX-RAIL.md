@@ -67,8 +67,16 @@ One payload is resolved by **exactly one** of two flows, and they never overlap:
    · one target, resolved by hit location                      · a ray from the shooter, width + damage by range band
    · DamageDialog, or the card's Apply button                  · EVERYONE in the path, no evasion (CP2020 p.108)
    · waits on presentationSettled()                            · GM aims a GM-only zone, then ONE Confirm card
-                                                               · confirm applies, posts one result card, deletes the zone
+                                                               · confirm applies, posts one result card, scatters
+                                                                 the burning load's fires down the
+                                                                 path, deletes the zone
 ```
+
+Since 2026-08-09 there is a **third** caller of that same question and it is on the presentation side:
+`patternFlowOwns(payload)` in `fx/effects.js`, which decides whether the fan-out draws the burning
+ground or leaves it to the pattern's own confirm. It imports the same `spreadModeForAmmo`, so the three
+cannot answer differently. It deliberately does **not** consult the pattern's world setting, because
+neither damage gate does — see §8 for what that costs.
 
 The two gates are literally the same call (`_spreadModeOf(payload)`, twice), which is the whole
 guarantee: if they ever disagreed, a shell would be damaged **twice** — once by the dialog and once by
@@ -131,8 +139,8 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
 | 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit**, and the row has `impactSquares` | yes |
-| 10 | **Burning ground** | `jb2a.ground_cracks.orange` (GroundCrackLoop) | overlay names `groundFire` **and** ≥ 1 round landed — **once per payload** | yes |
-| 11 | **Scorch** | `jb2a.scorched_earth.black` | with #10 | **no** (a black mark is not a light) |
+| 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, **45 s**, one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
+| 11 | **Scorch** | `jb2a.scorched_earth.black` | with #10 — **one** mark at the flames' centroid, however many flames | **no** (a black mark is not a light) |
 | 12 | **Blood splash** | `jb2a.liquid.splash02.red`, trimmed to 900 ms, random rotation | the world setting **and** ≥ 1 round landed **and** there is a target token **and** that token's actor is not structure — **once per payload** | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
@@ -142,6 +150,20 @@ reaches 232 the moment it is routed up. **The cost:** that route is above the *v
 lifted sprite is drawn across ground the viewer cannot see. The engine offers no route that clears the
 darkness and keeps the mask. The muzzle light is unaffected — it is a real light source and still
 clips to walls, so the flash stays honest about the room even when the bolt is drawn over it.
+
+**Where the burning ground goes (#10), which is the whole of the 2026-08-09 redesign.** A fire is put
+where the *rounds* went, never on the target, and neither answer is invented:
+
+| The class draws | Landing points are | Bound |
+|---|---|---|
+| a **pellet fan** (the shell; any class under a `flechette` load) | a subset of the very endpoints the tracer fans to, picked evenly across the cone | `maxPerPayload` = 4 |
+| **one bolt** (every other class) | one point per landed round, scattered inside a 0.8-square disc around the aim — the payload says how many rounds landed and never where, so the disc is an admission rather than a claim | `maxPerPayload` = 4 |
+| a **shot pattern** (buckshot, RAW) | scattered inside the pattern polygon, beyond its first 30 %, placed when the GM **confirms** | `maxPerPattern` = 5 |
+
+The scatter is **seeded off the payload** (`fxSeedOf` → `seededRng`), so two clients computing it agree
+and a test can compute it twice. Across bursts a scene holds at most **`maxLive` = 24** flames; a
+placement that would exceed it ends the **oldest** first, through the engine's own manager, which
+relays the end to every client exactly as the placement was relayed.
 
 **The one departure from that rule is the blood splash (#12).** Blood is not a light source, so the
 rule as written puts it below — and on the rig's own dark range that is not a dimmer effect, it is no
@@ -306,7 +328,8 @@ the baton-round treatment. **Known limit:** without an id, `dualPurpose` collaps
 ```
 faceTarget()                       ← awaited; the rounds start from a token already pointed
 fxBurstAmbience()                  ← once, multi-round payloads only (mote spray)
-fxGroundFire()                     ← once, incendiary + at least one hit; NOT awaited
+fxGroundFire(points)               ← ONE placement, N flames, incendiary + at least one hit +
+                                     the single-target flow owns the payload; NOT awaited
 fxBloodSplatter()                  ← once, gore on + a hit + a flesh target token; NOT awaited
 for each round i of shots:
     if i > 0: await cadenceMs      ← the ONE wait in the loop
@@ -365,7 +388,8 @@ the gore switch both ways.
 5033 ms (crack) against the ordinary impact's 833 ms. Every impact is played through
 `timeRange(0, impactClipMs)`, defaulting to the ordinary impact's own length — so a promotion is free
 in the dimension the user is sensitive to. What is given up is each asset's trailing fade; on
-incendiary that loss is covered by the burning ground, which sits at the same point for seconds.
+incendiary that loss is covered by the burning ground, which goes on burning where the rounds fell
+for three quarters of a minute.
 
 **Any overlay that moves a tail input must be threaded into the tail.** `flechette` gives a class a
 crossing time it did not have; `impactClipMs` changes how long the mark is drawn. Both are read
@@ -417,7 +441,14 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `BATON_ROUND` | `throwable.launch.cannon_ball.01.black`, 2.4 sq frame, 240 ms crossing | the whole less-lethal representation, in one block |
 | `IMPACT_FIRE` / `IMPACT_CRACK` / `IMPACT_DUST` | keys + measured clip lengths | the promoted impacts |
 | `AMMO_FX_RECOLOR_FIELDS` / `AMMO_FX_REPLACE_FIELDS` | colour pair / asset pair | which overlay fields may only repaint an element the class already declares |
-| `GROUND_FIRE.lifetimeMs` | 3200 | how long the burning ground burns |
+| `GROUND_FIRE.key` | `flames.orange.03.1x1` | **which picture the fire is** — the whole of the rejected/shipped decision |
+| `GROUND_FIRE.squares` | 0.9 | one flame's drawn width in grid units (0.5 reads as a spark, 1.6 as a bonfire) |
+| `GROUND_FIRE.lifetimeMs` | **45000** | how long a flame burns — the "stayed burning" call |
+| `GROUND_FIRE.fadeOutMs` | 2500 | the burn-**down** at the very end (5.6 % of the life; the rejected build spent 28 % fading) |
+| `GROUND_FIRE.scatterSquares` | 0.8 | radius of the landing scatter when the class gives no per-round geometry |
+| `GROUND_FIRE.maxPerPayload` | 4 | the most flames one payload may place |
+| `GROUND_FIRE.maxPerPattern` | 5 | the most flames one confirmed shot pattern may scatter |
+| `GROUND_FIRE.maxLive` | 24 | the most flames alive on a scene at once — oldest evicted first |
 | `GROUND_SCORCH.lifetimeMs` | 180000 | the scorch's cap — **minutes, not forever** |
 | `BLOOD_SPLATTER.key` | `jb2a.liquid.splash02.red` | the splash asset — **natively blood-coloured, no filter is applied** |
 | `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
@@ -514,6 +545,13 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **SPREAD, 2026-08-09** | Expiry is **two clocks**, and which one owns a pattern is decided when it is thrown | A pattern thrown during an encounter belongs to that encounter's rounds; one thrown outside any encounter has no round to wait for and belongs to a 60-second wall clock. Asking later — "is a combat running *now*?" — is wrong in both directions: a pattern thrown out of combat became immortal the moment somebody rolled initiative, and one thrown in combat was swept off the table if its own round ran long. The encounter id is stored, so it also survives that encounter being deleted. A pattern carrying **no** timestamp is litter from the build that had no expiry at all, and is read as expired rather than as immortal — which is what lets an already-littered world tidy itself on load instead of needing a migration. |
 | **SPREAD, 2026-08-09** | The pattern reaches the **far edge of the target's own square**, not its centre | Found by the keeper, not by eye: ending the ray exactly at the aimed-at centre put that centre *on* the polygon's end edge, so whether the token the shooter aimed at was inside its own pattern came down to a floating-point comparison. Reproduced on the rig — a three-shell burst resolved against a bystander and missed the target entirely. Half the target's own width is the smallest overshoot that settles it, and it costs no other square. |
 | **SPREAD, 2026-08-09** | An **untargeted** shell is thrown along the shooter's facing | The same answer, for the same reason, that the presentation rail already gives an untargeted shot (§6, "An untargeted shot is drawn along the shooter's own facing"). It was due east before. Honest limit, unchanged: it is only as good as a token's rotation, and the band stays Medium because an untargeted shot names no distance. Capture 60e. |
+| **BURNING GROUND, 2026-08-09** | ⏪⏪ The **ground-crack asset is rejected outright**, not re-tuned | *"The 'on fire' effect that goes on the ground when incendiary hits is not what we're looking for. First off, it looks like a ground shock effect of some kind, not fire. It darkens and cools, making it not look like an active flame."* Half of "darkens and cools" was ours and half was the asset's, and the fixes differ: decoded off the installed GroundCrackLoop file its own luminance is **flat** — mean 55–57/255 and 46 % of the frame lit at every one of twelve sample points — so the cooling was our own envelope, a 900 ms fade on a 3200 ms life, i.e. 28 % of the element was a dim-down. What no envelope could fix is the picture: it draws glowing **fissures in the floor**, which is cooling magma. The family stays in the file as the armour-piercing load's *impact* mark, which is a different element and was never the thing reported. |
+| **BURNING GROUND, 2026-08-09** | The fire is `jb2a.flames.orange.03.1x1` | Chosen from a closed enumeration of the installed tier — 2061 keys, every family whose name carries fire/flame/burn/ember/torch/brazier/lava/scorch/crack, then decoded frame by frame. Two facts decided it. **Top-down:** its own filename says 05x05ft, so it is a square ground plate; the tier's other genuine loops that hold their light are 400×600 (`Flames04`) and 400×1000 (`Campfire03`) portraits — a flame seen from the *side*, which laid on a floor reads as a wall sprite. **No decay:** 5000 ms, and its tail third measures **brighter** than its own middle (ratio 1.19), so it cannot cool inside its loop. Rejected with reasons: `campfire.01` / `bonfire.01` are ringed with **stones**; `braziers.*` has a bowl; `fire_trap.01` is a comet streak, not a fire; `fireball.loop_no_debris` is a whole burning field at 49 % coverage; `impact.fire` (already the incendiary hit mark) decays to **zero** by 1417 ms of its 2267 and is not a loop at all. |
+| **BURNING GROUND, 2026-08-09** | ⏪ **N flames at the landing points**, not one at the target | *"I was picturing something more like little animated flame decals that stayed burning on the ground in the places the shots landed, not just on the target."* Neither branch invents a position: a fanning class already computes real per-pellet endpoints for its tracer, so a subset of those **is** where its shot landed; a single-bolt class puts every round on one aim point, so its rounds are scattered inside a 0.8-square disc — an admission that the exact square is not known, which is the same limit that makes the fan-out assign hits to the leading rounds. |
+| **BURNING GROUND, 2026-08-09** | A pattern shot's fires belong to the **path**, and are placed on **confirm** | For buckshot the Core rules put the shot across the whole 1–3 m path and the module already asserts that by damaging everyone in it, so "where the shot landed" is not the target. The geometry is owned by the flow that drew it, and the fires go down when the **GM confirms**: an unconfirmed pattern is a GM-only aiming aid and a fire is not, so lighting the ground mid-decision would leak the aim and leave fires burning for a shot nobody resolved. The rail correspondingly draws none for a pattern payload, gated on the **same call** the two damage gates make (`spreadModeForAmmo`) so the three cannot disagree. |
+| **BURNING GROUND, 2026-08-09** | The gate is now **one placement event per payload**, and two bounds replace the old one | The old rule said "one fire" and existed because the fan-out caps at 30 rounds — a per-round lingering element would be thirty fires on one square for one trigger pull. That bound is unchanged: the call still sits outside the round loop, so the loop cannot multiply it, and `maxPerPayload` (4) holds the placement itself down. A **second** bound is new because these live for 45 s rather than 3.2: `maxLive` (24) caps what may burn on a scene at once, enforced by ending the **oldest** — the shot a viewer is watching is the one that must be drawn. |
+| **BURNING GROUND, 2026-08-09** | The scatter is **seeded from the payload**, not from `Math.random` | Sequencer broadcasts the resolved sequence rather than the code that built it, so today one client rolls and everyone draws the same fires — but a scatter that is only correct because of *where* it was computed is one refactor from two clients disagreeing about where a fire burns for the next 45 seconds. Seeding makes the agreement a property of the inputs. It is also the only way to pin a scatter in a test without pinning pictures: the keeper recomputes the plan from the seed the fan-out reported and compares by value. |
+| **BURNING GROUND, 2026-08-09** | Lifetime **45 s**, and the scorch stays **one** per placement | 45 s is a look call, not a measurement, taken on the precedent the scorch already set for a session-bound element with a cap in place of a persistence ruling; the fade is 5.6 % of it, against the 28 % that produced the report. The scorch deliberately does **not** follow the flame count: it lives for three minutes, so four per burst is exactly the accumulation the payload gate exists to prevent, where four 45-second flames are not. It sits at the flames' centroid and says one true thing — a fire burned here. |
 | **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 
 ---
@@ -533,7 +571,8 @@ map · **every mapped database key resolving on the free tier** (so a paid-tier-
 rather than by showing nothing) · the flash envelope by value, the applied write sequence, and that
 **no document write reaches the shooter token** other than the face-target rotation · the fan-out's
 counts and cadence · the ammo overlay resolution, every treatment's values, the tail threading, the
-once-per-payload ground gate and the flash tint through the darkness gate · two real sessions, to
+burning ground's placement gate, its planners and its scene cap, and the flash tint through the
+darkness gate · two real sessions, to
 prove the socket relay draws a flash on a client the fire never ran on · a non-GM session driving a
 write, because a rule that reads right and a write the server refuses look identical from the GM's
 side · 0 console errors.
@@ -553,6 +592,23 @@ shot **count** and spread are untouched while its size and speed are replaced; t
 key at the class's own width with no `impactScale` anywhere; and that the tail is `240 + 833` on all five
 classes. Two legs drive it live and read the file the *engine* was handed rather than the merge — an asset
 swap is exactly the change a value-only assertion cannot see.
+
+**The burning-ground section is written as the inverse of the one it replaces**, in the same way the
+baton pair's was, because the rebuild made three of its facts false on purpose. Where the old legs said
+the lifetime was *a few seconds*, that ONE fire was set, and that the fire was the crack family, the
+replacements say the lifetime is **tens of** seconds, that a ten-round burst sets **four** fires and one
+scorch, and that the crack survives only as the armour-piercing *impact* — a different element that was
+never the thing reported. Around those sit the legs the redesign needs: both planners asserted **by
+value** (a fanned class's fires must each be a member of the very pellet fan the tracer draws, and must
+span it rather than cluster; a single-bolt class's must be N distinct points inside the scatter disc);
+determinism computed **twice** and compared, with a second seed proving the seed is really the source;
+the pattern's scatter checked against the **real polygon** with the module's own `pointInPolygon`, which
+is deliberately a different piece of arithmetic from the ray-local construction that produced it; the
+either/or by value on both sides; the scene cap **driven** — enough bursts to exceed it must leave the
+cap's worth burning and not the sum — and the canvas clear leaving none; and the settle exclusion pinned
+as an identity, that an incendiary payload's apply window is byte-for-byte the ordinary one on all five
+classes. One leg decodes the shipped clip off the **installed file** and asserts its tail is no dimmer
+than its middle, because "it darkens and cools" is a claim about frames and is answered with frames.
 
 The gore unit added a section of its own, and it is almost entirely negatives, because four
 independent gates each mean "this must NOT be drawn": the switch registered world-scoped and shipping
@@ -620,6 +676,8 @@ twice.
 
 | Item | State |
 |---|---|
+| **The burning ground's size, density and lifetime are not signed off** | ⚠ **The open item of this unit.** The asset was chosen by measurement and the placement was ruled, but three numbers are look calls the build lane made while the user was away: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**, and a flame burns **45 s**. Each is one constant, and a veto costs nothing: `GROUND_FIRE.squares`, `.maxPerPayload` / `.maxPerPattern`, `.lifetimeMs`. Captures 61a–61d. |
+| A shell fired with the shot pattern **switched off** is claimed by neither flow | ⚠ Pre-existing, in the DAMAGE routing rather than in this rail, and surfaced by building against it. `_hookWeaponFired` stands down for any non-single cartridge and `_hookSpread` stands down when the world setting is off, so with the setting off a buckshot payload opens no damage window and throws no pattern. The burning ground follows the mechanics — it draws nothing either — which is the right way round but does not fix the routing. |
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
 | The discharge column's on-screen presence at the new trim | The tail ruling cut the clip from 300 ms to 55 ms and a 220 ms dwell replaces the lost presence, so the blast is now a short bright bloom rather than a developing one. Measured delivery is ~160 ms of wall clock rather than the 220 asked for (media start-up plus rate slippage under load). Nothing is wrong; it is a **look** call the user has not yet made in motion — the dwell is one constant. Captures 57a/57c. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
