@@ -226,10 +226,33 @@ function installRenderEmit() {
           //     to this, and the damage handler never reads it at all.
           targetTokenId: target?.id ?? null,
           fxTargetTokenId: _fireCtx.fxTargetTokenId ?? null,
+          // WHO PULLED THE TRIGGER. This hook is a LOCAL `Hooks.callAll` — it is raised only on the
+          // client that resolved the shot, never broadcast — so this field names the one client that
+          // has the shot in hand. The damage handler uses it to decide who presents the result:
+          // without it, that decision fell to whoever happened to hold the "active GM" seat, and at a
+          // table with two GM sessions the GM who fired was not that seat, so nobody opened the apply
+          // window for their own shot. A payload that lacks the field (a relayed or re-emitted one)
+          // keeps the seat rule; see the gate in damage-hooks.js.
+          firedByUserId: game.user?.id ?? null,
           targetActorId: target?.actor?.id ?? _fireCtx.fallbackTargetActorId ?? null,
           // Natural-1 on the attack roll (the multi-hit card carries it) — drives the mono
           // break-on-fumble rule in the weaponFired handler. Absent on non-melee cards → false.
           fumble: rollIsNaturalOne(data?.attackRoll),
+          // ⭐ THE BASE'S OWN FUMBLE RULING, which is a DIFFERENT question from the field above and is
+          // why both are carried. `fumble` is "the attack die came up 1" and is true whether or not the
+          // table is in play; this one is true only when the base actually RESOLVED a fumble — its
+          // `_maybeApplyRangedFumble` builds this block only when the `fumbleTableEnabled` setting is on,
+          // and every path that builds it also sets `forceMiss`. So this is the honest signal for "the
+          // round never went down-range": with the table OFF a natural 1 is an ordinary bad roll and the
+          // gun really did fire, and suppressing that shot's presentation would be wrong.
+          //
+          // Reported from the table: a fumbled shot still drew a full muzzle blast down-range. The base
+          // hands the card `fired: 1` on a fumble whatever the outcome was (roundsFired is computed
+          // before the ruling is consulted), so the count alone cannot tell the rail that nothing was
+          // discharged — measured on the rig: fired 1 / hits 0 / fumble block present. Only a boolean is
+          // carried, not the block: the title/html are localized prose for the CARD, and the rail needs
+          // one yes/no.
+          fumbleRuled: !!data?.fumble,
           ...(_fireCtx.effectFields ?? {}),   // explosion/gas/spread/DOT/taser/AP/pen fields from the ammo
         });
       } else if (_suppressiveCtx && path === SUPPRESSIVE_TEMPLATE) {
