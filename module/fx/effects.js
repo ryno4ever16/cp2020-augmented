@@ -836,19 +836,43 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  *    a near-white bolt. "Colder" here is desaturation, deliberately NOT a rotation toward blue: the
  *    tier's blue bullets are its energy-weapon read (see the note on the class table), so rotating a
  *    slug toward blue would say "laser", which is the opposite of the fact being conveyed.
- *  - INERT (rubber / stundart): saturation halved and brightness pulled DOWN. It is the only matrix
- *    that darkens, and that is the point — a baton round is the one load that should look like it is
- *    carrying less energy than a standard one.
+ *  - INERT (formerly rubber / stundart): saturation halved and brightness pulled DOWN.
+ *    ⏪⏪ RETIRED FROM USE 2026-08-09 ON USER RULING. It was the only matrix that darkened, and that was
+ *    reported as the defect: "what you did for rubber bullets doesn't look good — instead of
+ *    darkening/muting the color, let's look for a better asset to represent rubber bullets." The
+ *    premise it was built on — that a baton round should look like it carries less energy — is not
+ *    wrong about the round, but it is wrong about the SCREEN: a dimmed sprite on a dark scene is not a
+ *    quieter round, it is a round the eye has to hunt for (capture 59-control). Colour is now the wrong
+ *    lever for this load entirely; the round is said with a different ASSET (see BATON_ROUND below).
+ *    Left declared rather than deleted, the way this file leaves every superseded mechanism wired: it
+ *    is one row field from returning if the replacement is vetoed.
  *
- * ⚠ NO WIDTH LEVER EXISTS. "A thinner bolt for AP" was considered and cannot be built: a painted
- * (stretched) tracer takes its width from the asset's own frame and Sequencer's size call on a
- * stretched effect controls the stretch, not the cross-section. Colour is the whole available palette
- * for a painted tracer, which is why all three of these are colour and why the two treatments that
- * genuinely change SHAPE (flechette's fan, the impact promotions) do it with different fields.
+ * ⚠ NO WIDTH LEVER EXISTS FOR A PAINTED BOLT. "A thinner bolt for AP" was considered and cannot be
+ * built: a painted (stretched) tracer takes its width from the asset's own frame and Sequencer's size
+ * call on a stretched effect controls the stretch, not the cross-section. Colour is the whole available
+ * palette for a painted tracer, which is why the two live matrices here are colour and why the
+ * treatments that genuinely change SHAPE (flechette's fan, the impact promotions, and now the baton
+ * round's travelled slug) do it with different fields.
  */
 export const TRACER_COLOR_INCENDIARY = Object.freeze({ hue: -20, saturate: 0.30, brightness: 1.20 });
 export const TRACER_COLOR_HARDENED   = Object.freeze({ hue: 8,   saturate: -0.85, brightness: 1.45 });
 export const TRACER_COLOR_INERT      = Object.freeze({ hue: 0,   saturate: -0.55, brightness: 0.60 });
+
+/**
+ * THE BATON MATRIX (2026-08-09) — what the baton round's own elements are repainted with.
+ *
+ * ⭐ THE ONE NUMBER TO READ IS `brightness: 1.30`, and it is above 1 on purpose: the treatment this
+ * replaces pulled it to 0.60 and the user rejected exactly that. This matrix takes the COLOUR out and
+ * leaves the light in. It is applied to two things and says a different true thing about each:
+ *  - the ROUND (BATON_ROUND's asset) is already greyscale — mean luminance 99/255 measured off the
+ *    installed file — so saturation does nothing here and the brightness is the whole point: it lifts a
+ *    dark grey slug to a pale one that reads against a black floor.
+ *  - the shell's DISCHARGE COLUMN is `bullet.02`'s orange bloom, so here the desaturation is the whole
+ *    point: a reduced-pressure less-lethal load's blast is gas and pale flash rather than fire.
+ * One matrix for both is not a shortcut — it is what makes the shell's two elements agree, which is the
+ * standing uniformity ruling (§ the AMMO_FX block).
+ */
+export const TRACER_COLOR_BATON = Object.freeze({ hue: 0, saturate: -0.85, brightness: 1.30 });
 
 /**
  * How far the discharge column is stretched, in grid units, measured from the shooter's own edge.
@@ -1113,6 +1137,85 @@ export const IMPACT_FIRE = Object.freeze({ key: "jb2a.impact.fire.01.orange", cl
 export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orange", clipMs: 5033 });
 
 /**
+ * THE THIRD PROMOTED IMPACT (2026-08-09) — the BLUNT mark, for a round that does not penetrate.
+ *
+ * `jb2a.smoke.puff.ring.01.white`, 1067ms measured off the installed file (three variants under the
+ * key, so successive hits do not stamp the identical puff — the same property IMPACT_CRACK has). It is
+ * NOT given its own `impactClipMs`: the default trim is the ordinary mark's 833ms, which is the
+ * promotion rule above applied unchanged, and it lands neatly — ink coverage peaks at 0.46s and the
+ * ring is breaking up by 0.76s, so 833 keeps the whole readable life and drops the dying specks.
+ *
+ * ⭐ WHY THIS ONE, out of a closed enumeration of the free tier's impacts (decoded frame by frame, not
+ * chosen by name):
+ *   impact.001/002/003/011/012.blue ...... yellow or electric SPIKE STARBURSTS. Ruled out by the
+ *                                          standing 2026-08-08 no-starburst ruling, which is about the
+ *                                          shape and not about the colour.
+ *   impact.water.02.blue ................. a wet splat leaving a smudge. Reads liquid, not blunt.
+ *   side_impact.part.smoke.blue.01-03 .... crystalline shards, 3067ms. Reads ice/magic.
+ *   side_impact.part.shockwave.blue ...... concentric rings, and the best BLUNT read on the tier — but
+ *                                          the arcs face one baked direction and the impact is drawn
+ *                                          with no rotation, so it would point the same way whichever
+ *                                          way the shot went. Rejected on that, not on looks.
+ *   smoke.puff.centered.grey ............. wispy curls, 2300ms, peak luminance 87/255. Too slow and too
+ *                                          faint to read as an arrival at all.
+ *   smoke.puff.ring.01.white ............. ⭐ blooms to a solid cloud by 0.30s and opens into a ring of
+ *                                          dust; radial, so no rotation question; peak luminance
+ *                                          217/255, so it exists on a dark range.
+ *
+ * ⚠ IT IS SMOKE ROUTED ABOVE THE LIGHTING, which is a departure from this file's own routing rule in
+ * the same shape as the blood splash's — dust does not glow. It is not a NEW departure: the impact draw
+ * path lifts every hit mark unconditionally, so this asset simply inherits what the element already
+ * does. Recorded here so a reader meets the fact at the asset rather than discovering it.
+ */
+export const IMPACT_DUST = Object.freeze({ key: "jb2a.smoke.puff.ring.01.white", clipMs: 1067 });
+
+/**
+ * THE BATON ROUND (2026-08-09, user ruling) — the less-lethal load drawn as a SOLID OBJECT instead of
+ * as a light. Everything the rubber/stun-dart treatment is made of, in one block, because a veto lands
+ * on the whole idea rather than on one of its numbers.
+ *
+ * ⭐ WHAT THE RULING ASKED FOR. "What you did for rubber bullets doesn't look good. Instead of
+ * darkening/muting the color, let's look for a better asset to represent rubber bullets." So the load
+ * is now identified by WHAT IS DRAWN, not by how dim it is.
+ *
+ * `key` — `jb2a.throwable.launch.cannon_ball.01.black`. Enumerated against the free tier's whole ranged
+ * family rather than picked by name; what is actually available as a non-glowing projectile is:
+ *   bullet.03.blue ........ a blue bolt that develops a full spiky STARBURST at 0.30s and a rayed radial
+ *                           bloom at 0.44s — more "magical" than the orange bullet it would replace, so
+ *                           ruled out by the standing no-starburst ruling.
+ *   snowball_toss.white ... 2867ms, and it ends in snowflakes and ice crystals.
+ *   boulder.toss.02 ....... a tumbling rock. Legible, and it was captured as candidate C (59c) — but its
+ *                           art travels BACKWARD across its own frame (centroid 0.46 → 0.27 → 0.65 of
+ *                           frame width) and it reads as a thrown stone rather than as a fired round.
+ *   throwable.launch.cannon_ball.01.black ... ⭐ a solid tumbling slug with a short speed trail, 467ms
+ *                           in the short band, centroid sweeping cleanly forward 0.37 → 0.59. This is
+ *                           the tier's only manufactured-looking inert projectile.
+ *
+ * `squares` = 2.4 — the sprite's drawn FRAME width in grid units, not the slug. Same trap the flechette
+ * dart's length records, and measured the same way: the ball occupies 0.10–0.25 of the frame's width
+ * across the clip, so 2.4 puts roughly 0.25–0.55 of a square of actual ball on the screen — just above
+ * buckshot's ~0.42sq of lit streak at its own 1.0. Do not read 2.4 as "a slug two squares wide".
+ *
+ * `crossMs` = 240 — how long the round takes to cross to what was aimed at, against buckshot's 150 and
+ * the flechette dart's 170. It is the SLOWEST thing this rail fires, and that is the second half of the
+ * representation: a baton round is the one load you can watch arrive. This is a TAIL INPUT (see
+ * presentationTailMs) and it is threaded, so the apply window moves with it rather than behind it.
+ *
+ * ⭐ THE TRAVELLED FORM IS ALSO WHAT MAKES THE SWAP SAFE, and that is worth stating because it looks
+ * like a style choice and is not. A painted (stretched) tracer's on-screen life is the ASSET's own clip,
+ * bounded once for the whole rail by TRACER_CLIP_MS = 933 — measured as the upper bound of the two
+ * bullet families. This asset's bands run 467 / 767 / 1167 / 2067 / 2433ms, so painting it would put
+ * two of five bands past that bound and the tail would come back short with no signal — the silent,
+ * one-directional failure presentationTailMs warns about. A travelled sprite's life is `dashMs +
+ * DASH_ARRIVAL_HOLD_MS` and owes the asset nothing.
+ */
+export const BATON_ROUND = Object.freeze({
+  key: "jb2a.throwable.launch.cannon_ball.01.black",
+  squares: 2.4,
+  crossMs: 240,
+});
+
+/**
  * ⭐ THE RULE THAT KEEPS AN IMPACT PROMOTION FROM MOVING THE CLOCK: a promoted impact is drawn for the
  * SAME time the ordinary one is, by trimming it. It changes the MARK, not the PACING.
  *
@@ -1202,8 +1305,17 @@ export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orang
  *    ⚠ It is also the reason presentationTailMs takes an ammo key — `dashMs` is a tail input, and an
  *    overlay that changes it while the tail is computed from the bare class row would open the apply
  *    window early. The length is NOT a tail input, so this change moves no window: `dashMs` stays 170.
- *  - `rubber` / `stundart` — the inert pair: dull bolt, small impact. They differ mechanically only in
- *    the stun modifier, which is not a visible fact, so they draw alike.
+ *  - `rubber` / `stundart` — the BATON pair, and the only overlay that changes what the round IS rather
+ *    than what colour it is. The round becomes a solid travelled slug (BATON_ROUND), the hit becomes a
+ *    dust puff (IMPACT_DUST), and the one matrix that repaints them (TRACER_COLOR_BATON) also repaints
+ *    the shell's discharge column, so the shell's two elements agree — the standing uniformity ruling.
+ *    They differ mechanically only in the stun modifier, which is not a visible fact, so they draw alike.
+ *    ⏪⏪ SUPERSEDES the dulled-bolt/small-mark treatment (tracer brightness 0.60, `impactScale` 0.6),
+ *    rejected on report 2026-08-09: "instead of darkening/muting the color, let's look for a better
+ *    asset to represent rubber bullets." Both halves of that treatment are gone, and the second half
+ *    deliberately: a blunt round does not make a SMALLER mark than a bullet, it makes a different one,
+ *    and shrinking it was the same "say it with less" reflex the ruling rejected. The mark is now
+ *    identified by its picture and drawn at the class's own width. Captures 59-control vs 59b.
  */
 export const AMMO_FX = Object.freeze({
   api: Object.freeze({
@@ -1226,8 +1338,22 @@ export const AMMO_FX = Object.freeze({
   hollowPoint: Object.freeze({ impactScale: 1.6 }),
   safety: Object.freeze({ impactScale: 0.55 }),
   flechette: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 1.1, dashMs: 170, impactScale: 0.7 }),
-  rubber: Object.freeze({ tracerColor: TRACER_COLOR_INERT, columnColor: TRACER_COLOR_INERT, impactScale: 0.6 }),
-  stundart: Object.freeze({ tracerColor: TRACER_COLOR_INERT, columnColor: TRACER_COLOR_INERT, impactScale: 0.6 }),
+  rubber: Object.freeze({
+    tracer: BATON_ROUND.key,
+    tracerColor: TRACER_COLOR_BATON,
+    columnColor: TRACER_COLOR_BATON,
+    dashSquares: BATON_ROUND.squares,
+    dashMs: BATON_ROUND.crossMs,
+    impactKey: IMPACT_DUST.key,
+  }),
+  stundart: Object.freeze({
+    tracer: BATON_ROUND.key,
+    tracerColor: TRACER_COLOR_BATON,
+    columnColor: TRACER_COLOR_BATON,
+    dashSquares: BATON_ROUND.squares,
+    dashMs: BATON_ROUND.crossMs,
+    impactKey: IMPACT_DUST.key,
+  }),
 });
 
 /**
@@ -1240,6 +1366,23 @@ export const AMMO_FX = Object.freeze({
  * the 2026-08-09 pellet ruling. Do not "tidy" it to a falsy check.
  */
 export const AMMO_FX_RECOLOR_FIELDS = Object.freeze(["tracerColor", "columnColor"]);
+
+/**
+ * The overlay fields that may only REPLACE an element's asset, never ADD the element — the same rule as
+ * the recolour fields above, extended (2026-08-09) from "what colour is it" to "what picture is it".
+ *
+ * WHY THIS EXISTS. The baton treatment is the first overlay that says the round with a different FILE
+ * rather than with a different colour, and a bare overwrite would have made `column` a way to hand a
+ * pistol a shotgun's discharge blast — precisely the thing the repaint-never-add ruling forbids for
+ * `columnColor` one field away. Rather than trust that nobody writes that row, the mask is widened so
+ * the guarantee is structural. Nothing shipping today changes behaviour: every class row declares
+ * `tracer`, so a `tracer` swap reaches all five exactly as before, and no shipped overlay names
+ * `column` at all.
+ *
+ * ⚠ SAME `=== undefined` TEST, for the same reason — key presence, so the shell's declared-but-unpainted
+ * fields keep meaning what they mean. See the AMMO_FX block.
+ */
+export const AMMO_FX_REPLACE_FIELDS = Object.freeze(["tracer", "column"]);
 
 /**
  * WHICH LOAD FIRED — the ammo key for one weaponFired payload. Pure.
@@ -1299,9 +1442,10 @@ export function ammoFxFingerprintKey(payload) {
  * field-by-field comparison.
  *
  * THREE STEPS, in this order:
- *  1. RECOLOUR FIELDS are applied only where the class row already CARRIES them — key presence, so a
+ *  1. THE MASKED FIELDS are applied only where the class row already CARRIES them — key presence, so a
  *     row carrying `null` is repaintable while painting nothing itself (the ruling in the AMMO_FX
- *     block — repaint, never add).
+ *     block — repaint, never add). Two lists, one rule: AMMO_FX_RECOLOR_FIELDS is what colour an
+ *     element is, AMMO_FX_REPLACE_FIELDS is which picture it is.
  *  2. Everything else is a plain overwrite, so an overlay may genuinely give a class an element it did
  *     not have: that is how flechette gives a rifle a fan of darts.
  *  3. `impactScale` is spent against the CLASS's own impact width and then removed from the result, so
@@ -1319,7 +1463,8 @@ export function ammoFxEntry(weaponClass, ammoKey = null) {
   if (!overlay) return base;
   const out = { ...base };
   for (const [field, value] of Object.entries(overlay)) {
-    if (AMMO_FX_RECOLOR_FIELDS.includes(field) && base[field] === undefined) continue;
+    const masked = AMMO_FX_RECOLOR_FIELDS.includes(field) || AMMO_FX_REPLACE_FIELDS.includes(field);
+    if (masked && base[field] === undefined) continue;
     out[field] = value;
   }
   if (out.impactScale !== undefined) {
