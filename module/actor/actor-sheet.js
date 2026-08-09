@@ -926,20 +926,37 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           const effective = gearProviders.filter(g => !g.dualWieldOnly || fireOptions.dualWield);
           fireOptions.extraMod = (Number(fireOptions.extraMod) || 0) + gearModSum(fireOptions, effective);
         }
-        // Close the moment the shot ACTUALLY GOES OUT, rather than when the whole roll settles.
+        // Get the window OFF THE SCREEN the moment the shot actually goes out — in the same frame, not
+        // when the close finishes.
         //
-        // WHY: the base dialog closes itself only after `onConfirm` resolves, and that chain awaits an
-        // options-save and then the roll's own chat card — two server round trips. The shot's visuals
-        // start inside the roll, so the dialog sat over the action it had just triggered for the whole
-        // of them. `cyberpunk2020.weaponFired` is emitted from inside the roll and ONLY for a shot that
-        // resolved, so closing on it is early enough to clear the view and late enough to be certain.
+        // WHY IT IS A CLASS AND NOT JUST close(): closing an ApplicationV2 is asynchronous (it awaits
+        // its own teardown), so even asking for it at the announcement left the window drawn over the
+        // opening frames of the shot — the reported "it still doesn't fully disappear before the
+        // animation starts". Hiding is a single synchronous classList add, so it lands in the tick the
+        // shot is announced and the stage is clean before the rail draws anything. The real close is
+        // then left to proceed in the background: it does the teardown, and the window is already gone
+        // as far as anyone watching is concerned. NOTHING IS DELAYED to achieve this — the shot is not
+        // held back for a close, which is the whole point of doing it this way round.
         //
-        // The base's own rule is left intact: a roll that returns false never emits the event, so the
-        // dialog stays open for correction exactly as it does upstream, and the base's later close()
-        // on success is a no-op against an already-closed window. Melee, which emits no such event,
-        // simply keeps the upstream timing. The listener is removed either way.
+        // `.cp-hidden` is the codebase's existing hide class (css/cp2020-augmented.css) — reused rather
+        // than restyled, and no inline style is set on the element.
+        //
+        // The base's own rule is left intact: a roll that returns false never emits the event, so a
+        // rejected shot neither hides nor closes the window and it stays open for correction exactly as
+        // upstream. Melee, which emits no such event, keeps the upstream timing. The listener is
+        // removed either way.
+        // ⚠ AND THE CLOSE IS UNANIMATED, which is the half that was missing. Read off this core:
+        // ApplicationV2's close adds `minimizing`, sets `maxHeight: 0`, and then — unless `animate` is
+        // false — AWAITS its own CSS transition with a 1000ms ceiling before tearing the element down.
+        // So the default close leaves the window in the DOM, mid-fade, across the opening of the shot;
+        // asking for the close at the announcement did not help, because the announcement is where the
+        // fade STARTS. Passing `animate: false` skips the awaited transition and goes straight to
+        // teardown. The hide above stays as the belt-and-braces half: it is one synchronous class in
+        // the announcement's own tick, so the window stops being painted immediately even though the
+        // teardown that follows is still asynchronous.
         const closeOnFire = Hooks.once("cyberpunk2020.weaponFired", () => {
-          try { dialog.close(); } catch (_e) { /* already closed by the base path */ }
+          try { dialog.element?.classList?.add("cp-hidden"); } catch (_e) { /* no element yet */ }
+          try { dialog.close({ animate: false }); } catch (_e) { /* already closed by the base path */ }
         });
         try {
           return await item.__weaponRoll(fireOptions, targetTokens);
