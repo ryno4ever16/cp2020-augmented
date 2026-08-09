@@ -1132,10 +1132,22 @@ export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orang
  *    bloom; a safety round is built NOT to over-penetrate, and its mark is correspondingly small.
  *    Nothing else changes for either: same colour, same asset, same timing.
  *  - `flechette` — the one overlay that changes the SHAPE of the round. It is a fan of darts, so it
- *    takes the travelled-fan fields the shell class already uses, on whatever class fires it: more
- *    darts than the shell's buckshot, spread wider, each dart smaller and faster. ⚠ It is also the
- *    reason presentationTailMs takes an ammo key — `dashMs` is a tail input, and an overlay that
- *    changes it while the tail is computed from the bare class row would open the apply window early.
+ *    takes the travelled-fan fields the shell class already uses, on whatever class fires it.
+ *    ⚠ CORRECTED 2026-08-09: this note used to say "each dart smaller and faster" than buckshot, and
+ *    the table has never said that. Against the shell row the dart is LONGER (1.1 vs 1.0), SLOWER
+ *    across the shot (170ms vs 150ms) and lands a SMALLER mark (×0.70). What makes it read as a needle
+ *    swarm is the COUNT (8 vs 6), the wider SPREAD (0.10 vs 0.07 rad) and that small mark — not a
+ *    shorter or quicker projectile. A keeper leg now pins the direction of each of those comparisons.
+ *    ⏪ `dashSquares` 0.8 → 1.1 (2026-08-09, user approval). 0.8 was picked as "smaller than buckshot"
+ *    (the shell's 1.0) and never measured, and it read FAINT on a painted-bolt class — capture 56e on
+ *    the rifle. The number is the sprite's drawn WIDTH, not the visible slug: this asset animates a
+ *    bullet with a trail across its own frame, so the lit part is roughly a fifth of it (the same
+ *    caution the shell's own pellet-size note records, where 0.5 read as dirt on the screen). 1.1 sits
+ *    just above buckshot's 1.0 — legible on a lit slug while the spread and the count are what keep it
+ *    reading as a needle swarm rather than as shot. Compare 56e against 57f.
+ *    ⚠ It is also the reason presentationTailMs takes an ammo key — `dashMs` is a tail input, and an
+ *    overlay that changes it while the tail is computed from the bare class row would open the apply
+ *    window early. The length is NOT a tail input, so this change moves no window: `dashMs` stays 170.
  *  - `rubber` / `stundart` — the inert pair: dull bolt, small impact. They differ mechanically only in
  *    the stun modifier, which is not a visible fact, so they draw alike.
  */
@@ -1159,7 +1171,7 @@ export const AMMO_FX = Object.freeze({
   }),
   hollowPoint: Object.freeze({ impactScale: 1.6 }),
   safety: Object.freeze({ impactScale: 0.55 }),
-  flechette: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 0.8, dashMs: 170, impactScale: 0.7 }),
+  flechette: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 1.1, dashMs: 170, impactScale: 0.7 }),
   rubber: Object.freeze({ tracerColor: TRACER_COLOR_INERT, columnColor: TRACER_COLOR_INERT, impactScale: 0.6 }),
   stundart: Object.freeze({ tracerColor: TRACER_COLOR_INERT, columnColor: TRACER_COLOR_INERT, impactScale: 0.6 }),
 });
