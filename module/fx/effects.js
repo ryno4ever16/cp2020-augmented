@@ -164,11 +164,21 @@ export const FACING_AIM_SQUARES = 3;
  * The flash colour for a scene at `darkness` — the reference's own value in the dark, null in the
  * light. Pure, so both regimes are assertable without a canvas. A non-finite darkness is treated as
  * lit (null), which is the safe half: it can only ever fail to colour, never stain a lit floor.
+ *
+ * ⭐ `ammoColor` (FR#24) — the loaded round's OWN flash colour, where its overlay names one (AMMO_FX,
+ * `flashColor`). It replaces the reference colour INSIDE the dark regime and nowhere else, which is
+ * the whole reason the parameter enters here rather than at the source: the darkness gate is
+ * inviolable (the 44.8%-of-frame lit-floor stain measured above is what it exists to prevent), and a
+ * tint threaded through this function CANNOT bypass it — below the threshold the early return has
+ * already fired and the answer is null whatever the ammo asked for. A null/absent ammo colour leaves
+ * the reference value exactly as it was, so every unmodified load is byte-identical to before.
  */
-export function flashColorFor(darkness) {
+export function flashColorFor(darkness, ammoColor = null) {
   const d = Number(darkness);
   if (!Number.isFinite(d)) return null;
-  return d >= MUZZLE_LIGHT.darknessColorThreshold ? MUZZLE_LIGHT.referenceColor : null;
+  if (d < MUZZLE_LIGHT.darknessColorThreshold) return null;
+  const ammo = typeof ammoColor === "string" ? ammoColor.trim() : "";
+  return ammo || MUZZLE_LIGHT.referenceColor;
 }
 
 /** The darkness of the scene this client is looking at, for the colour regime. 0 when unknown. */
@@ -494,6 +504,13 @@ export const DASH_ARRIVAL_HOLD_MS = 260;
  * dash to arrive before the impact is drawn — a class whose tracer crosses in `dashMs` would
  * otherwise confirm the hit while its own pellets were still in the air. A painted (stretched) tracer
  * is drawn across the whole line at once and needs no delay.
+ *
+ * ⭐ `key` IS NOW A DEFAULT RATHER THAN THE ANSWER (FR#24). fxShot plays `entry.impactKey` where the
+ * resolved row names one and this key otherwise, so a class row or an ammo overlay can promote the
+ * mark — the incendiary load's fire impact, the armour-piercing load's ground crack — with no new
+ * branch: the existing tier gate simply guards the resolved key instead of this one. `clipMs` likewise
+ * became the DEFAULT trim length (`entry.impactClipMs`), which is what keeps a promotion from moving
+ * the apply window; the rule and what it costs are stated in the impact-promotion block below AMMO_FX.
  */
 export const HIT_CONFIRM = Object.freeze({
   key: "jb2a.impact.005.orange",
@@ -501,6 +518,81 @@ export const HIT_CONFIRM = Object.freeze({
   // Measured off the installed file (833ms). This is the LAST thing a landing round puts on screen,
   // so it is what "the action has finished" means for that round — see presentationTailMs.
   clipMs: 833,
+});
+
+/**
+ * THE BURNING GROUND — fire left at the point an incendiary payload landed. Drawn ONCE PER PAYLOAD.
+ *
+ * ⭐ ONCE PER PAYLOAD IS THE WHOLE GATE, and it is the same gate `smokeSingle` and fxBurstAmbience sit
+ * behind for the same reason: the fan-out caps at MAX_FX_SHOTS (30) rounds, so a per-round element
+ * that lingers for seconds would put thirty overlapping fires on one square for one trigger pull. One
+ * burst sets one fire. The call site is outside the round loop, which is what enforces it — there is
+ * no counter to get wrong.
+ *
+ * ⚠ NOT PERSISTENT, and the lifetime is a cap rather than a look: `lifetimeMs` is a few seconds so the
+ * fire is a consequence a viewer connects to the shot they just watched. The asset is a TRUE LOOP
+ * (GroundCrackLoop_01..03, 2667ms measured on the install), so it runs to the lifetime cleanly instead
+ * of ending mid-animation, and the key is the parent path so the three variants rotate per payload.
+ *
+ * ⚠⚠ THE TRADE, ACCEPTED BY THE USER RATHER THAN HIDDEN: this is self-luminous, so it takes the
+ * above-lighting route (LIT_SPRITE_ABOVE_LIGHTING) like every other thing on this rail that emits
+ * light — and that route is above the VISION mask as well as the darkness, so a fire burning behind a
+ * wall is drawn to a viewer who cannot see that square. The engine offers no route that clears the
+ * darkness and keeps the mask (the measurement and the finding are in the LIT_SPRITE_ABOVE_LIGHTING
+ * block). The alternative was a fire that is invisible in the dark, which is the only place it exists
+ * to be seen. The muzzle LIGHT is unaffected either way — it is a real light source and still clips.
+ *
+ * ⛔ EXCLUDED FROM THE SETTLE SIGNAL, deliberately and by construction: nothing here is given a
+ * settleTag name, and presentationTailMs takes no term for it. The apply window opens when the last
+ * ROUND has finished, per the 2026-08-08 ruling; a fire that is meant to go on burning afterwards is
+ * scene dressing in exactly the sense that ruling names, and waiting for it would hold the damage
+ * window shut for the whole burn.
+ */
+export const GROUND_FIRE = Object.freeze({
+  key: "jb2a.ground_cracks.orange",
+  squares: 1.6,
+  lifetimeMs: 3200,
+  fadeInMs: 250,
+  fadeOutMs: 900,
+  opacity: 0.85,
+});
+
+/**
+ * THE SCORCH — the mark the fire leaves behind, drawn with it and outliving it by minutes.
+ *
+ * ⚠ WHAT THIS HONESTLY IS, stated at the site because the limit is invisible from the outside: it is a
+ * long-lived SEQUENCER EFFECT, not a Tile and not a document. It is bound to the session — a page
+ * reload, a scene change or a client reconnect takes it away, and it never existed for a client that
+ * joined after the shot. NOTHING IS WRITTEN, which is the requirement: this rail performs exactly one
+ * document write (the face-target turn) and a decal that persisted properly would be a second one, on
+ * the scene, from whichever client happened to resolve the shot.
+ *
+ * Real persistence is a shared question with blood decals and needs a ruling of its own (who owns the
+ * write, who cleans it up, what a table does about a scene that accumulates them across a campaign).
+ * Recorded here so that when it is answered, this is the site that changes.
+ *
+ * `lifetimeMs` IS A CAP AND NOT A LOOK. Minutes, not forever: a Sequencer effect with no end is a leak
+ * by another name, and a scorch that is still there an hour later is a mark on the map nobody can
+ * remove without clearing every effect on the canvas.
+ *
+ * ⚠ `loops: 1` IS LOAD-BEARING. The asset is 6250ms and the lifetime is far longer, and an effect
+ * whose duration exceeds its clip LOOPS by default — a scorch mark that re-blooms every six seconds
+ * for three minutes is a strobe, not a decal. One loop plays the mark forming and then holds it for
+ * the remainder.
+ *
+ * BELOW THE LIGHTING, unlike the fire above it, and that is the file's own rule applied rather than an
+ * exception: self-luminous elements go up, lit-by-the-world elements stay down. A scorch is a black
+ * mark on a floor. It has no light of its own and it should be as dark as the room is.
+ *
+ * ⛔ EXCLUDED FROM THE SETTLE SIGNAL for the same reason as the fire, and much more so.
+ */
+export const GROUND_SCORCH = Object.freeze({
+  key: "jb2a.scorched_earth.black",
+  squares: 1.5,
+  lifetimeMs: 180000,
+  fadeInMs: 600,
+  fadeOutMs: 3000,
+  opacity: 0.7,
 });
 
 /**
@@ -674,6 +766,37 @@ export const MUZZLE_SMOKE = Object.freeze({
 export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness: 1.15 });
 
 /**
+ * THE THREE AMMO TRACER MATRICES — the same mechanism as TRACER_COLOR above (a ColorMatrix, never a
+ * tint: the measurement recorded there rules the tint out for all of them) applied to say WHICH ROUND
+ * is in the gun rather than which weapon fired it.
+ *
+ * The free tier delivers bullets in ORANGE (01/02) and BLUE (03) and nothing else — red is a filter
+ * result, not an asset (verified on the install), so every one of these is a rotation of the same
+ * orange asset and not a different file. Each is stated as the operation it performs on that orange:
+ *
+ *  - INCENDIARY (api): hue rotated NEGATIVE, i.e. orange → red, with saturation ADDED rather than
+ *    removed. It is the only one of the three that moves the hue the other way from the class shift,
+ *    which is what makes an incendiary burst read as a different round at a glance and not merely as a
+ *    brighter one. Brightness is nudged up because a saturated red loses luminance against a dark floor.
+ *  - HARDENED (ap / dualPurpose): saturation stripped almost to nothing and brightness pushed well up —
+ *    a near-white bolt. "Colder" here is desaturation, deliberately NOT a rotation toward blue: the
+ *    tier's blue bullets are its energy-weapon read (see the note on the class table), so rotating a
+ *    slug toward blue would say "laser", which is the opposite of the fact being conveyed.
+ *  - INERT (rubber / stundart): saturation halved and brightness pulled DOWN. It is the only matrix
+ *    that darkens, and that is the point — a baton round is the one load that should look like it is
+ *    carrying less energy than a standard one.
+ *
+ * ⚠ NO WIDTH LEVER EXISTS. "A thinner bolt for AP" was considered and cannot be built: a painted
+ * (stretched) tracer takes its width from the asset's own frame and Sequencer's size call on a
+ * stretched effect controls the stretch, not the cross-section. Colour is the whole available palette
+ * for a painted tracer, which is why all three of these are colour and why the two treatments that
+ * genuinely change SHAPE (flechette's fan, the impact promotions) do it with different fields.
+ */
+export const TRACER_COLOR_INCENDIARY = Object.freeze({ hue: -20, saturate: 0.30, brightness: 1.20 });
+export const TRACER_COLOR_HARDENED   = Object.freeze({ hue: 8,   saturate: -0.85, brightness: 1.45 });
+export const TRACER_COLOR_INERT      = Object.freeze({ hue: 0,   saturate: -0.55, brightness: 0.60 });
+
+/**
  * How far the discharge column is stretched, in grid units, measured from the shooter's own edge.
  *
  * ⏱ FR#23. It used to reach the aim point, which drew a full bolt down the shot line and read as a
@@ -832,6 +955,220 @@ export const FX_CLASSES = Object.freeze({
   shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", tracer: "jb2a.bullet.01.orange", motes: 10, smokeSquares: 0.6, smokeSingle: true, column: "jb2a.bullet.02.orange", columnColor: TRACER_COLOR, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
 });
+
+/* ══════════════════════ The ammo overlay (FR#24) ══════════════════════ */
+
+/**
+ * THE TWO PROMOTED IMPACTS — a different mark at the far end of the shot for a round that arrives
+ * differently. Both are free-tier keys, both verified against the installed database at build time
+ * (and gated by fxDbEntryExists at play time, so a tier that lacks one degrades to the ordinary
+ * impact rather than showing nothing).
+ *
+ * `clipMs` is MEASURED off the installed file, not read off a label:
+ *   ImpactFire01_01_Regular_Orange_600x600.webm ......... 2267ms
+ *   GroundCrackImpact_01_Regular_Orange_600x600.webm .... 5033ms
+ * against the ordinary impact's own 833ms (HIT_CONFIRM.clipMs). Those are three to six times the mark
+ * they replace, which is the reason the trim below exists rather than being a tuning preference.
+ *
+ * ⚠ THE KEYS ARE THE PARENT PATHS ON PURPOSE. `jb2a.impact.ground_crack.orange` holds three files
+ * (GroundCrackImpact_01..03) and the engine picks one per section, so successive AP hits do not stamp
+ * the identical crack. The fire family has only one file on the free tier, so its key resolves to the
+ * same clip every time — stated so the asymmetry is not read as an oversight.
+ */
+export const IMPACT_FIRE = Object.freeze({ key: "jb2a.impact.fire.01.orange", clipMs: 2267 });
+export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orange", clipMs: 5033 });
+
+/**
+ * ⭐ THE RULE THAT KEEPS AN IMPACT PROMOTION FROM MOVING THE CLOCK: a promoted impact is drawn for the
+ * SAME time the ordinary one is, by trimming it. It changes the MARK, not the PACING.
+ *
+ * Why this is a rule and not a preference. The apply window waits for the round's terminal elements
+ * (presentationTailMs → the settle signal), so an impact that runs 5s instead of 0.833s would hold the
+ * damage window shut for five seconds on every armour-piercing hit — a cost nobody asked for, on the
+ * cheap tier of this unit, arriving as a side effect of choosing a different picture. Trimming makes
+ * the promotion free in exactly the dimension the user is sensitive to.
+ *
+ * WHAT IS GIVEN UP, stated rather than discovered: both assets spend their opening on the mark itself
+ * and their remainder on a fade — embers for the fire, cooling glow for the crack — so the trim keeps
+ * the impact and drops the fade. On AP that is simply a shorter mark. On incendiary the loss is
+ * covered by something better: the burning-ground element (GROUND_FIRE) sits at that same point for
+ * seconds afterwards, so the linger the trim removed is drawn by the element that exists to draw it.
+ *
+ * Applied UNIFORMLY, with no branch: every impact is played through `timeRange(0, impactClipMs)` and
+ * the default is the ordinary impact's own full length, so for an unpromoted row the trim is a no-op
+ * on a clip it exactly equals. An overlay that genuinely wants the long fade names its own
+ * `impactClipMs` and gets it — and then honestly pays for it in the tail, because the tail reads the
+ * same field.
+ */
+
+/**
+ * THE OVERLAY TABLE — one optional row per ammo modifier id, shallow-merged over the weapon class's
+ * row. The class says what KIND of gun fired; this says what was IN it. Ammo that names no row here
+ * (standard, brass-cased, anything unrecognised) draws exactly what it drew before this table existed,
+ * which is the property every "unchanged" leg in the keeper pins.
+ *
+ * The ids are `system.modifier` on the loaded ammo item — lookups.js AMMO_MODIFIERS, seeded by
+ * ammoModifierSystemFields — and they ride the weaponFired payload as `payload.modifier` (seam-shim
+ * AMMO_EFFECT_FIELDS). Resolution is ammoFxKeyOf below.
+ *
+ * ⚠ THE MERGE IS NOT A PLAIN SPREAD, and the difference is a standing user ruling rather than an
+ * implementation detail. See ammoFxEntry: the two RECOLOUR fields may only repaint an element the
+ * class already draws, never add one. That is what keeps the shell's pellet fan untinted — the ruling
+ * is "shell pellets are never tinted, `columnColor` is the escape hatch" — with no branch anywhere
+ * naming the shell: the shell row carries `columnColor` and no `tracerColor`, so an incendiary shell
+ * tints its discharge column and leaves its pellets alone, while an incendiary rifle round tints the
+ * bolt it actually has. One rule, both outcomes, no class named.
+ *
+ * FIELDS THIS TABLE MAY CARRY, beyond the class row's own vocabulary:
+ *  - `impactKey`     the hit-confirmation asset, promoted per round (see the two blocks above)
+ *  - `impactClipMs`  how long that impact is drawn — the trim, and the tail term with it
+ *  - `impactScale`   a MULTIPLIER on the class's own `impactSquares`, never an absolute width. An
+ *                    absolute value would flatten the classes into one size: the table steps the
+ *                    impact from 0.7 (pistol) to 1.3 (heavy) precisely because a heavy round lands
+ *                    harder, and a hollow-point should be wider THAN ITS OWN CLASS, not wider than
+ *                    everything. A multiplier keeps both facts.
+ *  - `flashColor`    the muzzle light's colour IN THE DARK REGIME ONLY (flashColorFor). It cannot
+ *                    reach a lit scene — the gate returns null before the ammo colour is consulted.
+ *  - `groundFire`    this round leaves fire on the ground where it lands (fxGroundFire), once per
+ *                    payload, never per round.
+ *
+ * THE ROWS, and what each is saying:
+ *  - `api` — the only load that is on fire. Red-shifted bolt, a fire impact, a warm muzzle light in
+ *    the dark, and the two ground elements. Everything else on this table is one or two fields.
+ *  - `ap` / `dualPurpose` — identical treatment, and deliberately so: their MECHANICS are byte-identical
+ *    (lookups.js gives both the same armour and past-armour multipliers), so drawing them differently
+ *    would be inventing a distinction the rules do not make. They are two rows rather than one alias
+ *    because the ids are what arrive on the payload and a reader looking one up should find it.
+ *  - `hollowPoint` / `safety` — the pure size pair. A hollow-point deforms and makes a wide messy
+ *    bloom; a safety round is built NOT to over-penetrate, and its mark is correspondingly small.
+ *    Nothing else changes for either: same colour, same asset, same timing.
+ *  - `flechette` — the one overlay that changes the SHAPE of the round. It is a fan of darts, so it
+ *    takes the travelled-fan fields the shell class already uses, on whatever class fires it: more
+ *    darts than the shell's buckshot, spread wider, each dart smaller and faster. ⚠ It is also the
+ *    reason presentationTailMs takes an ammo key — `dashMs` is a tail input, and an overlay that
+ *    changes it while the tail is computed from the bare class row would open the apply window early.
+ *  - `rubber` / `stundart` — the inert pair: dull bolt, small impact. They differ mechanically only in
+ *    the stun modifier, which is not a visible fact, so they draw alike.
+ */
+export const AMMO_FX = Object.freeze({
+  api: Object.freeze({
+    tracerColor: TRACER_COLOR_INCENDIARY,
+    columnColor: TRACER_COLOR_INCENDIARY,
+    impactKey: IMPACT_FIRE.key,
+    flashColor: "#ff6a1a",
+    groundFire: true,
+  }),
+  ap: Object.freeze({
+    tracerColor: TRACER_COLOR_HARDENED,
+    columnColor: TRACER_COLOR_HARDENED,
+    impactKey: IMPACT_CRACK.key,
+  }),
+  dualPurpose: Object.freeze({
+    tracerColor: TRACER_COLOR_HARDENED,
+    columnColor: TRACER_COLOR_HARDENED,
+    impactKey: IMPACT_CRACK.key,
+  }),
+  hollowPoint: Object.freeze({ impactScale: 1.6 }),
+  safety: Object.freeze({ impactScale: 0.55 }),
+  flechette: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 0.8, dashMs: 170, impactScale: 0.7 }),
+  rubber: Object.freeze({ tracerColor: TRACER_COLOR_INERT, columnColor: TRACER_COLOR_INERT, impactScale: 0.6 }),
+  stundart: Object.freeze({ tracerColor: TRACER_COLOR_INERT, columnColor: TRACER_COLOR_INERT, impactScale: 0.6 }),
+});
+
+/**
+ * The overlay fields that may only REPAINT, never ADD. See the ruling in the AMMO_FX block: an overlay
+ * may change the colour of an element the class already draws; it may not give a class an element its
+ * row deliberately omits.
+ */
+export const AMMO_FX_RECOLOR_FIELDS = Object.freeze(["tracerColor", "columnColor"]);
+
+/**
+ * WHICH LOAD FIRED — the ammo key for one weaponFired payload. Pure.
+ *
+ * ID FIRST. The payload carries the modifier's own id (`payload.modifier`, added to the seam's
+ * AMMO_EFFECT_FIELDS for exactly this), so when it is there it IS the answer and nothing is inferred.
+ * That matters beyond tidiness: `ap` and `dualPurpose` carry byte-identical mechanics, so no amount of
+ * looking at the consequences can tell them apart — only the id can.
+ *
+ * FINGERPRINT SECOND, and only when there is no id: a payload emitted before that field existed (a
+ * relayed one, an older session, a test emission) still carries the MECHANICS the modifier seeded, and
+ * those are nearly unique. This is a compatibility path, not the design.
+ */
+export function ammoFxKeyOf(payload) {
+  const id = String(payload?.modifier ?? "").trim();
+  if (id) return id;
+  return ammoFxFingerprintKey(payload);
+}
+
+/**
+ * The ammo key inferred from a payload's MECHANICS alone, for a payload carrying no id. Pure.
+ *
+ * Order is load-bearing where two loads overlap:
+ *  - api is tested BEFORE ap, because api's armour and past-armour multipliers are ap's exactly; what
+ *    separates them is that api is the only load in the registry with a FIRE damage-over-time.
+ *  - stundart before rubber (its stun modifier is −2 where rubber's is the default 0).
+ *
+ * ⚠ RUBBER TAKES AN EXTRA TERM THAT THE SURVEY'S TABLE DID NOT LIST, and the reason is measured rather
+ * than theoretical: `stunSaveOnHit` with a zero modifier is ALSO what a taser/explosive warhead's own
+ * fields look like — the b1 seam probe's payload carries `stunSaveOnHit: true, stunSaveMod: 0` off a
+ * grenade — so that pair alone would paint every such round with the baton-round matrix. Rubber is the
+ * only registry entry that pairs it with a HALVED past-armour multiplier, so that term is what makes
+ * the test honest. Nothing is lost: a genuine rubber round always carries it (lookups.js AMMO_MODIFIERS).
+ *
+ * An unrecognised or unremarkable payload comes back "standard", which has no overlay row — so the
+ * fallback for "I cannot tell" is drawing exactly what was drawn before this table existed.
+ */
+export function ammoFxFingerprintKey(payload) {
+  if (!payload || typeof payload !== "object") return "standard";
+  const n = (v) => Number(v);
+  if (payload.dotEnabled === true && String(payload.dotType ?? "") === "fire") return "api";
+  if (String(payload.spreadMode ?? "") === "flechette") return "flechette";
+  if (n(payload.armorMultSoft) === 2 && n(payload.penDamageMult) === 3) return "safety";
+  if (n(payload.armorMultSoft) === 2 && n(payload.penDamageMult) === 1.5) return "hollowPoint";
+  if (payload.stunSaveOnHit === true && n(payload.stunSaveMod) === -2) return "stundart";
+  if (payload.stunSaveOnHit === true && n(payload.stunSaveMod) === 0 && n(payload.penDamageMult) === 0.5) return "rubber";
+  if (n(payload.armorMultSoft) === 0.5 && n(payload.penDamageMult) === 0.5) return "ap";
+  return "standard";
+}
+
+/**
+ * THE ONE PLACE A CLASS ROW AND AN AMMO OVERLAY ARE COMBINED. Pure, so every treatment in the table is
+ * asserted by value with no canvas, no engine and no shot.
+ *
+ * Returns the class row untouched (the same frozen object, not a copy) when there is no overlay to
+ * apply, which is what makes "standard ammo changes nothing" a checkable identity rather than a
+ * field-by-field comparison.
+ *
+ * THREE STEPS, in this order:
+ *  1. RECOLOUR FIELDS are applied only where the class row already carries them (the ruling in the
+ *     AMMO_FX block — repaint, never add).
+ *  2. Everything else is a plain overwrite, so an overlay may genuinely give a class an element it did
+ *     not have: that is how flechette gives a rifle a fan of darts.
+ *  3. `impactScale` is spent against the CLASS's own impact width and then removed from the result, so
+ *     what comes out is an ordinary class row that any existing reader understands — the multiplier is
+ *     a way of writing the table, not a new field the draw path has to know about.
+ *
+ * ⚠ RESOLUTION HAPPENS HERE AND NOWHERE ELSE, and callers pass the KEY rather than the entry: fxShot
+ * has no payload to read a key from, so if it resolved its own it would have to be handed one anyway.
+ * The key is resolved once per payload in fxWeaponFired and threaded down.
+ */
+export function ammoFxEntry(weaponClass, ammoKey = null) {
+  const base = FX_CLASSES[weaponClass];
+  if (!base) return null;
+  const overlay = ammoKey ? AMMO_FX[ammoKey] : null;
+  if (!overlay) return base;
+  const out = { ...base };
+  for (const [field, value] of Object.entries(overlay)) {
+    if (AMMO_FX_RECOLOR_FIELDS.includes(field) && base[field] === undefined) continue;
+    out[field] = value;
+  }
+  if (out.impactScale !== undefined) {
+    const width = Number(base.impactSquares);
+    if (width > 0) out.impactSquares = Number((width * Number(out.impactScale)).toFixed(4));
+    delete out.impactScale;
+  }
+  return out;
+}
 
 /**
  * Weapon-class resolution is by TYPE, not by item name (design doc §3): the catalog is far too large
@@ -1156,11 +1493,14 @@ export function muzzleEnvelopeDurationMs() {
  * (LimitedAnglePolygon.pointBetweenRays), and nothing on the source path clamps the field. So 269
  * builds one wedge with a 91-degree notch behind the shooter, not two mirrored halves.
  */
-export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad = null, mode = MUZZLE_MODE, darkness = null } = {}) {
+export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad = null, mode = MUZZLE_MODE, darkness = null, ammoColor = null } = {}) {
   const m = MUZZLE_LIGHT;
-  // THE COLOUR REGIME (FR#23). Resolved once here so every source this call returns agrees, and taken
-  // from the caller's reading when it has one so the pure function stays drivable without a canvas.
-  const color = flashColorFor(darkness === null ? viewedSceneDarkness() : darkness);
+  // THE COLOUR REGIME (FR#23), now with the LOADED ROUND's colour where its overlay names one (FR#24).
+  // Resolved once here so every source this call returns agrees, and taken from the caller's reading
+  // when it has one so the pure function stays drivable without a canvas. The ammo colour is passed
+  // THROUGH the gate rather than around it — flashColorFor answers null below the darkness threshold
+  // whatever the ammo asked for, so a tinted load cannot stain a lit floor.
+  const color = flashColorFor(darkness === null ? viewedSceneDarkness() : darkness, ammoColor);
   const grid = Number(gridDistance) > 0 ? Number(gridDistance) : 1;
   const ppu = Number(pixelsPerUnit) > 0 ? Number(pixelsPerUnit) : 1;
   const px = (squares) => Number((squares * grid * ppu).toFixed(3));
@@ -1255,7 +1595,7 @@ export function clearFlashes() {
  * the shot is pointed at, or null. A token that is not drawn on this client's canvas gets nothing —
  * there is no lighting to affect — and a payload for a scene this client is not viewing is dropped.
  */
-export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = MUZZLE_MODE } = {}) {
+export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = MUZZLE_MODE, ammoColor = null } = {}) {
   const SourceClass = pointLightSourceClass();
   const ticker = _ticker();
   if (!SourceClass || !ticker || !canvas?.ready) return false;
@@ -1274,6 +1614,11 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
     : facingRad(placeable.document?.rotation);
 
   // Already flashing → restart the envelope in place and re-point it. One source set per token.
+  // The SOURCES are not rebuilt here, so a restart keeps the colour the first round of the burst
+  // built — which is right, because one payload is one load: every round of a burst carries the same
+  // ammo. Two payloads with different loads fired inside one five-frame envelope would show the first
+  // one's colour for the overlap; that is a handful of frames and it is left alone rather than paid
+  // for with a source rebuild per round.
   const running = _flashes.get(id);
   if (running) {
     running.levels = _levelsOverride ?? muzzleFrameLevels();
@@ -1290,7 +1635,7 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
   const ppu = Number(dims.distancePixels) || ((Number(dims.size) || 100) / (Number(dims.distance) || 1));
   const specs = muzzleSourceSpecs({
     gridDistance: Number(canvas.scene?.grid?.distance) || 1,
-    pixelsPerUnit: ppu, aimRad, mode,
+    pixelsPerUnit: ppu, aimRad, mode, ammoColor,
   });
   const elevation = Number(placeable.document?.elevation) || 0;
 
@@ -1375,7 +1720,7 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
  * question to answer — nothing is written — so a player firing a GM-owned token, or a GM firing
  * anyone's, all take the identical path.
  */
-export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MODE } = {}) {
+export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MODE, ammoColor = null } = {}) {
   const doc = shooterToken?.document ?? shooterToken;
   const tokenId = typeof shooterToken === "string" ? shooterToken : doc?.id;
   if (!tokenId) return false;
@@ -1384,11 +1729,15 @@ export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MOD
     ? { x: Math.round(aimPoint.x), y: Math.round(aimPoint.y) }
     : null;
   try {
-    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_FLASH, sceneId, tokenId, aim });
+    // The ammo colour rides the datagram (FR#24) so every client's own flash agrees with the firing
+    // one's. It is a COLOUR and not an ammo id deliberately: the receiving client then needs no
+    // registry lookup and no agreement about tables, and a client that cannot resolve the id anyway
+    // (an older module version) simply receives a field it ignores.
+    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_FLASH, sceneId, tokenId, aim, ammoColor: ammoColor ?? null });
   } catch (err) {
     console.warn(`${SCOPE} | muzzle flash announce failed`, err);
   }
-  return muzzleFlashLocal(tokenId, aim, { sceneId, mode });
+  return muzzleFlashLocal(tokenId, aim, { sceneId, mode, ammoColor });
 }
 
 /* ══════════════════════════ Sequencer verbs (optional-only) ══════════════════════════ */
@@ -1757,9 +2106,13 @@ function _held(effect) {
  *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null } = {}) {
-  const out = { light: false, muzzle: false, spark: false, column: false, tracer: false, pellets: 0, impact: false, tagged: 0 };
-  const entry = FX_CLASSES[weaponClass];
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null } = {}) {
+  const out = { light: false, muzzle: false, spark: false, column: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null };
+  // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
+  // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
+  // the same code for every load. The KEY is passed in rather than resolved here because there is no
+  // payload at this level to resolve it from; fxWeaponFired does that once and threads it.
+  const entry = ammoFxEntry(weaponClass, ammoKey);
   if (!entry) return out;
   const from = centerOf(shooterToken);
   const gridPx = Number(canvas?.dimensions?.size) || 100;
@@ -1772,7 +2125,10 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
   // The flash is announced and drawn first because it costs nothing to wait for — it is synchronous.
   // It takes the SAME axis as the sprites, so the notch behind the shooter lines up with the bolt.
-  if (light && shooterToken) out.light = fxMuzzleFlash(shooterToken, to, { mode });
+  // The ammo's own flash colour where its overlay names one. It reaches the source through the
+  // darkness gate (flashColorFor), so it can only ever appear in the regime the gate already allows a
+  // colour in — a lit scene draws the same uncoloured flash it drew before this existed.
+  if (light && shooterToken) out.light = fxMuzzleFlash(shooterToken, to, { mode, ammoColor: entry.flashColor ?? null });
 
   if (sequencerActive() && shooterToken) {
     try {
@@ -1913,9 +2269,19 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       // The miss branch draws nothing on purpose: a miss already says so by where its tracer goes,
       // and marking it would make every shot look like a hit. Held back by the tracer's own crossing
       // time where the class travels one, so the impact does not precede its own pellets.
-      if (hit && to && entry.impactSquares > 0 && fxDbEntryExists(HIT_CONFIRM.key)) {
-        const impact = _held(seq.effect().file(HIT_CONFIRM.key)).atLocation(to)
+      //
+      // ⭐ THE IMPACT IS PROMOTABLE (FR#24). The asset is `entry.impactKey` where a row or an ammo
+      // overlay names one and HIT_CONFIRM.key otherwise, and it is TRIMMED to `entry.impactClipMs`
+      // (default: the ordinary impact's own full length, so the trim is a no-op for an unpromoted
+      // row). The existing tier gate is unchanged and now guards the resolved key, so an overlay
+      // naming an asset the installed tier lacks degrades to NO impact rather than to a wrong one —
+      // the same silent-degrade rule every other key on this rail follows.
+      const impactKey = entry.impactKey ?? HIT_CONFIRM.key;
+      const impactClipMs = Number(entry.impactClipMs) > 0 ? Number(entry.impactClipMs) : HIT_CONFIRM.clipMs;
+      if (hit && to && entry.impactSquares > 0 && fxDbEntryExists(impactKey)) {
+        const impact = _held(seq.effect().file(impactKey)).atLocation(to)
           .size({ width: entry.impactSquares }, { gridUnits: true })
+          .timeRange(0, impactClipMs)
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
         // TERMINAL ELEMENT — on a landing round this is normally the last thing to leave the screen.
         if (settleTag) { impact.name(settleTag); out.tagged++; }
@@ -1923,6 +2289,11 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
           ? (_dashMsOverride ?? entry.dashMs) : 0;
         if (travel > 0) impact.delay(travel);
         out.impact = true;
+        // Reported so a caller (and the keeper) can assert WHICH mark was drawn and how wide, by
+        // value, rather than by looking at the canvas — the promotion is otherwise invisible to a test.
+        out.impactKey = impactKey;
+        out.impactSquares = entry.impactSquares;
+        out.impactClipMs = impactClipMs;
       }
       if (out.muzzle || out.tracer || out.impact) await seq.play();
     } catch (err) {
@@ -2066,6 +2437,71 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
   return out;
 }
 
+/**
+ * THE INCENDIARY GROUND ELEMENTS — the burning ground and the scorch it leaves, drawn ONCE for a whole
+ * payload at the point that payload landed. The two live in one verb because they are one event: the
+ * fire and its mark start together and only their lifetimes differ.
+ *
+ * GATED ON THE ROW, NOT ON A NAME. The caller decides by reading `groundFire` off the resolved entry
+ * (ammoFxEntry), so no branch anywhere in this file names the incendiary load — adding the field to a
+ * second overlay is all it would take to give another round the same treatment.
+ *
+ * `delayMs` is the travelled tracer's crossing time, so the fire starts when the round arrives rather
+ * than when it leaves. It is the same number the hit confirmation is held back by, read from the same
+ * row field, so the two land together.
+ *
+ * NOT AWAITED by its caller and NOT TAGGED for the settle signal — see the two spec blocks above for
+ * both rulings. Returns what it queued so the gate and the lifetimes are assertable by value.
+ */
+export async function fxGroundFire(point, { delayMs = 0 } = {}) {
+  const out = { fire: false, scorch: false, fireMs: 0, scorchMs: 0 };
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y) || !sequencerActive()) return out;
+  const at = { x: point.x, y: point.y };
+  const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
+  try {
+    const seq = new globalThis.Sequence();
+    // TWO SEPARATE SECTIONS, which is the file's standing answer to the randomiser trap: the engine
+    // rolls a multi-file key once per section, so the fire picking its variant and the scorch picking
+    // its own have to be two sections. They are also two different lifetimes, which one section could
+    // not express anyway.
+    if (fxDbEntryExists(GROUND_FIRE.key)) {
+      const fire = _held(seq.effect().file(GROUND_FIRE.key)).atLocation(at)
+        .size({ width: GROUND_FIRE.squares }, { gridUnits: true })
+        // Self-luminous → above the lighting, with the vision-mask trade documented at the spec block.
+        .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
+        .opacity(GROUND_FIRE.opacity)
+        .fadeIn(GROUND_FIRE.fadeInMs)
+        .duration(GROUND_FIRE.lifetimeMs)
+        .fadeOut(GROUND_FIRE.fadeOutMs);
+      if (delay > 0) fire.delay(delay);
+      out.fire = true;
+      out.fireMs = GROUND_FIRE.lifetimeMs;
+    }
+    if (fxDbEntryExists(GROUND_SCORCH.key)) {
+      const scorch = _held(seq.effect().file(GROUND_SCORCH.key)).atLocation(at)
+        .size({ width: GROUND_SCORCH.squares }, { gridUnits: true })
+        // NOT above the lighting: a scorch mark is not a light source (the split is stated in the
+        // LIT_SPRITE_ABOVE_LIGHTING block — self-luminous up, lit-by-the-world down).
+        .opacity(GROUND_SCORCH.opacity)
+        .fadeIn(GROUND_SCORCH.fadeInMs)
+        // ONE LOOP, then hold. Without this the mark re-blooms every clip length for the whole
+        // lifetime — see the ruling in the GROUND_SCORCH block.
+        .loopOptions({ loops: 1 })
+        .duration(GROUND_SCORCH.lifetimeMs)
+        .fadeOut(GROUND_SCORCH.fadeOutMs);
+      if (delay > 0) scorch.delay(delay);
+      out.scorch = true;
+      out.scorchMs = GROUND_SCORCH.lifetimeMs;
+    }
+    if (out.fire || out.scorch) {
+      seq.play().catch((err) => console.warn(`${SCOPE} | ground fire play failed`, err));
+    }
+  } catch (err) {
+    console.warn(`${SCOPE} | ground fire failed`, err);
+  }
+  return out;
+}
+
 /* ══════════════════════════ Payload → shots ══════════════════════════ */
 
 /** Rounds that HIT: the payload's areaDamages carries one entry per hitting round, by location. */
@@ -2203,12 +2639,21 @@ export async function faceTarget(shooterToken, aimPoint) {
  * fade after it), so waiting for them would mean waiting seconds past the point a viewer would say the
  * action was over. "Finished" is the last round's impact/tracer ending, and nothing else.
  */
-export function presentationTailMs(weaponClass) {
-  const entry = FX_CLASSES[weaponClass];
+export function presentationTailMs(weaponClass, ammoKey = null) {
+  // ⚠ THE OVERLAY IS READ HERE TOO, AND THAT IS NOT OPTIONAL (FR#24). This function used to read
+  // FX_CLASSES directly, and an ammo overlay that changes any of its inputs — flechette moves `dashMs`
+  // and gives a class a fan it did not have, a promotion moves the impact's own length — would then be
+  // drawn by fxShot and NOT accounted for here. The failure that produces is silent and one-directional:
+  // the tail comes back short, the settle floor is short with it, and the apply window opens while the
+  // last round is still on screen. Same resolver as the draw path, so the two cannot drift.
+  const entry = ammoFxEntry(weaponClass, ammoKey);
   const travel = Number(entry?.dashMs) > 0 ? Number(entry.dashMs) : 0;
   const spark = entry?.spark ? MUZZLE_SPARK.clipMs : 0;
   const tracerEnd = travel > 0 ? travel + DASH_ARRIVAL_HOLD_MS : TRACER_CLIP_MS;
-  const impactEnd = Number(entry?.impactSquares) > 0 ? travel + HIT_CONFIRM.clipMs : 0;
+  // The impact term is how long the impact is DRAWN, which for a promoted asset is its trim rather
+  // than its own clip — the same field fxShot plays it with (see the impact-promotion rule).
+  const impactClipMs = Number(entry?.impactClipMs) > 0 ? Number(entry.impactClipMs) : HIT_CONFIRM.clipMs;
+  const impactEnd = Number(entry?.impactSquares) > 0 ? travel + impactClipMs : 0;
   // The lance term is the class's DWELL, not the trim: a row that stretches its lance must be covered
   // by the tail it belongs to. (Every shipped dwell is far under the travelled/impact terms, so this
   // reads the same as before for all five rows — it is written this way so a longer dwell later cannot
@@ -2236,9 +2681,11 @@ export function presentationTailMs(weaponClass) {
  * BOUNDED by MAX_FX_SHOTS, the same bound the fan-out itself applies, so a payload claiming a corrupt
  * round count can no more park a wait than it can queue that many rounds.
  */
-export function presentationMs(shots, weaponClass) {
+export function presentationMs(shots, weaponClass, ammoKey = null) {
   const n = Math.min(Math.max(Math.trunc(Number(shots) || 0), 1), MAX_FX_SHOTS);
-  return (n - 1) * classCadenceMs(weaponClass) + presentationTailMs(weaponClass);
+  // The CADENCE is deliberately NOT overlaid: no ammo row carries one and none should. Spacing between
+  // rounds is a property of the weapon's action, not of what is in the magazine.
+  return (n - 1) * classCadenceMs(weaponClass) + presentationTailMs(weaponClass, ammoKey);
 }
 
 /**
@@ -2269,7 +2716,9 @@ export function payloadPresentationMs(payload) {
   const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
   const gridPx = Number(canvas?.dimensions?.size) || 100;
   const leadIn = shooter ? (faceTargetTurn(shooter, aimPointOf(shooter, target, gridPx))?.durationMs ?? 0) : 0;
-  return leadIn + presentationMs(shotCountOf(payload), weaponClass);
+  // The loaded round's overlay, resolved from the payload the same way the fan-out resolves it, so the
+  // arithmetic fallback and the fan-out's own floor agree about a round whose overlay moves the tail.
+  return leadIn + presentationMs(shotCountOf(payload), weaponClass, ammoFxKeyOf(payload));
 }
 
 /* ══════════════════════════ The completion signal ══════════════════════════ */
@@ -2445,7 +2894,7 @@ export function settlementsInFlight() {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -2484,6 +2933,12 @@ export async function fxWeaponFired(payload) {
   // never observe each other's endings.
   const settleTag = `${SCOPE}.settle.${foundry.utils.randomID()}`;
 
+  // WHICH LOAD IS IN THE GUN — resolved ONCE, here, with the payload in hand, and threaded into every
+  // verb below. It cannot be resolved further down: fxShot and the tail arithmetic never see a payload,
+  // so a key resolved there would have to be invented. See ammoFxKeyOf for id-first / fingerprint.
+  const ammoKey = ammoFxKeyOf(payload);
+  const ammoEntry = ammoFxEntry(weaponClass, ammoKey);
+
   const shots = shotCountOf(payload);
   const hits = Math.min(hitCountOf(payload), shots);
   const shooter = shooterTokenOf(actor);
@@ -2521,6 +2976,22 @@ export async function fxWeaponFired(payload) {
       .catch((err) => { console.warn(`${SCOPE} | burst ambience failed`, err); return { motes: 0 }; });
   }
 
+  // THE INCENDIARY GROUND ELEMENTS, queued ONCE for the whole payload and only when a round LANDED —
+  // a burst that misses sets nothing alight. Placed here, outside the round loop, deliberately: the
+  // loop is what would make it per-round, so keeping the call out of it IS the once-per-payload gate
+  // (the same shape as fxBurstAmbience above). Held back by the class's own crossing time so the fire
+  // starts when the round arrives. Not awaited — it must never delay the first round.
+  let groundFire = null;
+  if (shooter && hits > 0 && ammoEntry?.groundFire) {
+    const gridPx = Number(canvas?.dimensions?.size) || 100;
+    const at = aimPointOf(shooter, target, gridPx);
+    if (at) {
+      groundFire = { queued: true, at: { x: Math.round(at.x), y: Math.round(at.y) } };
+      fxGroundFire(at, { delayMs: Number(ammoEntry.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0 })
+        .catch((err) => console.warn(`${SCOPE} | ground fire failed`, err));
+    }
+  }
+
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -2550,7 +3021,7 @@ export async function fxWeaponFired(payload) {
       flashes++;
       // Only the LAST round is tagged: the ruling is that the action is over when the last round's
       // impact/tracer ends, and those are the latest-ending elements on screen by construction.
-      fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: i === shots - 1 ? settleTag : null })
+      fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: i === shots - 1 ? settleTag : null, ammoKey })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
     }
   }
@@ -2559,11 +3030,13 @@ export async function fxWeaponFired(payload) {
   // sweep are already spent and cannot be double-counted — whatever the loop actually cost, real time
   // has passed and only the tail is left. What ENDS the wait is the engine reporting those elements
   // gone; the scheduled tail is only the floor and the no-engine fallback.
-  const settleTailMs = presentationTailMs(weaponClass);
+  // The floor takes the AMMO KEY, so an overlay that lengthens the tail (flechette's crossing time, a
+  // promoted impact's own trim) is waited out rather than being drawn past a window that already opened.
+  const settleTailMs = presentationTailMs(weaponClass, ammoKey);
   _watchSettleTag(settleTag, settleTailMs, settle);
 
   return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smokePuffs,
-    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs };
+    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
@@ -2586,7 +3059,7 @@ export function registerCombatFx() {
     if (data?.type !== MSG_FLASH) return;
     if (!combatFxEnabled()) return;
     try {
-      muzzleFlashLocal(data.tokenId, data.aim ?? null, { sceneId: data.sceneId ?? null });
+      muzzleFlashLocal(data.tokenId, data.aim ?? null, { sceneId: data.sceneId ?? null, ammoColor: data.ammoColor ?? null });
     } catch (err) {
       console.warn(`${SCOPE} | muzzle flash relay failed`, err);
     }
