@@ -2228,7 +2228,9 @@
     "CombatFx": "Display: Weapon-Fire Effects (flash + sound)",
     "CombatFxHint": "When enabled, a resolved ranged shot plays a short muzzle-flash light on the shooter's token and a shot sound on the interface channel (so each player's own interface-volume slider controls it). Automatic weapons play one shot sound per round fired, under a single sustained flash. Melee attacks produce neither. If the optional Sequencer and JB2A modules are installed, matching muzzle and tracer sprites are added as well — without them the flash and sound work on their own. Turn off for a silent, unlit table.",
     "FaceTargetOnFire": "Shooter turns to face the target",
-    "FaceTargetOnFireHint": "Before the first round, the firing token turns to look at what it is aiming at. Turn this off if your tokens are drawn with a fixed facing."
+    "FaceTargetOnFireHint": "Before the first round, the firing token turns to look at what it is aiming at. Turn this off if your tokens are drawn with a fixed facing.",
+    "Gore": "Display: Blood on Hits (off by default)",
+    "GoreHint": "When enabled, a shot that lands on a living target draws a short red splash over that token — one per attack, whatever the number of rounds, and nothing at all on a miss. Targets whose damage goes to structure instead of flesh (vehicles, powered armour, full-conversion cyborgs) never draw it. The splash lasts under a second and leaves no mark on the map. Off unless your table asks for it; requires Weapon-Fire Effects and the optional Sequencer and JB2A modules."
   },
   "TYPES": {
     "Actor": {

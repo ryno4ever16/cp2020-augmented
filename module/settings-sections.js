@@ -43,7 +43,7 @@ const SECTIONS = [
   { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
-  { key: "SectionDisplay", keys: ["carolingianSkin", "combatFxEnabled"] },
+  { key: "SectionDisplay", keys: ["carolingianSkin", "combatFxEnabled", "goreEnabled"] },
 ];
 
 // master toggle → the sub-settings that only matter when it's on (greyed + disabled while it's off).

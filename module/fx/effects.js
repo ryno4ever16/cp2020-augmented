@@ -19,7 +19,8 @@
  */
 
 import { tokensOf } from "../mech/light.js";
-import { combatFxEnabled, faceTargetOnFireEnabled } from "../settings.js";
+import { isFullBorg } from "../mech/borg.js";
+import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -593,6 +594,59 @@ export const GROUND_SCORCH = Object.freeze({
   fadeInMs: 600,
   fadeOutMs: 3000,
   opacity: 0.7,
+});
+
+/**
+ * THE BLOOD SPLASH — a short red burst drawn over a LIVING target that a round actually reached.
+ * Phase 1: transient only. Nothing is left on the floor and nothing is written anywhere.
+ *
+ * ⚠ FOUR GATES, and all four are somewhere else on purpose — this block is only the look. The world
+ * setting (`goreEnabled`, default OFF), "at least one round landed", "the target is not structure"
+ * and "once per payload" are all applied at the ONE call site in fxWeaponFired, outside the round
+ * loop, which is the same shape the burning ground uses and for the same reason: the loop is what
+ * would make an element per-round, so keeping the call out of it IS the once-per-payload gate.
+ *
+ * ⭐ THE ASSET IS NATIVELY BLOOD-COLOURED — no colour filter is applied, and that corrects the design
+ * note this unit started from. The free tier carries no family NAMED blood, which is true and is what
+ * the earlier survey found; but `jb2a.liquid.*` ships RED variants, and decoding this one frame by
+ * frame off the installed file gives a mean of R91 G1 B1 at 113ms, R95 G1 B2 at 283ms and R157 G3 B4
+ * at 453ms — a deep near-black red in every frame, with the green and blue channels essentially at
+ * zero. A ColorMatrix over that would be repainting red with red. (The measurement also settles the
+ * choice between the two red liquids the tier carries: this one's ink centroid holds at 0.50/0.51 of
+ * its own frame from 170ms to 510ms — it is RADIAL about its centre, so it needs no rotation and can
+ * never disagree with the shot axis, where `liquid.splash_side02.red` traverses its frame 0.29 → 0.65
+ * and is a directional wave.)
+ *
+ * `squares` IS THE DRAWN FRAME, NOT THE INK — the same trap the flechette dart length records. The
+ * ink reaches 0.50 of the frame at 170ms and peaks at 0.87 at 510ms, so at 1.5 squares the splash
+ * opens at about three quarters of a square and peaks a little wider than one: a mark the size of the
+ * body it is on, growing past its edges, rather than a pool over the neighbouring squares.
+ *
+ * `clipMs` is a trim, and it is chosen where the CONTENT ends rather than where the file does. The
+ * clip runs 1133ms but its ink is spent well before that: coverage falls from 17.1% of the frame at
+ * 283ms to 0.07% at 680ms, and peak alpha is 5/255 by 963ms. 900 keeps every frame that has anything
+ * in it and drops a dead tail, and it holds the element inside the "under a beat" the user asked for.
+ *
+ * ⚠⚠ ABOVE THE LIGHTING, WHICH IS A DELIBERATE DEPARTURE from this file's own routing rule (the rule
+ * is in LIT_SPRITE_ABOVE_LIGHTING: self-luminous elements go up, lit-by-the-world elements stay
+ * down, which is why the scorch stays down). Blood is not a light source, so the rule as written
+ * would put it below — and measured on the rig's own dark range at darkness 1.0 that is not a dimmer
+ * version of the effect, it is no effect at all. The trade is therefore between an element that is
+ * invisible exactly where a table plays and an element drawn across ground the viewer cannot see;
+ * the second is the lesser cost HERE and only here, because this element lives for under a second,
+ * where the scorch that accepted the other side of the trade lives for minutes. It is a knob rather
+ * than a constant in the code path so the call can be reversed without finding the draw site.
+ *
+ * ⛔ EXCLUDED FROM THE SETTLE SIGNAL, by construction and not by a flag: nothing here is given a
+ * settleTag name and presentationTailMs takes no term for it, so the damage window never waits on
+ * it. Same ruling as the burning ground — the action is over when the last round's own terminal
+ * elements end.
+ */
+export const BLOOD_SPLATTER = Object.freeze({
+  key: "jb2a.liquid.splash02.red",
+  squares: 1.5,
+  clipMs: 900,
+  aboveLighting: true,
 });
 
 /**
@@ -2618,6 +2672,73 @@ export async function fxGroundFire(point, { delayMs = 0 } = {}) {
   return out;
 }
 
+/**
+ * Does this actor take damage into STRUCTURE rather than into flesh? Pure-ish, and the answer is
+ * taken at the ACTOR level deliberately.
+ *
+ * TWO WAYS AN ACTOR IS STRUCTURE, and they are the two the rest of the module already recognises:
+ *  - it is a vehicle-type actor — the module's own actor type covers both civilian vehicles and
+ *    powered-armour suits (a suit is that type with `isACPA` set), and every damage path treats both
+ *    as SDP; and
+ *  - it is a full-conversion cyborg — a character-type actor whose whole body is machinery, which is
+ *    exactly what `isFullBorg` answers and what makes routesToSdp true for all six of its zones.
+ *
+ * ⚠ WHY NOT `routesToSdp`, WHICH IS THE FUNCTION THAT REALLY DECIDES: it takes a hit LOCATION, and at
+ * the moment this rail draws there is no location to give it. The payload carries how many rounds
+ * landed, not where — the fan-out already assigns hits to the leading rounds for the same reason. So
+ * a per-zone answer is not available at draw time and would have to be invented. The consequence is
+ * stated rather than hidden: an ordinary character with a cyberarm reads as FLESH here, and a round
+ * that in fact struck that arm still draws blood. That is phase 1's known limit (the doc's open
+ * items carry it), and it is the right way round — the alternative, suppressing blood for anyone
+ * wearing chrome, would be wrong far more often than this is.
+ */
+export function bearsStructuralSdp(actor) {
+  if (!actor) return false;
+  if (String(actor.type ?? "") === `${SCOPE}.vehicle`) return true;
+  return isFullBorg(actor) === true;
+}
+
+/**
+ * THE BLOOD SPLASH for one payload — drawn ON the target token, once, for a hit that landed.
+ *
+ * Every gate lives at the call site (see the BLOOD_SPLATTER block); this verb only draws. It is given
+ * the TOKEN rather than a point on purpose: blood belongs to a body, so a shot with nothing aimed at
+ * has nowhere to put it and the caller simply does not call — the synthesized aim point the rest of
+ * the rail falls back to is a direction, not a victim.
+ *
+ * `delayMs` is the class's own crossing time where it travels one, so the splash appears when the
+ * round arrives rather than when it leaves — the same number, from the same row field, that holds
+ * back the hit confirmation and the burning ground.
+ *
+ * The rotation is randomised so two hits on one token are not the same picture; the asset is radial
+ * about its own centre (measured — see the spec block), so a rotation cannot put it out of line with
+ * anything. One section, one roll: Sequencer rolls its randomisers once per section, which is exactly
+ * one splash's worth here.
+ *
+ * NOT AWAITED by its caller and NOT TAGGED for the settle signal. Returns what it queued so the gate
+ * and the values are assertable without looking at the canvas.
+ */
+export async function fxBloodSplatter(targetToken, { delayMs = 0 } = {}) {
+  const out = { drawn: false, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares, clipMs: BLOOD_SPLATTER.clipMs };
+  if (!targetToken || !sequencerActive() || !fxDbEntryExists(BLOOD_SPLATTER.key)) return out;
+  const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
+  try {
+    const seq = new globalThis.Sequence();
+    const splash = _held(seq.effect().file(BLOOD_SPLATTER.key)).atLocation(targetToken)
+      .size({ width: BLOOD_SPLATTER.squares }, { gridUnits: true })
+      // The departure from the routing rule, with the measurement and the reason at the spec block.
+      .aboveLighting(BLOOD_SPLATTER.aboveLighting)
+      .randomRotation()
+      .timeRange(0, BLOOD_SPLATTER.clipMs);
+    if (delay > 0) splash.delay(delay);
+    out.drawn = true;
+    seq.play().catch((err) => console.warn(`${SCOPE} | blood splash play failed`, err));
+  } catch (err) {
+    console.warn(`${SCOPE} | blood splash failed`, err);
+  }
+  return out;
+}
+
 /* ══════════════════════════ Payload → shots ══════════════════════════ */
 
 /** Rounds that HIT: the payload's areaDamages carries one entry per hitting round, by location. */
@@ -3012,7 +3133,7 @@ export function settlementsInFlight() {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -3110,6 +3231,24 @@ export async function fxWeaponFired(payload) {
     }
   }
 
+  // THE BLOOD SPLASH, and its four gates in one place. Same position as the ground elements and for
+  // the same reason: outside the round loop IS the once-per-payload rule, so a thirty-round burst
+  // marks its target once rather than thirty times over.
+  //  1. the world setting, read per shot so a GM switching it takes effect with no reload;
+  //  2. a round LANDED — a burst that misses draws nothing (the ruled fumble is already gone, several
+  //     lines above, so nothing here has to know about it);
+  //  3. a TARGET TOKEN, not an aim point: blood needs a body, and an untargeted shot has none;
+  //  4. that token's actor is not STRUCTURE (bearsStructuralSdp — vehicles, powered armour and full
+  //     conversions), which is where the actor-level limit of the phase-1 answer is documented.
+  // Not awaited, so it can never delay a round, and never tagged, so the damage window never waits
+  // on it (the settle ruling is at the spec block).
+  let blood = null;
+  if (goreEnabled() && hits > 0 && target && !bearsStructuralSdp(target.actor)) {
+    blood = { queued: true, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares, tokenId: target.id };
+    fxBloodSplatter(target, { delayMs: Number(ammoEntry?.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0 })
+      .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
+  }
+
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -3154,7 +3293,7 @@ export async function fxWeaponFired(payload) {
   _watchSettleTag(settleTag, settleTailMs, settle);
 
   return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smokePuffs,
-    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire };
+    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */

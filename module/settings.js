@@ -883,6 +883,20 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
+  // Blood on a landing hit. OFF by default and world-scoped, which is the point of it existing at all:
+  // this is the one thing the rail draws that a table may find objectionable rather than merely noisy,
+  // so it is a deliberate switch-on by the GM for the whole table rather than a per-player preference
+  // (a table that has agreed to it should not have one player seeing a different scene). Read per shot,
+  // so it applies live. Inert while combatFxEnabled is off — the rail draws nothing at all then.
+  game.settings.register(SCOPE, "goreEnabled", {
+    name: "SETTINGS.Gore",
+    hint: "SETTINGS.GoreHint",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: false,
+  });
+
   // --- Native System Settings page organizer (section headers + reorder + master-gating) ---
   // One data-driven pass (module/settings-sections.js) replacing the per-feature MM + IP grey-out
   // hooks: labelled section headers, contiguous reorder, and grey/disable of each master's sub-settings.
@@ -1059,4 +1073,9 @@ export function faceTargetOnFireEnabled() {
 
 export function combatFxEnabled() {
   try { return game.settings.get(SCOPE, "combatFxEnabled") !== false; } catch { return true; }
+}
+
+/** Blood on a landing hit (default OFF — fail-closed: an unreadable setting draws nothing). */
+export function goreEnabled() {
+  try { return game.settings.get(SCOPE, "goreEnabled") === true; } catch { return false; }
 }
