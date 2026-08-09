@@ -1,6 +1,8 @@
 # The FX rail
 
-*First edition — 2026-08-09. Covers `module/fx/effects.js` and the seam that feeds it.*
+*First edition — 2026-08-09. Covers `module/fx/effects.js` and the seam that feeds it, plus the one
+thing a shot puts on the canvas that is not a sprite: the shotgun's shot pattern
+(`module/combat/spread-zone-look.js`, and the flow that places it in `module/combat/damage-hooks.js`).*
 
 This is the maintainer's document for everything the module draws when a gun goes off. It is written
 for someone who has never read a development report: every number here is either measured on a real
@@ -49,6 +51,49 @@ Two target fields exist on purpose. `targetTokenId` decides whether the damage w
 mid-action; `fxTargetTokenId` only says which way the shot was pointed. Folding them together would
 silently move every single-shot and burst card onto the mid-action damage path, which the user
 explicitly did not want.
+
+### 1.1a Two resolution flows, and the one question that chooses between them
+
+One payload is resolved by **exactly one** of two flows, and they never overlap:
+
+```
+   cyberpunk2020.weaponFired  ── payload ──▶  spreadModeForAmmo(payload)   (module/lookups.js)
+                                                        │
+                    ┌───────────────────────────────────┴────────────────────────────┐
+                    │ "single"                                                       │ "buck" / "flechette"
+                    ▼                                                                ▼
+   SINGLE-TARGET FLOW                                          PATTERN FLOW
+   damage-hooks.js _hookWeaponFired                            damage-hooks.js _hookSpread
+   · one target, resolved by hit location                      · a ray from the shooter, width + damage by range band
+   · DamageDialog, or the card's Apply button                  · EVERYONE in the path, no evasion (CP2020 p.108)
+   · waits on presentationSettled()                            · GM aims a GM-only zone, then ONE Confirm card
+                                                               · confirm applies, posts one result card, deletes the zone
+```
+
+The two gates are literally the same call (`_spreadModeOf(payload)`, twice), which is the whole
+guarantee: if they ever disagreed, a shell would be damaged **twice** — once by the dialog and once by
+the pattern — or not at all. A keeper leg counts the call sites.
+
+**The question is asked of the CARTRIDGE, not of a flag.** The shotgun is an area weapon in the Core
+rules; buckshot patterns because of what it is. Every shotgun ammo item ever seeded carries
+`spreadMode: "single"` (the ammo-modifier seeder's default), so a rule that read the stored field
+would have made the book behaviour reachable only by hand-editing every ammo item in every world.
+Deriving it at fire time means an untouched world's buckshot fires the pattern on its next shot, with
+no migration and no re-seed. The four cases, in decision order:
+
+| Input | Result |
+|---|---|
+| the `slug` load (by `spreadMode: "slug"` **or** by modifier id) | `single` — the one shotgun load that is a single projectile |
+| any other explicitly declared non-single mode (`flechette`) | that mode, unchanged |
+| a caliber that is not shotgun-family — **including blank or unknown** | `single` (safe default: no cartridge recorded, no pattern) |
+| anything left: a shotgun-family caliber | `buck` |
+
+**The cartridge is recorded under two different names**, and the seam resolves both: an *ammo* item
+stores the round it **is** in `system.caliber`; a *weapon* stores the round it **takes** in
+`system.ammoType` — the base system's own field, and the only one its weapon schema has (a `caliber`
+written to a weapon is dropped). Every shell weapon in the shipped catalogue records a gauge there and
+nothing anywhere else, so without the second reading a shell fired on free fire, or from a weapon never
+reloaded, would report no cartridge at all and throw no pattern.
 
 ### 1.2 What runs where
 
@@ -201,6 +246,31 @@ Resolved widths, for reference:
 class's own width. ⏪ They used to sit at × 0.60. A blunt round does not make a *smaller* mark than a
 bullet, it makes a *different* one, and shrinking it was the same "say it with less" reflex the 2026-08-09
 ruling rejected — see §6.
+
+### 3.2a The shot pattern's own look — `SPREAD_ZONE_LOOK`
+
+`module/combat/spread-zone-look.js`. The pattern zone is a canvas object rather than a sprite, so its
+appearance is not the effect engine's business — but it is the same kind of fact and it lives in the
+same kind of block: one frozen object, no branch anywhere else.
+
+| Value | Ships as | What it is |
+|---|---|---|
+| `fillColor` | `#ffaa00` | the wash, and the region document's own `color` |
+| `outlineColor` | `#cc6600` | the drawn edge |
+| `fillAlpha` | **0.10** | against core's own **0.5** — the user's "near-transparent … you can read tokens and shots through it" |
+| `hatch` | **false** | core's diagonal bars are opaque, so they are the half that actually occludes |
+| `outlineWidth` / `outlineAlpha` | 2 px × ui scale / 0.85 | thin and nearly solid: the inverse of the fill, and what carries the shape |
+
+⚠ **Core gives the document no way to say any of this.** A v14 Region carries `color` and `visibility`
+and no opacity of any kind: its highlight is a `RegionMesh` whose alpha is assigned the literal `0.5`
+inside the placeable's own `_draw`, and whose hatch is switched back **on** by `_refreshState` on every
+refresh. So the treatment is applied to the drawn object, on both `drawRegion` and `refreshRegion`,
+for regions carrying our `isSpreadZone` flag and no others. The outline is ours for the same reason:
+core's own region border is bound to interaction (`controlled || hover || layer.highlightObjects`), so
+an unhovered region on a non-active layer has no edge at all, and a 0.10 fill with no edge is not
+"ghost", it is "gone". A keeper leg asserts **core's** 0.5-and-hatched values on an untouched region
+first, so a core release that changes them fails by name rather than leaving us tuning against
+something that already moved. Captures **60a** (ours) and **60a-control** (core's, same region).
 
 ### 3.3 How the load is identified
 
@@ -363,6 +433,15 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setDashMs`,
 `_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`.
 
+**The shot pattern's knobs**, which are not in `effects.js` because the pattern is not a sprite:
+
+| Knob | Ships as | Changes | Where |
+|---|---|---|---|
+| `SPREAD_ZONE_LOOK.*` | see §3.2a | the whole ghost treatment | `module/combat/spread-zone-look.js` |
+| `SPREAD_ZONE_TTL_MS` | 60000 | how long an **unconfirmed** pattern lives outside an encounter | `module/combat/damage-hooks.js` |
+| `SPREAD_ZONE_SWEEP_MS` | 15000 | how often the out-of-combat sweep looks | `module/combat/damage-hooks.js` |
+| the band table | 1/2/3 m, 4d6/3d6/2d6 | width and damage by Close / Medium / Long — Core defaults, overridden per ammo item | `_placeSpreadZone` |
+
 ---
 
 ## 6. Rulings log
@@ -426,6 +505,15 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **BATON, 2026-08-09** | The hit mark becomes a **dust puff** (`jb2a.smoke.puff.ring.01.white`) | Enumerated the same way. Every blue impact on the tier (`001`–`004`, `011`, `012`) is a spike starburst; `impact.water.02.blue` reads liquid; `side_impact.part.smoke.*` is crystalline shards at 3067 ms; `smoke.puff.centered.grey` peaks at luminance 87/255 and is too faint to read as an arrival. The one genuinely *blunt* alternative — `side_impact.part.shockwave.blue`, a concentric ring wave — is rejected on **mechanism**, not looks: its arcs face one baked direction and the impact is drawn with no rotation, so it would point the same way whichever way the shot went. The chosen puff is radial, peaks at 217/255, and takes no `impactClipMs`, so the promotion rule trims it to the ordinary mark's 833 ms unchanged. |
 | **BATON, 2026-08-09** | **One matrix** repaints the slug *and* the shell's discharge column | `TRACER_COLOR_BATON` = hue 0, sat −0.85, **brightness 1.30**. The number to read is 1.30 — above 1, where the rejected value was 0.60. It says a different true thing about each element it touches: the slug's art is already greyscale (mean luminance 99/255 measured), so the *brightness* is what lifts it off a black floor; the column is `bullet.02`'s orange bloom, so the *desaturation* is what turns a fire blast into the pale gas flash of a reduced-pressure load. One matrix rather than two is what makes the shell's two elements agree — the standing uniformity ruling. |
 | **BATON, 2026-08-09** | The masked-merge rule is widened from **colour** to **asset** | The baton treatment is the first overlay that swaps a *file*, and a bare overwrite would have made `column` a way to hand a pistol a shotgun's discharge blast — one field away from what `columnColor` is already forbidden to do. `AMMO_FX_REPLACE_FIELDS` puts `tracer` and `column` behind the same key-presence mask. No shipped behaviour changes; the guarantee becomes structural instead of conventional. |
+| **SPREAD, 2026-08-09** | The shotgun is played **RAW**: buckshot throws the p.108 pattern, and which shot does is read from the **cartridge** at fire time | "Then do it RAW." The Core rules list the shotgun on their own Area Effect table — 1 m / 2 m / 3 m wide by Close / Medium / Long, 4d6 / 3d6 / 2d6, everyone in the path, no evasion. Deriving it from the caliber rather than from the stored `spreadMode` is not a style choice: every shotgun ammo item ever seeded carries `spreadMode: "single"`, so reading the flag would have made the book behaviour reachable only by hand-editing every ammo item in every existing world. Derived, an untouched world's buckshot patterns on its next shot with no migration. |
+| **SPREAD, 2026-08-09** | ⛔ **The slug is a LOAD, because the registry has no slug cartridge to be** | The build spec asked for "the slug caliber". There is none: `CALIBERS` models **one** shotgun entry, `"00"`, labelled *"00 Buck / Slug"*, and all six gauge spellings alias onto it — so the cartridge physically cannot say which of the two is chambered. A slug is therefore expressed as a shotgun-family ammo **modifier** (`slug`, `spreadMode: "slug"`), which is also what it is: the same hull, a different projectile. Additive only — one row in a lookup table, one selector option, no schema, no migration, nothing re-seeded. **This is the build lane's call and not a ruling.** |
+| **SPREAD, 2026-08-09** | An autoshotgun's N shells are **N rolls on ONE card** | No special autoshotgun rule exists in the recorded read, so RAW is that each shell throws its own pattern — and N patterns aimed identically *are* one pattern resolved N times. The mechanics stay per shell (N banded rolls per token, each through the armour pipeline, which is a different number from N × one roll the moment SP is in the way); only the aiming and the clicking collapse. Card text states the count; one result card lists the rolls. Captures 60b / 60c. |
+| **SPREAD, 2026-08-09** | The pattern is **ghost orange**, at 0.10 against core's 0.5, with the hatch off | "Ghost orange … the old opacity was horrible to look at and it blocks things including the shots." Values and the reason core forces this to be done on the drawn object are in §3.2a. The hatch is the half that actually occludes, so alpha alone would not have answered the report. Captures 60a and 60a-control are the same region under both treatments. |
+| **SPREAD, 2026-08-09** | The pattern is **GM-only** | It is an aiming aid the GM has not committed to yet. The table should not watch an unconfirmed blast hover over their tokens, and a player who can see it can read the GM's intent before the GM has one. Uses the shim's existing GAMEMASTER default. |
+| **SPREAD, 2026-08-09** | **Confirm, then vanish** — and an ignored pattern expires on its own | The defect this replaces was pinned live: every spread shot created a region and *nothing* deleted it — no confirm path, no consumer for the round it recorded — so the count grew one per shot forever. Confirm now deletes on every exit that reached a real pattern, including the one where nobody was inside it. |
+| **SPREAD, 2026-08-09** | Expiry is **two clocks**, and which one owns a pattern is decided when it is thrown | A pattern thrown during an encounter belongs to that encounter's rounds; one thrown outside any encounter has no round to wait for and belongs to a 60-second wall clock. Asking later — "is a combat running *now*?" — is wrong in both directions: a pattern thrown out of combat became immortal the moment somebody rolled initiative, and one thrown in combat was swept off the table if its own round ran long. The encounter id is stored, so it also survives that encounter being deleted. A pattern carrying **no** timestamp is litter from the build that had no expiry at all, and is read as expired rather than as immortal — which is what lets an already-littered world tidy itself on load instead of needing a migration. |
+| **SPREAD, 2026-08-09** | The pattern reaches the **far edge of the target's own square**, not its centre | Found by the keeper, not by eye: ending the ray exactly at the aimed-at centre put that centre *on* the polygon's end edge, so whether the token the shooter aimed at was inside its own pattern came down to a floating-point comparison. Reproduced on the rig — a three-shell burst resolved against a bystander and missed the target entirely. Half the target's own width is the smallest overshoot that settles it, and it costs no other square. |
+| **SPREAD, 2026-08-09** | An **untargeted** shell is thrown along the shooter's facing | The same answer, for the same reason, that the presentation rail already gives an untargeted shot (§6, "An untargeted shot is drawn along the shooter's own facing"). It was due east before. Honest limit, unchanged: it is only as good as a token's rotation, and the band stays Medium because an untargeted shot names no distance. Capture 60e. |
 | **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 
 ---
@@ -476,6 +564,29 @@ off, exactly ONE splash from a ten-round burst, nothing on a vehicle, nothing on
 nothing on a ruled fumble, nothing on a burst that misses, nothing when no token was aimed at, and the
 scheduled tail identical with the switch on and off.
 
+**The shot pattern has its own spec**, `tests/cp2020-augmented-spread-zone.mjs` (75 checks), because
+what it tests is the damage rail and a canvas document's lifetime rather than anything the effect
+engine draws. Eight sections: the derivation asserted by value across the whole caliber × load matrix
+(including every gauge alias and both blanks) · the seam carrying the cartridge, checked against the
+**shipped shell compendium** rather than a fixture, so a catalogue that stopped recording gauges would
+fail here · the either/or, driven by raising the real hook and asking whether the single-target flow
+**claimed** the payload — which answers "was a dialog opened?" without opening one · placement, with
+core's own 0.5-and-hatched values asserted on an untouched region before ours are asserted on
+ours · per-shell resolution against a **fixtured** band formula, so three shells must read `5, 5, 5`
+and can never be one roll counted three times, driven by a real DOM click on the posted card's
+button · both expiry rules as pure predicates by value, then driven live · cover occlusion · and a
+source scan for the two ways this could silently rot (the stored flag being read again, and
+`region.behaviors.length`).
+
+⛔ **The spec must not disturb the review rig**, and two of its legs exist only because of that. The
+showcase encounter on :30004 is the user's, so the round rule is driven by raising `updateCombat` with
+that encounter's **own unchanged round** and a backdated pattern — nothing about the combat is
+written, and a leg asserts afterwards that it still stands where it did. The clock rule is reached by
+clearing the pattern's recorded encounter, which is exactly the document state an out-of-combat throw
+produces. Fixtures live in an empty lane far from the review targets: the first run of this spec put
+its pattern across **Review · Shooter** and damaged it, which is also how the ray-overshoot defect
+above was found.
+
 **Traps a new leg will hit.** A `timeRange` end is a **budget, not a guarantee** — the media element
 starts after the effect does and can run past the range end, so anything asserting "content X is never
 drawn" must be measured against the video's own `currentTime`, not inferred from the constant · the
@@ -515,6 +626,9 @@ twice.
 | Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice, and the blood splash is transient by ruling — floor decals were explicitly held out of phase 1. Both change at the same time, in the same way, whenever that ruling arrives. |
 | Blood asks the ACTOR, not the hit location | A cyberlimbed character bleeds even when the round struck the chrome arm. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. |
 | The blood splash is routed above the lighting | The one departure from the file's own routing rule, taken because below it the mark does not exist on a dark scene. It is a **look** call the user has not yet made in motion: the cost is that a splash is drawn over ground the viewer cannot see, for under a second. One constant (`BLOOD_SPLATTER.aboveLighting`) reverses it. Captures 58a vs 58d. |
+| **The slug is modelled as a LOAD, and that is a build-lane call** | ⚠ **The open item of the spread unit.** The registry has one shotgun cartridge, `"00"`, labelled *"00 Buck / Slug"* — so nothing about the caliber can say which is chambered, and the build expressed the slug as a shotgun-family ammo modifier instead (see §6). The alternative is splitting the cartridge into two registry entries, which is a migration and a re-seed and would break the gauge aliases that currently all point at one id. A veto is cheap by construction: the whole thing is one row in `AMMO_MODIFIERS`, one option on the ammo sheet's spread selector, and the first branch of `spreadModeForAmmo`. |
+| One shipped shell weapon records **no gauge** | 10 of the 11 shell weapons in `supplement-shotguns` carry a gauge in `ammoType`; one carries an empty string, so it reports no cartridge and throws no pattern until an ammo item is loaded. Same shape as the known blank-`vehicleType` data gap, and it belongs to the pack-data sweep rather than to this rail. |
+| The pattern's look is **verified on v14 only** | `spread-zone-look.js` carries a v13 branch (a MeasuredTemplate's own alpha, and its control icon hidden) written from that core's API and never run: the ship target is v14 and the rig is v14. Structurally the same two facts; it is untested and says so at the site. |
 | Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
 | Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
 | Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
