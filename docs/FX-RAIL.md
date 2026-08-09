@@ -1,0 +1,409 @@
+# The FX rail
+
+*First edition — 2026-08-09. Covers `module/fx/effects.js` and the seam that feeds it.*
+
+This is the maintainer's document for everything the module draws when a gun goes off. It is written
+for someone who has never read a development report: every number here is either measured on a real
+install or ruled by the module's user, and where the two disagree the document says which is which.
+
+**The one rule to read first.** `module/fx/effects.js` is the *only* file that knows about outside
+effect engines. Every asset key, every colour, every duration and every geometry constant lives there.
+If an animation looks wrong, that file is where it is wrong; nothing else needs opening.
+
+---
+
+## 1. Architecture
+
+### 1.1 The seam
+
+```
+   base system fires a weapon
+        │
+        │  (the base emits no hook of its own — module/seam-shim.js wraps its fire
+        │   methods and its card render, and raises one instead)
+        ▼
+   Hooks: "cyberpunk2020.weaponFired"  ── payload ──┐
+        │                                           │
+        ├─→ module/combat/damage-hooks.js           │  (damage: what happened)
+        └─→ module/fx/effects.js  fxWeaponFired()   │  (presentation: what it looked like)
+                                                    │
+                            both read the SAME payload object
+```
+
+The payload is one resolved burst against one target. Its presentation-relevant fields:
+
+| Field | Meaning | Set by |
+|---|---|---|
+| `attackerId` | who fired | seam shim |
+| `weaponId` / `weaponName` | which weapon (id is exact — two same-named weapons can carry different ammo) | seam shim |
+| `shotsFired` / `shotsHit` | rounds spent and rounds that landed **for this card** | the base's own card data |
+| `areaDamages` | one entry per landing round, by hit location | the base's own card data |
+| `targetTokenId` | the card's own resolved target — **damage-flow routing** | the card |
+| `fxTargetTokenId` | the aimed-at token — **presentation only**, set on every fire mode | seam shim |
+| `firedByUserId` | the one client that resolved the shot | seam shim |
+| `fumbleRuled` | the base actually *resolved* a fumble (not merely "a 1 was rolled") | seam shim |
+| `modifier` | the loaded ammo's modifier id — **the ammo overlay's input** | seam shim, from the loaded ammo item |
+| `armorMultSoft`, `penDamageMult`, `spreadMode`, `dotType`, … | the loaded ammo's mechanics | seam shim, from the loaded ammo item |
+
+Two target fields exist on purpose. `targetTokenId` decides whether the damage window opens
+mid-action; `fxTargetTokenId` only says which way the shot was pointed. Folding them together would
+silently move every single-shot and burst card onto the mid-action damage path, which the user
+explicitly did not want.
+
+### 1.2 What runs where
+
+`cyberpunk2020.weaponFired` is a **local** `Hooks.callAll` — it fires only on the client that resolved
+the shot. Each element reaches the other clients differently:
+
+| Element | Transport | Notes |
+|---|---|---|
+| Shot audio | `AudioHelper.play(..., true)` broadcast | interface channel, so each player's own slider governs it |
+| Muzzle **light** | the module's own socket channel, drawn locally by every receiver | no document is written |
+| Sprites (lance, column, tracer, impact, smoke, ground fire) | Sequencer's own socket | |
+| Face-target turn | an ordinary token document update | **the only document write on this rail** |
+
+### 1.3 Dependency policy
+
+Sequencer and JB2A are **optional**. Sprite verbs no-op silently when they are absent; the muzzle
+light and the audio are native and always work. An asset key that the *installed* JB2A tier does not
+carry is skipped, never played — `fxDbEntryExists()` is the gate, and every key on the rail passes
+through it. All shipped keys are chosen from the **free** tier and are pinned by a keeper leg.
+
+---
+
+## 2. Element reference
+
+Everything one trigger pull can put on screen, in the order it appears.
+
+| # | Element | Asset / mechanism | Gate | Above lighting? |
+|---|---|---|---|---|
+| 1 | **Face-target turn** | token document `rotation` update, 220 ms sweep | table setting **and** token not `lockRotation` **and** turn ≥ 5° | n/a |
+| 2 | **Muzzle light** | native `PointLightSource`, built and driven per render frame | always (native) | it *is* a light — clips to walls |
+| 3 | **Muzzle lance** | `jb2a.muzzle_flash.single.01.yellow`, trimmed to 110 ms | row names `muzzle` (every class **except** the shell) | yes |
+| 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
+| 5 | **Discharge column** | `jb2a.bullet.02.orange`, stretched 1.25 sq, trimmed 300 ms | row names `column` (shell only) | yes |
+| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange` | row names `tracer` | yes |
+| 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
+| 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
+| 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or a promoted key | the round **hit**, and the row has `impactSquares` | yes |
+| 10 | **Burning ground** | `jb2a.ground_cracks.orange` (GroundCrackLoop) | overlay names `groundFire` **and** ≥ 1 round landed — **once per payload** | yes |
+| 11 | **Scorch** | `jb2a.scorched_earth.black` | with #10 | **no** (a black mark is not a light) |
+
+**The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
+*lit by the world* stays below it. This is not cosmetic: measured on the rig at darkness 1.0, a sprite
+left in the primary group crushes to a peak of 15/255 whatever the class or filter, and the same asset
+reaches 232 the moment it is routed up. **The cost:** that route is above the *vision* mask too, so a
+lifted sprite is drawn across ground the viewer cannot see. The engine offers no route that clears the
+darkness and keeps the mask. The muzzle light is unaffected — it is a real light source and still
+clips to walls, so the flash stays honest about the room even when the bolt is drawn over it.
+
+---
+
+## 3. The tables
+
+### 3.1 Weapon classes — `FX_CLASSES`
+
+Resolution is by weapon **type**, never by item name. Shotgun-ness is read from the *attack* type
+(`Shotgun` / `Autoshotgun`) **before** the type map, because base data types shell weapons as `Rifle`
+so they take the Rifle skill.
+
+| Class | Tracer | Muzzle | Impact (sq) | Cadence | Distinctive |
+|---|---|---|---|---|---|
+| `pistol` | bullet.01 | 1.1 sq lance | 0.70 | 80 ms | 8 motes |
+| `smg` | bullet.01 | 1.2 sq lance | 0.75 | 80 ms | 12 motes |
+| `rifle` | bullet.02 | 1.6 sq lance | 0.95 | 80 ms | 13 motes |
+| `shotgun` | bullet.01 | **no lance** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, 1 sq dashes crossing in 150 ms, discharge column, single-shot smoke |
+| `heavy` | bullet.02 | 2.1 sq lance | 1.30 | 80 ms | 16 motes |
+
+Sizes are in **grid units**, not scale factors — the same fraction of a square on any scene.
+
+Optional row fields: `pellets`, `spreadRad`, `dashSquares`, `dashMs`, `cadenceMs`, `soundBurst`,
+`spark`, `tracerColor`, `column`, `columnColor`, `motes`, `smokeSquares`, `smokeSingle`, `muzzleMs`,
+`impactKey`, `impactClipMs`. A row that omits one simply does not get that treatment; **no branch
+anywhere in the file names a specific class.**
+
+### 3.2 Ammo overlays — `AMMO_FX`
+
+Keyed by the loaded ammo's `system.modifier` (lookups.js `AMMO_MODIFIERS`). The overlay is merged over
+the class row; ammo that names no row draws exactly what the class drew before this table existed.
+
+| Modifier | Tracer/column | Impact | Impact width | Fan | Light | Ground |
+|---|---|---|---|---|---|---|
+| `standard`, `brassCased` | — | — | — | — | — | — |
+| `api` | red-shifted (hue −20, sat +0.30, bright 1.20) | fire impact | class | — | **tinted `#ff6a1a`** (dark only) | fire + scorch |
+| `ap` | near-white (hue 8, sat −0.85, bright 1.45) | ground crack | class | — | — | — |
+| `dualPurpose` | *identical to `ap`* | ground crack | class | — | — | — |
+| `hollowPoint` | — | — | **× 1.60** | — | — | — |
+| `safety` | — | — | **× 0.55** | — | — | — |
+| `flechette` | — | — | × 0.70 | **8 darts @ 0.10 rad, 0.8 sq, 170 ms** | — | — |
+| `rubber` | dulled (sat −0.55, **bright 0.60**) | — | × 0.60 | — | — | — |
+| `stundart` | *identical to `rubber`* | — | × 0.60 | — | — | — |
+
+Arrow loads (`broadhead`, `spinner`, `target`) have no rows: there is no bow FX class yet.
+
+**Two rules govern the merge** (`ammoFxEntry`):
+
+1. **Repaint, never add.** `tracerColor` and `columnColor` are applied *only where the class row
+   already carries them*. This is what keeps the shell's pellet fan untinted — the shell row has
+   `columnColor` and no `tracerColor`, so an incendiary shell tints its discharge column and leaves
+   the pellets alone, while an incendiary rifle round tints the bolt it actually has. One rule, both
+   outcomes, no class named anywhere.
+2. **`impactScale` is a multiplier, never a width.** An absolute value would flatten the classes into
+   one size; the table steps the impact from 0.70 (pistol) to 1.30 (heavy) precisely because a heavy
+   round lands harder. A hollow-point should be wider *than its own class*. The multiplier is spent
+   during resolution and removed from the result, so the draw path only ever sees an ordinary row.
+
+Resolved widths, for reference:
+
+| | pistol | smg | rifle | shotgun | heavy |
+|---|---|---|---|---|---|
+| base | 0.70 | 0.75 | 0.95 | 1.15 | 1.30 |
+| `hollowPoint` | 1.12 | 1.20 | 1.52 | 1.84 | 2.08 |
+| `flechette` | 0.49 | 0.525 | 0.665 | 0.805 | 0.91 |
+| `rubber` / `stundart` | 0.42 | 0.45 | 0.57 | 0.69 | 0.78 |
+| `safety` | 0.385 | 0.4125 | 0.5225 | 0.6325 | 0.715 |
+
+### 3.3 How the load is identified
+
+`ammoFxKeyOf(payload)`:
+
+1. **The id, if the payload has one** (`payload.modifier`). This is the design. It also settles a case
+   nothing else can: `ap` and `dualPurpose` carry *byte-identical* mechanics, so no amount of looking
+   at the consequences distinguishes them.
+2. **A fingerprint of the mechanics, only when there is no id** — a compatibility path for payloads
+   emitted before the field existed.
+
+| Load | Fingerprint |
+|---|---|
+| `api` | `dotEnabled && dotType === "fire"` — the only fire damage-over-time in the registry |
+| `flechette` | `spreadMode === "flechette"` |
+| `safety` | `armorMultSoft === 2 && penDamageMult === 3` |
+| `hollowPoint` | `armorMultSoft === 2 && penDamageMult === 1.5` |
+| `stundart` | `stunSaveOnHit && stunSaveMod === -2` |
+| `rubber` | `stunSaveOnHit && stunSaveMod === 0 && penDamageMult === 0.5` |
+| `ap` | `armorMultSoft === 0.5 && penDamageMult === 0.5` |
+
+Order matters where loads overlap: `api` is tested before `ap` (api's armour multipliers *are* ap's);
+`stundart` before `rubber`. The `penDamageMult` term on `rubber` is not decoration — a warhead's own
+fields include `stunSaveOnHit: true, stunSaveMod: 0`, so the pair alone would paint every grenade with
+the baton-round treatment. **Known limit:** without an id, `dualPurpose` collapses onto `ap`.
+
+---
+
+## 4. The sequencing contract
+
+### 4.1 One payload
+
+```
+faceTarget()                       ← awaited; the rounds start from a token already pointed
+fxBurstAmbience()                  ← once, multi-round payloads only (mote spray)
+fxGroundFire()                     ← once, incendiary + at least one hit; NOT awaited
+for each round i of shots:
+    if i > 0: await cadenceMs      ← the ONE wait in the loop
+    sfx()                          ← audio
+    fxSmokePuff()                  ← single-discharge classes only; NOT awaited
+    fxShot()                       ← light + sprites + tracer + impact; NOT awaited
+_watchSettleTag(settleTag, presentationTailMs(class, ammo))
+```
+
+Everything a round draws starts in the **same tick** as that round's audio. Nothing in this path waits
+on a server. Rounds are capped at `MAX_FX_SHOTS` (30).
+
+Hits are assigned to the **leading** rounds of the burst: the payload knows how many rounds landed,
+not which, and inventing an order would be inventing a fact.
+
+**A ruled fumble draws nothing at all** — no light, no sprite, no tracer, no impact, no audio. The gate
+is `payload.fumbleRuled` (the base actually resolved a fumble), *not* a natural 1: with the fumble
+table switched off a natural 1 is an ordinary bad roll and the weapon really did fire.
+
+### 4.2 The tail, and when the damage window may open
+
+The damage window waits for the rail. Three routes, and each reports which one it took:
+
+| Route | When | Value |
+|---|---|---|
+| `signal` | normal — the engine reported the last round's terminal elements gone | measured |
+| `arithmetic` | no fan-out registered (rail off, unmapped weapon, nothing drawn) | `payloadPresentationMs()` |
+| `cap` | the signal never arrived | `PRESENTATION_CAP_MS` (8 s) |
+
+The **terminal elements** are the last round's tracer and impact; only they are named for the engine to
+report on. The scheduled tail is the *floor* (never open early) and the fallback.
+
+`presentationTailMs(class, ammoKey)` — the longest of: light envelope · lance dwell · spark clip ·
+tracer end (travelled: `dashMs + 260`; painted: 933) · impact end (`dashMs + impactClipMs`) · column
+trim. Shipped values:
+
+| Class | tail (standard) | tail (`flechette`) | tail (`api` / `ap`) |
+|---|---|---|---|
+| pistol / smg / rifle / heavy | 933 ms | 1003 ms | 933 ms |
+| shotgun | 983 ms | 1003 ms | 983 ms |
+
+**Deliberately *not* in the tail:** burst smoke, mote spray, burning ground, scorch. They are scene
+dressing that lingers on purpose; waiting for them would hold the damage window shut for seconds after
+a viewer has already called the action over.
+
+**An impact promotion changes the mark, not the clock.** The two promoted assets are 2267 ms (fire) and
+5033 ms (crack) against the ordinary impact's 833 ms. Every impact is played through
+`timeRange(0, impactClipMs)`, defaulting to the ordinary impact's own length — so a promotion is free
+in the dimension the user is sensitive to. What is given up is each asset's trailing fade; on
+incendiary that loss is covered by the burning ground, which sits at the same point for seconds.
+
+**Any overlay that moves a tail input must be threaded into the tail.** `flechette` gives a class a
+crossing time it did not have; `impactClipMs` changes how long the mark is drawn. Both are read
+through the same resolver the draw path uses, so they cannot drift. The failure mode if they ever do
+is silent and one-directional: the window opens while the last round is still on screen.
+
+### 4.3 The darkness gate
+
+The muzzle light's **colour** is chosen from the viewed scene's darkness, read fresh per flash:
+
+| Scene darkness | Colour |
+|---|---|
+| ≥ 0.25 | the loaded round's `flashColor` if it has one, else `#943400` |
+| < 0.25 | **null** — core removes the coloration layer from the render entirely |
+
+This is not an opacity. `hasColor` is set from `data.color !== null`, so a null colour takes the layer
+out of the render (`layers.coloration.active === false`). The gate is inviolable and the ammo tint is
+passed *through* it, never around it: below the threshold `flashColorFor()` has already returned null
+before the ammo is consulted. The reason is measured — a coloured source moves **44.8%** of a lit
+frame's pixels on this core, where the uncoloured one moves 0.2%.
+
+---
+
+## 5. Tune-knob index
+
+Everything worth changing, and what it does. All in `module/fx/effects.js`.
+
+| Knob | Ships as | Changes |
+|---|---|---|
+| `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
+| `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
+| `MUZZLE_MODE` | `"cone"` | flash shape: `cone` / `omni` / `hybrid` |
+| `MUZZLE_LIGHT.coneDegrees` | 270 | wedge width (a 90° notch behind the shooter) |
+| `MUZZLE_LIGHT.luminosity` | 0.65 | flash strength — **raised from the reference's 0.5 on request** |
+| `MUZZLE_LIGHT.referenceColor` | `#943400` | dark-regime colour (`#ffae42` is the earlier warm option) |
+| `MUZZLE_LIGHT.darknessColorThreshold` | 0.25 | where the colour regime switches |
+| `MUZZLE_LIGHT.brightSquares` / `dimSquares` | 12.5 / 12.5 | equal on purpose — attenuation does *all* the falloff |
+| `MUZZLE_SPRITE.endMs` | 110 | lance trim — beyond this the clip's smoke-and-fire plume returns |
+| `MUZZLE_SPRITE.edgeFraction` | 0.5 | how far along the aim the sprite is planted, as a fraction of token width |
+| `FACING_AIM_SQUARES` | 3 | how far the synthesized aim point sits for an untargeted shot |
+| `COLUMN_SQUARES` / `COLUMN_TRIM_MS` | 1.25 / 300 | discharge column reach and trim |
+| `DASH_ARRIVAL_HOLD_MS` | 260 | how long a travelled pellet lives after arriving |
+| `TRACER_CLIP_MS` | 933 | painted tracer's on-screen life (upper bound of the mapped families) |
+| `TRACER_COLOR` | hue 18, sat −0.35, bright 1.15 | the class colour shift |
+| `TRACER_COLOR_INCENDIARY` / `_HARDENED` / `_INERT` | see §3.2 | the ammo colour shifts |
+| `IMPACT_FIRE` / `IMPACT_CRACK` | keys + measured clip lengths | the promoted impacts |
+| `GROUND_FIRE.lifetimeMs` | 3200 | how long the burning ground burns |
+| `GROUND_SCORCH.lifetimeMs` | 180000 | the scorch's cap — **minutes, not forever** |
+| `MUZZLE_SMOKE.*` | see the block | one puff's size, phase, drift and cap |
+| `MUZZLE_MOTES.*` | see the block | speck geometry, all off the reference frame |
+| `PRESENTATION_CAP_MS` | 8000 | hard ceiling on how long the damage window may be held |
+| `APPLY_LEAD_MS` | 150 | how far ahead of the engine's report the window may open |
+| `SETTLE_CONFIRM_MS` | 60 | how long "all ended" must hold before it is believed |
+| `FACE_TARGET.durationMs` / `minDegrees` | 220 / 5 | the turn sweep and its dead zone |
+
+Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setDashMs`,
+`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`.
+
+---
+
+## 6. Rulings log
+
+Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
+history. ⏪ marks a decision that reversed an earlier one.
+
+| Date / ref | Ruling | Why |
+|---|---|---|
+| FR#1–5 | The flash is a **client-local light source**, not a token document update | The document transport delivered an 85 ms envelope in ~1.3 s of wall clock; a viewer watched the light bloom outward and fade. Nothing about the values was wrong; the transport was. |
+| FR#5 | Lit sprites are routed **above the lighting**, not merely elevated | Elevation does not choose the layer — route flags do. Measured: elevation-only crushes every class to a peak of 15/255; the same asset reaches 232 above the lighting. Accepted cost: above the vision mask too. |
+| — | Flash colour **dropped** in favour of illumination only | A coloured source moved 44.8% of a *lit* frame's pixels on this core; the reference's engine does not do that. The user's hard requirement was "no visible flash in a lit area". |
+| ⏪ FR#23 | Flash colour **restored, darkness-gated** | Uncoloured read "too white". The stain measurement still binds — but only in a lit scene. Gating keeps both requirements instead of trading one for the other. |
+| FR#23 | Luminosity raised 0.5 → **0.65** | "I'd like them to feel pretty violent." A deliberate departure upward from the reference-exact value; it cannot reintroduce the stain, which is the coloration layer's doing. |
+| FR#14 | Lance **trimmed to 110 ms** and sized in grid units | Reported "too large / a plume of smoke and fire". Frame-by-frame: the clip opens as a lance and then develops two billowing clouds. Scaling cannot remove a plume; only a trim can. |
+| FR#14 | The trim is a **time range**, never `endTimePerc` | Measured: the percentage form cut nothing (1752 ms vs 1634 ms untrimmed); a time range gave 861 ms. Do not swap back without re-measuring. |
+| FR#16 | Tracer colour is a **ColorMatrix**, never a tint | `tint` *multiplies*, so tinting orange with pale yellow returns *more* saturated orange — the opposite of the asked-for shift. Photographed side by side. |
+| FR#17 | Smoke is **many short puffs overlapping out of phase** | "A lessening amount of smoke continues to advance, rapidly disappearing." One sprite dimming cannot produce that. Structure borrowed from the reference; assets are ours. |
+| FR#18 | Every puff is its **own** `.effect()` section | Sequencer's randomisers roll **once per section**, not per repetition. A section with `.repeats(n)` yields n identical copies — the reference itself falls into this. |
+| FR#18 | The puff's heading is set with `spriteRotation`, not `rotateTowards` | `rotateTowards` **sets the movement destination**. Puffs built with both flew to the target instead of drifting; measured 6–9 squares out on a 9-square shot line. |
+| FR#19 | Pellets are driven by a **speed**, with an arrival hold | With no speed the travel is driven by the lifetime, so a pellet was destroyed at the instant it arrived — and on a client dropping frames, before. Measured: every pellet died at 0.778 of the line. |
+| FR#20 | Smoke drift is **capped against the shooter**, with a lateral component | Reported "launching out of the gun like a projectile". The distance was never the fault — every puff slid along the same axis, so the group streamed as one jet. |
+| FR#20 | The shell smokes on a **single** discharge (`smokeSingle`) | Reported "I don't see it at all for shotguns". Diagnosis: the shell path drew its puffs correctly; the table simply fires **one** round, and the multi-round gate then asked for none. |
+| FR#21 | `muzzleMs` dwell added (lance stretched by playback **rate**, not range) | A single discharge's 110 ms lance is over before the eye settles, where an automatic's restarts read as sustained. Extending the *range* would let the plume back in. |
+| FR#22 | The shell gets a **discharge column** (`bullet.02`, stretched) | Decoding the assets showed `bullet.02` carries a spiky bloom, smoke curls and an impact star baked into its own clip. The "spiky piece" lives in the asset, not in our lance. |
+| ⏪ FR#22 | The shell draws **no lance**, and the dwell goes with it | "The newly added spiky cone looks great, but the flame lance from before still sits below it and it doesn't look good. Remove the flame lance." Mechanism left wired — it is one row field from use. |
+| ⏪ FR#22 | The burst smoke **stream is retired** | The premise was wrong: `bullet.02` already carries its own smoke, so our puffs were a second smoke over a smoke. That is the reported "spammy no matter how we do it". Cost: pistol/SMG (`bullet.01`) autos are now smokeless — one row field from changing. |
+| 2026-08-08 | **No spark star** on any class | Matched A/B on the rig (captures 45/46, 45b/46b): the radial star reads "magical" and "busy" for a firearm, fires rays backward across the shooter, and is a fixed size so it dominates a pistol. "The angled one is good enough." Mechanism left wired. |
+| 2026-08-08 | The action is over when the **last round's impact/tracer** ends | Burst smoke and mote motes linger on purpose. Waiting for them would hold the window seconds past the point a viewer calls it done. |
+| FR#22 | The settle signal asks the **engine**, not the clock | The engine keeps an effect alive past its nominal time. Measured: RIFLE 1022 ms vs a 933 ms schedule, SHELL 1045 ms vs 983 ms. That overhang is exactly the reported remainder. |
+| FR#23 | `APPLY_LEAD_MS` = 150 | Reported "slightly sluggish". The final frames of an impact are nearly transparent, so the eye finishes before the engine does. The scheduled floor still overrides the lead. |
+| FR#23 | The column is shortened to 1.25 sq and trimmed to 300 ms | Stretched to the aim point it drew "a rifle-like single bullet per shotgun shot". What it exists for is the bloom at its origin. |
+| FR#23 | ⚠ **Open:** at that short stretch the asset's arrival star is not separable | Captured at three trims: 500 ms still showed the star, 150 ms showed nothing readable. The alternative on record is a long stretch (30 ft band) trimmed instead. Flagged with capture 55c; not taken unilaterally. |
+| — | A **ruled fumble** draws and sounds nothing | "If the shotgun didn't fire, it shouldn't blast visibly." The round count cannot catch it — the base computes `roundsFired` before consulting the ruling — so the seam forwards the ruling itself. |
+| — | An **untargeted** shot is drawn along the shooter's own facing | The previous build answered "which way" separately per element and answered "unknown", so a shot at nothing drew a plain radius and no sprites. Honest limit: it is only as good as a token's rotation. |
+| **FR#24, 2026-08-09** | The ammo's **id** rides the payload | Everything else forwarded is a mechanical *consequence*; this is the modifier itself. Two of thirteen (`ap`/`dualPurpose`) carry identical mechanics and were indistinguishable at any distance. Presentation-only: no damage path reads it. |
+| **FR#24, 2026-08-09** | Overlays **repaint, never add** | Standing ruling: shell pellets are never tinted, `columnColor` is the escape hatch. Expressed as a merge rule so no branch names the shell. |
+| **FR#24, 2026-08-09** | `impactScale` is a multiplier | An absolute width would flatten the per-class impact ladder, which exists because a heavy round lands harder. |
+| **FR#24, 2026-08-09** | An impact promotion is **trimmed to the ordinary mark's length** | Otherwise every AP hit would hold the damage window shut for five seconds — a cost nobody asked for, arriving as a side effect of choosing a different picture. |
+| **FR#24, 2026-08-09** | The ammo tint goes **through** the darkness gate | The gate is inviolable; the lit-floor stain stays impossible by construction rather than by opacity. |
+| **FR#24, 2026-08-09** | Burning ground and scorch are **once per payload** and excluded from the settle signal | The fan-out caps at 30 rounds; a per-round lingering element would put 30 overlapping fires on one square for one trigger pull. |
+| **FR#24, 2026-08-09** | The scorch is **session-bound**, with a lifetime cap in minutes | Real persistence means a document write on the scene from whichever client resolved the shot. That is a shared question with blood decals and needs its own ruling. An uncapped Sequencer effect is a leak by another name. |
+| **FR#24, 2026-08-09** | No **audio** layer for the ammo treatments | Sourcing is owed. Recorded so the omission is a decision, not a gap. |
+
+---
+
+## 7. Testing story
+
+**The keeper.** `tests/cp2020-augmented-fx-rail.mjs` in the fork repo, run against a rig carrying
+Foundry + this module + Sequencer + the free JB2A tier:
+
+```
+FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=<pw> node cp2020-augmented-fx-rail.mjs
+```
+
+What it pins, in outline: capability detection against the *installed* engine and tier · class
+resolution from item type data, including the attack-type discriminator that runs ahead of the type
+map · **every mapped database key resolving on the free tier** (so a paid-tier-only key is caught here
+rather than by showing nothing) · the flash envelope by value, the applied write sequence, and that
+**no document write reaches the shooter token** other than the face-target rotation · the fan-out's
+counts and cadence · the ammo overlay resolution, every treatment's values, the tail threading, the
+once-per-payload ground gate and the flash tint through the darkness gate · two real sessions, to
+prove the socket relay draws a flash on a client the fire never ran on · a non-GM session driving a
+write, because a rule that reads right and a write the server refuses look identical from the GM's
+side · 0 console errors.
+
+**Assertion style.** Every pure helper on the rail (`muzzleSourceSpecs`, `pelletEndpoints`,
+`moteEndpoints`, `smokePuffPlan`, `presentationTailMs`, `flashColorFor`, `ammoFxEntry`, …) takes an
+injectable `rng` or plain arguments precisely so its output is asserted **by value**, with no canvas,
+no engine and no shot. Anything that cannot be — which asset was queued, how many were emitted, what
+colour a source was built with — is driven live and read back off the engine.
+
+**Traps a new leg will hit.** Sequencer randomisers roll once per section · `endTimePerc` is a no-op on
+this build (use `timeRange`) · `rotateTowards` sets the movement destination · core packs colours to
+**numbers** on source data, so compare in core's units · the capture seam must be applied *first* in a
+chain (the engine reads the playback rate when it works out a trim point) · `endAllEffects()` between
+sections can make the engine lose a race with itself, which is why the harness absorbs exactly that one
+third-party signature and nothing else.
+
+**Capture seams.** Screenshots on a software rasteriser cannot catch a 110 ms sprite or a pellet that
+crosses in under a frame. `_setSpriteRate`, `_setDashMs` and `_setFlashLevels` stretch the *clock*
+without changing a single shipped value — sizes, trims, geometry and colour are untouched. Every image
+taken through one says **HELD** in its filename.
+
+**Provisioning.** `tests/cp2020-augmented-provision-fx-ammo.mjs` stocks one ammo item per treated
+modifier on the review shooter, in a caliber one of its own weapons takes. It is idempotent and never
+changes what a weapon has loaded, so a reviewer swaps loads from the sheet and fires the same gun
+twice.
+
+---
+
+## 8. Open items
+
+| Item | State |
+|---|---|
+| The discharge column's arrival star at the short stretch | Not separable by trimming (measured). Alternative on record: long stretch, trimmed instead. Awaiting a look ruling. |
+| Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
+| Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice. |
+| Flechette dart size on a painted-bolt class | `dashSquares: 0.8` reads faint on the rifle in capture 56e. The number was chosen as "smaller than buckshot" (the shell's 1.0), not measured — and a HELD frame is a poor judge of how big a lit slug looks (the same caution the pellet-size block records). A one-field call for the user: 0.8 as shipped, or up toward 1.0 for legibility. |
+| Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
+| Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
+| Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
