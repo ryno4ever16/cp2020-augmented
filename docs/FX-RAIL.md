@@ -44,7 +44,7 @@ The payload is one resolved burst against one target. Its presentation-relevant 
 | `fxTargetTokenId` | the aimed-at token — **presentation only**, set on every fire mode | seam shim |
 | `firedByUserId` | the one client that resolved the shot | seam shim |
 | `fumbleRuled` | the base actually *resolved* a fumble (not merely "a 1 was rolled") | seam shim |
-| `modifier` | the loaded ammo's modifier id — **the ammo overlay's input** | seam shim, from the loaded ammo item |
+| `modifier` | the loaded ammo's modifier id — **the ammo overlay's input** | ⚠ **ruled, not wired** — see §8. `AMMO_EFFECT_FIELDS` does not list it, so it arrives `undefined` and every load is identified by the fingerprint path instead |
 | `armorMultSoft`, `penDamageMult`, `spreadMode`, `dotType`, … | the loaded ammo's mechanics | seam shim, from the loaded ammo item |
 
 Two target fields exist on purpose. `targetTokenId` decides whether the damage window opens
@@ -665,10 +665,70 @@ crosses in under a frame. `_setSpriteRate`, `_setDashMs` and `_setFlashLevels` s
 without changing a single shipped value — sizes, trims, geometry and colour are untouched. Every image
 taken through one says **HELD** in its filename.
 
-**Provisioning.** `tests/cp2020-augmented-provision-fx-ammo.mjs` stocks one ammo item per treated
-modifier on the review shooter, in a caliber one of its own weapons takes. It is idempotent and never
-changes what a weapon has loaded, so a reviewer swaps loads from the sheet and fires the same gun
-twice.
+**Provisioning — the review bench.** `tests/cp2020-augmented-provision-review-bench.mjs` builds the
+whole review loadout: **one weapon per (class × distinct-visual load), each already loaded**, named with
+a numbered prefix so the shooter's Combat tab reads as an ordered walk-down list. It is idempotent by
+**rebuild** — every run deletes what it owns and recreates the same rows, one at a time, because the
+Combat tab lists `actor.itemTypes.weapon` in collection order and not by name, so creation order *is*
+the reading order. Re-running is therefore also the reset (magazines full, loads re-linked, damage
+zeroed, targets back in position).
+
+⚠ **"Loaded" on the ship target means `system.ammoItemId`, and only that.** That is the field the seam
+reads (`ammoEffectFields`), so it is what puts a load's mechanics and its cartridge on the payload. The
+`loadedAmmoId` / `loadedAmmo` snapshot pair exists on the **fork's** weapon schema and not on the
+shipped system's; the provisioner writes the pair when the running schema carries it and reports when it
+does not, rather than writing keys the DataModel drops.
+
+⏪ It **supersedes** `tests/cp2020-augmented-provision-fx-ammo.mjs`, which stocked loose ammo boxes on a
+shooter carrying unloaded guns and left the reviewer to load each one from the sheet. That design was
+retired by the user on 2026-08-09: *"preload my guns with the right ammo and give me multiple guns of the
+same type with different ammo so I can just go down the list and shoot each of them."*
+
+The bench, as it ships (walk-down order, pistol → smg → rifle → shell → heavy):
+
+| # | Weapon | Caliber | Load | Class | What that row exists to show |
+|---|---|---|---|---|---|
+| 01 | Stolbovoy St-2 Pistol | 10mm | `standard` | pistol | the class baseline — 0.70 sq mark; the control for 02/03 |
+| 02 | Stolbovoy St-2 Pistol | 10mm | `hollowPoint` | pistol | `impactScale` × 1.60 → 1.12 sq |
+| 03 | Stolbovoy St-2 Pistol | 10mm | `safety` | pistol | `impactScale` × 0.55 → 0.385 sq |
+| 04 | H&K MPK-9 | 9mm | `standard` | smg | the burst cadence (80 ms), mote spray, smokeless auto |
+| 05 | H&K MPK-9 | 9mm | `rubber` | smg | **the baton pair, class half** — `cannon_ball` slug + dust puff |
+| 06 | Militech Ronin Light Assault | 5.56 | `standard` | rifle | the class baseline — 0.95 sq mark |
+| 07 | Militech Ronin Light Assault | 5.56 | `api` | rifle | **burning ground on the single-target flow** — ≤ 4 flames in the scatter disc + one scorch |
+| 08 | Militech Ronin Light Assault | 5.56 | `ap` | rifle | near-white bolt + ground-crack impact; the control for 16 |
+| 09 | Militech Ronin Light Assault | 5.56 | `flechette` | rifle | 8 darts at 1.1 sq from a class that draws one bolt |
+| 10 | Arasaka Rapid Assault Shot 12 | 00 | `standard` | shotgun | **the RAW buck pattern** + confirm + delete; and the discharge column at its 55/220 trim |
+| 11 | Arasaka Rapid Assault Shot 12 | 00 | `slug` | shotgun | **the single-target contrast** — the one shell load that throws no pattern |
+| 12 | Arasaka Rapid Assault Shot 12 | 00 | `api` | shotgun | **burning ground on the pattern flow** — ≤ 5 flames placed on *confirm*; column **and** fan both red |
+| 13 | Arasaka Rapid Assault Shot 12 | 00 | `stundart` | shotgun | **the baton pair, shell half** — one matrix across column and pellets |
+| 14 | Arasaka Rapid Assault Shot 12 | 00 | `flechette` | shotgun | a dart swarm, and a flechette pattern rather than a buck one |
+| 15 | Barrett-Arasaka Light 20mm | 20/9mm | `standard` | heavy | the top of the impact ladder — 1.30 sq |
+| 16 | Barrett-Arasaka Light 20mm | 20/9mm | `dualPurpose` | heavy | identical to `ap` by ruling — the pair the payload's ammo **id** exists for |
+
+Every pairing is checked against `modifiersForCaliber` before the row is built, and every magazine's
+caliber IS its gun's own `ammoType` string — so a load can never land in a barrel that does not take it,
+and the check is the registry's answer rather than the script's. Sixteen rows, five classes, ten distinct
+loads; `brassCased` is the one treated modifier with no row, because it draws exactly what `standard`
+draws. The range is set up with it: three labelled targets (flesh · cyberlimb · vehicle) at 10–11 m,
+inside every bench gun's Close band and in the pattern's Medium band, at zero damage, gore ON.
+
+**The bench's own smoke test.** `tests/cp2020-augmented-review-bench-smoke.mjs` (36 checks) is not a
+keeper — it pins no values. It answers one question: can each gun be picked up and fired with zero
+loading steps, and does the thing that row exists to show actually reach the canvas? Every shot goes
+through the **real UI path** (the sheet's fire button → the modifiers dialog → its submit) and every
+claim is read off the **engine**: the payload the seam raised, the database keys Sequencer was handed
+(`createSequencerEffect`), the region documents the pattern flow wrote. It drives blood on flesh and its
+absence on the vehicle, the baton asset and its dust mark, the burning ground and its scorch, the buck
+pattern's placement / confirm / deletion, the incendiary shell's fires arriving only **on confirm**, and
+the either/or by value on both sides — `payload.handled` unset for buckshot and `"cp2020-augmented"` for
+the slug. It restores everything it disturbs.
+
+⚠ **Two traps it hit, recorded because the next leg will hit them too.** `createSequencerEffect` reports
+the **database key** a section was handed (sometimes with a variant suffix, `…yellow.1`), *not* a resolved
+file path — a leg matching on `Sequencer.Database` filenames matches nothing. And the apply window is
+**deferred until the presentation settles**, up to `PRESENTATION_CAP_MS` (8 s), so a window opened by the
+*previous* shot arrives long after that shot's own read: a leg that counts windows must drain past the cap
+before it fires, or it attributes one shot's dialog to the next one's payload.
 
 ---
 
@@ -676,6 +736,7 @@ twice.
 
 | Item | State |
 |---|---|
+| **The ammo's `modifier` id is ruled onto the payload but is not on it** | 🔴 **Doc-vs-code divergence, found 2026-08-09 by the review bench's smoke test.** FR#24 ruled that the modifier's own id rides `cyberpunk2020.weaponFired`, and §1.1, §3.3 and §6 all state it — but `AMMO_EFFECT_FIELDS` in `module/seam-shim.js` lists `caliber` and not `modifier`, so `payload.modifier` is `undefined` on every real shot (read live off the hook: `modifier: null` for all sixteen bench loads). Every load is therefore resolved by `ammoFxKeyOf`'s **fingerprint** path, which is the compatibility branch. Two consequences, and only one of them costs anything today: `dualPurpose` collapses onto `ap` — the exact case the id was added to settle — and `brassCased` / `slug` resolve to no key, which is what they draw anyway. Nothing on the shipped bench looks different, because `ap` and `dualPurpose` carry identical overlay rows. The fix is one string in one array; it wants its own unit and a keeper leg that asserts the field off a **real** fired payload rather than off a synthesized one (every existing leg hands `ammoFxKeyOf` a payload it built itself, which is why this survived 610 checks). |
 | **The burning ground's size, density and lifetime are not signed off** | ⚠ **The open item of this unit.** The asset was chosen by measurement and the placement was ruled, but three numbers are look calls the build lane made while the user was away: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**, and a flame burns **45 s**. Each is one constant, and a veto costs nothing: `GROUND_FIRE.squares`, `.maxPerPayload` / `.maxPerPattern`, `.lifetimeMs`. Captures 61a–61d. |
 | A shell fired with the shot pattern **switched off** is claimed by neither flow | ⚠ Pre-existing, in the DAMAGE routing rather than in this rail, and surfaced by building against it. `_hookWeaponFired` stands down for any non-single cartridge and `_hookSpread` stands down when the world setting is off, so with the setting off a buckshot payload opens no damage window and throws no pattern. The burning ground follows the mechanics — it draws nothing either — which is the right way round but does not fix the routing. |
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
