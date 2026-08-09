@@ -807,39 +807,109 @@ export const TRACER_COLOR_INERT      = Object.freeze({ hue: 0,   saturate: -0.55
  *
  * ⚠ THE ASSET IS DISTANCE-BANDED, which is what makes this worth measuring rather than assuming: the
  * database hands back a different source file per stretch distance, so shortening the stretch does not
- * merely scale the same clip, it can select a different one whose phases are proportioned differently.
- * The shipped value is the one whose delivered file still carries the bloom intact (measured on the
- * rig; the alternative, if a short band's bloom is ever weak, is to keep the long band and trim it
- * instead — recorded so the choice does not have to be rediscovered).
+ * merely scale the same clip, it selects a different one. At 1.25 squares the database serves the
+ * SHORTEST band, and that is the right one — measured, see below.
+ *
+ * ⏪ THE "USE A LONG BAND INSTEAD" ALTERNATIVE IS DEAD (2026-08-09). It used to be recorded here as the
+ * escape hatch if the short band's phases were ever inseparable, on the assumption that a longer band
+ * spreads bloom / travel / arrival further apart in TIME. Decoded off the installed files, that
+ * assumption is false in the direction that matters:
+ *   Bullet_02_Regular_Orange_{05,15,30,60,90}ft — 933ms EVERY ONE. The bands differ in WIDTH
+ *   (600 / 1000 / 1600 / 2800 / 4000 px), not in duration.
+ * The bloom is the same ~230px of art in all five, so a longer band is the same bloom with more
+ * distance for the round to cover in the same 933ms. Frame-analysed, head position as a multiple of
+ * the bloom's own extent at 133ms of clip: 05ft = 1.05×, 90ft = 1.9×. The long band puts the round
+ * FURTHER from the bloom at every clip time, not nearer. The short band is strictly the best available
+ * for a bloom-only read, and the only lever that separates the phases is the TRIM below.
  */
 export const COLUMN_SQUARES = 1.25;
 
 /**
- * How much of the column's clip plays, in clip milliseconds — the trim that keeps its BLAST and drops
- * its ARRIVAL.
+ * How much of the column's clip plays, in clip milliseconds — the trim that keeps its BLOOM and drops
+ * everything after it.
  *
- * ⚠ MEASURED ON THE FIRST SHORTENED CAPTURE, not assumed. Shortening the stretch alone was not enough:
- * `bullet.02` ends with a big spiky impact star, and at a 1.25-square stretch that star landed about a
- * square and a half ahead of the barrel, bright and detached — a floating impact hanging in mid-air
- * rather than part of the discharge (it also fell across the target token, which made it read as a hit
- * that had not happened). The stretch controls WHERE the clip is drawn; only a trim controls HOW MUCH
- * of it is drawn.
+ * The stretch controls WHERE the clip is drawn; only a trim controls HOW MUCH of it is drawn. Same tool
+ * and same reasoning as the muzzle lance's own trim (MUZZLE_SPRITE.endMs), including the finding
+ * recorded there that a TIME RANGE really cuts on this build where the percentage form cut nothing.
  *
- * So the column plays its opening and stops early. Same tool and same reasoning as the muzzle lance's
- * own trim (MUZZLE_SPRITE.endMs), including the finding recorded there that a TIME RANGE really cuts on
- * this build where the percentage form measured as no cut at all.
+ * ⏪⏪ 300 → 70 (2026-08-09, user ruling). At 300ms the user reported two things about this one element,
+ * and they turned out to be the same element: "the spiky cone is currently emitting a tail (looks like
+ * a round or round tail)", and "shotgun also has this standard starburst in addition to the spiky
+ * cone". Both are `bullet.02`'s own baked phases, and the value here decided how many of them played.
  *
- * ⚠⚠ WHAT THE TRIM CANNOT DO, measured rather than assumed, and left for the user to rule on: at this
- * SHORT stretch the database serves a short distance band (05ft/15ft), and those files compress the
- * whole bolt — bloom, travel AND arrival star — into their opening. Captured at three trims: at 500ms
- * the arrival star was still on screen; at 150ms the column was gone before it could be read at all;
- * 300ms is the value that keeps a readable discharge. So the star is NOT a tail that can be cut off
- * the short band — it arrives with the bloom. The alternative on record is to keep a LONG stretch (the
- * 30ft band, whose phases are spread out) and trim that instead, which trades the short reach back for
- * a separable star. Not taken unilaterally: the short reach is the thing the user asked for, and the
- * star's read is a look question. Flagged with capture 55c.
+ * ⭐ THE CLIP, DECODED FRAME BY FRAME off the installed 05ft file (600x400, 933ms) rather than guessed —
+ * this is the whole basis for the number:
+ *      0–33ms    the bloom forming, small
+ *     33–66ms    ⭐ THE SPIKY CONE at full size, apex on the barrel, nothing else on screen
+ *     66–96ms    a white streak develops BEHIND the muzzle (the speed trail)
+ *     96–160ms   bright heads separate and run forward — the "round with a tail"
+ *    160–300ms   ⭐ THE STARBURST, ~1.5 squares ahead of the barrel, bright and detached
+ *    300–933ms   sparks and smoke curls, dimming
+ * Confirmed on the rig at four trims played through the ship chain (capture 57d): 300ms shows cone,
+ * trail AND starburst; 140ms shows cone and a pronounced trail, no starburst; 100ms shows the cone with
+ * a modest trail; 70ms shows the cone alone. So ~70 is the largest value that draws ONLY what the user
+ * asked to keep — and 55 is that value with the overrun margin below subtracted.
+ *
+ * ⚠⚠ THE TRIM IS A BUDGET, NOT A GUARANTEE, and this is the measurement that sets the final number.
+ * The media element starts playing when its texture is ready, which lags the effect's own start, while
+ * the effect's death is scheduled from the effect's start — so the video can run PAST the range end.
+ * Sampled at 4ms against the video's own `currentTime`, worst clip actually reached over repeated real
+ * discharges:
+ *     trim  70 / rate 1      → 139ms   ⚠ a rate of 1 is the WORST case, not the safest: a 70ms budget
+ *                                        is shorter than the start lag, so the media runs at full speed
+ *                                        through the whole overshoot
+ *     trim  70 / rate 1/3    →  76ms   (bare chain)   ·  103ms worst of 12 real discharges (ship chain)
+ *     trim  45 / rate 1/3    →  50ms
+ * A slower rate makes the trim MORE accurate, because the overshoot is a fixed slice of WALL time and a
+ * slow rate converts less of it into clip. 55 with the dwell below keeps the worst observed reach inside
+ * the clean-cone window even on this rig, which renders at ~12fps and therefore exaggerates every
+ * scheduling lag a real client would have.
+ *
+ * ⚠ IT IS NOT THE ON-SCREEN LIFE — see COLUMN_DWELL_MS. 55ms of clip would be a shorter discharge than
+ * any class's lance, and this is the one class that draws no lance at all. The dwell is what keeps the
+ * blast readable; this number only decides which frames exist.
  */
-export const COLUMN_TRIM_MS = 300;
+export const COLUMN_TRIM_MS = 55;
+
+/**
+ * How long the trimmed column stays on screen, in WALL-CLOCK milliseconds.
+ *
+ * Two numbers rather than one, for exactly the reason the lance's own pair exists (see the
+ * MUZZLE_DWELL_DEFAULT_MS block): the trim decides WHICH frames are drawn and the dwell decides HOW LONG
+ * they take to play. Extending the trim to buy on-screen time is what lets the tail and the starburst
+ * back in — they are later frames of this same clip — so the time has to come from the playback RATE
+ * instead. What is shown stays byte-for-byte the frames ruled in above.
+ *
+ * WHY 220. FR#21 measured that a SINGLE discharge's muzzle sprite is over before the eye settles where
+ * an automatic's restarts read as sustained, and ruled a 220ms dwell for the one class that fires one
+ * round — this class. FR#22 then removed that class's lance and the dwell went with it, leaving the
+ * column's own 300ms clip carrying the discharge's whole on-screen presence. Cutting the clip to 55ms
+ * without restoring a dwell would hand back the defect FR#21 fixed, so the dwell comes back on the
+ * element that now carries the blast, at the value that was already ruled for it.
+ *
+ * ⭐ IT IS ALSO WHAT MAKES THE TRIM ACCURATE, which is the part that would not survive being "tidied
+ * away". The trim block records the measurement: the media overshoots its range end by a slice of WALL
+ * time, so the slower the rate, the less of that slice becomes clip. Rate 1 was measured as the worst
+ * case (139ms reached against a 70ms range), not the safest. 55/220 is an exact 0.25, the same kind of
+ * round derived rate the lance's ruled dwell gave it.
+ *
+ * ⚠ 220 IS THE ASK, NOT A MEASURED DELIVERY. Sampled at 4ms against the sprite's own media element, the
+ * shipped pair puts the column on screen for ~160ms of wall clock rather than the full 220 — the media
+ * starts a little after the effect does and the host does not hold the requested rate exactly under
+ * load. It is recorded here because presentationTailMs takes this constant as the column's term, and a
+ * term that over-states an element's life is the SAFE direction for a floor the damage window waits on
+ * (the window may open late, never early). Do not "correct" it downward to the measured number without
+ * re-reading that function's opening note.
+ */
+export const COLUMN_DWELL_MS = 220;
+
+/**
+ * The playback rate that makes the trimmed column last its dwell. Pure, and exported so the pair is
+ * asserted by value rather than by watching a sprite.
+ */
+export function columnRateFor() {
+  return COLUMN_TRIM_MS / COLUMN_DWELL_MS;
+}
 
 /**
  * The mapping table: our weapon CLASS → Sequencer database keys + our sound basename + options.
@@ -927,8 +997,18 @@ export const COLUMN_TRIM_MS = 300;
  *    own built-in bloom, the pellet fan, one smoke puff and the native flash light. Restoring it is
  *    adding the two fields back; the dwell mechanism they used is still wired (MUZZLE_DWELL_DEFAULT_MS).
  *  - `tracer: bullet 01` — the THIN variant, where the rifle takes the heavy 02.
- *  - NO `tracerColor` — the shell's pellets are a settled look; the colour shift is for the classes
- *    that draw a single comet.
+ *  - `tracerColor: null` — ⭐ DECLARED, PAINTED WITH NOTHING (2026-08-09, user ruling). `null` is not
+ *    the same statement as leaving the field out, and the difference is the whole mechanism behind the
+ *    ruling. Omitting it says "this class has no repaintable fan" and an ammo overlay's `tracerColor`
+ *    is then dropped by the repaint mask; `null` says "the fan is repaintable, and the CLASS paints it
+ *    with nothing". So the base look is unchanged — the draw path's `if (entry.tracerColor)` is false
+ *    on null, and buckshot still leaves the muzzle in the asset's own colour, which is the settled
+ *    look — while an ammo overlay that recolours now reaches the pellets as well as the column.
+ *    Reported: "for incendiary on autoshotgun the little dorito shaped pellets themselves didn't get
+ *    the same red treatment as the spiky cone and starburst. Make sure when you update the animation
+ *    for one shotgun ammo type, it's updated for all." ⏪ This supersedes FR#24's "shell pellets are
+ *    never tinted" for AMMO loads only; for the base look that ruling stands, and it stands here as a
+ *    null rather than as a branch.
  *  - `smokeSingle: true` — ⭐ THE ANSWER TO "I don't see it at all for shotguns" (FR#20), and the
  *    diagnosis is worth keeping because the obvious suspects were all innocent. Measured on the rig:
  *    the shell path emits and DRAWS its puffs correctly — a six-round shell burst put SIX puffs on the
@@ -952,7 +1032,7 @@ export const FX_CLASSES = Object.freeze({
   pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, motes: 8,  impactSquares: 0.7 },
   smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, motes: 12, impactSquares: 0.75 },
   rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, motes: 13, impactSquares: 0.95 },
-  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", tracer: "jb2a.bullet.01.orange", motes: 10, smokeSquares: 0.6, smokeSingle: true, column: "jb2a.bullet.02.orange", columnColor: TRACER_COLOR, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", tracer: "jb2a.bullet.01.orange", tracerColor: null, motes: 10, smokeSquares: 0.6, smokeSingle: true, column: "jb2a.bullet.02.orange", columnColor: TRACER_COLOR, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
 });
 
@@ -1013,11 +1093,20 @@ export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orang
  *
  * ⚠ THE MERGE IS NOT A PLAIN SPREAD, and the difference is a standing user ruling rather than an
  * implementation detail. See ammoFxEntry: the two RECOLOUR fields may only repaint an element the
- * class already draws, never add one. That is what keeps the shell's pellet fan untinted — the ruling
- * is "shell pellets are never tinted, `columnColor` is the escape hatch" — with no branch anywhere
- * naming the shell: the shell row carries `columnColor` and no `tracerColor`, so an incendiary shell
- * tints its discharge column and leaves its pellets alone, while an incendiary rifle round tints the
- * bolt it actually has. One rule, both outcomes, no class named.
+ * class already DECLARES, never add one — so an overlay cannot give a pistol a discharge column, and
+ * cannot give a class a bolt colour on a bolt it does not draw.
+ *
+ * ⭐ DECLARED IS NOT THE SAME AS PAINTED, and that distinction is what lets one rule serve two rulings
+ * (2026-08-09). The mask asks whether the class row CARRIES the field, so a row may carry it as `null`:
+ * "this element is repaintable, and I paint it with nothing." The shell row does exactly that for its
+ * pellet fan. The outcomes, with no branch anywhere naming a class:
+ *   - base shell        — `tracerColor: null` → no ColorMatrix on the fan, the settled buckshot look
+ *   - incendiary shell  — the overlay's shift lands on the column AND the fan, one treatment
+ *   - incendiary rifle  — the same overlay tints the single bolt it actually draws
+ *   - incendiary pistol — no `column`/`columnColor` field at all, so it gains no column
+ * ⏪ The earlier form of this rule kept the shell's fan untinted under EVERY load by leaving the field
+ * out. The user superseded that for ammo: "make sure when you update the animation for one shotgun ammo
+ * type, it's updated for all." The base look is unchanged; only the overlays reach further.
  *
  * FIELDS THIS TABLE MAY CARRY, beyond the class row's own vocabulary:
  *  - `impactKey`     the hit-confirmation asset, promoted per round (see the two blocks above)
@@ -1077,8 +1166,12 @@ export const AMMO_FX = Object.freeze({
 
 /**
  * The overlay fields that may only REPAINT, never ADD. See the ruling in the AMMO_FX block: an overlay
- * may change the colour of an element the class already draws; it may not give a class an element its
- * row deliberately omits.
+ * may change the colour of an element the class already DECLARES; it may not give a class an element
+ * its row deliberately omits.
+ *
+ * ⚠ THE TEST IS `=== undefined`, i.e. key PRESENCE, and that is deliberate rather than incidental — a
+ * truthiness test would collapse `null` (declared, painted with nothing) into absent and silently undo
+ * the 2026-08-09 pellet ruling. Do not "tidy" it to a falsy check.
  */
 export const AMMO_FX_RECOLOR_FIELDS = Object.freeze(["tracerColor", "columnColor"]);
 
@@ -1140,8 +1233,9 @@ export function ammoFxFingerprintKey(payload) {
  * field-by-field comparison.
  *
  * THREE STEPS, in this order:
- *  1. RECOLOUR FIELDS are applied only where the class row already carries them (the ruling in the
- *     AMMO_FX block — repaint, never add).
+ *  1. RECOLOUR FIELDS are applied only where the class row already CARRIES them — key presence, so a
+ *     row carrying `null` is repaintable while painting nothing itself (the ruling in the AMMO_FX
+ *     block — repaint, never add).
  *  2. Everything else is a plain overwrite, so an overlay may genuinely give a class an element it did
  *     not have: that is how flechette gives a rifle a fan of darts.
  *  3. `impactScale` is spent against the CLASS's own impact width and then removed from the result, so
@@ -2207,9 +2301,19 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
           .timeRange(0, COLUMN_TRIM_MS)
           .stretchTo(colEnd);
-        // The same ColorMatrix the other bullet.02 rows carry. The shell's PELLETS still take none —
-        // that was ruled separately and stands — so the field is per-element here rather than reused
-        // from `tracerColor`, and dropping the shift is deleting one row field.
+        // THE DWELL (2026-08-09) — the trim above cuts the clip down to its bloom, which is 55ms of
+        // content on a class that draws no lance at all, so the rate stretches those same frames over
+        // COLUMN_DWELL_MS of wall clock. Rate, never range: a longer range is how the tail and the
+        // starburst get back in (they are later frames of this one clip), and a rate of 1 is measured
+        // as the WORST case for overshoot rather than the safest — see the COLUMN_TRIM_MS block.
+        //
+        // ⚠ THE CAPTURE SEAM STILL WINS, same trap as the lance's dwell: _held has already applied a
+        // capture rate if one is armed, and setting this afterwards would silently defeat it.
+        if (_spriteRateOverride === null) column.playbackRate(columnRateFor());
+        // The column keeps its OWN colour field rather than reusing `tracerColor`, and that stays true
+        // now that an ammo overlay also reaches the pellet fan: the two are separate fields because the
+        // CLASS paints them differently — the column orange, the fan nothing (`tracerColor: null`) —
+        // and only an overlay makes them agree. Dropping the column's shift is deleting one row field.
         if (entry.columnColor) column.filter("ColorMatrix", entry.columnColor);
         out.column = true;
       }
@@ -2663,9 +2767,11 @@ export function presentationTailMs(weaponClass, ammoKey = null) {
   // runs its own clip from the instant the round goes out — so the window has to wait for whichever of
   // the two chains ends LAST, not for the one that happens to be named. Counted by value here rather
   // than tagged, so the arithmetic stays readable and does not depend on engine reporting order.
-  // The column is TRIMMED (COLUMN_TRIM_MS), so the honest term is how long it actually plays and not
-  // the asset's full clip — the arrival phase it used to run is no longer drawn at all.
-  const columnEnd = entry?.column ? COLUMN_TRIM_MS : 0;
+  // The column is TRIMMED and then DWELT: the honest term is how long it is actually on screen, which
+  // is the dwell (COLUMN_DWELL_MS), not the 55ms of clip the trim admits. Reading the trim here would
+  // under-count the element by a factor of four — the exact silent, one-directional failure this
+  // function's opening note warns about.
+  const columnEnd = entry?.column ? COLUMN_DWELL_MS : 0;
   return Math.max(muzzleEnvelopeDurationMs(), muzzleDwellMs(weaponClass), spark, tracerEnd, impactEnd, columnEnd);
 }
 
