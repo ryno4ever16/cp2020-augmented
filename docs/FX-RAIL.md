@@ -81,7 +81,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 2 | **Muzzle light** | native `PointLightSource`, built and driven per render frame | always (native) | it *is* a light — clips to walls |
 | 3 | **Muzzle lance** | `jb2a.muzzle_flash.single.01.yellow`, trimmed to 110 ms | row names `muzzle` (every class **except** the shell) | yes |
 | 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
-| 5 | **Discharge column** | `jb2a.bullet.02.orange`, stretched 1.25 sq, trimmed 300 ms | row names `column` (shell only) | yes |
+| 5 | **Discharge column** | `jb2a.bullet.02.orange`, stretched 1.25 sq, trimmed **55 ms**, dwelt **220 ms** | row names `column` (shell only) | yes |
 | 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange` | row names `tracer` | yes |
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
@@ -112,7 +112,7 @@ so they take the Rifle skill.
 | `pistol` | bullet.01 | 1.1 sq lance | 0.70 | 80 ms | 8 motes |
 | `smg` | bullet.01 | 1.2 sq lance | 0.75 | 80 ms | 12 motes |
 | `rifle` | bullet.02 | 1.6 sq lance | 0.95 | 80 ms | 13 motes |
-| `shotgun` | bullet.01 | **no lance** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, 1 sq dashes crossing in 150 ms, discharge column, single-shot smoke |
+| `shotgun` | bullet.01, `tracerColor: null` | **no lance** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, 1 sq dashes crossing in 150 ms, discharge column, single-shot smoke |
 | `heavy` | bullet.02 | 2.1 sq lance | 1.30 | 80 ms | 16 motes |
 
 Sizes are in **grid units**, not scale factors — the same fraction of a square on any scene.
@@ -122,10 +122,20 @@ Optional row fields: `pellets`, `spreadRad`, `dashSquares`, `dashMs`, `cadenceMs
 `impactKey`, `impactClipMs`. A row that omits one simply does not get that treatment; **no branch
 anywhere in the file names a specific class.**
 
+**Omitted is not the same as `null`.** For the two recolour fields the difference is load-bearing:
+omitting the field means "this class has no such element, and no overlay may give it one"; `null` means
+"the element exists and is repaintable, and the class paints it with nothing". The shell row uses
+`tracerColor: null` so that ordinary buckshot carries no colour shift while an ammo overlay reaches the
+pellets. See §3.2.
+
 ### 3.2 Ammo overlays — `AMMO_FX`
 
 Keyed by the loaded ammo's `system.modifier` (lookups.js `AMMO_MODIFIERS`). The overlay is merged over
 the class row; ammo that names no row draws exactly what the class drew before this table existed.
+
+The **Tracer/column** column below means every element the class *declares* as repaintable. On the four
+single-bolt classes that is the bolt. On the shell it is the discharge column **and the pellet fan** —
+both, always, and with the same shift.
 
 | Modifier | Tracer/column | Impact | Impact width | Fan | Light | Ground |
 |---|---|---|---|---|---|---|
@@ -144,10 +154,19 @@ Arrow loads (`broadhead`, `spinner`, `target`) have no rows: there is no bow FX 
 **Two rules govern the merge** (`ammoFxEntry`):
 
 1. **Repaint, never add.** `tracerColor` and `columnColor` are applied *only where the class row
-   already carries them*. This is what keeps the shell's pellet fan untinted — the shell row has
-   `columnColor` and no `tracerColor`, so an incendiary shell tints its discharge column and leaves
-   the pellets alone, while an incendiary rifle round tints the bolt it actually has. One rule, both
-   outcomes, no class named anywhere.
+   already **carries the key***. The test is key presence (`=== undefined`), not truthiness, so a row
+   may carry `null` and mean "repaintable, painted with nothing". Four outcomes, one rule, no class
+   named anywhere:
+
+   | Case | Row says | Result |
+   |---|---|---|
+   | ordinary shell | `tracerColor: null` | no shift on the fan — the settled buckshot look |
+   | incendiary shell | overlay supplies the shift | discharge column **and** pellet fan both red |
+   | incendiary rifle | row carries `tracerColor` | the single bolt it actually draws is red |
+   | incendiary pistol | no `column`/`columnColor` key at all | gains no column |
+
+   ⏪ The earlier form of this rule left `tracerColor` *off* the shell row, which kept the fan untinted
+   under every load. The user superseded that for ammo overlays (§6); the base look is unchanged.
 2. **`impactScale` is a multiplier, never a width.** An absolute value would flatten the classes into
    one size; the table steps the impact from 0.70 (pistol) to 1.30 (heavy) precisely because a heavy
    round lands harder. A hollow-point should be wider *than its own class*. The multiplier is spent
@@ -230,8 +249,9 @@ The **terminal elements** are the last round's tracer and impact; only they are 
 report on. The scheduled tail is the *floor* (never open early) and the fallback.
 
 `presentationTailMs(class, ammoKey)` — the longest of: light envelope · lance dwell · spark clip ·
-tracer end (travelled: `dashMs + 260`; painted: 933) · impact end (`dashMs + impactClipMs`) · column
-trim. Shipped values:
+tracer end (travelled: `dashMs + 260`; painted: 933) · impact end (`dashMs + impactClipMs`) · **column
+dwell** (220 ms — the time the column is on screen, *not* the 55 ms of clip its trim admits; reading
+the trim here would under-count that element four-fold). Shipped values:
 
 | Class | tail (standard) | tail (`flechette`) | tail (`api` / `ap`) |
 |---|---|---|---|
@@ -287,7 +307,9 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `MUZZLE_SPRITE.endMs` | 110 | lance trim — beyond this the clip's smoke-and-fire plume returns |
 | `MUZZLE_SPRITE.edgeFraction` | 0.5 | how far along the aim the sprite is planted, as a fraction of token width |
 | `FACING_AIM_SQUARES` | 3 | how far the synthesized aim point sits for an untargeted shot |
-| `COLUMN_SQUARES` / `COLUMN_TRIM_MS` | 1.25 / 300 | discharge column reach and trim |
+| `COLUMN_SQUARES` | 1.25 | discharge column reach, in grid units from the shooter's edge |
+| `COLUMN_TRIM_MS` | 55 | **which frames of the column clip exist** — under every excluded phase (§6) |
+| `COLUMN_DWELL_MS` | 220 | **how long those frames take to play** — delivered as `columnRateFor()` = 0.25 |
 | `DASH_ARRIVAL_HOLD_MS` | 260 | how long a travelled pellet lives after arriving |
 | `TRACER_CLIP_MS` | 933 | painted tracer's on-screen life (upper bound of the mapped families) |
 | `TRACER_COLOR` | hue 18, sat −0.35, bright 1.15 | the class colour shift |
@@ -337,7 +359,7 @@ history. ⏪ marks a decision that reversed an earlier one.
 | FR#22 | The settle signal asks the **engine**, not the clock | The engine keeps an effect alive past its nominal time. Measured: RIFLE 1022 ms vs a 933 ms schedule, SHELL 1045 ms vs 983 ms. That overhang is exactly the reported remainder. |
 | FR#23 | `APPLY_LEAD_MS` = 150 | Reported "slightly sluggish". The final frames of an impact are nearly transparent, so the eye finishes before the engine does. The scheduled floor still overrides the lead. |
 | FR#23 | The column is shortened to 1.25 sq and trimmed to 300 ms | Stretched to the aim point it drew "a rifle-like single bullet per shotgun shot". What it exists for is the bloom at its origin. |
-| FR#23 | ⚠ **Open:** at that short stretch the asset's arrival star is not separable | Captured at three trims: 500 ms still showed the star, 150 ms showed nothing readable. The alternative on record is a long stretch (30 ft band) trimmed instead. Flagged with capture 55c; not taken unilaterally. |
+| FR#23 | ⚠ ~~**Open:** at that short stretch the asset's arrival star is not separable~~ | ⏪ **Superseded 2026-08-09** — see the four entries at the end of this table. The star *is* separable, by trim; the "long stretch" alternative recorded here was measured and is wrong. |
 | — | A **ruled fumble** draws and sounds nothing | "If the shotgun didn't fire, it shouldn't blast visibly." The round count cannot catch it — the base computes `roundsFired` before consulting the ruling — so the seam forwards the ruling itself. |
 | — | An **untargeted** shot is drawn along the shooter's own facing | The previous build answered "which way" separately per element and answered "unknown", so a shot at nothing drew a plain radius and no sprites. Honest limit: it is only as good as a token's rotation. |
 | **FR#24, 2026-08-09** | The ammo's **id** rides the payload | Everything else forwarded is a mechanical *consequence*; this is the modifier itself. Two of thirteen (`ap`/`dualPurpose`) carry identical mechanics and were indistinguishable at any distance. Presentation-only: no damage path reads it. |
@@ -348,6 +370,11 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **FR#24, 2026-08-09** | Burning ground and scorch are **once per payload** and excluded from the settle signal | The fan-out caps at 30 rounds; a per-round lingering element would put 30 overlapping fires on one square for one trigger pull. |
 | **FR#24, 2026-08-09** | The scorch is **session-bound**, with a lifetime cap in minutes | Real persistence means a document write on the scene from whichever client resolved the shot. That is a shared question with blood decals and needs its own ruling. An uncapped Sequencer effect is a leak by another name. |
 | **FR#24, 2026-08-09** | No **audio** layer for the ammo treatments | Sourcing is owed. Recorded so the omission is a decision, not a gap. |
+| **FR#25, 2026-08-09** | ⏪ The column's **tail is out**: trim 300 → **55 ms** | "The shotgun's spiky cone is currently emitting a tail. Let's eliminate that tail (looks like a round or round tail)." The clip was decoded frame by frame off the installed 05 ft file: cone alone at 33–66 ms, a streak behind the muzzle from ~66, heads separating and running forward from ~96, the starburst from ~160. 55 is the largest trim under all three, with the overshoot margin below subtracted. ⏪ Supersedes the FR#23 300 ms value. |
+| **FR#25, 2026-08-09** | ⏪ The "long band" alternative is **wrong**, not merely untaken | The 55c note assumed a longer distance band spreads the phases further apart in time. Decoded: all five bands are **933 ms**; they differ in width (600→4000 px), and the bloom is the same ~230 px of art in every one. Head position as a multiple of the bloom's extent at 133 ms of clip: 05 ft = 1.05×, 90 ft = 1.9×. The long band puts the round *further* from the bloom, not nearer. The short band is strictly best; the trim is the only lever. |
+| **FR#25, 2026-08-09** | The **starburst and the tail were one element** | Reported separately — "shotgun also has this standard starburst in addition to the spiky cone" — and decomposed on the rig: the starburst appears in a sequence carrying *only* the column, with no pellets and no hit mark drawn. It is `bullet.02`'s own baked arrival phase, ~1.5 squares off the barrel. The trim removes it; the hit confirmation at the target is a different asset and is untouched. Capture 57c. |
+| **FR#25, 2026-08-09** | The trim gets a **dwell** (220 ms, rate 0.25) rather than being left at 55 ms of wall clock | Two reasons, and the second is why it cannot be tidied away. (1) FR#21 already ruled that a *single* discharge needs ~220 ms of presence, and this is the one class that draws no lance at all. (2) Measured: the media overshoots its range end by a slice of **wall** time, so a slow rate converts less of it into clip. Rate 1 is the **worst** case, not the safest — 139 ms of clip reached against a 70 ms range. At 55/220 the worst clip reached over 16 real discharges was **59 ms**. |
+| **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 
 ---
 
@@ -377,7 +404,14 @@ injectable `rng` or plain arguments precisely so its output is asserted **by val
 no engine and no shot. Anything that cannot be — which asset was queued, how many were emitted, what
 colour a source was built with — is driven live and read back off the engine.
 
-**Traps a new leg will hit.** Sequencer randomisers roll once per section · `endTimePerc` is a no-op on
+**Traps a new leg will hit.** A `timeRange` end is a **budget, not a guarantee** — the media element
+starts after the effect does and can run past the range end, so anything asserting "content X is never
+drawn" must be measured against the video's own `currentTime`, not inferred from the constant · the
+host refuses a media `playbackRate` below **0.0625** (it throws `NotSupportedError` and the clip then
+plays at 1, which silently invalidates every held capture taken through it) · this rig renders at about
+**12 fps**, so a `requestAnimationFrame` sampler sees a 200 ms effect three times and every duration
+inferred from it is noise — sample on an interval and read the media clock ·
+Sequencer randomisers roll once per section · `endTimePerc` is a no-op on
 this build (use `timeRange`) · `rotateTowards` sets the movement destination · core packs colours to
 **numbers** on source data, so compare in core's units · the capture seam must be applied *first* in a
 chain (the engine reads the playback rate when it works out a trim point) · `endAllEffects()` between
@@ -400,7 +434,7 @@ twice.
 
 | Item | State |
 |---|---|
-| The discharge column's arrival star at the short stretch | Not separable by trimming (measured). Alternative on record: long stretch, trimmed instead. Awaiting a look ruling. |
+| The discharge column's on-screen presence at the new trim | The tail ruling cut the clip from 300 ms to 55 ms and a 220 ms dwell replaces the lost presence, so the blast is now a short bright bloom rather than a developing one. Measured delivery is ~160 ms of wall clock rather than the 220 asked for (media start-up plus rate slippage under load). Nothing is wrong; it is a **look** call the user has not yet made in motion — the dwell is one constant. Captures 57a/57c. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
 | Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice. |
 | Flechette dart size on a painted-bolt class | `dashSquares: 0.8` reads faint on the rifle in capture 56e. The number was chosen as "smaller than buckshot" (the shell's 1.0), not measured — and a HELD frame is a poor judge of how big a lit slug looks (the same caution the pellet-size block records). A one-field call for the user: 0.8 as shipped, or up toward 1.0 for legibility. |
