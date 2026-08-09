@@ -82,10 +82,10 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 3 | **Muzzle lance** | `jb2a.muzzle_flash.single.01.yellow`, trimmed to 110 ms | row names `muzzle` (every class **except** the shell) | yes |
 | 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
 | 5 | **Discharge column** | `jb2a.bullet.02.orange`, stretched 1.25 sq, trimmed **55 ms**, dwelt **220 ms** | row names `column` (shell only) | yes |
-| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange` | row names `tracer` | yes |
+| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange`, or an ammo's own round (`rubber`/`stundart` → `jb2a.throwable.launch.cannon_ball.01.black`) | row names `tracer` | yes |
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
-| 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or a promoted key | the round **hit**, and the row has `impactSquares` | yes |
+| 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit**, and the row has `impactSquares` | yes |
 | 10 | **Burning ground** | `jb2a.ground_cracks.orange` (GroundCrackLoop) | overlay names `groundFire` **and** ≥ 1 round landed — **once per payload** | yes |
 | 11 | **Scorch** | `jb2a.scorched_earth.black` | with #10 | **no** (a black mark is not a light) |
 | 12 | **Blood splash** | `jb2a.liquid.splash02.red`, trimmed to 900 ms, random rotation | the world setting **and** ≥ 1 round landed **and** there is a target token **and** that token's actor is not structure — **once per payload** | **yes** — a deliberate departure, below |
@@ -155,17 +155,19 @@ both, always, and with the same shift.
 | `hollowPoint` | — | — | **× 1.60** | — | — | — |
 | `safety` | — | — | **× 0.55** | — | — | — |
 | `flechette` | — | — | × 0.70 | **8 darts @ 0.10 rad, 1.1 sq, 170 ms** | — | — |
-| `rubber` | dulled (sat −0.55, **bright 0.60**) | — | × 0.60 | — | — | — |
-| `stundart` | *identical to `rubber`* | — | × 0.60 | — | — | — |
+| `rubber` | **the round is a different asset** — `cannon_ball` slug, travelled 2.4 sq / 240 ms; repainted colourless-but-brighter (hue 0, sat −0.85, **bright 1.30**) | **dust puff** | class | count/spread unchanged, size and speed replaced | — | — |
+| `stundart` | *identical to `rubber`* | **dust puff** | class | *as `rubber`* | — | — |
 
 Arrow loads (`broadhead`, `spinner`, `target`) have no rows: there is no bow FX class yet.
 
 **Two rules govern the merge** (`ammoFxEntry`):
 
-1. **Repaint, never add.** `tracerColor` and `columnColor` are applied *only where the class row
-   already **carries the key***. The test is key presence (`=== undefined`), not truthiness, so a row
-   may carry `null` and mean "repaintable, painted with nothing". Four outcomes, one rule, no class
-   named anywhere:
+1. **Repaint, never add** — and since 2026-08-09, **re-picture, never add** with it. Two masked lists,
+   one rule: `AMMO_FX_RECOLOR_FIELDS` (`tracerColor`, `columnColor`) is *what colour an element is*, and
+   `AMMO_FX_REPLACE_FIELDS` (`tracer`, `column`) is *which picture it is*. Both are applied *only where
+   the class row already **carries the key***. The test is key presence (`=== undefined`), not
+   truthiness, so a row may carry `null` and mean "repaintable, painted with nothing". Four outcomes,
+   one rule, no class named anywhere:
 
    | Case | Row says | Result |
    |---|---|---|
@@ -176,6 +178,11 @@ Arrow loads (`broadhead`, `spinner`, `target`) have no rows: there is no bow FX 
 
    ⏪ The earlier form of this rule left `tracerColor` *off* the shell row, which kept the fan untinted
    under every load. The user superseded that for ammo overlays (§6); the base look is unchanged.
+
+   ⏪ The mask was widened from colour to asset on 2026-08-09, when the baton treatment became the first
+   overlay to say the round with a different *file*. Nothing shipping changed behaviour — every class
+   declares `tracer`, and no overlay names `column` — but `column` can no longer become a way to hand a
+   pistol a shotgun's discharge blast, which was one bare overwrite away.
 2. **`impactScale` is a multiplier, never a width.** An absolute value would flatten the classes into
    one size; the table steps the impact from 0.70 (pistol) to 1.30 (heavy) precisely because a heavy
    round lands harder. A hollow-point should be wider *than its own class*. The multiplier is spent
@@ -188,8 +195,12 @@ Resolved widths, for reference:
 | base | 0.70 | 0.75 | 0.95 | 1.15 | 1.30 |
 | `hollowPoint` | 1.12 | 1.20 | 1.52 | 1.84 | 2.08 |
 | `flechette` | 0.49 | 0.525 | 0.665 | 0.805 | 0.91 |
-| `rubber` / `stundart` | 0.42 | 0.45 | 0.57 | 0.69 | 0.78 |
 | `safety` | 0.385 | 0.4125 | 0.5225 | 0.6325 | 0.715 |
+
+`rubber` / `stundart` no longer appear in that table: they carry no `impactScale` at all and land at the
+class's own width. ⏪ They used to sit at × 0.60. A blunt round does not make a *smaller* mark than a
+bullet, it makes a *different* one, and shrinking it was the same "say it with less" reflex the 2026-08-09
+ruling rejected — see §6.
 
 ### 3.3 How the load is identified
 
@@ -263,10 +274,15 @@ tracer end (travelled: `dashMs + 260`; painted: 933) · impact end (`dashMs + im
 dwell** (220 ms — the time the column is on screen, *not* the 55 ms of clip its trim admits; reading
 the trim here would under-count that element four-fold). Shipped values:
 
-| Class | tail (standard) | tail (`flechette`) | tail (`api` / `ap`) |
-|---|---|---|---|
-| pistol / smg / rifle / heavy | 933 ms | 1003 ms | 933 ms |
-| shotgun | 983 ms | 1003 ms | 983 ms |
+| Class | tail (standard) | tail (`flechette`) | tail (`api` / `ap`) | tail (`rubber` / `stundart`) |
+|---|---|---|---|---|
+| pistol / smg / rifle / heavy | 933 ms | 1003 ms | 933 ms | **1073 ms** |
+| shotgun | 983 ms | 1003 ms | 983 ms | **1073 ms** |
+
+The baton pair is the one overlay that genuinely *moves* the window, and it must: it hands every class a
+240 ms crossing time (`240 + 833`), against the flechette's 170 and buckshot's own 150. A keeper leg pins
+1073 by the arithmetic on all five classes. Its **impact** promotion is free in the usual way — the dust
+puff's own 1067 ms clip is trimmed to the ordinary 833 ms, so the whole move is the crossing.
 
 **Deliberately *not* in the tail:** burst smoke, mote spray, burning ground, scorch, **blood splash**.
 They are scene dressing that lingers on purpose; waiting for them would hold the damage window shut for
@@ -326,8 +342,11 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `DASH_ARRIVAL_HOLD_MS` | 260 | how long a travelled pellet lives after arriving |
 | `TRACER_CLIP_MS` | 933 | painted tracer's on-screen life (upper bound of the mapped families) |
 | `TRACER_COLOR` | hue 18, sat −0.35, bright 1.15 | the class colour shift |
-| `TRACER_COLOR_INCENDIARY` / `_HARDENED` / `_INERT` | see §3.2 | the ammo colour shifts |
-| `IMPACT_FIRE` / `IMPACT_CRACK` | keys + measured clip lengths | the promoted impacts |
+| `TRACER_COLOR_INCENDIARY` / `_HARDENED` / `_BATON` | see §3.2 | the ammo colour shifts |
+| `TRACER_COLOR_INERT` | hue 0, sat −0.55, bright 0.60 | ⏪ **retired from use** — the rejected darkening; declared, on no shipped row |
+| `BATON_ROUND` | `throwable.launch.cannon_ball.01.black`, 2.4 sq frame, 240 ms crossing | the whole less-lethal representation, in one block |
+| `IMPACT_FIRE` / `IMPACT_CRACK` / `IMPACT_DUST` | keys + measured clip lengths | the promoted impacts |
+| `AMMO_FX_RECOLOR_FIELDS` / `AMMO_FX_REPLACE_FIELDS` | colour pair / asset pair | which overlay fields may only repaint an element the class already declares |
 | `GROUND_FIRE.lifetimeMs` | 3200 | how long the burning ground burns |
 | `GROUND_SCORCH.lifetimeMs` | 180000 | the scorch's cap — **minutes, not forever** |
 | `BLOOD_SPLATTER.key` | `jb2a.liquid.splash02.red` | the splash asset — **natively blood-coloured, no filter is applied** |
@@ -401,6 +420,12 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **BLOOD, 2026-08-09** | Size is the drawn **frame**, 1.5 sq; trim is where the **content** ends, 900 ms | Ink coverage falls from 17.1% of the frame at 283 ms to 0.07% at 680 ms and peak alpha is 5/255 by 963 ms, so 900 keeps every frame that has anything in it. The frame-vs-ink distinction is the same trap the flechette dart length records. |
 | **BLOOD, 2026-08-09** | Drawn **above the lighting**, against this file's own routing rule | Below it, on a dark scene, the mark does not exist (capture 58d). The accepted cost is the vision mask, for under a second. Stated as a departure with a knob rather than folded in silently. |
 | **BLOOD, 2026-08-09** | **Once per payload**, and never part of the settle wait | The same rule and the same reason as the burning ground: the fan-out caps at 30 rounds, and the damage window may not be held for scene dressing. |
+| **BATON, 2026-08-09** | ⏪⏪ The rubber / stun-dart **darkening is rejected outright**, not re-tuned | "What you did for rubber bullets doesn't look good. Instead of darkening/muting the color, let's look for a better asset to represent rubber bullets." The old treatment was a bolt at brightness **0.60** and a mark at **× 0.60**. Its premise was not wrong about the round — a baton round does carry less energy — it was wrong about the **screen**: a dimmed sprite on a dark scene is not a quieter round, it is a round the eye has to hunt for. Capture 59-control. Both halves are gone, including the shrink: a blunt round makes a *different* mark, not a *smaller* one. |
+| **BATON, 2026-08-09** | The load is now said with a **different asset**: the round is a solid travelled slug | `jb2a.throwable.launch.cannon_ball.01.black`, sized 2.4 sq of frame (≈ 0.25–0.55 sq of actual ball, measured) and crossing in **240 ms** — the slowest thing the rail fires. Chosen from a closed enumeration of the tier's ranged family, not by name: `bullet.03.blue` develops a full spiky starburst at 0.30 s (the 2026-08-08 no-starburst ruling is about the shape, not the colour); `snowball_toss` ends in snowflakes; `boulder.toss.02` is legible but its art travels *backward* across its own frame (centroid 0.46 → 0.27 → 0.65) and reads as a thrown stone. Captures 59a / 59b / 59c. |
+| **BATON, 2026-08-09** | The round is **travelled**, not painted — and that is a correctness choice, not a style one | A painted tracer's on-screen life is the *asset's* clip, bounded once for the whole rail by `TRACER_CLIP_MS` = 933. This asset's five distance bands are 467 / 767 / 1167 / 2067 / 2433 ms, so painting it would put two of them past that bound and the tail would come back short with no signal — exactly the silent, one-directional failure `presentationTailMs` exists to prevent. A travelled sprite's life is `dashMs + 260` and owes the asset nothing. |
+| **BATON, 2026-08-09** | The hit mark becomes a **dust puff** (`jb2a.smoke.puff.ring.01.white`) | Enumerated the same way. Every blue impact on the tier (`001`–`004`, `011`, `012`) is a spike starburst; `impact.water.02.blue` reads liquid; `side_impact.part.smoke.*` is crystalline shards at 3067 ms; `smoke.puff.centered.grey` peaks at luminance 87/255 and is too faint to read as an arrival. The one genuinely *blunt* alternative — `side_impact.part.shockwave.blue`, a concentric ring wave — is rejected on **mechanism**, not looks: its arcs face one baked direction and the impact is drawn with no rotation, so it would point the same way whichever way the shot went. The chosen puff is radial, peaks at 217/255, and takes no `impactClipMs`, so the promotion rule trims it to the ordinary mark's 833 ms unchanged. |
+| **BATON, 2026-08-09** | **One matrix** repaints the slug *and* the shell's discharge column | `TRACER_COLOR_BATON` = hue 0, sat −0.85, **brightness 1.30**. The number to read is 1.30 — above 1, where the rejected value was 0.60. It says a different true thing about each element it touches: the slug's art is already greyscale (mean luminance 99/255 measured), so the *brightness* is what lifts it off a black floor; the column is `bullet.02`'s orange bloom, so the *desaturation* is what turns a fire blast into the pale gas flash of a reduced-pressure load. One matrix rather than two is what makes the shell's two elements agree — the standing uniformity ruling. |
+| **BATON, 2026-08-09** | The masked-merge rule is widened from **colour** to **asset** | The baton treatment is the first overlay that swaps a *file*, and a bare overwrite would have made `column` a way to hand a pistol a shotgun's discharge blast — one field away from what `columnColor` is already forbidden to do. `AMMO_FX_REPLACE_FIELDS` puts `tracer` and `column` behind the same key-presence mask. No shipped behaviour changes; the guarantee becomes structural instead of conventional. |
 | **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 
 ---
@@ -430,6 +455,16 @@ side · 0 console errors.
 injectable `rng` or plain arguments precisely so its output is asserted **by value**, with no canvas,
 no engine and no shot. Anything that cannot be — which asset was queued, how many were emitted, what
 colour a source was built with — is driven live and read back off the engine.
+
+**The baton pair's legs are written as the inverse of the ones they replace.** Two legs used to assert
+that this pair's matrix was the only one that *darkened* and that it drew a *dull bolt and a small mark*.
+Both facts are now false by design, so the replacements assert the opposite on purpose: that **no** live
+matrix darkens and that the retired one appears on **no** shipped row; that the load is said with a
+different asset on every class; that a class which painted its round now travels it; that the shell's
+shot **count** and spread are untouched while its size and speed are replaced; that the mark is the dust
+key at the class's own width with no `impactScale` anywhere; and that the tail is `240 + 833` on all five
+classes. Two legs drive it live and read the file the *engine* was handed rather than the merge — an asset
+swap is exactly the change a value-only assertion cannot see.
 
 The gore unit added a section of its own, and it is almost entirely negatives, because four
 independent gates each mean "this must NOT be drawn": the switch registered world-scoped and shipping
@@ -474,6 +509,7 @@ twice.
 
 | Item | State |
 |---|---|
+| **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
 | The discharge column's on-screen presence at the new trim | The tail ruling cut the clip from 300 ms to 55 ms and a 220 ms dwell replaces the lost presence, so the blast is now a short bright bloom rather than a developing one. Measured delivery is ~160 ms of wall clock rather than the 220 asked for (media start-up plus rate slippage under load). Nothing is wrong; it is a **look** call the user has not yet made in motion — the dwell is one constant. Captures 57a/57c. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
 | Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice, and the blood splash is transient by ruling — floor decals were explicitly held out of phase 1. Both change at the same time, in the same way, whenever that ruling arrives. |
