@@ -1058,6 +1058,12 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 .cyberpunk .save-prompt .save-buttons { margin-top: 6px; }
 
+/* Shot-pattern resolution card: one line per token caught in the pattern, each carrying that token's
+   per-shell rolls. The rows are DIVs (the template says why), so all this owes them is the gap. */
+.cyberpunk .save-prompt .cp-spread-result-list { margin-top: 4px; }
+
+.cyberpunk .save-prompt .cp-spread-result-row { margin: 2px 0; }
+
 /* Suppressive-fire placement preview readout — a floating label pinned to the cursor while the shooter
    aims + sizes the fire lane (module/combat/suppressive-placement.js). left/top are set in JS to follow
    the pointer; pointer-events:none so it never intercepts the confirming click. Fire-lane orange on a

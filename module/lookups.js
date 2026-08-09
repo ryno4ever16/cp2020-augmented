@@ -213,7 +213,14 @@ export const AMMO_MODIFIERS = {
   spinner:     { label: "Spinner",           costMult: 1,     families: ["arrow"], mech: { penDamageMult: 3 } },
   target:      { label: "Target",            costMult: 1,     families: ["arrow"], mech: { armorMultSoft: 0.5, armorMultHard: 0.5 } },
   // D4 shotgun load (shotgun family only). Stundart shell: -2 to the target's Stun save.
-  stundart:    { label: "Stundart",          costMult: 1,     families: ["shotgun"], mech: { stunSaveOnHit: true, stunSaveMod: -2 } }
+  stundart:    { label: "Stundart",          costMult: 1,     families: ["shotgun"], mech: { stunSaveOnHit: true, stunSaveMod: -2 } },
+  // ⭐ THE SINGLE-PROJECTILE SHELL. The registry models ONE shotgun caliber — "00", labelled
+  // "00 Buck / Slug" — so the cartridge cannot say which of the two is in the chamber, and the
+  // pattern rule below reads the SHELL's default (buckshot) off that caliber. A slug is therefore
+  // expressed as a LOAD, which is also what it physically is: the same hull, a different projectile.
+  // `spreadMode: "slug"` is the whole mechanic — spreadModeForAmmo reads it and hands the shot back
+  // to the ordinary single-target flow (CP2020 p.109 AP behaviour is the modifier's own business).
+  slug:        { label: "Slug",              costMult: 1,     families: ["shotgun"], mech: { spreadMode: "slug" } }
 };
 
 // Ammo families for modifier compatibility. A caliber's family comes from its costClass; a modifier
@@ -227,6 +234,47 @@ export function caliberFamily(caliberId) {
   if (!id) return "";
   const cal = getCalibers()[id];
   return CALIBER_FAMILY[cal?.costClass] ?? "firearm";
+}
+
+/* ── The spread pattern is a property of the CARTRIDGE, not of a stored flag ──────────────────── */
+
+/** Every value `spreadModeForAmmo` can return. `buck` is the caliber-derived one. */
+export const SPREAD_MODE_SINGLE = "single";
+export const SPREAD_MODE_BUCK = "buck";
+export const SPREAD_MODE_SLUG = "slug";
+
+/**
+ * The spread mode a fired round ACTUALLY has (CP2020 p.108). Pure of documents — takes the three
+ * fields the weaponFired payload carries and answers "single" | "buck" | "flechette" | …
+ *
+ * ⭐ WHY THIS IS DERIVED AT FIRE TIME RATHER THAN STORED. The shotgun IS an area weapon in the Core
+ * rules — its own Area Effect table lists it — so a shell fires a pattern because of what it is, not
+ * because someone ticked a box on an item. Every shotgun ammo item in every existing world was seeded
+ * `spreadMode: "single"` (the ammo-modifier seeder's default), so a rule that read the stored field
+ * would have made the book behaviour reachable only by hand-editing ammo. Deriving it means an
+ * untouched world's buckshot fires the pattern on the next shot, with no migration and no re-seed.
+ *
+ * The four cases, in the order they are decided:
+ *   1. `slug` — the ONE load that puts a single projectile down a shotgun barrel. It is checked FIRST
+ *      because it is the exception to the caliber rule, and it is asked of the load two ways (the
+ *      seeded `spreadMode` and the modifier id itself) so an item whose fields were edited apart still
+ *      resolves the same. Slugs must NOT gain a pattern.
+ *   2. Any other explicitly declared non-single mode wins — `flechette` is the shipped one, and a
+ *      hand-authored mode on a homebrew item keeps working exactly as it did.
+ *   3. A non-shotgun caliber (or a caliber the registry does not know, including a blank one) is
+ *      single-target. A blank caliber answering "single" is the deliberate safe default: an item with
+ *      no cartridge recorded must not start throwing patterns.
+ *   4. Everything left is a shotgun-family caliber firing its default load — buckshot.
+ *
+ * @param {{spreadMode?: string, caliber?: string, modifier?: string}} ammoFields
+ * @returns {string} the resolved mode; "single" means the ordinary single-target damage flow
+ */
+export function spreadModeForAmmo({ spreadMode, caliber, modifier } = {}) {
+  const declared = String(spreadMode ?? "").trim();
+  if (declared === SPREAD_MODE_SLUG || String(modifier ?? "").trim() === SPREAD_MODE_SLUG) return SPREAD_MODE_SINGLE;
+  if (declared && declared !== SPREAD_MODE_SINGLE) return declared;
+  if (caliberFamily(caliber) !== "shotgun") return SPREAD_MODE_SINGLE;
+  return SPREAD_MODE_BUCK;
 }
 
 /** True if `modifierId` can be loaded onto ammo of `caliberId`. Universal modifiers + unset calibers fit all. Pure-ish. */

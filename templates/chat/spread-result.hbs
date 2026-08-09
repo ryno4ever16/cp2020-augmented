@@ -1,0 +1,24 @@
+{{!--
+  Shot-pattern RESOLUTION card (CP2020 p.108) — one card for the whole burst, however many shells it
+  threw. Rendered via renderTemplate with
+  { weaponName, band, shells, multiShell, dmgFormula, rows: [{ name, rolls, total }] }.
+  `rolls` is the per-shell damage list as text, so N shells read as N numbers rather than as one sum.
+  Rows are DIVs, not a list: core's own layered `ul` styling wins over a module rule on this build
+  (probed — list-style computed `circle` with the module rule live), and a chat card wants no markers.
+  i18n via CPLocal; triple-stash where the string carries <b>.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "SpreadResultTitle" weapon=weaponName}}</h3>
+  <div class="save-info">
+    {{#if multiShell}}
+      <span>{{{CPLocal "SpreadResultSummaryShells" shells=shells band=band dmg=dmgFormula}}}</span>
+    {{else}}
+      <span>{{{CPLocal "SpreadResultSummary" band=band dmg=dmgFormula}}}</span>
+    {{/if}}
+    <div class="cp-spread-result-list">
+      {{#each rows}}
+        <div class="cp-spread-result-row">{{{CPLocal "SpreadResultRow" name=this.name rolls=this.rolls total=this.total}}}</div>
+      {{/each}}
+    </div>
+  </div>
+</div>

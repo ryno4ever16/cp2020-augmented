@@ -381,10 +381,14 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     }
     sheet.modifierChoices = validMods.map(([id, m]) => ({ value: id, label: (m && m.label) ? m.label : id }));
 
-    // Spread mode selector (Single / Spread)
+    // Spread mode selector. "Single" no longer means "never a pattern" on a shotgun cartridge — the
+    // pattern is derived from the CALIBER at fire time (spreadModeForAmmo), so a shell left on Single
+    // fires buckshot. "Slug" is the value that says single projectile out of a shotgun barrel and is
+    // the only way to hold a shell OFF the pattern; it is what the Slug ammo modifier seeds.
     sheet.ammoSpreadModes = [
       { value: "single", localKey: "AmmoSpreadModeSingle" },
-      { value: "spread", localKey: "AmmoSpreadModeSpread" }
+      { value: "spread", localKey: "AmmoSpreadModeSpread" },
+      { value: "slug",   localKey: "AmmoSpreadModeSlug" }
     ];
 
     const effectTypes = Array.isArray(sys.effectTypes)

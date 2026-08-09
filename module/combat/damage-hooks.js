@@ -39,6 +39,8 @@ import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegion
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
+import { spreadModeForAmmo, SPREAD_MODE_SINGLE } from "../lookups.js";
+import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
@@ -218,6 +220,7 @@ export function registerDamageHooks() {
   _hookManualRoundTick();
   _hookExplosion();
   _hookSpread();
+  _hookSpreadZoneExpiry();
   _hookMultiActionPenalty();
   _hookAutomationMigrationNotice();
   _hookSocketRelay();
@@ -452,7 +455,12 @@ function _hookWeaponFired() {
     // apply path here so the primary target isn't damaged twice. The per-token blast/pattern
     // re-emits plain weaponFired payloads (no effectTypes/spreadMode), which fall through normally.
     if ((payload.effectTypes ?? []).includes("Explosive")) return;
-    if (payload.spreadMode && payload.spreadMode !== "single") return;
+    // ⚠ THE SAME DERIVATION THE PATTERN HOOK USES, and it must stay the same call: this line and
+    // _hookSpread are the two halves of one either/or. If they ever disagreed, a shell would either be
+    // damaged twice (dialog AND pattern) or not at all. Reading the stored spreadMode flag here while
+    // the pattern hook derived from the caliber is exactly that disagreement, which is why the flag is
+    // no longer read in either place.
+    if (_spreadModeOf(payload) !== SPREAD_MODE_SINGLE) return;
 
     // item.js uses "attackerId"; support legacy "actorId" for any third-party callers.
     const attackerActorId = payload.attackerId ?? payload.actorId ?? null;
@@ -2073,18 +2081,48 @@ async function _scatterExplosion(templateId) {
 }
 
 /**
- * Shotgun / flechette spread (CP2020 p.108). Ammo whose spreadMode is not "single" fires a widening
- * pattern: a ray from the attacker toward the target, width by range band (Close/Med/Long), with
- * range-banded damage (ammo override, else Core 4d6/3d6/2d6). Everyone in the straight path is hit
- * (no evasion). The GM aims and confirms, mirroring suppressive fire.
+ * How long an UNCONFIRMED pattern lives when no encounter is running, in wall-clock milliseconds.
+ *
+ * ⭐ WHY A CLOCK AND NOT JUST A ROUND. The round rule below is the honest one — a pattern belongs to
+ * the shot that threw it, and the shot is over when its round is — but outside an encounter the round
+ * NEVER ADVANCES, so a round-only rule expires nothing and every ignored shot leaves a region behind
+ * forever. That is the litter defect this replaces: patterns accumulated on the scene one per shot,
+ * with nothing on any path deleting them.
+ *
+ * 60 seconds is chosen against the one thing that must not happen: a pattern vanishing while the GM is
+ * still looking at it. Out of combat there is no turn to hold, so the realistic window is "read the
+ * card, drag the pattern, click Confirm" — comfortably under a minute — and a GM who takes longer has
+ * the card still in chat and can fire again. The sweep runs on its own interval rather than on a
+ * per-zone timer so a client that was closed mid-shot still cleans up on its next session.
+ */
+export const SPREAD_ZONE_TTL_MS = 60000;
+
+/** How often the out-of-combat sweep looks. Well under the TTL, cheap enough to ignore (one filter). */
+export const SPREAD_ZONE_SWEEP_MS = 15000;
+
+/** The derived spread mode for a fired payload — the ONE place the damage rail asks the question. */
+function _spreadModeOf(payload) {
+  return spreadModeForAmmo({ spreadMode: payload?.spreadMode, caliber: payload?.caliber, modifier: payload?.modifier });
+}
+
+/**
+ * Shotgun / flechette spread (CP2020 p.108). A shell throws a widening pattern: a ray from the attacker
+ * toward the target, width by range band (Close/Med/Long), with range-banded damage (ammo override,
+ * else Core 4d6/3d6/2d6). Everyone in the straight path is hit (no evasion). The GM aims and confirms,
+ * mirroring suppressive fire.
+ *
+ * ⭐ WHAT MAKES A SHOT A PATTERN IS THE CARTRIDGE, NOT A FLAG (spreadModeForAmmo, lookups.js). The
+ * shotgun is an area weapon in the Core rules, so buckshot patterns because of what it is; the ONE
+ * shotgun load that does not is the slug, which says so on the load. Deriving it here rather than
+ * reading the stored `spreadMode` is what lets a world's existing, untouched buckshot fire the book
+ * pattern on its next shot — every shotgun ammo item ever seeded carries `spreadMode: "single"`.
  */
 function _hookSpread() {
   const enabled = () => { try { return game.settings.get("cp2020-augmented", "shotgunSpreadEnabled"); } catch { return true; } };
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!enabled()) return;
-    const mode = payload.spreadMode;
-    if (!mode || mode === "single") return;
+    if (_spreadModeOf(payload) === SPREAD_MODE_SINGLE) return;
     // weaponFired fires only on the firing client; placing the pattern needs the GM. The active GM
     // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
     // _hookSuppressiveFire. Without this a player's shotgun produced no spread.
@@ -2093,8 +2131,9 @@ function _hookSpread() {
   });
 }
 
-/** Place the shotgun/flechette spread pattern + post its Confirm card. Runs on the active GM. */
-async function _placeSpreadZone(payload) {
+/** Place the shotgun/flechette spread pattern + post its Confirm card. Runs on the active GM.
+ *  Exported for the keeper, which drives placement and confirmation as the two halves they are. */
+export async function _placeSpreadZone(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
 
@@ -2108,15 +2147,28 @@ async function _placeSpreadZone(payload) {
     const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
     const gridDist = scene.grid?.distance ?? 1;
 
-    // Direction + range band toward the target (East + Medium if no target).
-    let angleDeg = 0, band = "Medium", lengthM = 10;
+    // Direction + range band toward the target. With NOTHING targeted the pattern is thrown along the
+    // shooter's OWN FACING rather than due east: a token's rotation is the only statement of "which way"
+    // an untargeted shot leaves behind, and the presentation rail already answers the same question the
+    // same way (fx/effects.js facingRad). It is only as good as the token's rotation, which is the honest
+    // limit; the band stays Medium because an untargeted shot names no distance to measure.
+    let band = "Medium", lengthM = 10;
+    let angleDeg = Math.round(((Number(atk.document?.rotation ?? atk.rotation) || 0) + 90) % 360);
     const tgt = payload.targetTokenId ? canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId) : null;
     if (tgt) {
       const tx = tgt.center?.x ?? tgt.x, ty = tgt.center?.y ?? tgt.y;
       angleDeg = Math.round(Math.atan2(ty - oy, tx - ox) * 180 / Math.PI);
       const distM = (Math.hypot(tx - ox, ty - oy) / gridSize) * gridDist;
       band = distM <= 6 ? "Short" : (distM <= 25 ? "Medium" : "Long");   // CP2020 close / medium / long
-      lengthM = Math.max(2, distM);
+      // ⭐ THE PATTERN REACHES THE FAR EDGE OF THE TARGET'S OWN SQUARE, not its centre point. Ending
+      // the ray exactly at the aimed-at centre put that centre ON the polygon's end edge, so whether
+      // the token the shooter aimed at was inside its own pattern came down to a floating-point
+      // comparison — reproduced on the rig, where a three-shell burst resolved against a bystander
+      // and missed the target entirely. Half the target's own width is the smallest overshoot that
+      // makes the aimed-at token unambiguously inside, and it costs no other square: the extra reach
+      // is inside the square the target already occupies.
+      const halfTargetM = ((Number(tgt.document?.width ?? tgt.width) || 1) / 2) * gridDist;
+      lengthM = Math.max(2, distM + halfTargetM);
     }
 
     const widthM = band === "Short" ? Number(payload.spreadWidthShort ?? 1)
@@ -2126,24 +2178,44 @@ async function _placeSpreadZone(payload) {
       (band === "Short" ? payload.spreadDamageShort : band === "Long" ? payload.spreadDamageLong : payload.spreadDamageMedium)
       || (band === "Short" ? "4d6" : band === "Long" ? "2d6" : "3d6");   // Core defaults
 
+    // ⭐ ONE PATTERN, N SHELLS. No autoshotgun rule exists in the Core read, so RAW is that each shell
+    // fires its own pattern — and N patterns aimed identically ARE one pattern resolved N times. The
+    // burst therefore places ONE region and the confirm card resolves the shells, which is the whole of
+    // the "per-shell mechanics, one card" ruling: the mechanics stay per shell (N banded rolls per token
+    // below), only the aiming and the clicking collapse. shotsFired is absent on cards that don't set it.
+    const shells = Math.max(1, Math.floor(Number(payload.shotsFired) || 1));
+
     const weaponName = payload.weaponName ?? localize("WpnShotgun");
     // Create via the core-agnostic shim (MeasuredTemplate ray on v13, Region polygon on v14).
+    // Visibility is the shim's GAMEMASTER default (buildAreaData) — a pattern is an aiming aid the GM
+    // has not committed to yet, so the table must not watch it hover over their tokens.
     const handle = await createArea(scene, {
       kind: "ray",
       x: ox, y: oy, dirDeg: angleDeg, lengthM, widthM,
-      color: "#ffaa00", borderColor: "#cc6600",
+      color: SPREAD_ZONE_LOOK.fillColor, borderColor: SPREAD_ZONE_LOOK.outlineColor,
       flags: {
-        isSpreadZone: true, dmgFormula, band, attackerId, originX: ox, originY: oy,
+        isSpreadZone: true, dmgFormula, band, attackerId, originX: ox, originY: oy, shells,
         ap: Boolean(payload.ap), edged: Boolean(payload.edged), mono: Boolean(payload.mono),
         armorMultSoft: Number(payload.armorMultSoft ?? 1), armorMultHard: Number(payload.armorMultHard ?? 1),
         penDamageMult: Number(payload.penDamageMult ?? 1), weaponName, createdRound: game.combat?.round ?? 0,
+        // ⭐ WHICH CLOCK OWNS THIS PATTERN, decided once, at the moment it is thrown. A pattern thrown
+        // during an encounter belongs to that encounter's rounds; one thrown outside any encounter has
+        // no round to wait for and belongs to the wall clock. Asking the question later — "is a combat
+        // running now?" — gets it wrong in both directions: a pattern thrown out of combat became
+        // immortal the moment somebody rolled initiative, and a pattern thrown in combat was swept off
+        // the table by the clock if its own round happened to run long. The id also survives the
+        // encounter being deleted, which is what lets the sweep collect a pattern whose combat is gone.
+        combatId: (game.combats?.active?.started ? game.combats.active.id : "") ?? "",
+        // The wall clock the out-of-combat sweep reads. Written at creation because a region carries no
+        // creation time of its own that survives a reload.
+        createdAt: Date.now(),
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Spread area creation failed"); return; }
 
     const spreadCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
       "modules/cp2020-augmented/templates/chat/spread-confirm.hbs",
-      { weaponName, band, widthM, dmgFormula, templateId: handle.doc.id }
+      { weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1, templateId: handle.doc.id }
     );
     await ChatMessage.create({
       content: spreadCard,
@@ -2151,8 +2223,13 @@ async function _placeSpreadZone(payload) {
     });
 }
 
-/** Apply spread damage to every token in the confirmed pattern (no evasion — buckshot just hits). */
-async function _confirmSpreadZone(templateId) {
+/**
+ * Apply spread damage to every token in the confirmed pattern (no evasion — buckshot just hits), then
+ * DELETE the pattern. The delete is the user's "confirm, then vanish" ruling and it runs on every exit
+ * from here that got as far as a real pattern, including the one where nothing was inside it: a
+ * resolved shot must not leave an aiming aid on the table either way.
+ */
+export async function _confirmSpreadZone(templateId) {
   if (!canvas?.scene || !templateId) return;
   if (!_claimAreaConfirm("confirmSpreadZone", { templateId }, templateId)) return;
   const scene = canvas.scene;
@@ -2167,6 +2244,7 @@ async function _confirmSpreadZone(templateId) {
   // fallback for legacy zones (v14 Regions have no top-level x/y).
   const originX = Number(f.originX ?? handle.doc.x ?? 0);
   const originY = Number(f.originY ?? handle.doc.y ?? 0);
+  const shells = Math.max(1, Math.floor(Number(f.shells) || 1));
 
   // Token containment via shim; exclude the attacker; apply cover check.
   const candidates = (scene.tokens?.contents ?? canvas.tokens.placeables.map(t => t.document ?? t))
@@ -2176,14 +2254,124 @@ async function _confirmSpreadZone(templateId) {
     const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
     return !_isOccluded(originX, originY, tok);    // intervening cover exempts spaces behind it
   });
-  if (!tokens.length) { ui.notifications.info(localize("NoTokensInSpread")); return; }
 
+  const weaponName = localizeParam("WpnVariantSpread", { name: f.weaponName ?? localize("WpnShotgun") });
+  const rows = [];
   for (const td of tokens) {
     const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
-    const dmgRoll = await new Roll(f.dmgFormula || "3d6").evaluate();
-    const dmg = Math.max(0, Math.floor(dmgRoll.total));
-    await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantSpread", { name: f.weaponName ?? localize("WpnShotgun") }) });
+    // ⭐ N ROLLS, NOT ONE ROLL APPLIED N TIMES. Each shell is its own discharge of shot, so each gets
+    // its own banded roll and its own trip through the armour pipeline — which is a different number
+    // from N × one roll the moment armour is in the way, because SP is subtracted per hit.
+    const shots = [];
+    for (let i = 0; i < shells; i++) {
+      const dmgRoll = await new Roll(f.dmgFormula || "3d6").evaluate();
+      const dmg = Math.max(0, Math.floor(dmgRoll.total));
+      shots.push(dmg);
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName });
+    }
+    rows.push({ name: tok.name ?? tok.document?.name ?? "?", rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0) });
   }
+
+  // ONE resolution card for the whole burst, so N shells are readable as N numbers rather than as N
+  // separate cards. Posted before the delete so a reader still has the pattern on screen as it lands.
+  if (rows.length) {
+    const resultCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
+      "modules/cp2020-augmented/templates/chat/spread-result.hbs",
+      { weaponName: f.weaponName ?? localize("WpnShotgun"), band: f.band, shells, multiShell: shells > 1, dmgFormula: f.dmgFormula, rows }
+    );
+    await ChatMessage.create({ content: resultCard });
+  } else {
+    ui.notifications.info(localize("NoTokensInSpread"));
+  }
+
+  await deleteArea(handle);
+}
+
+/**
+ * Pattern lifecycle, the half that runs when nobody clicks Confirm. Two consumers because there are two
+ * clocks and only one of them ever ticks at a given table:
+ *
+ *   in combat  — a pattern belongs to the shot that threw it, so it dies when the round it was thrown
+ *                on is over. Same rule, same shape, as the suppressive lane's expiry above.
+ *   otherwise  — no round ever advances, so the wall clock is the only clock there is (SPREAD_ZONE_TTL_MS).
+ *
+ * The sweep also cleans up patterns left by a PREVIOUS session (it reads a stored timestamp, not a live
+ * timer), which is what makes an already-littered world tidy itself on the next load rather than needing
+ * a migration. Both run on the active GM only — two GMs would race the same delete.
+ */
+function _hookSpreadZoneExpiry() {
+  Hooks.on("updateCombat", async (combat, updateData) => {
+    if (!_ownsSpreadSweep()) return;
+    if (updateData.round === undefined) return;               // round advance only
+    const scene = canvas?.scene;
+    if (!scene) return;
+    for (const handle of areasByFlag(scene, "isSpreadZone")) {
+      if (spreadZoneRoundExpired(handle.doc.flags?.["cp2020-augmented"] ?? {}, combat)) await deleteArea(handle);
+    }
+  });
+
+  // The out-of-combat clock. This function is itself called from the ready pass, so the interval starts
+  // here rather than behind another `ready` hook — a listener added during the ready call is not invoked
+  // for that call, and the sweep would silently never start. Each tick guards itself, so a session that
+  // begins an encounter later needs no re-wiring.
+  if (_spreadSweepTimer === null) _spreadSweepTimer = setInterval(_sweepStaleSpreadZones, SPREAD_ZONE_SWEEP_MS);
+  // A scene the GM has just opened may be carrying patterns left by a previous session; the interval's
+  // own first tick is a sweep interval away, and this makes the tidy immediate on arrival.
+  Hooks.on("canvasReady", () => { _sweepStaleSpreadZones(); });
+}
+
+/** The one live sweep interval, so a re-registration cannot stack a second one. */
+let _spreadSweepTimer = null;
+
+/** Only the active GM deletes zones — every GM client receives the same hooks, and two would race. */
+function _ownsSpreadSweep() {
+  return !!game.user?.isGM && game.users.activeGM?.id === game.user.id;
+}
+
+/**
+ * ROUND RULE, as a value. A pattern dies when the round it was thrown on is over — but only for the
+ * encounter it was thrown in: two encounters can exist at once, and a pattern must not be expired by a
+ * round advancing somewhere it has nothing to do with. A pattern with no encounter recorded (thrown out
+ * of combat, or left by a build before this flag existed) is not the round rule's business at all.
+ * Pure — no documents, so the whole decision is asserted by value.
+ */
+export function spreadZoneRoundExpired(flags, combat) {
+  const combatId = String(flags?.combatId ?? "").trim();
+  if (!combatId || !combat?.id || combatId !== combat.id) return false;
+  return (Number(combat.round) || 0) > (Number(flags?.createdRound) || 0);
+}
+
+/**
+ * WALL-CLOCK RULE, as a value. Answers "has this unconfirmed pattern outlived its welcome?" for the
+ * patterns the round rule does not own. `encounterRunning` is asked of the pattern's OWN encounter —
+ * a pattern belonging to a live, started encounter is the round rule's, whatever the clock says.
+ * A pattern with no timestamp is litter from the build that had no expiry at all, and reading a missing
+ * timestamp as "created at the epoch" is what lets an already-littered world tidy itself: the
+ * alternative reading makes exactly the documents this rule exists to remove immortal.
+ * Pure — `now` is passed in, so the keeper asserts the boundary rather than waiting out a minute.
+ */
+export function spreadZoneClockExpired(flags, { encounterRunning = false, now = Date.now(), ttlMs = SPREAD_ZONE_TTL_MS } = {}) {
+  if (encounterRunning) return false;
+  return (now - (Number(flags?.createdAt) || 0)) >= ttlMs;
+}
+
+/**
+ * Delete every unconfirmed pattern the wall clock has outlived. Exported for the keeper, which drives it
+ * directly rather than waiting out a real minute.
+ */
+export async function _sweepStaleSpreadZones() {
+  if (!_ownsSpreadSweep()) return 0;
+  const scene = canvas?.scene;
+  if (!scene) return 0;
+  const now = Date.now();
+  let deleted = 0;
+  for (const handle of areasByFlag(scene, "isSpreadZone")) {
+    const flags = handle.doc.flags?.["cp2020-augmented"] ?? {};
+    const own = String(flags.combatId ?? "").trim();
+    const encounterRunning = !!own && !!game.combats?.get?.(own)?.started;
+    if (spreadZoneClockExpired(flags, { encounterRunning, now })) { await deleteArea(handle); deleted++; }
+  }
+  return deleted;
 }
 
 /**

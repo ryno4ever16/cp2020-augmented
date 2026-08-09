@@ -115,7 +115,12 @@ const AMMO_EFFECT_FIELDS = [
   // which load fired, from the fingerprint its mechanics left behind — and two of the thirteen (ap and
   // dualPurpose) carry byte-identical mechanics, so they were indistinguishable at any distance. One
   // string closes that. It is presentation-only downstream: no damage path reads it.
-  "modifier",
+  // ⭐ THE CARTRIDGE. The shotgun is an area weapon in the Core rules, so whether a shot throws a
+  // pattern is a fact about the round in the chamber — not about a flag somebody set on an item.
+  // spreadModeForAmmo (lookups.js) derives the mode from this at fire time, which is what lets an
+  // untouched world's buckshot fire the book pattern with no migration. Only the AMMO item carries it
+  // under this key; the weapon's own chambering has a different name and is resolved separately below.
+  "caliber",
   "ap", "edged", "mono", "effectTypes", "blastRadius", "blastFullDamageWithin", "blastMultipliers", "blastShrapnel",
   "penDamageMult", "armorMultSoft", "armorMultHard",
   "spreadMode", "spreadDamageShort", "spreadDamageMedium", "spreadDamageLong",
@@ -132,6 +137,16 @@ export function ammoEffectFields(weapon) {
   for (const sys of [ammoSys, weapon?.system]) {
     if (!sys) continue;
     for (const k of AMMO_EFFECT_FIELDS) if (out[k] === undefined && sys[k] !== undefined) out[k] = sys[k];
+  }
+  // ⚠ THE CARTRIDGE IS RECORDED UNDER TWO DIFFERENT NAMES, and the plain copy above only ever finds
+  // one of them. An AMMO item stores the round it IS in `caliber`; a WEAPON stores the round it TAKES
+  // in `ammoType` — the base system's own field, and the only one its weapon schema has (`caliber` on
+  // a weapon is dropped on write). Every shotgun in the shipped catalogue records a gauge there and
+  // nothing anywhere else, so without this line a shell fired without a distinct ammo item — free
+  // fire, or a weapon never reloaded — reports no cartridge at all and throws no pattern.
+  if (!String(out.caliber ?? "").trim()) {
+    const weaponCaliber = String(weapon?.system?.ammoType ?? "").trim();
+    if (weaponCaliber) out.caliber = weaponCaliber;
   }
   return out;
 }

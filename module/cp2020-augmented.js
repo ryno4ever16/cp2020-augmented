@@ -14,6 +14,7 @@ import { registerGasCloudBehavior, registerGasCloudVisibilityDefault } from "./c
 import { registerSuppressiveZoneBehavior, registerSuppressiveZoneVisibilityDefault } from "./combat/suppressive-zone-behavior.js";
 import { registerCoverZoneBehavior, registerCoverZoneVisibilityDefault } from "./combat/cover-zone-behavior.js";
 import { registerCoverSocket, registerCoverTools, registerCoverWallConfig } from "./combat/cover.js";
+import { registerSpreadZoneLook } from "./combat/spread-zone-look.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
@@ -262,6 +263,10 @@ Hooks.once("init", function () {
   // Unit 3: native Wall documents carry the same cover data via flags; the fields live on the
   // native Wall configuration sheet, and flagged walls join the damage dialog's cover picker.
   registerCoverWallConfig();
+  // Shot patterns (buckshot / flechette) are drawn as a ghost rather than as core's half-opaque hatched
+  // slab. UNCONDITIONAL, like the FX rail: it only ever touches a region carrying our own isSpreadZone
+  // flag, so it costs a flag read per region draw and changes nothing else on the scene.
+  registerSpreadZoneLook();
   registerRadiation();
   registerRadiationZones();
   // R3b GM tools: the apply-dose / environmental scene-control buttons (shown to a GM while radiation is
