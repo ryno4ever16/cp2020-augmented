@@ -132,15 +132,67 @@ export const FACING_AIM_SQUARES = 3;
  *
  * Both alternatives stay one edit away: "#943400" is the reference's own value, "#ffae42" the warm
  * yellow-orange this shipped before. Either restores a tinted flash with no other change.
+ *
+ * ⭐⭐ SUPERSEDED IN PART (FR#23) — THE COLOUR IS NOW DARKNESS-GATED, which keeps both requirements
+ * instead of trading one for the other.
+ *
+ * The report: with the colour dropped the flash "feels too white now", and the user wants the
+ * reference match back. The measurement above is still correct and still binding — a coloured source
+ * really does paint a LIT room orange on this core (44.8% of the frame's pixels moved, capture 39) —
+ * but it only binds in a lit scene. In the DARK, the same colour is what the reference actually looks
+ * like, and the illumination-only version is the thing that reads as white.
+ *
+ * So the source reads the VIEWED SCENE'S darkness when it is built and picks a regime:
+ *   darkness >= darknessColorThreshold  ->  colour "#943400" at alpha 0.5, the reference verbatim
+ *   darkness <  darknessColorThreshold  ->  colour null, the coloration layer never renders
+ * The lit-floor stain therefore stays impossible by construction rather than by opacity: below the
+ * threshold `data.color` is null, `hasColor` is false, and core takes the coloration layer out of the
+ * render entirely (`layers.coloration.active === false`) — the same mechanism the note above describes,
+ * now applied only where it is needed.
+ *
+ * Read at BUILD time, per flash, not cached: a GM changing scene darkness mid-session gets the right
+ * regime on the next shot with no reload, and a client viewing a different scene builds for the scene
+ * IT is looking at. The threshold is a knob rather than "> 0" because a scene at darkness 0.1 is still
+ * a lit room to a viewer, and the stain measurement was taken at darkness 0.
+ *
+ * REFERENCE CITATION for the colour itself: `diwako-cpred-additions/scripts/dfAmbientLights.js`, which
+ * hard-codes colour "#943400" at alpha 0.5 on the temporary ambient light it creates (the full value
+ * list is in the configuration note below, and the reproduction in import-staging/RED-REFERENCE-RIG.md).
  */
+
+/**
+ * The flash colour for a scene at `darkness` — the reference's own value in the dark, null in the
+ * light. Pure, so both regimes are assertable without a canvas. A non-finite darkness is treated as
+ * lit (null), which is the safe half: it can only ever fail to colour, never stain a lit floor.
+ */
+export function flashColorFor(darkness) {
+  const d = Number(darkness);
+  if (!Number.isFinite(d)) return null;
+  return d >= MUZZLE_LIGHT.darknessColorThreshold ? MUZZLE_LIGHT.referenceColor : null;
+}
+
+/** The darkness of the scene this client is looking at, for the colour regime. 0 when unknown. */
+export function viewedSceneDarkness() {
+  const scene = canvas?.scene;
+  const d = scene?.environment?.darknessLevel ?? scene?.darkness;
+  return Number.isFinite(Number(d)) ? Number(d) : 0;
+}
 export const MUZZLE_LIGHT = Object.freeze({
-  color: null,            // ILLUMINATION ONLY on this engine — measured divergence, see the note.
-                          // Knobs: "#943400" (reference) / "#ffae42" (previous)
+  // ⭐ TWO REGIMES NOW (FR#23) — `color` is no longer one value, it is chosen from the VIEWED SCENE'S
+  // DARKNESS at the moment the source is built. See flashColorFor and the two-regime note above.
+  color: null,            // the LIT regime, and the measured divergence the note describes
+  referenceColor: "#943400",   // the DARK regime — the reference's own value, verbatim
+  darknessColorThreshold: 0.25,// at or above this scene darkness the reference colour is used
+                          // Knob: "#ffae42" is the warm yellow-orange this shipped before
   brightSquares: 12.5,    // reference-exact: bright == dim, so attenuation does ALL the falloff
   dimSquares: 12.5,
   attenuation: 1,         // reference-exact, and core's maximum: the fade spans the whole radius
   alpha: 0.5,             // reference-exact; the coloration layer's intensity, inert while color is null
-  luminosity: 0.5,        // reference-exact (confirmed against the guide's own module)
+  luminosity: 0.65,       // ⏱ RAISED ON REPORT (FR#23) — "I'd like them to feel pretty violent". The
+                          // reference-exact value was 0.5 (confirmed against the guide's own module);
+                          // this is a deliberate departure upward, and the ONE knob that carries it.
+                          // It cannot reintroduce the lit-floor stain: that is the coloration layer's
+                          // doing, and in a lit scene the colour is null so the layer does not render.
   nominalFrameMs: 17,     // one frame at 60fps — reporting only, nothing is scheduled on it
   attackFrames: 1,
   holdFrames: 2,
@@ -622,6 +674,51 @@ export const MUZZLE_SMOKE = Object.freeze({
 export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness: 1.15 });
 
 /**
+ * How far the discharge column is stretched, in grid units, measured from the shooter's own edge.
+ *
+ * ⏱ FR#23. It used to reach the aim point, which drew a full bolt down the shot line and read as a
+ * single rifle round riding on top of the shell's pellet fan. The element exists for the BLOOM baked
+ * into its origin, so the stretch only has to be long enough to carry that bloom and a short streak
+ * behind it. A grid-unit distance keeps it the same size on any scene and independent of range — a
+ * shot at two squares and a shot at twelve now draw the same muzzle blast.
+ *
+ * ⚠ THE ASSET IS DISTANCE-BANDED, which is what makes this worth measuring rather than assuming: the
+ * database hands back a different source file per stretch distance, so shortening the stretch does not
+ * merely scale the same clip, it can select a different one whose phases are proportioned differently.
+ * The shipped value is the one whose delivered file still carries the bloom intact (measured on the
+ * rig; the alternative, if a short band's bloom is ever weak, is to keep the long band and trim it
+ * instead — recorded so the choice does not have to be rediscovered).
+ */
+export const COLUMN_SQUARES = 1.25;
+
+/**
+ * How much of the column's clip plays, in clip milliseconds — the trim that keeps its BLAST and drops
+ * its ARRIVAL.
+ *
+ * ⚠ MEASURED ON THE FIRST SHORTENED CAPTURE, not assumed. Shortening the stretch alone was not enough:
+ * `bullet.02` ends with a big spiky impact star, and at a 1.25-square stretch that star landed about a
+ * square and a half ahead of the barrel, bright and detached — a floating impact hanging in mid-air
+ * rather than part of the discharge (it also fell across the target token, which made it read as a hit
+ * that had not happened). The stretch controls WHERE the clip is drawn; only a trim controls HOW MUCH
+ * of it is drawn.
+ *
+ * So the column plays its opening and stops early. Same tool and same reasoning as the muzzle lance's
+ * own trim (MUZZLE_SPRITE.endMs), including the finding recorded there that a TIME RANGE really cuts on
+ * this build where the percentage form measured as no cut at all.
+ *
+ * ⚠⚠ WHAT THE TRIM CANNOT DO, measured rather than assumed, and left for the user to rule on: at this
+ * SHORT stretch the database serves a short distance band (05ft/15ft), and those files compress the
+ * whole bolt — bloom, travel AND arrival star — into their opening. Captured at three trims: at 500ms
+ * the arrival star was still on screen; at 150ms the column was gone before it could be read at all;
+ * 300ms is the value that keeps a readable discharge. So the star is NOT a tail that can be cut off
+ * the short band — it arrives with the bloom. The alternative on record is to keep a LONG stretch (the
+ * 30ft band, whose phases are spread out) and trim that instead, which trades the short reach back for
+ * a separable star. Not taken unilaterally: the short reach is the thing the user asked for, and the
+ * star's read is a look question. Flagged with capture 55c.
+ */
+export const COLUMN_TRIM_MS = 300;
+
+/**
  * The mapping table: our weapon CLASS → Sequencer database keys + our sound basename + options.
  * Database KEYS, never file paths — a key resolves on whichever JB2A tier the user installed, and a
  * key the installed tier lacks is skipped instead of 404ing (see fxDbEntryExists).
@@ -1059,8 +1156,11 @@ export function muzzleEnvelopeDurationMs() {
  * (LimitedAnglePolygon.pointBetweenRays), and nothing on the source path clamps the field. So 269
  * builds one wedge with a 91-degree notch behind the shooter, not two mirrored halves.
  */
-export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad = null, mode = MUZZLE_MODE } = {}) {
+export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad = null, mode = MUZZLE_MODE, darkness = null } = {}) {
   const m = MUZZLE_LIGHT;
+  // THE COLOUR REGIME (FR#23). Resolved once here so every source this call returns agrees, and taken
+  // from the caller's reading when it has one so the pure function stays drivable without a canvas.
+  const color = flashColorFor(darkness === null ? viewedSceneDarkness() : darkness);
   const grid = Number(gridDistance) > 0 ? Number(gridDistance) : 1;
   const ppu = Number(pixelsPerUnit) > 0 ? Number(pixelsPerUnit) : 1;
   const px = (squares) => Number((squares * grid * ppu).toFixed(3));
@@ -1073,7 +1173,7 @@ export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad 
     key, angle: 360, rotation: 0,
     bright: key === "spill" ? 0 : bright,          // the companion glows, it does not light brightly
     dim,
-    color: m.color,
+    color,
     attenuation: m.attenuation,
     alpha: Number((m.alpha * level).toFixed(3)),
     luminosity: Number((m.luminosity * level).toFixed(3)),
@@ -1081,7 +1181,7 @@ export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad 
   const wedge = () => ({
     key: "cone", angle: m.coneDegrees, rotation,
     bright, dim,
-    color: m.color,
+    color,
     attenuation: m.attenuation,
     alpha: m.alpha,
     luminosity: m.luminosity,
@@ -1361,6 +1461,16 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
  * toward it returns the centre unchanged; its callers resolve one first (aimPointOf), so in the
  * shipped paths there is always a line.
  */
+/** The point `distPx` along the from->to axis, starting at `from`. Pure; null when there is no axis. */
+export function pointAlong(from, to, distPx = 0) {
+  if (!from || !to) return null;
+  const dx = to.x - from.x, dy = to.y - from.y;
+  const len = Math.hypot(dx, dy);
+  if (!len) return { x: from.x, y: from.y };
+  return { x: Number((from.x + (dx / len) * distPx).toFixed(3)),
+           y: Number((from.y + (dy / len) * distPx).toFixed(3)) };
+}
+
 export function muzzlePoint(from, to, offsetPx = 0) {
   if (!from) return null;
   if (!to || !(offsetPx > 0)) return { x: from.x, y: from.y };
@@ -1728,9 +1838,19 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       // accounts for it by value instead (presentationTailMs takes a column term), so the window's wait
       // does not depend on which of two overlapping clips the engine happens to report last.
       if (to && entry.column && fxDbEntryExists(entry.column)) {
+        // ⏱ SHORTENED ON REPORT (FR#23). Stretched to the AIM POINT the column was a full-length bolt,
+        // so every shotgun discharge grew a rifle-like single round on top of its pellet fan — "the
+        // column added a rifle-like single bullet per shotgun shot". What it is here for is the BLOOM
+        // at its origin, not the projectile, so it now stretches to a SHORT endpoint a fixed distance
+        // along the aim: the bloom lands at the barrel exactly as before and what follows it reads as
+        // the blast rather than as a round in flight. The endpoint is a spec knob in grid units, so it
+        // is the same fraction of a square on any scene and does not scale with the range.
+        const colPx = COLUMN_SQUARES * (Number(canvas?.dimensions?.size) || 100);
+        const colEnd = pointAlong(from, to, tokenRadiusPx(shooterToken, gridPx) + colPx);
         const column = _held(seq.effect().file(entry.column)).atLocation(shooterToken)
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
-          .stretchTo(hit ? to : missEndpoint(from, to));
+          .timeRange(0, COLUMN_TRIM_MS)
+          .stretchTo(colEnd);
         // The same ColorMatrix the other bullet.02 rows carry. The shell's PELLETS still take none —
         // that was ruled separately and stands — so the field is per-element here rather than reused
         // from `tracerColor`, and dropping the shift is deleting one row field.
@@ -2098,7 +2218,9 @@ export function presentationTailMs(weaponClass) {
   // runs its own clip from the instant the round goes out — so the window has to wait for whichever of
   // the two chains ends LAST, not for the one that happens to be named. Counted by value here rather
   // than tagged, so the arithmetic stays readable and does not depend on engine reporting order.
-  const columnEnd = entry?.column ? TRACER_CLIP_MS : 0;
+  // The column is TRIMMED (COLUMN_TRIM_MS), so the honest term is how long it actually plays and not
+  // the asset's full clip — the arrival phase it used to run is no longer drawn at all.
+  const columnEnd = entry?.column ? COLUMN_TRIM_MS : 0;
   return Math.max(muzzleEnvelopeDurationMs(), muzzleDwellMs(weaponClass), spark, tracerEnd, impactEnd, columnEnd);
 }
 
