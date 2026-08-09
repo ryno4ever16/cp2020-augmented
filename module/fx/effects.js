@@ -254,7 +254,75 @@ export const MUZZLE_SPRITE = Object.freeze({
 });
 
 /**
+ * HOW LONG THE LANCE STAYS ON SCREEN, per class — and why that is a separate number from the trim.
+ *
+ * Reported (FR#21): "the cone shaped starburst that appears for the rifle shots should be present, but
+ * it's not" — on the shotgun. Measured on the rig, in this order, and the first two answers were both
+ * "nothing is wrong":
+ *   1. QUEUED? Yes — fxShot returns `muzzle: true` for the shell, off the same row field every class
+ *      uses, and the key resolves on the installed tier.
+ *   2. DRAWN? Yes — one lance sprite on the canvas per round, at 190x96 world px for the shell's 1.9
+ *      squares (the LARGEST of any class; the rifle's 1.6 draws 160x80), above lighting, not occluded.
+ *   3. FOR HOW LONG? This is where it went. The trimmed range is 110ms of CLIP, and at playback rate 1
+ *      that content is spent so fast that the effect's own video had already finished advancing before
+ *      the effect became observable in the engine's list at all (clip span measured as 0ms across an
+ *      8ms sampler, against 92ms at rate 0.5 and 60ms at 0.33). The effect object then lingers ~790ms
+ *      showing nothing more.
+ * So the asymmetry is not in the shell at all — it is in the ROUND COUNT. The rifle is fired on auto:
+ * ten lances restart at an 80ms cadence, which a viewer reads as one sustained flash. The shotgun's
+ * ordinary pull is ONE round, so the identical lance gets one 110ms life and is over before the eye
+ * settles. Same sprite, same code, opposite read.
+ *
+ * THE LEVER IS THE RATE, NOT THE RANGE, and that distinction is load-bearing: extending the time range
+ * would let the clip's billowing fire-and-smoke phase back in, which is the exact thing FR#14 trimmed
+ * away and which was reported as "a plume" before it was cut. Slowing the playback stretches the SAME
+ * 0-110ms of content over more wall clock, so what is shown is byte-for-byte the ruled lance and only
+ * its dwell changes.
+ *
+ * `muzzleMs` on a class row is that dwell in wall-clock milliseconds; the rate is derived from it
+ * (muzzleRateFor). A row that omits the field dwells for the trim itself, i.e. rate 1 and not one
+ * property changed — so only the class that reported the problem moves.
+ *
+ * ⏪⏪ NO ROW NAMES ONE ANY MORE (FR#22, user ruling) — and the chain is worth keeping because the
+ * mechanism outlived the reason for it:
+ *   FR#21 ADDED the dwell, for the shell alone, because its single discharge's lance was over before
+ *     the eye settled while an automatic's restarts read as sustained.
+ *   FR#22 gave the shell a bullet.02 DISCHARGE COLUMN, whose own built-in bloom sits at the barrel.
+ *   The user then ruled on seeing the two together: "the newly added spiky cone looks great, but the
+ *     flame lance from before still sits below it and it doesn't look good. Remove the flame lance."
+ *     So the shell draws NO lance, and the dwell that existed only to make that lance visible goes
+ *     with it. The shell's muzzle is now the column's bloom, the pellet fan, one smoke puff, and the
+ *     native flash light.
+ * The mechanism below is deliberately LEFT WIRED rather than deleted: it is one row field away from
+ * use if another class ever wants a longer lance, and it is measured and documented. Every shipped row
+ * omits it today, so every shipped lance plays at rate 1.
+ */
+export const MUZZLE_DWELL_DEFAULT_MS = MUZZLE_SPRITE.endMs;
+
+/**
  * The SPIKY half of the starburst, drawn on top of the aimed lance — optional per class (`spark`).
+ *
+ * ⛔ NO CLASS ASKS FOR IT ANY MORE — USER RULING, 2026-08-08, after a matched A/B on the rig (eyes-on
+ * 45/46 rifle, 45b/46b pistol: identical shot, identical framing, the field the only difference).
+ * The verdict on the radial star was that it reads as "magical" and "busy" for a firearm, and that
+ * "the angled one is good enough, and should work for all weapon types that shoot bullets in a
+ * straight line" — the shotgun included, asked and answered separately. Three things the captures
+ * make plain, kept here as the reasons rather than the taste:
+ *   - it is RADIAL, so its rays fire BACKWARD across the shooter's own token; nothing about a
+ *     discharge throws light behind the barrel, and a symmetric star is a sparkle idiom, not a gun one;
+ *   - `squares` is a fixed size for every class, so it dominates a small muzzle — it is proportionally
+ *     largest on the pistol, the class with the least flash to compete with it;
+ *   - the aimed lance ALONE still sells the discharge (46/46b), and does it pointing the way the shot
+ *     went, so nothing load-bearing was lost by dropping it.
+ * What is genuinely given up is the spiky read: the lance is smoother and more flame-like than the
+ * reference's forward ray fan. The tier offers no third option (see the finding below), so that is the
+ * trade the ruling accepts.
+ *
+ * THE MECHANISM IS DELIBERATELY LEFT INTACT rather than deleted, and this block with it: the draw is
+ * still gated on the per-class `spark` field, so re-enabling it anywhere is adding ONE field back to
+ * that class's row in FX_CLASSES — nothing else moves, and a class carrying it still gets exactly the
+ * treatment described below. The keeper pins both halves: no class queues it as shipped, and a row
+ * given the field still does.
  *
  * The honest finding behind this: the free tier has NO directional spiky starburst. Its muzzle family
  * is the smooth lance above; its spiky stars (the `impact` family) are RADIAL and carry a thin
@@ -324,6 +392,44 @@ export const MUZZLE_SPARK = Object.freeze({
 export const LIT_SPRITE_ABOVE_LIGHTING = true;
 
 /**
+ * How long a TRAVELLED pellet stays alive AFTER it has arrived — the fix for "the shells hit, but
+ * visibly they always fall short".
+ *
+ * ⚠ THE MECHANISM, because it is not the one it looks like. The endpoints were never short: read off
+ * the live engine, each pellet's own target position came back at the aimed-at token's centre, fanned
+ * across the cone exactly as pelletEndpoints builds it (target centre 1750,1950; the six pellets asked
+ * for 1748–1750 x 1901–1999). What went wrong was the CLOCK. The engine drives a moved effect for
+ * `movementDuration`, and with no speed set that is the effect's whole lifetime — so the sprite was
+ * scheduled to arrive at the same instant it was destroyed. The arrival frame therefore never existed
+ * to be seen, and worse, the movement is stepped by the RENDER loop while the lifetime is a wall-clock
+ * timeout: on a client that is dropping frames the interpolation gets fewer steps than the timeout
+ * gets milliseconds, so the sprite dies part-way. Measured on this rig at 700px of shot line, six
+ * pellets, sampling the animated property on a clock rather than per frame: every pellet was destroyed
+ * at 0.778 of the line — 155–162px short of the target centre, against a token half-width of 50px, so
+ * a good square and a half short of touching it. A coarser per-frame sample of the same shot read
+ * 0.556. That spread between two samples of one unchanged build is itself the tell: the shortfall is
+ * however far behind the wall clock the render loop happens to be.
+ *
+ * THE FIX IS TWO PARTS, and both are needed:
+ *  - the travel is driven by a SPEED (moveSpeed, pixels per second) instead of by the lifetime, so
+ *    `dashMs` keeps its meaning as the crossing time and no longer doubles as the sprite's death;
+ *  - the lifetime is the crossing time PLUS this hold, so the pellet is still on screen once it
+ *    arrives — which is what makes the arrival visible at all — and so a render loop running behind
+ *    the wall clock has slack to finish the interpolation instead of being cut off mid-flight.
+ *
+ * The value is set by the slack it has to cover rather than by taste: a client stepping the render
+ * loop a few times a second is ~100ms per step, so this carries roughly two steps of lag and still
+ * reads as a beat rather than as pellets parked on the target. It is spent as a FADE (the pellet
+ * fades over the hold rather than blinking out), and it overlaps the HIT CONFIRMATION, which is
+ * delayed by the same crossing time — so the impact goes off while the pellets are still there.
+ *
+ * A MISS is deliberately untouched by all of this: the miss splay sends each pellet to its own reach,
+ * one muzzle velocity carries it there in its own time, and it still lands wide or short of the token
+ * exactly as the divergence design intends. Arriving is a property of a HIT, not of the mechanism.
+ */
+export const DASH_ARRIVAL_HOLD_MS = 260;
+
+/**
  * The HIT CONFIRMATION — one impact drawn at the aimed-at point for each round that LANDS.
  *
  * The rail could already say a round was fired; nothing on the canvas said whether it arrived, and
@@ -340,7 +446,34 @@ export const LIT_SPRITE_ABOVE_LIGHTING = true;
 export const HIT_CONFIRM = Object.freeze({
   key: "jb2a.impact.005.orange",
   delayFollowsTracer: true,
+  // Measured off the installed file (833ms). This is the LAST thing a landing round puts on screen,
+  // so it is what "the action has finished" means for that round — see presentationTailMs.
+  clipMs: 833,
 });
+
+/**
+ * How long a PAINTED (stretched) tracer stays on screen, in milliseconds — the other candidate for the
+ * last thing a round draws, and the one that matters when a round MISSES and draws no impact.
+ *
+ * Measured off the installed files: the two mapped bullet families run 533–933ms, and `bullet.01`
+ * varies with the distance band the ranged entry hands back (533 / 533 / 633 / 833) while `bullet.02`
+ * is a flat 933. This is the LONGEST of them, taken as one constant rather than modelled per band and
+ * per class: it is an upper bound on a value that is only ever compared against the impact's 833ms,
+ * and being a shade generous here costs a fraction of a second on a miss while being wrong the other
+ * way would cut the tracer off mid-flight. A TRAVELLED tracer does not use this — its own on-screen
+ * life is its crossing time plus DASH_ARRIVAL_HOLD_MS, both of which the table already names.
+ */
+export const TRACER_CLIP_MS = 933;
+
+/**
+ * The hard ceiling on how long the apply window may be held back waiting for the rail to finish, in
+ * milliseconds. Raced against the completion signal — whichever comes first wins — so a fan-out that
+ * never reports (a listener that threw, an engine that stalled, a payload nobody registered) can delay
+ * the window but can never park it. Comfortably past the longest span the table can produce: the
+ * thirty-round cap at the slowest mapped cadence plus a terminal element is ~6.2s, and this sits above
+ * a normal burst by a wide margin while still being a bound a person would wait through.
+ */
+export const PRESENTATION_CAP_MS = 8000;
 
 /**
  * FACE THE TARGET — the shooter turns to look at what it is shooting at, before the first round.
@@ -389,32 +522,87 @@ export const MUZZLE_MOTES = Object.freeze({
 });
 
 /**
- * The SMOKE WISP — one small puff at the muzzle, angled along the aim, drawn ONCE PER BURST and only
- * for a multi-round payload. Width is the per-class field (`smokeSquares`); everything else is a
- * property of the asset and of the burst.
+ * THE MUZZLE SMOKE — a rolling mass built from MANY SHORT PUFFS OVERLAPPING OUT OF PHASE, emitted
+ * across a burst, rather than one wisp with a long fade.
  *
- * ⚠ SIZE IS THE THING TO GET RIGHT HERE, and the first values shipped were wrong: at 1.4 squares the
- * puff photographed as a large tangled cloud filling the space between shooter and target — a second
- * effect competing with the shot rather than a wisp beside it. The reference's wisp measures about
- * 30x25px on its 165px grid, i.e. under a fifth of a square. The per-class widths below are a
- * compromise on that: appreciably under half a square so it reads as a wisp at the muzzle, but not so
- * small that the asset's own detail disappears into a smudge. Opacity is held low for the same reason
- * — it is meant to be noticed second, after the flash.
+ * ⚠ THIS REPLACES THE SINGLE-WISP TREATMENT, and the reason is worth keeping. The wisp was one sprite
+ * whose lifetime was stretched to cover the burst and which then faded out slowly (the FR#16 tune took
+ * it to 1050–3600ms with a 700ms fade). The user's description of what they actually want is not that:
+ * "after the last shots have left the barrel, the smoke effect is still advancing every other frame or
+ * so. Different parts of the smoke are sometimes advancing at a different time. One frame, some of the
+ * smoke advances, and the next the rest advances. By 'lingering' I mean that a LESSENING AMOUNT of
+ * smoke continues to ADVANCE, for several frames, RAPIDLY disappearing." A single sprite dimming
+ * cannot produce that; several sprites at different points of their own animation, ending at different
+ * times, is exactly that. So the long static fade is superseded for bursts: `fadeOutMs` here is
+ * deliberately SHORT (300ms — "rapidly disappearing"), and the linger comes from instances outliving
+ * each other rather than from any one of them hanging around.
  *
- * `key` is the tier's SIDE puff (a directional asset — it drifts one way), which is what lets it
- * carry an aim at all; the centred puff in the same family has no direction to rotate. LIFETIME is
- * asked to be the burst's own length (shots × cadence) so the wisp is still there between rounds and
- * gone shortly after the last one, clamped at both ends: `minMs` so a two-round burst still leaves
- * something visible, `maxMs` so a thirty-round payload does not park smoke on the map.
+ * ⭐ THE STRUCTURE IS BORROWED FROM THE REFERENCE, THE ASSETS ARE NOT. Observed on the reference rig
+ * (RED-REFERENCE-RIG.md §5): it has NO smoke and NO ember element at all. What reads as a billow
+ * rolling through a burst is ONE 633ms tracer clip emitted per shot at a 100ms cadence — about six
+ * copies alive at once, each at a different point of its own animation. The evolution is PHASE-OFFSET
+ * OVERLAP, not variation between instances and not one long effect. That structure is what is copied
+ * here, with a smoke asset in place of a tracer.
+ *
+ * ⭐⭐ THE TRAP THAT MAKES THIS NON-OBVIOUS, and the reason every puff is built as its OWN section:
+ * Sequencer's own randomisers roll ONCE PER SECTION, not per repetition — `_initialize()` flips the
+ * mirror coin a single time, so a section with `.repeats(n)` yields n IDENTICAL copies. The reference
+ * falls into exactly this (it asks for `randomizeMirrorY` and gets `flipY: true` on all ten). So the
+ * variation below is rolled BY US, per emission, and each emission gets a separate `.effect()`.
+ *
+ * ⏪ SCOPE NARROWED (FR#22): this spec once paced a STREAM of puffs across a burst, and the number it
+ * existed to preserve was the concurrency — how many were alive at once. There is no stream any more
+ * (see the retirement note on smokePlanFor), so what is left of it describes ONE puff: the shell's
+ * single discharge. The per-instance variation below still earns its place — the shell fires repeatedly
+ * over a session and identical puffs would read as a stamp — but nothing here is paced against a
+ * cadence now, and `clipMs` is documentation rather than an input to any arithmetic.
+ *
+ * ASSET NOTES, measured off the installed free tier: the five variants all live under ONE database key
+ * (`jb2a.smoke.puff.side.grey` holds SmokePuffSide01_01..05), so cycling them means indexing the file
+ * list rather than naming five keys. Their durations are NOT equal — 1100 / 1100 / 1200 / 1067 / 1900ms
+ * — and that is left alone deliberately: the 1900ms variant is the natural straggler, which is the
+ * "lessening amount still advancing" the ruling asks for, for free. `clipMs` below is the typical
+ * value (1100) and is now documentation only — the stride arithmetic it fed is retired.
+ *
+ * ⏪ THE SAVED FALLBACK, if this reads worse than what it replaced: the literal-fidelity option is to
+ * DELETE the smoke and the embers entirely and let tracer overlap do the work, exactly as the
+ * reference does — it has neither. That is a one-line change (drop the `motes`/`smoke` emission from
+ * the fan-out) and is recorded here so it does not have to be rediscovered.
  */
 export const MUZZLE_SMOKE = Object.freeze({
   key: "jb2a.smoke.puff.side.grey",
-  minMs: 700,
-  maxMs: 2600,
-  fadeOutMs: 450,
-  opacity: 0.35,
+  variants: 5,
+  clipMs: 1100,
+  // Per-instance variation, all rolled by us (see the trap above).
+  rotationDeg: 35,          // ± about the aim — WIDE, so the mass fans instead of pointing down-range
+  // ⏱ TUNED ON REPORT (2026-08-08): "too ropy", "starts a bit too far from the shooter", and on the
+  // fast automatics "too large" and it "spams". The scale band is wider and the phase spread much
+  // wider, so successive puffs stop reading as repeats of one another; opacity is down so the
+  // overlapping edges merge into a mass instead of showing as separate strands; and the bloom is
+  // softer and slower, which also blurs the moment of arrival that made the metronome obvious.
+  scaleMin: 0.8, scaleMax: 1.45,
+  rateMin: 0.85, rateMax: 1.15,
+  jitterSquares: 0.18,      // positional scatter at the muzzle
+  startPhaseMax: 0.55,      // fraction of its own clip an instance may start into
+  // Where the puff is BORN, as a fraction of the shooter token's own width along the aim. The muzzle
+  // SPRITE sits on the forward edge (0.5); the smoke starts further back, essentially at the barrel
+  // and slightly inside the token, and rolls out from there — reported as "starts a bit too far from
+  // the shooter" when it shared the sprite's edge offset.
+  originFraction: 0.28,
+  // DRIFT — a slow roll that hangs at the muzzle, never a launch. See the drift note below.
+  // ⏱ TIGHTENED ON REPORT (2026-08-08, FR#20): "still gets a bit too far from the shooter, all
+  // classes". Measured live before this pass: 0.48–0.77 squares on a shell burst, 0.54–0.99 across the
+  // classes — i.e. the REACH was already about where it should be, but the CAP was more than twice it,
+  // so it bounded nothing a viewer ever saw and the tail of the distribution ran out to a tile and a
+  // half. Both are moved: the components come in so the typical puff settles nearer, and the cap comes
+  // down to the top of the asked-for band (about half a tile to a tile) so it is a bound that bites.
+  driftAlongSquares: 0.28,  // component down-range
+  driftLateralSquares: 0.24, // component ACROSS the aim — this is what makes it billow, not stream
+  driftMaxSquares: 0.9,     // hard cap on where a puff may end up, measured FROM THE SHOOTER
+  scaleInFrom: 0.55, scaleInMs: 240,
+  fadeOutMs: 300,           // MODEST on purpose — "rapidly disappearing"
+  opacity: 0.28,
 });
-
 /**
  * The TRACER COLOUR SHIFT — how a class's tracer is pushed from the asset's orange toward the
  * reference's yellow-near-the-head-fading-to-white comet. Optional per class (`tracerColor`).
@@ -474,6 +662,11 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  *    because "was this automatic fire" is a property of the shot and not of the weapon. That matches
  *    the reference, where the automatic weapon threw specks and smoke and the semi-automatic one in
  *    the same scene threw neither.
+ *  - `smokeSingle`: this class smokes on a SINGLE discharge as well, i.e. it opts out of the
+ *    multi-round gate above for the smoke only (never for the specks). See the shell row's note.
+ *  - `muzzleMs`: how long this class's lance DWELLS on screen, stretched over the same trimmed clip
+ *    range by a derived playback rate. A row that omits it plays at rate 1 and is untouched. See the
+ *    MUZZLE_DWELL_DEFAULT_MS block for why dwell and trim have to be two different numbers.
  *
  * SHELL-CLASS NUMBERS (chosen here, tuned by eye on the rig — see the eyes-on record):
  *  - `pellets: 6` — enough to read as a spread rather than a doubled bolt. It was 4 while each pellet
@@ -507,13 +700,28 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  *    squares off the aim point — visibly a cone, still landing on a one-square target. A MISS reuses
  *    the wide miss divergence per pellet instead, so a missed shell splays wide and lands at mixed
  *    depths rather than fanning neatly past the target.
- *  - `muzzleSquares: 1.9` — heavier than the rifle's 1.6 so the blast reads as a bigger bore, still
- *    under the heavy class's 2.1 so the largest flash on the table remains the largest weapon on it.
- *    (This is the MUZZLE sprite's drawn width; the tracer takes its size from `dashSquares` instead,
- *    so the two are independent.)
+ *  - NO `muzzle` KEY AT ALL, and no `muzzleSquares`/`muzzleMs` with it (FR#22, user ruling). The shell
+ *    is the one class that draws no aimed lance: with the discharge column below it, the lance read as
+ *    a second flame sitting under the bloom — "the newly added spiky cone looks great, but the flame
+ *    lance from before still sits below it and it doesn't look good." Its discharge is now the column's
+ *    own built-in bloom, the pellet fan, one smoke puff and the native flash light. Restoring it is
+ *    adding the two fields back; the dwell mechanism they used is still wired (MUZZLE_DWELL_DEFAULT_MS).
  *  - `tracer: bullet 01` — the THIN variant, where the rifle takes the heavy 02.
  *  - NO `tracerColor` — the shell's pellets are a settled look; the colour shift is for the classes
  *    that draw a single comet.
+ *  - `smokeSingle: true` — ⭐ THE ANSWER TO "I don't see it at all for shotguns" (FR#20), and the
+ *    diagnosis is worth keeping because the obvious suspects were all innocent. Measured on the rig:
+ *    the shell path emits and DRAWS its puffs correctly — a six-round shell burst put SIX puffs on the
+ *    canvas (stride 1, the densest of any class) at 0.48–0.77 squares, against the rifle's two. What
+ *    the table actually fires, though, is ONE discharge: the review shotgun on its ordinary trigger
+ *    pull reports `shotsFired: 1`, and the multi-round gate above then draws no smoke at all — while
+ *    the same table's rifle and SMG are fired on auto and smoke every time. So the class was never
+ *    losing puffs; it was never asked for any.
+ *    The gate itself stays for everything else: it was ruled off the reference, where an automatic and
+ *    a semi-automatic weapon in the SAME scene differed exactly this way — but both of those were
+ *    single-projectile weapons. A shell's one discharge is the case that reads wrong without smoke, so
+ *    it opts out by row rather than by a branch naming the class. The specks are NOT opted out: a
+ *    dozen hot specks off one shell is the "spam" read the burst treatment exists to avoid.
  *
  * MUZZLE SIZES (all five rows): the reference's flash reaches about 0.6 of a grid square forward of
  * the muzzle. Drawn width 1.6 puts the rifle's lance at roughly that reach, which is where the rifle
@@ -521,11 +729,11 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * reduction (`scale: 0.7` drew 4.2 squares), which is the reported "too large" answered by value.
  */
 export const FX_CLASSES = Object.freeze({
-  pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, spark: true, motes: 8,  smokeSquares: 0.4,  impactSquares: 0.7 },
-  smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, spark: true, motes: 12, smokeSquares: 0.45, impactSquares: 0.75 },
-  rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, spark: true, motes: 13, smokeSquares: 0.5,  impactSquares: 0.95 },
-  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", muzzleSquares: 1.9, spark: true, motes: 10, smokeSquares: 0.6, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
-  heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, spark: true, motes: 16, smokeSquares: 0.65, impactSquares: 1.3 },
+  pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, motes: 8,  impactSquares: 0.7 },
+  smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, motes: 12, impactSquares: 0.75 },
+  rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, motes: 13, impactSquares: 0.95 },
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", tracer: "jb2a.bullet.01.orange", motes: 10, smokeSquares: 0.6, smokeSingle: true, column: "jb2a.bullet.02.orange", columnColor: TRACER_COLOR, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
+  heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
 });
 
 /**
@@ -1261,13 +1469,127 @@ export function moteEndpoints(from, to, { count = 0, spreadRad = 0, nearPx = 0, 
 }
 
 /**
- * How long one burst's smoke wisp lives: the burst's own length (rounds × cadence), clamped. Pure.
- * Asking for the burst length is what makes the wisp still be there between rounds — the thing the
- * reference shows and a per-shot puff cannot do.
+ * ⏪⏪ RETIRED (FR#22, user ruling) — the stride derivation, the concurrency band and every other part of
+ * the BURST puff machinery are gone. The chain, so the next reader does not rebuild it:
+ *
+ *   FR#17 BUILT it — a stream of phase-offset puffs emitted across a burst, because the reference video
+ *     showed a billow rolling through automatic fire and we had no smoke of our own.
+ *   FR#18/#20 TUNED it — stride overrides for the fast automatics, sizes, opacity, drift, and finally a
+ *     per-row opt-in so the shell's single discharge smoked at all.
+ *   FR#22 RETIRES it for bursts — because the premise was wrong. Decoding the bullet assets frame by
+ *     frame showed `jb2a.bullet.02` (rifle/heavy) carries its OWN gray smoke curls, which linger at the
+ *     muzzle for most of its clip, plus a spiky bloom at the origin and a spiky impact star. The
+ *     reference's billow was never a smoke system at all — it was those built-in phases OVERLAPPING one
+ *     per shot. So our puffs were a second smoke drawn on top of a smoke that was already there, which
+ *     is exactly what the user kept reporting: "spammy no matter how we do it."
+ *
+ * WHAT THIS COSTS, stated plainly rather than discovered later: pistol and SMG map `bullet.01`, which
+ * carries NO built-in smoke, so their automatic fire is now smokeless. That matches the reference (it
+ * used bullet.01 for every gun and had zero smoke). If the user later wants SMG autos to smoke, it is a
+ * ONE-FIELD change — swap that row's `tracer` to `jb2a.bullet.02.orange` — not a rebuild of this.
+ *
+ * WHAT SURVIVES: the shell's SINGLE-discharge puff (`smokeSingle`), kept by explicit user ruling, and
+ * everything it needs — MUZZLE_SMOKE's per-instance spec, smokePuffPlan's randomisation, fxSmokePuff.
+ * One puff, one discharge; there is no stream left to pace, so there is no stride to derive.
  */
-export function burstSmokeMs(shots, cadenceMs) {
-  const span = Math.max(0, (Number(shots) || 0)) * (Number(cadenceMs) || 0);
-  return Math.min(MUZZLE_SMOKE.maxMs, Math.max(MUZZLE_SMOKE.minMs, Math.round(span)));
+
+/** How many puffs a payload emits, and when. Only a `smokeSingle` class firing ONE round draws one; a
+ *  burst draws none from us at all (see the retirement note above). Pure. */
+
+/**
+ * How long this class's muzzle lance stays on screen, in wall-clock milliseconds. A row that names no
+ * `muzzleMs` dwells for the trim itself. Pure — see the MUZZLE_DWELL_DEFAULT_MS block for why dwell and
+ * trim are two numbers.
+ */
+export function muzzleDwellMs(weaponClass) {
+  const own = Number(FX_CLASSES[weaponClass]?.muzzleMs);
+  return Number.isFinite(own) && own > 0 ? own : MUZZLE_DWELL_DEFAULT_MS;
+}
+
+/**
+ * The playback rate that makes the trimmed lance last its class's dwell. Exactly 1 for every row that
+ * names no dwell, so "unchanged" is a value the keeper can assert rather than a claim. Pure.
+ */
+export function muzzleRateFor(weaponClass) {
+  return Number((MUZZLE_SPRITE.endMs / muzzleDwellMs(weaponClass)).toFixed(4));
+}
+
+/**
+ * Does this class smoke on a SINGLE discharge as well as on a burst — i.e. does its row opt out of the
+ * multi-round gate for the smoke? Pure, and read by BOTH the arithmetic below and the fan-out's own
+ * gate, so what the plan predicts and what the loop emits cannot drift apart. See the shell row's note
+ * for why exactly one class carries it.
+ */
+export function smokesOnSingleShot(weaponClass) {
+  return FX_CLASSES[weaponClass]?.smokeSingle === true;
+}
+
+/** How many puffs a payload of `shots` rounds emits at that stride, and how many overlap. Pure. */
+export function smokePlanFor(weaponClass, shots) {
+  const n = Math.min(Math.max(Math.trunc(Number(shots) || 0), 0), MAX_FX_SHOTS);
+  const emissions = (n === 1 && smokesOnSingleShot(weaponClass)) ? 1 : 0;
+  return { emissions, cadenceMs: classCadenceMs(weaponClass) };
+}
+
+/**
+ * The randomised parameters for ONE puff. Pure, and `rng` is injectable, so "these instances differ"
+ * is asserted by value rather than by looking at the canvas.
+ *
+ * Every roll here is ours. See the trap in the MUZZLE_SMOKE block: Sequencer's own randomisers fire
+ * once per section, so anything asked of THEM would come back identical on every instance.
+ */
+export function smokePuffPlan(index, { files = [], sizeSquares = 0.5, gridPx = 100, from = null, to = null, origin = null, rng = Math.random } = {}) {
+  const variant = files.length ? files[index % files.length] : MUZZLE_SMOKE.key;
+  const spread = MUZZLE_SMOKE.scaleMax - MUZZLE_SMOKE.scaleMin;
+  const rateSpread = MUZZLE_SMOKE.rateMax - MUZZLE_SMOKE.rateMin;
+  const plan = {
+    file: variant,
+    mirrorY: rng() < 0.5,
+    rotationDeg: Number(((rng() * 2 - 1) * MUZZLE_SMOKE.rotationDeg).toFixed(2)),
+    sizeSquares: Number((sizeSquares * (MUZZLE_SMOKE.scaleMin + rng() * spread)).toFixed(4)),
+    playbackRate: Number((MUZZLE_SMOKE.rateMin + rng() * rateSpread).toFixed(3)),
+    startTimeMs: Math.round(rng() * MUZZLE_SMOKE.startPhaseMax * MUZZLE_SMOKE.clipMs),
+    aimDeg: 0,
+    offset: { x: Number(((rng() * 2 - 1) * MUZZLE_SMOKE.jitterSquares * gridPx).toFixed(2)),
+              y: Number(((rng() * 2 - 1) * MUZZLE_SMOKE.jitterSquares * gridPx).toFixed(2)) },
+    driftTo: null,
+  };
+  // THE DRIFT — a slow roll that stays with the shooter, reported as "launching out of the gun like a
+  // projectile" before this was reworked.
+  //
+  // ⚠ THE DISTANCE WAS NEVER THE FAULT: the old reach was 0.27–0.63 squares, already inside the "a
+  // tile or two" the ruling asks for. What read as a launch was the DIRECTION — every puff slid along
+  // exactly the same bullet axis, so the group streamed down-range as one jet. The fix is a LATERAL
+  // component per instance (signed, so puffs go to both sides) on top of a smaller along-aim one: the
+  // mass now billows around the muzzle instead of queueing down the firing line.
+  //
+  // Displacement is then CAPPED against the SHOOTER, not the muzzle, so the ruling's bound is the one
+  // actually enforced — the muzzle point is itself half a token out along the aim, and a cap measured
+  // from there would quietly allow more.
+  //
+  // SPEED: no duration or speed is set, so the engine moves the puff over the clip's own remaining
+  // life — roughly a square across a second, against a tracer's 4000px/s. The easing is left
+  // ease-out so most of the travel is early and it settles, which is the "roll" rather than a slide.
+  if (from && to) {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ax = dx / len, ay = dy / len;                 // along the aim
+    const px = -ay, py = ax;                            // across it
+    const along = MUZZLE_SMOKE.driftAlongSquares * gridPx * (0.5 + rng() * 0.7);
+    const lateral = MUZZLE_SMOKE.driftLateralSquares * gridPx * (rng() * 2 - 1);
+    let x = from.x + plan.offset.x + ax * along + px * lateral;
+    let y = from.y + plan.offset.y + ay * along + py * lateral;
+    const anchor = origin ?? from;
+    const cap = MUZZLE_SMOKE.driftMaxSquares * gridPx;
+    const outX = x - anchor.x, outY = y - anchor.y;
+    const out = Math.hypot(outX, outY);
+    if (out > cap) { x = anchor.x + (outX / out) * cap; y = anchor.y + (outY / out) * cap; }
+    plan.aimDeg = Number((Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2));
+    plan.driftTo = { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
+    plan.driftFromOriginSquares = Number((Math.hypot(x - anchor.x, y - anchor.y) / gridPx).toFixed(3));
+    plan.lateralSquares = Number((lateral / gridPx).toFixed(3));
+  }
+  return plan;
 }
 
 // Capture seam, the same shape as _setFlashLevels above and for the same reason: a pellet crosses in
@@ -1325,8 +1647,8 @@ function _held(effect) {
  *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE } = {}) {
-  const out = { light: false, muzzle: false, spark: false, tracer: false, pellets: 0, impact: false };
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null } = {}) {
+  const out = { light: false, muzzle: false, spark: false, column: false, tracer: false, pellets: 0, impact: false, tagged: 0 };
   const entry = FX_CLASSES[weaponClass];
   if (!entry) return out;
   const from = centerOf(shooterToken);
@@ -1355,14 +1677,28 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       // rotateTowards accounts for the asset's own baked orientation (measured on
       // jb2a.muzzle_flash.single.01.yellow: it lands along the shooter→aim line with NO additional
       // sprite-rotation offset, so none is applied; the keeper pins that by value).
-      if (to && fxDbEntryExists(entry.muzzle)) {
+      // A row may name NO lance at all (the shell, FR#22) — its discharge is read from the column's
+      // own bloom instead. The key is checked before the tier lookup so an absent row is a plain
+      // "this class draws no lance", not a database miss.
+      if (to && entry.muzzle && fxDbEntryExists(entry.muzzle)) {
         // Sized in GRID UNITS (a spec, not a scale factor — see MUZZLE_SPRITE), planted at the
         // token's forward edge, and cut short of the clip's smoke-and-fire phase.
-        _held(seq.effect().file(entry.muzzle)).atLocation(muzzle)
+        const lance = _held(seq.effect().file(entry.muzzle)).atLocation(muzzle)
           .size({ width: entry.muzzleSquares }, { gridUnits: true })
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
           .timeRange(0, MUZZLE_SPRITE.endMs)
           .rotateTowards(to);
+        // The class's own DWELL, applied as a rate over the SAME trimmed range (see the dwell block):
+        // a single discharge's lance is otherwise over before the eye settles, where an automatic's
+        // restarts often enough to read as sustained.
+        //
+        // ⚠ THE CAPTURE SEAM STILL WINS. _held has already applied it if one is armed, and a class rate
+        // set afterwards would silently defeat it — the same "apply the seam FIRST in the chain" trap
+        // the trim hit once before. So this is applied only when no capture rate is holding the sprite.
+        if (_spriteRateOverride === null) {
+          const rate = muzzleRateFor(weaponClass);
+          if (rate !== 1) lance.playbackRate(rate);
+        }
         out.muzzle = true;
       }
       // The spiky companion. Radial, so it takes no aim of its own; it is planted on the same muzzle
@@ -1372,6 +1708,34 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
           .size({ width: MUZZLE_SPARK.squares }, { gridUnits: true })
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
         out.spark = true;
+      }
+      // THE DISCHARGE COLUMN (FR#22, user ruling) — one stretched bolt from the muzzle to the aim
+      // point, drawn UNDER the pellet fan, for a class whose row names a `column` asset.
+      //
+      // WHAT IT IS FOR, and why it is a second tracer rather than a new sprite: decoding the assets
+      // showed `bullet.02` carries three things baked into ITS OWN clip that `bullet.01` does not — a
+      // SPIKY BLOOM at its origin, gray smoke curls that hang at that origin for most of the clip, and
+      // a spiky impact star. The shell fires `bullet.01` pellets, so it had none of them. Laying one
+      // stretched `bullet.02` down the shot plants that bloom at the barrel — which is the "spiky
+      // piece" the user has been asking after, and it turns out to live in the asset rather than in our
+      // lance — and brings the asset's own smoke to the discharge with it.
+      //
+      // ORDER IS LOAD-BEARING: queued BEFORE the pellets, deliberately. Both sit at the same elevation
+      // above lighting, so the engine draws them in the order they were added — the column goes down
+      // first and the dashes read on top of it, which is the ruled composition ("under the fan").
+      //
+      // NOT tagged for the settle signal even though it is a terminal-ish element: the tail arithmetic
+      // accounts for it by value instead (presentationTailMs takes a column term), so the window's wait
+      // does not depend on which of two overlapping clips the engine happens to report last.
+      if (to && entry.column && fxDbEntryExists(entry.column)) {
+        const column = _held(seq.effect().file(entry.column)).atLocation(shooterToken)
+          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
+          .stretchTo(hit ? to : missEndpoint(from, to));
+        // The same ColorMatrix the other bullet.02 rows carry. The shell's PELLETS still take none —
+        // that was ruled separately and stands — so the field is per-element here rather than reused
+        // from `tracerColor`, and dropping the shift is deleting one row field.
+        if (entry.columnColor) column.filter("ColorMatrix", entry.columnColor);
+        out.column = true;
       }
       if (to && fxDbEntryExists(entry.tracer)) {
         // A class carrying a pellet count draws its round as a FAN of tracers instead of one bolt;
@@ -1394,9 +1758,20 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // time. Passing only a width leaves the height on the asset's own aspect, so the dash stays
         // proportioned rather than squashed. Rotation is set once, explicitly, and the movement is told
         // not to rotate again, so there is a single source of the sprite's heading.
+        // ONE muzzle velocity for every pellet of the round, in pixels per second, derived from the
+        // class's crossing time AT THE AIM DISTANCE. See DASH_ARRIVAL_HOLD_MS for why the travel is
+        // driven by a speed rather than by the effect's lifetime; `dashMs` still means exactly what the
+        // table says it means — how long a pellet takes to cross to what was aimed at. A pellet sent
+        // somewhere else (the miss splay reaches short or wide) then takes proportionally more or less
+        // time to get there, which is what one muzzle velocity and different distances would do.
+        const dashMs = _dashMsOverride ?? entry.dashMs;
+        const aimDist = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+        const pelletSpeed = (aimDist / Math.max(1, dashMs)) * 1000;
         for (const end of ends) {
           const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken)
             .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
+          // TERMINAL ELEMENT — named so the engine's own end can be observed (see _watchSettleTag).
+          if (settleTag) { shot.name(settleTag); out.tagged++; }
           // The colour shift, where the class asks for one. A ColorMatrix and not a tint — see
           // TRACER_COLOR for the measurement that rules the tint out.
           if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor);
@@ -1404,7 +1779,9 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
             shot.size({ width: entry.dashSquares }, { gridUnits: true })
               .rotateTowards(end)
               .moveTowards(end, { ease: "linear", rotate: false })
-              .duration(_dashMsOverride ?? entry.dashMs);
+              .moveSpeed(pelletSpeed)
+              .duration(dashMs + DASH_ARRIVAL_HOLD_MS)
+              .fadeOut(DASH_ARRIVAL_HOLD_MS);
           } else {
             shot.stretchTo(end);
           }
@@ -1420,6 +1797,8 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         const impact = _held(seq.effect().file(HIT_CONFIRM.key)).atLocation(to)
           .size({ width: entry.impactSquares }, { gridUnits: true })
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
+        // TERMINAL ELEMENT — on a landing round this is normally the last thing to leave the screen.
+        if (settleTag) { impact.name(settleTag); out.tagged++; }
         const travel = HIT_CONFIRM.delayFollowsTracer && entry.dashSquares > 0
           ? (_dashMsOverride ?? entry.dashMs) : 0;
         if (travel > 0) impact.delay(travel);
@@ -1431,6 +1810,75 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
     }
   }
   return out;
+}
+
+/**
+ * ONE smoke puff, emitted mid-burst and fully self-randomised — the unit the rolling mass is made of.
+ *
+ * Built as its OWN Sequence with its OWN single section, which is the load-bearing part: Sequencer
+ * rolls its randomisers once per section, so any attempt to get variation out of one section with
+ * repeats produces identical copies (see MUZZLE_SMOKE). Every varying property below is rolled here,
+ * per call, and handed to the builder as a fixed value.
+ *
+ * Returns the plan it used so the fan-out and the keeper can read what was actually asked for.
+ * NOT awaited by its caller — the puff must not hold up the round that spawned it.
+ */
+export async function fxSmokePuff(shooterToken, targetToken, { weaponClass, index = 0, rng = Math.random } = {}) {
+  const entry = FX_CLASSES[weaponClass];
+  if (!entry || !(entry.smokeSquares > 0) || !sequencerActive() || !shooterToken) return null;
+  if (!fxDbEntryExists(MUZZLE_SMOKE.key)) return null;
+  const gridPx = Number(canvas?.dimensions?.size) || 100;
+  const from = centerOf(shooterToken);
+  const to = aimPointOf(shooterToken, targetToken, gridPx);
+  if (!from || !to) return null;
+  // Born at the BARREL, not at the sprite's forward edge — see MUZZLE_SMOKE.originFraction.
+  const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SMOKE.originFraction);
+
+  // The five variants live under ONE key, so the cycle indexes the FILE LIST. If the database will not
+  // hand it over, the key itself still plays — the engine picks a file and the puff simply loses its
+  // deterministic cycling, not its existence.
+  let files = [];
+  try { files = (globalThis.Sequencer?.Database?.getAllFileEntries?.(MUZZLE_SMOKE.key) ?? []).flat().filter((f) => typeof f === "string"); }
+  catch (_e) { files = []; }
+
+  const plan = smokePuffPlan(index, { files, sizeSquares: entry.smokeSquares, gridPx, from: muzzle, to, origin: from, rng });
+  try {
+    const seq = new globalThis.Sequence();
+    // ⚠⚠ NO `rotateTowards` HERE, AND THAT IS THE WHOLE FIX FOR "it seems to be launching out of the
+    // gun like a projectile". Read off the engine: `_moveTowards()` moves the effect to
+    // `this.targetPosition`, which is `data.target` — and `rotateTowards(aim)` is what SETS data.target.
+    // So a puff built with both was never drifting to the point this planner computed at all; it was
+    // flying to the aimed-at token, at whatever speed its own lifetime implied. The drift cap below was
+    // never consulted. Measured before this fix: puffs sat 6-9 squares from the shooter on a 9-square
+    // shot line — i.e. arriving with the rounds.
+    //
+    // The heading is set directly instead, which is what was actually wanted: the side-puff asset is
+    // pointed along the aim plus this instance's own jitter, and `moveTowards` is left as the only
+    // thing that owns a destination.
+    const puff = seq.effect().file(plan.file)
+      .atLocation({ x: muzzle.x + plan.offset.x, y: muzzle.y + plan.offset.y })
+      .size({ width: plan.sizeSquares }, { gridUnits: true })
+      .spriteRotation(plan.aimDeg + plan.rotationDeg)
+      .mirrorY(plan.mirrorY)
+      .opacity(MUZZLE_SMOKE.opacity)
+      .scaleIn(MUZZLE_SMOKE.scaleInFrom, MUZZLE_SMOKE.scaleInMs, { ease: "easeOutQuad" })
+      .fadeOut(MUZZLE_SMOKE.fadeOutMs)
+      // The PHASE. Starting each instance at a different point of its own clip is what makes the mass
+      // advance in pieces instead of in lockstep, and it is half of the "different parts advance on
+      // different frames" the ruling describes; the per-instance rate is the other half, because it
+      // makes their frames land on different render ticks.
+      .startTime(plan.startTimeMs);
+    // The capture seam still wins where it is armed, so a capture run holds every puff at one rate.
+    puff.playbackRate(_spriteRateOverride ?? plan.playbackRate);
+    // Deliberately NOT tagged for the completion signal: the smoke is dressing and the apply window
+    // does not wait for it (see presentationTailMs). There is no settleTag parameter here at all.
+    if (plan.driftTo) puff.moveTowards(plan.driftTo, { ease: "easeOutQuad", rotate: false });
+    seq.play().catch((err) => console.warn(`${SCOPE} | smoke puff play failed`, err));
+    return plan;
+  } catch (err) {
+    console.warn(`${SCOPE} | smoke puff failed`, err);
+    return null;
+  }
 }
 
 /**
@@ -1448,7 +1896,7 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
  * Returns what it queued, so the keeper asserts the gate by value rather than by watching the canvas.
  */
 export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, shots = 0, cadenceMs = SHOT_CADENCE_MS } = {}) {
-  const out = { motes: 0, smoke: false };
+  const out = { motes: 0 };
   const entry = FX_CLASSES[weaponClass];
   if (!entry || !sequencerActive() || !shooterToken) return out;
   const from = centerOf(shooterToken);
@@ -1481,22 +1929,17 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
       }
       out.motes = ends.length;
     }
-    if (entry.smokeSquares > 0 && fxDbEntryExists(MUZZLE_SMOKE.key)) {
-      _held(seq.effect().file(MUZZLE_SMOKE.key)).atLocation(muzzle)
-        .size({ width: entry.smokeSquares }, { gridUnits: true })
-        .rotateTowards(to)
-        .opacity(MUZZLE_SMOKE.opacity)
-        .duration(burstSmokeMs(shots, cadenceMs))
-        .fadeOut(MUZZLE_SMOKE.fadeOutMs);
-      out.smoke = true;
-    }
+    // NO SMOKE HERE ANY MORE. The wisp used to be queued alongside the specks, once for the whole
+    // burst; smoke is now a stream of overlapping puffs emitted ACROSS the burst (fxSmokePuff, called
+    // from the fan-out at the class's stride). The embers are unchanged and stay per burst — they are
+    // a single spray thrown once, which is what they always were.
     // NOT awaited, deliberately. The engine's play promise settles somewhere inside the effect's own
     // lifetime, and the wisp is asked to live for the whole burst — so awaiting it here would hold the
     // first round back by up to the wisp's entire duration and the burst would start seconds after the
     // trigger. Measured on this rig before the change: the fan-out's per-round cost went from tens of
     // milliseconds to hundreds, all of it this one await. Queuing is synchronous, so the counts below
     // are already final when this returns.
-    if (out.motes || out.smoke) seq.play().catch((err) => console.warn(`${SCOPE} | burst ambience play failed`, err));
+    if (out.motes) seq.play().catch((err) => console.warn(`${SCOPE} | burst ambience play failed`, err));
   } catch (err) {
     console.warn(`${SCOPE} | burst ambience failed`, err);
   }
@@ -1580,6 +2023,15 @@ export function faceTargetTurn(shooterToken, aimPoint) {
   if (!faceTargetOnFireEnabled() || !shooterToken || !aimPoint) return null;
   const doc = shooterToken?.document ?? shooterToken;
   if (doc?.isOwner === false) return null;
+  // CORE'S OWN "Lock Rotation" flag, honored as the per-token opt-out. When it is set, core draws the
+  // token mesh upright no matter what the rotation FIELD says — the table has told us this token has a
+  // fixed facing (portrait art, usually). Turning it would then write a rotation nobody can see AND
+  // make the fan-out wait out a sweep with nothing on screen: a dead pause. Checked HERE rather than at
+  // the write because this one helper is what both callers read — the fan-out that performs the turn
+  // and the arithmetic that budgets for it — so a single check removes the write and the lead-in
+  // together. Two independent opt-outs, deliberately: this is per token, faceTargetOnFireEnabled() is
+  // the table-wide switch, and either alone is enough to mean "no turn".
+  if (doc?.lockRotation === true) return null;
   const from = centerOf(shooterToken);
   const to = faceTargetRotation(from, aimPoint);
   if (to === null) return null;
@@ -1616,16 +2068,38 @@ export async function faceTarget(shooterToken, aimPoint) {
  * is not finished being looked at until the slowest of them is:
  *   - the muzzle LIGHT envelope (muzzleEnvelopeDurationMs — five frames, 85ms at the reference rate)
  *   - the muzzle SPRITE, trimmed to its opening lance (MUZZLE_SPRITE.endMs, 110ms)
- *   - the SPARK, which is untrimmed and is the longest of them (MUZZLE_SPARK.clipMs, 267ms measured)
- *   - a travelled tracer's crossing time, for a class that draws one (`dashMs`) — 150ms on the shell
- *     class, i.e. shorter than the spark, but it is read from the row rather than assumed so a class
- *     given a slower dash later is covered without another edit here.
- * A painted (stretched) tracer contributes no travel time — it is drawn along the whole line at once.
+ *   - the SPARK, untrimmed (MUZZLE_SPARK.clipMs, 267ms measured) — but ONLY for a class whose row asks
+ *     for it, and as of the 2026-08-08 ruling no shipped class does. Counted per class because a
+ *     treatment that is not drawn is not being looked at; the moment a row carries `spark` again that
+ *     class's tail grows to cover it with no further edit here.
+ *   - the TRACER's end: a travelled one is its crossing time plus its arrival hold (dashMs +
+ *     DASH_ARRIVAL_HOLD_MS); a painted one is its own clip (TRACER_CLIP_MS).
+ *   - the HIT CONFIRMATION's end, for a class that draws one: it is held back by a travelled tracer's
+ *     crossing time and then runs its own clip, so `dashMs + HIT_CONFIRM.clipMs`. On a landing round
+ *     this is normally the largest of them and therefore what the whole span resolves to.
+ *
+ * ⚠ WHAT IS DELIBERATELY NOT IN HERE — user ruling, 2026-08-08: the burst SMOKE and the ember MOTES.
+ * They are scene dressing that lingers on purpose (the wisp is asked to live for the whole burst and
+ * fade after it), so waiting for them would mean waiting seconds past the point a viewer would say the
+ * action was over. "Finished" is the last round's impact/tracer ending, and nothing else.
  */
 export function presentationTailMs(weaponClass) {
   const entry = FX_CLASSES[weaponClass];
   const travel = Number(entry?.dashMs) > 0 ? Number(entry.dashMs) : 0;
-  return Math.max(muzzleEnvelopeDurationMs(), MUZZLE_SPRITE.endMs, MUZZLE_SPARK.clipMs, travel);
+  const spark = entry?.spark ? MUZZLE_SPARK.clipMs : 0;
+  const tracerEnd = travel > 0 ? travel + DASH_ARRIVAL_HOLD_MS : TRACER_CLIP_MS;
+  const impactEnd = Number(entry?.impactSquares) > 0 ? travel + HIT_CONFIRM.clipMs : 0;
+  // The lance term is the class's DWELL, not the trim: a row that stretches its lance must be covered
+  // by the tail it belongs to. (Every shipped dwell is far under the travelled/impact terms, so this
+  // reads the same as before for all five rows — it is written this way so a longer dwell later cannot
+  // quietly outlive the signal.)
+  //
+  // THE COLUMN TERM (FR#22): a class drawing a discharge column lays down a full painted bolt, which
+  // runs its own clip from the instant the round goes out — so the window has to wait for whichever of
+  // the two chains ends LAST, not for the one that happens to be named. Counted by value here rather
+  // than tagged, so the arithmetic stays readable and does not depend on engine reporting order.
+  const columnEnd = entry?.column ? TRACER_CLIP_MS : 0;
+  return Math.max(muzzleEnvelopeDurationMs(), muzzleDwellMs(weaponClass), spark, tracerEnd, impactEnd, columnEnd);
 }
 
 /**
@@ -1660,6 +2134,10 @@ export function payloadPresentationMs(payload) {
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weaponClass = weaponFxClass(resolveFiredWeapon(payload, actor));
   if (!weaponClass) return 0;
+  // A ruled fumble draws nothing (see the bail in fxWeaponFired), so there is no presentation to wait
+  // out. Kept in step with the fan-out deliberately: the two are read by the same callers, and a span
+  // reported for a shot that is never drawn would park a window for a second over an empty canvas.
+  if (payload?.fumbleRuled) return 0;
   // The LEAD-IN. When the shooter turns first, the rounds do not start until the turn finishes, so
   // the span a caller waits out has to include it — otherwise the apply window would open a turn's
   // worth of time early, which is the whole thing the wait exists to prevent. Read from the same
@@ -1670,6 +2148,166 @@ export function payloadPresentationMs(payload) {
   const gridPx = Number(canvas?.dimensions?.size) || 100;
   const leadIn = shooter ? (faceTargetTurn(shooter, aimPointOf(shooter, target, gridPx))?.durationMs ?? 0) : 0;
   return leadIn + presentationMs(shotCountOf(payload), weaponClass);
+}
+
+/* ══════════════════════════ The completion signal ══════════════════════════ */
+
+/**
+ * Payloads whose fan-out is in flight, each holding the promise that resolves when THAT payload's
+ * action has finished. Keyed by the payload object itself — the same object reaches every listener of
+ * one emission, so identity is the join between the rail and whoever is waiting on it, with no id to
+ * invent and nothing to collide.
+ *
+ * WHY A SIGNAL RATHER THAN MORE ARITHMETIC. The rail is the thing that queues the durations, so it is
+ * the only honest source for "is it over". A caller reproducing the sum has to be re-derived every
+ * time a cadence, a hold or a clip is tuned, and it silently drifts when it is not. The arithmetic
+ * survives only as the fallback for the cases where there IS no fan-out to ask.
+ */
+const _settlements = new Map();
+
+/**
+ * Terminal-element watches, keyed by the name stamped on the last round's tracer and impact.
+ *
+ * ⚠ WHY THE ENGINE IS ASKED RATHER THAN THE CLOCK. The first build of this signal resolved on the
+ * SCHEDULED tail — the sum of the durations the rail asked for. The engine does not honour those
+ * exactly: it keeps an effect alive past its nominal time (the same class of finding as the trimmed
+ * lance that measured 861ms against a 110ms trim). Measured on this rig, last observed effect end
+ * against the scheduled tail: RIFLE 1022ms vs 933ms (+89ms), SHELL 1045ms vs 983ms (+62ms). That
+ * overhang is small but it is exactly the remainder the report was about — the window opening while
+ * the impact's last frames are still on screen. So the terminal elements are NAMED when they are
+ * queued and the engine's own `endedSequencerEffect` is what resolves the wait.
+ *
+ * The scheduled tail is kept as the FLOOR (never resolve early if an effect fails to spawn and ends
+ * at once) and as the fallback when nothing was created at all — an engine that is absent, or an asset
+ * the installed tier does not carry. PRESENTATION_CAP_MS still races the whole thing.
+ */
+const _tagWatches = new Map();
+
+/** Settle a tag's watch if its terminal elements have all ended and no new ones are still arriving. */
+function _maybeSettleTag(tag) {
+  const w = _tagWatches.get(tag);
+  if (!w || w.done || w.created === 0 || w.ended < w.created) return;
+  // A short confirm window: the round's effects are queued together but they do not all spawn in the
+  // same tick (a delayed impact spawns after its tracer), so "all ended" is only final once nothing
+  // new has appeared for a beat.
+  clearTimeout(w.confirm);
+  w.confirm = setTimeout(() => {
+    if (w.done || w.ended < w.created) return;
+    _finishTag(tag, "engine");
+  }, SETTLE_CONFIRM_MS);
+}
+
+/** Resolve a tag's watch, never before the scheduled floor, and drop it. */
+function _finishTag(tag, via) {
+  const w = _tagWatches.get(tag);
+  if (!w || w.done) return;
+  // The rule: open at max(scheduled floor, engine end − lead). Measured from when the engine actually
+  // reported the last element gone, NOT from now — by the time this runs the confirm window has
+  // already been spent, and the lead is what gives that back.
+  const engineElapsed = (w.lastEndAt ?? Date.now()) - w.startedAt;
+  const openAt = via === "engine" ? settleOpenAtMs(w.scheduledMs, engineElapsed) : w.scheduledMs;
+  const wait = Math.max(0, openAt - (Date.now() - w.startedAt));
+  const finish = () => {
+    if (w.done) return;
+    w.done = true;
+    clearTimeout(w.confirm); clearTimeout(w.floor);
+    _tagWatches.delete(tag);
+    w.settle({ via, ms: Math.max(openAt, Date.now() - w.startedAt),
+               scheduledMs: w.scheduledMs, engineMs: engineElapsed, openAt,
+               created: w.created, ended: w.ended });
+  };
+  if (wait > 0) w.floor = setTimeout(finish, wait);
+  else finish();
+}
+
+/** How long "all ended" has to hold before it is believed, in milliseconds. */
+export const SETTLE_CONFIRM_MS = 60;
+
+/**
+ * How far AHEAD of the engine's report the apply window is allowed to open, in milliseconds.
+ *
+ * Reported as "slightly sluggish": waiting for the engine to say the last element is gone is correct
+ * in principle but lands a hair after the moment a viewer has already called it over — the final
+ * frames of an impact are nearly transparent, so the eye finishes before the engine does. This is the
+ * knob that trims that.
+ *
+ * ⚠ WHAT IT CAN AND CANNOT DO, stated plainly because the arithmetic is not obvious. The rule is
+ * `open at max(scheduled_end, engine_end − lead)`, and it is evaluated WHEN THE ENGINE REPORTS —
+ * nothing can know the engine's end before it happens. So the lead cannot rewind past that moment; it
+ * spends itself on the wait we were still ABOUT to add (the confirm window, and any remainder of the
+ * scheduled floor). Measured against the previous build that is roughly the confirm window's worth.
+ * The floor is deliberately still the floor: the lead may never drag the open before the scheduled
+ * end, which is the guard that stopped the window opening early when the engine is slow to report.
+ */
+export const APPLY_LEAD_MS = 150;
+
+/**
+ * When the apply window may open, in ms from the fan-out's own start. Pure, so both halves of the rule
+ * — the lead and the floor that overrides it — are asserted by value rather than by watching a window.
+ */
+export function settleOpenAtMs(scheduledMs, engineElapsedMs) {
+  return Math.max(Number(scheduledMs) || 0, (Number(engineElapsedMs) || 0) - APPLY_LEAD_MS);
+}
+
+/** Begin watching a round's named terminal elements. */
+function _watchSettleTag(tag, scheduledMs, settle) {
+  const w = { created: 0, ended: 0, done: false, startedAt: Date.now(), scheduledMs, settle, confirm: null, floor: null };
+  _tagWatches.set(tag, w);
+  // Nothing named ever appeared by the time the schedule says it should be over → there was nothing to
+  // observe (no engine, or no asset), so the arithmetic stands in.
+  setTimeout(() => {
+    if (!w.done && w.created === 0) _finishTag(tag, "scheduled");
+  }, scheduledMs);
+}
+
+/** Arm the signal for a payload about to be fanned out. Returns the resolver the fan-out will call. */
+function _armSettlement(payload) {
+  if (!payload || typeof payload !== "object") return () => {};
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  const entry = { promise, resolve, done: false };
+  _settlements.set(payload, entry);
+  return (info) => {
+    if (entry.done) return;
+    entry.done = true;
+    entry.resolve(info);
+    // Dropped once settled: the map holds only what is in flight, so nothing accumulates across a
+    // session however many rounds are fired.
+    _settlements.delete(payload);
+  };
+}
+
+/**
+ * Resolves when THIS payload's action has finished on screen — the last round's impact/tracer ending,
+ * per the 2026-08-08 ruling (burst smoke and ember motes excluded; they are dressing and they linger).
+ *
+ * Reports HOW it resolved, so a caller and the keeper can tell the three routes apart rather than
+ * inferring them from timing:
+ *   "signal"     — the fan-out reported its own completion. The normal path.
+ *   "arithmetic" — no fan-out registered for this payload, so the pure span stands in. That is the
+ *                  rail being switched off, a weapon with no mapped class, or an emission nothing drew.
+ *   "cap"        — the signal did not arrive inside PRESENTATION_CAP_MS and the wait was cut short.
+ *
+ * ⚠ LISTENER ORDER IS NOT ASSUMED. The fx fan-out and the damage handler are independent listeners on
+ * the same hook and nothing sequences them, so a caller can reach this before the rail has armed
+ * anything. Rather than depend on registration order, this yields a few microtasks first and only then
+ * decides it is on the arithmetic path — the fan-out arms synchronously as its first act, so a turn of
+ * the microtask queue is enough for a rail that is going to run at all.
+ */
+export async function presentationSettled(payload) {
+  for (let i = 0; i < 8 && !_settlements.has(payload); i++) await Promise.resolve();
+  const entry = _settlements.get(payload);
+  if (!entry) return { via: "arithmetic", ms: payloadPresentationMs(payload) };
+  let capped;
+  const cap = new Promise((r) => { capped = setTimeout(() => r({ via: "cap", ms: PRESENTATION_CAP_MS }), PRESENTATION_CAP_MS); });
+  const outcome = await Promise.race([entry.promise, cap]);
+  clearTimeout(capped);
+  return outcome;
+}
+
+/** How many payloads are in flight right now. Read by the keeper; also the leak check. */
+export function settlementsInFlight() {
+  return _settlements.size;
 }
 
 /**
@@ -1685,12 +2323,44 @@ export function payloadPresentationMs(payload) {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smoke: false, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
   const weaponClass = weaponFxClass(weapon);
   if (!weaponClass) return { ...result, skipped: "class" };
+
+  // A RULED FUMBLE DRAWS NOTHING. Reported from the table: a fumbled shotgun still threw a full muzzle
+  // blast down-range — "if the shotgun didn't fire, it shouldn't blast visibly."
+  //
+  // WHY THE ROUND COUNT COULD NOT CATCH IT (measured on the rig, not assumed): the base computes
+  // `roundsFired` BEFORE it consults the fumble ruling, so the card reports `fired: 1` on a fumble
+  // whatever the outcome was, and shotCountOf reads exactly that. Every fumble the table rules on also
+  // sets `forceMiss`, so the card comes through as one round fired, zero hits — which is indistinguishable
+  // from an ordinary miss by count alone. Hence the seam forwards the base's own ruling as its own
+  // field, and this is the one thing that can tell them apart. See the note at the emit in seam-shim.js
+  // for why the plain natural-1 field is NOT the right gate: with the fumble table switched off a
+  // natural 1 is an ordinary bad roll and the weapon really did fire.
+  //
+  // EVERYTHING goes with it, not just the sprite: the flash, the muzzle sprite, the tracers/pellets,
+  // the impacts, the burst ambience AND the report — the shot's audio is played from inside the loop
+  // below, so returning here is what silences it too. (The audio was NOT separately broken: the
+  // reproduction played shot-shotgun.ogg for the fumbled shot like any other. Nothing is left as a
+  // stand-in — a misfire click would need a sound this library does not carry, recorded as an earmark.)
+  //
+  // Placed with the other two bail-outs, ahead of _armSettlement, for the reason stated there: a
+  // payload this rail will not draw must fall to the arithmetic rather than leave a caller waiting on
+  // a promise nobody will resolve.
+  if (payload?.fumbleRuled) return { ...result, weaponClass, skipped: "fumble" };
+
+  // ARM THE COMPLETION SIGNAL, and do it here — after the two bail-outs above and before the first
+  // await. After, because a payload this rail is not going to draw must fall to the arithmetic rather
+  // than wait on a promise nobody will resolve; before, because a caller listening to the same hook
+  // may reach presentationSettled() in the same turn and must find the arming already done.
+  const settle = _armSettlement(payload);
+  // The name stamped on the last round's terminal elements, unique per fan-out so two shots in flight
+  // never observe each other's endings.
+  const settleTag = `${SCOPE}.settle.${foundry.utils.randomID()}`;
 
   const shots = shotCountOf(payload);
   const hits = Math.min(hitCountOf(payload), shots);
@@ -1723,13 +2393,19 @@ export async function fxWeaponFired(payload) {
 
   // The multi-round-only treatments, queued once for the whole burst before the first round leaves.
   // A single shot never reaches this line, which is the whole gate (see fxBurstAmbience).
-  let ambience = { motes: 0, smoke: false };
+  let ambience = { motes: 0 };
   if (burst && shooter) {
     ambience = await fxBurstAmbience(shooter, target, { weaponClass, shots, cadenceMs })
-      .catch((err) => { console.warn(`${SCOPE} | burst ambience failed`, err); return { motes: 0, smoke: false }; });
+      .catch((err) => { console.warn(`${SCOPE} | burst ambience failed`, err); return { motes: 0 }; });
   }
 
   let flashes = 0;
+  let smokePuffs = 0;
+  // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
+  // puffs are drawn ONLY for a single discharge of a class whose row opts in — today just the shell.
+  // A burst gets its smoke from the tracer asset's own curls instead (see the retirement note on
+  // smokePlanFor), so drawing ours over it was doubling a smoke that was already there.
+  const smokes = !burst && smokesOnSingleShot(weaponClass);
   for (let i = 0; i < shots; i++) {
     if (i > 0) await _sleep(cadenceMs);
     sfx(weaponClass, { burst });
@@ -1738,14 +2414,34 @@ export async function fxWeaponFired(payload) {
     // burst announces its own flash — the per-token cap that keeps that bounded lives in the local
     // runner (one source set per token, each round restarting the envelope), not here, so a round is
     // never silently dropped on the way out.
+    // THE SINGLE DISCHARGE'S PUFF. What is left of the smoke system after FR#22: one puff, for one
+    // round, on a class that asks for it. Not awaited — it must never delay its own round.
+    if (shooter && smokes) {
+      // Counted on EMISSION, not on the promise: this is async and fire-and-forget, so its return is a
+      // promise and would always look truthy. The count is what the stride asked for, which is the
+      // number the arithmetic (smokePlanFor) predicts and the keeper asserts against.
+      fxSmokePuff(shooter, target, { weaponClass, index: smokePuffs })
+        .catch((err) => console.warn(`${SCOPE} | smoke puff failed`, err));
+      smokePuffs++;
+    }
     if (shooter) {
       flashes++;
-      fxShot(shooter, target, { weaponClass, hit: i < hits })
+      // Only the LAST round is tagged: the ruling is that the action is over when the last round's
+      // impact/tracer ends, and those are the latest-ending elements on screen by construction.
+      fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: i === shots - 1 ? settleTag : null })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
     }
   }
-  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smoke: ambience.smoke,
-    turnedDeg: turn ? turn.deltaDeg : null };
+  // The last round has left the muzzle; what remains on screen is its terminal elements. The watch is
+  // started from HERE rather than computed from the start, so the cadence gaps and the face-target
+  // sweep are already spent and cannot be double-counted — whatever the loop actually cost, real time
+  // has passed and only the tail is left. What ENDS the wait is the engine reporting those elements
+  // gone; the scheduled tail is only the floor and the no-engine fallback.
+  const settleTailMs = presentationTailMs(weaponClass);
+  _watchSettleTag(settleTag, settleTailMs, settle);
+
+  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smokePuffs,
+    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
@@ -1772,6 +2468,23 @@ export function registerCombatFx() {
     } catch (err) {
       console.warn(`${SCOPE} | muzzle flash relay failed`, err);
     }
+  });
+  // THE ENGINE'S OWN REPORT that a drawn element has appeared and gone. These are what resolve the
+  // completion signal: the rail names the last round's terminal elements when it queues them, and the
+  // engine tells us when each one actually leaves the screen — which runs past the scheduled tail by a
+  // measured margin (see _tagWatches). Registered once, and inert for any effect not carrying one of
+  // our names, so nothing else on the canvas is affected.
+  Hooks.on("createSequencerEffect", (effect) => {
+    const w = _tagWatches.get(effect?.data?.name);
+    if (w && !w.done) { w.created++; clearTimeout(w.confirm); }
+  });
+  Hooks.on("endedSequencerEffect", (effect) => {
+    const tag = effect?.data?.name;
+    const w = _tagWatches.get(tag);
+    if (!w || w.done) return;
+    w.ended++;
+    w.lastEndAt = Date.now();
+    _maybeSettleTag(tag);
   });
   // Nothing is persisted, so there is nothing to sweep up on load — but the sources this client is
   // drawing belong to the scene it is drawing them on, and its lighting collection is emptied under
