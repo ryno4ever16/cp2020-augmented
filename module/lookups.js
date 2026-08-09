@@ -277,6 +277,44 @@ export function spreadModeForAmmo({ spreadMode, caliber, modifier } = {}) {
   return SPREAD_MODE_BUCK;
 }
 
+/** Is the pattern mechanic switched on for this world? Defaults to ON when the setting is unreachable
+ *  (a module boot order that asks before registration must not silently orphan every shell). */
+export function shotgunPatternEnabled() {
+  try { return game.settings.get("cp2020-augmented", "shotgunSpreadEnabled") !== false; }
+  catch (e) { return true; }
+}
+
+/**
+ * WHICH FLOW OWNS A FIRED PAYLOAD — the ONE site every caller asks, and the only one that may.
+ *
+ * `spreadModeForAmmo` above answers what the ROUND is; this answers what the module will DO with it,
+ * which is the same question plus the world's own switch. Three callers ask it and they must never be
+ * able to answer differently: the single-target damage gate and the pattern damage gate in
+ * combat/damage-hooks.js (`_spreadModeOf`), and the presentation rail's `patternFlowOwns`
+ * (fx/effects.js), which decides whether the fan-out draws the burning ground or leaves it to the
+ * pattern's confirm.
+ *
+ * ⭐ WHY THE SETTING BELONGS HERE AND NOT AT THE PATTERN GATE ALONE. It used to be read only by
+ * `_hookSpread`, so with the pattern switched OFF a shell was claimed by NEITHER flow: the
+ * single-target gate stood down because the cartridge derived to `buck`, and the pattern hook stood
+ * down because the setting said no. No apply window opened, no pattern was thrown, and the shot simply
+ * did no damage. Folding the switch into the shared answer makes "off" mean what a reader expects —
+ * the module does not do patterns, so every shell takes the ordinary single-target route, exactly as
+ * the slug already does — and it keeps the either/or an identity rather than a coincidence. The
+ * presentation follows for free: with the pattern off, an incendiary shell's fires are drawn by the
+ * fan-out again, because the flow that would otherwise have placed them does not exist.
+ *
+ * @param {{spreadMode?: string, caliber?: string, modifier?: string}} payload
+ * @returns {string} "single" when the ordinary damage flow owns this shot, else the pattern's mode
+ */
+export function spreadFlowModeOf(payload) {
+  const derived = spreadModeForAmmo({
+    spreadMode: payload?.spreadMode, caliber: payload?.caliber, modifier: payload?.modifier,
+  });
+  if (derived === SPREAD_MODE_SINGLE) return SPREAD_MODE_SINGLE;
+  return shotgunPatternEnabled() ? derived : SPREAD_MODE_SINGLE;
+}
+
 /** True if `modifierId` can be loaded onto ammo of `caliberId`. Universal modifiers + unset calibers fit all. Pure-ish. */
 export function modifierAppliesToCaliber(modifierId, caliberId) {
   const mod = AMMO_MODIFIERS[modifierId];

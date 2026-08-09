@@ -115,6 +115,13 @@ const AMMO_EFFECT_FIELDS = [
   // which load fired, from the fingerprint its mechanics left behind — and two of the thirteen (ap and
   // dualPurpose) carry byte-identical mechanics, so they were indistinguishable at any distance. One
   // string closes that. It is presentation-only downstream: no damage path reads it.
+  //
+  // ⚠ IT MUST SIT BESIDE THE CARTRIDGE, NEVER INSTEAD OF IT. The spread unit added `caliber` here and
+  // took this line out with it, and nothing failed: `ammoFxKeyOf` falls back to a fingerprint of the
+  // mechanics when there is no id, so every load still resolved — except the one pair the id exists to
+  // settle, which silently collapsed (`dualPurpose` → `ap`). The two fields answer different questions
+  // and are both load-bearing.
+  "modifier",
   // ⭐ THE CARTRIDGE. The shotgun is an area weapon in the Core rules, so whether a shot throws a
   // pattern is a fact about the round in the chamber — not about a flag somebody set on an item.
   // spreadModeForAmmo (lookups.js) derives the mode from this at fire time, which is what lets an

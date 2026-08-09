@@ -25,7 +25,7 @@ import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settin
 // to decide whether the single-target damage flow claims a payload and once to decide whether the shot
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
 // does. Importing the derivation is what makes a third caller impossible to disagree with the first two.
-import { spreadModeForAmmo, SPREAD_MODE_SINGLE } from "../lookups.js";
+import { spreadFlowModeOf, SPREAD_MODE_SINGLE } from "../lookups.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -3058,22 +3058,22 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
 /**
  * IS THIS PAYLOAD THE SHOT PATTERN'S, RATHER THAN THE SINGLE-TARGET FLOW'S? Pure.
  *
- * The identical call damage-hooks.js makes at both of its own gates, and made here for the same reason
- * it is made there: the two flows never overlap, so an element that belongs to one must not be drawn
- * for the other. The question is asked of the CARTRIDGE (spreadModeForAmmo), never of a stored flag —
- * every shotgun ammo item ever seeded carries `spreadMode: "single"`, so reading the field would answer
- * "not a pattern" for every shell in every existing world.
+ * The identical call damage-hooks.js makes at both of its own gates — literally the same shared site
+ * (lookups.js `spreadFlowModeOf`) — and made here for the same reason it is made there: the two flows
+ * never overlap, so an element that belongs to one must not be drawn for the other. The question is
+ * asked of the CARTRIDGE, never of a stored flag: every shotgun ammo item ever seeded carries
+ * `spreadMode: "single"`, so reading the field would answer "not a pattern" for every shell in every
+ * existing world.
  *
- * ⚠ IT DELIBERATELY DOES NOT CONSULT THE PATTERN'S WORLD SETTING, because neither damage gate does: a
- * payload's flow is decided by what was in the gun. The consequence — with the pattern switched off a
- * shell is claimed by neither flow — is a gap in the DAMAGE routing that predates this element and is
- * recorded as an open item; the presentation follows the mechanics either way, which is the property
- * worth keeping.
+ * ⭐ THE PATTERN'S WORLD SWITCH IS PART OF THAT SHARED ANSWER, so this follows it without knowing it
+ * exists. With the pattern switched OFF no flow places one, the shell takes the ordinary single-target
+ * route, and the fan-out therefore draws an incendiary shell's burning ground itself — which is right,
+ * because the confirm that would otherwise have scattered those fires down the path never happens.
+ * ⏪ This reverses the earlier note here, which said the setting was deliberately not consulted because
+ * neither damage gate consulted it. Neither did — and that was the defect, not the design.
  */
 export function patternFlowOwns(payload) {
-  return spreadModeForAmmo({
-    spreadMode: payload?.spreadMode, caliber: payload?.caliber, modifier: payload?.modifier,
-  }) !== SPREAD_MODE_SINGLE;
+  return spreadFlowModeOf(payload) !== SPREAD_MODE_SINGLE;
 }
 
 /**

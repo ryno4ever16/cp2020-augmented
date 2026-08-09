@@ -39,7 +39,7 @@ import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegion
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
-import { spreadModeForAmmo, SPREAD_MODE_SINGLE } from "../lookups.js";
+import { spreadFlowModeOf, SPREAD_MODE_SINGLE } from "../lookups.js";
 import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
@@ -2100,9 +2100,12 @@ export const SPREAD_ZONE_TTL_MS = 60000;
 /** How often the out-of-combat sweep looks. Well under the TTL, cheap enough to ignore (one filter). */
 export const SPREAD_ZONE_SWEEP_MS = 15000;
 
-/** The derived spread mode for a fired payload — the ONE place the damage rail asks the question. */
+/** The flow that owns a fired payload — the ONE place the damage rail asks the question, and it asks
+ *  the same shared site (lookups.js `spreadFlowModeOf`) the presentation rail asks. That site folds the
+ *  world switch into the answer, which is what keeps "pattern off" meaning "shells take the ordinary
+ *  single-target route" rather than "shells are owned by nobody". */
 function _spreadModeOf(payload) {
-  return spreadModeForAmmo({ spreadMode: payload?.spreadMode, caliber: payload?.caliber, modifier: payload?.modifier });
+  return spreadFlowModeOf(payload);
 }
 
 /**
@@ -2118,10 +2121,12 @@ function _spreadModeOf(payload) {
  * pattern on its next shot — every shotgun ammo item ever seeded carries `spreadMode: "single"`.
  */
 function _hookSpread() {
-  const enabled = () => { try { return game.settings.get("cp2020-augmented", "shotgunSpreadEnabled"); } catch { return true; } };
-
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
-    if (!enabled()) return;
+    // ⚠ THE WORLD SWITCH IS NOT READ HERE. It is folded into the shared answer (lookups.js
+    // `spreadFlowModeOf`), so switching the pattern off resolves a shell to "single" for BOTH gates at
+    // once and the single-target flow picks it up. Reading the setting separately here is exactly the
+    // defect that fix removed: this hook stood down for the setting while the gate above stood down for
+    // the cartridge, and the payload fell between them — no window, no pattern, no damage.
     if (_spreadModeOf(payload) === SPREAD_MODE_SINGLE) return;
     // weaponFired fires only on the firing client; placing the pattern needs the GM. The active GM
     // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
