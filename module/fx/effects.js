@@ -52,6 +52,111 @@ export const SHOT_CADENCE_MS = 80;
 export const MAX_FX_SHOTS = 30;
 
 /**
+ * HOW FAR BEHIND ITS OWN SLOT A ROUND MAY START BEFORE IT IS DROPPED, in milliseconds.
+ *
+ * ⭐ THE DEFECT THIS EXISTS FOR, measured on the rig 2026-08-09 rather than reasoned about. The fan-out
+ * loop below paces rounds by the wall clock while everything it queues is drawn by the render loop, so
+ * under load the two clocks come apart. The old loop waited a FIXED `cadenceMs` per iteration, which
+ * means every millisecond a round's timer fired LATE was added to the next round's start instead of
+ * being absorbed — the error compounded, and a burst stretched to somewhere over twice its length and
+ * went on drawing after the shooting had stopped. A 30-round flechette payload at the shell's 180 ms
+ * cadence was measured at **11 681 ms against an intended 5 220 ms (2.24×)**, and the same ratio held
+ * at 5 / 10 / 20 rounds (2.13× / 2.24× / 2.23×), so it is the mechanism and not a one-off.
+ *
+ * ⚠ WHERE THE TIME ACTUALLY GOES, because the obvious answer is wrong and it changes the fix. Building
+ * one round's Sequence is CHEAP — `fxShot`'s synchronous cost measured at a median of **1 ms**. The lag
+ * is not our work, it is the loop's own `setTimeout` being starved while the engine draws what earlier
+ * rounds already queued (the same run measured the canvas at 5 FPS with 421 effects live). So no amount
+ * of making the round body cheaper fixes it: the loop has to stop trusting that its sleep slept for the
+ * time it asked for. Hence the two halves below.
+ *
+ * ⭐ HALF ONE — THE SCHEDULE IS ANCHORED TO THE WALL CLOCK. Round `i` is DUE at `t0 + i × cadence`
+ * (roundDueAtMs), and the loop sleeps only the REMAINDER to that instant. A round that ran late no
+ * longer pushes its successors, so the error stops compounding: it is measured fresh each round against
+ * a fixed origin rather than accumulated.
+ *
+ * ⭐ HALF TWO — A ROUND THAT STILL CANNOT START ON TIME IS DROPPED, NOT QUEUED (user ruling
+ * 2026-08-09, verbatim reason: *"the audio already told the ear the story"*). Anchoring alone would
+ * still let a starved loop fire five rounds' worth of sprites in one tick once the timer finally came
+ * back; the drop is what keeps the picture honest. The round goes ENTIRELY — its audio, its light, its
+ * sprites, its tracer and its impact — and the measurement at the drop site records why the first,
+ * audio-surviving build of the rule was refused.
+ *
+ * ⛔ THE LAST ROUND IS NEVER DROPPED, however late it is, and that is a hard rule rather than a
+ * preference: it is the round that carries the settle tag, so the damage window's completion signal is
+ * named on an element that is certain to be drawn. Keeping it is why no retagging machinery is needed
+ * and why the window can never be left waiting on a picture that was refused.
+ *
+ * ⭐ WHY HALF A CADENCE, AND NOT A FLAT NUMBER OF MILLISECONDS. The first build of this rule used a flat
+ * 150 ms, on the reasoning that renderer starvation does not scale with how fast the gun fires. The rig
+ * refused it on the second run, and the arithmetic says why. The gap between two rounds that both get
+ * drawn is `cadence − (how late the earlier one was)`: a round drawn 150 ms behind its slot is already
+ * past the NEXT round's slot when it finishes, so that next round waits not at all and the two are
+ * drawn together. Measured, at the shipped 80 ms cadence with a 150 ms threshold: gaps of 256, 1, 256 ms
+ * across one burst — two rounds one millisecond apart, which is the very bunching the anchoring was
+ * supposed to stop.
+ *
+ * So the threshold has to be smaller than the cadence, and expressing it as a FRACTION of the cadence is
+ * what turns the rule into a guarantee rather than a hope: at half a cadence, no round is ever drawn
+ * more than half a slot late, and therefore **no two drawn rounds are ever closer together than half a
+ * cadence**. That is a property of the arithmetic, not of the host, and the keeper pins it as one.
+ * Concretely: 40 ms at the default 80 ms spacing, 90 ms at the shell's 180 ms.
+ *
+ * The rule is self-correcting, which is the property that actually retires the report: dropping late
+ * rounds removes exactly the queued work that was starving the timer, so the lag falls back under the
+ * threshold and the rest of the burst draws normally. A healthy client never reaches it at all — timer
+ * lateness there is a frame or two, well inside 40 ms.
+ *
+ * ⏪ THE REVERT VALUE, if the fraction is ever wanted back as a flat figure, is **150 ms** — but note
+ * that it does not hold the separation guarantee at any cadence below 300 ms, which is every class we
+ * ship. Set the fraction to 0 to drop nothing at all (anchoring alone — the measured bunching above is
+ * what that costs).
+ */
+export const FX_DROP_LAG_FRACTION = 0.5;
+
+/**
+ * When round `index` of a fan-out is DUE, in ms on the same clock the loop started from. Pure, so the
+ * anchored schedule is asserted by value rather than by watching a burst.
+ */
+export function roundDueAtMs(startMs, index, cadenceMs) {
+  return (Number(startMs) || 0) + Math.max(0, Number(index) || 0) * (Number(cadenceMs) || 0);
+}
+
+/**
+ * THE DROP DECISION, as a value: is this round too far behind its own slot to be worth drawing?
+ * Pure — no clock, no canvas — so both halves of the rule (the threshold and the last-round exemption)
+ * are pinned by the keeper without having to starve a real renderer.
+ */
+export function roundDropped({ lagMs = 0, isLast = false, dropLagMs = 0 } = {}) {
+  if (isLast) return false;                       // the settle tag rides this one — never refused
+  const limit = Number(dropLagMs);
+  if (!Number.isFinite(limit) || limit <= 0) return false;
+  return (Number(lagMs) || 0) > limit;
+}
+
+// Capture/test seam, sixth of the same family (_setFlashLevels, _setDashMs, _setSpriteRate, _setDbProbe,
+// _setSoundManifest) and armed by nothing that ships. It exists because the two ends of the drop rule
+// need opposite conditions to be pinned honestly: a threshold set out of reach proves a healthy client
+// drops NOTHING (exact counts, no timing), and a threshold set at the floor proves a loaded one drops
+// the late rounds and keeps the last. Null restores the shipped value.
+let _dropLagOverride = null;
+
+/** Test seam: force an ABSOLUTE drop threshold in ms (null restores the cadence-derived one). */
+export function _setDropLagMs(ms) {
+  _dropLagOverride = Number.isFinite(ms) ? Number(ms) : null;
+  return _dropLagOverride;
+}
+
+/**
+ * The drop threshold for a burst running at `cadenceMs` — half a slot, unless a seam is armed. Pure
+ * apart from the seam, so the separation guarantee is checkable at every cadence the table ships.
+ */
+export function dropLagMsFor(cadenceMs) {
+  if (_dropLagOverride !== null) return _dropLagOverride;
+  return Math.max(0, (Number(cadenceMs) || 0) * FX_DROP_LAG_FRACTION);
+}
+
+/**
  * How the flash is SHAPED — one of the three shapes muzzleSourceSpecs below can build.
  *  - "cone"   a wedge of `coneDegrees` about the shot's axis (the shipped default). At the measured
  *             width that wedge is most of the circle with a NOTCH cut out behind the shooter, not a
@@ -664,22 +769,41 @@ export const GROUND_SCORCH = Object.freeze({
  * THE BLOOD SPLASH — a short red burst drawn over a LIVING target that a round actually reached.
  * Phase 1: transient only. Nothing is left on the floor and nothing is written anywhere.
  *
- * ⚠ FOUR GATES, and all four are somewhere else on purpose — this block is only the look. The world
- * setting (`goreEnabled`, default OFF), "at least one round landed", "the target is not structure"
- * and "once per payload" are all applied at the ONE call site in fxWeaponFired, outside the round
- * loop, which is the same shape the burning ground uses and for the same reason: the loop is what
- * would make an element per-round, so keeping the call out of it IS the once-per-payload gate.
+ * ⚠ THE GATES are somewhere else on purpose — this block is only the look. The world setting
+ * (`goreEnabled`, default OFF), "at least one round landed" and "the target is not structure" are all
+ * resolved ONCE at the call site in fxWeaponFired; only the per-round issue and the cap live in the
+ * loop. See that site for why the gates and the draws are now in two different places.
  *
- * ⭐ THE ASSET IS NATIVELY BLOOD-COLOURED — no colour filter is applied, and that corrects the design
- * note this unit started from. The free tier carries no family NAMED blood, which is true and is what
- * the earlier survey found; but `jb2a.liquid.*` ships RED variants, and decoding this one frame by
- * frame off the installed file gives a mean of R91 G1 B1 at 113ms, R95 G1 B2 at 283ms and R157 G3 B4
- * at 453ms — a deep near-black red in every frame, with the green and blue channels essentially at
- * zero. A ColorMatrix over that would be repainting red with red. (The measurement also settles the
- * choice between the two red liquids the tier carries: this one's ink centroid holds at 0.50/0.51 of
- * its own frame from 170ms to 510ms — it is RADIAL about its centre, so it needs no rotation and can
- * never disagree with the shot axis, where `liquid.splash_side02.red` traverses its frame 0.29 → 0.65
- * and is a directional wave.)
+ * ⏪⏪ ONCE PER PAYLOAD IS DEAD (user ruling 2026-08-09, on the MPK-9 burst). The first build drew one
+ * splash for a whole payload — deliberately, as the burning ground still does — and a ten-round burst
+ * therefore marked its target exactly as hard as a single shot did. The rule is now ONE SPRAY PER
+ * LANDING ROUND, bounded by `maxPerPayload`.
+ *
+ * ⭐ WHY THE CAP IS 4, measured rather than picked. The clip lives 900 ms and the hits are the leading
+ * rounds of the burst, so at the default 80 ms cadence ten hits would put ten sprays inside one clip's
+ * life — every one of them still on screen while the next arrives, which is a fountain rather than a
+ * body being hit repeatedly. Four is the most that still reads as SEPARATE events: at 80 ms apart they
+ * are four distinguishable arrivals spread over the burst's opening, and each is still visible when the
+ * next lands, which is the "repeated spray" the ruling asks for. The cap is a payload bound, not a
+ * scene bound — a second burst sprays again.
+ *
+ * ⭐ THE ASSET IS NATIVELY BLOOD-COLOURED — no colour filter is applied. The free tier carries no
+ * family NAMED blood, which is true and is what the earlier survey found; but `jb2a.liquid.*` ships RED
+ * variants, and decoding off the installed files gives near-black deep red in every frame with the
+ * green and blue channels essentially at zero. A ColorMatrix over that would be repainting red with
+ * red.
+ *
+ * ⏪⏪ THE RADIAL SPLASH IS SUPERSEDED (user ruling 2026-08-09, verbatim: *"It's angled. The blood
+ * pushes out in a direction. It should move in the same direction as the bullet that strikes the
+ * target."*). The first build chose `liquid.splash02.red` precisely BECAUSE it is radial — its ink
+ * centroid holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it needed no rotation and
+ * could never disagree with the shot axis. That safety is exactly what made it wrong: a radial burst
+ * says the wound has no direction. The shipped asset is now `liquid.splash_side02.red`, whose ink
+ * TRAVERSES its own frame 0.29 → 0.65 left-to-right — a directional wave — and it is rotated so that
+ * travel continues the shooter→target vector THROUGH the target: the spray leaves on the far side,
+ * away from the shooter, as an exit. The rotation basis is the tracers' own (`rotateTowards` at a point
+ * further along the same ray), so the spray and the round that caused it can never disagree about which
+ * way the shot was going.
  *
  * `squares` IS THE DRAWN FRAME, NOT THE INK — the same trap the flechette dart length records. The
  * ink reaches 0.50 of the frame at 170ms and peaks at 0.87 at 510ms, so at 1.5 squares the splash
@@ -707,10 +831,11 @@ export const GROUND_SCORCH = Object.freeze({
  * elements end.
  */
 export const BLOOD_SPLATTER = Object.freeze({
-  key: "jb2a.liquid.splash02.red",
+  key: "jb2a.liquid.splash_side02.red",
   squares: 1.5,
   clipMs: 900,
   aboveLighting: true,
+  maxPerPayload: 4,
 });
 
 /**
@@ -918,7 +1043,16 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * treatments that genuinely change SHAPE (flechette's fan, the impact promotions, and now the baton
  * round's travelled slug) do it with different fields.
  */
-export const TRACER_COLOR_INCENDIARY = Object.freeze({ hue: -20, saturate: 0.30, brightness: 1.20 });
+/**
+ * ⏱ EASED ONE NOTCH 2026-08-09 (user): hue −20 → **−14**. The rotation is what pulls the tier's orange
+ * bolt toward red, and at −20 the api round read as more red than the load wants to say. −14 keeps it
+ * clearly a hotter, redder round than the standard tracer while leaving the orange in it.
+ *
+ * ⏪ THE REVERT VALUE IS **hue: −20** (saturate 0.30 and brightness 1.20 are unchanged and were never
+ * in question) — recorded here rather than in a commit message so the reversal is a one-number edit at
+ * the site, per this file's standing habit for values the user may want back.
+ */
+export const TRACER_COLOR_INCENDIARY = Object.freeze({ hue: -14, saturate: 0.30, brightness: 1.20 });
 export const TRACER_COLOR_HARDENED   = Object.freeze({ hue: 8,   saturate: -0.85, brightness: 1.45 });
 export const TRACER_COLOR_INERT      = Object.freeze({ hue: 0,   saturate: -0.55, brightness: 0.60 });
 
@@ -1197,6 +1331,9 @@ export const FX_CLASSES = Object.freeze({
  * the identical crack. The fire family has only one file on the free tier, so its key resolves to the
  * same clip every time — stated so the asymmetry is not read as an oversight.
  */
+// ⏪ ON NO SHIPPED ROW as of 2026-08-09 — the api promotion that used it was withdrawn on report (the
+// ruling is at the AMMO_FX api entry). Left declared rather than deleted, the way this file leaves
+// every superseded mechanism wired: restoring it is one field on one row.
 export const IMPACT_FIRE = Object.freeze({ key: "jb2a.impact.fire.01.orange", clipMs: 2267 });
 export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orange", clipMs: 5033 });
 
@@ -1382,10 +1519,17 @@ export const BATON_ROUND = Object.freeze({
  *    identified by its picture and drawn at the class's own width. Captures 59-control vs 59b.
  */
 export const AMMO_FX = Object.freeze({
+  // ⏪ THE IMPACT PROMOTION IS WITHDRAWN (user ruling 2026-08-09, verbatim: *"get rid of the blast
+  // circle that lands on the target. I think multiple are being placed"*). This row used to promote the
+  // hit mark to IMPACT_FIRE, which drew a burning ring ON the target on top of the burning ground the
+  // same load already sets at the landing points — and because the mark is drawn per LANDING ROUND, a
+  // burst stacked one ring per hit in the same place, which is the doubling the report names. Removing
+  // the field is the whole fix: with no `impactKey` the row falls through to the class's own standard
+  // hit mark, exactly as every unpromoted load does. Everything else about the load is untouched — the
+  // tinted rounds, the tinted flash and the burning ground it leaves behind all stay.
   api: Object.freeze({
     tracerColor: TRACER_COLOR_INCENDIARY,
     columnColor: TRACER_COLOR_INCENDIARY,
-    impactKey: IMPACT_FIRE.key,
     flashColor: "#ff6a1a",
     groundFire: true,
   }),
@@ -2940,6 +3084,14 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
  * GM clearing the canvas). `creationTimestamp` is the engine's own field, so "oldest" is its answer
  * and not our guess about ordering.
  */
+/** Flames QUEUED but not yet created by the engine — counted against the cap. See fxGroundFire. */
+let _pendingGroundFires = 0;
+
+/** How many flames are on their way but not yet visible to the engine. Read by the keeper. */
+export function pendingGroundFires() {
+  return _pendingGroundFires;
+}
+
 export function liveGroundFires() {
   try {
     const list = globalThis.Sequencer?.EffectManager?.getEffects?.({ name: `${GROUND_FIRE_NAME}.*` }) ?? [];
@@ -2992,9 +3144,18 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
   try {
     // THE CAP, applied before anything is queued: make room for this placement by ending the oldest.
+    //
+    // ⚠ THE PENDING TALLY IS PART OF THE COUNT, and it is not bookkeeping for its own sake. This verb
+    // is fire-and-forget and the engine does not create an effect until its own play resolves, so a
+    // placement that has been QUEUED is invisible to liveGroundFires until a beat later. Two placements
+    // issued inside that beat therefore both read the same "live" number and both under-evict. That was
+    // unreachable while the fan-out loop ran at twice its own length; the anchored loop (see
+    // FX_DROP_LAG_FRACTION) hands bursts over fast enough to reach it, and the rig caught it immediately —
+    // eight bursts left 28 flames alive against a cap of 24. Counting what is already on its way is
+    // what makes the cap hold rather than approximately hold.
     if (fxDbEntryExists(GROUND_FIRE.key)) {
       const live = liveGroundFires();
-      const overBy = live.length + list.length - GROUND_FIRE.maxLive;
+      const overBy = live.length + _pendingGroundFires + list.length - GROUND_FIRE.maxLive;
       if (overBy > 0) {
         const names = live.slice(0, Math.min(overBy, live.length)).map((e) => e?.data?.name).filter(Boolean);
         out.evicted = names.length;
@@ -3047,7 +3208,13 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
       out.scorchMs = GROUND_SCORCH.lifetimeMs;
     }
     if (out.fires || out.scorch) {
-      seq.play().catch((err) => console.warn(`${SCOPE} | ground fire play failed`, err));
+      // Held on the tally from the moment they are queued until the engine has actually made them, at
+      // which point liveGroundFires can see them and the tally must let go — released in a finally so
+      // a play that throws cannot strand the count high and starve every later placement.
+      _pendingGroundFires += out.fires;
+      seq.play()
+        .catch((err) => console.warn(`${SCOPE} | ground fire play failed`, err))
+        .finally(() => { _pendingGroundFires = Math.max(0, _pendingGroundFires - out.fires); });
     }
   } catch (err) {
     console.warn(`${SCOPE} | ground fire failed`, err);
@@ -3155,8 +3322,9 @@ export function bearsStructuralSdp(actor) {
  * NOT AWAITED by its caller and NOT TAGGED for the settle signal. Returns what it queued so the gate
  * and the values are assertable without looking at the canvas.
  */
-export async function fxBloodSplatter(targetToken, { delayMs = 0 } = {}) {
-  const out = { drawn: false, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares, clipMs: BLOOD_SPLATTER.clipMs };
+export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 } = {}) {
+  const out = { drawn: false, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
+    clipMs: BLOOD_SPLATTER.clipMs, exitPoint: null };
   if (!targetToken || !sequencerActive() || !fxDbEntryExists(BLOOD_SPLATTER.key)) return out;
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
   try {
@@ -3165,8 +3333,28 @@ export async function fxBloodSplatter(targetToken, { delayMs = 0 } = {}) {
       .size({ width: BLOOD_SPLATTER.squares }, { gridUnits: true })
       // The departure from the routing rule, with the measurement and the reason at the spec block.
       .aboveLighting(BLOOD_SPLATTER.aboveLighting)
-      .randomRotation()
       .timeRange(0, BLOOD_SPLATTER.clipMs);
+    // ⭐ THE EXIT VECTOR (2026-08-09 ruling). The asset's ink travels left-to-right across its own
+    // frame, so pointing that travel at a location makes the spray move that way. The location asked
+    // for is a point BEYOND the target on the shooter→target ray — one grid unit past the body — so the
+    // spray continues the round's line and leaves on the far side rather than washing back toward the
+    // muzzle. `rotateTowards` is the same call and the same basis the tracers take their heading from,
+    // which is what keeps the two from ever disagreeing.
+    //
+    // The rotation is only possible when the shot HAS an axis; a call with no shooter falls back to the
+    // old random rotation rather than drawing every splash pointing screen-right, which would be a
+    // worse lie than no direction at all.
+    const from = shooterToken ? centerOf(shooterToken) : null;
+    const at = centerOf(targetToken);
+    if (from && at && (from.x !== at.x || from.y !== at.y)) {
+      const gridPx = Number(canvas?.dimensions?.size) || 100;
+      const reach = Math.hypot(at.x - from.x, at.y - from.y) + gridPx;
+      const exit = pointAlong(from, at, reach);
+      splash.rotateTowards(exit);
+      out.exitPoint = { x: Math.round(exit.x), y: Math.round(exit.y) };
+    } else {
+      splash.randomRotation();
+    }
     if (delay > 0) splash.delay(delay);
     out.drawn = true;
     seq.play().catch((err) => console.warn(`${SCOPE} | blood splash play failed`, err));
@@ -3457,7 +3645,7 @@ function _finishTag(tag, via) {
   const finish = () => {
     if (w.done) return;
     w.done = true;
-    clearTimeout(w.confirm); clearTimeout(w.floor);
+    clearTimeout(w.confirm); clearTimeout(w.floor); clearTimeout(w.cap);
     _tagWatches.delete(tag);
     w.settle({ via, ms: Math.max(openAt, Date.now() - w.startedAt),
                scheduledMs: w.scheduledMs, engineMs: engineElapsed, openAt,
@@ -3498,13 +3686,26 @@ export function settleOpenAtMs(scheduledMs, engineElapsedMs) {
 
 /** Begin watching a round's named terminal elements. */
 function _watchSettleTag(tag, scheduledMs, settle) {
-  const w = { created: 0, ended: 0, done: false, startedAt: Date.now(), scheduledMs, settle, confirm: null, floor: null };
+  const w = { created: 0, ended: 0, done: false, startedAt: Date.now(), scheduledMs, settle, confirm: null, floor: null, cap: null };
   _tagWatches.set(tag, w);
   // Nothing named ever appeared by the time the schedule says it should be over → there was nothing to
   // observe (no engine, or no asset), so the arithmetic stands in.
   setTimeout(() => {
     if (!w.done && w.created === 0) _finishTag(tag, "scheduled");
   }, scheduledMs);
+  // ⭐ THE HARD STOP (2026-08-09), and it closes a real leak rather than a theoretical one. The two
+  // exits above both require a COUNT to be right: the scheduled fallback only fires when nothing was
+  // created, and the engine exit only fires when `ended` catches `created`. A watch whose elements were
+  // created but never all reported gone satisfies NEITHER and used to sit in these maps for the rest of
+  // the session. Measured on the rig: five overlapping 30-round fan-outs left 2 of 5 watches unresolved
+  // and still holding their payloads fifteen seconds after everything had left the screen.
+  //
+  // The apply window itself was never at risk — presentationSettled races PRESENTATION_CAP_MS, so a
+  // caller always got an answer — but the bookkeeping grew without bound, which is exactly the sort of
+  // slow accumulation a long session turns into a problem. Resolving on the SAME cap the window
+  // already honours means this can never change what a caller observes: by the time it fires, any
+  // waiter has already taken the capped answer. It only guarantees the entries are dropped.
+  w.cap = setTimeout(() => { if (!w.done) _finishTag(tag, "cap"); }, PRESENTATION_CAP_MS);
 }
 
 /** Arm the signal for a payload about to be fanned out. Returns the resolver the fan-out will call. */
@@ -3570,7 +3771,7 @@ export function settlementsInFlight() {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -3689,23 +3890,22 @@ export async function fxWeaponFired(payload) {
     }
   }
 
-  // THE BLOOD SPLASH, and its four gates in one place. Same position as the ground elements and for
-  // the same reason: outside the round loop IS the once-per-payload rule, so a thirty-round burst
-  // marks its target once rather than thirty times over.
+  // THE BLOOD SPLASH — its gates resolved ONCE here, its draws issued PER LANDING ROUND from inside
+  // the loop below. ⏪ REBUILT 2026-08-09: the once-per-payload rule this block used to enforce is
+  // dead (user, on the MPK-9 burst — a ten-round burst marked its target once, which read as one
+  // wound however many rounds went in). The gates themselves are unchanged and still all in one place:
   //  1. the world setting, read per shot so a GM switching it takes effect with no reload;
   //  2. a round LANDED — a burst that misses draws nothing (the ruled fumble is already gone, several
   //     lines above, so nothing here has to know about it);
   //  3. a TARGET TOKEN, not an aim point: blood needs a body, and an untargeted shot has none;
   //  4. that token's actor is not STRUCTURE (bearsStructuralSdp — vehicles, powered armour and full
   //     conversions), which is where the actor-level limit of the phase-1 answer is documented.
-  // Not awaited, so it can never delay a round, and never tagged, so the damage window never waits
-  // on it (the settle ruling is at the spec block).
-  let blood = null;
-  if (goreEnabled() && hits > 0 && target && !bearsStructuralSdp(target.actor)) {
-    blood = { queued: true, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares, tokenId: target.id };
-    fxBloodSplatter(target, { delayMs: Number(ammoEntry?.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0 })
-      .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
-  }
+  // What CHANGED is only how many times the draw is issued and when: once per landing round, on that
+  // round's own visual-impact clock, bounded by BLOOD_SPLATTER.maxPerPayload. Still never awaited and
+  // still never tagged, so it can neither delay a round nor hold the damage window.
+  const bleeds = goreEnabled() && hits > 0 && !!target && !bearsStructuralSdp(target.actor);
+  let blood = bleeds ? { queued: 0, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
+    tokenId: target.id, cap: BLOOD_SPLATTER.maxPerPayload } : null;
 
   let flashes = 0;
   let smokePuffs = 0;
@@ -3714,8 +3914,33 @@ export async function fxWeaponFired(payload) {
   // A burst gets its smoke from the tracer asset's own curls instead (see the retirement note on
   // smokePlanFor), so drawing ours over it was doubling a smoke that was already there.
   const smokes = !burst && smokesOnSingleShot(weaponClass);
+  // THE ANCHOR. Every round's due time is measured from this one instant (roundDueAtMs), so a round
+  // that starts late cannot push the rounds after it — see FX_DROP_LAG_FRACTION for the measurement that
+  // made this necessary and for why the loop may not trust its own sleep.
+  const loopStart = Date.now();
+  let dropped = 0;
+  let maxLagMs = 0;
   for (let i = 0; i < shots; i++) {
-    if (i > 0) await _sleep(cadenceMs);
+    // Sleep the REMAINDER to this round's slot, not a fixed interval. A round already past its slot
+    // waits not at all and is dealt with by the drop rule below.
+    if (i > 0) {
+      const wait = roundDueAtMs(loopStart, i, cadenceMs) - Date.now();
+      if (wait > 0) await _sleep(wait);
+    }
+    // How far behind its own slot this round actually is, measured at the moment it would be issued.
+    const lagMs = Date.now() - roundDueAtMs(loopStart, i, cadenceMs);
+    if (lagMs > maxLagMs) maxLagMs = lagMs;
+    const isLast = i === shots - 1;
+    // ⭐ THE DROP, and it takes the WHOLE round — its audio with its picture. The first build of this
+    // rule kept the audio and refused only the sprites, on the reading that the ear should still get
+    // every round; the rig refused that reading by measurement. Because a starved loop reaches several
+    // rounds' slots at once, keeping the audio put two and three shots' worth of it in a SINGLE tick
+    // (measured gaps of 231, 0, 235, 0 ms across a five-round burst) — which is not a burst that fires
+    // faster, it is two reports landing on top of each other. Dropping the round outright leaves the
+    // rounds that DO play sitting on their own slots, so the burst keeps its rhythm at the cost of a
+    // round rather than losing the rhythm to keep one. That is what the ruling's reason says out loud:
+    // the audio already told the ear the story, so one more report is what there is least need of.
+    if (roundDropped({ lagMs, isLast, dropLagMs: dropLagMsFor(cadenceMs) })) { dropped++; continue; }
     sfx(weaponClass, { burst });
     // Flash + sprite + tracer all start in the SAME tick as this shot's audio, and none of them is
     // awaited: the loop's timer is the cadence a viewer and a listener both read. Every round of a
@@ -3736,8 +3961,18 @@ export async function fxWeaponFired(payload) {
       flashes++;
       // Only the LAST round is tagged: the ruling is that the action is over when the last round's
       // impact/tracer ends, and those are the latest-ending elements on screen by construction.
-      fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: i === shots - 1 ? settleTag : null, ammoKey })
+      fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
+      // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock. The hits are the
+      // LEADING rounds of the burst (the same assignment fxShot's `hit` argument uses one line above),
+      // so `i < hits` is the round that landed, and the delay is the class's crossing time — the spray
+      // therefore starts when this round's dart arrives, not when the payload was resolved. The cap is
+      // what keeps ten hits reading as repeated spray rather than as a fountain (see the spec block).
+      if (blood && i < hits && blood.queued < BLOOD_SPLATTER.maxPerPayload) {
+        blood.queued++;
+        fxBloodSplatter(shooter, target, { delayMs: Number(ammoEntry?.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0 })
+          .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
+      }
     }
   }
   // The last round has left the muzzle; what remains on screen is its terminal elements. The watch is
@@ -3751,7 +3986,10 @@ export async function fxWeaponFired(payload) {
   _watchSettleTag(settleTag, settleTailMs, settle);
 
   return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smokePuffs,
-    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood };
+    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood,
+    // The pacing report, by value: how many rounds' pictures were refused and the worst lateness seen.
+    // `loopMs` against `(shots-1) × cadence` is the drift the anchored schedule exists to hold down.
+    dropped, maxLagMs, loopMs: Date.now() - loopStart };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
