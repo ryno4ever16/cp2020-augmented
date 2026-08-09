@@ -21,12 +21,29 @@ import { localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
+/**
+ * Announced (locally, on the client holding the window) when an apply window closes WITHOUT the damage
+ * having been applied — the X, the Cancel button, Escape, or any other close that is not the one Apply
+ * performs. Carries the payload the window was opened with, and the resolved target.
+ *
+ * The window deliberately does not know what should happen next: it reports its own dismissal, and the
+ * hooks layer decides (damage-hooks.js puts the apply button back on the shot's chat card). Same shape as
+ * the other module-local announcements, e.g. SUPPRESSIVE_ZONE_ENTERED_HOOK.
+ */
+export const DAMAGE_DIALOG_DISMISSED_HOOK = "cp2020-augmented.damageDialogDismissed";
+
 export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
   constructor(payload, target, options = {}) {
     super(options);
     this.payload    = payload;
     this.target     = target;
+    // Applied-close vs dismissed-close. Apply is the ONE close that resolves the shot, and it sets this
+    // immediately before asking the window to close; every other route out (X, Cancel, Escape, a close
+    // the framework performs) leaves it false and is therefore a dismissal. Read once, in _preClose,
+    // which is the single teardown all of those routes pass through.
+    this._damageApplied      = false;
+    this._dismissalAnnounced = false;
     this._overrides = {};   // { flatIndex: after-SP override }
     this._armorMode = null;
     this._damageType = null;   // "" / null = a normal hit; "fire" | "radiation" | "heat"
@@ -351,6 +368,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         firstHitLocation: rawHits[0]?.location ?? null,
       });
       this._chewSelectedCover();
+      this._damageApplied = true;   // an applied close — see the flag's note in the constructor
       this.close();
       return;
     }
@@ -394,11 +412,35 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       await _postSavePrompts(this.target, token);
     }
 
+    this._damageApplied = true;   // an applied close — see the flag's note in the constructor
     this.close();
   }
 
   static _onCancel(event, target) {
     this.close();
+  }
+
+  /**
+   * The single teardown every close route passes through — the Apply action's own close, the Cancel
+   * button, the window's X, Escape, and any close the framework performs. So it is the one honest place
+   * to tell an applied close apart from a dismissed one, and the announcement is made here rather than
+   * from each button.
+   *
+   * WHY the announcement exists at all: this window took over the routing for a shot that had a target
+   * (PATH A in damage-hooks.js), and that path deliberately does NOT flag the shot's chat card — one
+   * path, not both. Dismissing the window used to throw the whole affordance away, so a shot that was
+   * not followed through on could not be applied at all afterwards. Announcing the dismissal lets the
+   * hooks layer hand the shot back to its own card, which is where the button lived before.
+   *
+   * Announce-once guard in the same spirit as the sheet-listener bind-once guards: the announcement is
+   * an event with a side effect at the other end, so it must not be repeatable by a second teardown pass.
+   */
+  async _preClose(options) {
+    await super._preClose?.(options);
+    if (this._dismissalAnnounced) return;
+    this._dismissalAnnounced = true;
+    if (this._damageApplied) return;
+    Hooks.callAll(DAMAGE_DIALOG_DISMISSED_HOOK, this.payload, this.target);
   }
 
   /** Satisfy the V2 form contract — real work is in the applyDamage action. */
