@@ -44,7 +44,8 @@ The payload is one resolved burst against one target. Its presentation-relevant 
 | `fxTargetTokenId` | the aimed-at token — **presentation only**, set on every fire mode | seam shim |
 | `firedByUserId` | the one client that resolved the shot | seam shim |
 | `fumbleRuled` | the base actually *resolved* a fumble (not merely "a 1 was rolled") | seam shim |
-| `modifier` | the loaded ammo's modifier id — **the ammo overlay's input** | ⚠ **ruled, not wired** — see §8. `AMMO_EFFECT_FIELDS` does not list it, so it arrives `undefined` and every load is identified by the fingerprint path instead |
+| `modifier` | the loaded ammo's modifier id — **the ammo overlay's input** | seam shim, from the loaded ammo item. Sits **beside** `caliber` in `AMMO_EFFECT_FIELDS`, never instead of it: the two answer different questions (which load, which cartridge) and a build that swapped one for the other cost `dualPurpose` its identity for a day — see §6, 2026-08-09 |
+| `caliber` | the cartridge in the chamber — **the pattern flow's input** | seam shim, from the loaded ammo's `caliber`, falling back to the weapon's own `ammoType` |
 | `armorMultSoft`, `penDamageMult`, `spreadMode`, `dotType`, … | the loaded ammo's mechanics | seam shim, from the loaded ammo item |
 
 Two target fields exist on purpose. `targetTokenId` decides whether the damage window opens
@@ -57,7 +58,7 @@ explicitly did not want.
 One payload is resolved by **exactly one** of two flows, and they never overlap:
 
 ```
-   cyberpunk2020.weaponFired  ── payload ──▶  spreadModeForAmmo(payload)   (module/lookups.js)
+   cyberpunk2020.weaponFired  ── payload ──▶  spreadFlowModeOf(payload)   (module/lookups.js)
                                                         │
                     ┌───────────────────────────────────┴────────────────────────────┐
                     │ "single"                                                       │ "buck" / "flechette"
@@ -74,13 +75,33 @@ One payload is resolved by **exactly one** of two flows, and they never overlap:
 
 Since 2026-08-09 there is a **third** caller of that same question and it is on the presentation side:
 `patternFlowOwns(payload)` in `fx/effects.js`, which decides whether the fan-out draws the burning
-ground or leaves it to the pattern's own confirm. It imports the same `spreadModeForAmmo`, so the three
-cannot answer differently. It deliberately does **not** consult the pattern's world setting, because
-neither damage gate does — see §8 for what that costs.
+ground or leaves it to the pattern's own confirm.
 
-The two gates are literally the same call (`_spreadModeOf(payload)`, twice), which is the whole
+All three ask **one shared site**, `spreadFlowModeOf(payload)` in `module/lookups.js`, so they cannot
+answer differently. That site is `spreadModeForAmmo` — what the *round* is — plus the pattern's world
+switch, which is what the module will *do* with it:
+
+```
+spreadModeForAmmo(fields)   what the ROUND is        (the caliber rule above — nothing else)
+        └── spreadFlowModeOf(payload)   what the MODULE DOES with it   ← the one site all three ask
+                 · pattern switched ON  → the derived mode stands
+                 · pattern switched OFF → "single": no flow places a pattern, so the ordinary
+                                          single-target flow owns every shell, exactly as it
+                                          already owns the slug
+```
+
+⏪ **The switch used to be read only by the pattern hook, and that was a defect, not a design.** With
+the pattern off, the single-target gate stood down because the cartridge derived to `buck` and the
+pattern hook stood down because the setting said no — so a shell payload was claimed by **neither**
+flow: no apply window, no pattern, no damage. Folding the switch into the shared answer makes "off"
+mean what a reader expects, and the presentation follows for free — with the pattern off, an incendiary
+shell's burning ground is drawn by the fan-out again, because the confirm that would otherwise have
+scattered those fires down the path never happens.
+
+The two damage gates are literally the same call (`_spreadModeOf(payload)`, twice), which is the whole
 guarantee: if they ever disagreed, a shell would be damaged **twice** — once by the dialog and once by
-the pattern — or not at all. A keeper leg counts the call sites.
+the pattern — or not at all. A keeper leg counts the call sites; another asserts the damage rail reads
+the world setting **nowhere** of its own.
 
 **The question is asked of the CARTRIDGE, not of a flag.** The shotgun is an area weapon in the Core
 rules; buckshot patterns because of what it is. Every shotgun ammo item ever seeded carries
@@ -548,10 +569,12 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **BURNING GROUND, 2026-08-09** | ⏪⏪ The **ground-crack asset is rejected outright**, not re-tuned | *"The 'on fire' effect that goes on the ground when incendiary hits is not what we're looking for. First off, it looks like a ground shock effect of some kind, not fire. It darkens and cools, making it not look like an active flame."* Half of "darkens and cools" was ours and half was the asset's, and the fixes differ: decoded off the installed GroundCrackLoop file its own luminance is **flat** — mean 55–57/255 and 46 % of the frame lit at every one of twelve sample points — so the cooling was our own envelope, a 900 ms fade on a 3200 ms life, i.e. 28 % of the element was a dim-down. What no envelope could fix is the picture: it draws glowing **fissures in the floor**, which is cooling magma. The family stays in the file as the armour-piercing load's *impact* mark, which is a different element and was never the thing reported. |
 | **BURNING GROUND, 2026-08-09** | The fire is `jb2a.flames.orange.03.1x1` | Chosen from a closed enumeration of the installed tier — 2061 keys, every family whose name carries fire/flame/burn/ember/torch/brazier/lava/scorch/crack, then decoded frame by frame. Two facts decided it. **Top-down:** its own filename says 05x05ft, so it is a square ground plate; the tier's other genuine loops that hold their light are 400×600 (`Flames04`) and 400×1000 (`Campfire03`) portraits — a flame seen from the *side*, which laid on a floor reads as a wall sprite. **No decay:** 5000 ms, and its tail third measures **brighter** than its own middle (ratio 1.19), so it cannot cool inside its loop. Rejected with reasons: `campfire.01` / `bonfire.01` are ringed with **stones**; `braziers.*` has a bowl; `fire_trap.01` is a comet streak, not a fire; `fireball.loop_no_debris` is a whole burning field at 49 % coverage; `impact.fire` (already the incendiary hit mark) decays to **zero** by 1417 ms of its 2267 and is not a loop at all. |
 | **BURNING GROUND, 2026-08-09** | ⏪ **N flames at the landing points**, not one at the target | *"I was picturing something more like little animated flame decals that stayed burning on the ground in the places the shots landed, not just on the target."* Neither branch invents a position: a fanning class already computes real per-pellet endpoints for its tracer, so a subset of those **is** where its shot landed; a single-bolt class puts every round on one aim point, so its rounds are scattered inside a 0.8-square disc — an admission that the exact square is not known, which is the same limit that makes the fan-out assign hits to the leading rounds. |
-| **BURNING GROUND, 2026-08-09** | A pattern shot's fires belong to the **path**, and are placed on **confirm** | For buckshot the Core rules put the shot across the whole 1–3 m path and the module already asserts that by damaging everyone in it, so "where the shot landed" is not the target. The geometry is owned by the flow that drew it, and the fires go down when the **GM confirms**: an unconfirmed pattern is a GM-only aiming aid and a fire is not, so lighting the ground mid-decision would leak the aim and leave fires burning for a shot nobody resolved. The rail correspondingly draws none for a pattern payload, gated on the **same call** the two damage gates make (`spreadModeForAmmo`) so the three cannot disagree. |
+| **BURNING GROUND, 2026-08-09** | A pattern shot's fires belong to the **path**, and are placed on **confirm** | For buckshot the Core rules put the shot across the whole 1–3 m path and the module already asserts that by damaging everyone in it, so "where the shot landed" is not the target. The geometry is owned by the flow that drew it, and the fires go down when the **GM confirms**: an unconfirmed pattern is a GM-only aiming aid and a fire is not, so lighting the ground mid-decision would leak the aim and leave fires burning for a shot nobody resolved. The rail correspondingly draws none for a pattern payload, gated on the **same call** the two damage gates make (`spreadFlowModeOf`) so the three cannot disagree. |
 | **BURNING GROUND, 2026-08-09** | The gate is now **one placement event per payload**, and two bounds replace the old one | The old rule said "one fire" and existed because the fan-out caps at 30 rounds — a per-round lingering element would be thirty fires on one square for one trigger pull. That bound is unchanged: the call still sits outside the round loop, so the loop cannot multiply it, and `maxPerPayload` (4) holds the placement itself down. A **second** bound is new because these live for 45 s rather than 3.2: `maxLive` (24) caps what may burn on a scene at once, enforced by ending the **oldest** — the shot a viewer is watching is the one that must be drawn. |
 | **BURNING GROUND, 2026-08-09** | The scatter is **seeded from the payload**, not from `Math.random` | Sequencer broadcasts the resolved sequence rather than the code that built it, so today one client rolls and everyone draws the same fires — but a scatter that is only correct because of *where* it was computed is one refactor from two clients disagreeing about where a fire burns for the next 45 seconds. Seeding makes the agreement a property of the inputs. It is also the only way to pin a scatter in a test without pinning pictures: the keeper recomputes the plan from the seed the fan-out reported and compares by value. |
 | **BURNING GROUND, 2026-08-09** | Lifetime **45 s**, and the scorch stays **one** per placement | 45 s is a look call, not a measurement, taken on the precedent the scorch already set for a session-bound element with a cap in place of a persistence ruling; the fade is 5.6 % of it, against the 28 % that produced the report. The scorch deliberately does **not** follow the flame count: it lives for three minutes, so four per burst is exactly the accumulation the payload gate exists to prevent, where four 45-second flames are not. It sits at the flames' centroid and says one true thing — a fire burned here. |
+| **SEAM, 2026-08-09** | The ammo's **id and its cartridge both ride the payload — beside each other, never one instead of the other** | The spread unit added `caliber` to `AMMO_EFFECT_FIELDS` and took `modifier` out with it, and **nothing failed**: `ammoFxKeyOf` falls back to a fingerprint of the mechanics when there is no id, so every load still resolved and every picture was still drawn. The one pair the fingerprint cannot split is `ap` / `dualPurpose` — byte-identical mechanics — so the entire visible cost was `dualPurpose` silently answering `ap`, which is the exact case the id was added to settle. The two fields answer different questions (which **load** is in the gun; which **cartridge** it is) and both are load-bearing. The real lesson is the keeper's, not the code's: every existing leg handed the resolver a payload it had built itself, so 610 checks could not see a field the seam never sent. The fix is one string; the guard is a leg that reads a **real** fired payload off the hook and asserts, on the same object, that the id answers `dualPurpose` while the id-stripped copy answers `ap`. |
+| **SPREAD, 2026-08-09** | ⏪ The pattern's **world switch is part of the flow question**, asked at one shared site | Pre-existing gap, recorded as an open item since the spread unit and closed here. The switch was read only by the pattern hook, so with it **off** a shell was owned by nobody — the single-target gate stood down for the cartridge, the pattern hook stood down for the setting, and the shot did no damage at all. "Off" now means the module does not do patterns, so every shell takes the ordinary single-target route exactly as the slug already does. Put in `spreadFlowModeOf` (lookups.js) rather than at either gate because the guarantee that matters is that all **three** callers — both damage gates and the presentation rail's `patternFlowOwns` — cannot answer differently, and a second reader of the setting is precisely how they disagreed. ⏪ Supersedes the note at `patternFlowOwns` that the setting was deliberately not consulted "because neither damage gate does": neither did, and that was the bug. |
 | **FR#25, 2026-08-09** | ⏪ An ammo recolour now reaches the **pellet fan**; the base fan stays untinted | "For incendiary on autoshotgun the little dorito shaped pellets themselves didn't get the same red treatment as the spiky cone and starburst. Make sure when you update the animation for one shotgun ammo type, it's updated for all." Expressed as `tracerColor: null` on the class row — declared repaintable, painted with nothing — so the base look is byte-identical and every recolouring overlay (`api`, `ap`, `dualPurpose`, `rubber`, `stundart`) lands on column and fan alike. ⏪ Supersedes FR#24's "shell pellets are never tinted" for overlays only. |
 
 ---
@@ -582,6 +605,19 @@ side · 0 console errors.
 injectable `rng` or plain arguments precisely so its output is asserted **by value**, with no canvas,
 no engine and no shot. Anything that cannot be — which asset was queued, how many were emitted, what
 colour a source was built with — is driven live and read back off the engine.
+
+⚠ **And the limit of that style, which this unit exists to fix.** A leg that hands a pure helper a payload it built
+itself proves the helper, and says **nothing** about whether the seam sends that field. `payload.modifier`
+went missing from `AMMO_EFFECT_FIELDS` for a whole build while 610 checks stayed green, because every
+one of them supplied the id in the fixture. `tests/cp2020-augmented-b1-seam-payload.mjs` is the answer
+and is now the seam's own keeper: it fires bench guns **07** and **16** through the real UI path and
+asserts `modifier`, `caliber` and the resolved overlay key **off the payload the hook actually carried**,
+with gun 16 chosen because it is the one load a fingerprint physically cannot identify. Its sharpest leg
+asks the resolver twice about the same real payload — once as fired, once with the id deleted — so the
+record contains the fallback answering `ap`, which is what makes the id's presence a claim and not a
+formality. The fx-rail spec carries the same question in miniature against the real bench items rather
+than a fixture. **Any field the seam forwards wants one leg of this shape**; a fixture cannot fail for
+the absence of something it supplies.
 
 **The baton pair's legs are written as the inverse of the ones they replace.** Two legs used to assert
 that this pair's matrix was the only one that *darkened* and that it drew a *dull bolt and a small mark*.
@@ -620,7 +656,7 @@ off, exactly ONE splash from a ten-round burst, nothing on a vehicle, nothing on
 nothing on a ruled fumble, nothing on a burst that misses, nothing when no token was aimed at, and the
 scheduled tail identical with the switch on and off.
 
-**The shot pattern has its own spec**, `tests/cp2020-augmented-spread-zone.mjs` (75 checks), because
+**The shot pattern has its own spec**, `tests/cp2020-augmented-spread-zone.mjs` (81 checks), because
 what it tests is the damage rail and a canvas document's lifetime rather than anything the effect
 engine draws. Eight sections: the derivation asserted by value across the whole caliber × load matrix
 (including every gauge alias and both blanks) · the seam carrying the cartridge, checked against the
@@ -736,9 +772,9 @@ before it fires, or it attributes one shot's dialog to the next one's payload.
 
 | Item | State |
 |---|---|
-| **The ammo's `modifier` id is ruled onto the payload but is not on it** | 🔴 **Doc-vs-code divergence, found 2026-08-09 by the review bench's smoke test.** FR#24 ruled that the modifier's own id rides `cyberpunk2020.weaponFired`, and §1.1, §3.3 and §6 all state it — but `AMMO_EFFECT_FIELDS` in `module/seam-shim.js` lists `caliber` and not `modifier`, so `payload.modifier` is `undefined` on every real shot (read live off the hook: `modifier: null` for all sixteen bench loads). Every load is therefore resolved by `ammoFxKeyOf`'s **fingerprint** path, which is the compatibility branch. Two consequences, and only one of them costs anything today: `dualPurpose` collapses onto `ap` — the exact case the id was added to settle — and `brassCased` / `slug` resolve to no key, which is what they draw anyway. Nothing on the shipped bench looks different, because `ap` and `dualPurpose` carry identical overlay rows. The fix is one string in one array; it wants its own unit and a keeper leg that asserts the field off a **real** fired payload rather than off a synthesized one (every existing leg hands `ammoFxKeyOf` a payload it built itself, which is why this survived 610 checks). |
+| ~~The ammo's `modifier` id is ruled onto the payload but is not on it~~ | ✅ **CLOSED 2026-08-09.** `AMMO_EFFECT_FIELDS` had had `modifier` **replaced** by `caliber` rather than joined by it, so `payload.modifier` was `undefined` on every real shot and every load resolved through `ammoFxKeyOf`'s fingerprint branch — collapsing `dualPurpose` onto `ap`, the one case the id exists to settle. Both fields now sit in the list, with the comment block saying why one may never displace the other. The guard is the point: `tests/cp2020-augmented-b1-seam-payload.mjs` now fires bench guns **07** (`api`, 5.56) and **16** (`dualPurpose`, 20/9mm) through the real UI path and asserts `payload.modifier`, `payload.caliber` and the resolved key off the payload the hook actually carried — plus, on that same object, that stripping the id makes it answer `ap`. Reverting the one string turns four of its legs red. See §6. |
 | **The burning ground's size, density and lifetime are not signed off** | ⚠ **The open item of this unit.** The asset was chosen by measurement and the placement was ruled, but three numbers are look calls the build lane made while the user was away: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**, and a flame burns **45 s**. Each is one constant, and a veto costs nothing: `GROUND_FIRE.squares`, `.maxPerPayload` / `.maxPerPattern`, `.lifetimeMs`. Captures 61a–61d. |
-| A shell fired with the shot pattern **switched off** is claimed by neither flow | ⚠ Pre-existing, in the DAMAGE routing rather than in this rail, and surfaced by building against it. `_hookWeaponFired` stands down for any non-single cartridge and `_hookSpread` stands down when the world setting is off, so with the setting off a buckshot payload opens no damage window and throws no pattern. The burning ground follows the mechanics — it draws nothing either — which is the right way round but does not fix the routing. |
+| ~~A shell fired with the shot pattern **switched off** is claimed by neither flow~~ | ✅ **CLOSED 2026-08-09.** The world switch is now part of the flow question itself, asked at one shared site (`spreadFlowModeOf`, lookups.js) by both damage gates and by `patternFlowOwns`. With the pattern off a shell resolves to `single`, so the ordinary apply flow claims it exactly as it claims a slug, and the fan-out draws an incendiary shell's burning ground itself because no confirm will. Pinned three ways: the spread-zone spec drives a shell with the setting off and asserts the single-target flow **claimed** it (and that no pattern was placed), the fx-rail spec drives the same payload's fires on the rail, and a source leg asserts the damage rail reads the setting **nowhere** of its own. Both specs restore the setting in a `finally`. See §1.1a and §6. |
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
 | The discharge column's on-screen presence at the new trim | The tail ruling cut the clip from 300 ms to 55 ms and a 220 ms dwell replaces the lost presence, so the blast is now a short bright bloom rather than a developing one. Measured delivery is ~160 ms of wall clock rather than the 220 asked for (media start-up plus rate slippage under load). Nothing is wrong; it is a **look** call the user has not yet made in motion — the dwell is one constant. Captures 57a/57c. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
