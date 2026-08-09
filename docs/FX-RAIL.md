@@ -162,7 +162,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit**, and the row has `impactSquares` | yes |
 | 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, **45 s**, one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
 | 11 | **Scorch** | `jb2a.scorched_earth.black` | with #10 — **one** mark at the flames' centroid, however many flames | **no** (a black mark is not a light) |
-| 12 | **Blood splash** | `jb2a.liquid.splash02.red`, trimmed to 900 ms, random rotation | the world setting **and** ≥ 1 round landed **and** there is a target token **and** that token's actor is not structure — **once per payload** | **yes** — a deliberate departure, below |
+| 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4 | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
 *lit by the world* stays below it. This is not cosmetic: measured on the rig at darkness 1.0, a sprite
@@ -185,6 +185,26 @@ The scatter is **seeded off the payload** (`fxSeedOf` → `seededRng`), so two c
 and a test can compute it twice. Across bursts a scene holds at most **`maxLive` = 24** flames; a
 placement that would exceed it ends the **oldest** first, through the engine's own manager, which
 relays the end to every client exactly as the placement was relayed.
+
+**How the blood splash is aimed and how often it is drawn (#12), rebuilt 2026-08-09.** Both halves
+of this were reversed on report and both reversals are recorded in §6.
+
+*Direction.* The first build used `liquid.splash02.red` precisely **because** it is radial — its ink
+centroid holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it needed no rotation and could
+never disagree with the shot axis. That safety is what made it wrong: a radial burst says the wound has
+no direction. The shipped asset is now `liquid.splash_side02.red`, whose ink **traverses** its own frame
+0.29 → 0.65 left-to-right, and it is rotated (`rotateTowards`, the tracers' own call and the tracers'
+own basis) at a point **one grid unit beyond the target on the shooter→target ray**. The spray therefore
+continues the round's line and leaves on the far side, as an exit. A shot with no shooter — nothing on
+the rail draws one today, but the verb is callable — falls back to a random rotation rather than to a
+baked heading, because a wrong direction is a worse lie than none. Capture 64a.
+
+*How many.* One spray per **landing round**, not one per payload, capped at `maxPerPayload` = **4**.
+The cap is measured rather than picked: the clip lives 900 ms and hits are the leading rounds of the
+burst, so at the default 80 ms cadence ten hits would put ten sprays inside one clip's life — a fountain
+rather than a body being hit repeatedly. Four are still four distinguishable arrivals, each still on
+screen when the next lands. A round the pacing rule **refuses** (§4.1a) draws no spray either; the spray
+is issued from inside the round's own draw block, so the two can never disagree. Capture 64b.
 
 **The one departure from that rule is the blood splash (#12).** Blood is not a light source, so the
 rule as written puts it below — and on the rig's own dark range that is not a dimmer effect, it is no
@@ -237,7 +257,7 @@ both, always, and with the same shift.
 | Modifier | Tracer/column | Impact | Impact width | Fan | Light | Ground |
 |---|---|---|---|---|---|---|
 | `standard`, `brassCased` | — | — | — | — | — | — |
-| `api` | red-shifted (hue −20, sat +0.30, bright 1.20) | fire impact | class | — | **tinted `#ff6a1a`** (dark only) | fire + scorch |
+| `api` | red-shifted (hue **−14**, sat +0.30, bright 1.20) | **class default** ⏪ | class | — | **tinted `#ff6a1a`** (dark only) | fire + scorch |
 | `ap` | near-white (hue 8, sat −0.85, bright 1.45) | ground crack | class | — | — | — |
 | `dualPurpose` | *identical to `ap`* | ground crack | class | — | — | — |
 | `hollowPoint` | — | — | **× 1.60** | — | — | — |
@@ -353,10 +373,13 @@ fxGroundFire(points)               ← ONE placement, N flames, incendiary + at 
                                      the single-target flow owns the payload; NOT awaited
 fxBloodSplatter()                  ← once, gore on + a hit + a flesh target token; NOT awaited
 for each round i of shots:
-    if i > 0: await cadenceMs      ← the ONE wait in the loop
+    sleep until t0 + i×cadence      ← the ONE wait, and it is ANCHORED (§4.1a)
+    if this round is too late:     ← DROP it entirely and go to the next
+        continue
     sfx()                          ← audio
     fxSmokePuff()                  ← single-discharge classes only; NOT awaited
     fxShot()                       ← light + sprites + tracer + impact; NOT awaited
+    fxBloodSplatter()              ← landing rounds only, up to the cap; NOT awaited
 _watchSettleTag(settleTag, presentationTailMs(class, ammo))
 ```
 
@@ -370,6 +393,78 @@ not which, and inventing an order would be inventing a fact.
 is `payload.fumbleRuled` (the base actually resolved a fumble), *not* a natural 1: with the fumble
 table switched off a natural 1 is an ordinary bad roll and the weapon really did fire.
 
+### 4.1a Pacing: an anchored schedule, and a late round dropped rather than queued
+
+**The report.** Animations ran in slow motion, queued behind the audio, and went on arriving after the
+shooting had stopped — worst on the heavy multi-sprite payloads (flechette's 8 darts a round, the
+shell's column plus fan).
+
+**The mechanism, measured on the rig 2026-08-09 rather than reasoned about.** The loop paces by the
+wall clock while everything it queues is drawn by the render loop. The old loop waited a **fixed**
+`cadenceMs` each iteration, so every millisecond a round's timer fired late was *added* to the next
+round's start instead of being absorbed — the error compounded, without bound:
+
+| Rounds (shell, 180 ms cadence, flechette) | Intended | Measured before | Ratio |
+|---|---|---|---|
+| 5 | 720 ms | 1 534 ms | 2.13× |
+| 10 | 1 620 ms | 3 630 ms | 2.24× |
+| 20 | 3 420 ms | 7 617 ms | 2.23× |
+| 30 | 5 220 ms | **11 681 ms** | **2.24×** |
+
+The obvious suspect is wrong, and it changes the fix: **building a round's Sequence is cheap** —
+`fxShot`'s synchronous cost measured at a median of **1 ms**. The lateness is the loop's own
+`setTimeout` being starved while the engine draws what earlier rounds already queued (the same run
+measured the canvas at 5 FPS with 421 effects live). No amount of making the round body cheaper touches
+it; the loop has to stop trusting that its sleep slept for the time it asked for.
+
+**Half one — the schedule is anchored.** Round *i* is due at `t0 + i × cadence` (`roundDueAtMs`), and the
+loop sleeps only the **remainder** to that instant. A round that ran late no longer pushes its
+successors: lateness is measured fresh each round against a fixed origin instead of accumulating.
+
+**Half two — a round that still cannot start on time is DROPPED, not queued.** User ruling 2026-08-09,
+verbatim reason: *"the audio already told the ear the story."* The round goes **entirely** — its audio
+with its picture. The first build of the rule kept the audio and refused only the sprites; the rig
+refused that reading by measurement, because a starved loop reaches several slots at once and keeping
+the audio put two and three reports in a single tick (measured gaps of **231, 0, 235, 0 ms** across one
+five-round burst). Dropping the round outright leaves the rounds that *do* play sitting on their own
+slots — the burst keeps its rhythm at the cost of a round, rather than losing the rhythm to keep one.
+
+**The threshold is half a slot** (`FX_DROP_LAG_FRACTION` = 0.5 → 40 ms at the default 80 ms cadence,
+90 ms at the shell's 180 ms), and it is a **fraction rather than a flat figure** for a reason the
+arithmetic settles. The gap between two rounds that both get drawn is `cadence − (how late the earlier
+one was)`. A flat 150 ms shipped first — and the rig refused it on the second run, at the default
+cadence, with gaps of **256, 1, 256 ms**: a round drawn 150 ms behind its slot is already past the next
+round's slot, so the two are drawn together. At half a cadence no round is ever drawn more than half a
+slot late, and therefore **no two drawn rounds are ever closer together than half a cadence**. That is a
+property of the arithmetic, not of the host, and a keeper leg pins it at every cadence the table ships.
+
+**⛔ The last round is never dropped**, however late. It carries the settle tag, so the completion signal
+is always named on an element that is certain to be drawn — which is what makes retagging machinery
+unnecessary and what stops the apply window ever waiting on a refusal.
+
+**What it costs a healthy client: nothing.** Timer lateness on a client that is keeping up is a frame or
+two, well inside 40 ms, and a keeper leg drives a ten-round burst with the threshold held out of reach
+and asserts `dropped === 0`. The rule is also self-correcting, which is what actually retires the
+report: dropping late rounds removes exactly the queued work that was starving the timer.
+
+**Measured after, same host, same payloads:**
+
+| Rounds | Intended | After | Drift |
+|---|---|---|---|
+| 5 | 720 ms | 785 ms | +65 ms |
+| 10 | 1 620 ms | 1 797 ms | +177 ms |
+| 20 | 3 420 ms | 3 639 ms | +219 ms |
+| 30 | 5 220 ms | **5 309 ms** | **+89 ms** (was +6 461 ms) |
+
+The fan-out reports `dropped`, `maxLagMs` and `loopMs` on its result, so the pacing is readable rather
+than inferred. `_setDropLagMs(ms)` is a test seam for an absolute threshold; nothing ships with it armed.
+
+**One knock-on, and it was a real bounding defect.** The faster hand-over exposed a race in the burning
+ground's scene cap: the cap read `liveGroundFires()`, but the engine does not create an effect until its
+own play resolves, so two placements issued inside that beat both read the same number and both
+under-evicted — eight bursts left **28 flames alive against a cap of 24**. Flames now queued but not yet
+created are counted too (`pendingGroundFires`), which makes the cap hold rather than approximately hold.
+
 ### 4.2 The tail, and when the damage window may open
 
 The damage window waits for the rail. Three routes, and each reports which one it took:
@@ -382,6 +477,18 @@ The damage window waits for the rail. Three routes, and each reports which one i
 
 The **terminal elements** are the last round's tracer and impact; only they are named for the engine to
 report on. The scheduled tail is the *floor* (never open early) and the fallback.
+
+**A watch now always ends.** Both of the watch's original exits require a count to be right — the
+scheduled fallback fires only when *nothing* was created, and the engine exit only when `ended` catches
+`created` — so a watch whose elements were created but never all reported gone satisfied neither and sat
+in the maps for the rest of the session. Measured: five overlapping 30-round fan-outs left **2 of 5**
+watches unresolved and still holding their payloads fifteen seconds after everything had left the
+screen. The apply window was never at risk (`presentationSettled` always races the cap), but the
+bookkeeping grew without bound. A hard stop on the **same** `PRESENTATION_CAP_MS` the window already
+honours now drops the entry; because any waiter has already taken the capped answer by then, it cannot
+change what a caller observes. Note that a 30-round shell burst legitimately runs past that cap on a
+slow client — 5.2 s of firing plus its tail — and opens the window at the ceiling; it did so far harder
+before this unit, when the same burst ran 11.7 s.
 
 `presentationTailMs(class, ammoKey)` — the longest of: light envelope · lance dwell · spark clip ·
 tracer end (travelled: `dashMs + 260`; painted: 933) · impact end (`dashMs + impactClipMs`) · **column
@@ -442,6 +549,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 |---|---|---|
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
 | `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
+| `FX_DROP_LAG_FRACTION` | **0.5** | how late a round may be before it is dropped, as a share of its own slot (§4.1a). 0 drops nothing — anchoring alone, which measurably bunches. ⏪ the earlier flat figure was **150 ms**, which does not hold the separation guarantee at any cadence we ship |
 | `MUZZLE_MODE` | `"cone"` | flash shape: `cone` / `omni` / `hybrid` |
 | `MUZZLE_LIGHT.coneDegrees` | 270 | wedge width (a 90° notch behind the shooter) |
 | `MUZZLE_LIGHT.luminosity` | 0.65 | flash strength — **raised from the reference's 0.5 on request** |
@@ -457,7 +565,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `DASH_ARRIVAL_HOLD_MS` | 260 | how long a travelled pellet lives after arriving |
 | `TRACER_CLIP_MS` | 933 | painted tracer's on-screen life (upper bound of the mapped families) |
 | `TRACER_COLOR` | hue 18, sat −0.35, bright 1.15 | the class colour shift |
-| `TRACER_COLOR_INCENDIARY` / `_HARDENED` / `_BATON` | see §3.2 | the ammo colour shifts |
+| `TRACER_COLOR_INCENDIARY` / `_HARDENED` / `_BATON` | see §3.2 | the ammo colour shifts. ⏱ incendiary eased 2026-08-09, hue −20 → **−14**; ⏪ the revert value **−20** is recorded at the site, saturation and brightness unchanged |
 | `TRACER_COLOR_INERT` | hue 0, sat −0.55, bright 0.60 | ⏪ **retired from use** — the rejected darkening; declared, on no shipped row |
 | `BATON_ROUND` | `throwable.launch.cannon_ball.01.black`, 2.4 sq frame, 240 ms crossing | the whole less-lethal representation, in one block |
 | `IMPACT_FIRE` / `IMPACT_CRACK` / `IMPACT_DUST` | keys + measured clip lengths | the promoted impacts |
@@ -471,7 +579,8 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `GROUND_FIRE.maxPerPattern` | 5 | the most flames one confirmed shot pattern may scatter |
 | `GROUND_FIRE.maxLive` | 24 | the most flames alive on a scene at once — oldest evicted first |
 | `GROUND_SCORCH.lifetimeMs` | 180000 | the scorch's cap — **minutes, not forever** |
-| `BLOOD_SPLATTER.key` | `jb2a.liquid.splash02.red` | the splash asset — **natively blood-coloured, no filter is applied** |
+| `BLOOD_SPLATTER.key` | `jb2a.liquid.splash_side02.red` | the splash asset — **natively blood-coloured, no filter is applied**; the SIDE (directional) cut, rotated to the exit vector. ⏪ the radial `splash02.red` is still on the tier |
+| `BLOOD_SPLATTER.maxPerPayload` | 4 | the most sprays one payload may draw — repeated spray, never a fountain |
 | `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
 | `BLOOD_SPLATTER.clipMs` | 900 | the trim — content is spent by ~700 ms of an 1133 ms file |
 | `BLOOD_SPLATTER.aboveLighting` | `true` | the documented departure from the routing rule (§2) |
@@ -485,7 +594,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `FACE_TARGET.durationMs` / `minDegrees` | 220 / 5 | the turn sweep and its dead zone |
 
 Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setDashMs`,
-`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`.
+`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`, `_setDropLagMs`.
 
 **The shot pattern's knobs**, which are not in `effects.js` because the pattern is not a sprite:
 
@@ -502,6 +611,28 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-09 — the pacing unit.**
+
+| Ruling | Value | Why |
+|---|---|---|
+| A round that cannot start on its slot is **dropped, not queued** | `FX_DROP_LAG_FRACTION` 0.5 | User, verbatim: *"the audio already told the ear the story."* The fan-out paced by wall clock against a render loop, with a fixed per-round sleep, so timer lateness compounded — a 30-round shell burst measured **11 681 ms against an intended 5 220 ms (2.24×)**. Anchoring the schedule plus dropping the late rounds brings the same burst to **5 309 ms (+89 ms)**. §4.1a |
+| The drop takes the round's **audio** too | — | ⏪ The first build kept the audio and refused only the picture. A starved loop reaches several slots at once, so keeping the audio put two and three reports in one tick — measured gaps of **231, 0, 235, 0 ms**. The rhythm is worth more than the round. |
+| The threshold is a **fraction of the cadence**, not a flat figure | 0.5 → 40 ms / 90 ms | ⏪ A flat **150 ms** shipped first and the rig refused it at the default 80 ms cadence: gaps of **256, 1, 256 ms**. A round drawn more than half a slot late is already past the next slot, so the two draw together. Half a cadence makes "no two drawn rounds closer than half a cadence" arithmetic rather than hope. |
+| The **last round is never dropped** | — | It carries the settle tag. Keeping it means the completion signal is always named on a drawn element, so the apply window can never wait on a refusal — and no retagging machinery is needed. |
+| A settle watch always ends | hard stop at `PRESENTATION_CAP_MS` | Neither original exit fires for a watch whose elements were created but never all reported gone; five overlapping fan-outs left **2 of 5** in the maps indefinitely. Resolving on the cap the window already honours cannot change what a caller sees. §4.2 |
+| Flames **queued but not yet created** count against the scene cap | `pendingGroundFires` | Exposed by the faster hand-over: two placements inside one beat both read the same `liveGroundFires()` and both under-evicted — **28 alive against a cap of 24**. |
+
+**2026-08-09 — the blood rebuild and the api report.**
+
+| Ruling | Value | Why |
+|---|---|---|
+| The spray is **directional**, along the shot | `jb2a.liquid.splash_side02.red`, `rotateTowards` a point one grid unit beyond the target | User, verbatim: *"It's angled. The blood pushes out in a direction. It should move in the same direction as the bullet that strikes the target."* ⏪ supersedes the radial `splash02.red`, which had been chosen **because** it was radial (centroid fixed at 0.50/0.51 of its frame) and so could never disagree with the axis — the very property that made it say the wound had no direction. The side cut's ink traverses 0.29 → 0.65 of its own frame. Capture 64a. |
+| One spray per **landing round**, not per payload | cap 4 | ⏪ User, on the MPK-9 burst: a ten-round burst marked its target exactly as hard as a single shot. The cap is measured — the clip lives 900 ms and hits are the leading rounds, so ten hits at an 80 ms cadence would overlap ten sprays inside one clip's life. Four read as four arrivals. Capture 64b. |
+| Each spray runs on its round's **visual-impact clock** | `delayMs` = the load's `dashMs` | The spray starts when *its* round arrives, not when the payload resolved. A round the pacing rule refuses draws no spray either — the two share one draw block. |
+| The incendiary **blast ring on the target** is withdrawn | `AMMO_FX.api.impactKey` removed | User, verbatim: *"get rid of the blast circle that lands on the target. I think multiple are being placed."* Removing the field is the whole fix — the row falls through to the class's own standard hit mark, like every unpromoted load. The tail is unchanged (the promotion was already trimmed to 833 ms). The tinted rounds, tinted flash and burning ground all stay; `IMPACT_FIRE` stays declared, one field from returning. Capture 64c. |
+| The incendiary red is **eased one notch** | hue −20 → **−14** | User. Saturation and brightness were never in question. ⏪ The revert value −20 is recorded at the site. |
+| The out-of-combat pattern TTL **works as built** | — | Verified live end to end on a real fired pattern: placed with no owning encounter, still present at 20 s, removed by the module's own interval at **70.0 s** (TTL 60 s + one 15 s sweep tick). The lingering patterns that prompted the check belonged to the **round** rule, not the clock rule — see §8. |
 
 | Date / ref | Ruling | Why |
 |---|---|---|
@@ -549,7 +680,7 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **BLOOD, 2026-08-09** | **No blood on a target that takes damage into structure** | Vehicles, powered armour and full-conversion bodies do not bleed. Asked at the ACTOR level (`bearsStructuralSdp`), which is the honest limit — see the next entry. |
 | **BLOOD, 2026-08-09** | The target-type question is asked **of the actor, not of the zone** | `routesToSdp` is the function that really decides, and it takes a hit LOCATION the payload does not carry: the card says how many rounds landed, never where. So a cyberlimbed character reads as flesh and still bleeds when the round in fact struck the arm. The alternative — suppressing blood for anyone wearing chrome — would be wrong far more often. A keeper leg pins both halves: the arm routes to structure, the actor does not. |
 | **BLOOD, 2026-08-09** | ⏪ The free tier **does** carry a blood-coloured asset; no colour filter is used | The unit's own design note said "no blood family, red-tint a liquid splash". Half right: nothing is *named* blood, but `jb2a.liquid.*` ships red variants. Decoded off the installed file, this one means R91 G1 B1 at 113 ms, R95 G1 B2 at 283 ms, R157 G3 B4 at 453 ms — a deep near-black red with the other two channels at zero. A ColorMatrix over that would repaint red with red. |
-| **BLOOD, 2026-08-09** | The **radial** liquid, not the side one | Measured centroids: `splash02.red` holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it is radial about its centre and needs no rotation to agree with the shot; `splash_side02.red` traverses 0.29 → 0.65 and is a directional wave. Rotation is randomised only so two hits are not the same picture. |
+| **BLOOD, 2026-08-09** ⏪ **REVERSED the same day** | Chose the **radial** liquid; the **side** one now ships | Measured centroids: `splash02.red` holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it is radial about its centre and needs no rotation to agree with the shot; `splash_side02.red` traverses 0.29 → 0.65 and is a directional wave. The measurement stands and the conclusion drawn from it did not: "cannot disagree with the axis" was treated as a virtue, and the user ruled that a wound with no direction is the defect. The traversal that disqualified the side cut is exactly what now qualifies it. See §6. |
 | **BLOOD, 2026-08-09** | Size is the drawn **frame**, 1.5 sq; trim is where the **content** ends, 900 ms | Ink coverage falls from 17.1% of the frame at 283 ms to 0.07% at 680 ms and peak alpha is 5/255 by 963 ms, so 900 keeps every frame that has anything in it. The frame-vs-ink distinction is the same trap the flechette dart length records. |
 | **BLOOD, 2026-08-09** | Drawn **above the lighting**, against this file's own routing rule | Below it, on a dark scene, the mark does not exist (capture 58d). The accepted cost is the vision mask, for under a second. Stated as a departure with a knob rather than folded in silently. |
 | **BLOOD, 2026-08-09** | **Once per payload**, and never part of the settle wait | The same rule and the same reason as the burning ground: the fan-out caps at 30 rounds, and the damage window may not be held for scene dressing. |
@@ -569,7 +700,7 @@ history. ⏪ marks a decision that reversed an earlier one.
 | **SPREAD, 2026-08-09** | The pattern reaches the **far edge of the target's own square**, not its centre | Found by the keeper, not by eye: ending the ray exactly at the aimed-at centre put that centre *on* the polygon's end edge, so whether the token the shooter aimed at was inside its own pattern came down to a floating-point comparison. Reproduced on the rig — a three-shell burst resolved against a bystander and missed the target entirely. Half the target's own width is the smallest overshoot that settles it, and it costs no other square. |
 | **SPREAD, 2026-08-09** | An **untargeted** shell is thrown along the shooter's facing | The same answer, for the same reason, that the presentation rail already gives an untargeted shot (§6, "An untargeted shot is drawn along the shooter's own facing"). It was due east before. Honest limit, unchanged: it is only as good as a token's rotation, and the band stays Medium because an untargeted shot names no distance. Capture 60e. |
 | **BURNING GROUND, 2026-08-09** | ⏪⏪ The **ground-crack asset is rejected outright**, not re-tuned | *"The 'on fire' effect that goes on the ground when incendiary hits is not what we're looking for. First off, it looks like a ground shock effect of some kind, not fire. It darkens and cools, making it not look like an active flame."* Half of "darkens and cools" was ours and half was the asset's, and the fixes differ: decoded off the installed GroundCrackLoop file its own luminance is **flat** — mean 55–57/255 and 46 % of the frame lit at every one of twelve sample points — so the cooling was our own envelope, a 900 ms fade on a 3200 ms life, i.e. 28 % of the element was a dim-down. What no envelope could fix is the picture: it draws glowing **fissures in the floor**, which is cooling magma. The family stays in the file as the armour-piercing load's *impact* mark, which is a different element and was never the thing reported. |
-| **BURNING GROUND, 2026-08-09** | The fire is `jb2a.flames.orange.03.1x1` | Chosen from a closed enumeration of the installed tier — 2061 keys, every family whose name carries fire/flame/burn/ember/torch/brazier/lava/scorch/crack, then decoded frame by frame. Two facts decided it. **Top-down:** its own filename says 05x05ft, so it is a square ground plate; the tier's other genuine loops that hold their light are 400×600 (`Flames04`) and 400×1000 (`Campfire03`) portraits — a flame seen from the *side*, which laid on a floor reads as a wall sprite. **No decay:** 5000 ms, and its tail third measures **brighter** than its own middle (ratio 1.19), so it cannot cool inside its loop. Rejected with reasons: `campfire.01` / `bonfire.01` are ringed with **stones**; `braziers.*` has a bowl; `fire_trap.01` is a comet streak, not a fire; `fireball.loop_no_debris` is a whole burning field at 49 % coverage; `impact.fire` (already the incendiary hit mark) decays to **zero** by 1417 ms of its 2267 and is not a loop at all. |
+| **BURNING GROUND, 2026-08-09** | The fire is `jb2a.flames.orange.03.1x1` | Chosen from a closed enumeration of the installed tier — 2061 keys, every family whose name carries fire/flame/burn/ember/torch/brazier/lava/scorch/crack, then decoded frame by frame. Two facts decided it. **Top-down:** its own filename says 05x05ft, so it is a square ground plate; the tier's other genuine loops that hold their light are 400×600 (`Flames04`) and 400×1000 (`Campfire03`) portraits — a flame seen from the *side*, which laid on a floor reads as a wall sprite. **No decay:** 5000 ms, and its tail third measures **brighter** than its own middle (ratio 1.19), so it cannot cool inside its loop. Rejected with reasons: `campfire.01` / `bonfire.01` are ringed with **stones**; `braziers.*` has a bowl; `fire_trap.01` is a comet streak, not a fire; `fireball.loop_no_debris` is a whole burning field at 49 % coverage; `impact.fire` (then the incendiary hit mark, since withdrawn — §6) decays to **zero** by 1417 ms of its 2267 and is not a loop at all. |
 | **BURNING GROUND, 2026-08-09** | ⏪ **N flames at the landing points**, not one at the target | *"I was picturing something more like little animated flame decals that stayed burning on the ground in the places the shots landed, not just on the target."* Neither branch invents a position: a fanning class already computes real per-pellet endpoints for its tracer, so a subset of those **is** where its shot landed; a single-bolt class puts every round on one aim point, so its rounds are scattered inside a 0.8-square disc — an admission that the exact square is not known, which is the same limit that makes the fan-out assign hits to the leading rounds. |
 | **BURNING GROUND, 2026-08-09** | A pattern shot's fires belong to the **path**, and are placed on **confirm** | For buckshot the Core rules put the shot across the whole 1–3 m path and the module already asserts that by damaging everyone in it, so "where the shot landed" is not the target. The geometry is owned by the flow that drew it, and the fires go down when the **GM confirms**: an unconfirmed pattern is a GM-only aiming aid and a fire is not, so lighting the ground mid-decision would leak the aim and leave fires burning for a shot nobody resolved. The rail correspondingly draws none for a pattern payload, gated on the **same call** the two damage gates make (`spreadFlowModeOf`) so the three cannot disagree. |
 | **BURNING GROUND, 2026-08-09** | The gate is now **one placement event per payload**, and two bounds replace the old one | The old rule said "one fire" and existed because the fan-out caps at 30 rounds — a per-round lingering element would be thirty fires on one square for one trigger pull. That bound is unchanged: the call still sits outside the round loop, so the loop cannot multiply it, and `maxPerPayload` (4) holds the placement itself down. A **second** bound is new because these live for 45 s rather than 3.2: `maxLive` (24) caps what may burn on a scene at once, enforced by ending the **oldest** — the shot a viewer is watching is the one that must be drawn. |
@@ -597,7 +728,14 @@ rather than by showing nothing) · the flash envelope by value, the applied writ
 **no document write reaches the shooter token** other than the face-target rotation · the fan-out's
 counts and cadence · the ammo overlay resolution, every treatment's values, the tail threading, the
 burning ground's placement gate, its planners and its scene cap, and the flash tint through the
-darkness gate · two real sessions, to
+darkness gate · **the pacing contract** — the anchored slot ladder and the drop decision as pure values
+(including the separation guarantee at every shipped cadence and the last-round exemption), then live
+both ways: the threshold held out of reach to prove a healthy client drops **nothing**, and the
+threshold at the floor with a 30-round flechette fan-out (a load this host genuinely cannot keep up
+with, so the refusals are real) to prove late rounds are dropped, the burst still ends on its own
+schedule, the last round still carries the settle name, and the window still closes on the engine's
+signal · **the api overlay after the report** — no promoted mark on any class, the eased hue with its
+revert value, and the other promotions untouched · two real sessions, to
 prove the socket relay draws a flash on a client the fire never ran on · a non-GM session driving a
 write, because a rule that reads right and a write the server refuses look identical from the GM's
 side · 0 console errors.
@@ -781,8 +919,13 @@ before it fires, or it attributes one shot's dialog to the next one's payload.
 | The discharge column's on-screen presence at the new trim | The tail ruling cut the clip from 300 ms to 55 ms and a 220 ms dwell replaces the lost presence, so the blast is now a short bright bloom rather than a developing one. Measured delivery is ~160 ms of wall clock rather than the 220 asked for (media start-up plus rate slippage under load). Nothing is wrong; it is a **look** call the user has not yet made in motion — the dwell is one constant. Captures 57a/57c. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
 | Real decal persistence (scorch, and blood) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. Today's scorch is session-bound by choice, and the blood splash is transient by ruling — floor decals were explicitly held out of phase 1. Both change at the same time, in the same way, whenever that ruling arrives. |
+| ~~Animations run in slow motion and trail out after the shooting stops~~ | ✅ **CLOSED 2026-08-09.** Measured, not guessed: a fixed per-round sleep against a starved timer compounded to **2.24×** on every burst size tried. Anchored schedule + drop rule brings a 30-round burst from +6 461 ms of drift to **+89 ms**. §4.1a, and the keeper drives both halves. |
+| ~~The out-of-combat pattern TTL may not be deleting~~ | ✅ **CHECKED LIVE 2026-08-09, and it works.** A real fired pattern was placed out of combat, was still there at 20 s, and was removed by the module's own interval at **70.0 s** (TTL 60 s + one 15 s tick), with nothing called by hand. What had been seen lingering was a different rule — see the row below. |
+| **A started encounter that never advances a round keeps its patterns forever** | ⚠ **Found during the 2026-08-09 autopsy; needs a ruling, not a fix.** 11 patterns were sitting on the rig's review scene 105 minutes after they were thrown. All of them belonged to an encounter that was **started and still on round 3**, and both clocks decline them by design: the wall-clock rule stands down whenever the owning encounter is running (`encounterRunning`), and the round rule only fires on a round **advance**. So an encounter left started and idle makes its patterns immortal. That is the rules as written — a pattern belongs to the round it was thrown on — but a table that stops advancing rounds accumulates them. Options are a wall-clock backstop for in-combat patterns, or a sweep when an encounter is deleted; both are design calls. |
 | Blood asks the ACTOR, not the hit location | A cyberlimbed character bleeds even when the round struck the chrome arm. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. |
 | The blood splash is routed above the lighting | The one departure from the file's own routing rule, taken because below it the mark does not exist on a dark scene. It is a **look** call the user has not yet made in motion: the cost is that a splash is drawn over ground the viewer cannot see, for under a second. One constant (`BLOOD_SPLATTER.aboveLighting`) reverses it. Captures 58a vs 58d. |
+| **The rebuilt blood splash is not signed off** | ⚠ **The open item of this unit.** The direction and the per-hit rule are both rulings and both are built; the remaining numbers are build-lane calls made while the user was away — the payload cap of **4** and the one-grid-unit exit offset that sets the heading. Each is one constant (`BLOOD_SPLATTER.maxPerPayload`; the `+ gridPx` in `fxBloodSplatter`). Captures 64a (angled shot, held) and 64b (burst). |
+| **The incendiary load still burns the ground the target is standing on** | ⚠ **Raised by capture 64c, needs a ruling.** The blast ring the report named is gone. But on a hit the aim point *is* the target's square, so the burning ground — which was ruled to stay — still lands there and reads as fire on the target. If what was actually objected to was the fire rather than the ring, the fix is a different one (offset the landing points off the target, or suppress ground fire on a hit). One look at 64c settles which. |
 | **The slug is modelled as a LOAD, and that is a build-lane call** | ⚠ **The open item of the spread unit.** The registry has one shotgun cartridge, `"00"`, labelled *"00 Buck / Slug"* — so nothing about the caliber can say which is chambered, and the build expressed the slug as a shotgun-family ammo modifier instead (see §6). The alternative is splitting the cartridge into two registry entries, which is a migration and a re-seed and would break the gauge aliases that currently all point at one id. A veto is cheap by construction: the whole thing is one row in `AMMO_MODIFIERS`, one option on the ammo sheet's spread selector, and the first branch of `spreadModeForAmmo`. |
 | One shipped shell weapon records **no gauge** | 10 of the 11 shell weapons in `supplement-shotguns` carry a gauge in `ammoType`; one carries an empty string, so it reports no cartridge and throws no pattern until an ammo item is loaded. Same shape as the known blank-`vehicleType` data gap, and it belongs to the pack-data sweep rather than to this rail. |
 | The pattern's look is **verified on v14 only** | `spread-zone-look.js` carries a v13 branch (a MeasuredTemplate's own alpha, and its control icon hidden) written from that core's API and never run: the ship target is v14 and the rig is v14. Structurally the same two facts; it is untested and says so at the site. |
