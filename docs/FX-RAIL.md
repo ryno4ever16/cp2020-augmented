@@ -73,6 +73,16 @@ One payload is resolved by **exactly one** of two flows, and they never overlap:
                                                                  path, deletes the zone
 ```
 
+⭐ **What the pattern CARRIES** (2026-08-10, review finding F7). The zone the GM aims is the only record
+of the shot by the time anyone clicks Confirm, so it has to carry everything the shell will do — not just
+the armour half. Its flags hold the armour terms (`ap`, `edged`, `mono`, `armorMult*`, `penDamageMult`),
+the banded damage and geometry, both lifecycle clocks — **and the load's per-hit riders**
+(`stunSaveOnHit`, `stunSaveMod`, `dotEnabled`, `dotTurns`, `dotType`, `dotDamageFormula`, `effectTypes`).
+`_confirmSpreadZone` applies those riders through `_applyAreaHitToToken`, which makes the **same two
+calls the single-target flow makes** (`updateTaserState`, then `applyDotFromPayload`) in the same order,
+once per landed shell per token. A load with no riders stores the inert values and neither call does
+anything, so the explosion path through the same helper is unchanged.
+
 Since 2026-08-09 there is a **third** caller of that same question and it is on the presentation side:
 `patternFlowOwns(payload)` in `fx/effects.js`, which decides whether the fan-out draws the burning
 ground or leaves it to the pattern's own confirm.
@@ -346,11 +356,37 @@ its own arrival, **our hit-confirmation mark is suppressed** for the duration of
 target's square carries two arrivals.
 
 **Which shots get it:** buckshot only, asked of the **cartridge** (`spreadModeForAmmo`) exactly the way
-the pattern flow asks. The slug and the flechette load keep the pictures they were just given.
+the pattern flow asks — **and only when the LOAD does not draw its own round** (`ammoRedefinesProjectile`,
+added 2026-08-10). The slug and the flechette load keep the pictures they were just given.
 
 ⚠ It deliberately does **not** read `spreadFlowModeOf`, which folds in the pattern's world switch. That
 switch decides what the module *does* with a shell; this is a question about what leaves the barrel, and
 a table that switched the damage pattern off has not thereby asked for a different-looking gun.
+
+⭐ **The load's own question, and why the cartridge's was not enough** (2026-08-10, review finding F9).
+"Buckshot" is derived from the *caliber*, and several **loads** of buckshot declare no spread mode of
+their own — so `api`, `ap`, `dualPurpose`, `stundart` and `rubber` 00 shells all fell into this branch,
+including the two whose entire row is a *different projectile*. A stun-dart shell was given the grey
+eight-dart fan by one ruling and then drew orange fireballs anyway; a baton round did the same.
+(Flechette and slug escaped only because they happen to declare a spread mode — a mechanical fact
+standing in for a presentation one: luck, not a rule.) The rule now lives on the **table**:
+
+```
+ammoRedefinesProjectile(key)   does this load's overlay name its own projectile geometry?
+        AMMO_FX_PROJECTILE_FIELDS = pellets · dashSquares · dashMs · tracer   (key presence)
+                 · standard / api / ap / dualPurpose  → false → the volley draws the round
+                 · stundart / rubber / flechette / slug → true → the load draws its own
+```
+
+Both the fan-out and `payloadPresentationMs` ask it, so the tail a shot is waited out for is always the
+tail of the picture it actually drew.
+
+⭐ **A branch that replaces the round still owes the resolved entry its treatments** (2026-08-10, the
+other half of F9). The volley now applies `entry.tracerColor` exactly as the pellet fan does — the same
+`if (entry.tracerColor)` expression one branch below — so an incendiary volley is red-shifted, a hardened
+one takes the hardened matrix, and the base shell's declared `tracerColor: null` paints it with nothing
+and leaves the settled look untouched. `fxShot` reports what it painted as `out.volleyColor` so the
+picture is readable by value rather than by eye.
 
 **The bands, and why a mirror of the engine's picker is unavoidable.** The database serves a *different
 file* per distance and each file bakes its own crossing. The switch points are not ours: they are
@@ -392,6 +428,26 @@ raising it much past 5 starts pushing a "hit" visibly off the target at long ran
 ⭐ **The seed folds in the round INDEX**, so an autoshotgun's three shells each throw their own
 differently-mirrored, differently-angled volley. A per-payload seed would have made a burst three
 identical copies — the report restated one level up. Capture **67b**.
+
+⭐⭐ **AND IT FOLDS IN THE ROLLED DAMAGE** (2026-08-10, review finding F3, user ruling: *"use a more
+dynamic seed… damage numbers"*). The round index alone answered the report one level down but not at the
+level it was made: attacker, weapon, round count, hit count and round index are **identical on two
+consecutive shots from the same gun at the same target**, so the second trigger pull computed the first
+pull's mirror and the first pull's angle. A bench firing repeatedly saw at most two pictures per gun —
+one for a hit, one for a miss.
+
+```
+shotSeed = fxSeedOf(attackerId, weaponId, shots, hits, roundIndex, JSON.stringify(areaDamages))
+                                                                   └── the rolled numbers: the same
+                                                                       term, in the same position, the
+                                                                       burning-ground seed already folds
+```
+
+Two identical trigger pulls differ because their **rolls** differ; two clients still agree because the
+rolls ride the payload both of them received. Determinism was never a property of the identity fields —
+it is a property of seeding off the payload at all. Pinned by six driven pulls that differ only in their
+damage numbers and must produce six distinct pictures (fx-rail §19); under the reverted seed that count
+is 1.
 
 **⏪ Revert, in one edit:** `VOLLEY.enabled = false`. Buckshot returns to the six travelled dashes the
 shell row has always described, the hit mark comes back with it, and the tail falls through to the
@@ -774,6 +830,18 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
 
+**2026-08-10 — the personal-review fixes (F3 · F9 · F7 · F1).** A read-only review of the whole FX arc
+raised nine findings; the user ruled four of them for fixing on the same day. All four are below, and
+each one closed a blind spot in the *keeper* as well as in the product.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⭐ **F3 — the volley seed folds in the ROLLED DAMAGE** | `fxSeedOf(attackerId, weaponId, shots, hits, i, JSON.stringify(areaDamages))` | User, verbatim: *"use a more dynamic seed… damage numbers."* Every term the seed had was identical across two consecutive shots from the same gun at the same target, so the chaos knobs answered "the volley is too neat" for the rounds of one burst and not for repeat trigger pulls: a bench firing the same gun saw at most two pictures. The rolled damage is the term the burning-ground seed already folds, in the same position — so the two seeds now have one shape between them. Clients still agree because the rolls ride the payload. §3.2b |
+| ⭐ **F9a — the volley honours the resolved entry's colour** | `if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor)` on the volley sprite; reported as `out.volleyColor` | A branch that REPLACES the drawn round still owes the load its treatments (standard rule 20). The volley read no overlay field at all, so an incendiary 00 shell drew the plain orange clip, `ap`/`dualPurpose` lost their hardened tint, and the standing *"update one shotgun ammo type's animation, update them all"* ruling was true of the pellet fan and false of the thing that replaced it. Same expression as the fan's, so the declared-vs-painted semantics carry over untouched: the shell row's `tracerColor: null` paints the base volley with nothing. |
+| ⭐ **F9b — a load that draws its own projectile is NOT replaced by the volley** | `ammoRedefinesProjectile(key)`; `AMMO_FX_PROJECTILE_FIELDS` = `pellets` · `dashSquares` · `dashMs` · `tracer` | `volleyOwns` asks the *cartridge*, and a stun-dart or baton 00 shell is buckshot by caliber while being a needle swarm or a blunt slug by picture — so the branch that replaces the round was replacing rounds the table had already described. The rule is written against the overlay table rather than against a list of load names, so a new row that names its own geometry is covered the day it is added. Both the fan-out and `payloadPresentationMs` ask it, so the tail matches the picture actually drawn. §3.2b |
+| ⭐ **F7 — the load's per-hit riders travel with the pattern** | zone flags gain `stunSaveOnHit` · `stunSaveMod` · `dotEnabled` · `dotTurns` · `dotType` · `dotDamageFormula` · `effectTypes`; `_applyAreaHitToToken` makes the single-target flow's own two calls | The pattern carried the ARMOUR half of what a load does and nothing else. That was invisible while only flechette threw a pattern (a load with no riders); the moment RAW buckshot joined the pattern flow, every 00 shell carrying riders lost them — a stun dart's −2 and an incendiary's ignition simply stopped happening, because the pattern outlives the payload and the region recorded neither. The confirm now applies them **per landed shell per token**, mirroring `_autoApply` exactly, including its ordering (the shock-state write before the prompt that reads it). Loads with no riders store the "does nothing" values, and a pattern placed before this change resolves unchanged. |
+| ⭐ **F1 — the canary gains two exception classes** | `skipped: "shooter"` bail; `jb2aActive()` gate | A sheet-fire by an actor with no token, and an install with the engine but no assets, are both ordinary and both made a healthy client say the module was faulty — the second while advising a reload that could not help. §7.5 |
+
 **2026-08-09 — the column deletion, the muzzle restoration, the volleybul trial and the identity pass.**
 
 | Ruling | Value | Why |
@@ -920,6 +988,22 @@ revert value, and the other promotions untouched · two real sessions, to
 prove the socket relay draws a flash on a client the fire never ran on · a non-GM session driving a
 write, because a rule that reads right and a write the server refuses look identical from the GM's
 side · 0 console errors.
+
+⭐ **§19, the review-fix section (2026-08-10)** — three legs' worth of blind spot the review found in
+*this spec* rather than in the product, each written so that reverting its fix fails it. The chaos had
+been varied across round **indexes** and never across two separate **trigger pulls**, which is exactly
+the case the identity-only seed got wrong: §19 drives six pulls that differ only in their rolled damage
+and requires six distinct pictures (the reverted seed gives one). The volley had been pinned as *which
+loads own it* and never as *what a tinted or a dart load looks like once it owns it*: §19 reads the
+matrix off the queued volley per load, and reads the dart fan on the loads that now escape it. And the
+presentation canary shipped with **no leg at all**: §19b stands the asset modules down on the client and
+provokes a whole discharge with every database key answering "missing", which must stay quiet — then
+§19c puts the assets back and provokes the identical shot, which must speak, so the quiet half is not a
+tautology. The pattern flow's half of the same review (the load's per-hit riders) is
+`tests/cp2020-augmented-spread-zone.mjs` §9, which reads the state the two rider calls write — the shock
+count and modifier, the threshold that modifier lowers with the rider removed as its own negative, and
+the armed over-time turns — plus a plain load that arms neither and a pre-change pattern that still
+resolves.
 
 **Assertion style.** Every pure helper on the rail (`muzzleSourceSpecs`, `pelletEndpoints`,
 `moteEndpoints`, `smokePuffPlan`, `presentationTailMs`, `flashColorFor`, `ammoFxEntry`, …) takes an
@@ -1145,8 +1229,24 @@ presented while the screen stayed empty.
   compares it to the count taken before. It splits its message by `result.flashes`: non-zero means the rail
   reached its build sites and the engine made nothing → **this client cannot draw, reload it**; zero means
   the rail never asked → **a module fault, reloading will not help**. Silent when no Sequencer is installed
-  (the light and the report are the whole presentation there, by design), when the rail deliberately bailed
-  (`skipped`: disabled / unrecognised class / ruled fumble), and when the count moved. Once per session.
+  (the light and the report are the whole presentation there, by design), **when no asset module is
+  installed beside it**, when the rail deliberately bailed (`skipped`: disabled / unrecognised class /
+  ruled fumble / **no shooter**), and when the count moved. Once per session.
+  ⭐ **Two exception classes were added 2026-08-10** (review finding F1), because a healthy client tripped
+  it in two ordinary situations.
+  **(a) A sheet-fire by an actor with no token placed anywhere.** Every draw verb is shooter-gated, so the
+  fan-out ran to draw nothing, reported nothing in `skipped`, and four seconds later told the table their
+  module was faulty. The rail now bails with `skipped: "shooter"` — *after* the load and the counts are
+  resolved, so the report still says what was fired, and *before* `_armSettlement`, so nothing is left
+  waiting on a promise nobody resolves. It also silences the report from nowhere, since the shot's audio
+  is played from inside the loop the bail skips.
+  **(b) Sequencer installed, no JB2A.** Every key then misses and every sprite is skipped *by the
+  silent-degrade rule*, so the creation count cannot move — while `flashes` is non-zero, which earns the
+  "reload this tab" message for a client whose only problem is that it has no asset library, and which a
+  reload will not install. Gated on `jb2aActive()`, which stays informational everywhere else
+  (`fxDbEntryExists` is the real per-key gate) and is exactly the right question here, where the subject
+  is not one key but whether there was ever anything to draw at all. The fx-rail keeper drives both halves
+  and then **provokes the canary for real** with the assets back, so the quiet half is not a tautology.
   ⚠ **It must not read at the moment the fan-out resolves.** The creation hook for the last queued round
   routinely lands after that promise settles, and on a one-round shot it almost always does — the first
   version did read there, called a healthy client dead, and was caught by the fx-rail keeper's
@@ -1179,6 +1279,10 @@ presented while the screen stayed empty.
 | ~~Animations run in slow motion and trail out after the shooting stops~~ | ✅ **CLOSED 2026-08-09.** Measured, not guessed: a fixed per-round sleep against a starved timer compounded to **2.24×** on every burst size tried. Anchored schedule + drop rule brings a 30-round burst from +6 461 ms of drift to **+89 ms**. §4.1a, and the keeper drives both halves. |
 | ~~The out-of-combat pattern TTL may not be deleting~~ | ✅ **CHECKED LIVE 2026-08-09, and it works.** A real fired pattern was placed out of combat, was still there at 20 s, and was removed by the module's own interval at **70.0 s** (TTL 60 s + one 15 s tick), with nothing called by hand. What had been seen lingering was a different rule — see the row below. |
 | **A started encounter that never advances a round keeps its patterns forever** | ⚠ **Found during the 2026-08-09 autopsy; needs a ruling, not a fix.** 11 patterns were sitting on the rig's review scene 105 minutes after they were thrown. All of them belonged to an encounter that was **started and still on round 3**, and both clocks decline them by design: the wall-clock rule stands down whenever the owning encounter is running (`encounterRunning`), and the round rule only fires on a round **advance**. So an encounter left started and idle makes its patterns immortal. That is the rules as written — a pattern belongs to the round it was thrown on — but a table that stops advancing rounds accumulates them. Options are a wall-clock backstop for in-combat patterns, or a sweep when an encounter is deleted; both are design calls. |
+| **A shooter resolved from a token on a scene nobody is looking at draws the shot from that scene's coordinates** | ⚠ **MEASURED 2026-08-10 (review finding F2), needs a ruling.** `shooterTokenOf` falls back to `tokensOf(actor)[0]`, which reaches **across scenes**. Probed on the rig: an actor whose only token sits at (2200, 2400) on an unviewed scene, fired while the GM views a 2800 × 2000 scene, queued **four sprites on the viewed canvas** — the lance at (2216.8, 2412.6), the tracer stretched from (2200, 2400) to the aim at (650, 650), the impact and the blood on the target — i.e. the shot is drawn from a point 400 px **below the viewed scene's own bottom edge**. The `skipped` bail added the same day does not cover it: that fires only when the actor has **no token anywhere**. ⭐ The second half of the finding is **REFUTED**: the off-scene token's rotation does **not** change. `faceTargetTurn` does compute a turn (138.366°, delta 138.366°, 220 ms), but the write throws — *"You must provide an `_id` for every object in the update data Array"*, the exact cross-scene `TokenDocument` hazard `mech/light.js` already documents — and `faceTarget`'s own try/catch swallows it as a warning. So the defect is a misdraw, not a stray document write. Options: prefer a token on the **viewed** scene and treat "none here" as no shooter, or keep the cross-scene fallback and skip the draw. Both are design calls. |
+| **A pattern on an unviewed scene survives a round advance** | ⚠ **CONFIRMED 2026-08-10 (review finding F8), cosmetic, needs a ruling.** Probed on the rig with the probe's own encounter: a pattern placed on scene A at round 1, the GM then viewing scene B, `combat.update({round: 2})` → **the pattern is still there**, while the pure rule (`spreadZoneRoundExpired`) says `true` for exactly that pattern. Both expiry paths walk `canvas.scene` only. Returning to A and advancing to round 3 collected it. So it self-corrects the moment the GM looks back and a round passes; the fix would be to walk the pattern's **own** scene (`areasByFlag` per scene, or the combat's scene) rather than the viewed one. |
+| **A missed volley draws a different distance band than its tail was computed from** | ⚠ **MEASURED 2026-08-10 (review finding F5), no ruling yet.** A missed shell stretches to `missEndpoint`, whose reach is **0.6–1.15 ×** the true aim distance, while every timing came from the true aim's band. Swept by value over the reach range: at 6 squares the drawn file is a **shorter** band 42.3 % of the time, at 12 and 20 squares 27.4 % — all in the safe direction (the tail over-states). The unsafe direction is confined to the neighbourhood just **under** a boundary, where 1.15 × reaches the next band up: at 4.5 squares **7.5 %** of missed shells draw a longer band (tail under-stated by **200 ms**), at 8.5 squares **16.9 %** (**400 ms**), at 14.5 squares **21.4 %** (**400 ms**). It moves the **scheduled floor** only: the settle still waits on the engine's own end for the effect that was really drawn, so the exposure is the no-engine fallback rather than ordinary play. |
+| **The arithmetic still prices a volley for a shot the fan-out now refuses** | ⚠ **MEASURED 2026-08-10 (review finding F5a), no ruling yet.** `payloadPresentationMs` resolves its volley spec without the `&& shooter` guard the fan-out applies, so a buckshot payload from an actor with no token computes **600 ms** (the 15ft band at a zero-square aim) for a shot the rail now reports as `skipped: "shooter"` and does not draw at all; the same payload with no volley term computes 983 ms. Harmless today — a caller waits a beat over an empty canvas — but the two answers should come from one question. |
 | Blood asks the ACTOR, not the hit location | A cyberlimbed character bleeds even when the round struck the chrome arm. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. |
 | The blood splash is routed above the lighting | The one departure from the file's own routing rule, taken because below it the mark does not exist on a dark scene. It is a **look** call the user has not yet made in motion: the cost is that a splash is drawn over ground the viewer cannot see, for under a second. One constant (`BLOOD_SPLATTER.aboveLighting`) reverses it. Captures 58a vs 58d. |
 | **The rebuilt blood splash is not signed off** | ⚠ **The open item of this unit.** The direction and the per-hit rule are both rulings and both are built; the remaining numbers are build-lane calls made while the user was away — the payload cap of **4** and the one-grid-unit exit offset that sets the heading. Each is one constant (`BLOOD_SPLATTER.maxPerPayload`; the `+ gridPx` in `fxBloodSplatter`). Captures 64a (angled shot, held) and 64b (burst). |
