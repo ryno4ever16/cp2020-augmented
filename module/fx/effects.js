@@ -681,8 +681,10 @@ export const HIT_CONFIRM = Object.freeze({
  * round: the shot a viewer is watching is the one that must be drawn.
  *
  * `lifetimeMs` IS THE "STAYED BURNING" REQUIREMENT, and it is a look call rather than a measurement —
- * tens of seconds, on the precedent the scorch already set for a session-bound element with a cap in
- * place of a persistence ruling. `fadeOutMs` is a burn-DOWN at the very end and not a dim-through: it
+ * tens of seconds, on the precedent the (since-removed, see the block below) ground mark set for a
+ * session-bound element with a cap in place of a persistence ruling. The precedent outlived the
+ * element that set it: this number is still a cap, and it is still not forever.
+ * `fadeOutMs` is a burn-DOWN at the very end and not a dim-through: it
  * is 5.6% of the life here, against the 28% that produced the report.
  *
  * ⚠⚠ THE TRADE, ACCEPTED BY THE USER RATHER THAN HIDDEN: this is self-luminous, so it takes the
@@ -723,49 +725,26 @@ export const GROUND_FIRE = Object.freeze({
 /** The name every burning-ground flame is stamped with, so the scene cap can find and evict them. */
 export const GROUND_FIRE_NAME = `${SCOPE}.groundfire`;
 
-/**
- * THE SCORCH — the mark the fire leaves behind, drawn with it and outliving it by minutes.
+/* ══════════════════ THE GROUND MARK — REMOVED 2026-08-10 ══════════════════
  *
- * ⚠ WHAT THIS HONESTLY IS, stated at the site because the limit is invisible from the outside: it is a
- * long-lived SEQUENCER EFFECT, not a Tile and not a document. It is bound to the session — a page
- * reload, a scene change or a client reconnect takes it away, and it never existed for a client that
- * joined after the shot. NOTHING IS WRITTEN, which is the requirement: this rail performs exactly one
- * document write (the face-target turn) and a decal that persisted properly would be a second one, on
- * the scene, from whichever client happened to resolve the shot.
+ * ⏪⏪ The dark decal the burning ground used to leave behind is GONE on user ruling, verbatim: *"kill
+ * it"*. The flames above are unchanged; only the mark under them was withdrawn. What stood here was a
+ * GROUND_SCORCH constant, a draw site in fxGroundFire, and the `scorch`/`scorchMs` fields on that
+ * verb's return shape — all three are deleted rather than left switched off, because a field that is
+ * always false is a mechanism a later reader has to disprove.
  *
- * Real persistence is a shared question with blood decals and needs a ruling of its own (who owns the
- * write, who cleans it up, what a table does about a scene that accumulates them across a campaign).
- * Recorded here so that when it is answered, this is the site that changes.
+ * THE FINAL SPEC, recorded so a revert is a transcription and not a rebuild: key
+ * `jb2a.scorched_earth.black`, 1.5 squares, opacity 0.7, lifetime 180000 ms, fadeIn 600, fadeOut 3000,
+ * `loopOptions({ loops: 1 })` (load-bearing — the asset is 6250 ms and an effect outliving its clip
+ * re-blooms by default), BELOW the lighting (it is not a light source, so the file's routing rule put
+ * it down), and exactly ONE per payload at the CENTROID of the flames, delayed by the same arrival
+ * time they take.
  *
- * `lifetimeMs` IS A CAP AND NOT A LOOK. Minutes, not forever: a Sequencer effect with no end is a leak
- * by another name, and a scorch that is still there an hour later is a mark on the map nobody can
- * remove without clearing every effect on the canvas.
- *
- * ⚠ `loops: 1` IS LOAD-BEARING. The asset is 6250ms and the lifetime is far longer, and an effect
- * whose duration exceeds its clip LOOPS by default — a scorch mark that re-blooms every six seconds
- * for three minutes is a strobe, not a decal. One loop plays the mark forming and then holds it for
- * the remainder.
- *
- * BELOW THE LIGHTING, unlike the fire above it, and that is the file's own rule applied rather than an
- * exception: self-luminous elements go up, lit-by-the-world elements stay down. A scorch is a black
- * mark on a floor. It has no light of its own and it should be as dark as the room is.
- *
- * ⭐ STILL EXACTLY ONE PER PLACEMENT, at the CENTROID of the flames, now that the fire is N flames
- * (2026-08-09). It did not follow the fire's count, and the asymmetry is the point: a flame lives 45
- * seconds and a scorch lives three minutes, so four scorches per burst is precisely the accumulation
- * the once-per-payload rule was written to prevent, where four flames are not. The mark says "a fire
- * burned here", which is one fact about one burst wherever its rounds fell.
- *
- * ⛔ EXCLUDED FROM THE SETTLE SIGNAL for the same reason as the fire, and much more so.
+ * The two facts that outlive it, because they were never its alone: the fire's own `lifetimeMs` was
+ * set on the precedent this element established for a session-bound element with a cap in place of a
+ * persistence ruling; and REAL decal persistence is still an open question, now carried by the blood
+ * splash by itself (see the doc's open items).
  */
-export const GROUND_SCORCH = Object.freeze({
-  key: "jb2a.scorched_earth.black",
-  squares: 1.5,
-  lifetimeMs: 180000,
-  fadeInMs: 600,
-  fadeOutMs: 3000,
-  opacity: 0.7,
-});
 
 /**
  * THE BLOOD SPLASH — a short red burst drawn over a LIVING target that a round actually reached.
@@ -819,12 +798,14 @@ export const GROUND_SCORCH = Object.freeze({
  *
  * ⚠⚠ ABOVE THE LIGHTING, WHICH IS A DELIBERATE DEPARTURE from this file's own routing rule (the rule
  * is in LIT_SPRITE_ABOVE_LIGHTING: self-luminous elements go up, lit-by-the-world elements stay
- * down, which is why the scorch stays down). Blood is not a light source, so the rule as written
+ * down). Blood is not a light source, so the rule as written
  * would put it below — and measured on the rig's own dark range at darkness 1.0 that is not a dimmer
  * version of the effect, it is no effect at all. The trade is therefore between an element that is
  * invisible exactly where a table plays and an element drawn across ground the viewer cannot see;
- * the second is the lesser cost HERE and only here, because this element lives for under a second,
- * where the scorch that accepted the other side of the trade lives for minutes. It is a knob rather
+ * the second is the lesser cost HERE and only here, because this element lives for under a second.
+ * The one element that took the other side of the same trade — a dark ground mark that stayed down
+ * and therefore vanished on a dark range, for minutes at a time — was removed on 2026-08-10 (the note
+ * beside GROUND_FIRE), so this is now the only place the departure is taken. It is a knob rather
  * than a constant in the code path so the call can be reversed without finding the draw site.
  *
  * ⛔ EXCLUDED FROM THE SETTLE SIGNAL, by construction and not by a flag: nothing here is given a
@@ -3306,9 +3287,11 @@ export function liveGroundFires() {
 }
 
 /**
- * THE INCENDIARY GROUND ELEMENTS — N small flames at the points a payload's rounds landed, plus the ONE
- * scorch those flames share. They live in one verb because they are one event: the fires and their mark
- * start together and only their lifetimes differ.
+ * THE INCENDIARY GROUND FIRE — N small flames at the points a payload's rounds landed.
+ *
+ * ⏪ It used to draw a second element with them, one dark mark under the whole placement; that was
+ * removed 2026-08-10 on user ruling and its values are recorded beside GROUND_FIRE. The verb keeps its
+ * name and its shape, and now reports fires only.
  *
  * GATED ON THE ROW, NOT ON A NAME. The caller decides by reading `groundFire` off the resolved entry
  * (ammoFxEntry), so no branch anywhere in this file names the incendiary load — adding the field to a
@@ -3340,7 +3323,7 @@ export function liveGroundFires() {
  * value.
  */
 export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxPerPayload } = {}) {
-  const out = { fires: 0, scorch: false, fireMs: 0, scorchMs: 0, evicted: 0, at: [] };
+  const out = { fires: 0, fireMs: 0, evicted: 0, at: [] };
   const list = (Array.isArray(points) ? points : [points])
     .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
     .slice(0, Math.max(0, Math.trunc(max)));
@@ -3390,28 +3373,9 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
       }
       out.fireMs = GROUND_FIRE.lifetimeMs;
     }
-    if (fxDbEntryExists(GROUND_SCORCH.key)) {
-      // ONE mark for the whole placement, at the flames' centroid — the ruling is in the GROUND_SCORCH
-      // block: this element lives for minutes, so N of them is the accumulation the payload gate exists
-      // to prevent, where N flames at 45 seconds is not.
-      const cx = list.reduce((s, p) => s + p.x, 0) / list.length;
-      const cy = list.reduce((s, p) => s + p.y, 0) / list.length;
-      const scorch = _held(seq.effect().file(GROUND_SCORCH.key)).atLocation({ x: cx, y: cy })
-        .size({ width: GROUND_SCORCH.squares }, { gridUnits: true })
-        // NOT above the lighting: a scorch mark is not a light source (the split is stated in the
-        // LIT_SPRITE_ABOVE_LIGHTING block — self-luminous up, lit-by-the-world down).
-        .opacity(GROUND_SCORCH.opacity)
-        .fadeIn(GROUND_SCORCH.fadeInMs)
-        // ONE LOOP, then hold. Without this the mark re-blooms every clip length for the whole
-        // lifetime — see the ruling in the GROUND_SCORCH block.
-        .loopOptions({ loops: 1 })
-        .duration(GROUND_SCORCH.lifetimeMs)
-        .fadeOut(GROUND_SCORCH.fadeOutMs);
-      if (delay > 0) scorch.delay(delay);
-      out.scorch = true;
-      out.scorchMs = GROUND_SCORCH.lifetimeMs;
-    }
-    if (out.fires || out.scorch) {
+    // ⏪ The mark that used to be drawn here, at the flames' centroid, was removed 2026-08-10 on user
+    // ruling — its final values are recorded in the block above.
+    if (out.fires) {
       // Held on the tally from the moment they are queued until the engine has actually made them, at
       // which point liveGroundFires can see them and the tally must let go — released in a finally so
       // a play that throws cannot strand the count high and starve every later placement.
@@ -3476,7 +3440,7 @@ export function ammoLeavesGroundFire(ammoKey) {
  */
 export async function fxPatternGroundFire({ x, y, dirDeg, lengthPx, widthPx, count, seed } = {}) {
   const pts = patternFirePoints({ x, y, dirDeg, lengthPx, widthPx, count, seed });
-  if (!pts.length) return { fires: 0, scorch: false, fireMs: 0, scorchMs: 0, evicted: 0, at: [] };
+  if (!pts.length) return { fires: 0, fireMs: 0, evicted: 0, at: [] };
   return fxGroundFire(pts, { max: GROUND_FIRE.maxPerPattern });
 }
 
