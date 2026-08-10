@@ -1826,8 +1826,20 @@ async function _runManualRoundTick(combat) {
   await runRadZoneTick(combat);
 }
 
-/** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct). */
-async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName }) {
+/** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct).
+ *
+ * ⭐ THE LOAD'S PER-HIT RIDERS ARE APPLIED HERE TOO (2026-08-10), and they are the single-target flow's
+ * own two calls rather than a second reading of the same rules: `updateTaserState` for a round that
+ * delivers shock, `applyDotFromPayload` for one that starts a burn or an etch (_autoApply makes exactly
+ * these two, in exactly this order — the taser flag has to be written BEFORE the prompt, because the
+ * stun threshold reads it). Both are driven off the fields the CALLER passes, which for a pattern shell
+ * is the spread flags and for a blast is the blast flags: a caller that never carried them passes
+ * nothing, `stunSaveOnHit` is falsy and `dotEnabled` is falsy, and neither call does anything — so the
+ * explosion path through this helper is unchanged by their arrival.
+ * Once per landed shell per token, which is what the pattern flow already does with everything else it
+ * applies (N shells = N banded rolls = N trips through the armour pipeline). */
+async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
+                                                stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula }) {
   if (!tok?.actor || dmg <= 0) return 0;
   const loc = (await rollLocation(tok.actor, null)).areaHit;
   const hits = await applyAreaDamages({
@@ -1843,6 +1855,21 @@ async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, 
     ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
     dryRun:        false,
   });
+  // The rider payload, in the shape both helpers read (save-rolls.js). Built from this call's own
+  // arguments so nothing here has to know which flow handed them over.
+  const rider = { stunSaveOnHit: Boolean(stunSaveOnHit), stunSaveMod: Number(stunSaveMod ?? 0),
+                  dotEnabled: Boolean(dotEnabled), dotTurns: Number(dotTurns ?? 0),
+                  dotType: String(dotType || "acid"), dotDamageFormula: String(dotDamageFormula || "1d6"),
+                  weaponName: String(weaponName || "") };
+  // A shock rider counts only where the round got through and did not land in a limb's own structure —
+  // the same reading the single-target flow applies (RAW: no shock through a cyberlimb).
+  if (rider.stunSaveOnHit && hits.some(h => h.penetrates && !h.cyberlimb)) {
+    const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
+    if (taserEnabled) await updateTaserState(tok.actor, rider);
+  }
+  // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js. The location
+  // is this shell's own rolled one, which is what the single-target flow passes as well.
+  await applyDotFromPayload(tok.actor, hits[0]?.location ?? loc, rider, hits.some(h => h.penetrates));
   const total = hits.reduce((s, h) => s + h.netDamage, 0);
   if (total > 0) {
     const ws = tok.actor.woundState?.() ?? 0;
@@ -2215,6 +2242,25 @@ export async function _placeSpreadZone(payload) {
         ap: Boolean(payload.ap), edged: Boolean(payload.edged), mono: Boolean(payload.mono),
         armorMultSoft: Number(payload.armorMultSoft ?? 1), armorMultHard: Number(payload.armorMultHard ?? 1),
         penDamageMult: Number(payload.penDamageMult ?? 1), weaponName, createdRound: game.combat?.round ?? 0,
+        // ⭐ THE LOAD'S PER-HIT RIDERS TRAVEL WITH THE PATTERN (2026-08-10). The flags above are the
+        // ARMOUR half of what a load does; these are the other half — the shock a stun round delivers
+        // and the burn an incendiary one starts. They were left out while only flechette threw a
+        // pattern (that load has no riders), and the moment RAW buckshot joined the pattern flow every
+        // 00 shell carrying them lost them: a stundart shell's −2 and an api shell's ignition simply
+        // stopped happening, because the pattern outlives the payload and the region carried no record
+        // of either. Written here, where every other fact about this pattern is written, and honored
+        // per landed shell in _applyAreaHitToToken — the same two calls the single-target flow makes,
+        // in the same order (the taser flag before the prompt that reads it).
+        // Same defensive coercion as the fields above, so a payload missing any of them stores the
+        // "does nothing" value rather than undefined.
+        stunSaveOnHit: Boolean(payload.stunSaveOnHit), stunSaveMod: Number(payload.stunSaveMod ?? 0),
+        dotEnabled: Boolean(payload.dotEnabled), dotTurns: Number(payload.dotTurns ?? 0),
+        dotType: String(payload.dotType || "acid"), dotDamageFormula: String(payload.dotDamageFormula || "1d6"),
+        // Recorded with them because it is the same contract (seam-shim AMMO_EFFECT_FIELDS) and a
+        // pattern that carries five of a load's six statements is a pattern nobody can read back. No
+        // damage path in this flow consults it today — the explosive branch is a different flow, and it
+        // is gated before a pattern is ever placed.
+        effectTypes: Array.isArray(payload.effectTypes) ? [...payload.effectTypes] : [],
         // ⭐ WHICH CLOCK OWNS THIS PATTERN, decided once, at the moment it is thrown. A pattern thrown
         // during an encounter belongs to that encounter's rounds; one thrown outside any encounter has
         // no round to wait for and belongs to the wall clock. Asking the question later — "is a combat
