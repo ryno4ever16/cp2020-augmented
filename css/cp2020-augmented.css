@@ -182,11 +182,22 @@
 .cp-cyber-install-dialog .dialog-buttons { gap: 6px; }
 .cp-cyber-install-dialog .dialog-buttons button { flex: 1 1 0; white-space: nowrap; min-width: 0; }
 
-/* Apply-damage "Select Target" dialog: three buttons share the row and the long
-   "Use Canvas Target" label overflowed its third. Size each button to its content
-   (min-width:max-content keeps the label+icon from spilling) and let them wrap if
-   the dialog is narrow, rather than clipping the text. */
+/* Apply-damage "Select Target" dialog: three buttons share the footer row and the long
+   "Use Canvas Target" label spilled out of its third.
+   ⚠ TWO FOOTER SELECTORS, and the second one is the one that does the work. A DialogV2 on
+   Foundry v13/v14 puts its buttons in `footer.form-footer` (measured chain: section.window-content
+   > form.dialog-form > footer.form-footer > button); `.dialog-buttons` is the OLDER core Dialog's
+   container. Naming only the old one is why the first attempt at this fix changed nothing at all —
+   it matched no element, while the button kept core's defaults (`flex:1 1 0`, `white-space:normal`,
+   `min-width:auto`), split the 208px footer three ways and wrapped the label onto three lines
+   inside a 40px-tall button (measured scrollHeight 45 vs clientHeight 40 = the visible spill).
+   Both selectors are kept so the rule holds whichever container the running core builds.
+   Size each button to its label instead: max-content is its floor, nowrap keeps it on one line,
+   and the footer's own wrapping moves a button that no longer fits onto the next row rather than
+   squeezing it. The dialog's declared width (damage-hooks.js) is what keeps all three on one row. */
+.cp-apply-target-dialog .form-footer,
 .cp-apply-target-dialog .dialog-buttons { gap: 6px; flex-wrap: wrap; }
+.cp-apply-target-dialog .form-footer button,
 .cp-apply-target-dialog .dialog-buttons button { flex: 1 1 auto; min-width: max-content; white-space: nowrap; }
 
 /* ── Round-7: single window — home directory + vendor tray + context menu ── */
