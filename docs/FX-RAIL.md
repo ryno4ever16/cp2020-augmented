@@ -1117,6 +1117,47 @@ file path — a leg matching on `Sequencer.Database` filenames matches nothing. 
 *previous* shot arrives long after that shot's own read: a leg that counts windows must drain past the cap
 before it fires, or it attributes one shot's dialog to the next one's payload.
 
+### 7.4 Client-side failure shapes — what a dead-looking rail actually means
+
+Three distinct things make the rail *look* broken, and they are told apart by where the evidence is.
+Recorded 2026-08-10 after an evening spent chasing the wrong one twice.
+
+| What the table sees | Where the evidence is | What it is | Cure |
+|---|---|---|---|
+| A client's OWN shots draw nothing; other clients' shots draw on it normally; rolls, magazine and damage all work | its console: many `canvas-effect.js` `Cannot set properties of null (setting 'volume')` from Sequencer's `_createSprite` | **The tab has run out of media players.** A browser caps how many media elements one document may hold, and a tab open for hours across hundreds of effects reaches it. From then on every video texture comes back null and the engine throws before anything is drawn. Nothing in the rail can see this — it queues its work and the work quietly dies downstream. | **Reload the tab.** The pool resets. Nothing to fix in the module; the canary below is what makes it self-reporting. |
+| A client loading *while* effects are broadcasting logs ~6× `Cannot read properties of null (reading 'viewedScene')` at Sequencer's `shouldPlay` ← `sockets.js playEffect` | its console, during load only | **Relayed effect packets arriving before that client's canvas is ready.** Those effects skip. Cosmetic, self-limiting, not ours. | None needed. |
+| Every client is fine but the module's whole combat layer is absent on ONE — attack rolls and magazine work, no damage window, no presentation | that client's console, near load: a `cp2020-augmented \| ready wiring` line | **A ready-time wiring step threw.** See §7.5. | Reload; the named step tells you what actually broke. |
+
+⚠ **`document.querySelectorAll("video")` cannot measure the first row.** Sequencer 4.2.3 decodes into PIXI
+textures from media elements that are never attached to the document, so the count reads 0 no matter how
+many are live — measured on the rig across 150 effects in six batches (0 video nodes at every mark, 0
+errors, `EffectManager.effects` back to 0 after each batch, so *ending* an effect does release it). The
+ceiling is real but is not observable from page JS; it is reached by tab AGE and cumulative effect count,
+not by concurrency, and a fresh session does not approach it.
+
+### 7.5 The two canaries — the rail now reports its own silence
+
+Both were built 2026-08-10 for the failure above, because every check that existed said the shot had been
+presented while the screen stayed empty.
+
+- **The presentation canary** (`_reportSilentPresentation` / `_confirmSilentPresentation`, effects.js).
+  Counts what the ENGINE reports creating (`createSequencerEffect` → `_drawsSeen`) across one fan-out and
+  compares it to the count taken before. It splits its message by `result.flashes`: non-zero means the rail
+  reached its build sites and the engine made nothing → **this client cannot draw, reload it**; zero means
+  the rail never asked → **a module fault, reloading will not help**. Silent when no Sequencer is installed
+  (the light and the report are the whole presentation there, by design), when the rail deliberately bailed
+  (`skipped`: disabled / unrecognised class / ruled fumble), and when the count moved. Once per session.
+  ⚠ **It must not read at the moment the fan-out resolves.** The creation hook for the last queued round
+  routinely lands after that promise settles, and on a one-round shot it almost always does — the first
+  version did read there, called a healthy client dead, and was caught by the fx-rail keeper's
+  `0 console errors` leg on the same run it was written. The reading is now taken after
+  `SILENT_CHECK_GRACE_MS` (4000) plus the shot's own `settleTailMs`.
+- **The seam canary** (`renderEmitLive` / `assertRenderEmit`, seam-shim.js). The payload that starts all of
+  this is raised from a wrap on the *global* `renderTemplate` — one shared binding, the only part of the
+  shim another actor can replace, and it leaves no trace when it goes. The wrapper is now kept by identity,
+  checked on every shot, re-asserted if it is not ours, and reported once. Emissions are deduplicated per
+  card (`_emittedFor`) so re-asserting can never double-emit even if something wrapped ours.
+
 ---
 
 ## 8. Open items
