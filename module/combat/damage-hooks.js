@@ -870,6 +870,11 @@ async function _pickTargetDialog() {
     new foundry.applications.api.DialogV2({
       window: { title: localize("ApplyDamageSelectTarget") },
       classes: ["cp-apply-target-dialog"],
+      // A DialogV2 sizes itself to a narrow default (measured 241px here), which left the footer
+      // 208px to divide between three buttons — not enough for "Use Canvas Target" to stay on one
+      // line. The css sizes each button to its own label; this is the width that then fits all
+      // three across. Resizable, so a longer translation can still be given more room by hand.
+      position: { width: 420 },
       content,
       buttons: [
         {
