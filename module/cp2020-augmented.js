@@ -70,6 +70,7 @@ import { registerSeamShim } from "./seam-shim.js";
 import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js";
 import { registerIconNormalizationShim } from "./icon-normalization-shim.js";
 import { hostProvides } from "./system-api.js";
+import { localize, localizeParam } from "./utils.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
@@ -452,6 +453,39 @@ async function migrateFleshLimbStatus() {
   console.log(`${SCOPE} | flesh-limb-status migration complete.`);
 }
 
+/**
+ * ⭐ WHY THE READY WIRING IS ISOLATED STEP BY STEP.
+ *
+ * Every register* call below is INDEPENDENT of the others — the presentation rail does not need the
+ * loadout engine, the seam does not need the sheet skin. But they all run inside ONE synchronous
+ * `ready` listener, so before this helper existed the FIRST step to throw ended the listener and
+ * every step after it silently never registered. There was no error about the missing features, only
+ * about the step that threw; the rest simply were not there.
+ *
+ * That is not theoretical. Reported from the table twice in one evening: a client whose shots
+ * produced an attack roll and a magazine decrement and NOTHING else — no damage application, no
+ * muzzle flash, no sound — while every other client on the same world drew that same shot perfectly.
+ * A reload cured it. That is this shape exactly: the base system's fire flow is untouched by us and
+ * kept working, while the entire Augmented layer below the throwing step was absent. Whether the
+ * trigger is a slow client, a busy main thread, or a browser extension holding up the load, the
+ * defect is ours — twenty independent features had no business sharing one failure.
+ *
+ * With this, a step that throws costs its own feature and names itself, and the nineteen after it
+ * still register. `wiringFailures` collects the names for the readiness audit at the bottom of the
+ * file, which is what tells the GM out loud.
+ */
+const wiringFailures = [];
+function wire(step, register) {
+  try {
+    register();
+  } catch (e) {
+    wiringFailures.push(step);
+    console.error(`${SCOPE} | ready wiring: "${step}" failed to register (its feature is inactive this session)`, e);
+  }
+}
+/** Set at the very end of the ready listener; the audit below reads it to tell "finished" from "stopped". */
+let wiringComplete = false;
+
 Hooks.once("ready", function () {
   // Hard guard: the Augmented Edition only works on the cyberpunk2020 system.
   if (game.system.id !== SYSTEM_ID) {
@@ -476,26 +510,26 @@ Hooks.once("ready", function () {
 
   // P3 light emitters + P4 vision devices: item toggles drive the bearer's token light/sight
   // (the active GM applies the token writes).
-  registerMechLight();
-  registerMechVision();
+  wire("mech light", registerMechLight);
+  wire("mech vision", registerMechVision);
   // P7 timed consumables: dose gate on activation + the per-turn timer tick.
-  registerMechConsumable();
+  wire("mech consumable", registerMechConsumable);
   // Q2 chip skill grants: an active chip naming a skill the actor lacks creates it (RAW: chips
   // work untrained); the choose-chips prompt for the skill. Initiating-client/owner writes.
-  registerMechChipGrant();
+  wire("mech chip grant", registerMechChipGrant);
   // Q6 containers: uninstall cascade — deleting a container detaches its children to loose gear.
-  registerMechContainer();
+  wire("mech container", registerMechContainer);
   // Loadouts: a body carrying a `loadout` manifest (e.g. a full 'borg) materializes its prebuilt
   // options as real cyberware on install, and removes them on uninstall/delete. Initiating-owner writes.
-  registerMechLoadout();
+  wire("mech loadout", registerMechLoadout);
   // PA (Powered Armor) skills: linking a character as an ACPA suit's pilot backfills the three Maximum
   // Metal powered-armor skills (PA Combat Sense / PA Tech / Expert (PA Design)) at level 0 from the
   // module skills compendium. Idempotent; only the initiating client that owns the pilot writes.
-  registerPaSkillBackfill();
+  wire("PA skill backfill", registerPaSkillBackfill);
   // PA Combat Sense (MM p.52–53) pilot-side bonuses: a Trooper's OWN initiative gains ½ his PA Combat
   // Sense (out-of-suit) via a Combatant init-roll override, and his Awareness/Notice rolls gain full PACS
   // while piloting an ACPA via a rollSkill wrap. In-suit full initiative + Solo-suppression already ship.
-  registerPaCombatSense();
+  wire("PA combat sense", registerPaCombatSense);
 
   // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
   // first-run picker). The flag flips immediately so the picker never reappears on later loads; the
@@ -514,26 +548,26 @@ Hooks.once("ready", function () {
   // Apply the per-user Carolingian / Restyler terminal sheet skin (toggles the cp-carolingian
   // <body> class that gates the skin CSS in cp2020-augmented.css). Client-side cosmetic, so it
   // runs independently of the combat-automation gate below.
-  applyCarolingianSkinClass();
+  wire("terminal skin class", applyCarolingianSkinClass);
 
   // Player-facing exposure scoping for the base system's two bulk-scraped weapon compendiums
   // (pistols-add / rifles-add): while `hideScrapedPacks` is on (default), their PLAYER/TRUSTED pack
   // ownership is set to NONE so they leave the players' Compendium sidebar. Re-asserted here on every
   // load by the ACTIVE GM client only (a world setting is a GM-only write); the prior ownership is
   // snapshotted before the first change and restored when the setting is turned off. Self-guarded.
-  applyScrapedPackVisibility();
+  wire("scraped-pack visibility", applyScrapedPackVisibility);
 
   // TEMPORARY seam shim: emit the weaponFired / skillRolled hooks the module relies on, but ONLY while
   // the base system lacks native emission (the seam PRs aren't merged). Self-disengages the instant the
   // base system emits them — including on a fork+module install (the fork emits natively). See seam-shim.js.
-  registerSeamShim();
+  wire("seam shim", registerSeamShim);
 
   // Martial-art id-resolution repair: the base system recovers a skill's canonical compendium id
   // only from the legacy flags.core.sourceId, so styles dragged onto a sheet under Foundry v12+
   // lose their Key-Attack bonuses (and a level-0 seeded row can shadow a leveled dragged copy).
   // The candidate half self-disengages when the base reads _stats.compendiumSource itself (the
   // pending upstream fix). See martial/id-resolution-shim.js.
-  registerMartialIdResolutionShim();
+  wire("martial id-resolution shim", registerMartialIdResolutionShim);
 
   // combatAutomationEnabled is the master gate for the Augmented combat layer (damage application,
   // saves, area effects, combat-tracker controls, vehicle/ACPA weapon fire + targeting + missiles);
@@ -547,34 +581,34 @@ Hooks.once("ready", function () {
   // PopOut! chat rebinding registers UNCONDITIONALLY: the delegated chat-card listeners (drug
   // wear-off, martial defense offer/result) register at init regardless of the combat gate, so
   // their PopOut rebinding must too. Inert when PopOut! is absent.
-  registerPopoutCompat();
+  wire("PopOut! chat rebinding", registerPopoutCompat);
   // One-shot chat-card lock (render pass + GM stamp-relay + severable re-arm). UNCONDITIONAL, like the
   // PopOut rebinding above: the prompt cards it locks (saves, drug/rad checks, martial defense) post
   // regardless of the combat gate, so the lock must be live regardless too.
-  registerCardLock();
+  wire("chat-card lock", registerCardLock);
   // Combat FX rail (muzzle flash light + shot audio, optional Sequencer/JB2A sprites). UNCONDITIONAL
   // for the same reason as the two above: it is presentation of a shot the base system resolved, not
   // automation, so it must run even where the combat-automation layer stands down. Its own world
   // setting (combatFxEnabled) is read per event, so the switch applies without a reload.
-  registerCombatFx();
+  wire("combat fx rail", registerCombatFx);
   if (doCombat) {
-    registerDamageHooks();
-    registerMovementGate();
-    registerSaveRollHandlers();
+    wire("damage hooks", registerDamageHooks);
+    wire("movement gate", registerMovementGate);
+    wire("save-roll handlers", registerSaveRollHandlers);
   }
   if (doVehicles) {
     // Vehicle / ACPA combat handlers (chat-button + per-round flight + crit hooks).
-    registerVehicleFireHandlers();
-    registerVehicleTargetingHandlers();
-    registerMissileFlightHooks();
-    registerAcpaCombatHooks();
+    wire("vehicle fire handlers", registerVehicleFireHandlers);
+    wire("vehicle targeting handlers", registerVehicleTargetingHandlers);
+    wire("missile flight hooks", registerMissileFlightHooks);
+    wire("ACPA combat hooks", registerAcpaCombatHooks);
   }
 
   // IP (Improvement Points) tracker — independent of the combat layer; the auto-queue self-gates on
   // ipRawTracking (RAW mode only), the in-sheet UI on ipEnabled (= !ipHideUI).
   const doIp = !hostProvides("ip");
   if (doIp) {
-    registerIpHooks();
+    wire("IP tracker hooks", registerIpHooks);
     // (Option B) The in-sheet IP UI now ships with our registered actor sheet — the old
     // renderCyberpunkActorSheet injector is removed (it rendered poorly on the base system's DOM).
   }
@@ -586,7 +620,7 @@ Hooks.once("ready", function () {
     // the Recurring Services tab with our registered actor sheet — both in-sheet injectors are removed
     // (services dumped into his Gear tab; install is native on our item sheet now).
     // Sidebar cart button + chat links + live buyer sync + the GM stock-decrement relay.
-    registerShopHooks();
+    wire("shop hooks", registerShopHooks);
   }
 
   // Martial-arts layer (Option B): martial features now ship entirely with our registered sheets — the
@@ -598,6 +632,34 @@ Hooks.once("ready", function () {
 
   console.log(`${SCOPE} | Ready (on ${SYSTEM_ID} v${game.system.version}); layers: ` +
     `combat=${doCombat} vehicles=${doVehicles} ip=${doIp} shopping=${doShopping} martial=${doMartial}`);
+  wiringComplete = true;
+});
+
+/**
+ * THE READINESS AUDIT — a SECOND, deliberately tiny `ready` listener.
+ *
+ * It is separate on purpose. Foundry calls each hook listener inside its own try/catch, so a listener
+ * that throws does not stop the ones registered after it — which means this one still runs even when
+ * the wiring listener above stopped partway, and it is the only thing that can report that. Putting
+ * the audit at the bottom of that same listener would have made it the first casualty of exactly the
+ * failure it exists to announce.
+ *
+ * It reports two conditions, and nothing else:
+ *   - the wiring listener did not reach its end (something threw outside a `wire()` step), or
+ *   - one or more named steps failed.
+ * A GM gets one message naming what is missing; every client gets the console line. Silence means the
+ * layer is wired — which is the state the log could not previously distinguish from a total outage.
+ */
+Hooks.once("ready", function () {
+  try {
+    if (game.system.id !== SYSTEM_ID) return;      // the hard guard above already spoke
+    if (wiringComplete && !wiringFailures.length) return;
+    const missing = wiringFailures.length ? wiringFailures.join(", ") : localize("Augmented.WiringStoppedEarly");
+    console.error(`${SCOPE} | ready wiring INCOMPLETE (complete=${wiringComplete}); inactive this session: ${missing}. Reload this client; if it repeats, the console error above names the cause.`);
+    ui.notifications?.error?.(localizeParam("Augmented.WiringIncomplete", { features: missing }), { permanent: true });
+  } catch (e) {
+    console.error(`${SCOPE} | readiness audit failed`, e);
+  }
 });
 
 /**

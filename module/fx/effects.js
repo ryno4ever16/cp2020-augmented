@@ -26,6 +26,7 @@ import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settin
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
 // does. Importing the derivation is what makes a third caller impossible to disagree with the first two.
 import { spreadFlowModeOf, spreadModeForAmmo, SPREAD_MODE_SINGLE, SPREAD_MODE_BUCK } from "../lookups.js";
+import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -4178,6 +4179,65 @@ export async function fxWeaponFired(payload) {
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
 
+// Every effect the engine has reported creating on this client, ever. A counter, not a list: the only
+// question asked of it is "did this number move while that shot was being drawn".
+let _drawsSeen = 0;
+// One message per session. The condition it reports does not clear by itself — it is a property of
+// the tab — so repeating it every shot would only be noise on top of silence.
+let _silentPresentationWarned = false;
+// How long after a fan-out settles the canary waits before calling a shot undrawn. Generous on
+// purpose: being late with a true report costs nothing, and being early produced a false one.
+const SILENT_CHECK_GRACE_MS = 4000;
+
+/**
+ * Say — once — that a shot this rail drew produced nothing on screen.
+ *
+ * The reading is deliberately narrow, because a warning that cries on ordinary play is worse than no
+ * warning at all. It fires only when ALL of these hold:
+ *   - the effects engine is installed (without it there are no sprites to count and none are meant);
+ *   - the rail did NOT bail (a disabled setting, an unrecognised weapon and a ruled fumble each draw
+ *     nothing ON PURPOSE and each says so in `skipped`);
+ *   - the fan-out had rounds to draw;
+ *   - and the engine's creation count did not move across the whole fan-out.
+ * A miss does not trip it: a missed round still draws its flash and its tracer. A fumble does not
+ * trip it: that one is `skipped`. What trips it is the case that used to be invisible — the rail did
+ * everything and the screen stayed empty.
+ */
+function _reportSilentPresentation(result, drawsBefore) {
+  if (_silentPresentationWarned) return;
+  if (!globalThis.Sequencer) return;                       // no engine → no sprites are expected
+  if (!result || result.skipped || !(result.shots > 0)) return;   // a deliberate non-draw
+  if (_drawsSeen > drawsBefore) return;                    // the engine made something → all is well
+  // ⚠ DO NOT DECIDE HERE. The fan-out resolving is not the same instant as the engine reporting what
+  // it made: the creation hook for a round queued at the end of the loop can land after this promise
+  // settles, and on a one-round shot it usually does. Reading now calls a healthy client dead — it
+  // did exactly that the first time this was written, and tripped a keeper leg to prove it. Give the
+  // engine the shot's own tail plus a margin, then look again; a tab that genuinely cannot draw will
+  // still be at zero, and one that was merely a beat behind will not.
+  setTimeout(() => _confirmSilentPresentation(result, drawsBefore), SILENT_CHECK_GRACE_MS + (result.settleTailMs ?? 0));
+}
+
+/** The second look, after the grace window. Same test, taken once the engine has had time to answer. */
+function _confirmSilentPresentation(result, drawsBefore) {
+  if (_silentPresentationWarned || _drawsSeen > drawsBefore) return;
+  _silentPresentationWarned = true;
+  // ⭐ TWO DIFFERENT FAULTS LOOK THE SAME FROM THE SCREEN, and they need opposite advice. The rail's
+  // own report tells them apart for free: `flashes` counts the muzzle flashes it actually queued, so
+  // it is non-zero exactly when the rail reached its build sites and handed work to the engine.
+  //   flashes > 0 → we asked, the engine made nothing → the fault is this CLIENT's drawing, and a
+  //                 reload is the cure (the case a long-open tab reaches).
+  //   flashes = 0 → we never asked → the fault is OURS, somewhere in the rail, and a reload will not
+  //                 touch it. Saying "reload your tab" there would send someone chasing their own
+  //                 browser for a module defect.
+  const reached = (result.flashes ?? 0) > 0;
+  const shot = `${result.weaponClass} shot (${result.shots} round(s))`;
+  console.error(reached
+    ? `${SCOPE} | combat fx: the rail queued a ${shot} and the effects engine created nothing. This client cannot draw new effects — most often a browser tab open long enough to run out of media players. Reload this tab.`
+    : `${SCOPE} | combat fx: the rail produced no effects at all for a ${shot} that should have drawn. This is a fault in the module, not in this client — reloading will not change it. Please report it. Result: ${JSON.stringify(result)}`);
+  try { ui.notifications?.warn?.(localize(reached ? "Augmented.PresentationSilent" : "Augmented.PresentationNotAttempted"), { permanent: true }); }
+  catch (_e) { /* no UI on this client */ }
+}
+
 /**
  * Hook wiring — called once from the module's ready hook. Registered unconditionally (like the chat
  * card lock and the PopOut rebinding): the setting is read per event, so a GM toggling combatFxEnabled
@@ -4186,7 +4246,23 @@ export async function fxWeaponFired(payload) {
 export function registerCombatFx() {
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
     if (!combatFxEnabled()) return;
-    fxWeaponFired(payload).catch((err) => console.warn(`${SCOPE} | combat fx failed`, err));
+    // THE PRESENTATION CANARY. Take the engine's creation count before the fan-out and again after it,
+    // and compare: this rail can run perfectly — payload raised, class resolved, every verb called —
+    // and still put nothing on screen, because the drawing itself happens inside the effects engine
+    // and can fail there without anything reaching us. That is not hypothetical: a client whose tab
+    // had been open for hours reported silent shots all evening while the same shots drew normally on
+    // every other client, and its console was full of the engine's own sprite-creation errors (a
+    // browser caps how many media elements one document may hold at once, and a tab that has drawn
+    // enough of them stops being able to make more until it is reloaded). Nothing above this line
+    // could tell — every check we had said the shot was presented.
+    //
+    // So measure the OUTCOME, not the intent, and say so once. Read only when the engine is present
+    // (with no Sequencer installed the rail draws no sprites BY DESIGN — the light and the report are
+    // the whole presentation there, and warning about that would be false).
+    const drawsBefore = _drawsSeen;
+    fxWeaponFired(payload)
+      .then((result) => _reportSilentPresentation(result, drawsBefore))
+      .catch((err) => console.warn(`${SCOPE} | combat fx failed`, err));
   });
   // The flash announcement. Same channel and same type-dispatch shape as the module's other relays;
   // unlike the write relays there is no GM gate, because every client draws its own copy and nothing
@@ -4207,6 +4283,7 @@ export function registerCombatFx() {
   // measured margin (see _tagWatches). Registered once, and inert for any effect not carrying one of
   // our names, so nothing else on the canvas is affected.
   Hooks.on("createSequencerEffect", (effect) => {
+    _drawsSeen++;   // the canary's only reading: did the engine actually make anything (see above)
     const w = _tagWatches.get(effect?.data?.name);
     if (w && !w.done) { w.created++; clearTimeout(w.confirm); }
   });

@@ -17,6 +17,8 @@
  * When the upstream PRs are accepted, this whole file can be deleted.
  */
 
+import { localize } from "./utils.js";
+
 const SCOPE = "cp2020-augmented";
 
 const WEAPON_FIRED = "cyberpunk2020.weaponFired";
@@ -105,6 +107,60 @@ let _fireCtx = null;
 // call (unlike two of the fire methods), so this is set immediately before and never goes stale mid-render.
 let _suppressiveCtx = null;
 
+// ⭐ THE ONE PART OF THIS SHIM THAT CAN GO AWAY WITHOUT SAYING SO.
+//
+// The fire methods are patched onto a document-class PROTOTYPE: durable, private to us, and nothing
+// else on a Foundry client rewrites it. The EMISSION, though, rides a wrap on `globalThis.render-
+// Template` — one shared global binding, assigned through a core deprecation accessor. Whoever
+// assigns it last wins, and the loser leaves no trace: the fire methods still run, the roll still
+// posts, the magazine still decrements, and the module's whole combat layer simply never hears about
+// the shot. Reported from the table twice in one day, both times cured by a reload.
+//
+// So we keep the wrapper we installed BY IDENTITY. That is what lets us answer "is our emit still the
+// one the base system's bare `renderTemplate(...)` call reaches?" — see renderEmitLive() — instead of
+// assuming the install held for the life of the session.
+let _renderWrapper = null;
+// One visible message per session when the rail is found dead. The console keeps every occurrence;
+// the notification exists so a GM is told rather than left wondering why nothing happens.
+let _railWarned = false;
+// Cards this shim has already emitted for. A second wrapper can end up in the chain — something else
+// may wrap OURS after we install, and from outside we cannot see that ours is still buried in there,
+// so a re-assert can legitimately add a layer. The card's render DATA is the same object at every
+// level of that chain, so marking it is what keeps one card to exactly one emission however many
+// wrappers the call passes through. Weak, so a finished card is collected normally.
+const _emittedFor = new WeakSet();
+
+/**
+ * Is the card-render wrap this shim installed still the one the base system's bare
+ * `renderTemplate(...)` call resolves to? False before any install, and false once something has
+ * replaced the global.
+ *
+ * ⚠ HONEST LIMIT: if another actor wrapped OUR wrapper rather than replacing it, our emit still runs
+ * but this reads false, because from out here the two cases look identical. Re-asserting in that case
+ * is harmless (the per-card mark above prevents the double emission), and no module on the supported
+ * stack wraps this binding — but the reading is "ours is not the outermost", not "the emit is dead".
+ */
+export function renderEmitLive() {
+  return !!_renderWrapper && globalThis.renderTemplate === _renderWrapper;
+}
+
+/**
+ * Re-assert the card-render wrap when it is no longer ours, and say so once.
+ *
+ * Called on every shot, which is the one moment the answer matters and the one moment we can still
+ * do something about it: re-installing here repairs THIS shot, not merely the next one. Cheap by
+ * construction — installRenderEmit() returns immediately while ours is live, so the ordinary case
+ * costs one identity comparison.
+ */
+function assertRenderEmit() {
+  if (!_renderWrapper || renderEmitLive()) return;
+  console.warn(`${SCOPE} | seam shim: the card-render wrap is no longer ours — re-asserting it. Any shot taken before now raised no ${WEAPON_FIRED}, so it got no damage automation and no presentation.`);
+  installRenderEmit();
+  if (_railWarned) return;
+  _railWarned = true;
+  try { ui.notifications?.warn?.(localize("Augmented.SeamRailReasserted")); } catch (_e) { /* no UI on this client */ }
+}
+
 // The effect fields the combat engine reads off a weaponFired payload (beyond identity + areaDamages).
 // On stock, the base fire methods build ONLY areaDamages, so without these the module's explosion / gas /
 // spread / DOT / taser / armor-piercing / penetration branches never fire. They live on the loaded ammo
@@ -176,6 +232,9 @@ function installWeaponFiredShim(ItemProto) {
     if (typeof orig === "function") foundAny = true;           // the method exists (base's or already ours)
     if (!shouldPatch(orig)) continue;                          // missing or already ours → skip
     function fireWrapper(attackMods, ...rest) {
+      // Check the rail at the one moment it matters — the shot — and repair it in time for THIS one.
+      // See the note on _renderWrapper for why this is the half that can vanish quietly.
+      assertRenderEmit();
       _fireCtx = {
         attackerId: this.actor?.id ?? null,
         weaponName: this.name,
@@ -223,7 +282,8 @@ function installRenderEmit() {
   async function renderWrapper(path, data, ...rest) {
     const out = await orig.call(this, path, data, ...rest);
     try {
-      if (_fireCtx && path === MULTI_HIT_TEMPLATE) {
+      if (_fireCtx && path === MULTI_HIT_TEMPLATE && !(data && _emittedFor.has(data))) {
+        if (data) _emittedFor.add(data);   // one card, one emission — however many wrappers are stacked
         const target = data?.target;   // a Token (full-auto sets it per shot); may be undefined otherwise
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
@@ -313,6 +373,9 @@ function installRenderEmit() {
   // future core can't abort the shim — weaponFired auto-emit just won't engage there.
   try {
     globalThis.renderTemplate = renderWrapper;
+    // Remember WHICH function we put there, so "did the install hold?" is an identity question with a
+    // yes/no answer rather than an assumption. renderEmitLive() is the only reader.
+    _renderWrapper = renderWrapper;
   } catch (e) {
     console.warn(`${SCOPE} | seam-shim could not wrap renderTemplate; weaponFired/suppressiveFire will not auto-emit`, e);
   }
@@ -444,8 +507,21 @@ export function registerSeamShim() {
   } catch (e) {
     console.warn(`${SCOPE} | seam shim skillRolled install failed`, e);
   }
+  // PROVE THE WRAP TOOK, rather than reporting that we asked for it. Everything above can return true
+  // and still leave the rail dead: patching the fire methods is the easy half, and the emission that
+  // makes them matter rides the one assignment that can be defeated without throwing. Retry once —
+  // an install that lost a race can win the re-run — and if it still is not ours, say so where a GM
+  // will actually see it. A combat layer that is silently inert is precisely the failure that took
+  // two evenings to characterize; it should announce itself in one line.
+  if (out.weaponFired && !renderEmitLive()) {
+    installRenderEmit();
+    if (!renderEmitLive()) {
+      console.error(`${SCOPE} | seam shim: the card-render wrap did not take — ${WEAPON_FIRED} will not be emitted on this client, so damage automation and combat presentation are inactive until it is reloaded.`);
+      try { ui.notifications?.error?.(localize("Augmented.SeamRailInactive"), { permanent: true }); } catch (_e) { /* no UI on this client */ }
+    }
+  }
   if (out.weaponFired || out.suppressiveFire || out.skillRolled) {
-    console.log(`${SCOPE} | seam shim engaged (base system lacks native hooks):`, out);
+    console.log(`${SCOPE} | seam shim engaged (base system lacks native hooks):`, out, `render emit live: ${renderEmitLive()}`);
   }
   return out;
 }

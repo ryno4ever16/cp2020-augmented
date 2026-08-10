@@ -3,7 +3,13 @@
     "Augmented": {
       "WrongSystem": "Cyberpunk 2020: Augmented Edition requires the Cyberpunk 2020 system to be active.",
       "MissingApi": "Cyberpunk 2020: Augmented Edition requires a newer Cyberpunk 2020 system that exposes the helper API (game.cyberpunk.api). Please update the base system.",
-      "AutomationReceived": "Augmented automation: {actor} fired {weapon}."
+      "AutomationReceived": "Augmented automation: {actor} fired {weapon}.",
+      "SeamRailInactive": "Augmented Edition could not attach to weapon fire on this browser tab. Attack rolls will still work, but damage application and combat effects will not. Please reload this tab.",
+      "SeamRailReasserted": "Augmented Edition re-attached to weapon fire. Any shots taken before now produced no damage application or combat effects — reload this tab if it happens again.",
+      "WiringIncomplete": "Augmented Edition did not finish starting up on this browser tab, so some features are inactive: {features}. Please reload this tab.",
+      "WiringStoppedEarly": "startup stopped partway",
+      "PresentationSilent": "This browser tab can no longer draw combat effects — shots will resolve normally but you will see and hear nothing. Please reload this tab.",
+      "PresentationNotAttempted": "Combat effects were not produced for that shot. This is a fault in Augmented Edition rather than in your browser, so reloading will not help — please report it."
     },
     "SaveNotOwned": "You don't own {name} — only its owner or the GM can make this save.",
     "SheetAugmentedActor": "Augmented Edition",
