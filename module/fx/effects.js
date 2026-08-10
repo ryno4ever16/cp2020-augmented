@@ -1197,6 +1197,19 @@ export const TRACER_COLOR_DART = Object.freeze({ hue: 0, saturate: -0.90, bright
  * AND THEY ARE PER SHELL, not per payload: the seed folds in the round INDEX, so an autoshotgun's three
  * shells each throw their own differently-mirrored, differently-angled volley. A per-payload seed would
  * have made a burst three identical copies, which is the report restated one level up.
+ *
+ * ⭐ AND PER TRIGGER PULL, which the round index alone did NOT deliver (2026-08-10, user ruling: *"use a
+ * more dynamic seed... damage numbers"*). The seed's first form folded identity fields only — attacker,
+ * weapon, round count, hit count, round index — and every one of those is the SAME on two consecutive
+ * shots from the same gun at the same target. So the second pull computed the first pull's mirror and
+ * the first pull's angle: a table firing repeatedly saw at most two pictures per gun (one hit, one
+ * miss), which is the "too neat" report restated one level DOWN rather than answered.
+ *   The fix is the entropy rule this file already follows everywhere else it seeds: fold in a value the
+ * ROLL produced. `JSON.stringify(payload.areaDamages)` is the rolled damage of this shot — the same term
+ * the burning-ground seed folds, in the same position, so the two seeds now have one shape between them.
+ * Two identical trigger pulls differ because their rolls differ; two CLIENTS still agree because the
+ * rolls ride the payload both of them received. Determinism was never a property of the identity fields;
+ * it is a property of seeding off the payload at all.
  */
 export const VOLLEY = Object.freeze({
   enabled: true,
@@ -1749,6 +1762,38 @@ export const AMMO_FX_RECOLOR_FIELDS = Object.freeze(["tracerColor"]);
  * fields keep meaning what they mean. See the AMMO_FX block.
  */
 export const AMMO_FX_REPLACE_FIELDS = Object.freeze(["tracer"]);
+
+/**
+ * The overlay fields that describe THE ROUND'S OWN GEOMETRY — what shape leaves the barrel, how many of
+ * them, how long each is and how long it takes to cross. A row carrying any of these has drawn its own
+ * picture of the projectile; a row carrying none of them has only said what colour or what mark the
+ * class's round makes.
+ */
+export const AMMO_FX_PROJECTILE_FIELDS = Object.freeze(["pellets", "dashSquares", "dashMs", "tracer"]);
+
+/**
+ * DOES THIS LOAD DRAW ITS OWN ROUND? Pure, so the answer is asserted by value against the table rather
+ * than by watching a shot.
+ *
+ * ⚠ WHY THE VOLLEY HAS TO ASK IT (2026-08-10). `volleyOwns` asks the CARTRIDGE — is this buckshot — and
+ * that question is right for what it was written for: a table's damage-pattern switch must not repaint a
+ * gun. But "buckshot" is derived from the caliber, and several LOADS of buckshot set no spread mode of
+ * their own, so every one of them fell into the volley branch — including the two whose whole row is a
+ * different projectile. A stun-dart 00 shell was given the grey eight-dart fan by one ruling and then
+ * drew orange fireballs anyway, because the branch that replaced the round never asked what the round
+ * was; a baton round did the same. (Flechette and slug escaped only because they happen to declare a
+ * spread mode, which is a mechanical fact standing in for a presentation one — luck, not a rule.)
+ *
+ * So the rule is written where it belongs, on the TABLE: an overlay that names its own projectile
+ * geometry keeps its own picture, and the volley draws the loads that only tint or re-mark the class's
+ * own round (base, api, ap, dualPurpose). Key PRESENCE again, the same test the masks use, so a row that
+ * ever declares one of these as `null` is still saying "this is mine to draw".
+ */
+export function ammoRedefinesProjectile(ammoKey) {
+  const row = ammoKey ? AMMO_FX[ammoKey] : null;
+  if (!row) return false;
+  return AMMO_FX_PROJECTILE_FIELDS.some((f) => row[f] !== undefined);
+}
 
 /**
  * WHICH LOAD FIRED — the ammo key for one weaponFired payload. Pure.
@@ -2986,11 +3031,24 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
           .mirrorY(chaos.mirrorY)
           .stretchTo(aimed);
+        // ⭐ THE LOADED ROUND'S COLOUR REACHES THE VOLLEY TOO (2026-08-10). A branch that REPLACES the
+        // drawn round still owes the resolved entry its treatments: this one draws the whole discharge
+        // in one sprite, so if it read no overlay field at all then an incendiary shell drew the plain
+        // orange fan, a hardened one lost its tint, and the "update one shotgun load's animation, update
+        // them all" ruling was true of the pellet fan and false of the thing that replaced it.
+        // It is the SAME expression the fan uses one branch below (`if (entry.tracerColor)`), which is
+        // what keeps the declared-vs-painted semantics intact rather than restating them: the shell row
+        // declares `tracerColor: null`, so the BASE volley is painted with nothing and stays the settled
+        // look, while api/ap/dualPurpose paint through the merge exactly as they paint the pellets.
+        if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor);
         if (settleTag) { shot.name(settleTag); out.tagged++; }
         out.volley = true;
         out.tracer = true;
         out.volleyBand = volley.band;
         out.volleyChaos = chaos;
+        // Reported so the keeper reads what was PAINTED rather than what the table declares — null on a
+        // base shell is the answer, not the absence of one.
+        out.volleyColor = entry.tracerColor ?? null;
       }
       if (!volleyOk && to && fxDbEntryExists(entry.tracer)) {
         // A class carrying a pellet count draws its round as a FAN of tracers instead of one bolt;
@@ -3735,8 +3793,14 @@ export function payloadPresentationMs(payload) {
   // tail is a property of its RANGE, so this resolver has to look at the canvas exactly once to find
   // it. With no shooter or no aim there is no distance to band, and the volley term falls away with the
   // shot it belonged to.
-  return leadIn + presentationMs(shotCountOf(payload), weaponClass, ammoFxKeyOf(payload),
-    volleyOwns(payload) ? volleySpecFor(payloadAimSquares(shooter, target, gridPx)) : null);
+  // ⚠ AND IT ASKS THE LOAD THE SAME THIRD QUESTION THE FAN-OUT ASKS (2026-08-10): a load that draws its
+  // own projectile is not drawn as a volley, so its tail is its own row's — computing a volley band here
+  // for a shot the fan-out will draw as a dart fan would hold the window shut for a second the shot does
+  // not spend. Same resolver, same call, so the two cannot drift (the rule at presentationTailMs).
+  const key = ammoFxKeyOf(payload);
+  return leadIn + presentationMs(shotCountOf(payload), weaponClass, key,
+    volleyOwns(payload) && !ammoRedefinesProjectile(key)
+      ? volleySpecFor(payloadAimSquares(shooter, target, gridPx)) : null);
 }
 
 /**
@@ -3962,19 +4026,10 @@ export async function fxWeaponFired(payload) {
   // reproduction played shot-shotgun.ogg for the fumbled shot like any other. Nothing is left as a
   // stand-in — a misfire click would need a sound this library does not carry, recorded as an earmark.)
   //
-  // Placed with the other two bail-outs, ahead of _armSettlement, for the reason stated there: a
+  // Placed with the other bail-outs, ahead of _armSettlement, for the reason stated there: a
   // payload this rail will not draw must fall to the arithmetic rather than leave a caller waiting on
   // a promise nobody will resolve.
   if (payload?.fumbleRuled) return { ...result, weaponClass, skipped: "fumble" };
-
-  // ARM THE COMPLETION SIGNAL, and do it here — after the two bail-outs above and before the first
-  // await. After, because a payload this rail is not going to draw must fall to the arithmetic rather
-  // than wait on a promise nobody will resolve; before, because a caller listening to the same hook
-  // may reach presentationSettled() in the same turn and must find the arming already done.
-  const settle = _armSettlement(payload);
-  // The name stamped on the last round's terminal elements, unique per fan-out so two shots in flight
-  // never observe each other's endings.
-  const settleTag = `${SCOPE}.settle.${foundry.utils.randomID()}`;
 
   // WHICH LOAD IS IN THE GUN — resolved ONCE, here, with the payload in hand, and threaded into every
   // verb below. It cannot be resolved further down: fxShot and the tail arithmetic never see a payload,
@@ -3985,6 +4040,28 @@ export async function fxWeaponFired(payload) {
   const shots = shotCountOf(payload);
   const hits = Math.min(hitCountOf(payload), shots);
   const shooter = shooterTokenOf(actor);
+
+  // ⭐ NOBODY ON THE MAP TO FIRE FROM (2026-08-10) — the fourth deliberate non-draw, and it says so in
+  // `skipped` like the other three. Every verb below is `if (shooter)`-gated already, so a sheet-fire by
+  // an actor with no token placed anywhere ran the whole fan-out to draw nothing: no flash, no sprite,
+  // no report, and — because nothing was `skipped` — a presentation canary that woke up four seconds
+  // later and told the table their module was faulty (review finding F1a). Firing from a sheet with no
+  // token down is ordinary play, so the honest report is "there was no shooter", not a defect notice.
+  // The silence it also buys is deliberate: the shot's audio is played from inside the loop, so a
+  // token-less fire no longer makes a report from nowhere either.
+  // Placed AFTER the load and the counts are resolved, so the result still says what was fired and how
+  // many rounds — a bail is a report, not a blank — and BEFORE _armSettlement, with the other bails.
+  if (!shooter) return { ...result, weaponClass, ammoKey, shots, hits, skipped: "shooter" };
+
+  // ARM THE COMPLETION SIGNAL, and do it here — after the bail-outs above and before the first
+  // await. After, because a payload this rail is not going to draw must fall to the arithmetic rather
+  // than wait on a promise nobody will resolve; before, because a caller listening to the same hook
+  // may reach presentationSettled() in the same turn and must find the arming already done.
+  const settle = _armSettlement(payload);
+  // The name stamped on the last round's terminal elements, unique per fan-out so two shots in flight
+  // never observe each other's endings.
+  const settleTag = `${SCOPE}.settle.${foundry.utils.randomID()}`;
+
   // Read once, so the audio, the pellet fan and the flash restart of every round of this payload are
   // paced by the same number — there is one wait in the loop and everything a round does happens after
   // it. A class that names no cadence of its own gets the default (classCadenceMs).
@@ -4005,8 +4082,14 @@ export async function fxWeaponFired(payload) {
   // cartridge is buckshot (volleyOwns, asked of the round exactly as patternFlowOwns asks the flow) and
   // which distance band the engine will serve, which needs the canvas and the aim. Null on every other
   // load, and null with the trial switched off, so everything downstream is a fall-through.
+  //
+  // ⭐ AND A THIRD QUESTION, ASKED OF THE LOAD (2026-08-10): does the round in the gun draw ITSELF? The
+  // cartridge question above is about the caliber, and a stun-dart or baton 00 shell is buckshot by
+  // caliber while being a fan of needles or a single blunt slug by picture. A branch that replaces the
+  // round may not replace one the table has already described — see ammoRedefinesProjectile, where the
+  // rule is written against the overlay table rather than against a list of load names.
   const gridSizePx = Number(canvas?.dimensions?.size) || 100;
-  const volley = volleyOwns(payload) && shooter
+  const volley = volleyOwns(payload) && shooter && !ammoRedefinesProjectile(ammoKey)
     ? volleySpecFor(payloadAimSquares(shooter, target, gridSizePx)) : null;
   // WHEN THIS ROUND ARRIVES — the one clock the delayed dressing (blood, burning ground) is hung on.
   // For a travelled fan that is the class's own crossing time; for a volley it is the BAND's baked one,
@@ -4145,8 +4228,12 @@ export async function fxWeaponFired(payload) {
       // rather than being three copies of one jittered volley (see the VOLLEY block's chaos note). It
       // is folded in beside the payload's own fields, so the agreement between clients is a property of
       // the shot and the round rather than of who drew it.
+      // ⭐ AND THE ROLLED DAMAGE WITH IT, which is what makes two separate TRIGGER PULLS differ rather
+      // than only two rounds of one burst — the identity fields are identical across repeat shots. Same
+      // term, same position, as the burning-ground seed above; see the VOLLEY block's chaos note.
       fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
-        volley, shotSeed: fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits, i) })
+        volley, shotSeed: fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits, i,
+          JSON.stringify(payload?.areaDamages ?? {})) })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
       // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock. The hits are the
       // LEADING rounds of the burst (the same assignment fxShot's `hit` argument uses one line above),
@@ -4195,17 +4282,29 @@ const SILENT_CHECK_GRACE_MS = 4000;
  * The reading is deliberately narrow, because a warning that cries on ordinary play is worse than no
  * warning at all. It fires only when ALL of these hold:
  *   - the effects engine is installed (without it there are no sprites to count and none are meant);
- *   - the rail did NOT bail (a disabled setting, an unrecognised weapon and a ruled fumble each draw
- *     nothing ON PURPOSE and each says so in `skipped`);
+ *   - an ASSET module is installed with it (see below);
+ *   - the rail did NOT bail — and there are four ways to bail, each of them ordinary play and each of
+ *     them named in `skipped`: the setting is off ("disabled"), the weapon maps to no class ("class"),
+ *     the table ruled the shot a fumble ("fumble"), and the actor has no token anywhere ("shooter");
  *   - the fan-out had rounds to draw;
  *   - and the engine's creation count did not move across the whole fan-out.
  * A miss does not trip it: a missed round still draws its flash and its tracer. A fumble does not
  * trip it: that one is `skipped`. What trips it is the case that used to be invisible — the rail did
  * everything and the screen stayed empty.
+ *
+ * ⭐ THE ASSET GATE (2026-08-10, review finding F1b). With the engine installed and NO asset module
+ * beside it, every sprite verb consults the database, finds no key and skips — silently, by the rule
+ * this whole rail follows — so the creation count never moves and the client looks broken while being
+ * entirely healthy. Worse, it is told the wrong thing: `flashes` is non-zero on that path, so the
+ * message it earns is "reload this tab", and reloading a tab does not install an asset library. The
+ * gate is `jb2aActive()` — which stays informational everywhere else (fxDbEntryExists is the real
+ * per-key gate) and is exactly the right question HERE, where the subject is not one key but whether
+ * there was ever anything to draw at all.
  */
 function _reportSilentPresentation(result, drawsBefore) {
   if (_silentPresentationWarned) return;
   if (!globalThis.Sequencer) return;                       // no engine → no sprites are expected
+  if (!jb2aActive()) return;                               // engine but no assets → nothing to draw
   if (!result || result.skipped || !(result.shots > 0)) return;   // a deliberate non-draw
   if (_drawsSeen > drawsBefore) return;                    // the engine made something → all is well
   // ⚠ DO NOT DECIDE HERE. The fan-out resolving is not the same instant as the engine reporting what
