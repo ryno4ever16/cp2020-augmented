@@ -212,7 +212,7 @@ where the *rounds* went, never on the target, and neither answer is invented:
 
 | The class draws | Landing points are | Bound |
 |---|---|---|
-| a **pellet fan** (the shell; any class under a `stundart` load — and ⏪ under `flechette` too until 2026-08-10, when that row stopped naming a count) | a subset of the very endpoints the tracer fans to, picked evenly across the cone | `maxPerPayload` = 4 |
+| a **pellet fan** (the shell, by its own class row — ⏪ and any class under a `flechette` or `stundart` load until those rows stopped naming a count, 2026-08-10 and 2026-08-11; no overlay row forces a fan any more) | a subset of the very endpoints the tracer fans to, picked evenly across the cone | `maxPerPayload` = 4 |
 | **one bolt** (every other class) | one point per landed round, scattered inside a 0.8-square disc around the aim — the payload says how many rounds landed and never where, so the disc is an admission rather than a claim | `maxPerPayload` = 4 |
 | a **shot pattern** (buckshot, RAW) | scattered inside the pattern polygon, beyond its first 30 %, placed when the GM **confirms** | `maxPerPattern` = 5 |
 
@@ -318,7 +318,7 @@ the difference.** Two rows were **deleted** under it rather than retuned, and on
 |---|---|---|
 | `hollowPoint` | `impactScale` × 1.60 | ⏪ **deleted.** Nobody reads a hollow-point off the width of a mark |
 | `safety` | `impactScale` × 0.55 | ⏪ **deleted.** Same reason |
-| `stundart` | byte-identical to `rubber` | ⏪ **rebuilt as a grey dart fan.** A baton round is a fat blunt slug and a stun dart is a needle — drawing them alike was the visible error |
+| `stundart` | byte-identical to `rubber` | ⏪ **rebuilt as a grey dart.** A baton round is a fat blunt slug and a stun dart is a needle — drawing them alike was the visible error. (It was rebuilt as a *fan* and stopped being one on 2026-08-11 — §6, the single-file ruling; the look is what that pass bought and the look is what stayed) |
 | `slug` | *(no row — it inherited the shell's six-pellet fan)* | ⭐ **new: one painted `bullet.02` bolt.** A slug was being drawn as buckshot |
 
 The mechanics of every one of these are **untouched** — nothing in any damage path has ever read this
@@ -334,7 +334,7 @@ it), so restoring either deleted row is one line.
 | `dualPurpose` | *identical to `ap`* | ground crack | class | — | — | — |
 | `slug` ⭐ | **the round is a different asset** — `bullet.02`, **painted** (`dashSquares: 0`), in the standard shift | class default | class | **`pellets: 1`** — no fan at all | — | — |
 | `flechette` | **grey dart** (hue 0, sat **−0.90**, bright 1.15) | class default | × 0.70 | ⏪ **none of its own** — 1.1 sq / 170 ms per round, **one per cadence slot** on a single-round class, the class's own count on a class that draws a group (2026-08-10) | — | — |
-| `stundart` ⭐ | *identical to `flechette`* | class default | × 0.70 | **8 darts @ 0.10 rad**, in the same 1.1 sq / 170 ms dart look — ⏪ the count is this row's own since 2026-08-10 | — | — |
+| `stundart` ⭐ | *identical to `flechette`* | class default | × 0.70 | ⏪ **none of its own** — same removal, same reason, 2026-08-11: one dart per cadence slot on a single-round class, the shell's own six at 0.07 rad on a shell. (Was **8 @ 0.10 rad**, mirrored from `flechette` until 2026-08-10 and stated here until 2026-08-11) | — | — |
 | `rubber` | **the round is a different asset** — `cannon_ball` slug, travelled 2.4 sq / 240 ms; repainted colourless-but-brighter (hue 0, sat −0.85, **bright 1.30**) | **dust puff** | class | count/spread unchanged, size and speed replaced | — | — |
 | ~~`hollowPoint`~~ / ~~`safety`~~ | ⏪ **rows deleted** — both resolve to the class row itself, by identity | | | | | |
 
@@ -350,10 +350,12 @@ is not a difference a viewer can take. Colour is the one axis on this rail that 
 single frame, and it is also the load's own true statement: a flechette or a needle-dart is a bare metal
 spike, where shot and bullets leave a barrel glowing.
 
-⭐ **The rule carries more weight since 2026-08-10.** With the single-file ruling (§6) the `flechette`
-row no longer names a count at all, so on a class that fires one round per slot the colour, the length
-and the smaller mark are the *whole* difference between a dart and a bullet — the count used to do part
-of that work and now does none of it.
+⭐ **The rule carries the whole load since 2026-08-11.** With the single-file ruling (§6) the `flechette`
+row stopped naming a count on 2026-08-10 and the `stundart` row followed on 2026-08-11, so **neither dart
+row names one** — on a class that fires one round per slot the colour, the length and the smaller mark
+are the *entire* difference between a dart and a bullet, and on a shell the two dart loads and buckshot
+all draw the same six marks, separated by nothing but this colour. The count used to do part of that work
+and now does none of it, which is why the grey is a rule rather than a preference.
 
 `TRACER_COLOR_DART` = **hue 0, saturate −0.90, brightness 1.15**, and every number in it is doing
 something:
@@ -398,7 +400,7 @@ a table that switched the damage pattern off has not thereby asked for a differe
 "Buckshot" is derived from the *caliber*, and several **loads** of buckshot declare no spread mode of
 their own — so `api`, `ap`, `dualPurpose`, `stundart` and `rubber` 00 shells all fell into this branch,
 including the two whose entire row is a *different projectile*. A stun-dart shell was given the grey
-eight-dart fan by one ruling and then drew orange fireballs anyway; a baton round did the same.
+dart fan by one ruling and then drew orange fireballs anyway; a baton round did the same.
 (Flechette and slug escaped only because they happen to declare a spread mode — a mechanical fact
 standing in for a presentation one: luck, not a rule.) The rule now lives on the **table**:
 
@@ -622,8 +624,9 @@ shell's column plus fan).
 ⏪ **This section fixed the LOOP; it did not fix every report.** The same complaint came back on
 2026-08-10 for the dart load specifically, and the residual was the one thing a pacing rule cannot
 reach: the backlog queued by the rounds it *chose to keep*. That was answered by removing the count
-rather than by re-tuning anything here — §6, the single-file ruling. Reproducing the table below now
-needs a class whose own row draws a group.
+rather than by re-tuning anything here — §6, the single-file ruling, extended to `stundart` on
+2026-08-11 by the same reasoning. Reproducing the table below now needs a class whose **own** row draws
+a group, because no overlay row does.
 
 **The mechanism, measured on the rig 2026-08-09 rather than reasoned about.** The loop paces by the
 wall clock while everything it queues is drawn by the render loop. The old loop waited a **fixed**
@@ -877,7 +880,19 @@ the regular shots do — one after the other, single file."*
 | ⏪⏪ **The `flechette` row stops naming a count and a cone** | removed: **`pellets: 8, spreadRad: 0.1`** (the revert values, recorded at the row and here). Kept: `dashSquares: 1.1` · `dashMs: 170` · `impactScale: 0.7` · `tracerColor: TRACER_COLOR_DART` | One mark per round, through the same per-round path standard ammo takes, in the round's own cadence slot. The **look is untouched** — what was rejected is the group, not the round. Written as a *removal* rather than as a branch, so a class that draws one round per slot resolves to one and a class whose own row draws a group (the shell: 6 at 0.07 rad) keeps its own; both are fall-throughs. |
 | ⭐ **The count was the defect, not the clock** | measured on the rig, 20 rounds at the rifle's 80 ms spacing | The pacing unit (§4.1a) had **already** anchored the schedule and already refused rounds it could not draw on time, and the loop did finish when the reports did (1593 ms against an intended 1520 ms). The picture still did not: a count of eight on a twenty-round payload is 160 sprites handed to a renderer that draws at its own pace, and **no pacing rule can reach a backlog created by the rounds it chose to keep.** The only lever on that backlog is the count. Before: the last mark left the screen **3433 ms** after the last report. After: **2248 ms**, against a same-payload **control** with no overlay at **2278 ms** — i.e. the load is now indistinguishable from the ordinary stream, and the ~2.2 s that remains is this headless rig's own drawing delay for *any* load. ≈**1.2 s** of the report was the count, which is the "over a second" it named. |
 | ⛔ **The load still declares its own projectile** | `ammoRedefinesProjectile("flechette") === true`, now off `dashSquares,dashMs` | `AMMO_FX_PROJECTILE_FIELDS` lists `pellets` among four, and the test is key presence — so dropping the count is exactly the edit that could have silently reclassified this load as "a tint only" and handed it to the branch that replaces the round wholesale (F9b, below). It still answers true off the fields that remain, so the volley escape holds and `presentationTailMs` still reads `dashMs`: the tail is **1003 ms** on the rifle, unchanged, and no apply window moved. A keeper leg pins *which* fields carry the answer. |
-| The `stundart` row **keeps its group**, and the count becomes its own | `pellets: 8, spreadRad: 0.1` now stated at that row rather than mirrored from `flechette` | The two rows were deliberately written as one set of numbers so a change to the dart look would move both. This ruling moved one and not the other, so the shared half (length, crossing, mark, grey) stays shared and the count is now local. It is not an oversight: a stun dart is a group of needles out of one cartridge, where a dart round on a stream weapon is one round per trigger pull. A later ruling on this load is a two-field edit at that row. |
+| The `stundart` row **keeps its group**, and the count becomes its own — ⏪ **superseded 2026-08-11, see the entry below** | `pellets: 8, spreadRad: 0.1` stated at that row rather than mirrored from `flechette` | The two rows were deliberately written as one set of numbers so a change to the dart look would move both. This ruling moved one and not the other, so the shared half (length, crossing, mark, grey) stayed shared and the count became local. Its last sentence — "a later ruling on this load is a two-field edit at that row" — is exactly what happened the next day. |
+
+**2026-08-11 — the same ruling, on the stun dart, decided by the WEAPON CLASS.** Asked whether the
+`stundart` load should draw single file the way `flechette` now does, the user ruled, verbatim: *"Is it
+fired from a weapon that usually fires in a single file line? If so yes. If it's fired from a shotgun,
+no."*
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⏪⏪ **The `stundart` row stops naming a count and a cone too** | removed: **`pellets: 8, spreadRad: 0.1`** (the revert values, recorded at the row and here). Kept: `dashSquares: 1.1` · `dashMs: 170` · `impactScale: 0.7` · `tracerColor: TRACER_COLOR_DART` | The ruling names a **class**, not a load, and the mechanism for "the class decides the shape" already exists — it is the removal the day before. A row that names no count leaves the class's own answer standing, so a stream-firing class draws one dart per cadence slot and a shotgun class fans from its own row. Both halves of the ruling are therefore one edit and **no branch**: "if so yes" is the fall-through to the per-round path, and "if it's fired from a shotgun, no" is the shell's own `pellets: 6, spreadRad: 0.07` coming through the merge untouched. |
+| The **dart look is untouched**, exactly as it was for `flechette` | 1.1 sq at 170 ms, a × 0.70 mark, `TRACER_COLOR_DART` | What was rejected is the group, not the round. `dashMs` is the tail's own input and did not move, so the tail is still **1003 ms** on every class and no apply window opened early — the arithmetic is byte-identical before and after. |
+| ⛔ **The load still declares its own projectile** | `ammoRedefinesProjectile("stundart") === true`, now off `dashSquares,dashMs` | Same guard as the day before and it matters more here: the stun-dart 00 shell is the *specific* load the F9b escape was written for — it was drawing orange fireballs out of the round-replacing branch until 2026-08-10 — so silently reclassifying it as "a tint only" would have reopened a fixed defect. Keeper legs pin the answer, the fields carrying it, and the escape on a buckshot cartridge. |
+| The two dart rows are **one set of fields again** | `stundart` and `flechette` now resolve identically on all five classes | Which is what they were before 2026-08-10, for the reason that was always true: a stun dart and a flechette dart are the same object fired for different reasons. They stay written out separately rather than shared — one ruling has already moved one without the other. A keeper leg asserts the two are equal, so a future divergence is visible rather than silent. |
 
 **2026-08-10 — the origin field: the payload names WHICH FIGURE fired.** Reported from the table: a
 scene held two figures of one actor, and firing from one drew the muzzle work and the rounds out of the
@@ -917,7 +932,7 @@ each one closed a blind spot in the *keeper* as well as in the product.
 | ⭐⭐ **THE REALISM RAZOR:** a load gets a visual only if you could plausibly see the difference | — | The user's own framing, and it is what the next three rows are decided by. A table shown a difference that does not exist learns to distrust the ones that do. |
 | ⏪ **`hollowPoint` and `safety` are DELETED** | both rows gone; `impactScale` stays a live field | Their entire content was a multiplier on the hit mark's width — × 1.60 and × 0.55. Nobody watching a firefight reads a hollow-point off the size of a mark. **Mechanics untouched:** this table has never been read by any damage path, so only the pictures died. Bench guns 02 and 03 now draw identically to 01, which is the point of those rows rather than a regression in them. Capture 67i; restoring either is one line. |
 | ⭐ The **slug gets its own row** — one heavy painted bolt | `pellets: 1`, `dashSquares: 0`, `dashMs: 0`, `tracer: bullet.02`, standard shift | It had been inheriting the shell's six-pellet fan, i.e. a single projectile drawn as buckshot. Written entirely in the class row's own fields: `pellets: 1` returns no fan at all (the planner only fans above one) so the draw path falls through to the single-endpoint branch every other class takes, and `dashSquares: 0` is the path's own switch from travelled to painted. `dashMs: 0` is **not cosmetic** — it is a tail correction, see §4.2. It should read like rifle fire, and it does: same bolt family, same 933 ms tail. Capture 67e. |
-| ⏪ **The stun dart stops being the baton's twin** | `stundart` = the flechette geometry in the dart grey | They had been byte-identical, on the reading that both are less-lethal and differ only by a stun modifier nobody can see. The ruling reverses that on the **object** rather than on the mechanic: a baton round is a fat blunt slug and a stun dart is a *needle* — thin, finned, fired in a group — so they do not look alike at all, and drawing them alike was the visible error. The baton asset and the dust puff stay with `rubber` alone. Capture 67f. |
+| ⏪ **The stun dart stops being the baton's twin** | `stundart` = the flechette geometry in the dart grey | They had been byte-identical, on the reading that both are less-lethal and differ only by a stun modifier nobody can see. The ruling reverses that on the **object** rather than on the mechanic: a baton round is a fat blunt slug and a stun dart is a *needle* — thin, finned, fired in a group — so they do not look alike at all, and drawing them alike was the visible error. The baton asset and the dust puff stay with `rubber` alone. Capture 67f. ⏪ The "fired in a group" half of that sentence was superseded on 2026-08-11 (the single-file ruling above): the group is now the shell's to draw, and the needle is said by the colour, the length and the mark. What this ruling bought — the look — is untouched. |
 | ⭐ **The dart language: grey is darts, orange is balls and bullets** | `TRACER_COLOR_DART` = hue 0, sat −0.90, bright 1.15 | A rule, not one row's tuning. The tier ships one projectile family and it is orange, so an 8-dart flechette fan and a 6-pellet buckshot fan were the same picture with a different count — and a count is not a difference the eye takes at 150–170 ms. Colour separates them in one frame and says the load's own true thing: a dart is a bare metal spike. ⚠ It is a **desaturation, not a darkening** — brightness sits above 1 for the same reason `TRACER_COLOR_BATON`'s 1.30 does, because the rejected rubber treatment proved a dimmed sprite on a dark scene is a round the eye has to hunt for. Its own constant rather than a reuse of the baton matrix, so a later change to one cannot silently change the other. Captures 67f / 67g / 67x, and the 67fgh triptych. |
 
 **2026-08-09 — the pacing unit.**
@@ -1065,17 +1080,22 @@ count and modifier, the threshold that modifier lowers with the rider removed as
 the armed over-time turns — plus a plain load that arms neither and a pre-change pattern that still
 resolves.
 
-⭐ **§21, the single-file section (2026-08-10)** — the dart load's count, in three kinds of leg, and the
-third is the one that matters. **By value:** the row names no count and no cone; every single-round class
-resolves to no count, and the *fan planner* is asked with that entry and returns nothing, so the absence
-is asserted where it is consumed and not only where it is declared; the load's own length, crossing, mark
-and colour are unchanged. **Negatives:** a class whose own row draws a group keeps drawing it (the shell's
-6 at 0.07 rad come through the merge), the shell class row is unmoved, the `stundart` row keeps its own 8,
-and — the leg that guards the edit that could have gone wrong silently — `ammoRedefinesProjectile` still
-answers **true**, off `dashSquares,dashMs` rather than off the count it used to answer off, so the escape
-from the round-replacing branch holds and the tail arithmetic is untouched. **Driven:** a recording
-surface counts what is *handed over* (one mark per round drawn, exactly; the group form would hand over
-eight times that). **Measured:** the same 20-round payload is run twice on the real engine — once with no
+⭐ **§21, the single-file section (2026-08-10, extended to `stundart` 2026-08-11)** — the dart loads'
+count, in three kinds of leg, and the third is the one that matters. **By value:** neither row names a
+count or a cone; every single-round class resolves to no count for either load, and the *fan planner* is
+asked with each entry and returns nothing, so the absence is asserted where it is consumed and not only
+where it is declared; each load's own length, crossing, mark and colour are unchanged, and the two rows
+are asserted **equal** on all five classes so a future divergence is visible rather than silent.
+**Negatives:** a class whose own row draws a group keeps drawing it — the shell's 6 at 0.07 rad come
+through the merge for *both* loads, which is the "if it's fired from a shotgun, no" half of the 2026-08-11
+ruling read off the resolved entry and off the queue; the shell class row is unmoved; and — the leg that
+guards the edit that could have gone wrong silently — `ammoRedefinesProjectile` still answers **true** for
+each, off `dashSquares,dashMs` rather than off the count it used to answer off, so the escape from the
+round-replacing branch holds (re-read on the stun-dart 00 shell specifically, the load that escape was
+written for) and the tail arithmetic is untouched at 1003 ms. **Driven:** a recording surface counts what
+is *handed over* — one mark per round drawn, exactly, for a single round and for a 20-round burst of each
+load; the group form would hand over eight times that; and one shell round of the stun dart still hands
+over six. **Measured:** the same 20-round payload is run twice on the real engine — once with no
 overlay as a **control**, once with the dart load — with the audio stubbed to stamp the clock and the
 engine's own end-of-element hook stamping it too, and the claim is the ruling itself: the dart load's
 last mark leaves the screen when the ordinary stream's does. The control is what makes that honest, since
@@ -1263,7 +1283,7 @@ The bench, as it ships (walk-down order, pistol → smg → rifle → shell → 
 | 10 | Arasaka Rapid Assault Shot 12 | 00 | `standard` | shotgun | ⚠ **the VOLLEYBUL TRIAL — the adopt/veto ruling this bench exists for**; plus the RAW buck pattern + confirm + delete, and the shell's restored 1.9 sq lance |
 | 11 | Arasaka Rapid Assault Shot 12 | 00 | `slug` | shotgun | **one heavy painted bolt** (new), and the single-target contrast — the one shell load that throws no pattern |
 | 12 | Arasaka Rapid Assault Shot 12 | 00 | `api` | shotgun | **burning ground on the pattern flow** — ≤ 5 flames placed on *confirm*; the pellet fan red |
-| 13 | Arasaka Rapid Assault Shot 12 | 00 | `stundart` | shotgun | ⏪ **a grey needle-dart fan** — no longer the baton's twin |
+| 13 | Arasaka Rapid Assault Shot 12 | 00 | `stundart` | shotgun | ⏪ **a grey needle-dart fan** — no longer the baton's twin; ⏪ and since 2026-08-11 the fan is the SHELL's own six at its own 0.07 rad rather than the row's eight, which is the "if it's fired from a shotgun, no" half of that ruling standing up on the bench |
 | 14 | Arasaka Rapid Assault Shot 12 | 00 | `flechette` | shotgun | a **grey** dart swarm — ⏪ now the SHELL's own six at its own 0.07 rad rather than the row's eight (2026-08-10), and a flechette pattern rather than a buck one |
 | 15 | Barrett-Arasaka Light 20mm | 20/9mm | `standard` | heavy | the top of the impact ladder — 1.30 sq |
 | 16 | Barrett-Arasaka Light 20mm | 20/9mm | `dualPurpose` | heavy | identical to `ap` by ruling — the pair the payload's ammo **id** exists for |

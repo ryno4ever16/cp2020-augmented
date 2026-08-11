@@ -1027,7 +1027,7 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * built: a painted (stretched) tracer takes its width from the asset's own frame and Sequencer's size
  * call on a stretched effect controls the stretch, not the cross-section. Colour is the whole available
  * palette for a painted tracer, which is why the two live matrices here are colour and why the
- * treatments that genuinely change SHAPE (the stun dart's group, the impact promotions, and the baton
+ * treatments that genuinely change SHAPE (the slug's single bolt, the impact promotions, and the baton
  * round's travelled slug) do it with different fields.
  */
 /**
@@ -1687,18 +1687,42 @@ export const BATON_ROUND = Object.freeze({
  *  - `stundart` — ⏪ NO LONGER THE BATON'S TWIN (2026-08-09, the realism razor). It used to be
  *    byte-identical to `rubber`, on the reading that both are less-lethal and their only difference is a
  *    stun modifier nobody can see. The ruling reversed that on the object rather than on the mechanic: a
- *    baton round is a fat blunt slug and a stun dart is a **needle** — thin, finned, fired in a group —
- *    so they do not look alike at all, and drawing them alike was the visible error. It draws a GROUP
- *    of darts — a count, a cone, and the dart length, crossing and grey of the dart language — which
- *    says two true things at once: it is a needle, and it is not a bullet. The baton asset and the dust
- *    puff stay with `rubber` alone, which is where the round they depict lives.
- *    ⏪ IT IS NO LONGER A MIRROR OF THE `flechette` ROW (2026-08-10). Those values were deliberately
- *    written as flechette's own so that one change would move both; the 2026-08-10 single-file ruling
- *    moved one of them and not the other, so the count and the cone now live HERE in their own right.
- *    They are the same numbers flechette carried (8 at 0.10 rad) and they are kept because the ruling
- *    was about the load that was reported, not about the group form itself — a stun dart is fired as a
- *    group of needles from one cartridge, where a dart round on a stream weapon is one round per pull.
- *    A later ruling on this load is a two-field edit at this row and reaches nothing else.
+ *    baton round is a fat blunt slug and a stun dart is a **needle** — thin, finned — so they do not
+ *    look alike at all, and drawing them alike was the visible error. It says the round in the DART
+ *    LANGUAGE: the dart's length, its crossing time, a smaller mark and the grey — which says two true
+ *    things at once: it is a needle, and it is not a bullet. The baton asset and the dust puff stay with
+ *    `rubber` alone, which is where the round they depict lives.
+ *
+ *    ⏪⏪ AND IT NO LONGER FORCES A GROUP EITHER (`pellets: 8, spreadRad: 0.1` — the revert values,
+ *    recorded at the row itself as well). USER RULING 2026-08-11, verbatim, asked whether this load
+ *    should draw single file the way `flechette` now does: *"Is it fired from a weapon that usually
+ *    fires in a single file line? If so yes. If it's fired from a shotgun, no."* That is the CLASS
+ *    deciding the shape, which is exactly the mechanism the 2026-08-10 single-file ruling put in one row
+ *    up — so the answer here is the same removal rather than a second rule. With no count on the row a
+ *    stream-firing class draws ONE dart per round through the same per-round path standard ammo takes,
+ *    and a shotgun class fans from ITS OWN row (6 at 0.07 rad). Both are fall-throughs, neither is a
+ *    branch, and nothing in the draw path was taught a new word.
+ *    ⚠ THE 2026-08-10 NOTE THAT STOOD HERE said the count and the cone were this row's own "in their own
+ *    right", on the reading that a stun dart is a group of needles out of one cartridge. The ruling
+ *    above supersedes the first half and re-reads the second rather than contradicting it: a stun dart
+ *    fired out of a SHELL still draws a group of needles, and it draws the shell's own, because the
+ *    class row says so. What is gone is the overlay forcing that group onto a rifle.
+ *    ⭐ THE DART LOOK IS UNTOUCHED, the same half the flechette ruling kept: `dashSquares: 1.1`,
+ *    `dashMs: 170`, `impactScale: 0.7` and `tracerColor: TRACER_COLOR_DART` all stay. `dashMs` is the
+ *    tail's own input and it did not move, so the tail is still 1003ms on a stream class and no apply
+ *    window opened early.
+ *    ⛔ AND THE ROW MUST KEEP DECLARING ITS OWN PROJECTILE, for the reason the flechette note records
+ *    one row up: `ammoRedefinesProjectile` is key presence over AMMO_FX_PROJECTILE_FIELDS, which lists
+ *    `pellets` among them — so this removal is exactly the edit that could have quietly reclassified the
+ *    load as "a tint only" and handed it to the branch that replaces the round wholesale. That is not a
+ *    hypothetical here: the stun-dart 00 shell is the very load that branch was drawing orange fireballs
+ *    over until 2026-08-10 (see ammoRedefinesProjectile). It still answers yes, off `dashSquares` and
+ *    `dashMs`, and a keeper leg pins which fields carry the answer.
+ *    ⭐ THE TWO DART ROWS ARE ONE SET OF FIELDS AGAIN, which is what they were before 2026-08-10 and for
+ *    the reason that was always true: a stun dart and a flechette dart ARE the same object fired for
+ *    different reasons, so a reader who has understood one row has understood both. They are still
+ *    written out separately rather than shared, because one ruling has already moved one of them without
+ *    the other and the next one may too — a ruling on either is a two-field edit at its own row.
  */
 export const AMMO_FX = Object.freeze({
   // ⏪ THE IMPACT PROMOTION IS WITHDRAWN (user ruling 2026-08-09, verbatim: *"get rid of the blast
@@ -1749,9 +1773,12 @@ export const AMMO_FX = Object.freeze({
   }),
   // ⏪ NOT `rubber`'s twin any more — a needle, in the same grey dart language the flechette row speaks.
   // The LOOK is deliberately the dart look (length, crossing, mark and grey), so a reader who has
-  // understood one row has understood both; the COUNT and the CONE are this row's own since 2026-08-10,
-  // when the single-file ruling took them off flechette and left this load a group. See the row note.
-  stundart: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 1.1, dashMs: 170, impactScale: 0.7, tracerColor: TRACER_COLOR_DART }),
+  // understood one row has understood both.
+  // ⏪ THE COUNT AND THE CONE ARE GONE HERE TOO (user ruling 2026-08-11 — see the row note above: the
+  // class decides the shape, single file on a stream-firing weapon and the shell's own fan on a shell,
+  // exactly as `flechette` does since 2026-08-10). The revert values, so restoring the group form is one
+  // edit at this site: `pellets: 8, spreadRad: 0.1`.
+  stundart: Object.freeze({ dashSquares: 1.1, dashMs: 170, impactScale: 0.7, tracerColor: TRACER_COLOR_DART }),
 });
 
 /**
@@ -1802,7 +1829,7 @@ export const AMMO_FX_PROJECTILE_FIELDS = Object.freeze(["pellets", "dashSquares"
  * that question is right for what it was written for: a table's damage-pattern switch must not repaint a
  * gun. But "buckshot" is derived from the caliber, and several LOADS of buckshot set no spread mode of
  * their own, so every one of them fell into the volley branch — including the two whose whole row is a
- * different projectile. A stun-dart 00 shell was given the grey eight-dart fan by one ruling and then
+ * different projectile. A stun-dart 00 shell was given the grey dart fan by one ruling and then
  * drew orange fireballs anyway, because the branch that replaced the round never asked what the round
  * was; a baton round did the same. (Flechette and slug escaped only because they happen to declare a
  * spread mode, which is a mechanical fact standing in for a presentation one — luck, not a rule.)
@@ -1885,10 +1912,10 @@ export function ammoFxFingerprintKey(payload) {
  *     block — repaint, never add). Two lists, one rule: AMMO_FX_RECOLOR_FIELDS is what colour an
  *     element is, AMMO_FX_REPLACE_FIELDS is which picture it is.
  *  2. Everything else is a plain overwrite, so an overlay may genuinely give a class an element it did
- *     not have: that is how the baton row gives a painted-bolt class a travelled slug, and how the
- *     stun-dart row gives one a group of needles. An overlay that names none of a field leaves the
- *     class's own answer standing, which is how the flechette row draws one dart on a class that fires
- *     one round and the shell's own six on a class that fires six.
+ *     not have: that is how the baton row gives a painted-bolt class a travelled slug and its own dust
+ *     mark. An overlay that names none of a field leaves the class's own answer standing, which is how
+ *     BOTH dart rows draw one dart on a class that fires one round and the shell's own six on a class
+ *     that fires six.
  *  3. `impactScale` is spent against the CLASS's own impact width and then removed from the result, so
  *     what comes out is an ordinary class row that any existing reader understands — the multiplier is
  *     a way of writing the table, not a new field the draw path has to know about.
