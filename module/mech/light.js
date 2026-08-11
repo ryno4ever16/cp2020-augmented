@@ -157,6 +157,7 @@ async function restoreTokenLight(tokenDoc) {
  *  item or still carries our base-light flag (deduped per actor — linked tokens are covered by one
  *  applyActorLight). Applier-scoped. Shared by the canvasReady resync and the ON settings sweep. */
 async function reconcileSceneLight(scene) {
+  if (someoneElseIsTheApplier()) return;   // not our writes → don't touch a single token (see below)
   const seen = new Set();
   for (const tokenDoc of scene?.tokens ?? []) {
     const actor = tokenDoc.actor;
@@ -192,6 +193,20 @@ export function iAmTheApplier(actor) {
   const gm = game.users?.activeGM;
   if (gm) return gm.id === game.user.id;      // exactly one applier when any GM is on
   return !!actor?.isOwner;                     // no GM online: an owner tries directly
+}
+
+/** The actor-free HALF of iAmTheApplier, for use as a whole-sweep early-out.
+ *  When a GM is online, exactly one client is the applier and the decision does not involve the actor
+ *  at all — so every OTHER client can skip a scene sweep before it reads its first token. That matters
+ *  because the sweeps run on canvasReady: without this, every player client walked every token on the
+ *  scene, resolved each token's actor (materializing a synthetic actor per unlinked token) and scanned
+ *  its items, only to discard every result at the per-actor check inside the loop.
+ *  Returns FALSE when no GM is online, because there the decision IS per-actor (an owner applies for
+ *  the actors it owns) — the loop's own iAmTheApplier call still decides that case, unchanged.
+ *  Shared by the mech/ engines (vision.js imports it). */
+export function someoneElseIsTheApplier() {
+  const gm = game.users?.activeGM;
+  return !!gm && gm.id !== game.user?.id;
 }
 
 /** Does this item event concern the light engine at all? */
