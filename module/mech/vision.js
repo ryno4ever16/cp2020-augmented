@@ -27,7 +27,7 @@
  * default (character/npc yes; vehicles/ACPA/others no).
  */
 
-import { tokensOf, iAmTheApplier, enqueueApply, updateTokenDoc } from "./light.js";
+import { tokensOf, iAmTheApplier, someoneElseIsTheApplier, enqueueApply, updateTokenDoc } from "./light.js";
 import { contributingItems } from "./cyberlimb.js";
 import { cwIsEnabled } from "../utils.js";
 import { mechTokenWritesEnabled } from "../settings.js";
@@ -238,6 +238,11 @@ async function restoreTokenVision(tokenDoc) {
  *  item or still carries our base-sight flag (deduped per actor — linked tokens are covered by one
  *  applyActorVision). Applier-scoped. Shared by the canvasReady resync and the ON settings sweep. */
 async function reconcileSceneVision(scene) {
+  // Whole-sweep early-out, mirroring the light engine: with a GM online this client either owns every
+  // write on the scene or none of them, and that decision needs no actor — so a non-applier stops here
+  // instead of resolving an actor and scanning its items once per token. (No GM online → false, and the
+  // per-actor iAmTheApplier inside the loop still decides ownership. See light.js.)
+  if (someoneElseIsTheApplier()) return;
   const seen = new Set();
   for (const tokenDoc of scene?.tokens ?? []) {
     const actor = tokenDoc.actor;
