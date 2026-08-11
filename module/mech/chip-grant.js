@@ -63,6 +63,32 @@ function looksLikeDocumentId(key) {
   return /^[A-Za-z0-9]{16}$/.test(String(key ?? ""));
 }
 
+/** id → name over the whole skill-pack index, built ONCE per language and shared by every caller.
+ *  `getSkillIndex` already caches the index ARRAY, but the id→name map built from it was rebuilt per
+ *  actor — and the reconciliation pass at ready runs once per owned actor, so a GM (who owns every
+ *  actor in the world) rebuilt the identical map once per world actor. Callers READ this map only;
+ *  per-actor data belongs in the caller's own map (see chipKeyNameResolver).
+ *  A failed index is NOT cached — the entry is dropped so the next caller retries, which is what the
+ *  per-actor build did. Impure (pack index). */
+const _skillNamesByLang = new Map();
+export function skillIndexNamesById(lang = game.i18n?.lang) {
+  const key = String(lang ?? "");
+  let pending = _skillNamesByLang.get(key);
+  if (!pending) {
+    pending = (async () => {
+      const byId = new Map();
+      for (const e of await getSkillIndex(lang)) byId.set(e.id, e.name);
+      return byId;
+    })().catch((e) => {
+      _skillNamesByLang.delete(key);
+      console.warn(`${SCOPE} | chip skill grant: the skill index is unavailable; resolving id-form keys from the actor's own skills only`, e);
+      return new Map();
+    });
+    _skillNamesByLang.set(key, pending);
+  }
+  return pending;
+}
+
 /** ChipSkills keys are skill NAMES in the pack catalog but skill-item _IDs when written through
  *  the item sheets (ours and the base's — the base override resolves `chipMap[si.id] ??
  *  chipMap[si.name]` the same way). Grant/prune reason in NAMES, so map id-keys back to names:
@@ -72,13 +98,13 @@ function looksLikeDocumentId(key) {
  *  is dropped, never created as a skill literally named the id string. Non-id unknown keys pass
  *  through as literal names. Impure (index). */
 async function chipKeyNameResolver(actor) {
-  const byId = new Map();
-  try {
-    for (const e of await getSkillIndex()) byId.set(e.id, e.name);
-  } catch (_e) { /* the actor's own skills below still resolve */ }
-  for (const it of actor?.items ?? []) if (it?.type === "skill") byId.set(it.id, it.name);
+  const packNames = await skillIndexNamesById();
+  const ownNames = new Map();
+  for (const it of actor?.items ?? []) if (it?.type === "skill") ownNames.set(it.id, it.name);
   return (key) => {
-    const name = byId.get(key);
+    // The actor's OWN skill is consulted first, so its current name wins over the pack entry it came
+    // from — the same precedence the single merged map had, now without copying the pack half per actor.
+    const name = ownNames.get(key) ?? packNames.get(key);
     if (name !== undefined) return name;
     if (looksLikeDocumentId(key)) {
       console.warn(`${SCOPE} | chip skill grant: dropping unresolved id-form ChipSkills key "${key}"`);
