@@ -89,7 +89,13 @@ const r = await p.evaluate(async () => {
       timedBt: timedFor(a, "bt"),                       // -1 (temp BODY -1, still timed)
       overlayBt: (Number(a.system.stats.bt.total) || 0) - baseBt,     // -2 (temp -1 + perm -1)
       overlayAttr: (Number(a.system.stats.attr.total) || 0) - baseAttr, // +1
-      overlayRef: (Number(a.system.stats.ref.total) || 0) - baseRef,  // 0 (no REF at band 401)
+      // REF's overlay is NOT expected to be zero: band 401 rolls 1D6 damage into HP, and the system
+      // docks REF for the wound state that damage produces. Both halves are reported so the check can
+      // reconstruct the legitimate wound penalty exactly and demand the overlay equal it — see the
+      // single_overlayRefIsWoundOnly note below for the ladder and its source lines.
+      baseRef,                                                          // REF total BEFORE the dose (undamaged)
+      overlayRef: (Number(a.system.stats.ref.total) || 0) - baseRef,     // wound penalty only, no radiation REF
+      damage: Number(a.system.damage) || 0,                             // the rolled 1D6 that drives woundState
       damageApplied: (Number(a.system.damage) || 0) > 0,               // band 401 damage 1D6 → HP
     };
 
@@ -178,6 +184,20 @@ const r = await p.evaluate(async () => {
   return out;
 });
 
+// The REF penalty the SYSTEM applies for a wound state, reconstructed from the system's own ladder so
+// this keeper can subtract it and see what radiation alone did to REF. Mirrors, in order:
+//   systems/cyberpunk2020/module/actor/actor.js:509-514  woundState() = damage ? Math.ceil(damage/4) : 0
+//   ...:394-402  woundState >= 4 → REF = ceil(REF/3);  == 3 → REF = ceil(REF/2);  == 2 → REF = REF - 2
+//                (states 0 and 1 — undamaged and Light — leave REF alone)
+// Returns the DELTA (<= 0) that the ladder applies to a pre-wound REF total.
+const woundRefPenalty = (ref, damage) => {
+  const woundState = damage ? Math.ceil(damage / 4) : 0;
+  if (woundState >= 4) return Math.ceil(ref / 3) - ref;
+  if (woundState === 3) return Math.ceil(ref / 2) - ref;
+  if (woundState === 2) return -2;
+  return 0;
+};
+
 const checks = {
   no_throw: !r.THROWN,
   // pure
@@ -200,7 +220,14 @@ const checks = {
   single_noRefLeak: r.single?.permRef === 0,          // band 301's REF-1 must NOT leak in (proves single-band)
   single_overlayBt: r.single?.overlayBt === -2,
   single_overlayAttr: r.single?.overlayAttr === 1,
-  single_overlayNoRef: r.single?.overlayRef === 0,
+  // Band 401 carries no REF row, so every point REF moved must be the wound the band's own 1D6 damage
+  // inflicted — nothing else. Demanding a flat 0 here was wrong: the 1D6 reaches woundState 2 on a 5 or
+  // a 6 (ceil(5/4) == 2), and the system then docks REF by 2, so the leg failed on a third of runs for a
+  // legitimate rules effect. Asserting the EXACT reconstructed penalty is both deterministic given the
+  // rolled damage and strictly stronger — a stray radiation REF modifier of any size now shows up as a
+  // mismatch instead of hiding inside a tolerance.
+  single_overlayRefIsWoundOnly:
+    r.single?.overlayRef === woundRefPenalty(r.single?.baseRef ?? 0, r.single?.damage ?? 0),
   single_damageApplied: r.single?.damageApplied === true,
   // cross-incident accumulation
   cross_exposure600: r.cross?.exposure === 600,
