@@ -63,6 +63,10 @@ export const MAX_FX_SHOTS = 30;
  * went on drawing after the shooting had stopped. A 30-round flechette payload at the shell's 180 ms
  * cadence was measured at **11 681 ms against an intended 5 220 ms (2.24×)**, and the same ratio held
  * at 5 / 10 / 20 rounds (2.13× / 2.24× / 2.23×), so it is the mechanism and not a one-off.
+ * ⏪ TO REPRODUCE THAT LOAD TODAY you need a class whose OWN row draws a group — the flechette overlay
+ * stopped forcing one on 2026-08-10 (see its row note), and that removal is what answered the RESIDUAL
+ * the two halves below could not: this rule paces the loop, and nothing that paces a loop can reach the
+ * backlog the rounds it kept had already queued.
  *
  * ⚠ WHERE THE TIME ACTUALLY GOES, because the obvious answer is wrong and it changes the fix. Building
  * one round's Sequence is CHEAP — `fxShot`'s synchronous cost measured at a median of **1 ms**. The lag
@@ -1023,7 +1027,7 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * built: a painted (stretched) tracer takes its width from the asset's own frame and Sequencer's size
  * call on a stretched effect controls the stretch, not the cross-section. Colour is the whole available
  * palette for a painted tracer, which is why the two live matrices here are colour and why the
- * treatments that genuinely change SHAPE (flechette's fan, the impact promotions, and now the baton
+ * treatments that genuinely change SHAPE (the stun dart's group, the impact promotions, and the baton
  * round's travelled slug) do it with different fields.
  */
 /**
@@ -1060,10 +1064,13 @@ export const TRACER_COLOR_BATON = Object.freeze({ hue: 0, saturate: -0.85, brigh
  *
  * ⭐ THE DART LANGUAGE, which is a rule and not one row's tuning: on this rail **grey means darts and
  * orange means balls and bullets**. The tier gives us one projectile family and it is orange, so a
- * flechette swarm and a buckshot fan were drawn in the same colour and the only difference a viewer had
+ * group of darts and a group of shot were drawn in the same colour and the only difference a viewer had
  * was that one had eight marks and the other six — which at speed is no difference at all. Desaturating
  * the dart loads is what makes the two readable side by side, and it is the load's own true statement:
  * a flechette or a needle-dart is a bare metal spike, where shot and bullets leave a barrel glowing.
+ * ⭐ AND IT CARRIES MORE WEIGHT SINCE 2026-08-10, when the single-file ruling took the count off the
+ * flechette row: on a class that draws one round per slot the colour, the length and the smaller mark
+ * are now the WHOLE difference between a dart and a bullet, where the count used to do part of the work.
  *
  * ⚠ IT IS NOT A DARKENING, and that is deliberate rather than incidental. `brightness: 1.15` sits ABOVE
  * 1 for the same reason TRACER_COLOR_BATON's 1.30 does — the rejected baton treatment pulled a round to
@@ -1621,27 +1628,53 @@ export const BATON_ROUND = Object.freeze({
  *                         tracer shift, so a slug reads as rifle fire. Both fields are MASKED fields
  *                         and both land, because the shell row declares each of them (the colour as
  *                         `null` — declared, painted with nothing).
- *  - `flechette` — the one overlay that changes the SHAPE of the round. It is a fan of darts, so it
- *    takes the travelled-fan fields the shell class already uses, on whatever class fires it.
- *    ⭐ RECOLOURED GREY 2026-08-09 (`tracerColor: TRACER_COLOR_DART`) — see that constant for the dart
- *    language and the reason it is a rule rather than a preference. Reported effect: at speed an orange
- *    8-dart fan and an orange 6-pellet fan are the same picture with a different count, so flechette
- *    read as buckshot. Colour is the one axis on this rail that separates them in a single frame.
- *    ⚠ CORRECTED 2026-08-09: this note used to say "each dart smaller and faster" than buckshot, and
- *    the table has never said that. Against the shell row the dart is LONGER (1.1 vs 1.0), SLOWER
- *    across the shot (170ms vs 150ms) and lands a SMALLER mark (×0.70). What makes it read as a needle
- *    swarm is the COUNT (8 vs 6), the wider SPREAD (0.10 vs 0.07 rad), that small mark and now the
- *    COLOUR — not a shorter or quicker projectile. A keeper leg pins the direction of each comparison.
+ *  - `flechette` — the overlay that re-pictures the round without changing how many of them there are.
+ *    It says the round with a LENGTH, a CROSSING TIME, a MARK WIDTH and a COLOUR, and it says nothing
+ *    about the count: on a class that draws one round per slot it draws one, and on a class that draws
+ *    a group it draws that class's group. Both of those are fall-throughs, not branches.
+ *
+ *    ⏪⏪ IT USED TO FORCE A GROUP OF EIGHT ONTO EVERY CLASS (`pellets: 8, spreadRad: 0.1` — the revert
+ *    values, recorded at the row itself as well). USER RULING 2026-08-10, verbatim: the marks "should
+ *    come out in the same bullet stream as the regular shots do — one after the other, single file."
+ *    The report it answers, on a stream-firing bench weapon: "flechettes still keep coming for over a
+ *    second after the firing sound stops. The animation simply isn't synced up with the shots."
+ *
+ *    ⭐ WHY THE COUNT WAS THE DEFECT AND NOT THE CLOCK, because the obvious reading is wrong and it is
+ *    the same trap FX_DROP_LAG_FRACTION records one level up. The fan-out loop was ALREADY anchored and
+ *    already refused rounds it could not draw on time, so the loop finished when the reports did — and
+ *    the picture still did not. What was left is the work the drawn rounds had queued: a count of eight
+ *    on a twenty-round payload is a hundred and sixty sprites handed to a renderer that draws them at
+ *    its own pace, and no pacing rule can reach a backlog created by the rounds it chose to keep. The
+ *    only lever on that backlog is the count itself. MEASURED on the rig, twenty rounds at the rifle's
+ *    80ms spacing: the last mark left the screen **3433ms** after the last report was played, against a
+ *    tail of 1003ms that the arithmetic said was owed — and thirteen of the twenty rounds had already
+ *    been refused by the drop rule in the attempt to keep up. The keeper's measured leg is that number.
+ *
+ *    ⭐ THE DART LOOK IS UNCHANGED, and that is the ruling's other half: what was rejected is the
+ *    GROUP, not the round. `tracerColor: TRACER_COLOR_DART` (2026-08-09) still carries the dart
+ *    language — see that constant for why grey-means-darts is a rule rather than a preference — and the
+ *    length and crossing are still the load's own. What a viewer loses is the eight-abreast shape; what
+ *    separates a dart from a bullet is now the colour, the length and the smaller mark, on a round that
+ *    arrives in its own cadence slot like every other.
+ *    ⚠ ON A CLASS THAT ALREADY DRAWS A GROUP the row changes nothing about how many: the shell's own
+ *    `pellets: 6` and `spreadRad: 0.07` come through the merge untouched, so a dart shell is six grey
+ *    darts at the shell's own spread. That is the class row speaking, which is the property the mask
+ *    rules exist to keep — an overlay may re-picture an element, and here it no longer re-counts one.
  *    ⏪ `dashSquares` 0.8 → 1.1 (2026-08-09, user approval). 0.8 was picked as "smaller than buckshot"
  *    (the shell's 1.0) and never measured, and it read FAINT on a painted-bolt class — capture 56e on
  *    the rifle. The number is the sprite's drawn WIDTH, not the visible slug: this asset animates a
  *    bullet with a trail across its own frame, so the lit part is roughly a fifth of it (the same
  *    caution the shell's own pellet-size note records, where 0.5 read as dirt on the screen). 1.1 sits
- *    just above buckshot's 1.0 — legible on a lit slug while the spread and the count are what keep it
- *    reading as a needle swarm rather than as shot. Compare 56e against 57f.
+ *    just above buckshot's 1.0 — legible on a lit slug. Compare 56e against 57f.
  *    ⚠ It is also the reason presentationTailMs takes an ammo key — `dashMs` is a tail input, and an
  *    overlay that changes it while the tail is computed from the bare class row would open the apply
- *    window early. The length is NOT a tail input, so this change moves no window: `dashMs` stays 170.
+ *    window early. The length is NOT a tail input, so that change moved no window, and neither does
+ *    dropping the count: `dashMs` stays 170 and the tail arithmetic is untouched by both.
+ *    ⛔ AND THE ROW MUST KEEP DECLARING ITS OWN PROJECTILE. `ammoRedefinesProjectile` is key presence
+ *    over AMMO_FX_PROJECTILE_FIELDS, which listed `pellets` among them — so removing the count is
+ *    exactly the edit that could have silently reclassified this load as "a tint only" and handed it to
+ *    the branch that replaces the round wholesale. It still answers yes, off `dashSquares` and `dashMs`,
+ *    and a keeper leg pins which fields carry the answer.
  *  - `rubber` — the BATON treatment, and the only overlay that changes what the round IS rather than
  *    what colour it is. The round becomes a solid travelled slug (BATON_ROUND), the hit becomes a dust
  *    puff (IMPACT_DUST), and one matrix (TRACER_COLOR_BATON) repaints it.
@@ -1655,10 +1688,17 @@ export const BATON_ROUND = Object.freeze({
  *    byte-identical to `rubber`, on the reading that both are less-lethal and their only difference is a
  *    stun modifier nobody can see. The ruling reversed that on the object rather than on the mechanic: a
  *    baton round is a fat blunt slug and a stun dart is a **needle** — thin, finned, fired in a group —
- *    so they do not look alike at all, and drawing them alike was the visible error. It now takes the
- *    DART geometry (the flechette fan's count, spread, length and crossing) in the same grey dart
- *    language, which says two true things at once: it is a needle, and it is not a bullet. The baton
- *    asset and the dust puff stay with `rubber` alone, which is where the round they depict lives.
+ *    so they do not look alike at all, and drawing them alike was the visible error. It draws a GROUP
+ *    of darts — a count, a cone, and the dart length, crossing and grey of the dart language — which
+ *    says two true things at once: it is a needle, and it is not a bullet. The baton asset and the dust
+ *    puff stay with `rubber` alone, which is where the round they depict lives.
+ *    ⏪ IT IS NO LONGER A MIRROR OF THE `flechette` ROW (2026-08-10). Those values were deliberately
+ *    written as flechette's own so that one change would move both; the 2026-08-10 single-file ruling
+ *    moved one of them and not the other, so the count and the cone now live HERE in their own right.
+ *    They are the same numbers flechette carried (8 at 0.10 rad) and they are kept because the ruling
+ *    was about the load that was reported, not about the group form itself — a stun dart is fired as a
+ *    group of needles from one cartridge, where a dart round on a stream weapon is one round per pull.
+ *    A later ruling on this load is a two-field edit at this row and reaches nothing else.
  */
 export const AMMO_FX = Object.freeze({
   // ⏪ THE IMPACT PROMOTION IS WITHDRAWN (user ruling 2026-08-09, verbatim: *"get rid of the blast
@@ -1697,7 +1737,9 @@ export const AMMO_FX = Object.freeze({
     dashSquares: 0,
     dashMs: 0,
   }),
-  flechette: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 1.1, dashMs: 170, impactScale: 0.7, tracerColor: TRACER_COLOR_DART }),
+  // ⏪ THE COUNT AND THE CONE ARE GONE (user ruling 2026-08-10 — see the row note above). The revert
+  // values, so restoring the group form is one edit at this site: `pellets: 8, spreadRad: 0.1`.
+  flechette: Object.freeze({ dashSquares: 1.1, dashMs: 170, impactScale: 0.7, tracerColor: TRACER_COLOR_DART }),
   rubber: Object.freeze({
     tracer: BATON_ROUND.key,
     tracerColor: TRACER_COLOR_BATON,
@@ -1705,10 +1747,10 @@ export const AMMO_FX = Object.freeze({
     dashMs: BATON_ROUND.crossMs,
     impactKey: IMPACT_DUST.key,
   }),
-  // ⏪ NOT `rubber`'s twin any more — a needle, in the same grey dart language flechette now speaks.
-  // The geometry is deliberately flechette's own values rather than a second set: a stun dart and a
-  // flechette dart ARE the same object fired for different reasons, so a reader who has understood one
-  // row has understood both, and a later change to the dart look is one place.
+  // ⏪ NOT `rubber`'s twin any more — a needle, in the same grey dart language the flechette row speaks.
+  // The LOOK is deliberately the dart look (length, crossing, mark and grey), so a reader who has
+  // understood one row has understood both; the COUNT and the CONE are this row's own since 2026-08-10,
+  // when the single-file ruling took them off flechette and left this load a group. See the row note.
   stundart: Object.freeze({ pellets: 8, spreadRad: 0.1, dashSquares: 1.1, dashMs: 170, impactScale: 0.7, tracerColor: TRACER_COLOR_DART }),
 });
 
@@ -1843,7 +1885,10 @@ export function ammoFxFingerprintKey(payload) {
  *     block — repaint, never add). Two lists, one rule: AMMO_FX_RECOLOR_FIELDS is what colour an
  *     element is, AMMO_FX_REPLACE_FIELDS is which picture it is.
  *  2. Everything else is a plain overwrite, so an overlay may genuinely give a class an element it did
- *     not have: that is how flechette gives a rifle a fan of darts.
+ *     not have: that is how the baton row gives a painted-bolt class a travelled slug, and how the
+ *     stun-dart row gives one a group of needles. An overlay that names none of a field leaves the
+ *     class's own answer standing, which is how the flechette row draws one dart on a class that fires
+ *     one round and the shell's own six on a class that fires six.
  *  3. `impactScale` is spent against the CLASS's own impact width and then removed from the result, so
  *     what comes out is an ordinary class row that any existing reader understands — the multiplier is
  *     a way of writing the table, not a new field the draw path has to know about.
@@ -3700,8 +3745,8 @@ export function presentationTailMs(weaponClass, ammoKey = null, volley = null) {
   // decode, and for why a fixed guess opens the window a second early on a long shot.
   if (volley) return Math.max(muzzleEnvelopeDurationMs(), muzzleDwellMs(weaponClass), Number(volley.tailMs) || 0);
   // ⚠ THE OVERLAY IS READ HERE TOO, AND THAT IS NOT OPTIONAL (FR#24). This function used to read
-  // FX_CLASSES directly, and an ammo overlay that changes any of its inputs — flechette moves `dashMs`
-  // and gives a class a fan it did not have, a promotion moves the impact's own length — would then be
+  // FX_CLASSES directly, and an ammo overlay that changes any of its inputs — the dart rows move
+  // `dashMs`, the baton row moves it further, a promotion moves the impact's own length — would then be
   // drawn by fxShot and NOT accounted for here. The failure that produces is silent and one-directional:
   // the tail comes back short, the settle floor is short with it, and the apply window opens while the
   // last round is still on screen. Same resolver as the draw path, so the two cannot drift.
