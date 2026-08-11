@@ -6,7 +6,7 @@ import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSuppleme
 import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
-import { renderChatCard } from "../compat.js";
+import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber } from "../lookups.js";
 import { purchaseAmmo } from "./buy-ammo.js";
@@ -481,8 +481,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     try { (await game.packs.get(packId)?.getDocument(itemId))?.sheet?.render({ force: true }); } catch { /* gone */ }
   }
 
-  /** V2: re-invoke the preserved jQuery `activateListeners` on each render (V2 has no auto-listener
-   *  wiring), and keep the window header title in sync with the dynamic, view-based `get title()`. */
+  /** V2: re-invoke the preserved `activateListeners` on each render (V2 has no auto-listener wiring),
+   *  and keep the window header title in sync with the dynamic, view-based `get title()`. */
   _onRender(context, options) {
     super._onRender?.(context, options);
     const titleEl = this.element?.querySelector?.(".window-title");
@@ -492,7 +492,9 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
   // ── Listeners ────────────────────────────────────────────────────────────────
   activateListeners(html) {
-    const root = html instanceof jQuery ? html[0] : html;
+    // _onRender passes a plain HTMLElement; the normalizer also covers a jQuery wrapper, which a v13
+    // caller can still hand in. Reading a bare `jQuery` global would throw where none is exposed.
+    const root = getHtmlElement(html);
     if (!root) return;
     const isGM = game.user.isGM;
 
@@ -1092,7 +1094,8 @@ function openShopFromSidebar() { openShopWindow(resolveSidebarBuyer(), { view: "
 function injectSidebarShopButton(html) {
   try {
     if (!shoppingEnabled()) return;
-    const root = html instanceof jQuery ? html[0] : html;
+    // The sidebar render hook hands a jQuery wrapper on v13 and an HTMLElement on v14.
+    const root = getHtmlElement(html);
     const menu = root?.querySelector?.("nav.tabs menu") ?? root?.querySelector?.(".tabs menu");
     if (!menu || menu.querySelector(".cp-shop-tab")) return;
     const li = document.createElement("li");
@@ -1135,7 +1138,8 @@ function _wireShopCardControls(message, html) {
   // querySelectorAll walks over its subtree.
   if (!message?.content?.includes("cp-shop-")) return;
 
-  const root = html instanceof jQuery ? html[0] : html;
+  // The chat-card render hook hands a jQuery wrapper on v13 and an HTMLElement on v14.
+  const root = getHtmlElement(html);
   root?.querySelectorAll?.(".cp-shop-open-link").forEach(btn => {
     if (btn.dataset.cpBound === "1") return;
     btn.dataset.cpBound = "1";
