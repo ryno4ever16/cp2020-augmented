@@ -100,7 +100,10 @@ function drawOutline(regionObject) {
     const uiScale = Number(canvas?.dimensions?.uiScale) > 0 ? Number(canvas.dimensions.uiScale) : 1;
     const color = Number(foundry.utils.Color.from(SPREAD_ZONE_LOOK.outlineColor));
     gfx.lineStyle({ width: SPREAD_ZONE_LOOK.outlineWidth * uiScale, color, alpha: SPREAD_ZONE_LOOK.outlineAlpha, alignment: 0.5 });
-    for (const poly of regionObject.polygons ?? []) gfx.drawPolygon(poly);
+    // The geometry is read off the DOCUMENT: the placeable's own `polygons` is a deprecated forwarder
+    // on v13+ and logs a warning on every region refresh, which is every frame the shape moves. The
+    // old getter is kept as the fallback so a core that has only that shape still draws.
+    for (const poly of regionObject.document?.polygons ?? regionObject.polygons ?? []) gfx.drawPolygon(poly);
   } catch (e) { /* geometry not ready on this frame → the next refresh draws it */ }
 }
 
