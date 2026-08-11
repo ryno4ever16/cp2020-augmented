@@ -21,6 +21,7 @@
 import { DamageDialog }                                       from "./DamageDialog.js";
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
+import { onChatCardRender } from "../chat-render-compat.js";
 import { markCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
@@ -465,62 +466,76 @@ function _hookCreateChatMessage() {
   });
 }
 
+/**
+ * The render pass itself: put the Apply Damage control on a card that carries a damage payload.
+ * Kept separate from its registration so the same function serves both the per-message render hook
+ * and the scrollback catch-up in chat-render-compat.js. Idempotent — see the guard below.
+ * @param {ChatMessage} message
+ * @param {HTMLElement} html
+ */
+function _injectApplyDamageControl(message, html) {
+  const payload = message.getFlag?.("cp2020-augmented", "damagePayload");
+  if (!payload?.areaDamages || Object.keys(payload.areaDamages).length === 0) return;
+
+  // Show button to GM always; show to players only if they own the attacker actor.
+  // Avoids any dependency on message.userId / message.author which can be undefined in v14+.
+  const attackerActorId = payload.attackerId ?? payload.actorId ?? null;
+  const attackerActor = attackerActorId ? game.actors.get(attackerActorId) : null;
+  const canApply = game.user.isGM || (attackerActor?.isOwner ?? false);
+  if (!canApply) return;
+
+  // This pass runs again after setFlag, on any later re-render (edit, popout), and once more from
+  // the scrollback catch-up. Without this guard each of those stacks another button.
+  if (html.querySelector(".cp2020-apply-damage-btn")) return;
+
+  const btn = document.createElement("button");
+  btn.classList.add("cp2020-apply-damage-btn");
+  btn.textContent = localize("ApplyDamageBtn");
+
+  btn.addEventListener("click", async () => {
+    // Prefer a currently-targeted token; fall back to payload IDs
+    let target = null;
+
+    const currentTargets = game.user.targets;
+    if (currentTargets.size > 0) {
+      const tok = currentTargets.first();
+      target = tok.actor;
+      payload.targetTokenId = tok.id;
+      payload.targetActorId = target?.id ?? null;
+    } else {
+      target = _resolveTarget(payload);
+    }
+
+    if (!target) {
+      target = await _pickTargetDialog();
+      if (!target) return;
+    }
+
+    // Dispatch by target type: a vehicle target (or a Penetration weapon vs a person) is handled
+    // by the unified resolver; a normal personnel-vs-person hit falls through to the dialog.
+    if (await dispatchAttack(payload, target)) return;
+
+    if (game.settings.get("cp2020-augmented", "damageAutoApply")) {
+      await _autoApply(payload, target);
+    } else {
+      new DamageDialog(payload, target).render(true);
+    }
+  });
+
+  const container = html.querySelector(".cyberpunk-card") ?? html;
+  container.appendChild(btn);
+}
+
 function _hookRenderChatMessage() {
   // renderChatMessageHTML replaced the deprecated renderChatMessage in Foundry v15.
   // It passes a native HTMLElement as the second argument on v13 (since v13.331) and v14+.
   // Using this hook name means we work on v13.350, v14, and v15 with a single registration.
-  Hooks.on("renderChatMessageHTML", (message, html) => {
-    const payload = message.getFlag?.("cp2020-augmented", "damagePayload");
-    if (!payload?.areaDamages || Object.keys(payload.areaDamages).length === 0) return;
-
-    // Show button to GM always; show to players only if they own the attacker actor.
-    // Avoids any dependency on message.userId / message.author which can be undefined in v14+.
-    const attackerActorId = payload.attackerId ?? payload.actorId ?? null;
-    const attackerActor = attackerActorId ? game.actors.get(attackerActorId) : null;
-    const canApply = game.user.isGM || (attackerActor?.isOwner ?? false);
-    if (!canApply) return;
-
-    // renderChatMessageHTML fires again after setFlag and on any later re-render
-    // (edit, popout, scrollback). Without this guard each re-render stacks another button.
-    if (html.querySelector(".cp2020-apply-damage-btn")) return;
-
-    const btn = document.createElement("button");
-    btn.classList.add("cp2020-apply-damage-btn");
-    btn.textContent = localize("ApplyDamageBtn");
-
-    btn.addEventListener("click", async () => {
-      // Prefer a currently-targeted token; fall back to payload IDs
-      let target = null;
-
-      const currentTargets = game.user.targets;
-      if (currentTargets.size > 0) {
-        const tok = currentTargets.first();
-        target = tok.actor;
-        payload.targetTokenId = tok.id;
-        payload.targetActorId = target?.id ?? null;
-      } else {
-        target = _resolveTarget(payload);
-      }
-
-      if (!target) {
-        target = await _pickTargetDialog();
-        if (!target) return;
-      }
-
-      // Dispatch by target type: a vehicle target (or a Penetration weapon vs a person) is handled
-      // by the unified resolver; a normal personnel-vs-person hit falls through to the dialog.
-      if (await dispatchAttack(payload, target)) return;
-
-      if (game.settings.get("cp2020-augmented", "damageAutoApply")) {
-        await _autoApply(payload, target);
-      } else {
-        new DamageDialog(payload, target).render(true);
-      }
-    });
-
-    const container = html.querySelector(".cyberpunk-card") ?? html;
-    container.appendChild(btn);
-  });
+  //
+  // Registered through onChatCardRender, not Hooks.on directly: the log's first scrollback batch
+  // renders (and fires this hook for every message in it) BEFORE the `ready` hook this wiring runs
+  // in, so a plain registration would miss every card already in the log — the reason a reload used
+  // to strip the Apply control off existing cards. See module/chat-render-compat.js.
+  onChatCardRender(_injectApplyDamageControl);
 }
 
 /**

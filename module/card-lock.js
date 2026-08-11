@@ -22,6 +22,7 @@
  */
 
 import { onGlobalClick } from "./popout-compat.js";
+import { onChatCardRender } from "./chat-render-compat.js";
 import { localize } from "./utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -96,7 +97,12 @@ function _lockCardDom(card) {
   });
 }
 
-/** renderChatMessageHTML pass: lock a stamped card's buttons + (GM) inject the re-arm control. */
+/**
+ * Render pass: lock a stamped card's buttons + (GM) inject the re-arm control.
+ * Idempotent by construction — the class add and the `disabled` writes are no-ops when already
+ * applied, and _injectRearm guards on its own control — so it is safe under the per-message render
+ * hook and the scrollback catch-up both reaching the same card.
+ */
 function _lockRenderedCard(message, html) {
   if (!isCardResolved(message)) return;
   const root = html instanceof jQuery ? html[0] : html;
@@ -123,7 +129,11 @@ function _injectRearm(card, message) {
 
 /** One-time setup: the render pass, the GM stamp-relay listener, and (severable) the re-arm handler. */
 export function registerCardLock() {
-  Hooks.on("renderChatMessageHTML", _lockRenderedCard);
+  // Registered through onChatCardRender, not Hooks.on directly: the log's first scrollback batch
+  // fires the render hook for every message in it BEFORE `ready`, so a plain registration would miss
+  // every card already in the log and a reload would leave stamped cards looking unresolved (buttons
+  // live again, no re-arm control). See module/chat-render-compat.js.
+  onChatCardRender(_lockRenderedCard);
 
   // Active-GM listener: write the stamp on behalf of a player who resolved a GM-authored card. Only the
   // active GM writes (mirrors the other relays) so a two-GM table does not double-write the flag.

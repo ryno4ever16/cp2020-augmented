@@ -7,6 +7,7 @@ import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPE
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
 import { renderChatCard } from "../compat.js";
+import { onChatCardRender } from "../chat-render-compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber } from "../lookups.js";
 import { purchaseAmmo } from "./buy-ammo.js";
 import {
@@ -1118,6 +1119,47 @@ export async function publishShop(shopId) {
   ChatMessage.create({ content });
 }
 
+/**
+ * Render pass: wire the controls on a shop chat card (the storefront link, and for a GM the
+ * Approve/Deny pair on a pending purchase request). Kept separate from its registration so the same
+ * function serves both the per-message render hook and the scrollback catch-up in
+ * chat-render-compat.js. Idempotent — each control is marked `cpBound` once and skipped thereafter.
+ * @param {ChatMessage} message
+ * @param {HTMLElement} html
+ */
+function _wireShopCardControls(message, html) {
+  // Cheap first-line bail (perf audit S9), matching the other two chat-card passes: this runs for
+  // EVERY message the log renders, including a whole scrollback batch at load. Both controls it wires
+  // live only on the two shop cards, and `cp-shop-` appears in no other chat template — so scanning
+  // the stored content string settles it, and a non-shop card costs one property read instead of two
+  // querySelectorAll walks over its subtree.
+  if (!message?.content?.includes("cp-shop-")) return;
+
+  const root = html instanceof jQuery ? html[0] : html;
+  root?.querySelectorAll?.(".cp-shop-open-link").forEach(btn => {
+    if (btn.dataset.cpBound === "1") return;
+    btn.dataset.cpBound = "1";
+    btn.addEventListener("click", (ev) => { ev.preventDefault(); openShopWindow(resolveSidebarBuyer(), { view: "storefront", shopId: btn.dataset.shopId }); });
+  });
+  // GM Approve/Deny on a pending purchase request (the card is whispered to GMs, so only GMs see it).
+  // On a price-request, Approve reads the GM's entered price from the card's price input.
+  if (game.user.isGM) root?.querySelectorAll?.(".cp-shop-request-btn").forEach(btn => {
+    if (btn.dataset.cpBound === "1") return;
+    btn.dataset.cpBound = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      // Disable both buttons synchronously on click so a double-click can't fire a second resolution
+      // (the async race is guarded by the in-memory claim + status flip in resolvePurchaseRequest).
+      const card = btn.closest(".cp-shop-request");
+      const btns = card ? [...card.querySelectorAll(".cp-shop-request-btn")] : [btn];
+      btns.forEach(b => b.disabled = true);
+      const price = card?.querySelector(".cp-shop-request-price")?.value;
+      const resolved = await resolvePurchaseRequest(message, btn.dataset.action === "approve", price);
+      if (resolved === false) btns.forEach(b => b.disabled = false);   // retriable bail (e.g. a price is still needed)
+    });
+  });
+}
+
 /** Ready-time hooks: sidebar button + chat links + live buyer sync + the GM stock-decrement relay. */
 export function registerShopHooks() {
   Hooks.on("renderSidebar", (app, html) => injectSidebarShopButton(html));
@@ -1143,31 +1185,11 @@ export function registerShopHooks() {
     }, 50);
   });
 
-  Hooks.on("renderChatMessageHTML", (message, html) => {
-    const root = html instanceof jQuery ? html[0] : html;
-    root?.querySelectorAll?.(".cp-shop-open-link").forEach(btn => {
-      if (btn.dataset.cpBound === "1") return;
-      btn.dataset.cpBound = "1";
-      btn.addEventListener("click", (ev) => { ev.preventDefault(); openShopWindow(resolveSidebarBuyer(), { view: "storefront", shopId: btn.dataset.shopId }); });
-    });
-    // GM Approve/Deny on a pending purchase request (the card is whispered to GMs, so only GMs see it).
-    // On a price-request, Approve reads the GM's entered price from the card's price input.
-    if (game.user.isGM) root?.querySelectorAll?.(".cp-shop-request-btn").forEach(btn => {
-      if (btn.dataset.cpBound === "1") return;
-      btn.dataset.cpBound = "1";
-      btn.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        // Disable both buttons synchronously on click so a double-click can't fire a second resolution
-        // (the async race is guarded by the in-memory claim + status flip in resolvePurchaseRequest).
-        const card = btn.closest(".cp-shop-request");
-        const btns = card ? [...card.querySelectorAll(".cp-shop-request-btn")] : [btn];
-        btns.forEach(b => b.disabled = true);
-        const price = card?.querySelector(".cp-shop-request-price")?.value;
-        const resolved = await resolvePurchaseRequest(message, btn.dataset.action === "approve", price);
-        if (resolved === false) btns.forEach(b => b.disabled = false);   // retriable bail (e.g. a price is still needed)
-      });
-    });
-  });
+  // Registered through onChatCardRender, not Hooks.on directly: the log's first scrollback batch
+  // fires the render hook for every message in it BEFORE `ready`, so a plain registration would miss
+  // every shop card already in the log and its controls would do nothing after a reload.
+  // See module/chat-render-compat.js.
+  onChatCardRender(_wireShopCardControls);
 
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "shopBuyRelay") return;
