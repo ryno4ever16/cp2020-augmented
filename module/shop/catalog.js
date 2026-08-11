@@ -1088,7 +1088,12 @@ export async function publishShop(shopId) {
 export function registerShopHooks() {
   Hooks.on("renderSidebar", (app, html) => injectSidebarShopButton(html));
   if (ui.sidebar?.element) injectSidebarShopButton(ui.sidebar.element);
-  if (shoppingEnabled()) getCatalogIndex().catch(() => {});
+  // The catalog index is DEMAND-BUILT: getCatalogIndex() memoizes its own promise and the only
+  // consumer (_prepareContext) awaits it, so nothing needs warming here. The ready-time warm-up that
+  // used to sit on this line was removed 2026-08-10 (perf audit S1: it issued one field-projected
+  // getIndex() request per Item compendium in the WHOLE installation — every source, not just ours —
+  // on every client, whether or not the shop was ever opened). Deliberate trade: the first shop open
+  // now pays the build instead of the boot.
 
   let _ctrlTimer = null;
   Hooks.on("controlToken", () => {
