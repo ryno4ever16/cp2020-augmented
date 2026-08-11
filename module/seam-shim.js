@@ -224,6 +224,30 @@ function _firstTargetTokenId() {
   return null;
 }
 
+/** The token the shot is fired FROM, captured at the trigger pull.
+ *
+ *  ⭐ WHY THE ACTOR ID IS NOT AN ANSWER. Two tokens of one actor share it, and an unlinked token's own
+ *  actor carries the base actor's id as well — so a consumer resolving the origin by actor id can only
+ *  answer "whichever was placed first", which is how a shot fired from the second figure drew its
+ *  muzzle work and its rounds out of the first (reported 2026-08-10). The identity is known here, at
+ *  the one moment it is unambiguous, so it is captured here and carried on the payload.
+ *
+ *  In priority order: a synthetic actor belongs to exactly one token and names it itself; else the
+ *  token this user has SELECTED on the viewed canvas, which is what the ordinary fire flow leaves
+ *  selected; else core's own speaker resolution for this actor (which prefers a selected token and
+ *  otherwise takes the actor's first drawn one). Null when none of them answers — every consumer
+ *  falls back to its own actor lookup, i.e. to the behaviour it had before this field existed.
+ *  Fully optional-chained: a client with no canvas yet must not throw on the way to firing. */
+function _firingTokenId(actor) {
+  if (!actor) return null;
+  try {
+    if (actor.isToken) return actor.token?.id ?? null;
+    const selected = canvas?.tokens?.controlled?.find(t => t.actor?.id === actor.id);
+    if (selected) return selected.id ?? null;
+    return ChatMessage.getSpeaker({ actor })?.token ?? null;
+  } catch (_e) { return null; }   // no canvas / no scene on this client
+}
+
 function installWeaponFiredShim(ItemProto) {
   if (prototypeEmits(ItemProto, WEAPON_FIRED)) return false;   // base system emits it (method or helper) → disengage
   let patchedAny = false, foundAny = false;
@@ -237,6 +261,9 @@ function installWeaponFiredShim(ItemProto) {
       assertRenderEmit();
       _fireCtx = {
         attackerId: this.actor?.id ?? null,
+        // WHICH FIGURE FIRED, as opposed to whose it is (see _firingTokenId). Read at CALL time for
+        // the same reason the aim is: it is a fact about this trigger pull.
+        attackerTokenId: _firingTokenId(this.actor),
         weaponName: this.name,
         weaponId: this.id ?? null,   // resolve the EXACT weapon downstream (two same-named weapons with different ammo)
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
@@ -287,6 +314,12 @@ function installRenderEmit() {
         const target = data?.target;   // a Token (full-auto sets it per shot); may be undefined otherwise
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
+          // WHICH FIGURE ON THE MAP FIRED — the attacker's id names the ACTOR, and an actor can have
+          // several figures drawn, so the two are different questions and the presentation needs this
+          // one. Same field name the suppressive payload uses, so both are read the same way. Null
+          // when the seam could not establish it; a consumer that finds it absent resolves the origin
+          // from the actor exactly as it did before the field existed.
+          attackerTokenId: _fireCtx.attackerTokenId ?? null,
           weaponName: _fireCtx.weaponName,
           weaponId: _fireCtx.weaponId,
           areaDamages: data?.areaDamages ?? {},
@@ -393,7 +426,6 @@ function installSuppressiveFireShim(ItemProto) {
   const orig = ItemProto?.__suppressiveFire;
   if (!shouldPatch(orig)) return false;                          // missing or already ours → skip
   function suppressiveWrapper(mods, ...rest) {
-    const attackerTok = canvas?.tokens?.placeables?.find(t => t.actor?.id === this.actor?.id) ?? null;
     const sys = this._getWeaponSystem?.() ?? {};
     // Rounds actually laid down this burst — recomputed EXACTLY as base item.js __suppressiveFire does
     // (rof/shotsLeft floored to non-negative ints, requested = mods.roundsFired || maxRounds, clamped
@@ -408,7 +440,10 @@ function installSuppressiveFireShim(ItemProto) {
     const roundsFired = maxRounds > 0 ? Math.min(Math.max(requested, 1), maxRounds) : 0;
     _suppressiveCtx = {
       actorId: this.actor?.id ?? null,
-      attackerTokenId: attackerTok?.id ?? null,
+      // Captured by the SAME rule the fire wrapper uses, so the zone is laid from the figure that laid
+      // it down. This used to take the first figure on the canvas whose actor matched, which cannot
+      // tell two figures of one actor apart (see _firingTokenId).
+      attackerTokenId: _firingTokenId(this.actor),
       weaponRange: Number(sys.range ?? 50),
       roundsFired,
     };

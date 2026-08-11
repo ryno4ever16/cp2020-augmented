@@ -36,7 +36,8 @@ The payload is one resolved burst against one target. Its presentation-relevant 
 
 | Field | Meaning | Set by |
 |---|---|---|
-| `attackerId` | who fired | seam shim |
+| `attackerId` | **whose** shot it is — the ACTOR id, which cannot name a figure on the map | seam shim |
+| `attackerTokenId` | **which figure fired** — the origin every effect is drawn out of | seam shim, captured at the trigger pull (see below) |
 | `weaponId` / `weaponName` | which weapon (id is exact — two same-named weapons can carry different ammo) | seam shim |
 | `shotsFired` / `shotsHit` | rounds spent and rounds that landed **for this card** | the base's own card data |
 | `areaDamages` | one entry per landing round, by hit location | the base's own card data |
@@ -52,6 +53,29 @@ Two target fields exist on purpose. `targetTokenId` decides whether the damage w
 mid-action; `fxTargetTokenId` only says which way the shot was pointed. Folding them together would
 silently move every single-shot and burst card onto the mid-action damage path, which the user
 explicitly did not want.
+
+**⭐ THE ORIGIN FIELD — `attackerTokenId` (2026-08-10).** The actor id names an ACTOR, and an actor can
+have several figures drawn at once; an unlinked figure's own actor even carries the base actor's id. So
+resolving the origin from `attackerId` can only answer *"whichever figure was placed first"* — which is
+what a shot fired from the second copy of a figure used to do: it drew its flash, its muzzle work and
+its rounds out of the first one. The seam captures the firing figure at the trigger pull, where the
+identity is unambiguous, in this order (`_firingTokenId`, `module/seam-shim.js`):
+
+1. a **synthetic actor** (an unlinked figure's own actor) belongs to exactly one figure and names it;
+2. else the figure the firing user has **selected** on the viewed canvas — what an ordinary turn leaves
+   selected;
+3. else **core's own speaker resolution** for that actor (which itself prefers a selected figure and
+   otherwise takes the actor's first drawn one);
+4. else `null` — nothing could be established.
+
+The rail reads it through `shooterTokenForPayload(payload, actor)` (`fx/effects.js`), used by BOTH the
+fan-out and the tail arithmetic so the window a caller waits out is measured from the same figure the
+shot is drawn from. It **falls back to `shooterTokenOf(actor)`** in two cases — the field is absent (an
+older or re-emitted payload) or it names a figure this client is not drawing (a payload relayed from
+another scene) — so a payload without it behaves exactly as every payload did before the field existed.
+`shooterTokenOf` itself is untouched; whether a shot with no figure on the *viewed* scene should draw at
+all is a separate open question (§8) and is deliberately not decided here. The same field name is what
+the suppressive payload has always used, and the suppressive wrapper now captures it by the same rule.
 
 ### 1.1a Two resolution flows, and the one question that chooses between them
 
@@ -831,6 +855,16 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
 
+**2026-08-10 — the origin field: the payload names WHICH FIGURE fired.** Reported from the table: a
+scene held two figures of one actor, and firing from one drew the muzzle work and the rounds out of the
+other. User GO to carry the firing figure's identity on the payload and have the rail prefer it.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⭐ **The payload carries the firing figure — `attackerTokenId`** | captured in the fire wrapper by `_firingTokenId(actor)`: synthetic actor's own figure → the selected figure on the viewed canvas → core's speaker resolution → `null` (`module/seam-shim.js`) | The rail resolved the origin from `attackerId`, which is an ACTOR id — two figures of one actor share it, and an unlinked figure's own actor carries the base id as well — so the lookup could only answer "whichever was placed first" and a shot from the second figure was drawn from the first. The identity is unambiguous at the trigger pull and nowhere afterwards, so it is captured there and carried. The **name is deliberate parity**: the suppressive payload has always called this field `attackerTokenId`, and `DamageDialog._attackerTokenDoc` and `vehicle-targeting.resolveFacing` already read it — so the fire payload gains the field those consumers were already asking for. §1.1 |
+| The rail **prefers the named figure, and keeps the old lookup as the fallback** | `shooterTokenForPayload(payload, actor)`, read by the fan-out AND by `payloadPresentationMs` | Two fallbacks, both deliberate: a payload with no such field (older or re-emitted) and a named figure this client is not drawing (relayed from another scene) both resolve exactly as before. `shooterTokenOf` itself is **unchanged** — whether a shot with no figure on the viewed scene should draw at all is a separate open question (§8) and pre-empting it here would have decided it by accident. Both call sites read the one resolver so the window a caller waits out is measured from the figure the shot is drawn from; the keeper pins that by value (a 12-square shot's 1200 ms against the same payload resolved to the far figure's 1600 ms). |
+| The **suppressive capture is the same rule** | `_firingTokenId(this.actor)` replaces the first-match-by-actor-id lookup in the suppressive wrapper | It had the identical defect in the identical shape, one field along, and two rules for "which figure is this actor" in one file is the thing that lets them drift. |
+
 **2026-08-10 — the personal-review fixes (F3 · F9 · F7 · F1).** A read-only review of the whole FX arc
 raised nine findings; the user ruled four of them for fixing on the same day. All four are below, and
 each one closed a blind spot in the *keeper* as well as in the product.
@@ -1006,6 +1040,20 @@ tautology. The pattern flow's half of the same review (the load's per-hit riders
 count and modifier, the threshold that modifier lowers with the rider removed as its own negative, and
 the armed over-time turns — plus a plain load that arms neither and a pre-change pattern that still
 resolves.
+
+⭐ **§20, two figures of one actor (2026-08-10)** — the multiplicity the spec had never varied. Every
+other leg places exactly ONE figure per actor, so an origin lookup that answers "the first one placed"
+could not be caught by any of them. §20 places two figures of one actor far apart, fires a payload that
+NAMES the second, and asserts the rounds are hung on that figure, the muzzle work is placed at its
+coordinates and nothing at the other's, the muzzle light is raised on its own key, and the resolver
+answers it by value. The two fallbacks are legs of their own — a payload naming no figure, and one
+naming a figure this client is not drawing, both of which must resolve exactly as before — and the last
+leg puts the tail arithmetic on the same footing: the two figures stand at different distances from one
+mark, so a shell's banded window reads **1200 ms** from the named figure against **1600 ms** from the
+first, which is the same defect one layer along. The seam's half of the same question is
+`tests/cp2020-augmented-b1-seam-payload.mjs`: it reads `attackerTokenId` **off the payload a real fired
+shot carried**, once with the figure selected on the canvas and once with nothing selected, so both of
+the ordinary capture paths are on the record.
 
 **Assertion style.** Every pure helper on the rail (`muzzleSourceSpecs`, `pelletEndpoints`,
 `moteEndpoints`, `smokePuffPlan`, `presentationTailMs`, `flashColorFor`, `ammoFxEntry`, …) takes an

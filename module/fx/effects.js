@@ -3596,6 +3596,28 @@ export function shooterTokenOf(actor) {
 }
 
 /**
+ * The figure THIS payload was fired from — the origin every verb below is drawn out of.
+ *
+ * ⭐ THE PAYLOAD'S OWN ANSWER COMES FIRST, and the lookup above is only what is left when it has none.
+ * An actor id cannot name a figure: two tokens of one actor share it, and an unlinked token's own
+ * actor carries the base actor's id too, so `shooterTokenOf` can only answer "whichever was placed
+ * first" — which is how a shot fired from the second figure drew its flash, its muzzle work and its
+ * rounds out of the first (reported from the table 2026-08-10). The seam captures the firing figure at
+ * the trigger pull and carries it as `attackerTokenId` (seam-shim.js), so where that field is present
+ * the origin is a fact rather than a guess.
+ *
+ * Falls back for the two cases where the named figure answers nothing HERE: a payload that carries no
+ * such field (an older or re-emitted one), and a named figure this client is not drawing — a payload
+ * relayed from another scene. Both then behave exactly as every payload did before the field existed;
+ * whether a shot with no figure on the viewed canvas should draw at all is a separate question and is
+ * deliberately not decided here.
+ */
+export function shooterTokenForPayload(payload, actor) {
+  const named = payload?.attackerTokenId ? (canvas?.tokens?.get(payload.attackerTokenId) ?? null) : null;
+  return named ?? shooterTokenOf(actor);
+}
+
+/**
  * The turn this payload's shooter would make before firing, or null when it would make none.
  *
  * Answers one question for two callers that must agree: the fan-out, which performs the turn, and the
@@ -3746,7 +3768,7 @@ export function payloadPresentationMs(payload) {
   // the span a caller waits out has to include it — otherwise the apply window would open a turn's
   // worth of time early, which is the whole thing the wait exists to prevent. Read from the same
   // helper the fan-out uses, so a shot that will not turn adds nothing.
-  const shooter = shooterTokenOf(actor);
+  const shooter = shooterTokenForPayload(payload, actor);
   const aimTokenId = payload?.targetTokenId ?? payload?.fxTargetTokenId ?? null;
   const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
   const gridPx = Number(canvas?.dimensions?.size) || 100;
@@ -4003,7 +4025,10 @@ export async function fxWeaponFired(payload) {
 
   const shots = shotCountOf(payload);
   const hits = Math.min(hitCountOf(payload), shots);
-  const shooter = shooterTokenOf(actor);
+  // WHICH FIGURE FIRED — the payload's own answer where it has one, so two figures of one actor draw
+  // their own shots (see shooterTokenForPayload). The arithmetic above resolves it the same way, so
+  // the window a caller waits out is measured from the same figure this draws from.
+  const shooter = shooterTokenForPayload(payload, actor);
 
   // ⭐ NOBODY ON THE MAP TO FIRE FROM (2026-08-10) — the fourth deliberate non-draw, and it says so in
   // `skipped` like the other three. Every verb below is `if (shooter)`-gated already, so a sheet-fire by
