@@ -89,6 +89,7 @@ function splitSourceKey(sk) {
 
 // ── Catalog index (session cache) ───────────────────────────────────────────
 let _catalogIndexPromise = null;
+let _catalogIndexBuilt = false;   // set when the build RESOLVES, so a render can test readiness without awaiting
 
 async function buildCatalogIndex() {
   // Read the GM price-override map ONCE for the whole index (avoids a settings read per row).
@@ -130,10 +131,17 @@ async function buildCatalogIndex() {
 }
 
 export function getCatalogIndex() {
-  if (!_catalogIndexPromise) _catalogIndexPromise = buildCatalogIndex().catch(e => { _catalogIndexPromise = null; throw e; });
+  if (!_catalogIndexPromise) {
+    _catalogIndexPromise = buildCatalogIndex()
+      .then(all => { _catalogIndexBuilt = true; return all; })
+      .catch(e => { _catalogIndexPromise = null; throw e; });
+  }
   return _catalogIndexPromise;
 }
-export function clearCatalogIndexCache() { _catalogIndexPromise = null; }
+/** Is the index BUILT? Answers synchronously, so a render can choose between the rows and the pending
+ *  panel without awaiting (awaiting is what would hold the whole window closed on the first open). */
+export function catalogIndexReady() { return _catalogIndexBuilt; }
+export function clearCatalogIndexCache() { _catalogIndexPromise = null; _catalogIndexBuilt = false; }
 
 /** key → index row, for resolving a shop's sourceKeys to catalog entries. */
 function indexByKey(all) { const m = new Map(); for (const it of all) m.set(it.key, it); return m; }
@@ -151,6 +159,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._search = "";
     this._cats = new Set();
     this._books = new Set();
+    this._catalogIndexWait = null;   // the one pending "re-render when the index lands" (see _awaitCatalogIndex)
   }
 
   static DEFAULT_OPTIONS = {
@@ -320,6 +329,18 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     };
     if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
 
+    // Every other view lists compendium rows, which come from the catalog index — built on first demand
+    // (one field-projected getIndex per pack). The cost depends on the core version: measured ~931ms over
+    // 52 real pack-index requests on v13, but ~4ms with no extra requests on v14, which already has the
+    // indices resident by `ready`. Awaiting it inline holds the window shut for however long that takes,
+    // so the first open renders the pending panel instead and `_awaitCatalogIndex` re-renders into the
+    // real rows the moment the build lands — on v14 that is a frame or less, and the panel is not meant
+    // to linger past the genuine wait. Once built, `catalogIndexReady()` stays true for the session and
+    // this branch never runs again.
+    if (!catalogIndexReady()) {
+      this._awaitCatalogIndex();
+      return { ...common, catalogLoading: true };
+    }
     const all = await getCatalogIndex();
     const cfg = shopSourceConfig();
     // The TEXT search is applied CLIENT-SIDE (_applySearch) — the server renders the full
@@ -334,6 +355,19 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     if (this.view === "build")      return { ...common, ...this._dataBuild(all, { isGM, cfg, search }) };
     return { ...common, ...this._dataStorefront(all, { isGM, cfg, search }) };
+  }
+
+  /** Start (or join) the index build behind the pending panel and re-render once it resolves.
+   *  Two guards: `_catalogIndexWait` keeps ONE pending re-render per window no matter how many renders
+   *  happen while the build runs, and the resolve leg checks `this.rendered` so a window the user closed
+   *  mid-build re-renders nothing. A failed build logs and leaves the panel up — re-rendering there would
+   *  just kick the build again and spin. */
+  _awaitCatalogIndex() {
+    if (this._catalogIndexWait) return;
+    this._catalogIndexWait = getCatalogIndex().then(
+      () => { this._catalogIndexWait = null; if (this.rendered) this.render(); },
+      (err) => { this._catalogIndexWait = null; console.error(`${SCOPE} | catalog index build failed`, err); }
+    );
   }
 
   _dataHome(isGM) {

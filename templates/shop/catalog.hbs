@@ -61,7 +61,16 @@
     {{#if missing}}<p class="cp-src-none">{{localize "CYBERPUNK.ShopGone"}}</p>{{/if}}
     {{#if closed}}<p class="cp-src-none">⚫ {{localize "CYBERPUNK.ShopClosed"}}</p>{{/if}}
 
-    {{#unless missing}}{{#unless closed}}
+    {{!-- The rows come from the compendium catalog index, which builds on the first open. Until it lands
+          the window shows this panel; the app re-renders itself into the full list when it does. --}}
+    {{#if catalogLoading}}
+    <div class="cp-catalog-loading">
+        <span class="cp-catalog-spinner"></span>
+        <p class="cp-catalog-loading-label">{{localize "CYBERPUNK.ShopCatalogLoading"}}</p>
+    </div>
+    {{/if}}
+
+    {{#unless catalogLoading}}{{#unless missing}}{{#unless closed}}
 
     {{!-- Toolbar (search + source badge) --}}
     {{#if showSearch}}
@@ -227,6 +236,6 @@
 
     <p class="cp-catalog-footer">{{#if isBuild}}{{localize "CYBERPUNK.ShopBuildFooter"}}{{else}}{{localize "CYBERPUNK.CatalogFooter"}}{{/if}}</p>
 
-    {{/unless}}{{/unless}}
+    {{/unless}}{{/unless}}{{/unless}}
     {{/if}}
 </div>
