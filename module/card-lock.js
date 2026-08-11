@@ -23,6 +23,7 @@
 
 import { onGlobalClick } from "./popout-compat.js";
 import { onChatCardRender } from "./chat-render-compat.js";
+import { getHtmlElement } from "./compat.js";
 import { localize } from "./utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -105,7 +106,10 @@ function _lockCardDom(card) {
  */
 function _lockRenderedCard(message, html) {
   if (!isCardResolved(message)) return;
-  const root = html instanceof jQuery ? html[0] : html;
+  // v13 hands this hook a jQuery wrapper, v14 a plain HTMLElement — getHtmlElement is the module's one
+  // normalizer for that split. Reading a bare `jQuery` global here would THROW on a core that no longer
+  // exposes one, rather than fall through to the element it was already given.
+  const root = getHtmlElement(html);
   const card = root?.querySelector?.(".cyberpunk-card, .cyberpunk");
   if (!card) return;
 
