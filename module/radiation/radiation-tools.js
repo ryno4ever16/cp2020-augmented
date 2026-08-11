@@ -167,7 +167,7 @@ export async function openEnvironmentalDialog(actors) {
 /* ══════════════════════════════════ Scene-control tools ══════════════════════════════════ */
 
 /**
- * Add the three radiation GM tools to the token scene-control group (pure of the hook — exported for the
+ * Add the two radiation GM tools to the token scene-control group (pure of the hook — exported for the
  * keeper). Mirrors the df-active-lights idiom: augment an EXISTING group's `tools` (v13 `controls` is a
  * Record<string, SceneControl>; each tool is a momentary `button` firing `onChange`) rather than
  * registering a bespoke canvas layer. Added for any GM (the tools ARE the opt-in; radiation stays inert
