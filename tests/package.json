@@ -1,0 +1,10 @@
+{
+  "name": "cp2020-augmented-keepers",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rig keepers for the cp2020-augmented module. Each *.mjs is a standalone Playwright script that drives a live Foundry world and asserts module mechanisms; there is no test runner and no config. Run one directly: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=<pw> node cp2020-augmented-<name>.mjs",
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
