@@ -51,7 +51,7 @@ import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
 import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
 import { registerRadiation } from "./radiation/radiation.js";
-import { registerRadiationZones } from "./radiation/radiation-zones.js";
+import { registerRadiationZones, migrateLegacyRadZones } from "./radiation/radiation-zones.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerRadiationZoneBehavior, registerRadiationZoneVisibilityDefault } from "./radiation/radiation-zone-behavior.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
@@ -329,6 +329,15 @@ Hooks.once("init", function () {
     ip: { openTracker: openIpTracker },
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
+    // Manual re-run entry points for the one-time world migrations. Each of those passes stamps its
+    // completion flag BEFORE it sweeps, so a run that dies part-way is never retried automatically —
+    // these are how a GM asks for that retry (and how a GM upgrades content imported after the world
+    // was first migrated). Both default to running regardless of the stamp; pass `{ force: false }`
+    // for the boot behaviour (run only if the stamp is unset).
+    migrations: {
+      fleshLimbStatus: (opts) => migrateFleshLimbStatus({ force: true, ...(opts ?? {}) }),
+      legacyRadZones: (opts) => migrateLegacyRadZones({ force: true, ...(opts ?? {}) }),
+    },
   };
   const mod = game.modules.get(SCOPE);
   if (mod) mod.api = game.cpAugmented;
@@ -385,13 +394,16 @@ async function migrateAugmentedSettings() {
  * `-=` idiom); zones that DO carry a structural pool (a real cyberlimb / borg chassis) keep their
  * `limbStatus` untouched. World actors AND unlinked scene-token actor deltas are both swept. Guarded
  * by a world flag so it runs exactly once. Safe to fail — a missed actor just keeps its old flags.
+ *
+ * `force` re-runs the sweep with the completion flag already set — the manual re-run path exposed as
+ * `game.modules.get("cp2020-augmented").api.migrations.fleshLimbStatus()`.
  */
-async function migrateFleshLimbStatus() {
+async function migrateFleshLimbStatus({ force = false } = {}) {
   const DONE = "fleshLimbStatusMigrated";
   if (!game.settings.settings.has(`${SCOPE}.${DONE}`)) {
     game.settings.register(SCOPE, DONE, { scope: "world", config: false, type: Boolean, default: false });
   }
-  if (game.settings.get(SCOPE, DONE)) return;
+  if (!force && game.settings.get(SCOPE, DONE)) return;
 
   // "Has a structural pool" reuses cyberlimb.js's own SDP helper, so the decision matches the damage
   // routing exactly (borg Head/Torso count too — their status is structural and must NOT move).
@@ -413,16 +425,31 @@ async function migrateFleshLimbStatus() {
       .catch((e) => console.warn(`${SCOPE} | flesh-status migration failed for actor ${actor.id}`, e));
   };
 
-  for (const actor of game.actors ?? []) await migrateActor(actor);
-  for (const scene of game.scenes ?? []) {
-    for (const token of scene.tokens ?? []) {
-      if (token.actorLink) continue;      // linked tokens share the world actor migrated above
-      await migrateActor(token.actor);    // the unlinked token's synthetic delta actor
-    }
-  }
-
+  // ⭐ THE COMPLETION FLAG IS WRITTEN BEFORE THE SWEEP, DELIBERATELY.
+  // Reading `token.actor` on an unlinked token materializes that token's synthetic actor, so this
+  // sweep builds one for every unlinked token on every scene in the world — the largest single burst
+  // this module produces at load. Written AFTER the sweep (as it was), any throw left the flag unset,
+  // so the whole burst repeated on every boot of that world forever and never got past the throw.
+  // Writing it first bounds the cost at one attempt per world.
+  // THE TRADE: a sweep that stops part-way is no longer retried on its own — the actors it never
+  // reached keep their pre-split flags. That is why the failure below is a console.error that names
+  // the re-run entry point, not a quiet warn.
   await game.settings.set(SCOPE, DONE, true);
-  console.log(`${SCOPE} | flesh-limb-status migration complete.`);
+  try {
+    for (const actor of game.actors ?? []) await migrateActor(actor);
+    for (const scene of game.scenes ?? []) {
+      for (const token of scene.tokens ?? []) {
+        if (token.actorLink) continue;      // linked tokens share the world actor migrated above
+        await migrateActor(token.actor);    // the unlinked token's synthetic delta actor
+      }
+    }
+    console.log(`${SCOPE} | flesh-limb-status migration complete.`);
+  } catch (e) {
+    console.error(
+      `${SCOPE} | the flesh-limb-status migration stopped part-way. Actors it had not reached yet keep `
+      + `their pre-split limb flags. It is marked done and will NOT run itself again. A GM can re-run it `
+      + `from a script macro: game.modules.get("${SCOPE}").api.migrations.fleshLimbStatus()`, e);
+  }
 }
 
 Hooks.once("ready", function () {
