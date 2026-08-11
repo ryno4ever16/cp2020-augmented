@@ -1287,16 +1287,33 @@ The bench, as it ships (walk-down order, pistol → smg → rifle → shell → 
 | 14 | Arasaka Rapid Assault Shot 12 | 00 | `flechette` | shotgun | a **grey** dart swarm — ⏪ now the SHELL's own six at its own 0.07 rad rather than the row's eight (2026-08-10), and a flechette pattern rather than a buck one |
 | 15 | Barrett-Arasaka Light 20mm | 20/9mm | `standard` | heavy | the top of the impact ladder — 1.30 sq |
 | 16 | Barrett-Arasaka Light 20mm | 20/9mm | `dualPurpose` | heavy | identical to `ap` by ruling — the pair the payload's ammo **id** exists for |
+| 17 ⭐ | Van Pattan | CAL10 (→ `00`) | `stundart` | **rifle** | ⭐ **the FIRST half of the 2026-08-11 single-file ruling — ONE dart per round out of a stream-firing class.** Added 2026-08-11 by user order: 13 is the "if it's fired from a shotgun, no" half and was the only stun-dart gun on the bench, so the half the ruling actually *changed* was not reviewable. Fired next to 13 it is the same load drawing two shapes, with the buck pattern as the constant on both sides |
 
 Every pairing is checked against `modifiersForCaliber` before the row is built, and every magazine's
 caliber IS its gun's own `ammoType` string — so a load can never land in a barrel that does not take it,
-and the check is the registry's answer rather than the script's. Sixteen rows, five classes, ten distinct
-loads. ⏪ Since 2026-08-09 **three** of those loads deliberately draw nothing of their own —
+and the check is the registry's answer rather than the script's. Seventeen rows, five classes, ten distinct
+loads.
+
+⭐ **Row 17 is out of the class grouping deliberately, and what it cost to build is worth recording**,
+because the same wall stands in front of any future load that is family-scoped. `stundart` is a
+**shotgun-family** load (`AMMO_MODIFIERS.stundart.families`), so the registry gate above — the one that
+keeps the bench honest — refuses it on 5.56 and on 9mm, and the ammo sheet refuses it too. A stun dart
+on an assault rifle is therefore not a state the product can reach at all, and the ruling's first half
+had to be shown on a gun that chambers a **shell** while resolving to a stream class: `weaponFxClass`
+answers off `attackType` first and `weaponType` second, so a 10-gauge weapon typed `Rifle` with
+`attackType: "Auto"` answers `rifle`. Sixteen such weapons exist across every pack (4 rifle-class,
+12 pistol-class) and **every one is RoF 1–2** — the Van Pattan, at RoF 2 with a four-round magazine, is
+the deepest. So the stream on this row is two darts, and that is the ceiling the data imposes rather
+than a choice. Two consequences are stated in the guide rather than hidden: whether the load should be
+allowed on ordinary cartridges is an **open ruling for the user** (a rules question — the books give the
+stun dart as a shell, and the shipping Stundart Pistol carries a proprietary round, not a load); and the
+gun is from the scraped `rifles-add` set, so its stream classification rests on pack data a later pass
+could change — which is why the smoke pins `weaponFxClass` for that row. ⏪ Since 2026-08-09 **three** of those loads deliberately draw nothing of their own —
 `brassCased`, `hollowPoint` and `safety` all resolve to the class row itself — so rows 02 and 03 exist
 to prove a *sameness* rather than a difference. The range is set up with it: three labelled targets (flesh · cyberlimb · vehicle) at 10–11 m,
 inside every bench gun's Close band and in the pattern's Medium band, at zero damage, gore ON.
 
-**The bench's own smoke test.** `tests/cp2020-augmented-review-bench-smoke.mjs` (36 checks) is not a
+**The bench's own smoke test.** `tests/cp2020-augmented-review-bench-smoke.mjs` (42 checks) is not a
 keeper — it pins no values. It answers one question: can each gun be picked up and fired with zero
 loading steps, and does the thing that row exists to show actually reach the canvas? Every shot goes
 through the **real UI path** (the sheet's fire button → the modifiers dialog → its submit) and every
@@ -1307,6 +1324,17 @@ the absence of any mark under it, the buck
 pattern's placement / confirm / deletion, the incendiary shell's fires arriving only **on confirm**, and
 the either/or by value on both sides — `payload.handled` unset for buckshot and `"cp2020-augmented"` for
 the slug. It restores everything it disturbs.
+
+⭐ **§H, added with row 17 (2026-08-11), is the only section that COUNTS rather than asks whether
+something was drawn** — the single-file ruling is a claim about a ratio, and a deduplicated census of
+effect keys cannot see one, since one dart and six darts are the same entry in it. So the census is kept
+undeduplicated alongside the set every other leg uses, 13 and 17 are fired back to back, and the marks
+are counted per class tracer. ⚠ **Counted per round DRAWN, not per round fired** — the pacing rule
+(§4.1a) refuses rounds it cannot draw on time, so a ten-round shell burst hands over four to six rounds'
+worth of fans and an exact `rounds × 6` product is simply wrong (it failed that way first). The legs
+therefore read the SHAPE: a multiple of the shell's own count on 13, never more than one mark per round
+on 17. The restored count of 8 on that overlay row fails both. §H also pins `weaponFxClass` for row 17,
+because that classification comes from pack data rather than from anything this module owns.
 
 ⚠ **Two traps it hit, recorded because the next leg will hit them too.** `createSequencerEffect` reports
 the **database key** a section was handed (sometimes with a variant suffix, `…yellow.1`), *not* a resolved
@@ -1387,6 +1415,8 @@ presented while the screen stayed empty.
 | The volley draws **five** rounds where our fan draws six | Recorded so it is a decision rather than a gap. The asset's round count is baked in and is not a knob; the shell row's `pellets: 6` is untouched and returns the moment the trial is switched off. Nothing in the rules ties the drawn count to the damage, which is resolved by the p.108 pattern and not by sprites. |
 | The volley's arrival bloom reaches ~0.7 of a square past the aim point | Measured off the installed clips (the front edge holds at 0.94–0.99 of frame after arrival). It is the asset's own composition, not a placement error, and it is why the hit mark is suppressed rather than merely moved. |
 | **The dart grey is a build-lane pick** | ⚠ The *rule* is the user's (grey = darts, orange = balls and bullets, under the realism razor). The *numbers* are mine: hue 0, saturate −0.90, brightness 1.15. A veto is one constant (`TRACER_COLOR_DART`) and it reaches both dart loads at once, which is the point of it being one constant. Captures 67f / 67g / 67x and the 67fgh triptych. |
+| ⚠ **The stun-dart load cannot reach a real stream weapon — a DATA ruling is owed** | ⚠ **Found 2026-08-11 while building bench row 17, and left for the user.** The 2026-08-11 ruling's first half ("a weapon that usually fires in a single file line") is honoured in the rail and reachable on the bench, but only barely: `stundart` is a **shotgun-family** load, so no assault rifle or SMG can chamber it — the registry gate refuses the pairing and the ammo sheet snaps the field back. The only guns that carry it and still stream are the sixteen shell-chambering oddities across all packs (4 rifle-class, 12 pistol-class), and **every one is RoF 1–2**, so row 17's stream is two darts and there is no way to see the load go down the Ronin's thirty. Widening it is **one word of data** (add `firearm` to that load's families) but it is a **rules question, not a code one** — the books give the stun dart as a shell, and the shipping Pursuit Security Stundart Pistol carries a proprietary round rather than a load — so nothing was changed. Options as put to the user: leave it · widen to all firearms · widen to pistol-family only. |
+| ⚠ **Bench row 17's stream classification rests on scraped pack data** | Recorded as a known dependency rather than a defect. The Van Pattan answers `rifle` to `weaponFxClass` because its `attackType` reads **Auto** rather than Autoshotgun on a 10-gauge chambering, and it comes from the `rifles-add` set the data-rot sweep flagged. That may be correct and it may be rot; either way a later data pass could turn the row back into a shotgun and delete the demonstration silently. The smoke's §H pins `weaponFxClass` for that row so the check goes red instead. |
 | **The shell lance at 1.9 squares is a build-lane pick** | ⚠ The *restoration* is the user's ruling; the *width* is mine, chosen against the ladder (rifle 1.6, heavy 2.1) and verified as a drawn 190 px on a 100 px grid. One constant, `FX_CLASSES.shotgun.muzzleSquares`. Capture 67d has the two shells and the rifle in one frame. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
 | Real decal persistence (**blood only** now) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. The blood splash is transient by ruling — floor decals were explicitly held out of phase 1. ⏪ This row used to carry the incendiary ground mark alongside it; that element was **removed outright on 2026-08-10**, so the question is the splash's alone. |
