@@ -40,8 +40,9 @@ import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegion
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
-import { spreadFlowModeOf, SPREAD_MODE_SINGLE } from "../lookups.js";
+import { spreadFlowModeOf, spreadBandSpec, spreadBandDamage, SPREAD_MODE_SINGLE } from "../lookups.js";
 import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
+import { pixelsToMeters } from "../vehicle/vehicle-grid.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
@@ -2156,6 +2157,27 @@ function _spreadModeOf(payload) {
 }
 
 /**
+ * THE CORRIDOR THE SHOOTER DECLARED, or null when nobody declared one.
+ *
+ * Exported and pure so both the plant and the keeper read the same answer: a payload either carries a
+ * usable corridor — a finite angle, a positive reach, a positive width — or it does not, and there is
+ * no half-declared state in between. A record that fails any of these is treated as absent rather than
+ * repaired, so a malformed aim degrades to the computed axis instead of planting a corridor of NaN.
+ *
+ * @param {object} payload a weaponFired payload
+ * @returns {null|{angleDeg:number, reachM:number, lengthM:number, widthM:number, band:string}}
+ */
+export function declaredSpreadAim(payload) {
+  const a = payload?.spreadAim;
+  if (!a) return null;
+  const angleDeg = Number(a.angleDeg), reachM = Number(a.reachM);
+  const lengthM = Number(a.lengthM), widthM = Number(a.widthM);
+  if (!Number.isFinite(angleDeg) || !(reachM > 0) || !(lengthM > 0) || !(widthM > 0)) return null;
+  const band = ["Short", "Medium", "Long"].includes(a.band) ? a.band : spreadBandSpec(reachM).band;
+  return { angleDeg, reachM, lengthM, widthM, band };
+}
+
+/**
  * Shotgun / flechette spread (CP2020 p.108). A shell throws a widening pattern: a ray from the attacker
  * toward the target, width by range band (Close/Med/Long), with range-banded damage (ammo override,
  * else Core 4d6/3d6/2d6). Everyone in the straight path is hit (no evasion). The GM aims and confirms,
@@ -2197,50 +2219,77 @@ export async function _placeSpreadZone(payload) {
     }
     const ox = atk.center?.x ?? atk.x, oy = atk.center?.y ?? atk.y;
     const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
-    const gridDist = scene.grid?.distance ?? 1;
 
-    // Direction + range band toward the target. With NOTHING targeted the pattern is thrown along the
-    // shooter's OWN FACING rather than due east: a token's rotation is the only statement of "which way"
-    // an untargeted shot leaves behind, and the presentation rail already answers the same question the
-    // same way (fx/effects.js facingRad). It is only as good as the token's rotation, which is the honest
-    // limit; the band stays Medium because an untargeted shot names no distance to measure.
-    let band = "Medium", lengthM = 10;
-    let angleDeg = Math.round(((Number(atk.document?.rotation ?? atk.rotation) || 0) + 90) % 360);
-    const tgt = payload.targetTokenId ? canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId) : null;
-    if (tgt) {
-      const tx = tgt.center?.x ?? tgt.x, ty = tgt.center?.y ?? tgt.y;
-      angleDeg = Math.round(Math.atan2(ty - oy, tx - ox) * 180 / Math.PI);
-      const distM = (Math.hypot(tx - ox, ty - oy) / gridSize) * gridDist;
-      band = distM <= 6 ? "Short" : (distM <= 25 ? "Medium" : "Long");   // CP2020 close / medium / long
-      // ⭐ THE PATTERN REACHES THE FAR EDGE OF THE TARGET'S OWN SQUARE, not its centre point. Ending
-      // the ray exactly at the aimed-at centre put that centre ON the polygon's end edge, so whether
-      // the token the shooter aimed at was inside its own pattern came down to a floating-point
-      // comparison — reproduced on the rig, where a three-shell burst resolved against a bystander
-      // and missed the target entirely. Half the target's own width is the smallest overshoot that
-      // makes the aimed-at token unambiguously inside, and it costs no other square: the extra reach
-      // is inside the square the target already occupies.
-      const halfTargetM = ((Number(tgt.document?.width ?? tgt.width) || 1) / 2) * gridDist;
-      lengthM = Math.max(2, distM + halfTargetM);
+    // ⭐ THE SHOOTER'S OWN DECLARED CORRIDOR COMES FIRST (2026-08-11). A spread weapon fired from the
+    // sheet is AIMED before it is declared — the shooter drags the corridor, confirms it, and only then
+    // sees the modifiers window — so by the time this runs the angle, the reach and the band are facts
+    // the shooter stated rather than an axis this function guessed from whoever happened to be targeted.
+    // See combat/spread-placement.js for the gesture and seam-shim.js for how it rides the payload.
+    //
+    // The origin is taken from the figure AS IT STANDS NOW, not from the aim record, so the corridor,
+    // the rounds the rail draws and the cover ray all leave the same point even if the figure was
+    // nudged between the aim and the roll. Everything else is the shooter's.
+    const declared = declaredSpreadAim(payload);
+    let band, lengthM, widthM, angleDeg;
+    if (declared) {
+      angleDeg = declared.angleDeg;
+      lengthM = declared.lengthM;
+      widthM = declared.widthM;
+      band = declared.band;
+    } else {
+      // ⏪ THE UNDECLARED FALLBACK — what every shot did before the gesture existed, kept because a
+      // shell can still be fired by something that never armed it (a macro, a keeper driving the roll
+      // directly, a future entry point). Direction + range band toward the target; with NOTHING targeted
+      // the pattern is thrown along the shooter's OWN FACING rather than due east, because a token's
+      // rotation is the only statement of "which way" an untargeted shot leaves behind and the
+      // presentation rail answers the same question the same way (fx/effects.js facingRad). The band
+      // stays Medium because an untargeted shot names no distance to measure.
+      lengthM = 10;
+      angleDeg = Math.round(((Number(atk.document?.rotation ?? atk.rotation) || 0) + 90) % 360);
+      let distM = null;
+      const tgt = payload.targetTokenId ? canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId) : null;
+      if (tgt) {
+        const tx = tgt.center?.x ?? tgt.x, ty = tgt.center?.y ?? tgt.y;
+        angleDeg = Math.round(Math.atan2(ty - oy, tx - ox) * 180 / Math.PI);
+        distM = pixelsToMeters(scene, Math.hypot(tx - ox, ty - oy));
+        // ⭐ THE PATTERN REACHES THE FAR EDGE OF THE TARGET'S OWN SQUARE, not its centre point. Ending
+        // the ray exactly at the aimed-at centre put that centre ON the polygon's end edge, so whether
+        // the token the shooter aimed at was inside its own pattern came down to a floating-point
+        // comparison — reproduced on the rig, where a three-shell burst resolved against a bystander
+        // and missed the target entirely. Half the target's own width is the smallest overshoot that
+        // makes the aimed-at token unambiguously inside, and it costs no other square: the extra reach
+        // is inside the square the target already occupies. (The aim gesture applies the same rule.)
+        const halfTargetM = pixelsToMeters(scene, gridSize) * ((Number(tgt.document?.width ?? tgt.width) || 1) / 2);
+        lengthM = Math.max(2, distM + halfTargetM);
+      }
+      // The band ladder and the per-load widths come from the ONE shared derivation the aim preview
+      // reads, so a declared corridor and a guessed one cannot be two different shapes of the same rule.
+      // With no target there is no distance to measure, and `null` is what resolves to the Medium band.
+      const spec = spreadBandSpec(distM === null ? 10 : distM, {
+        short: payload.spreadWidthShort, medium: payload.spreadWidthMedium, long: payload.spreadWidthLong,
+      });
+      band = spec.band;
+      widthM = spec.widthM;
     }
-
-    const widthM = band === "Short" ? Number(payload.spreadWidthShort ?? 1)
-                 : band === "Long"  ? Number(payload.spreadWidthLong  ?? 3)
-                 :                     Number(payload.spreadWidthMedium ?? 2);
-    const dmgFormula =
-      (band === "Short" ? payload.spreadDamageShort : band === "Long" ? payload.spreadDamageLong : payload.spreadDamageMedium)
-      || (band === "Short" ? "4d6" : band === "Long" ? "2d6" : "3d6");   // Core defaults
+    const dmgFormula = spreadBandDamage(band, {
+      short: payload.spreadDamageShort, medium: payload.spreadDamageMedium, long: payload.spreadDamageLong,
+    });
 
     // ⭐ ONE PATTERN, N SHELLS. No autoshotgun rule exists in the Core read, so RAW is that each shell
     // fires its own pattern — and N patterns aimed identically ARE one pattern resolved N times. The
-    // burst therefore places ONE region and the confirm card resolves the shells, which is the whole of
-    // the "per-shell mechanics, one card" ruling: the mechanics stay per shell (N banded rolls per token
-    // below), only the aiming and the clicking collapse. shotsFired is absent on cards that don't set it.
+    // burst therefore places ONE region and one resolution rolls the shells, which is the whole of the
+    // "per-shell mechanics, one card" ruling: the mechanics stay per shell (N banded rolls per token
+    // below), only the aiming and the resolving collapse. shotsFired is absent on cards that don't set
+    // it. Unchanged by the placement-forward gesture: one aim is still one pattern, however many shells
+    // ride it.
     const shells = Math.max(1, Math.floor(Number(payload.shotsFired) || 1));
 
     const weaponName = payload.weaponName ?? localize("WpnShotgun");
     // Create via the core-agnostic shim (MeasuredTemplate ray on v13, Region polygon on v14).
-    // Visibility is the shim's GAMEMASTER default (buildAreaData) — a pattern is an aiming aid the GM
-    // has not committed to yet, so the table must not watch it hover over their tokens.
+    // Visibility is the shim's GAMEMASTER default (buildAreaData). It stays that way for both corridors:
+    // an UNDECLARED one is an aiming aid nobody has committed to, so the table must not watch it hover
+    // over their tokens; a DECLARED one was already shown to the shooter who drew it (as a client-local
+    // ghost, in combat/spread-placement.js) and lives on the canvas only for the length of the shot.
     const handle = await createArea(scene, {
       kind: "ray",
       x: ox, y: oy, dirDeg: angleDeg, lengthM, widthM,
@@ -2287,9 +2336,34 @@ export async function _placeSpreadZone(payload) {
         // The wall clock the out-of-combat sweep reads. Written at creation because a region carries no
         // creation time of its own that survives a reload.
         createdAt: Date.now(),
+        // WHOSE CORRIDOR THIS IS — the shooter's, or this function's. It decides who ends the shot (see
+        // below), and it is recorded rather than re-derived because the payload does not outlive the
+        // plant and a reader of the region has no other way to tell the two apart.
+        declaredAim: !!declared,
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Spread area creation failed"); return; }
+
+    // ⭐ A CORRIDOR THE SHOOTER ALREADY CONFIRMED NEEDS NO SECOND CONFIRMATION (2026-08-11). The click
+    // that used to sit on the chat card did two jobs — it aimed the pattern and it resolved the shot —
+    // and the ruling moved the aiming half to the front of the gesture. What is left is "resolve now",
+    // which the roll has already committed to, so the pattern resolves itself at the end of the shot's
+    // own presentation: the rounds cross the corridor, and the damage lands as they arrive. Damage and
+    // animation are one event, which is what retires the late-window complaint the review raised.
+    //
+    // The wait is the rail's own completion signal, the same one the single-target window waits out
+    // (fx/effects.js presentationSettled) — the signal on the client that drew the shot, and the honest
+    // arithmetic floor on a client that did not (a player's shot relayed here, where no fan-out ran).
+    // Nothing is held open by it: the cap inside presentationSettled bounds the wait either way.
+    //
+    // ⏪ AN UNDECLARED CORRIDOR STILL POSTS THE CARD, and that is the whole of the difference. A shell
+    // fired by something that never armed the aim gesture has a corridor this function GUESSED, so the
+    // reader is still owed the chance to look at it before it resolves.
+    if (declared) {
+      await presentationSettled(payload);
+      await _confirmSpreadZone(handle.doc.id);
+      return;
+    }
 
     const spreadCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
       "modules/cp2020-augmented/templates/chat/spread-confirm.hbs",
