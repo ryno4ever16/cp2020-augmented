@@ -1092,6 +1092,25 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
    aims + sizes the fire lane (module/combat/suppressive-placement.js). left/top are set in JS to follow
    the pointer; pointer-events:none so it never intercepts the confirming click. Fire-lane orange on a
    dark plate, matching the corridor's #ff4400 family. */
+/* The shot pattern's aim readout — the same cursor-following chip as the suppressive lane's, in the
+   pattern's own colours (the ghost is orange-red, the fire lane is orange). Kept as its own rule rather
+   than a shared base + modifier because the two are three declarations apart and a reader looking for
+   either wants the whole thing in one place. */
+.cp-spread-preview-readout {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: bold;
+  white-space: nowrap;
+  color: #ffcf9a;
+  background: rgba(20, 10, 6, 0.88);
+  border: 1px solid #e2521d;
+  border-radius: 3px;
+  text-shadow: 0 1px 2px #000;
+}
+
 .cp-supp-preview-readout {
   position: fixed;
   z-index: 10000;
