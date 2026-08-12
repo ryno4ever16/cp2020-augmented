@@ -980,7 +980,8 @@
       "LocomotionWater": "Water",
       "NewShell": "New Shell",
       "NewSystem": "New System",
-      "NewWeapon": "New Weapon"
+      "NewWeapon": "New Weapon",
+      "DeployNoTokenFallback": "{name} was created, but you have no token on this scene to park it beside — it is in the Actors sidebar, in the Vehicles folder. Drag it onto the map to place it."
     },
     "Accel": "Accel",
     "Decel": "Decel",

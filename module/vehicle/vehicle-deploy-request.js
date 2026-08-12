@@ -11,11 +11,17 @@
  *    (or the item) at any time breaks nothing.
  *  - Re-clicking Deploy when this player already created an actor from this item reports
  *    "already deployed as <current actor name>" (name read live at message time).
- *  - Token placement is NOT part of this flow — the GM drags the created actor to scenes like
- *    any other actor (deployVehicleToScene remains the canvas-side helper).
+ *  - DEPLOY MEANS IT HITS THE CANVAS (user ruling 2026-08-11: "my first thought was to look at the
+ *    canvas and say 'where's the roadcar'"). Approval also PLACES the vehicle, beside the token
+ *    the requester is standing on, on that requester's scene. The requester's client picks the
+ *    anchor (only it knows what that player has selected) and sends it with the request; the GM
+ *    client, which may write tokens anywhere, does the placing. A requester with no token on a
+ *    scene still gets the actor — plus a notice saying where to find it.
  */
 
 import { localizeParam, tryLocalize } from "../utils.js";
+import { deployVehicleToScene } from "./vehicle-canvas.js";
+import { placeBeside } from "./vehicle-seating.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_ACTOR_TYPE = "cp2020-augmented.vehicle";
@@ -162,6 +168,59 @@ export async function createVehicleActorFromItem(item, { name, requesterUserId }
   });
 }
 
+/* ------------------------------------------------------------------ canvas placement */
+
+/**
+ * The token a deploy should appear beside, chosen on the REQUESTER's own client: whatever they
+ * have selected, else their assigned character's token on the scene they are looking at, else
+ * (for a player, whose ownership is meaningful) any token they own there.
+ * @returns {{sceneId:string, tokenId:string}|null}
+ */
+export function requesterAnchor() {
+  const controlled = canvas?.tokens?.controlled?.[0];
+  if (controlled?.id && canvas?.scene?.id) return { sceneId: canvas.scene.id, tokenId: controlled.id };
+  const scene = canvas?.scene ?? game.scenes?.active ?? null;
+  if (!scene) return null;
+  const charId = game.user?.character?.id ?? null;
+  const tokens = [...(scene.tokens ?? [])];
+  const own = charId ? tokens.find(t => t.actorId === charId) : null;
+  const fallback = game.user?.isGM ? null : tokens.find(t => t.actor?.isOwner);
+  const pick = own ?? fallback;
+  return pick ? { sceneId: scene.id, tokenId: pick.id } : null;
+}
+
+/**
+ * Put the freshly created vehicle on the canvas next to the requester's token. Runs on the GM
+ * client (token writes on any scene). Never throws — a placement failure must not cost the actor.
+ * @returns {Promise<{placed:boolean, sceneName:string|null}>}
+ */
+export async function placeDeployedVehicle(actor, anchor) {
+  try {
+    const scene = anchor?.sceneId ? game.scenes.get(anchor.sceneId) : null;
+    const anchorToken = anchor?.tokenId ? scene?.tokens?.get(anchor.tokenId) : null;
+    if (!scene || !anchorToken) return { placed: false, sceneName: null };
+
+    const grid = scene.grid?.size ?? 100;
+    const size = {
+      w: Number(actor.prototypeToken?.width) || 4,
+      h: Number(actor.prototypeToken?.height) || 2,
+    };
+    const anchorRect = {
+      x: anchorToken.x, y: anchorToken.y,
+      w: (anchorToken.width ?? 1) * grid, h: (anchorToken.height ?? 1) * grid,
+    };
+    const blockers = [...(scene.tokens ?? [])].map(t => ({
+      x: t.x, y: t.y, w: (t.width ?? 1) * grid, h: (t.height ?? 1) * grid,
+    }));
+    const spot = placeBeside(anchorRect, grid, size, blockers, { width: scene.width, height: scene.height });
+    const res = await deployVehicleToScene(actor, { scene, x: spot.x, y: spot.y, gw: size.w, gh: size.h });
+    return { placed: !!res, sceneName: scene.name };
+  } catch (err) {
+    console.warn("Cyberpunk2020 | vehicle deploy placement failed", err);
+    return { placed: false, sceneName: null };
+  }
+}
+
 /**
  * One-time migration for the civilian-sheet split: vehicle actors that predate isMMVehicle keep
  * the combat sheet (stamped true) so existing worlds change nothing; new creates/deploys default
@@ -204,9 +263,15 @@ export async function requestVehicleDeploy(item) {
   const name = await promptForName(item);
   if (!name) return null;
 
+  // The anchor is read HERE, on the requester's client, because only this client knows what this
+  // player has selected — the approving GM cannot see another user's selection.
+  const anchor = requesterAnchor();
+
   if (game.user.isGM) {
     const actor = await createVehicleActorFromItem(item, { name, requesterUserId: game.user.id });
+    const { placed } = await placeDeployedVehicle(actor, anchor);
     ui.notifications?.info?.(localizeParam("VehicleDeployCreated", { name: actor.name }));
+    if (!placed) ui.notifications?.warn?.(localizeParam("Vehicle.DeployNoTokenFallback", { name: actor.name }));
     return actor;
   }
 
@@ -221,6 +286,7 @@ export async function requestVehicleDeploy(item) {
     proposedName: name,
     requesterId: game.user.id,
     requesterName: game.user.name,
+    anchor,
   });
   ui.notifications?.info?.(localizeParam("VehicleDeployRequestSent", { name }));
   return null;
@@ -257,8 +323,11 @@ async function _handleDeployRequest(data) {
     const actor = await createVehicleActorFromItem(item, {
       name: data.proposedName, requesterUserId: data.requesterId,
     });
+    const { placed } = await placeDeployedVehicle(actor, data.anchor);
+    if (!placed) ui.notifications?.warn?.(localizeParam("Vehicle.DeployNoTokenFallback", { name: actor.name }));
     game.socket.emit(`module.${SCOPE}`, {
-      type: MSG_RESULT, requesterId: data.requesterId, approved: true, actorName: actor.name, actorId: actor.id,
+      type: MSG_RESULT, requesterId: data.requesterId, approved: true,
+      actorName: actor.name, actorId: actor.id, placed,
     });
   } else {
     game.socket.emit(`module.${SCOPE}`, {
@@ -273,6 +342,11 @@ function _handleDeployResult(data) {
   if (data.requesterId !== game.user.id) return;
   if (data.approved) {
     ui.notifications?.info?.(localizeParam("VehicleDeployApproved", { name: data.actorName }));
+    // Deploy normally lands the vehicle beside the player. When it couldn't (they had no token
+    // on a scene), say where the vehicle actually is instead of leaving them hunting the canvas.
+    if (data.placed === false) {
+      ui.notifications?.warn?.(localizeParam("Vehicle.DeployNoTokenFallback", { name: data.actorName }));
+    }
     // The actor may arrive over the world sync a beat after the socket message — retry briefly.
     const tryOpen = (attempt = 0) => {
       const actor = game.actors.get(data.actorId);
