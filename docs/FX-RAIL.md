@@ -499,11 +499,30 @@ dirt** (the asset bakes its arrival, so a missed volley blooms wherever it lands
 draws **five** rounds where our fan draws six; and its arrival bloom reaches up to ~0.7 of a square past
 the aim point, which is why our own mark was suppressed rather than merely moved.
 
-**A better asset would supersede all of this.** The free tier was re-enumerated for a genuine
-pellet-cluster projectile at the veto and carries none: the ranged families are single bolts
-(`bullet.01/02/03`), the volley families are the aligned-lane clips just vetoed, and the throwables are
-single objects. Anything better is a paid-tier or third-party question, and the user sees captures
-before any switch.
+#### ⭐ A CANDIDATE THE VETO TURNED UP — **variant 002**, not adopted, wants eyes
+
+The free tier's delivered ranged/projectile/throwable families were enumerated off the install at the
+veto (54 families; the shipped bullets are single bolts, the throwables are single objects, and the
+arrow volleys come in `Circle` / `Cone5e` / `ConePF2e` formations that are shape-right for a pattern but
+draw **arrows**). One row of that list is worth the user's eyes:
+
+`jb2a.volley_of_projectiles_Line.bullet.001.**002**.orangeyellow` — the **second** bullet-volley variant,
+which this arc has never drawn. Decoded against the vetoed 001 on the same 30ft band:
+
+| | `001.001` (vetoed) | `001.002` (candidate) |
+|---|---|---|
+| mid-frame blobs | **7** | **32** |
+| their columns | 446 / 1278×2 / 1380 / 1387×2 / 1496 — two aligned ranks | 489 … 1414, spread across the whole frame |
+| their rows | 117–285, wide | 174–240, a narrow band |
+| clip | 79f / 2633 ms | 146f / **4867 ms** |
+
+That is a **stream of many small projectiles at mixed depths** rather than side-by-side lanes — which is
+the read the ruling asked for, out of one asset. Two reasons it was **not** switched to: the ruling says
+the user sees captures before any asset change, and the clip is nearly five seconds, so adopting it
+would need a trim plus the engine-wait cap rule (§9 rule 16) before it could carry a settle tag. Recorded
+here, with the key, so the choice is one the user can make rather than one they have to discover.
+
+Anything beyond this row is a paid-tier or third-party question.
 
 **Two rules govern the merge** (`ammoFxEntry`):
 
@@ -1576,6 +1595,7 @@ presented while the screen stayed empty.
 | **The dart grey is a build-lane pick** | ⚠ The *rule* is the user's (grey = darts, orange = balls and bullets, under the realism razor). The *numbers* are mine: hue 0, saturate −0.90, brightness 1.15. A veto is one constant (`TRACER_COLOR_DART`) and it reaches both dart loads at once, which is the point of it being one constant. Captures 67f / 67g / 67x and the 67fgh triptych. |
 | ~~Whether the stun-dart load should be allowed on ordinary cartridges~~ | ✅ **CLOSED 2026-08-11 — leave it as it is.** Asked whether to widen `AMMO_MODIFIERS.stundart.families` past the shotgun family so the load could reach a stream-firing weapon, the user ruled the question shut along with the bench row that raised it: the bench is for the loads the product ships, not for arranging a state it cannot otherwise reach. The family lock stands, the registry gate and the ammo sheet keep refusing the pairing, and no data was changed. The revival path, if it is ever wanted, is in §6 under the same date. |
 | **The shell lance at 1.9 squares is a build-lane pick** | ⚠ The *restoration* is the user's ruling; the *width* is mine, chosen against the ladder (rifle 1.6, heavy 2.1) and verified as a drawn 190 px on a 100 px grid. One constant, `FX_CLASSES.shotgun.muzzleSquares`. Capture 67d has the two shells and the rifle in one frame. |
+| ⭐ **A second volley variant exists and has never been drawn** | ⚠ **Found during the 2026-08-11 veto, needs eyes before anything changes.** `jb2a.volley_of_projectiles_Line.bullet.001.002.orangeyellow` decodes as 32 small blobs at mixed depths where the vetoed variant decodes as 7 in two aligned ranks — i.e. it may be the "small balls, irregular grouped spread" the ruling asked for, in one asset. Not adopted: the ruling requires captures first, and at 4867 ms it would need a trim and an engine-wait cap before it could carry a settle tag. §3.2b has the decode. |
 | **The buckshot fan's new look is not signed off** | ⚠ **The open item of this unit.** The *veto* and the *direction* are the user's; the numbers are the build lane's, made from the bench report rather than in front of the user. Four constants and a fifth: `PELLET_CHAOS.slotFraction` **0.9** · `.reachFraction` **0.35** · `.sizeFraction` **0.25** · `.staggerMs` **45**, plus `FX_CLASSES.shotgun.dashSquares` **0.7** (revert **1**; not taken to **0.5**, the value already rejected by eye on this row). A veto on any one is a one-number edit. §3.2b. |
 | **The pellet arrival marks are a build-lane call, and so is the razor split** | ⚠ **The open item of this unit.** The ruling says "small arrival marks at pellet endpoints, ≤ 50 % of the volley's fireballs" and "fire arrivals reserved for the incendiary shell". The size (**0.45 sq**, under 40 % of the class's own aim mark) and the trim (**500 ms**) are mine; the *split* is implemented as one gate (`entry.groundFire`) rather than as two assets, so the incendiary shell keeps the fires it already sets and gets no dust over them — which is also what keeps the withdrawn 2026-08-09 blast-ring ruling honoured. If the intent was a fire mark **as well**, that is a different build. §3.2b. |
 | **Six pellet marks land on the same square as the restored aim-point star** | ⚠ **Raised by the build, needs eyes.** The veto restores the hit-confirmation star (1.15 sq at the aim point) *and* the ruling adds six 0.45 sq marks at the pellet endpoints — and on a hit the pellets converge within 0.28–0.84 squares of that aim point, so the seven marks overlap. The stagger spreads them over a few frames rather than stamping them at once. If it reads busy in motion, dropping **either** is one edit: the star is the class's `impactSquares`, the marks are `PELLET_ARRIVAL`. |
