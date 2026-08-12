@@ -415,7 +415,9 @@ export async function applyRadiationDose(actor, rawRads, { perTurn = true, sourc
       const dmg = await rollDamageAmount(curBand.damage);
       if (dmg > 0) {
         damageDealt += dmg;
+        // No impact sound: a radiation dose is not a round arriving on a body.
         await applyLocationDamage({
+          fxSilent: true,
           target: actor, location: "Torso",
           netDamage: dmg, structuralDamage: dmg, penetrates: true,
           token: tokenForActor(actor)

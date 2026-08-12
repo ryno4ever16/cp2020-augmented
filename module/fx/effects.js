@@ -2379,6 +2379,215 @@ export function sfx(cls, { volume = SHOT_VOLUME, burst = false } = {}) {
   }
 }
 
+/* ══════════════════════════ Hit-impact audio — what a LANDED round sounds like ══════════════════════════ */
+
+/**
+ * THE TWO IMPACT ASSETS, and the one number each of them needed.
+ *
+ * Two clips, chosen by what took the hit, because the two answer different questions for a listener:
+ * a round that goes into a body and a round that goes into a structure are the only distinction the
+ * rest of this module can make at draw time (bearsStructuralSdp — see hitSoundKindFor), and it is the
+ * distinction the table asked for.
+ *
+ * ⭐ THE LEVELS ARE MEASURED OFF THE SHIPPED FILES, not off the sources they were transcoded from
+ * (2026-08-12). The two candidates arrive as Freesound MP3 previews and are re-encoded to Ogg Vorbis
+ * for delivery; that re-encode moved the flesh clip's peak by ~0.95 dB, so a gain computed from the
+ * MP3 would have been wrong by that much. Read with libsndfile off `sounds/`:
+ *
+ *   | file            | peak      | loudest 100 ms | duration |
+ *   |-----------------|-----------|----------------|----------|
+ *   | `hit-flesh.ogg` | −1.23 dBFS| −18.68 dB      | 0.157 s  |
+ *   | `hit-sdp.ogg`   | −2.58 dBFS| −12.83 dB      | 0.418 s  |
+ *
+ * `gain` PEAK-MATCHES the two to each other so the choice of clip is not also a choice of loudness:
+ * 0.8677 / 0.7431 = **1.1677** on the structure clip, 1.0 on the flesh one. After it both land at
+ * ~0.477 of full scale at HIT_SOUND_VOLUME.
+ *
+ * ⚠ RECORDED RATHER THAN SMOOTHED: peak-matching does NOT equalise the two by ear. The structure clip
+ * carries 5.85 dB more energy in its loudest 100 ms because it rings and the flesh clip does not, so
+ * it will read as the bigger event even at a matched peak. That is arguably right — a round into a
+ * vehicle IS the bigger event — but it is a look call nobody has signed, so the measurement is stated
+ * here and the knob to change it is `gain`.
+ */
+export const HIT_SOUND = Object.freeze({
+  flesh:     Object.freeze({ base: "hit-flesh", gain: 1.0,    peakDbfs: -1.23, peak100Db: -18.68 }),
+  structure: Object.freeze({ base: "hit-sdp",   gain: 1.1677, peakDbfs: -2.58, peak100Db: -12.83 }),
+});
+
+/**
+ * Interface-channel level for an impact, before the per-asset gain and the per-hit variance.
+ *
+ * Set AGAINST THE REPORTS rather than picked: the shot assets peak at +1.88 / +0.44 / +1.45 / −0.38
+ * dBFS and play at SHOT_VOLUME (0.8), so a pistol report reaches ~0.99 of full scale. An impact at
+ * 0.55 reaches ~0.477 — **6.4 dB under the report of the weapon that caused it**, which is the
+ * relationship a downrange event should have to the muzzle event a listener already heard. Raising
+ * this to SHOT_VOLUME would put the two within 1–2 dB of each other, which is what "machine-gunned
+ * impacts" sounds like.
+ */
+export const HIT_SOUND_VOLUME = 0.55;
+
+/**
+ * How many impacts ONE payload may sound, refused rounds included.
+ *
+ * ⛔ DELIBERATELY NOT `HIT_MARK_MAX_PER_PAYLOAD` (30), and the reason is the difference between an eye
+ * and an ear. Thirty marks are thirty sprites spread over thirty squares' worth of canvas and the eye
+ * reads them as thirty confirmations; thirty copies of one 0.16 s clip inside a two-second burst is
+ * one continuous noise. The element that already learned this on this rail is the blood spray, which
+ * keeps its own much tighter bound for exactly the same reason — so this takes the SAME number
+ * (BLOOD_SPLATTER.maxPerPayload = 4) rather than a second invented one, and moves with it.
+ */
+export const HIT_SOUND_MAX_PER_PAYLOAD = BLOOD_SPLATTER.maxPerPayload;
+
+/**
+ * The per-hit level wobble, as multipliers on the resolved volume, taken by round index.
+ *
+ * ⚠ THIS IS THE HALF OF THE VARIATION THIS HOST CAN ACTUALLY DELIVER. The ordinary fix for repeated
+ * copies of one clip is a playback-RATE wobble, and the note on sfx() records at length why that is
+ * not available here: nothing in this core's audio layer carries a rate, and the broadcast path
+ * discards any extra field, so a rate poked locally would vary the sound on ONE client while every
+ * other heard it unvaried. Volume IS carried, on both the local and the broadcast path, so it is what
+ * varies. Deterministic and indexed rather than random: a keeper asserts the ladder by value, and a
+ * burst's four impacts are four stated levels rather than four rolls.
+ */
+export const HIT_SOUND_VARIANCE = Object.freeze([1, 0.9, 0.96, 0.86]);
+
+/**
+ * THE BOUND FOR A CALLER THAT KEEPS NO TALLY, in milliseconds.
+ *
+ * The fan-out counts its own impacts and hands each one an `index`, so it is exempt from everything
+ * here. The APPLY seams cannot: a hand-applied damage dialog walks its rows in one synchronous loop
+ * and has no payload to count against, so an un-indexed caller would put N plays of one clip in a
+ * single tick — the worst case there is, because they phase into one smear rather than reading as N
+ * hits. So an un-indexed call takes its index from a rolling counter that resets after this much
+ * quiet, and is REFUSED past `HIT_SOUND_MAX_PER_PAYLOAD` inside one window. The window is a shade over
+ * the longest impact clip (418 ms) plus the pause a person needs to read a result line.
+ */
+export const HIT_SOUND_BURST_WINDOW_MS = 700;
+
+/** The rolling tally for un-indexed callers. Reset by quiet, never by a caller. */
+let _hitBurst = { n: 0, at: 0 };
+
+/** Test seam: capture the impacts instead of playing them. Armed by nothing that ships. */
+let _hitSoundSink = null;
+export function _setHitSoundSink(fn) {
+  _hitSoundSink = typeof fn === "function" ? fn : null;
+  _hitBurst = { n: 0, at: 0 };   // a capture run starts from the same place a quiet client does
+}
+
+/**
+ * WHICH CLIP A TARGET TAKES. One question, asked of the same predicate the blood spray asks — an actor
+ * that carries structural SDP (a vehicle, a powered-armour suit, a full-conversion cyborg) is
+ * structure, and everything else is flesh. Asking it here rather than at each call site is what stops
+ * the sound and the spray disagreeing about what was hit.
+ */
+export function hitSoundKindFor(actor) {
+  return bearsStructuralSdp(actor) ? "structure" : "flesh";
+}
+
+/** The playable source for a kind, or null when the listing says nothing is delivered for it. */
+export function hitSoundSrc(kind) {
+  const row = HIT_SOUND[kind];
+  return row ? _deliveredSrc(row.base) : null;
+}
+
+/** The level one impact plays at: the base, the asset's peak-match gain, and the index's wobble. PURE. */
+export function hitSoundVolume(kind, index = 0) {
+  const row = HIT_SOUND[kind];
+  if (!row) return 0;
+  const wobble = HIT_SOUND_VARIANCE[((Number(index) || 0) % HIT_SOUND_VARIANCE.length + HIT_SOUND_VARIANCE.length) % HIT_SOUND_VARIANCE.length];
+  return Number(Math.min(1, HIT_SOUND_VOLUME * row.gain * wobble).toFixed(4));
+}
+
+/**
+ * Sound ONE landed round, `delayMs` from now.
+ *
+ * ⏱ THE DELAY IS A TIMER HERE, not a playback option, and that is a property of the host rather than a
+ * choice: a Sound's own options do carry a `delay`, but AudioHelper.play never passes it — it hands
+ * `game.audio.play` exactly {volume, loop, context} on the local path, and the receiving client's
+ * `playAudio` handler rebuilds the same three from the emitted object. So a delay put on the object
+ * would be dropped at both ends. One `setTimeout` on the issuing client is the whole mechanism, and it
+ * is enough BECAUSE the rail runs on ONE client: the timer fires there and the broadcast goes out at
+ * the arrival instant, so every listener hears it then rather than each computing its own.
+ *
+ * Returns what it WILL play, synchronously, so the keeper asserts the values without waiting out the
+ * clock — the same reporting shape fxHitMark uses.
+ */
+export function fxHitSound(kind, { delayMs = 0, index = null } = {}) {
+  const out = { played: false, kind: kind ?? null, src: null, volume: 0, delayMs: 0, skipped: null };
+  if (!combatFxEnabled()) return { ...out, skipped: "disabled" };
+  const src = hitSoundSrc(kind);
+  if (!src) return { ...out, skipped: "asset" };   // nothing delivered for this kind → silent, like a missing key
+  // A CALLER THAT KEEPS NO TALLY GETS ONE — see HIT_SOUND_BURST_WINDOW_MS. The fan-out hands its own
+  // index down and never reaches this branch; the apply seams have no payload to count against, so the
+  // element counts for them. Resolved before the locked check so a refused burst reports as a burst.
+  // ⚠ TESTED ON THE RAW ARGUMENT, not on `Number(index)` — `Number(null)` is 0, which is finite, so
+  // coercing first made every un-indexed caller look like caller number zero and the bound below never
+  // engaged (measured on the rig: nine rows in one tick, all at the same level).
+  let idx = index;
+  if (!Number.isFinite(idx)) {
+    const now = Date.now();
+    if (now - _hitBurst.at > HIT_SOUND_BURST_WINDOW_MS) _hitBurst = { n: 0, at: now };
+    if (_hitBurst.n >= HIT_SOUND_MAX_PER_PAYLOAD) return { ...out, skipped: "burst" };
+    idx = _hitBurst.n;
+    _hitBurst = { n: _hitBurst.n + 1, at: now };
+  }
+  // ⛔ A LOCKED AUDIO CONTEXT IS NOT A DELAY, IT IS A TRAP — measured on the rig 2026-08-12, and it is
+  // the defect the placeholder this replaces was reported for. Until a client has produced a genuine
+  // user gesture, `game.audio.locked` is true and the three contexts do not exist yet
+  // (game.audio.interface and .music both read `undefined`). Core's Sound#load opens with
+  // `if (game.audio.locked) await game.audio.unlock;` — so AudioHelper.play hands back a promise that
+  // NEVER SETTLES on such a client, and settles only when somebody eventually clicks. Two consequences,
+  // both observed: a caller that awaits it stalls outright (two probe runs parked for minutes on one
+  // play call), and a rejection arriving after the unlock lands OUTSIDE the try/catch that issued it,
+  // as an unhandled rejection with core's own stack rather than ours.
+  //
+  // Skipping is also the right BEHAVIOUR, not just the safe one: a parked impact does not play at the
+  // arrival, it plays whenever the first click happens — which is the sound of a hit arriving minutes
+  // after the round did. There is nothing to hear on a locked client, so say so and report it.
+  //
+  // ⚠ THE CAPTURE SEAM IS CONSULTED FIRST (§9 I) — an armed sink takes the impact before any host
+  // state is asked about, because a sink never reaches an audio device and so cannot care whether the
+  // context is unlocked. Ordering it the other way makes a headless keeper measure ITS OWN page (which
+  // never produces a user gesture on the game document, so it is genuinely locked) instead of the
+  // element. The locked path keeps its own leg, driven with the sink disarmed.
+  const captured = !!_hitSoundSink;
+  try { if (!captured && game?.audio?.locked) return { ...out, skipped: "locked" }; } catch (_e) { /* no audio layer */ }
+  const volume = hitSoundVolume(kind, idx);
+  const delay = Number(delayMs) > 0 ? Math.round(Number(delayMs)) : 0;
+  out.played = true; out.src = src; out.volume = volume; out.delayMs = delay;
+  const fire = () => {
+    if (_hitSoundSink) { _hitSoundSink({ kind, src, volume, delayMs: delay }); return; }
+    try {
+      // ⚠ THE `.catch` IS THE OTHER HALF OF THE GUARD. This returns a promise; a synchronous try/catch
+      // around it catches only what throws before the first await, which is nearly nothing. Naming the
+      // verb here is the same discipline every fire-and-forget draw on this rail follows.
+      Promise.resolve(foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, true))
+        .catch((err) => console.warn(`${SCOPE} | hit impact audio play failed`, err));
+    } catch (err) {
+      console.warn(`${SCOPE} | hit impact audio failed`, err);
+    }
+  };
+  if (delay > 0) setTimeout(fire, delay); else fire();
+  return out;
+}
+
+/**
+ * The once-per-payload plan for a fan-out's impacts: resolved BEFORE the loop, issued from inside it,
+ * `per-round-capped` — the standard's second issue policy (§9, "the one idiom"), the same shape the
+ * blood spray and the hit mark carry.
+ *
+ * Null when there is nothing to sound for: the rail is off, no figure was aimed at (an impact belongs
+ * to a thing that was hit, exactly as blood belongs to a body — an aim point is a direction, not a
+ * victim), or the kind's asset is not delivered.
+ */
+export function hitSoundPlanFor(targetToken) {
+  if (!combatFxEnabled() || !targetToken?.actor) return null;
+  const kind = hitSoundKindFor(targetToken.actor);
+  const src = hitSoundSrc(kind);
+  if (!src) return null;
+  return { kind, src, queued: 0, cap: HIT_SOUND_MAX_PER_PAYLOAD };
+}
+
 /* ══════════════════ Native muzzle flash — a client-local transient light source ══════════════════ */
 
 /**
@@ -4539,7 +4748,7 @@ export function settlementsInFlight() {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -4742,6 +4951,24 @@ export async function fxWeaponFired(payload) {
   // value: "an N-round burst with M hits marks M arrivals" is the ruling, and this is the number that
   // says whether it held.
   const impacts = { queued: 0, refused: 0, cap: HIT_MARK_MAX_PER_PAYLOAD };
+  // ⭐ WHAT A LANDED ROUND SOUNDS LIKE, resolved ONCE here and issued per landing round below — the
+  // once-per-payload gate in its `per-round-capped` form, beside the two elements it rides with.
+  //
+  // ⛔ IT IS THE RAIL THAT SOUNDS A SHOT, NOT THE APPLY, and that is the whole timing argument. The
+  // damage lands after `presentationSettled` by design, which for a burst is the last round's tail and
+  // for a declared corridor is whenever the GM confirms — seconds, sometimes, after the rounds crossed
+  // the map. An impact sounded there is not late by a frame, it is late by the whole action. So the
+  // sound hangs on `arriveIn` exactly as the mark and the spray do, off the ONE arrival this payload
+  // resolved, and the apply paths sound only what this rail did not (see the split at
+  // applyAreaDamages / applyVehicleDamageCore).
+  //
+  // ⚠ THE CONSEQUENCE, STATED: at arrival the rail knows the round LANDED, not that it BEAT ARMOUR —
+  // penetration is computed at apply time and cannot be had here. So a round stopped dead by a
+  // vehicle's SP still makes the structure sound from this seam. That is the same information the hit
+  // mark and the blood spray already draw on, and matching the picture is the point: an impact the eye
+  // is shown and the ear is not reads as a bug. The apply-side legs, which DO know, are penetration-
+  // gated — the asymmetry is deliberate and documented in docs/FX-RAIL.md §2.
+  const hitAudio = hitSoundPlanFor(target);
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -4808,6 +5035,14 @@ export async function fxWeaponFired(payload) {
         fxBloodSplatter(shooter, target, { delayMs: arriveIn })
           .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
       }
+      // The impact's AUDIO, on the same `arriveIn` the two draws above take, so what a viewer sees and
+      // what a listener hears are one event. Its own cap, for the reason at HIT_SOUND_MAX_PER_PAYLOAD.
+      // The queued index rides the variance ladder, so four impacts are four levels rather than four
+      // copies of one waveform.
+      if (hitAudio && hitAudio.queued < hitAudio.cap) {
+        fxHitSound(hitAudio.kind, { delayMs: arriveIn, index: hitAudio.queued });
+        hitAudio.queued++;
+      }
     };
     if (refused) {
       dropped++;
@@ -4871,6 +5106,10 @@ export async function fxWeaponFired(payload) {
     turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood, volley,
     // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
     arrival, impacts,
+    // WHAT THE IMPACTS SOUNDED LIKE and how many were issued against their own cap — reported for the
+    // same reason the mark tally is: "an N-round burst on a vehicle sounds M structure impacts" is the
+    // claim, and this is the number that says whether it held.
+    hitAudio,
     // WHERE THIS PAYLOAD WAS POINTED, reported rather than inferred — the point every element above
     // was drawn along, the distance that banded it, and whether the shooter DECLARED that corridor
     // (combat/spread-placement.js) or it was read off the aimed-at token. Reported for the same reason

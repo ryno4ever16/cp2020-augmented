@@ -26,8 +26,29 @@ import { renderChatCard } from "../compat.js";
 import { acpaBodyArea, externalSystemHit, acpaSystemHit, acpaRollAgain, acpaCriticalEffect, acpaCriticalUpdate, acpaAreaSDP, systemIntegrity } from "./vehicle-acpa.js";
 import { acpaHitSystem, acpaSystemSdp } from "./vehicle-acpa-systems.js";
 import { computeNetDamage, applyLocationDamage, _deriveLiveSP, ablateLocationOnce, ARMOR_MODES } from "../combat/DamageApplicator.js";
+// The impact's audio lives on the FX rail beside the report it follows — one gate, one channel, one
+// loudness scale (fx/effects.js, HIT_SOUND). This file only says WHEN structure took a round.
+import { fxHitSound } from "../fx/effects.js";
 
 const SCOPE = "cp2020-augmented";
+
+/**
+ * THE STRUCTURE IMPACT THIS RESOLVER OWES, and the one question that decides whether it makes it.
+ *
+ * ⛔ `fxSilent` IS THE SPLIT, and it exists because there are two clocks and only one of them is here.
+ * A round FIRED at this vehicle was already sounded by the FX rail at its measured ARRIVAL — the same
+ * instant the impact mark and the dust were drawn (fx/effects.js, hitSoundPlanFor). This resolver runs
+ * later, after the presentation settles, and for a declared corridor it runs whenever the GM confirms:
+ * sounding the hit here too would be a second impact for one round, seconds behind the first. So the
+ * routing path (vehicle-weapons.js routeWeaponFiredToVehicle) says `fxSilent: true` and this stays
+ * quiet, and the paths that reach this resolver with no shot behind them at all — the hand-resolved
+ * damage dialog — leave it false and get their impact HERE, immediately, because an apply with no
+ * arrival clock has nothing to be late for.
+ */
+function _sdpHitSound(fxSilent) {
+  if (fxSilent) return null;
+  return fxHitSound("structure");
+}
 
 /* --------------------------------- CORE (p.112) --------------------------------- */
 
@@ -274,7 +295,7 @@ export async function openVehicleDamageDialog(actor) {
 }
 
 /** Apply Core damage: subtract facing SP, reduce SDP, set destroyed; post a card. */
-export async function applyVehicleDamageCore(actor, { rawDamage = 0, ap = false, facing = "front" } = {}) {
+export async function applyVehicleDamageCore(actor, { rawDamage = 0, ap = false, facing = "front", fxSilent = false } = {}) {
   const sys = actor.system ?? {};
   const spKey = _facingKey(facing);
   const sp = Number(sys.sp?.[spKey]) || 0;
@@ -284,6 +305,12 @@ export async function applyVehicleDamageCore(actor, { rawDamage = 0, ap = false,
   // Write the WHOLE sdp object — a dot-path update ("system.sdp.value") on this ObjectField wipes
   // sdp.max (and thus Body Value). Preserve max.
   await actor.update({ "system.sdp": { value: res.newSDP, max: Number(sys.sdp?.max) || 0 } });
+
+  // `res.through` is the damage that beat the facing's SP and actually came off SDP, so a hit fully
+  // stopped by armour stays silent — this seam sounds only when SDP really moved. That penetration
+  // gate is available HERE and is not available on the rail, which knows only that the round landed;
+  // the asymmetry is deliberate and recorded at the plan site (fx/effects.js, hitSoundPlanFor).
+  if (res.through > 0) _sdpHitSound(fxSilent);
 
   const body = localizeParam("Vehicle.CoreDmgBody", {
     raw: rawDamage, sp: res.spUsed, apClause: ap ? localize("Vehicle.CoreDmgApClause") : "",
@@ -331,7 +358,7 @@ export function acpaResolveMode(sys) {
  * damage is estimated from the Penetration Factor (Pen ≈ avgDamage/10). Rolls its own dice (pushed to
  * `rolls`) and returns the chat header/lines + the actor updates + embedded acpaSystem Item updates.
  */
-async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls) {
+async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str, fxSilent = false }, rolls) {
   const roll = async (f) => { const r = await new Roll(f).evaluate(); rolls.push(r); return r; };
   const d10 = async () => (await roll("1d10")).total;
   const d100 = async () => (await roll("1d100")).total;
@@ -565,6 +592,12 @@ async function _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str }, rolls)
     applyFrame(areaKey, frameDamage, areaName);
     applyFrame(mechShockAreaKey, mechShockDamage, mechShockAreaName);
     updates["system.frameSDP"] = cur;
+
+    // The ACPA (powered-armour) leg: this is the block that consumes FRAME SDP, so a suit whose
+    // armour + Toughness ate the hit — or one that only lost a mounted system's SOP — stays silent.
+    // The enclosing `if` already gates on frame damage having landed, which is this path's equivalent
+    // of the Core path's `res.through > 0`.
+    _sdpHitSound(fxSilent);
   }
   return { body, lines, updates, itemUpdates, pilotDamage, pilotStun, areaName };
 }
@@ -681,7 +714,7 @@ async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen,
  * flow; powered armor (isACPA) uses the faithful SDP-damage flow (MM p.54-56). `rawDamage` is the
  * actual rolled weapon damage when the caller has it (used for ACPA); else ACPA estimates it from Pen.
  */
-export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front", goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, heat = false, highDensityAP = false, ap = false, railgun = false, rawDamage = null } = {}) {
+export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front", goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, heat = false, highDensityAP = false, ap = false, railgun = false, rawDamage = null, fxSilent = false } = {}) {
   // Master toggle. The weaponFired auto-dispatch (dispatchAttack) reaches this resolver directly,
   // bypassing the dialog's own pre-check — so without this guard, auto-fire would write the vehicle
   // even when the GM has vehicle-damage automation disabled. No warning here (the manual dialog warns);
@@ -731,7 +764,7 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
     const mode = acpaResolveMode(sys);
     const r = (mode === "quickkill")
       ? await _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0, basePen, facing }, rolls)
-      : await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0 }, rolls);
+      : await _resolveAcpaSopDamage(actor, sys, { pen, rawDamage, str: Number(sys.str) || 0, fxSilent }, rolls);
     body = r.body;
     lines = r.lines;
     Object.assign(updates, r.updates);
@@ -766,7 +799,10 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
             // (DamageApplicator ~L249): a full-borg PILOT (e.g. the DaiOni's Alpha) routes it to zone SDP,
             // which absorbs machinery-style with NO BTM (Core p.89); a flesh pilot ignores it and takes the
             // post-BTM netDamage on the wound track.
-            await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: afterSP, penetrates: true });
+            // No SECOND impact: the hit that put damage through to the pilot has already made its
+            // noise on the suit's own frame (or was declared silent with it), and overflow is the same
+            // round, not another one.
+            await applyLocationDamage({ target: pilot, location: charLoc, netDamage, structuralDamage: afterSP, penetrates: true, fxSilent: true });
             lines += `<br><b>${r.pilotDamage}</b> reaches the pilot − armor SP ${pilotSP} = ${afterSP}, − BTM ${pilotBtm} → <b>${netDamage}</b> to the pilot (${charLoc}).`;
             // Ablate the pilot's armor on penetration — the EXACT gate the personnel path uses in
             // applyAreaDamages (ablate setting + FULL armor mode + penetration + a real wound).

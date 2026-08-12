@@ -131,6 +131,77 @@ const res = await page.evaluate(async () => {
   ok("acpa: copy B untouched", sdp1.B === sdp0.B, `B ${sdp1.B}`);
   ok("acpa: WORLD actor untouched", sdp1.base === sdp0.base, `base ${sdp1.base}`);
 
+  // ---- 7b. THE STRUCTURE IMPACT SOUND, and the one rule that stops it doubling (2026-08-12) ----
+  // The resolver that decrements SDP is one of the two seams that sound a structure impact; the FX
+  // rail is the other, and it sounds a FIRED round at its arrival. So the routed path above must be
+  // SILENT here and the hand-resolved path must not be. Captured through the rail's own sink, so the
+  // leg makes no noise and asserts the src and level by value rather than by ear.
+  const FXA = await import("/modules/cp2020-augmented/module/fx/effects.js");
+  const VD = await import("/modules/cp2020-augmented/module/vehicle/vehicle-damage.js");
+  const heard = [];
+  const fxWas = (() => { try { return game.settings.get(NS, "combatFxEnabled"); } catch { return null; } })();
+  const ruleWas = (() => { try { return game.settings.get(NS, "vehicleRuleSystem"); } catch { return null; } })();
+  // The audio context's locked state is irrelevant to what this leg asserts — the sink replaces the
+  // play entirely — and the locked path has its own dedicated leg in the fx-rail keeper. Held false
+  // so a headless page that has not been clicked still exercises the seam, and restored after.
+  const lockedWas = game.audio.locked;
+  const msgsBefore = new Set(game.messages.map(m => m.id));
+  try {
+    try { await game.settings.set(NS, "combatFxEnabled", true); } catch (e) {}
+    try { await game.settings.set(NS, "vehicleRuleSystem", "Core"); } catch (e) {}
+    game.audio.locked = false;
+    FXA._setHitSoundSink((e) => heard.push(e));
+
+    const quiet = await Actor.create({ name: "__PW__SdpSound", type: "cp2020-augmented.vehicle",
+      system: { sdp: { value: 200, max: 200 }, sp: { front: 20, side: 20, rear: 20, top: 20, bottom: 20 } } });
+
+    // (i) the routed path — a payload, i.e. a shot the rail already sounded at its arrival.
+    heard.length = 0;
+    await VW.routeWeaponFiredToVehicle({ areaDamages: { Torso: [{ damage: 60 }] }, weaponName: "__PW__test" }, quiet);
+    const routedPlays = heard.splice(0).length;
+    ok("sdp sound: a routed SHOT is silent at the apply — the rail already sounded its arrival",
+       routedPlays === 0, `${routedPlays} play(s)`);
+
+    // (ii) the hand-resolved path — no shot behind it, so it sounds immediately.
+    heard.length = 0;
+    const through = await VD.applyVehicleDamageCore(quiet, { rawDamage: 60, ap: false, facing: "front" });
+    const handPlays = heard.splice(0);
+    ok("sdp sound: the hand-resolved dialog path sounds the structure clip, once, at its own level",
+       through.through > 0 && handPlays.length === 1
+       && handPlays[0].src === FXA.hitSoundSrc("structure")
+       && handPlays[0].volume === FXA.hitSoundVolume("structure", 0)
+       && handPlays[0].delayMs === 0,
+       JSON.stringify({ through: through.through, plays: handPlays }));
+
+    // (iii) the penetration gate — armour that ate the round leaves SDP alone and stays silent.
+    heard.length = 0;
+    const stopped = await VD.applyVehicleDamageCore(quiet, { rawDamage: 12, ap: false, facing: "front" });
+    const stoppedPlays = heard.splice(0).length;
+    ok("sdp sound: a hit fully stopped by armour moves no SDP and makes no noise (negative)",
+       stopped.through === 0 && stoppedPlays === 0, `through=${stopped.through}, ${stoppedPlays} play(s)`);
+
+    // (iv) the master switch, which is the only gate this element has.
+    heard.length = 0;
+    try { await game.settings.set(NS, "combatFxEnabled", false); } catch (e) {}
+    const offRes = await VD.applyVehicleDamageCore(quiet, { rawDamage: 60, ap: false, facing: "front" });
+    const offPlays = heard.splice(0).length;
+    try { await game.settings.set(NS, "combatFxEnabled", true); } catch (e) {}
+    ok("sdp sound: with the FX master switch off nothing is sounded, damage unaffected (negative)",
+       offRes.through > 0 && offPlays === 0, `through=${offRes.through}, ${offPlays} play(s)`);
+
+    await quiet.delete();
+  } finally {
+    FXA._setHitSoundSink(null);
+    game.audio.locked = lockedWas;
+    if (fxWas !== null) { try { await game.settings.set(NS, "combatFxEnabled", fxWas); } catch (e) {} }
+    if (ruleWas !== null) { try { await game.settings.set(NS, "vehicleRuleSystem", ruleWas); } catch (e) {} }
+    for (const m of game.messages.filter(m => !msgsBefore.has(m.id))) { try { await m.delete(); } catch (e) {} }
+    for (const a of game.actors.filter(a => a.name === "__PW__SdpSound")) { try { await a.delete(); } catch (e) {} }
+  }
+  ok("sdp sound cleanup: the fixture and its cards are gone",
+     game.actors.filter(a => a.name === "__PW__SdpSound").length === 0
+     && game.messages.filter(m => !msgsBefore.has(m.id)).length === 0);
+
   // Clear the suit copies FIRST — the deploy helper dedupes on the vehicleHandle flag and would
   // otherwise return copy A as "existing" instead of creating a fresh token to inspect.
   await scene.deleteEmbeddedDocuments("Token", [suitA.id, suitB.id]);

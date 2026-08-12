@@ -1464,7 +1464,9 @@ async function _runOverTimeTick(combat) {
         }
         // Route through the shared seam: a burning cyberlimb takes structural SDP damage pre-BTM (no
         // wound track, no stun save); flesh burns HP post-BTM and rolls a stun save.
-        const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: fireStructural, penetrates: true, token });
+        // No impact sound: a burn or an etch ticking down is damage landing, but it is not a round
+        // arriving on a body, and the seam below cannot tell the two apart on its own.
+        const outcome = await applyLocationDamage({ target: actor, location, netDamage: dmg, structuralDamage: fireStructural, penetrates: true, token, fxSilent: true });
         if (fireAblate) {
           // Pass the "fire" type so the burning tick erodes armor by the SAME typed rule as a point-of-impact
           // hit: every layer that actually stopped this fire ablates — a fire garment via its typed rating,
@@ -1927,7 +1929,9 @@ async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize(
   // biosystem) instead of the flesh wound track; flesh advances system.damage, loses stabilization,
   // and runs wound severity — all inside applyLocationDamage. BTM is already applied above (concussion
   // applies BTM even to machinery, Listen Up p.105), so pass the same permanent value as structural.
-  const outcome = await applyLocationDamage({ target: actor, location: "Torso", netDamage: permanent, structuralDamage: permanent, penetrates: true, token: tok });
+  // No impact sound, for the same reason the over-time tick above is silent: this is accumulated
+  // damage becoming permanent, not a round arriving.
+  const outcome = await applyLocationDamage({ target: actor, location: "Torso", netDamage: permanent, structuralDamage: permanent, penetrates: true, token: tok, fxSilent: true });
   await ablateLocationByAmount(actor, "Torso", 2).catch(() => {}); // concussion wears soft armor −2 SP
   await postSavePromptCard({
     body: localizeParam("ConcussionBody", { name: actor.name, weapon: weaponName, permanent, gotThrough }),
@@ -2832,6 +2836,9 @@ function _hookSocketRelay() {
           ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
           targetTokenId: data.targetTokenId ?? null,
           dryRun:        false,
+          // Came off a SHOT: the FX rail sounded each landing round at its arrival on the client that
+          // fired (and broadcast it to this one), so the apply stays silent — see applyAreaDamages.
+          fxSilent:      true,
         });
         // Cyberlimb hits are soaked into limb SDP, not the wound track — they don't count toward the
         // post-hit stun/death prompt or the taser cumulative-save state (RAW: no shock/stun).
@@ -2959,6 +2966,8 @@ async function _autoApply(payload, target) {
     ablate,
     targetTokenId: payload.targetTokenId ?? null,
     dryRun: false,
+    // Same reason as the relay branch: this flow is the rail's own shot, already sounded at arrival.
+    fxSilent: true,
   });
 
   // Cyberlimb hits soak into limb SDP, not the wound track — they don't count toward the

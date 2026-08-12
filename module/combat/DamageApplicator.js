@@ -21,6 +21,10 @@ import { makeCoverLedger } from "./cover.js";
 import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
 import { isFullBorg, borgArmorSP, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
 import { typedLayerSP } from "../data/mech-item-data.js";
+// The impact's audio, from the one place that owns it (fx/effects.js). This file supplies only the
+// two things the rail cannot know: whether the round BEAT ARMOUR, and which zone it landed in — the
+// level ladder and the burst bound are the element's own, so no caller here keeps a tally.
+import { fxHitSound } from "../fx/effects.js";
 
 export const ARMOR_MODES = {
   FULL:   "full",
@@ -257,10 +261,47 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
  *   penetrates       — armor was beaten (a stopped hit does no structural damage).
  * @returns {Promise<{cyberlimb: boolean, applied: number}>}
  */
-export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null }) {
+export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null, fxSilent = false }) {
+  /**
+   * THE IMPACT AUDIO THIS SEAM OWES, and what makes it different from the rail's.
+   *
+   * ⛔ TWO LEGS, ONE ASSET SET, DIFFERENT GATES — the split follows from which clock each seam is on:
+   *
+   *  - THE RAIL sounds a shot at its measured ARRIVAL (fx/effects.js, hitSoundPlanFor), alongside the
+   *    impact mark and the blood spray. At that instant nothing knows whether the round beat armour —
+   *    penetration is computed HERE, later — so the rail sounds every round that LANDED, which is
+   *    exactly the information its two neighbouring draws already use.
+   *  - THIS SEAM is the apply, and the apply happens after the presentation settles: for a burst that
+   *    is the last round's tail, for a declared corridor it is whenever the GM confirms. Sounding a
+   *    rail-driven shot here as well would be a second impact per round, seconds behind the first. So
+   *    `fxSilent` is set by the flows that came off a shot (_autoApply and its GM-side relay), and the
+   *    flows with NO arrival clock at all leave it false — the hand-applied damage dialog, an area
+   *    shell resolved on confirm, a vehicle-weapon hit on a passenger. Those have nothing to be late
+   *    for, so they play now.
+   *
+   * ⚠ IT IS ALSO SET BY THE APPLIES THAT ARE NOT IMPACTS AT ALL. A burn tick, an acid tick, a
+   * radiation dose and an ACPA pilot's overflow all land damage through this seam and none of them is
+   * a round arriving on a body — which is why the flag is named for what it DOES here (stay quiet)
+   * rather than for one of the two reasons a caller might have. Each call site states its own.
+   *
+   * ⭐ WHY HERE AND NOT ONE LEVEL UP: this is the seam EVERY personnel apply passes through. The
+   * damage dialog's Apply calls it directly, row by row, and never touches applyAreaDamages — a leg
+   * placed there would have left the module's most-used manual path silent.
+   *
+   * ⭐ WHAT THIS SEAM KNOWS THAT THE RAIL CANNOT: penetration, and the hit LOCATION. A round stopped
+   * dead by armour is SILENT here (taken because the seam that can tell should), and a hit that routed
+   * into a cyberlimb's own SDP sounds as STRUCTURE even on an otherwise flesh target — `routesToSdp`
+   * answers per zone, which the rail explicitly cannot (see bearsStructuralSdp's note).
+   *
+   * No index is passed: a caller here keeps no tally, so the element supplies the level ladder and the
+   * burst bound itself (HIT_SOUND_BURST_WINDOW_MS) — which is what stops a multi-row dialog putting
+   * one clip through the same tick four times over.
+   */
+  const sounds = !fxSilent && penetrates;
   if (routesToSdp(target, location)) {
     const sdpDmg = penetrates ? Math.max(0, Math.round(Number(structuralDamage ?? netDamage) || 0)) : 0;
     const outcome = sdpDmg > 0 ? await absorbCyberlimbHit(target, location, sdpDmg) : null;
+    if (sounds && sdpDmg > 0) fxHitSound("structure");   // the zone's OWN answer — chrome, not the body
     // A full borg's Head (brain) or Torso (biosystem) destroyed ends the actor — the one death the
     // limb model omits (Chromebook 2 p.64,66). A limb just goes useless, so this only fires for a borg.
     if (outcome?.status === "destroyed" && BORG_CORE_ZONES.has(location) && isFullBorg(target)) {
@@ -280,6 +321,7 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
       });
     }
   }
+  if (sounds && netDamage > 0) fxHitSound(isFullBorg(target) ? "structure" : "flesh");
   await assessWoundSeverity(target, location, netDamage, { token });
   return { cyberlimb: false, applied: netDamage > 0 ? netDamage : 0 };
 }
@@ -300,7 +342,7 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {boolean} p.dryRun        If true: runs math only, does not write HP or ablate
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
-export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false }) {
+export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false, fxSilent = false }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -310,10 +352,13 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
   if (!dryRun && target?.type === "cp2020-augmented.vehicle") {
     try {
       const VW = await import("../vehicle/vehicle-weapons.js");
-      await VW.routeWeaponFiredToVehicle({ areaDamages, ap }, target);
+      // The vehicle resolvers own the structure impact from here; `fxSilent` rides along so a shot the
+      // FX rail already sounded at its arrival is not sounded a second time when it applies.
+      await VW.routeWeaponFiredToVehicle({ areaDamages, ap, fxSilent }, target);
     } catch (err) { console.warn("cp2020-augmented | vehicle damage routing failed:", err); }
     return [];
   }
+
 
   const results = [];
   const btm = Number(target.system.stats?.bt?.modifier) || 0;
@@ -385,7 +430,11 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
         ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null;
       // The shared seam: a cyberlimb zone absorbs into its SDP; flesh advances the wound track and
       // runs the limb/head severity check (CP2020 p.103 + optional Listen Up crippling).
-      await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken });
+      // `fxSilent` is threaded, not decided here: only the caller knows whether this flow came off a
+      // shot the FX rail already sounded. The sound itself is issued one level down, in
+      // applyLocationDamage, because that is the seam EVERY personnel apply passes through — this one,
+      // the hand-applied damage dialog, and anything else that lands a hit on a body.
+      await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken, fxSilent });
 
       if (ablate && armorMode === ARMOR_MODES.FULL && penetrates && netDamage > 0) {
         await ablateLocationOnce(target, spKey, damageType);

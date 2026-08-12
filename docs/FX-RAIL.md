@@ -198,6 +198,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 9b | **Pellet arrival marks** ⭐ *new 2026-08-11* | `jb2a.smoke.puff.ring.01.white` at **0.45 sq**, trimmed to **500 ms**, one at each pellet endpoint | the round **hit**, the class draws a **fan**, and the load does **not** set its own landing points alight (§3.2b) | yes |
 | 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, **45 s**, one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
+| 13 | **Impact audio** ⭐ *new 2026-08-12* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included | n/a (not drawn) |
 | 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
@@ -259,6 +260,80 @@ element lives for under a second. The one element that took the other side of th
 ground mark that stayed below the lighting and therefore vanished on a dark range, for minutes at a
 time — was removed on 2026-08-10, so the splash is now the only place the departure is taken. It is a
 knob (`BLOOD_SPLATTER.aboveLighting`), not a constant in the draw path.
+
+**What a landed round SOUNDS like (#13), added 2026-08-12.** The rail has always played the weapon's
+own report from inside the fan-out loop; this is the other half — the noise at the far end of the shot.
+
+*Two clips, chosen by what took it.* `hitSoundKindFor` asks the **same** predicate the blood splash asks
+(`bearsStructuralSdp`), so structure and flesh cannot disagree about one target: a vehicle, a
+powered-armour suit or a full-conversion cyborg sounds as **structure**, everything else as **flesh**.
+Assets are resolved through `_deliveredSrc` exactly as the reports are, so a build that ships without
+them is silent rather than broken — the audio equivalent of the missing-key skip.
+
+*Levels, measured off the shipped files rather than off their sources.* Both candidates arrive as
+Freesound MP3 previews and are transcoded to Ogg Vorbis for delivery, and the transcode moved the flesh
+clip's peak by ~0.95 dB — so a gain computed from the MP3 would have been wrong by that much.
+
+| file | peak | loudest 100 ms | duration |
+|---|---|---|---|
+| `hit-flesh.ogg` | −1.23 dBFS | −18.68 dB | 0.157 s |
+| `hit-sdp.ogg` | −2.58 dBFS | −12.83 dB | 0.418 s |
+
+`HIT_SOUND.structure.gain` = **1.1677** (0.8677 / 0.7431) peak-matches the two to each other, so
+choosing a clip is not also choosing a loudness. `HIT_SOUND_VOLUME` = **0.55** sets both **against the
+reports**: the shot assets peak at +1.88 / +0.44 / +1.45 / −0.38 dBFS and play at `SHOT_VOLUME` 0.8, so a
+pistol report reaches ~0.99 of full scale and an impact reaches ~0.477 — **6.4 dB under the report of the
+weapon that caused it**, which is the relationship a downrange event should have to a muzzle event the
+listener already heard.
+
+*Variation is by LEVEL, because this host has no rate.* The note on `sfx()` records at length why a
+per-round playback-rate wobble cannot be delivered uniformly here (no `playbackRate`, no `detune`, and
+the broadcast path discards extra fields). Volume **is** carried on both paths, so `HIT_SOUND_VARIANCE`
+= `[1, 0.9, 0.96, 0.86]` is applied by round index — deterministic and indexed rather than rolled, so a
+keeper asserts the ladder by value.
+
+*The cap is the blood splash's, by import rather than by copy.* `HIT_SOUND_MAX_PER_PAYLOAD` **is**
+`BLOOD_SPLATTER.maxPerPayload` (4) and moves with it. It is deliberately **not** the mark's 30: thirty
+marks are thirty sprites over thirty squares of canvas and the eye reads them as thirty confirmations,
+where thirty copies of one 0.16 s clip inside a two-second burst is one continuous noise.
+
+⚠ **The rail sounds a round that LANDED, not one that PENETRATED, and that is a documented asymmetry.**
+At the arrival nothing knows whether the round beat armour — penetration is computed at apply time — so
+the rail uses exactly the information its two neighbouring draws already use. The **apply-side** legs,
+which do know, are penetration-gated: a hit stopped dead by armour is silent there, and a hit that
+routed into a cyberlimb's own SDP sounds as *structure* even on an otherwise flesh target, because
+`routesToSdp` answers per **zone** where the rail can only ask about the actor.
+
+**The three seams, and the one flag that keeps them from doubling.**
+
+| Seam | Where | Sounds when |
+|---|---|---|
+| the rail | `fxWeaponFired` → `markAndBleed` | a round LANDED — delayed by that round's arrival, capped at 4 |
+| personnel apply | `applyLocationDamage` (**not** `applyAreaDamages`) | `!fxSilent` **and** the round penetrated **and** it moved something |
+| structure apply | `applyVehicleDamageCore` · the ACPA frame block | `!fxSilent` **and** SDP actually moved (`res.through > 0`) |
+
+`fxSilent` is threaded by the caller and is named for what it DOES rather than for one of the two
+reasons a caller has for setting it: the flow **came off a shot the rail already sounded**
+(`_autoApply`, its GM-side relay, `routeWeaponFiredToVehicle`), or the apply **is not an impact at
+all** — a burn or acid tick, accumulated damage becoming permanent, a radiation dose, an ACPA pilot's
+overflow from a hit the suit already voiced. Each call site says which.
+
+⭐ **The personnel leg sits one seam LOWER than it first looked.** The hand-applied damage dialog calls
+`applyLocationDamage` directly, row by row, and never touches `applyAreaDamages` — so a leg placed on
+the latter would have left the module's most-used manual path silent. `applyAreaDamages` only threads
+the flag down.
+
+**The un-indexed caller's bound.** The fan-out counts its own impacts and hands each one an `index`, so
+it is exempt. An apply seam cannot: it walks its rows in one synchronous loop with no payload to count
+against, and N un-indexed plays in a single tick phase into one smear rather than reading as N hits. So
+an un-indexed call takes its index from a rolling counter that resets after `HIT_SOUND_BURST_WINDOW_MS`
+(**700 ms**, a shade over the longest clip plus a reading pause) and is **refused** past the cap inside
+one window — reported as `skipped: "burst"`.
+
+⚠ **The capture seam is consulted BEFORE the host's audio state** (§9 I). An armed sink never reaches an
+audio device, so it cannot care whether the context is unlocked; ordering it the other way makes a
+headless keeper measure its own page — which genuinely IS locked, since a run never produces a user
+gesture on the game document — instead of the element. Measured on the rig: `pageAudioLocked: true`.
 
 ---
 
@@ -1050,9 +1125,14 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `APPLY_LEAD_MS` | 150 | how far ahead of the engine's report the window may open |
 | `SETTLE_CONFIRM_MS` | 60 | how long "all ended" must hold before it is believed |
 | `FACE_TARGET.durationMs` / `minDegrees` | 220 / 5 | the turn sweep and its dead zone |
+| `HIT_SOUND_VOLUME` ⭐ | **0.55** | interface level for a landed round's impact, before the per-asset gain and the index wobble. Set against the reports: 6.4 dB under a pistol's peak at `SHOT_VOLUME` 0.8 |
+| `HIT_SOUND.<kind>.gain` ⭐ | flesh **1.0** / structure **1.1677** | peak-matches the two impact clips to each other (0.8677 / 0.7431, measured off the shipped `.ogg`s). Raise the structure figure to let a vehicle hit sit above a body hit |
+| `HIT_SOUND_MAX_PER_PAYLOAD` ⭐ | **4** (= `BLOOD_SPLATTER.maxPerPayload`) | how many impacts one payload may sound. Shared with the splash by import, not by copy |
+| `HIT_SOUND_VARIANCE` ⭐ | `[1, 0.9, 0.96, 0.86]` | the per-round level wobble, by round index — the only variation this host's audio layer can deliver uniformly |
+| `HIT_SOUND_BURST_WINDOW_MS` ⭐ | **700** | how long the rolling tally an UN-indexed caller draws on stays open. Past the cap inside one window a play is refused (`skipped: "burst"`); quiet reopens it. The fan-out supplies its own index and is exempt |
 
 Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setDashMs`,
-`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`, `_setDropLagMs`.
+`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`, `_setDropLagMs`, `_setHitSoundSink`.
 
 **The shot pattern's knobs**, which are not in `effects.js` because the pattern is not a sprite:
 
@@ -1069,6 +1149,23 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-12 — a landed round makes a noise, and the rail is what makes it.**
+The docket asked for impact sounds differentiated by what was hit, replacing a placeholder probe that
+had been wired into the two SDP-decrement sites to prove the trigger seam.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⭐ **The impact sounds on the ARRIVAL clock, from the rail — not at damage-apply wall time** | `hitSoundPlanFor` before the loop, `fxHitSound(kind, {delayMs: arriveIn, index})` inside it, beside the mark and the spray | The apply runs after `presentationSettled` by construction: for a burst that is the last round's tail, for a declared corridor it is whenever the GM confirms. An impact sounded there is not late by a frame, it is late by the whole action. The three elements that say a round landed — the mark, the spray and now the noise — hang on the ONE arrival this payload resolved (§4.2a), so nothing on one shot can disagree about when the round got there. |
+| **The apply paths keep a leg, for the shots that never had an arrival** | `fxSilent` on `applyLocationDamage` / `applyVehicleDamageCore` / `applyVehicleDamageMM`, threaded through `applyAreaDamages`; set by `_autoApply`, its GM-side relay and `routeWeaponFiredToVehicle` | A hand-resolved damage dialog, a vehicle-damage dialog and an area shell resolved on confirm have no shot behind them and nothing to be late for, so they play immediately. The flows that DID come off a shot say so and stay quiet — otherwise a five-round burst on a vehicle would sound five more impacts, all of them late. The flag is named for what it does, because its **other** user is the applies that are not impacts at all (burn/acid ticks, permanent-damage conversion, radiation doses, an ACPA pilot's overflow). |
+| ⭐ **The personnel leg goes on `applyLocationDamage`, not on `applyAreaDamages`** | one call site per zone outcome, inside the shared seam | Found by reading the callers rather than by assuming: the hand-applied damage dialog calls `applyLocationDamage` **directly**, row by row, and never passes through `applyAreaDamages`. A leg one level up would have covered the automated flows — which are the ones the rail already sounds — and left the manual one, the whole reason the apply leg exists, silent. |
+| **An un-indexed caller gets a tally from the element** | `HIT_SOUND_BURST_WINDOW_MS` 700 ms, refused past the cap as `skipped: "burst"` | The apply seams walk their rows in one synchronous loop and have no payload to count against, so N plays land in the SAME tick and phase into one smear. Tested on the raw argument, not on `Number(index)` — `Number(null)` is 0, which is finite, and coercing first made every un-indexed caller look like caller zero (measured: nine rows in one tick, all at one level). |
+| ⭐ **The capture seam is consulted before the host's audio state** | `_setHitSoundSink` wins over the `locked` check | §9 I says the seam is applied first, and here that is load-bearing rather than tidy: a sink never reaches an audio device, and a headless keeper page is GENUINELY locked (it never produces a user gesture on the game document — the join click lands on the previous one). With the order reversed every driven leg would have been measuring the page instead of the element. |
+| **A hit stopped by armour is silent on the apply seam, and audible on the rail** | apply: `penetrates && (netDamage > 0 ‖ cyberlimb structural > 0)`; rail: the round landed | Asymmetric on purpose, and the asymmetry is which seam can answer. Penetration exists only after the armour math, which is the apply; at the arrival the rail knows only what its own two draws know. Matching the picture is the point — an impact the eye is shown and the ear is not reads as a defect. |
+| **The apply seam chooses its clip per ZONE, the rail per ACTOR** | apply: `routesToSdp` (via `applyLocationDamage`'s `cyberlimb`) ‖ `isFullBorg`; rail: `bearsStructuralSdp` | The same known limit the blood splash carries: the payload says how many rounds landed and never where, so a per-zone answer does not exist at draw time. Where it DOES exist it is used, so a round into a cyberarm sounds like the chrome it hit. |
+| **The cap is the blood splash's, not the mark's** | `HIT_SOUND_MAX_PER_PAYLOAD` = `BLOOD_SPLATTER.maxPerPayload` = 4 | Thirty marks are thirty confirmations; thirty copies of one 0.16 s clip inside a two-second burst is one noise. Taken by import so the two move together rather than drifting apart. |
+| ⭐ **A locked audio context is a skip, not a delay** | `fxHitSound` returns `skipped: "locked"` when `game.audio.locked` | **Measured on the rig 2026-08-12, and it is the defect the placeholder was reported for.** Until a client produces a genuine user gesture the three audio contexts do not exist (`game.audio.interface` and `.music` both read `undefined`), and core's `Sound#load` opens with `if (game.audio.locked) await game.audio.unlock;` — so `AudioHelper.play` hands back a promise that **never settles** on such a client. Two consequences, both observed: a caller that awaits it stalls outright (two probe runs parked for minutes on one play call), and a rejection arriving after the eventual unlock lands **outside** the synchronous try/catch that issued it. Skipping is also the right behaviour: a parked impact plays at the first click, not at the arrival. The play promise additionally carries a `.catch` naming the verb, the same discipline every fire-and-forget draw here follows. |
+| **The delay is a timer, not a playback option** | one `setTimeout` before the `AudioHelper.play` call | Read from core rather than assumed: `AudioHelper.play` hands `game.audio.play` exactly `{volume, loop, context}` on the local path, and the receiving client's `playAudio` handler rebuilds the same three — a `delay` put on the object is dropped at both ends. One timer on the issuing client is enough **because the rail runs on one client**: it fires there and the broadcast goes out at the arrival instant, so every listener hears it then. |
 
 **2026-08-11 (the bench walk) — a spread weapon is AIMED before it is declared.**
 *"Shouldn't they have to place the pattern first, then they say how they'll attack?"* Raised against the
@@ -1667,6 +1764,8 @@ presented while the screen stayed empty.
 | **The pellet arrival marks are a build-lane call, and so is the razor split** | ⚠ **The open item of this unit.** The ruling says "small arrival marks at pellet endpoints, ≤ 50 % of the volley's fireballs" and "fire arrivals reserved for the incendiary shell". The size (**0.45 sq**, under 40 % of the class's own aim mark) and the trim (**500 ms**) are mine; the *split* is implemented as one gate (`entry.groundFire`) rather than as two assets, so the incendiary shell keeps the fires it already sets and gets no dust over them — which is also what keeps the withdrawn 2026-08-09 blast-ring ruling honoured. If the intent was a fire mark **as well**, that is a different build. §3.2b. |
 | **Six pellet marks land on the same square as the restored aim-point star** | ⚠ **Raised by the build, needs eyes.** The veto restores the hit-confirmation star (1.15 sq at the aim point) *and* the ruling adds six 0.45 sq marks at the pellet endpoints — and on a hit the pellets converge within 0.28–0.84 squares of that aim point, so the seven marks overlap. The stagger spreads them over a few frames rather than stamping them at once. If it reads busy in motion, dropping **either** is one edit: the star is the class's `impactSquares`, the marks are `PELLET_ARRIVAL`. |
 | **The arrival ladder lengthens the apply window on painted classes** | ⚠ **Stated so it is a decision, not a surprise.** The mark is now drawn at the round's arrival, so the settle floor grows with it — the rifle's tail goes 933 → **1200** ms at the 30ft band and **1533** ms at 90ft, and a long shot therefore holds the damage window a little longer than it did. That is the correct direction (over-stating is safe, under-stating opens the window over a mark still coming) and the engine's own end still ends the wait first in ordinary play, but it is a felt change at the table. |
+| **The two impact clips are not signed off by ear** | ⚠ **The open item of this unit.** The *feature* and the two files are the user's picks (`flesh-01` = *Bullet Blood 3*, `sdp-02` = *HeavyBulletPing*, kept out of a 40-candidate audition). The *levels* are the build lane's: `HIT_SOUND_VOLUME` **0.55** and the structure clip's peak-match `gain` **1.1677**. ⚠ Peak-matching does **not** equalise them by ear — the structure clip carries **5.85 dB** more energy in its loudest 100 ms because it rings and the flesh clip does not, so it will read as the bigger event at a matched peak. That may be correct (a round into a vehicle IS the bigger event) but nobody has ruled it. Two constants revert either half. The audition manifest also records the user's own reservations about both files: `flesh-01` reads to two commenters as a *knife*, and `sdp-02` is honestly-labelled kitchenware foley described as "not loved". |
+| **`sfx()` carries the same locked-context hazard the impact leg now guards** | ⚠ **Found while fixing the impact leg 2026-08-12, deliberately NOT changed.** A shot fired on a client whose audio context has never been unlocked hands back a promise that never settles, and the report then plays whenever the first click happens rather than when the shot did (§6, same date). The impact leg skips outright; `sfx()` still parks, because changing it changes SHOT audio behaviour and that is a different unit's call. One line if it is wanted: the same `game.audio.locked` guard, with a `skipped` report. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
 | Real decal persistence (**blood only** now) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. The blood splash is transient by ruling — floor decals were explicitly held out of phase 1. ⏪ This row used to carry the incendiary ground mark alongside it; that element was **removed outright on 2026-08-10**, so the question is the splash's alone. |
 | ~~Animations run in slow motion and trail out after the shooting stops~~ | ✅ **CLOSED 2026-08-09.** Measured, not guessed: a fixed per-round sleep against a starved timer compounded to **2.24×** on every burst size tried. Anchored schedule + drop rule brings a 30-round burst from +6 461 ms of drift to **+89 ms**. §4.1a, and the keeper drives both halves. |
@@ -1838,6 +1937,7 @@ the plan, not half in the row and half in the loop condition.
 | Smoke puff | **B+** | gate still split row-flag + loop condition — the drift the idiom above retires |
 | Motes / burst ambience | **A−** | `Math.random` appropriate (transient); await-cost lesson recorded |
 | Ground fire | **A** | the standard's exemplar: seeded with entropy, capped, evicted, named — and it now takes the fan's own jitter |
+| Impact audio | **A−** | new 2026-08-12 — spec-blocked with measured levels, arrival-anchored, per-round-capped by import from the splash, capture-seamed (`_setHitSoundSink`), reported by value (`hitAudio`). The two clips' relative loudness is an unsigned look call (§8) |
 | Blood splatter | **A−** | per-round-capped idiom done right; rotation basis shared; F2 inherits |
 | Baton round | **A−** | replace-mask precedent; asset measured |
 | Spread-zone ghost look | **B+** | not Sequencer; isolated and flag-keyed, but the v13 branch is unverified |

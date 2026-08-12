@@ -185,6 +185,12 @@ export async function routeWeaponFiredToVehicle(payload, vehicleActor) {
   if (!hits.length) return false;
   const ap = !!payload?.ap;
 
+  // ⛔ `fxSilent: true` ON BOTH BRANCHES BELOW. A payload reaching this function came off a SHOT, and
+  // the FX rail already sounded that shot's impact at its measured arrival — one per landing round,
+  // against its own cap (fx/effects.js, hitSoundPlanFor). This loop runs once per hit AFTER the
+  // presentation settled, so leaving the resolvers to sound it here would give a five-round burst five
+  // more impacts, all of them late and none of them on the arrival clock. The resolvers keep their
+  // penetration-gated sound for the path that has no shot behind it — the hand-resolved dialog.
   const ruleSystem = effectiveVehicleRuleSystem();
   // Imported lazily to keep the pure-math top of this module free of Phase 4 UI deps in tests.
   const VD = await import("./vehicle-damage.js");
@@ -193,9 +199,9 @@ export async function routeWeaponFiredToVehicle(payload, vehicleActor) {
       // Penetration is the weapon's own value when the weapon resolves (independent of this round's roll);
       // the per-hit dmg only feeds the no-weapon fallback. ACPA's SDP flow uses the actual rolled damage.
       const pen = _payloadPenetration(payload, dmg, ap);
-      await VD.applyVehicleDamageMM(vehicleActor, { basePen: pen, facing: "front", rawDamage: dmg });
+      await VD.applyVehicleDamageMM(vehicleActor, { basePen: pen, facing: "front", rawDamage: dmg, fxSilent: true });
     } else {
-      await VD.applyVehicleDamageCore(vehicleActor, { rawDamage: dmg, ap, facing: "front" });
+      await VD.applyVehicleDamageCore(vehicleActor, { rawDamage: dmg, ap, facing: "front", fxSilent: true });
     }
   }
   return true;
