@@ -3,9 +3,9 @@
 The audio files in this directory are third-party works redistributed under the licenses
 listed below. Every license used here permits redistribution as part of this module.
 
-License breakdown (44 files):
+License breakdown (46 files):
 
-- **40 × CC0 1.0 Universal (Public Domain Dedication).** Attribution is not legally
+- **42 × CC0 1.0 Universal (Public Domain Dedication).** Attribution is not legally
   required for CC0 but is given below as a courtesy to the original authors.
 - **2 × CC BY 4.0.** Attribution *is* legally required for these; the entries are marked
   **ATTRIBUTION REQUIRED** and carry the exact credit line to reproduce.
@@ -19,6 +19,12 @@ Each file was obtained from the Freesound page linked in its entry, where that s
 sound's license is stated. Files are the Freesound-generated high-quality Ogg Vorbis
 preview of the original upload — no editing, trimming, or loudness normalization was
 performed by this project.
+
+**One exception, stated because it is one:** the two **hit-impact** files at the end of
+this document were obtained as Freesound's MP3 previews and **re-encoded to Ogg Vorbis**
+by this project for delivery. Nothing else was done to them — no trim, no gain, no
+resample, no channel change — and their playback levels are set in code
+(`module/fx/effects.js`, `HIT_SOUND`) rather than baked into the files.
 
 ---
 
@@ -511,3 +517,38 @@ files can be deleted with no loss of slot coverage.
 - **License:** Pixabay Content License — https://pixabay.com/service/license-summary/
 - **Modifications:** Renamed only. Pixabay's served MP3 (MPEG-2 Layer III, 160 kbps,
   24 kHz, joint stereo, ~9.17 s).
+
+---
+
+# Hit impacts
+
+The two clips a **landed round** plays, chosen by what it hit (see `docs/FX-RAIL.md` §2,
+element 13). Both are CC0 and both were picked by the user from a 40-candidate audition;
+the audition's own manifest, with the full candidate set and its measurements, is
+`Sound Candidates - Hit Impacts/MANIFEST.md`.
+
+## `hit-flesh.ogg`
+
+- **Title:** Bullet Blood 3
+- **Author:** JustInvoke
+- **Source:** https://freesound.org/people/JustInvoke/sounds/138480/
+- **License:** CC0 1.0 Universal — https://creativecommons.org/publicdomain/zero/1.0/
+- **Modifications:** Renamed, and **re-encoded from Freesound's MP3 preview to Ogg Vorbis**
+  by this project (mono, 44.1 kHz, 0.157 s). No trim, gain, resample or channel change.
+- **Note:** The uploader describes it as the "sound of a bullet hitting flesh". Measured on
+  the shipped file: peak −1.23 dBFS, loudest 100 ms −18.68 dB. Played at
+  `HIT_SOUND_VOLUME` 0.55 with no gain of its own.
+
+## `hit-sdp.ogg`
+
+- **Title:** HeavyBulletPing.mp3
+- **Author:** wilhellboy
+- **Source:** https://freesound.org/people/wilhellboy/sounds/351371/
+- **License:** CC0 1.0 Universal — https://creativecommons.org/publicdomain/zero/1.0/
+- **Modifications:** Renamed, and **re-encoded from Freesound's MP3 preview to Ogg Vorbis**
+  by this project (stereo, 44.1 kHz, 0.418 s). No trim, gain, resample or channel change.
+- **Note:** The uploader's own description: "Me hitting my pots and pans in an attempt to
+  make a sound that can pass for a bullet pinging off of metal or armor." Measured on the
+  shipped file: peak −2.58 dBFS, loudest 100 ms −12.83 dB. Played at `HIT_SOUND_VOLUME`
+  0.55 × a **1.1677** peak-match gain, which is the ratio of the two files' peaks and is
+  applied in code rather than to the file.
