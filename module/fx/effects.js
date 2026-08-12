@@ -4318,6 +4318,20 @@ export function resolveFiredWeapon(payload, actor) {
 }
 
 /**
+ * The actor whose items this payload's weapon lives on — the firing TOKEN's actor first, the base
+ * actor by id only as the fallback. An UNLINKED token's actor is base + delta, and the delta can
+ * carry weapons the base actor does not (a GM edits the goon's gun on the token, never the base):
+ * those items resolve by neither id nor name on `game.actors.get(attackerId)` (an unlinked token
+ * shares its base actor's id), so every such shot silently drew no FX at all (rig-diagnosed
+ * 2026-08-12 on a token whose inventory predated a base-actor re-provision). Read-time only —
+ * fixing the lookup, never the data. A client not drawing the named token falls back as before.
+ */
+export function actorForPayload(payload) {
+  const tok = payload?.attackerTokenId ? canvas?.tokens?.get(payload.attackerTokenId) : null;
+  return tok?.actor ?? (payload?.attackerId ? game.actors?.get(payload.attackerId) : null);
+}
+
+/**
  * The FX class for a fired weapon, or null when the weapon takes no muzzle fx (melee, or a type with
  * no v1 mapping). Reads the weapon sub-block so a cyberware weapon resolves like a held one.
  *
@@ -4521,7 +4535,7 @@ export function presentationMs(shots, weaponClass, ammoKey = null, volley = null
  */
 export function payloadPresentationMs(payload) {
   if (!combatFxEnabled()) return 0;
-  const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
+  const actor = actorForPayload(payload);
   const weaponClass = weaponFxClass(resolveFiredWeapon(payload, actor));
   if (!weaponClass) return 0;
   // A ruled fumble draws nothing (see the bail in fxWeaponFired), so there is no presentation to wait
@@ -4761,7 +4775,7 @@ export function settlementsInFlight() {
 export async function fxWeaponFired(payload) {
   const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
-  const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
+  const actor = actorForPayload(payload);
   const weapon = resolveFiredWeapon(payload, actor);
   const weaponClass = weaponFxClass(weapon);
   if (!weaponClass) return { ...result, skipped: "class" };
