@@ -840,6 +840,87 @@ export const BLOOD_SPLATTER = Object.freeze({
 export const TRACER_CLIP_MS = 933;
 
 /**
+ * WHEN A PAINTED (STRETCHED) ROUND ACTUALLY ARRIVES — the missing half of this rail's second clock,
+ * measured per distance band off the installed files.
+ *
+ * ⏪ THE DEFECT THIS ANSWERS (user, at the bench, 2026-08-11): *"blood splashes and dust/impact marks
+ * play when the round DEPARTS"*, and worst on the rifle and the heavy — the two classes whose round is
+ * on screen longest. The mechanism was one expression: the impact was held back by
+ * `dashSquares > 0 ? dashMs : 0`, so only a TRAVELLED round had an arrival at all and every PAINTED
+ * one confirmed its hit in the same tick the muzzle lit. Four of the five shipped classes are painted,
+ * so the bug was the ordinary case rather than an edge of it. The same zero reached the blood splash
+ * through `arrivalMs`, which is why the two elements were reported together.
+ *
+ * ⚠ A PAINTED ROUND HAS AN ARRIVAL — it just is not one this file was computing. `stretchTo` scales the
+ * asset across the whole shooter→aim line in one go, but the asset is not a static streak: it animates
+ * a head travelling from one end of its own frame to the other, and the engine hands back a DIFFERENT
+ * FILE per distance band, each animating that crossing over its own span. So the arrival is a property
+ * of the band, exactly as the volley's is, and it is read off the file rather than guessed.
+ *
+ * ⭐ MEASURED, NOT PICKED (2026-08-11, decoded off this rig's installed JB2A free tier). Per frame, the
+ * RIGHTMOST lit column of the frame was taken as the head's position, and the arrival is the first
+ * frame at which that leading edge stops advancing — 98% of the clip's own maximum, which normalises
+ * away each file's different trailing padding. All ten files are 30fps.
+ *
+ *   bullet.01 (pistol / smg / shotgun)     bullet.02 (rifle / heavy / slug)
+ *     05ft  100ms  (16f, 533ms clip)         05ft  267ms  (28f, 933ms clip)
+ *     15ft  333ms  (16f, 533ms)              15ft  200ms  (28f, 933ms)
+ *     30ft  467ms  (19f, 633ms)              30ft  367ms  (28f, 933ms)
+ *     60ft  567ms  (25f, 833ms)              60ft  533ms  (28f, 933ms)
+ *     90ft  733ms  (29f, 967ms)              90ft  700ms  (28f, 933ms)
+ *
+ * ⚠ TWO ANOMALIES IN THE DECODE, recorded rather than smoothed. bullet.01's 05ft file opens with its
+ * head already halfway across its own frame and never reaches the frame edge (max lead 0.83), so its
+ * 100ms is "this shot is over before it starts" and not a crossing; and bullet.02's 05ft reads LONGER
+ * than its 15ft (267 vs 200) because the two files pad differently (max lead 1.00 vs 0.94). Both sit
+ * inside the two nearest bands, both are short shots, and neither is worth a special case — but a
+ * later reader comparing the ladder to the files should not think the inversion is a typing error.
+ *
+ * ⛔ THE TABLE IS KEYED BY THE TRACER KEY, not by the class, and that is what makes an ammo overlay
+ * that REPLACES the picture (the slug row hands the shotgun a bullet.02) get the right answer with no
+ * branch. A key this table does not carry falls to TRACER_ARRIVAL_FALLBACK_MS.
+ */
+export const TRACER_ARRIVAL_MS = Object.freeze({
+  "jb2a.bullet.01.orange": Object.freeze({ "05ft": 100, "15ft": 333, "30ft": 467, "60ft": 567, "90ft": 733 }),
+  "jb2a.bullet.02.orange": Object.freeze({ "05ft": 267, "15ft": 200, "30ft": 367, "60ft": 533, "90ft": 700 }),
+});
+
+/**
+ * The engine's own band boundaries for the five-file ranged families, in grid squares — the same mirror
+ * VOLLEY_BANDS is of the four-file volley family, extended by the 05ft entry the bullet families carry
+ * and the volley family does not. The engine serves the NEAREST band, so each boundary sits at the
+ * midpoint of two neighbours in squares (3, 6, 12 and 18 squares are 15/30/60/90ft on a 5ft grid).
+ * Asserted against `getFileForDistance` on the installed engine rather than trusted — see the keeper.
+ */
+export const TRACER_ARRIVAL_BANDS = Object.freeze([
+  Object.freeze({ band: "90ft", minSquares: 15 }),
+  Object.freeze({ band: "60ft", minSquares: 9 }),
+  Object.freeze({ band: "30ft", minSquares: 5 }),
+  Object.freeze({ band: "15ft", minSquares: 2 }),
+  Object.freeze({ band: "05ft", minSquares: 0 }),
+]);
+
+/**
+ * The arrival used for a painted tracer this file has no measurement for — an asset an overlay named
+ * that is not one of the two mapped bullet families. The middle of the measured ladder, so a key we
+ * have not decoded is neither confirmed at the muzzle nor held for the better part of a second.
+ */
+export const TRACER_ARRIVAL_FALLBACK_MS = 400;
+
+/** Which band file the engine will serve a five-file ranged family at this many squares. Pure. */
+export function tracerBandFor(distSquares) {
+  const d = Number(distSquares) || 0;
+  return (TRACER_ARRIVAL_BANDS.find((b) => d >= b.minSquares) ?? TRACER_ARRIVAL_BANDS[TRACER_ARRIVAL_BANDS.length - 1]).band;
+}
+
+/** How long a painted round of this tracer family takes to cross a shot of this length, in ms. Pure. */
+export function tracerArrivalMs(tracerKey, distSquares) {
+  const table = TRACER_ARRIVAL_MS[tracerKey];
+  if (!table) return TRACER_ARRIVAL_FALLBACK_MS;
+  return Number(table[tracerBandFor(distSquares)]) || TRACER_ARRIVAL_FALLBACK_MS;
+}
+
+/**
  * The hard ceiling on how long the apply window may be held back waiting for the rail to finish, in
  * milliseconds. Raced against the completion signal — whichever comes first wins — so a fan-out that
  * never reports (a listener that threw, an engine that stalled, a payload nobody registered) can delay
@@ -1944,6 +2025,52 @@ export function ammoFxEntry(weaponClass, ammoKey = null) {
 }
 
 /**
+ * ⭐ THE ONE DERIVATION OF CLOCK 2 — when this round arrives — for every shape this rail draws. Pure.
+ *
+ * There are three ways a round crosses to what it was pointed at, and before 2026-08-11 only two of
+ * them had an answer here: a volley knew its band's baked crossing time, a TRAVELLED dash knew its own
+ * `dashMs`, and a PAINTED (stretched) round was given zero, which is what put the impact family at the
+ * muzzle instead of at the target (the defect is written up at TRACER_ARRIVAL_MS). The painted answer
+ * is now read off the same measured band table the engine picks its file from.
+ *
+ * IT IS ONE FUNCTION AND NOT THREE BECAUSE THE ELEMENTS HAVE TO AGREE. The hit mark, the blood spray,
+ * the burning ground and the tail floor all hang on this number; a second derivation anywhere is a way
+ * for the mark and the blood on one shot to disagree about when the round got there. The fan-out
+ * resolves it ONCE per payload and threads it, exactly as it threads the load key and the volley spec.
+ *
+ * `distSquares` is the only impure input, and it is passed rather than measured here so this stays
+ * assertable with no canvas. `source` is reported for the keeper — it says WHICH of the three shapes
+ * answered, which is the thing a test would otherwise have to infer from the number.
+ */
+export function arrivalSpecFor(weaponClass, ammoKey = null, distSquares = 0, volley = null) {
+  if (volley) return { ms: Number(volley.crossMs) || 0, source: "volley", band: volley.band ?? null };
+  const entry = ammoFxEntry(weaponClass, ammoKey);
+  if (!entry) return { ms: 0, source: "none", band: null };
+  const dash = Number(entry.dashMs) > 0 ? Number(entry.dashMs) : 0;
+  if (dash > 0) return { ms: dash, source: "dash", band: null };
+  return { ms: tracerArrivalMs(entry.tracer, distSquares), source: "stretch", band: tracerBandFor(distSquares) };
+}
+
+/**
+ * THE HIT MARK THIS CLASS AND LOAD DRAW, resolved once and read by both the sites that draw it — the
+ * ordinary round inside fxShot, and the round the pacing rule refused (fxHitMark). Pure.
+ *
+ * Factored out on 2026-08-11 for exactly that reason: the second site is new, and a second copy of the
+ * promotion rule (`impactKey` where a row names one, HIT_CONFIRM's key otherwise; `impactClipMs` where
+ * a row names one, HIT_CONFIRM's clip otherwise) is how a promoted mark ends up drawn on one path and
+ * not the other. Returns null for a row that draws no mark at all.
+ */
+export function hitMarkFor(weaponClass, ammoKey = null) {
+  const entry = ammoFxEntry(weaponClass, ammoKey);
+  if (!entry || !(Number(entry.impactSquares) > 0)) return null;
+  return {
+    key: entry.impactKey ?? HIT_CONFIRM.key,
+    squares: Number(entry.impactSquares),
+    clipMs: Number(entry.impactClipMs) > 0 ? Number(entry.impactClipMs) : HIT_CONFIRM.clipMs,
+  };
+}
+
+/**
  * Weapon-class resolution is by TYPE, not by item name (design doc §3): the catalog is far too large
  * to enumerate, and every ranged item already carries a type. Both the stored label ("SMG") and the
  * enum key ("submachinegun") are accepted — lookups.js weaponTypes maps one to the other, and older
@@ -2994,8 +3121,8 @@ function _held(effect) {
  *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0 } = {}) {
-  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null };
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null } = {}) {
+  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0 };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
   // the same code for every load. The KEY is passed in rather than resolved here because there is no
@@ -3011,6 +3138,15 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
   // Where the sprites are planted: the shooter's forward edge, walked along that axis by a fraction
   // of the token's OWN width. The previous build put everything on the centre unconditionally.
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
+  // ⭐ WHEN THIS ROUND GETS THERE (2026-08-11). Passed in by the fan-out, which resolves it ONCE for the
+  // whole payload so every element of every round hangs on the same number; derived here from the same
+  // resolver when this verb is called on its own (the keeper does, and a caller who has not measured the
+  // shot must still get an arrival rather than a zero — that zero was the reported defect). See
+  // arrivalSpecFor for the three shapes and TRACER_ARRIVAL_MS for the painted one's measurement.
+  const aimSquares = from && to ? Math.hypot(to.x - from.x, to.y - from.y) / gridPx : 0;
+  const arrival = (arrivalMs !== null && Number(arrivalMs) >= 0)
+    ? Number(arrivalMs) : arrivalSpecFor(weaponClass, ammoKey, aimSquares, volley).ms;
+  out.arrivalMs = arrival;
   // The flash is announced and drawn first because it costs nothing to wait for — it is synchronous.
   // It takes the SAME axis as the sprites, so the notch behind the shooter lines up with the bolt.
   // The ammo's own flash colour where its overlay names one. It reaches the source through the
@@ -3171,24 +3307,33 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       // bloom at the endpoint, so ours would be a second star on the same square. Expressed as a gate
       // here rather than as a zeroed width on the row, because the row is the CLASS's and the volley is
       // a property of the shot — and because switching the trial off must restore the mark with it.
-      const impactKey = entry.impactKey ?? HIT_CONFIRM.key;
-      const impactClipMs = Number(entry.impactClipMs) > 0 ? Number(entry.impactClipMs) : HIT_CONFIRM.clipMs;
-      if (!volleyOk && hit && to && entry.impactSquares > 0 && fxDbEntryExists(impactKey)) {
-        const impact = _held(seq.effect().file(impactKey)).atLocation(to)
-          .size({ width: entry.impactSquares }, { gridUnits: true })
-          .timeRange(0, impactClipMs)
+      //
+      // ⭐ AND IT NOW WAITS FOR EVERY SHAPE OF ROUND, not just a travelled one (2026-08-11). The delay
+      // used to be `dashSquares > 0 ? dashMs : 0`, so the four PAINTED classes confirmed their hit in
+      // the same tick they fired — the reported "impacts play when the round departs". It is the
+      // resolved arrival now, which is that expression for a travelled round and a measured band
+      // crossing for a painted one. `delayFollowsTracer` still switches the whole behaviour off in one
+      // field; what changed is the number it gates, not the gate.
+      const mark = hitMarkFor(weaponClass, ammoKey);
+      if (!volleyOk && hit && to && mark && fxDbEntryExists(mark.key)) {
+        const impact = _held(seq.effect().file(mark.key)).atLocation(to)
+          .size({ width: mark.squares }, { gridUnits: true })
+          .timeRange(0, mark.clipMs)
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
         // TERMINAL ELEMENT — on a landing round this is normally the last thing to leave the screen.
         if (settleTag) { impact.name(settleTag); out.tagged++; }
-        const travel = HIT_CONFIRM.delayFollowsTracer && entry.dashSquares > 0
-          ? (_dashMsOverride ?? entry.dashMs) : 0;
+        // The capture seam's dash override still wins where one is armed, for the same reason it wins
+        // over the sprite rate: a test that shortens the crossing must shorten what waits on it.
+        const travel = HIT_CONFIRM.delayFollowsTracer
+          ? (entry.dashSquares > 0 ? (_dashMsOverride ?? arrival) : arrival) : 0;
         if (travel > 0) impact.delay(travel);
         out.impact = true;
         // Reported so a caller (and the keeper) can assert WHICH mark was drawn and how wide, by
         // value, rather than by looking at the canvas — the promotion is otherwise invisible to a test.
-        out.impactKey = impactKey;
-        out.impactSquares = entry.impactSquares;
-        out.impactClipMs = impactClipMs;
+        out.impactKey = mark.key;
+        out.impactSquares = mark.squares;
+        out.impactClipMs = mark.clipMs;
+        out.impactDelayMs = travel;
       }
       if (out.muzzle || out.tracer || out.impact || out.volley) await seq.play();
     } catch (err) {
@@ -3604,6 +3749,69 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
   return out;
 }
 
+/**
+ * THE MARK A REFUSED ROUND STILL OWES — the hit confirmation on its own, with no muzzle, no report and
+ * no tracer.
+ *
+ * ⭐ WHY THIS VERB EXISTS (user ruling 2026-08-11): *"hits late in a long burst get NO blood at all"*.
+ * The pacing rule (roundDropped) takes a late round WHOLE — audio with picture — and that rule is right
+ * about what it was written for: a report landing on top of another report is worse than a missing
+ * report, and a backlog of tracers is what made the picture run a second behind the sound. But it was
+ * also taking the round's ARRIVAL with it, and an arrival is not a pacing cost: the mark and the spray
+ * are ONE sprite each, they are drawn at the far end of the shot rather than at the muzzle, and they
+ * are the only thing on screen that says the round landed on somebody. A ten-round burst that hit six
+ * times was marking three, which reads as a burst that mostly missed.
+ *
+ * So the two budgets are now separate: the TRACER budget is the pacing rule's and may refuse rounds,
+ * and the IMPACT budget is the payload's hit count (bounded by HIT_MARK_MAX_PER_PAYLOAD). A round that
+ * hit gets its impact family whether or not its tracer was drawn.
+ *
+ * `delayMs` is what is LEFT of this round's arrival at the moment the drop is decided — the fan-out
+ * subtracts the lateness that caused the drop, so a mark for a round that is already 200ms behind its
+ * slot lands 200ms sooner than one issued on time and the two arrive together on the canvas.
+ *
+ * ⛔ NEVER TAGGED. The last round is never dropped (the pacing rule guarantees it), so the settle name
+ * always rides an ordinary fxShot; a mark from here can never be the element the damage window waits on.
+ */
+export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKey = null, delayMs = 0 } = {}) {
+  const out = { drawn: false, key: null, squares: 0, clipMs: 0, delayMs: 0 };
+  const mark = hitMarkFor(weaponClass, ammoKey);
+  if (!mark || !sequencerActive() || !fxDbEntryExists(mark.key)) return out;
+  const gridPx = Number(canvas?.dimensions?.size) || 100;
+  const to = shooterToken ? aimPointOf(shooterToken, targetToken, gridPx) : (targetToken ? centerOf(targetToken) : null);
+  if (!to) return out;
+  const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
+  try {
+    const seq = new globalThis.Sequence();
+    const impact = _held(seq.effect().file(mark.key)).atLocation(to)
+      .size({ width: mark.squares }, { gridUnits: true })
+      .timeRange(0, mark.clipMs)
+      .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
+    if (delay > 0) impact.delay(delay);
+    out.drawn = true;
+    out.key = mark.key;
+    out.squares = mark.squares;
+    out.clipMs = mark.clipMs;
+    out.delayMs = delay;
+    seq.play().catch((err) => console.warn(`${SCOPE} | hit mark play failed`, err));
+  } catch (err) {
+    console.warn(`${SCOPE} | hit mark failed`, err);
+  }
+  return out;
+}
+
+/**
+ * The bound on how many hit marks ONE payload may draw, refused rounds included.
+ *
+ * It is the fan-out's own round cap and not a smaller number, deliberately: the mark lives 833ms, it is
+ * one sprite, and it lands on the square the shot was aimed at — so N of them is N confirmations of N
+ * landed rounds, which is the thing the ruling asks to stop losing. The element that genuinely does not
+ * survive repetition is the blood spray (four sprays inside one 900ms clip is a fountain), and that one
+ * keeps its own much tighter cap at BLOOD_SPLATTER.maxPerPayload. Stated as a constant rather than left
+ * implicit so the bound is a value a keeper can read.
+ */
+export const HIT_MARK_MAX_PER_PAYLOAD = MAX_FX_SHOTS;
+
 /* ══════════════════════════ Payload → shots ══════════════════════════ */
 
 /** Rounds that HIT: the payload's areaDamages carries one entry per hitting round, by location. */
@@ -3763,7 +3971,7 @@ export async function faceTarget(shooterToken, aimPoint) {
  * fade after it), so waiting for them would mean waiting seconds past the point a viewer would say the
  * action was over. "Finished" is the last round's impact/tracer ending, and nothing else.
  */
-export function presentationTailMs(weaponClass, ammoKey = null, volley = null) {
+export function presentationTailMs(weaponClass, ammoKey = null, volley = null, arrivalMs = null) {
   // THE VOLLEY IS ITS OWN WHOLE ANSWER, and returns early rather than joining the max below. That is
   // not a shortcut: when the volley is drawn, the pellet fan is NOT (it replaces it) and the hit mark
   // is NOT (fxShot suppresses it), so folding in a `tracerEnd` and an `impactEnd` for elements this
@@ -3778,9 +3986,20 @@ export function presentationTailMs(weaponClass, ammoKey = null, volley = null) {
   // the tail comes back short, the settle floor is short with it, and the apply window opens while the
   // last round is still on screen. Same resolver as the draw path, so the two cannot drift.
   const entry = ammoFxEntry(weaponClass, ammoKey);
-  const travel = Number(entry?.dashMs) > 0 ? Number(entry.dashMs) : 0;
+  const dash = Number(entry?.dashMs) > 0 ? Number(entry.dashMs) : 0;
+  // ⭐ THE IMPACT'S OWN START IS AN INPUT NOW (2026-08-11), and it is PASSED rather than derived: the
+  // painted classes' arrival is a property of the shot's LENGTH, and this function is pure and has no
+  // way to ask how long the shot was. Both shipping callers resolve it (the fan-out from the canvas it
+  // is drawing on, payloadPresentationMs from the same two tokens) and hand it in, so the floor the
+  // apply window rests on covers a mark that is now drawn most of a second later than it used to be.
+  //   With nothing passed it falls back to the row's own crossing time, which is exactly what this
+  // function computed before the arrival existed — so a caller that only has a class and a load still
+  // gets the old, travelled-only answer rather than an invented one.
+  const travel = (arrivalMs !== null && Number(arrivalMs) >= 0) ? Number(arrivalMs) : dash;
   const spark = entry?.spark ? MUZZLE_SPARK.clipMs : 0;
-  const tracerEnd = travel > 0 ? travel + DASH_ARRIVAL_HOLD_MS : TRACER_CLIP_MS;
+  // The TRACER's own life is unchanged by any of this — a painted streak lives its clip and a travelled
+  // dash lives its crossing plus the hold. It is the impact that moved.
+  const tracerEnd = dash > 0 ? dash + DASH_ARRIVAL_HOLD_MS : TRACER_CLIP_MS;
   // The impact term is how long the impact is DRAWN, which for a promoted asset is its trim rather
   // than its own clip — the same field fxShot plays it with (see the impact-promotion rule).
   const impactClipMs = Number(entry?.impactClipMs) > 0 ? Number(entry.impactClipMs) : HIT_CONFIRM.clipMs;
@@ -3808,13 +4027,13 @@ export function presentationTailMs(weaponClass, ammoKey = null, volley = null) {
  * BOUNDED by MAX_FX_SHOTS, the same bound the fan-out itself applies, so a payload claiming a corrupt
  * round count can no more park a wait than it can queue that many rounds.
  */
-export function presentationMs(shots, weaponClass, ammoKey = null, volley = null) {
+export function presentationMs(shots, weaponClass, ammoKey = null, volley = null, arrivalMs = null) {
   const n = Math.min(Math.max(Math.trunc(Number(shots) || 0), 1), MAX_FX_SHOTS);
   // The CADENCE is deliberately NOT overlaid: no ammo row carries one and none should. Spacing between
   // rounds is a property of the weapon's action, not of what is in the magazine. The VOLLEY is threaded
   // through for the same reason the ammo key is — it moves the tail, and a floor computed without it
   // would open the window while the last shell's rounds were still crossing.
-  return (n - 1) * classCadenceMs(weaponClass) + presentationTailMs(weaponClass, ammoKey, volley);
+  return (n - 1) * classCadenceMs(weaponClass) + presentationTailMs(weaponClass, ammoKey, volley, arrivalMs);
 }
 
 /**
@@ -3856,9 +4075,14 @@ export function payloadPresentationMs(payload) {
   // for a shot the fan-out will draw as a dart fan would hold the window shut for a second the shot does
   // not spend. Same resolver, same call, so the two cannot drift (the rule at presentationTailMs).
   const key = ammoFxKeyOf(payload);
-  return leadIn + presentationMs(shotCountOf(payload), weaponClass, key,
-    volleyOwns(payload) && !ammoRedefinesProjectile(key)
-      ? volleySpecFor(payloadAimSquares(shooter, target, gridPx)) : null);
+  const squares = payloadAimSquares(shooter, target, gridPx);
+  const volley = volleyOwns(payload) && !ammoRedefinesProjectile(key) ? volleySpecFor(squares) : null;
+  // ⭐ AND THE ARRIVAL, resolved off the same distance the fan-out will measure and by the same call, so
+  // the floor this arithmetic hands a caller and the floor the fan-out watches out cannot disagree about
+  // when the last round's mark starts. A painted round's mark now begins most of a second into the
+  // presentation on a long shot, and a window computed without that term would open over it.
+  return leadIn + presentationMs(shotCountOf(payload), weaponClass, key, volley,
+    arrivalSpecFor(weaponClass, key, squares, volley).ms);
 }
 
 /**
@@ -4059,7 +4283,7 @@ export function settlementsInFlight() {
  * asserts the fan-out by value instead of by wall-clock observation.
  */
 export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = payload?.attackerId ? game.actors?.get(payload.attackerId) : null;
   const weapon = resolveFiredWeapon(payload, actor);
@@ -4152,11 +4376,17 @@ export async function fxWeaponFired(payload) {
   const gridSizePx = Number(canvas?.dimensions?.size) || 100;
   const volley = volleyOwns(payload) && shooter && !ammoRedefinesProjectile(ammoKey)
     ? volleySpecFor(payloadAimSquares(shooter, target, gridSizePx)) : null;
-  // WHEN THIS ROUND ARRIVES — the one clock the delayed dressing (blood, burning ground) is hung on.
-  // For a travelled fan that is the class's own crossing time; for a volley it is the BAND's baked one,
-  // which is the whole reason the band is resolved above rather than left to the engine.
-  const arrivalMs = volley ? volley.crossMs
-    : (Number(ammoEntry?.dashMs) > 0 ? Number(ammoEntry.dashMs) : 0);
+  // WHEN THIS ROUND ARRIVES — the one clock every delayed element of the shot is hung on: the hit mark,
+  // the pellet arrival marks, the blood spray and the burning ground. Resolved ONCE, here, and threaded
+  // into every verb below and into the tail floor, so nothing on one shot can disagree with anything
+  // else about when the round got there.
+  //
+  // ⏪ IT USED TO BE `dashMs, or zero` (2026-08-11). Zero was the answer for the four PAINTED classes,
+  // which is why their impacts and their blood played at the muzzle — the reported defect. The painted
+  // arrival is a measured band crossing now; see arrivalSpecFor for the three shapes and
+  // TRACER_ARRIVAL_MS for the decode.
+  const arrival = arrivalSpecFor(weaponClass, ammoKey, payloadAimSquares(shooter, target, gridSizePx), volley);
+  const arrivalMs = arrival.ms;
 
   // One payload = one resolved burst, so whether this is a MULTI-round payload is known before the
   // first round goes out and holds for all of them — every round of one burst gets the same asset,
@@ -4231,6 +4461,11 @@ export async function fxWeaponFired(payload) {
   let blood = bleeds ? { queued: 0, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
     tokenId: target.id, cap: BLOOD_SPLATTER.maxPerPayload } : null;
 
+  // THE IMPACT TALLY — how many of this payload's landing rounds have had their arrival marked, drawn
+  // and refused rounds counted together, against the bound at HIT_MARK_MAX_PER_PAYLOAD. Reported by
+  // value: "an N-round burst with M hits marks M arrivals" is the ruling, and this is the number that
+  // says whether it held.
+  const impacts = { queued: 0, refused: 0, cap: HIT_MARK_MAX_PER_PAYLOAD };
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -4264,7 +4499,45 @@ export async function fxWeaponFired(payload) {
     // rounds that DO play sitting on their own slots, so the burst keeps its rhythm at the cost of a
     // round rather than losing the rhythm to keep one. That is what the ruling's reason says out loud:
     // the audio already told the ear the story, so one more report is what there is least need of.
-    if (roundDropped({ lagMs, isLast, dropLagMs: dropLagMsFor(cadenceMs) })) { dropped++; continue; }
+    const refused = roundDropped({ lagMs, isLast, dropLagMs: dropLagMsFor(cadenceMs) });
+    // ⭐⭐ THE IMPACT FAMILY IS NOT ON THE TRACER'S BUDGET (user ruling 2026-08-11: *"hits late in a long
+    // burst get NO blood at all"*). The pacing rule above refuses a late round's PICTURE AND ITS REPORT,
+    // and it is right to — but it was also refusing the round's ARRIVAL, and those are two different
+    // costs. A tracer is a sprite per pellet drawn from the muzzle every cadence slot and it is what
+    // creates the backlog the rule exists to hold down; a hit mark and a blood spray are one sprite each,
+    // at the far end of the shot, and they are the only thing that says the round landed on somebody. So
+    // this block sits ABOVE the drop rather than inside the branch below it, and a round that HIT gets
+    // its impact family whether or not its tracer was drawn. See fxHitMark for the ruling in full.
+    //
+    // The remaining lateness comes OFF the arrival, so a round already 200ms behind its slot puts its
+    // mark up 200ms sooner and lands on the canvas alongside the rounds that were drawn on time.
+    const arriveIn = Math.max(0, arrivalMs - lagMs);
+    // What a LANDING round owes at the far end of the shot, issued from one place so the drawn round
+    // and the refused one cannot drift. `issueMark` is false for a round that is being drawn: fxShot
+    // puts the mark in the same Sequence as that round's tracer, and a second one here would be two
+    // marks on one square.
+    const markAndBleed = (issueMark) => {
+      if (impacts.queued < HIT_MARK_MAX_PER_PAYLOAD) {
+        impacts.queued++;
+        if (issueMark) {
+          impacts.refused++;
+          fxHitMark(shooter, target, { weaponClass, ammoKey, delayMs: arriveIn })
+            .catch((err) => console.warn(`${SCOPE} | hit mark failed`, err));
+        }
+      }
+      // ⏫ MOVED OUT OF THE DRAW BRANCH with the mark, and for the same reason — this is where the "no
+      // blood at all" half of the report was coming from. The gates and the cap are unchanged.
+      if (blood && blood.queued < BLOOD_SPLATTER.maxPerPayload) {
+        blood.queued++;
+        fxBloodSplatter(shooter, target, { delayMs: arriveIn })
+          .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
+      }
+    };
+    if (refused) {
+      dropped++;
+      if (shooter && i < hits) markAndBleed(true);
+      continue;
+    }
     sfx(weaponClass, { burst });
     // Flash + sprite + tracer all start in the SAME tick as this shot's audio, and none of them is
     // awaited: the loop's timer is the cadence a viewer and a listener both read. Every round of a
@@ -4292,20 +4565,18 @@ export async function fxWeaponFired(payload) {
       // ⭐ AND THE ROLLED DAMAGE WITH IT, which is what makes two separate TRIGGER PULLS differ rather
       // than only two rounds of one burst — the identity fields are identical across repeat shots. Same
       // term, same position, as the burning-ground seed above; see the VOLLEY block's chaos note.
+      // THE ARRIVAL IS HANDED DOWN rather than re-derived: one derivation per payload, so this round's
+      // mark and this round's spray (issued above) are hung on the identical number.
       fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
-        volley, shotSeed: fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits, i,
+        volley, arrivalMs, shotSeed: fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits, i,
           JSON.stringify(payload?.areaDamages ?? {})) })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
-      // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock. The hits are the
-      // LEADING rounds of the burst (the same assignment fxShot's `hit` argument uses one line above),
-      // so `i < hits` is the round that landed, and the delay is the class's crossing time — the spray
-      // therefore starts when this round's dart arrives, not when the payload was resolved. The cap is
-      // what keeps ten hits reading as repeated spray rather than as a fountain (see the spec block).
-      if (blood && i < hits && blood.queued < BLOOD_SPLATTER.maxPerPayload) {
-        blood.queued++;
-        fxBloodSplatter(shooter, target, { delayMs: arrivalMs })
-          .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
-      }
+      // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock, and the mark counted
+      // against the same budget the refused rounds draw from. The hits are the LEADING rounds of the
+      // burst (the same assignment fxShot's `hit` argument uses one line above), so `i < hits` is the
+      // round that landed. Issued AFTER the round's own sequence so the ordering on the wire reads the
+      // way the shot does.
+      if (i < hits) markAndBleed(false);
     }
   }
   // The last round has left the muzzle; what remains on screen is its terminal elements. The watch is
@@ -4315,11 +4586,16 @@ export async function fxWeaponFired(payload) {
   // gone; the scheduled tail is only the floor and the no-engine fallback.
   // The floor takes the AMMO KEY, so an overlay that lengthens the tail (flechette's crossing time, a
   // promoted impact's own trim) is waited out rather than being drawn past a window that already opened.
-  const settleTailMs = presentationTailMs(weaponClass, ammoKey, volley);
+  // ⭐ AND THE RESOLVED ARRIVAL WITH IT (2026-08-11) — the mark is drawn `arrivalMs` after its round
+  // now, so a floor computed without that term would open the apply window while the last round's own
+  // confirmation was still coming. Same number the draws were hung on, handed to the same resolver.
+  const settleTailMs = presentationTailMs(weaponClass, ammoKey, volley, arrivalMs);
   _watchSettleTag(settleTag, settleTailMs, settle);
 
   return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smokePuffs,
     turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood, volley,
+    // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
+    arrival, impacts,
     // The pacing report, by value: how many rounds' pictures were refused and the worst lateness seen.
     // `loopMs` against `(shots-1) × cadence` is the drift the anchored schedule exists to hold down.
     dropped, maxLagMs, loopMs: Date.now() - loopStart };

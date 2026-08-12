@@ -79,20 +79,41 @@ await page.fill('input[name="password"]', PW);
 await page.click('button[name="join"]');
 await page.waitForFunction(() => window.game?.ready === true, null, { timeout: 60000 });
 
+// ⭐ THE SCENE THIS SPEC OWNS, PINNED AND *VIEWED* — not activated (2026-08-11).
+//
+// Every section used to build its fixtures on `game.scenes.active`, which is a WORLD-wide property any
+// other client can change. When a second lane activated its own review scene mid-run, this spec's
+// tokens were created on that scene while its cleanup swept this one, and the orphans it left made the
+// NEXT run throw out of the server backend on the first fixture delete. Viewing is the right verb:
+// `Scene#view` moves only THIS client's canvas, so the drawn-pixel legs get the scene they need without
+// taking the canvas away from anybody else, and `canvas.scene` — which is what the fan-out actually
+// draws on — follows it.
+//
+// It falls back to the active scene, then to the first scene, so a rig without the review fixtures still
+// runs; the name is the ONE place the choice is written.
+const FX_SCENE_NAME = "Review · Dark Range";
+await page.evaluate(async (name) => {
+  const scene = game.scenes.getName(name) ?? game.scenes.active ?? game.scenes.contents[0];
+  if (scene && canvas.scene?.id !== scene.id) await scene.view();
+  globalThis.__FX_SCENE_ID = scene?.id ?? null;
+}, FX_SCENE_NAME);
+await page.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 60000 });
+
 const res = await page.evaluate(async () => {
   const SCOPE = "cp2020-augmented";
   const out = { checks: [], soundsDelivered: null };
   const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  if (!game.scenes.active) await (game.scenes.getName("Foundry Virtual Tabletop") ?? game.scenes.contents[0])?.activate();
-  const scene = game.scenes.active;
+  // The pinned scene (see FX_SCENE_NAME above), never `game.scenes.active` — which another client can
+  // change under a running section.
+  const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
 
   const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
 
   /* ── fixtures ──────────────────────────────────────────────────────────── */
-  for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__FX"))) await a.delete();
   for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__FX"))) await t.delete();
+  for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__FX"))) await a.delete();
 
   const actor = await Actor.create({ name: "__PW__FX Shooter", type: "character" });
   const mk = (name, weaponType, attackType = "semiAuto", extra = {}) => ({ name, type: "weapon", system: { weaponType, attackType, damage: "1d6", range: 50, rof: 1, shots: 10, shotsLeft: 10, ...extra } });
@@ -1257,7 +1278,14 @@ const res = await page.evaluate(async () => {
     // rounds. Left unclassified it counts as a sixth "round" and shifts every sprite-vs-audio pairing
     // by one — which is exactly what this leg reported the first time the gore switch was left on.
     const isBlood = !isSmoke && !isAmbience && files.some(f => f.includes(fx.BLOOD_SPLATTER.key));
-    seqPlays.push({ t: Date.now(), isSmoke, isAmbience, isBlood });
+    // ⭐ AND THE LONE HIT MARK (2026-08-11). A round the pacing rule REFUSES still marks its arrival,
+    // and that mark is issued as its own single-section sequence — so left unclassified it counts as a
+    // sixth "round" and shifts every sprite-vs-audio pairing by one, exactly as the splash did before
+    // it was classified. A DRAWN round's sequence carries its lance and its tracers too, so the section
+    // count is what tells the two apart rather than the file.
+    const isMark = !isSmoke && !isAmbience && !isBlood && files.length === 1
+      && /impact\.|ground_crack|smoke\.puff\.ring/.test(files[0]);
+    seqPlays.push({ t: Date.now(), isSmoke, isAmbience, isBlood, isMark });
     return realSeqPlay.apply(this, a);
   };
   plays = [];
@@ -1273,7 +1301,8 @@ const res = await page.evaluate(async () => {
   const smokeSeqs = seqPlays.filter(x => x.isSmoke);
   const ambienceSeqs = seqPlays.filter(x => x.isAmbience);
   const bloodSeqs = seqPlays.filter(x => x.isBlood);
-  const shotSeqPlays = seqPlays.filter(x => !x.isSmoke && !x.isAmbience && !x.isBlood).map(x => x.t);
+  const markSeqs = seqPlays.filter(x => x.isMark);
+  const shotSeqPlays = seqPlays.filter(x => !x.isSmoke && !x.isAmbience && !x.isBlood && !x.isMark).map(x => x.t);
   // The gore switch is a world setting a GM may have left either way, so this leg says what it EXPECTS
   // of it rather than assuming: the payload above lands on a real target, so one splash if the switch
   // is on and none if it is off — and either way it is not one of the rounds.
@@ -1295,7 +1324,13 @@ const res = await page.evaluate(async () => {
     shotSeqPlays.length === aimedBurst.shots - aimedBurst.dropped
     && ambienceSeqs.length === 1
     && smokeSeqs.length === 0 && aimedBurst.smokePuffs === 0,
-    `${seqPlays.length} sequences = ${shotSeqPlays.length} units + ${ambienceSeqs.length} ambience + ${smokeSeqs.length} puff(s)`);
+    `${seqPlays.length} sequences = ${shotSeqPlays.length} units + ${ambienceSeqs.length} ambience + ${markSeqs.length} lone mark(s) + ${bloodSeqs.length} splash(es) + ${smokeSeqs.length} puff(s)`);
+  // ⭐ AND THE REFUSED ROUNDS' MARKS ARE EXACTLY THE ONES THE FAN-OUT SAYS IT ISSUED — the ruling that
+  // an arrival is not on the tracer's budget, read on the wire rather than off the report.
+  ok("aimed burst: every round the pacing rule refused still put its own arrival mark on the canvas",
+    markSeqs.length === (aimedBurst.impacts?.refused ?? 0)
+    && aimedBurst.impacts?.queued === Math.min(aimedBurst.hits, fx.HIT_MARK_MAX_PER_PAYLOAD),
+    `${aimedBurst.dropped} refused, ${markSeqs.length} lone mark(s), ${aimedBurst.impacts?.queued} arrivals for ${aimedBurst.hits} hits`);
   const syncGaps = shotSeqPlays.map((t, i) => t - (plays[i]?.t ?? t));
   ok("sync: every sprite starts within 100ms of its own round's audio",
     syncGaps.length === aimedBurst.shots - aimedBurst.dropped && syncGaps.length > 0
@@ -1691,16 +1726,23 @@ const res = await page.evaluate(async () => {
     elevMiss.impact === false
     && playedEntries.flat().filter(e => e.file === fx.HIT_CONFIRM.key).length === 0,
     JSON.stringify(elevMiss));
-  // A travelled-dash class holds its confirmation back by the crossing time so the impact cannot
-  // precede its own pellets; a painted tracer is drawn across the line at once and waits for nothing.
+  // ⏪ REWRITTEN 2026-08-11. This leg used to read "a travelled class waits its crossing time; a
+  // PAINTED one waits for nothing" — and the second half was the reported defect, not a design: four
+  // of the five shipped classes are painted, so four of five confirmed their hit at the muzzle. BOTH
+  // shapes wait now; what differs is where the number comes from (the row's own crossing, or the
+  // measured band the engine will serve for a shot that long). Asserted as two numbers, both above
+  // zero and each equal to its own resolver's answer.
   played.length = 0; playedEntries.length = 0;
   await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "shotgun", hit: true, light: false });
   await sleep(150);
   const shellImpact = playedEntries.flat().find(e => e.file === fx.HIT_CONFIRM.key);
-  ok("impact: a travelled-tracer class delays its confirmation by that tracer's own crossing time",
+  const paintedImpact = elevEntries.find(e => e.file === fx.HIT_CONFIRM.key);
+  const paintedSquares = fx.payloadAimSquares(tokenDoc, targetDoc, gridPx);
+  ok("impact: BOTH tracer shapes hold their confirmation back until the round gets there",
     shellImpact?.delay === fx.FX_CLASSES.shotgun.dashMs
-    && elevEntries.find(e => e.file === fx.HIT_CONFIRM.key)?.delay === undefined,
-    `shell ${shellImpact?.delay}ms vs painted ${elevEntries.find(e => e.file === fx.HIT_CONFIRM.key)?.delay}`);
+    && paintedImpact?.delay === fx.arrivalSpecFor("rifle", null, paintedSquares).ms
+    && paintedImpact?.delay > 0,
+    `shell ${shellImpact?.delay}ms (its own crossing) vs painted ${paintedImpact?.delay}ms (the ${fx.tracerBandFor(paintedSquares)} band)`);
   played.length = 0; playedEntries.length = 0;
 
   ok("aim: no sprite the adapter queued is left without a rotation input",
@@ -2576,10 +2618,16 @@ const res = await page.evaluate(async () => {
   // The payload-facing entry point: the class is resolved the way the fan-out resolves it, and the
   // zero cases are exactly two — nothing mapped, or the rail switched off.
   const mkPayload = (over = {}) => ({ attackerId: actor.id, weaponId: madeIds.rifle, weaponName: "__PW__FX rifle", areaDamages: {}, ...over });
+  // ⏪ ASSERTED AS THE ARITHMETIC'S OWN SHAPE (2026-08-11) rather than against a bare presentationMs
+  // call. The entry point resolves an ARRIVAL off the shot's length now, and a pure call given no
+  // arrival cannot know it — so the claim "the payload entry point resolves the class and defers to
+  // the arithmetic" is read where it is actually visible: six rounds cost five cadence gaps more than
+  // one, on the same class, through the same entry point.
   ok("presentation window: a mapped payload reports its own span through the payload entry point",
-    fx.payloadPresentationMs(mkPayload({ shotsFired: 6 })) === fx.presentationMs(6, "rifle")
-    && fx.payloadPresentationMs(mkPayload({ shotsFired: 1 })) === fx.presentationMs(1, "rifle"),
-    `${fx.payloadPresentationMs(mkPayload({ shotsFired: 6 }))}ms for six rounds`);
+    fx.payloadPresentationMs(mkPayload({ shotsFired: 6 })) - fx.payloadPresentationMs(mkPayload({ shotsFired: 1 }))
+      === 5 * fx.classCadenceMs("rifle")
+    && fx.payloadPresentationMs(mkPayload({ shotsFired: 1 })) > 0,
+    `${fx.payloadPresentationMs(mkPayload({ shotsFired: 6 }))}ms for six rounds, ${fx.payloadPresentationMs(mkPayload({ shotsFired: 1 }))}ms for one`);
   ok("presentation window: an unmapped weapon reports nothing to wait for (negative)",
     fx.payloadPresentationMs(mkPayload({ weaponId: madeIds.melee, weaponName: "__PW__FX melee", shotsFired: 6 })) === 0
     && fx.payloadPresentationMs({ shotsFired: 6 }) === 0,
@@ -2591,12 +2639,14 @@ const res = await page.evaluate(async () => {
   // claim is about the ENGINE being absent, not about what its database answers. It is safe here and
   // only here because the swap, the read and the restore are one unbroken synchronous run: no queued
   // section can be scheduled in between, so no effect in flight can find the namespace missing.
+  const spanWithEngine = fx.payloadPresentationMs(mkPayload({ shotsFired: 6 }));
   const realSeqDb = globalThis.Sequencer;
   globalThis.Sequencer = { Database: { entryExists: () => false } };
-  ok("presentation window: it does not depend on the optional sprite engine",
-    fx.payloadPresentationMs(mkPayload({ shotsFired: 6 })) === fx.presentationMs(6, "rifle"),
-    String(fx.payloadPresentationMs(mkPayload({ shotsFired: 6 }))));
+  const spanWithoutEngine = fx.payloadPresentationMs(mkPayload({ shotsFired: 6 }));
   globalThis.Sequencer = realSeqDb;
+  ok("presentation window: it does not depend on the optional sprite engine",
+    spanWithoutEngine === spanWithEngine && spanWithEngine > 0,
+    `${spanWithEngine}ms with the engine, ${spanWithoutEngine}ms without`);
 
   /* -- 11a-ii-b. the COMPLETION SIGNAL: the rail reports, the sum stands in --- */
   // The window used to wait on a sum reproduced in the damage handler. The rail queues the durations,
@@ -3088,7 +3138,11 @@ const res = await page.evaluate(async () => {
   await shooterDoc.update({ rotation: 0 });
   await sleep(400);
   const spanWithTurn = fx.payloadPresentationMs(payload({ shotsFired: 2, targetTokenId: targetDoc.id }));
-  const spanNoTurn = fx.presentationMs(2, "rifle");
+  // ⏪ THE ARRIVAL IS AN INPUT NOW (2026-08-11): the mark waits for a painted round to cross, so the
+  // no-turn span has to be computed with the same arrival the entry point resolves or the difference
+  // between the two would be the arrival rather than the sweep. Same resolver, same distance.
+  const turnSquares = fx.payloadAimSquares(canvas.tokens.get(tokenDoc.id) ?? tokenDoc, targetDoc, Number(canvas.dimensions.size) || 100);
+  const spanNoTurn = fx.presentationMs(2, "rifle", null, null, fx.arrivalSpecFor("rifle", null, turnSquares).ms);
   ok("turn: the presentation span includes the sweep when a sweep is going to happen",
     spanWithTurn === spanNoTurn + fx.FACE_TARGET.durationMs,
     `${spanWithTurn}ms with the lead-in vs ${spanNoTurn}ms without`);
@@ -3117,8 +3171,8 @@ const res = await page.evaluate(async () => {
     && scene.tokens.get(tokenDoc.id).rotation === 0,
     `${rotationWrites.length - lockMark} write(s) at rotation ${scene.tokens.get(tokenDoc.id).rotation}`);
   ok("turn: and its span carries no lead-in — no dead pause for a sweep that never happens (negative)",
-    fx.payloadPresentationMs(payload({ shotsFired: 2, targetTokenId: targetDoc.id })) === fx.presentationMs(2, "rifle"),
-    `${fx.payloadPresentationMs(payload({ shotsFired: 2, targetTokenId: targetDoc.id }))}ms vs ${fx.presentationMs(2, "rifle")}ms without a lead-in`);
+    fx.payloadPresentationMs(payload({ shotsFired: 2, targetTokenId: targetDoc.id })) === spanNoTurn,
+    `${fx.payloadPresentationMs(payload({ shotsFired: 2, targetTokenId: targetDoc.id }))}ms vs ${spanNoTurn}ms without a lead-in`);
   await shooterDoc.update({ lockRotation: false });
   await sleep(300);
 
@@ -3157,7 +3211,11 @@ const res = await page.evaluate(async () => {
     areaDamages: { Torso: [{ damage: 3 }] },
   }));
   await sleep(400);
-  const fxOnlyEntry = playedEntries.flat().find(e => !!e.rotateTowards);
+  // ⚠ THE LANCE's rotation, named by its file rather than taken as "the first thing with a rotation".
+  // A landing round now also queues a blood splash, which takes its OWN rotation toward a point one
+  // grid unit BEYOND the target — a perfectly correct heading for that element and the wrong answer to
+  // this question, which is about the shot's axis.
+  const fxOnlyEntry = playedEntries.flat().find(e => !!e.rotateTowards && e.file === fx.FX_CLASSES.rifle.muzzle);
   const fxAimPoint = fx.centerOf(targetDoc);
   ok("presentation field: a payload with only the aim field still draws a directional sprite",
     fxOnly.shots === 1 && !!fxOnlyEntry, `${JSON.stringify(fxOnly)} / ${playedEntries.flat().length} queued`);
@@ -3657,7 +3715,7 @@ let ctx2 = null;
 try {
   const setup = await page.evaluate(async () => {
     const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const scene = game.scenes.active;
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
     for (const t of [...scene.tokens].filter(t => t.name?.startsWith("__PW__XC"))) await t.delete();
     for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__XC"))) await a.delete();
     const actor = await Actor.create({ name: "__PW__XC Shooter", type: "character" });
@@ -3670,7 +3728,7 @@ try {
 
   ctx2 = await browser.newContext();
   const p2 = await ctx2.newPage();
-  p2.on("pageerror", e => errors.push(`[session 2] ${e.message}`));
+  p2.on("pageerror", e => errors.push(`[session 2] ${e.message} ||AT|| ${String(e.stack ?? "").replace(/\s+/g, " ").slice(0, 220)}`));
   p2.on("console", m => { if (m.type() === "error" && !/compatibility|deprecat|screen resolution/i.test(m.text())) errors.push(`[session 2] ${m.text()}`); });
   await p2.setViewportSize({ width: 1600, height: 900 });
   await p2.goto(`${URL}/join`);
@@ -3687,6 +3745,15 @@ try {
   await p2.fill('input[name="password"]', "");
   await p2.click('button[name="join"]');
   await p2.waitForFunction(() => window.game?.ready === true, null, { timeout: 60000 });
+  await p2.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 60000 });
+  // The receiving session has to be LOOKING AT the same scene the fixture was built on, or the relayed
+  // flash is drawn onto a canvas that carries no such token. It views it rather than activating it —
+  // same reason as the pin at the top of this file.
+  await p2.evaluate(async (name) => {
+    const scene = game.scenes.getName(name) ?? game.scenes.active ?? game.scenes.contents[0];
+    if (scene && canvas.scene?.id !== scene.id) await scene.view();
+    globalThis.__FX_SCENE_ID = scene?.id ?? null;
+  }, FX_SCENE_NAME);
   await p2.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 60000 });
 
   // The receiving session WATCHES rather than polls. The relayed flash lasts a handful of render
@@ -3783,7 +3850,7 @@ try {
   // The load-bearing negative again, from the other side: session 2 drew a light without any token
   // document having changed — which is what the old transport could not do without a write.
   const doc2 = await p2.evaluate(({ tokenId }) => {
-    const d = game.scenes.active.tokens.get(tokenId);
+    const d = (game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active).tokens.get(tokenId);
     return { bright: d._source.light.bright, dim: d._source.light.dim, flags: JSON.stringify(d.flags?.["cp2020-augmented"] ?? {}) };
   }, setup);
   xok("two sessions: session 2's copy of the token document carries no light change (negative)",
@@ -3797,7 +3864,7 @@ try {
   await page.evaluate(async ({ tokenId, actorId }) => {
     const fx = await import("/modules/cp2020-augmented/module/fx/effects.js");
     fx.clearFlashes();
-    try { await game.scenes.active.deleteEmbeddedDocuments("Token", [tokenId]); } catch (e) { /* gone */ }
+    try { await (game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active).deleteEmbeddedDocuments("Token", [tokenId]); } catch (e) { /* gone */ }
     try { await game.actors.get(actorId)?.delete(); } catch (e) { /* gone */ }
   }, setup);
 } catch (err) {
@@ -3841,6 +3908,13 @@ try {
     await p.click('button[name="join"]');
     await p.waitForFunction(() => window.game?.ready === true, null, { timeout: 90000 });
     await p.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 90000 });
+    // Both probe seats look at the scene this spec owns, for the same reason session 2 does.
+    await p.evaluate(async (n) => {
+      const scene = game.scenes.getName(n) ?? game.scenes.active ?? game.scenes.contents[0];
+      if (scene && canvas.scene?.id !== scene.id) await scene.view();
+      globalThis.__FX_SCENE_ID = scene?.id ?? null;
+    }, FX_SCENE_NAME);
+    await p.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 90000 });
     await p.waitForTimeout(1500);
     return { ctx, p };
   };
@@ -3864,7 +3938,7 @@ try {
     });
     await armTap(A); await armTap(B);
     const fixture = await FIRE.p.evaluate(async () => {
-      const scene = game.scenes.active;
+      const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
       const shooter = game.actors.getName("Review · Shooter");
       const pistol = shooter.items.find(i => i.type === "weapon" && /Pistol/i.test(i.name));
       const tgt = scene.tokens.find(t => t.name === "Review · Target");
@@ -4703,9 +4777,9 @@ try {
       JSON.stringify(fx.muzzleSourceSpecs({ darkness: 1, ammoColor: tint }).map(s => s.color)));
 
     /* ── i. LIVE: what the fan-out actually queues ──────────────────────────── */
-    const scene = game.scenes.active;
-    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__AMMO"))) await a.delete();
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
     for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__AMMO"))) await t.delete();
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__AMMO"))) await a.delete();
     const shooterActor = await Actor.create({ name: "__PW__AMMO Shooter", type: "character" });
     const targetActor = await Actor.create({ name: "__PW__AMMO Target", type: "character" });
     const [rifleItem] = await shooterActor.createEmbeddedDocuments("Item", [{
@@ -5065,6 +5139,11 @@ try {
     /* ── b. the target-type answer, by value ────────────────────────────────── */
     // Phase 1 answers at the ACTOR level: the hit location is not known when this is drawn, so the
     // question asked is "is this actor structure", not "was this zone structure".
+    // ⚠ TOKENS BEFORE ACTORS (2026-08-11). Deleting an actor that still has a figure on the canvas
+    // sends an update down the figure's own chain against a document that is already gone, which throws
+    // out of the server backend and takes the whole section with it. Same ordering fix the radiation
+    // keeper took, applied at every sweep in this spec.
+    for (const t of [...((game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active)?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__GORE"))) await t.delete();
     for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__GORE"))) await a.delete();
     const fleshActor = await Actor.create({ name: "__PW__GORE Flesh", type: "character" });
     const npcActor = await Actor.create({ name: "__PW__GORE NPC", type: "npc" });
@@ -5154,7 +5233,7 @@ try {
       JSON.stringify(tailsOff));
 
     /* ── e. LIVE: what the fan-out actually queues ──────────────────────────── */
-    const scene = game.scenes.active;
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
     for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__GORE"))) await t.delete();
     const shooterActor = await Actor.create({ name: "__PW__GORE Shooter", type: "character" });
     const [rifleItem] = await shooterActor.createEmbeddedDocuments("Item", [{
@@ -5586,11 +5665,11 @@ try {
     const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
-    const scene = game.scenes.active;
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
 
     /* ── fixtures: one gunner, one thing to aim at, and one actor with no token at all ────────── */
-    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__RVW"))) await a.delete();
     for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__RVW"))) await t.delete();
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__RVW"))) await a.delete();
     const gunSystem = { weaponType: "Shotgun", attackType: "Shotgun", damage: "3d6", range: 50, rof: 1, shots: 8, shotsLeft: 8 };
     const actor = await Actor.create({ name: "__PW__RVW Shooter", type: "character" });
     const [gun] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__RVW shell gun", type: "weapon", system: gunSystem }]);
@@ -5616,7 +5695,10 @@ try {
                       opacity: () => e, fadeOut: () => e, playbackRate: () => e,
                       rotateTowards: (p) => { this.entries[e._i].rotateTowards = p; return e; },
                       size: (s, o) => { this.entries[e._i].size = s; this.entries[e._i].sizeOpts = o; return e; },
-                      elevation: () => e, aboveLighting: () => e, delay: () => e,
+                      elevation: () => e, aboveLighting: () => e,
+                      // Recorded rather than swallowed (2026-08-11): the arrival clock is a VALUE now, and
+                      // "the mark waited for the round" is only assertable if the delay reaches the record.
+                      delay: (v) => { this.entries[e._i].delay = v; return e; },
                       moveTowards: (p) => { this.entries[e._i].to = p; return e; }, moveSpeed: () => e,
                       mirrorY: (v) => { this.entries[e._i].mirrorY = v; return e; },
                       name: (v) => { this.entries[e._i].name = v; return e; },
@@ -5833,7 +5915,7 @@ const provoke = async () => page.evaluate(async () => {
   try {
     Hooks.callAll("cyberpunk2020.weaponFired", { attackerId: actor.id, weaponId: gun.id,
       weaponName: "__PW__RVW shell gun", shotsFired: 1, areaDamages: {},
-      fxTargetTokenId: game.scenes.active.tokens.find((t) => t.name === "__PW__RVW Dummy")?.id ?? null });
+      fxTargetTokenId: (game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active).tokens.find((t) => t.name === "__PW__RVW Dummy")?.id ?? null });
     // The canary looks once after its own grace window plus the shot's tail; give it both and a margin.
     await sleep(7000);
   } finally { fx._setDbProbe(null); }
@@ -5889,7 +5971,7 @@ try {
     // Belt and braces on the client's own module list, then the fixtures.
     for (const [id, m] of Object.entries(globalThis.__pwJb2aStash ?? {})) game.modules.set(id, m);
     globalThis.__pwJb2aStash = {};
-    const scene = game.scenes.active;
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
     for (const t of [...(scene?.tokens ?? [])].filter((t) => t.name?.startsWith("__PW__RVW"))) await t.delete().catch(() => {});
     for (const a of [...game.actors].filter((a) => a.name?.startsWith("__PW__RVW"))) await a.delete().catch(() => {});
   }).catch(() => {});
@@ -5914,7 +5996,7 @@ try {
     const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
-    const scene = game.scenes.active;
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
 
     for (const t of [...(scene?.tokens ?? [])].filter((t) => t.name?.startsWith("__PW__TWIN"))) await t.delete();
     for (const a of [...game.actors].filter((a) => a.name?.startsWith("__PW__TWIN"))) await a.delete();
@@ -6088,7 +6170,7 @@ try {
     const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
-    const scene = game.scenes.active;
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
     const E = (c, k) => fx.ammoFxEntry(c, k);
     // The classes that draw ONE round per slot — every row whose own geometry names no count.
     const STREAM = ["pistol", "smg", "rifle", "heavy"];
@@ -6442,6 +6524,238 @@ try {
   single.checks.push({ n: "single-file section ran", p: false, d: String(err?.message ?? err) });
 }
 
+/* ══ 22. THE ARRIVAL CLOCK: an impact lands when the round does, and a refused round still lands ══ */
+// Two halves of one report from the bench (2026-08-11):
+//   (a) "blood splashes and dust/impact marks play when the round DEPARTS", worst on the rifle and the
+//       heavy. Mechanism: the impact was held back by `dashSquares > 0 ? dashMs : 0`, and four of the
+//       five shipped classes carry no dash — so a PAINTED round confirmed its hit in the same tick it
+//       fired. The fix is a measured per-band crossing time (TRACER_ARRIVAL_MS) resolved once per
+//       payload and threaded everywhere.
+//   (b) "hits late in a long burst get NO blood at all". Mechanism: the pacing rule takes a late round
+//       WHOLE, and that used to take its arrival with it. The impact family is off the tracer's budget
+//       now — a round that HIT marks and bleeds whether or not its tracer was drawn.
+// Both are asserted by VALUE, and both are written so that reverting the fix fails them.
+const arrive = { checks: [], measured: {} };
+try {
+  const r = await page.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const out = { checks: [], measured: {} };
+    const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
+
+    /* ── a. THE BAND TABLE, against the engine's own picker ──────────────────────────────────── */
+    // The whole ladder rests on which FILE the engine serves for a shot of a given length, so the
+    // mirror is asserted against `getFileForDistance` rather than trusted — the same leg shape the
+    // shelved volley's band mirror uses, extended to the five-file bullet families.
+    const gpx = Number(canvas.dimensions.size) || 100;
+    for (const key of Object.keys(fx.TRACER_ARRIVAL_MS)) {
+      const entry = globalThis.Sequencer.Database.getEntry(key);
+      const rows = [0.5, 1, 1.9, 2, 4.9, 5, 6, 8.9, 9, 12, 14.9, 15, 20].map((d) => {
+        const served = String(entry?.getFileForDistance?.(d * gpx) ?? "").match(/_(\d+ft)_/)?.[1] ?? "?";
+        return { d, served, ours: fx.tracerBandFor(d) };
+      });
+      ok(`arrival: our band picker agrees with the engine's own for ${key}, at every boundary`,
+        rows.every(r2 => r2.served === r2.ours),
+        rows.map(r2 => `${r2.d}:${r2.ours}${r2.served === r2.ours ? "" : `!=${r2.served}`}`).join(" "));
+    }
+    ok("arrival: the boundaries are the mirrored ones and nothing else — 2, 5, 9 and 15 squares",
+      fx.tracerBandFor(0) === "05ft" && fx.tracerBandFor(1.9) === "05ft" && fx.tracerBandFor(2) === "15ft"
+      && fx.tracerBandFor(4.9) === "15ft" && fx.tracerBandFor(5) === "30ft"
+      && fx.tracerBandFor(8.9) === "30ft" && fx.tracerBandFor(9) === "60ft"
+      && fx.tracerBandFor(14.9) === "60ft" && fx.tracerBandFor(15) === "90ft",
+      fx.TRACER_ARRIVAL_BANDS.map(b => `${b.band}>=${b.minSquares}`).join(" "));
+    // The decoded values themselves, by value — the ladder rises with distance on both families, and
+    // the two short-band anomalies the spec block records are still exactly where it says they are.
+    ok("arrival: the measured ladder rises with the shot's length on both mapped families",
+      ["30ft", "60ft", "90ft"].every((b, i, a) => i === 0
+        || (fx.TRACER_ARRIVAL_MS["jb2a.bullet.01.orange"][b] > fx.TRACER_ARRIVAL_MS["jb2a.bullet.01.orange"][a[i - 1]]
+          && fx.TRACER_ARRIVAL_MS["jb2a.bullet.02.orange"][b] > fx.TRACER_ARRIVAL_MS["jb2a.bullet.02.orange"][a[i - 1]]))
+      && fx.TRACER_ARRIVAL_MS["jb2a.bullet.02.orange"]["90ft"] === 700
+      && fx.TRACER_ARRIVAL_MS["jb2a.bullet.01.orange"]["30ft"] === 467,
+      JSON.stringify(fx.TRACER_ARRIVAL_MS));
+    ok("arrival: a tracer family this file has not decoded falls to the stated fallback (negative)",
+      fx.tracerArrivalMs("jb2a.bullet.03.blue", 6) === fx.TRACER_ARRIVAL_FALLBACK_MS
+      && fx.tracerArrivalMs(undefined, 6) === fx.TRACER_ARRIVAL_FALLBACK_MS
+      && fx.TRACER_ARRIVAL_FALLBACK_MS === 400,
+      `${fx.TRACER_ARRIVAL_FALLBACK_MS}ms`);
+
+    /* ── b. THE ONE RESOLVER, and its three shapes ───────────────────────────────────────────── */
+    ok("arrival: a PAINTED class resolves a banded crossing — and it is not zero (the defect itself)",
+      fx.arrivalSpecFor("rifle", "standard", 6).ms === 367
+      && fx.arrivalSpecFor("rifle", "standard", 6).source === "stretch"
+      && fx.arrivalSpecFor("rifle", "standard", 6).band === "30ft"
+      && fx.arrivalSpecFor("pistol", "standard", 4).ms === 333
+      && fx.arrivalSpecFor("heavy", "standard", 20).ms === 700,
+      ["pistol", "smg", "rifle", "heavy"].map(c => `${c}:${fx.arrivalSpecFor(c, "standard", 6).ms}`).join(" "));
+    ok("arrival: a TRAVELLED class resolves its own crossing time, unbanded, exactly as before",
+      fx.arrivalSpecFor("shotgun", "standard", 2).ms === fx.FX_CLASSES.shotgun.dashMs
+      && fx.arrivalSpecFor("shotgun", "standard", 20).ms === fx.FX_CLASSES.shotgun.dashMs
+      && fx.arrivalSpecFor("shotgun", "standard", 6).source === "dash"
+      && fx.arrivalSpecFor("rifle", "rubber", 6).ms === fx.BATON_ROUND.crossMs,
+      `shell ${fx.arrivalSpecFor("shotgun", "standard", 6).ms}ms at every range`);
+    ok("arrival: an overlay that REPLACES the picture is banded off the picture it replaced it with",
+      fx.arrivalSpecFor("shotgun", "slug", 6).source === "stretch"
+      && fx.arrivalSpecFor("shotgun", "slug", 6).ms === fx.arrivalSpecFor("rifle", "standard", 6).ms
+      && fx.arrivalSpecFor("shotgun", "slug", 20).ms > fx.arrivalSpecFor("shotgun", "slug", 2).ms,
+      `slug ${fx.arrivalSpecFor("shotgun", "slug", 6).ms}ms vs rifle ${fx.arrivalSpecFor("rifle", "standard", 6).ms}ms`);
+    ok("arrival: the shelved volley branch still answers first when a spec is handed in (negative)",
+      fx.arrivalSpecFor("shotgun", "standard", 6, { crossMs: 480, band: "30ft" }).ms === 480
+      && fx.arrivalSpecFor("shotgun", "standard", 6, { crossMs: 480, band: "30ft" }).source === "volley"
+      && fx.arrivalSpecFor("__nope__", "standard", 6).ms === 0,
+      "volley first, then dash, then band");
+
+    /* ── c. THE TAIL TAKES IT — the floor the apply window rests on ──────────────────────────── */
+    // Over-stating is the safe direction and under-stating is the silent one, so the leg is that the
+    // tail GREW by exactly the arrival for a painted class and did not move for a travelled one.
+    ok("arrival: a painted class's tail grows by exactly the arrival, so the window waits for the mark",
+      fx.presentationTailMs("rifle", "standard", null, 367) === 367 + fx.HIT_CONFIRM.clipMs
+      && fx.presentationTailMs("rifle", "standard", null, 367) === 1200
+      && fx.presentationTailMs("rifle", "standard", null, 700) === 1533,
+      `${fx.presentationTailMs("rifle", "standard", null, 367)}ms at the 30ft band`);
+    ok("arrival: a travelled class's tail is unmoved — its crossing was always the term (negative)",
+      fx.presentationTailMs("shotgun", "standard", null, fx.arrivalSpecFor("shotgun", "standard", 6).ms)
+        === fx.presentationTailMs("shotgun", "standard")
+      && fx.presentationTailMs("shotgun", "standard") === 983,
+      `${fx.presentationTailMs("shotgun", "standard")}ms`);
+    ok("arrival: called without one the tail falls back to the row's own crossing — the old answer",
+      fx.presentationTailMs("rifle", "standard") === fx.TRACER_CLIP_MS
+      && fx.presentationTailMs("rifle", "standard") === 933,
+      `${fx.presentationTailMs("rifle", "standard")}ms`);
+
+    /* ── d. DRIVEN: the mark really waits ────────────────────────────────────────────────────── */
+    for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__ARV"))) await t.delete();
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__ARV"))) await a.delete();
+    const actor = await Actor.create({ name: "__PW__ARV Shooter", type: "character" });
+    const [rifle] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__ARV rifle", type: "weapon",
+      system: { weaponType: "Rifle", attackType: "Auto", damage: "1d6", range: 50, rof: 10, shots: 40, shotsLeft: 40 } }]);
+    const dummy = await Actor.create({ name: "__PW__ARV Dummy", type: "character" });
+    const [shooterTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__ARV Shooter", actorId: actor.id, actorLink: true, x: 1000, y: 1400 }]);
+    const [targetTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__ARV Dummy", actorId: dummy.id, actorLink: true, x: 1600, y: 1400 }]);
+    await sleep(400);
+
+    const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
+    const goreWas = game.settings.get(SCOPE, "goreEnabled");
+    const realSequence = globalThis.Sequence;
+    const playedEntries = [];
+    try {
+      await game.settings.set(SCOPE, "combatFxEnabled", true);
+      await game.settings.set(SCOPE, "goreEnabled", true);
+      class RecSequence {
+        constructor() { this.entries = []; }
+        effect() {
+          const e = { file: (f) => { this.entries.push({ file: f }); e._i = this.entries.length - 1; return e; },
+                      atLocation: (l) => { this.entries[e._i].atLocation = l; return e; }, scale: () => e,
+                      endTimePerc: () => e, timeRange: (a2, b2) => { this.entries[e._i].timeRange = [a2, b2]; return e; },
+                      filter: (n, o) => { this.entries[e._i].filter = { name: n, opts: o }; return e; },
+                      opacity: () => e, fadeOut: () => e, playbackRate: () => e, randomRotation: () => e,
+                      rotateTowards: (p) => { this.entries[e._i].rotateTowards = p; return e; },
+                      size: (s, o) => { this.entries[e._i].size = s; this.entries[e._i].sizeOpts = o; return e; },
+                      elevation: () => e, aboveLighting: () => e,
+                      delay: (v) => { this.entries[e._i].delay = v; return e; },
+                      moveTowards: (p) => { this.entries[e._i].to = p; return e; }, moveSpeed: () => e,
+                      mirrorY: () => e, name: (v) => { this.entries[e._i].name = v; return e; },
+                      duration: () => e,
+                      stretchTo: (p) => { this.entries[e._i].stretchTo = p; this.entries[e._i].to = p; return e; } };
+          return e;
+        }
+        async play() { playedEntries.push(this.entries); }
+      }
+      globalThis.Sequence = RecSequence;
+      const shooterPl = canvas.tokens.get(shooterTok.id), targetPl = canvas.tokens.get(targetTok.id);
+      const squares = fx.payloadAimSquares(shooterPl, targetPl, gpx);
+      const expectMs = fx.arrivalSpecFor("rifle", "standard", squares).ms;
+      out.measured.arrival = { squares: Number(squares.toFixed(2)), band: fx.tracerBandFor(squares), ms: expectMs };
+
+      playedEntries.length = 0;
+      const one = await fx.fxShot(shooterPl, targetPl, { weaponClass: "rifle", hit: true, light: false, ammoKey: "standard" });
+      await sleep(150);
+      const mark = playedEntries.flat().find(x => x.file === fx.HIT_CONFIRM.key);
+      ok("arrival driven: a painted round's hit mark is DELAYED by its own banded crossing, not by zero",
+        one.arrivalMs === expectMs && one.impactDelayMs === expectMs && mark?.delay === expectMs && expectMs > 0,
+        JSON.stringify({ band: fx.tracerBandFor(squares), reported: one.impactDelayMs, queued: mark?.delay ?? null }));
+      // ⏪ THE REVERTED SHAPE, computed rather than driven: the old expression gave a painted class zero.
+      ok("arrival driven: the old expression would have queued it at zero — the defect, by value (negative)",
+        (fx.FX_CLASSES.rifle.dashSquares > 0 ? fx.FX_CLASSES.rifle.dashMs : 0) === 0 && mark?.delay > 0,
+        `reverted 0ms vs shipped ${mark?.delay}ms`);
+      // A travelled class is untouched by the change: its crossing was always what the mark waited for.
+      playedEntries.length = 0;
+      const shell = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false, ammoKey: "standard" });
+      await sleep(150);
+      ok("arrival driven: a travelled class still waits exactly its own crossing time (negative)",
+        shell.impactDelayMs === fx.FX_CLASSES.shotgun.dashMs && shell.arrivalMs === fx.FX_CLASSES.shotgun.dashMs,
+        `${shell.impactDelayMs}ms vs the row's ${fx.FX_CLASSES.shotgun.dashMs}ms`);
+      // A MISS draws no mark at all, which is unchanged and is what keeps the fix from marking misses.
+      playedEntries.length = 0;
+      const missed = await fx.fxShot(shooterPl, targetPl, { weaponClass: "rifle", hit: false, light: false, ammoKey: "standard" });
+      await sleep(150);
+      ok("arrival driven: a MISS still draws no mark, so nothing waits for an arrival it never has (negative)",
+        missed.impact === false && playedEntries.flat().every(x => x.file !== fx.HIT_CONFIRM.key),
+        JSON.stringify({ impact: missed.impact }));
+
+      /* ── e. THE IMPACT BUDGET IS NOT THE TRACER'S ───────────────────────────────────────────── */
+      // A burst long enough that the pacing rule refuses rounds, with every round a HIT. The ruling is
+      // that the impact count equals the hit count whatever the drop count is.
+      const burst = (n) => ({ attackerId: actor.id, weaponId: rifle.id, weaponName: "__PW__ARV rifle",
+        caliber: "5.56", modifier: "standard", shotsFired: n, targetTokenId: targetTok.id,
+        fxTargetTokenId: targetTok.id,
+        areaDamages: { Torso: Array.from({ length: n }, () => ({ damage: 5 })) } });
+      playedEntries.length = 0;
+      const long = await fx.fxWeaponFired(burst(20));
+      await sleep(400);
+      out.measured.longBurst = { shots: long.shots, hits: long.hits, dropped: long.dropped,
+        impacts: long.impacts, blood: long.blood, maxLagMs: long.maxLagMs };
+      ok("budget: an N-round burst with M hits schedules exactly M impact sets, refused rounds included",
+        long.impacts.queued === long.hits && long.hits === 20 && long.impacts.cap === fx.HIT_MARK_MAX_PER_PAYLOAD,
+        JSON.stringify({ shots: long.shots, hits: long.hits, dropped: long.dropped, impacts: long.impacts.queued }));
+      ok("budget: the refused rounds' marks were issued on their own — the count the drop used to lose",
+        long.impacts.refused === long.dropped || long.dropped === 0,
+        `${long.dropped} refused, ${long.impacts.refused} marks issued separately`);
+      ok("budget: the blood cap is the SPRAY's own and is still much tighter than the mark's",
+        long.blood?.queued === Math.min(long.hits, fx.BLOOD_SPLATTER.maxPerPayload)
+        && fx.BLOOD_SPLATTER.maxPerPayload < fx.HIT_MARK_MAX_PER_PAYLOAD,
+        JSON.stringify({ sprays: long.blood?.queued, cap: fx.BLOOD_SPLATTER.maxPerPayload }));
+      // The negative: a burst that MISSED everything schedules nothing, however many rounds it fired.
+      playedEntries.length = 0;
+      const allMiss = await fx.fxWeaponFired({ attackerId: actor.id, weaponId: rifle.id,
+        weaponName: "__PW__ARV rifle", caliber: "5.56", modifier: "standard", shotsFired: 12,
+        targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id, areaDamages: {} });
+      await sleep(300);
+      ok("budget: a burst that landed nothing schedules no impacts and no blood (negative)",
+        allMiss.hits === 0 && allMiss.impacts.queued === 0 && allMiss.blood === null,
+        JSON.stringify({ hits: allMiss.hits, impacts: allMiss.impacts.queued, blood: allMiss.blood }));
+      // And the mark a refused round draws is the SAME resolved mark the drawn round draws — one
+      // resolver, so a promoted asset cannot appear on one path and not the other.
+      ok("budget: both paths resolve the same mark, so a promotion cannot reach only one of them",
+        fx.hitMarkFor("rifle", "ap").key === fx.IMPACT_CRACK.key
+        && fx.hitMarkFor("rifle", "standard").key === fx.HIT_CONFIRM.key
+        && fx.hitMarkFor("rifle", "standard").squares === fx.FX_CLASSES.rifle.impactSquares
+        && fx.hitMarkFor("__nope__", "standard") === null,
+        JSON.stringify(fx.hitMarkFor("rifle", "ap")));
+      playedEntries.length = 0;
+      const lone = await fx.fxHitMark(shooterPl, targetPl, { weaponClass: "rifle", ammoKey: "ap", delayMs: 250 });
+      await sleep(150);
+      const loneQueued = playedEntries.flat().find(x => x.file === fx.IMPACT_CRACK.key);
+      ok("budget: the refused round's verb queues that mark, delayed, and NEVER names a settle tag",
+        lone.drawn === true && lone.delayMs === 250 && loneQueued?.delay === 250
+        && loneQueued?.name === undefined && loneQueued?.size?.width === fx.FX_CLASSES.rifle.impactSquares,
+        JSON.stringify({ key: lone.key, delay: lone.delayMs, named: loneQueued?.name ?? null }));
+    } finally {
+      globalThis.Sequence = realSequence;
+      await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
+      await game.settings.set(SCOPE, "goreEnabled", goreWas);
+      for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__ARV"))) await t.delete().catch(() => {});
+      for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__ARV"))) await a.delete().catch(() => {});
+    }
+    return out;
+  });
+  arrive.checks.push(...r.checks);
+  arrive.measured = r.measured;
+} catch (err) {
+  arrive.checks.push({ n: "arrival-clock section ran", p: false, d: String(err?.message ?? err) });
+}
+
 console.log("\n=== combat FX rail keeper ===");
 for (const c of res.checks) check(c.n, c.p, c.d);
 for (const c of xres.checks) check(c.n, c.p, c.d);
@@ -6455,11 +6769,13 @@ for (const c of fres.checks) check(c.n, c.p, c.d);
 for (const c of canary.checks) check(c.n, c.p, c.d);
 for (const c of twins.checks) check(c.n, c.p, c.d);
 for (const c of single.checks) check(c.n, c.p, c.d);
+for (const c of arrive.checks) check(c.n, c.p, c.d);
 console.log(`  dart load, single-file queue: ${JSON.stringify(single.measured?.queue ?? null)}`);
 console.log(`  stun-dart load, single-file queue: ${JSON.stringify(single.measured?.stunQueue ?? null)}`);
 console.log(`  dart load, MEASURED sync (trail after the last report): ${JSON.stringify(single.measured?.sync ?? null)}`);
 console.log(`  F5 (measurement, no ruling yet) no-shooter arithmetic: ${JSON.stringify(fres.measured?.f5NoShooter ?? null)}`);
 console.log(`  F5 (measurement, no ruling yet) missed-shell band sweep: ${JSON.stringify(fres.measured?.f5MissBands ?? null)}`);
+console.log(`  arrival clock, measured: ${JSON.stringify(arrive.measured ?? null)}`);
 console.log(`  pacing under load, measured: ${JSON.stringify(cres.measured ?? null)}`);
 console.log(`  blood splash, measured: ${JSON.stringify(bres.measured ?? null)}`);
 console.log(`  burning-ground clip, decoded off the install: ${JSON.stringify(ares.groundFireDecode ?? null)}`);
