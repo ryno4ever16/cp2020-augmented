@@ -16,7 +16,7 @@
 import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
-import { requestCoverChew, coverBetween } from "./cover.js";
+import { requestCoverChew, coverBetween, coverChewSummary } from "./cover.js";
 import { localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -137,6 +137,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       armorMode,
       ablate,
       coverSP,
+      cover: this._coverRow,
       damageType: this._damageType ?? "",
     });
 
@@ -247,6 +248,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       armorMode,
       ablate,
       coverSP:     this._coverSP,
+      cover:       this._coverRow,
       damageType: this._damageType ?? "",
     });
     // Keep the two displayed totals in exact parity with _prepareContext: flesh HP (BTM math) on
@@ -269,22 +271,25 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /**
-   * Debit the selected cover zone's structure pool (unified cover system Unit 2). The pool
-   * absorbs the RAW rolled damage of every shot resolved through the cover (MM p.58 counts
-   * damage RECEIVED; SP stays constant while the object stands — the fold math is untouched).
-   * requestCoverChew self-routes: active-GM writes directly, everyone else relays. No-op in
-   * manual mode.
+   * Record the burst's wear on the cover object it was shot through.
+   *
+   * The per-round bookkeeping already happened inside the resolver (cover.js makeCoverLedger), so
+   * this reads the receipts off the resolved rows rather than re-deriving anything: ONE document
+   * write for the whole burst, carrying the round-by-round detail the summary card reports. That
+   * split is deliberate — the MATH degrades per round so a broken object stops protecting the
+   * rounds behind it, while the WRITE happens once so a six-round burst is one debit and one card.
+   * requestCoverChew self-routes: the active GM writes directly, everyone else relays. No-op when
+   * the shot went through no object (a hand-typed Cover SP has nothing to charge).
    */
-  _chewSelectedCover() {
-    if (!this._coverZoneUuid) return;
-    const raw = Object.values(this.payload?.areaDamages ?? {})
-      .flat()
-      .reduce((s, e) => s + (Number(e?.damage) || 0), 0);
-    if (raw <= 0) return;
+  _chewCoverForBurst(resolvedRows) {
+    const summary = coverChewSummary(resolvedRows);
+    if (!summary || summary.absorbed <= 0) return;
     requestCoverChew({
-      behaviorUuid: this._coverZoneUuid,
-      damage: raw,
+      behaviorUuid: summary.uuid,
+      damage: summary.absorbed,
       weaponName: String(this.payload?.weaponName || ""),
+      rounds: summary.rounds,
+      destroyedAtRound: summary.destroyedAtRound,
     });
   }
 
@@ -311,6 +316,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       armorMode,
       ablate,
       coverSP,
+      cover: this._coverRow,
       damageType: this._damageType ?? "",
     });
 
@@ -351,7 +357,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         weaponName:       String(this.payload.weaponName      || ""),
         firstHitLocation: rawHits[0]?.location ?? null,
       });
-      this._chewSelectedCover();
+      this._chewCoverForBurst(rawHits);
       this._damageApplied = true;   // an applied close — see the flag's note in the constructor
       this.close();
       return;
@@ -376,7 +382,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     }
 
     await this.target.sheet?.render(false);
-    this._chewSelectedCover();
+    this._chewCoverForBurst(rawHits);
     ui.notifications.info(localizeParam("DamageApplied", { amount: applied, name: this.target.name }));
 
     // Taser flag must be updated BEFORE the save prompt — threshold calculation reads it. Cyberlimb-

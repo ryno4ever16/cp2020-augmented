@@ -17,6 +17,7 @@ import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
 import { postDeathSavePrompt } from "./save-rolls.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { localize, localizeParam, combineArmorSP, foldArmorSP } from "../utils.js";
+import { makeCoverLedger } from "./cover.js";
 import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
 import { isFullBorg, borgArmorSP, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
 import { typedLayerSP } from "../data/mech-item-data.js";
@@ -295,10 +296,11 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {string}  p.armorMode
  * @param {boolean} p.ablate
  * @param {number}  p.coverSP
+ * @param {object}  p.cover        Cover-object row snapshot to wear down round by round (or null)
  * @param {boolean} p.dryRun        If true: runs math only, does not write HP or ablate
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
-export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, damageType = "", token = null, targetTokenId = null, dryRun = false }) {
+export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -315,6 +317,10 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
 
   const results = [];
   const btm = Number(target.system.stats?.bt?.modifier) || 0;
+  // Cover wears down per round, exactly like armor: the ledger hands each round the SP the object
+  // still offers and books that round's raw damage against its structure (see cover.js
+  // makeCoverLedger for the attribution). Armor mode "none" folds no cover, so it books none.
+  const coverLedger = makeCoverLedger({ coverSP: armorMode === ARMOR_MODES.NONE ? 0 : coverSP, cover });
 
   const liveSP = {};
   // Keyed by the SP location (Groin → Torso), so a Groin hit draws on torso armor.
@@ -357,14 +363,18 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
       if (mult !== 1.0) currentSP = Math.max(0, Math.floor(currentSP * mult));
     }
 
+    const roundCoverSP = coverLedger.spForRound();
     const { spFull, spUsed, damageAfterSP, penetrates } = resolveHitMath({
-      currentSP, rawDamage, ap, armorMode, coverSP, penDamageMult,
+      currentSP, rawDamage, ap, armorMode, coverSP: roundCoverSP, penDamageMult,
     });
+    // Booked AFTER the math: the round that empties the pool was still shot THROUGH the object,
+    // so it gets the object's SP; only the rounds behind it face bare armor.
+    const coverChew = coverLedger.absorb(rawDamage);
 
     // netDamage centralizes head doubling (p.103) and the optional Listen Up limb model.
     const netDamage = computeNetDamage(damageAfterSP, btm, penetrates, location);
 
-    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location) });
+    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location), coverSP: roundCoverSP, coverChew });
 
     if (!dryRun) {
       // Prefer the caller's token (the shot's actual target token, threaded from the auto-apply call
@@ -390,8 +400,8 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
 
 // Dry-run variants return damageAfterSP (pre-BTM) without writing any data.
 
-export async function resolveAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0 }) {
-  return applyAreaDamages({ target, areaDamages, ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, armorMode, ablate: false, coverSP, dryRun: true });
+export async function resolveAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, coverSP = 0, cover = null }) {
+  return applyAreaDamages({ target, areaDamages, ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, armorMode, ablate: false, coverSP, cover, dryRun: true });
 }
 
 /**
@@ -407,10 +417,13 @@ export async function resolveAreaDamages({ target, areaDamages, ap, edged = fals
  * path performs via real document writes (ablateLocationOnce → _deriveLiveSP re-derive); the actual
  * writes happen in DamageDialog._onApply's apply loop.
  */
-export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate = false, coverSP = 0, damageType = "" }) {
+export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate = false, coverSP = 0, cover = null, damageType = "" }) {
   const results = [];
   const liveSP  = {};        // cached UN-multiplied per-location base SP (mirrors applyAreaDamages)
   const ablations = {};      // per-location count of simulated staged-penetration ablations
+  // Cover degradation is SIMULATED here on the same ledger the async path writes from, so the
+  // preview shows the same mid-burst break the apply will perform — no documents are touched.
+  const coverLedger = makeCoverLedger({ coverSP: armorMode === ARMOR_MODES.NONE ? 0 : coverSP, cover });
 
   const getLiveSP = (key) => {
     if (liveSP[key] !== undefined) return liveSP[key];
@@ -439,16 +452,20 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
         if (mult !== 1.0) currentSP = Math.max(0, Math.floor(currentSP * mult));
       }
 
+      const roundCoverSP = coverLedger.spForRound();
       const { spFull, spUsed, damageAfterSP, penetrates } = resolveHitMath({
-        currentSP, rawDamage, ap, armorMode, coverSP, penDamageMult,
+        currentSP, rawDamage, ap, armorMode, coverSP: roundCoverSP, penDamageMult,
       });
+      // Booked AFTER the math — mirrors applyAreaDamages: the round that empties the pool was
+      // still shot through the object, the rounds behind it face bare armor.
+      const coverChew = coverLedger.absorb(rawDamage);
 
       // `sdp` mirrors the async path's `cyberlimb` flag (applyAreaDamages) but is named for what it
       // means at the seam: routesToSdp covers BOTH a cyberlimb limb zone AND every zone of a full
       // borg (Head/Torso included), so the preview marks exactly the rows applyLocationDamage will
       // absorb into a machine zone's SDP (rounded afterSP, no BTM, no doubling) instead of the flesh
       // wound track — the preview must never disagree with what Apply does.
-      results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location) });
+      results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location), coverSP: roundCoverSP, coverChew });
 
       // Between-hit SP degradation: same model + same gate as the async path's per-layer ablation.
       // async (applyAreaDamages): `ablate && armorMode===FULL && penetrates && netDamage>0` →

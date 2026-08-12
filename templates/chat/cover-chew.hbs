@@ -1,7 +1,16 @@
-{{!-- Cover chew card: posted by chewCoverZone on every structure debit (cover.js). --}}
+{{!-- Cover chew card: ONE card per apply (cover.js chewCoverZone / chewCoverWall). The headline
+      is the whole burst's debit; roundLines (present only when the burst had more than one
+      debiting round) show the round-by-round wear, and brokeLine names the round the object
+      gave out. A single debit posts exactly the card it always did. --}}
 <div class="cyberpunk cp-cover-chew">
     <h3>{{#if destroyed}}{{CPLocal "CoverDestroyedTitle"}}{{else}}{{CPLocal "CoverChewTitle"}}{{/if}}</h3>
     <p>{{CPLocal "CoverChewLine" name=label damage=damage}}{{#if weaponName}} ({{weaponName}}){{/if}}</p>
+    {{#if roundLines}}
+    <ul class="cp-cover-chew-rounds">
+        {{#each roundLines}}<li>{{this}}</li>{{/each}}
+    </ul>
+    {{/if}}
+    {{#if brokeLine}}<p class="cp-cover-broke-line">{{brokeLine}}</p>{{/if}}
     {{#if destroyed}}
     <p class="cp-cover-destroyed-line">{{#if doorOpened}}{{CPLocal "CoverDoorOpenedLine" name=label}}{{else}}{{CPLocal "CoverDestroyedLine" name=label}}{{/if}}</p>
     {{else}}

@@ -10,7 +10,9 @@
  * points — SDP = 3 × SP by default — and the book's examples count damage RECEIVED against it
  * ("a 10SP concrete block wall which has received 30pts SDP … has had the block shattered").
  * SP stays constant while the object stands; at pool 0 the zone is destroyed and contributes
- * nothing. The GM can scale poolMax for massiveness (the book's ×4/×5 or ×1 note).
+ * nothing. The GM can scale poolMax for massiveness (the book's ×4/×5 or ×1 note). The pool is
+ * worn down ROUND BY ROUND inside the damage loop (makeCoverLedger), so a burst can break an
+ * object part-way through and leave its own later rounds unobstructed.
  *
  * State legibility is COLOR + CARDS, zero custom canvas rendering: the module drives the region
  * color through three bands (intact amber → chewed orange → destroyed gray) and posts a chew
@@ -222,6 +224,90 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
   return out;
 }
 
+/* ═════════════════════ Per-round structure ledger (pure, no document writes) ═════════════════════ */
+
+/**
+ * The bookkeeper a burst runs its rounds through, so cover wears down the same way armor does:
+ * one round at a time, with the object's state carried forward to the NEXT round.
+ *
+ * WHY IT EXISTS: the debit used to be a single lump charged after the whole volley had already
+ * been resolved, which meant a burst that should have blown a hole in a door on its third round
+ * instead resolved all six rounds against an intact door and then knocked it down afterwards. The
+ * ledger moves the bookkeeping INTO the per-round loop, so the round that empties the pool is the
+ * last round the object stands for and every later round in the same burst faces bare armor.
+ *
+ * THE ATTRIBUTION (the honest definition of "what the object absorbed"):
+ *   a round's debit = min(that round's RAW damage, the structure still standing).
+ * The book is the reason it is raw damage and not the object's share of the stopped damage:
+ * Maximum Metal p.58 counts damage RECEIVED against an object's structure ("a 10SP concrete block
+ * wall which has received 30pts SDP … has had the block shattered") — the shot hits the object
+ * with everything it has, and what gets through to the target afterwards is a separate question
+ * answered by the SP fold. So the object receives the round's full roll, capped by what is left of
+ * it. The cap is what makes the last round's debit smaller than its roll, and the overflow is NOT
+ * carried anywhere: a door does not owe damage once it is off its hinges.
+ *
+ * SP stays constant while the object stands (the same book rule) — `spForRound` returns either the
+ * cover SP in play or, once the pool is gone, zero. Nothing here writes a document: the caller
+ * accumulates the whole burst and performs ONE debit through chewCover.
+ *
+ * @param {number} p.coverSP  The SP actually in play this apply (a GM-typed value overrides the
+ *                            object's own printed SP; 0 = cover is not folded at all).
+ * @param {object} p.cover    The row snapshot to attribute to ({uuid,label,pool,poolMax,destroyed}),
+ *                            or null when a bare number was typed with no object behind it.
+ */
+export function makeCoverLedger({ coverSP = 0, cover = null } = {}) {
+  const sp = Math.max(0, Number(coverSP) || 0);
+  const uuid = String(cover?.uuid ?? "");
+  const label = String(cover?.label ?? "");
+  const poolMax = Math.max(0, Math.round(Number(cover?.poolMax) || 0));
+  const tracked = !!uuid && sp > 0;
+  let pool = Math.max(0, Math.round(Number(cover?.pool) || 0));
+  let gone = tracked ? (!!cover?.destroyed || pool <= 0) : false;
+  let round = 0;
+
+  return {
+    /** SP the NEXT round faces — zero once the object has been knocked down mid-burst. */
+    spForRound() { return gone ? 0 : sp; },
+    /**
+     * Book one round's raw damage against the object. Returns that round's receipt, or null when
+     * there is no object to charge (bare typed SP) or nothing left of it.
+     */
+    absorb(rawDamage) {
+      round += 1;
+      if (!tracked || gone) return null;
+      const dmg = Math.max(0, Math.round(Number(rawDamage) || 0));
+      const absorbed = Math.min(dmg, pool);
+      if (absorbed <= 0) return null;
+      pool -= absorbed;
+      const destroyed = pool <= 0;
+      if (destroyed) gone = true;
+      return { uuid, label, round, absorbed, poolAfter: pool, poolMax, destroyed };
+    },
+  };
+}
+
+/**
+ * Fold a resolved burst's per-round receipts into the one debit that gets written and the figures
+ * the summary card reports. Reads the `coverChew` field the resolvers attach to each hit row, so
+ * the preview and the apply path derive it from exactly the same numbers. Returns null when the
+ * burst never touched a cover object.
+ */
+export function coverChewSummary(rows) {
+  const receipts = (rows ?? []).map(r => r?.coverChew).filter(Boolean);
+  if (!receipts.length) return null;
+  const last = receipts[receipts.length - 1];
+  return {
+    uuid: last.uuid,
+    label: last.label,
+    absorbed: receipts.reduce((s, r) => s + r.absorbed, 0),
+    pool: last.poolAfter,
+    poolMax: last.poolMax,
+    destroyed: !!last.destroyed,
+    destroyedAtRound: receipts.find(r => r.destroyed)?.round ?? 0,
+    rounds: receipts.map(r => ({ round: r.round, absorbed: r.absorbed, poolAfter: r.poolAfter, destroyed: !!r.destroyed })),
+  };
+}
+
 /* ═══════════════════════════════════ Chew lifecycle (GM) ═══════════════════════════════════ */
 
 /** Pool band → region color. Intact amber, chewed orange, destroyed gray. */
@@ -235,8 +321,12 @@ export function coverBandColor(pool, poolMax) {
  * Debit a cover zone's structure pool (GM-side write). Recolors the region by band, flips
  * `destroyed` at 0, posts the chew/destroyed chat card. Returns {pool, destroyed} or null when
  * the behavior can't be resolved. Idempotent-safe on already-destroyed zones (no double cards).
+ *
+ * `damage` is a whole BURST's debit and `rounds` its per-round receipts (makeCoverLedger): one
+ * document write, one card, with the round-by-round wear readable on the card. Direct callers that
+ * pass no receipts get the plain single-debit card they always got.
  */
-export async function chewCoverZone({ behaviorUuid, damage, weaponName = "" }) {
+export async function chewCoverZone({ behaviorUuid, damage, weaponName = "", rounds = null, destroyedAtRound = 0 }) {
   const behavior = await fromUuid(behaviorUuid);
   if (!behavior || behavior.type !== COVER_ZONE_BEHAVIOR) return null;
   const s = behavior.system ?? {};
@@ -255,9 +345,28 @@ export async function chewCoverZone({ behaviorUuid, damage, weaponName = "" }) {
   const label = region?.name || s.material || localize("CoverZoneFallbackName");
   const content = await renderTpl(`modules/${SCOPE}/templates/chat/cover-chew.hbs`, {
     label, damage: dmg, pool, poolMax, destroyed, weaponName,
+    ...burstLines({ rounds, destroyedAtRound, label, poolMax }),
   });
   await ChatMessage.create({ content });
   return { pool, destroyed };
+}
+
+/**
+ * Card data for a burst's round-by-round wear. Pre-localized here (the render edge) so the card
+ * template stays a plain `{{#each}}` — the established "assemble dynamic content in JS" rule.
+ * Returns an empty object for a single unrecorded debit, which leaves the card exactly as it was.
+ */
+function burstLines({ rounds, destroyedAtRound, label, poolMax }) {
+  const list = Array.isArray(rounds) ? rounds : [];
+  if (list.length < 2) return {};
+  return {
+    roundLines: list.map(r => localizeParam("CoverChewRoundLine", {
+      round: r.round, damage: r.absorbed, pool: r.poolAfter, poolMax,
+    })),
+    brokeLine: destroyedAtRound > 0
+      ? localizeParam("CoverChewBrokeAtRound", { name: label, round: destroyedAtRound })
+      : "",
+  };
 }
 
 /**
@@ -266,7 +375,7 @@ export async function chewCoverZone({ behaviorUuid, damage, weaponName = "" }) {
  * a DOOR wall broken to 0 structure swings open (door state → open), so movement and sight open
  * with the barrier. Returns {pool, destroyed} or null when the uuid isn't a cover-flagged wall.
  */
-export async function chewCoverWall({ wallUuid, damage, weaponName = "" }) {
+export async function chewCoverWall({ wallUuid, damage, weaponName = "", rounds = null, destroyedAtRound = 0 }) {
   const wall = await fromUuid(wallUuid);
   if (!wall || wall.documentName !== "Wall") return null;
   const row = coverWallsOn(wall.parent).find(r => r.uuid === wall.uuid);
@@ -289,6 +398,7 @@ export async function chewCoverWall({ wallUuid, damage, weaponName = "" }) {
 
   const content = await renderTpl(`modules/${SCOPE}/templates/chat/cover-chew.hbs`, {
     label: row.label, damage: dmg, pool, poolMax: row.poolMax, destroyed, doorOpened, weaponName,
+    ...burstLines({ rounds, destroyedAtRound, label: row.label, poolMax: row.poolMax }),
   });
   await ChatMessage.create({ content });
   return { pool, destroyed };
@@ -303,10 +413,14 @@ export async function chewCover(payload) {
   const uuid = String(payload?.uuid ?? payload?.behaviorUuid ?? "");
   if (!uuid) return null;
   const doc = await fromUuid(uuid);
-  if (doc?.documentName === "Wall") {
-    return chewCoverWall({ wallUuid: uuid, damage: payload?.damage, weaponName: payload?.weaponName ?? "" });
-  }
-  return chewCoverZone({ behaviorUuid: uuid, damage: payload?.damage, weaponName: payload?.weaponName ?? "" });
+  const common = {
+    damage: payload?.damage,
+    weaponName: payload?.weaponName ?? "",
+    rounds: Array.isArray(payload?.rounds) ? payload.rounds : null,
+    destroyedAtRound: Number(payload?.destroyedAtRound) || 0,
+  };
+  if (doc?.documentName === "Wall") return chewCoverWall({ wallUuid: uuid, ...common });
+  return chewCoverZone({ behaviorUuid: uuid, ...common });
 }
 
 /**

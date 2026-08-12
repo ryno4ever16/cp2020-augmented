@@ -1317,6 +1317,8 @@
     "CoverDestroyedTitle": "Cover destroyed",
     "CoverChewLine": "{name} absorbed {damage} damage",
     "CoverPoolLine": "Structure: {pool} / {poolMax}",
+    "CoverChewRoundLine": "Round {round}: −{damage} → {pool} / {poolMax}",
+    "CoverChewBrokeAtRound": "{name} gave out on round {round} — the rounds behind it were unobstructed.",
     "CoverDestroyedLine": "{name} is destroyed — it no longer provides cover.",
     "CoverNoGMForChew": "A GM must be online to record cover damage.",
     "ManeuverabilityFull": "Maneuverability",
