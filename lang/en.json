@@ -1315,8 +1315,6 @@
     "CoverZonePoolHint": "Remaining structure. Damage from shots resolved through this cover drains it; at 0 the cover is destroyed and stops protecting.",
     "CoverZonePoolMax": "Structure",
     "CoverZonePoolMaxHint": "Total structure. Default is 3 × SP (Maximum Metal p.58); scale it up for massive objects or down for flimsy partial ones. Size the zone to ONE cover object — the book shatters the block that was hit, not the whole wall.",
-    "CoverZoneMaterial": "Material",
-    "CoverZoneMaterialHint": "Free text shown on cards when the region has no name (e.g. the preset name).",
     "CoverZoneDestroyed": "Destroyed",
     "CoverZoneDestroyedHint": "A destroyed cover object contributes no SP. Untick (and restore Structure) to repair it.",
     "CoverZoneFallbackName": "Cover",

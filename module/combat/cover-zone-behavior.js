@@ -67,11 +67,11 @@ export function registerCoverZoneBehavior() {
           label: "CYBERPUNK.CoverZonePoolMax",
           hint: "CYBERPUNK.CoverZonePoolMaxHint",
         }),
-        material: new fields.StringField({
-          required: false, blank: true, initial: "",
-          label: "CYBERPUNK.CoverZoneMaterial",
-          hint: "CYBERPUNK.CoverZoneMaterialHint",
-        }),
+        // A `material` StringField lived here and rendered as a free-text "Material" input on the
+        // behavior's native config sheet. Removed (user ruling 2026-08-11, completed 2026-08-12):
+        // the REGION's own name is the label everywhere (picker rows, chew cards), and placement
+        // wrote the same preset string to both — the field was a dead duplicate. Old documents
+        // still carrying system.material are simply ignored by schema cleaning; no migration.
         destroyed: new fields.BooleanField({
           initial: false,
           label: "CYBERPUNK.CoverZoneDestroyed",

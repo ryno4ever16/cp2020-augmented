@@ -87,7 +87,7 @@ export function coverZonesOn(scene) {
       out.push({
         region, behavior,
         uuid: behavior.uuid,
-        label: region.name || s.material || localize("CoverZoneFallbackName"),
+        label: region.name || localize("CoverZoneFallbackName"),
         sp: Number(s.sp) || 0,
         pool: Number(s.pool) || 0,
         poolMax: Number(s.poolMax) || 0,
@@ -342,7 +342,7 @@ export async function chewCoverZone({ behaviorUuid, damage, weaponName = "", rou
   const region = behavior.parent;
   try { await region?.update?.({ color: coverBandColor(pool, poolMax) }); } catch (e) { /* cosmetic */ }
 
-  const label = region?.name || s.material || localize("CoverZoneFallbackName");
+  const label = region?.name || localize("CoverZoneFallbackName");
   const content = await renderTpl(`modules/${SCOPE}/templates/chat/cover-chew.hbs`, {
     label, damage: dmg, pool, poolMax, destroyed, weaponName,
     ...burstLines({ rounds, destroyedAtRound, label, poolMax }),
@@ -469,7 +469,7 @@ export async function placeCoverZone({ scene, label, sp, poolMax } = {}) {
     color: coverBandColor(pool, pool),
     visibility: CONST?.REGION_VISIBILITY?.ALWAYS ?? 2,
     shapes: [{ type: "rectangle", x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), width: w, height: h, rotation: 0 }],
-    behaviors: [{ type: COVER_ZONE_BEHAVIOR, system: { sp: spN, pool, poolMax: pool, material: label ?? "" } }],
+    behaviors: [{ type: COVER_ZONE_BEHAVIOR, system: { sp: spN, pool, poolMax: pool } }],
   }]);
   return region ?? null;
 }
