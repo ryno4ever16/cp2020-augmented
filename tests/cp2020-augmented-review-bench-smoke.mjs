@@ -38,6 +38,22 @@ await page.evaluate(() => {
 await page.fill('input[name="password"]', PW);
 await page.click('button[name="join"]');
 await page.waitForFunction(() => window.game?.ready === true, null, { timeout: 90000 });
+
+// ⭐ THE BENCH SCENE, PINNED AND *VIEWED* — not activated (2026-08-11).
+//
+// Every reader below took `game.scenes.active`, which is a WORLD-wide property any other client can
+// change. With a second lane's review scene activated, this spec looked up the bench's own figures on a
+// canvas that does not carry them: the first target resolved to `undefined` and the run died inside
+// `setTarget`, with the bench itself perfectly intact. Viewing is the right verb — `Scene#view` moves
+// only THIS client's canvas, so the shots are drawn and sampled where the fixtures are without taking
+// the canvas away from anybody else.
+const BENCH_SCENE_NAME = "Review · Dark Range";
+await page.evaluate(async (name) => {
+  const scene = game.scenes.getName(name) ?? game.scenes.active ?? game.scenes.contents[0];
+  if (scene && canvas.scene?.id !== scene.id) await scene.view();
+  globalThis.__BENCH_SCENE_ID = scene?.id ?? null;
+}, BENCH_SCENE_NAME);
+await page.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 90000 });
 await page.waitForTimeout(3000);
 
 /* ── instrumentation: one tap on each engine that can answer a question ───────────────────────── */
@@ -57,7 +73,7 @@ const setup = await page.evaluate(async (SCOPE) => {
   Hooks.on("createRegion", (r) => g.regions.push(r.id));
 
   const shooter = game.actors.getName("Review · Shooter");
-  const scene = game.scenes.active;
+  const scene = game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active;
   return {
     actorId: shooter.id,
     guns: Object.fromEntries(shooter.itemTypes.weapon
@@ -198,7 +214,7 @@ r = await fire("10", "Review · Target");   // NOT retried: a pattern is thrown 
 ok("E: the cartridge resolves to the BUCK pattern, not a single-target shot",
   r.payloads[0]?.caliber === "00", `caliber=${r.payloads[0]?.caliber} spreadMode=${r.payloads[0]?.spreadMode}`);
 const pat = await page.evaluate((SCOPE) => {
-  const zones = game.scenes.active.regions.filter(x => x.getFlag(SCOPE, "isSpreadZone"));
+  const zones = (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone"));
   const card = [...game.messages].reverse().find(m => (m.content ?? "").includes("cp-confirm-spread-zone"));
   return { zones: zones.map(z => ({ id: z.id, band: z.getFlag(SCOPE, "band"), shells: z.getFlag(SCOPE, "shells"),
       dmg: z.getFlag(SCOPE, "dmgFormula") })), cardId: card?.id ?? null };
@@ -221,10 +237,10 @@ const confirmed = await page.evaluate(async ({ cardId }) => {
 // POLLED, not slept on: the confirm rolls every shell against every token in the path, posts a result
 // card and scatters the load's fires before it deletes — a fixed wait raced all three.
 await page.waitForFunction((SCOPE) =>
-  game.scenes.active.regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length === 0,
+  (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length === 0,
   SCOPE, { timeout: 20000 }).catch(() => {});
 const afterConfirm = await page.evaluate((SCOPE) => ({
-  zones: game.scenes.active.regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+  zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
 }), SCOPE);
 ok("E: the Confirm button on the card is clickable", confirmed.clicked);
 ok("E: confirming DELETES the pattern — nothing is left hovering", afterConfirm.zones === 0, `${afterConfirm.zones} left`);
@@ -233,7 +249,7 @@ ok("E: confirming DELETES the pattern — nothing is left hovering", afterConfir
 console.log(`\n── F · 11 Arasaka RAS-12 Slug → Review · Target (flesh) ──`);
 r = await fireUntilHit("11", "Review · Target");
 const slug = await page.evaluate((SCOPE) => ({
-  zones: game.scenes.active.regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+  zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
   flagged: [...game.messages].slice(-4).filter(m => !!m.getFlag(SCOPE, "damagePayload")).length,
   dialogs: [...foundry.applications.instances.values()].filter(a => /Damage/i.test(a?.constructor?.name ?? "")).map(a => a.constructor.name),
 }), SCOPE);
@@ -260,7 +276,7 @@ r = await fire("12", "Review · Target");   // same reason as E
 ok("G: an incendiary SHELL draws no fires yet — the pattern owns them until the GM commits (negative)",
   !drew(r.files, setup.keys.groundFire), r.files.join(", ").slice(0, 220));
 const patG = await page.evaluate((SCOPE) => {
-  const z = game.scenes.active.regions.find(x => x.getFlag(SCOPE, "isSpreadZone"));
+  const z = (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.find(x => x.getFlag(SCOPE, "isSpreadZone"));
   const card = [...game.messages].reverse().find(m => (m.content ?? "").includes("cp-confirm-spread-zone"));
   return { zone: z?.id ?? null, ammoKey: z?.getFlag(SCOPE, "ammoKey") ?? null, cardId: card?.id ?? null };
 }, SCOPE);
@@ -274,7 +290,7 @@ const gFiles = await page.evaluate(async ({ cardId }) => {
 }, { cardId: patG.cardId });
 ok("G: and on CONFIRM the fires go down the path", drew(gFiles, setup.keys.groundFire), gFiles.join(", ").slice(0, 220));
 const afterG = await page.evaluate((SCOPE) =>
-  game.scenes.active.regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length, SCOPE);
+  (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length, SCOPE);
 ok("G: that pattern is deleted too", afterG === 0, `${afterG} left`);
 
 /* ══ RESTORE ══════════════════════════════════════════════════════════════════════════════════ */
@@ -284,7 +300,7 @@ const restored = await page.evaluate(async ({ SCOPE, baselineCards, baselineRegi
     if (/Damage|Modifiers/i.test(a?.constructor?.name ?? "")) { try { await a.close(); } catch (e) { /* closed */ } }
   }
   try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none */ }
-  const scene = game.scenes.active;
+  const scene = game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active;
   // any pattern this run left behind
   const strayZones = scene.regions.filter(r => !baselineRegions.includes(r.id));
   if (strayZones.length) await scene.deleteEmbeddedDocuments("Region", strayZones.map(r => r.id));
