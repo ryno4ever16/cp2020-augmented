@@ -14,11 +14,15 @@ import { warheadProfile, shellTravelTurns, indirectToHitNumber, indirectToHitBon
          bombDirectPen, diveBombAimBonus, bombFallTurns, bombLanding } from "./vehicle-indirect.js";
 import { resolveAreaShot } from "./vehicle-area.js";
 import { openSingletonDialog, localize, localizeParam } from "../utils.js";
-import { pxPerMeter, metersToUnits, metersPerUnit } from "./vehicle-grid.js";
+import { pxPerMeter, metersPerUnit } from "./vehicle-grid.js";
 import { gridDistanceBetween } from "../combat/rangefinding.js";
+import { createArea, usesRegions } from "../combat/area-shapes.js";
+import { GAS_CLOUD_BEHAVIOR } from "../combat/gas-cloud-behavior.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
+/** How many combat rounds a shell's cloud lingers (matches the grenade default). */
+const GAS_CLOUD_TURNS = 3;
 
 const _enabled = (key, dflt = true) => { try { return game.settings.get(SCOPE, key); } catch { return dflt; } };
 
@@ -34,19 +38,38 @@ async function _ignite(actor, dot = {}) {
   await applyFireDotState(actor, "Torso", Number(dot.turns) || 10, String(dot.formula || "3d6"));
 }
 
-/** Leave a lingering gas/smoke cloud that the existing per-turn gas handler will run saves for. */
+/**
+ * Leave a lingering gas/smoke cloud that the existing per-turn gas handler will run saves for.
+ *
+ * Routed through the core-agnostic `createArea` shim: a chemical shell used to create a
+ * MeasuredTemplate directly, and v14 no longer has that embedded type at all — the call threw,
+ * the catch swallowed it, and no cloud appeared. The shim emits a template on v13 and a Region on
+ * v14, so this is now the one-call sibling of the gas-grenade spawn in damage-hooks.js: on v14 the
+ * cloud carries its own `gasCloud` region behavior (the GM manages it with Foundry's own region
+ * tools); on v13 it keeps the legacy flag set the per-turn tick's back-compat path reads.
+ */
 async function _placeGasCloud(scene, origin, radiusM, weaponName) {
   if (!_enabled("gasGrenadeCloudEnabled")) return null;
-  const td = {
-    t: "circle", x: origin.x, y: origin.y, direction: 0, distance: Math.max(0.5, metersToUnits(scene, radiusM)),
-    fillColor: "#88ff44", borderColor: "#44aa22",
-    flags: { [SCOPE]: {
-      isGasCloud: true, turnsLeft: 3, stunSaveMod: 0,
-      createdRound: game.combat?.round ?? 0, weaponName: weaponName || "Chemical Shell", vehicleArea: true,
-    } },
+  const name = weaponName || localize("Vehicle.ChemicalShell");
+  const descriptor = {
+    kind: "circle", x: origin.x, y: origin.y, radiusM,
+    color: "#88ff44", borderColor: "#44aa22",
   };
-  try { const [doc] = await scene.createEmbeddedDocuments("MeasuredTemplate", [td]); return doc; }
-  catch (err) { console.warn("Cyberpunk2020 | gas cloud placement failed", err); return null; }
+  if (usesRegions()) {
+    descriptor.behaviors = [{
+      type: GAS_CLOUD_BEHAVIOR,
+      name: localize("GasCloudBehaviorLabel"),
+      system: { turnsLeft: GAS_CLOUD_TURNS, stunSaveMod: 0, weaponName: name },
+    }];
+  } else {
+    descriptor.flags = {
+      isGasCloud: true, turnsLeft: GAS_CLOUD_TURNS, stunSaveMod: 0,
+      createdRound: game.combat?.round ?? 0, weaponName: name, vehicleArea: true,
+    };
+  }
+  const handle = await createArea(scene, descriptor);
+  if (!handle?.doc) { console.warn("Cyberpunk2020 | vehicle gas cloud placement failed"); return null; }
+  return handle.doc;
 }
 
 /**

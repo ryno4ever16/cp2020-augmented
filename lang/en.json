@@ -992,7 +992,8 @@
       "OccupancyBadgeNoCap": "{count}",
       "AboardBanner": "Aboard {vehicle}",
       "StepOut": "Step Out",
-      "StepOutTip": "Leave the vehicle and stand beside it."
+      "StepOutTip": "Leave the vehicle and stand beside it.",
+      "ChemicalShell": "Chemical Shell"
     },
     "Accel": "Accel",
     "Decel": "Decel",
