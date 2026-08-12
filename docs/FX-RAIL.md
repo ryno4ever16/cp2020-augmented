@@ -517,6 +517,221 @@ reasons before it passed.
 
 ---
 
+## 2b. The medical-extraction arrival — a referee-placed sequence
+
+*Added 2026-08-12. `module/fx/trauma-team.js` (the sequence) and `module/fx/trauma-team-tool.js` (the
+gesture); the keeper is `tests/cp2020-augmented-trauma-team.mjs`.*
+
+Neither of the two kinds above. §2 is drawn **because a trigger was pulled**; §2a is drawn **because a
+condition is on a figure**. This one is drawn **because a referee asked for it** — a set piece, placed
+by hand, that runs a ladder and then leaves something standing.
+
+### 2b.1 What it is
+
+The reference the user described, and its five facts are rulings rather than build-lane choices:
+
+1. an animated **rectangular** landing area with caution marks and a holographic border, pulsing;
+2. an aircraft **descends from off frame** onto it;
+3. it **HOVERS — it never lands** — through roughly **four circular pulses**;
+4. **five figures unload ONE AFTER ANOTHER**;
+5. the sequence **ends with the aircraft still on station**.
+
+A second use of the control sends it back up (reverse ascent). Everything else in this section is a
+number, and every number is one constant listed in §8.
+
+### 2b.2 ⛔ It draws a picture, and only a picture
+
+The five figures are **sprites, not documents**. No actor is created, no token is placed, no region is
+written, and the scene's own flags are untouched from the first frame to the last — the keeper asserts
+region / tile / token / drawing counts and `scene.flags.sequencer` on both sides of a full run. This is
+standard §G/22 taken without an exception.
+
+⛔ **THE SCOPING CALL, made in the build lane and flagged for the user (§8).** The reference shows five
+*people*. A table that wants five figures it can move and roll for wants **documents**, which is a
+different feature with its own questions (which actors? owned by whom? cleaned up when?) and it belongs
+to whatever builds non-player figures, not to a presentation rail. v1 ships the cinematic only.
+
+### 2b.3 The ladder
+
+One **anchored schedule** — every phase is an absolute offset from the placement instant, so a late
+timer cannot push the ones after it (standard §D/11).
+
+| ms | Phase | What is drawn |
+|---|---|---|
+| 0 | marked area | the ground plate + four caution marks, on their own beat |
+| 900 | descent begins | the airframe, and the descent cue |
+| 1800 | downdraft | blown dust under the arrival |
+| 3100 / 3600 | dust rings | two puff rings at touchdown height |
+| 3500 | on station | the descent ends; station-keeping begins |
+| 3700 / 4900 / 6100 / 7300 | the four rings | one expanding ring each |
+| 4600 / 5300 / 6000 / 6700 / 7400 | the five figures | one mark each, stepped across the far edge and progressively further out |
+| — | end state | the plate, its marks and the airframe **remain** |
+
+`landingLadderMs()` = **10 050 ms**, which is the last *ring's* content end rather than the last
+figure's — over-stating, which is the safe direction for the same reason the shot rail's tail
+over-states.
+
+### 2b.4 The composition, and why each key
+
+Free tier only; 2 061 installed keys were enumerated before anything was chosen.
+
+| Part | Key | Why |
+|---|---|---|
+| plate | `jb2a.zoning.outward.square.loop.bluegreen.01` | the tier's only asset that is both rectangular and holographic, with a border that travels outward on its own loop. Parent key → two variants, randomised per placement |
+| caution marks | `jb2a.markers_scifi.001.loop.001.orangeyellow` | amber IS the caution read; the family's other eight colourways say magic |
+| airframe | *engine-native shape* | **no aircraft art exists** in this module, the base system or the free tier |
+| downdraft | `jb2a.smoke.plumes_loop.01.grey` | a grey billowing loop — air pushed onto the ground, seen from above |
+| dust | `jb2a.smoke.puff.ring.01.white` | the shot rail's own arrival dust (`IMPACT_DUST`), reused rather than re-picked |
+| rings | `jb2a.zoning.outward.circle.once.bluegreen.01` | concentric arcs travelling outward; the plate's own family, so ring and pad read as one system |
+| figures | `jb2a.token_stage.round.blue.01` | purpose-built for a figure *taking its place*; parent of six variants, so the five differ for free |
+
+⚠⚠ **TWO KEYS WERE PICKED BY NAME AND BOTH WERE WRONG.** This is standard §A/4 ("decode, don't guess")
+earning its place a second time, and both were caught by *looking at a rig capture*, not by reading:
+
+- `jb2a.template_circle.out_pulse.01.burst.bluewhite` — sounds like an outward pulse; decodes as **a
+  ring of musical notes**. It is a dance effect. It went into a real capture before it was seen.
+- `jb2a.wind_stream.white` — sounds like a downdraft; decodes as a full-bleed field of **horizontal**
+  white streaks with no transparent ground, i.e. wind blowing *across* the map. It would have carpeted
+  the scene.
+
+**Ink fractions were measured, not assumed** (max extent over every frame, 10 % threshold):
+
+| Clip | Frame | Duration | Ink | Fraction |
+|---|---|---|---|---|
+| `ZoningSquare01Out_…_Loop` | 600×600 | 3 042 ms (73 @ 24 fps) | 536×537 | **0.893 × 0.895** |
+| `ZoningCircle01Out_…` | 600×600 | 2 750 ms (66 @ 24 fps) | 536×534 | 0.893 × 0.890 |
+| `MarkerScifiLoop001_…OrangeYellow` | 600×600 | 3 000 ms | 600×600 | 1.000 |
+| `SmokePlumesLoop01_01` | 400×400 | 2 000 ms | 241×234 | 0.603 × 0.585 |
+| `SmokePuffRing01_01` | 400×400 | 1 067 ms | 390×398 | 0.975 × 0.995 |
+
+The plate and the downdraft are therefore drawn to `size / inkFraction`, so their ink lands on the
+rectangle rather than inside it. Drawn at face value the plate's border reached only **0.73** of the
+marked area mid-travel — visible in the first capture, and the reason `zoneInkFraction` exists.
+
+The rings are spaced **1 200 ms** apart against their own **2 750 ms** clip. At the first pick (900 ms)
+three rings were on screen at once and it read as churn rather than as four waves.
+
+### 2b.5 The airframe, and the engine finding that shaped it
+
+There is no aircraft art anywhere available to this module, and this rail does not source art of its
+own (§8 carries the asset ask). So the airframe is an **engine-native shape** — a dark rounded lozenge
+with a lit edge, which is what a top-down camera sees of a planform. With real art it becomes one
+`.file()` call and the shape goes.
+
+⭐ **MEASURED ENGINE FINDING: shapes are drawn from their TOP-LEFT.** The installed build's
+`drawRect(offset.x, offset.y, w, h)` treats the offset as the corner, so an uncorrected body sits a full
+half-width right and half-length down of the point it was given — photographed on the rig with the hull
+hanging off the corner of its own pad. `anchor` **is declared in the engine's typings but is not applied
+to the RECT / RREC cases**; only ELLIPSE is centre-drawn. The correction is half the body, negative, in
+grid units, and it lives at one site (`airframeShape()`) because two calls draw the hull.
+
+**The flight is `animateProperty`, not the travel verb.** The engine's move takes a speed, which would
+have to be back-solved from a distance; `animateProperty("spriteContainer", "position.y", …)` takes the
+duration the ladder already states. Station-keeping then rides the **sprite inside that container**
+(`loopProperty`, ping-pong, delayed to the descent's end), so the two never contend for one property.
+Both are individually guarded — a host without one still puts the airframe on station.
+
+### 2b.6 Sound — one beat shipped, the bed recorded as missing
+
+The shipped library was measured, not skimmed:
+
+| file | dur | centroid | head/mid/tail rms |
+|---|---|---|---|
+| `fx-scifi-whoosh.ogg` | 0.54 s | **197 Hz** | 0.858 / 0.580 / 0.104 |
+| `rocket-launch.ogg` | 1.41 s | 6 827 Hz | 0.200 / 0.056 / 0.002 |
+| `shockwave.ogg` | 1.41 s | 668 Hz | 0.285 / 0.438 / 0.094 |
+| `fx-flamethrower.ogg` | 1.92 s | 1 317 Hz | 0.138 / 0.167 / 0.026 |
+
+One fits one beat: `fx-scifi-whoosh` is the lowest thing in the library and decays head-to-tail — a
+heavy mass passing overhead, i.e. the descent. It plays there at 0.5.
+
+⛔ **What is NOT there and is not faked: a station-keeping bed.** Every candidate decays to silence;
+there is no rotor or turbine LOOP in the library, and the sequence's longest phase is a machine hanging
+in the air. The hover is silent and the ask is in §8. **No audio was sourced for this unit.**
+
+The locked-context guard is taken here rather than deferred: a cue that fires on the viewer's next click
+instead of on the arrival is worse than silence on a cinematic.
+
+### 2b.7 The long-lived contract, and what survives what
+
+All three of standard §G/21, and the shape is the condition overlays' exactly:
+
+- **cap** — one placement at a time; a second replaces the first. Its part count is resolved *before*
+  anything is queued (18 parts) and the cap is asked once.
+- **`maxLive` 40** with oldest-out eviction **through the engine's manager**, pending counted, released
+  in `finally`.
+- **one stamped prefix** (`cp2020-augmented.traumateam.<placement>.<part>`) so the census is a **query
+  of the engine**, never a ledger of ours.
+- **`lifetimeMs` 600 000** is a leak bound, not the sequence's life. A part that reaches it ends, the
+  engine reports it, and the reconciler re-issues — the intentional-end register is what stops a
+  departure or an eviction from undoing itself.
+
+**Nothing is persisted.** The record of what is on station lives in each client's memory, so a scene
+change and a canvas rebuild are recovered and a **full reload is not** (§8). ⭐ The catch-up hangs on
+`sequencerReady`, not `ready` — the +0 / +12 / +677 ms ordering measured for the condition overlays
+applies unchanged, and a sweep at `ready` queues work against an engine that is not up yet.
+
+**Sync**: one socket announcement, dispatched by type on the module's standing channel. The referee's
+client emits and draws its own copy locally (an emit never echoes to its sender), every other client
+draws from the announcement. No active-referee election, because nothing is written.
+
+### 2b.8 The entry surface
+
+One momentary button on the **token** scene-control group — the df-active-lights idiom the radiation
+tools and the cover placement already use: augment an existing group, never invent a canvas layer.
+**Referee-gated twice**: `addTraumaTeamTool` refuses to render it, and `onTraumaTeamTool` refuses to
+act. The API (`game.cpAugmented.traumaTeam.land/end/active/state`) is gated the same way, because an API
+is a door too.
+
+The button is a toggle in *behaviour*, not in state: nothing on station → arm the placement ghost;
+something on station → send it away.
+
+⭐ **Review·Shooter parity** is satisfied by construction rather than by a bench row. The standing rule
+is that every shipped element must be reachable from the bench; this element is not payload-driven, so
+a firing range cannot reach it — its trigger IS a one-click control that is present on every scene for
+every referee, which is a lower bar to exercise than any bench gun. Nothing needs provisioning: open a
+scene, press the button, click.
+
+The ghost is `combat/spread-placement.js`'s shape — a world-space PIXI outline, window-level **capture**
+listeners so the confirming click cannot be eaten by a placeable, right-click / Esc cancel, a
+`canvasTearDown` safety net, and the scene's own grid snap. It draws the rectangle by **importing**
+`landingRect` rather than copying it, so what the referee aims is what the module puts down. It spends
+nothing and writes nothing at either end.
+
+### 2b.9 Settle
+
+The whole element is **excluded** from the shot rail's settle signal and carries no tail entry: it is
+scene dressing in exactly the sense that ruling names (standard §E/14), no damage window waits on it,
+and it is never queued from a payload.
+
+### 2b.10 What the keeper pins — `tests/cp2020-augmented-trauma-team.mjs`, 62 legs
+
+**By value:** the control is added for a referee and **refused** without the flag, with nothing written
+into the group, and the handler refuses again at the action layer · the rectangle, its four corners in
+order, the offscreen entry point and the five stepped exit points as **numbers**, all scaling with the
+grid, all computed twice and identical · the ring and figure ladders as numbers, with the five instants
+asserted **strictly increasing** and the five places asserted **distinct** (the one-after-another ruling
+is a value, not a comment) · every shipped key asserted **resolving on the installed tier**, so a
+paid-tier or renamed key is caught here rather than by showing nothing.
+
+**Driven live**, with the whole ladder compressed through the capture seam: the exact 18-part queue in
+order · the plate and marks up *before* the airframe arrives · the plate, its marks and the airframe
+still there when the ladder has finished · every part stamped under the one prefix.
+
+**The negatives and the guards:** master switch off → `{queued: [], skipped: "disabled"}` and nothing
+drawn · every key absent (through the rail's own database seam) → the asset parts skip silently and the
+engine-native hull still marks the spot · **zero document writes**, asserted as region / tile / token /
+drawing counts and `scene.flags.sequencer` on both sides · the re-issue (a part ended by nobody comes
+back, exactly one) · the rebuild driven through the **real hooks** — `canvasTearDown` takes every sprite
+away, the record survives it, and `sequencerReady` rebuilds the standing half and **only** it, one of
+each, with a sweep straight after adding nothing · the departure leaving nothing under the prefix · a
+clean rig · 0 console errors.
+
+Siblings re-run because `effects.js` gained one export: `cp2020-augmented-fx-rail.mjs` **823/823**,
+`cp2020-augmented-review-bench-smoke.mjs` **36/36**, `cp2020-augmented-b1-seam-payload.mjs` **28/28**.
+
+---
+
 ## 3. The tables
 
 ### 3.1 Weapon classes — `FX_CLASSES`
@@ -1341,12 +1556,65 @@ is the table, so a sixth condition is a row rather than a change:
 | `SPREAD_ZONE_SWEEP_MS` | 15000 | how often the out-of-combat sweep looks | `module/combat/damage-hooks.js` |
 | the band table | 1/2/3 m, 4d6/3d6/2d6 | width and damage by Close / Medium / Long — Core defaults, overridden per ammo item | `_placeSpreadZone` |
 
+**The arrival sequence's knobs** — all in one frozen block, `TRAUMA_TEAM` in
+`module/fx/trauma-team.js`, except the last row. Every one is a single constant.
+
+| Knob | Ships as | Changes |
+|---|---|---|
+| `zoneWidthSquares` / `zoneLengthSquares` | 4 / 6 | the marked rectangle, in grid squares |
+| `zoneInkFraction` | **0.893** | measured; the plate is drawn to `size / this` so its border reaches the corner marks. **Revert = 1** |
+| `downdraftInkFraction` | 0.603 | same correction for the dust loop |
+| `cornerSquares` | 0.9 | each caution mark's drawn frame |
+| `airframeWidthSquares` / `airframeLengthSquares` / `airframeCornerSquares` | 2.4 / 4.6 / 0.8 | the hull's planform |
+| `airframeFill` / `airframeFillAlpha` / `airframeLine` | `0x0a0d12` / 0.72 / `0x37e0c0` | how heavy and how lit the hull reads |
+| `entryRiseSquares` / `entryScale` | 8 / 0.55 | how far off frame it starts, and how small it is while high |
+| `descentAtMs` / `descentMs` | 900 / 2600 | when it enters and how long it takes to come down |
+| `bobSquares` / `bobMs` | 0.16 / 2400 | station-keeping sway. **0 stops it dead** |
+| `pulseCount` / `pulseFirstAtMs` / `pulseGapMs` | 4 / 3700 / **1200** | the rings. The gap is set against their own 2 750 ms clip |
+| `pulseSquares` | 7.2 | ring frame, sized so its ink clears the rectangle |
+| `figureCount` / `unloadAtMs` / `unloadGapMs` | 5 / 4600 / 700 | the file of figures. **The count and the one-after-another are rulings** |
+| `figureStepSquares` / `figureWalkSquares` / `figureWalkGrowthSquares` | 0.9 / 1.1 / 0.18 | how they are spread and how far out each walks |
+| `downdraft*` / `dust*` | see the block | the air under it |
+| `ascentMs` | 2200 | the departure |
+| `lifetimeMs` / `maxLive` | 600000 / 40 | the leak bound and the scene cap |
+| `TRAUMA_TEAM_SOUND.descent` / `.volume` | `fx-scifi-whoosh` / 0.5 | the one shipped cue. **`null` ships it silent** |
+| `LANDING_GHOST.*` | amber, alpha 0.12 | the placement ghost — `module/fx/trauma-team-tool.js` |
+
 ---
 
 ## 6. Rulings log
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-12 — a referee can call in an arrival, and it hovers.**
+The docket described a recorded reference: a marked rectangular area with caution marks and a
+holographic border, an aircraft descending from off frame, a hover with roughly four circular pulses,
+five figures unloading one after another, and an ending with the aircraft still on station.
+
+| Ruling | Value | Why |
+|---|---|---|
+| the marked area is **rectangular** | 4 × 6 squares | from the reference. The tier's square zoning plate is stretched to it, and its border ink is thicker on the short sides as a result — stated, not smoothed |
+| it **hovers, never lands** | the airframe's own element persists past the ladder | from the reference, and it is what makes this a long-lived element rather than a one-shot |
+| **four** rings | `pulseCount: 4` | from the reference |
+| **five** figures, **one after another** | `figureCount: 5`, `unloadGapMs: 700` | from the reference. Five distinct instants and five distinct places, never five copies of one |
+| the sequence ends with it **on station** | the ladder ends; nothing takes the hull down | from the reference. A second use of the control sends it back up |
+| ⛔ **the figures are SPRITES, not documents** | zero document writes, asserted | build-lane scoping call. Real figures are a document feature with its own questions; a presentation rail does not half-build one. **Flagged for the user — §8** |
+| the entry is **one referee button on an existing group** | `cp-tt-land` on the token group | the df-active-lights idiom the radiation and cover tools already use. Gated at render AND in the handler AND in the API |
+| the button is **the opt-in** | no new setting | placement is consent; the master `combatFxEnabled` still governs |
+
+⚠ **Two keys were picked by name and both were wrong** (§2b.4), and both were caught by looking at a
+rig capture rather than by reading. `template_circle.out_pulse.*.bluewhite` is **a ring of musical
+notes**; `wind_stream.white` is a full-bleed field of **horizontal** streaks. Standard §A/4 exists for
+exactly this, and it had to be paid twice in one unit.
+
+⭐ **Engine finding: shapes draw from their TOP-LEFT.** `drawRect(offset.x, offset.y, w, h)` in the
+installed build, and `anchor` is declared in the engine's typings but never applied to the RECT / RREC
+cases — only ELLIPSE is centre-drawn. Half the body, negative, in grid units, at one site.
+
+⚠ **The hover is silent, and that is a recorded gap rather than an omission.** The library was measured
+(§2b.6); one clip fits the descent beat and nothing in it is a station-keeping bed. No audio was sourced
+for this unit, per the docket.
 
 **2026-08-12 — a figure wears what is wrong with it, for as long as it is wrong.**
 The docket asked for persistent overlays on every condition the system applies, auto-applied whenever
@@ -2008,6 +2276,12 @@ presented while the screen stayed empty.
 | **The five sizes and opacities are build-lane picks** | ⚠ Chosen against each other on the rig rather than in front of the user: burning `scaleToObject` **1.15** / opacity 0.85 · acid 0.9 / 0.8 · dead 1.25 / **0.55** · badges 0.55 sq / 0.95, spaced 0.42 apart and raised 0.30 above the figure's edge. Every one is a single constant and a veto costs nothing. |
 | **The overlays ride the shot rail's master switch and have none of their own** | ⚠ `combatFxEnabled` governs both, which is what the docket specified. A table that wants gunfire effects but no condition marks (or the reverse) has no way to say so today; a dedicated sub-toggle is one setting plus one reader if it is wanted. |
 | **An evicted overlay is silent about being evicted** | ⚠ Past `maxLive` = 60 the oldest mark is ended to make room, so on a very busy scene a figure can be wearing a condition with nothing drawn until the next event touching it redraws it. The reconciler makes this self-correcting rather than permanent, and 60 is twelve fully-marked figures, but the failure mode is worth knowing before someone reports a missing flame. |
+| ⛔⛔ **THE ARRIVAL'S FIVE FIGURES ARE A CINEMATIC, NOT FIVE FIGURES — AND THAT IS A BUILD-LANE CALL** | ⚠ **THE OPEN ITEM OF THIS UNIT, and the first thing to ask.** The reference shows five people getting out. What ships is five SPRITES: no actor, no token, no document of any kind (asserted both directions by the keeper). The reasoning is that real figures are a *document* feature carrying questions a presentation rail cannot answer — which actors, owned by whom, cleaned up when, and what happens to them when the aircraft leaves — and half-building one is worse than not building it. If what was wanted is five figures a table can move and roll for, that is the non-player-figure generator's job and this sequence becomes its trigger: the seam is `figureSchedule()`, which already returns five stated points and five stated instants, so a document-creating caller has exactly the geometry it needs and nothing else has to move. |
+| **An asset ask: there is no aircraft art** | ⚠ **Recorded rather than solved, and nothing was scraped.** All 2 061 installed keys were enumerated; the free tier has no aircraft, and neither the module nor the base system ships one (module `img/` is five files; the system's is 22, all sheet furniture). So the airframe is an engine-native rounded shape — a dark planform with a lit edge, which is at least what a top-down camera would see. **With a licensed top-down aerodyne image this becomes one `.file()` call and the shape goes**, along with `airframeShape()` and the offset correction under it. That is the single highest-value asset the user could hand this rail. |
+| **A sound ask: there is no station-keeping bed** | ⚠ **Measured, not assumed (§2b.6).** Every candidate in the 46-file library decays to silence and none is a rotor or turbine LOOP, so the longest phase of the sequence — a machine hanging in the air — is silent. The descent gets `fx-scifi-whoosh` (197 Hz, decaying, the lowest thing shipped) because it genuinely fits that one beat. What is wanted is a **loopable low turbine/rotor bed** and, if a second is ever sourced, a spin-up/spin-down pair for the arrival and departure. No audio was sourced for this unit, per the docket. |
+| **A full reload loses a placement that is on station** | ⚠ **Stated so it is a decision, not a surprise.** Nothing is persisted (§G/22), so the record of what is standing lives in each client's memory. A scene change and a canvas rebuild are recovered by the reconciler; a browser reload is not, and the referee places it again. Persisting it would mean a document write from presentation, which this rail does not do — the alternative, if it is ever wanted, is the referee's own client answering a "what is on station?" request from a joining client, which is a socket round trip rather than a write. |
+| **The arrival's heading is fixed** | ⚠ The rectangle is axis-aligned and the aircraft comes in from screen-north (`entryPointFor`). One heading means one rotation basis and nothing computing a second one (§B/6), which is why v1 has it. A referee-chosen heading is a rotation applied to the plate, the four marks, the hull and this one point — not a new mechanism — plus a way to express it in the ghost. |
+| **Twelve numbers in the arrival's ladder are build-lane picks** | ⚠ **The rest of the open items for this unit, and every one is a one-edit veto** (the full list with its ships-as values is in §5). The five facts from the reference are rulings and are built; these are the numbers around them: the 4 × 6 footprint · the hull's 2.4 × 4.6 lozenge at fill alpha **0.72** (it is a heavy dark shape over somebody's map — the most likely thing to be objected to) · the 900 / 2600 ms entry and descent · the **1200 ms** ring spacing · the 0.9 / 1.1 / 0.18 figure spread · the 2200 ms departure · and the descent cue at **0.5**. |
 | Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
 | Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
 | Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
@@ -2165,6 +2439,7 @@ the plan, not half in the row and half in the loop condition.
 | Ground fire | **A** | the standard's exemplar: seeded with entropy, capped, evicted, named — and it now takes the fan's own jitter |
 | Impact audio | **A−** | new 2026-08-12 — spec-blocked with measured levels, arrival-anchored, per-round-capped by import from the splash, capture-seamed (`_setHitSoundSink`), reported by value (`hitAudio`). The two clips' relative loudness is an unsigned look call (§8) |
 | Condition overlays | **A** | new 2026-08-12 — spec-blocked with decoded bases and rejected candidates recorded, database-keyed and guarded, grid-unit geometry measured off the figure's own width, slot-per-row so marks cannot slide, capped + evicted + named so the census is a query of the engine, zero document writes (asserted), excluded from the settle signal, capture-seamed (`_setStatusFxRate`), reported by value. Detection is event-driven at the real mutation points with the catch-up on the engine's own signal. Sizes, the acid recolour and the stunned key are unsigned look calls (§8) |
+| Extraction arrival | **A−** | new 2026-08-12 — spec-blocked with the reference's five rulings separated from the numbers, database-keyed and guarded per draw, ink fractions measured off the installed clips and corrected for, one anchored ladder, capped + evicted + named so the census is a query of the engine, zero document writes (asserted both directions), excluded from the settle signal with the exclusion stated, capture-seamed (`_setTraumaTimeScale`), reported by value, socket-threaded, referee-gated three times. **The −** is that two of its seven keys were first chosen by NAME and were wrong (§2b.4) — decoded and replaced before ship, but the rule exists so that does not happen at all. The cinematic-only scoping call and the asset/sound asks are in §8 |
 | Blood splatter | **A−** | per-round-capped idiom done right; rotation basis shared; F2 inherits |
 | Baton round | **A−** | replace-mask precedent; asset measured |
 | Spread-zone ghost look | **B+** | not Sequencer; isolated and flag-keyed, but the v13 branch is unverified |
