@@ -8,9 +8,13 @@ This is the maintainer's document for everything the module draws when a gun goe
 for someone who has never read a development report: every number here is either measured on a real
 install or ruled by the module's user, and where the two disagree the document says which is which.
 
-**The one rule to read first.** `module/fx/effects.js` is the *only* file that knows about outside
-effect engines. Every asset key, every colour, every duration and every geometry constant lives there.
-If an animation looks wrong, that file is where it is wrong; nothing else needs opening.
+**The one rule to read first.** `module/fx/` is the *only* place that knows about outside effect
+engines. Every asset key, every colour, every duration and every geometry constant lives there — in
+`effects.js` for everything a trigger pull draws, and in `status-fx.js` for the marks a figure wears
+while a condition is on it (§2a). If an animation looks wrong, one of those two files is where it is
+wrong; nothing else needs opening. *(The rule named `effects.js` alone until 2026-08-12; it was always
+about containment, and containment is now the folder. `status-fx.js` asks every capability question
+through `effects.js`'s own answers, so there is still exactly one adapter to the engine.)*
 
 ---
 
@@ -334,6 +338,182 @@ one window — reported as `skipped: "burst"`.
 audio device, so it cannot care whether the context is unlocked; ordering it the other way makes a
 headless keeper measure its own page — which genuinely IS locked, since a run never produces a user
 gesture on the game document — instead of the element. Measured on the rig: `pageAudioLocked: true`.
+
+---
+
+## 2a. Condition overlays — what a figure wears while something is wrong with it
+
+*Added 2026-08-12. `module/fx/status-fx.js`, and the keeper is
+`tests/cp2020-augmented-status-fx.mjs`.*
+
+Everything above is drawn **because a trigger was pulled**. This section is the other kind: a looping
+mark that rides a figure for exactly as long as a condition is on it, and goes the moment it clears.
+
+⚠ **The rail's one rule now reads `module/fx/`, not `module/fx/effects.js`.** The rule was always about
+containment — one place a reader goes when a drawing looks wrong — and effects.js had reached 5 262
+lines. The condition table lives in its own file beside it and asks every capability question through
+effects.js's own answers (`sequencerActive`, `fxDbEntryExists`, `tokenRadiusPx`,
+`LIT_SPRITE_ABOVE_LIGHTING`), so there is still exactly **one** adapter to the outside engine.
+
+### 2a.1 The closed inventory — every condition this system can put on a figure
+
+Two roads reach a figure and the resolver reads both. **The base system registers no status effects of
+its own** — verified by literal-string count across every `.js`, `.json`, `.hbs` and `.css` in the
+installed system: `statusEffects` 0 files, `CONFIG.statusEffects` 0, `toggleStatusEffect` 0,
+`ActiveEffect` 0, `.statuses` 0, `TokenDocument` 0. Its only `CONFIG` writes are document classes and
+DataModels. So a token carries **exactly Foundry core's default list**, and the module's own mechanisms
+speak that same vocabulary. Read on core 14.364, 34 ids:
+
+`dead · unconscious · sleep · stun · prone · restrain · paralysis · fly · blind · deaf · silence · fear
+· burning · frozen · shock · corrode · bleeding · disease · poison · curse · regen · degen · hover ·
+burrow · upgrade · downgrade · invisible · target · eye · bless · fireShield · coldShield · magicShield
+· holyShield`
+
+| Marker | Detection source | Written by | Value domain | Treatment |
+|---|---|---|---|---|
+| **Dead** | condition id `dead` | `DamageApplicator.js:182` · `save-rolls.js:404,428` (death save) · `mech/borg.js:342` | present / absent | ✅ **ships** |
+| **Unconscious** | condition id `unconscious` | `save-rolls.js:373` (failed stun check), lifted again at `:572` by the recovery check | present / absent | ✅ **ships** — as the *stunned* row, because this engine's stun outcome IS `unconscious` |
+| **Stunned (hand-set)** | condition id `stun` | nothing in the module — a GM's own token-HUD toggle | present / absent | ✅ **ships**, same row |
+| **On fire** | `flags.cp2020-augmented.fireDotState` | `damage-hooks.js:1436-1493` (per-turn burn, HP) | array of `{location, turnsLeft, formula, mult}`; absent or `[]` = not burning | ✅ **ships** |
+| **Burning (hand-set)** | condition id `burning` | nothing in the module | present / absent | ✅ **ships**, same row |
+| **Acid / armour degradation** | `flags.cp2020-augmented.dotState` | `damage-hooks.js:1389-1425` (per-turn SP loss) | array of `{location, turnsLeft, …}`; absent or `[]` = clear | ✅ **ships** |
+| **Corroding (hand-set)** | condition id `corrode` | nothing in the module | present / absent | ✅ **ships**, same row |
+| **Poisoned** | condition id `poison` | **nothing** — no module mechanism produces poison today | present / absent | ✅ **ships** (the core id only) |
+| **Wound state** | `actor.woundState()`, derived `Math.ceil(system.damage / 4)` — a METHOD, there is no `system.woundState` | base system `actor/actor.js:509-514`; the only write site for `system.damage` is `actor-sheet.js:532-537` | integer 0–10: 0 unhurt · 1 Light · 2 Serious · 3 Critical · 4–10 Mortal 0–6 | ⚠ **no treatment — awaiting the user's call** |
+| **Taser / stun accumulation** | `flags.cp2020-augmented.taserState` | `damage-hooks.js:1712` | `{count, round, mod}` | ⚠ **awaiting call** |
+| **Choking** | `flags.cp2020-augmented.chokeState` | `damage-hooks.js:1506-1512` | `{formula, …}` | ⚠ **awaiting call** |
+| **Stabilized** | `flags.cp2020-augmented.stabilized` | `save-rolls.js` (successful stabilization roll) | `true` / absent | ⚠ **awaiting call** |
+| **Radiation — current exposure** | `flags.cp2020-augmented.radExposure` (+ `radHistory`, `radBandCrossed`, `radExposureSeq`) | `radiation/radiation.js:388-391` | numbers (rads) | ⚠ **awaiting call** |
+| **Radiation — stat loss** | `flags.cp2020-augmented.radState` | `radiation/radiation.js:288,489,582` | marker array, each tagged `{seq}` | ⚠ **awaiting call** |
+| **Drugged** | `flags.cp2020-augmented.drugState` | `mech/drug.js` (`DRUG_FLAG`) | marker array | ⚠ **awaiting call** |
+| **Addicted** | `flags.cp2020-augmented.addictionState` | `mech/drug.js` (`ADDICTION_FLAG`) | marker array | ⚠ **awaiting call** |
+| **Consumable timer running** | `flags.cp2020-augmented.consumableState`, **plus** a real inert `ActiveEffect` carrying `flags.cp2020-augmented.consumableItemId` | `mech/consumable.js:98-133` | marker array / one effect per running item | ⚠ **awaiting call** — this one already draws core's own icon on the token |
+| **Flesh limb lost** | `flags.cp2020-augmented.fleshLimbStatus` | `DamageApplicator.js:200,221`, `mech/cyberlimb.js` | per-limb status map | ⚠ **awaiting call** |
+| **Cyberlimb SDP damage** | `system.sdp.current.<zone>` vs `system.sdp.sum.<zone>` | base system `actor-sheet.js:327-336` | integer per zone; `0` = destroyed **by convention only — the base draws no conclusion from it** | ⚠ **awaiting call** |
+
+**Recorded as NOT conditions**, so the list above is closed rather than merely long: the combat-posture
+flags (`dodging`, `parrying`, `aimRounds`, `waitingForTurn`, `waitingAfterId`, `actionCount`,
+`actionCountRound`) are one action's bookkeeping, not a lasting state; `preStunMovement` is the saved
+walk speed the unconscious lock restores; and `fullBorg`, `ammoTracking`, `loadout`, `visionPick`,
+`mechBaseLight`, `mechBaseSight`, `origMountZone`, `originX/Y`, `damagePayload`, `reputation` are
+configuration or transport. **Cyberpsychosis has no marker of any kind** on either side — there is
+nothing to detect.
+
+⛔ **Why the awaiting-call rows have no look.** The user's instruction was that conditions which do not
+read straight across from the source material get adapted **with** them. Inventing a picture for
+"addicted" or "wound state" is the thing that instruction exists to prevent, so those rows sit in §8 as
+calls rather than in the table as guesses. Each is **one row** in `STATUS_FX_ROWS` when a call arrives —
+a table entry, not a code change.
+
+### 2a.2 The five shipped rows
+
+| Row | Raised by | Database key | Placement | Size / opacity |
+|---|---|---|---|---|
+| `burning` | `burning` · `fireDotState` | `jb2a.flames.02.orange` | **body**, above lighting | `scaleToObject` 1.15, opacity 0.85 |
+| `poison` | `poison` | `jb2a.markers.poison.dark_green.02` | **badge**, above lighting | 0.55 sq, opacity 0.95 |
+| `acid` | `corrode` · `dotState` | `jb2a.bubble.002.001.loop.blue` **recoloured** | **body**, above lighting | `scaleToObject` 0.9, opacity 0.8 |
+| `stunned` | `stun` · `unconscious` | `jb2a.markers.stun.purple.02` | **badge**, above lighting | 0.55 sq, opacity 0.95 |
+| `dead` | `dead` | `jb2a.markers.simple.001.loop.001.red` | **ground**, below tokens | `scaleToObject` 1.25, opacity 0.55 |
+
+**Every key was decoded before it was chosen** (§9 A/4), and two decodes decided rows outright. Read off
+the installed clips at 98 % of each one's own maximum, thirds and first-to-last seam:
+
+| Clip | Frame | Duration | Thirds (mean luminance) | Seam | Verdict |
+|---|---|---|---|---|---|
+| `flames.02.orange` | 400×400, ink 289×316 | 4967 ms | 41.2 / 43.4 / 42.1 | 3.18 | ✅ **taken** — a SIDE elevation (taller than wide) that holds its brightness, which is what a burning figure needs |
+| `flames.01.orange` | 200×200 | 5000 ms | 110.3 / 79.4 / **114.1** | **14.09** | ✗ swings across its own thirds with a heavy seam — it visibly pulses when looped |
+| `flames.orange.03.1x1` | 300×300 | 5000 ms | 22.8 / 22.6 / 24.9 | 4.44 | ✗ the burning ground's asset, authored as a top-down **ground plate** — reads as a puddle on a body |
+| `markers.stun.purple.02` | 400×400, ink 278×302 | 6042 ms | 12.5 / 12.4 / 12.8 | 0.75 | ✅ **taken** — purpose-built for the condition and flat across its own clip |
+| `dizzy_stars.400px.blueorange` | 400×400 | 2000 ms | 115.4 / 170.4 / **35.9** | 0.08 | ✗ the literal "circling stars" and **not a loop**: it fades to a fifth of its own middle and starts black, so looping it strobes every two seconds. One constant away — §8 |
+| `markers.poison.dark_green.02` | 400×400, ink 269×298 | 6042 ms | 20.1 / 20.0 / 22.2 | 1.17 | ✅ **taken** |
+| `bubble.002.001.loop.blue` | 600×600, ink 467×372 | 4000 ms | 12.9 / 17.4 / 18.2 | 1.97 | ✅ **taken**, recoloured — the free tier's only true bubbling loop, and it is blue |
+| `bubble.001.001.loop.blue` | 400×400 | 2000 ms | 32.5 / 31.2 / 28.2 | 5.53 | ✗ the worse seam of the pair |
+| `markers.simple.001.loop.001.red` | 600×600, ink 421×414 | 2000 ms | 24.9 / 26.8 / 25.3 | **0.29** | ✅ **taken** — the cleanest seam measured, and already red |
+
+**The acid colour is ours, not the asset's.** One ColorMatrix on that row — hue **−120**, saturate
+**+0.15**, brightness **1.0** — rotates the blue to an acid green. Reverting is deleting one field.
+
+### 2a.3 Stacking, and the rule that stops marks from sliding
+
+Three placement families, each with its own answer, because one offset scheme for all of them would put
+a badge on a figure's chest or a flame on the floor:
+
+- **body** — `scaleToObject`, nudged sideways by `bodySpread` (**0.22**) × the figure's own width, so a
+  burning figure being eaten by acid reads as two things rather than one smear. Slots: burning −0.11 w,
+  acid +0.11 w.
+- **badge** — a fixed **0.55 sq** mark, `badgeSpacing` **0.42** apart, sitting `badgeRise` **0.30**
+  above the figure's own top edge — measured from `tokenRadiusPx`, so a 2×2 figure wears its badges
+  outside itself (y −0.80 at 1 square, **−1.30** at 2) rather than on its chest. Slots: poison −0.21,
+  stunned +0.21.
+- **ground** — centred, no offset.
+
+⭐ **A slot belongs to a ROW, not to draw order.** `statusFxOffset` is a pure function of the row id, so
+a figure that gains a third condition does not shuffle the two it is already wearing. Reordering
+`STATUS_FX_ROWS` is what moves marks on screen, and that is the only thing that does.
+
+**One suppression rule ships:** `dead` cancels `stunned`. These genuinely stand together — the
+applicator sets `dead` while the stun check had already set `unconscious` — and stars over a body is
+noise. It is one field (`suppressedBy`).
+
+### 2a.4 Lifecycle — mutation points, never a timer
+
+| Event | Hook | What it does |
+|---|---|---|
+| a core condition arrives or goes | `createActiveEffect` · `updateActiveEffect` · `deleteActiveEffect` | reconcile every figure that actor is drawn as |
+| a module flag is written | `updateActor` (`setFlag` **is** an actor update) | same |
+| an unlinked figure's own state changes | `updateToken` | reconcile that figure |
+| a figure arrives already marked | `createToken` | reconcile that figure |
+| a figure is deleted | `deleteToken` | sweep **by name** — the placeable is mid-destruction and is never read |
+| a scene is drawn | `canvasReady` + the catch-up below | reconcile every figure on it |
+| a scene goes | `canvasTearDown` | end everything |
+| an overlay ends by itself | `endedSequencerEffect` | re-issue if the condition is still there |
+
+Nothing polls. **Every entry point calls one reconciler** (`syncTokenStatusFx`) which recomputes the
+answer from the condition rather than tracking add/remove events, so a missed hook, a reload, a scene
+change and a GM clearing a status by hand all converge on the same picture instead of each needing its
+own branch. It is also what makes running it twice free.
+
+⭐⭐ **THE CATCH-UP, AND WHY IT HANGS ON THE ENGINE'S SIGNAL** — the finding of this unit. Measured hook
+order on a real load:
+
+```
+   canvasReady    @ +0 ms      ← the redraw a reload needs … before this file exists
+   ready          @ +12 ms     ← where the module registers, and where a naive catch-up would run
+   sequencerReady @ +677 ms    ← where the effect engine can actually draw
+```
+
+`canvasReady` fires during game setup, **before** the module's ready hook, so the listener is registered
+too late to hear the load that installed it — the known register-plus-catch-up shape
+(`module/chat-render-compat.js`). But a catch-up taken at `ready` is **also wrong, in the other
+direction**: `sequencerActive()` is already true there (the module is active and its constructor
+exists), so the sweep does not bail — it queues work against an engine that is not up, the work is
+silently lost, and the screen looks exactly as it did before the fix. Hanging it on `sequencerReady`
+puts it after both. Caught by the reload leg of the keeper, which failed twice for these two different
+reasons before it passed.
+
+### 2a.5 Budget, and what is deliberately not spent
+
+- **No document is written.** Sequencer's own `persist()` writes the effect into the **scene's flags**,
+  which is a document write from presentation (§9 G/22). Measured on the rig: an attached, named,
+  duration-bounded effect leaves `scene.flags.sequencer` with **zero** keys and is still queryable and
+  endable by name. The keeper asserts that count is 0 with two overlays live and again before a reload.
+- **Lifetime `lifetimeMs` = 600 000 ms**, and it is not the condition's lifetime — a condition can
+  outlast any clip, so the overlay is re-issued when the engine reports it ended while the condition
+  still stands. Ten minutes is rare enough to be invisible and short enough that a leak cannot outlive
+  a session. It is a cap, exactly as the burning ground's 45 s is.
+- **Scene cap `maxLive` = 60** (five rows × twelve figures), enforced by ending the **oldest** through
+  the engine's own manager, with the **pending** tally counted against it — the same construction, and
+  the same reason, as `GROUND_FIRE`. ⚠ An evicted overlay is **not a lost condition**: the next event
+  touching that figure redraws it, because the reconciler always recomputes from the condition.
+- **Excluded from the settle signal**, by construction: nothing here takes a `settleTag` and
+  `presentationTailMs` takes no term for it. An overlay meant to outlive the action is scene dressing in
+  exactly the sense the 2026-08-08 ruling names.
+- **Everyone sees them, with no GM gate.** These are state visibility, not a GM's secret, and every
+  condition with a shipped row is already public: core draws its own status icon for every client, and
+  the module's lasting-damage cards post to chat. **There is no GM-only condition on this system to
+  mirror** — the survey found none.
+- **Attached, not planted** (`attachTo`, `followRotation: false`), so a figure that walks carries its
+  condition and a badge stays upright when the rail turns a token to face a shot.
 
 ---
 
@@ -1132,7 +1312,25 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `HIT_SOUND_BURST_WINDOW_MS` ⭐ | **700** | how long the rolling tally an UN-indexed caller draws on stays open. Past the cap inside one window a play is refused (`skipped: "burst"`); quiet reopens it. The fan-out supplies its own index and is exempt |
 
 Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setDashMs`,
-`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`, `_setDropLagMs`, `_setHitSoundSink`.
+`_setSpriteRate`, `_setDbProbe`, `_setSoundManifest`, `_setDropLagMs`, `_setHitSoundSink`,
+`_setStatusFxRate` (`module/fx/status-fx.js`).
+
+**The condition overlays' knobs** ⭐ *new 2026-08-12* — `module/fx/status-fx.js`, and the whole feature
+is the table, so a sixth condition is a row rather than a change:
+
+| Knob | Ships as | Changes |
+|---|---|---|
+| `STATUS_FX_ROWS[].key` | see §2a.2 | which clip a condition wears. Every key is guarded by `fxDbEntryExists`, so a tier without it skips silently |
+| `STATUS_FX_ROWS[].placement` | `body` / `badge` / `ground` | where the mark sits, and therefore which sizing rule it takes. Moving the `dead` row to `badge` is what lifts it out from under the lighting |
+| `STATUS_FX_ROWS[].colour` | acid only: hue **−120**, saturate **+0.15**, brightness **1.0** | the acid row's recolour of a blue bubbling loop. Deleting the field restores the asset's own blue |
+| `STATUS_FX_ROWS[].scale` / `.opacity` | burning 1.15/0.85 · acid 0.9/0.8 · dead 1.25/0.55 · badges —/0.95 | one row's own presence |
+| `STATUS_FX.badgeSquares` | **0.55** | a badge's drawn frame in grid units (the marker clips carry ink across ~0.7 of it) |
+| `STATUS_FX.badgeRise` / `.badgeSpacing` | **0.30** / **0.42** | how far above the figure's own top edge badges sit, and how far apart |
+| `STATUS_FX.bodySpread` | **0.22** | how far two body treatments are pushed apart, as a fraction of the figure's width |
+| `STATUS_FX.lifetimeMs` | **600000** | how long one issue of an overlay runs before it is re-issued. Not the condition's lifetime |
+| `STATUS_FX.maxLive` | **60** | how many overlays may be alive on a scene at once; oldest out, through the engine's manager |
+| `STATUS_FX.fadeInMs` / `.fadeOutMs` | 300 / 400 | how a mark arrives and leaves |
+| `combatFxEnabled` (world setting) | default `true` | **shared with the shot rail** — the overlays ride the same master switch, read per event, and a switch-off sweeps what is already drawn |
 
 **The shot pattern's knobs**, which are not in `effects.js` because the pattern is not a sprite:
 
@@ -1149,6 +1347,26 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-12 — a figure wears what is wrong with it, for as long as it is wrong.**
+The docket asked for persistent overlays on every condition the system applies, auto-applied whenever
+the condition is on the figure, with the ones that do not read across from the source material adapted
+**with** the user rather than invented.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⭐ **Detection reads BOTH roads, and the module's own flags are the half that actually fires** | `statusMarkersOf({statuses, flags})` — core condition ids **and** `flags.cp2020-augmented.*` marker arrays | The base system registers **no** status effects at all (§2a.1, counted), so a token carries core's default list — and the module's lasting-damage engines do not use it: burning lives in `fireDotState` and armour degradation in `dotState`, neither of which is a status. A build watching `actor.statuses` alone would have drawn nothing for the two conditions the request named first. |
+| **A flag counts as raised only when it holds a live marker** | non-empty array, or a non-empty object | The engines write `[]` and unset the key at different points in their own teardown; treating "present" as "raised" leaves a mark up for a burn that finished. Asserted both ways in the keeper. |
+| **Five rows ship; every other condition is a call, not a guess** | §2a.1's table — 11 markers recorded with detection source and no look | The instruction was to adapt the non-obvious ones *with* the user. A picture invented for "addicted" or "wound state" is precisely what that forbids, so those sit in §8. Each is one row when a call arrives. |
+| **`unconscious` is the stunned row, not a row of its own** | `statuses: ["stun", "unconscious"]` | This engine's stun outcome IS `unconscious` — the failed stun check toggles it and the recovery check lifts it. Core's own `stun` is watched beside it so a hand-marked figure reads the same. Whether the two deserve different looks is an open call. |
+| **`dead` suppresses `stunned`** | `suppressedBy: "dead"` | They genuinely stand together: the applicator sets `dead` while the stun check had already set `unconscious`. Stars over a body is noise. |
+| ⏪ **Not `persist()`** | `attachTo` + `duration` + a stamped `name`, re-issued on expiry | Sequencer's own persistence writes the effect into the **scene's flags** — a document write from presentation, which this rail does not do (§9 G/22). Measured: an attached, named, duration-bounded effect leaves `scene.flags.sequencer` with **zero** keys and is still queryable and endable. The only thing given up is a redraw on reload, which `canvasReady` does anyway. |
+| ⭐⭐ **The load catch-up hangs on `sequencerReady`, not on `ready`** | measured order: `canvasReady` +0 ms → `ready` +12 ms → `sequencerReady` +677 ms | Two different failures, one leg. `canvasReady` fires during setup, so the listener is registered too late to hear the load that installed it — the known register-plus-catch-up shape. But a catch-up at `ready` is too EARLY: `sequencerActive()` is already true there, so the sweep does not bail, it queues against an engine that is not up, and the work is silently lost. The reload leg failed for both reasons in turn before it passed. |
+| **Slots belong to rows, not to draw order** | `statusFxOffset(id, widthSquares)`, pure | A figure that gains a third condition must not shuffle the two it is wearing. Reordering `STATUS_FX_ROWS` is the only thing that moves a mark. |
+| **Badges measure from the figure, not from the grid** | `badgeRise` above `tokenRadiusPx` — y −0.80 at 1 square, **−1.30** at 2 | A fixed grid-unit rise puts a badge on a 2×2 figure's chest. |
+| **The acid row is recoloured, and says so** | hue −120 / saturate +0.15 / brightness 1.0 over `bubble.002.001.loop.blue` | Asset-native first (§9 A/3) — but the free tier's only true bubbling loop is blue, and the alternative was a green clip with the wrong motion. One field reverts it. Unsigned look call, §8. |
+| **Everyone sees them** | no GM gate anywhere | State visibility, not a secret: every shipped row's condition is already public (core draws its own icon for all clients, the lasting-damage cards post to chat). The survey found **no** GM-only condition on this system to mirror. |
+| **The bench specs' "no live effect" restore leg now excludes this prefix** | `cp2020-augmented.statusfx.` filtered out in `review-bench-smoke` and `b1-seam-payload` | That leg exists to catch a muzzle or tracer that never ended. An overlay is *supposed* to still be there, so a legitimately burning figure would have failed it for doing its job — which is exactly how it was found. |
 
 **2026-08-12 — a landed round makes a noise, and the rail is what makes it.**
 The docket asked for impact sounds differentiated by what was hit, replacing a placeholder probe that
@@ -1782,6 +2000,14 @@ presented while the screen stayed empty.
 | **The slug is modelled as a LOAD, and that is a build-lane call** | ⚠ **The open item of the spread unit.** The registry has one shotgun cartridge, `"00"`, labelled *"00 Buck / Slug"* — so nothing about the caliber can say which is chambered, and the build expressed the slug as a shotgun-family ammo modifier instead (see §6). The alternative is splitting the cartridge into two registry entries, which is a migration and a re-seed and would break the gauge aliases that currently all point at one id. A veto is cheap by construction: the whole thing is one row in `AMMO_MODIFIERS`, one option on the ammo sheet's spread selector, and the first branch of `spreadModeForAmmo`. |
 | One shipped shell weapon records **no gauge** | 10 of the 11 shell weapons in `supplement-shotguns` carry a gauge in `ammoType`; one carries an empty string, so it reports no cartridge and throws no pattern until an ammo item is loaded. Same shape as the known blank-`vehicleType` data gap, and it belongs to the pack-data sweep rather than to this rail. |
 | The pattern's look is **verified on v14 only** | `spread-zone-look.js` carries a v13 branch (a MeasuredTemplate's own alpha, and its control icon hidden) written from that core's API and never run: the ship target is v14 and the rig is v14. Structurally the same two facts; it is untested and says so at the site. |
+| ⭐⭐ **ELEVEN CONDITIONS HAVE NO TREATMENT AND ARE WAITING ON THE USER** | ⚠ **The open item of this unit, and it is a batch of calls rather than a defect.** The instruction was that conditions which do not read straight across from the source material get adapted **with** the user, so the inventory (§2a.1) is closed and complete while the look for each of these is deliberately blank. Each becomes **one row** in `STATUS_FX_ROWS` — a table entry, not a code change. In the order I would ask them: ① **wound state** (`actor.woundState()`, 0–10 — the one every table would notice; a badge that changes with the tier, or nothing?) · ② **radiation** (two markers: `radExposure` the running dose, `radState` the stat loss — one look or two?) · ③ **drugged** and ④ **addicted** (`drugState` / `addictionState`) · ⑤ **taser accumulation** (`taserState`) · ⑥ **choking** (`chokeState`) · ⑦ **stabilized** (`stabilized` — arguably a *good* mark, the one row in the list that is not a problem) · ⑧ **flesh limb lost** (`fleshLimbStatus`) · ⑨ **cyberlimb SDP damage** (derived from `sdp.current` vs `sdp.sum`; note the base system draws no conclusion from a zeroed zone) · ⑩ **consumable timer running** (`consumableState` — this one **already** puts core's own icon on the token, so a second mark may be redundant) · ⑪ the ~25 core condition ids nothing in the module ever sets (`prone`, `blind`, `deaf`, `fear`, `bleeding`, `frozen`, …) — a GM can toggle any of them by hand and none has a look. |
+| **The stunned look is the marker clip, not the circling stars** | ⚠ **Needs eyes.** The user asked for "classic circling stars/sparks" and the free tier has exactly that — `jb2a.dizzy_stars.400px.blueorange` — but it is **not a loop**: 2000 ms, thirds 115.4/170.4/**35.9**, starting and ending black (seam 0.08), so looping it strobes on and off every two seconds. What ships is `jb2a.markers.stun.purple.02`, purpose-built for the condition and flat across its own 6042 ms (12.5/12.4/12.8, seam 0.75). If the stars are wanted anyway the swap is **one constant** (`STATUS_FX_ROWS` → the `stunned` row's `key`) and the pulse comes with them; making them loop cleanly instead would mean a re-issue on a 2 s clock, which is a different build. |
+| **Whether `stun` and `unconscious` deserve two different looks** | ⚠ They share one row today because this engine's stun outcome IS `unconscious` (the failed check sets it, the recovery check lifts it) and core's `stun` is only ever hand-set. If a table wants "rattled" to read differently from "out cold", that is a second row and a second key. |
+| **The acid row's colour is a build-lane pick** | ⚠ The *rule* is the razor — acid should not look like the poison badge — and the placement carries most of that (poison is a badge above the figure, acid bubbles over the body). The *numbers* are mine: hue **−120**, saturate **+0.15**, brightness **1.0** over a blue bubbling loop, because the free tier has no green one with the right motion. Deleting the `colour` field restores the asset's own blue. |
+| **The dead ring is invisible on an unlit square** | ⚠ **Stated so it is a decision, not a surprise.** It is drawn **below the tokens**, which is also below the lighting, so on a dark scene it is not there to be seen. Accepted on this row alone because core's own skull icon on the token is unaffected and still carries the fact, and because a ring drawn over ground the viewer cannot see is the trade the whole rail's above-lighting note describes. One field (`placement: "badge"`) lifts it out. |
+| **The five sizes and opacities are build-lane picks** | ⚠ Chosen against each other on the rig rather than in front of the user: burning `scaleToObject` **1.15** / opacity 0.85 · acid 0.9 / 0.8 · dead 1.25 / **0.55** · badges 0.55 sq / 0.95, spaced 0.42 apart and raised 0.30 above the figure's edge. Every one is a single constant and a veto costs nothing. |
+| **The overlays ride the shot rail's master switch and have none of their own** | ⚠ `combatFxEnabled` governs both, which is what the docket specified. A table that wants gunfire effects but no condition marks (or the reverse) has no way to say so today; a dedicated sub-toggle is one setting plus one reader if it is wanted. |
+| **An evicted overlay is silent about being evicted** | ⚠ Past `maxLive` = 60 the oldest mark is ended to make room, so on a very busy scene a figure can be wearing a condition with nothing drawn until the next event touching it redraws it. The reconciler makes this self-correcting rather than permanent, and 60 is twelve fully-marked figures, but the failure mode is worth knowing before someone reports a missing flame. |
 | Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
 | Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
 | Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
@@ -1938,6 +2164,7 @@ the plan, not half in the row and half in the loop condition.
 | Motes / burst ambience | **A−** | `Math.random` appropriate (transient); await-cost lesson recorded |
 | Ground fire | **A** | the standard's exemplar: seeded with entropy, capped, evicted, named — and it now takes the fan's own jitter |
 | Impact audio | **A−** | new 2026-08-12 — spec-blocked with measured levels, arrival-anchored, per-round-capped by import from the splash, capture-seamed (`_setHitSoundSink`), reported by value (`hitAudio`). The two clips' relative loudness is an unsigned look call (§8) |
+| Condition overlays | **A** | new 2026-08-12 — spec-blocked with decoded bases and rejected candidates recorded, database-keyed and guarded, grid-unit geometry measured off the figure's own width, slot-per-row so marks cannot slide, capped + evicted + named so the census is a query of the engine, zero document writes (asserted), excluded from the settle signal, capture-seamed (`_setStatusFxRate`), reported by value. Detection is event-driven at the real mutation points with the catch-up on the engine's own signal. Sizes, the acid recolour and the stunned key are unsigned look calls (§8) |
 | Blood splatter | **A−** | per-round-capped idiom done right; rotation basis shared; F2 inherits |
 | Baton round | **A−** | replace-mask precedent; asset measured |
 | Spread-zone ghost look | **B+** | not Sequencer; isolated and flag-keyed, but the v13 branch is unverified |
