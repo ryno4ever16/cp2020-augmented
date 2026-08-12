@@ -113,6 +113,9 @@ export function coverWallsOn(scene) {
     const pool = (typeof f.coverPool === "number" && Number.isFinite(f.coverPool))
       ? Math.max(0, Math.round(f.coverPool)) : poolMax;
     const isDoor = (wall.door ?? 0) > 0;
+    // A wall document has no name of its own. The retired material field is still READ here so
+    // walls named before it was removed keep their label; everything else falls back to the
+    // generic wall/door name.
     const material = (typeof f.coverMaterial === "string") ? f.coverMaterial.trim() : "";
     const c = wall.c ?? [];
     out.push({
@@ -461,7 +464,6 @@ export function registerCoverWallConfig() {
         sp: (typeof f.coverSp === "number" && Number.isFinite(f.coverSp)) ? f.coverSp : "",
         pool: (typeof f.coverPool === "number" && Number.isFinite(f.coverPool)) ? f.coverPool : "",
         poolMax: (typeof f.coverPoolMax === "number" && Number.isFinite(f.coverPoolMax)) ? f.coverPoolMax : "",
-        material: (typeof f.coverMaterial === "string") ? f.coverMaterial : "",
         isDoor: (doc?.door ?? 0) > 0,
       });
       // Async render may lose the race against a re-render/close — re-check before inserting.

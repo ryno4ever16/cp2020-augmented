@@ -22,10 +22,8 @@
             <input type="number" name="flags.{{scope}}.coverPoolMax" value="{{poolMax}}" min="0" step="1"/>
         </div>
     </div>
-    <div class="form-group">
-        <label title="{{CPLocal 'CoverWallMaterialHint'}}">{{CPLocal "CoverZoneMaterial"}}</label>
-        <div class="form-fields">
-            <input type="text" name="flags.{{scope}}.coverMaterial" value="{{material}}"/>
-        </div>
-    </div>
+    {{!-- A free-text material/name field lived here. It was removed: the three structure numbers
+          are the whole of what a cover wall needs, and the name added a field to fill in for no
+          mechanical effect. Values already stored on existing walls are still READ for the wall's
+          display name (cover.js coverWallsOn) — nothing writes the flag any more. --}}
 </fieldset>
