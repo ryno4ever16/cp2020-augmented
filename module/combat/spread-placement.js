@@ -85,6 +85,16 @@ function _clientToWorld(clientX, clientY) {
 }
 
 /**
+ * Did this pointer/wheel event land on the game canvas itself? The aim listeners are window-level
+ * captures, so without this guard a click on ANY open UI — the actor sheet being dragged out of the
+ * way, the sidebar — would confirm the corridor (user-hit 2026-08-12). Events on UI elements are
+ * left entirely alone: the sheet moves, scrolls and right-clicks like normal while the aim is live.
+ */
+function _isCanvasEvent(ev) {
+  return ev.target === canvas?.app?.view || ev.target?.id === "board";
+}
+
+/**
  * The token a confirmed aim point lands ON, or null. Its own width is what the corridor overshoots by.
  *
  * ⭐ THE OVERSHOOT IS A RULE THIS FLOW INHERITS, not a new one: ending the corridor exactly on a token's
@@ -141,6 +151,11 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   const state = {
     angleDeg: facingDeg,
     reachPx: metersToPixels(scene, 10),
+    // Wheel-set reach adjustment, in metres, added on top of the cursor distance. The corridor's WIDTH
+    // is the book's spread — a pure function of the distance band and the load — so the wheel does not
+    // set width directly; it pushes the corridor's END past (or short of) the cursor, and the band,
+    // width and damage follow in the readout. Mirrors the suppressive preview's wheel gesture.
+    reachBiasM: 0,
     lastClientX: window.innerWidth / 2,
     lastClientY: window.innerHeight / 2,
   };
@@ -160,7 +175,7 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
 
   /** The corridor the current cursor position describes — the ONE derivation both halves read. */
   const specNow = () => {
-    const distM = Math.max(SPREAD_MIN_LENGTH_M, pixelsToMeters(scene, state.reachPx));
+    const distM = Math.max(SPREAD_MIN_LENGTH_M, pixelsToMeters(scene, state.reachPx) + state.reachBiasM);
     const { band, widthM } = spreadBandSpec(distM, widths);
     return { distM, band, widthM, dmgFormula: spreadBandDamage(band, formulas) };
   };
@@ -186,7 +201,20 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
     redraw();
   };
 
+  const onWheel = (ev) => {
+    if (!_isCanvasEvent(ev)) return;         // a wheel over a sheet/sidebar scrolls it like normal
+    ev.preventDefault();
+    ev.stopPropagation();
+    // Scroll up reaches further, scroll down pulls back (never below the plantable floor). Band, width
+    // and damage re-derive from the new reach on the next redraw.
+    const step = ev.deltaY < 0 ? 1 : -1;
+    const cursorM = pixelsToMeters(scene, state.reachPx);
+    state.reachBiasM = Math.max(SPREAD_MIN_LENGTH_M - cursorM, state.reachBiasM + step);
+    redraw();
+  };
+
   const onDown = (ev) => {
+    if (!_isCanvasEvent(ev)) return;         // clicks on open UI move/close windows, never the aim
     if (ev.button === 2) { ev.preventDefault(); ev.stopPropagation(); cancel(); return; }  // right-click cancels
     if (ev.button !== 0) return;                                                            // only left confirms
     ev.preventDefault();
@@ -194,13 +222,15 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
     confirm();
   };
 
-  const onContext = (ev) => { ev.preventDefault(); ev.stopPropagation(); };  // suppress the browser menu on cancel
+  // Suppress the browser menu only over the canvas (the right-click cancel); UI menus stay usable.
+  const onContext = (ev) => { if (_isCanvasEvent(ev)) { ev.preventDefault(); ev.stopPropagation(); } };
 
   const onKey = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); cancel(); } };
 
   const removeListeners = () => {
     window.removeEventListener("pointermove", onMove, true);
     window.removeEventListener("pointerdown", onDown, true);
+    window.removeEventListener("wheel", onWheel, { capture: true });
     window.removeEventListener("contextmenu", onContext, true);
     window.removeEventListener("keydown", onKey, true);
   };
@@ -261,6 +291,7 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
 
   window.addEventListener("pointermove", onMove, true);
   window.addEventListener("pointerdown", onDown, true);
+  window.addEventListener("wheel", onWheel, { capture: true, passive: false });
   window.addEventListener("contextmenu", onContext, true);
   window.addEventListener("keydown", onKey, true);
 
