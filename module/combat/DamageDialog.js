@@ -16,7 +16,7 @@
 import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
-import { coverChoicesFor, requestCoverChew, coverBetween, coverAutoDetectEnabled } from "./cover.js";
+import { requestCoverChew, coverBetween } from "./cover.js";
 import { localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -49,13 +49,15 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     this._damageType = null;   // "" / null = a normal hit; "fire" | "radiation" | "heat"
     this._ablate    = null;
     this._coverSP   = 0;
-    // Cover-zone picker (unified cover system Unit 2): selecting a zone sets _coverSP from the
-    // zone AND remembers the behavior uuid so Apply can debit the zone's structure pool (chew).
-    // "" = manual mode — the free-typed coverSP input, exactly the pre-cover-system behavior.
+    // WHICH cover object the shot went through. There is no picker control any more: the window
+    // shows a typed Cover SP field and nothing else, and the object is identified by the segment
+    // auto-detect below. The uuid is internal state, kept because it is the ONLY attribution path
+    // left — without it a chewed pool could not be charged to a document. "" = no object known
+    // (a hand-typed Cover SP still folds into the math, it just has nothing to debit).
     this._coverZoneUuid = "";
-    this._coverRows     = [];
-    // Ray auto-detect (Unit 4) is a ONE-SHOT seed on the first context build — this latch is what
-    // keeps a later re-render from re-picking over the GM's own choice.
+    this._coverRow      = null;   // the detected row snapshot: label / sp / pool / poolMax
+    // The segment auto-detect is a ONE-SHOT seed on the first context build — this latch is what
+    // keeps a later re-render from re-picking over a value the GM typed.
     this._autoCoverTried = false;
   }
 
@@ -102,28 +104,26 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     const ablate    = this._ablate    ?? game.settings.get("cp2020-augmented", "damageAblation");
 
-    // Cover zones on the target's scene (nearest first) for the picker. Cached on the instance
-    // so the change listener resolves a selection without re-querying the canvas.
-    try { this._coverRows = coverChoicesFor(this._targetTokenDoc()); } catch (e) { this._coverRows = []; }
-
-    // Ray auto-detect (Unit 4): opt-in world setting, FIRST context build only, and it never
-    // overrides a selection that is already set — it is purely a starting value, both the picker
-    // and the Cover SP input stay editable. Seeding _coverSP here (before resolveAreaDamagesSync
-    // reads it below) means the preview folds the cover on the very first render.
-    if (!this._autoCoverTried && !this._coverZoneUuid && coverAutoDetectEnabled()) {
+    // Segment auto-detect: FIRST context build only, and it never overrides a value already set —
+    // it is purely a starting value, the Cover SP input stays editable. Seeding _coverSP here
+    // (before resolveAreaDamagesSync reads it below) means the preview folds the cover on the very
+    // first render. There is no world setting in front of this: placing a cover object on the map
+    // IS the opt-in, and the segment test returns nothing on a scene that carries none, so a table
+    // that never places cover never sees it. It needs an attacker token, so it reaches only shots
+    // that came from a fire card — a hand-opened Apply Damage window has no line to test.
+    if (!this._autoCoverTried && !this._coverZoneUuid) {
       this._autoCoverTried = true;
       try {
         const picked = coverBetween(this._attackerTokenDoc(), this._targetTokenDoc())[0];
-        if (picked) { this._coverZoneUuid = picked.uuid; this._coverSP = Math.max(0, Number(picked.sp) || 0); }
-      } catch (e) { /* auto-pick is best-effort; manual mode is the fallback */ }
+        if (picked) {
+          this._coverZoneUuid = picked.uuid;
+          this._coverRow = { uuid: picked.uuid, label: picked.label, sp: picked.sp, pool: picked.pool, poolMax: picked.poolMax, destroyed: picked.destroyed };
+          this._coverSP = Math.max(0, Number(picked.sp) || 0);
+        }
+      } catch (e) { /* auto-pick is best-effort; a typed Cover SP is the fallback */ }
     }
     // Read AFTER the auto-pick so a seeded value reaches both the preview math and the input.
     const coverSP = this._coverSP;
-
-    const coverChoices = this._coverRows.map(r => ({
-      uuid: r.uuid, label: r.label, sp: r.sp, pool: r.pool, poolMax: r.poolMax,
-      destroyed: r.destroyed, selected: r.uuid === this._coverZoneUuid,
-    }));
 
     const rawHits = resolveAreaDamagesSync({
       target:      this.target,
@@ -183,8 +183,6 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       damageType:   this._damageType ?? "",
       ap:           Boolean(this.payload.ap),
       coverSP,
-      coverChoices,
-      hasCoverChoices: coverChoices.length > 0,
     };
   }
 
@@ -208,20 +206,6 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector("input[name='coverSP']")?.addEventListener("change", ev => {
       const v = Number(ev.currentTarget.value);
       this._coverSP   = (Number.isFinite(v) && v >= 0) ? v : 0;
-      this._overrides = {};
-      this.render(false);
-    });
-
-    // Cover-zone picker: a zone selection sets the SP from the zone (the preview math and the
-    // manual input both follow — the input stays editable as a GM override) and remembers the
-    // behavior uuid so Apply debits the zone's structure. "" returns to pure manual mode.
-    root.querySelector("select[name='coverZone']")?.addEventListener("change", ev => {
-      const uuid = ev.currentTarget.value;
-      this._coverZoneUuid = uuid;
-      if (uuid) {
-        const row = this._coverRows.find(r => r.uuid === uuid);
-        if (row) this._coverSP = Math.max(0, Number(row.sp) || 0);
-      }
       this._overrides = {};
       this.render(false);
     });

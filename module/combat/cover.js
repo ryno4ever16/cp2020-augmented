@@ -3,8 +3,8 @@
  *
  * Cover zones are native Regions carrying the CoverZoneBehavior (cover-zone-behavior.js) — the
  * fourth zone vertical, and the first PASSIVE one: nothing here subscribes to events or round
- * ticks. The damage pipeline QUERIES zones (the Apply Damage dialog's cover picker, Unit 2) and,
- * after a shot resolves through one, DEBITS its structure pool here ("chew").
+ * ticks. The damage pipeline QUERIES zones (the Apply Damage window resolves which object the shot
+ * crossed) and, as the burst's rounds resolve through one, DEBITS its structure pool here ("chew").
  *
  * Chew rule (Maximum Metal p.58, read from the printed text): the pool is the object's hit
  * points — SDP = 3 × SP by default — and the book's examples count damage RECEIVED against it
@@ -22,10 +22,10 @@
  * every other zone write in the module.
  *
  * Unit 3 (walls/doors): native Wall documents can carry the SAME cover data as a zone, stored as
- * wall flags (coverSp / coverPool / coverPoolMax / coverMaterial) and edited through fields this
- * module adds to the native Wall configuration sheet. Flagged walls join the damage dialog's
- * cover picker alongside zones — the picker rows carry a uuid either way, and the chew entry
- * point dispatches on the resolved document type. Cover flags are meant for walls a shot can
+ * wall flags (coverSp / coverPool / coverPoolMax) and edited through fields this module adds to
+ * the native Wall configuration sheet. Flagged walls sit alongside zones in every query here —
+ * the rows carry a uuid either way, and the chew entry point dispatches on the resolved document
+ * type. Cover flags are meant for walls a shot can
  * cross (windows, thin barriers, doors — walls that do NOT block sight); a DOOR wall whose
  * structure reaches 0 is broken open (door state → open), so the barrier and sightline open
  * with it. Non-door walls at 0 simply stop contributing (the map art stays).
@@ -154,7 +154,7 @@ function _tokenCenter(tokenDoc) {
   };
 }
 
-/** Picker rows for a target token's scene — zones AND cover-flagged walls, nearest first
+/** Candidate cover rows for a target token's scene — zones AND cover-flagged walls, nearest first
  *  (unknown-centre rows last). Every row carries a uuid; the chew entry point dispatches on it. */
 export function coverChoicesFor(tokenDoc) {
   const scene = tokenDoc?.parent ?? canvas?.scene;
@@ -167,15 +167,10 @@ export function coverChoicesFor(tokenDoc) {
   return rows.sort((a, b) => a.d2 - b.d2);
 }
 
-/* ═══════════════════════════ Ray auto-detect (Unit 4, opt-in) ═══════════════════════════ */
-
-/** Whether the opt-in ray auto-detect world setting is on (default OFF). */
-export function coverAutoDetectEnabled() {
-  try { return !!game.settings.get(SCOPE, "autoCoverDetection"); } catch (e) { return false; }
-}
+/* ═════════════════════════════ Segment auto-detect (Unit 4) ═════════════════════════════ */
 
 /**
- * The picker rows actually CROSSED by the shot line from the attacker's token to the target's
+ * The cover rows actually CROSSED by the shot line from the attacker's token to the target's
  * token. Wall rows use an exact segment-vs-segment test; zone rows sample the line at
  * quarter-grid steps through the native region containment test — the platform owns the
  * geometry either way. The first half-grid at the ATTACKER'S end is trimmed off the line: the

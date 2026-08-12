@@ -477,15 +477,9 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
-  // --- autoCoverDetection (cover Unit 4 — opt-in ray auto-detect, default OFF) ---
-  game.settings.register(SCOPE, "autoCoverDetection", {
-    name: "SETTINGS.AutoCoverDetection",
-    hint: "SETTINGS.AutoCoverDetectionHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
+  // (A world toggle for the cover segment auto-detect used to sit here. It was retired: PLACING a
+  // cover object on the map is itself the opt-in, and the segment test returns nothing on a scene
+  // that carries none — so the toggle only ever added a second switch in front of a switch.)
 
   // --- explosivesDetailed ---
   game.settings.register(SCOPE, "explosivesDetailed", {
