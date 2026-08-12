@@ -2681,3 +2681,44 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   -webkit-appearance: none;
   display: none;
 }
+
+/* ── Apply Damage: the per-hit SP breakdown line ───────────────────────────────────────────────
+ * The hit row shows one combined SP figure; this disclosure under it names every component that
+ * went into the figure (each armor piece, the cover object, the multipliers) and reports what the
+ * round cost that object's structure. Collapsed by default so the row list keeps its shape — the
+ * numbers are for the reader who doubts one line, not for every line at once. Rows are a plain
+ * label/value pair so a long armor name wraps against a right-aligned number instead of pushing
+ * it out of the window. */
+.cyberpunk .cp-damage-breakdown {
+  margin: 0 0 4px 60px;   /* aligns under the location column, not under its label */
+  font-size: 0.75em;
+}
+.cyberpunk .cp-damage-breakdown > summary {
+  cursor: pointer;
+  opacity: 0.7;
+  list-style: revert;
+}
+.cyberpunk .cp-damage-breakdown > summary:hover { opacity: 1; }
+.cyberpunk .cp-damage-breakdown-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 1px 0 1px 12px;
+}
+.cyberpunk .cp-damage-breakdown-row .cp-bd-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  opacity: 0.85;
+}
+.cyberpunk .cp-damage-breakdown-row .cp-bd-value {
+  flex: 0 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The structure a cover object gave up for this round — a consequence of the hit rather than a
+ * step of its arithmetic, so it reads in the cover band's own amber. */
+.cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-label,
+.cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-value {
+  color: #d1a054;
+  opacity: 1;
+}

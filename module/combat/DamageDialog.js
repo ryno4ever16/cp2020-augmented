@@ -17,7 +17,7 @@ import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablate
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 import { requestCoverChew, coverBetween, coverChewSummary } from "./cover.js";
-import { localizeParam } from "../utils.js";
+import { localize, localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -156,6 +156,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         btm,   // per-row so the flesh after-SP tooltip needs no fragile parent-path lookup
         sdpRemaining: pool ? pool.current : null,
         sdpMax:       pool ? pool.max : null,
+        breakdownRows: this._breakdownRows(hit, btm, afterSP, this._overrides[i] !== undefined),
       };
     });
 
@@ -228,6 +229,62 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         this._updateTotalDisplay();
       });
     });
+  }
+
+  /**
+   * Turn one hit's structural breakdown (DamageApplicator) into the labelled label/value pairs the
+   * expandable math line renders. This is the render edge, so ALL the chrome is localized here and
+   * the resolver stays i18n-free. Every component is named: armor pieces by the item's own name,
+   * the cover object by its label, the borg chassis by a localized stand-in — the whole point of
+   * the line is that the SP column stops being one opaque number and says what made it.
+   *
+   * The order IS the arithmetic, top to bottom: roll → each armor layer → the layering bonus the
+   * proportional table grants → any armor multiplier → combined armor → cover → effective SP → the
+   * AP halving → the subtraction → the penetrating multiplier → a GM override if there was one →
+   * BTM → final. Steps that did not happen emit no row, so an unarmoured hit with no cover shows
+   * three lines rather than twelve.
+   */
+  _breakdownRows(hit, btm, afterSP, overridden) {
+    const b = hit?.breakdown;
+    if (!b) return [];
+    const rows = [];
+    const add = (label, value, kind = "") => rows.push({ label, value, drain: kind === "drain" });
+    const spTag = (n) => `[${n}]`;
+
+    add(localize("DamageDlgBdRoll"), String(b.raw));
+    for (const layer of b.layers) add(layer.chassis ? localize("DamageDlgBdChassis") : layer.name, spTag(layer.sp));
+    if (b.layers.length > 1) add(localize("DamageDlgBdLayerBonus"), `+${b.layerBonus}`);
+    if (b.armorMult !== 1) add(localize("DamageDlgBdArmorMult"), `×${b.armorMult}`);
+    if (b.layers.length) add(localize("DamageDlgBdArmorSp"), String(b.armorSP));
+    if (b.coverSP > 0) add(b.coverName || localize("DamageDlgBdCover"), spTag(b.coverSP));
+    if (b.coverSP > 0 && b.armorSP > 0) add(localize("DamageDlgBdEffectiveSp"), String(b.effectiveSP));
+    if (b.apHalved) add(localize("DamageDlgBdApHalf"), String(b.spUsed));
+    add(localize("DamageDlgBdAfterSp"), b.penetrates ? String(b.afterSPRaw) : localize("DamageDlgBdStopped"));
+    if (b.penetrates && b.penMult !== 1) add(localizeParam("DamageDlgBdPenMult", { mult: b.penMult }), String(b.afterSP));
+    if (overridden) add(localize("DamageDlgBdOverride"), String(afterSP));
+
+    if (hit.sdp) {
+      // A machine zone takes the structural value with no BTM and no doubling — mirror what Apply
+      // writes rather than showing a toughness subtraction that never happens there.
+      add(localize("DamageDlgBdStructural"), String(hit.penetrates ? Math.max(0, Math.round(afterSP)) : 0));
+    } else {
+      // Toughness only enters the arithmetic when something got through — a stopped hit goes
+      // straight to a final of nothing, and printing a subtraction that never ran would read as
+      // if BTM were what stopped it.
+      if (hit.penetrates) add(localize("DamageDlgBdBtm"), `−${btm}`);
+      add(localize("DamageDlgBdFinal"), String(computeNetDamage(afterSP, btm, hit.penetrates, hit.location)));
+    }
+
+    // What this round cost the object it was shot through — the receipt the applicator's ledger
+    // wrote for this exact round, so the reader sees the pool fall bullet by bullet.
+    const chew = hit.coverChew;
+    if (chew) {
+      add(chew.label, chew.destroyed
+        ? localizeParam("DamageDlgBdDrainDestroyed", { damage: chew.absorbed })
+        : localizeParam("DamageDlgBdDrain", { damage: chew.absorbed, pool: chew.poolAfter, poolMax: chew.poolMax }),
+        "drain");
+    }
+    return rows;
   }
 
   _updateTotalDisplay() {

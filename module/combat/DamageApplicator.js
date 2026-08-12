@@ -441,6 +441,8 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
       const spKey      = spLocationKey(location);
       let currentSP    = getLiveSP(location);   // un-multiplied base; mult applied fresh below
 
+      const armorBase   = currentSP;   // pre-multiplier combined armor — the layering fold's own result
+      let   armorMult   = 1;
       const effSoftSync = mono ? Math.min(1 / 3, armorMultSoft) : (edged ? Math.min(0.5, armorMultSoft) : armorMultSoft);
       const effHardSync = mono ? Math.min(2 / 3, armorMultHard) : armorMultHard;
       if ((effSoftSync !== 1.0 || effHardSync !== 1.0) && currentSP > 0 && armorMode !== ARMOR_MODES.NONE) {
@@ -449,7 +451,7 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
         // Borg chassis is hard metal (mirror of the async path) — soft-only mults never halve it.
         const hasHardArmor = isFullBorg(target) || allItems.some(item => getArmorHardness(item) === "hard");
         const mult = hasHardArmor ? effHardSync : effSoftSync;
-        if (mult !== 1.0) currentSP = Math.max(0, Math.floor(currentSP * mult));
+        if (mult !== 1.0) { armorMult = mult; currentSP = Math.max(0, Math.floor(currentSP * mult)); }
       }
 
       const roundCoverSP = coverLedger.spForRound();
@@ -465,7 +467,31 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
       // borg (Head/Torso included), so the preview marks exactly the rows applyLocationDamage will
       // absorb into a machine zone's SDP (rounded afterSP, no BTM, no doubling) instead of the flesh
       // wound track — the preview must never disagree with what Apply does.
-      results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location), coverSP: roundCoverSP, coverChew });
+      // The named parts of this round's arithmetic, for the window's expandable math line. Every
+      // component is carried as data + a NAME (armor items by their own name, the cover object by
+      // its label) — the render edge turns it into text, this stays i18n-free. Structural only:
+      // nothing here feeds the damage numbers, it reports on them.
+      const layers      = (armorMode === ARMOR_MODES.NONE) ? [] : armorLayerRows(target, spKey, damageType);
+      const layerMax    = layers.reduce((m, l) => Math.max(m, l.sp), 0);
+      const breakdown = {
+        raw: rawDamage,
+        layers,
+        // What the proportional table (p.99) added on top of the single best layer to reach the
+        // combined value the math used — read off armorBase itself, never re-folded.
+        layerBonus: Math.max(0, armorBase - layerMax),
+        armorBase, armorMult, armorSP: currentSP,
+        coverName: String(cover?.label ?? ""),
+        coverSP: roundCoverSP,
+        effectiveSP: spFull,
+        apHalved: !!ap && armorMode !== ARMOR_MODES.NONE && spUsed !== spFull,
+        spUsed,
+        afterSPRaw: rawDamage - spUsed,
+        penMult: Number(penDamageMult) || 1,
+        afterSP: damageAfterSP,
+        penetrates,
+      };
+
+      results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location), coverSP: roundCoverSP, coverChew, breakdown });
 
       // Between-hit SP degradation: same model + same gate as the async path's per-layer ablation.
       // async (applyAreaDamages): `ablate && armorMode===FULL && penetrates && netDamage>0` →
@@ -629,6 +655,30 @@ export function _deriveLiveSP(target, location, damageType = "") {
   const borgSP = borgArmorSP(target, location);
   if (borgSP > 0) combined = combineArmorSP(combined, borgSP);
   return combined;
+}
+
+/**
+ * The NAMED composition behind a location's combined armor SP: one row per layer that actually
+ * contributes, carrying the item's own name and the SP it brings to this hit's damage type. Same
+ * item set and same per-layer valuation `_deriveLiveSP` folds, so the rows are the pieces of the
+ * number the damage math used rather than a second opinion about it. A full-conversion borg's
+ * chassis has no item behind it, so it comes back flagged (`chassis`) and nameless for the render
+ * edge to label. PURE — no i18n, no documents written.
+ */
+export function armorLayerRows(target, location, damageType = "") {
+  const contributors = getArmorContributors(target, location);
+  const allItems = [...contributors.cwItems, ...contributors.orderedLayers, ...contributors.unassigned];
+  const rows = [];
+  for (const item of allItems) {
+    const base = (item.type === "cyberware")
+      ? Number(item.system?.CyberWorkType?.Locations?.[location]) || 0
+      : Number(item.system?.coverage?.[location]?.stoppingPower) || 0;
+    const sp = typedLayerSP(item, base, damageType);
+    if (sp > 0) rows.push({ name: item.name, sp });
+  }
+  const chassis = borgArmorSP(target, location);
+  if (chassis > 0) rows.push({ name: "", sp: chassis, chassis: true });
+  return rows;
 }
 
 /** Effective armor SP at a hit location AFTER proportional layer combination (the value the damage

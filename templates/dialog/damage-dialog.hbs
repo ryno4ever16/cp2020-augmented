@@ -65,6 +65,20 @@
       {{#unless hit.penetrates}}<span class="inactive" style="font-size:0.75em;" title="{{CPLocal 'DamageDlgStopped'}}">✗</span>{{/unless}}
       {{#if hit.overridden}}<span class="inactive" style="font-size:0.75em; color:var(--color-text-hyperlink);" title="{{CPLocal 'DamageDlgOverridden'}}">✎</span>{{/if}}
     </div>
+    {{!-- The SP column is one combined number; this line says what went into it, naming every
+          component — each armor piece, the cover object the shot crossed, and what that round cost
+          the object's structure. Collapsed by default; the reader opens the row they doubt. --}}
+    {{#if hit.breakdownRows}}
+    <details class="cp-damage-breakdown">
+      <summary>{{CPLocal "DamageDlgBreakdown"}}</summary>
+      {{#each hit.breakdownRows}}
+      <div class="cp-damage-breakdown-row{{#if drain}} cp-damage-breakdown-drain{{/if}}">
+        <span class="cp-bd-label">{{label}}</span>
+        <span class="cp-bd-value">{{value}}</span>
+      </div>
+      {{/each}}
+    </details>
+    {{/if}}
     {{/each}}
   </div>
 
