@@ -1121,6 +1121,9 @@ export const TRACER_COLOR = Object.freeze({ hue: 18, saturate: -0.35, brightness
  * the site, per this file's standing habit for values the user may want back.
  */
 export const TRACER_COLOR_INCENDIARY = Object.freeze({ hue: -14, saturate: 0.30, brightness: 1.20 });
+// ⏪ ON NO SHIPPED ROW as of 2026-08-11 — the hardened rounds' flight tint was removed under the
+// realism razor (the ruling is at the AMMO_FX `ap` row). Left declared rather than deleted, the way
+// this file leaves every superseded mechanism wired: restoring it is one field on two rows.
 export const TRACER_COLOR_HARDENED   = Object.freeze({ hue: 8,   saturate: -0.85, brightness: 1.45 });
 export const TRACER_COLOR_INERT      = Object.freeze({ hue: 0,   saturate: -0.55, brightness: 0.60 });
 
@@ -1281,7 +1284,23 @@ export const TRACER_COLOR_DART = Object.freeze({ hue: 0, saturate: -0.90, bright
  * it is a property of seeding off the payload at all.
  */
 export const VOLLEY = Object.freeze({
-  enabled: true,
+  // ⏪⏪ VETOED (user ruling 2026-08-11, at the bench — the trial's verdict). The whole block below is
+  // SHELVED, not deleted, which is this file's standing habit for a superseded mechanism: with this one
+  // field false `volleySpecFor` returns null, `volleyOwns` answers no, and every downstream site falls
+  // THROUGH to the pellet fan it was written to fall through to — including the hit mark fxShot
+  // suppressed while the trial ran, which comes back with it. Restoring the trial is this one field.
+  //
+  // WHAT WAS WRONG WITH IT, in the user's terms: *"the visible bullets and long trails are a problem"* —
+  // buckshot is small balls in an irregular grouped spread, and this asset draws aligned side-by-side
+  // lanes of long-trailed rounds, which reads as a rank of rifle fire. The ARRIVALS were the half worth
+  // keeping (*"the arrival fireballs were GREAT"*), and they are kept — scaled down and moved onto the
+  // fan's own pellet endpoints (PELLET_ARRIVAL). The irregularity the volley was reaching for is now
+  // the fan's own (PELLET_CHAOS).
+  //
+  // The two personal-review findings against it die here with it: F9 (the branch that replaced the round
+  // ignored the resolved entry's colour) was fixed on 2026-08-10 and is moot with the branch off, and
+  // F4 (the settle cap at the asset's content end) belongs to an element nothing draws.
+  enabled: false,
   key: "jb2a.volley_of_projectiles_Line.bullet.001.001.orangeyellow",
   // Measured off the installed files (see the table above). Keyed by the engine's own band names.
   crossMs: Object.freeze({ "15ft": 240, "30ft": 480, "60ft": 840, "90ft": 1200 }),
@@ -1416,7 +1435,17 @@ export function rotateAbout(origin, point, deg) {
  *    count leaves no pellet sitting exactly on the aim line and the group cannot read as "one bolt
  *    plus strays". A burst stays bounded — the fan-out caps at MAX_FX_SHOTS units, so the worst case
  *    is MAX_FX_SHOTS × pellets tracers.
- *  - `dashSquares: 1` — the drawn WIDTH of one pellet's sprite, one grid square, height following the
+ *  - ⏪ `dashSquares` 1 → **0.7** (user ruling 2026-08-11, with the volley veto: *"buckshot = small
+ *    balls"*, so the dashes have to stop reading as dashes). The number is the sprite's drawn WIDTH and
+ *    the asset lights roughly a fifth of it, so shortening the frame shortens the trail more than it
+ *    shortens the ball — which is the read the ruling asks for. It is NOT taken further than this on
+ *    purpose: 0.5 was the FIRST value ever tried on this row and was rejected by eye as "a few pixels,
+ *    reads as dirt on the screen" (the note below is that measurement, kept), so 0.7 is the shortest
+ *    step that stays clear of the value already known to disappear. The per-pellet size jitter
+ *    (PELLET_CHAOS.sizeFraction, ±25%) then spreads the six across 0.53–0.88, all of them above the
+ *    rejected floor. ⏪ The revert value is `dashSquares: 1`. This wants eyes — it is a look call.
+ *  - the previous note, unchanged, and it is why 0.7 rather than 0.5: the drawn WIDTH of one pellet's
+ *    sprite, height following the
  *    asset's own aspect (it is sized in grid units, so it is the same fraction of a square on any
  *    scene: measured 100×40px on a 100px grid, against the rifle bolt's 800×200px on the same shot).
  *    This is the answer to "the projectiles read as standard bullets": the previous build stretched
@@ -1503,7 +1532,7 @@ export const FX_CLASSES = Object.freeze({
   pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, motes: 8,  impactSquares: 0.7 },
   smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, motes: 12, impactSquares: 0.75 },
   rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, motes: 13, impactSquares: 0.95 },
-  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1, dashMs: 150, cadenceMs: 180 },
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 0.7, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
 });
 
@@ -1564,6 +1593,48 @@ export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orang
  * does. Recorded here so a reader meets the fact at the asset rather than discovering it.
  */
 export const IMPACT_DUST = Object.freeze({ key: "jb2a.smoke.puff.ring.01.white", clipMs: 1067 });
+
+/**
+ * WHERE THE PELLETS LANDED — a small mark at each pellet's own endpoint, for a fanned round that hit.
+ *
+ * ⭐ THE HALF OF THE TRIAL THE USER KEPT (ruling 2026-08-11): *"the arrival fireballs were GREAT but
+ * scale them DOWN"* by at least half. The volley baked its arrivals into one clip and they went with
+ * it; this puts them back on the fan, where they belong to the pellets that actually caused them —
+ * `pelletEndpoints` already computes those positions for the tracers, so nothing is invented here.
+ *
+ * `squares: 0.45` — the drawn width, against the shell class's own aim-point mark at 1.15 squares.
+ * That is under 40% of the mark this rail already draws on the target and comfortably inside the "at
+ * least half down" the ruling asks for, which is what keeps six of them from becoming the wall of fire
+ * the volley's blooms were being scaled back from. It is a LOOK call and it wants eyes.
+ *
+ * ⚠ IT IS THE SAME ASSET AS `IMPACT_DUST`, deliberately and not by accident: that key was chosen out of
+ * a closed enumeration of the free tier's impacts precisely as the BLUNT, radial, no-rotation-question
+ * arrival mark (the survey is at IMPACT_DUST), which is the same job at a smaller size. It is declared
+ * as its own constant rather than as a reference because the two elements answer to different rulings
+ * and either may be re-pointed without the other. A reader counting sprites should know that a baton
+ * shell puts its own dust mark on the aim point at the class's 1.15 squares and six of these at the
+ * pellet endpoints at 0.45, all out of one key — so tell them apart by SIZE, not by file.
+ *
+ * `clipMs: 500` — a trim, not the asset's life (the dust ring runs 1067ms). Six marks landing within a
+ * few frames of each other need to be gone before the next discharge, and the ring's ink is dense
+ * through its first half; 500 keeps the bloom and drops the drift. It sits under the 833ms the aim-point
+ * mark is trimmed to, so these can never be the last thing on screen and the tail arithmetic does not
+ * take a term for them.
+ *
+ * ⛔ THE RAZOR SPLIT — STANDARD BUCK GETS DUST, THE INCENDIARY SHELL GETS ITS FIRES. The ruling reserves
+ * fire arrivals for the incendiary load, and the incendiary load ALREADY has them: its landing points
+ * are the same pellet endpoints, and `fxGroundFire` sets a real flame burning at each one. So the split
+ * is not two assets chosen by load name — it is one gate, `entry.groundFire`, and a load that lights
+ * its landings does not also get dust over them. That also honours the standing 2026-08-09 ruling that
+ * removed the api row's fire impact ("get rid of the blast circle that lands on the target"): drawing a
+ * fire mark here would have re-created exactly the doubling that ruling deleted. The api shell's red
+ * treatment is therefore untouched, which is what the user asked for.
+ */
+export const PELLET_ARRIVAL = Object.freeze({
+  key: "jb2a.smoke.puff.ring.01.white",
+  squares: 0.45,
+  clipMs: 500,
+});
 
 /**
  * THE BATON ROUND (2026-08-09, user ruling) — the less-lethal load drawn as a SOLID OBJECT instead of
@@ -1819,12 +1890,21 @@ export const AMMO_FX = Object.freeze({
     flashColor: "#ff6a1a",
     groundFire: true,
   }),
+  // ⏪ THE FLIGHT TINT IS GONE FROM BOTH HARDENED ROWS (user ruling 2026-08-11, at the bench). The
+  // question the user put was a consistency one: the hollow-point treatment had already been deleted
+  // under the realism razor for saying a difference a viewer cannot see, so why does an armour-piercing
+  // round still FLY differently? It does not, in fact — a hardened core changes what happens when the
+  // round lands, not what the round looks like crossing a room — so the near-white bolt was the rail
+  // asserting something untrue about the flight. Both rows now fall through to the CLASS's own tracer
+  // colour, which is to say an AP round flies exactly like a standard one.
+  //   THE IMPACT STAYS, and that is what makes this pass the razor rather than delete a distinction:
+  // `IMPACT_CRACK` is a visibly different strike at the far end, which is where the difference actually
+  // is. The revert value, so restoring the flight tint is one line at each row:
+  // `tracerColor: TRACER_COLOR_HARDENED`.
   ap: Object.freeze({
-    tracerColor: TRACER_COLOR_HARDENED,
     impactKey: IMPACT_CRACK.key,
   }),
   dualPurpose: Object.freeze({
-    tracerColor: TRACER_COLOR_HARDENED,
     impactKey: IMPACT_CRACK.key,
   }),
   // ⏪ `hollowPoint` and `safety` STOOD HERE and were deleted 2026-08-09 under the realism razor (see
@@ -2687,7 +2767,7 @@ export function missEndpoint(from, to, rng = Math.random) {
  * Pure, and `rng` is injectable, so both branches are value-asserted rather than eyeballed.
  * Returns [] when there is nothing to fan (no aim, or a class carrying no pellet count).
  */
-export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = true, rng = Math.random } = {}) {
+export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = true, rng = Math.random, jitter = null } = {}) {
   const n = Math.trunc(pellets);
   if (!from || !to || !(n > 1)) return [];
   if (!hit) return Array.from({ length: n }, () => missEndpoint(from, to, rng));
@@ -2697,8 +2777,103 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
   const aim = Math.atan2(dy, dx);
   return Array.from({ length: n }, (_v, i) => {
     const offset = spreadRad * ((2 * i) / (n - 1) - 1);   // −1 … +1 of the cone, evenly spaced
-    return { x: from.x + Math.cos(aim + offset) * dist, y: from.y + Math.sin(aim + offset) * dist };
+    // ⭐ THE PER-PELLET IRREGULARITY (2026-08-11), and it is OPTIONAL so the even ladder above stays
+    // the readable default: `jitter[i]` adds this pellet's own angle nudge and pushes its endpoint
+    // nearer or further along its own line, which is what turns a neat arc into a grouped cluster at
+    // mixed depths. See PELLET_CHAOS for the ruling and the values; with no jitter passed every
+    // number below is the one this function has always returned.
+    const j = jitter?.[i] ?? null;
+    // ⛔ CLAMPED TO THE DECLARED CONE. The nudge is symmetric, so an OUTERMOST pellet would otherwise be
+    // pushed past the half-angle its class declares — and measured on the rig that is what took a hit
+    // off the body it was aimed at. The clamp is what makes "the group stays inside the cone" a
+    // guarantee rather than an intention; inner pellets never reach it.
+    const nudged = Math.max(-spreadRad, Math.min(spreadRad, offset + (Number(j?.angleRad) || 0)));
+    const angle = aim + nudged;
+    const reach = dist * (Number(j?.reachScale) > 0 ? Number(j.reachScale) : 1);
+    return { x: from.x + Math.cos(angle) * reach, y: from.y + Math.sin(angle) * reach };
   });
+}
+
+/**
+ * THE BUCKSHOT FAN'S IRREGULARITY — one jitter record per pellet, from the shot's own seed. Pure.
+ *
+ * ⏪⏪ THE FAN IS BACK, AND THE VOLLEY IS OFF (user ruling 2026-08-11, at the bench). The trial asset's
+ * *"visible bullets and trails are a problem"*: buckshot is small balls thrown in an irregular grouped
+ * spread, and the volley drew them SIDE BY SIDE in aligned lanes with long trails, which is a rank of
+ * rifle rounds and not a shot pattern. The ruling was *"choose a new asset for buckshot or go back to
+ * what we had"*, so the six-dash fan is restored — with the four things the volley was reaching for
+ * built into the fan itself rather than baked into one clip:
+ *
+ *  - `slotFraction` — each pellet's angle is nudged by up to this fraction of HALF ITS OWN SLOT in the
+ *    even ladder. The slots stop being a ladder — at 0.9 a pellet can reach almost to its neighbour's
+ *    place — while the group stays strictly INSIDE the cone the class declares, because the outermost
+ *    slots can only ever move inward by less than half a step.
+ *  - `reachFraction` — each pellet is sent nearer or further along its own line, by this fraction of
+ *    the cone's OWN LATERAL half-spread at that distance. This is the DEPTH half of "irregular grouped
+ *    spread": pellets that all stop on one arc read as a painted crescent, and pellets at mixed depths
+ *    read as a cluster with a near and a far side.
+ *  - `sizeFraction` — each pellet's drawn width varies by this fraction, so no two balls in one shot
+ *    are the same ball.
+ *  - `staggerMs` — each pellet leaves up to this many milliseconds late. A shot whose pellets all
+ *    start on the same frame is one object moving; a few milliseconds apart they are many.
+ *
+ * ⛔⛔ BOTH GEOMETRY KNOBS ARE SCALED BY THE CLASS'S OWN CONE, AND THAT IS LOAD-BEARING, not tidiness.
+ * The first build scaled them by the whole cone and by the whole shot: the angle jitter then pushed
+ * the outer pellets to 1.45× the declared spread and the depth jitter moved the arrival by a fifth of
+ * the shot's length, and a HIT stopped landing on the body it was aimed at (measured on the rig: 113px
+ * from the target's centre against a 50px half-width). Converging on the target is what makes a hit a
+ * hit — it is the property the whole `hit`/`miss` split is built on — so the irregularity has to live
+ * inside the cone rather than on top of it. Scaled this way the worst case a six-pellet fan can
+ * produce is the cone's own edge plus half its lateral spread in depth, which is inside a one-square
+ * token at every range a battle map spans.
+ *
+ * ⛔ SEEDED, AND THE SEED CARRIES PER-EVENT ENTROPY. The record is computed from the SHOT seed the
+ * fan-out already builds — attacker, weapon, counts, ROUND INDEX and the rolled `areaDamages` — so two
+ * clients draw the identical cluster while two consecutive identical trigger pulls do not (the F3 rule
+ * at fxSeedOf's callers, and the same term in the same position as the burning-ground seed). This is
+ * the finding the volley failed: its seed folded identity fields only and repeated itself.
+ */
+export const PELLET_CHAOS = Object.freeze({
+  slotFraction: 0.9,
+  reachFraction: 0.35,
+  sizeFraction: 0.25,
+  staggerMs: 45,
+});
+
+/**
+ * One jitter record per pellet, from a seed — the RAW rolls, in units of ±1. Pure, so determinism is
+ * proved by computing it twice, and the rolls are assertable without a cone to multiply them by.
+ */
+export function pelletChaosFor(seed, count) {
+  const n = Math.max(0, Math.trunc(count));
+  const rng = seededRng(seed);
+  return Array.from({ length: n }, () => ({
+    // Each draw is taken in a fixed order so the record is a function of the seed and the index alone.
+    angle: Number((rng() * 2 - 1).toFixed(4)),
+    reach: Number((rng() * 2 - 1).toFixed(4)),
+    sizeScale: Number((1 + (rng() * 2 - 1) * PELLET_CHAOS.sizeFraction).toFixed(4)),
+    delayMs: Math.round(rng() * PELLET_CHAOS.staggerMs),
+  }));
+}
+
+/**
+ * The same records RESOLVED against the class's own cone — the form pelletEndpoints reads. Pure, and
+ * kept apart from the roll above so the two questions stay separate: what did the seed produce, and
+ * how far may it move a pellet of THIS class.
+ *
+ * The angle is scaled by half of one slot in the even ladder (`1 / (n − 1)` of the cone, halved), so
+ * the jitter is always a fraction of the gap between neighbours; the reach is scaled by the cone's own
+ * lateral half-spread. See the bound note at PELLET_CHAOS for why neither is scaled by anything bigger.
+ */
+export function pelletJitterFor(seed, count, spreadRad = 0) {
+  const n = Math.max(0, Math.trunc(count));
+  const cone = Number(spreadRad) || 0;
+  const slotHalf = n > 1 ? cone / (n - 1) : 0;
+  return pelletChaosFor(seed, n).map((c) => ({
+    ...c,
+    angleRad: Number((c.angle * PELLET_CHAOS.slotFraction * slotHalf).toFixed(6)),
+    reachScale: Number((1 + c.reach * PELLET_CHAOS.reachFraction * cone).toFixed(6)),
+  }));
 }
 
 /**
@@ -2763,12 +2938,18 @@ export function seededRng(seed = 0) {
  */
 export function groundFirePoints(from, to, {
   landed = 1, pellets = 0, spreadRad = 0, scatterPx = 0, max = GROUND_FIRE.maxPerPayload, seed = 0,
+  jitter = null,
 } = {}) {
   if (!from || !to) return [];
   const want = Math.max(1, Math.min(Math.trunc(max), Math.trunc(landed) || 1));
   const n = Math.trunc(pellets);
   if (n > 1) {
-    const fan = pelletEndpoints(from, to, { pellets: n, spreadRad, hit: true });
+    // ⭐ THE SAME JITTER THE TRACERS TOOK (2026-08-11), passed in rather than rolled here. Once the fan
+    // became irregular (PELLET_CHAOS) this call had to take the irregularity with it or the claim above
+    // would stop being true: the flames would sit on the even ladder while the pellets that lit them
+    // flew a square either side. The caller hands over the FIRST round's own jitter, because the fires
+    // are one placement for the whole payload and that is the round whose landing they depict.
+    const fan = pelletEndpoints(from, to, { pellets: n, spreadRad, hit: true, jitter });
     if (!fan.length) return [];
     const take = Math.min(want, fan.length);
     const step = fan.length / take;
@@ -3122,7 +3303,7 @@ function _held(effect) {
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
 export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null } = {}) {
-  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0 };
+  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0 };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
   // the same code for every load. The KEY is passed in rather than resolved here because there is no
@@ -3244,7 +3425,13 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // every other class omits the field and takes the single endpoint. `out.tracer` stays the same
         // boolean either way (did this shot claim a tracer at all) and `out.pellets` reports how many
         // were queued, so a caller can tell the two shapes apart.
-        const fan = pelletEndpoints(from, to, { pellets: entry.pellets, spreadRad: entry.spreadRad, hit });
+        // ⭐ THE FAN IS IRREGULAR NOW (2026-08-11) — each pellet takes its own angle nudge inside the
+        // class's cone, its own depth, its own drawn size and its own few milliseconds of lateness, all
+        // from THIS shot's seed so two clients draw the identical cluster and two trigger pulls do not.
+        // See PELLET_CHAOS for the ruling. A class carrying no pellet count computes an empty record and
+        // reads exactly as it did.
+        const jitter = pelletJitterFor(shotSeed, Math.trunc(entry.pellets) || 0, entry.spreadRad);
+        const fan = pelletEndpoints(from, to, { pellets: entry.pellets, spreadRad: entry.spreadRad, hit, jitter });
         const ends = fan.length ? fan : [hit ? to : missEndpoint(from, to)];
         // Two ways to draw one round, chosen by whether the class asked for a dash length:
         //
@@ -3269,7 +3456,9 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         const dashMs = _dashMsOverride ?? entry.dashMs;
         const aimDist = Math.hypot(to.x - from.x, to.y - from.y) || 1;
         const pelletSpeed = (aimDist / Math.max(1, dashMs)) * 1000;
-        for (const end of ends) {
+        for (let p = 0; p < ends.length; p++) {
+          const end = ends[p];
+          const chaos = jitter[p] ?? null;
           const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken)
             .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
           // TERMINAL ELEMENT — named so the engine's own end can be observed (see _watchSettleTag).
@@ -3278,14 +3467,34 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
           // TRACER_COLOR for the measurement that rules the tint out.
           if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor);
           if (entry.dashSquares > 0) {
-            shot.size({ width: entry.dashSquares }, { gridUnits: true })
+            // THIS pellet's own drawn width and its own few milliseconds of lateness. The size varies
+            // about the row's number and the stagger is spent BEFORE the movement, so the crossing time
+            // and therefore the arrival ladder are untouched by either.
+            const width = Number((entry.dashSquares * (Number(chaos?.sizeScale) > 0 ? chaos.sizeScale : 1)).toFixed(4));
+            shot.size({ width }, { gridUnits: true })
               .rotateTowards(end)
               .moveTowards(end, { ease: "linear", rotate: false })
               .moveSpeed(pelletSpeed)
               .duration(dashMs + DASH_ARRIVAL_HOLD_MS)
               .fadeOut(DASH_ARRIVAL_HOLD_MS);
+            if (chaos?.delayMs > 0) shot.delay(chaos.delayMs);
           } else {
             shot.stretchTo(end);
+          }
+          // ⭐ WHERE THIS PELLET LANDED — the small arrival mark, on a round that HIT and a load that
+          // does not already light its own landing points (the razor split is at PELLET_ARRIVAL). It
+          // hangs on the same arrival clock as everything else, plus this pellet's own stagger, so the
+          // marks pop in the order the pellets got there. Never tagged: they are trimmed well under the
+          // aim-point mark, so they cannot be the last thing on screen and the tail takes no term.
+          // The capture seam wins here too, for the same reason it wins over the hit mark: a test that
+          // shortens the crossing must shorten everything that waits on it.
+          if (hit && fan.length && !entry.groundFire && fxDbEntryExists(PELLET_ARRIVAL.key)) {
+            _held(seq.effect().file(PELLET_ARRIVAL.key)).atLocation(end)
+              .size({ width: PELLET_ARRIVAL.squares }, { gridUnits: true })
+              .timeRange(0, PELLET_ARRIVAL.clipMs)
+              .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
+              .delay((_dashMsOverride ?? arrival) + (Number(chaos?.delayMs) || 0));
+            out.pelletArrivals++;
           }
         }
         out.tracer = true;
@@ -4388,6 +4597,14 @@ export async function fxWeaponFired(payload) {
   const arrival = arrivalSpecFor(weaponClass, ammoKey, payloadAimSquares(shooter, target, gridSizePx), volley);
   const arrivalMs = arrival.ms;
 
+  // ONE round's seed, built in ONE place. Attacker, weapon, the two counts, the ROUND INDEX and the
+  // rolled damage — identity plus per-event entropy, which is the rule this file follows everywhere it
+  // seeds (see the entropy note at the VOLLEY block and the burning-ground seed above). Hoisted on
+  // 2026-08-11 because a second reader appeared: the burning ground now takes the FIRST round's pellet
+  // jitter, and two copies of this expression are how the flames and the pellets drift apart.
+  const shotSeedFor = (i) => fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits, i,
+    JSON.stringify(payload?.areaDamages ?? {}));
+
   // One payload = one resolved burst, so whether this is a MULTI-round payload is known before the
   // first round goes out and holds for all of them — every round of one burst gets the same asset,
   // rather than the first sounding different from the rest.
@@ -4435,6 +4652,9 @@ export async function fxWeaponFired(payload) {
       const pts = groundFirePoints(from, at, {
         landed: hits, pellets: ammoEntry.pellets, spreadRad: ammoEntry.spreadRad,
         scatterPx: GROUND_FIRE.scatterSquares * gridPx, max: GROUND_FIRE.maxPerPayload, seed,
+        // The FIRST round's own pellet jitter, so the flames sit where that round's pellets actually
+        // went rather than on the even ladder they no longer fly. Same helper, same seed the draw uses.
+        jitter: pelletJitterFor(shotSeedFor(0), Math.trunc(ammoEntry.pellets) || 0, ammoEntry.spreadRad),
       });
       if (pts.length) {
         groundFire = { queued: true, seed, points: pts.length, at: pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) };
@@ -4568,8 +4788,7 @@ export async function fxWeaponFired(payload) {
       // THE ARRIVAL IS HANDED DOWN rather than re-derived: one derivation per payload, so this round's
       // mark and this round's spray (issued above) are hung on the identical number.
       fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
-        volley, arrivalMs, shotSeed: fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits, i,
-          JSON.stringify(payload?.areaDamages ?? {})) })
+        volley, arrivalMs, shotSeed: shotSeedFor(i) })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
       // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock, and the mark counted
       // against the same budget the refused rounds draw from. The hits are the LEADING rounds of the

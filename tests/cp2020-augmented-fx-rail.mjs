@@ -704,10 +704,16 @@ const res = await page.evaluate(async () => {
         if (cb?.width && cb.width / (Number(canvas.stage?.scale?.x) || 1) >= line * 0.5) continue;
         seen.set(e.id, { x: e.position.x, y: e.position.y });
       }
-      if (performance.now() - t0 > 2600) clearInterval(iv);
+      // ⏱ WIDENED 2600 → 3600 ms on 2026-08-11, and the reason is a product change rather than a flaky
+      // rig: each pellet now leaves up to PELLET_CHAOS.staggerMs late and stops at its own depth, so the
+      // LAST pellet of a fan is created and settles measurably after the first. At the old window this
+      // sampler caught four of six on a software rasteriser and the retry could not help — every attempt
+      // sampled the same too-short window. Measured with a stand-alone probe at the wider window: 6 of 6
+      // every run, worst 42px from centre against a 50px half-width, fractions 0.976–1.024.
+      if (performance.now() - t0 > 3600) clearInterval(iv);
     }, 8);
     await fx.fxShot(shooter, target, { weaponClass: "shotgun", hit, light: false });
-    await sleep(2800);
+    await sleep(3800);
     clearInterval(iv);
     return [...seen.values()].map(p => ({
       fraction: +(Math.hypot(p.x - from.x, p.y - from.y) / line).toFixed(3),
@@ -1587,10 +1593,16 @@ const res = await page.evaluate(async () => {
   const drawnBolt = await drawnTracerSampled("rifle", rifleRow.tracer, 1400);
   await drain();
   out.drawnTracers = { gridPx, dash: drawnDash, bolt: drawnBolt };
-  ok("drawn: the shell pellet is rendered at the mapped dash length, in real pixels",
+  // ⏪ A BAND RATHER THAN A NUMBER (2026-08-11): the sampler cannot know WHICH of the six pellets it
+  // caught, and each is drawn at the row's length times its own seeded size scale. The band is the
+  // spec's own bound, so a pellet outside it is a real fault and a jitter that collapsed to zero would
+  // still have to sit at the row's length.
+  const dashLoPx = shellRow.dashSquares * (1 - fx.PELLET_CHAOS.sizeFraction) * gridPx - 2;
+  const dashHiPx = shellRow.dashSquares * (1 + fx.PELLET_CHAOS.sizeFraction) * gridPx + 2;
+  ok("drawn: the shell pellet is rendered inside the mapped dash length's own jitter band, in real pixels",
     drawnDash.frames > 0 && drawnDash.visible
-    && Math.abs(drawnDash.w - shellRow.dashSquares * gridPx) <= 2,
-    `${drawnDash.w}x${drawnDash.h}px on a ${gridPx}px grid, expected ${shellRow.dashSquares * gridPx}px wide`);
+    && drawnDash.w >= dashLoPx && drawnDash.w <= dashHiPx,
+    `${drawnDash.w}x${drawnDash.h}px on a ${gridPx}px grid, band ${dashLoPx.toFixed(1)}-${dashHiPx.toFixed(1)}px around ${shellRow.dashSquares * gridPx}px`);
   ok("drawn: the rifle bolt is rendered spanning the shot, many times the pellet's length (control)",
     drawnBolt.frames > 0 && drawnBolt.w >= drawnDash.w * 4,
     `bolt ${drawnBolt.w}x${drawnBolt.h}px vs pellet ${drawnDash.w}x${drawnDash.h}px`);
@@ -1827,40 +1839,46 @@ const res = await page.evaluate(async () => {
   ok("dart language: buckshot is left orange — the distinction is a difference, not a repaint of both",
     shellTracers.every(e => e.filter === undefined) && fx.FX_CLASSES.shotgun.tracerColor === null,
     "buckshot fan carries no matrix");
-  // ⭐ THE VOLLEY AS QUEUED (2026-08-09, ON TRIAL). What is handed to the engine, by value: ONE effect
-  // carrying the volley key, stretched to an endpoint, mirrored by this round's own chaos — and NOT a
-  // single pellet or hit mark beside it. A merge-only assertion could not see the substitution.
+  // ⏪⏪ THE VOLLEY IS SHELVED (user veto 2026-08-11). These legs used to drive the trial's substitution;
+  // they now pin the SHELF — that a buckshot discharge draws the fan and its own hit mark by default,
+  // and that the replaced-round branch is still intact behind the one switched-off field, so restoring
+  // the trial really is one edit. The branch is exercised with a HAND-BUILT spec, because
+  // volleySpecFor answers null while the switch is off.
   played.length = 0; playedEntries.length = 0;
   const volSeed = 4242;
+  ok("volley shelved: the switch is off and the resolver answers null at every distance",
+    fx.VOLLEY.enabled === false && [0, 2, 5, 9, 15, 25].every(d => fx.volleySpecFor(d) === null)
+    && fx.volleyOwns({ caliber: "00" }) === false,
+    `enabled ${fx.VOLLEY.enabled}`);
   await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "shotgun", hit: true, light: false,
-    ammoKey: "standard", volley: fx.volleySpecFor(5), shotSeed: volSeed });
+    ammoKey: "standard", shotSeed: volSeed });
+  await sleep(150);
+  const vetoQueued = playedEntries.flat();
+  ok("volley shelved: a buckshot discharge queues its PELLET FAN and no volley sprite (negative)",
+    vetoQueued.filter(e => e.file === fx.VOLLEY.key).length === 0
+    && vetoQueued.filter(e => e.file === fx.FX_CLASSES.shotgun.tracer).length === fx.FX_CLASSES.shotgun.pellets,
+    `${vetoQueued.filter(e => e.file === fx.FX_CLASSES.shotgun.tracer).length} pellets, ${vetoQueued.filter(e => e.file === fx.VOLLEY.key).length} volley`);
+  ok("volley shelved: the hit-confirmation mark the trial suppressed is back on the discharge",
+    vetoQueued.some(e => e.file === fx.HIT_CONFIRM.key),
+    vetoQueued.map(e => String(e.file).split(".").slice(-2).join(".")).join(" "));
+  // The shelved branch, driven with a spec built by hand — proof that switching the field back on
+  // restores the whole mechanism rather than half of it.
+  played.length = 0; playedEntries.length = 0;
+  const shelved = { key: fx.VOLLEY.key, band: "30ft", crossMs: fx.VOLLEY.crossMs["30ft"], tailMs: fx.VOLLEY.tailMs["30ft"] };
+  const volTagged = await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "shotgun", hit: true, light: false,
+    ammoKey: "standard", volley: shelved, shotSeed: volSeed, settleTag: "__pw__volley__tag" });
   await sleep(150);
   const volQueued = playedEntries.flat();
   const volEff = volQueued.find(e => e.file === fx.VOLLEY.key);
-  ok("volley queued: exactly one volley sprite is handed to the engine, stretched down the shot",
-    volQueued.filter(e => e.file === fx.VOLLEY.key).length === 1 && Number.isFinite(volEff?.stretchTo?.x),
-    `${volQueued.filter(e => e.file === fx.VOLLEY.key).length} volley, stretched to ${JSON.stringify(volEff?.stretchTo ?? null)}`);
-  ok("volley queued: no pellet and no hit mark are queued with it — it replaces both (negative)",
-    volQueued.every(e => e.file !== fx.FX_CLASSES.shotgun.tracer)
-    && volQueued.every(e => e.file !== fx.HIT_CONFIRM.key),
-    volQueued.map(e => String(e.file).split(".").slice(-2).join(".")).join(" "));
-  ok("volley queued: the mirror knob really reaches the engine, at this round's own seeded value",
-    volEff?.mirrorY === fx.volleyChaosFor(volSeed).mirrorY,
-    `queued ${volEff?.mirrorY} vs seeded ${fx.volleyChaosFor(volSeed).mirrorY}`);
-  // ⭐ THE SETTLE NAME lands on the volley, because it is the only element of the round that lasts —
-  // the fan and the impact it replaced were the two named ones. Driven with a real tag.
-  played.length = 0; playedEntries.length = 0;
-  const volTagged = await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "shotgun", hit: true, light: false,
-    ammoKey: "standard", volley: fx.volleySpecFor(5), shotSeed: volSeed, settleTag: "__pw__volley__tag" });
-  await sleep(150);
-  const volNamed = playedEntries.flat().find(e => e.file === fx.VOLLEY.key);
-  ok("volley queued: the settle name lands on the volley, and on nothing else of the round",
-    volNamed?.name === "__pw__volley__tag" && volTagged.tagged === 1
-    && playedEntries.flat().filter(e => e.name === "__pw__volley__tag").length === 1,
-    `${volTagged.tagged} tagged element(s), name ${volNamed?.name}`);
-  ok("volley queued: the shell still queues its lance — the volley replaces the ROUND, not the discharge",
-    volQueued.some(e => e.file === fx.FX_CLASSES.shotgun.muzzle),
-    "lance present alongside the volley");
+  ok("volley shelved: handed a spec by hand the branch still substitutes — one sprite, stretched, mirrored",
+    volQueued.filter(e => e.file === fx.VOLLEY.key).length === 1 && Number.isFinite(volEff?.stretchTo?.x)
+    && volEff?.mirrorY === fx.volleyChaosFor(volSeed).mirrorY,
+    `${volQueued.filter(e => e.file === fx.VOLLEY.key).length} volley, mirror ${volEff?.mirrorY}`);
+  ok("volley shelved: and the settle name still lands on it and on nothing else of the round",
+    volEff?.name === "__pw__volley__tag" && volTagged.tagged === 1
+    && volQueued.every(e => e.file !== fx.FX_CLASSES.shotgun.tracer)
+    && volQueued.some(e => e.file === fx.FX_CLASSES.shotgun.muzzle),
+    `${volTagged.tagged} tagged element(s), name ${volEff?.name}`);
   played.length = 0; playedEntries.length = 0;
 
   /* ── 9c-ii. the pellet is a SHORT TRAVELLED sprite, not a painted streak ── */
@@ -1870,10 +1888,16 @@ const res = await page.evaluate(async () => {
   // engine: a fixed size in GRID UNITS (so the length is a spec, not whatever the ranged asset handed
   // back for that distance), a movement to the endpoint, a crossing time, and NO stretch at all.
   const aimDistPx = Math.hypot(fx.centerOf(targetDoc).x - fx.centerOf(tokenDoc).x, fx.centerOf(targetDoc).y - fx.centerOf(tokenDoc).y);
-  ok("dash: every shell pellet is sized in grid units to the mapped dash length",
+  // ⏪ THE WIDTHS ARE PER-PELLET NOW (2026-08-11, PELLET_CHAOS): each is the row's length times THIS
+  // pellet's own seeded size scale, so the leg computes the same six numbers off the same seed rather
+  // than asserting one. The unit is still grid units, which is the property that made the length a spec.
+  const seed0Chaos = fx.pelletChaosFor(0, shellRow.pellets);
+  ok("dash: every shell pellet is sized in grid units to its own seeded share of the mapped dash length",
     shellTracers.length === shellRow.pellets
-    && shellTracers.every(e => e.size?.width === shellRow.dashSquares && e.sizeOpts?.gridUnits === true),
-    JSON.stringify(shellTracers.map(e => [e.size, e.sizeOpts])[0] ?? null));
+    && shellTracers.every((e, i) => e.size?.width === Number((shellRow.dashSquares * seed0Chaos[i].sizeScale).toFixed(4))
+      && e.sizeOpts?.gridUnits === true)
+    && new Set(shellTracers.map(e => e.size?.width)).size === shellRow.pellets,
+    `${shellTracers.map(e => e.size?.width).join(" ")} around ${shellRow.dashSquares}`);
   ok("dash: the height is left on the asset's own aspect, not forced",
     shellTracers.every(e => e.size?.height === undefined), JSON.stringify(shellTracers[0]?.size ?? null));
   // THE CROSSING TIME AND THE LIFETIME ARE NOW TWO DIFFERENT NUMBERS, and that split is the fix for
@@ -1902,7 +1926,8 @@ const res = await page.evaluate(async () => {
     heldTracers.length === shellRow.pellets
     && heldTracers.every(e => e.duration === 900 + fx.DASH_ARRIVAL_HOLD_MS
       && Math.abs((aimDistPx / e.moveSpeed) * 1000 - 900) < 1
-      && e.size?.width === shellRow.dashSquares && e.stretchTo === undefined),
+      && Math.abs(e.size?.width - shellRow.dashSquares) <= shellRow.dashSquares * fx.PELLET_CHAOS.sizeFraction
+      && e.stretchTo === undefined),
     `${heldTracers.length} pellets crossing in ${((aimDistPx / (heldTracers[0]?.moveSpeed || 1)) * 1000).toFixed(0)}ms, alive ${[...new Set(heldTracers.map(e => e.duration))].join(",")}ms`);
   fx._setDashMs(null);
   played.length = 0; playedEntries.length = 0;
@@ -3432,115 +3457,90 @@ const res = await page.evaluate(async () => {
     `declared ${"tracerColor" in fx.FX_CLASSES.shotgun}, painted ${JSON.stringify(fx.FX_CLASSES.shotgun.tracerColor)}`);
   await drain();
 
-  /* -- 11c-iii-c. THE BUCKSHOT VOLLEY — the trial, driven -- */
-  // ⚠ ON TRIAL, not adopted. These legs pin what the trial SHIPS so the user's ruling lands on a known
-  // object, and so that the revert is one constant: with VOLLEY.enabled false every one of them falls
-  // back to the dash-fan legs above rather than to a second code path.
-  ok("volley: the trial is armed, and its key resolves on the installed free tier",
-    fx.VOLLEY.enabled === true && fx.fxDbEntryExists(fx.VOLLEY.key) === true
+  /* -- 11c-iii-c. THE BUCKSHOT VOLLEY — VETOED, and the shelf pinned -- */
+  // ⏪⏪ THE TRIAL IS OVER (user ruling 2026-08-11, at the bench). Verdict: the asset's *"visible bullets
+  // and long trails are a problem"* — buckshot is small balls in an irregular grouped spread, not a rank
+  // of aligned rounds — so it is switched off and the six-dash fan is what buckshot draws. These legs
+  // no longer drive the substitution; they pin THE SHELF: that the switch is off, that every resolver
+  // answers accordingly, and that the shelved mechanism is still whole behind the one field so putting
+  // it back is genuinely one edit rather than a rebuild.
+  ok("volley veto: the switch is off, and its key still resolves on the installed tier (the shelf is intact)",
+    fx.VOLLEY.enabled === false && fx.fxDbEntryExists(fx.VOLLEY.key) === true
     && /volley_of_projectiles_Line\.bullet\.001\.001/.test(fx.VOLLEY.key),
     fx.VOLLEY.key);
-  // ⭐ THE BAND MIRROR, against the ENGINE'S OWN PICKER rather than against our own table. This is the
-  // leg that matters most: the whole tail arithmetic is derived from which file the engine will serve,
-  // and a mirror that drifts from the engine is silent.
+  ok("volley veto: the resolver answers null at every distance, and no cartridge claims it (negative)",
+    [0, 2, 4.9, 5, 9, 14.9, 15, 25].every(d => fx.volleySpecFor(d) === null)
+    && fx.volleyOwns({ caliber: "00" }) === false
+    && fx.volleyOwns({ caliber: "00", modifier: "api" }) === false,
+    "null at 0/2/4.9/5/9/14.9/15/25 squares");
+  // ⭐ THE BAND MIRROR SURVIVES THE VETO, and it is kept for a reason: `volleyBandFor` is the pure
+  // mirror of the ENGINE'S OWN picker, it is what the shelved tail arithmetic reads, and it is the leg
+  // that would catch the mirror drifting away from the engine while the trial sat switched off.
   const volEntry = globalThis.Sequencer.Database.getEntry(fx.VOLLEY.key);
   const gpx = Number(canvas.dimensions.size) || 100;
   const bandRows = [2, 4.9, 5, 6, 8.9, 9, 12, 14.9, 15, 20].map((d) => {
     const served = String(volEntry?.getFileForDistance?.(d * gpx) ?? "").match(/_(\d+ft)_/)?.[1] ?? "?";
     return { d, served, ours: fx.volleyBandFor(d) };
   });
-  ok("volley: our band picker agrees with the engine's own at every boundary — 5, 9 and 15 squares",
+  ok("volley veto: the shelved band picker still agrees with the engine's own at every boundary",
     bandRows.every(r => r.served === r.ours),
     bandRows.map(r => `${r.d}:${r.ours}${r.served === r.ours ? "" : `!=${r.served}`}`).join(" "));
-  ok("volley: the boundaries are the mirrored ones and nothing else",
-    fx.volleyBandFor(4.9) === "15ft" && fx.volleyBandFor(5) === "30ft"
-    && fx.volleyBandFor(8.9) === "30ft" && fx.volleyBandFor(9) === "60ft"
-    && fx.volleyBandFor(14.9) === "60ft" && fx.volleyBandFor(15) === "90ft",
-    fx.VOLLEY_BANDS.map(b => `${b.band}>=${b.minSquares}`).join(" "));
-  // ⭐ THE TAIL, BY VALUE AT THREE DISTANCES — the whole reason the band is resolved at all. The
-  // numbers are the decoded content ends, and each one is a different file.
-  ok("volley: the tail is BAND-DERIVED, so a longer shot holds the window longer — by value",
-    fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(2)) === 600
-    && fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(6)) === 800
-    && fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(12)) === 1200
-    && fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(20)) === 1600,
-    [2, 6, 12, 20].map(d => `${d}sq:${fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(d))}`).join(" "));
-  ok("volley: a fixed guess would open the window early on a long shot — the 90ft tail beats the shell's own",
-    fx.volleySpecFor(20).tailMs > fx.presentationTailMs("shotgun")
-    && fx.volleySpecFor(2).crossMs < fx.volleySpecFor(20).crossMs,
-    `90ft tail ${fx.volleySpecFor(20).tailMs}ms vs shell tail ${fx.presentationTailMs("shotgun")}ms`);
-  ok("volley: the crossing and the tail are two different numbers per band, and the tail is the later",
-    ["15ft", "30ft", "60ft", "90ft"].every(b => fx.VOLLEY.tailMs[b] > fx.VOLLEY.crossMs[b]),
+  ok("volley veto: the shelved band tables are intact — crossing and tail, four bands, tail the later",
+    ["15ft", "30ft", "60ft", "90ft"].every(b => fx.VOLLEY.tailMs[b] > fx.VOLLEY.crossMs[b])
+    && fx.VOLLEY.jitterDeg === 5 && fx.VOLLEY.mirrorFlip === true,
     ["15ft", "30ft", "60ft", "90ft"].map(b => `${b}:${fx.VOLLEY.crossMs[b]}/${fx.VOLLEY.tailMs[b]}`).join(" "));
-  // ⭐ THE CHAOS, as pure values: deterministic, per-round, and both knobs actually moving.
+  // The shelved chaos, still pure and still deterministic — handed a seed it computes the same discharge
+  // twice, which is the property the revert depends on.
   const chaosA = fx.volleyChaosFor(1234), chaosB = fx.volleyChaosFor(1234);
-  ok("volley chaos: it is a function of the seed alone, so two clients compute the same discharge",
-    chaosA.mirrorY === chaosB.mirrorY && chaosA.jitterDeg === chaosB.jitterDeg,
+  ok("volley veto: the shelved chaos is still a function of the seed alone",
+    chaosA.mirrorY === chaosB.mirrorY && chaosA.jitterDeg === chaosB.jitterDeg
+    && Math.abs(chaosA.jitterDeg) <= fx.VOLLEY.jitterDeg,
     JSON.stringify(chaosA));
-  const chaosSpread = Array.from({ length: 40 }, (_v, i) => fx.volleyChaosFor(fx.fxSeedOf("a", "w", 3, 3, i)));
-  ok("volley chaos: the mirror really flips and the jitter really varies across discharges",
-    chaosSpread.some(c => c.mirrorY) && chaosSpread.some(c => !c.mirrorY)
-    && new Set(chaosSpread.map(c => c.jitterDeg)).size > 30,
-    `${chaosSpread.filter(c => c.mirrorY).length}/40 mirrored, ${new Set(chaosSpread.map(c => c.jitterDeg)).size} distinct angles`);
-  ok("volley chaos: every jitter stays inside the few degrees the spec names",
-    chaosSpread.every(c => Math.abs(c.jitterDeg) <= fx.VOLLEY.jitterDeg), `±${fx.VOLLEY.jitterDeg}°`);
-  ok("volley chaos: consecutive rounds of ONE burst differ — the seed folds in the round index",
-    JSON.stringify(fx.volleyChaosFor(fx.fxSeedOf("a", "w", 3, 3, 0)))
-      !== JSON.stringify(fx.volleyChaosFor(fx.fxSeedOf("a", "w", 3, 3, 1))),
-    "round 0 vs round 1");
-  // ⭐ THE JITTER PRESERVES THE DISTANCE, which is what keeps the band out of its reach.
   const jFrom = { x: 0, y: 0 }, jTo = { x: 500, y: 0 };
   const jRot = fx.rotateAbout(jFrom, jTo, 5);
-  ok("volley chaos: the jitter ROTATES about the shooter, so the shot's own length is untouched",
+  ok("volley veto: the shelved jitter still ROTATES about the shooter, so a shot's length is untouched",
     Math.abs(Math.hypot(jRot.x, jRot.y) - 500) < 1e-6 && Math.abs(jRot.y) > 1,
     `${Math.hypot(jRot.x, jRot.y).toFixed(3)}px, off-axis ${jRot.y.toFixed(1)}px`);
-  // ⭐ WHICH SHOTS GET IT — buckshot alone, asked of the cartridge.
-  ok("volley: buckshot claims it and the two shell loads with pictures of their own do not (negative)",
-    fx.volleyOwns({ caliber: "00" }) === true
-    && fx.volleyOwns({ caliber: "00", modifier: "slug", spreadMode: "slug" }) === false
-    && fx.volleyOwns({ caliber: "00", modifier: "flechette", spreadMode: "flechette" }) === false
-    && fx.volleyOwns({ caliber: "5.56" }) === false && fx.volleyOwns({}) === false,
-    "buck yes; slug/flechette/rifle/blank no");
-  // ⚠ AND IT MUST NOT FOLLOW THE PATTERN'S WORLD SWITCH — a table that switched the damage pattern off
-  // has not asked for a different-looking gun. Driven with the setting really off.
+  // ⭐ AND THE TAIL FALLS BACK TO THE SHELL'S OWN. While the trial ran, a buckshot payload's tail was
+  // its band's; with the resolver answering null it is the class's crossing plus the mark again, which
+  // is the number the fan-out now watches out. Asserted by value at four distances so a band term
+  // leaking back in would be caught.
+  ok("volley veto: a buckshot tail is the SHELL's own at every distance, not a band's",
+    [2, 6, 12, 20].every(d => fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(d)) === 983)
+    && fx.presentationTailMs("shotgun") === fx.FX_CLASSES.shotgun.dashMs + fx.HIT_CONFIRM.clipMs,
+    [2, 6, 12, 20].map(d => `${d}sq:${fx.presentationTailMs("shotgun", "standard", fx.volleySpecFor(d))}`).join(" "));
+  // ⚠ THE CARTRIDGE QUESTION IS UNCHANGED BY THE VETO where it is asked of the PATTERN rather than of
+  // the volley — that flow is a different question and a different switch, and the veto must not have
+  // moved it. Driven with the pattern's world setting really off.
   {
     const wasOn = game.settings.get(SCOPE, "shotgunSpreadEnabled");
     try {
       await game.settings.set(SCOPE, "shotgunSpreadEnabled", false);
-      ok("volley: the pattern's world switch does NOT repaint the gun — the picture is the cartridge's",
-        fx.volleyOwns({ caliber: "00" }) === true && fx.patternFlowOwns({ caliber: "00" }) === false,
-        "switch off: volley still owns, pattern does not");
+      ok("volley veto: the pattern flow is untouched by it — two switches, two questions",
+        fx.patternFlowOwns({ caliber: "00" }) === false && fx.volleyOwns({ caliber: "00" }) === false,
+        "pattern off, volley off");
     } finally { await game.settings.set(SCOPE, "shotgunSpreadEnabled", wasOn); }
   }
-  // ⭐ DRIVEN: the volley replaces the fan and suppresses our hit mark, and the other two shell loads
-  // are untouched by all of it.
+  // ⭐ DRIVEN: what buckshot ACTUALLY draws now — the fan, its own hit mark, and a small arrival mark at
+  // every pellet endpoint. This is the revert shape the trial's own legs promised.
   globalThis.Sequencer?.EffectManager?.endAllEffects?.();
   await sleep(900);
-  const volShot = await fx.fxShot(canvas.tokens.get(tokenDoc.id), canvas.tokens.get(targetDoc.id),
-    { weaponClass: "shotgun", hit: true, light: false, ammoKey: "standard", volley: fx.volleySpecFor(5), shotSeed: 42 });
+  const vetoShot = await fx.fxShot(canvas.tokens.get(tokenDoc.id), canvas.tokens.get(targetDoc.id),
+    { weaponClass: "shotgun", hit: true, light: false, ammoKey: "standard", shotSeed: 42 });
   await sleep(1200);
-  ok("volley: a buckshot discharge draws the volley INSTEAD of the fan, and no pellets with it",
-    volShot.volley === true && volShot.tracer === true && volShot.pellets === 0
-    && volShot.volleyBand === "30ft",
-    JSON.stringify({ volley: volShot.volley, pellets: volShot.pellets, band: volShot.volleyBand }));
-  ok("volley: our own hit-confirmation mark is SUPPRESSED — the asset's baked arrival is the only one",
-    volShot.impact === false && volShot.impactKey === undefined,
-    JSON.stringify({ impact: volShot.impact }));
-  ok("volley: it carries this round's own chaos, reported so the picture is readable by value",
-    typeof volShot.volleyChaos?.mirrorY === "boolean" && Number.isFinite(volShot.volleyChaos?.jitterDeg),
-    JSON.stringify(volShot.volleyChaos));
-  const noVolShot = await fx.fxShot(canvas.tokens.get(tokenDoc.id), canvas.tokens.get(targetDoc.id),
-    { weaponClass: "shotgun", hit: true, light: false, ammoKey: "standard" });
-  await sleep(1200);
-  ok("volley: without it the shell draws its six-dash fan and its hit mark exactly as before (the revert shape)",
-    noVolShot.volley === false && noVolShot.pellets === fx.FX_CLASSES.shotgun.pellets
-    && noVolShot.impact === true,
-    JSON.stringify({ pellets: noVolShot.pellets, impact: noVolShot.impact }));
-  ok("volley: the fan and the volley are never both drawn — one shot, one picture",
-    (volShot.volley === true) !== (noVolShot.volley === true) && volShot.pellets === 0
-    && noVolShot.pellets > 0, "exclusive by value");
+  ok("volley veto: a buckshot discharge draws the SIX-DASH FAN and no volley at all",
+    vetoShot.volley === false && vetoShot.tracer === true
+    && vetoShot.pellets === fx.FX_CLASSES.shotgun.pellets,
+    JSON.stringify({ volley: vetoShot.volley, pellets: vetoShot.pellets }));
+  ok("volley veto: the hit-confirmation mark the trial suppressed is back, at the class's own width",
+    vetoShot.impact === true && vetoShot.impactKey === fx.HIT_CONFIRM.key
+    && vetoShot.impactSquares === fx.FX_CLASSES.shotgun.impactSquares,
+    JSON.stringify({ impact: vetoShot.impact, key: vetoShot.impactKey, w: vetoShot.impactSquares }));
+  ok("volley veto: and one small arrival mark per pellet — the half of the trial the ruling kept",
+    vetoShot.pelletArrivals === fx.FX_CLASSES.shotgun.pellets
+    && fx.PELLET_ARRIVAL.squares <= fx.FX_CLASSES.shotgun.impactSquares / 2,
+    `${vetoShot.pelletArrivals} arrivals at ${fx.PELLET_ARRIVAL.squares} squares vs the aim mark's ${fx.FX_CLASSES.shotgun.impactSquares}`);
   await drain();
-
   /* -- 11c-iv. the lance dwell: live again, on the one row it was ruled for -- */
   // ⏪⏪⏪ RESTORED (2026-08-09). FR#21 ruled a 220ms dwell for the class that fires ONE round per
   // trigger pull; FR#22 removed that class's lance and these legs became "nothing names a dwell"; the
@@ -4229,12 +4229,14 @@ try {
     ok("treatment api: on the shell the tint lands on the pellet fan",
       eq(apiShell.tracerColor, fx.TRACER_COLOR_INCENDIARY),
       JSON.stringify({ tracerColor: apiShell.tracerColor }));
+    // ⏪ The hardened pair left this list on 2026-08-11 — they carry no flight colour at all now, so
+    // there is nothing of theirs for the mask to reach. The RULE is unchanged and is still asserted on
+    // the three loads that do paint, plus the negative below for the two that no longer do.
     ok("treatment reach: every recolouring overlay reaches the shell's fan, not just the incendiary",
       eq(E("shotgun", "rubber").tracerColor, fx.TRACER_COLOR_BATON)
       && eq(E("shotgun", "stundart").tracerColor, fx.TRACER_COLOR_DART)
-      && eq(E("shotgun", "ap").tracerColor, fx.TRACER_COLOR_HARDENED)
-      && eq(E("shotgun", "dualPurpose").tracerColor, fx.TRACER_COLOR_HARDENED),
-      ["api", "ap", "dualPurpose", "rubber", "stundart"].map(k => `${k}:${!!E("shotgun", k).tracerColor}`).join(" "));
+      && eq(E("shotgun", "flechette").tracerColor, fx.TRACER_COLOR_DART),
+      ["api", "rubber", "stundart", "flechette"].map(k => `${k}:${!!E("shotgun", k).tracerColor}`).join(" "));
     ok("base fan: with no overlay the shell paints its pellets with NOTHING — the settled look stands",
       E("shotgun", "standard").tracerColor === null && E("shotgun", "brassCased").tracerColor === null
       && fx.FX_CLASSES.shotgun.tracerColor === null,
@@ -4252,11 +4254,22 @@ try {
       "no shipped row declares a column, so none can be added");
     // ARMOUR-PIERCING, and its identical twin.
     const apRifle = E("rifle", "ap");
-    ok("treatment ap: the bolt is desaturated and brighter, and the impact is a CRACK not a star",
-      eq(apRifle.tracerColor, fx.TRACER_COLOR_HARDENED)
-      && fx.TRACER_COLOR_HARDENED.saturate < -0.5 && fx.TRACER_COLOR_HARDENED.brightness > 1.2
+    // ⏪ THE FLIGHT TINT IS GONE (user ruling 2026-08-11, the realism razor): a hardened core changes
+    // what happens when the round LANDS, not what it looks like crossing a room, so the near-white bolt
+    // was the rail asserting something untrue. What the razor keeps is the visibly different STRIKE.
+    ok("treatment ap: the round flies as standard — no flight tint — and the impact is a CRACK not a star",
+      eq(apRifle.tracerColor, fx.FX_CLASSES.rifle.tracerColor)
+      && fx.AMMO_FX.ap.tracerColor === undefined && fx.AMMO_FX.dualPurpose.tracerColor === undefined
       && apRifle.impactKey === fx.IMPACT_CRACK.key && /ground_crack/.test(apRifle.impactKey),
       JSON.stringify({ tracerColor: apRifle.tracerColor, impactKey: apRifle.impactKey }));
+    ok("treatment ap: on the shell too — the fan is left in the class's own colour (negative)",
+      E("shotgun", "ap").tracerColor === null && E("shotgun", "dualPurpose").tracerColor === null
+      && E("shotgun", "ap").impactKey === fx.IMPACT_CRACK.key,
+      JSON.stringify({ tracerColor: E("shotgun", "ap").tracerColor, impactKey: E("shotgun", "ap").impactKey }));
+    ok("treatment ap: the shelved matrix is still declared, so restoring the tint is one field per row",
+      fx.TRACER_COLOR_HARDENED.saturate < -0.5 && fx.TRACER_COLOR_HARDENED.brightness > 1.2
+      && Object.keys(fx.AMMO_FX.ap).join(",") === "impactKey",
+      JSON.stringify(fx.TRACER_COLOR_HARDENED));
     ok("treatment dualPurpose: drawn identically to ap, because the rules make them identical",
       eq(E("rifle", "dualPurpose"), apRifle) && eq(E("shotgun", "dualPurpose"), E("shotgun", "ap")));
     // ⏪⏪ THE SIZE PAIR IS DELETED (2026-08-09, the realism razor: "a load gets a visual only if you
@@ -4314,7 +4327,7 @@ try {
       && fx.presentationTailMs("shotgun", "slug") === 933,
       `slug tail ${fx.presentationTailMs("shotgun", "slug")}ms vs buckshot ${fx.presentationTailMs("shotgun")}ms`);
     ok("treatment slug: buckshot is untouched by all of it (negative)",
-      fx.FX_CLASSES.shotgun.pellets === 6 && fx.FX_CLASSES.shotgun.dashSquares === 1
+      fx.FX_CLASSES.shotgun.pellets === 6 && fx.FX_CLASSES.shotgun.dashSquares === 0.7
       && fx.FX_CLASSES.shotgun.dashMs === 150 && fx.FX_CLASSES.shotgun.tracer === "jb2a.bullet.01.orange",
       "the class row is unmoved");
     ok("treatment slug: an id-less payload still names it, off the one mechanical field that separates it",
@@ -4646,6 +4659,18 @@ try {
     ok("flame points: a FANNED class sets fire at its own pellet endpoints, not near them",
       fanFires.length === 3 && fanFires.every(p => fan.some(q => near(p, q))),
       JSON.stringify(fanFires.map(p => `${Math.round(p.x)},${Math.round(p.y)}`)));
+    // ⭐ AND THE IRREGULARITY GOES WITH THEM (2026-08-11). Once the fan gained per-pellet jitter this
+    // planner had to take the same records, or the flames would sit on the even ladder while the pellets
+    // that lit them flew a square either side. Same helper, same seed, asserted as membership again.
+    {
+      const jit = fx.pelletJitterFor(4242, 6, 0.07);
+      const jFan = fx.pelletEndpoints(FROM, AIM, { pellets: 6, spreadRad: 0.07, hit: true, jitter: jit });
+      const jFires = fx.groundFirePoints(FROM, AIM, { landed: 3, pellets: 6, spreadRad: 0.07, max: 4, jitter: jit });
+      ok("flame points: a jittered fan sets fire at its JITTERED endpoints, not at the even ladder's",
+        jFires.length === 3 && jFires.every(p => jFan.some(q => near(p, q)))
+        && jFires.every(p => !fan.some(q => near(p, q))),
+        JSON.stringify(jFires.map(p => `${Math.round(p.x)},${Math.round(p.y)}`)));
+    }
     ok("flame points: those picks SPAN the fan rather than clustering on one side of it",
       new Set(fanFires.map(p => fan.findIndex(q => near(p, q)))).size === 3
       && Math.max(...fanFires.map(p => fan.findIndex(q => near(p, q)))) >= 4
@@ -5716,87 +5741,151 @@ try {
         targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id,
         areaDamages: { Torso: [{ damage: 7 }] }, ...over,
       });
-      // One trigger pull, reported as what the engine was handed: the volley sprite if there was one,
-      // and the whole file list either way (so "it drew something else instead" is readable too).
+      // One trigger pull, reported as what the engine was handed: the PELLET FAN (2026-08-11 — it used
+      // to read the volley sprite, and the volley is vetoed), plus the whole file list either way so
+      // "it drew something else instead" stays readable.
       const pull = async (p) => {
         playedEntries.length = 0;
         const res = await fx.fxWeaponFired(p);
         await sleep(140);
         const all = playedEntries.flat();
-        const v = all.find((x) => x.file === fx.VOLLEY.key) ?? null;
-        // The endpoint is kept at FULL precision. Rounding it to whole pixels collapsed a ±5° arc over a
-        // 600px throw into ~250 buckets, so six independently-seeded pulls collided there roughly one run
-        // in twenty and the distinct-picture count came back 5 — a birthday collision in this line, not a
-        // product defect. At full precision two endpoints coincide only if their jitter angles do.
+        const pellets = all.filter((x) => x.file === fx.FX_CLASSES.shotgun.tracer);
+        // The endpoints are kept at FULL precision. Rounding them to whole pixels collapsed a narrow arc
+        // over a 600px throw into a few hundred buckets, so independently-seeded pulls collided there
+        // roughly one run in twenty and the distinct-picture count came back short — a birthday collision
+        // in this line, not a product defect. At full precision two clusters coincide only if their
+        // jitters do.
         return { res, files: all.map((x) => ({ file: x.file, sat: x.filter?.opts?.saturate ?? null, hue: x.filter?.opts?.hue ?? null })),
-                 volley: v ? { mirrorY: v.mirrorY, x: v.stretchTo?.x ?? 0, y: v.stretchTo?.y ?? 0,
-                               filterName: v.filter?.name ?? null, hue: v.filter?.opts?.hue ?? null } : null };
+                 volley: all.find((x) => x.file === fx.VOLLEY.key) ?? null,
+                 fan: pellets.map((x) => ({ w: x.size?.width ?? null, x: x.to?.x ?? 0, y: x.to?.y ?? 0,
+                                            filterName: x.filter?.name ?? null, hue: x.filter?.opts?.hue ?? null })) };
       };
 
       /* ── F3. two TRIGGER PULLS, not two round indexes ─────────────────────────────────────── */
-      // Six pulls of the same gun at the same target with the same round and hit counts: every identity
-      // field the old seed folded is byte-identical across them, and only the ROLL differs. Under the
-      // reverted seed all six compute one mirror and one angle, so the distinct-picture count is 1.
+      // ⏪ RE-MECHANISMED 2026-08-11 onto the FAN, which is where the entropy rule now lives: the volley
+      // this used to drive is vetoed, and its per-shell chaos was replaced by the fan's per-PELLET chaos
+      // (PELLET_CHAOS). The blind spot the finding named is unchanged and so is the shape of the proof —
+      // six pulls of the same gun at the same target with the same round and hit counts, every identity
+      // field byte-identical across them, only the ROLL differing. Under an identity-only seed all six
+      // compute one cluster.
       const ROLLS = [7, 9, 11, 13, 15, 17];
       const pulls = [];
       for (const dmg of ROLLS) pulls.push(await pull(basePayload({ areaDamages: { Torso: [{ damage: dmg }] } })));
-      const shape = (p) => JSON.stringify([p.volley?.mirrorY, p.volley?.x, p.volley?.y]);
+      const shape = (p) => JSON.stringify(p.fan);
       // The claim is "the roll reaches the seed, and the seed reaches the draw", so it is asserted on
-      // those two links rather than on a raw count of distinct pictures. The old form demanded six
-      // distinct DRAWN pictures, which is not a property of the mechanism: the attacker/weapon ids are
-      // freshly minted every run, so the six seeds are a fresh draw each time and two of them landing on
-      // one picture is ordinary chance, not a regression. Both links below are exact.
+      // those two links rather than on a raw count of distinct pictures — the attacker/weapon ids are
+      // freshly minted every run, so two of six landing on one picture would be ordinary chance.
       const seedOf = (dmg) => fx.fxSeedOf(actor.id, gun.id, 1, 1, 0, JSON.stringify({ Torso: [{ damage: dmg }] }));
       const seeds = ROLLS.map(seedOf);
-      const chaos = seeds.map((s) => JSON.stringify(fx.volleyChaosFor(s)));
+      const chaos = seeds.map((s) => JSON.stringify(fx.pelletChaosFor(s, fx.FX_CLASSES.shotgun.pellets)));
       ok("F3 seed: six identical trigger pulls whose ROLLS differ fold six DIFFERENT seeds",
-        pulls.every((p) => p.volley) && new Set(seeds).size === 6,
+        pulls.every((p) => p.fan.length === fx.FX_CLASSES.shotgun.pellets) && new Set(seeds).size === 6,
         `${new Set(seeds).size}/6 distinct seeds — ${seeds.join(" ")}`);
-      // And the seed is what the canvas got: as many distinct volleys were drawn as there were distinct
-      // chaos values to draw. One-for-one, so a seed that never reached fxShot shows up as a shortfall.
       const distinct = new Set(pulls.map(shape));
-      ok("F3 seed: each distinct seeded chaos drew its own distinct volley — the seed reached the canvas",
+      ok("F3 seed: each distinct seeded cluster drew its own distinct fan — the seed reached the canvas",
         distinct.size === new Set(chaos).size && distinct.size > 1,
         `${distinct.size} drawn vs ${new Set(chaos).size} seeded`);
       // The agreement half of the same rule: the seed is the PAYLOAD's, so the same payload computed
-      // again is the same picture. Two clients handed one payload therefore draw one discharge.
+      // again is the same picture. Two clients handed one payload therefore draw one cluster.
       const repeatA = await pull(basePayload({ areaDamages: { Torso: [{ damage: 21 }] } }));
       const repeatB = await pull(basePayload({ areaDamages: { Torso: [{ damage: 21 }] } }));
-      ok("F3 seed: the same payload computed twice draws the SAME volley — agreement is a property of the input",
-        !!repeatA.volley && shape(repeatA) === shape(repeatB), `${shape(repeatA)} vs ${shape(repeatB)}`);
+      ok("F3 seed: the same payload computed twice draws the SAME fan — agreement is a property of the input",
+        repeatA.fan.length > 0 && shape(repeatA) === shape(repeatB),
+        `${repeatA.fan.length} pellets, identical: ${shape(repeatA) === shape(repeatB)}`);
       ok("F3 seed: and it is not simply constant — the differing-roll pulls did not match the repeat (negative)",
-        shape(repeatA) !== shape(pulls[0]), `${shape(repeatA)} vs ${shape(pulls[0])}`);
+        shape(repeatA) !== shape(pulls[0]), "repeat cluster differs from pull 0");
       // The exact term list, pinned: attacker, weapon, rounds, hits, round index, THEN the rolled damage
-      // in the same position the burning-ground seed folds it.
-      const expect0 = fx.volleyChaosFor(fx.fxSeedOf(actor.id, gun.id, 1, 1, 0, JSON.stringify({ Torso: [{ damage: 7 }] })));
-      ok("F3 seed: the drawn mirror is the one the documented term list computes, rolled damage included",
-        pulls[0].volley?.mirrorY === expect0.mirrorY,
-        `drawn ${pulls[0].volley?.mirrorY} vs seeded ${expect0.mirrorY} (jitter ${expect0.jitterDeg}°)`);
-      ok("F3 seed: the identity fields alone would have computed ONE picture for all six (the reverted shape)",
-        new Set([7, 9, 11, 13, 15, 17].map(() => JSON.stringify(fx.volleyChaosFor(fx.fxSeedOf(actor.id, gun.id, 1, 1, 0))))).size === 1,
+      // in the same position the burning-ground seed folds it. Read off the DRAWN pellet widths, which
+      // are the row's length times this pellet's own size jitter.
+      const expect0 = fx.pelletChaosFor(seedOf(7), fx.FX_CLASSES.shotgun.pellets);
+      ok("F3 seed: the drawn pellet widths are the ones the documented term list computes, rolled damage included",
+        pulls[0].fan.every((d, i) => Math.abs(d.w - fx.FX_CLASSES.shotgun.dashSquares * expect0[i].sizeScale) < 1e-3),
+        `${pulls[0].fan.map(d => d.w).join(" ")} vs seeded ${expect0.map(c => Number((fx.FX_CLASSES.shotgun.dashSquares * c.sizeScale).toFixed(4))).join(" ")}`);
+      ok("F3 seed: the identity fields alone would have computed ONE cluster for all six (the reverted shape)",
+        new Set(ROLLS.map(() => JSON.stringify(fx.pelletChaosFor(fx.fxSeedOf(actor.id, gun.id, 1, 1, 0), 6)))).size === 1,
         "identity-only seed: 1 distinct");
+      // ⭐ AND THE IRREGULARITY ITSELF, by value — the four knobs the ruling asked for, each one really
+      // moving and each one inside its stated bound. A jitter that silently collapsed to zero would
+      // leave every leg above green and the ruling unmet.
+      const knobSpread = fx.pelletChaosFor(seedOf(7), 6);
+      ok("F3 seed: the fan's four knobs all move, and each stays inside the bound the spec names",
+        knobSpread.every(c => Math.abs(c.angle) <= 1 && Math.abs(c.reach) <= 1
+          && Math.abs(c.sizeScale - 1) <= fx.PELLET_CHAOS.sizeFraction
+          && c.delayMs >= 0 && c.delayMs <= fx.PELLET_CHAOS.staggerMs)
+        && new Set(knobSpread.map(c => c.angle)).size === 6
+        && new Set(knobSpread.map(c => c.reach)).size === 6
+        && new Set(knobSpread.map(c => c.sizeScale)).size === 6,
+        JSON.stringify(knobSpread[0]));
+      // ⛔ AND THE RESOLVED FORM STAYS INSIDE THE CLASS'S OWN CONE, which is the property that keeps a
+      // HIT converging on the body it was aimed at. Swept over the whole roll range rather than over
+      // this run's one seed, because the bound has to hold for every seed a table can produce.
+      {
+        const cone = fx.FX_CLASSES.shotgun.spreadRad;
+        const f1 = { x: 0, y: 0 }, t1 = { x: 600, y: 0 };
+        let worstOff = 0, minFrac = 1;
+        for (let sd = 0; sd < 400; sd++) {
+          const jj = fx.pelletJitterFor(sd, 6, cone);
+          for (const e of fx.pelletEndpoints(f1, t1, { pellets: 6, spreadRad: cone, hit: true, jitter: jj })) {
+            worstOff = Math.max(worstOff, Math.hypot(e.x - 600, e.y));
+            minFrac = Math.min(minFrac, Math.hypot(e.x, e.y) / 600);
+          }
+        }
+        ok("F3 seed: over four hundred seeds no pellet of a HIT leaves the one-square token it was aimed at",
+          worstOff <= 50 && minFrac >= 0.95,
+          `worst ${worstOff.toFixed(1)}px from centre vs a 50px half-width, nearest stop at ${minFrac.toFixed(4)} of the line`);
+      }
+      // The endpoints are irregular in DEPTH as well as in angle — the "grouped spread at mixed depths"
+      // half of the ruling. Six pellets on one arc would all sit the same distance from the muzzle.
+      {
+        const f0 = { x: 0, y: 0 }, t0 = { x: 900, y: 0 };
+        const jit = fx.pelletJitterFor(seedOf(7), 6, fx.FX_CLASSES.shotgun.spreadRad);
+        const ends = fx.pelletEndpoints(f0, t0, { pellets: 6, spreadRad: fx.FX_CLASSES.shotgun.spreadRad, hit: true, jitter: jit });
+        const reaches = ends.map(e => Math.hypot(e.x, e.y));
+        const flat = fx.pelletEndpoints(f0, t0, { pellets: 6, spreadRad: fx.FX_CLASSES.shotgun.spreadRad, hit: true });
+        // ⚠ THE DISTINCTNESS IS ASSERTED ON THE SEEDED VALUES, NOT ON ROUNDED PIXELS. An earlier form
+        // demanded six distinct WHOLE-PIXEL depths and went red about one run in ten: with six draws
+        // over a ±22px band, two of them landing in the same pixel is an ordinary birthday collision in
+        // the assertion, not a fan that drew two pellets at one depth. The mechanism's own claim — that
+        // every pellet got its own seeded depth, and that the group really spans a range where the even
+        // ladder is a single arc — is what these two terms say. Same correction the F3 seed leg took.
+        ok("F3 seed: the jittered fan lands at MIXED depths where the even ladder lands on one arc",
+          new Set(jit.map(c => c.reachScale)).size === 6
+          && new Set(flat.map(e => Math.round(Math.hypot(e.x, e.y)))).size === 1
+          && Math.max(...reaches) - Math.min(...reaches) > 5,
+          `spread ${(Math.max(...reaches) - Math.min(...reaches)).toFixed(1)}px over ${new Set(jit.map(c => c.reachScale)).size} seeded depths vs even ${Math.round(Math.hypot(flat[0].x, flat[0].y))} x6`);
+      }
 
-      /* ── F9a. the load's colour reaches the thing that replaced the round ─────────────────── */
+      /* ── F9a. the load's colour reaches the round the table paints ────────────────────────── */
+      // ⏪ RE-MECHANISMED 2026-08-11. The finding was that the branch REPLACING the round ignored the
+      // resolved entry's colour; that branch is shelved, so the treatments reach the fan — which is what
+      // the "update one shotgun load's animation, update them all" ruling asked for in the first place.
+      // These legs now pin that reach on the PELLETS.
       const apiPull = await pull(basePayload({ modifier: "api" }));
-      ok("F9 colour: an incendiary shell's volley carries that load's own matrix",
-        apiPull.volley?.filterName === "ColorMatrix" && apiPull.volley?.hue === fx.TRACER_COLOR_INCENDIARY.hue,
-        JSON.stringify({ filter: apiPull.volley?.filterName, hue: apiPull.volley?.hue }));
+      ok("F9 colour: an incendiary shell's PELLETS carry that load's own matrix — every one of them",
+        apiPull.fan.length === fx.FX_CLASSES.shotgun.pellets
+        && apiPull.fan.every((d) => d.filterName === "ColorMatrix" && d.hue === fx.TRACER_COLOR_INCENDIARY.hue),
+        JSON.stringify({ pellets: apiPull.fan.length, filter: apiPull.fan[0]?.filterName, hue: apiPull.fan[0]?.hue }));
+      // ⏪ THE HARDENED LOAD LOST ITS FLIGHT TINT (user ruling 2026-08-11 — the razor). It flies exactly
+      // like a standard round now; the difference it keeps is the mark at the far end.
       const apPull = await pull(basePayload({ modifier: "ap" }));
-      ok("F9 colour: a hardened shell carries the hardened matrix, not the incendiary one",
-        apPull.volley?.hue === fx.TRACER_COLOR_HARDENED.hue && fx.TRACER_COLOR_HARDENED.hue !== fx.TRACER_COLOR_INCENDIARY.hue,
-        `${apPull.volley?.hue} vs incendiary ${fx.TRACER_COLOR_INCENDIARY.hue}`);
-      ok("F9 colour: a BASE shell's volley carries no matrix at all — declared repaintable, painted with nothing (negative)",
-        pulls[0].volley?.filterName === null && fx.FX_CLASSES.shotgun.tracerColor === null,
-        `base filter ${pulls[0].volley?.filterName}`);
+      ok("F9 colour: a hardened shell's pellets carry NO flight tint — it flies like standard (negative)",
+        apPull.fan.length === fx.FX_CLASSES.shotgun.pellets
+        && apPull.fan.every((d) => d.filterName === null)
+        && fx.ammoFxEntry("shotgun", "ap").tracerColor === null,
+        `filters ${JSON.stringify(apPull.fan.map(d => d.filterName))}`);
+      ok("F9 colour: a BASE shell's pellets carry no matrix at all — declared repaintable, painted with nothing (negative)",
+        pulls[0].fan.every((d) => d.filterName === null) && fx.FX_CLASSES.shotgun.tracerColor === null,
+        `base filter ${pulls[0].fan[0]?.filterName}`);
       // Reported on the call's own return as well, so the picture is readable without a recorder.
       const shooterPl = canvas.tokens.get(shooterTok.id), targetPl = canvas.tokens.get(targetTok.id);
-      const apiShot = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false, ammoKey: "api", volley: fx.volleySpecFor(6), shotSeed: 7 });
-      const stdShot = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false, ammoKey: "standard", volley: fx.volleySpecFor(6), shotSeed: 7 });
-      ok("F9 colour: fxShot reports what it painted the volley with — the matrix, or null for none",
-        apiShot.volleyColor === fx.TRACER_COLOR_INCENDIARY && stdShot.volleyColor === null && stdShot.volley === true,
-        JSON.stringify({ api: apiShot.volleyColor?.hue ?? null, base: stdShot.volleyColor }));
+      const apiShot = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false, ammoKey: "api", shotSeed: 7 });
+      const stdShot = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false, ammoKey: "standard", shotSeed: 7 });
+      ok("F9 colour: the incendiary shell keeps its FIRES at the landing points and the base shell gets the dust marks",
+        apiShot.pelletArrivals === 0 && stdShot.pelletArrivals === fx.FX_CLASSES.shotgun.pellets
+        && fx.ammoFxEntry("shotgun", "api").groundFire === true,
+        JSON.stringify({ api: apiShot.pelletArrivals, base: stdShot.pelletArrivals }));
 
-      /* ── F9b. a load that draws its own round is not replaced by the volley ──────────────── */
+      /* ── F9b. a load that draws its own round is not replaced by the shelved branch ──────── */
       ok("F9 geometry: the TABLE says which loads draw their own projectile, by value",
         fx.ammoRedefinesProjectile("standard") === false && fx.ammoRedefinesProjectile("api") === false
         && fx.ammoRedefinesProjectile("ap") === false && fx.ammoRedefinesProjectile("dualPurpose") === false
@@ -5806,9 +5895,6 @@ try {
         fx.AMMO_FX_PROJECTILE_FIELDS.join(","));
       const stunPull = await pull(basePayload({ modifier: "stundart" }));
       const stunDarts = stunPull.files.filter((f) => f.file === fx.FX_CLASSES.shotgun.tracer);
-      // ⏪ RE-PINNED 2026-08-11: the count was the overlay's eight and is now the SHELL's own six (§21,
-      // the single-file ruling extended to this load). The escape this leg guards is untouched — it is
-      // the load's GEOMETRY that keeps the volley off it, and the count was never the field carrying it.
       ok("F9 geometry: a stun-dart 00 shell draws its GREY DART FAN and no volley at all",
         stunPull.volley === null && stunPull.res.volley === null
         && stunDarts.length === fx.FX_CLASSES.shotgun.pellets
@@ -5818,17 +5904,18 @@ try {
       ok("F9 geometry: a baton 00 shell keeps its own round too — the escape is the table's, not one load's",
         rubberPull.volley === null && rubberPull.files.some((f) => f.file === fx.BATON_ROUND.key),
         rubberPull.files.map((f) => String(f.file).split(".").slice(-2).join(".")).join(" "));
-      ok("F9 geometry: and buckshot still gets it — the escape did not switch the trial off (negative)",
-        pulls[0].res.volley?.band === fx.volleyBandFor(fx.payloadAimSquares(shooterPl, targetPl, Number(canvas.dimensions.size))),
-        JSON.stringify(pulls[0].res.volley));
-      // The arithmetic has to agree with the fan-out about which shots are volleys, or the window is
-      // held shut for a band the shot never drew. The lead-in cancels out of the difference.
-      const dSq = fx.payloadAimSquares(shooterPl, targetPl, Number(canvas.dimensions.size));
+      ok("F9 geometry: and buckshot draws the fan rather than the shelved round — the veto, on a live pull (negative)",
+        pulls[0].res.volley === null && pulls[0].volley === null
+        && pulls[0].fan.length === fx.FX_CLASSES.shotgun.pellets,
+        JSON.stringify({ volley: pulls[0].res.volley, pellets: pulls[0].fan.length }));
+      // The arithmetic has to agree with the fan-out about what a shot draws, or the window is held shut
+      // for time the shot never spends. The lead-in cancels out of the difference.
       const armDiff = fx.payloadPresentationMs(basePayload({ modifier: "stundart" })) - fx.payloadPresentationMs(basePayload());
-      const pureDiff = fx.presentationMs(1, "shotgun", "stundart", null) - fx.presentationMs(1, "shotgun", "standard", fx.volleySpecFor(dSq));
+      const pureDiff = fx.presentationMs(1, "shotgun", "stundart", null, fx.arrivalSpecFor("shotgun", "stundart").ms)
+        - fx.presentationMs(1, "shotgun", "standard", null, fx.arrivalSpecFor("shotgun", "standard").ms);
       ok("F9 geometry: the tail arithmetic asks the same question the fan-out does, by value",
         armDiff === pureDiff && armDiff !== 0,
-        `payload difference ${armDiff}ms vs pure ${pureDiff}ms at ${dSq.toFixed(2)} squares`);
+        `payload difference ${armDiff}ms vs pure ${pureDiff}ms`);
 
       /* ── F1a. nobody on the map to fire from ─────────────────────────────────────────────── */
       const lonely = await Actor.create({ name: "__PW__RVW No Token", type: "character" });
@@ -5851,39 +5938,44 @@ try {
         JSON.stringify({ skipped: pulls[0].res.skipped, flashes: pulls[0].res.flashes }));
 
       /* ── F5. measurement only — recorded for the review, no verdict ──────────────────────── */
-      // (a) the arithmetic resolves a volley for a payload the fan-out now refuses outright.
+      // ⏪ BOTH BLOCKS RE-MECHANISMED 2026-08-11. Each measured a property of the VOLLEY's band table,
+      // and the volley is vetoed — but the two questions they asked outlive it, because the painted
+      // classes' arrival is banded in exactly the same way (TRACER_ARRIVAL_MS). So they now ask those
+      // questions of the arrival ladder instead of deleting them.
+      // (a) the arithmetic still computes a span for a payload the fan-out refuses outright.
       out.measured.f5NoShooter = {
         arithmeticMs: fx.payloadPresentationMs({ attackerId: lonely.id, weaponId: lonelyGun.id,
           weaponName: "__PW__RVW lonely gun", caliber: "00", modifier: "standard", shotsFired: 1,
           areaDamages: { Torso: [{ damage: 5 }] } }),
         fanOutSkipped: lonelyRes.skipped,
-        volleyTermAtZeroSquares: fx.volleySpecFor(0).tailMs,
-        sameShotWithNoVolleyTermMs: fx.presentationMs(1, "shotgun", "standard", null),
+        arrivalAtZeroSquares: fx.arrivalSpecFor("shotgun", "standard", 0).ms,
+        sameShotWithNoArrivalTermMs: fx.presentationMs(1, "shotgun", "standard", null),
       };
-      // (b) a missed shell stretches to a miss endpoint whose LENGTH is 0.6–1.15 of the true aim, while
-      // every timing was computed from the true aim's band. Swept across the reach range by value.
+      // (b) a MISSED painted round travels to a miss endpoint whose LENGTH is 0.6–1.15 of the true aim,
+      // while its impact was scheduled off the true aim's band. Swept across the reach range by value.
       // The distances chosen are the two kinds of neighbourhood: comfortably inside a band (3, 6, 12,
-      // 20) and just BELOW a boundary (4.5, 8.5, 14.5), where the long end of the miss reach is the
-      // only way the drawn file can be a LONGER band than the tail was computed from.
+      // 20) and just BELOW a boundary (4.5, 8.5, 14.5), where the long end of the miss reach is the only
+      // way the drawn file can be a LONGER band than the arrival was computed from. (A miss draws no
+      // mark at all, so this is a measurement of the schedule's honesty rather than of a visible fault.)
       out.measured.f5MissBands = [3, 4.5, 6, 8.5, 12, 14.5, 20].map((d) => {
         const from = { x: 0, y: 0 }, to = { x: d * 100, y: 0 };
-        const trueTail = fx.volleySpecFor(d).tailMs;
-        const seen = new Set(); let shorterBand = 0, longerBand = 0; const N = 200;
+        const trueArrival = fx.arrivalSpecFor("rifle", "standard", d).ms;
+        const seen = new Set(); let shorter = 0, longer = 0; const N = 200;
         for (let i = 0; i <= N; i++) {
           const u = i / N;
           const end = fx.missEndpoint(from, to, () => u);
           const drawnSq = Math.hypot(end.x - from.x, end.y - from.y) / 100;
-          const drawnTail = fx.volleySpecFor(drawnSq).tailMs;
-          seen.add(fx.volleyBandFor(drawnSq));
-          if (drawnTail < trueTail) shorterBand++;      // tail over-stated → the window waits too long
-          if (drawnTail > trueTail) longerBand++;        // tail UNDER-stated → the scheduled floor is early
+          const drawnArrival = fx.arrivalSpecFor("rifle", "standard", drawnSq).ms;
+          seen.add(fx.tracerBandFor(drawnSq));
+          if (drawnArrival < trueArrival) shorter++;   // scheduled later than the round would have got there
+          if (drawnArrival > trueArrival) longer++;    // scheduled EARLIER than it would have got there
         }
-        return { trueSquares: d, trueBand: fx.volleyBandFor(d), bandsDrawn: [...seen],
+        return { trueSquares: d, trueBand: fx.tracerBandFor(d), bandsDrawn: [...seen],
                  reachSquares: [Number((fx.MISS_REACH_MIN * d).toFixed(2)), Number((fx.MISS_REACH_MAX * d).toFixed(2))],
-                 tailMsTrue: trueTail,
-                 drewShorterBandFraction: Number((shorterBand / (N + 1)).toFixed(3)),
-                 drewLongerBandFraction: Number((longerBand / (N + 1)).toFixed(3)),
-                 worstUnderstatementMs: fx.volleySpecFor(fx.MISS_REACH_MAX * d).tailMs - trueTail };
+                 arrivalMsTrue: trueArrival,
+                 drewShorterBandFraction: Number((shorter / (N + 1)).toFixed(3)),
+                 drewLongerBandFraction: Number((longer / (N + 1)).toFixed(3)),
+                 worstUnderstatementMs: fx.arrivalSpecFor("rifle", "standard", fx.MISS_REACH_MAX * d).ms - trueArrival };
       });
     } finally {
       globalThis.Sequence = realSequence;
@@ -6004,10 +6096,10 @@ try {
     const actor = await Actor.create({ name: "__PW__TWIN Shooter", type: "character" });
     const [gun] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__TWIN rifle", type: "weapon",
       system: { weaponType: "Rifle", attackType: "semiAuto", damage: "1d6", range: 50, rof: 1, shots: 10, shotsLeft: 10 } }]);
-    // A second weapon whose presentation LENGTH depends on how far the shot travels — the one class
-    // that bands its tail by distance. It is what makes the arithmetic leg below a real reading: the
-    // two figures stand at different distances from the same mark, so the window a caller waits out
-    // differs depending on which figure the arithmetic resolved.
+    // A second weapon of a different class, kept as a fixture so this section can fire either shape.
+    // ⏪ It used to be the one whose presentation LENGTH varied with distance (its tail was the volley's
+    // band); since the veto the shell crosses in a flat 150ms and the PAINTED classes are the banded
+    // ones, so the arithmetic leg below reads the rifle above instead.
     const [shellGun] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__TWIN shell gun", type: "weapon",
       system: { weaponType: "Shotgun", attackType: "Shotgun", damage: "3d6", range: 50, rof: 1, shots: 8, shotsLeft: 8 } }]);
     const dummy = await Actor.create({ name: "__PW__TWIN Dummy", type: "character" });
@@ -6109,18 +6201,19 @@ try {
         `anchored ${JSON.stringify(foreign.anchoredIds)} / skipped ${foreign.res.skipped}`);
 
       /* ── the window a caller waits out follows the same figure ───────────────────────────────── */
-      // The two twins stand at different distances from the mark, and a shell's tail is banded by that
-      // distance, so the arithmetic reading the wrong figure is a wrong-length window — the same defect
-      // one layer along. Asserted as two different answers, each matching its own figure's band.
-      const shellPayload = (over = {}) => payload({ weaponId: shellGun.id, weaponName: "__PW__TWIN shell gun",
-        caliber: "00", modifier: "standard", ...over });
+      // The two twins stand at different distances from the mark, and a PAINTED round's arrival is banded
+      // by that distance, so the arithmetic reading the wrong figure is a wrong-length window — the same
+      // defect one layer along. Asserted as two different answers, each matching its own figure's band.
+      // ⏪ RE-MECHANISMED 2026-08-11: the banded class used to be the SHELL, whose tail was the volley's
+      // band. The volley is vetoed and the shell's crossing is a flat 150ms, so the distance-sensitive
+      // class is now the rifle — the same reading, off the element that actually carries a band today.
       const sqSecond = fx.payloadAimSquares(canvas.tokens.get(secondTok.id), canvas.tokens.get(dummyTok.id), gridPx);
       const sqFirst = fx.payloadAimSquares(canvas.tokens.get(firstTok.id), canvas.tokens.get(dummyTok.id), gridPx);
-      const msNamed = fx.payloadPresentationMs(shellPayload({ attackerTokenId: secondTok.id }));
-      const msUnnamed = fx.payloadPresentationMs(shellPayload());
+      const msNamed = fx.payloadPresentationMs(payload({ attackerTokenId: secondTok.id }));
+      const msUnnamed = fx.payloadPresentationMs(payload());
       ok("twins: the presentation window is computed from the named figure's own distance, not the first's",
-        fx.volleyBandFor(sqSecond) !== fx.volleyBandFor(sqFirst) && msNamed > 0 && msNamed !== msUnnamed,
-        `named ${msNamed}ms at ${sqSecond.toFixed(1)} squares (band ${fx.volleyBandFor(sqSecond)}) vs unnamed ${msUnnamed}ms at ${sqFirst.toFixed(1)} (band ${fx.volleyBandFor(sqFirst)})`);
+        fx.tracerBandFor(sqSecond) !== fx.tracerBandFor(sqFirst) && msNamed > 0 && msNamed !== msUnnamed,
+        `named ${msNamed}ms at ${sqSecond.toFixed(1)} squares (band ${fx.tracerBandFor(sqSecond)}) vs unnamed ${msUnnamed}ms at ${sqFirst.toFixed(1)} (band ${fx.tracerBandFor(sqFirst)})`);
     } finally {
       globalThis.Sequence = realSequence;
       fx._setFlashLevels(null); fx.clearFlashes();
@@ -6213,7 +6306,7 @@ try {
       JSON.stringify({ pellets: E("shotgun", "flechette").pellets, spreadRad: E("shotgun", "flechette").spreadRad }));
     ok("negative: the shell class row itself is unmoved by any of it",
       fx.FX_CLASSES.shotgun.pellets === 6 && fx.FX_CLASSES.shotgun.spreadRad === 0.07
-      && fx.FX_CLASSES.shotgun.dashSquares === 1 && fx.FX_CLASSES.shotgun.dashMs === 150,
+      && fx.FX_CLASSES.shotgun.dashSquares === 0.7 && fx.FX_CLASSES.shotgun.dashMs === 150,
       "the class row is unmoved");
 
     /* ── c-ii. THE SAME RULING ON THE OTHER DART LOAD (2026-08-11) ──────────── */
