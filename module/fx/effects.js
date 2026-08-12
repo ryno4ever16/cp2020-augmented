@@ -26,6 +26,10 @@ import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settin
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
 // does. Importing the derivation is what makes a third caller impossible to disagree with the first two.
 import { spreadFlowModeOf, spreadModeForAmmo, SPREAD_MODE_SINGLE, SPREAD_MODE_BUCK } from "../lookups.js";
+// The shot pattern's confirmed corridor arrives on the payload in METRES (it is a rules distance, and
+// the region is planted from the same numbers) — this is the one conversion that turns it into the
+// pixels this file draws in, and it is the same helper the plant and the aim preview use.
+import { metersToPixels } from "../vehicle/vehicle-grid.js";
 import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -3093,6 +3097,42 @@ export function aimPointOf(shooterToken, targetToken, gridSizePx = 100) {
   return facingAimPoint(from, doc?.rotation, px);
 }
 
+/**
+ * THE POINT A SPREAD SHOT WAS AIMED AT BEFORE THE TRIGGER WAS PULLED, or null when no corridor was
+ * declared. The shooter drags the pattern, confirms it, and only then declares the shot
+ * (combat/spread-placement.js), so for those shots the aim is a stated fact rather than an inference
+ * from whoever happened to be targeted.
+ *
+ * ⭐ REBUILT FROM THE ANGLE AND THE REACH, NOT READ AS A STORED POINT — one rotation basis, the rule
+ * this file follows everywhere. The corridor is described relative to the shooter, so the point is
+ * derived from the figure AS IT STANDS: a token nudged between the aim and the roll still fires along
+ * the line the shooter drew, out of the barrel it is actually holding, rather than out of a stale pair
+ * of world coordinates. The plant does the same with the same numbers.
+ *
+ * Null on every ordinary shot, which is what makes every caller a plain fall-through.
+ */
+export function declaredAimPointOf(payload, shooterToken) {
+  const a = payload?.spreadAim;
+  if (!a) return null;
+  const angleDeg = Number(a.angleDeg), reachM = Number(a.reachM);
+  if (!Number.isFinite(angleDeg) || !(reachM > 0)) return null;
+  const from = centerOf(shooterToken);
+  if (!from) return null;
+  const reachPx = metersToPixels(canvas?.scene, reachM);
+  if (!(reachPx > 0)) return null;
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: from.x + Math.cos(rad) * reachPx, y: from.y + Math.sin(rad) * reachPx };
+}
+
+/**
+ * WHERE THIS PAYLOAD IS POINTED — the one question every element of a shot takes its axis from, asked
+ * with the payload in hand. A declared corridor answers it; everything else falls through to the
+ * aimed-at token, and then to the shooter's own facing (`aimPointOf`).
+ */
+export function payloadAimPoint(payload, shooterToken, targetToken, gridSizePx = 100) {
+  return declaredAimPointOf(payload, shooterToken) ?? aimPointOf(shooterToken, targetToken, gridSizePx);
+}
+
 /** How far a token's edge is from its own centre, in pixels — a token's own width, not a constant. */
 export function tokenRadiusPx(token, gridSizePx = 100) {
   const doc = token?.document ?? token;
@@ -3302,7 +3342,7 @@ function _held(effect) {
  *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null } = {}) {
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null } = {}) {
   const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0 };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
@@ -3312,10 +3352,12 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
   if (!entry) return out;
   const from = centerOf(shooterToken);
   const gridPx = Number(canvas?.dimensions?.size) || 100;
-  // The axis this whole shot is drawn along — the aimed-at token's centre, or the shooter's own
-  // facing when nothing was aimed at (aimPointOf). Resolved ONCE, so the light, the sprite, the
-  // spark and the tracer cannot disagree about where the shot is pointed.
-  const to = aimPointOf(shooterToken, targetToken, gridPx);
+  // The axis this whole shot is drawn along — the corridor the shooter declared where there is one
+  // (passed in by the fan-out, which resolves it ONCE for the payload), else the aimed-at token's
+  // centre, else the shooter's own facing (aimPointOf). Resolved ONCE here too, so the light, the
+  // sprite, the spark and the tracer cannot disagree about where the shot is pointed.
+  const to = (aimPoint && Number.isFinite(aimPoint.x) && Number.isFinite(aimPoint.y))
+    ? aimPoint : aimPointOf(shooterToken, targetToken, gridPx);
   // Where the sprites are planted: the shooter's forward edge, walked along that axis by a fraction
   // of the token's OWN width. The previous build put everything on the centre unconditionally.
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
@@ -3563,13 +3605,15 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
  * Returns the plan it used so the fan-out and the keeper can read what was actually asked for.
  * NOT awaited by its caller — the puff must not hold up the round that spawned it.
  */
-export async function fxSmokePuff(shooterToken, targetToken, { weaponClass, index = 0, rng = Math.random } = {}) {
+export async function fxSmokePuff(shooterToken, targetToken, { weaponClass, index = 0, rng = Math.random, aimPoint = null } = {}) {
   const entry = FX_CLASSES[weaponClass];
   if (!entry || !(entry.smokeSquares > 0) || !sequencerActive() || !shooterToken) return null;
   if (!fxDbEntryExists(MUZZLE_SMOKE.key)) return null;
   const gridPx = Number(canvas?.dimensions?.size) || 100;
   const from = centerOf(shooterToken);
-  const to = aimPointOf(shooterToken, targetToken, gridPx);
+  // The payload's own axis where the fan-out resolved one (a declared shot-pattern corridor), else the
+  // shared reading — see the note at fxShot's `to`.
+  const to = aimPoint ?? aimPointOf(shooterToken, targetToken, gridPx);
   if (!from || !to) return null;
   // Born at the BARREL, not at the sprite's forward edge — see MUZZLE_SMOKE.originFraction.
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SMOKE.originFraction);
@@ -3635,7 +3679,7 @@ export async function fxSmokePuff(shooterToken, targetToken, { weaponClass, inde
  *
  * Returns what it queued, so the keeper asserts the gate by value rather than by watching the canvas.
  */
-export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, shots = 0, cadenceMs = SHOT_CADENCE_MS } = {}) {
+export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, shots = 0, cadenceMs = SHOT_CADENCE_MS, aimPoint = null } = {}) {
   const out = { motes: 0 };
   const entry = FX_CLASSES[weaponClass];
   if (!entry || !sequencerActive() || !shooterToken) return out;
@@ -3645,7 +3689,7 @@ export async function fxBurstAmbience(shooterToken, targetToken, { weaponClass, 
   // the shooter's own facing. This used to bail outright when nothing was aimed at, so a burst fired
   // at no target lost its specks and its wisp along with its wedge; that was the reported defect.
   // What remains of the guard is a shooter with no position at all, which has no muzzle to draw from.
-  const to = aimPointOf(shooterToken, targetToken, gridPx);
+  const to = aimPoint ?? aimPointOf(shooterToken, targetToken, gridPx);
   if (!from || !to) return out;
 
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
@@ -3982,12 +4026,12 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
  * ⛔ NEVER TAGGED. The last round is never dropped (the pacing rule guarantees it), so the settle name
  * always rides an ordinary fxShot; a mark from here can never be the element the damage window waits on.
  */
-export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKey = null, delayMs = 0 } = {}) {
+export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKey = null, delayMs = 0, aimPoint = null } = {}) {
   const out = { drawn: false, key: null, squares: 0, clipMs: 0, delayMs: 0 };
   const mark = hitMarkFor(weaponClass, ammoKey);
   if (!mark || !sequencerActive() || !fxDbEntryExists(mark.key)) return out;
   const gridPx = Number(canvas?.dimensions?.size) || 100;
-  const to = shooterToken ? aimPointOf(shooterToken, targetToken, gridPx) : (targetToken ? centerOf(targetToken) : null);
+  const to = aimPoint ?? (shooterToken ? aimPointOf(shooterToken, targetToken, gridPx) : (targetToken ? centerOf(targetToken) : null));
   if (!to) return out;
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
   try {
@@ -4272,7 +4316,7 @@ export function payloadPresentationMs(payload) {
   const aimTokenId = payload?.targetTokenId ?? payload?.fxTargetTokenId ?? null;
   const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
   const gridPx = Number(canvas?.dimensions?.size) || 100;
-  const leadIn = shooter ? (faceTargetTurn(shooter, aimPointOf(shooter, target, gridPx))?.durationMs ?? 0) : 0;
+  const leadIn = shooter ? (faceTargetTurn(shooter, payloadAimPoint(payload, shooter, target, gridPx))?.durationMs ?? 0) : 0;
   // The loaded round's overlay, resolved from the payload the same way the fan-out resolves it, so the
   // arithmetic fallback and the fan-out's own floor agree about a round whose overlay moves the tail.
   // THE VOLLEY the same way, and off the same distance the fan-out will measure — a buckshot payload's
@@ -4284,7 +4328,7 @@ export function payloadPresentationMs(payload) {
   // for a shot the fan-out will draw as a dart fan would hold the window shut for a second the shot does
   // not spend. Same resolver, same call, so the two cannot drift (the rule at presentationTailMs).
   const key = ammoFxKeyOf(payload);
-  const squares = payloadAimSquares(shooter, target, gridPx);
+  const squares = payloadAimSquares(shooter, target, gridPx, payload);
   const volley = volleyOwns(payload) && !ammoRedefinesProjectile(key) ? volleySpecFor(squares) : null;
   // ⭐ AND THE ARRIVAL, resolved off the same distance the fan-out will measure and by the same call, so
   // the floor this arithmetic hands a caller and the floor the fan-out watches out cannot disagree about
@@ -4299,9 +4343,12 @@ export function payloadPresentationMs(payload) {
  * it reads the canvas grid; the arithmetic is the same one the fan-out does, factored out so the tail
  * resolver and the draw path band a shot identically.
  */
-export function payloadAimSquares(shooterToken, targetToken, gridPx = 100) {
+export function payloadAimSquares(shooterToken, targetToken, gridPx = 100, payload = null) {
   const from = shooterToken ? centerOf(shooterToken) : null;
-  const to = from ? aimPointOf(shooterToken, targetToken, gridPx) : null;
+  // With a payload in hand the declared corridor answers first (payloadAimPoint); without one this is
+  // exactly what it always was. The distance is what bands the shot, so a corridor aimed short of a
+  // target — or past it — has to band on the corridor and not on the target.
+  const to = from ? payloadAimPoint(payload, shooterToken, targetToken, gridPx) : null;
   if (!from || !to) return 0;
   return Math.hypot(to.x - from.x, to.y - from.y) / (Number(gridPx) || 100);
 }
@@ -4583,8 +4630,17 @@ export async function fxWeaponFired(payload) {
   // round may not replace one the table has already described — see ammoRedefinesProjectile, where the
   // rule is written against the overlay table rather than against a list of load names.
   const gridSizePx = Number(canvas?.dimensions?.size) || 100;
+  // ⭐ WHERE THIS SHOT IS POINTED, RESOLVED ONCE FOR THE WHOLE PAYLOAD (2026-08-11) and threaded into
+  // every verb below — the turn, the ambience, the smoke, the burning ground, each round's draw and the
+  // hit marks. It was resolved four times from the same two tokens before, which was harmless only
+  // while there was one possible answer. There are two now: a spread weapon is AIMED before it is
+  // declared (combat/spread-placement.js), and its corridor is a statement by the shooter that a target
+  // token cannot be asked for — the shot may be aimed short of a figure, past it, or at open ground.
+  // One derivation is what stops the rounds crossing one line while the pattern is planted on another.
+  const aim = payloadAimPoint(payload, shooter, target, gridSizePx);
+  const aimSquares = payloadAimSquares(shooter, target, gridSizePx, payload);
   const volley = volleyOwns(payload) && shooter && !ammoRedefinesProjectile(ammoKey)
-    ? volleySpecFor(payloadAimSquares(shooter, target, gridSizePx)) : null;
+    ? volleySpecFor(aimSquares) : null;
   // WHEN THIS ROUND ARRIVES — the one clock every delayed element of the shot is hung on: the hit mark,
   // the pellet arrival marks, the blood spray and the burning ground. Resolved ONCE, here, and threaded
   // into every verb below and into the tail floor, so nothing on one shot can disagree with anything
@@ -4594,7 +4650,7 @@ export async function fxWeaponFired(payload) {
   // which is why their impacts and their blood played at the muzzle — the reported defect. The painted
   // arrival is a measured band crossing now; see arrivalSpecFor for the three shapes and
   // TRACER_ARRIVAL_MS for the decode.
-  const arrival = arrivalSpecFor(weaponClass, ammoKey, payloadAimSquares(shooter, target, gridSizePx), volley);
+  const arrival = arrivalSpecFor(weaponClass, ammoKey, aimSquares, volley);
   const arrivalMs = arrival.ms;
 
   // ONE round's seed, built in ONE place. Attacker, weapon, the two counts, the ROUND INDEX and the
@@ -4614,13 +4670,13 @@ export async function fxWeaponFired(payload) {
   // take their axis from the aim, so a token that is still swinging round when the first round goes
   // would be drawn firing sideways out of its own portrait. The wait is short by spec and it is
   // included in payloadPresentationMs, so the apply window still lands after everything.
-  const turn = shooter ? await faceTarget(shooter, aimPointOf(shooter, target, Number(canvas?.dimensions?.size) || 100)) : null;
+  const turn = shooter ? await faceTarget(shooter, aim) : null;
 
   // The multi-round-only treatments, queued once for the whole burst before the first round leaves.
   // A single shot never reaches this line, which is the whole gate (see fxBurstAmbience).
   let ambience = { motes: 0 };
   if (burst && shooter) {
-    ambience = await fxBurstAmbience(shooter, target, { weaponClass, shots, cadenceMs })
+    ambience = await fxBurstAmbience(shooter, target, { weaponClass, shots, cadenceMs, aimPoint: aim })
       .catch((err) => { console.warn(`${SCOPE} | burst ambience failed`, err); return { motes: 0 }; });
   }
 
@@ -4641,7 +4697,7 @@ export async function fxWeaponFired(payload) {
   let groundFire = null;
   if (shooter && hits > 0 && ammoEntry?.groundFire && !patternFlowOwns(payload)) {
     const gridPx = Number(canvas?.dimensions?.size) || 100;
-    const at = aimPointOf(shooter, target, gridPx);
+    const at = aim;
     const from = centerOf(shooter);
     if (at && from) {
       // Seeded off the payload, so the scatter is a property of the shot rather than of which client
@@ -4741,7 +4797,7 @@ export async function fxWeaponFired(payload) {
         impacts.queued++;
         if (issueMark) {
           impacts.refused++;
-          fxHitMark(shooter, target, { weaponClass, ammoKey, delayMs: arriveIn })
+          fxHitMark(shooter, target, { weaponClass, ammoKey, delayMs: arriveIn, aimPoint: aim })
             .catch((err) => console.warn(`${SCOPE} | hit mark failed`, err));
         }
       }
@@ -4770,7 +4826,7 @@ export async function fxWeaponFired(payload) {
       // Counted on EMISSION, not on the promise: this is async and fire-and-forget, so its return is a
       // promise and would always look truthy. The count is what the stride asked for, which is the
       // number the arithmetic (smokePlanFor) predicts and the keeper asserts against.
-      fxSmokePuff(shooter, target, { weaponClass, index: smokePuffs })
+      fxSmokePuff(shooter, target, { weaponClass, index: smokePuffs, aimPoint: aim })
         .catch((err) => console.warn(`${SCOPE} | smoke puff failed`, err));
       smokePuffs++;
     }
@@ -4788,7 +4844,7 @@ export async function fxWeaponFired(payload) {
       // THE ARRIVAL IS HANDED DOWN rather than re-derived: one derivation per payload, so this round's
       // mark and this round's spray (issued above) are hung on the identical number.
       fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
-        volley, arrivalMs, shotSeed: shotSeedFor(i) })
+        volley, arrivalMs, shotSeed: shotSeedFor(i), aimPoint: aim })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
       // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock, and the mark counted
       // against the same budget the refused rounds draw from. The hits are the LEADING rounds of the
@@ -4815,6 +4871,15 @@ export async function fxWeaponFired(payload) {
     turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood, volley,
     // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
     arrival, impacts,
+    // WHERE THIS PAYLOAD WAS POINTED, reported rather than inferred — the point every element above
+    // was drawn along, the distance that banded it, and whether the shooter DECLARED that corridor
+    // (combat/spread-placement.js) or it was read off the aimed-at token. Reported for the same reason
+    // the pacing is: an axis that can only be checked by looking at the canvas is an axis nothing can
+    // assert, and the shot pattern's whole flow now turns on the rounds and the planted region agreeing
+    // about it.
+    aim: aim ? { x: aim.x, y: aim.y } : null,
+    aimSquares,
+    aimDeclared: !!declaredAimPointOf(payload, shooter),
     // The pacing report, by value: how many rounds' pictures were refused and the worst lateness seen.
     // `loopMs` against `(shots-1) × cadence` is the drift the anchored schedule exists to hold down.
     dropped, maxLagMs, loopMs: Date.now() - loopStart };
