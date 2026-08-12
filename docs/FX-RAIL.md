@@ -191,13 +191,14 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
 | 5 | ~~Discharge column~~ | ⏪ **DELETED 2026-08-09.** The whole mechanism — asset, 1.25 sq stretch, 55 ms trim, 220 ms dwell, its own colour field and its own tail term — is gone, not disabled. §6 | — | — |
 | 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange`, or an ammo's own round (`rubber` → `jb2a.throwable.launch.cannon_ball.01.black`) | row names `tracer` | yes |
-| 6b | **Buckshot volley** ⚠ *on trial* | `jb2a.volley_of_projectiles_Line.bullet.001.001.orangeyellow`, stretched to the aim, whole clip | the cartridge is buckshot **and** `VOLLEY.enabled` — **replaces** #6 and suppresses #9 | yes |
+| ~~6b~~ | ~~**Buckshot volley**~~ | ⏪ **VETOED 2026-08-11** and switched off, not deleted. `VOLLEY.enabled: false` ⇒ the resolver answers null, buckshot draws #6 again and #9 comes back with it. §6, §3.2b | — | — |
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
-| 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit**, the row has `impactSquares`, **and no volley is drawn** | yes |
+| 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit** and the row has `impactSquares` — **delayed by that round's own arrival** (§4.2a), and drawn for a round the pacing rule refused as well as for one it drew | yes |
+| 9b | **Pellet arrival marks** ⭐ *new 2026-08-11* | `jb2a.smoke.puff.ring.01.white` at **0.45 sq**, trimmed to **500 ms**, one at each pellet endpoint | the round **hit**, the class draws a **fan**, and the load does **not** set its own landing points alight (§3.2b) | yes |
 | 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, **45 s**, one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
-| 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4 | **yes** — a deliberate departure, below |
+| 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
 *lit by the world* stays below it. This is not cosmetic: measured on the rig at darkness 1.0, a sprite
@@ -239,7 +240,15 @@ The cap is measured rather than picked: the clip lives 900 ms and hits are the l
 burst, so at the default 80 ms cadence ten hits would put ten sprays inside one clip's life — a fountain
 rather than a body being hit repeatedly. Four are still four distinguishable arrivals, each still on
 screen when the next lands. A round the pacing rule **refuses** (§4.1a) draws no spray either; the spray
-is issued from inside the round's own draw block, so the two can never disagree. Capture 64b.
+is issued from the same place the arrival mark is, so the two can never disagree.
+
+⏪ **A round the pacing rule refuses now sprays and marks anyway (2026-08-11).** The sentence above used
+to read "a round the pacing rule **refuses** draws no spray either", and that was the second half of the
+bench report: *"hits late in a long burst get NO blood at all"*. The drop rule is right about what it was
+written for — a tracer is a sprite per pellet, every cadence slot, and a backlog of them is what put the
+picture a second behind the sound — but a mark and a spray are one sprite each, at the far end of the
+shot, and they are the only thing that says the round landed on somebody. The two budgets are separate
+now: §4.1a. Capture 64b.
 
 **The one departure from that rule is the blood splash (#12).** Blood is not a light source, so the
 rule as written puts it below — and on the rig's own dark range that is not a dimmer effect, it is no
@@ -266,7 +275,7 @@ so they take the Rifle skill.
 | `pistol` | bullet.01 | 1.1 sq lance | 0.70 | 80 ms | 8 motes |
 | `smg` | bullet.01 | 1.2 sq lance | 0.75 | 80 ms | 12 motes |
 | `rifle` | bullet.02 | 1.6 sq lance | 0.95 | 80 ms | 13 motes |
-| `shotgun` | bullet.01, `tracerColor: null` | **1.9 sq lance, 220 ms dwell** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, 1 sq dashes crossing in 150 ms, single-shot smoke |
+| `shotgun` | bullet.01, `tracerColor: null` | **1.9 sq lance, 220 ms dwell** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, **0.7 sq** dashes crossing in 150 ms, per-pellet jitter (§3.2b), single-shot smoke |
 | `heavy` | bullet.02 | 2.1 sq lance | 1.30 | 80 ms | 16 motes |
 
 Sizes are in **grid units**, not scale factors — the same fraction of a square on any scene.
@@ -330,7 +339,7 @@ it), so restoring either deleted row is one line.
 |---|---|---|---|---|---|---|
 | `standard`, `brassCased` | — | — | — | — | — | — |
 | `api` | red-shifted (hue **−14**, sat +0.30, bright 1.20) | class default | class | — | **tinted `#ff6a1a`** (dark only) | fire (⏪ the mark under it was removed 2026-08-10) |
-| `ap` | near-white (hue 8, sat −0.85, bright 1.45) | ground crack | class | — | — | — |
+| `ap` | ⏪ **none — it flies exactly like standard** (2026-08-11, the razor; the withdrawn matrix was hue 8, sat −0.85, bright 1.45) | ground crack | class | — | — | — |
 | `dualPurpose` | *identical to `ap`* | ground crack | class | — | — | — |
 | `slug` ⭐ | **the round is a different asset** — `bullet.02`, **painted** (`dashSquares: 0`), in the standard shift | class default | class | **`pellets: 1`** — no fan at all | — | — |
 | `flechette` | **grey dart** (hue 0, sat **−0.90**, bright 1.15) | class default | × 0.70 | ⏪ **none of its own** — 1.1 sq / 170 ms per round, **one per cadence slot** on a single-round class, the class's own count on a class that draws a group (2026-08-10) | — | — |
@@ -375,122 +384,126 @@ something:
 What stays orange: buckshot (unpainted), the slug (standard shift), and every bullet class. Captures
 **67f** (stun dart), **67g** (flechette), **67x** (buckshot control) and the **67fgh** triptych.
 
-### 3.2b The buckshot volley — ⚠ ON TRIAL, not adopted
+### 3.2b The buckshot fan, and the volley that was vetoed
 
-The user has seen this composed offline and asked to watch it on the rig before ruling: *"I honestly
-like the whole clip, the fireballs look good… I need to see this on the test rig myself before I say
-adopt. Let's try full range."* **Nothing in this section is a settled value.**
+⏪⏪ **THE TRIAL IS OVER — VETOED 2026-08-11** at the bench. The verdict, in the user's terms: *"the
+visible bullets and long trails are a problem"* — buckshot is small balls thrown in an irregular grouped
+spread, and `jb2a.volley_of_projectiles_Line.bullet.001.001.orangeyellow` draws **aligned side-by-side
+lanes of long-trailed rounds**, which reads as a rank of rifle fire rather than as a shot pattern. The
+instruction was *"choose a new asset for buckshot or go back to what we had"*, and the half that was
+praised was kept: *"the arrival fireballs were GREAT"* — scaled down by at least half and moved onto the
+fan's own pellet endpoints.
+
+**The whole mechanism is SHELVED, not deleted.** `VOLLEY.enabled: false` ⇒ `volleySpecFor` answers null
+at every distance, `volleyOwns` answers false for every cartridge, and every downstream site falls
+**through** to the pellet fan it was always written to fall through to — including the hit mark `fxShot`
+suppressed while the trial ran. Restoring the trial is that one field and nothing else: the key, the
+band mirror, the crossing/tail tables, the jitter and the mirror flip all stand, and a keeper leg drives
+the shelved branch with a hand-built spec so the revert is proved rather than promised.
+
+**Two review findings die with it.** F9 (a branch that replaces the round must still honour the resolved
+entry's treatments) was fixed on 2026-08-10 and is moot with the branch off — the treatments now reach
+the fan, which is where the *"update one shotgun load's animation, update them all"* ruling always
+pointed. F4 (an untrimmed long asset needs an engine-wait cap at its content end) belongs to an element
+nothing draws.
+
+#### What buckshot draws now — the fan, irregularised
+
+The six travelled dashes the shell row has always described, with the four things the volley was
+reaching for built into the fan itself rather than baked into one clip. All four are **seeded** off the
+shot's own seed (`fxSeedOf` → `pelletChaosFor`), so two clients draw the identical cluster while two
+consecutive identical trigger pulls do not — the seed folds the round index *and the rolled damage*, the
+same entropy rule the burning ground follows and the one the volley failed.
+
+| Knob | Ships as | Scaled by | What it buys |
+|---|---|---|---|
+| `slotFraction` | **0.9** | half the pellet's own **slot** in the even ladder | the slots stop being a ladder — at 0.9 a pellet can almost reach its neighbour's place |
+| `reachFraction` | **0.35** | the cone's own **lateral** half-spread at that distance | mixed depths: a near side and a far side, instead of six marks on one arc |
+| `sizeFraction` | **0.25** | the row's `dashSquares` | no two balls in one shot are the same ball |
+| `staggerMs` | **45** | — | pellets leave a few milliseconds apart, so they are many objects and not one |
+
+⛔⛔ **BOTH GEOMETRY KNOBS ARE SCALED BY THE CLASS'S OWN CONE, AND THAT IS LOAD-BEARING.** The first
+build scaled the angle by the *whole* cone and the depth by the *whole shot*: the outer pellets were
+pushed to 1.45 × the declared spread and the arrival moved by a fifth of the shot's length, and a **HIT
+stopped landing on the body it was aimed at** — measured on the rig at **113 px** from the target's
+centre against a 50 px half-width. Converging on the target is what makes a hit a hit; the irregularity
+has to live *inside* the cone rather than on top of it. The resolved offset is additionally **clamped**
+to ±`spreadRad`, because a symmetric nudge on an outermost slot would otherwise still cross the edge.
+Swept over 400 seeds at 6 squares: worst pellet **45.0 px** from centre (vs a 50 px half-width), nearest
+stop **0.9755** of the shot line. A keeper leg runs that sweep.
+
+**The dash length: `dashSquares` 1 → 0.7.** The number is the sprite's drawn **width** and the asset
+lights roughly a fifth of it, so shortening the frame shortens the *trail* more than it shortens the
+ball — which is the read the ruling asked for. It is deliberately **not** taken further: **0.5 was the
+first value ever tried on this row** and was rejected by eye as "a few pixels, reads as dirt on the
+screen", so 0.7 is the shortest step that stays clear of the value already known to disappear. With the
+±25 % size jitter the six draw between **0.53 and 0.88** squares, all of them above that floor. ⏪ The
+revert value is `dashSquares: 1`. **This is a look call and it wants eyes.**
+
+#### The arrival marks, and the razor split
+
+`PELLET_ARRIVAL` — the dust ring at **0.45 squares**, trimmed to **500 ms**, one at each pellet's own
+endpoint, delayed by that round's arrival plus that pellet's own stagger. Against the class's aim-point
+mark at 1.15 squares that is under 40 %, comfortably inside the "at least half down" the ruling asks
+for, and what keeps six of them from becoming the wall of fire the volley's blooms were being scaled
+back from. Never named for the settle signal: trimmed well under the aim mark, they can never be the
+last thing on screen, so the tail takes no term for them.
+
+⛔ **STANDARD BUCK GETS DUST; THE INCENDIARY SHELL GETS ITS FIRES.** The ruling reserves fire arrivals
+for the incendiary load — and the incendiary load **already has them**: its landing points are the same
+pellet endpoints, and the burning ground sets a real flame at each one. So the split is not two assets
+chosen by load name; it is one gate, `entry.groundFire`, and a load that lights its landings does not
+also get dust over them. That also honours the standing 2026-08-09 ruling that removed the api row's
+fire impact (*"get rid of the blast circle that lands on the target"*): drawing a fire mark here would
+have re-created exactly the doubling that ruling deleted. **The api shell's red treatment is untouched**,
+which is what the user asked for.
+
+⚠ **The mark shares its asset with `IMPACT_DUST`**, deliberately — that key was chosen out of a closed
+enumeration of the free tier's impacts precisely as the blunt, radial, no-rotation-question arrival, and
+this is the same job at a smaller size. It is declared as its own constant because the two elements
+answer to different rulings. A reader counting sprites should know that a baton shell puts its own dust
+mark on the aim point at 1.15 squares and six of these at 0.45, out of one key: **tell them apart by
+size, not by file.**
+
+#### The burning ground takes the same jitter
+
+Once the fan became irregular, `groundFirePoints` had to take the irregularity with it or the flames
+would sit on the even ladder while the pellets that lit them flew a square either side. It is handed the
+**first round's** own jitter record — the same helper, off the same seed the draw uses — because the
+fires are one placement event for the whole payload and that is the round whose landing they depict.
+The standard's "never invent a position you could have asked for" is the rule being kept here.
+
+#### The shelf, for the record
 
 `jb2a.volley_of_projectiles_Line.bullet.001.001.orangeyellow` is one ranged asset that draws a
 **five-round fan** crossing to the aim point and blooming into **arrival fireballs**, all baked into its
-own clip. Where our fan is six sprites we place and time, this is one sprite that contains the whole
-discharge. Per the ruling the **whole clip is kept**, fireballs included — and because the asset draws
-its own arrival, **our hit-confirmation mark is suppressed** for the duration of the trial, or the
-target's square carries two arrivals.
+own clip. It is served in four distance bands, and the two numbers per band answer two different
+questions — `crossMs` (the arrival) is when the rounds get there; `tailMs` (the content end) is when the
+element stops being worth waiting for.
 
-**Which shots get it:** buckshot only, asked of the **cartridge** (`spreadModeForAmmo`) exactly the way
-the pattern flow asks — **and only when the LOAD does not draw its own round** (`ammoRedefinesProjectile`,
-added 2026-08-10). The slug and the flechette load keep the pictures they were just given.
-
-⚠ It deliberately does **not** read `spreadFlowModeOf`, which folds in the pattern's world switch. That
-switch decides what the module *does* with a shell; this is a question about what leaves the barrel, and
-a table that switched the damage pattern off has not thereby asked for a different-looking gun.
-
-⭐ **The load's own question, and why the cartridge's was not enough** (2026-08-10, review finding F9).
-"Buckshot" is derived from the *caliber*, and several **loads** of buckshot declare no spread mode of
-their own — so `api`, `ap`, `dualPurpose`, `stundart` and `rubber` 00 shells all fell into this branch,
-including the two whose entire row is a *different projectile*. A stun-dart shell was given the grey
-dart fan by one ruling and then drew orange fireballs anyway; a baton round did the same.
-(Flechette and slug escaped only because they happen to declare a spread mode — a mechanical fact
-standing in for a presentation one: luck, not a rule.) The rule now lives on the **table**:
-
-```
-ammoRedefinesProjectile(key)   does this load's overlay name its own projectile geometry?
-        AMMO_FX_PROJECTILE_FIELDS = pellets · dashSquares · dashMs · tracer   (key presence)
-                 · standard / api / ap / dualPurpose  → false → the volley draws the round
-                 · stundart / rubber / flechette / slug → true → the load draws its own
-```
-
-Both the fan-out and `payloadPresentationMs` ask it, so the tail a shot is waited out for is always the
-tail of the picture it actually drew.
-
-⭐ **A branch that replaces the round still owes the resolved entry its treatments** (2026-08-10, the
-other half of F9). The volley now applies `entry.tracerColor` exactly as the pellet fan does — the same
-`if (entry.tracerColor)` expression one branch below — so an incendiary volley is red-shifted, a hardened
-one takes the hardened matrix, and the base shell's declared `tracerColor: null` paints it with nothing
-and leaves the settled look untouched. `fxShot` reports what it painted as `out.volleyColor` so the
-picture is readable by value rather than by eye.
-
-**The bands, and why a mirror of the engine's picker is unavoidable.** The database serves a *different
-file* per distance and each file bakes its own crossing. The switch points are not ours: they are
-`SequencerFileRangeFind.ftToDistanceMap`, read out of the installed engine — 15ft ≥ 2 squares, 30ft ≥ 5,
-60ft ≥ 9, 90ft ≥ 15, with the smallest band's minimum collapsed to 0 — so the live boundaries are **5, 9
-and 15 squares**. A keeper leg asserts our picker against the engine's own answer at every boundary.
-
-Decoded off the four installed files at 40 ms against each video's own clock:
-
-| Band | File | Duration | **Arrival** (front edge at the far end) | **Content ends** (peak ≥ 120/255) |
-|---|---|---|---|---|
-| 15ft | 1000×400 | 2567 ms | **240 ms** | **600 ms** |
-| 30ft | 1600×400 | 2633 ms | **480 ms** | **800 ms** |
-| 60ft | 2800×400 | 3067 ms | **840 ms** | **1200 ms** |
-| 90ft | 4000×400 | 3433 ms | **1200 ms** | **1600 ms** |
-
-Two numbers per band, answering two different questions. `crossMs` (the arrival) is when the rounds get
-there, so it is what the blood spray and the burning ground are delayed by — the role `dashMs` plays for
-a travelled fan. `tailMs` (the content end) is how long the element is worth *looking* at, so it is the
-term `presentationTailMs` takes. **It is not the file's own duration:** every band spends its last one to
-two seconds on a dim residue (peak 40–70/255 over ~0.1 % of the frame), and holding the damage window
-shut for 3.4 s to wait out something invisible is the exact cost §4.2's rules exist to refuse. Take the
-band off a fixed guess instead and a 15-square shot opens its window a full second before its own rounds
-land — the silent one-directional failure.
-
-**The chaos knobs.** Reported: the volley is too neat, five rounds in the same formation every time. Two
-knobs answer it, and each is a property of the **shot** rather than of the client that drew it
-(`seededRng` off `fxSeedOf`), so two clients compute the same jitter and a test can compute it twice:
-
-| Knob | Ships as | What it does |
+| Band | `crossMs` | `tailMs` |
 |---|---|---|
-| `VOLLEY.mirrorFlip` | `true` | mirrors the sprite across its own long axis on about half of discharges, swapping which side the leading rounds are on. Free — it re-uses the asset's own art |
-| `VOLLEY.jitterDeg` | **5** | rotates the aim by up to ±5°, **about the shooter**, so the distance is preserved exactly and the band cannot flip at a boundary because of jitter |
+| 15ft | 240 | 600 |
+| 30ft | 480 | 800 |
+| 60ft | 840 | 1200 |
+| 90ft | 1200 | 1600 |
 
-Measured over 300 seeds: the mirror lands heads 151 times and mean |jitter| is **2.45°** — about 0.21 of
-a square at 5 squares, 0.6 at 15. The jitter is in *degrees*, so it scales with range by construction;
-raising it much past 5 starts pushing a "hit" visibly off the target at long range.
+Its own chaos (a seeded mirror flip and ±5° of aim jitter, rotated **about the shooter** so the band
+cannot move) is intact, as is `ammoRedefinesProjectile` — the rule, written on the **table** rather than
+on a list of load names, that keeps a load which draws its own projectile (`stundart`, `rubber`,
+`flechette`, `slug`) out of any branch that would replace the round wholesale. That rule outlives the
+volley: it is the general statement of "a load that has been given a picture keeps it".
 
-⭐ **The seed folds in the round INDEX**, so an autoshotgun's three shells each throw their own
-differently-mirrored, differently-angled volley. A per-payload seed would have made a burst three
-identical copies — the report restated one level up. Capture **67b**.
+**Known limits of the shelved element, if it is ever revived:** a **miss still lights fireballs in the
+dirt** (the asset bakes its arrival, so a missed volley blooms wherever it lands — capture **67c**); it
+draws **five** rounds where our fan draws six; and its arrival bloom reaches up to ~0.7 of a square past
+the aim point, which is why our own mark was suppressed rather than merely moved.
 
-⭐⭐ **AND IT FOLDS IN THE ROLLED DAMAGE** (2026-08-10, review finding F3, user ruling: *"use a more
-dynamic seed… damage numbers"*). The round index alone answered the report one level down but not at the
-level it was made: attacker, weapon, round count, hit count and round index are **identical on two
-consecutive shots from the same gun at the same target**, so the second trigger pull computed the first
-pull's mirror and the first pull's angle. A bench firing repeatedly saw at most two pictures per gun —
-one for a hit, one for a miss.
-
-```
-shotSeed = fxSeedOf(attackerId, weaponId, shots, hits, roundIndex, JSON.stringify(areaDamages))
-                                                                   └── the rolled numbers: the same
-                                                                       term, in the same position, the
-                                                                       burning-ground seed already folds
-```
-
-Two identical trigger pulls differ because their **rolls** differ; two clients still agree because the
-rolls ride the payload both of them received. Determinism was never a property of the identity fields —
-it is a property of seeding off the payload at all. Pinned by six driven pulls that differ only in their
-damage numbers and must produce six distinct pictures (fx-rail §19); under the reverted seed that count
-is 1.
-
-**⏪ Revert, in one edit:** `VOLLEY.enabled = false`. Buckshot returns to the six travelled dashes the
-shell row has always described, the hit mark comes back with it, and the tail falls through to the
-ordinary arithmetic — because every one of those is a fall-through and not a second code path. No row
-changes, no asset key is removed, and flechette and slug never entered the branch.
-
-**Known, accepted for the trial:** a **miss still lights fireballs in the dirt** (the asset bakes its
-arrival, so a missed volley blooms wherever it lands — capture **67c**, the frame the user must judge);
-the volley draws **five** rounds where our fan draws six; and the arrival bloom reaches up to ~0.7 of a
-template square past the aim point.
+**A better asset would supersede all of this.** The free tier was re-enumerated for a genuine
+pellet-cluster projectile at the veto and carries none: the ranged families are single bolts
+(`bullet.01/02/03`), the volley families are the aligned-lane clips just vetoed, and the throwables are
+single objects. Anything better is a paid-tier or third-party question, and the user sees captures
+before any switch.
 
 **Two rules govern the merge** (`ammoFxEntry`):
 
@@ -688,6 +701,38 @@ report: dropping late rounds removes exactly the queued work that was starving t
 The fan-out reports `dropped`, `maxLagMs` and `loopMs` on its result, so the pacing is readable rather
 than inferred. `_setDropLagMs(ms)` is a test seam for an absolute threshold; nothing ships with it armed.
 
+⭐⭐ **THE IMPACT FAMILY IS NOT ON THE TRACER'S BUDGET (2026-08-11).** Bench report: *"hits late in a
+long burst get NO blood at all"*. The drop rule above takes a late round **whole** — audio with picture —
+and it is right about what it was written for: a report landing on top of another report is worse than a
+missing report, and a backlog of tracers is what put the picture a second behind the sound. But it was
+also taking the round's **arrival** with it, and an arrival is not a pacing cost. A tracer is a sprite
+per pellet, issued from the muzzle every cadence slot; a hit mark and a blood spray are **one sprite
+each**, at the far end of the shot, and they are the only thing on screen that says the round landed on
+somebody. A ten-round burst that hit six times was marking three, which reads as a burst that mostly
+missed.
+
+So the two budgets are separate:
+
+| Budget | Owned by | Bound |
+|---|---|---|
+| **tracer / audio / flash / lance** | the pacing rule — may refuse a late round outright | the last round is never refused |
+| **hit mark** | the payload's own hit count | `HIT_MARK_MAX_PER_PAYLOAD` = `MAX_FX_SHOTS` (30) |
+| **blood spray** | the same, capped much tighter | `BLOOD_SPLATTER.maxPerPayload` = 4 |
+
+A round that **hit** gets its impact family whether or not its tracer was drawn. A refused round's mark
+is issued on its own (`fxHitMark`) with the lateness that caused the drop **subtracted** from the
+arrival, so a mark for a round already 200 ms behind its slot lands 200 ms sooner and arrives on the
+canvas alongside the rounds that were drawn on time. It is never named for the settle signal — the last
+round is never refused, so the tag always rides an ordinary `fxShot`.
+
+The hit-mark bound is deliberately the fan-out's own round cap rather than something smaller: the mark
+is one transient sprite (833 ms) on the aimed square, so N of them is N confirmations of N landed
+rounds — which is the thing the ruling asks to stop losing. The element that genuinely does not survive
+repetition is the spray, and it keeps its own much tighter cap. Both paths resolve the mark through one
+function (`hitMarkFor`), so a promoted asset cannot reach one path and not the other. Measured on the
+rig, a 20-round burst with 20 hits: **13 rounds refused by the pacing rule, 20 arrivals marked, 13 of
+them issued on their own**, 4 sprays.
+
 **One knock-on, and it was a real bounding defect.** The faster hand-over exposed a race in the burning
 ground's scene cap: the cap read `liveGroundFires()`, but the engine does not create an effect until its
 own play resolves, so two placements issued inside that beat both read the same number and both
@@ -719,13 +764,24 @@ change what a caller observes. Note that a 30-round shell burst legitimately run
 slow client — 5.2 s of firing plus its tail — and opens the window at the ceiling; it did so far harder
 before this unit, when the same burst ran 11.7 s.
 
-`presentationTailMs(class, ammoKey, volley)` — the longest of: light envelope · lance dwell · spark clip
-· tracer end (travelled: `dashMs + 260`; painted: 933) · impact end (`dashMs + impactClipMs`). ⏪ The
-**column dwell** term left this list on 2026-08-09 with the element it described; the shell's own lance
-dwell (220 ms) is now an ordinary `muzzleDwellMs` term like every other class's, which is one of the
-things the deletion bought.
+`presentationTailMs(class, ammoKey, volley, arrivalMs)` — the longest of: light envelope · lance dwell ·
+spark clip · tracer end (travelled: `dashMs + 260`; painted: 933) · **impact end (`arrivalMs +
+impactClipMs`)**. ⏪ The **column dwell** term left this list on 2026-08-09 with the element it
+described; the shell's own lance dwell (220 ms) is now an ordinary `muzzleDwellMs` term like every other
+class's, which is one of the things the deletion bought.
 
-⚠ **A volley is its own whole answer** and returns early rather than joining that maximum. That is not a
+⭐ **The ARRIVAL is a fourth input as of 2026-08-11**, and it is *passed* rather than derived: a painted
+round's arrival is a property of the shot's **length**, and this function is pure and has no way to ask
+how long the shot was. Both shipping callers resolve it — the fan-out off the canvas it is drawing on,
+`payloadPresentationMs` off the same two tokens — and hand it in, so the floor the apply window rests on
+covers a mark that is now drawn most of a second later than it used to be. Called **without** one it
+falls back to the row's own crossing time, which is exactly what it computed before the arrival existed;
+that is the answer a caller holding only a class and a load gets, rather than an invented one. By value
+on the rifle: **933 ms** with no arrival, **1200 ms** at the 30ft band, **1533 ms** at 90ft. A travelled
+class does not move at all — its crossing was always the term.
+
+⚠ **A volley is its own whole answer** and returns early rather than joining that maximum. (Shelved
+since the 2026-08-11 veto — nothing hands one in today; the branch stands so the revert is one field.) That is not a
 shortcut: when the volley is drawn, the pellet fan is *not* (it replaces it) and the hit mark is *not*
 (`fxShot` suppresses it), so folding in a `tracerEnd` and an `impactEnd` for elements the shot does not
 draw would over-state the wait on exactly the loads that are already slowest. The term is the band's
@@ -774,6 +830,71 @@ crossing time it did not have; `impactClipMs` changes how long the mark is drawn
 through the same resolver the draw path uses, so they cannot drift. The failure mode if they ever do
 is silent and one-directional: the window opens while the last round is still on screen.
 
+### 4.2a The arrival clock — when a round *gets there*
+
+⏪ **THE DEFECT THIS ANSWERS (bench report, 2026-08-11):** *"blood splashes and dust/impact marks play
+when the round DEPARTS"*, worst on the rifle and the heavy. The mechanism was one expression — the
+impact was held back by `dashSquares > 0 ? dashMs : 0`, and **four of the five shipped classes carry no
+dash**, so a PAINTED round confirmed its hit in the same tick the muzzle lit. The bug was the ordinary
+case, not an edge of it. The same zero reached the blood splash and the burning ground through
+`arrivalMs`, which is why the two were reported together.
+
+⚠ **A painted round *has* an arrival — it just was not being computed.** `stretchTo` scales the asset
+across the whole shooter→aim line in one go, but the asset is not a static streak: it animates a head
+travelling from one end of its own frame to the other, and the engine hands back a **different file per
+distance band**, each animating that crossing over its own span. So the arrival is a property of the
+band, exactly as the shelved volley's was — and it is read off the file rather than guessed.
+
+**Decoded off the installed free tier**, not picked. Per frame, the rightmost lit column of the frame is
+the head's position; the arrival is the first frame at which that leading edge stops advancing (98 % of
+the clip's own maximum, which normalises away each file's different trailing padding). All ten files are
+30 fps.
+
+| Band | `bullet.01` (pistol · smg · shotgun) | `bullet.02` (rifle · heavy · slug) |
+|---|---|---|
+| 05ft | 100 ms *(16f, 533 ms clip)* | 267 ms *(28f, 933 ms)* |
+| 15ft | 333 ms *(16f, 533 ms)* | 200 ms *(28f, 933 ms)* |
+| 30ft | 467 ms *(19f, 633 ms)* | 367 ms *(28f, 933 ms)* |
+| 60ft | 567 ms *(25f, 833 ms)* | 533 ms *(28f, 933 ms)* |
+| 90ft | 733 ms *(29f, 967 ms)* | 700 ms *(28f, 933 ms)* |
+
+⚠ **Two anomalies in the decode, recorded rather than smoothed.** `bullet.01`'s 05ft file opens with its
+head already halfway across its own frame and never reaches the frame edge (max lead 0.83), so its
+100 ms is "this shot is over before it starts" and not a crossing; and `bullet.02`'s 05ft reads *longer*
+than its 15ft (267 vs 200) because the two files pad differently (max lead 1.00 vs 0.94). Both are short
+shots inside the two nearest bands, and neither is worth a special case — but the inversion is not a
+typing error.
+
+**The band boundaries** (`TRACER_ARRIVAL_BANDS`) are the mirror of the engine's own picker for the
+five-file families: 90ft ≥ 15 · 60ft ≥ 9 · 30ft ≥ 5 · 15ft ≥ 2 · 05ft ≥ 0 squares. The engine serves
+the **nearest** band, so each boundary sits at the midpoint of two neighbours (3 / 6 / 12 / 18 squares
+are 15 / 30 / 60 / 90 ft on a 5 ft grid). Asserted against `getFileForDistance` on the installed engine
+rather than trusted — the same leg shape the shelved volley's mirror carries.
+
+**One resolver, three shapes** (`arrivalSpecFor`), and it reports which one answered:
+
+| `source` | When | Value |
+|---|---|---|
+| `volley` | a volley spec was handed in (shelved) | that band's baked `crossMs` |
+| `dash` | the resolved row names a `dashMs` — the travelled shapes | `dashMs`, unbanded, the same at every range |
+| `stretch` | everything else — the painted shapes | the band table above, keyed by the **tracer key** |
+
+The table is keyed by the tracer key rather than by the class, which is what makes an overlay that
+**replaces** the picture get the right answer with no branch: the `slug` row hands the shotgun a
+`bullet.02`, and the slug is banded off the picture it was replaced with. A key the table does not carry
+falls to `TRACER_ARRIVAL_FALLBACK_MS` (400).
+
+⛔ **It is ONE derivation per payload.** The hit mark, the pellet arrival marks, the blood spray, the
+burning ground and the tail floor all hang on this number; a second derivation anywhere is a way for the
+mark and the blood on one shot to disagree about when the round got there. `fxWeaponFired` resolves it
+once, before the loop, and threads it into every verb — exactly as it threads the load key. `fxShot`
+derives its own only when called on its own (the keeper does, and a caller with no measured shot must
+still get an arrival rather than the zero that was the defect).
+
+**A miss is untouched.** A missed round draws no mark at all, so nothing waits for an arrival it never
+has; the miss splay still sends each pellet to its own reach and lands wide or short exactly as the
+divergence design intends.
+
 ### 4.3 The darkness gate
 
 The muzzle light's **colour** is chosen from the viewed scene's darkness, read fresh per flash:
@@ -812,7 +933,17 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `FX_CLASSES.shotgun.muzzleSquares` | **1.9** | the shell's lance width in grid units — between the rifle's 1.6 and the heavy's 2.1; measured 190 px on a 100 px grid |
 | `FX_CLASSES.shotgun.muzzleMs` | **220** | the shell's lance dwell, the only row that names one; delivered as `muzzleRateFor("shotgun")` = 0.5 |
 | ~~`COLUMN_SQUARES` / `COLUMN_TRIM_MS` / `COLUMN_DWELL_MS` / `columnRateFor()`~~ | ⏪ **deleted 2026-08-09** | the discharge column's four constants went with the mechanism (§6). A keeper leg asserts all four are `undefined` |
-| `VOLLEY.enabled` ⚠ | **true** — *on trial* | the buckshot volley master switch. **False reverts buckshot to the six-dash fan and restores the hit mark**, with no other edit |
+| `VOLLEY.enabled` | ⏪ **false** — *vetoed 2026-08-11* | the buckshot volley master switch, and the whole of the shelf. **True restores the trial**: the resolver answers a band spec again, the volley replaces the fan and the hit mark is suppressed once more. Nothing else is edited either way |
+| `PELLET_CHAOS.slotFraction` ⭐ | **0.9** | how far a pellet's angle may wander, as a share of **half its own slot** in the even ladder. At 0.9 a pellet almost reaches its neighbour's place; the result is clamped to the class's declared cone, so this can never widen a spread |
+| `PELLET_CHAOS.reachFraction` ⭐ | **0.35** | how much nearer or further a pellet stops, as a share of the cone's own **lateral** half-spread. The depth half of the irregular cluster. ⚠ Raising it past ~0.5 walks a pellet of a HIT off a one-square token — measured, §6 |
+| `PELLET_CHAOS.sizeFraction` ⭐ | **0.25** | per-pellet drawn-width variance about the row's `dashSquares` |
+| `PELLET_CHAOS.staggerMs` ⭐ | **45** | how late a pellet may leave, per pellet |
+| `FX_CLASSES.shotgun.dashSquares` | ⏪ **0.7** (was **1**) | the drawn width of one pellet. Shortened on the veto so the dashes read as balls; **not** taken to 0.5, which is the value already rejected by eye as "a few pixels, reads as dirt on the screen" |
+| `PELLET_ARRIVAL` ⭐ | dust ring, **0.45 sq**, trimmed to **500 ms** | the small mark at each pellet's landing point — the half of the volley trial the ruling kept, scaled down |
+| `TRACER_ARRIVAL_MS` ⭐ | bullet.01 100/333/467/567/733 · bullet.02 267/200/367/533/700, by band | **decoded off the installed files** — when a PAINTED round arrives. ⚠ not a tuning knob: re-measure if the asset changes |
+| `TRACER_ARRIVAL_BANDS` ⭐ | 90ft ≥ 15 · 60ft ≥ 9 · 30ft ≥ 5 · 15ft ≥ 2 · 05ft ≥ 0 | the mirror of the engine's own band picker for the five-file bullet families — **do not tune, it must match `SequencerFileRangeFind`** |
+| `TRACER_ARRIVAL_FALLBACK_MS` ⭐ | 400 | the arrival for a tracer family this file has not decoded |
+| `HIT_MARK_MAX_PER_PAYLOAD` ⭐ | `MAX_FX_SHOTS` (30) | the bound on arrival marks per payload, refused rounds included. Deliberately the fan-out's own round cap: the mark is one transient sprite on the aimed square, and N of them is N confirmations of N landed rounds |
 | `VOLLEY.key` | `volley_of_projectiles_Line.bullet.001.001.orangeyellow` | which picture the volley is (variant `001` is the 5-round fan) |
 | `VOLLEY.crossMs` | 240 / 480 / 840 / 1200 by band | when the rounds ARRIVE — what the blood spray and the burning ground are delayed by |
 | `VOLLEY.tailMs` | 600 / 800 / 1200 / 1600 by band | when the element stops being worth waiting for — the tail term (§3.2b) |
@@ -822,7 +953,8 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `DASH_ARRIVAL_HOLD_MS` | 260 | how long a travelled pellet lives after arriving |
 | `TRACER_CLIP_MS` | 933 | painted tracer's on-screen life (upper bound of the mapped families) |
 | `TRACER_COLOR` | hue 18, sat −0.35, bright 1.15 | the class colour shift |
-| `TRACER_COLOR_INCENDIARY` / `_HARDENED` / `_BATON` | see §3.2 | the ammo colour shifts. ⏱ incendiary eased 2026-08-09, hue −20 → **−14**; ⏪ the revert value **−20** is recorded at the site, saturation and brightness unchanged |
+| `TRACER_COLOR_INCENDIARY` / `_BATON` | see §3.2 | the ammo colour shifts. ⏱ incendiary eased 2026-08-09, hue −20 → **−14**; ⏪ the revert value **−20** is recorded at the site, saturation and brightness unchanged |
+| `TRACER_COLOR_HARDENED` | hue 8, sat −0.85, bright 1.45 | ⏪ **retired from use 2026-08-11** — the hardened rounds' flight tint; declared, on no shipped row. Restoring it is one field on each of two rows |
 | `TRACER_COLOR_INERT` | hue 0, sat −0.55, bright 0.60 | ⏪ **retired from use** — the rejected darkening; declared, on no shipped row |
 | `TRACER_COLOR_DART` | hue 0, sat **−0.90**, bright 1.15 | the dart language's grey — the most desaturated matrix on the rail, and above 1 in brightness on purpose (§3.2) |
 | `BATON_ROUND` | `throwable.launch.cannon_ball.01.black`, 2.4 sq frame, 240 ms crossing | the whole less-lethal representation, in one block |
@@ -868,6 +1000,46 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-11 (the bench walk) — impact-family effects fire at ARRIVAL, and every hit keeps them.**
+Reported in two halves against the MPK-9 and the Ronin: *"blood splashes and dust/impact marks play when
+the round DEPARTS"* (worst on rifle and heavy, the classes whose round is visible longest), and *"hits
+late in a long burst get NO blood at all"*.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⭐ **A painted round has an arrival, and it is measured** | `TRACER_ARRIVAL_MS` — bullet.01 100/333/467/567/733, bullet.02 267/200/367/533/700, by band; fallback 400 | The impact was held back by `dashSquares > 0 ? dashMs : 0`, and four of the five shipped classes carry no dash — so the ordinary case confirmed its hit at the muzzle. `stretchTo` paints the whole line at once but the **asset** animates a head across its own frame, and the engine serves a different file per distance band, so the arrival is a property of the band. Decoded off the installed files at 30 fps: the first frame at which the leading lit column stops advancing (98 % of the clip's own maximum, which normalises each file's padding). Two short-band anomalies recorded rather than smoothed — §4.2a. |
+| ⛔ **ONE derivation per payload, threaded** | `arrivalSpecFor(class, ammoKey, distSquares, volley)` → `{ms, source, band}` | The mark, the pellet arrivals, the spray, the burning ground and the tail floor all hang on this number. A second derivation is how the mark and the blood on one shot come to disagree. Resolved once in `fxWeaponFired` and handed down, exactly as the load key is. Keyed by the **tracer key**, so a load that replaces the picture (`slug` → `bullet.02`) is banded off the picture it was replaced with, with no branch. |
+| **The tail takes it** | `presentationTailMs(class, ammoKey, volley, arrivalMs)`; rifle 933 → **1200** ms at the 30ft band, **1533** at 90ft; travelled classes unmoved | The mark is drawn most of a second later than it was, so a floor computed without that term opens the apply window over it — the silent, one-directional failure the standard's rule 15 names. Passed rather than derived because the arrival needs the shot's **length** and the function is pure. With nothing passed it returns exactly what it returned before, so a caller holding only a class and a load gets the old answer rather than an invented one. |
+| ⭐⭐ **The impact family is off the tracer's budget** | `HIT_MARK_MAX_PER_PAYLOAD` = `MAX_FX_SHOTS` (30); blood keeps its own cap of 4 | The pacing rule refuses a late round **whole**, and it is right to — but a tracer is a sprite per pellet every cadence slot, while a mark and a spray are one sprite each at the far end of the shot, and they are the only thing that says the round landed on somebody. A ten-round burst that hit six was marking three. A refused round's mark is issued on its own, with the lateness that caused the drop subtracted from the arrival so it lands beside the rounds drawn on time. Measured: 20 rounds, 20 hits → 13 refused, **20 arrivals marked**, 4 sprays. §4.1a. |
+| Both paths resolve the mark through one function | `hitMarkFor(class, ammoKey)` | A second copy of the promotion rule (`impactKey` where a row names one, `impactClipMs` likewise) is how a promoted asset ends up drawn on one path and not the other. |
+
+**2026-08-11 (the bench walk) — ⏪⏪ the buckshot volley is VETOED; the fan returns, irregularised.**
+Verbatim essence: *"the visible bullets and long trails are a problem"* — buckshot is small balls in an
+irregular grouped spread, not a rank of side-by-side rounds — *"the arrival fireballs were GREAT but
+scale them down"* (≥ 50 %) — *"choose a new asset for buckshot or go back to what we had"*.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⏪⏪ **`VOLLEY.enabled` → false** | shelved, not deleted; the hit mark the trial suppressed comes back with it | Every downstream site was written as a fall-through, so one field reverts the whole thing and a keeper leg drives the shelved branch with a hand-built spec to prove it. Findings **F9** (overlay reach) and **F4** (settle cap at the content end) die with the element. |
+| ⭐ **The fan is irregularised, seeded** | `PELLET_CHAOS` — `slotFraction` 0.9 · `reachFraction` 0.35 · `sizeFraction` 0.25 · `staggerMs` 45 | Per-pellet angle, depth, drawn size and start, all from the **shot's own seed** — which folds the round index *and the rolled damage*, so two clients agree while two identical trigger pulls do not. That is the F3 entropy rule the volley failed, applied to the thing that replaced it. |
+| ⛔ **Both geometry knobs are scaled by the class's own cone, and the result is clamped to it** | measured: worst pellet **45.0 px** from centre over 400 seeds, against a 50 px half-width | The first build scaled the angle by the whole cone and the depth by the whole shot, and a **hit stopped landing on the body it was aimed at** — 113 px from centre, measured on the rig. Converging on the target is what makes a hit a hit. |
+| ⏪ **`dashSquares` 1 → 0.7** | revert value `1`; the six draw 0.53–0.88 with the size jitter | The number is the drawn **width** and the asset lights roughly a fifth of it, so shortening the frame shortens the trail more than the ball. Deliberately not taken to **0.5**, which is the value already rejected by eye on this row as "a few pixels, reads as dirt on the screen". **A look call — it wants eyes.** |
+| ⭐ **Small arrival marks at the pellet endpoints** | `PELLET_ARRIVAL` — dust ring, **0.45 sq** (under 40 % of the class's 1.15 aim mark), trimmed to **500 ms** | The half of the trial the ruling kept, moved onto the fan's own endpoints, which `pelletEndpoints` already computes. Never named for the settle signal. |
+| ⛔ **The razor split: standard buck gets dust, the incendiary shell gets its fires** | one gate, `entry.groundFire` | The incendiary load's landing points are the same pellet endpoints and the burning ground already sets a real flame at each. Adding a fire mark would have re-created exactly the doubling the 2026-08-09 ruling deleted (*"get rid of the blast circle that lands on the target"*). **The api shell's red treatment is untouched.** |
+| The burning ground takes the fan's jitter | the **first round's** own record, same helper, same seed | Once the fan was irregular, flames on the even ladder would sit a square off the pellets that lit them. "Never invent a position you could have asked for." |
+| **No better asset exists on the free tier** | re-enumerated at the veto | The ranged families are single bolts, the volley families are the aligned-lane clips just vetoed, and the throwables are single objects. Anything better is a paid-tier or third-party question, and captures come before any switch. |
+
+**2026-08-11 (the bench walk) — ⏪ the hardened rounds' FLIGHT tint is deleted; the impact stays.**
+The question the user put was a consistency one: `hollowPoint` had already been deleted under the
+realism razor for saying a difference a viewer cannot see, so why does an armour-piercing round still
+**fly** differently? The answer is that it does not.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⏪ **`ap` and `dualPurpose` lose `tracerColor`** | revert value `tracerColor: TRACER_COLOR_HARDENED` (hue 8, sat −0.85, bright 1.45), recorded at each row and at the constant | A hardened core changes what happens when the round **lands**, not what it looks like crossing a room — so the near-white bolt was the rail asserting something untrue about the flight. Both rows now fall through to the **class's** own tracer colour, which is to say an AP round flies exactly like a standard one. On the shell that is `null`: the fan is left in the asset's own colour. |
+| ⭐ **The IMPACT stays, which is what passes the razor** | `impactKey: IMPACT_CRACK.key` on both rows | The difference is real and it is at the far end: a visibly different strike. Deleting a distinction is only right where nobody could see it; this one is exactly where a viewer *can*. |
+| The matrix stays declared | on no shipped row | This file's standing habit for a superseded mechanism — restoring the tint is one field on each of two rows. |
 
 **2026-08-10 — the dart load draws SINGLE FILE on a stream-firing class.** Reported from the bench,
 gun 09 (a stream-firing 5.56 class under the `flechette` load), verbatim: *"Flechettes still keep coming
@@ -1398,12 +1570,16 @@ presented while the screen stayed empty.
 | ~~A shell fired with the shot pattern **switched off** is claimed by neither flow~~ | ✅ **CLOSED 2026-08-09.** The world switch is now part of the flow question itself, asked at one shared site (`spreadFlowModeOf`, lookups.js) by both damage gates and by `patternFlowOwns`. With the pattern off a shell resolves to `single`, so the ordinary apply flow claims it exactly as it claims a slug, and the fan-out draws an incendiary shell's burning ground itself because no confirm will. Pinned three ways: the spread-zone spec drives a shell with the setting off and asserts the single-target flow **claimed** it (and that no pattern was placed), the fx-rail spec drives the same payload's fires on the rail, and a source leg asserts the damage rail reads the setting **nowhere** of its own. Both specs restore the setting in a `finally`. See §1.1a and §6. |
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
 | ~~The discharge column's on-screen presence at the new trim~~ | ⏪ **RETIRED 2026-08-09 BY DELETION.** The user replaced the element rather than ruling on it: the column is gone and the shell draws the ordinary muzzle lance at 1.9 squares with the 220 ms dwell that was always ruled for it. There is no longer an on-screen presence to call. §6. |
-| ⚠⚠ **THE VOLLEYBUL IS NOT ADOPTED — this is the ruling the bench exists for** | ⚠ **The open item of this unit.** Buckshot draws the volley clip on trial, at the user's own instruction to try it live at full range. Three things need eyes in motion and none of them can be measured: **(a) adopt or veto** the whole-clip look with its baked arrival fireballs; **(b) the chaos** — is a random mirror plus ±5° of aim jitter enough, too much, or the wrong kind of variation (`VOLLEY.jitterDeg`, `VOLLEY.mirrorFlip`); **(c) the miss** — a missed volley still lights fireballs in the dirt, because the arrival is baked into the asset and cannot be separated from the crossing. Accepted for the trial; capture **67c** is the frame to look at. Revert is `VOLLEY.enabled = false` and nothing else. Captures 67a / 67b / 67c / 67h. |
-| The volley draws **five** rounds where our fan draws six | Recorded so it is a decision rather than a gap. The asset's round count is baked in and is not a knob; the shell row's `pellets: 6` is untouched and returns the moment the trial is switched off. Nothing in the rules ties the drawn count to the damage, which is resolved by the p.108 pattern and not by sprites. |
-| The volley's arrival bloom reaches ~0.7 of a square past the aim point | Measured off the installed clips (the front edge holds at 0.94–0.99 of frame after arrival). It is the asset's own composition, not a placement error, and it is why the hit mark is suppressed rather than merely moved. |
+| ~~⚠⚠ **THE VOLLEYBUL IS NOT ADOPTED**~~ | ✅ **CLOSED 2026-08-11 — VETOED at the bench.** §6 and §3.2b carry the verdict and what replaced it. The trial's own record follows, struck through: ⏪ Buckshot draws the volley clip on trial, at the user's own instruction to try it live at full range. Three things need eyes in motion and none of them can be measured: **(a) adopt or veto** the whole-clip look with its baked arrival fireballs; **(b) the chaos** — is a random mirror plus ±5° of aim jitter enough, too much, or the wrong kind of variation (`VOLLEY.jitterDeg`, `VOLLEY.mirrorFlip`); **(c) the miss** — a missed volley still lights fireballs in the dirt, because the arrival is baked into the asset and cannot be separated from the crossing. Accepted for the trial; capture **67c** is the frame to look at. Revert is `VOLLEY.enabled = false` and nothing else. Captures 67a / 67b / 67c / 67h. |
+| ~~The volley draws **five** rounds where our fan draws six~~ | ⏪ Moot with the veto — the shell row's `pellets: 6` is what draws. Recorded so it is a decision rather than a gap. The asset's round count is baked in and is not a knob; the shell row's `pellets: 6` is untouched and returns the moment the trial is switched off. Nothing in the rules ties the drawn count to the damage, which is resolved by the p.108 pattern and not by sprites. |
+| ~~The volley's arrival bloom reaches ~0.7 of a square past the aim point~~ | ⏪ Moot with the veto. Measured off the installed clips (the front edge holds at 0.94–0.99 of frame after arrival). It is the asset's own composition, not a placement error, and it is why the hit mark is suppressed rather than merely moved. |
 | **The dart grey is a build-lane pick** | ⚠ The *rule* is the user's (grey = darts, orange = balls and bullets, under the realism razor). The *numbers* are mine: hue 0, saturate −0.90, brightness 1.15. A veto is one constant (`TRACER_COLOR_DART`) and it reaches both dart loads at once, which is the point of it being one constant. Captures 67f / 67g / 67x and the 67fgh triptych. |
 | ~~Whether the stun-dart load should be allowed on ordinary cartridges~~ | ✅ **CLOSED 2026-08-11 — leave it as it is.** Asked whether to widen `AMMO_MODIFIERS.stundart.families` past the shotgun family so the load could reach a stream-firing weapon, the user ruled the question shut along with the bench row that raised it: the bench is for the loads the product ships, not for arranging a state it cannot otherwise reach. The family lock stands, the registry gate and the ammo sheet keep refusing the pairing, and no data was changed. The revival path, if it is ever wanted, is in §6 under the same date. |
 | **The shell lance at 1.9 squares is a build-lane pick** | ⚠ The *restoration* is the user's ruling; the *width* is mine, chosen against the ladder (rifle 1.6, heavy 2.1) and verified as a drawn 190 px on a 100 px grid. One constant, `FX_CLASSES.shotgun.muzzleSquares`. Capture 67d has the two shells and the rifle in one frame. |
+| **The buckshot fan's new look is not signed off** | ⚠ **The open item of this unit.** The *veto* and the *direction* are the user's; the numbers are the build lane's, made from the bench report rather than in front of the user. Four constants and a fifth: `PELLET_CHAOS.slotFraction` **0.9** · `.reachFraction` **0.35** · `.sizeFraction` **0.25** · `.staggerMs` **45**, plus `FX_CLASSES.shotgun.dashSquares` **0.7** (revert **1**; not taken to **0.5**, the value already rejected by eye on this row). A veto on any one is a one-number edit. §3.2b. |
+| **The pellet arrival marks are a build-lane call, and so is the razor split** | ⚠ **The open item of this unit.** The ruling says "small arrival marks at pellet endpoints, ≤ 50 % of the volley's fireballs" and "fire arrivals reserved for the incendiary shell". The size (**0.45 sq**, under 40 % of the class's own aim mark) and the trim (**500 ms**) are mine; the *split* is implemented as one gate (`entry.groundFire`) rather than as two assets, so the incendiary shell keeps the fires it already sets and gets no dust over them — which is also what keeps the withdrawn 2026-08-09 blast-ring ruling honoured. If the intent was a fire mark **as well**, that is a different build. §3.2b. |
+| **Six pellet marks land on the same square as the restored aim-point star** | ⚠ **Raised by the build, needs eyes.** The veto restores the hit-confirmation star (1.15 sq at the aim point) *and* the ruling adds six 0.45 sq marks at the pellet endpoints — and on a hit the pellets converge within 0.28–0.84 squares of that aim point, so the seven marks overlap. The stagger spreads them over a few frames rather than stamping them at once. If it reads busy in motion, dropping **either** is one edit: the star is the class's `impactSquares`, the marks are `PELLET_ARRIVAL`. |
+| **The arrival ladder lengthens the apply window on painted classes** | ⚠ **Stated so it is a decision, not a surprise.** The mark is now drawn at the round's arrival, so the settle floor grows with it — the rifle's tail goes 933 → **1200** ms at the 30ft band and **1533** ms at 90ft, and a long shot therefore holds the damage window a little longer than it did. That is the correct direction (over-stating is safe, under-stating opens the window over a mark still coming) and the engine's own end still ends the wait first in ordinary play, but it is a felt change at the table. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
 | Real decal persistence (**blood only** now) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. The blood splash is transient by ruling — floor decals were explicitly held out of phase 1. ⏪ This row used to carry the incendiary ground mark alongside it; that element was **removed outright on 2026-08-10**, so the question is the splash's alone. |
 | ~~Animations run in slow motion and trail out after the shooting stops~~ | ✅ **CLOSED 2026-08-09.** Measured, not guessed: a fixed per-round sleep against a starved timer compounded to **2.24×** on every burst size tried. Anchored schedule + drop rule brings a 30-round burst from +6 461 ms of drift to **+89 ms**. §4.1a, and the keeper drives both halves. |
@@ -1411,8 +1587,8 @@ presented while the screen stayed empty.
 | **A started encounter that never advances a round keeps its patterns forever** | ⚠ **Found during the 2026-08-09 autopsy; needs a ruling, not a fix.** 11 patterns were sitting on the rig's review scene 105 minutes after they were thrown. All of them belonged to an encounter that was **started and still on round 3**, and both clocks decline them by design: the wall-clock rule stands down whenever the owning encounter is running (`encounterRunning`), and the round rule only fires on a round **advance**. So an encounter left started and idle makes its patterns immortal. That is the rules as written — a pattern belongs to the round it was thrown on — but a table that stops advancing rounds accumulates them. Options are a wall-clock backstop for in-combat patterns, or a sweep when an encounter is deleted; both are design calls. |
 | **A shooter resolved from a token on a scene nobody is looking at draws the shot from that scene's coordinates** | ⚠ **MEASURED 2026-08-10 (review finding F2), needs a ruling.** `shooterTokenOf` falls back to `tokensOf(actor)[0]`, which reaches **across scenes**. Probed on the rig: an actor whose only token sits at (2200, 2400) on an unviewed scene, fired while the GM views a 2800 × 2000 scene, queued **four sprites on the viewed canvas** — the lance at (2216.8, 2412.6), the tracer stretched from (2200, 2400) to the aim at (650, 650), the impact and the blood on the target — i.e. the shot is drawn from a point 400 px **below the viewed scene's own bottom edge**. The `skipped` bail added the same day does not cover it: that fires only when the actor has **no token anywhere**. ⭐ The second half of the finding is **REFUTED**: the off-scene token's rotation does **not** change. `faceTargetTurn` does compute a turn (138.366°, delta 138.366°, 220 ms), but the write throws — *"You must provide an `_id` for every object in the update data Array"*, the exact cross-scene `TokenDocument` hazard `mech/light.js` already documents — and `faceTarget`'s own try/catch swallows it as a warning. So the defect is a misdraw, not a stray document write. Options: prefer a token on the **viewed** scene and treat "none here" as no shooter, or keep the cross-scene fallback and skip the draw. Both are design calls. |
 | **A pattern on an unviewed scene survives a round advance** | ⚠ **CONFIRMED 2026-08-10 (review finding F8), cosmetic, needs a ruling.** Probed on the rig with the probe's own encounter: a pattern placed on scene A at round 1, the GM then viewing scene B, `combat.update({round: 2})` → **the pattern is still there**, while the pure rule (`spreadZoneRoundExpired`) says `true` for exactly that pattern. Both expiry paths walk `canvas.scene` only. Returning to A and advancing to round 3 collected it. So it self-corrects the moment the GM looks back and a round passes; the fix would be to walk the pattern's **own** scene (`areasByFlag` per scene, or the combat's scene) rather than the viewed one. |
-| **A missed volley draws a different distance band than its tail was computed from** | ⚠ **MEASURED 2026-08-10 (review finding F5), no ruling yet.** A missed shell stretches to `missEndpoint`, whose reach is **0.6–1.15 ×** the true aim distance, while every timing came from the true aim's band. Swept by value over the reach range: at 6 squares the drawn file is a **shorter** band 42.3 % of the time, at 12 and 20 squares 27.4 % — all in the safe direction (the tail over-states). The unsafe direction is confined to the neighbourhood just **under** a boundary, where 1.15 × reaches the next band up: at 4.5 squares **7.5 %** of missed shells draw a longer band (tail under-stated by **200 ms**), at 8.5 squares **16.9 %** (**400 ms**), at 14.5 squares **21.4 %** (**400 ms**). It moves the **scheduled floor** only: the settle still waits on the engine's own end for the effect that was really drawn, so the exposure is the no-engine fallback rather than ordinary play. |
-| **The arithmetic still prices a volley for a shot the fan-out now refuses** | ⚠ **MEASURED 2026-08-10 (review finding F5a), no ruling yet.** `payloadPresentationMs` resolves its volley spec without the `&& shooter` guard the fan-out applies, so a buckshot payload from an actor with no token computes **600 ms** (the 15ft band at a zero-square aim) for a shot the rail now reports as `skipped: "shooter"` and does not draw at all; the same payload with no volley term computes 983 ms. Harmless today — a caller waits a beat over an empty canvas — but the two answers should come from one question. |
+| **A missed PAINTED round is scheduled off a different band than it flies** | ⚠ **MEASURED 2026-08-10 as F5 against the volley, RE-MEASURED 2026-08-11 against the arrival ladder that replaced it (§4.2a); still no ruling.** A miss draws **no mark at all**, so nothing visible hangs on it — what moves is the scheduled floor. The old volley reading follows for the record: ⏪ A missed shell stretches to `missEndpoint`, whose reach is **0.6–1.15 ×** the true aim distance, while every timing came from the true aim's band. Swept by value over the reach range: at 6 squares the drawn file is a **shorter** band 42.3 % of the time, at 12 and 20 squares 27.4 % — all in the safe direction (the tail over-states). The unsafe direction is confined to the neighbourhood just **under** a boundary, where 1.15 × reaches the next band up: at 4.5 squares **7.5 %** of missed shells draw a longer band (tail under-stated by **200 ms**), at 8.5 squares **16.9 %** (**400 ms**), at 14.5 squares **21.4 %** (**400 ms**). It moves the **scheduled floor** only: the settle still waits on the engine's own end for the effect that was really drawn, so the exposure is the no-engine fallback rather than ordinary play. |
+| ~~**The arithmetic still prices a volley for a shot the fan-out now refuses**~~ | ⏪ **Moot with the veto** — no volley term is resolved for any payload. The reading for the record: ⚠ **MEASURED 2026-08-10 (F5a), no ruling.** `payloadPresentationMs` resolves its volley spec without the `&& shooter` guard the fan-out applies, so a buckshot payload from an actor with no token computes **600 ms** (the 15ft band at a zero-square aim) for a shot the rail now reports as `skipped: "shooter"` and does not draw at all; the same payload with no volley term computes 983 ms. Harmless today — a caller waits a beat over an empty canvas — but the two answers should come from one question. |
 | Blood asks the ACTOR, not the hit location | A cyberlimbed character bleeds even when the round struck the chrome arm. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. |
 | The blood splash is routed above the lighting | The one departure from the file's own routing rule, taken because below it the mark does not exist on a dark scene. It is a **look** call the user has not yet made in motion: the cost is that a splash is drawn over ground the viewer cannot see, for under a second. One constant (`BLOOD_SPLATTER.aboveLighting`) reverses it. Captures 58a vs 58d. |
 | **The rebuilt blood splash is not signed off** | ⚠ **The open item of this unit.** The direction and the per-hit rule are both rulings and both are built; the remaining numbers are build-lane calls made while the user was away — the payload cap of **4** and the one-grid-unit exit offset that sets the heading. Each is one constant (`BLOOD_SPLATTER.maxPerPayload`; the `+ gridPx` in `fxBloodSplatter`). Captures 64a (angled shot, held) and 64b (burst). |
@@ -1423,3 +1599,163 @@ presented while the screen stayed empty.
 | Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
 | Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
 | Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
+
+---
+
+## 9. The Sequencer authoring standard — **RATIFIED 2026-08-11**
+
+Every rule below is one this arc either followed and benefited from, or violated and paid for; the
+lesson that produced each is cited beside it. Ratified by the user on 2026-08-11 from the review draft,
+and it is the **conformance bar for every new element** from here: a unit that adds or replaces
+something on this rail is not done until it can be read against this section. The working-procedure form
+of the same standard is the project skill `cp2020-sequencer-fx`.
+
+### A. The element's contract (before any code)
+
+1. **Spec block first.** Every element gets ONE frozen constant block carrying every number a reviewer
+   might move, each with the measured basis or the ruling that set it, and the **revert value recorded
+   at the site** when a ruling replaces something. *(This file's standing habit —
+   `TRACER_COLOR_INCENDIARY`'s revert note; the discharge column's four-report decay.)*
+2. **Database keys, never file paths.** Keys resolve on whichever asset tier is installed; existence is
+   guarded per draw (`fxDbEntryExists`) and a missing key **skips silently**. Never vendor assets
+   (JB2A free is CC BY-NC-SA).
+3. **Asset-native first.** Prefer what the clip already bakes in — a multi-file key randomises per play,
+   a range-banded key picks per distance, an arrival bloom comes free. **An element that needs a trim, a
+   dwell, a derived rate AND a shortened stretch to show one frame of itself is the wrong asset —
+   replace it, don't tune it.** *(The discharge column, deleted after four reports.)*
+4. **Decode, don't guess.** Sizes are the **drawn frame**, not the ink; durations are measured off the
+   installed file's own clock; distance-banded assets get a per-band table, and **arrival and
+   content-end are two different numbers answering two different questions**. *(`dashSquares: 0.8`
+   "picked, never measured" read faint; the volley band table; the 2026-08-11 arrival decode.)*
+
+### B. Geometry and placement
+
+5. **Grid units, not pixels or scale factors** (`gridUnits: true`), so the look survives any scene.
+   Token-relative plants measure from the token's own edge (`tokenRadiusPx`).
+6. **One rotation basis.** Everything directional takes its axis from the shooter→aim ray through the
+   same call (`rotateTowards` at a point along that ray). An element that computed its own heading is an
+   element that can disagree with the round that caused it. *(Blood's exit vector deliberately reuses
+   the tracers' basis.)*
+7. **Never invent a position you could have asked for.** Fanned classes reuse their **real** pellet
+   endpoints; single-bolt classes scatter inside a stated disc **as an admission of ignorance**.
+   Constructions that must stay inside a shape are built in the shape's own coordinates and rotated out
+   (`patternFirePoints`), with the containment test kept as a **separate** check.
+   ⭐ *Extended 2026-08-11:* when the endpoints gain a jitter, everything derived from them takes the
+   **same** jitter record — the burning ground now does — or the derived positions quietly stop being
+   where the rounds went.
+
+### C. Determinism and randomness
+
+8. **Transient + one-client → `Math.random` is fine** (miss splay, motes), with an injectable `rng` for
+   tests. **Long-lived, cross-client-meaningful, or replayed → payload-seeded** (`fxSeedOf` →
+   `seededRng`), so agreement is a property of the inputs.
+9. ⚠ **The seed must carry per-event entropy when variety across events is the point.** Fold in a rolled
+   value (`areaDamages` JSON), a stamped `createdAt`, or a payload nonce — **identity fields alone
+   (attacker, weapon, counts) make two identical trigger pulls draw the same picture.** *(Review finding
+   F3: the ground-fire seed folds `areaDamages` and varies; the volley seed did not and repeated. The
+   pellet fan that replaced the volley folds the same term in the same position.)*
+10. **Per-round variety folds in the round index** beside the payload fields.
+
+### D. The fan-out loop (pacing)
+
+11. **One wait per loop, anchored to a slot ladder** (`roundDueAtMs` from one `loopStart`); sleep only
+    the remainder. Never accumulate a fixed cadence — timer lateness compounds (measured 2.24×).
+12. **Drop-not-queue:** a round later than `FX_DROP_LAG_FRACTION` (0.5) of its own cadence is dropped
+    **whole** — audio with picture. The **last round is never dropped** (it carries the settle tag).
+    Thresholds are fractions of cadence, never flat ms (a flat 150 fails below 300 ms cadence —
+    measured).
+    ⭐ *Amended 2026-08-11:* the drop rule owns the **tracer budget only**. A round that HIT still gets
+    its arrival elements — they are one sprite each, at the far end of the shot, and they are what says
+    the round landed. State the impact budget separately and bound it separately (§4.1a).
+13. **Nothing inside the loop is awaited except the one sleep.** Draw verbs are fire-and-forget with a
+    `.catch` naming the verb. *(Awaiting one `play()` cost 330 ms per round.)*
+
+### E. The completion signal (settle)
+
+14. **Every element either participates in the settle signal or carries a documented exclusion plus a
+    tail entry.** Only the last round's latest-ending element is tagged; scene dressing that outlives
+    the action (fires, blood, the pellet arrival marks) is excluded so the damage window never waits on
+    it.
+15. **The tail arithmetic reads the RESOLVED entry** — class row + ammo overlay + banded spec — so any
+    overlay field that moves a duration is a tail input. **Over-stating an element's life is the safe
+    direction; under-stating opens the apply window early**, which is the silent one-directional
+    failure. *(2026-08-11: the arrival became a tail input the moment the mark started waiting for it.)*
+16. ⚠ **Untrimmed long assets need an engine-wait CAP at their content end.** The engine's exit fires at
+    clip end, not at the last visible frame; a tagged element whose final seconds are invisible residue
+    holds the window shut for them. *(Review finding F4, against the volley.)*
+
+### F. Overlays and load identity
+
+17. **One merge site** (`ammoFxEntry`); the draw path reads only the resolved entry and never knows an
+    overlay happened. The key is resolved **once per payload** and threaded down.
+18. **Repaint-never-add masks use `=== undefined` key presence.** Declared-as-`null` means "repaintable,
+    painted with nothing" — never "tidy" it to a falsy check.
+19. **Identity rides the payload** (`modifier` beside `caliber` — they answer different questions and
+    neither may displace the other); fingerprints are the compatibility path.
+20. ⚠ **A branch that REPLACES the drawn round must still honour the resolved entry's treatments**
+    (colour, at minimum) or explicitly document that it suspends them. *(Review finding F9. The branch
+    it was written against is shelved; the rule is general and outlives it.)*
+
+### G. Long-lived elements
+
+21. **Caps + lifetimes + eviction, all three:** a per-payload bound, a scene-wide `maxLive` with
+    oldest-out eviction (evicted **through the engine's manager**, so the end relays to every client),
+    and a stamped `name` under one prefix so the census is a **query of the engine**, never our own
+    ledger. Count the **pending** (queued-not-yet-created) against the cap, and release in `finally`.
+22. **No document writes from presentation.** The one exception (the face-target rotation) is
+    owner-gated, dead-zoned, and its duration joins the presentation arithmetic.
+
+### H. Flow ownership and clocks
+
+23. **One flow-ownership site** (`spreadFlowModeOf`): what-the-round-**is** (pure derivation) and
+    what-the-module-**does** (world switch) are two questions with one authoritative answer. Presentation
+    asks the IS question when the look must survive the switch — and says so at the call site.
+24. **Three clocks, named:** roll time → **visual impact** (`arrivalMs`, ONE derivation per payload) →
+    damage application (settle-gated). Delayed dressing hangs on clock 2; the apply window on clock 3.
+    ⭐ *Corrected 2026-08-11:* clock 2 must have an answer for **every** draw shape the rail supports. It
+    had one for travelled and banded rounds and a **zero** for painted ones, and that zero put four of
+    five classes' impacts at the muzzle. A shape with no clock-2 answer is a defect, not a default.
+
+### I. Registration, capture, verification
+
+25. **Capture seams are part of the element** (`_held`, the `_set*` family, armed by nothing that ships)
+    and are applied **first** in the chain — a rate or filter set after the seam silently defeats it.
+26. **The keeper asserts VALUES:** queued entries, resolved specs, negative cases (off / missing key /
+    wrong class), determinism by computing twice — plus at least one leg per element that exercises the
+    **live** path, and one that varies the inputs a real table varies (**two separate trigger pulls, not
+    two indexes** — the F3 blind-spot rule).
+27. **The Review·Shooter exercises every shipped element** (review-shooter parity), and `docs/FX-RAIL.md`
+    gets the element's entry **and** its rulings-log lines in the same unit.
+
+### The once-per-payload gate — THE ONE IDIOM
+
+Resolve every gate **once** in `fxWeaponFired`, before the loop, into a local plan object; then declare
+the element's issue policy explicitly:
+
+- **`per-payload`** — the call sits **outside** the loop. *(The burning ground's shape.)*
+- **`per-round-capped`** — the plan carries a `cap` and the loop checks `queued < cap`. *(The blood
+  spray's shape, and the hit mark's since 2026-08-11.)*
+
+Row-flag gating (the smoke's `smokeSingle` + `!burst`) is **retired for new elements**: put the policy in
+the plan, not half in the row and half in the loop condition.
+
+### Conformance grades (living elements, at ratification)
+
+| Element | Grade | Gaps against this standard |
+|---|---|---|
+| Flash light (native) | **A** | n/a (not Sequencer); spec-blocked, capped, socket-announced |
+| Muzzle lance | **A** | model citizen — spec, decode, dwell-as-rate, capture-seam order |
+| Tracer / pellet fan | **A** | irregularised 2026-08-11, seeded with per-event entropy, bounded by the class's own cone |
+| Impact marks (`HIT_CONFIRM` / crack / dust) | **A** | parent-path keys documented; promotion masked; **arrival-anchored and off the tracer budget since 2026-08-11** |
+| Pellet arrival marks | **A−** | new 2026-08-11 — spec-blocked, endpoint-reusing, excluded from settle; size and trim are unsigned look calls (§8) |
+| Smoke puff | **B+** | gate still split row-flag + loop condition — the drift the idiom above retires |
+| Motes / burst ambience | **A−** | `Math.random` appropriate (transient); await-cost lesson recorded |
+| Ground fire | **A** | the standard's exemplar: seeded with entropy, capped, evicted, named — and it now takes the fan's own jitter |
+| Blood splatter | **A−** | per-round-capped idiom done right; rotation basis shared; F2 inherits |
+| Baton round | **A−** | replace-mask precedent; asset measured |
+| Spread-zone ghost look | **B+** | not Sequencer; isolated and flag-keyed, but the v13 branch is unverified |
+
+*(The volley's own **C** — F3 seed entropy, F4 settle cap, F9 overlay reach, all three — went with the
+element on 2026-08-11. It is recorded in §6 rather than graded here: a shelved branch is not a living
+element, and the three findings that made it a C are the reason three of the rules above are written the
+way they are.)*
