@@ -959,7 +959,8 @@
       "LocomotionWater": "Water",
       "NewShell": "New Shell",
       "NewSystem": "New System",
-      "NewWeapon": "New Weapon"
+      "NewWeapon": "New Weapon",
+      "ChemicalShell": "Chemical Shell"
     },
     "Accel": "Accel",
     "Decel": "Decel",
