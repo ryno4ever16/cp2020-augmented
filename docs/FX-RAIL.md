@@ -929,6 +929,54 @@ passed *through* it, never around it: below the threshold `flashColorFor()` has 
 before the ammo is consulted. The reason is measured — a coloured source moves **44.8%** of a lit
 frame's pixels on this core, where the uncoloured one moves 0.2%.
 
+### 4.4 The declared corridor — where a shot-pattern payload is pointed
+
+**Aim, then declare, then bang** (user ruling 2026-08-11). A spread weapon fired from the sheet does not
+open its modifiers window first: the fire control arms an aim preview, the shooter drags the corridor
+against the map and confirms it with a click, and only that confirmed corridor opens the window. So by
+the time the rail sees the payload, where the shot is pointed is a **statement by the shooter** rather
+than an inference from whoever happened to be targeted.
+
+The gesture lives in `module/combat/spread-placement.js` and draws nothing on this rail — it is one PIXI
+corridor and a DOM readout on the aiming client, built from the same pure geometry (`rayPolygonShape`)
+and the same pure band ladder (`lookups.js spreadBandSpec`) that the planted region uses, so the ghost
+and the region are the same shape. It spends nothing: the magazine is decremented inside the base
+system's own fire methods, which are two steps further down, so Esc cancels a shot that never happened.
+
+What reaches this file is one field on the payload — `spreadAim` — carrying an **angle and two reaches**
+rather than a point:
+
+| Field | Read by | Meaning |
+|---|---|---|
+| `angleDeg` | rail + plant | the axis, in canvas degrees |
+| `reachM` | **rail** | where the shooter clicked — what the rounds are drawn to |
+| `lengthM` | **plant** | that plus the overshoot into the aimed-at figure's own square, so containment is unambiguous |
+| `widthM` / `band` | plant + card | the corridor's width and its Core range band |
+
+⭐ **It is a description, not a position, and that is the point.** Every consumer rebuilds the corridor
+off the shooter's figure **as it stands** (`declaredAimPointOf`), so a token nudged between the aim and
+the roll still fires along the line that was drawn, out of the barrel it is actually holding. A stored
+pair of world coordinates would have quietly disagreed with the muzzle.
+
+The aim is resolved **once per payload** in the fan-out (`payloadAimPoint`) and threaded into every verb
+— the turn, the burst ambience, the smoke, the burning ground, each round's `fxShot`, and the hit marks
+issued for refused rounds. It was read four separate times from the same two tokens before, which was
+harmless only while there was one possible answer. The fan-out now **reports** what it used (`aim`,
+`aimSquares`, `aimDeclared`) for the same reason it reports its pacing: an axis that can only be checked
+by looking at the canvas is an axis nothing can assert.
+
+**Damage and animation are one event.** A corridor the shooter already confirmed needs no second
+confirmation, so the chat card's Confirm button — which used to do two jobs, aiming *and* resolving —
+keeps only the job the roll has already committed to, and the pattern resolves itself when the rail says
+the shot is over (`presentationSettled`, the same signal the single-target apply window waits out). On a
+client that did not draw the shot (a player's shell relayed to the GM) that call takes its arithmetic
+route, which is the honest floor. This is what retires review finding F4's late-window complaint for this
+flow: the rounds cross the corridor and the damage lands as they arrive.
+
+⏪ **A shell nobody aimed still gets the card.** A payload with no `spreadAim` — a macro, a keeper driving
+the roll directly — is planted on a corridor the module *guessed* from the target axis, exactly as every
+shell was before this unit, and a guessed corridor is still shown to a reader before it resolves.
+
 ---
 
 ## 5. Tune-knob index
@@ -949,6 +997,8 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `MUZZLE_SPRITE.endMs` | 110 | lance trim — beyond this the clip's smoke-and-fire plume returns |
 | `MUZZLE_SPRITE.edgeFraction` | 0.5 | how far along the aim the sprite is planted, as a fraction of token width |
 | `FACING_AIM_SQUARES` | 3 | how far the synthesized aim point sits for an untargeted shot |
+| `SPREAD_PREVIEW_FILL_ALPHA` ⭐ | **0.18** | how solid the aim ghost is while it is being dragged (`module/combat/spread-placement.js` — the one knob in this index that is not in `effects.js`, listed here because it is the shot's own look). Revert to `SPREAD_ZONE_LOOK.fillAlpha` (0.10) to make the dragged ghost identical to the planted one |
+| `SPREAD_MIN_LENGTH_M` ⭐ | **2** | the shortest corridor an aim may confirm, in metres — mirrors the plant's own floor |
 | `FX_CLASSES.shotgun.muzzleSquares` | **1.9** | the shell's lance width in grid units — between the rifle's 1.6 and the heavy's 2.1; measured 190 px on a 100 px grid |
 | `FX_CLASSES.shotgun.muzzleMs` | **220** | the shell's lance dwell, the only row that names one; delivered as `muzzleRateFor("shotgun")` = 0.5 |
 | ~~`COLUMN_SQUARES` / `COLUMN_TRIM_MS` / `COLUMN_DWELL_MS` / `columnRateFor()`~~ | ⏪ **deleted 2026-08-09** | the discharge column's four constants went with the mechanism (§6). A keeper leg asserts all four are `undefined` |
@@ -1019,6 +1069,21 @@ Test/capture seams (**nothing ships with one armed**): `_setFlashLevels`, `_setD
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-11 (the bench walk) — a spread weapon is AIMED before it is declared.**
+*"Shouldn't they have to place the pattern first, then they say how they'll attack?"* Raised against the
+sequencing the walk saw: the animation played at the roll while the damage waited on a Confirm click,
+and the corridor the damage used was drawn *after* the shot had already been declared.
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⭐ **The fire control enters placement, not the modifiers window** | one PIXI corridor + a DOM readout on the aiming client (`module/combat/spread-placement.js`); Esc or right-click cancels | A shotgun is an area weapon in the Core rules, so the corridor decides the band, the width and the banded damage — everything the modifiers window would otherwise ask about blind. Aiming *is* the declaration. Nothing is spent by it: the magazine is decremented inside the base system's fire methods, two steps further down, so a cancelled aim is a shot that never happened — asserted by value on `shotsLeft`, not by inspection. |
+| **The shooter places it, and only the shooter sees it** | the ghost is client-local PIXI; the planted region keeps its GM-only visibility | The aim belongs to whoever is taking the shot, and it is theirs until they commit to it. Once planted, the pattern reverts to the existing semantics with no new rule: a client-local Graphics is invisible to the table by construction, so this cost no visibility code at all. |
+| **The corridor is an angle and two reaches, not a point** | `angleDeg` · `reachM` (rail) · `lengthM` = reach + the aimed-at figure's half-width (plant) · `widthM` · `band` | One rotation basis, the rule this rail follows everywhere. Every consumer rebuilds the line off the shooter's figure as it stands, so a token nudged between the aim and the roll still fires along the line that was drawn. The two reaches are two different questions: the rounds are drawn to where the shooter clicked; the region is planted past it, because ending the polygon on a figure's centre puts that centre on its end edge and makes containment a floating-point comparison — the defect that once resolved a burst against a bystander. |
+| ⭐ **The aim is resolved ONCE per payload and threaded** | `payloadAimPoint` → turn, ambience, smoke, burning ground, every `fxShot`, every refused round's hit mark | It was read four times from the same two tokens, which was harmless only while there was one possible answer. There are two now, and a declared corridor may be aimed short of a figure, past it, or at open ground — so a second reading is how the rounds cross one line while the region is planted on another. The fan-out reports what it used (`aim`, `aimSquares`, `aimDeclared`) for the same reason it reports its pacing. |
+| ⭐ **Damage and animation are one event** | the plant awaits `presentationSettled(payload)` and resolves the pattern itself; no Confirm card is posted for a declared corridor | The Confirm click did two jobs — aim and resolve — and the ruling moved the aiming half to the front. What is left is "resolve now", which the roll already committed to, so it happens when the rail says the shot is over. On a client that did not draw the shot the same call takes its arithmetic route, which is the honest floor. This is what retires review finding F4's late-window complaint for this flow. |
+| ⏪ **A shell nobody aimed keeps the card** | gated on `declaredAim`, recorded on the region | A payload with no corridor was planted on one the module *guessed* from the target axis. A guess is still shown to a reader before it resolves; a statement is not. Keeping the fallback is also what leaves the flow reachable from a macro or a keeper driving the roll directly. |
+| **The band ladder is one pure derivation** | `lookups.js spreadBandSpec` / `spreadBandDamage`, read by the preview and by the plant | The arithmetic existed once, inside the plant, because nothing else needed it. Two readers is how a preview starts promising a width the plant does not honour. |
 
 **2026-08-11 (the bench walk) — impact-family effects fire at ARRIVAL, and every hit keeps them.**
 Reported in two halves against the MPK-9 and the Ronin: *"blood splashes and dust/impact marks play when
@@ -1596,6 +1661,8 @@ presented while the screen stayed empty.
 | ~~Whether the stun-dart load should be allowed on ordinary cartridges~~ | ✅ **CLOSED 2026-08-11 — leave it as it is.** Asked whether to widen `AMMO_MODIFIERS.stundart.families` past the shotgun family so the load could reach a stream-firing weapon, the user ruled the question shut along with the bench row that raised it: the bench is for the loads the product ships, not for arranging a state it cannot otherwise reach. The family lock stands, the registry gate and the ammo sheet keep refusing the pairing, and no data was changed. The revival path, if it is ever wanted, is in §6 under the same date. |
 | **The shell lance at 1.9 squares is a build-lane pick** | ⚠ The *restoration* is the user's ruling; the *width* is mine, chosen against the ladder (rifle 1.6, heavy 2.1) and verified as a drawn 190 px on a 100 px grid. One constant, `FX_CLASSES.shotgun.muzzleSquares`. Capture 67d has the two shells and the rifle in one frame. |
 | ⭐ **A second volley variant exists and has never been drawn** | ⚠ **Found during the 2026-08-11 veto, needs eyes before anything changes.** `jb2a.volley_of_projectiles_Line.bullet.001.002.orangeyellow` decodes as 32 small blobs at mixed depths where the vetoed variant decodes as 7 in two aligned ranks — i.e. it may be the "small balls, irregular grouped spread" the ruling asked for, in one asset. Not adopted: the ruling requires captures first, and at 4867 ms it would need a trim and an engine-wait cap before it could carry a settle tag. §3.2b has the decode. |
+| **The pattern now resolves itself, with nobody left to press anything** | ⚠ **Stated so it is a decision, not a surprise.** The ruling says the damage resolution *opens* at the animation's content end, and for the pattern flow there is no window to open — the resolution IS the application plus its result card. So a declared corridor applies its damage automatically when the rail settles, and the only thing a reader can still stop is a shell nobody aimed (which keeps its card). If what was wanted was a card that appears at the content end and still waits for a click, that is one branch: post the confirm card instead of calling `_confirmSpreadZone` in `_placeSpreadZone`, after the same `presentationSettled` await. |
+| **The aim ghost's alpha and the readout's wording are build-lane calls** | ⚠ The gesture and its order are the user's; the ghost is drawn at **0.18** where the planted pattern sits at 0.10 (it is being dragged, against a dark map, by the person who owns it), and the readout reads `"{band} band — {width}m wide, {dmg}"`. One constant (`SPREAD_PREVIEW_FILL_ALPHA`) and one i18n key (`SpreadPreviewReadout`). |
 | **The buckshot fan's new look is not signed off** | ⚠ **The open item of this unit.** The *veto* and the *direction* are the user's; the numbers are the build lane's, made from the bench report rather than in front of the user. Four constants and a fifth: `PELLET_CHAOS.slotFraction` **0.9** · `.reachFraction` **0.35** · `.sizeFraction` **0.25** · `.staggerMs` **45**, plus `FX_CLASSES.shotgun.dashSquares` **0.7** (revert **1**; not taken to **0.5**, the value already rejected by eye on this row). A veto on any one is a one-number edit. §3.2b. |
 | **The pellet arrival marks are a build-lane call, and so is the razor split** | ⚠ **The open item of this unit.** The ruling says "small arrival marks at pellet endpoints, ≤ 50 % of the volley's fireballs" and "fire arrivals reserved for the incendiary shell". The size (**0.45 sq**, under 40 % of the class's own aim mark) and the trim (**500 ms**) are mine; the *split* is implemented as one gate (`entry.groundFire`) rather than as two assets, so the incendiary shell keeps the fires it already sets and gets no dust over them — which is also what keeps the withdrawn 2026-08-09 blast-ring ruling honoured. If the intent was a fire mark **as well**, that is a different build. §3.2b. |
 | **Six pellet marks land on the same square as the restored aim-point star** | ⚠ **Raised by the build, needs eyes.** The veto restores the hit-confirmation star (1.15 sq at the aim point) *and* the ruling adds six 0.45 sq marks at the pellet endpoints — and on a hit the pellets converge within 0.28–0.84 squares of that aim point, so the seven marks overlap. The stagger spreads them over a few frames rather than stamping them at once. If it reads busy in motion, dropping **either** is one edit: the star is the class's `impactSquares`, the marks are `PELLET_ARRIVAL`. |
@@ -1774,6 +1841,7 @@ the plan, not half in the row and half in the loop condition.
 | Blood splatter | **A−** | per-round-capped idiom done right; rotation basis shared; F2 inherits |
 | Baton round | **A−** | replace-mask precedent; asset measured |
 | Spread-zone ghost look | **B+** | not Sequencer; isolated and flag-keyed, but the v13 branch is unverified |
+| Spread aim preview | **A−** | added 2026-08-11 — not Sequencer; one spec-blocked alpha, geometry and band ladder shared with the plant by import rather than by copy, teardown on cancel/confirm/`canvasTearDown`, writes no document. Its alpha and readout wording are unsigned look calls (§8) |
 
 *(The volley's own **C** — F3 seed entropy, F4 settle cap, F9 overlay reach, all three — went with the
 element on 2026-08-11. It is recorded in §6 rather than graded here: a shelved branch is not a living
