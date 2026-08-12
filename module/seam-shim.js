@@ -238,7 +238,7 @@ function _firstTargetTokenId() {
  *  otherwise takes the actor's first drawn one). Null when none of them answers — every consumer
  *  falls back to its own actor lookup, i.e. to the behaviour it had before this field existed.
  *  Fully optional-chained: a client with no canvas yet must not throw on the way to firing. */
-function _firingTokenId(actor) {
+export function firingTokenIdOf(actor) {
   if (!actor) return null;
   try {
     if (actor.isToken) return actor.token?.id ?? null;
@@ -261,9 +261,9 @@ function installWeaponFiredShim(ItemProto) {
       assertRenderEmit();
       _fireCtx = {
         attackerId: this.actor?.id ?? null,
-        // WHICH FIGURE FIRED, as opposed to whose it is (see _firingTokenId). Read at CALL time for
+        // WHICH FIGURE FIRED, as opposed to whose it is (see firingTokenIdOf). Read at CALL time for
         // the same reason the aim is: it is a fact about this trigger pull.
-        attackerTokenId: _firingTokenId(this.actor),
+        attackerTokenId: firingTokenIdOf(this.actor),
         weaponName: this.name,
         weaponId: this.id ?? null,   // resolve the EXACT weapon downstream (two same-named weapons with different ammo)
         fallbackTargetActorId: attackMods?.targetActor?.id ?? null,
@@ -275,6 +275,15 @@ function installWeaponFiredShim(ItemProto) {
         // time, like the dialog does, so it reflects the token the shot was actually aimed at; null when
         // nothing is targeted.
         fxTargetTokenId: _firstTargetTokenId(),
+        // ⭐ THE CORRIDOR A SPREAD SHOT WAS AIMED ALONG BEFORE THE TRIGGER WAS PULLED (2026-08-11).
+        // It arrives on the attack modifiers because that object is the one thing that travels from the
+        // fire gesture into the base's own fire method — the aim is declared by the shooter several
+        // steps before this, in combat/spread-placement.js, and carrying it here means no global to keep
+        // in step and no second channel to go stale. Absent on every ordinary shot, and absent on a
+        // spread shot fired by anything other than the sheet's own control (a macro, a keeper driving
+        // the roll directly), in which case the plant falls back to computing an axis from the target
+        // exactly as it did before this existed.
+        spreadAim: attackMods?.cpSpreadAim ?? null,
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       return orig.call(this, attackMods, ...rest);
@@ -347,6 +356,10 @@ function installRenderEmit() {
           //     to this, and the damage handler never reads it at all.
           targetTokenId: target?.id ?? null,
           fxTargetTokenId: _fireCtx.fxTargetTokenId ?? null,
+          // The declared corridor, carried whole. Null on every shot that was not aimed first — every
+          // consumer treats a null as "nobody declared an aim" and computes one, which is the behaviour
+          // that shipped before the placement gesture existed.
+          spreadAim: _fireCtx.spreadAim ?? null,
           // WHO PULLED THE TRIGGER. This hook is a LOCAL `Hooks.callAll` — it is raised only on the
           // client that resolved the shot, never broadcast — so this field names the one client that
           // has the shot in hand. The damage handler uses it to decide who presents the result:
@@ -442,8 +455,8 @@ function installSuppressiveFireShim(ItemProto) {
       actorId: this.actor?.id ?? null,
       // Captured by the SAME rule the fire wrapper uses, so the zone is laid from the figure that laid
       // it down. This used to take the first figure on the canvas whose actor matched, which cannot
-      // tell two figures of one actor apart (see _firingTokenId).
-      attackerTokenId: _firingTokenId(this.actor),
+      // tell two figures of one actor apart (see firingTokenIdOf).
+      attackerTokenId: firingTokenIdOf(this.actor),
       weaponRange: Number(sys.range ?? 50),
       roundsFired,
     };
