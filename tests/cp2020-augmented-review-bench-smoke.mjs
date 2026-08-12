@@ -370,7 +370,12 @@ const restored = await page.evaluate(async ({ SCOPE, baselineCards, baselineRegi
     ammoFull: actor.itemTypes.ammo.filter(a => a.getFlag(SCOPE, "reviewBench"))
       .every(a => Number(a.system.quantity) === 60),
     regions: scene.regions.map(r => r.name),
-    liveEffects: (globalThis.Sequencer?.EffectManager?.effects ?? []).length,
+    // ⚠ THE SHOT RAIL'S TRANSIENTS ONLY. Persistent condition overlays (module/fx/status-fx.js) are
+    // drawn for as long as the condition is on the figure and are meant to still be there afterwards,
+    // so a figure that is legitimately burning would otherwise fail this leg for doing its job. What
+    // this check is actually for is a muzzle, tracer or impact that never ended.
+    liveEffects: (globalThis.Sequencer?.EffectManager?.effects ?? [])
+      .filter(e => !String(e?.data?.name ?? "").startsWith("cp2020-augmented.statusfx.")).length,
     cards: game.messages.size,
     dialogs: [...foundry.applications.instances.values()].filter(a => /Damage|Modifiers/i.test(a?.constructor?.name ?? "")).length,
   };

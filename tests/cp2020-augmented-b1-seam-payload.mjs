@@ -292,7 +292,12 @@ const restored = await p.evaluate(async ({ SCOPE, baselineCards }) => {
     ammoFull: actor.itemTypes.ammo.filter(a => a.getFlag(SCOPE, "reviewBench"))
       .every(a => Number(a.system.quantity) === 60),
     strayActors: game.actors.filter(a => a.name === "__PW__B1").length,
-    liveEffects: (globalThis.Sequencer?.EffectManager?.effects ?? []).length,
+    // ⚠ THE SHOT RAIL'S TRANSIENTS ONLY — persistent condition overlays (module/fx/status-fx.js) are
+    // supposed to still be on screen while their condition is, so a figure that is legitimately
+    // burning must not read as a muzzle or tracer that never ended. See the same filter in the
+    // review-bench smoke spec.
+    liveEffects: (globalThis.Sequencer?.EffectManager?.effects ?? [])
+      .filter(e => !String(e?.data?.name ?? "").startsWith("cp2020-augmented.statusfx.")).length,
     cards: game.messages.size,
     dialogs: [...foundry.applications.instances.values()].filter(a => /Damage|Modifiers/i.test(a?.constructor?.name ?? "")).length,
   };
