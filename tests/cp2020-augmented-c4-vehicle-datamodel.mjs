@@ -21,7 +21,7 @@ async function joinAs(page, match, passwords) {
   const u = users.find((x) => match.test(x.l));
   if (!u) throw new Error("no user matching " + match);
   for (const pw of passwords) {
-    await sel.selectOption(u.v);
+    await page.evaluate(v=>{const el=document.querySelector('select[name="userid"]');el.value=v;el.dispatchEvent(new Event("change",{bubbles:true}));},u.v);
     await page.locator('input[name="password"]').fill(pw);
     await Promise.all([
       page.waitForNavigation({ url: /\/game/, timeout: 15_000 }).catch(() => {}),

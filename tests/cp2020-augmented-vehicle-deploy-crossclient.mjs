@@ -59,8 +59,7 @@ gm.page.on("console", m => { if (m.type() === "error") gmErrors.push(m.text()); 
 
 // setup: active scene, player-owned driver with two vehicle items; clean stale runs
 const setup = await gm.page.evaluate(async SCOPE => {
-  if (!game.scenes.active) await (game.scenes.getName("Foundry Virtual Tabletop") ?? game.scenes.contents[0])?.activate();
-
+  const activeBefore = game.scenes.active?.id ?? null;
   const player = game.users.find(u => !u.isGM && /test user 1/i.test(u.name)) ?? game.users.find(u => !u.isGM);
   if (!player) return { error: "no player user" };
 
@@ -74,12 +73,28 @@ const setup = await gm.page.evaluate(async SCOPE => {
     name: "__PW__Driver", type: "character",
     ownership: { [player.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER },
   });
+
+  // The whole flow runs on a scene of our own — the deploy now PLACES a token beside the
+  // requester, and it must never land on the world's active scene. Observer by default so the
+  // player client can view it.
+  for (const s of [...game.scenes]) if (s.name === "__PW__DeployScene") await s.delete();
+  const scene = await Scene.create({
+    name: "__PW__DeployScene", width: 3000, height: 3000, grid: { size: 100 },
+    ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER },
+  });
+  const [anchorTok] = await scene.createEmbeddedDocuments("Token", [{
+    name: "__PW__Driver", actorId: driver.id, actorLink: true, x: 500, y: 500, width: 1, height: 1,
+    texture: { src: "icons/svg/mystery-man.svg" },
+  }]);
+
   const pack = game.packs.get("cyberpunk2020.vehicles");
   const idx = await pack.getIndex({ fields: ["type", "system.sdp"] });
   const src = await pack.getDocument(idx.find(e => e.type === "vehicle" && Number(e.system?.sdp?.max) > 0)._id);
   const [itemA, itemB] = await driver.createEmbeddedDocuments("Item", [src.toObject(), src.toObject()]);
   return {
     playerId: player.id, playerName: player.name, driverId: driver.id,
+    activeBefore, sceneId: scene.id, grid: scene.grid.size,
+    anchorTokenId: anchorTok.id, anchor: { x: anchorTok.x, y: anchorTok.y },
     itemAUuid: itemA.uuid, itemBUuid: itemB.uuid, srcName: src.name,
     expected: {
       topSpeed: Number(src.system.speed?.max) || Number(src.system.speed?.value) || 0,
@@ -101,6 +116,18 @@ await pl.page.evaluate(() => {
     ui.notifications[kind] = (msg, ...rest) => { window.__pwNotes.push({ kind, msg: String(msg) }); return orig(msg, ...rest); };
   }
 });
+
+// The player looks at the probe scene and selects their own token — the deploy must land beside
+// exactly that token, on exactly that scene (the anchor is read on the requester's client).
+const playerView = await pl.page.evaluate(async ({ sceneId, anchorTokenId }) => {
+  await game.scenes.get(sceneId).view();
+  for (let i = 0; i < 50 && canvas.scene?.id !== sceneId; i++) await new Promise(r => setTimeout(r, 200));
+  for (let i = 0; i < 50 && !canvas.tokens.get(anchorTokenId); i++) await new Promise(r => setTimeout(r, 200));
+  canvas.tokens.get(anchorTokenId)?.control({ releaseOthers: true });
+  return { viewing: canvas.scene?.id === sceneId, controlled: canvas.tokens.controlled.length };
+}, setup);
+check("player client is viewing the probe scene with its token selected",
+  playerView.viewing === true && playerView.controlled === 1, JSON.stringify(playerView));
 
 // A. happy path: request with a CUSTOM name
 await pl.page.evaluate(async ({ itemAUuid }) => {
@@ -146,6 +173,20 @@ check("topSpeed seeded from item", created.topSpeed === setup.expected.topSpeed,
 check("sdp max+value seeded full", created.sdpMax === setup.expected.sdpMax && created.sdpVal === setup.expected.sdpMax, `${created.sdpVal}/${created.sdpMax}`);
 check("sp seeds all facings", created.spFront === setup.expected.sp && created.spRear === setup.expected.sp);
 check("filed in Vehicles folder", created.folderName === "Vehicles", String(created.folderName));
+
+// …and the vehicle is ON THE CANVAS beside the requester's token (the ruling: deploy means it
+// hits the canvas), placed by the GM client onto the scene the PLAYER was looking at.
+const landed = await pl.page.waitForFunction(({ sceneId }) => {
+  const scene = game.scenes.get(sceneId);
+  const actor = game.actors.find(a => a.name === "Keeper Custom Ride");
+  const tok = actor ? scene.tokens.find(t => t.actorId === actor.id) : null;
+  return tok ? { x: tok.x, y: tok.y, w: tok.width, h: tok.height, sort: tok.sort } : null;
+}, setup, { timeout: 15000 }).then(h => h.jsonValue()).catch(() => null);
+check("approved deploy places the vehicle on the player's scene", !!landed);
+check("placed beside the requester's own token (exact)",
+  landed && landed.x === setup.anchor.x + setup.grid && landed.y === setup.anchor.y,
+  landed ? `x=${landed.x} y=${landed.y}` : "no token");
+check("placed handle sorts below crew", landed?.sort === -100, String(landed?.sort));
 const approvedNote = await pl.page.waitForFunction(
   () => window.__pwNotes.some(n => n.kind === "info" && n.msg.includes("Keeper Custom Ride") && /approved/i.test(n.msg)),
   null, { timeout: 10000 },
@@ -223,23 +264,44 @@ const declined = await pl.page.evaluate(() => ({
 check("decline: player warned", true);
 check("decline: no actor created", !declined.actor);
 
-// D. embark/disembark gesture + crew-follow (GM client)
-const boardRes = await gm.page.evaluate(async SCOPE => {
+// D. embark/disembark gesture + seating presentation + crew-follow (GM client).
+// Runs on its OWN scene (viewed, never activated) so the world's active scene is untouched.
+const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore }) => {
   const out = {};
-  const scene = game.scenes.active;
+  const scene = game.scenes.get(sceneId);
+  await scene.view();
+  for (let i = 0; i < 50 && canvas.scene?.id !== scene.id; i++) await new Promise(r => setTimeout(r, 200));
   const grid = scene.grid.size;
+  // This core streams a token's document position while it animates; wait for it to settle.
+  const settle = async (id) => {
+    let last = null;
+    for (let i = 0; i < 30; i++) {
+      const t = scene.tokens.get(id);
+      const now = `${t.x},${t.y}`;
+      if (now === last) return;
+      last = now;
+      await new Promise(r => setTimeout(r, 150));
+    }
+  };
+
   const vehicleActor = game.actors.find(a => a.name === "Renamed Ride");
   const api = game.cpAugmented.vehicles;
+  // deploy is idempotent per (actor, scene) — the approved deploy already parked this vehicle
+  // here, so this returns THAT handle. Put the crew token beside wherever it actually is.
   const dep = await api.deploy(vehicleActor, { scene, x: 10 * grid, y: 10 * grid, gw: 2, gh: 1 });
   const vTok = scene.tokens.get(dep.tokenId);
+  out.reusedExistingHandle = dep.existing === true;
   const driver = game.actors.getName("__PW__Driver");
   const [cTok] = await scene.createEmbeddedDocuments("Token", [{
-    name: driver.name, actorId: driver.id, actorLink: true, x: 12 * grid, y: 10 * grid, width: 1, height: 1,
+    name: driver.name, actorId: driver.id, actorLink: true,
+    x: vTok.x + vTok.width * grid, y: vTok.y, width: 1, height: 1,
+    texture: { src: "icons/svg/mystery-man.svg" },
   }]);
   // wait for placeable
   for (let i = 0; i < 25 && !canvas.tokens.get(cTok.id); i++) await new Promise(r => setTimeout(r, 200));
   const placeable = canvas.tokens.get(cTok.id);
   if (!placeable) return { error: "crew placeable never drew" };
+  const priorScale = cTok._source.texture.scaleX;
   // open HUD on the crew token
   const hud = canvas.tokens.hud ?? canvas.hud?.token;
   hud.bind(placeable);
@@ -249,16 +311,24 @@ const boardRes = await gm.page.evaluate(async SCOPE => {
   if (!btnIn) return out;
   btnIn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   for (let i = 0; i < 25 && scene.tokens.get(cTok.id).flags?.[SCOPE]?.boardedVehicle !== vehicleActor.id; i++) await new Promise(r => setTimeout(r, 200));
+  await settle(cTok.id);
   out.boardedFlag = scene.tokens.get(cTok.id).flags?.[SCOPE]?.boardedVehicle === vehicleActor.id;
 
-  // crew-follow: move the vehicle, crew translates by the same delta
-  const c0 = { x: scene.tokens.get(cTok.id)._source.x, y: scene.tokens.get(cTok.id)._source.y };
-  await vTok.update({ x: vTok._source.x + 3 * grid, y: vTok._source.y + grid });
-  for (let i = 0; i < 25 && scene.tokens.get(cTok.id)._source.x === c0.x; i++) await new Promise(r => setTimeout(r, 200));
-  const c1 = { x: scene.tokens.get(cTok.id)._source.x, y: scene.tokens.get(cTok.id)._source.y };
-  out.crewFollowed = c1.x === c0.x + 3 * grid && c1.y === c0.y + grid;
+  // seated: first seat = the footprint's first square, drawn at 60%, sorted above the hull
+  const seated = scene.tokens.get(cTok.id);
+  out.seat = { x: seated.x, y: seated.y, vx: vTok.x, vy: vTok.y,
+               scale: seated._source.texture.scaleX, sort: seated.sort, hullSort: vTok.sort };
 
-  // HUD now offers Disembark; click it; flag clears; position stays (drop in place)
+  // crew-follow: move the vehicle, crew translates by the same delta (seat offset preserved)
+  const c0 = { x: scene.tokens.get(cTok.id).x, y: scene.tokens.get(cTok.id).y };
+  await vTok.update({ x: vTok.x + 3 * grid, y: vTok.y + grid }, { teleport: true });
+  for (let i = 0; i < 25 && scene.tokens.get(cTok.id).x === c0.x; i++) await new Promise(r => setTimeout(r, 200));
+  await settle(cTok.id);
+  const c1 = { x: scene.tokens.get(cTok.id).x, y: scene.tokens.get(cTok.id).y };
+  out.crewFollowed = c1.x === c0.x + 3 * grid && c1.y === c0.y + grid;
+  out.stillSeated = c1.x === vTok.x && c1.y === vTok.y;
+
+  // HUD now offers Disembark; click it; flag clears; the rider lands BESIDE the hull
   hud.clear(); hud.bind(placeable);
   await new Promise(r => setTimeout(r, 500));
   const btnOut = document.querySelector(".cp-vehicle-board.cp-board-out");
@@ -266,23 +336,43 @@ const boardRes = await gm.page.evaluate(async SCOPE => {
   if (btnOut) {
     btnOut.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     for (let i = 0; i < 25 && scene.tokens.get(cTok.id).flags?.[SCOPE]?.boardedVehicle; i++) await new Promise(r => setTimeout(r, 200));
+    await settle(cTok.id);
     out.flagCleared = !scene.tokens.get(cTok.id).flags?.[SCOPE]?.boardedVehicle;
-    const c2 = { x: scene.tokens.get(cTok.id)._source.x, y: scene.tokens.get(cTok.id)._source.y };
+    const t = scene.tokens.get(cTok.id);
+    const vr = { x: vTok.x, y: vTok.y, w: vTok.width * grid, h: vTok.height * grid };
+    const tr = { x: t.x, y: t.y, w: t.width * grid, h: t.height * grid };
+    out.outsideFootprint = !(tr.x < vr.x + vr.w && vr.x < tr.x + tr.w && tr.y < vr.y + vr.h && vr.y < tr.y + tr.h);
+    out.gap = Math.max(Math.max(vr.x - (tr.x + tr.w), tr.x - (vr.x + vr.w), 0),
+                       Math.max(vr.y - (tr.y + tr.h), tr.y - (vr.y + vr.h), 0));
+    out.scaleRestored = t._source.texture.scaleX === priorScale;
+    const c2 = { x: t.x, y: t.y };
     // vehicle moves again — crew must NOT follow
-    await vTok.update({ x: vTok._source.x + 2 * grid });
-    await new Promise(r => setTimeout(r, 1200));
-    const c3 = { x: scene.tokens.get(cTok.id)._source.x, y: scene.tokens.get(cTok.id)._source.y };
-    out.droppedInPlace = c3.x === c2.x && c3.y === c2.y;
+    await vTok.update({ x: vTok.x + 2 * grid }, { teleport: true });
+    await new Promise(r => setTimeout(r, 1500));
+    const c3 = { x: scene.tokens.get(cTok.id).x, y: scene.tokens.get(cTok.id).y };
+    out.stayedBehind = c3.x === c2.x && c3.y === c2.y;
   }
-  out.vehTokenId = dep.tokenId; out.crewTokenId = cTok.id;
+  out.activeUnchanged = (game.scenes.active?.id ?? null) === activeBefore;
   return out;
-}, SCOPE);
+}, { SCOPE, sceneId: setup.sceneId, activeBefore: setup.activeBefore });
 check("embark button renders on crew token near vehicle", boardRes.embarkBtn === true, boardRes.error ?? "");
 check("embark sets boardedVehicle flag", boardRes.boardedFlag === true);
+check("embark seats the rider in the footprint's first square (exact)",
+  Number.isFinite(boardRes.seat?.x) && boardRes.seat.x === boardRes.seat.vx && boardRes.seat.y === boardRes.seat.vy,
+  JSON.stringify(boardRes.seat));
+check("seated rider is drawn at 60% of its own art scale", boardRes.seat?.scale === 0.6, String(boardRes.seat?.scale));
+check("seated rider sorts above the hull",
+  Number.isFinite(boardRes.seat?.sort) && boardRes.seat.sort > boardRes.seat.hullSort,
+  `${boardRes.seat?.sort} vs ${boardRes.seat?.hullSort}`);
 check("crew follows vehicle movement", boardRes.crewFollowed === true);
+check("crew keeps its seat offset after the move", boardRes.stillSeated === true);
 check("disembark button renders while boarded", boardRes.disembarkBtn === true);
 check("disembark clears flag", boardRes.flagCleared === true);
-check("disembarked crew stays put (drop in place)", boardRes.droppedInPlace === true);
+check("disembarked crew lands outside the footprint", boardRes.outsideFootprint === true);
+check("disembarked crew lands adjacent (≤1 square)", boardRes.gap <= 100, String(boardRes.gap));
+check("disembark restores the pre-boarding art scale", boardRes.scaleRestored === true);
+check("negative case: disembarked crew no longer follows", boardRes.stayedBehind === true);
+check("active scene unchanged by the boarding pass", boardRes.activeUnchanged === true);
 
 // E. tag-wrap: summary fully visible at default open width
 const tag = await gm.page.evaluate(async ({ itemAUuid }) => {
@@ -310,17 +400,26 @@ console.log(`  info: tag wrapped below title = ${tag.wrappedBelowTitle}`);
 await gm.page.locator(`#${tag.appId}`).screenshot({ path: `${SHOT_DIR}/veh-item-tag-wrap.png` });
 
 // cleanup
-await gm.page.evaluate(async ({ boardIds }) => {
-  const scene = game.scenes.active;
-  const ids = [boardIds.vehTokenId, boardIds.crewTokenId].filter(id => id && scene.tokens.get(id));
-  if (ids.length) await scene.deleteEmbeddedDocuments("Token", ids);
+const cleaned = await gm.page.evaluate(async ({ sceneId, activeBefore }) => {
+  await game.scenes.get(sceneId)?.delete();
   for (const n of ["Renamed Ride", "Keeper Custom Ride", "Declined Ride"]) await game.actors.find(a => a.name === n)?.delete();
-  await game.actors.getName("__PW__Driver")?.delete();
+  for (const a of [...game.actors]) if (a.name.startsWith("__PW__")) await a.delete();
   const folder = game.folders.find(f => f.type === "Actor" && f.name === "Vehicles");
   if (folder && folder.contents.length === 0) await folder.delete();
-}, { boardIds: { vehTokenId: boardRes.vehTokenId, crewTokenId: boardRes.crewTokenId } });
+  return {
+    scenesLeft: game.scenes.filter(s => s.name.startsWith("__PW__")).length,
+    actorsLeft: game.actors.filter(a => a.name.startsWith("__PW__")).length,
+    activeUnchanged: (game.scenes.active?.id ?? null) === activeBefore,
+  };
+}, { sceneId: setup.sceneId, activeBefore: setup.activeBefore });
+check("probe scene and fixtures removed",
+  cleaned.scenesLeft === 0 && cleaned.actorsLeft === 0, `scenes=${cleaned.scenesLeft} actors=${cleaned.actorsLeft}`);
+check("world active scene untouched by the run", cleaned.activeUnchanged === true);
 
-const realErrors = gmErrors.filter(e => !/compatibility|deprecat|screen resolution/i.test(e));
+// The rig is shared: other work running in the same world logs its own errors into this
+// page. `Invalid Asset` comes from the effects asset registry, which nothing in this spec
+// touches, so it is excluded by name rather than being read as a fault here.
+const realErrors = gmErrors.filter(e => !/compatibility|deprecat|screen resolution|Invalid Asset/i.test(e));
 check("0 GM console errors", realErrors.length === 0, realErrors.slice(0, 3).join(" | "));
 
 console.log(`\nRESULT: ${fail === 0 ? "PASS" : "FAIL"} (${pass}/${pass + fail})`);
