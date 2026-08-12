@@ -11,7 +11,7 @@ It does **not** modify the base system; everything is added through hooks, modul
 
 ## Design principles
 
-This module is written to the **same conventions as the base system** ("Tilt's Way"): templates own structure / JS owns data, everything localized via i18n keys (no hardcoded HTML/CSS in JS), settings under `SETTINGS.*`, features registered from `Hooks.once('init'/'ready')`. The long-term intent is that this work remains mergeable back into the base system.
+This module is written to the **same conventions as the base system**: templates own structure / JS owns data, everything localized via i18n keys (no hardcoded HTML/CSS in JS), settings under `SETTINGS.*`, features registered from `Hooks.once('init'/'ready')`. The long-term intent is that this work remains mergeable back into the base system.
 
 ## Requirements
 
