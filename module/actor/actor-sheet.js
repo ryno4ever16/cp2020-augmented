@@ -1,4 +1,6 @@
-import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY } from "../lookups.js"
+import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
+import { armSpreadPreview } from "../combat/spread-placement.js";
+import { firingTokenIdOf } from "../seam-shim.js";
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, properCase } from "../utils.js"
 import { makeD10Roll } from "../dice.js"
 import { ModifiersDialog } from "../dialog/modifiers.js"
@@ -809,12 +811,74 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   }
 
   /**
+   * The fire control's entry point — AIM, then DECLARE, then BANG.
+   *
+   * ⭐ A SPREAD WEAPON IS AIMED BEFORE IT IS DECLARED (user ruling 2026-08-11: *"shouldn't they have to
+   * place the pattern first, then they say how they'll attack?"*). A shotgun is an area weapon in the
+   * Core rules, so the corridor decides the band, the width and the banded damage — everything the
+   * modifiers window would otherwise be asking about blind. So the click arms the aim preview first
+   * (combat/spread-placement.js), and only a CONFIRMED corridor opens the modifiers window. Cancelling
+   * the aim cancels the shot outright: nothing is rolled, nothing is spent (the magazine is decremented
+   * inside the base system's fire methods, several steps further down), and no pattern is planted —
+   * the region is not created until the roll commits.
+   *
+   * ⚠ THE SINGLE-TARGET PATH IS UNTOUCHED, including its return type. A non-spread weapon still gets
+   * its dialog built and rendered synchronously and still returns that dialog to the caller, which is
+   * what the existing specs read. A spread weapon returns the aim gesture's PROMISE instead — it
+   * resolves to the dialog once the corridor is confirmed, and to null when the shooter cancels —
+   * because there is no dialog to return until somebody has aimed.
+   */
+  _cpOpenWeaponAttackDialog(item) {
+    if (!item) return;
+    // The question is asked of the WEAPON AS IT STANDS (which round is in it), by the same shared site
+    // the fired payload will be judged by — see lookups.js weaponSpreadFlowMode for why the two must
+    // never be able to disagree.
+    if (item.isRanged?.() && weaponSpreadFlowMode(item) !== SPREAD_MODE_SINGLE) {
+      return this._cpAimSpreadThenOpenModifiers(item);
+    }
+    return this._cpOpenAttackModifiers(item);
+  }
+
+  /**
+   * The spread gesture: arm the corridor preview, and open the ordinary modifiers window on a confirm.
+   *
+   * The shooter's own figure is the corridor's origin, resolved by the SAME rule the seam captures at
+   * the trigger pull (`firingTokenIdOf`) so the corridor starts where the rounds will be drawn from.
+   * With no figure on the canvas there is nothing to aim from, so the shot falls back to the ordinary
+   * window — an aim gesture anchored to nothing would be worse than none.
+   *
+   * @returns {Promise<object|null>} the modifiers dialog, or null when the aim was cancelled
+   */
+  async _cpAimSpreadThenOpenModifiers(item) {
+    const tokenId = firingTokenIdOf(this.actor);
+    const shooterToken = (tokenId ? canvas?.tokens?.get(tokenId) : null)
+      ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === this.actor?.id)
+      ?? null;
+    if (!shooterToken) return this._cpOpenAttackModifiers(item);
+
+    // The load's own per-band numbers, so the readout quotes what this shell will actually do rather
+    // than Core's defaults. Read off the loaded ammo item, exactly as the seam reads them.
+    const ammoSys = this.actor?.items?.get?.(item?.system?.ammoItemId)?.system ?? {};
+    const spreadAim = await armSpreadPreview({
+      shooterToken,
+      weaponName: item.name,
+      widths: { short: ammoSys.spreadWidthShort, medium: ammoSys.spreadWidthMedium, long: ammoSys.spreadWidthLong },
+      formulas: { short: ammoSys.spreadDamageShort, medium: ammoSys.spreadDamageMedium, long: ammoSys.spreadDamageLong },
+    });
+    if (!spreadAim) return null;   // Esc / right click — no shot, no ammunition, no pattern
+    return this._cpOpenAttackModifiers(item, { spreadAim });
+  }
+
+  /**
    * Open the attack (Modifiers) dialog for a weapon: build the target list + ranged/martial/melee
    * modifier groups (with auto-rangefinding when exactly one target is selected) and fire via the
    * dialog's onConfirm. Body ported verbatim from the former .fire-weapon jQuery handler (Stage A2);
    * mirrors upstream's `_cpOpenWeaponAttackDialog`.
+   *
+   * `spreadAim` is the corridor a spread weapon was aimed along before this window opened; it rides the
+   * fire options into the roll so the payload can carry it (see the note at the call to `__weaponRoll`).
    */
-  _cpOpenWeaponAttackDialog(item) {
+  _cpOpenAttackModifiers(item, { spreadAim = null } = {}) {
     if (!item) return;
     let isRanged = item.isRanged();
 
@@ -958,6 +1022,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
           try { dialog.element?.classList?.add("cp-hidden"); } catch (_e) { /* no element yet */ }
           try { dialog.close({ animate: false }); } catch (_e) { /* already closed by the base path */ }
         });
+        // ⭐ THE CONFIRMED CORRIDOR RIDES THE FIRE OPTIONS DOWN. The aim was declared before this
+        // window opened, and three things downstream need it: the region is planted on it, the rail
+        // draws the rounds along it, and the pattern resolves at the end of that presentation. The
+        // options object is what the base system hands to its own fire methods, so an extra field on it
+        // arrives at the seam (seam-shim.js) with no new channel and nothing global to keep in step —
+        // and the base ignores keys it does not know. Absent on every ordinary shot.
+        if (spreadAim) fireOptions.cpSpreadAim = spreadAim;
         try {
           return await item.__weaponRoll(fireOptions, targetTokens);
         } finally {
