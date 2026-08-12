@@ -315,6 +315,60 @@ export function spreadFlowModeOf(payload) {
   return shotgunPatternEnabled() ? derived : SPREAD_MODE_SINGLE;
 }
 
+/**
+ * THE PATTERN'S RANGE BAND AND ITS WIDTH, from one distance — the ONE derivation, so the corridor a
+ * shooter aims and the corridor the module plants cannot be two different shapes.
+ *
+ * Before placement moved to the front of the gesture this arithmetic existed once, inside the plant
+ * (combat/damage-hooks.js `_placeSpreadZone`), and there was nothing else that needed it. There are two
+ * readers now — the aim preview the shooter drags, and the plant that follows it — and a second copy of
+ * a band ladder is how a preview starts promising a width the plant does not honour. Pure: no document,
+ * no canvas, no setting.
+ *
+ * The bands are Core's close / medium / long (CP2020 p.108); the widths default to the Core 1 / 2 / 3
+ * metres and are overridden per load by the three `spreadWidth*` fields the ammo carries.
+ *
+ * @param {number} distanceM  shooter → aim point, in metres
+ * @param {{short?: number|string, medium?: number|string, long?: number|string}} widths per-load overrides
+ * @returns {{band: string, widthM: number}}
+ */
+export function spreadBandSpec(distanceM, widths = {}) {
+  const d = Number(distanceM);
+  const band = !Number.isFinite(d) || d <= 6 ? "Short" : (d <= 25 ? "Medium" : "Long");
+  const declared = band === "Short" ? widths.short : band === "Long" ? widths.long : widths.medium;
+  const fallback = band === "Short" ? 1 : band === "Long" ? 3 : 2;
+  const widthM = Number(declared);
+  return { band, widthM: Number.isFinite(widthM) && widthM > 0 ? widthM : fallback };
+}
+
+/** The banded damage formula for a pattern — the load's own where it states one, else Core's. Pure. */
+export function spreadBandDamage(band, formulas = {}) {
+  const declared = band === "Short" ? formulas.short : band === "Long" ? formulas.long : formulas.medium;
+  const stated = String(declared ?? "").trim();
+  if (stated) return stated;
+  return band === "Short" ? "4d6" : band === "Long" ? "2d6" : "3d6";
+}
+
+/**
+ * DOES THIS WEAPON, AS IT STANDS RIGHT NOW, THROW A PATTERN? Asked BEFORE the trigger is pulled, which
+ * is the one thing `spreadFlowModeOf` cannot be asked for on its own: that site reads a fired payload,
+ * and the placement-first gesture has to know the answer while the payload does not exist yet.
+ *
+ * ⚠ IT MUST AGREE WITH THE SEAM, and the two read the cartridge from the same two places for that
+ * reason: an AMMO item records the round it IS in `caliber`, a WEAPON records the round it TAKES in
+ * `ammoType` (see seam-shim.js `ammoEffectFields`, which builds the fired payload the same way). A
+ * disagreement here would arm an aim gesture for a shot that then resolves single-target, or skip the
+ * gesture for one that patterns — so a keeper leg fires a real shell and asserts both answers match.
+ *
+ * @param {object} weapon a weapon Item (owned; the loaded ammo is looked up on its actor)
+ * @returns {string} "single" when the ordinary flow owns it, else the pattern's mode
+ */
+export function weaponSpreadFlowMode(weapon) {
+  const ammoSys = weapon?.actor?.items?.get?.(weapon?.system?.ammoItemId)?.system ?? null;
+  const caliber = String(ammoSys?.caliber ?? "").trim() || String(weapon?.system?.ammoType ?? "").trim();
+  return spreadFlowModeOf({ spreadMode: ammoSys?.spreadMode, caliber, modifier: ammoSys?.modifier });
+}
+
 /** True if `modifierId` can be loaded onto ammo of `caliberId`. Universal modifiers + unset calibers fit all. Pure-ish. */
 export function modifierAppliesToCaliber(modifierId, caliberId) {
   const mod = AMMO_MODIFIERS[modifierId];
