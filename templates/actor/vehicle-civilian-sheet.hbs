@@ -66,6 +66,14 @@
                 <input type="number" name="system.bodyRating" value="{{system.bodyRating}}">
             </span>
         </div>
+        <div class="field" title="{{CPLocal 'Vehicle.FootprintTip'}}">
+            <label>{{CPLocal "Vehicle.FootprintLabel"}}</label>
+            <span class="flexrow flex-pad">
+                <input type="number" name="prototypeToken.width" value="{{actor.prototypeToken.width}}" min="1" step="1">
+                <span class="nogrow">×</span>
+                <input type="number" name="prototypeToken.height" value="{{actor.prototypeToken.height}}" min="1" step="1">
+            </span>
+        </div>
         {{#if unmodeledSubtype}}
         <div class="field span-two-cells">
             <label class="cp-veh-unmodeled" title="{{CPLocal 'VehicleUnmodeledTip'}}">{{CPLocal "VehicleUnmodeled" subtype=system.vehicleTypeText}}</label>

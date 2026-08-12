@@ -11,7 +11,7 @@
  *   crewToken.flags.cp2020-augmented.boardedVehicle  = <vehicleActorId>
  */
 
-import { localizeParam } from "../utils.js";
+import { deleteFieldUpdate, localizeParam } from "../utils.js";
 import { seatSlotPosition, placeBeside } from "./vehicle-seating.js";
 
 const SCOPE = "cp2020-augmented";
@@ -81,6 +81,26 @@ function tokenRect(doc, gridSize) {
   return { x: doc.x, y: doc.y, w: (doc.width ?? 1) * gridSize, h: (doc.height ?? 1) * gridSize };
 }
 
+/**
+ * Update options that carry the update's new x/y as a single instant `displace` movement waypoint —
+ * the core's replacement for the deprecated `teleport: true` option (same shape on v13 and v14).
+ * Getting into a car is not a walk across the map: without this the core animates the token along
+ * a path and streams the document's x/y as it goes, so the token is briefly somewhere between its
+ * old spot and its seat (rig-measured mid-glide reads). No position change ⇒ no movement options.
+ */
+function displaceWaypointFor(tokenDoc, update) {
+  if (update.x === undefined && update.y === undefined) return null;
+  const src = tokenDoc._source ?? tokenDoc;
+  return { waypoints: [{
+    x: update.x ?? src.x, y: update.y ?? src.y,
+    action: "displace", snapped: false, explicit: false, checkpoint: true,
+  }] };
+}
+function displaceOptionsFor(tokenDoc, update) {
+  const instruction = displaceWaypointFor(tokenDoc, update);
+  return instruction ? { movement: { [tokenDoc.id]: instruction } } : {};
+}
+
 /** The vehicle's handle token on a scene (the one the crew token is sitting on/next to). */
 export function vehicleTokenFor(scene, vehicleActorId) {
   return (scene?.tokens ?? []).find(t => t.actorId === vehicleActorId && isVehicleTokenDoc(t)) ?? null;
@@ -143,10 +163,7 @@ export async function boardVehicle(crewTokenDoc, vehicleActor, vehicleTokenDoc =
     if ((Number(src.sort) || 0) < lift) update.sort = lift;
   }
 
-  // `teleport` — getting into a car is not a walk across the map. Without it the core animates
-  // the rider along a path and streams the document's x/y as it goes, so the token is briefly
-  // somewhere between its old spot and its seat (rig-measured mid-glide reads).
-  await crewTokenDoc.update(update, { teleport: true });
+  await crewTokenDoc.update(update, displaceOptionsFor(crewTokenDoc, update));
 
   // A handle placed outside our own defaults (an older token, a hand-made one) may sort at or
   // above its riders, which would let the hull swallow every seat click. Push it back down.
@@ -169,10 +186,11 @@ export async function disembark(crewTokenDoc) {
   const vehicleDoc = vehicleActorId ? vehicleTokenFor(scene, vehicleActorId) : null;
   const prior = crewTokenDoc.flags?.[SCOPE]?.boardedRestore ?? null;
 
+  // deleteFieldUpdate picks the core's supported deletion form (ForcedDeletion on v14, `-=` on v13).
   const update = {
-    [`flags.${SCOPE}.-=boardedVehicle`]: null,
-    [`flags.${SCOPE}.-=seatIndex`]: null,
-    [`flags.${SCOPE}.-=boardedRestore`]: null,
+    ...deleteFieldUpdate(`flags.${SCOPE}.boardedVehicle`),
+    ...deleteFieldUpdate(`flags.${SCOPE}.seatIndex`),
+    ...deleteFieldUpdate(`flags.${SCOPE}.boardedRestore`),
   };
   if (prior) {
     update["texture.scaleX"] = Number(prior.scaleX) || 1;
@@ -189,7 +207,7 @@ export async function disembark(crewTokenDoc) {
     update.x = spot.x;
     update.y = spot.y;
   }
-  await crewTokenDoc.update(update, { teleport: true });
+  await crewTokenDoc.update(update, displaceOptionsFor(crewTokenDoc, update));
 }
 
 /**
@@ -244,6 +262,40 @@ export function registerVehicleCanvasHooks() {
     const scene = data.sceneId ? game.scenes?.get(data.sceneId) : canvas?.scene;
     if (scene && Array.isArray(data.updates) && data.updates.length) {
       await scene.updateEmbeddedDocuments("Token", data.updates, { cp2020VehicleSync: true });
+    }
+  });
+
+  // Footprint follows the sheet: when a vehicle actor's prototype-token size changes (the sheet's
+  // Footprint field), resize its handle tokens on every scene and re-seat anyone aboard — seats
+  // derive from footprint cells, so a resize moves them. Runs on the active GM's client only (one
+  // writer, and the GM can modify any token) — the same gating as the crew-follow relay.
+  Hooks.on("updateActor", async (actor, change) => {
+    if (actor.type !== "cp2020-augmented.vehicle") return;
+    const pt = change?.prototypeToken;
+    if (!pt || (pt.width === undefined && pt.height === undefined)) return;
+    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    const gw = Math.max(1, Number(actor.prototypeToken?.width) || 1);
+    const gh = Math.max(1, Number(actor.prototypeToken?.height) || 1);
+    for (const scene of game.scenes ?? []) {
+      const handle = vehicleTokenFor(scene, actor.id);
+      if (!handle || (handle.width === gw && handle.height === gh)) continue;
+      await handle.update({ width: gw, height: gh });
+      const grid = scene.grid?.size ?? 100;
+      const rect = { x: handle.x, y: handle.y, w: gw * grid, h: gh * grid };
+      const updates = [];
+      const movement = {};
+      for (const t of scene.tokens) {
+        if (t.flags?.[SCOPE]?.boardedVehicle !== actor.id) continue;
+        const idx = Number(t.flags?.[SCOPE]?.seatIndex);
+        if (!Number.isInteger(idx) || idx < 0) continue;
+        const seat = seatSlotPosition(rect, grid, idx, { w: t.width, h: t.height });
+        if (seat.x === t.x && seat.y === t.y) continue;
+        updates.push({ _id: t.id, x: seat.x, y: seat.y });
+        movement[t.id] = displaceWaypointFor(t, seat);
+      }
+      if (updates.length) {
+        await scene.updateEmbeddedDocuments("Token", updates, { movement, cp2020VehicleSync: true });
+      }
     }
   });
 

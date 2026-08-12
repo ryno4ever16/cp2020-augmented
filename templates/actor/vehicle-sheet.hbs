@@ -137,6 +137,14 @@
         <div class="field-list">
             <div class="field" title="{{CPLocal 'Vehicle.CrewSlotsTip'}}"><label>{{CPLocal "Vehicle.CrewSlotsLabel"}}</label><input type="number" name="system.crewSlots" value="{{system.crewSlots}}"/></div>
             <div class="field" title="{{CPLocal 'Vehicle.PassengerSlotsTip'}}"><label>{{CPLocal "Vehicle.PassengerSlotsLabel"}}</label><input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}"/></div>
+            <div class="field" title="{{CPLocal 'Vehicle.FootprintTip'}}">
+                <label>{{CPLocal "Vehicle.FootprintLabel"}}</label>
+                <span class="flexrow flex-pad">
+                    <input type="number" name="prototypeToken.width" value="{{actor.prototypeToken.width}}" min="1" step="1"/>
+                    <span class="nogrow">×</span>
+                    <input type="number" name="prototypeToken.height" value="{{actor.prototypeToken.height}}" min="1" step="1"/>
+                </span>
+            </div>
         </div>
         {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-occupants.hbs"}}
         <div class="field-list">

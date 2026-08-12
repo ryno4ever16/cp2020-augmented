@@ -841,6 +841,8 @@
       "CrewSlotsLabel": "Crew Slots",
       "PassengerSlotsTip": "How many additional passengers the vehicle can carry beyond the crew.",
       "PassengerSlotsLabel": "Passenger Slots",
+      "FootprintTip": "Size of the vehicle's token on the map, in grid squares (width × height). Changing it resizes tokens already on a scene and re-seats anyone aboard.",
+      "FootprintLabel": "Footprint",
       "VehicleLinkTip": "Cybernetic vehicle link: the driver/pilot adds +2 to all control, maneuver, and vehicle-weapon rolls, and can act while driving without the 'doing something else' penalty (Maximum Metal). ACPA always counts as linked.",
       "VehicleLinkLabel": "Vehicle Link",
       "DamageControlTip": "A redundant network of backups, fire extinguishers and breakers. When a system is hit, roll 1d10 — on a 6-10 it keeps working as if undamaged (Maximum Metal, p.4). Used by the damage resolver.",
