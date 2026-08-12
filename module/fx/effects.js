@@ -2317,6 +2317,17 @@ function _deliveredSrc(base) {
 }
 
 /**
+ * The playable source path for ONE shipped basename, or null when the listing says it is not
+ * delivered. The same answer `shotSoundSrc` and the impact leg get, exposed for the elements that
+ * choose their asset by name rather than through a class row (the arrival sequence's descent cue) —
+ * so there is still exactly one place that knows the sounds directory's layout and its two failure
+ * shapes (listing succeeded + absent → silent; listing unavailable → trust the shipped asset).
+ */
+export function fxSoundSrc(base) {
+  return _deliveredSrc(base);
+}
+
+/**
  * The playable source path for a weapon class, or null when nothing is playable for it.
  *
  * `burst` selects the class's ALTERNATE asset where it carries one (`soundBurst`). Why a class gets

@@ -21,6 +21,8 @@ import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
 import { registerCombatFx } from "./fx/effects.js";
 import { registerStatusFx } from "./fx/status-fx.js";
+import { landTraumaTeam, endTraumaTeam, traumaTeamActive, traumaTeamState, registerTraumaTeam } from "./fx/trauma-team.js";
+import { registerTraumaTeamTool } from "./fx/trauma-team-tool.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -279,6 +281,9 @@ Hooks.once("init", function () {
   // enabled). Zone placement is native (draw a Region + add the behavior). Per-actor panel controls are
   // wired by the actor sheet itself.
   registerRadiationTools();
+  // The medical-extraction arrival control. Same idiom again: one momentary button on the token group,
+  // referee-only, and the button IS the opt-in — nothing in this feature runs until one is pressed.
+  registerTraumaTeamTool();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).
@@ -364,6 +369,13 @@ Hooks.once("init", function () {
     },
     // IP tracker API: open the GM Improvement-Points tracker.
     ip: { openTracker: openIpTracker },
+    // The medical-extraction arrival sequence, for a macro that would rather name a point than click
+    // one. Referee-only inside, exactly as the scene control is. `land` takes a canvas point
+    // ({x, y}); `end` sends it away; `active`/`state` answer what is on station.
+    traumaTeam: {
+      land: landTraumaTeam, end: endTraumaTeam,
+      active: traumaTeamActive, state: traumaTeamState,
+    },
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
     // Manual re-run entry points for the one-time world migrations. Each of those passes stamps its
@@ -631,6 +643,10 @@ Hooks.once("ready", function () {
   // setting (combatFxEnabled), read per event: it is presentation of a condition something else
   // already applied, so it must run wherever that condition can reach a figure.
   wire("condition overlays", registerStatusFx);
+  // The medical-extraction arrival sequence. Unconditional and gated by the same world setting, read
+  // per event, for the same reason as the two above: it is presentation a referee asked for by hand,
+  // it writes nothing, and its listeners are inert until a control is pressed.
+  wire("extraction arrival sequence", registerTraumaTeam);
   if (doCombat) {
     wire("damage hooks", registerDamageHooks);
     wire("movement gate", registerMovementGate);
