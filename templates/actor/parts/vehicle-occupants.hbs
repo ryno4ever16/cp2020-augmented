@@ -1,0 +1,27 @@
+{{!-- Who is aboard this vehicle right now: the live count against its seats, and one row per
+      rider with a control to put them back on the ground. Shared by the civilian and the MM
+      combat layouts. The list is empty (and the whole block hidden) when nobody is riding. --}}
+{{#if occupancy.count}}
+<div class="cp-vehicle-occupants">
+    <div class="cp-occupancy-line">
+        <label>{{CPLocal "Vehicle.AboardLabel"}}</label>
+        <span class="cp-occupancy-count {{#if occupancy.over}}cp-occupancy-over{{/if}}"
+              title="{{CPLocal 'Vehicle.AboardTip'}}">
+            {{#if occupancy.capacity}}{{CPLocal "Vehicle.AboardCount" count=occupancy.count cap=occupancy.capacity}}{{else}}{{CPLocal "Vehicle.AboardCountNoCap" count=occupancy.count}}{{/if}}
+        </span>
+    </div>
+    <ul class="cp-occupant-list">
+        {{#each occupancy.occupants}}
+        <li class="cp-occupant-row" data-token-id="{{this.tokenId}}" data-scene-id="{{this.sceneId}}">
+            <img class="cp-occupant-img" src="{{this.img}}" alt="{{this.name}}" width="24" height="24"/>
+            <span class="cp-occupant-name">{{this.name}}</span>
+            {{#if @root.occupancy.canManage}}
+            <button type="button" class="cp-occupant-out" data-action="occupantDisembark"
+                    data-token-id="{{this.tokenId}}" data-scene-id="{{this.sceneId}}"
+                    title="{{CPLocal 'Vehicle.StepOutTip'}}">{{CPLocal "Vehicle.StepOut"}}</button>
+            {{/if}}
+        </li>
+        {{/each}}
+    </ul>
+</div>
+{{/if}}

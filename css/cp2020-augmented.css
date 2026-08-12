@@ -2722,3 +2722,82 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   color: #d1a054;
   opacity: 1;
 }
+
+/* ── Vehicle occupancy: who is aboard ────────────────────────────────────────
+ * The vehicle sheet's riders list and the "Aboard X" strip a passenger gets on their own
+ * character sheet. Both are read-outs of the same boarding flag, so they share a look: a quiet
+ * bordered block, one flex row per person, the control pinned to its own width (Foundry defaults
+ * buttons to fill their container). */
+.cyberpunk .cp-vehicle-occupants {
+  margin: 4px 0 6px;
+  padding: 4px 6px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  border-radius: 3px;
+}
+.cyberpunk .cp-occupancy-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cyberpunk .cp-occupancy-line > label {
+  flex: 0 0 auto;
+  font-weight: bold;
+  opacity: 0.85;
+}
+.cyberpunk .cp-occupancy-count {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+/* More riders than seats is a GM call, not an error — amber, the module's warn colour. */
+.cyberpunk .cp-occupancy-count.cp-occupancy-over { color: #c0791a; font-weight: bold; }
+.cyberpunk ul.cp-occupant-list {
+  list-style: none;
+  margin: 3px 0 0;
+  padding: 0;
+}
+.cyberpunk .cp-occupant-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+}
+.cyberpunk .cp-occupant-row .cp-occupant-img {
+  flex: 0 0 auto;
+  border: none;
+  object-fit: cover;
+}
+.cyberpunk .cp-occupant-row .cp-occupant-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cyberpunk .cp-occupant-row .cp-occupant-out,
+.cyberpunk .cp-aboard-banner .cp-aboard-out {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: max-content;
+  white-space: nowrap;
+  line-height: 1.4;
+  padding: 0 6px;
+}
+.cyberpunk .cp-aboard-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin: 0 0 4px;
+  padding: 3px 6px;
+  border: 1px solid rgba(192, 121, 26, 0.55);
+  border-radius: 3px;
+  background: rgba(192, 121, 26, 0.12);
+}
+.cyberpunk .cp-aboard-banner .cp-aboard-icon { flex: 0 0 auto; opacity: 0.8; }
+.cyberpunk .cp-aboard-banner .cp-aboard-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

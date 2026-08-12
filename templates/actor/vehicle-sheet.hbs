@@ -138,6 +138,7 @@
             <div class="field" title="{{CPLocal 'Vehicle.CrewSlotsTip'}}"><label>{{CPLocal "Vehicle.CrewSlotsLabel"}}</label><input type="number" name="system.crewSlots" value="{{system.crewSlots}}"/></div>
             <div class="field" title="{{CPLocal 'Vehicle.PassengerSlotsTip'}}"><label>{{CPLocal "Vehicle.PassengerSlotsLabel"}}</label><input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}"/></div>
         </div>
+        {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-occupants.hbs"}}
         <div class="field-list">
             <div class="field" title="{{CPLocal 'Vehicle.VehicleLinkTip'}}">
                 <label>{{CPLocal "Vehicle.VehicleLinkLabel"}}</label><input type="checkbox" name="system.vehicleLink" {{#if system.vehicleLink}}checked{{/if}}/>

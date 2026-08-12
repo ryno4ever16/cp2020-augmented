@@ -224,6 +224,9 @@
         </div>
     </div>
 
+    {{!-- Who is riding right now (hidden while the vehicle is empty). --}}
+    {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-occupants.hbs"}}
+
     {{!-- Fuel — demoted like the item sheet: renders only once fuel data exists. --}}
     {{#if showFuel}}
     <div class="field-list">

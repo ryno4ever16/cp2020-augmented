@@ -13,6 +13,7 @@
  */
 
 import { boardVehicle, disembark, isVehicleTokenDoc } from "./vehicle-canvas.js";
+import { occupancyOf, toggleOccupantFade, isVehicleFaded } from "./vehicle-occupancy.js";
 import { localizeParam, tryLocalize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -36,10 +37,6 @@ function _vehiclesInReach(tokenDoc) {
   return hits.sort((a, b) => a.d2 - b.d2).map(h => h.token);
 }
 
-function _boardedCount(scene, vehicleActorId) {
-  return scene.tokens.filter(t => t.flags?.[SCOPE]?.boardedVehicle === vehicleActorId).length;
-}
-
 async function _onEmbark(tokenDoc) {
   const vehicle = _vehiclesInReach(tokenDoc)[0];
   if (!vehicle) {
@@ -47,12 +44,11 @@ async function _onEmbark(tokenDoc) {
     return;
   }
   const va = vehicle.actor;
-  const cap = (Number(va.system?.crewSlots) || 0) + (Number(va.system?.passengerSlots) || 0);
-  const aboard = _boardedCount(tokenDoc.parent, va.id);
+  const { count: aboard, capacity: cap } = occupancyOf(va, tokenDoc.parent);
   if (cap > 0 && aboard >= cap) {
     ui.notifications?.warn?.(localizeParam("VehicleEmbarkFull", { name: va.name, count: aboard + 1, cap }));
   }
-  await boardVehicle(tokenDoc, va);
+  await boardVehicle(tokenDoc, va, vehicle);
   ui.notifications?.info?.(localizeParam("VehicleEmbarked", { name: va.name }));
 }
 
@@ -61,35 +57,63 @@ async function _onDisembark(tokenDoc) {
   ui.notifications?.info?.(tryLocalize("VehicleDisembarked", "Disembarked."));
 }
 
+/** One HUD control, in Foundry's own button shape (icon + tooltip + aria label). */
+function _hudButton(className, iconClass, label, onClick) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = `control-icon ${className}`;
+  btn.dataset.tooltip = label;
+  btn.setAttribute("aria-label", label);
+  const icon = document.createElement("i");
+  icon.className = iconClass;
+  btn.appendChild(icon);
+  btn.addEventListener("click", onClick);
+  return btn;
+}
+
 export function registerVehicleBoardingHud() {
   Hooks.on("renderTokenHUD", (hud, html) => {
     const root = html instanceof HTMLElement ? html : html?.[0];
     const tokenDoc = hud?.object?.document;
     if (!root || !tokenDoc) return;
-    if (isVehicleTokenDoc(tokenDoc)) return;                 // vehicles don't board vehicles
-    if (!tokenDoc.actor?.isOwner) return;
+    const col = root.querySelector(".col.right") ?? root;
 
+    // A vehicle can't board a vehicle; its one control fades the people riding it, so a crowded
+    // cab stops hiding the hull. Client-local (see vehicle-occupancy.js) — nobody else's view
+    // changes, so it needs no ownership beyond being able to see the token.
+    if (isVehicleTokenDoc(tokenDoc)) {
+      const vehicleId = tokenDoc.actorId;
+      if (!vehicleId || occupancyOf(tokenDoc.actor, tokenDoc.parent).count === 0) return;
+      const faded = isVehicleFaded(vehicleId);
+      const label = faded
+        ? tryLocalize("Vehicle.ShowOccupants", "Show occupants")
+        : tryLocalize("Vehicle.FadeOccupants", "Fade occupants");
+      col.appendChild(_hudButton(
+        `cp-vehicle-fade ${faded ? "cp-fade-on" : "cp-fade-off"}`,
+        faded ? "fas fa-eye" : "fas fa-eye-slash",
+        label,
+        (ev) => { ev.preventDefault(); toggleOccupantFade(vehicleId); hud.render?.(true); },
+      ));
+      return;
+    }
+
+    if (!tokenDoc.actor?.isOwner) return;
     const boarded = tokenDoc.flags?.[SCOPE]?.boardedVehicle;
     if (!boarded && _vehiclesInReach(tokenDoc).length === 0) return;
 
-    const col = root.querySelector(".col.right") ?? root;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `control-icon cp-vehicle-board ${boarded ? "cp-board-out" : "cp-board-in"}`;
     const label = boarded
       ? tryLocalize("VehicleDisembark", "Disembark")
       : tryLocalize("VehicleEmbark", "Embark");
-    btn.dataset.tooltip = label;
-    btn.setAttribute("aria-label", label);
-    const icon = document.createElement("i");
-    icon.className = boarded ? "fas fa-person-walking-arrow-right" : "fas fa-van-shuttle";
-    btn.appendChild(icon);
-    btn.addEventListener("click", async ev => {
-      ev.preventDefault();
-      if (boarded) await _onDisembark(tokenDoc);
-      else await _onEmbark(tokenDoc);
-      hud.render?.(true);
-    });
-    col.appendChild(btn);
+    col.appendChild(_hudButton(
+      `cp-vehicle-board ${boarded ? "cp-board-out" : "cp-board-in"}`,
+      boarded ? "fas fa-person-walking-arrow-right" : "fas fa-van-shuttle",
+      label,
+      async (ev) => {
+        ev.preventDefault();
+        if (boarded) await _onDisembark(tokenDoc);
+        else await _onEmbark(tokenDoc);
+        hud.render?.(true);
+      },
+    ));
   });
 }

@@ -29,6 +29,8 @@ import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
 import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFromItem, registerCivilianSheetMigration } from "./vehicle/vehicle-deploy-request.js";
 import { registerVehicleBoardingHud } from "./vehicle/vehicle-boarding-hud.js";
+import { registerVehicleOccupancyHooks } from "./vehicle/vehicle-occupancy.js";
+import { registerVehicleAboardBanner } from "./vehicle/vehicle-aboard-banner.js";
 import { openControlRollDialog } from "./vehicle/vehicle-control.js";
 import { openVehicleDamageDialog } from "./vehicle/vehicle-damage.js";
 import { weaponToPenetration, vehicleToHitModifier, openVehicleFireDialog, registerVehicleFireHandlers } from "./vehicle/vehicle-weapons.js";
@@ -97,6 +99,8 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/vehicle-civilian-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs",
   "modules/cp2020-augmented/templates/actor/parts/countermeasures.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/vehicle-occupants.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/aboard-banner.hbs",
   // Augmented character/NPC actor sheet (Option B) + its parts. The {{> "modules/…/parts/X.hbs"}}
   // includes resolve as registered partials only once preloaded here.
   "modules/cp2020-augmented/templates/actor/actor-sheet.hbs",
@@ -340,6 +344,10 @@ Hooks.once("init", function () {
   // embark/disembark token-HUD gesture.
   registerVehicleDeploySocket();
   registerVehicleBoardingHud();
+  // Occupancy badge on the handle + the client-local occupant fade; and the "aboard" strip on a
+  // rider's own character sheet. Both are presentation only — no document writes.
+  registerVehicleOccupancyHooks();
+  registerVehicleAboardBanner();
   // One-time stamp: pre-civilian-split vehicle actors keep the MM combat sheet.
   registerCivilianSheetMigration();
 

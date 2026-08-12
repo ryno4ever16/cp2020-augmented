@@ -1,0 +1,8 @@
+{{!-- "You are aboard X" strip, injected at the top of a character's own sheet while their token
+      is riding a vehicle. The sheet is reachable from the sidebar with no token selected (and
+      with no canvas at all), so this is the one surface a passenger can always get to. --}}
+<div class="cp-aboard-banner" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">
+    <i class="fas fa-van-shuttle cp-aboard-icon"></i>
+    <span class="cp-aboard-text">{{CPLocal "Vehicle.AboardBanner" vehicle=vehicleName}}</span>
+    <button type="button" class="cp-aboard-out" title="{{CPLocal 'Vehicle.StepOutTip'}}">{{CPLocal "Vehicle.StepOut"}}</button>
+</div>

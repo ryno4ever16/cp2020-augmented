@@ -8,6 +8,8 @@ import { acpaSystemsSummary, acpaAreaSpaces, acpaSpacesOver, acpaBuildIssues } f
 import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 import { localize, localizeParam } from "../utils.js";
 import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
+import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
+import { disembark } from "../vehicle/vehicle-canvas.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -55,6 +57,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaSystemAdd:    CyberpunkVehicleSheet._onAcpaSystemAdd,
       acpaSystemEdit:   CyberpunkVehicleSheet._onAcpaSystemEdit,
       acpaSystemDelete: CyberpunkVehicleSheet._onAcpaSystemDelete,
+      occupantDisembark: CyberpunkVehicleSheet._onOccupantDisembark,
     },
   };
 
@@ -217,6 +220,10 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
             : localizeParam("VehicleSourceItem", { item: item.name });
         } catch (e) { return ""; }
       })(),
+      // Who is riding, live (user ruling: the passengers section states N of max and names them,
+      // with a way to put each one back on the ground). Read across scenes so a sheet opened from
+      // the sidebar answers the same as the canvas.
+      occupancy: { ...occupancyAcrossScenes(actor), canManage: game.user?.isGM === true || owner },
       controlEnabled,
       damageEnabled,
       reactiveWear,
@@ -348,6 +355,16 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
   static _onControlRoll(event, _target) {
     event.preventDefault();
     openControlRollDialog(this.actor);
+  }
+
+  /** Put one named rider back on the ground, from the vehicle's own passengers list. */
+  static async _onOccupantDisembark(event, target) {
+    event.preventDefault();
+    const scene = game.scenes.get(target?.dataset?.sceneId);
+    const tokenDoc = scene?.tokens?.get(target?.dataset?.tokenId);
+    if (!tokenDoc) return;
+    await disembark(tokenDoc);
+    this.render(false);
   }
 
   static _onVehicleDamage(event, _target) {
