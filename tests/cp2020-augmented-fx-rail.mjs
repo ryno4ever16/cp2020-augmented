@@ -6849,6 +6849,178 @@ try {
   arrive.checks.push({ n: "arrival-clock section ran", p: false, d: String(err?.message ?? err) });
 }
 
+/* ══ 23. THE DECLARED CORRIDOR: a spread shot is drawn along the line the shooter aimed ══════════ */
+// User ruling 2026-08-11 — "shouldn't they have to place the pattern first, then they say how they'll
+// attack?". A spread weapon is aimed BEFORE it is declared, so its payload arrives carrying a corridor
+// (`spreadAim`: an angle and a reach, deliberately not a point) and every element of the shot has to be
+// drawn along it rather than at whoever happened to be targeted. The corridor here is aimed 90° AWAY
+// from the target token, so a rail that ignored the declaration draws visibly elsewhere and the legs
+// below fail by value rather than by a near miss.
+const corridor = { checks: [], measured: {} };
+try {
+  const r = await page.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const out = { checks: [], measured: {} };
+    const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+    const grid = await import(`/modules/${SCOPE}/module/vehicle/vehicle-grid.js`);
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
+    const gpx = Number(canvas.dimensions.size) || 100;
+
+    for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__COR"))) await t.delete().catch(() => {});
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__COR"))) await a.delete().catch(() => {});
+    const actor = await Actor.create({ name: "__PW__COR Shooter", type: "character" });
+    const [shell] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__COR shell gun", type: "weapon",
+      system: { weaponType: "Shotgun", attackType: "Shotgun", ammoType: "12ga", damage: "3d6", range: 50, rof: 1, shots: 8, shotsLeft: 8 } }]);
+    const dummy = await Actor.create({ name: "__PW__COR Dummy", type: "character" });
+    const [shooterTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__COR Shooter", actorId: actor.id, actorLink: true, x: 1000, y: 1400 }]);
+    const [targetTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__COR Dummy", actorId: dummy.id, actorLink: true, x: 1600, y: 1400 }]);
+    await sleep(400);
+    const shooterPl = canvas.tokens.get(shooterTok.id), targetPl = canvas.tokens.get(targetTok.id);
+    const from = { x: shooterPl.center.x, y: shooterPl.center.y };
+
+    // A corridor pointing straight DOWN, two squares long, while the target sits six squares EAST.
+    const reachSquares = 2;
+    const reachM = grid.pixelsToMeters(scene, reachSquares * gpx);
+    const aimPayload = (over = {}) => ({
+      attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: shell.id, weaponName: "__PW__COR shell gun",
+      caliber: "00", modifier: "standard", shotsFired: 1, shotsHit: 1,
+      targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id,
+      areaDamages: { Torso: [{ damage: 6 }] },
+      spreadAim: { angleDeg: 90, reachM, lengthM: reachM, widthM: 2, band: "Short" },
+      ...over,
+    });
+
+    /* ── a. the reader, by value ─────────────────────────────────────────────────────────────── */
+    const pt = fx.declaredAimPointOf(aimPayload(), shooterPl);
+    ok("corridor: the declared aim point is rebuilt from the angle and the reach, by value",
+      !!pt && Math.abs(pt.x - from.x) < 0.01 && Math.abs(pt.y - (from.y + reachSquares * gpx)) < 0.01,
+      JSON.stringify({ from, got: pt, expect: { x: from.x, y: from.y + reachSquares * gpx } }));
+    ok("corridor: a payload with no corridor has no declared point (negative)",
+      fx.declaredAimPointOf({}, shooterPl) === null && fx.declaredAimPointOf(aimPayload({ spreadAim: null }), shooterPl) === null);
+    ok("corridor: a malformed corridor is not repaired into a point (negative)",
+      fx.declaredAimPointOf({ spreadAim: { angleDeg: 90, reachM: 0 } }, shooterPl) === null
+      && fx.declaredAimPointOf({ spreadAim: { angleDeg: NaN, reachM: 5 } }, shooterPl) === null);
+    ok("corridor: with no figure to fire from there is no point either (negative)",
+      fx.declaredAimPointOf(aimPayload(), null) === null);
+
+    /* ── b. the corridor OUTRANKS the aimed-at token, and the two are far apart ──────────────── */
+    const declaredPt = fx.payloadAimPoint(aimPayload(), shooterPl, targetPl, gpx);
+    const undeclaredPt = fx.payloadAimPoint(aimPayload({ spreadAim: null }), shooterPl, targetPl, gpx);
+    ok("corridor: the declared corridor answers where the shot is pointed, not the target token",
+      Math.abs(declaredPt.y - (from.y + reachSquares * gpx)) < 0.01 && Math.abs(declaredPt.x - from.x) < 0.01
+      && Math.abs(undeclaredPt.x - targetPl.center.x) < 0.01 && Math.abs(undeclaredPt.y - targetPl.center.y) < 0.01,
+      JSON.stringify({ declared: declaredPt, undeclared: undeclaredPt }));
+    ok("corridor: and the shot is BANDED on the corridor's reach, not on the target's distance, by value",
+      Math.abs(fx.payloadAimSquares(shooterPl, targetPl, gpx, aimPayload()) - reachSquares) < 0.01
+      && Math.abs(fx.payloadAimSquares(shooterPl, targetPl, gpx) - 6) < 0.01,
+      `${fx.payloadAimSquares(shooterPl, targetPl, gpx, aimPayload()).toFixed(2)} declared vs ${fx.payloadAimSquares(shooterPl, targetPl, gpx).toFixed(2)} to the target`);
+    ok("corridor: the point MOVES WITH THE FIGURE — it is a description, not a stored position",
+      Math.abs(fx.declaredAimPointOf(aimPayload(), targetPl).x - targetPl.center.x) < 0.01,
+      JSON.stringify(fx.declaredAimPointOf(aimPayload(), targetPl)));
+
+    /* ── c. DRIVEN: the rounds really cross the declared line ────────────────────────────────── */
+    const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
+    const realSequence = globalThis.Sequence;
+    const played = [];
+    try {
+      await game.settings.set(SCOPE, "combatFxEnabled", true);
+      class RecSequence {
+        constructor() { this.entries = []; }
+        effect() {
+          const e = { file: (f) => { this.entries.push({ file: f }); e._i = this.entries.length - 1; return e; },
+                      atLocation: (l) => { this.entries[e._i].atLocation = l; return e; }, scale: () => e,
+                      endTimePerc: () => e, timeRange: () => e, filter: () => e, opacity: () => e,
+                      fadeOut: () => e, playbackRate: () => e, randomRotation: () => e,
+                      rotateTowards: (p) => { this.entries[e._i].rotateTowards = p; return e; },
+                      size: () => e, elevation: () => e, aboveLighting: () => e,
+                      delay: () => e, moveTowards: (p) => { this.entries[e._i].to = p; return e; },
+                      moveSpeed: () => e, mirrorY: () => e, name: () => e, duration: () => e,
+                      stretchTo: (p) => { this.entries[e._i].to = p; return e; } };
+          return e;
+        }
+        async play() { played.push(this.entries); }
+      }
+      globalThis.Sequence = RecSequence;
+
+      // TWO SEPARATE TRIGGER PULLS, not two indexes of one — the same shot with and without the
+      // declaration, so what is compared is the presence of the corridor and nothing else.
+      played.length = 0;
+      const declaredRun = await fx.fxWeaponFired(aimPayload());
+      await sleep(400);
+      const declaredEnds = played.flat().filter(x => x.to).map(x => x.to);
+      played.length = 0;
+      const plainRun = await fx.fxWeaponFired(aimPayload({ spreadAim: null }));
+      await sleep(400);
+      const plainEnds = played.flat().filter(x => x.to).map(x => x.to);
+      out.measured.corridor = {
+        declared: { aim: declaredRun.aim, squares: Number(declaredRun.aimSquares?.toFixed?.(2)), flagged: declaredRun.aimDeclared, ends: declaredEnds.length },
+        plain: { aim: plainRun.aim, squares: Number(plainRun.aimSquares?.toFixed?.(2)), flagged: plainRun.aimDeclared, ends: plainEnds.length },
+      };
+      ok("corridor driven: the fan-out reports the aim it used, and says the shooter declared it",
+        declaredRun.aimDeclared === true && Math.abs(declaredRun.aim.y - (from.y + reachSquares * gpx)) < 0.01
+        && Math.abs(declaredRun.aim.x - from.x) < 0.01,
+        JSON.stringify(declaredRun.aim));
+      ok("corridor driven: the same shot WITHOUT a corridor is drawn at the target instead (negative)",
+        plainRun.aimDeclared === false && Math.abs(plainRun.aim.x - targetPl.center.x) < 0.01,
+        JSON.stringify(plainRun.aim));
+      // Every travelling sprite the declared shot queued ends DOWN the corridor; not one of them ends
+      // anywhere near the target the payload still names.
+      const nearDeclared = declaredEnds.filter(p => Math.abs(p.x - from.x) < gpx && p.y > from.y).length;
+      ok("corridor driven: every pellet of the declared shot travels down the corridor, none at the target",
+        declaredEnds.length > 0 && nearDeclared === declaredEnds.length
+        && declaredEnds.every(p => Math.abs(p.x - targetPl.center.x) > gpx),
+        `${nearDeclared}/${declaredEnds.length} down the corridor`);
+      ok("corridor driven: the undeclared shot's pellets travel at the target (negative)",
+        plainEnds.length > 0 && plainEnds.every(p => p.x > from.x + gpx),
+        `${plainEnds.length} ends, first ${JSON.stringify(plainEnds[0] ?? null)}`);
+      // The arrival clock is resolved off the CORRIDOR's own reach. The shell is a travelled class, so
+      // its crossing is its row's dash time at any distance and the two runs read the same number —
+      // which is the point of asserting against the resolver rather than against the other run: the
+      // input that changed is the distance handed in, and the answer for this class is distance-free.
+      ok("corridor driven: the arrival clock is resolved off the corridor's own reach",
+        declaredRun.arrival?.ms === fx.arrivalSpecFor("shotgun", declaredRun.ammoKey, reachSquares, declaredRun.volley).ms
+        && Math.abs(declaredRun.aimSquares - reachSquares) < 0.01,
+        JSON.stringify({ declared: declaredRun.arrival, squares: declaredRun.aimSquares, plain: plainRun.arrival }));
+      // The window's own arithmetic reads the same corridor, and the difference it makes here is the
+      // turn: the declared line is 90° off the figure's heading, so the floor grows by the face-target
+      // sweep the fan-out will actually spend. A floor computed at the target would not have it.
+      const declaredFloor = fx.payloadPresentationMs(aimPayload());
+      const plainFloor = fx.payloadPresentationMs(aimPayload({ spreadAim: null }));
+      out.measured.floors = { declared: declaredFloor, plain: plainFloor };
+      ok("corridor driven: the window's own floor is computed against the corridor, turn included",
+        declaredFloor > plainFloor && declaredFloor - plainFloor === (fx.faceTargetTurn(shooterPl, declaredPt)?.durationMs ?? 0),
+        `${declaredFloor}ms declared vs ${plainFloor}ms plain; turn ${fx.faceTargetTurn(shooterPl, declaredPt)?.durationMs ?? 0}ms`);
+    } finally {
+      globalThis.Sequence = realSequence;
+      try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ }
+      await sleep(200);
+      await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
+    }
+
+    /* ── d. the source guard: ONE derivation per payload ─────────────────────────────────────── */
+    const src = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
+    const fanOut = src.slice(src.indexOf("export async function fxWeaponFired"));
+    ok("corridor: the fan-out resolves the aim ONCE and never re-derives it from the two tokens",
+      (fanOut.match(/payloadAimPoint\(payload, shooter/g) ?? []).length === 1
+      && !/aimPointOf\(shooter, target/.test(fanOut),
+      `payloadAimPoint ×${(fanOut.match(/payloadAimPoint\(payload, shooter/g) ?? []).length}, stale re-derivations ${/aimPointOf\(shooter, target/.test(fanOut)}`);
+
+    for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__COR"))) await t.delete().catch(() => {});
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__COR"))) await a.delete().catch(() => {});
+    for (const m of game.messages.filter(m => m.speaker?.actor === actor.id)) { try { await m.delete(); } catch (e) { /* gone */ } }
+    ok("corridor cleanup: the fixtures are gone",
+      game.actors.filter(a => a.name?.startsWith("__PW__COR")).length === 0
+      && [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__COR")).length === 0);
+    return out;
+  });
+  corridor.checks.push(...r.checks);
+  corridor.measured = r.measured;
+} catch (err) {
+  corridor.checks.push({ n: "declared-corridor section ran", p: false, d: String(err?.message ?? err) });
+}
+
 console.log("\n=== combat FX rail keeper ===");
 for (const c of res.checks) check(c.n, c.p, c.d);
 for (const c of xres.checks) check(c.n, c.p, c.d);
@@ -6863,12 +7035,14 @@ for (const c of canary.checks) check(c.n, c.p, c.d);
 for (const c of twins.checks) check(c.n, c.p, c.d);
 for (const c of single.checks) check(c.n, c.p, c.d);
 for (const c of arrive.checks) check(c.n, c.p, c.d);
+for (const c of corridor.checks) check(c.n, c.p, c.d);
 console.log(`  dart load, single-file queue: ${JSON.stringify(single.measured?.queue ?? null)}`);
 console.log(`  stun-dart load, single-file queue: ${JSON.stringify(single.measured?.stunQueue ?? null)}`);
 console.log(`  dart load, MEASURED sync (trail after the last report): ${JSON.stringify(single.measured?.sync ?? null)}`);
 console.log(`  F5 (measurement, no ruling yet) no-shooter arithmetic: ${JSON.stringify(fres.measured?.f5NoShooter ?? null)}`);
 console.log(`  F5 (measurement, no ruling yet) missed-shell band sweep: ${JSON.stringify(fres.measured?.f5MissBands ?? null)}`);
 console.log(`  arrival clock, measured: ${JSON.stringify(arrive.measured ?? null)}`);
+console.log(`  declared corridor, measured: ${JSON.stringify(corridor.measured ?? null)}`);
 console.log(`  pacing under load, measured: ${JSON.stringify(cres.measured ?? null)}`);
 console.log(`  blood splash, measured: ${JSON.stringify(bres.measured ?? null)}`);
 console.log(`  burning-ground clip, decoded off the install: ${JSON.stringify(ares.groundFireDecode ?? null)}`);
