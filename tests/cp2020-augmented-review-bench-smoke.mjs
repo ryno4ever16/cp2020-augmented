@@ -59,7 +59,7 @@ await page.waitForTimeout(3000);
 /* ── instrumentation: one tap on each engine that can answer a question ───────────────────────── */
 const setup = await page.evaluate(async (SCOPE) => {
   const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
-  const g = globalThis.__smoke = { files: [], payloads: [], raw: [], cards: [], regions: [] };
+  const g = globalThis.__smoke = { files: [], payloads: [], raw: [], cards: [], regions: [], patterns: [] };
   Hooks.on("createSequencerEffect", (e) => {
     const f = String(e?.data?.file ?? e?.data?.src ?? "");
     if (f) g.files.push(f);
@@ -70,7 +70,19 @@ const setup = await page.evaluate(async (SCOPE) => {
     landed: Object.values(p.areaDamages ?? {}).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0),
   }); });
   Hooks.on("createChatMessage", (m) => g.cards.push(m.id));
-  Hooks.on("createRegion", (r) => g.regions.push(r.id));
+  // ⭐ THE PATTERN'S FACTS ARE TAKEN AT CREATION (2026-08-11). A declared corridor resolves itself when
+  // the shot's presentation ends and DELETES the region on the way out, so by the time a leg looks the
+  // document is gone — reading it later measured nothing but the run's own wait. Recorded here, where it
+  // is certainly alive.
+  Hooks.on("createRegion", (r) => {
+    g.regions.push(r.id);
+    if (r.getFlag(SCOPE, "isSpreadZone")) g.patterns.push({
+      id: r.id, band: r.getFlag(SCOPE, "band"), shells: r.getFlag(SCOPE, "shells"),
+      dmg: r.getFlag(SCOPE, "dmgFormula"), declaredAim: r.getFlag(SCOPE, "declaredAim"),
+      dirDeg: r.getFlag(SCOPE, "dirDeg"), lengthM: r.getFlag(SCOPE, "lengthM"), widthM: r.getFlag(SCOPE, "widthM"),
+      ammoKey: r.getFlag(SCOPE, "ammoKey"),
+    });
+  });
 
   const shooter = game.actors.getName("Review · Shooter");
   const scene = game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active;
@@ -117,7 +129,7 @@ async function fire(num, targetName) {
       }
       await new Promise(r => setTimeout(r, 1200));
     }
-    g.files.length = 0; g.payloads.length = 0; g.raw.length = 0; g.regions.length = 0;
+    g.files.length = 0; g.payloads.length = 0; g.raw.length = 0; g.regions.length = 0; g.patterns.length = 0;
     canvas.tokens.get(tokenId).setTarget(true, { releaseOthers: true });
     const actor = game.actors.get(actorId);
     await actor.sheet.render(true);
@@ -127,6 +139,29 @@ async function fire(num, targetName) {
     if (!el) throw new Error(`no fire button for ${gunId}`);
     el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   }, { actorId: setup.actorId, gunId: gun.id, tokenId: setup.tokens[targetName] });
+
+  // ⭐ A SPREAD WEAPON IS AIMED BEFORE IT IS DECLARED (user ruling 2026-08-11). Its fire control arms a
+  // corridor preview instead of opening the window, so the reviewer's gesture has a step in the middle:
+  // move to aim, click to place. Performed here exactly as a reviewer performs it, and skipped for every
+  // weapon that arms none — which is what the wait is for, since only one of the two ever appears.
+  await page.evaluate(async ({ tokenId }) => {
+    const place = await import(`/modules/cp2020-augmented/module/combat/spread-placement.js`);
+    const armed = async () => {
+      for (let i = 0; i < 40; i++) {
+        if (place.spreadPreviewActive()) return true;
+        if ([...foundry.applications.instances.values()].some(a => /ModifiersDialog/.test(a?.constructor?.name ?? "") && a.rendered === true)) return false;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return false;
+    };
+    if (!(await armed())) return false;
+    const t = canvas.tokens.get(tokenId);
+    const p = canvas.stage.worldTransform.apply(new PIXI.Point(t.center.x, t.center.y));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: p.x, clientY: p.y, bubbles: true }));
+    await new Promise(r => setTimeout(r, 250));
+    window.dispatchEvent(new PointerEvent("pointerdown", { clientX: p.x, clientY: p.y, button: 0, bubbles: true }));
+    return true;
+  }, { tokenId: setup.tokens[targetName] });
 
   await page.waitForFunction(() => [...foundry.applications.instances.values()]
     .some(a => /ModifiersDialog/.test(a?.constructor?.name ?? "") && a.rendered === true), null, { timeout: 25000 });
@@ -147,6 +182,7 @@ async function fire(num, targetName) {
     files: [...new Set(globalThis.__smoke.files)],
     payloads: globalThis.__smoke.payloads,
     newRegions: globalThis.__smoke.regions,
+    patterns: globalThis.__smoke.patterns,
     dialogs: [...foundry.applications.instances.values()].filter(a => /Damage/i.test(a?.constructor?.name ?? "")).map(a => a.constructor.name),
   }));
 }
@@ -208,42 +244,36 @@ ok("D: the hit mark is the CLASS's own, and the withdrawn burning ring stays wit
 const liveFires = await page.evaluate(() => (globalThis.Sequencer?.EffectManager?.effects ?? []).length);
 ok("D: the fires are really alive on the canvas afterwards", liveFires > 0, `${liveFires} live effect(s)`);
 
-/* ══ E. 10 shell Buckshot — the RAW pattern, its confirm card, and the delete on confirm ══════ */
-console.log(`\n── E · 10 Arasaka RAS-12 Buckshot → Review · Target (flesh) ──`);
+/* ══ E. 10 shell Buckshot — AIM FIRST, then the pattern that resolves itself ══════════════════ */
+// ⏪ THIS SECTION USED TO CLICK A CONFIRM CARD. The 2026-08-11 ruling moved the aiming half of that
+// click to the FRONT of the gesture (the `fire()` helper above now performs it), so the click that is
+// left — "resolve now" — is one the roll has already committed to, and the pattern resolves itself when
+// the shot's presentation ends. What a reviewer is checking here is therefore the ORDER: aimed, planted
+// on the aimed line, resolved as the rounds arrive, gone afterwards, and nobody asked to press anything.
+console.log(`
+── E · 10 Arasaka RAS-12 Buckshot → Review · Target (flesh) ──`);
 r = await fire("10", "Review · Target");   // NOT retried: a pattern is thrown hit or miss, and two would be two
 ok("E: the cartridge resolves to the BUCK pattern, not a single-target shot",
   r.payloads[0]?.caliber === "00", `caliber=${r.payloads[0]?.caliber} spreadMode=${r.payloads[0]?.spreadMode}`);
-const pat = await page.evaluate((SCOPE) => {
-  const zones = (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone"));
-  const card = [...game.messages].reverse().find(m => (m.content ?? "").includes("cp-confirm-spread-zone"));
-  return { zones: zones.map(z => ({ id: z.id, band: z.getFlag(SCOPE, "band"), shells: z.getFlag(SCOPE, "shells"),
-      dmg: z.getFlag(SCOPE, "dmgFormula") })), cardId: card?.id ?? null };
-}, SCOPE);
-ok("E: a shot PATTERN is placed on the canvas", pat.zones.length === 1, JSON.stringify(pat.zones));
-ok("E: banded from the real token distance, one pattern for the whole burst",
+const pat = { zones: r.patterns };
+ok("E: a shot PATTERN was placed on the canvas", pat.zones.length === 1, JSON.stringify(pat.zones));
+ok("E: planted on the corridor the SHOOTER declared, not on a guessed axis",
+  pat.zones[0]?.declaredAim === true, `declaredAim=${pat.zones[0]?.declaredAim}`);
+ok("E: banded from the real aimed distance, one pattern for the whole burst",
   pat.zones[0]?.band === "Medium" && Number(pat.zones[0]?.shells) >= 1,
   `band=${pat.zones[0]?.band} shells=${pat.zones[0]?.shells} dmg=${pat.zones[0]?.dmg}`);
 ok("E: the single-target flow did NOT claim this payload — the pattern owns it (negative)",
   r.handled.every(h => h === null), JSON.stringify(r.handled));
 ok("E: and no apply window opened for it", r.dialogs.length === 0, r.dialogs.join(", "));
-ok("E: a GM Confirm card was posted", !!pat.cardId, pat.cardId ?? "none");
-// the real gesture: click the button on the rendered card
-const confirmed = await page.evaluate(async ({ cardId }) => {
-  const el = document.querySelector(`[data-message-id="${cardId}"] .cp-confirm-spread-zone`);
-  if (!el) return { clicked: false };
-  el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  return { clicked: true };
-}, { cardId: pat.cardId });
-// POLLED, not slept on: the confirm rolls every shell against every token in the path, posts a result
-// card and scatters the load's fires before it deletes — a fixed wait raced all three.
-await page.waitForFunction((SCOPE) =>
-  (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length === 0,
-  SCOPE, { timeout: 20000 }).catch(() => {});
 const afterConfirm = await page.evaluate((SCOPE) => ({
   zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+  confirmCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).length,
+  resultCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
 }), SCOPE);
-ok("E: the Confirm button on the card is clickable", confirmed.clicked);
-ok("E: confirming DELETES the pattern — nothing is left hovering", afterConfirm.zones === 0, `${afterConfirm.zones} left`);
+ok("E: NO confirm card is posted — the shooter already confirmed the corridor (negative)",
+  afterConfirm.confirmCards === 0, `${afterConfirm.confirmCards} card(s)`);
+ok("E: the pattern resolved ITSELF and posted its result", afterConfirm.resultCards > 0, `${afterConfirm.resultCards} result card(s)`);
+ok("E: and nothing is left hovering on the canvas", afterConfirm.zones === 0, `${afterConfirm.zones} left`);
 
 /* ══ F. 11 shell SLUG — the single-target contrast: no pattern, an apply route ════════════════ */
 console.log(`\n── F · 11 Arasaka RAS-12 Slug → Review · Target (flesh) ──`);
@@ -264,8 +294,13 @@ ok("F: and an apply route reaches the reviewer for this shot",
   slug.dialogs.length > 0 || slug.flagged > 0 || setup.autoApply === true,
   `${slug.dialogs.join(",") || "no window"} / ${slug.flagged} flagged card(s) / autoApply=${setup.autoApply}`);
 
-/* ══ G. 12 shell API — the pattern's OWN fires, placed on confirm ═════════════════════════════ */
-console.log(`\n── G · 12 Arasaka RAS-12 API → Review · Target (flesh) ──`);
+/* ══ G. 12 shell API — the pattern's OWN fires, laid down when the shot lands ═════════════════ */
+// ⏪ THIS SECTION USED TO CLICK A CONFIRM CARD TOO. With the corridor declared up front the resolution
+// rides the shot's own presentation, so the fires the load leaves go down inside the same gesture —
+// still placed by the PATTERN and not by the fan-out, which is the distinction that matters and is
+// asserted below on the region's own recorded load.
+console.log(`
+── G · 12 Arasaka RAS-12 API → Review · Target (flesh) ──`);
 await page.evaluate(async () => {
   for (const a of [...foundry.applications.instances.values()]) {
     if (/Damage|Modifiers/i.test(a?.constructor?.name ?? "")) { try { await a.close(); } catch (e) { /* closed */ } }
@@ -273,25 +308,15 @@ await page.evaluate(async () => {
   try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none */ }
 });
 r = await fire("12", "Review · Target");   // same reason as E
-ok("G: an incendiary SHELL draws no fires yet — the pattern owns them until the GM commits (negative)",
-  !drew(r.files, setup.keys.groundFire), r.files.join(", ").slice(0, 220));
-const patG = await page.evaluate((SCOPE) => {
-  const z = (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.find(x => x.getFlag(SCOPE, "isSpreadZone"));
-  const card = [...game.messages].reverse().find(m => (m.content ?? "").includes("cp-confirm-spread-zone"));
-  return { zone: z?.id ?? null, ammoKey: z?.getFlag(SCOPE, "ammoKey") ?? null, cardId: card?.id ?? null };
-}, SCOPE);
-ok("G: the pattern records the load it was thrown with", patG.ammoKey === "api", `ammoKey=${patG.ammoKey}`);
-const gFiles = await page.evaluate(async ({ cardId }) => {
-  globalThis.__smoke.files.length = 0;
-  const el = document.querySelector(`[data-message-id="${cardId}"] .cp-confirm-spread-zone`);
-  el?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-  await new Promise(r => setTimeout(r, 5000));
-  return [...new Set(globalThis.__smoke.files)];
-}, { cardId: patG.cardId });
-ok("G: and on CONFIRM the fires go down the path", drew(gFiles, setup.keys.groundFire), gFiles.join(", ").slice(0, 220));
-const afterG = await page.evaluate((SCOPE) =>
-  (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length, SCOPE);
-ok("G: that pattern is deleted too", afterG === 0, `${afterG} left`);
+ok("G: the pattern records the load it was thrown with", r.patterns[0]?.ammoKey === "api", `ammoKey=${r.patterns[0]?.ammoKey}`);
+ok("G: an incendiary shell's fires reach the canvas as the shot resolves",
+  drew(r.files, setup.keys.groundFire), r.files.join(", ").slice(0, 220));
+const afterG = await page.evaluate((SCOPE) => ({
+  zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+  confirmCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).length,
+}), SCOPE);
+ok("G: that pattern is deleted too, with no card left behind", afterG.zones === 0 && afterG.confirmCards === 0,
+  `${afterG.zones} zone(s), ${afterG.confirmCards} card(s)`);
 
 /* ══ RESTORE ══════════════════════════════════════════════════════════════════════════════════ */
 console.log(`\n── restore ──`);
