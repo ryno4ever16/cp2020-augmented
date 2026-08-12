@@ -103,6 +103,48 @@ const res = await page.evaluate(async () => {
   const choices = cov.coverChoicesFor(tok).filter(c => c.label.startsWith("__PWK__"));
   ok("choices sorted nearest-first", choices[0]?.label === "__PWK__Near", choices.map(c => c.label).join(","));
 
+  /* 6. PER-ROUND structure debit inside the resolver — a burst wears the object down round by
+        round, and the round that empties the pool is the last one the object stands for.
+        Fixture: an unarmoured target, cover SP 20 over structure 60, six rounds of 25.
+          r1 25 -> pool 35 | r2 25 -> pool 10 | r3 absorbs the remaining 10 -> pool 0, DESTROYED
+          r4-r6 face SP 0 and land their full 25 each. */
+  const DA = await import(`/modules/${SCOPE}/module/combat/DamageApplicator.js`);
+  const bare = await Actor.create({ name: "__PWK__Bare", type: "npc" });
+  const coverRow = { uuid: "__PWK__uuid", label: "__PWK__Door", sp: 20, pool: 60, poolMax: 60, destroyed: false };
+  const burst = { Torso: Array.from({ length: 6 }, () => ({ damage: 25 })) };
+  const rows = DA.resolveAreaDamagesSync({
+    target: bare, areaDamages: burst, ap: false, armorMode: "full", ablate: false,
+    coverSP: 20, cover: coverRow,
+  });
+  ok("resolver returns one row per round", rows.length === 6, String(rows.length));
+  ok("rounds 1-3 face the object's SP 20", rows.slice(0, 3).every(r => r.coverSP === 20), rows.map(r => r.coverSP).join(","));
+  ok("rounds 1-2 debit the full round (35, then 10 left)",
+    rows[0]?.coverChew?.absorbed === 25 && rows[0]?.coverChew?.poolAfter === 35
+    && rows[1]?.coverChew?.absorbed === 25 && rows[1]?.coverChew?.poolAfter === 10,
+    JSON.stringify([rows[0]?.coverChew, rows[1]?.coverChew]));
+  ok("round 3 debits only what is left (10) and empties the pool",
+    rows[2]?.coverChew?.absorbed === 10 && rows[2]?.coverChew?.poolAfter === 0 && rows[2]?.coverChew?.destroyed === true,
+    JSON.stringify(rows[2]?.coverChew));
+  ok("round 3 still resolved through the object (after-SP 5)", rows[2]?.damageAfterSP === 5 && rows[2]?.penetrates === true, JSON.stringify({ a: rows[2]?.damageAfterSP, p: rows[2]?.penetrates }));
+  ok("rounds 4-6 face SP 0", rows.slice(3).every(r => r.coverSP === 0), rows.map(r => r.coverSP).join(","));
+  ok("rounds 4-6 land their full 25", rows.slice(3).every(r => r.damageAfterSP === 25), rows.map(r => r.damageAfterSP).join(","));
+  ok("rounds 4-6 debit nothing (the object is gone)", rows.slice(3).every(r => !r.coverChew), JSON.stringify(rows.slice(3).map(r => r.coverChew)));
+
+  const summary = cov.coverChewSummary(rows);
+  ok("burst summary totals the rounds (60 = the whole structure)", summary?.absorbed === 60, JSON.stringify(summary));
+  ok("burst summary names the object and reports it gone", summary?.label === "__PWK__Door" && summary?.pool === 0 && summary?.destroyed === true, JSON.stringify(summary));
+  ok("burst summary records the round it broke on", summary?.destroyedAtRound === 3, String(summary?.destroyedAtRound));
+  ok("burst summary carries one receipt per debiting round", summary?.rounds?.length === 3, String(summary?.rounds?.length));
+
+  // negative case: a typed SP with no object folds into the math but has nothing to debit
+  const typedOnly = DA.resolveAreaDamagesSync({
+    target: bare, areaDamages: { Torso: [{ damage: 25 }] }, ap: false, armorMode: "full",
+    ablate: false, coverSP: 20, cover: null,
+  });
+  ok("a typed Cover SP with no object still folds (after-SP 5)", typedOnly[0]?.damageAfterSP === 5, String(typedOnly[0]?.damageAfterSP));
+  ok("a typed Cover SP with no object debits nothing", !typedOnly[0]?.coverChew && cov.coverChewSummary(typedOnly) === null);
+  await bare.delete();
+
   // cleanup
   await scene.deleteEmbeddedDocuments("Token", [tok.id]);
   await actor.delete();

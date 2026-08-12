@@ -6,10 +6,13 @@
  *  - a destroyed row sitting on the segment is NOT returned
  *  - origin trim: a row within half a grid of the ATTACKER'S centre is excluded, while the
  *    SAME row moved next to the TARGET is returned
- *  - the autoCoverDetection setting gates the DamageDialog seed: off (default) the picker opens
- *    unselected at Cover SP 0; on, a fresh dialog preselects the crossed row and its SP; the
- *    selection survives a re-render; a manual re-selection is never re-seeded (one-shot latch)
- *  - with the setting on and nothing on the segment, the dialog still opens unselected
+ *  - NO world toggle stands in front of the seed any more (the key is not registered and the
+ *    module exposes no reader for it): placing cover is the opt-in
+ *  - the DamageDialog seeds Cover SP from the crossed row on the first build, offers no
+ *    cover-object selector at all, keeps the seeded value across a re-render, and never re-seeds
+ *    over a value typed afterwards (one-shot latch)
+ *  - with nothing on the segment the window opens at Cover SP 0
+ *  - the expandable math line names the cover object it seeded and its SP
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
  */
 import { chromium } from "@playwright/test";
@@ -43,27 +46,31 @@ const res = await page.evaluate(async (SCOPE) => {
   const out = { checks: [], ids: {}, diag: {} };
   const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
 
-  if (!game.scenes.active) await (game.scenes.getName("Foundry Virtual Tabletop") ?? game.scenes.contents[0])?.activate();
-  const scene = game.scenes.active;
-  for (let i = 0; i < 100 && !(canvas?.ready && canvas.scene?.id === scene.id); i++) await new Promise(r => setTimeout(r, 200));
+  // The segment test is a statement about what lies between two points, so it can only be asserted
+  // on a surface whose whole contents this spec placed. A shared scene carrying standing review
+  // fixtures put cover on the line and made every "exactly these crossings" reading wrong — so the
+  // spec builds and activates its OWN scene and hands the previous one back at the end.
+  out.ids.prevActiveId = game.scenes.active?.id ?? null;
+  for (const s of [...game.scenes]) if (s.name?.startsWith("__PWX__")) await s.delete();
+  const [scene] = await Scene.create([{
+    name: "__PWX__CoverRay", width: 4000, height: 3000, padding: 0,
+    grid: { size: 100, type: CONST.GRID_TYPES.SQUARE },
+  }]);
+  await scene.activate();
+  for (let i = 0; i < 150 && !(canvas?.ready && canvas.scene?.id === scene.id); i++) await new Promise(r => setTimeout(r, 200));
   out.ids.sceneId = scene.id;
 
-  // stale sweep from any interrupted run
-  const stale = [...scene.walls].filter(w => w.flags?.[SCOPE]?.__pwx === true).map(w => w.id);
-  if (stale.length) await scene.deleteEmbeddedDocuments("Wall", stale);
-  for (const r of [...scene.regions]) if (r.name?.startsWith("__PWX__")) await r.delete();
   for (const a of [...game.actors]) if (a.name?.startsWith("__PWX__")) await a.delete();
-  const staleTok = [...scene.tokens].filter(t => t.name?.startsWith("__PWX__")).map(t => t.id);
-  if (staleTok.length) await scene.deleteEmbeddedDocuments("Token", staleTok);
 
   const cov = await import(`/modules/${SCOPE}/module/combat/cover.js`);
   const G = scene.grid?.size ?? 100;
   out.diag.grid = G;
 
-  // Any cover row already on the scene would contaminate the dialog phase's "nothing selected"
-  // expectations — record the count so a contaminated run is visible rather than silently wrong.
+  // A purpose-built scene starts with nothing on it — assert that rather than trusting it, so a
+  // future contamination is a failing check instead of a silently wrong crossing count.
   const preExisting = cov.coverChoicesFor(null).length;
   out.diag.preExistingRows = preExisting;
+  ok("the spec's own scene starts with no cover on it", preExisting === 0, String(preExisting));
 
   const mkWall = async (c, flags = {}) => {
     const [w] = await scene.createEmbeddedDocuments("Wall", [{ c, flags: { [SCOPE]: { __pwx: true, ...flags } } }]);
@@ -133,8 +140,9 @@ const res = await page.evaluate(async (SCOPE) => {
   ok("no target token returns no rows", cov.coverBetween(aTok, null).length === 0);
   ok("attacker standing on the target returns no rows (zero-length segment)", cov.coverBetween(tTok, tTok).length === 0);
 
-  /* the setting reader defaults OFF */
-  ok("auto-detect setting reads off by default", cov.coverAutoDetectEnabled() === false, String(cov.coverAutoDetectEnabled()));
+  /* the world toggle that used to gate the seed is gone in both directions */
+  ok("the retired world toggle is not registered", game.settings.settings.has(`${SCOPE}.autoCoverDetection`) === false);
+  ok("the module exposes no reader for it", cov.coverAutoDetectEnabled === undefined, typeof cov.coverAutoDetectEnabled);
 
   /* Trim the fixture down for the dialog phase: one crossing row (the SP-20 wall, nearest to the
      target of everything on the segment) plus the off-segment zone that must never be seeded. */
@@ -156,7 +164,7 @@ const res = await page.evaluate(async (SCOPE) => {
 for (const c of res.checks) check(c.n, c.p, c.d);
 console.log(`  (diag: ${JSON.stringify(res.diag)})`);
 
-/* ═════════════════════ phase 2: the dialog seed, gated by the world setting ═════════════════════ */
+/* ═══════════════ phase 2: the dialog seed — no world toggle, no selector control ═══════════════ */
 
 const openDialog = async () => {
   await page.evaluate(async ({ victimId, tTokId, aTokId }) => {
@@ -171,18 +179,20 @@ const openDialog = async () => {
     );
     await window.__pwDlg.render(true);
   }, res.ids);
-  await page.waitForSelector('form.damage-dialog select[name="coverZone"]', { timeout: 15000 });
+  await page.waitForSelector('form.damage-dialog input[name="coverSP"]', { timeout: 15000 });
 };
 
 const readDialog = () => page.evaluate(() => {
   const root = document.querySelector("form.damage-dialog");
-  const sel = root?.querySelector('select[name="coverZone"]');
   const sp = root?.querySelector('input[name="coverSP"]');
+  const bdRows = [...root.querySelectorAll(".cp-damage-breakdown-row")].map(r => ({
+    label: r.querySelector(".cp-bd-label")?.textContent?.trim() ?? "",
+    value: r.querySelector(".cp-bd-value")?.textContent?.trim() ?? "",
+  }));
   return {
-    sel: sel?.value ?? null,
     sp: sp?.value ?? null,
-    optCount: sel ? sel.options.length : 0,
-    selectedAttrs: sel ? [...sel.options].filter(o => o.selected).map(o => o.value) : [],
+    selectors: root.querySelectorAll('select[name="coverZone"]').length,
+    bdRows,
   };
 });
 
@@ -196,50 +206,45 @@ const rerenderVia = async (markSelector, act) => {
   }, markSelector, { timeout: 15000 });
 };
 
-const setAuto = (on) => page.evaluate(v => game.settings.set("cp2020-augmented", "autoCoverDetection", v), on);
-
-/* e1. setting OFF (default): picker renders, nothing preselected, Cover SP 0 */
-await setAuto(false);
+/* e1. no world toggle is set anywhere below — the window is opened exactly as a shot opens it,
+       and the crossed row's SP arrives on the first build. */
 await openDialog();
 let dlg = await readDialog();
-check("setting off: picker offers the scene's cover rows", dlg.optCount === 4, `options ${dlg.optCount}`);
-check("setting off: no row preselected", dlg.sel === "" && dlg.selectedAttrs.every(v => v === ""), JSON.stringify(dlg));
-check("setting off: Cover SP stays 0", dlg.sp === "0", String(dlg.sp));
+check("no cover-object selector renders in the window", dlg.selectors === 0, `selects ${dlg.selectors}`);
+check("Cover SP seeded from the crossed row (20), no world toggle involved", dlg.sp === "20", String(dlg.sp));
 
-/* e2. setting ON: a fresh dialog seeds the CROSSED row and its SP */
-await setAuto(true);
-await openDialog();
-dlg = await readDialog();
-check("setting on: crossed row preselected in the picker", dlg.sel === res.ids.wCrossUuid, `${dlg.sel} vs ${res.ids.wCrossUuid}`);
-check("setting on: the off-segment row is NOT the seeded one", dlg.sel !== res.ids.offZoneUuid);
-check("setting on: Cover SP seeded from the row (20)", dlg.sp === "20", String(dlg.sp));
+/* e2. the math line names the object that seeded it, with its SP in the ordered format */
+const coverRow = dlg.bdRows.find(r => r.label === "__PWX__CrossWall");
+check("the math line names the seeded cover object", !!coverRow, dlg.bdRows.map(r => `${r.label}=${r.value}`).join(" | "));
+check("the math line carries its SP as [20]", coverRow?.value === "[20]", String(coverRow?.value));
+check("the math line opens with the roll (12)", dlg.bdRows[0]?.label === "Roll" && dlg.bdRows[0]?.value === "12", JSON.stringify(dlg.bdRows[0]));
+check("the math line closes on a named final value", dlg.bdRows.some(r => r.label === "Final"), dlg.bdRows.map(r => r.label).join(","));
 
 /* e3. the seed survives a real re-render */
-await rerenderVia('select[name="coverZone"]', () => page.evaluate(() => {
+await rerenderVia('input[name="coverSP"]', () => page.evaluate(() => {
   const sel = document.querySelector('form.damage-dialog select[name="armorMode"]');
   sel.value = sel.value === "full" ? "simple" : "full";
   sel.dispatchEvent(new Event("change", { bubbles: true }));
 }));
 dlg = await readDialog();
-check("one-shot auto-pick survives re-render", dlg.sel === res.ids.wCrossUuid, JSON.stringify(dlg));
 check("the seeded Cover SP survives the re-render", dlg.sp === "20", String(dlg.sp));
 
-/* e4. choosing manual sticks — the latch never re-seeds on a later re-render */
+/* e4. a value typed afterwards sticks — the one-shot latch never re-seeds over it */
 await rerenderVia('select[name="armorMode"]', () => page.evaluate(() => {
-  const sel = document.querySelector('form.damage-dialog select[name="coverZone"]');
-  sel.value = "";
-  sel.dispatchEvent(new Event("change", { bubbles: true }));
+  const el = document.querySelector('form.damage-dialog input[name="coverSP"]');
+  el.value = "3";
+  el.dispatchEvent(new Event("change", { bubbles: true }));
 }));
 dlg = await readDialog();
-check("manual re-selection clears the seeded row", dlg.sel === "", JSON.stringify(dlg));
+check("a typed Cover SP replaces the seeded one", dlg.sp === "3", String(dlg.sp));
 
-await rerenderVia('select[name="coverZone"]', () => page.evaluate(() => {
+await rerenderVia('input[name="coverSP"]', () => page.evaluate(() => {
   const sel = document.querySelector('form.damage-dialog select[name="armorMode"]');
   sel.value = sel.value === "full" ? "simple" : "full";
   sel.dispatchEvent(new Event("change", { bubbles: true }));
 }));
 dlg = await readDialog();
-check("manual choice is never re-seeded (one-shot latch holds)", dlg.sel === "", JSON.stringify(dlg));
+check("the typed value is never re-seeded (one-shot latch holds)", dlg.sp === "3", String(dlg.sp));
 
 /* the attacker resolver's actor-id fallback (no attackerTokenId in the payload) */
 const byActorId = await page.evaluate(async ({ victimId, tTokId, shooterId, aTokId }) => {
@@ -250,7 +255,8 @@ const byActorId = await page.evaluate(async ({ victimId, tTokId, shooterId, aTok
 }, res.ids);
 check("attacker resolves from the actor id when no token id is carried", byActorId.id === byActorId.want, JSON.stringify(byActorId));
 
-/* f. setting ON but nothing on the segment: the dialog opens in manual mode */
+/* f. nothing on the segment (an off-segment row still on the scene): the window opens at 0, and
+      the math line carries no cover component at all — the natural off state, no toggle needed. */
 await page.evaluate(async ({ sceneId, onZoneId, wCrossId }) => {
   const scene = game.scenes.get(sceneId);
   await scene.regions.get(onZoneId)?.delete();
@@ -258,43 +264,30 @@ await page.evaluate(async ({ sceneId, onZoneId, wCrossId }) => {
 }, res.ids);
 await openDialog();
 dlg = await readDialog();
-check("nothing on the segment: no row preselected", dlg.sel === "", JSON.stringify(dlg));
 check("nothing on the segment: Cover SP stays 0", dlg.sp === "0", String(dlg.sp));
-check("nothing on the segment: the off-segment row is still offered", dlg.optCount === 2, `options ${dlg.optCount}`);
+check("nothing on the segment: the math line names no cover component",
+  !dlg.bdRows.some(r => /__PWX__|^Cover$/.test(r.label)), dlg.bdRows.map(r => r.label).join(","));
 
 /* ═══════════════════════════════ cleanup + rig hygiene ═══════════════════════════════ */
-await setAuto(false);
-const restored = await page.evaluate(() => game.settings.get("cp2020-augmented", "autoCoverDetection"));
-check("auto-detect setting restored to the default", restored === false, String(restored));
-
-await page.evaluate(async ({ sceneId, onZoneId, offZoneId, aTokId, tTokId, shooterId, victimId }) => {
-  const SCOPE = "cp2020-augmented";
+// The whole surface this spec built goes with the scene; the previously active one is handed back
+// so the rig is left exactly as it was found.
+await page.evaluate(async ({ sceneId, prevActiveId }) => {
   for (const app of [...foundry.applications.instances.values()]) {
     if (app.constructor?.name === "DamageDialog") await app.close().catch(() => {});
   }
-  const scene = game.scenes.get(sceneId);
-  const toks = [aTokId, tTokId].filter(id => scene.tokens.get(id));
-  if (toks.length) await scene.deleteEmbeddedDocuments("Token", toks).catch(() => {});
-  for (const id of [onZoneId, offZoneId]) await scene.regions.get(id)?.delete().catch(() => {});
-  for (const r of [...scene.regions]) if (r.name?.startsWith("__PWX__")) await r.delete().catch(() => {});
-  const walls = [...scene.walls].filter(w => w.flags?.[SCOPE]?.__pwx === true).map(w => w.id);
-  if (walls.length) await scene.deleteEmbeddedDocuments("Wall", walls).catch(() => {});
-  for (const id of [shooterId, victimId]) await game.actors.get(id)?.delete().catch(() => {});
   for (const a of [...game.actors]) if (a.name?.startsWith("__PWX__")) await a.delete().catch(() => {});
   for (const m of game.messages.filter(x => x.content.includes("__PWX__") || x.content.includes("cp-cover-chew"))) await m.delete().catch(() => {});
+  const prev = prevActiveId ? game.scenes.get(prevActiveId) : null;
+  if (prev) { await prev.activate().catch(() => {}); for (let i = 0; i < 150 && canvas?.scene?.id !== prev.id; i++) await new Promise(r => setTimeout(r, 200)); }
+  await game.scenes.get(sceneId)?.delete().catch(() => {});
 }, res.ids).catch(e => console.log(`  (cleanup warning: ${e.message})`));
 
-const leftovers = await page.evaluate(({ sceneId }) => {
-  const SCOPE = "cp2020-augmented";
-  const scene = game.scenes.get(sceneId);
-  return {
-    regions: [...scene.regions].filter(r => r.name?.startsWith("__PWX__")).length,
-    walls: [...scene.walls].filter(w => w.flags?.[SCOPE]?.__pwx === true).length,
-    tokens: [...scene.tokens].filter(t => t.name?.startsWith("__PWX__")).length,
-    actors: game.actors.filter(a => a.name?.startsWith("__PWX__")).length,
-  };
-}, res.ids);
-check("fixtures fully swept from the rig", Object.values(leftovers).every(v => v === 0), JSON.stringify(leftovers));
+const leftovers = await page.evaluate(({ prevActiveId }) => ({
+  probeScenes: game.scenes.filter(s => s.name?.startsWith("__PWX__")).length,
+  actors: game.actors.filter(a => a.name?.startsWith("__PWX__")).length,
+  activeRestored: (game.scenes.active?.id ?? null) === prevActiveId ? 0 : 1,
+}), res.ids);
+check("fixtures swept and the previously active scene handed back", Object.values(leftovers).every(v => v === 0), JSON.stringify(leftovers));
 
 check("0 console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 console.log(`\nRESULT: ${fail === 0 ? "PASS" : "FAIL"} (${pass}/${pass + fail})`);

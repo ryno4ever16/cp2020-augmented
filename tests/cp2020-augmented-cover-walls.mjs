@@ -1,14 +1,17 @@
 /**
  * KEEPER: cover Unit 3 — native Wall documents carrying cover data.
  *  - coverWallsOn: unflagged walls excluded; SP-only wall reads the 3xSP structure default;
- *    explicit structure numbers respected; material label wins, else the localized wall/door fallback
+ *    explicit structure numbers respected; a legacy stored material label still wins (the field that
+ *    wrote it is retired but the value is still read), else the localized wall/door fallback
  *  - coverChoicesFor merges wall rows with zone rows and sorts nearest-first (every row carries a uuid)
  *  - chewCoverWall: exact structure debit, chat card per debit, destroyed flip at 0,
  *    door-state flip to open at zero structure (non-door walls leave door state untouched),
  *    idempotent on an already-destroyed wall (no extra card)
  *  - chewCover dispatcher routes a Wall uuid to the wall branch and a behavior uuid to the zone branch
- *  - the native wall configuration sheet carries the four injected fields, the SP->structure
- *    pre-fill fires on a real change event, and the sheet's own submit persists the flags
+ *  - the native wall configuration sheet carries exactly the three structure fields (the material
+ *    input is gone and nothing writes that flag), the SP->structure pre-fill fires on a real change
+ *    event, the sheet's own submit persists the flags, and an unnamed wall falls back to the
+ *    localized generic label
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
  */
 import { chromium } from "@playwright/test";
@@ -195,8 +198,10 @@ if (fieldsetSeen) {
     const names = [...fs.querySelectorAll("input")].map(i => i.getAttribute("name"));
     return { names, text: fs.textContent, inForm: !!fs.closest("form") };
   }, SCOPE);
-  const want = ["coverSp", "coverPool", "coverPoolMax", "coverMaterial"].map(k => `flags.${SCOPE}.${k}`);
-  check("four flag-named inputs present", want.every(n => dom.names.includes(n)), dom.names.join(","));
+  const want = ["coverSp", "coverPool", "coverPoolMax"].map(k => `flags.${SCOPE}.${k}`);
+  check("the three structure inputs are present", want.every(n => dom.names.includes(n)), dom.names.join(","));
+  check("the retired material/name input is gone", !dom.names.includes(`flags.${SCOPE}.coverMaterial`), dom.names.join(","));
+  check("the fieldset carries exactly those three inputs", dom.names.length === 3, String(dom.names.length));
   check("fieldset sits inside the sheet's own form", dom.inForm === true);
   check("no raw key text leaks into the fieldset", !/CYBERPUNK\./.test(dom.text), dom.text.slice(0, 120));
 
@@ -214,12 +219,6 @@ if (fieldsetSeen) {
   check("SP edit pre-fills empty structure fields with 3xSP", filled.pool === "60" && filled.poolMax === "60", JSON.stringify(filled));
 
   // the sheet's OWN submit persists the flags
-  await page.evaluate((SCOPE) => {
-    const m = document.querySelector(`.cp-cover-wall-fields input[name="flags.${SCOPE}.coverMaterial"]`);
-    m.value = "__PWX__CfgWall";
-    m.dispatchEvent(new Event("change", { bubbles: true }));
-  }, SCOPE);
-
   let submitted = false;
   try {
     const btn = page.locator(`#${appId} button[type="submit"]`).first();
@@ -241,14 +240,18 @@ if (fieldsetSeen) {
   if (!submitted || persisted.timeout) {
     check("sheet submit persists the cover flags [PARKED — submit path did not land headless]", false, `submitted=${submitted} ${JSON.stringify(persisted)}`);
   } else {
-    check("sheet submit persists the cover flags", persisted.sp === 20 && persisted.pool === 60 && persisted.poolMax === 60 && persisted.material === "__PWX__CfgWall", JSON.stringify(persisted));
+    check("sheet submit persists the cover flags", persisted.sp === 20 && persisted.pool === 60 && persisted.poolMax === 60, JSON.stringify(persisted));
+    check("no material flag is written any more", persisted.material === undefined, String(persisted.material));
     const row = await page.evaluate(({ sceneId, cfgWallId }) => import("/modules/cp2020-augmented/module/combat/cover.js").then(cov => {
       const scene = game.scenes.get(sceneId);
       const w = scene.walls.get(cfgWallId);
       const r = cov.coverWallsOn(scene).find(x => x.uuid === w.uuid);
       return r ? { label: r.label, sp: r.sp, pool: r.pool, poolMax: r.poolMax, destroyed: r.destroyed } : null;
     }), res.ids);
-    check("sheet-authored wall becomes a cover row", row?.sp === 20 && row?.pool === 60 && row?.poolMax === 60 && row?.label === "__PWX__CfgWall" && row?.destroyed === false, JSON.stringify(row));
+    // With nothing to name it, the row falls back to the localized generic wall label — a wall
+    // document has no name of its own, so this is the honest floor.
+    check("sheet-authored wall becomes a cover row", row?.sp === 20 && row?.pool === 60 && row?.poolMax === 60 && row?.destroyed === false, JSON.stringify(row));
+    check("an unnamed wall falls back to the generic label", row?.label === "Wall", String(row?.label));
   }
 }
 
