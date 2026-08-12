@@ -20,6 +20,7 @@ import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
 import { registerCombatFx } from "./fx/effects.js";
+import { registerStatusFx } from "./fx/status-fx.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -626,6 +627,10 @@ Hooks.once("ready", function () {
   // automation, so it must run even where the combat-automation layer stands down. Its own world
   // setting (combatFxEnabled) is read per event, so the switch applies without a reload.
   wire("combat fx rail", registerCombatFx);
+  // Persistent condition overlays. Unconditional for the same reason and gated by the same world
+  // setting (combatFxEnabled), read per event: it is presentation of a condition something else
+  // already applied, so it must run wherever that condition can reach a figure.
+  wire("condition overlays", registerStatusFx);
   if (doCombat) {
     wire("damage hooks", registerDamageHooks);
     wire("movement gate", registerMovementGate);
