@@ -6,7 +6,11 @@ import { apiHelper } from "./system-api.js";
 export const localize      = apiHelper("i18n", "localize", _localize);
 export const tryLocalize   = apiHelper("i18n", "tryLocalize", _tryLocalize);
 export const localizeParam = apiHelper("i18n", "localizeParam", _localizeParam);
-export const rollLocation  = apiHelper("dice", "rollLocation", _rollLocation);
+// The local copy is a SUPERSET of the base's rollLocation: it picks the lookup table by setting
+// (Core or the alternate one), re-rolls a hit that lands on a limb the target no longer has and
+// reports rerolledFrom, and answers an aimed area the target's table lacks instead of throwing on
+// it. So it is used until a base DECLARES it carries those rules — see module/system-api.js.
+export const rollLocation  = apiHelper("dice", "rollLocation", _rollLocation, { requiresFeature: "hitLocationRules" });
 
 // Utility methods that don't really belong anywhere else
 

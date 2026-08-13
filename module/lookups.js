@@ -7,9 +7,15 @@ import { apiHelper } from "./system-api.js";
 // local copies (the _-prefixed functions below). See module/system-api.js. (Data tables stay local.)
 export const defaultHitLocations       = apiHelper("lookups", "defaultHitLocations", _defaultHitLocations);
 export const strengthDamageBonus       = apiHelper("lookups", "strengthDamageBonus", _strengthDamageBonus);
-export const isFnff2Enabled            = apiHelper("lookups", "isFnff2Enabled", _isFnff2Enabled);
 export const getFnff2DamageBonusSymbol = apiHelper("lookups", "getFnff2DamageBonusSymbol", _getFnff2DamageBonusSymbol);
-export const getMartialActionBonus     = apiHelper("lookups", "getMartialActionBonus", _getMartialActionBonus);
+// Two SUPERSETS of the base's helpers of the same name, so they wait for a base that DECLARES it owns
+// the martial layer before its versions are used — see module/system-api.js. _isFnff2Enabled resolves
+// the toggle without throwing when the setting is not registered (the base reads it unguarded, and
+// the martial engine calls this on a vanilla actor); _getMartialActionBonus takes a third argument,
+// the per-skill bonus map that backs custom styles and per-skill overrides, which the base's
+// two-argument copy accepts and drops.
+export const isFnff2Enabled            = apiHelper("lookups", "isFnff2Enabled", _isFnff2Enabled, { requiresFeature: "martial" });
+export const getMartialActionBonus     = apiHelper("lookups", "getMartialActionBonus", _getMartialActionBonus, { requiresFeature: "martial" });
 
 // Module flag / settings scope (per-file convention used across the module).
 const SCOPE = "cp2020-augmented";

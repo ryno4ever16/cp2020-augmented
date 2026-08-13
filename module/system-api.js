@@ -15,13 +15,27 @@
  * they point at — can be deleted (the planned cleanup patch → the lean "release build" in
  * Data/_seamwork/release-build-optionA/).
  *
+ * ⚠ PREFERRING THE HOST IS ONLY SAFE WHERE THE TWO COPIES MEAN THE SAME THING. A few local copies
+ * are deliberate SUPERSETS of the base's helper of the same name — same group, same name, same call
+ * shape — so a base that starts publishing the api would resolve over them and the extra rules would
+ * simply stop applying, with nothing to notice: the location roll would lose the alternate table and
+ * the gone-limb re-roll, the martial bonus lookup would drop its third argument (the per-skill map),
+ * and the ruleset toggle would read its setting unguarded and throw where the local copy answers
+ * false. `requiresFeature` is the guard: such a helper names the capability the base must DECLARE on
+ * `game.cyberpunk.api.features` (the same declaration `hostProvides` reads for the feature layers)
+ * before its version may be used. Until the base declares it, the module keeps its own copy — which
+ * is the behaviour every version of the module has shipped, so the guard is also the no-change path.
+ *
  * @param {string}   group     api group: "i18n" | "schema" | "lookups" | "chat" | "dice" | "constants"
  * @param {string}   name      helper name within that group
  * @param {Function} fallback  the module's local implementation, used when the api lacks it
- * @returns {Function}         calls the api helper if present, else the fallback
+ * @param {object}   [opts]
+ * @param {string}   [opts.requiresFeature]  capability the base must declare before its copy is used
+ * @returns {Function}         calls the api helper if present and permitted, else the fallback
  */
-export function apiHelper(group, name, fallback) {
+export function apiHelper(group, name, fallback, { requiresFeature = null } = {}) {
   return function (...args) {
+    if (requiresFeature && !hostProvides(requiresFeature)) return fallback.apply(this, args);
     const fn = globalThis.game?.cyberpunk?.api?.[group]?.[name];
     return (typeof fn === "function" ? fn : fallback).apply(this, args);
   };
@@ -34,7 +48,13 @@ export function apiHelper(group, name, fallback) {
  * `game.cyberpunk.api.features`; an absent map (an older base, or one shipping none of these) reads as
  * `false`, so the module registers normally. See Data/_seamwork/FOLLOWUP-cherrypick-hardening.md.
  *
- * @param {string} feature  "combatAutomation" | "vehicles" | "shopping" | "ip" | "martial"
+ * Also read by `apiHelper`'s `requiresFeature` guard, for the helpers whose local copy carries rules
+ * the base's helper of the same name does not (see the note above): "martial" covers the martial
+ * bonus lookup and the ruleset toggle, "hitLocationRules" the alternate location table and the
+ * gone-limb re-roll.
+ *
+ * @param {string} feature  "combatAutomation" | "vehicles" | "shopping" | "ip" | "martial" |
+ *                          "actorSheet" | "itemSheet" | "hitLocationRules"
  * @returns {boolean}
  */
 export function hostProvides(feature) {
