@@ -133,6 +133,9 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs",
+  // Shop buyer strip — included by the catalog template and re-rendered on its own when the buyer
+  // changes, which is why it is a partial at all (module/shop/catalog.js _cpSyncBuyer).
+  "modules/cp2020-augmented/templates/shop/buyer-bar.hbs",
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",

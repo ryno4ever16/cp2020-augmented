@@ -43,18 +43,7 @@
             <h2>{{localize "CYBERPUNK.CatalogTitle"}}</h2>
         {{/if}}
         {{#unless isBuild}}
-        <span class="cp-catalog-buyer">
-            {{#if buyerOptions.length}}
-            <i class="fa-solid fa-user"></i>
-            <select class="cp-buyer-pick" title="{{localize "CYBERPUNK.ShopBuyerPickHint"}}">
-                <option value="">{{localize "CYBERPUNK.ShopBuyerPick"}}</option>
-                {{#each buyerOptions}}<option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>{{/each}}
-            </select>
-            {{#if hasBuyer}}<span class="cp-buyer-funds">{{buyerFunds}}eb</span>{{/if}}
-            {{else}}
-            {{#if hasBuyer}}<b>{{buyerName}}</b> · {{buyerFunds}}eb{{else}}<span class="cp-buyer-warn"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNeeded"}}</span>{{/if}}
-            {{/if}}
-        </span>
+        <span class="cp-catalog-buyer">{{> "modules/cp2020-augmented/templates/shop/buyer-bar.hbs"}}</span>
         {{/unless}}
     </div>
 
@@ -161,7 +150,9 @@
                 {{#if r._first}}<div class="cp-letter-header">{{r._letter}}</div>{{/if}}
                 <div class="cp-catalog-row{{#if r.soldOut}} cp-shop-soldout{{/if}}{{#if r.ammo}} cp-ammo-row{{/if}}"
                      data-name="{{r.name}}" data-source-key="{{r.key}}{{r.sourceKey}}" data-item-id="{{#if r.id}}{{r.id}}{{else}}{{r.itemId}}{{/if}}" data-pack-id="{{r.packId}}" data-fashion="{{#if r.fashion}}1{{else}}0{{/if}}"{{#if r.ammo}} data-ammo-caliber="{{r.caliber}}"{{/if}}{{#if r.curated}} data-curated="1"{{/if}}{{#if r._letter}} data-letter="{{r._letter}}"{{/if}}>
-                    <img class="cp-cat-thumb" src="{{r.img}}" width="26" height="26" title="{{#if r.ammo}}{{localize "CYBERPUNK.AmmoBuyTitle"}}{{else}}{{localize "CYBERPUNK.ShopOpenDetails"}}{{/if}}"/>
+                    {{!-- loading="lazy" pairs with the row's content-visibility: thousands of thumbs
+                          off the bottom of a 2,500-row list are never fetched until scrolled to. --}}
+                    <img class="cp-cat-thumb" src="{{r.img}}" width="26" height="26" loading="lazy" title="{{#if r.ammo}}{{localize "CYBERPUNK.AmmoBuyTitle"}}{{else}}{{localize "CYBERPUNK.ShopOpenDetails"}}{{/if}}"/>
                     <span class="cp-cat-itemname" title="{{#if r.ammo}}{{localize "CYBERPUNK.AmmoBuyTitle"}}{{else}}{{localize "CYBERPUNK.ShopOpenDetails"}}{{/if}}">{{r.name}}{{#if r.featured}} ★{{/if}}</span>
                     {{#if r.ammo}}<span class="cp-ammo-rounds" title="{{localize "CYBERPUNK.AmmoRoundsPerBox"}}">{{r.boxSize}}/box</span>{{/if}}
                     {{#if @root.showSource}}{{#if r.supplement}}<span class="cp-src-badge" title="{{r.supplement}}">{{#if r.supplementShort}}{{r.supplementShort}}{{else}}{{r.supplement}}{{/if}}</span>{{/if}}{{/if}}

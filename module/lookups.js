@@ -263,6 +263,21 @@ function _blackhandsPricing() {
   try { return game.settings.get("cp2020-augmented", "ammoBlackhandsPricing") || "off"; } catch (e) { return "off"; }
 }
 
+/** A cheap fingerprint of everything the generated ammo catalog rows are built from: the GM's custom
+ *  calibers and the Blackhand's pricing mode. Nothing else feeds them, so a caller that caches those
+ *  rows can compare this string instead of rebuilding the whole caliber × load matrix every render,
+ *  and a GM registering a caliber or flipping the pricing mode still lands on the next render. */
+export function ammoCatalogSignature() {
+  let custom = "";
+  for (const scope of ["cyberpunk2020", "cp2020-augmented"]) {
+    try {
+      const raw = game.settings.get(scope, "customCalibers");
+      if (raw && typeof raw === "object" && Object.keys(raw).length) { custom = JSON.stringify(raw); break; }
+    } catch (e) { /* not registered under this scope */ }
+  }
+  return `${_blackhandsPricing()}|${custom}`;
+}
+
 /** Box size + price for a caliber, honoring the Blackhand's box-pricing mode. */
 export function getCaliberBox(caliberId) {
   const cal = getCalibers()[caliberId];
