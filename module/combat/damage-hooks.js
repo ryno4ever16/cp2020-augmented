@@ -40,6 +40,7 @@ import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegion
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
+import { SCATTER_ROSE, scatterDriftM, scatterLandedPoint } from "./scatter-table.js";
 import { spreadFlowModeOf, spreadBandSpec, spreadBandDamage, SPREAD_MODE_SINGLE } from "../lookups.js";
 import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
 // The two floors a corridor may not go under, taken from the gesture that declares one rather than
@@ -2168,57 +2169,13 @@ async function _confirmExplosion(templateId) {
 /**
  * THE GRENADE TABLE'S DIRECTION ROSE (CP2020 p.108) — a d10 face to a unit heading, and its name.
  *
- * ⭐ LIFTED OUT OF THE GRENADE FLOW so a second reader cannot invent a second rose. It was a pair of
- * locals inside `_scatterExplosion` while a missed grenade was the only thing that scattered; the shot
- * pattern misses on the SAME table (p.108 sends a missed pattern to the grenade rules by name), and a
- * copy of a direction table is how two flows start disagreeing about which way a 3 goes.
- *
- * The layout is a NUMPAD around the aim point, so the face reads off the keypad a table already has
- * under its hand, and screen axes apply: +y is DOWN, which is why south is +1. Faces 5 and 10 are the
- * table's two no-drift results — a shot that missed the roll can still land where it was pointed, and
- * that is the book's own answer rather than a rounding of ours.
- *
- * ⚠ THIS IS NOT THE ONLY SCATTER ROSE IN THE MODULE, deliberately. `vehicle-indirect.js`
- * `scatterDirectionDeg` spaces ten headings 36° apart with no no-drift face, because it serves
- * Maximum Metal's indirect-fire and bombing tables (MM p.8-9) and those deviate by a computed distance
- * that is never zero. Two different books, two different tables; they are kept apart on purpose.
- *
- * The NAMES stay English here — this is data, and the render edge wraps them with `tryLocalize` (the
- * value-is-key convention, lookups.js line 2), so a table that adds `CYBERPUNK.SW` gets its own word
- * and one that does not keeps the compass point unchanged.
+ * ⏩ THE ROSE AND THE DRIFT NOW LIVE IN `combat/scatter-table.js` and are re-exported from here so every
+ * reader (and every keeper) keeps the name it already had. They moved on 2026-08-13 because the
+ * PRESENTATION rail needs them too — fx/effects.js draws the rounds toward the point this table
+ * produces — and this file already imports effects, so effects cannot import back. See that file's
+ * header for the full reasoning; nothing about the numbers changed.
  */
-export const SCATTER_ROSE = Object.freeze({
-  1:  Object.freeze({ vx: -1, vy:  1, name: "SW" }),
-  2:  Object.freeze({ vx:  0, vy:  1, name: "S" }),
-  3:  Object.freeze({ vx:  1, vy:  1, name: "SE" }),
-  4:  Object.freeze({ vx: -1, vy:  0, name: "W" }),
-  5:  Object.freeze({ vx:  0, vy:  0, name: "on-target" }),
-  6:  Object.freeze({ vx:  1, vy:  0, name: "E" }),
-  7:  Object.freeze({ vx: -1, vy: -1, name: "NW" }),
-  8:  Object.freeze({ vx:  0, vy: -1, name: "N" }),
-  9:  Object.freeze({ vx:  1, vy: -1, name: "NE" }),
-  10: Object.freeze({ vx:  0, vy:  0, name: "direct hit" }),
-});
-
-/**
- * The drift a missed throw or a missed pattern takes, in METRES, from the two d10 faces. PURE.
- *
- * The diagonal faces are normalised to unit length before the distance is applied, so a 3 travels the
- * rolled number of metres south-east rather than that many metres on each axis — the table gives one
- * distance, not two. A no-drift face reports `distanceM: 0` however the distance die fell, which is
- * what lets a caller print "landed on the aimed point" without re-deriving the rose.
- *
- * @param {number} dirFace  the 1d10 direction face
- * @param {number} distFace the 1d10 distance face, in metres
- * @returns {{dxM:number, dyM:number, distanceM:number, face:number, name:string}}
- */
-export function scatterDriftM(dirFace, distFace) {
-  const face = Math.min(10, Math.max(1, Math.round(Number(dirFace) || 1)));
-  const { vx, vy, name } = SCATTER_ROSE[face];
-  const mag = Math.hypot(vx, vy) || 1;
-  const drift = (vx || vy) ? Math.max(0, Number(distFace) || 0) : 0;
-  return { dxM: (vx / mag) * drift, dyM: (vy / mag) * drift, distanceM: drift, face, name };
-}
+export { SCATTER_ROSE, scatterDriftM };
 
 /** Scatter a missed grenade: Grenade Table (CP2020 p.108) — 1d10 direction + 1d10 metres. */
 async function _scatterExplosion(templateId) {
@@ -2393,16 +2350,12 @@ export function scatteredSpreadCorridor({
   const aimedX = originX + Math.cos(rad) * declared.reachM * ppm;
   const aimedY = originY + Math.sin(rad) * declared.reachM * ppm;
 
-  const drift = scatterDriftM(dirFace, distFace);
-  let aimX = aimedX + drift.dxM * ppm;
-  let aimY = aimedY + drift.dyM * ppm;
-  let clamped = false;
-  if (sceneRect && Number.isFinite(sceneRect.x) && Number.isFinite(sceneRect.width)) {
-    const cx = Math.min(Math.max(aimX, sceneRect.x), sceneRect.x + sceneRect.width);
-    const cy = Math.min(Math.max(aimY, sceneRect.y), sceneRect.y + sceneRect.height);
-    clamped = cx !== aimX || cy !== aimY;
-    aimX = cx; aimY = cy;
-  }
+  // The landed centre comes from the SHARED site (combat/scatter-table.js), because the presentation
+  // rail asks the same question of the same two faces and derives the point the rounds fly to. Two
+  // derivations — even from identical dice — part company at the clamp.
+  const { x: aimX, y: aimY, driftM, dirName, dirFace: face, clamped } = scatterLandedPoint({
+    aimedX, aimedY, pixelsPerMeter: ppm, dirFace, distFace, sceneRect,
+  });
 
   const reachM = Math.max(SPREAD_MIN_LENGTH_M, Math.hypot(aimX - originX, aimY - originY) / ppm);
   const angleDeg = (Math.atan2(aimY - originY, aimX - originX) * 180) / Math.PI;
@@ -2414,7 +2367,7 @@ export function scatteredSpreadCorridor({
     lengthM: Math.max(SPREAD_MIN_LENGTH_M, reachM + (Number(overshootM) || 0)),
     widthM: Math.max(SPREAD_MIN_WIDTH_M, spec.widthM + widthBiasM),
     band: spec.band,
-    aimX, aimY, driftM: drift.distanceM, dirName: drift.name, dirFace: drift.face, clamped,
+    aimX, aimY, driftM, dirName, dirFace: face, clamped,
   };
 }
 
@@ -2519,8 +2472,25 @@ export async function _placeSpreadZone(payload) {
       // and the corridor is rebuilt from the shooter as they stand to wherever the shell landed.
       outcome = spreadAttackOutcome(payload);
       if (outcome && !outcome.hit) {
-        const dirRoll  = await new Roll("1d10").evaluate();
-        const distRoll = await new Roll("1d10").evaluate();
+        // ⭐⭐ THE DICE ARE THE PAYLOAD'S, NOT THIS FUNCTION'S (2026-08-13). This runs on the ACTIVE GM,
+        // which on a player's shot — and on a shot by any GM who does not hold that seat — is a
+        // DIFFERENT CLIENT from the one that drew the rounds. The presentation had already resolved its
+        // axis toward the point the shooter aimed at by the time this ran, so rolling here produced a
+        // second, unrelated answer: on a miss the rounds flew one way and the pattern landed another,
+        // in front of the table, every time. Rolling once at the seam where the payload is assembled
+        // (seam-shim.js) and carrying the RESULTS means both rails read the same two faces. Results,
+        // not a seed — results are data and need no shared generator across clients.
+        //
+        // ⏪ THE FALLBACK IS FOR PAYLOADS THAT PREDATE THE CARRIED FIELDS, and it is not dead code: a
+        // client still on the older build mid-update relays one, a macro or a keeper can call this
+        // directly, and on the fork the seam shim is dormant so nothing stamps them. Those shots
+        // scatter exactly as they did before — correctly placed, merely un-followed by the rounds.
+        const carried = payload?.spreadScatter ?? null;
+        const dirFace = Number(carried?.dirFace);
+        const distFace = Number(carried?.distFace);
+        const haveCarried = Number.isFinite(dirFace) && Number.isFinite(distFace);
+        const dirTotal = haveCarried ? dirFace : (await new Roll("1d10").evaluate()).total;
+        const distTotal = haveCarried ? distFace : (await new Roll("1d10").evaluate()).total;
         const ppm = metersToPixels(scene, 1) || 1;
         // The scattered centre earns its own overshoot from whatever is standing there NOW, by the same
         // rule the aim gesture and the undeclared fallback both apply (see _tokenAtPoint's note): a
@@ -2533,7 +2503,7 @@ export async function _placeSpreadZone(payload) {
         const landed = scatteredSpreadCorridor({
           originX: ox, originY: oy, declared, widths, pixelsPerMeter: ppm,
           sceneRect: canvas?.dimensions?.sceneRect ?? null,
-          dirFace: dirRoll.total, distFace: distRoll.total,
+          dirFace: dirTotal, distFace: distTotal,
         });
         const overshootM = _halfTokenWidthAtM(scene, landed.aimX, landed.aimY, gridSize);
         scatter = { ...landed, lengthM: Math.max(SPREAD_MIN_LENGTH_M, landed.reachM + overshootM) };

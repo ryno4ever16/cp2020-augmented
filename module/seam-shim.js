@@ -18,6 +18,7 @@
  */
 
 import { localize } from "./utils.js";
+import { payloadScattersOnMiss } from "./combat/scatter-table.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -321,6 +322,37 @@ function installRenderEmit() {
       if (_fireCtx && path === MULTI_HIT_TEMPLATE && !(data && _emittedFor.has(data))) {
         if (data) _emittedFor.add(data);   // one card, one emission — however many wrappers are stacked
         const target = data?.target;   // a Token (full-auto sets it per shot); may be undefined otherwise
+        // ⭐⭐ THE SCATTER DICE ARE ROLLED HERE, ONCE, AND TRAVEL WITH THE SHOT.
+        //
+        // A missed shot pattern goes to the grenade table (CP2020 p.108) and its true centre moves. TWO
+        // rails then need to know where it moved to: the DAMAGE rail plants the pattern there, and the
+        // PRESENTATION rail draws the rounds toward it. Those two rails run on DIFFERENT CLIENTS — the
+        // plant runs on the active GM, the fan-out on whoever pulled the trigger — so a roll made inside
+        // the plant is a roll the presentation never sees. It had already resolved its axis toward the
+        // point the shooter aimed at, so on every miss the rounds flew one way and the pattern landed
+        // another. Rolling at the one place the payload is ASSEMBLED puts both readers behind the same
+        // two faces, and the fan-out reads the payload before anything else touches it.
+        //
+        // ⚠ THE RESULTS TRAVEL, NOT A SEED. This payload is relayed over the socket to the GM as JSON,
+        // and there is no shared generator across clients to re-run a seed against — two faces of data
+        // are the whole answer and they survive the trip unchanged.
+        //
+        // Nothing is rolled for a shot that cannot scatter: `payloadScattersOnMiss` wants a corridor the
+        // shooter actually declared AND the base system's own verdict of a miss (see that function).
+        // Every ordinary shot leaves this field absent, and every reader treats absent as "nobody
+        // asked" — the behaviour that shipped before this existed.
+        const verdict = {
+          spreadAim: _fireCtx.spreadAim ?? null,
+          attackTotal: Number.isFinite(Number(data?.attackRoll?.total)) ? Number(data.attackRoll.total) : null,
+          toHitDC: Number.isFinite(Number(data?.toHit)) ? Number(data.toHit) : null,
+        };
+        let spreadScatter = null;
+        if (payloadScattersOnMiss(verdict)) {
+          spreadScatter = {
+            dirFace: (await new Roll("1d10").evaluate()).total,
+            distFace: (await new Roll("1d10").evaluate()).total,
+          };
+        }
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
           // WHICH FIGURE ON THE MAP FIRED — the attacker's id names the ACTOR, and an actor can have
@@ -360,6 +392,9 @@ function installRenderEmit() {
           // consumer treats a null as "nobody declared an aim" and computes one, which is the behaviour
           // that shipped before the placement gesture existed.
           spreadAim: _fireCtx.spreadAim ?? null,
+          // WHERE THE MISSED CENTRE WENT — the two grenade-table faces, rolled once above. Null on every
+          // shot that hit and on every shot that declared no corridor.
+          spreadScatter,
           // ⭐ WHETHER THE SHOT ACTUALLY HIT WHAT IT WAS POINTED AT, as the BASE SYSTEM already ruled it.
           //
           // The base rolls one attack per card — REF + the attack skill + every modifier the window

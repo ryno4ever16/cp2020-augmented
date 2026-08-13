@@ -1468,18 +1468,40 @@ rather than a point:
 | `lengthM` | **plant** | that plus the overshoot into the aimed-at figure's own square, so containment is unambiguous |
 | `widthM` / `band` | plant + card | the corridor's width and its Core range band |
 
-⚠ **AND THE CORRIDOR CAN MOVE AFTER THE RAIL HAS DRAWN IT** (⭐ 2026-08-13, the scatter-on-miss unit).
+⭐ **AND THE CORRIDOR CAN MOVE — THE ROUNDS GO WITH IT** (⭐ 2026-08-13, the scatter-on-miss unit;
+✅ **the seam gap it opened was closed the same day** — see below).
 A declared corridor is still a shot that can miss: the plant reads the base system's own attack total
 and DC off the payload (`attackTotal` / `toHitDC`), and on a **miss** it sends the pattern's true centre
 to the grenade table (CP2020 p.108 — 1d10 direction, 1d10 metres) and rebuilds the corridor from the
-unmoved muzzle to wherever the shell landed. **The rail does not follow it, and that is a known
-limitation rather than a design:** the scatter is rolled on the **active GM's** client inside
-`_placeSpreadZone`, while this file's fan-out has already resolved its axis on the **firing** client and
-started drawing. So on a miss the rounds are drawn toward the point that was **aimed at** while the
-planted region sits where the shell actually went. Both readings are defensible on their own — the
-rounds did leave the muzzle on that heading — but they are visibly two different places, and closing the
-gap means rolling the scatter before the fan-out reads the payload (dice in the seam, or a pre-pass),
-which is a bigger change than the unit was scoped for. **Open item (§8).**
+unmoved muzzle to wherever the shell landed.
+
+**The gap, and what it looked like.** The scatter was first rolled on the **active GM's** client inside
+`_placeSpreadZone` — while this file's fan-out had already resolved its axis on the **firing** client and
+started drawing. Two clients, two rolls, two answers: on every miss the rounds crossed one line while the
+pattern was planted on another. Both readings were defensible in isolation (the rounds *did* leave the
+muzzle on that heading) but they were visibly two different places on the table.
+
+**The fix is one roll, at the seam, carried on the payload.**
+
+| Where | What it does now |
+|---|---|
+| `module/seam-shim.js` (payload assembly, **firing** client) | asks `payloadScattersOnMiss` — a corridor was declared **and** the base ruled a miss — and if so rolls the two d10s **once**, stamping `spreadScatter: {dirFace, distFace}` |
+| `module/combat/scatter-table.js` (**pure**, no imports) | owns `SCATTER_ROSE`, `scatterDriftM`, and `scatterLandedPoint` — the single site that turns two faces into a landed point, clamp included |
+| `module/fx/effects.js` `declaredAimPointOf` | applies the carried faces through `scatterLandedPoint`, so the aim resolved once per payload **is** the landed centre |
+| `module/combat/damage-hooks.js` `_placeSpreadZone` | **uses the carried faces, never re-rolls** |
+
+⚠ **Results travel, not a seed.** The payload is relayed to the GM as JSON and there is no shared
+generator across clients to re-run a seed against; two faces of data are the whole answer and they
+survive the trip unchanged. ⏪ **The plant keeps a roll for payloads that carry no faces** — a client
+still on an older build mid-update, a macro or keeper calling the plant directly, and the **fork**, where
+the seam shim is dormant because the base emits the hook natively. Those shots scatter exactly as they
+did before: correctly placed, merely un-followed by the rounds.
+
+⚠ **The table lives in its own file because of an import edge, not for tidiness.** `damage-hooks`
+imports `fx/effects`, so effects cannot import back; a second copy of the rose in the presentation rail
+is precisely how the two sides would start disagreeing about which way a 3 goes — and here that
+disagreement is the visible defect. `damage-hooks` re-exports the rose and the drift, so every existing
+reader and every keeper keeps the name it already had.
 
 ⭐ **It is a description, not a position, and that is the point.** Every consumer rebuilds the corridor
 off the shooter's figure **as it stands** (`declaredAimPointOf`), so a token nudged between the aim and
@@ -2495,7 +2517,7 @@ presented while the screen stayed empty.
 |---|---|
 | ~~The ammo's `modifier` id is ruled onto the payload but is not on it~~ | ✅ **CLOSED 2026-08-09.** `AMMO_EFFECT_FIELDS` had had `modifier` **replaced** by `caliber` rather than joined by it, so `payload.modifier` was `undefined` on every real shot and every load resolved through `ammoFxKeyOf`'s fingerprint branch — collapsing `dualPurpose` onto `ap`, the one case the id exists to settle. Both fields now sit in the list, with the comment block saying why one may never displace the other. The guard is the point: `tests/cp2020-augmented-b1-seam-payload.mjs` now fires bench guns **07** (`api`, 5.56) and **16** (`dualPurpose`, 20/9mm) through the real UI path and asserts `payload.modifier`, `payload.caliber` and the resolved key off the payload the hook actually carried — plus, on that same object, that stripping the id makes it answer `ap`. Reverting the one string turns four of its legs red. See §6. |
 | **The burning ground's size, density and lifetime are not signed off** | ⚠ **Still open, and the budget half moved 2026-08-13.** The asset was chosen by measurement and the placement was ruled, but the numbers are look calls the build lane made: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**. The **lifetime** and the **scene cap** were trimmed on the user's ruling to ⏱ **25 s** and ⏱ **12** (⏪ 45 s / 24) against a profiled ~0.36 % of a frame per live flame — but those two numbers are the build lane's proposal too, and re-tuning either by eye is one field: `GROUND_FIRE.lifetimeMs`, `.maxLive`, `.squares`, `.maxPerPayload` / `.maxPerPattern`. Captures 61a–61d. |
-| **A scattered shot pattern and the rounds drawn for it point at two different places** | ⚠ **Raised by the scatter-on-miss unit, 2026-08-13, §4.4.** On a missed pattern the region is rebuilt about a scattered centre on the **GM's** client, after this file's fan-out has already resolved and started drawing its axis on the **firing** client. So the rounds fly at the aimed point and the pattern lands wide. Closing it means resolving the scatter before the fan-out reads the payload — dice in the seam, or a synchronous pre-pass — which is a bigger change than that unit was scoped for. Needs a ruling on whether the mismatch is worth that. |
+| ~~A scattered shot pattern and the rounds drawn for it point at two different places~~ | ✅ **CLOSED 2026-08-13**, the same day it was raised. It was raised because the scatter was rolled inside the plant, on the **active GM's** client, after the **firing** client's fan-out had already resolved its axis toward the aimed point — two clients, two rolls, two answers, and on every miss the rounds crossed one line while the pattern was planted on another. The dice now roll **once**, at the seam where the payload is assembled (`seam-shim.js`, firing client), guarded by `payloadScattersOnMiss`, and ride the payload as `spreadScatter: {dirFace, distFace}`; both rails turn those two faces into a landed point through the one pure site they share (`combat/scatter-table.js` `scatterLandedPoint`, clamp included), and the plant **never re-rolls** when the faces are carried. Results travel, not a seed — the payload is relayed as JSON and there is no cross-client generator to re-run. A roll is kept in the plant for payloads that carry no faces (an older client mid-update, a macro or keeper calling the plant directly, and the fork, where the shim is dormant). Pinned by `tests/cp2020-augmented-spread-zone.mjs` §14g: one forced-miss payload drives both rails and the drawn endpoint and the planted centre are asserted to be the **same coordinates**, with the hit case asserted at the aim. See §4.4. |
 | ~~A shell fired with the shot pattern **switched off** is claimed by neither flow~~ | ✅ **CLOSED 2026-08-09.** The world switch is now part of the flow question itself, asked at one shared site (`spreadFlowModeOf`, lookups.js) by both damage gates and by `patternFlowOwns`. With the pattern off a shell resolves to `single`, so the ordinary apply flow claims it exactly as it claims a slug, and the fan-out draws an incendiary shell's burning ground itself because no confirm will. Pinned three ways: the spread-zone spec drives a shell with the setting off and asserts the single-target flow **claimed** it (and that no pattern was placed), the fx-rail spec drives the same payload's fires on the rail, and a source leg asserts the damage rail reads the setting **nowhere** of its own. Both specs restore the setting in a `finally`. See §1.1a and §6. |
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
 | ~~The discharge column's on-screen presence at the new trim~~ | ⏪ **RETIRED 2026-08-09 BY DELETION.** The user replaced the element rather than ruling on it: the column is gone and the shell draws the ordinary muzzle lance at 1.9 squares with the 220 ms dwell that was always ruled for it. There is no longer an on-screen presence to call. §6. |

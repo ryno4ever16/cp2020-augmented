@@ -30,6 +30,9 @@ import { spreadFlowModeOf, spreadModeForAmmo, SPREAD_MODE_SINGLE, SPREAD_MODE_BU
 // the region is planted from the same numbers) — this is the one conversion that turns it into the
 // pixels this file draws in, and it is the same helper the plant and the aim preview use.
 import { metersToPixels } from "../vehicle/vehicle-grid.js";
+// Pure, dependency-free by design so BOTH rails can read it — see combat/scatter-table.js's header for
+// why the grenade table does not live in damage-hooks any more.
+import { scatterLandedPoint } from "../combat/scatter-table.js";
 import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -3559,7 +3562,30 @@ export function declaredAimPointOf(payload, shooterToken) {
   const reachPx = metersToPixels(canvas?.scene, reachM);
   if (!(reachPx > 0)) return null;
   const rad = (angleDeg * Math.PI) / 180;
-  return { x: from.x + Math.cos(rad) * reachPx, y: from.y + Math.sin(rad) * reachPx };
+  const aimedX = from.x + Math.cos(rad) * reachPx;
+  const aimedY = from.y + Math.sin(rad) * reachPx;
+
+  // ⭐⭐ THE ROUNDS FOLLOW THE SCATTER (2026-08-13). A declared corridor is still a shot that can miss,
+  // and a missed pattern's true centre moves to the grenade table's answer (CP2020 p.108) — so the
+  // point the shooter clicked stops being the point the shell went to. Drawing the rounds at the
+  // AIMED point after that is drawing a shot that did not happen: the pellets crossed one line while
+  // the pattern was planted on another, which is what a table watched happen on every miss.
+  //
+  // The two faces are the SHOT'S OWN, rolled once when the payload was assembled on the firing client
+  // (seam-shim.js) precisely so this side and the plant cannot answer differently, and the landing
+  // point comes from the site they BOTH read (combat/scatter-table.js) so the clamp cannot part them
+  // either. Absent on every shot that hit and every shot that declared nothing — a plain fall-through
+  // to the aimed point, which is what this function always returned.
+  const sc = payload?.spreadScatter;
+  const dirFace = Number(sc?.dirFace), distFace = Number(sc?.distFace);
+  if (!Number.isFinite(dirFace) || !Number.isFinite(distFace)) return { x: aimedX, y: aimedY };
+  const landed = scatterLandedPoint({
+    aimedX, aimedY,
+    pixelsPerMeter: metersToPixels(canvas?.scene, 1) || 1,
+    dirFace, distFace,
+    sceneRect: canvas?.dimensions?.sceneRect ?? null,
+  });
+  return { x: landed.x, y: landed.y };
 }
 
 /**

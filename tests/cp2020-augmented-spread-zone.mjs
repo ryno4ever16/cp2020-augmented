@@ -80,6 +80,7 @@ const res = await page.evaluate(async () => {
   const seam = await import(`/modules/${SCOPE}/module/seam-shim.js`);
   const areas = await import(`/modules/${SCOPE}/module/combat/area-shapes.js`);
   const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+  const scatterTable = await import(`/modules/${SCOPE}/module/combat/scatter-table.js`);
 
   const mine = (r) => r?.flags?.[SCOPE]?.isSpreadZone === true;
   const myZones = () => [...(scene?.regions ?? [])].filter(mine);
@@ -1357,6 +1358,115 @@ const res = await page.evaluate(async () => {
     JSON.stringify({ scattered: myZones()[0]?.flags?.[SCOPE]?.scattered, declared: myZones()[0]?.flags?.[SCOPE]?.declaredAim }));
   await wipeZones(); await wipeCards();
   for (const t of [scAimTok, scHitTok]) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
+
+  // §14h — THE ROUNDS FOLLOW THE SCATTER. Two rails read one shot: the plant puts the pattern about the
+  // missed centre, the presentation draws the rounds toward it. They used to answer separately — the
+  // plant rolled its own dice on the ACTIVE GM's client, after the FIRING client's fan-out had already
+  // resolved its axis toward the aimed point — so on every miss the rounds crossed one line while the
+  // pattern was planted on another. The dice are rolled once now, at the seam, and ride the payload.
+  //
+  // Both answers are read here IN PIXELS off the same payload and compared by value. The fixture tokens
+  // are gone by this point, deliberately: with nothing standing on the landed centre the corridor takes
+  // no overshoot, so its far end IS the centre and the two numbers are directly comparable.
+  await sleep(800);   // the two fixture figures have to leave the CANVAS, not just the scene document
+  {
+    const ppm14h = grid.metersToPixels(scene, 1);
+    const rect14h = canvas.dimensions.sceneRect;
+    // A SCATTERED corridor runs half a standing figure's width past its new centre, so an unnoticed
+    // bystander there would move the far end by metres and this section would be comparing two different
+    // things. Only the LANDED point needs to be bare: an aimed corridor takes its length from the aim
+    // record, which already carries its own overshoot, and the plant measures nothing.
+    const occupied = (p) => (canvas?.tokens?.placeables ?? []).some((t) => {
+      const b = t.bounds ?? { x: t.x, y: t.y, width: t.w ?? 0, height: t.h ?? 0 };
+      return p.x >= b.x && p.x <= b.x + b.width && p.y >= b.y && p.y <= b.y + b.height;
+    });
+    const farEndOf = (flags) => {
+      const rad = (Number(flags.dirDeg) * Math.PI) / 180;
+      return { x: Number(flags.originX) + Math.cos(rad) * Number(flags.lengthM) * ppm14h,
+               y: Number(flags.originY) + Math.sin(rad) * Number(flags.lengthM) * ppm14h };
+    };
+    const near = (a, b, tol = 0.5) => !!a && !!b && Math.abs(a.x - b.x) <= tol && Math.abs(a.y - b.y) <= tol;
+    const say = (p) => p ? `(${p.x.toFixed(1)}, ${p.y.toFixed(1)})` : "null";
+
+    // the decision itself, before any dice: a corridor plus the base system's own verdict
+    ok("§14h the scatter decision wants BOTH a declared corridor and a ruled miss",
+      scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }) === true
+      && scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }) === false
+      && scatterTable.payloadScattersOnMiss({ attackTotal: 9, toHitDC: 15 }) === false
+      && scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: null, toHitDC: null }) === false,
+      JSON.stringify([
+        scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }),
+        scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }),
+        scatterTable.payloadScattersOnMiss({ attackTotal: 9, toHitDC: 15 }),
+        scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: null, toHitDC: null }),
+      ]));
+
+    // WHERE THE DICE ARE ROLLED, read off the served code: the seam that assembles the payload on the
+    // FIRING client, not the plant that runs on the GM's. The behavioural legs below prove the plant
+    // honours what it is given; this one proves something gives it.
+    const seamSrc = await (await fetch(`/modules/${SCOPE}/module/seam-shim.js`, { cache: "no-store" })).text();
+    ok("§14h the seam asks the scatter question and stamps the two faces onto the payload it raises",
+      /payloadScattersOnMiss\(/.test(seamSrc) && /spreadScatter\s*=\s*\{/.test(seamSrc)
+      && /\bspreadScatter,/.test(seamSrc),
+      JSON.stringify({ asks: /payloadScattersOnMiss\(/.test(seamSrc), rolls: /spreadScatter\s*=\s*\{/.test(seamSrc), carries: /\bspreadScatter,/.test(seamSrc) }));
+
+    // A HIT: nothing scatters, and both rails sit on the point the shooter clicked. The PLANTED corridor
+    // runs the declared overshoot past that point (the aim record's own lengthM − reachM, the reach into
+    // the aimed-at figure's square), so the far end is compared against the aim plus exactly that.
+    const aimedPt = { x: scOrigin.x + 20 * scPpm, y: scOrigin.y };
+    const declaredOvershootPx = (declaredAim.lengthM - declaredAim.reachM) * ppm14h;
+    const hitP = basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 });
+    const hitDrawn = fx.declaredAimPointOf(hitP, shooterPlaceable);
+    await hooks._placeSpreadZone(hitP);
+    await sleep(500);
+    const hitPlanted = farEndOf(myZones()[0]?.flags?.[SCOPE] ?? {});
+    ok("§14h on a HIT the rounds are drawn to the aimed point and the pattern is planted on it",
+      near(hitDrawn, aimedPt) && near(hitPlanted, { x: aimedPt.x + declaredOvershootPx, y: aimedPt.y }),
+      `drawn ${say(hitDrawn)} planted ${say(hitPlanted)} aimed ${say(aimedPt)} +overshoot ${declaredOvershootPx.toFixed(1)}px`);
+    await wipeZones(); await wipeCards();
+
+    // A MISS, with the two faces CARRIED on the payload — face 2 is south, 7 metres.
+    const missP = basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 9, toHitDC: 15,
+      spreadScatter: { dirFace: 2, distFace: 7 },
+    });
+    const landedPt = scatterTable.scatterLandedPoint({
+      aimedX: aimedPt.x, aimedY: aimedPt.y, pixelsPerMeter: ppm14h, dirFace: 2, distFace: 7, sceneRect: rect14h,
+    });
+    ok("§14h nothing is standing where the shell lands, so the scattered corridor takes no overshoot",
+      occupied(landedPt) === false, JSON.stringify({ landed: occupied(landedPt) }));
+    const missDrawn = fx.declaredAimPointOf(missP, shooterPlaceable);
+    // ⛔ THE PLANT MUST NOT ROLL WHEN THE FACES ARE CARRIED, so the generator is forced to a face that
+    // would give a VISIBLY different answer (9 is north-east, 1 metre). If the plant reached for the dice
+    // the pattern would land somewhere the drawn rounds are not, which is the whole defect.
+    const origRU14h = CONFIG.Dice.randomUniform;
+    let missPlanted = null, missFlags = null;
+    try {
+      const Q = [9, 1].map((k) => 1 - (k - 0.5) / 10);
+      CONFIG.Dice.randomUniform = () => (Q.length ? Q.shift() : 0.5);
+      await hooks._placeSpreadZone(missP);
+      await sleep(500);
+      missFlags = myZones()[0]?.flags?.[SCOPE] ?? {};
+      missPlanted = farEndOf(missFlags);
+    } finally {
+      CONFIG.Dice.randomUniform = origRU14h;
+    }
+    ok("§14h a MISS displaces the drawn rounds and the planted pattern to the SAME point",
+      near(missDrawn, { x: landedPt.x, y: landedPt.y }) && near(missPlanted, { x: landedPt.x, y: landedPt.y }),
+      `drawn ${say(missDrawn)} planted ${say(missPlanted)} landed ${say(landedPt)}`);
+    ok("§14h and that point is 7 metres south of the aim — the vector the carried faces name",
+      Math.abs((landedPt.y - aimedPt.y) / ppm14h - 7) < 1e-6 && Math.abs(landedPt.x - aimedPt.x) < 1e-6,
+      `drift (${((landedPt.x - aimedPt.x) / ppm14h).toFixed(3)}, ${((landedPt.y - aimedPt.y) / ppm14h).toFixed(3)}) m`);
+    ok("§14h the plant used the CARRIED faces and never reached for the dice",
+      missFlags?.scatterDirFace === 2 && missFlags?.scatterDriftM === 7,
+      JSON.stringify({ face: missFlags?.scatterDirFace, drift: missFlags?.scatterDriftM, forced: "9 / 1m" }));
+    ok("§14h the drawn axis moves ONLY because the faces are carried (negative: same miss, no faces)",
+      !near(fx.declaredAimPointOf(
+        basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }), shooterPlaceable),
+        { x: landedPt.x, y: landedPt.y }),
+      say(fx.declaredAimPointOf(basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }), shooterPlaceable)));
+    await wipeZones(); await wipeCards();
+  }
 
   /* ── cleanup ────────────────────────────────────────────────────────────────────────────── */
   await wipeZones();
