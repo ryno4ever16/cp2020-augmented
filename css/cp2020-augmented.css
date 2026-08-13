@@ -91,6 +91,23 @@
   margin: 2px 0 4px; padding: 5px 8px; font-size: 0.82em; line-height: 1.4;
   border-left: 3px solid #c0791a; background: rgba(192, 121, 26, 0.12); border-radius: 2px;
 }
+/* Queue rows. One row per character+skill; repeats hide behind a count and open in place. */
+.cp-ip-tracker .cp-ip-row { padding: 2px 4px; }
+.cp-ip-tracker .cp-ip-row-main { align-items: center; gap: 6px; }
+.cp-ip-tracker .cp-ip-row-label { flex: 1 1 auto; min-width: 0; }
+.cp-ip-tracker .cp-ip-row-openable { cursor: pointer; }
+.cp-ip-tracker .cp-ip-row-openable:hover { color: #ffcc00; }
+.cp-ip-tracker .cp-ip-row-total { opacity: 0.6; }
+.cp-ip-tracker .cp-ip-row-count { font-weight: bold; color: #ffcc00; }
+.cp-ip-tracker .cp-ip-amount { flex: 0 0 auto; width: 46px; }
+.cp-ip-tracker .cp-ip-row-main button { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
+/* The opened group: its rolls, newest first, each prunable. */
+.cp-ip-tracker .cp-ip-row-rolls { margin: 1px 0 3px 12px; border-left: 2px solid rgba(255, 204, 0, 0.35); padding-left: 6px; }
+.cp-ip-tracker .cp-ip-roll { display: flex; align-items: center; gap: 6px; font-size: 0.85em; padding: 1px 2px; }
+.cp-ip-tracker .cp-ip-roll-total { flex: 0 0 auto; min-width: 2.2em; font-weight: bold; }
+.cp-ip-tracker .cp-ip-roll-age { flex: 1 1 auto; min-width: 0; opacity: 0.6; }
+.cp-ip-tracker .cp-ip-roll-prune { flex: 0 0 auto; cursor: pointer; opacity: 0.65; }
+.cp-ip-tracker .cp-ip-roll-prune:hover { opacity: 1; color: #d1502f; }
 .cp-ip-tracker .cp-ip-bal-actor { border-top: 1px solid rgba(255, 255, 255, 0.10); margin-top: 2px; }
 .cp-ip-tracker .cp-ip-balances label { font-size: 0.8em; opacity: 0.85; }
 .cp-ip-tracker .cp-ip-pend-badge { color: #ffcc00; font-size: 0.85em; opacity: 0.9; }

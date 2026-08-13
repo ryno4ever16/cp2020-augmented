@@ -1440,6 +1440,8 @@
     "IpThrottleResetTip": "Reset the per-skill throttle counters for a fresh cycle.",
     "IpApplyTip": "Release pending IP to the players and start a new throttle cycle. Waiting rolls are left alone.",
     "IpRolledTip": "rolled {total}",
+    "IpRollsOpenTip": "Open this group to see each roll — and to drop any that shouldn't count.",
+    "IpRollPruneTip": "Drop this roll from the group (it won't be awarded).",
     "IpSuccessTip": "Mark this use a success → grants the baseline IP.",
     "IpAwardTip": "Award this row's IP (to pending).",
     "IpSkipTip": "Discard this row (no IP).",

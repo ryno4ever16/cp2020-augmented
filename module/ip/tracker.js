@@ -1,12 +1,22 @@
 import {
-  getQueue, pruneOrphanQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, clearQueue,
-  applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
+  getQueue, queueRolls, pruneOrphanQueue, pruneQueueRoll, updateQueueRow, resolveQueueRow,
+  dismissQueueRow, clearQueue, applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
   bankForSkill, poolForActor, setActorPool, setSkillBank
 } from "./ip.js";
 import { ipRawTracking, ipAwardModel, ipThrottle } from "../settings.js";
 import { localize } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+
+/** How long ago a roll happened, in core's own words ("3 minutes ago"), so the reading is localized
+ *  and phrased the way the rest of Foundry phrases it. A clock time is the fallback if core's
+ *  helper is unavailable — the roll's total is the load-bearing figure either way. */
+function _rollAge(ts) {
+  const when = Number(ts) || 0;
+  if (!when) return "";
+  try { return foundry.utils.timeSince(when); }
+  catch (e) { return new Date(when).toLocaleTimeString(); }
+}
 
 /**
  * GM IP Tracker (RAW mode) — [[ip-tracker-design]].
@@ -26,6 +36,8 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     actions: {
       ipApply:  IpTracker._onApply,
       ipClear:  IpTracker._onClear,
+      ipOpenRow: IpTracker._onOpenRow,
+      ipPruneRoll: IpTracker._onPruneRoll,
       ipReset:  IpTracker._onReset,
       ipManual: IpTracker._onManual,
       ipAward:  IpTracker._onAward,
@@ -37,12 +49,30 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     main: { template: "modules/cp2020-augmented/templates/ip/tracker.hbs" },
   };
 
+  /** Which coalesced rows the GM has opened. Held on the window, not in the store: it is a view
+   *  state, and it must survive the re-render every queue write triggers. */
+  _openRows = new Set();
+
   async _prepareContext(_options) {
     const auto = ipAwardModel() === "autoBaseline";
     // Self-heal: drop any rows whose source actor was deleted (e.g. old test-actor debris) before
     // building the list — rerender:false since we're already inside a render.
     await pruneOrphanQueue({ rerender: false });
-    const rows = getQueue().map(r => ({ ...r }));
+    const rows = getQueue().map(r => {
+      const rolls = queueRolls(r);
+      const newest = rolls.reduce((a, b) => (b.ts > a.ts ? b : a), rolls[0] ?? { ts: 0 });
+      return {
+        ...r,
+        count: rolls.length,
+        single: rolls.length === 1,
+        newestTs: Number(newest?.ts) || 0,
+        open: this._openRows.has(r.id),
+        // Newest first: a spree is read from its latest roll backwards.
+        rolls: rolls.slice().sort((a, b) => b.ts - a.ts).map(x => ({ id: x.id, total: x.total, age: _rollAge(x.ts) })),
+      };
+    }).sort((a, b) => b.newestTs - a.newestTs);   // fresh activity stays at the top of the list
+    // Forget rows that have since been awarded or discarded, so the open-set can't grow forever.
+    this._openRows = new Set(rows.filter(r => r.open).map(r => r.id));
 
     // GM correction / balances view: each party actor's fungible pool + every skill that carries IP
     // (banked or pending). Pool + bank are GM-editable in the template; pending is shown read-only.
@@ -154,6 +184,26 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
   static async _onSkip(event, target) {
     const rowId = target.closest("[data-row-id]")?.dataset?.rowId;
     await dismissQueueRow(rowId);
+  }
+
+  /** Open (or close) a coalesced row's list of individual rolls. The class is toggled in place
+   *  rather than re-rendered: an amount the GM has already typed into a neighbouring row keeps its
+   *  focus, and the window's own record of what is open carries the state through the next render. */
+  static _onOpenRow(event, target) {
+    const row = target.closest("[data-row-id]");
+    const rowId = row?.dataset?.rowId;
+    const list = row?.querySelector(".cp-ip-row-rolls");
+    if (!rowId || !list) return;
+    const open = list.classList.contains("cp-hidden");
+    list.classList.toggle("cp-hidden", !open);
+    if (open) this._openRows.add(rowId); else this._openRows.delete(rowId);
+  }
+
+  /** Remove one roll from an opened group (curation, not awarding). */
+  static async _onPruneRoll(event, target) {
+    const rowId = target.closest("[data-row-id]")?.dataset?.rowId;
+    const rollId = target.closest("[data-roll-id]")?.dataset?.rollId;
+    await pruneQueueRoll(rowId, rollId);
   }
 
   /** Manual add: pick an actor, then a skill (RAW mode), then an IP amount (or add to the pool in

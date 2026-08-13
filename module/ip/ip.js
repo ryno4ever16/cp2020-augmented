@@ -265,14 +265,43 @@ export function recordSkillRoll(payload) {
   else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "ipSkillRolled", payload });
 }
 
+/**
+ * The individual rolls behind a queue row, oldest first. A row written before rows carried a `rolls`
+ * array is one roll — read it as such rather than migrating the stored queue, which is a transient
+ * world setting that empties itself in normal use.
+ */
+export function queueRolls(row) {
+  if (Array.isArray(row?.rolls) && row.rolls.length) return row.rolls;
+  if (!row) return [];
+  return [{ id: row.id, total: Number(row.total) || 0, ts: Number(row.ts) || 0 }];
+}
+
+/**
+ * Record one roll into the queue. Rolls of the SAME skill by the SAME character COALESCE into a
+ * single row carrying every roll: a player who rolls Handgun eleven times in a fight is one line to
+ * rule on, not eleven, and — because the cap counts ROWS — that spree can no longer push anybody
+ * else's roll out of the log. The merged row is re-queued at the end so the cap ages rows out by
+ * last activity, and its `total`/`ts` track the NEWEST roll, which is what a one-roll row displays
+ * and what the tracker sorts on.
+ */
 async function _enqueue(row) {
   const q = getQueue();
-  q.push({
-    id: foundry.utils.randomID(),
-    actorId: row.actorId, skillId: row.skillId,
-    actorName: row.actorName ?? "", skillName: row.skillName ?? "",
-    total: Number(row.total) || 0, ip: 0, success: false, ts: Date.now()
-  });
+  const roll = { id: foundry.utils.randomID(), total: Number(row.total) || 0, ts: Date.now() };
+  const at = q.findIndex(r => r.actorId === row.actorId && r.skillId === row.skillId);
+  if (at >= 0) {
+    const [existing] = q.splice(at, 1);
+    existing.rolls = queueRolls(existing).concat(roll);
+    existing.total = roll.total;
+    existing.ts = roll.ts;
+    q.push(existing);
+  } else {
+    q.push({
+      id: foundry.utils.randomID(),
+      actorId: row.actorId, skillId: row.skillId,
+      actorName: row.actorName ?? "", skillName: row.skillName ?? "",
+      total: roll.total, rolls: [roll], ip: 0, success: false, ts: roll.ts
+    });
+  }
   let overflowed = false;
   while (q.length > QUEUE_MAX) { q.shift(); overflowed = true; }   // FIFO: oldest un-awarded rolls age out
   await setQueue(q);
@@ -285,6 +314,31 @@ async function _enqueue(row) {
 export async function dismissQueueRow(rowId) {
   if (!_isActiveGM()) { _relayToActiveGM("ipDismissRow", { rowId }); return; }
   await setQueue(getQueue().filter(r => r.id !== rowId));
+  await _rearmQueueNotices();
+  _rerenderTracker();
+}
+
+/**
+ * Drop ONE roll out of a coalesced row — the curation verb inside an opened row, for the junk and
+ * the spam that shouldn't count toward what the group is worth. The last roll leaving takes the row
+ * with it (an empty group is not a decision anybody can make). Active-GM only; a non-active GM relays.
+ */
+export async function pruneQueueRoll(rowId, rollId) {
+  if (!_isActiveGM()) { _relayToActiveGM("ipPruneRoll", { rowId, rollId }); return; }
+  const q = getQueue();
+  const row = q.find(r => r.id === rowId);
+  if (!row) return;
+  const kept = queueRolls(row).filter(r => r.id !== rollId);
+  if (kept.length === queueRolls(row).length) return;
+  if (kept.length) {
+    const newest = kept.reduce((a, b) => (b.ts > a.ts ? b : a));
+    row.rolls = kept;
+    row.total = newest.total;
+    row.ts = newest.ts;
+    await setQueue(q);
+  } else {
+    await setQueue(q.filter(r => r.id !== rowId));
+  }
   await _rearmQueueNotices();
   _rerenderTracker();
 }
@@ -503,6 +557,7 @@ export function registerIpHooks() {
         case "ipSkillRolled": await _enqueue(data.payload); break;
         case "ipDismissRow":  await dismissQueueRow(data.payload?.rowId); break;
         case "ipUpdateRow":   await updateQueueRow(data.payload?.rowId, data.payload?.patch); break;
+        case "ipPruneRoll":   await pruneQueueRoll(data.payload?.rowId, data.payload?.rollId); break;
         case "ipResolveRow":  await resolveQueueRow(data.payload?.rowId); break;
         case "ipClearQueue":  await clearQueue(); break;
       }

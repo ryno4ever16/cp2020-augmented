@@ -16,19 +16,40 @@
     <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpQueue"}} {{#if rowCount}}({{rowCount}}){{/if}}</h2>
     <div class="flexcol" style="overflow-y:auto; min-height:60px; max-height:45%;">
         {{#if rowCount}}
+        {{!-- One row per character+skill. Repeats coalesce behind a count; the row opens to the
+              individual rolls, where each can be pruned out. The award stays at ROW level: one
+              amount, one ✓, one throttle count for the group. --}}
         {{#each rows as |row|}}
-        <div class="flexrow cp-ip-row" data-row-id="{{row.id}}" style="align-items:center; gap:6px; padding:2px 4px;">
-            <span style="flex:1;" title="{{CPLocal 'IpRolledTip' total=row.total}}">{{row.actorName}} · <b>{{row.skillName}}</b> <span style="opacity:0.6;">({{row.total}})</span></span>
-            {{#if ../auto}}
-            <label title="{{localize "CYBERPUNK.IpSuccessTip"}}"><input type="checkbox" class="cp-ip-success" {{#if row.success}}checked{{/if}}/> {{localize "CYBERPUNK.IpSuccess"}}</label>
-            <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" style="width:46px;" title="{{localize "CYBERPUNK.IpBonus"}}"/>
-            {{else}}
-            {{!-- No max: the award engine clamps nothing above zero, so a cap here would only paint a
-                  perfectly good figure invalid while awarding it anyway. --}}
-            <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" style="width:46px;" title="{{localize "CYBERPUNK.IpAmount"}}"/>
-            {{/if}}
-            <button type="button" data-action="ipAward" title="{{localize "CYBERPUNK.IpAwardTip"}}">✓</button>
-            <button type="button" data-action="ipSkip" title="{{localize "CYBERPUNK.IpSkipTip"}}">✕</button>
+        <div class="cp-ip-row" data-row-id="{{row.id}}">
+            <div class="flexrow cp-ip-row-main">
+                <span class="cp-ip-row-label{{#unless row.single}} cp-ip-row-openable{{/unless}}"
+                      {{#unless row.single}}data-action="ipOpenRow" title="{{localize "CYBERPUNK.IpRollsOpenTip"}}"{{else}}title="{{CPLocal 'IpRolledTip' total=row.total}}"{{/unless}}>
+                    {{row.actorName}} · <b>{{row.skillName}}</b>
+                    {{#if row.single}}<span class="cp-ip-row-total">({{row.total}})</span>
+                    {{else}}<span class="cp-ip-row-count">×{{row.count}}</span>{{/if}}
+                </span>
+                {{#if ../auto}}
+                <label title="{{localize "CYBERPUNK.IpSuccessTip"}}"><input type="checkbox" class="cp-ip-success" {{#if row.success}}checked{{/if}}/> {{localize "CYBERPUNK.IpSuccess"}}</label>
+                <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" title="{{localize "CYBERPUNK.IpBonus"}}"/>
+                {{else}}
+                {{!-- No max: the award engine clamps nothing above zero, so a cap here would only paint a
+                      perfectly good figure invalid while awarding it anyway. --}}
+                <input type="number" class="cp-ip-amount" value="{{row.ip}}" min="0" title="{{localize "CYBERPUNK.IpAmount"}}"/>
+                {{/if}}
+                <button type="button" data-action="ipAward" title="{{localize "CYBERPUNK.IpAwardTip"}}">✓</button>
+                <button type="button" data-action="ipSkip" title="{{localize "CYBERPUNK.IpSkipTip"}}">✕</button>
+            </div>
+            {{#unless row.single}}
+            <div class="cp-ip-row-rolls{{#unless row.open}} cp-hidden{{/unless}}">
+                {{#each row.rolls as |r|}}
+                <div class="cp-ip-roll" data-roll-id="{{r.id}}">
+                    <span class="cp-ip-roll-total">{{r.total}}</span>
+                    <span class="cp-ip-roll-age">{{r.age}}</span>
+                    <a class="cp-ip-roll-prune" data-action="ipPruneRoll" title="{{localize "CYBERPUNK.IpRollPruneTip"}}">✕</a>
+                </div>
+                {{/each}}
+            </div>
+            {{/unless}}
         </div>
         {{/each}}
         {{else}}
