@@ -1072,10 +1072,19 @@ export function martialOptions(actor, savedOptions={}) {
 
       // trainedMartials() shape differs by platform: the installed 1.1.1 system returns STRING keys
       // (display name via getMartialDisplayName), the fork returns { value, label } objects. Handle
-      // both, else the dropdown collapses to just "Brawling" on stock. `text` is rendered literally.
+      // both, else the dropdown collapses to just "Brawling" on stock.
+      //
+      // The display text MUST ride on `label`. These rows are rendered by the base system's shared
+      // select field (templates/fields/select.hbs) via its `selectOption` helper, which copies exactly
+      // value / localKey / localData / label off a choice and prints `label` when present, else
+      // `CPLocal localKey` — and CPLocal returns the bare string when no translation exists. Any other
+      // property name is silently dropped, and the row then prints its raw VALUE: the canonical key
+      // ("Martial Arts: Aikido") for a built-in style, the internal handle ("custom-martial:<itemId>")
+      // for a custom one. The value itself is what the form submits and what every style lookup keys
+      // off, so it stays exactly as trainedMartials() reported it.
       ...(actor.trainedMartials().map(m => {
-        if (typeof m === "string") return { value: m, text: actor.getMartialDisplayName?.(m) ?? m };
-        return { value: m.value, text: m.label ?? m.value };
+        if (typeof m === "string") return { value: m, label: actor.getMartialDisplayName?.(m) ?? m };
+        return { value: m.value, label: m.label ?? m.value };
       }))
     ];
     // Saved attack options: pre-fill the weapon's last-used martial art, if still a valid choice.
