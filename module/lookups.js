@@ -749,13 +749,26 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
         // placement preview's opening corridor (module/combat/suppressive-placement.js) — the shooter can then
         // re-size it there — and it keeps the base system's own suppressive DC honest when the zone automation
         // is OFF (base: DC = ceil(rounds / max(2, zoneWidth))), so a wider lane can still be declared.
-        {localKey:"FireZoneWidth",  dataPath:"zoneWidth",  dtype:"Number", defaultValue: 2},
-        {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: roundsFiredMax, min: 1, max: roundsFiredMax},
+        //
+        // ⭐ THE BOUNDS ARE PART OF THE ROW, NOT DECORATION. The shared number field renders `min`/`max`
+        // as `data-min`/`data-max`, which is where the dialog's validator reads them from — so a row
+        // that omits them hands the validator nothing to check against and the declaration is accepted
+        // whatever it says. The base system's own rows carry all three (its zone width floors at the 2 m
+        // its DC formula assumes, its rounds cap at min(ROF, shots left), its target count floors at 1);
+        // ours had dropped everything but the rounds pair. Restored to his numbers, and his
+        // `suppressive-field` selector classes with them so both dialogs address the rows the same way.
+        {localKey:"FireZoneWidth",  dataPath:"zoneWidth",  dtype:"Number", defaultValue: 2,
+         min: 2, step: 1, extraClasses: "suppressive-field suppressive-zone-width"},
+        {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: roundsFiredMax,
+         min: 1, max: roundsFiredMax, step: 1, extraClasses: "suppressive-field suppressive-rounds-fired"},
         {
             localKey: "TargetsCount",
             dataPath:"targetsCount",
             dtype:"Number",
-            defaultValue: Math.max(1, targetTokens.length)
+            defaultValue: Math.max(1, targetTokens.length),
+            min: 1,
+            step: 1,
+            extraClasses: "suppressive-field suppressive-targets-count"
         },
         ]
     ];

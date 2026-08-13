@@ -160,6 +160,32 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       inp.addEventListener("focus", () => { try { inp.select(); } catch (_) {} });
     }
 
+    /**
+     * The two round-count fields are bounded by the magazine, so anything that CHANGES the magazine
+     * while the window is open has to move their ceiling with it. Mirrors the base dialog's own
+     * applyLocalState (module/dialog/modifiers.js): rewrite `data-max`, seat the value at the new
+     * maximum, and clear any standing complaint about the old one.
+     *
+     * ⚠ THIS IS THE ROAD BACK INTO A DEFECT THAT WAS ALREADY CLOSED ONCE. The bounds are read from
+     * `data-max` by the validators below, and they are computed when the row is BUILT — before the
+     * reload. Leave them alone and a reload leaves the ceiling stale LOW (the field refuses a burst the
+     * gun can now fire) while an unload leaves it stale HIGH (the field accepts a burst out of an empty
+     * gun, and the fire path silently cuts it — the exact silent-clamp the autofire unit closed).
+     * Both directions are covered because both gestures live in this window.
+     */
+    const refreshRoundBounds = (shotsLeftAfter) => {
+      const sysAfter = this._weapon?._getWeaponSystem?.() ?? this._weapon?.system ?? {};
+      const rof = Math.max(0, Math.floor(Number(sysAfter?.rof) || 0));
+      const maxRounds = Math.min(rof, Math.max(0, Math.floor(Number(shotsLeftAfter) || 0)));
+      for (const name of ["fullAutoRoundsFired", "roundsFired"]) {
+        const input = root.querySelector(`input[name="${name}"], input[name="fields.${name}"]`);
+        if (!input) continue;
+        input.dataset.max = String(maxRounds);
+        input.value = String(maxRounds);
+        input.setCustomValidity("");
+      }
+    };
+
     // ── AMMO TRACKING / FREE FIRE ───────────────────────────────────────────
     // Per-actor toggle, relocated here from the combat-tab Weapons header. Unchecked = Free Fire
     // (the weapon ignores ammo). Reads/writes the module-scope flag via the single source in
@@ -236,6 +262,7 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
           this._weapon.system.CyberWorkType.Weapon.shotsLeft = shotsLeftAfter;
         }
         root.querySelectorAll("input.number[readonly]").forEach(el => { el.value = String(shotsLeftAfter); });
+        refreshRoundBounds(shotsLeftAfter);
       };
 
       const ammoTracking = ammoTrackingOn(weapon.actor);
@@ -392,6 +419,9 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         _wsys.loadedAmmo = {};
       }
       root.querySelectorAll("input.number[readonly]").forEach(el => { el.value = "0"; });
+      // Emptying the magazine drops the ceiling to nothing — see the note on refreshRoundBounds for why
+      // an unload is the more dangerous of the two directions.
+      refreshRoundBounds(0);
 
       if (returnedTo) {
         ui.notifications.info(localizeParam("UnloadedToItem", { count: currentLeft, item: returnedTo.name }));
@@ -451,22 +481,92 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // Same message key as the base, so the two dialogs say the same thing in every language.
     // ⚠ Only while FULL AUTO is selected: the row is hidden in every other mode and a hidden field
     // that reports invalid blocks the whole form.
-    const autoRoundsEl = root.querySelector(
-      'input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"]'
-    );
-    const validateAutoRounds = () => {
-      if (!autoRoundsEl) return;
-      autoRoundsEl.setCustomValidity("");
-      if ((fireModeEl?.value ?? "") !== fireModes.fullAuto) return;
-      const raw = String(autoRoundsEl.value ?? "").trim();
+    const numberInput = (name) => root.querySelector(`input[name="${name}"], input[name="fields.${name}"]`);
+    const autoRoundsEl = numberInput("fullAutoRoundsFired");
+
+    /** Complain on one field. With `report`, put the caret on it and raise the browser's own bubble —
+     *  which is what turns a silently blocked submit into a shooter being told what is wrong. */
+    const showFieldValidation = (input, message, { report = false } = {}) => {
+      if (!input) return false;
+      input.setCustomValidity(message);
+      if (report) { input.focus(); input.reportValidity(); }
+      return false;
+    };
+
+    const clearFieldValidation = (...inputs) => {
+      for (const input of inputs) if (input) input.setCustomValidity("");
+    };
+
+    // The three shapes the base system checks with, kept as three named helpers for the same reason it
+    // does: each row says which shape it wants, and the message key travels with the shape.
+    const validateIntegerRangeInput = (input, { min = 1, max = 1, messageKey = "IntegerRangeInvalid", report = false } = {}) => {
+      if (!input) return true;
+      input.setCustomValidity("");
+      const raw = String(input.value ?? "").trim();
       const value = Number(raw);
+      const invalid = raw === "" || !Number.isFinite(value) || !Number.isInteger(value) || value < min || value > max;
+      if (!invalid) return true;
+      return showFieldValidation(input, localizeParam(messageKey, { min, max }), { report });
+    };
+
+    const validateNumberMinInput = (input, { min = 1, messageKey = "NumberMinInvalid", report = false } = {}) => {
+      if (!input) return true;
+      input.setCustomValidity("");
+      const raw = String(input.value ?? "").trim();
+      const value = Number(raw);
+      const invalid = raw === "" || !Number.isFinite(value) || value < min;
+      if (!invalid) return true;
+      return showFieldValidation(input, localizeParam(messageKey, { min }), { report });
+    };
+
+    const validateIntegerMinInput = (input, { min = 1, messageKey = "IntegerMinInvalid", report = false } = {}) => {
+      if (!input) return true;
+      input.setCustomValidity("");
+      const raw = String(input.value ?? "").trim();
+      const value = Number(raw);
+      const invalid = raw === "" || !Number.isFinite(value) || !Number.isInteger(value) || value < min;
+      if (!invalid) return true;
+      return showFieldValidation(input, localizeParam(messageKey, { min }), { report });
+    };
+
+    const validateAutoRounds = ({ report = false } = {}) => {
+      if (!autoRoundsEl) return true;
+      autoRoundsEl.setCustomValidity("");
+      if ((fireModeEl?.value ?? "") !== fireModes.fullAuto) return true;
       const min = Math.max(1, Math.floor(Number(autoRoundsEl.dataset.min) || 1));
       const max = Math.max(0, Math.floor(Number(autoRoundsEl.dataset.max) || 0));
       // No rounds available at all: the weapon roll's own NoAmmo guard is the right place to say so.
-      if (max <= 0) return;
-      const invalid = raw === "" || !Number.isFinite(value) || !Number.isInteger(value)
-        || value < min || value > max;
-      if (invalid) autoRoundsEl.setCustomValidity(localizeParam("FullAutoRoundsInvalid", { min, max }));
+      if (max <= 0) return true;
+      return validateIntegerRangeInput(autoRoundsEl, { min, max, messageKey: "FullAutoRoundsInvalid", report });
+    };
+
+    // ── SUPPRESSIVE DECLARATION — the base system's own two-gate check, ported ────────────────
+    // A suppressive burst is DECLARED, not merely rolled: the shooter says how many rounds go down a
+    // corridor how many metres wide, at how many people, and the base derives its evasion DC from those
+    // numbers (ceil(rounds ÷ width), floor 2 m). Every one of them is silently rewritten downstream if
+    // it arrives wrong — the rounds get clamped into the magazine, the width gets floored, the count
+    // gets treated as one — so a bad declaration does not misfire, it LIES: the card and the zone quote
+    // numbers the shooter never asked for. The base dialog refuses instead, and now so does this one.
+    const validateSuppressiveInputs = ({ report = false } = {}) => {
+      const roundsInput = numberInput("roundsFired");
+      const zoneWidthInput = numberInput("zoneWidth");
+      const targetsInput = numberInput("targetsCount");
+
+      clearFieldValidation(roundsInput, zoneWidthInput, targetsInput);
+      if ((fireModeEl?.value ?? "") !== fireModes.suppressive) return true;
+
+      const maxRounds = Math.max(0, Math.floor(Number(roundsInput?.dataset?.max) || 0));
+      // No rounds available at all: the weapon roll's own NoAmmo guard is the right place to say so.
+      if (maxRounds > 0) {
+        if (!validateIntegerRangeInput(roundsInput, { min: 1, max: maxRounds, messageKey: "IntegerRangeInvalid", report })) return false;
+      }
+
+      const zoneMin = Math.max(1, Math.floor(Number(zoneWidthInput?.dataset?.min) || 2));
+      if (!validateNumberMinInput(zoneWidthInput, { min: zoneMin, messageKey: "NumberMinInvalid", report })) return false;
+
+      if (!validateIntegerMinInput(targetsInput, { min: 1, messageKey: "IntegerMinInvalid", report })) return false;
+
+      return true;
     };
 
     const updateVisibility = () => {
@@ -474,18 +574,41 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       _setVisible(supRows,  mode === fireModes.suppressive);
       _setVisible(autoRows, mode === fireModes.fullAuto);
       _setVisible(dualWieldRows, !!dualWieldEl?.checked);
+      // ⚠ A HIDDEN FIELD THAT REPORTS INVALID BLOCKS THE WHOLE FORM, and the browser cannot focus it to
+      // say why — so every row's complaint is cleared the moment its mode is deselected. Both validators
+      // are no-ops outside their own mode for the same reason.
       validateAutoRounds();
+      validateSuppressiveInputs();
+    };
+
+    // The submit gate reaches these from the static form handler. Both are re-run there with `report` on,
+    // so the refusal names the field instead of just not happening.
+    this._cpValidateOnSubmit = () => {
+      const autoOk = validateAutoRounds({ report: true });
+      if (!autoOk) return false;
+      return validateSuppressiveInputs({ report: true });
     };
 
     updateVisibility();
     fireModeEl?.addEventListener("change", updateVisibility);
     dualWieldEl?.addEventListener("change", updateVisibility);
-    autoRoundsEl?.addEventListener("input", validateAutoRounds);
-    autoRoundsEl?.addEventListener("change", validateAutoRounds);
+    for (const ev of ["input", "change"]) {
+      autoRoundsEl?.addEventListener(ev, () => validateAutoRounds());
+      for (const name of ["roundsFired", "zoneWidth", "targetsCount"]) {
+        numberInput(name)?.addEventListener(ev, () => validateSuppressiveInputs());
+      }
+    }
   }
 
   /** Form handler — called when the submit button is clicked. */
   static async _formHandler(event, form, formData) {
+    // ⛔ THE SUBMIT GATE. Native constraint validation already refuses a submit while a visible field is
+    // marked invalid, but it is not the whole answer: a value can be made invalid without an `input`
+    // event ever firing (a magazine changed by the Reload/Unload controls beside this button), and a
+    // form submitted by any road other than the button skips the browser's pass entirely. Re-running
+    // both checks here is the one place every submit passes through — and running them with `report` on
+    // means the shooter is TOLD, on the offending field, rather than left pressing a dead button.
+    if (this._cpValidateOnSubmit && this._cpValidateOnSubmit() === false) return;
     // formData.object holds the flat key→value map equivalent to the old FormApplication formData.
     this.object = formData.object;
     const fired = await this._onConfirm(this.object);

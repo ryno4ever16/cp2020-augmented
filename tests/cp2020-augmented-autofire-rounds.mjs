@@ -104,7 +104,7 @@ try {
     setup.rof === 30 && setup.shotsLeft === setup.shots, `rof ${setup.rof}, ${setup.shotsLeft}/${setup.shots}`);
 
   /* ── the firing gesture, split so the round field can be written between arm and submit ──── */
-  async function arm() {
+  async function arm(mode = "FullAuto") {
     await page.evaluate(async ({ actorId, gunId, tokenId }) => {
       for (let i = 0; i < 2; i++) {
         for (const a of [...foundry.applications.instances.values()]) {
@@ -134,14 +134,14 @@ try {
     // the shape of the defect this spec exists for. Every write here is verified from a fresh query.
     for (let attempt = 0; attempt < 3; attempt++) {
       await page.waitForTimeout(900);
-      const mode = await page.evaluate(() => {
+      const seen = await page.evaluate((want) => {
         const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
         const q = () => dlg.element.querySelector('select[name="fireMode"], select[name="fields.fireMode"]');
         const fm = q();
-        if (fm && fm.value !== "FullAuto") { fm.value = "FullAuto"; fm.dispatchEvent(new Event("change", { bubbles: true })); }
+        if (fm && fm.value !== want) { fm.value = want; fm.dispatchEvent(new Event("change", { bubbles: true })); }
         return q()?.value ?? null;
-      });
-      if (mode === "FullAuto" && attempt >= 1) break;   // seen twice running, not once
+      }, mode);
+      if (seen === mode && attempt >= 1) break;   // seen twice running, not once
     }
     await page.waitForTimeout(600);
   }
@@ -314,6 +314,190 @@ try {
   ok("D2 thirty rounds at close range is worth +3 to hit", mods.thirty === 3, `terms sum to ${mods.thirty}`);
   ok("D3 the to-hit maths moves with the chosen count (one number, two readers)",
     mods.thirty > mods.ten, `${mods.ten} vs ${mods.thirty}`);
+
+  /* ══ 5. THE SUPPRESSIVE DECLARATION IS CHECKED BEFORE IT IS BELIEVED ══════════════════════ */
+  // A suppressive burst is DECLARED: so many rounds, down a corridor so many metres wide, at so many
+  // people. The base derives its evasion DC from those three numbers, and every one of them is silently
+  // rewritten downstream if it arrives wrong — rounds clamped into the magazine, width floored to two
+  // metres, count read as one. So a bad declaration never misfires; it LIES, and the card quotes numbers
+  // the shooter never asked for. The base dialog refuses instead. These legs drive the real window.
+  // ⚠ A SUPPRESSIVE BURST RAISES ITS OWN EVENT, NOT the one the sections above tap: it renders the
+  // suppressive card, not the multi-hit card, so `__afTap` stays empty whether the shot happened or not.
+  // Reading the refusal off that tap would have passed on a run where the burst fired anyway — which is
+  // exactly what the pre-fix measurement showed (thirty rounds gone, tap empty). The suppressive event
+  // is tapped here and the magazine is read as the second, independent witness.
+  const readSup = () => page.evaluate(() => {
+    const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+    if (!dlg?.element) return { open: false };
+    const q = (n) => dlg.element.querySelector(`input[name="${n}"], input[name="fields.${n}"]`);
+    const one = (n) => {
+      const el = q(n);
+      return el ? { value: el.value, min: el.dataset.min ?? null, max: el.dataset.max ?? null, valid: el.checkValidity() } : null;
+    };
+    return { open: true, rounds: one("roundsFired"), width: one("zoneWidth"), targets: one("targetsCount") };
+  });
+
+  /** Write the three declaration fields, then read them back from fresh queries. */
+  const setSup = ({ rounds, width, targets }) => page.evaluate((vals) => {
+    const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+    if (!dlg?.element) return { open: false };
+    const q = (n) => dlg.element.querySelector(`input[name="${n}"], input[name="fields.${n}"]`);
+    for (const [name, v] of Object.entries({ roundsFired: vals.rounds, zoneWidth: vals.width, targetsCount: vals.targets })) {
+      if (v === undefined) continue;
+      const el = q(name);
+      if (!el) continue;
+      el.value = String(v);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    const one = (n) => { const el = q(n); return el ? { value: el.value, valid: el.checkValidity() } : null; };
+    return { open: true, rounds: one("roundsFired"), width: one("zoneWidth"), targets: one("targetsCount"),
+      gate: dlg._cpValidateOnSubmit ? dlg._cpValidateOnSubmit() : null,
+      formValid: dlg.element.checkValidity?.() ?? null };
+  }, { rounds, width, targets });
+
+  /** Submit and wait on the SUPPRESSIVE event (and nothing else), returning what it carried. */
+  const submitSup = (maxMs) => page.evaluate(async ({ maxMs }) => {
+    globalThis.__supTap.length = 0;
+    const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+    if (!dlg?.element) return { open: false, payloads: [] };
+    const btn = dlg.element.querySelector('button.fire, button[type="submit"]');
+    if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    else dlg.element.requestSubmit();
+    const t0 = performance.now();
+    while (performance.now() - t0 < maxMs) {
+      await new Promise((r) => setTimeout(r, 100));
+      if (globalThis.__supTap.length) break;
+    }
+    await new Promise((r) => setTimeout(r, 1800));   // let the magazine write land
+    return { open: true, payloads: globalThis.__supTap.slice() };
+  }, { maxMs });
+
+  // ⚠ The zone automation is switched OFF for this section and restored after. With it on, the shooter's
+  // client enters the canvas placement preview and waits for a gesture a headless run cannot make; the
+  // base suppressive flow is what these legs measure, and that is untouched by the setting.
+  const zonesWere = await page.evaluate(async () => {
+    const was = game.settings.get("cp2020-augmented", "suppressiveFireSaves");
+    if (was) await game.settings.set("cp2020-augmented", "suppressiveFireSaves", false);
+    globalThis.__supTap = [];
+    globalThis.__supHook = Hooks.on("cyberpunk2020.suppressiveFire", (p) => globalThis.__supTap.push(p));
+    return was;
+  });
+
+  await refill();
+  await arm("Suppressive");
+  const supBounds = await readSup();
+  ok("E1 the declaration rows carry their bounds (the validator reads them from the row, not from nowhere)",
+    supBounds.rounds?.max === String(setup.maxRounds) && supBounds.rounds?.min === "1"
+    && supBounds.width?.min === "2" && supBounds.targets?.min === "1",
+    `rounds ${supBounds.rounds?.min}..${supBounds.rounds?.max}, width min ${supBounds.width?.min}, targets min ${supBounds.targets?.min}`);
+
+  // ⚠ ONE COMPLAINT AT A TIME, IN ORDER — the base system's validator stops at the first row it can
+  // fault, which is why each row is faulted on its own here rather than all three at once. (Setting all
+  // three wrong and expecting three complaints measures a validator nobody wrote: the first fault
+  // returns, and the two rows behind it are never examined, so they read as valid.)
+  const supRounds = await setSup({ rounds: 99, width: 3, targets: 2 });
+  ok("E2 more rounds than the magazine holds is refused", supRounds.rounds?.valid === false,
+    `checkValidity() = ${supRounds.rounds?.valid} for 99 against max ${setup.maxRounds}`);
+  ok("E3 the submit gate says no while the round count is out of range", supRounds.gate === false,
+    `gate returned ${supRounds.gate}`);
+
+  const supWidth = await setSup({ rounds: 10, width: 0, targets: 2 });
+  ok("E4 a corridor of no width is refused", supWidth.width?.valid === false,
+    `checkValidity() = ${supWidth.width?.valid} for width 0 against min 2`);
+
+  const supTargets = await setSup({ rounds: 10, width: 3, targets: 0 });
+  ok("E5 a burst aimed at nobody is refused", supTargets.targets?.valid === false,
+    `checkValidity() = ${supTargets.targets?.valid} for 0 targets`);
+
+  const supBad = await setSup({ rounds: 99, width: 0, targets: 0 });
+  ok("E5b the whole bad declaration is refused at the gate", supBad.gate === false, `gate returned ${supBad.gate}`);
+  const beforeSup = await shotsLeftNow();
+  const firedSup = await submitSup(4000);
+  ok("E6 the refusal holds at the form: nothing is resolved", firedSup.payloads.length === 0,
+    `${firedSup.payloads.length} suppressive event(s)`);
+  const afterSup = await shotsLeftNow();
+  ok("E7 and the magazine is untouched by it", afterSup === beforeSup, `${beforeSup} → ${afterSup}`);
+
+  /* the positive counterpart: a legal declaration passes the same gate and reaches the fire path */
+  const supGood = await setSup({ rounds: 10, width: 3, targets: 2 });
+  ok("E8 a legal declaration is accepted by the same gate", supGood.gate === true && supGood.formValid === true,
+    `gate ${supGood.gate}, form validity ${supGood.formValid}`);
+  const beforeGood = await shotsLeftNow();
+  const firedGood = await submitSup(10000);
+  const supPayload = firedGood.payloads[0] ?? null;
+  ok("E9 the declared round count is the one the fire path lays down", supPayload?.roundsFired === 10,
+    `event says ${supPayload?.roundsFired}`);
+  ok("E10 the declared corridor width travels with it", supPayload?.zoneWidth === 3, `event says ${supPayload?.zoneWidth}`);
+  const afterGood = await shotsLeftNow();
+  ok("E11 and the magazine loses exactly the declared rounds", beforeGood - afterGood === 10,
+    `${beforeGood} → ${afterGood}`);
+  await page.evaluate(async (was) => {
+    try { Hooks.off("cyberpunk2020.suppressiveFire", globalThis.__supHook); } catch (e) { /* not hooked */ }
+    if (was) await game.settings.set("cp2020-augmented", "suppressiveFireSaves", was);
+  }, zonesWere);
+  await endEffects();
+
+  /* ══ 6. THE MAGAZINE CAN CHANGE WHILE THE WINDOW IS OPEN — the ceiling has to move with it ═══ */
+  // Reload and Unload sit in this same window, beside the button that fires. Both rewrite the magazine
+  // the round fields are bounded by, and the bounds were computed when the rows were built. Left alone,
+  // a reload leaves the ceiling stale LOW (the field refuses a burst the gun can now fire) and an unload
+  // leaves it stale HIGH (the field accepts a burst out of an empty gun and the fire path cuts it
+  // silently — the road back into the defect the round-count fix closed).
+  // Open on a nearly-empty gun so the ceiling starts LOW and the reload has something to raise.
+  const setShots = (n) => page.evaluate(({ actorId, gunId, n }) =>
+    game.actors.get(actorId).updateEmbeddedDocuments("Item", [{ _id: gunId, "system.shotsLeft": n }]),
+    { actorId: setup.actorId, gunId: setup.gunId, n });
+
+  await setShots(5);
+  await arm();
+  const lowCeiling = await setRounds(setup.maxRounds);
+  ok("F1 the ceiling is the loaded rounds, not the weapon's rate", lowCeiling.max === "5", `data-max ${lowCeiling.max}`);
+  ok("F2 a burst longer than the loaded rounds is refused", lowCeiling.valid === false,
+    `checkValidity() = ${lowCeiling.valid} for ${setup.maxRounds} against data-max 5`);
+
+  const afterReload = await page.evaluate(async () => {
+    const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+    dlg.element.querySelector("button.reload")?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 3000));
+    const q = (n) => dlg.element.querySelector(`input[name="${n}"], input[name="fields.${n}"]`);
+    const one = (n) => { const el = q(n); return el ? { value: el.value, max: el.dataset.max ?? null, valid: el.checkValidity() } : null; };
+    return { auto: one("fullAutoRoundsFired"), sup: one("roundsFired"),
+      gate: dlg._cpValidateOnSubmit ? dlg._cpValidateOnSubmit() : null };
+  });
+  const reloadedLeft = await shotsLeftNow();
+  ok("F3 reloading in the window raises the ceiling to the reloaded magazine",
+    afterReload.auto?.max === String(Math.min(setup.rof, reloadedLeft)),
+    `data-max ${afterReload.auto?.max} against ${reloadedLeft} loaded (ROF ${setup.rof})`);
+  ok("F4 and the field that was refused a moment ago now passes, untouched by the shooter",
+    afterReload.auto?.valid === true && afterReload.gate === true,
+    `valid ${afterReload.auto?.valid}, gate ${afterReload.gate}`);
+  ok("F5 the suppressive round field is raised by the same reload",
+    afterReload.sup?.max === String(Math.min(setup.rof, reloadedLeft)), `data-max ${afterReload.sup?.max}`);
+
+  // The other direction. An emptied magazine cannot complain its way out of trouble — with no rounds
+  // loaded the check stands down entirely (the weapon roll's own NoAmmo guard owns that case), so what
+  // has to be true is that the window stops OFFERING a burst: ceiling and value both fall to nothing.
+  const afterUnload = await page.evaluate(async () => {
+    const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+    dlg.element.querySelector("button.unload")?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    await new Promise((r) => setTimeout(r, 2500));
+    const q = (n) => dlg.element.querySelector(`input[name="${n}"], input[name="fields.${n}"]`);
+    const one = (n) => { const el = q(n); return el ? { value: el.value, max: el.dataset.max ?? null } : null; };
+    return { auto: one("fullAutoRoundsFired"), sup: one("roundsFired") };
+  });
+  ok("F6 emptying the magazine drops the burst ceiling to nothing",
+    afterUnload.auto?.max === "0" && afterUnload.auto?.value === "0",
+    `data-max ${afterUnload.auto?.max}, value ${afterUnload.auto?.value}`);
+  ok("F7 the suppressive round field's ceiling drops with it",
+    afterUnload.sup?.max === "0" && afterUnload.sup?.value === "0",
+    `data-max ${afterUnload.sup?.max}, value ${afterUnload.sup?.value}`);
+  ok("F8 the emptied magazine is really empty", (await shotsLeftNow()) === 0, await shotsLeftNow());
+  await page.evaluate(async () => {
+    for (const a of [...foundry.applications.instances.values()]) {
+      if (/Modifiers/i.test(a?.constructor?.name ?? "")) { try { await a.close(); } catch (e) { /* closed */ } }
+    }
+  });
 
   /* ══ RESTORE ═══════════════════════════════════════════════════════════════════════════════ */
   const restored = await page.evaluate(async ({ SCOPE, actorId, gunId, baselineCards, wasTracking }) => {
