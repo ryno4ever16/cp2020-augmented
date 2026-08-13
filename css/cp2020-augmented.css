@@ -117,6 +117,11 @@
 .cp-catalog-nomatch { opacity: 0.7; padding: 8px; }
 .cp-hidden-divider { font-size: 0.8em; opacity: 0.65; font-style: italic; margin-top: 10px; padding: 3px 4px; border-top: 1px dashed rgba(192,160,98,0.5); color: #c0a062; }
 .cp-catalog-row { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
+/* The master catalog is ~2,500 of these rows in one scroller. content-visibility lets the browser skip
+   layout and paint for the ones scrolled out of view, and contain-intrinsic-size gives it a height to
+   reserve so the scrollbar stays honest — 36px measured off a real row on the rig, with `auto` so the
+   browser substitutes each row's true height once it has been rendered even once. */
+.cp-catalog-row { content-visibility: auto; contain-intrinsic-size: auto 36px; }
 .cp-catalog-row.cp-buy-draggable { cursor: grab; }
 .cp-catalog-row.cp-buy-draggable:active { cursor: grabbing; }
 .cp-catalog-row.cp-dimmed { opacity: 0.5; }

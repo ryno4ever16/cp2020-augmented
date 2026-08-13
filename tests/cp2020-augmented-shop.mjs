@@ -9,6 +9,11 @@
  *   • the GM price-override flow (an unpriced item → setShopPriceOverride → resolves → buy at that price)
  * Restores the world override map + deletes its test actors, so it never leaks state.
  *
+ * Part 2 guards the catalog's paint cost: a changed buyer is patched into the open window instead of
+ * rebuilding ~2,500 rows, so four select/deselect cycles must produce zero re-renders while the funds
+ * readout still follows the token. Also pins the row paint diet (skipped off-screen rows, lazy thumbs)
+ * and the once-per-session ammo row build.
+ *
  * Run:  FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-shop.mjs
  */
 import { chromium } from "@playwright/test";
@@ -100,9 +105,114 @@ try {
   });
 
   for (const c of r.checks || []) log.push(`  ${c.ok ? "PASS" : "FAIL"}  ${c.label}  ${c.ok ? "" : "-> got " + c.got}`);
+
+  // ── Buyer changes are patched in place; selecting a token does not rebuild the catalog ──────────
+  const r2 = await gm.evaluate(async () => {
+    const C = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+    const checks = []; const chk = (label, cond, got) => checks.push({ label, ok: !!cond, got });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    let a = null, bb = null, w = null, tokenIds = [];
+    try {
+      for (const x of game.actors.filter(x => /^__PW__Buyer/.test(x.name))) await x.delete().catch(() => {});
+      a  = await Actor.create({ name: "__PW__BuyerA", type: "character", system: { eurobucks: 1234 } });
+      bb = await Actor.create({ name: "__PW__BuyerB", type: "character", system: { eurobucks: 777 } });
+      const tds = await canvas.scene.createEmbeddedDocuments("Token", [
+        { name: "__PW__BuyerA", actorId: a.id, actorLink: true, x: 200, y: 200, width: 1, height: 1 },
+        { name: "__PW__BuyerB", actorId: bb.id, actorLink: true, x: 400, y: 200, width: 1, height: 1 },
+      ]);
+      tokenIds = tds.map(t => t.id);
+      const tokA = canvas.tokens.get(tds.find(t => t.name === "__PW__BuyerA").id);
+      const tokB = canvas.tokens.get(tds.find(t => t.name === "__PW__BuyerB").id);
+      chk("both fixture tokens are placed and controllable", !!tokA && !!tokB, `${!!tokA}/${!!tokB}`);
+
+      canvas.tokens.releaseAll();
+      w = C.openShopWindow(null, { view: "catalog" });
+      for (let i = 0; i < 200 && !(w.element?.querySelectorAll(".cp-catalog-row").length); i++) await sleep(50);
+      const rowCount = w.element.querySelectorAll(".cp-catalog-row").length;
+      chk("catalog painted its rows", rowCount > 100, rowCount);
+
+      // Row paint diet: the two properties that keep a list this size cheap.
+      const firstRow = w.element.querySelector(".cp-catalog-row");
+      const firstImg = w.element.querySelector(".cp-catalog-row img");
+      chk("rows are skipped while off-screen", getComputedStyle(firstRow).contentVisibility === "auto", getComputedStyle(firstRow).contentVisibility);
+      chk("rows reserve a measured height", /36px/.test(getComputedStyle(firstRow).containIntrinsicSize), getComputedStyle(firstRow).containIntrinsicSize);
+      const nonLazy = [...w.element.querySelectorAll(".cp-catalog-row img")].filter(i => i.getAttribute("loading") !== "lazy").length;
+      chk("no row thumb loads eagerly", nonLazy === 0, nonLazy);
+      chk("row thumbs keep their intrinsic box", firstImg?.getAttribute("width") === "26" && firstImg?.getAttribute("height") === "26", `${firstImg?.getAttribute("width")}x${firstImg?.getAttribute("height")}`);
+
+      // Generated ammo rows are built once per session, not per render.
+      const ar1 = w._ammoCatalogRows(); const ar2 = w._ammoCatalogRows();
+      chk("ammo rows are handed back from the cache", ar1 === ar2, ar1 === ar2);
+      C.clearAmmoCatalogRowsCache();
+      const ar3 = w._ammoCatalogRows();
+      chk("clearing the cache rebuilds the same set", ar3 !== ar1 && ar3.length === ar1.length, `${ar3 !== ar1} len=${ar3.length}/${ar1.length}`);
+
+      // Sentinels: the window element and one row node must survive the churn untouched.
+      w.element.dataset.pwSentinel = "kept";
+      const rowNode = w.element.querySelector(".cp-catalog-row");
+      let renders = 0;
+      const origRender = w.render.bind(w);
+      w.render = function (...args) { renders++; return origRender(...args); };
+
+      const fundsText = () => w.element.querySelector(".cp-buyer-funds")?.textContent?.trim() ?? "";
+      const pickValue = () => w.element.querySelector(".cp-buyer-pick")?.value ?? null;
+      const seen = [];
+      for (let i = 0; i < 4; i++) {
+        const tok = i % 2 === 0 ? tokA : tokB;
+        tok.control({ releaseOthers: true });
+        await sleep(300);
+        seen.push({ phase: "on", funds: fundsText(), buyer: w.buyer?.name ?? null, pick: pickValue() });
+        canvas.tokens.releaseAll();
+        await sleep(300);
+        seen.push({ phase: "off", funds: fundsText(), buyer: w.buyer?.name ?? null });
+      }
+      w.render = origRender;
+
+      chk("4 select/deselect cycles trigger no re-render", renders === 0, renders);
+      chk("the window element survives the churn", w.element.dataset.pwSentinel === "kept", w.element.dataset.pwSentinel);
+      chk("the row nodes are never replaced", w.element.querySelector(".cp-catalog-row") === rowNode, w.element.querySelector(".cp-catalog-row") === rowNode);
+      chk("row count is unchanged after the churn", w.element.querySelectorAll(".cp-catalog-row").length === rowCount, w.element.querySelectorAll(".cp-catalog-row").length);
+
+      const on = seen.filter(s => s.phase === "on");
+      chk("funds follow the selected token (A → 1234eb)", on[0].funds === "1234eb", on[0].funds);
+      chk("funds follow the selected token (B → 777eb)", on[1].funds === "777eb", on[1].funds);
+      chk("funds follow the selected token on the repeat pass", on[2].funds === "1234eb" && on[3].funds === "777eb", `${on[2].funds}/${on[3].funds}`);
+      chk("the buyer object follows the selected token", on[0].buyer === "__PW__BuyerA" && on[1].buyer === "__PW__BuyerB", `${on[0].buyer}/${on[1].buyer}`);
+      chk("the picker re-selects the new buyer", on[0].pick === a.id && on[1].pick === bb.id, `${on[0].pick === a.id}/${on[1].pick === bb.id}`);
+      const off = seen.filter(s => s.phase === "off");
+      chk("releasing drops back off the fixture buyers", off.every(s => s.buyer !== "__PW__BuyerA" && s.buyer !== "__PW__BuyerB"), off.map(s => s.buyer).join(","));
+
+      // The picker is rebuilt by every repaint, so its listener has to be re-attached with it.
+      tokA.control({ releaseOthers: true });
+      await sleep(350);
+      const sel = w.element.querySelector(".cp-buyer-pick");
+      chk("a repainted strip carries a picker for the buyer", !!sel && sel.value === a.id, `${!!sel}/${sel?.value === a.id}`);
+      let renders2 = 0;
+      const origRender2 = w.render.bind(w);
+      w.render = function (...args) { renders2++; return origRender2(...args); };
+      if (sel) { sel.value = ""; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+      await sleep(350);
+      w.render = origRender2;
+      chk("the rebound picker clears the buyer", w.buyer === null, w.buyer?.name ?? "null");
+      chk("clearing through the picker costs no re-render", renders2 === 0, renders2);
+      chk("with no buyer the strip shows the notice instead", !!w.element.querySelector(".cp-buyer-warn"), !!w.element.querySelector(".cp-buyer-warn"));
+      return { ok: checks.every(c => c.ok), checks };
+    } catch (e) {
+      checks.push({ label: "churn leg ran to completion", ok: false, got: e?.message || String(e) });
+      return { ok: false, checks };
+    } finally {
+      try { canvas.tokens.releaseAll(); } catch {}
+      try { if (w) await w.close(); } catch {}
+      try { if (tokenIds.length) await canvas.scene.deleteEmbeddedDocuments("Token", tokenIds); } catch {}
+      try { await Actor.deleteDocuments([a?.id, bb?.id].filter(Boolean)); } catch {}
+      try { (await import("/modules/cp2020-augmented/module/shop/catalog.js")).clearAmmoCatalogRowsCache(); } catch {}
+    }
+  });
+  for (const c of r2.checks || []) log.push(`  ${c.ok ? "PASS" : "FAIL"}  ${c.label}  ${c.ok ? "" : "-> got " + c.got}`);
+
   const noConsoleErr = errors.length === 0;
   log.push(`  ${noConsoleErr ? "PASS" : "FAIL"}  0 console errors  ${noConsoleErr ? "" : "-> " + errors.join(" | ")}`);
-  pass = r.ok && noConsoleErr && !log.some(l => l.startsWith("PAGEERR"));
+  pass = r.ok && r2.ok && noConsoleErr && !log.some(l => l.startsWith("PAGEERR"));
 } catch (e) { log.push("ERROR " + (e?.message || e)); }
 finally { await b.close(); }
 

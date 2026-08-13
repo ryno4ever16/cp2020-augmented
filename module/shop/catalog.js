@@ -8,7 +8,7 @@ import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopA
 import { shimmerWindow } from "../shimmer.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
-import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber } from "../lookups.js";
+import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature } from "../lookups.js";
 import { purchaseAmmo } from "./buy-ammo.js";
 import {
   getShop, listShops, shopsVisibleTo, createShop, updateShop, deleteShop, duplicateShop,
@@ -146,6 +146,16 @@ export function clearCatalogIndexCache() { _catalogIndexPromise = null; _catalog
 
 /** key → index row, for resolving a shop's sourceKeys to catalog entries. */
 function indexByKey(all) { const m = new Map(); for (const it of all) m.set(it.key, it); return m; }
+
+/** The generated ammo rows + the signature of the settings they were generated from (see
+ *  _ammoCatalogRows). Module scope, so every window shares one build per session. */
+let _ammoRowsCache = null;
+let _ammoRowsSig = null;
+export function clearAmmoCatalogRowsCache() { _ammoRowsCache = null; _ammoRowsSig = null; }
+
+/** The buyer strip's own template — rendered whole by the initial render and again, alone, whenever
+ *  the buyer changes. */
+const BUYER_BAR_TEMPLATE = "modules/cp2020-augmented/templates/shop/buyer-bar.hbs";
 
 export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   /**
@@ -298,8 +308,22 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   /** Generated catalog rows for ammunition — one per caliber (incl. GM-custom calibers). Price shown is
-   *  the STANDARD box price; the per-row load dropdown re-prices live and the Buy charges box × boxes. */
+   *  the STANDARD box price; the per-row load dropdown re-prices live and the Buy charges box × boxes.
+   *
+   *  Memoized at module scope against `ammoCatalogSignature()`. The caliber × load matrix is the same
+   *  object graph on every render of every window, and rebuilding it was ~5ms of every catalog render
+   *  for a set that changes only when the GM registers a custom caliber or changes the pricing mode —
+   *  both of which move the signature. `_filterRows` copies every row before anything decorates it, so
+   *  the shared originals are only ever read. */
   _ammoCatalogRows() {
+    const sig = ammoCatalogSignature();
+    if (_ammoRowsCache && _ammoRowsSig === sig) return _ammoRowsCache;
+    _ammoRowsSig = sig;
+    _ammoRowsCache = this._buildAmmoCatalogRows();
+    return _ammoRowsCache;
+  }
+
+  _buildAmmoCatalogRows() {
     const img = "modules/cp2020-augmented/img/weapon-icon.svg";
     return Object.entries(getCalibers()).map(([id, c]) => ({
       ammo: true, caliber: id,
@@ -481,6 +505,54 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     try { (await game.packs.get(packId)?.getDocument(itemId))?.sheet?.render({ force: true }); } catch { /* gone */ }
   }
 
+  /** Bind the buyer picker. Its own helper because the in-place buyer repaint replaces the strip's
+   *  markup, and the old listener leaves with it. */
+  _activateBuyerPick(root) {
+    root.querySelector(".cp-buyer-pick")?.addEventListener("change", (ev) => {
+      const id = ev.currentTarget.value;
+      this._cpSyncBuyer(id ? (game.actors?.get(id) ?? null) : null);
+    });
+  }
+
+  /** Change who is shopping without re-rendering the window.
+   *
+   *  A catalog render rebuilds ~2,500 rows and ~25,000 nodes — measured at ~410ms median on the rig,
+   *  nearly all of it in core's part-sync — and `controlToken` fires on both halves of every click,
+   *  the select AND the release. Ten clicks was twenty of those renders and something like fifteen
+   *  seconds of a frozen window. The buyer reaches only three things in the markup: the picker's own
+   *  option list, the funds readout (both inside the buyer-bar partial, so this is still a template
+   *  render and not string-building) and the Buy buttons' no-buyer styling, which depends on whether
+   *  there is a buyer at all and not on which one — so it is touched only when that flips.
+   *
+   *  Not patched here, deliberately: the build view has no buyer strip at all, and a home view has no
+   *  rows; both just carry the new buyer into their next real render. */
+  async _cpSyncBuyer(buyer) {
+    const had = !!this.buyer;
+    this.buyer = buyer ?? null;
+    const root = this.element;
+    if (!root) return;
+
+    const strip = root.querySelector(".cp-catalog-buyer");
+    if (strip) {
+      const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
+      strip.innerHTML = await render(BUYER_BAR_TEMPLATE, {
+        buyerOptions: this._buyerOptions(),
+        hasBuyer: !!this.buyer,
+        buyerName: this.buyer?.name ?? "",
+        buyerFunds: this.buyer ? (Number(this.buyer.system?.eurobucks) || 0) : 0,
+      });
+      this._activateBuyerPick(root);
+    }
+
+    if (had !== !!this.buyer) {
+      const title = game.i18n.localize(this.buyer ? "CYBERPUNK.ShopBuy" : "CYBERPUNK.ShopBuyerNeeded");
+      for (const btn of root.querySelectorAll(".cp-catalog-buy")) {
+        btn.classList.toggle("cp-buy-nobuyer", !this.buyer);
+        btn.title = title;
+      }
+    }
+  }
+
   /** V2: re-invoke the preserved `activateListeners` on each render (V2 has no auto-listener wiring),
    *  and keep the window header title in sync with the dynamic, view-based `get title()`. */
   _onRender(context, options) {
@@ -521,11 +593,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelectorAll(".cp-home-shop").forEach(el => el.addEventListener("contextmenu", (e) => { e.preventDefault(); if (isGM) this._shopContextMenu(el.dataset.shopId, e); }));
 
     // Buyer picker (shop AS a chosen owned character).
-    root.querySelector(".cp-buyer-pick")?.addEventListener("change", (ev) => {
-      const id = ev.currentTarget.value;
-      this.buyer = id ? (game.actors?.get(id) ?? null) : null;
-      this.render();
-    });
+    this._activateBuyerPick(root);
 
     // Search + source toggle. Search filters in place (no re-render) so the box stays responsive even when
     // popped out into a second window; see _applySearch.
@@ -1183,8 +1251,9 @@ export function registerShopHooks() {
       for (const w of foundry.applications.instances.values()) {
         if (!(w instanceof CatalogBrowser) || w.view === "build") continue;
         if (w.buyer?.id === buyer?.id) continue;   // unchanged → don't disturb an open window
-        w.buyer = buyer;
-        w.render();                                 // scroll preserved by the PART's `scrollable`
+        // Patch the buyer in place. A render here is what made token selection feel broken with a big
+        // catalog open — see _cpSyncBuyer. Scroll is untouched because nothing is replaced.
+        w._cpSyncBuyer(buyer);
       }
     }, 50);
   });

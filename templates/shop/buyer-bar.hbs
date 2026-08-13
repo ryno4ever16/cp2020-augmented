@@ -1,0 +1,13 @@
+{{!-- The buyer strip: who is shopping and what they can spend. Its own partial because selecting a
+      token has to repaint exactly this much and nothing else — a whole catalog render for a changed
+      buyer is 2,500 rows of work for one name and one number (see _cpSyncBuyer). --}}
+{{#if buyerOptions.length}}
+<i class="fa-solid fa-user"></i>
+<select class="cp-buyer-pick" title="{{localize "CYBERPUNK.ShopBuyerPickHint"}}">
+    <option value="">{{localize "CYBERPUNK.ShopBuyerPick"}}</option>
+    {{#each buyerOptions}}<option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>{{/each}}
+</select>
+{{#if hasBuyer}}<span class="cp-buyer-funds">{{buyerFunds}}eb</span>{{/if}}
+{{else}}
+{{#if hasBuyer}}<b>{{buyerName}}</b> · {{buyerFunds}}eb{{else}}<span class="cp-buyer-warn"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNeeded"}}</span>{{/if}}
+{{/if}}
