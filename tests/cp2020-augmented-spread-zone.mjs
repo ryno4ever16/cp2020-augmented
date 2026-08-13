@@ -33,7 +33,8 @@
  *     board gate, both floors, the per-aim reset, and the plant's own floor
  * §12 a pattern nobody applied is still collected by its own clock (the card does not make it immortal)
  * §13 the save cadences — at Mortal BOTH saves are asked for, on their two clocks: one death prompt per
- *     application batch, a stun prompt per damage event
+ *     application batch, a stun prompt per damage event; plus the stabilized gate this rail now shares
+ *     with the single-target one, and the p.105 rule that clears stabilization before either can read it
  *
  * ⛔ The three cover regions, the showcase combat and the four review targets on this rig belong to the
  * user's morning review; every fixture here is named __PWK__SPREAD and is deleted on the way out, and
@@ -1069,6 +1070,64 @@ const res = await page.evaluate(async () => {
     stunCards(sinceIds).length === 2 && deathCards(sinceIds).length === 0,
     `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length} damage=${victim13.system?.damage}`);
   await wipeZones(); await wipeCards(); await wipeSaveCards();
+  await victim13.update({ "system.damage": 0 });
+
+  /* §13d — a stabilized patient is not asked to save against dying, and the p.105 rule that gets there first */
+  // The single-target rail has always read the stabilized flag before offering the death prompt, and so
+  // does the per-turn cadence; this rail did not, and now does. The two halves of this section are the
+  // gate itself and the reason it looks like a no-op end to end:
+  //   d1 — the gate, driven directly: a stabilized Mortal figure prompted with no fresh damage is asked
+  //        for no death save, and IS still asked for a stun save, because consciousness is a separate
+  //        question. Clearing the flag brings the death prompt back on the same fixture.
+  //   d2 — the whole pattern flow: identical to the unstabilized case, and correctly so. Fresh damage
+  //        clears stabilization (Core p.105, applyLocationDamage) before either rail reaches its check,
+  //        so the figure is asked — and told, by the notice, that its stabilization is gone. Recorded
+  //        as the reason the gate cannot be seen from the outside on a damaging path, so nobody later
+  //        reads the gate as dead code or the prompt as the old defect.
+  await victim13.update({ "system.damage": 14 });            // Mortal again
+  await victim13.setFlag(SCOPE, "stabilized", true);
+  ok("§13 the fixture is at Mortal and carries the stabilized flag",
+    (victim13.woundState?.() ?? 0) >= 4 && victim13.getFlag(SCOPE, "stabilized") === true,
+    `woundState=${victim13.woundState?.()} stabilized=${victim13.getFlag(SCOPE, "stabilized")}`);
+  await wipeSaveCards();
+  sinceIds = new Set(game.messages.map(m => m.id));
+  await hooks._postWoundSavePrompts(victim13, target.object ?? null, new Set());
+  await sleep(900);
+  ok("§13 the area rail asks a stabilized Mortal figure for NO death save",
+    deathCards(sinceIds).length === 0,
+    `${deathCards(sinceIds).length} :: ${deathCards(sinceIds).map(m => (m.content ?? "").slice(0, 70).replace(/\s+/g, " ")).join(" ~~ ")}`);
+  ok("§13 and still asks it for a stun save — consciousness is the other question",
+    stunCards(sinceIds).length === 1, `stun=${stunCards(sinceIds).length}`);
+  await wipeSaveCards();
+
+  // POSITIVE CONTROL, same fixture, same call: only the flag differs.
+  await victim13.unsetFlag(SCOPE, "stabilized");
+  sinceIds = new Set(game.messages.map(m => m.id));
+  await hooks._postWoundSavePrompts(victim13, target.object ?? null, new Set());
+  await sleep(900);
+  ok("§13 clearing the flag brings the death prompt straight back",
+    deathCards(sinceIds).length === 1 && stunCards(sinceIds).length === 1,
+    `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length}`);
+  await wipeSaveCards();
+
+  // d2 — end to end, where p.105 gets there first.
+  await victim13.update({ "system.damage": 14 });
+  await victim13.setFlag(SCOPE, "stabilized", true);
+  sinceIds = new Set(game.messages.map(m => m.id));
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 2, spreadDamageShort: "5", spreadDamageMedium: "5", spreadDamageLong: "5" }));
+  await sleep(500);
+  await hooks._confirmSpreadZone(myZones()[0].id);
+  await sleep(3500);
+  ok("§13 fresh damage takes the stabilization away first (p.105), so the flag is gone by prompt time",
+    !victim13.getFlag(SCOPE, "stabilized"), String(victim13.getFlag(SCOPE, "stabilized")));
+  ok("§13 and the table is told the stabilization was lost rather than left to notice",
+    [...game.messages].some(m => !sinceIds.has(m.id) && /stabiliz/i.test(m.content ?? "")),
+    String([...game.messages].filter(m => !sinceIds.has(m.id) && /stabiliz/i.test(m.content ?? "")).length));
+  ok("§13 so an un-stabilized Mortal figure is asked for both saves on their own clocks",
+    deathCards(sinceIds).length === 1 && stunCards(sinceIds).length === 2,
+    `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length}`);
+  await wipeZones(); await wipeCards(); await wipeSaveCards();
+  await victim13.unsetFlag(SCOPE, "stabilized");
   await victim13.update({ "system.damage": 0 });
 
   /* §13c — the per-TURN cadence the book actually describes is already built, and it is gated */

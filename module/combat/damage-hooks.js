@@ -1881,7 +1881,7 @@ async function _runManualRoundTick(combat) {
  * bodies onto one entry and silence a prompt the second body is owed. A caller that passes no batch
  * keeps the per-event behaviour, so every single-hit path through here is unchanged.
  */
-async function _postWoundSavePrompts(actor, tok, batch = null) {
+export async function _postWoundSavePrompts(actor, tok, batch = null) {
   const ws = actor?.woundState?.() ?? 0;
   if (ws <= 0) return;
   if (ws < 4) { await postStunSavePrompt(actor, tok); return; }
@@ -1893,8 +1893,18 @@ async function _postWoundSavePrompts(actor, tok, batch = null) {
   // above sets out: the death prompt is offered once for the whole application batch, the stun prompt
   // once per damage event, exactly as it is below Mortal. Death goes first, in the single-target rail's
   // own order — the more urgent question is the one a reader should meet first.
+  // ⭐ A STABILIZED PATIENT IS NOT ASKED TO SAVE AGAINST DYING — the read the single-target rail has
+  // always made (save-rolls.js `postSavePrompts`) and the per-turn cadence makes before re-offering.
+  // This rail did not make it, which was a genuine gap in the shape of the thing even though the two
+  // rails cannot be told apart on the DAMAGE path today: `applyLocationDamage` clears stabilization the
+  // moment fresh damage lands (Core p.105 — new damage restarts the death saves), so by the time either
+  // rail reaches its own check the flag is already gone and both post. The check earns its keep for the
+  // caller that prompts WITHOUT fresh damage, and for the day the p.105 clear grows a condition; what it
+  // must never be is a place where this rail and the single-target one answer differently.
+  // Consciousness is a separate question with a separate answer, so the stun prompt goes out either way.
   const body = tok?.document?.id ?? tok?.id ?? actor.id;
-  const deathOwed = !batch || !batch.has(body);
+  const isStabilized = actor.getFlag?.("cp2020-augmented", "stabilized");
+  const deathOwed = !isStabilized && (!batch || !batch.has(body));
   if (deathOwed) {
     batch?.add(body);
     await postDeathSavePrompt(actor, tok);
