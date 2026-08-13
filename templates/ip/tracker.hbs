@@ -76,7 +76,9 @@
 
     {{!-- BALANCES. One collapsed line per character (pool + everything banked); it opens to the
           skills carrying IP. Pool + banked are GM-editable absolute values; pending is read-only. --}}
-    <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpBalances"}}{{#if pendingTotal}} — {{localize "CYBERPUNK.IpPending"}} {{pendingTotal}}{{/if}}</h2>
+    {{!-- The pending total lives in the strip above; repeating it in the heading was the old window's
+          only place to put it. --}}
+    <h2 class="cyber-section-header">{{localize "CYBERPUNK.IpBalances"}}</h2>
     <div class="flexrow cp-ip-filter-row">
         <input type="text" class="cp-ip-filter" value="{{filter}}" placeholder="{{localize "CYBERPUNK.IpFilterPlaceholder"}}" title="{{localize "CYBERPUNK.IpFilterTip"}}"/>
     </div>

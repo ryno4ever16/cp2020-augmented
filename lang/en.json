@@ -1428,8 +1428,6 @@
     "IpQueueOverflowGm": "IP roll log full ({max}) — oldest un-awarded rolls are aging out. Open the IP Tracker to Apply or clear.",
     "IpQueue": "Skill rolls",
     "IpQueueEmpty": "No skill rolls waiting. Rolls appear here as players use skills.",
-    "IpPending": "Pending (not yet released)",
-    "IpPendingEmpty": "No pending IP.",
     "IpSuccess": "Success",
     "IpAmount": "IP to award. Press Enter to award this row.",
     "IpBonus": "Bonus IP",

@@ -94,7 +94,12 @@
 .cp-ip-tracker .cp-ip-toolbar { flex: 0 0 auto; align-items: center; gap: 8px; padding: 4px 0; }
 .cp-ip-tracker .cp-ip-toolbar button { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
 .cp-ip-tracker .cp-ip-toolbar-pad { flex: 1 1 auto; }
-.cp-ip-tracker .cyber-section-header { flex: 0 0 auto; }
+/* Section headings, sized for a working window: the sheets' full-size heading ate a third of the
+   height here and wrapped to three lines at the default width. Scoped to this window only. */
+.cp-ip-tracker .cyber-section-header {
+  flex: 0 0 auto; font-size: 1.05em; line-height: 1.3; margin: 6px 0 2px; padding-bottom: 1px;
+  border-bottom: 1px solid rgba(192, 160, 98, 0.35);
+}
 .cp-ip-tracker .cp-ip-queue { flex: 1 1 auto; min-height: 60px; overflow-y: auto; }
 .cp-ip-tracker .cp-ip-filter-row { flex: 0 0 auto; padding: 2px 0 3px; }
 .cp-ip-tracker .cp-ip-filter { flex: 1 1 auto; width: 100%; }
