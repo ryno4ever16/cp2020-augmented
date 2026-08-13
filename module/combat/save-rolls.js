@@ -116,9 +116,46 @@ function _getTaserPenalty(actor) {
 }
 
 /**
+ * THE LASTING-DAMAGE FLAG'S OWN CORE CONDITION, raised and lowered with it.
+ *
+ * ⭐ WHY THIS EXISTS (user report): a figure set on fire showed the ring and had NOTHING in its Active
+ * Effects. The two lasting-damage engines below keep their state in module flags — `fireDotState` while
+ * a body is burning, `dotState` while a load is eating its armour — and nothing ever toggled core's own
+ * `burning` / `corrode`, so no ActiveEffect document existed. Everything reading the FLAG agreed with
+ * everything else (the condition-overlay rail draws off both roads); everything reading
+ * `actor.statuses` — the token HUD, the effects list, any other module — saw an unhurt figure. One
+ * mechanism, two vocabularies, and only one of them was being spoken.
+ *
+ * ⚠ GUARDED ON THE CURRENT STATE rather than trusting the toggle to be idempotent. `toggleStatusEffect`
+ * with an explicit `active` is meant to be safe to repeat, but a burn that is re-ignited every turn
+ * would otherwise write a document update on every re-ignition for no change at all — and this is
+ * called from the damage path, which the busiest hook in the module is already listening to. Reading
+ * `actor.statuses` first makes the no-op free and makes the "already off" clear genuinely free too.
+ *
+ * ⚠ THE ACTOR HANDED IN IS THE ONE TO WRITE. For an unlinked figure that is the token's own synthetic
+ * actor, and the status belongs on THAT body rather than on the world actor its id also matches — the
+ * same rule every other write in this file follows (see the combat data hazards note).
+ *
+ * Returns whether it actually moved, so a caller and a keeper can tell a change from a no-op.
+ */
+export async function mirrorDotStatus(actor, statusId, active) {
+  try {
+    if (!actor?.toggleStatusEffect || !statusId) return false;
+    if ((actor.statuses?.has?.(statusId) === true) === !!active) return false;   // already where we want it
+    await actor.toggleStatusEffect(statusId, { active: !!active });
+    return true;
+  } catch (err) {
+    console.warn(`cp2020-augmented | could not mirror the ${statusId} condition`, err);
+    return false;
+  }
+}
+
+/**
  * Apply an acid DOT hit, respecting the acidDotStackMode setting.
  * Modes: "stack" extends turnsLeft at same location, "reset" overwrites, "separate" adds concurrent timer.
  * Legacy single-object dotState is transparently migrated to array format on read.
+ * The flag is mirrored onto core's `corrode` on the way in (mirrorDotStatus); the per-turn tick in
+ * damage-hooks.js takes it off again when the last marker expires.
  */
 export async function applyAcidDotState(target, location, turnsLeft, formula) {
   const mode = (() => { try { return game.settings.get("cp2020-augmented", "acidDotStackMode"); } catch { return "stack"; } })();
@@ -126,6 +163,7 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
 
   if (mode === "reset") {
     await target.setFlag("cp2020-augmented", "dotState", [newEntry]);
+    await mirrorDotStatus(target, "corrode", true);
     return;
   }
 
@@ -144,6 +182,7 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
     states.push(newEntry);
   }
   await target.setFlag("cp2020-augmented", "dotState", states);
+  await mirrorDotStatus(target, "corrode", true);
 }
 
 /**
@@ -152,6 +191,8 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
  * each turn (handled by the combat tick in damage-hooks.js), whereas acid degrades armor SP.
  * Modes: "stack" extends turnsLeft at same location, "reset" overwrites, "separate" adds a
  * concurrent timer. Legacy single-object state is transparently migrated to array form on read.
+ * The flag is mirrored onto core's `burning` on the way in (mirrorDotStatus); the per-turn tick in
+ * damage-hooks.js takes it off again when the last marker expires.
  */
 export async function applyFireDotState(target, location, turnsLeft, formula) {
   const mode = (() => { try { return game.settings.get("cp2020-augmented", "fireDotStackMode"); } catch { return "stack"; } })();
@@ -160,6 +201,7 @@ export async function applyFireDotState(target, location, turnsLeft, formula) {
 
   if (mode === "reset") {
     await target.setFlag("cp2020-augmented", "fireDotState", [newEntry]);
+    await mirrorDotStatus(target, "burning", true);
     return;
   }
 
@@ -178,6 +220,7 @@ export async function applyFireDotState(target, location, turnsLeft, formula) {
     states.push(newEntry);
   }
   await target.setFlag("cp2020-augmented", "fireDotState", states);
+  await mirrorDotStatus(target, "burning", true);
 }
 
 /**

@@ -132,10 +132,14 @@ export const STATUS_FX = Object.freeze({
  */
 export const STATUS_FX_ROWS = Object.freeze([
   Object.freeze({
-    // ⭐ TWO SOURCES ON ONE ROW, and the flag is the one that actually fires at this table. Nothing in
-    // the module toggles core's `burning`; the fire load's lasting damage lives in `fireDotState`
-    // (module/combat/damage-hooks.js). The core id is honoured as well so a GM who reaches for the
-    // token HUD gets the same picture as the load does.
+    // ⭐ TWO SOURCES ON ONE ROW, AND THEY NOW ARRIVE TOGETHER. The fire load's lasting damage lives in
+    // `fireDotState` (module/combat/damage-hooks.js), and since 2026-08-13 the engine that writes it
+    // also raises core's own `burning` (save-rolls.js `mirrorDotStatus`) and lowers it when the last
+    // marker expires — so a burning figure has a real ActiveEffect, which is what the token HUD, the
+    // effects list and every other module read. That does NOT double this row: the resolver below asks
+    // whether ANY of a row's sources is raised, so one condition arriving by both roads is still one
+    // mark. The core id is watched in its own right as well, for the GM who reaches for the token HUD
+    // without any load being involved.
     //
     // RING (reference "On Fire (Mild)" = the below-token fire ring), drawn UNDER the mini exactly as the
     // reference draws it — user ruling 2026-08-12: "reference exact", taken with its cost stated. THE
@@ -170,8 +174,11 @@ export const STATUS_FX_ROWS = Object.freeze([
     opacity: 0.85, aboveLighting: false, below: true,
   }),
   Object.freeze({
-    // The acid load degrades armour over turns and keeps its countdown in `dotState`; core's own
-    // `corrode` is the hand-toggled equivalent. THE COLOUR IS OURS: the ring set has no green, so the
+    // The acid load degrades armour over turns and keeps its countdown in `dotState`, and — as with the
+    // burn above, and since the same day — the engine that writes that flag also raises core's own
+    // `corrode` and lowers it with the last marker (save-rolls.js `mirrorDotStatus`), so the two roads
+    // arrive together and still draw one mark. `corrode` remains meaningful on its own for a GM who
+    // sets it by hand. THE COLOUR IS OURS: the ring set has no green, so the
     // molten-earth ring is rotated to an acid green rather than replaced by a clip that is the right
     // colour and the wrong motion. One constant reverts it to the asset's own orange. Drawn UNDER the
     // mini with every other row (2026-08-12, reference-exact), invisible on an unlit square by the same

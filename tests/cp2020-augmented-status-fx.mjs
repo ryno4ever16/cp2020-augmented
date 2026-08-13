@@ -220,6 +220,109 @@ eq("armour-degradation flag written → the acid mark appears", live2.drawn,
 eq("the drawn entry is the recoloured molten-ring key", live2.files, ["jb2a.shield_themed.below.molten_earth.01.orange"]);
 eq("flag cleared → the mark is gone", live2.after, []);
 
+/* ─────────────────── §4b the flag raises core's own condition ─────────────────── */
+// ⭐ THE DEFECT THIS SECTION PINS (user report): a figure set on fire wore the ring and had NOTHING in
+// its Active Effects, because the lasting-damage engines wrote their own flag and nobody ever toggled
+// core's `burning`. The ring was drawn off the FLAG road, so the picture looked right while the token
+// HUD, the effects list and anything else reading `actor.statuses` disagreed with it. The engines now
+// mirror the flag onto the core condition on the way in and take it off when the last marker expires,
+// which is the whole of this section — driven through the REAL apply helpers and the REAL per-turn
+// tick, never by setting a status by hand.
+//
+// ⚠ The tick belongs to an encounter, so this section brings its OWN (created inactive and deleted on
+// the way out): the rig's showcase encounter is the user's and is never touched. The round-tick master
+// is pinned for the same reason a rider setting is, and restored in the finally.
+console.log("\n§4b the lasting-damage flags mirror onto core's own conditions");
+const mirror = await page.evaluate(async ({ actorId, tokenId }) => {
+  const saves = await import("/modules/cp2020-augmented/module/combat/save-rolls.js");
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const SCOPE = "cp2020-augmented";
+  const actor = game.actors.get(actorId);
+  const out = { activeGM: game.users.activeGM?.name ?? null, isSelfActiveGM: game.users.activeGM?.id === game.user.id };
+  const statusesNow = () => [...(actor.statuses ?? [])];
+  const effectStatuses = () => actor.effects.map(e => [...(e.statuses ?? [])]).flat();
+  const tickWas = game.settings.get(SCOPE, "mechRoundTickAutomation");
+  const fireWas = game.settings.get(SCOPE, "fireDotEnabled");
+  const acidWas = game.settings.get(SCOPE, "acidArmorDotEnabled");
+  let combat = null;
+  try {
+    await game.settings.set(SCOPE, "mechRoundTickAutomation", true);
+    await game.settings.set(SCOPE, "fireDotEnabled", true);
+    await game.settings.set(SCOPE, "acidArmorDotEnabled", true);
+
+    /* §4b-i — a fire DoT applied through the real helper raises `burning` */
+    await saves.applyFireDotState(actor, "Torso", 2, "1d6");
+    await sleep(1200);
+    out.afterFireApply = { statuses: statusesNow(), effects: effectStatuses(),
+                           flag: (actor.getFlag(SCOPE, "fireDotState") ?? []).length };
+
+    /* §4b-ii — an acid DoT likewise raises `corrode`, beside the burn rather than instead of it */
+    await saves.applyAcidDotState(actor, "Torso", 1, "1d6");
+    await sleep(1200);
+    out.afterAcidApply = { statuses: statusesNow(), flag: (actor.getFlag(SCOPE, "dotState") ?? []).length };
+
+    /* §4b-iii — ONE tick: the burn has 2 turns, so it survives with its status; the acid had 1 and goes */
+    combat = await Combat.create({ scene: canvas.scene.id, active: false });
+    await combat.createEmbeddedDocuments("Combatant", [{ tokenId, actorId, sceneId: canvas.scene.id }]);
+    await combat.update({ round: 1, turn: 0 });
+    await sleep(800);
+    await combat.update({ round: 2, turn: 0 });     // previous.round = 1 → the over-time tick runs
+    await sleep(6000);
+    out.afterFirstTick = {
+      statuses: statusesNow(),
+      fire: (actor.getFlag(SCOPE, "fireDotState") ?? []).length,
+      acid: (actor.getFlag(SCOPE, "dotState") ?? []).length,
+    };
+
+    /* §4b-iv — a second tick empties the burn, and the status goes with the last marker */
+    await combat.update({ round: 3, turn: 0 });
+    await sleep(6000);
+    out.afterSecondTick = {
+      statuses: statusesNow(),
+      fire: (actor.getFlag(SCOPE, "fireDotState") ?? []).length,
+      effects: effectStatuses(),
+    };
+  } finally {
+    if (combat) await combat.delete().catch(() => {});
+    await game.settings.set(SCOPE, "mechRoundTickAutomation", tickWas);
+    await game.settings.set(SCOPE, "fireDotEnabled", fireWas);
+    await game.settings.set(SCOPE, "acidArmorDotEnabled", acidWas);
+    await actor.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+    await actor.unsetFlag(SCOPE, "dotState").catch(() => {});
+    for (const id of ["burning", "corrode"]) {
+      if (actor.statuses?.has?.(id)) await actor.toggleStatusEffect(id, { active: false }).catch(() => {});
+    }
+    await sleep(1500);
+    out.restored = { statuses: statusesNow(), tick: game.settings.get(SCOPE, "mechRoundTickAutomation") };
+  }
+  return out;
+}, { actorId: fixture.actorId, tokenId: fixture.tokenId });
+console.log(`  (active GM for the tick: ${mirror.activeGM}${mirror.isSelfActiveGM ? " — this client" : " — ANOTHER client"})`);
+check("a fire DoT applied through the engine raises core's `burning`",
+  mirror.afterFireApply.statuses.includes("burning"), JSON.stringify(mirror.afterFireApply));
+check("and it is a real ActiveEffect carrying that status, not just a derived set",
+  mirror.afterFireApply.effects.includes("burning"), JSON.stringify(mirror.afterFireApply.effects));
+check("the burn's own marker was written beside it, by value",
+  mirror.afterFireApply.flag === 1, String(mirror.afterFireApply.flag));
+check("an acid DoT raises `corrode` and leaves the burn's status standing",
+  mirror.afterAcidApply.statuses.includes("corrode") && mirror.afterAcidApply.statuses.includes("burning"),
+  JSON.stringify(mirror.afterAcidApply));
+check("one tick: the 2-turn burn survives and KEEPS its status (negative on an early clear)",
+  mirror.afterFirstTick.fire === 1 && mirror.afterFirstTick.statuses.includes("burning"),
+  JSON.stringify(mirror.afterFirstTick));
+check("the same tick emptied the 1-turn acid, and `corrode` went with the last marker",
+  mirror.afterFirstTick.acid === 0 && !mirror.afterFirstTick.statuses.includes("corrode"),
+  JSON.stringify(mirror.afterFirstTick));
+check("a second tick empties the burn, and `burning` goes with its last marker",
+  mirror.afterSecondTick.fire === 0 && !mirror.afterSecondTick.statuses.includes("burning"),
+  JSON.stringify(mirror.afterSecondTick));
+check("no ActiveEffect is left carrying either condition",
+  !mirror.afterSecondTick.effects.includes("burning") && !mirror.afterSecondTick.effects.includes("corrode"),
+  JSON.stringify(mirror.afterSecondTick.effects));
+check("the section left the figure clean and the round-tick master where it found it",
+  mirror.restored.statuses.length === 0 && typeof mirror.restored.tick === "boolean",
+  JSON.stringify(mirror.restored));
+
 /* ─────────────────── §5 stacking ─────────────────── */
 console.log("\n§5 two conditions at once");
 const stack = await page.evaluate(async ({ mod, actorId, TID }) => {

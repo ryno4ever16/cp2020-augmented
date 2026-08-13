@@ -375,9 +375,9 @@ burrow · upgrade · downgrade · invisible · target · eye · bless · fireShi
 | **Unconscious** | condition id `unconscious` | `save-rolls.js:373` (failed stun check), lifted again at `:572` by the recovery check | present / absent | ✅ **ships** — as the *stunned* row, because this engine's stun outcome IS `unconscious` |
 | **Stunned (hand-set)** | condition id `stun` | nothing in the module — a GM's own token-HUD toggle | present / absent | ✅ **ships**, same row |
 | **On fire** | `flags.cp2020-augmented.fireDotState` | `damage-hooks.js:1436-1493` (per-turn burn, HP) | array of `{location, turnsLeft, formula, mult}`; absent or `[]` = not burning | ✅ **ships** |
-| **Burning (hand-set)** | condition id `burning` | nothing in the module | present / absent | ✅ **ships**, same row |
+| **Burning** | condition id `burning` | ⏪ **2026-08-13: the module now writes it too** — `save-rolls.js mirrorDotStatus` raises it with the fire flag and the per-turn tick lowers it with the last marker; a GM's own token-HUD toggle still sets it independently | present / absent | ✅ **ships**, same row |
 | **Acid / armour degradation** | `flags.cp2020-augmented.dotState` | `damage-hooks.js:1389-1425` (per-turn SP loss) | array of `{location, turnsLeft, …}`; absent or `[]` = clear | ✅ **ships** |
-| **Corroding (hand-set)** | condition id `corrode` | nothing in the module | present / absent | ✅ **ships**, same row |
+| **Corroding** | condition id `corrode` | ⏪ **2026-08-13: written by the module too**, same mirror, same pair of ends | present / absent | ✅ **ships**, same row |
 | **Poisoned** | condition id `poison` | **nothing** — no module mechanism produces poison today | present / absent | ✅ **ships** (the core id only) |
 | **Wound state** | `actor.woundState()`, derived `Math.ceil(system.damage / 4)` — a METHOD, there is no `system.woundState` | base system `actor/actor.js:509-514`; the only write site for `system.damage` is `actor-sheet.js:532-537` | integer 0–10: 0 unhurt · 1 Light · 2 Serious · 3 Critical · 4–10 Mortal 0–6 | ⚠ **no treatment — awaiting the user's call** |
 | **Taser / stun accumulation** | `flags.cp2020-augmented.taserState` | `damage-hooks.js:1712` | `{count, round, mod}` | ⚠ **awaiting call** |
@@ -1685,6 +1685,21 @@ all). So a figure shot to Mortal by a pattern or a blast was never asked whether
 `_postWoundSavePrompts` now emits both there, on the two clocks unchanged: **one** death prompt per
 application batch, **one stun prompt per damage event** — so a three-shell burst on a Mortal figure owes
 one death save and three stun saves. Death is asked first, in the single-target rail's own order.
+
+**2026-08-13 — the lasting-damage flags speak core's vocabulary too.**
+User report: a figure set on fire wore the ring and had **nothing** in its Active Effects. The two
+lasting-damage engines kept their state in module flags (`fireDotState`, `dotState`) and nothing ever
+toggled core's own `burning` / `corrode`, so no ActiveEffect document existed. Everything reading the
+FLAG agreed with everything else — this rail draws off **both** roads, which is exactly why the picture
+looked right — while everything reading `actor.statuses` saw an unhurt figure.
+
+| Ruling | Value | Why |
+|---|---|---|
+| the apply **raises** the core condition | `save-rolls.js mirrorDotStatus(target, "burning"\|"corrode", true)` after the flag write | one mechanism should not speak two vocabularies, only one of which anything else understands |
+| the **tick** lowers it, and only with the LAST marker | at the two prune sites in `_runOverTimeTick`, on the branch where the flag is unset | a body burning at a second location is still burning; clearing on any expiry would take the mark off it |
+| the toggle is **guarded on current state** | `actor.statuses.has(id) === active` → no-op | a re-ignited burn re-applies every turn; without the guard each one is a document write for no change, on a path the busiest hook in the module is listening to |
+| the write lands on the **actor handed in** | the token's synthetic actor for an unlinked figure | the status belongs to the body that is burning, not to the world actor whose id it shares |
+| this does **not** double the ring | the resolver asks whether ANY of a row's sources is raised | one condition arriving by both roads is still one mark — asserted |
 
 **2026-08-12 — ⏪ the rings go UNDER the mini: "reference exact", and the darkness cost is accepted.**
 The open call the ring rework left behind (§8, "needs eyes") came back the same day with one answer:
