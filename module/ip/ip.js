@@ -182,19 +182,27 @@ async function _maybeNudgeNeglect(queueLength) {
   } catch (e) { console.warn("cp2020-augmented | IP neglect nudge failed", e); }
 }
 
-/** Re-arm the nudge once the queue drops back below the threshold (so a future buildup re-nudges). */
-async function _rearmNeglectIfBelow() {
+/**
+ * Re-arm both "the queue is piling up" notices once the queue has actually SHRUNK past their
+ * trigger levels, so a future buildup speaks again. Called from every path that REMOVES rows
+ * (clear, award, dismiss, prune) — and from none that doesn't: Apply no longer empties the queue,
+ * so re-arming there would let the full-log warning nag once per Apply while still over the cap.
+ */
+async function _rearmQueueNotices() {
   if (!_isActiveGM()) return;
-  if (getQueue().length < NEGLECT_THRESHOLD && _neglectFlag("ipNeglectNudged")) {
+  const length = getQueue().length;
+  if (length < QUEUE_MAX) _overflowNotified = false;
+  if (length < NEGLECT_THRESHOLD && _neglectFlag("ipNeglectNudged")) {
     try { await game.settings.set(SCOPE, "ipNeglectNudged", false); } catch (e) { /* ignore */ }
   }
 }
 
-/** Empty the queue without awarding (the nudge's "Clear the backlog" off-ramp). */
+/** Empty the queue without awarding — the tracker's Clear control and the nudge's "Clear the
+ *  backlog" off-ramp. Active-GM only; a non-active GM relays, like every other queue mutation. */
 export async function clearQueue() {
+  if (!_isActiveGM()) { _relayToActiveGM("ipClearQueue", {}); return; }
   await setQueue([]);
-  _overflowNotified = false;
-  await _rearmNeglectIfBelow();
+  await _rearmQueueNotices();
   _rerenderTracker();
 }
 
@@ -209,7 +217,7 @@ export async function pruneOrphanQueue({ rerender = true } = {}) {
   const live = q.filter(r => game.actors.get(r.actorId));
   if (live.length === q.length) return 0;
   await setQueue(live);
-  await _rearmNeglectIfBelow();
+  await _rearmQueueNotices();
   if (rerender) _rerenderTracker();
   return q.length - live.length;
 }
@@ -221,7 +229,7 @@ export async function removeActorFromQueue(actorId) {
   const kept = q.filter(r => r.actorId !== actorId);
   if (kept.length === q.length) return 0;
   await setQueue(kept);
-  await _rearmNeglectIfBelow();
+  await _rearmQueueNotices();
   _rerenderTracker();
   return q.length - kept.length;
 }
@@ -277,7 +285,7 @@ async function _enqueue(row) {
 export async function dismissQueueRow(rowId) {
   if (!_isActiveGM()) { _relayToActiveGM("ipDismissRow", { rowId }); return; }
   await setQueue(getQueue().filter(r => r.id !== rowId));
-  await _rearmNeglectIfBelow();
+  await _rearmQueueNotices();
   _rerenderTracker();
 }
 
@@ -289,12 +297,6 @@ export async function updateQueueRow(rowId, patch) {
   if (!row) return;
   Object.assign(row, patch);
   await setQueue(q);
-}
-
-/** Resolve every queued row (award each row's current IP/success), emptying the queue. Active-GM only. */
-export async function resolveAllQueue() {
-  if (!_isActiveGM()) { _relayToActiveGM("ipResolveAll", {}); return; }
-  for (const row of getQueue()) await resolveQueueRow(row.id);
 }
 
 /* --------------------------------------------------------------------- */
@@ -374,7 +376,7 @@ export async function resolveQueueRow(rowId) {
   // Re-read at write time (not the pre-await snapshot): a row enqueued during awardPending's await
   // window must survive — only THIS row is removed. Mirrors dismissQueueRow.
   await setQueue(getQueue().filter(r => r.id !== rowId));
-  await _rearmNeglectIfBelow();
+  await _rearmQueueNotices();
   _rerenderTracker();
 }
 
@@ -384,7 +386,12 @@ export async function resolveQueueRow(rowId) {
 
 /**
  * Release all pending IP to banked across every party actor (or one actor if given): for each
- * skill, ip += ipPending, ipPending = 0. Clears the queue + throttle counters (new cycle).
+ * skill, ip += ipPending, ipPending = 0. Starts a new throttle cycle.
+ *
+ * Apply APPLIES, and nothing else — it does not touch the queue. A roll nobody has ruled on yet
+ * stays queued (and lands in the next cycle's pending when it is finally awarded, which is exactly
+ * what the throttle reset here means); a roll that arrives mid-Apply cannot be swallowed either.
+ * Discarding queued rolls is a deliberate, counted act of its own — see clearQueue.
  */
 export async function applyPending(actor = null) {
   const actors = actor ? [actor] : game.actors.filter(a => a.type === "character" || a.type === "npc");
@@ -404,11 +411,7 @@ export async function applyPending(actor = null) {
     }
     if (updates.length) await a.updateEmbeddedDocuments("Item", updates);
   }
-  // Clear the queue + throttle for the new cycle.
-  await setQueue(actor ? getQueue().filter(r => r.actorId !== actor.id) : []);
-  await resetThrottle();
-  _overflowNotified = false;
-  await _rearmNeglectIfBelow();
+  await resetThrottle();          // a new cycle for the per-skill award counters; the queue stands
   _rerenderTracker();
   ui.notifications?.info(localize("IpApplied", { ip: released }));
   return released;
@@ -501,7 +504,7 @@ export function registerIpHooks() {
         case "ipDismissRow":  await dismissQueueRow(data.payload?.rowId); break;
         case "ipUpdateRow":   await updateQueueRow(data.payload?.rowId, data.payload?.patch); break;
         case "ipResolveRow":  await resolveQueueRow(data.payload?.rowId); break;
-        case "ipResolveAll":  await resolveAllQueue(); break;
+        case "ipClearQueue":  await clearQueue(); break;
       }
     } catch (e) { console.warn("cp2020-augmented | IP relay action failed", e); }
   });

@@ -3,6 +3,7 @@
         <button type="button" data-action="ipManual" title="{{localize "CYBERPUNK.IpManualAddTip"}}">＋ {{localize "CYBERPUNK.IpManualAdd"}}</button>
         <span class="flex-pad" style="flex:1;"></span>
         {{#unless (equals throttle "off")}}<button type="button" data-action="ipReset" title="{{localize "CYBERPUNK.IpThrottleResetTip"}}">↻ {{localize "CYBERPUNK.IpThrottleResetBtn"}}</button>{{/unless}}
+        {{#if rowCount}}<button type="button" data-action="ipClear" title="{{localize "CYBERPUNK.IpClearTip"}}">✕ {{localize "CYBERPUNK.IpClear"}}</button>{{/if}}
         <button type="button" data-action="ipApply" title="{{localize "CYBERPUNK.IpApplyTip"}}"><b>{{localize "CYBERPUNK.IpApply"}}</b></button>
     </div>
 

@@ -1,5 +1,5 @@
 import {
-  getQueue, pruneOrphanQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, resolveAllQueue,
+  getQueue, pruneOrphanQueue, updateQueueRow, resolveQueueRow, dismissQueueRow, clearQueue,
   applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
   bankForSkill, poolForActor, setActorPool, setSkillBank
 } from "./ip.js";
@@ -25,6 +25,7 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     resizable: true,
     actions: {
       ipApply:  IpTracker._onApply,
+      ipClear:  IpTracker._onClear,
       ipReset:  IpTracker._onReset,
       ipManual: IpTracker._onManual,
       ipAward:  IpTracker._onAward,
@@ -105,9 +106,27 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
 
   // ---------- actions (static, bound by V2 via data-action) ----------
 
+  /** Apply = release pending IP to the players and start a new throttle cycle. It deliberately does
+   *  NOT resolve or drop queued rows: rows the GM hasn't ruled on are still theirs to rule on after
+   *  an Apply, and can be awarded into the next cycle. Discarding them is _onClear's job. */
   static async _onApply(event, target) {
-    await resolveAllQueue();
     await applyPending();
+    this.render(false);
+  }
+
+  /** Discard every queued roll without awarding anything — the one control that empties the queue,
+   *  so it says how many rolls are about to go. */
+  static async _onClear(event, target) {
+    const count = getQueue().length;
+    if (!count) return;
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: localize("IpClearTitle") },
+      content: `<p>${localize("IpClearBody", { count })}</p>`,
+      yes: { callback: () => true },
+      no: { default: true, callback: () => false },
+    });
+    if (!ok) return;
+    await clearQueue();
     this.render(false);
   }
 
