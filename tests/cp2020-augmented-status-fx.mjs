@@ -102,11 +102,12 @@ eq("output is in table order, not input order", pure.order, ["burning", "poison"
 eq("NEGATIVE: nothing set raises nothing", pure.empty, []);
 eq("NEGATIVE: unrelated core ids raise nothing", pure.unrelated, []);
 eq("the shipped table is exactly five rows", pure.rowIds, ["burning", "poison", "acid", "stunned", "dead"]);
+// The ring standard (user ruling 2026-08-12): every non-ground row rides the figure's rim.
 eq("the shipped database keys", pure.rowKeys, [
-  "jb2a.flames.02.orange",
-  "jb2a.markers.poison.dark_green.02",
-  "jb2a.bubble.002.001.loop.blue",
-  "jb2a.markers.stun.purple.02",
+  "jb2a.shield_themed.below.fire.01.orange",
+  "jb2a.markers.smoke.ring.loop.bluepurple",
+  "jb2a.shield_themed.below.molten_earth.01.orange",
+  "jb2a.shield_themed.below.eldritch_web.01.dark_purple",
   "jb2a.markers.simple.001.loop.001.red",
 ]);
 check("the stamped name encodes figure then row", pure.namesFor === "cp2020-augmented.statusfx.TOKENID.burning", pure.namesFor);
@@ -124,12 +125,14 @@ const geo = await page.evaluate(async (mod) => {
     spec: { rise: M.STATUS_FX.badgeRise, spacing: M.STATUS_FX.badgeSpacing, spread: M.STATUS_FX.bodySpread, maxLive: M.STATUS_FX.maxLive, life: M.STATUS_FX.lifetimeMs },
   };
 }, MOD);
-eq("badge slot 0 sits left of centre, above the figure", geo.poison1, { x: -0.21, y: -0.8 });
-eq("badge slot 1 sits right of centre, same height", geo.stun1, { x: 0.21, y: -0.8 });
-eq("body slot 0 is nudged left of the figure's centre", geo.burn1, { x: -0.11, y: 0 });
-eq("body slot 1 is nudged right by the same amount", geo.acid1, { x: 0.11, y: 0 });
+// Ring rows stack CONCENTRICALLY — no slot offset for any of them, at any figure size; their
+// differing rim scales (1.0 / 1.05 / 1.18 / 1.25) are what keep them visually apart.
+eq("a ring row takes no slot offset (poison)", geo.poison1, { x: 0, y: 0 });
+eq("a ring row takes no slot offset (stunned)", geo.stun1, { x: 0, y: 0 });
+eq("a ring row takes no slot offset (burning)", geo.burn1, { x: 0, y: 0 });
+eq("a ring row takes no slot offset (acid)", geo.acid1, { x: 0, y: 0 });
 eq("a ground mark takes no offset", geo.dead1, { x: 0, y: 0 });
-eq("a 2-square figure wears its badges outside itself", geo.poison2, { x: -0.21, y: -1.3 });
+eq("figure size does not move a ring", geo.poison2, { x: 0, y: 0 });
 eq("the spec block's own values", geo.spec, { rise: 0.3, spacing: 0.42, spread: 0.22, maxLive: 60, life: 600000 });
 
 /* ─────────────────── fixtures ─────────────────── */
@@ -162,7 +165,7 @@ const live1 = await page.evaluate(async ({ mod, actorId, TID }) => {
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 const burnName = `cp2020-augmented.statusfx.${fixture.tokenId}.burning`;
 eq("condition set → exactly one mark, under the stamped name", live1.drawn, [burnName]);
-eq("the drawn entry is the decoded side-elevation flame key", live1.files, ["jb2a.flames.02.orange"]);
+eq("the drawn entry is the decoded rim-ring key", live1.files, ["jb2a.shield_themed.below.fire.01.orange"]);
 eq("condition cleared → the mark is gone", live1.after, []);
 
 /* ─────────────────── §4 the module-flag road ─────────────────── */
@@ -180,7 +183,7 @@ const live2 = await page.evaluate(async ({ mod, actorId, TID }) => {
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 eq("armour-degradation flag written → the acid mark appears", live2.drawn,
   [`cp2020-augmented.statusfx.${fixture.tokenId}.acid`]);
-eq("the drawn entry is the bubbling-loop key", live2.files, ["jb2a.bubble.002.001.loop.blue"]);
+eq("the drawn entry is the recoloured molten-ring key", live2.files, ["jb2a.shield_themed.below.molten_earth.01.orange"]);
 eq("flag cleared → the mark is gone", live2.after, []);
 
 /* ─────────────────── §5 stacking ─────────────────── */
@@ -208,8 +211,9 @@ eq("both marks are drawn, one per condition", stack.names, [
   `cp2020-augmented.statusfx.${fixture.tokenId}.poison`,
 ].sort());
 const offX = Object.fromEntries(stack.offsets.map(o => [o.n, o.x]));
-check("the two marks sit at two different offsets",
-  offX.burning !== null && offX.poison !== null && offX.burning !== offX.poison,
+// Rings are concentric by design: neither mark takes a sprite offset (their rim scales differ instead).
+check("ring marks stack concentrically — neither takes a slot offset",
+  (offX.burning === null || offX.burning === 0) && (offX.poison === null || offX.poison === 0),
   JSON.stringify(offX));
 check("no document was written: the scene carries no effect flags", stack.sceneFlagKeys === 0, String(stack.sceneFlagKeys));
 check("both cleared → nothing left", stack.after === 0, String(stack.after));

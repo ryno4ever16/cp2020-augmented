@@ -405,47 +405,62 @@ read straight across from the source material get adapted **with** them. Inventi
 calls rather than in the table as guesses. Each is **one row** in `STATUS_FX_ROWS` when a call arrives —
 a table entry, not a code change.
 
-### 2a.2 The five shipped rows
+### 2a.2 The five shipped rows — THE RING STANDARD (reworked 2026-08-12)
+
+**User ruling 2026-08-12: "All of our effects should look like this ring effect."** The reference
+setup dresses its conditions as a ring riding the figure's rim (its "On Fire" tiers are the JB2A
+`shield_themed` fire rings: Mild = below-token, Strong = above-token, Deadly = both at `_03`, the
+one tier that is patreon-gated). Every non-ground row is a **ring** now; the 2026-08-11 centered
+flame / badge treatments are superseded, each row's old key recorded at its site as the revert.
 
 | Row | Raised by | Database key | Placement | Size / opacity |
 |---|---|---|---|---|
-| `burning` | `burning` · `fireDotState` | `jb2a.flames.02.orange` | **body**, above lighting | `scaleToObject` 1.15, opacity 0.85 |
-| `poison` | `poison` | `jb2a.markers.poison.dark_green.02` | **badge**, above lighting | 0.55 sq, opacity 0.95 |
-| `acid` | `corrode` · `dotState` | `jb2a.bubble.002.001.loop.blue` **recoloured** | **body**, above lighting | `scaleToObject` 0.9, opacity 0.8 |
-| `stunned` | `stun` · `unconscious` | `jb2a.markers.stun.purple.02` | **badge**, above lighting | 0.55 sq, opacity 0.95 |
-| `dead` | `dead` | `jb2a.markers.simple.001.loop.001.red` | **ground**, below tokens | `scaleToObject` 1.25, opacity 0.55 |
+| `burning` | `burning` · `fireDotState` | `jb2a.shield_themed.below.fire.01.orange` | **ring**, above lighting | `scaleToObject` 1.18 (= 400/339 ink), opacity 0.85 |
+| `poison` | `poison` | `jb2a.markers.smoke.ring.loop.bluepurple` **recoloured** | **ring**, above lighting | `scaleToObject` 1.0 (ink is full-frame), opacity 0.85 |
+| `acid` | `corrode` · `dotState` | `jb2a.shield_themed.below.molten_earth.01.orange` **recoloured** | **ring**, above lighting | `scaleToObject` 1.05 (= 400/382), opacity 0.8 |
+| `stunned` | `stun` · `unconscious` | `jb2a.shield_themed.below.eldritch_web.01.dark_purple` | **ring**, above lighting | `scaleToObject` 1.25 (= 400/320), opacity 0.9 |
+| `dead` | `dead` | `jb2a.markers.simple.001.loop.001.red` | **ground**, below tokens | `scaleToObject` 1.25, opacity 0.55 — already a ring; unchanged |
 
-**Every key was decoded before it was chosen** (§9 A/4), and two decodes decided rows outright. Read off
-the installed clips at 98 % of each one's own maximum, thirds and first-to-last seam:
+**Every key was decoded before it was chosen** (§9 A/4). The ring set, read off the installed clips
+(thirds = mean luminance per clip third; seam = |first − last| frame):
 
-| Clip | Frame | Duration | Thirds (mean luminance) | Seam | Verdict |
+| Clip | Frame | Duration | Thirds | Seam | Verdict |
 |---|---|---|---|---|---|
-| `flames.02.orange` | 400×400, ink 289×316 | 4967 ms | 41.2 / 43.4 / 42.1 | 3.18 | ✅ **taken** — a SIDE elevation (taller than wide) that holds its brightness, which is what a burning figure needs |
-| `flames.01.orange` | 200×200 | 5000 ms | 110.3 / 79.4 / **114.1** | **14.09** | ✗ swings across its own thirds with a heavy seam — it visibly pulses when looped |
-| `flames.orange.03.1x1` | 300×300 | 5000 ms | 22.8 / 22.6 / 24.9 | 4.44 | ✗ the burning ground's asset, authored as a top-down **ground plate** — reads as a puddle on a body |
-| `markers.stun.purple.02` | 400×400, ink 278×302 | 6042 ms | 12.5 / 12.4 / 12.8 | 0.75 | ✅ **taken** — purpose-built for the condition and flat across its own clip |
-| `dizzy_stars.400px.blueorange` | 400×400 | 2000 ms | 115.4 / 170.4 / **35.9** | 0.08 | ✗ the literal "circling stars" and **not a loop**: it fades to a fifth of its own middle and starts black, so looping it strobes every two seconds. One constant away — §8 |
-| `markers.poison.dark_green.02` | 400×400, ink 269×298 | 6042 ms | 20.1 / 20.0 / 22.2 | 1.17 | ✅ **taken** |
-| `bubble.002.001.loop.blue` | 600×600, ink 467×372 | 4000 ms | 12.9 / 17.4 / 18.2 | 1.97 | ✅ **taken**, recoloured — the free tier's only true bubbling loop, and it is blue |
-| `bubble.001.001.loop.blue` | 400×400 | 2000 ms | 32.5 / 31.2 / 28.2 | 5.53 | ✗ the worse seam of the pair |
-| `markers.simple.001.loop.001.red` | 600×600, ink 421×414 | 2000 ms | 24.9 / 26.8 / 25.3 | **0.29** | ✅ **taken** — the cleanest seam measured, and already red |
+| `shield_themed.below.fire.01.orange` | 400×400, ink 339×345 | 5000 ms | 28.3 / 30.6 / 26.5 | 5.39 | ✅ **taken** — flat across its thirds; the flame flicker masks the seam |
+| `shield_themed.above.fire.01.orange` | 400×400, ink 358×361 | 5000 ms | **60.2 / 49.9 / 40.9** | 7.48 | ✗ as a loop — it DECAYS across its own clip and pulses every 5 s. Kept on record as the "stronger tier" one-key swap, carrying this caveat |
+| `shield_themed.below.molten_earth.01.orange` | 400×400, ink 382×384 | 5000 ms | 31.0 / 31.9 / 31.0 | **2.59** | ✅ **taken**, recoloured — the cleanest loop of the set |
+| `shield_themed.below.eldritch_web.01.dark_purple` | 400×400, ink 320×317 | **10042 ms** | 47.6 / 47.6 / 47.5 | 2.87 | ✅ **taken** — dead flat, native purple, longest loop of the set |
+| `markers.smoke.ring.loop.bluepurple` | 400×400, ink full-frame (30 fps) | 5067 ms | 56.9 / 56.9 / 54.5 | 5.05 | ✅ **taken**, recoloured toward green |
+| `shield.01.loop.blue` | 400×400, ink 328×332 | 4033 ms | 75.8 / 75.3 / 77.7 | **0.45** | ○ the glass-dome sheen on its own — not layered in v1 (the shield_themed rings carry their own sheen); recorded as the layering option |
 
-**The acid colour is ours, not the asset's.** One ColorMatrix on that row — hue **−120**, saturate
-**+0.15**, brightness **1.0** — rotates the blue to an acid green. Reverting is deleting one field.
+Superseded decodes (the 2026-08-11 table: `flames.02.orange`, `flames.01`, `flames.orange.03.1x1`,
+`markers.stun.purple.02`, `dizzy_stars`, `markers.poison.dark_green.02`, `bubble.002/001`) remain in
+git history at this section; their verdicts still hold for what they measured.
+
+**Two colours are ours, not the assets'.** Acid: hue **−120**, saturate +0.15 rotates the molten
+orange to green. Poison: hue **+130**, saturate +0.1 rotates the smoke ring's blue-purple to a fume
+green. Reverting either is deleting one field.
+
+**Reference-fidelity note.** The reference draws its `Below` ring UNDER the mini; ours rides above
+the token so `aboveLighting` keeps it visible on unlit squares (the rail's standing visibility
+ruling). `below: true` on a row is the reference-exact revert — at the cost of vanishing in
+darkness, the dead row's documented trade.
 
 ### 2a.3 Stacking, and the rule that stops marks from sliding
 
 Three placement families, each with its own answer, because one offset scheme for all of them would put
 a badge on a figure's chest or a flame on the floor:
 
-- **body** — `scaleToObject`, nudged sideways by `bodySpread` (**0.22**) × the figure's own width, so a
-  burning figure being eaten by acid reads as two things rather than one smear. Slots: burning −0.11 w,
-  acid +0.11 w.
+- **ring** (the house standard since 2026-08-12) — `scaleToObject` at the row's ink-fraction scale,
+  **centred, no slot offset**: rings stack CONCENTRICALLY, and their differing rim scales (1.0 /
+  1.05 / 1.18 / 1.25) are what keep simultaneous conditions apart. All four non-ground rows use it.
+- **body** — `scaleToObject`, nudged sideways by `bodySpread` (**0.22**) × the figure's own width.
+  No shipped row uses it since the ring rework; the family and its constant stay for a future row
+  that is genuinely a body treatment.
 - **badge** — a fixed **0.55 sq** mark, `badgeSpacing` **0.42** apart, sitting `badgeRise` **0.30**
-  above the figure's own top edge — measured from `tokenRadiusPx`, so a 2×2 figure wears its badges
-  outside itself (y −0.80 at 1 square, **−1.30** at 2) rather than on its chest. Slots: poison −0.21,
-  stunned +0.21.
-- **ground** — centred, no offset.
+  above the figure's own top edge. Also unused since the rework; kept for the §8 rows whose
+  eventual look may be a badge.
+- **ground** — centred, no offset (the dead row).
 
 ⭐ **A slot belongs to a ROW, not to draw order.** `statusFxOffset` is a pure function of the row id, so
 a figure that gains a third condition does not shuffle the two it is already wearing. Reordering
@@ -1536,9 +1551,9 @@ is the table, so a sixth condition is a row rather than a change:
 | Knob | Ships as | Changes |
 |---|---|---|
 | `STATUS_FX_ROWS[].key` | see §2a.2 | which clip a condition wears. Every key is guarded by `fxDbEntryExists`, so a tier without it skips silently |
-| `STATUS_FX_ROWS[].placement` | `body` / `badge` / `ground` | where the mark sits, and therefore which sizing rule it takes. Moving the `dead` row to `badge` is what lifts it out from under the lighting |
-| `STATUS_FX_ROWS[].colour` | acid only: hue **−120**, saturate **+0.15**, brightness **1.0** | the acid row's recolour of a blue bubbling loop. Deleting the field restores the asset's own blue |
-| `STATUS_FX_ROWS[].scale` / `.opacity` | burning 1.15/0.85 · acid 0.9/0.8 · dead 1.25/0.55 · badges —/0.95 | one row's own presence |
+| `STATUS_FX_ROWS[].placement` | `ring` / `body` / `badge` / `ground` | where the mark sits, and therefore which sizing rule it takes. `ring` (the 2026-08-12 standard) is centred and concentric; moving the `dead` row to `badge` lifts it above the lighting |
+| `STATUS_FX_ROWS[].colour` | acid: hue **−120**, sat **+0.15** · poison: hue **+130**, sat **+0.1** | the two ring recolours (molten orange → acid green; smoke blue-purple → fume green). Deleting the field restores the asset's own colour |
+| `STATUS_FX_ROWS[].scale` / `.opacity` | burning 1.18/0.85 · poison 1.0/0.85 · acid 1.05/0.8 · stunned 1.25/0.9 · dead 1.25/0.55 | ring scales are the decode's ink-fraction compensation (frame ÷ ink), measured not chosen; the opacities are build-lane picks |
 | `STATUS_FX.badgeSquares` | **0.55** | a badge's drawn frame in grid units (the marker clips carry ink across ~0.7 of it) |
 | `STATUS_FX.badgeRise` / `.badgeSpacing` | **0.30** / **0.42** | how far above the figure's own top edge badges sit, and how far apart |
 | `STATUS_FX.bodySpread` | **0.22** | how far two body treatments are pushed apart, as a fraction of the figure's width |
@@ -1586,6 +1601,20 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-12 — ⏪ the ring standard: condition overlays wear the reference's rim ring.**
+User, on seeing the centered flame on the review target: it is "not going to cut it… the reference
+has a sort of glass sheen effect with a fire spinning around the circular rim of the token" — then,
+on the identified `shield_themed` family: **"All of our effects should look like this ring effect."**
+Reversal of the 2026-08-11 unit's centered-flame/badge looks (their decodes and keys stay recorded at
+§2a.2 history + per-row in status-fx.js).
+
+| Ruling | Value | Why |
+|---|---|---|
+| every non-ground row is a **ring** | new placement family `ring`, concentric, no slot offset | the user's directive; the reference's own composition (its "On Fire" tiers are `shield_themed` fire rings) |
+| burning = the reference's own key | `jb2a.shield_themed.below.fire.01.orange` | free tier carries the exact file the reference names; only the `_03` "Deadly" tier is patreon-gated |
+| ring diameter compensates ink | scale = frame ÷ ink extent per decode | a ring drawn at frame scale sits inside the rim by its own padding |
+| rings ride OVER the token, above lighting | `aboveLighting`, no `below` | visibility on unlit squares (the rail's standing ruling); `below: true` per row = reference-exact underlay — **user call open, §8** |
 
 **2026-08-12 — a referee can call in an arrival, and it hovers.**
 The docket described a recorded reference: a marked rectangular area with caution marks and a
@@ -2269,11 +2298,14 @@ presented while the screen stayed empty.
 | One shipped shell weapon records **no gauge** | 10 of the 11 shell weapons in `supplement-shotguns` carry a gauge in `ammoType`; one carries an empty string, so it reports no cartridge and throws no pattern until an ammo item is loaded. Same shape as the known blank-`vehicleType` data gap, and it belongs to the pack-data sweep rather than to this rail. |
 | The pattern's look is **verified on v14 only** | `spread-zone-look.js` carries a v13 branch (a MeasuredTemplate's own alpha, and its control icon hidden) written from that core's API and never run: the ship target is v14 and the rig is v14. Structurally the same two facts; it is untested and says so at the site. |
 | ⭐⭐ **ELEVEN CONDITIONS HAVE NO TREATMENT AND ARE WAITING ON THE USER** | ⚠ **The open item of this unit, and it is a batch of calls rather than a defect.** The instruction was that conditions which do not read straight across from the source material get adapted **with** the user, so the inventory (§2a.1) is closed and complete while the look for each of these is deliberately blank. Each becomes **one row** in `STATUS_FX_ROWS` — a table entry, not a code change. In the order I would ask them: ① **wound state** (`actor.woundState()`, 0–10 — the one every table would notice; a badge that changes with the tier, or nothing?) · ② **radiation** (two markers: `radExposure` the running dose, `radState` the stat loss — one look or two?) · ③ **drugged** and ④ **addicted** (`drugState` / `addictionState`) · ⑤ **taser accumulation** (`taserState`) · ⑥ **choking** (`chokeState`) · ⑦ **stabilized** (`stabilized` — arguably a *good* mark, the one row in the list that is not a problem) · ⑧ **flesh limb lost** (`fleshLimbStatus`) · ⑨ **cyberlimb SDP damage** (derived from `sdp.current` vs `sdp.sum`; note the base system draws no conclusion from a zeroed zone) · ⑩ **consumable timer running** (`consumableState` — this one **already** puts core's own icon on the token, so a second mark may be redundant) · ⑪ the ~25 core condition ids nothing in the module ever sets (`prone`, `blind`, `deaf`, `fear`, `bleeding`, `frozen`, …) — a GM can toggle any of them by hand and none has a look. |
-| **The stunned look is the marker clip, not the circling stars** | ⚠ **Needs eyes.** The user asked for "classic circling stars/sparks" and the free tier has exactly that — `jb2a.dizzy_stars.400px.blueorange` — but it is **not a loop**: 2000 ms, thirds 115.4/170.4/**35.9**, starting and ending black (seam 0.08), so looping it strobes on and off every two seconds. What ships is `jb2a.markers.stun.purple.02`, purpose-built for the condition and flat across its own 6042 ms (12.5/12.4/12.8, seam 0.75). If the stars are wanted anyway the swap is **one constant** (`STATUS_FX_ROWS` → the `stunned` row's `key`) and the pulse comes with them; making them loop cleanly instead would mean a re-issue on a 2 s clock, which is a different build. |
+| ~~The stunned look is the marker clip, not the circling stars~~ | ⏪ **SUPERSEDED 2026-08-12 by the ring standard** — stunned now wears the eldritch-web ring (`shield_themed.below.eldritch_web.01.dark_purple`, native purple, 10 s dead-flat loop). The stars question stands unchanged for the record: `dizzy_stars` is still not a loop (2000 ms, fades to black, strobes if looped) and remains one constant away with that pulse attached. |
 | **Whether `stun` and `unconscious` deserve two different looks** | ⚠ They share one row today because this engine's stun outcome IS `unconscious` (the failed check sets it, the recovery check lifts it) and core's `stun` is only ever hand-set. If a table wants "rattled" to read differently from "out cold", that is a second row and a second key. |
-| **The acid row's colour is a build-lane pick** | ⚠ The *rule* is the razor — acid should not look like the poison badge — and the placement carries most of that (poison is a badge above the figure, acid bubbles over the body). The *numbers* are mine: hue **−120**, saturate **+0.15**, brightness **1.0** over a blue bubbling loop, because the free tier has no green one with the right motion. Deleting the `colour` field restores the asset's own blue. |
-| **The dead ring is invisible on an unlit square** | ⚠ **Stated so it is a decision, not a surprise.** It is drawn **below the tokens**, which is also below the lighting, so on a dark scene it is not there to be seen. Accepted on this row alone because core's own skull icon on the token is unaffected and still carries the fact, and because a ring drawn over ground the viewer cannot see is the trade the whole rail's above-lighting note describes. One field (`placement: "badge"`) lifts it out. |
-| **The five sizes and opacities are build-lane picks** | ⚠ Chosen against each other on the rig rather than in front of the user: burning `scaleToObject` **1.15** / opacity 0.85 · acid 0.9 / 0.8 · dead 1.25 / **0.55** · badges 0.55 sq / 0.95, spaced 0.42 apart and raised 0.30 above the figure's edge. Every one is a single constant and a veto costs nothing. |
+| **The acid row's colour is a build-lane pick** | ⚠ Carried across the ring rework: hue **−120**, saturate **+0.15** now rotates the molten-earth ring's orange to acid green (the ring set has no green). Deleting the `colour` field restores the asset's own orange. |
+| **The poison row's colour is a build-lane pick** | ⚠ New with the ring rework: hue **+130**, saturate **+0.1** rotates the smoke ring's blue-purple toward a fume green. Deleting the `colour` field restores the asset's own colour. |
+| **Rings ride OVER the token; the reference draws its Below ring UNDER the mini** | ⚠ **The look call of the ring rework, needs eyes.** Over-token + `aboveLighting` keeps a condition visible on unlit squares (the rail's standing visibility ruling) at the cost of flames/web overlapping the mini's edges — which is also roughly what the reference's *Strong* tier looks like. `below: true` on a row restores the reference-exact underlay and inherits the dead row's darkness trade. One field per row. |
+| **A stronger burning tier is one key away, and it pulses** | ⚠ The reference tiers its fire (Mild = below ring, Strong = above ring, Deadly = both at `_03`, patreon-gated). Our single `fireDotState` ships the below ring. `shield_themed.above.fire.01.orange` is installed and free — but it DECAYS across its own clip (thirds 60.2/49.9/40.9) and pulses every 5 s when looped. If a stronger look is wanted, layering below+above at `_01` is the honest free-tier approximation; the pulse rides along and is recorded here first. |
+| **The dead ring is invisible on an unlit square** | ⚠ **Stated so it is a decision, not a surprise.** It is drawn **below the tokens**, which is also below the lighting, so on a dark scene it is not there to be seen. Accepted on this row alone because core's own skull icon on the token is unaffected and still carries the fact. One field (`placement: "badge"`) lifts it out. |
+| **The ring opacities are build-lane picks; the scales are measured** | ⚠ Each ring's `scaleToObject` is the decode's ink-fraction compensation (burning 1.18 = 400/339 · acid 1.05 · stunned 1.25 · poison 1.0) — measured, not chosen. The OPACITIES are mine: 0.85 / 0.8 / 0.9 / 0.85, dead 0.55. Every one is a single constant and a veto costs nothing. |
 | **The overlays ride the shot rail's master switch and have none of their own** | ⚠ `combatFxEnabled` governs both, which is what the docket specified. A table that wants gunfire effects but no condition marks (or the reverse) has no way to say so today; a dedicated sub-toggle is one setting plus one reader if it is wanted. |
 | **An evicted overlay is silent about being evicted** | ⚠ Past `maxLive` = 60 the oldest mark is ended to make room, so on a very busy scene a figure can be wearing a condition with nothing drawn until the next event touching it redraws it. The reconciler makes this self-correcting rather than permanent, and 60 is twelve fully-marked figures, but the failure mode is worth knowing before someone reports a missing flame. |
 | ⛔⛔ **THE ARRIVAL'S FIVE FIGURES ARE A CINEMATIC, NOT FIVE FIGURES — AND THAT IS A BUILD-LANE CALL** | ⚠ **THE OPEN ITEM OF THIS UNIT, and the first thing to ask.** The reference shows five people getting out. What ships is five SPRITES: no actor, no token, no document of any kind (asserted both directions by the keeper). The reasoning is that real figures are a *document* feature carrying questions a presentation rail cannot answer — which actors, owned by whom, cleaned up when, and what happens to them when the aircraft leaves — and half-building one is worse than not building it. If what was wanted is five figures a table can move and roll for, that is the non-player-figure generator's job and this sequence becomes its trigger: the seam is `figureSchedule()`, which already returns five stated points and five stated instants, so a document-creating caller has exactly the geometry it needs and nothing else has to move. |

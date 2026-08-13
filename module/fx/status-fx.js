@@ -90,7 +90,10 @@ export const STATUS_FX = Object.freeze({
  *             raised when it holds a non-empty array or a truthy object (that is the shape every
  *             lasting-damage engine on this module stores — a list of live markers).
  * `key`       the database key. Existence is guarded per draw; a tier without it skips silently.
- * `placement` `body` (on the figure) · `badge` (a small mark above it) · `ground` (under it).
+ * `placement` `ring` (riding the figure's rim, centered, concentric with its siblings — the house
+ *             standard since the 2026-08-12 ruling) · `body` (on the figure, side-spread) · `badge`
+ *             (a small mark above it) · `ground` (under it). A ring takes no slot offset: rings
+ *             stack concentrically, and their differing rim scales keep them apart.
  * `colour`    an optional ColorMatrix, for a row whose only loop in the free tier is the wrong colour.
  * `suppressedBy` a row id that, when present, cancels this one.
  *
@@ -98,18 +101,28 @@ export const STATUS_FX = Object.freeze({
  * gains a third condition does not shuffle the two it already wore. Reordering this array moves marks
  * on screen.
  *
- * ⭐ EVERY KEY WAS DECODED BEFORE IT WAS CHOSEN, not picked by name (standard §A/4). The numbers are in
- * docs/FX-RAIL.md §2a; the two that decided rows outright:
- *   · `jb2a.flames.02.orange` is a SIDE elevation (ink 289×316 of a 400×400 frame — taller than wide)
- *     and holds its brightness across its own clip (thirds 41.2/43.4/42.1, seam 3.18), which is what a
- *     burning figure needs. `jb2a.flames.orange.03.1x1`, the burning ground's asset, is authored as a
- *     top-down GROUND plate and reads as a puddle when hung on a body; `jb2a.flames.01.orange` swings
- *     110→79→114 across its own thirds with a 14.09 seam, i.e. it visibly pulses when looped.
- *   · `jb2a.dizzy_stars.400px.blueorange` is the literal "circling stars" and is NOT a loop: 2000 ms,
- *     thirds 115/170/36, i.e. it fades to a fifth of its own middle and starts black (seam 0.08). Loop
- *     it and it strobes on and off every two seconds. `jb2a.markers.stun.purple.02` is purpose-built
- *     for the same condition, runs 6042 ms, and is flat across its thirds (12.5/12.4/12.8, seam 0.75).
- *     The stars remain one constant away — see docs/FX-RAIL.md §8.
+ * ⭐ EVERY KEY WAS DECODED BEFORE IT WAS CHOSEN, not picked by name (standard §A/4).
+ *
+ * ⭐⭐ THE RING STANDARD (user ruling 2026-08-12: "All of our effects should look like this ring
+ * effect"). The reference setup dresses a condition as a ring riding the figure's rim — the JB2A
+ * `shield_themed` family (fire below/above the token, molten earth, eldritch web) — under a dome
+ * sheen that is the asset's own. Every non-ground row below is a RING now; the earlier centered
+ * flame / badge treatments are the superseded mechanism, and each row records its revert key.
+ * Decode numbers for the ring set (24 fps unless noted; thirds = mean luma per clip third; seam =
+ * |first−last| frame):
+ *   · shield_themed.below.fire.01.orange       5000 ms, ink 339×345/400², thirds 28.3/30.6/26.5
+ *     (flat), seam 5.39 — the flicker masks the seam. THE burning ring.
+ *   · shield_themed.above.fire.01.orange       5000 ms, ink 358×361/400², thirds 60.2/49.9/40.9 —
+ *     DECAYS across its own clip: looped, it pulses every 5 s. Recorded, not smoothed; it is the
+ *     one-constant "stronger tier" swap and carries this caveat at the site.
+ *   · shield_themed.below.molten_earth.01.orange 5000 ms, ink 382×384/400², thirds 31.0/31.9/31.0,
+ *     seam 2.59 — the cleanest loop of the set. The acid ring (hue-rotated green, as before).
+ *   · shield_themed.below.eldritch_web.01.dark_purple 10042 ms, dead-flat thirds 47.6/47.6/47.5,
+ *     seam 2.87 — native purple, the stunned ring.
+ *   · markers.smoke.ring.loop.bluepurple (30 fps) 5067 ms, ink full-frame, thirds 56.9/56.9/54.5,
+ *     seam 5.05 — the poison ring, hue-rotated toward green.
+ * Ring SCALE compensates each asset's own ink fraction (frame 400 ÷ ink extent), so every ring's
+ * drawn diameter lands on the figure's rim rather than inside it — the basis is beside each value.
  */
 export const STATUS_FX_ROWS = Object.freeze([
   Object.freeze({
@@ -117,37 +130,57 @@ export const STATUS_FX_ROWS = Object.freeze([
     // the module toggles core's `burning`; the fire load's lasting damage lives in `fireDotState`
     // (module/combat/damage-hooks.js). The core id is honoured as well so a GM who reaches for the
     // token HUD gets the same picture as the load does.
+    //
+    // RING (reference "On Fire (Mild)" = the below-token fire ring). The reference draws the Below
+    // asset UNDER the mini; here it rides over-token so `aboveLighting` keeps it visible on unlit
+    // squares (the rail's standing visibility ruling) — `below: true` on this row is the
+    // reference-exact revert. Stronger tier = `jb2a.shield_themed.above.fire.01.orange`, one key
+    // away, but see the header: that clip decays across itself and pulses when looped.
+    // Superseded key (centered flame, ruled out 2026-08-12): "jb2a.flames.02.orange" @ body 1.15.
     id: "burning", statuses: ["burning"], flags: ["fireDotState"],
-    key: "jb2a.flames.02.orange", placement: "body",
-    scale: 1.15, opacity: 0.85, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    key: "jb2a.shield_themed.below.fire.01.orange", placement: "ring",
+    scale: 1.18,   // frame 400 ÷ ink 339 — the ring's drawn diameter lands on the rim
+    opacity: 0.85, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
   }),
   Object.freeze({
     // No module mechanism raises this today — it is the core id only, which is exactly what a GM
     // marking a figure poisoned by hand produces. Recorded as such rather than wired to something
     // approximate: this rail does not invent a mechanism to have something to draw.
+    //
+    // RING: the free tier's one true smoke ring loop, authored blue-purple; rotated toward a fume
+    // green. One constant (drop `colour`) reverts to the asset's own colour.
+    // Superseded key (badge, ruled out 2026-08-12): "jb2a.markers.poison.dark_green.02" @ badge.
     id: "poison", statuses: ["poison"], flags: [],
-    key: "jb2a.markers.poison.dark_green.02", placement: "badge",
-    opacity: 0.95, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    key: "jb2a.markers.smoke.ring.loop.bluepurple", placement: "ring",
+    colour: Object.freeze({ hue: 130, saturate: 0.1, brightness: 1.0 }),
+    scale: 1.0,    // ink reaches the frame edge — the frame IS the ring extent
+    opacity: 0.85, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
   }),
   Object.freeze({
     // The acid load degrades armour over turns and keeps its countdown in `dotState`; core's own
-    // `corrode` is the hand-toggled equivalent. THE COLOUR IS OURS: the free tier's only true bubbling
-    // loop is blue, so it is rotated to an acid green rather than replaced by a clip that is the right
-    // colour and the wrong motion. One constant reverts it to the asset's own blue.
+    // `corrode` is the hand-toggled equivalent. THE COLOUR IS OURS: the ring set has no green, so the
+    // molten-earth ring is rotated to an acid green rather than replaced by a clip that is the right
+    // colour and the wrong motion. One constant reverts it to the asset's own orange.
+    // Superseded key (centered bubbles, ruled out 2026-08-12): "jb2a.bubble.002.001.loop.blue" @ 0.9.
     id: "acid", statuses: ["corrode"], flags: ["dotState"],
-    key: "jb2a.bubble.002.001.loop.blue", placement: "body",
+    key: "jb2a.shield_themed.below.molten_earth.01.orange", placement: "ring",
     colour: Object.freeze({ hue: -120, saturate: 0.15, brightness: 1.0 }),
-    scale: 0.9, opacity: 0.8, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    scale: 1.05,   // frame 400 ÷ ink 382
+    opacity: 0.8, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
   }),
   Object.freeze({
     // ⭐ BOTH IDS, because this engine's stun outcome IS `unconscious`: a failed stun save calls
     // `toggleStatusEffect("unconscious")` (module/combat/save-rolls.js) and the recovery check toggles
     // it back off. Core's own `stun` is watched beside it so a hand-marked figure reads the same.
     // Whether those two deserve two different looks is an open call — docs/FX-RAIL.md §8.
+    //
+    // RING: the eldritch-web ring — native purple, the longest and flattest loop of the set (10 s,
+    // seam 2.87). Superseded key (badge, ruled out 2026-08-12): "jb2a.markers.stun.purple.02".
     id: "stunned", statuses: ["stun", "unconscious"], flags: [],
-    key: "jb2a.markers.stun.purple.02", placement: "badge",
-    opacity: 0.95, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
-    // A corpse wearing stun stars is noise: `dead` and `unconscious` genuinely stand together here,
+    key: "jb2a.shield_themed.below.eldritch_web.01.dark_purple", placement: "ring",
+    scale: 1.25,   // frame 400 ÷ ink 320
+    opacity: 0.9, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    // A corpse wearing a stun ring is noise: `dead` and `unconscious` genuinely stand together here,
     // because the applicator sets one and the stun save had already set the other.
     suppressedBy: "dead",
   }),
