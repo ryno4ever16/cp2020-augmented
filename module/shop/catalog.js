@@ -1,6 +1,6 @@
 import { buyItem, FASHION_STYLES, styleMultOf, resolveCatalogPrice, isValidPrice } from "./purchase.js";
 import { correctionFor, correctedCost } from "../data-corrections.js";
-import { buyAndInstallCyberware } from "../cyberware/install.js";
+import { buyAndInstallCyberware, offerCyberwareChoice, resolveCyberChoice, resolveCyberSurgery } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
 import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
@@ -877,7 +877,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 // ── Purchase engine (shared by the Buy button AND the actor-sheet drag-to-buy) ────────────────────────
 
 /** Buy a catalog item at flat Core cost for `buyer`. Routes cyberware → install, services → pay/subscribe. */
-export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styleMult = 1, styleLabel = "" } = {}) {
+export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styleMult = 1, styleLabel = "", requesterId = null } = {}) {
   if (!buyer) return;
   const doc = await game.packs.get(packId)?.getDocument(itemId);
   if (!doc) return;
@@ -901,7 +901,16 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
     await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel, priceRange: corr?.priceRange ?? null });
     return;
   }
-  if (doc.type === "cyberware") { await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice }); return; }
+  if (doc.type === "cyberware") {
+    // A GM approving a player's REQUEST is not the person whose Humanity is about to be spent, so the
+    // install-or-buy-only choice goes back to the buyer and the surgery confirmation comes forward to
+    // the GM afterwards (module/cyberware/install.js, "the approved-request route"). `requesterId` is
+    // set only by resolvePurchaseRequest; the direct paths — a player buying for themselves, a GM
+    // buying for an NPC — leave it null and keep their own dialog on the client that started them.
+    if (requesterId) { await offerCyberwareChoice(buyer, doc, { partPrice: unitPrice, packId, itemId, requesterId }); return; }
+    await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice });
+    return;
+  }
   const svc = classifyService(doc, game.packs.get(packId)?.metadata?.name ?? "");
   if (svc === "oneoff") await payOneOffService(buyer, doc, { unitPrice, priceLabel: label });
   else if (svc === "recurring") await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } });
@@ -1012,7 +1021,7 @@ async function resolvePurchaseRequest(message, approve, price) {
     if (approve) {
       if (req.needsPrice) await setShopPriceOverride(req.itemId, price);   // self-disengaging: compendium cost always wins later
       else if (req.priceRange && isValidPrice(price)) await setShopPriceOverride(req.itemId, price);   // range item: the GM's price becomes the standing final price
-      await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel });
+      await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel, requesterId: req.requesterId });
     } else {
       const player = game.users.get(req.requesterId);
       if (player) ChatMessage.create({
@@ -1230,6 +1239,31 @@ function _wireShopCardControls(message, html) {
       if (resolved === false) btns.forEach(b => b.disabled = false);   // retriable bail (e.g. a price is still needed)
     });
   });
+
+  // The two halves of an approved cyberware request. The permission question is answered inside each
+  // resolver (the choice belongs to the requester, the surgery to a GM) rather than here, so a card
+  // that is whispered to both still shows its buttons to both and refuses the wrong clicker quietly.
+  // Same click discipline as above: disable synchronously, restore only on a retriable bail.
+  const wireCyberButtons = (selector, run) => root?.querySelectorAll?.(selector).forEach(btn => {
+    if (btn.dataset.cpBound === "1") return;
+    btn.dataset.cpBound = "1";
+    btn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      const card = btn.closest(".cp-shop-request");
+      const btns = card ? [...card.querySelectorAll("button[data-action]")] : [btn];
+      btns.forEach(b => b.disabled = true);
+      const resolved = await run(btn, card);
+      if (resolved === false) btns.forEach(b => b.disabled = false);
+    });
+  });
+  wireCyberButtons(".cp-shop-cyber-choice-btn", (btn) => resolveCyberChoice(message, btn.dataset.action));
+  wireCyberButtons(".cp-shop-cyber-surgery-btn", (btn, card) => resolveCyberSurgery(
+    message, btn.dataset.action === "operate",
+    {
+      rollHumanity: card?.querySelector('[name="rollHumanity"]')?.checked ?? true,
+      applyDamage:  card?.querySelector('[name="applyDamage"]')?.checked ?? true,
+    },
+  ));
 }
 
 /** Ready-time hooks: sidebar button + chat links + live buyer sync + the GM stock-decrement relay. */

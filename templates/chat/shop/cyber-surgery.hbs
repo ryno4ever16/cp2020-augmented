@@ -1,0 +1,30 @@
+{{!-- The GM's half: the buyer chose to have it installed, so the referee confirms the operation and
+      keeps the two knobs that are theirs — whether the Humanity loss is rolled and whether the
+      surgical damage is applied. The checkbox names rollHumanity / applyDamage are read by the click
+      handler in catalog.js; keep them verbatim, as the install dialog's own template says. Whispered
+      to the GMs. --}}
+<div class="cp-shop-request cp-shop-cyber-surgery">
+  <p class="cp-shop-request-head"><i class="fas fa-user-doctor"></i> {{localize "CYBERPUNK.CyberSurgeryTitle"}}</p>
+  <p class="cp-shop-request-body">{{CPLocal "CyberSurgeryBody" name=name buyer=buyer patient=patient}}</p>
+  {{#if pending}}
+  <ul class="cp-shop-request-terms">
+    <li>{{CPLocal "CyberPartCost"}}: <b>{{partPrice}}</b>eb</li>
+    <li>{{CPLocal "CyberSurgeryCost"}} ({{surgeryLabel}}): <b>{{surgeryCost}}</b>eb</li>
+    <li>{{CPLocal "CyberTotalCost"}}: <b>{{total}}</b>eb</li>
+  </ul>
+  <div class="cp-shop-request-opts">
+    <label><input type="checkbox" name="rollHumanity" checked/> {{CPLocal "CyberRollHumanity"}} ({{humanityCost}})</label>
+    <label><input type="checkbox" name="applyDamage" checked/> {{CPLocal "CyberApplyDamage"}} ({{surgeryDamage}})</label>
+  </div>
+  <div class="cp-shop-request-actions">
+    <button type="button" class="cp-shop-cyber-surgery-btn cp-approve" data-action="operate"><i class="fas fa-check"></i> {{localize "CYBERPUNK.CyberInstallConfirm"}}</button>
+    <button type="button" class="cp-shop-cyber-surgery-btn cp-deny" data-action="refuse"><i class="fas fa-xmark"></i> {{localize "CYBERPUNK.CyberSurgeryRefuse"}}</button>
+  </div>
+  {{else}}
+  {{#if (equals status "done")}}
+  <p class="cp-shop-request-status cp-approved">{{CPLocal "CyberSurgeryDone" by=resolvedBy}}</p>
+  {{else}}
+  <p class="cp-shop-request-status cp-denied">{{CPLocal "CyberSurgeryRefused" by=resolvedBy}}</p>
+  {{/if}}
+  {{/if}}
+</div>

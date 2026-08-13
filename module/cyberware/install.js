@@ -1,7 +1,7 @@
 import { formulaHasDice } from "../dice.js";
 import { localize, tryLocalize } from "../utils.js";
 import { canShop } from "../settings.js";
-import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage } from "../compat.js";
+import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage, renderChatCard } from "../compat.js";
 import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
 
 /**
@@ -218,18 +218,7 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
   if (!canShop()) { ui.notifications?.warn(localize("ShopNotAllowed")); return false; }
 
   const { confirm = true } = opts;
-  const data = (source && typeof source.toObject === "function") ? source.toObject() : foundry.utils.deepClone(source ?? {});
-  // Shop-bought copy of a base-compendium item: stamp its origin uuid (toObject drops it) AND apply the
-  // book corrections up front, so the surgery below prices from the CORRECTED Surgery Code and the created
-  // item carries the corrected data. Stamped so the preCreateItem hook (data-corrections.js) won't re-apply.
-  if (source?.pack && typeof source.uuid === "string") {
-    data._stats = { ...(data._stats ?? {}), compendiumSource: source.uuid };
-    const corr = correctionFor(source.pack, source.id);
-    if (corr) { applyCorrectionToItemData(data, corr); markCorrectionApplied(data); }
-  }
-  const partPrice = Math.max(0, Math.round(Number(opts.partPrice ?? data.system?.cost ?? 0)));
-  const surgery = getSurgery(data.system?.surgCode);
-  const surgeryCost = surgery.cost;
+  const { data, partPrice, surgery, surgeryCost } = cyberwareTerms(source, opts.partPrice);
 
   // Initial affordability is checked against the PART price alone — buy-only must stay reachable even
   // if the buyer can't afford the surgery; the actual charge is re-validated after the choice.
@@ -250,42 +239,285 @@ export async function buyAndInstallCyberware(actor, source, opts = {}) {
   const installNow = choices.installNow !== false && opts.install !== false;
   const charge = installNow ? partPrice + surgeryCost : partPrice;
 
-  // Re-check funds (settings/funds could change while the dialog was open).
-  const funds2 = Number(actor.system?.eurobucks) || 0;
-  if (charge > funds2) { ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: data.name, cost: charge, funds: funds2 })); return false; }
+  const item = await chargeAndStockCyberware(actor, data, { charge, installed: installNow });
+  if (!item) return false;
+  if (!installNow) return postCyberwareBoughtOnly(actor, item, charge);
+  return completeCyberwareInstall(actor, item, {
+    surgery, charged: charge, rollHumanity: choices.rollHumanity, applyDamage: choices.applyDamage,
+  });
+}
 
-  // Charge first, then create (refund on failure) — same discipline as buyItem.
-  await actor.update({ "system.eurobucks": funds2 - charge });
-  let item;
+/* ══════════════════════ The shared halves ══════════════════════
+ *
+ * Everything below is what `buyAndInstallCyberware` above is made of, pulled out so the OTHER route to
+ * the same purchase — a player's request, approved by the GM, where the choice belongs to the player
+ * and the surgery to the GM (see `offerCyberwareChoice`) — runs the same engine rather than a second
+ * reading of it. Split at the two points where the flow can pause for a person: after the terms are
+ * known, and after the item exists.
+ */
+
+/** Resolve a catalog document into the terms a buyer has to decide on: the item data to create, what
+ *  the part costs, and what the surgery its code names costs and does. */
+export function cyberwareTerms(source, partPriceOverride) {
+  const data = (source && typeof source.toObject === "function") ? source.toObject() : foundry.utils.deepClone(source ?? {});
+  // Shop-bought copy of a base-compendium item: stamp its origin uuid (toObject drops it) AND apply the
+  // book corrections up front, so the surgery below prices from the CORRECTED Surgery Code and the created
+  // item carries the corrected data. Stamped so the preCreateItem hook (data-corrections.js) won't re-apply.
+  if (source?.pack && typeof source.uuid === "string") {
+    data._stats = { ...(data._stats ?? {}), compendiumSource: source.uuid };
+    const corr = correctionFor(source.pack, source.id);
+    if (corr) { applyCorrectionToItemData(data, corr); markCorrectionApplied(data); }
+  }
+  const partPrice = Math.max(0, Math.round(Number(partPriceOverride ?? data.system?.cost ?? 0)));
+  const surgery = getSurgery(data.system?.surgCode);
+  return { data, partPrice, surgery, surgeryCost: surgery.cost };
+}
+
+/** Charge, then create — and refund if the create fails. Same discipline, and the same order, as
+ *  buyItem. Funds are read HERE rather than passed in, because every caller has been away from the
+ *  actor for as long as a person took to press a button. Returns the created item, or null. */
+export async function chargeAndStockCyberware(actor, data, { charge = 0, installed = false } = {}) {
+  const funds = Number(actor.system?.eurobucks) || 0;
+  if (charge > funds) {
+    ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: data.name ?? "cyberware", cost: charge, funds }));
+    return null;
+  }
+  await actor.update({ "system.eurobucks": funds - charge });
   try {
-    delete data._id; delete data.folder; delete data.ownership;
-    if (data.flags?.["cp2020-augmented"]?.shop) delete data.flags["cp2020-augmented"].shop;
-    data.system = data.system ?? {};
-    data.system.equipped = installNow;   // buy-only leaves it uninstalled (no EMP/Humanity hit yet)
-    [item] = await actor.createEmbeddedDocuments("Item", [data]);
+    const payload = foundry.utils.deepClone(data);
+    delete payload._id; delete payload.folder; delete payload.ownership;
+    if (payload.flags?.["cp2020-augmented"]?.shop) delete payload.flags["cp2020-augmented"].shop;
+    payload.system = payload.system ?? {};
+    payload.system.equipped = installed;   // buy-only leaves it uninstalled (no EMP/Humanity hit yet)
+    const [item] = await actor.createEmbeddedDocuments("Item", [payload]);
+    return item;
   } catch (err) {
     console.error("cp2020-augmented | cyberware purchase failed to stock, refunding.", err);
-    await actor.update({ "system.eurobucks": funds2 });
+    await actor.update({ "system.eurobucks": funds });
     ui.notifications?.error(localize("ShopBuyFailed"));
-    return false;
+    return null;
   }
+}
 
-  // Buy-only: drop it in inventory uninstalled; the player can Install (Surgery) later from the sheet.
-  if (!installNow) {
-    const speaker = ChatMessage.getSpeaker(actor ? { actor } : {});
-    await createCyberpunkChatMessage({
-      speaker,
-      content: localize("CyberBoughtUninstalled", { actor: actor?.name ?? game.user.name, item: item.name, cost: charge })
-    }, { messageMode: getPublicMessageMode() });
-    ui.notifications?.info(localize("CyberBoughtInfo", { item: item.name }));
-    return true;
-  }
+/** Buy-only: it sits in inventory uninstalled and the owner can Install (Surgery) later from the sheet. */
+export async function postCyberwareBoughtOnly(actor, item, charged) {
+  const speaker = ChatMessage.getSpeaker(actor ? { actor } : {});
+  await createCyberpunkChatMessage({
+    speaker,
+    content: localize("CyberBoughtUninstalled", { actor: actor?.name ?? game.user.name, item: item.name, cost: charged })
+  }, { messageMode: getPublicMessageMode() });
+  ui.notifications?.info(localize("CyberBoughtInfo", { item: item.name }));
+  return true;
+}
 
+/** The surgery itself, on an item that already exists and is already paid for. */
+export async function completeCyberwareInstall(actor, item, { surgery, charged = 0, rollHumanity = true, applyDamage = true } = {}) {
   let loss = 0, dmg = 0;
-  if (choices.rollHumanity) loss = (await rollCyberwareHumanity(item)).loss;
-  if (choices.applyDamage) dmg = (await rollSurgicalDamage(actor, surgery.damage)).dmg;
-
-  await _postInstallSummary(actor, item, { surgery, charged: charge, loss, dmg });
+  if (rollHumanity) loss = (await rollCyberwareHumanity(item)).loss;
+  if (applyDamage) dmg = (await rollSurgicalDamage(actor, surgery.damage)).dmg;
+  await _postInstallSummary(actor, item, { surgery, charged, loss, dmg });
   ui.notifications?.info(localize("CyberInstalled", { item: item.name }));
   return true;
+}
+
+/* ══════════════════════ The approved-request route ══════════════════════
+ *
+ * A player asks the GM to buy a piece of chrome; the GM approves. The money and the stock are the
+ * GM's business and are settled before this point (module/shop/catalog.js), but the two questions
+ * left are not the same person's:
+ *
+ *   • Install it, or just buy the part?  — the BUYER's, because it is their character's Humanity and
+ *     their character's wound track. Asked of the GM, a player found out what had been done to them
+ *     from the summary card.
+ *   • Roll the Humanity loss? Apply the surgical damage?  — the GM's, because those are referee knobs
+ *     that exist for tables handling either by hand.
+ *
+ * So the approval hands a whispered CHOICE card to the requesting player, and picking Install hands a
+ * whispered SURGERY card back to the GMs. Nothing is charged until the hop that actually does the
+ * thing: buy-only charges the part at the player's click, install charges part plus surgery at the
+ * GM's. Funds are re-read at every hop, because between hops is a person deciding.
+ *
+ * The card idiom is the purchase request's own, verbatim: flags carrying the whole job, a `status`
+ * field flipped before the charge so a second click on another client finds it resolved, an in-memory
+ * claim so a double-click on THIS client cannot fire twice, and the content re-rendered to a resolved
+ * state. Buttons are bound in module/shop/catalog.js's single chat-card pass — these cards carry the
+ * `cp-shop-` class prefix its cheap bail looks for, which they earn honestly: they exist only as steps
+ * of a shop purchase.
+ */
+
+const SCOPE = "cp2020-augmented";
+
+/** Cards being resolved on THIS client — claimed synchronously, before any await. */
+const _resolvingCyberCards = new Set();
+
+/** Re-read the catalog document a card names and rebuild its terms. The cards carry pack/item ids
+ *  rather than a copy of the item, so a correction landing between hops is picked up and a card that
+ *  outlives its compendium resolves to nothing instead of to stale data. */
+async function _termsFromCard(job) {
+  const doc = await game.packs.get(job.packId)?.getDocument(job.itemId);
+  if (!doc) { ui.notifications?.warn(localize("ShopItemUnavailable")); return null; }
+  return cyberwareTerms(doc, job.partPrice);
+}
+
+/** Flip a card's status flag and re-render its content into the resolved state. */
+async function _closeCyberCard(message, flagKey, template, context) {
+  const content = await renderChatCard(template, context);
+  await message.update({ content, [`flags.${SCOPE}.${flagKey}.status`]: context.status });
+}
+
+/**
+ * Hand the buyer the install-or-buy-only choice, whispered. Called by the shop's request resolver in
+ * place of the confirm dialog the direct path shows — the direct path is unchanged and still runs its
+ * dialog on the client that started it.
+ */
+export async function offerCyberwareChoice(buyer, source, { partPrice, packId, itemId, requesterId } = {}) {
+  if (!buyer) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
+  const { data, partPrice: price, surgery, surgeryCost } = cyberwareTerms(source, partPrice);
+  const job = {
+    buyerId: buyer.id, packId, itemId, name: data.name ?? "", partPrice: price,
+    surgeryCost, requesterId: requesterId ?? "", approvedBy: game.user.id, status: "pending",
+  };
+  const context = {
+    pending: true, status: "pending",
+    name: job.name, buyer: buyer.name, partPrice: price,
+    surgeryLabel: tryLocalize(surgery.label), surgeryCost, surgeryDamage: surgery.damage,
+    humanityCost: String(data.system?.humanityCost ?? "—"),
+    total: price + surgeryCost,
+  };
+  const content = await renderChatCard("shop/cyber-choice.hbs", context);
+  const card = {
+    content,
+    whisper: [requesterId, ...ChatMessage.getWhisperRecipients("GM").map(u => u.id)].filter(Boolean),
+    speaker: ChatMessage.getSpeaker({ actor: buyer }),
+    flags: { [SCOPE]: { cyberChoice: job } },
+  };
+  // ⭐ AUTHORED BY THE PLAYER, deliberately, even though a GM is creating it. A chat message's author
+  // is its owner, and the player has to be able to close this card when they answer it — a card the
+  // GM owns would refuse the player's own update and the decision would die on their client. A GM may
+  // create a message under any author (core's own create rule); a player may not, which is exactly why
+  // the reverse card, whispered back to the GMs, is authored by whoever posts it.
+  if (requesterId) card.author = requesterId;
+  await ChatMessage.create(card);
+  return true;
+}
+
+/**
+ * The buyer's answer. "buyOnly" ends here — they own the character, so the charge and the item are
+ * ordinary local writes. "install" charges nothing and asks the GMs for the surgery.
+ * @returns {Promise<boolean>} false when the clicker should be able to try again (funds, a missing
+ *   document): the card stays pending and its buttons come back.
+ */
+export async function resolveCyberChoice(message, action) {
+  const job = message?.getFlag?.(SCOPE, "cyberChoice");
+  if (!job || job.status !== "pending") return true;
+  // Whispered to the requester and to the GMs; the requester decides, and a GM may decide for them —
+  // the table's own convention when a player is away from the keyboard.
+  if (game.user.id !== job.requesterId && !game.user.isGM) return true;
+  const buyer = game.actors.get(job.buyerId);
+  if (!buyer) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
+  if (_resolvingCyberCards.has(message.id)) return true;
+  _resolvingCyberCards.add(message.id);
+  try {
+    const terms = await _termsFromCard(job);
+    if (!terms) return false;
+    const funds = Number(buyer.system?.eurobucks) || 0;
+
+    if (action === "buyOnly") {
+      if (terms.partPrice > funds) {
+        ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: job.name, cost: terms.partPrice, funds }));
+        return false;
+      }
+      await _closeCyberCard(message, "cyberChoice", "shop/cyber-choice.hbs", {
+        pending: false, status: "boughtOnly", name: job.name, buyer: buyer.name,
+        partPrice: terms.partPrice, resolvedBy: game.user.name,
+      });
+      const item = await chargeAndStockCyberware(buyer, terms.data, { charge: terms.partPrice, installed: false });
+      if (!item) return true;                       // the card is closed; the refund happened inside
+      await postCyberwareBoughtOnly(buyer, item, terms.partPrice);
+      return true;
+    }
+
+    // Install: the money is taken at the GM's hop, so nothing is charged here — but refuse now rather
+    // than send the GM a card for a purchase that cannot be paid for.
+    const total = terms.partPrice + terms.surgeryCost;
+    if (total > funds) {
+      ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: job.name, cost: total, funds }));
+      return false;
+    }
+    await _closeCyberCard(message, "cyberChoice", "shop/cyber-choice.hbs", {
+      pending: false, status: "awaitingSurgery", name: job.name, buyer: buyer.name,
+      partPrice: terms.partPrice, resolvedBy: game.user.name,
+    });
+    await _requestSurgery(buyer, job, terms);
+    return true;
+  } finally {
+    _resolvingCyberCards.delete(message.id);
+  }
+}
+
+/** Whisper the GMs the surgery confirmation, carrying the referee's own two knobs. */
+async function _requestSurgery(buyer, job, terms) {
+  const context = {
+    pending: true, status: "pending",
+    name: job.name, buyer: buyer.name, patient: game.users.get(job.requesterId)?.name ?? "",
+    partPrice: terms.partPrice, surgeryLabel: tryLocalize(terms.surgery.label),
+    surgeryCost: terms.surgeryCost, surgeryDamage: terms.surgery.damage,
+    humanityCost: String(terms.data.system?.humanityCost ?? "—"),
+    total: terms.partPrice + terms.surgeryCost,
+  };
+  const content = await renderChatCard("shop/cyber-surgery.hbs", context);
+  await ChatMessage.create({
+    content,
+    whisper: ChatMessage.getWhisperRecipients("GM").map(u => u.id),
+    speaker: ChatMessage.getSpeaker({ actor: buyer }),
+    flags: { [SCOPE]: { cyberSurgery: { ...job, status: "pending" } } },
+  });
+  ui.notifications?.info(localize("CyberSurgeryRequested", { item: job.name }));
+}
+
+/**
+ * The GM's answer to the surgery card. Approve charges part + surgery together and runs the whole
+ * install; the two checkboxes are read off the card the GM is looking at.
+ * @returns {Promise<boolean>} false when the GM should be able to try again.
+ */
+export async function resolveCyberSurgery(message, approve, { rollHumanity = true, applyDamage = true } = {}) {
+  if (!game.user.isGM) return true;
+  const job = message?.getFlag?.(SCOPE, "cyberSurgery");
+  if (!job || job.status !== "pending") return true;
+  const buyer = game.actors.get(job.buyerId);
+  if (approve && !buyer) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
+  if (_resolvingCyberCards.has(message.id)) return true;
+  _resolvingCyberCards.add(message.id);
+  try {
+    if (!approve) {
+      await _closeCyberCard(message, "cyberSurgery", "shop/cyber-surgery.hbs", {
+        pending: false, status: "refused", name: job.name, buyer: buyer?.name ?? "", resolvedBy: game.user.name,
+      });
+      const player = game.users.get(job.requesterId);
+      if (player) await ChatMessage.create({
+        whisper: [player.id],
+        content: localize("CyberSurgeryRefusedWhisper", { item: foundry.utils.escapeHTML(job.name ?? "") }),
+      });
+      return true;
+    }
+    const terms = await _termsFromCard(job);
+    if (!terms) return false;
+    const charge = terms.partPrice + terms.surgeryCost;
+    const funds = Number(buyer.system?.eurobucks) || 0;
+    if (charge > funds) {
+      ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name: job.name, cost: charge, funds }));
+      return false;
+    }
+    // Close the card BEFORE the charge, for the reason the purchase request flips its status early:
+    // a second GM's click has to find this resolved rather than charge a second time.
+    await _closeCyberCard(message, "cyberSurgery", "shop/cyber-surgery.hbs", {
+      pending: false, status: "done", name: job.name, buyer: buyer.name, resolvedBy: game.user.name,
+    });
+    const item = await chargeAndStockCyberware(buyer, terms.data, { charge, installed: true });
+    if (!item) return true;                         // charge already refunded inside
+    await completeCyberwareInstall(buyer, item, { surgery: terms.surgery, charged: charge, rollHumanity, applyDamage });
+    return true;
+  } finally {
+    _resolvingCyberCards.delete(message.id);
+  }
 }

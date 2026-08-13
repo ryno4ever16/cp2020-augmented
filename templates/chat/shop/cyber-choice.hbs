@@ -1,0 +1,26 @@
+{{!-- The buyer's half of an approved cyberware request: install it, or just take the part home.
+      Whispered to the requesting player (and the GMs). Buttons are bound in catalog.js's chat-card
+      pass, which is why the root carries the cp-shop- prefix. Text from lang/en.json
+      (CYBERPUNK.Cyber*); styling reuses .cp-shop-request. --}}
+<div class="cp-shop-request cp-shop-cyber-choice">
+  <p class="cp-shop-request-head"><i class="fas fa-syringe"></i> {{localize "CYBERPUNK.CyberChoiceTitle"}}</p>
+  <p class="cp-shop-request-body">{{CPLocal "CyberChoiceBody" name=name buyer=buyer}}</p>
+  {{#if pending}}
+  <ul class="cp-shop-request-terms">
+    <li>{{CPLocal "CyberPartCost"}}: <b>{{partPrice}}</b>eb</li>
+    <li>{{CPLocal "CyberSurgeryCost"}} ({{surgeryLabel}}): <b>{{surgeryCost}}</b>eb — {{CPLocal "CyberChoiceDamageNote" damage=surgeryDamage}}</li>
+    <li>{{CPLocal "CyberChoiceHumanityNote" hc=humanityCost}}</li>
+    <li>{{CPLocal "CyberTotalCost"}}: <b>{{total}}</b>eb</li>
+  </ul>
+  <div class="cp-shop-request-actions">
+    <button type="button" class="cp-shop-cyber-choice-btn cp-approve" data-action="install"><i class="fas fa-syringe"></i> {{localize "CYBERPUNK.CyberInstallConfirm"}}</button>
+    <button type="button" class="cp-shop-cyber-choice-btn cp-deny" data-action="buyOnly"><i class="fas fa-box"></i> {{localize "CYBERPUNK.CyberBuyOnly"}}</button>
+  </div>
+  {{else}}
+  {{#if (equals status "boughtOnly")}}
+  <p class="cp-shop-request-status cp-approved">{{CPLocal "CyberChoiceBoughtOnly" by=resolvedBy cost=partPrice}}</p>
+  {{else}}
+  <p class="cp-shop-request-status cp-approved">{{CPLocal "CyberChoiceAwaitingSurgery" by=resolvedBy}}</p>
+  {{/if}}
+  {{/if}}
+</div>
