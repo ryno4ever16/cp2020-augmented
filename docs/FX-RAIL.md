@@ -201,7 +201,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
 | 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit** and the row has `impactSquares` — **delayed by that round's own arrival** (§4.2a), and drawn for a round the pacing rule refused as well as for one it drew | yes |
 | 9b | **Pellet arrival marks** ⭐ *new 2026-08-11* | `jb2a.smoke.puff.ring.01.white` at **0.45 sq**, trimmed to **500 ms**, one at each pellet endpoint | the round **hit**, the class draws a **fan**, and the load does **not** set its own landing points alight (§3.2b) | yes |
-| 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, **45 s**, one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
+| 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, ⏱ **25 s** (was 45 s), one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
 | 13 | **Impact audio** ⭐ *new 2026-08-12* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included | n/a (not drawn) |
 | 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
@@ -224,7 +224,7 @@ where the *rounds* went, never on the target, and neither answer is invented:
 | a **shot pattern** (buckshot, RAW) | scattered inside the pattern polygon, beyond its first 30 %, placed when the GM **confirms** | `maxPerPattern` = 5 |
 
 The scatter is **seeded off the payload** (`fxSeedOf` → `seededRng`), so two clients computing it agree
-and a test can compute it twice. Across bursts a scene holds at most **`maxLive` = 24** flames; a
+and a test can compute it twice. Across bursts a scene holds at most ⏱ **`maxLive` = 12** flames (was 24); a
 placement that would exceed it ends the **oldest** first, through the engine's own manager, which
 relays the end to every client exactly as the placement was relayed.
 
@@ -527,7 +527,7 @@ reasons before it passed.
 - **Lifetime `lifetimeMs` = 600 000 ms**, and it is not the condition's lifetime — a condition can
   outlast any clip, so the overlay is re-issued when the engine reports it ended while the condition
   still stands. Ten minutes is rare enough to be invisible and short enough that a leak cannot outlive
-  a session. It is a cap, exactly as the burning ground's 45 s is.
+  a session. It is a cap, exactly as the burning ground's 25 s is.
 - **Scene cap `maxLive` = 60** (five rows × twelve figures), enforced by ending the **oldest** through
   the engine's own manager, with the **pending** tally counted against it — the same construction, and
   the same reason, as `GROUND_FIRE`. ⚠ An evicted overlay is **not a lost condition**: the next event
@@ -1568,12 +1568,12 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `AMMO_FX_RECOLOR_FIELDS` / `AMMO_FX_REPLACE_FIELDS` | colour pair / asset pair | which overlay fields may only repaint an element the class already declares |
 | `GROUND_FIRE.key` | `flames.orange.03.1x1` | **which picture the fire is** — the whole of the rejected/shipped decision |
 | `GROUND_FIRE.squares` | 0.9 | one flame's drawn width in grid units (0.5 reads as a spark, 1.6 as a bonfire) |
-| `GROUND_FIRE.lifetimeMs` | **45000** | how long a flame burns — the "stayed burning" call |
-| `GROUND_FIRE.fadeOutMs` | 2500 | the burn-**down** at the very end (5.6 % of the life; the rejected build spent 28 % fading) |
+| `GROUND_FIRE.lifetimeMs` | ⏱ **25000** (was **45000**) | how long a flame burns — the "stayed burning" call, still met at 25 s. Trimmed 2026-08-13 (§6); ⚠ the number is the build lane's proposal, re-tune by eye |
+| `GROUND_FIRE.fadeOutMs` | 2500 | the burn-**down** at the very end (10 % of the trimmed life; the rejected build spent 28 % fading) |
 | `GROUND_FIRE.scatterSquares` | 0.8 | radius of the landing scatter when the class gives no per-round geometry |
 | `GROUND_FIRE.maxPerPayload` | 4 | the most flames one payload may place |
 | `GROUND_FIRE.maxPerPattern` | 5 | the most flames one confirmed shot pattern may scatter |
-| `GROUND_FIRE.maxLive` | 24 | the most flames alive on a scene at once — oldest evicted first |
+| `GROUND_FIRE.maxLive` | ⏱ **12** (was **24**) | the most flames alive on a scene at once — oldest evicted first. Trimmed 2026-08-13 (§6); ⚠ the number is the build lane's proposal, re-tune by eye |
 | `BLOOD_SPLATTER.key` | `jb2a.liquid.splash_side02.red` | the splash asset — **natively blood-coloured, no filter is applied**; the SIDE (directional) cut, rotated to the exit vector. ⏪ the radial `splash02.red` is still on the tier |
 | `BLOOD_SPLATTER.maxPerPayload` | 4 | the most sprays one payload may draw — repeated spray, never a fountain |
 | `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
@@ -1676,6 +1676,21 @@ nothing — the whole burst costs the ramp, the decay, one build and one teardow
 | a held light is bounded | `maxHoldMs = 8000` | a leak bound, not a look call — a corrupt round count must not hold a source open indefinitely |
 | the span rides the socket | `holdMs` on the flash datagram | every client holds its copy for the same time, or a burst strobes for watchers and glows for the shooter |
 | revert | `enabled: false` | restores the per-round strobe with no other edit |
+
+**2026-08-13 — the burning ground's budget is trimmed. Ruled: *yes*; ⚠ the numbers are the build
+lane's proposal and the user may re-tune them by eye.**
+A live flame is a looping sprite the profile put at roughly **0.36 % of a frame's budget at 60 Hz**, for
+as long as it burns, forever, whether or not anyone is still watching that square. Two constants carry
+that standing cost — how long one flame is paid for, and how many are paid for at once — and both are
+look calls rather than measurements, so both are trimmed rather than re-derived.
+
+| Ruling | Value | Why |
+|---|---|---|
+| a flame burns for | ⏱ **25 000 ms** (⏪ was **45 000**) | the **"stayed burning" requirement still holds at 25 s** — that is several combat rounds, and a table still sees the ground go on burning after the shot. Still a cap, still not forever |
+| a scene may hold | ⏱ **12** flames (⏪ was **24**) | three full payloads' worth (`maxPerPayload` 4), so an ordinary exchange never reaches it; a scene that does drops its **oldest**, which is the right way round |
+| the fade is unchanged | `fadeOutMs` 2500 | now 10 % of the life rather than 5.6 % — still a burn-**down** at the very end, nowhere near the 28 % that produced the original report |
+| ⚠ the numbers are not signed off by eye | both are one field | a veto costs one edit each; the previous values are recorded at the constants themselves |
+| ⭐ and the trim exposed a real leak in the cap | the cap is now applied **twice** per placement | The pass before a placement is queued can only end what already **exists**, and every placement here is delayed by the rounds' arrival time — so several bursts landing inside one delay all slipped past a cap that correctly knew it was being exceeded. Measured on the rig once the cap was 12: **13 burning against a cap of 12**. (Invisible at 24, where the leg only ever queued 20 and never reached the cap at all.) The cap is re-applied at the moment a placement's own flames exist, which makes it eventually-consistent. ⚠ It errs **low**: back-to-back bursts settle *below* the cap rather than at it, because what a pass can reach is the older flames and not the ones still arriving — the newest shot is always the one drawn, which is the ruling this cap serves. |
 
 **2026-08-13 — a condition overlay is drawn AND ended by each client alone.**
 The open call raised the same day (§8) offered two answers: play locally, or nominate one client to
@@ -2479,7 +2494,7 @@ presented while the screen stayed empty.
 | Item | State |
 |---|---|
 | ~~The ammo's `modifier` id is ruled onto the payload but is not on it~~ | ✅ **CLOSED 2026-08-09.** `AMMO_EFFECT_FIELDS` had had `modifier` **replaced** by `caliber` rather than joined by it, so `payload.modifier` was `undefined` on every real shot and every load resolved through `ammoFxKeyOf`'s fingerprint branch — collapsing `dualPurpose` onto `ap`, the one case the id exists to settle. Both fields now sit in the list, with the comment block saying why one may never displace the other. The guard is the point: `tests/cp2020-augmented-b1-seam-payload.mjs` now fires bench guns **07** (`api`, 5.56) and **16** (`dualPurpose`, 20/9mm) through the real UI path and asserts `payload.modifier`, `payload.caliber` and the resolved key off the payload the hook actually carried — plus, on that same object, that stripping the id makes it answer `ap`. Reverting the one string turns four of its legs red. See §6. |
-| **The burning ground's size, density and lifetime are not signed off** | ⚠ **The open item of this unit.** The asset was chosen by measurement and the placement was ruled, but three numbers are look calls the build lane made while the user was away: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**, and a flame burns **45 s**. Each is one constant, and a veto costs nothing: `GROUND_FIRE.squares`, `.maxPerPayload` / `.maxPerPattern`, `.lifetimeMs`. Captures 61a–61d. |
+| **The burning ground's size, density and lifetime are not signed off** | ⚠ **Still open, and the budget half moved 2026-08-13.** The asset was chosen by measurement and the placement was ruled, but the numbers are look calls the build lane made: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**. The **lifetime** and the **scene cap** were trimmed on the user's ruling to ⏱ **25 s** and ⏱ **12** (⏪ 45 s / 24) against a profiled ~0.36 % of a frame per live flame — but those two numbers are the build lane's proposal too, and re-tuning either by eye is one field: `GROUND_FIRE.lifetimeMs`, `.maxLive`, `.squares`, `.maxPerPayload` / `.maxPerPattern`. Captures 61a–61d. |
 | **A scattered shot pattern and the rounds drawn for it point at two different places** | ⚠ **Raised by the scatter-on-miss unit, 2026-08-13, §4.4.** On a missed pattern the region is rebuilt about a scattered centre on the **GM's** client, after this file's fan-out has already resolved and started drawing its axis on the **firing** client. So the rounds fly at the aimed point and the pattern lands wide. Closing it means resolving the scatter before the fan-out reads the payload — dice in the seam, or a synchronous pre-pass — which is a bigger change than that unit was scoped for. Needs a ruling on whether the mismatch is worth that. |
 | ~~A shell fired with the shot pattern **switched off** is claimed by neither flow~~ | ✅ **CLOSED 2026-08-09.** The world switch is now part of the flow question itself, asked at one shared site (`spreadFlowModeOf`, lookups.js) by both damage gates and by `patternFlowOwns`. With the pattern off a shell resolves to `single`, so the ordinary apply flow claims it exactly as it claims a slug, and the fan-out draws an incendiary shell's burning ground itself because no confirm will. Pinned three ways: the spread-zone spec drives a shell with the setting off and asserts the single-target flow **claimed** it (and that no pattern was placed), the fx-rail spec drives the same payload's fires on the rail, and a source leg asserts the damage rail reads the setting **nowhere** of its own. Both specs restore the setting in a `finally`. See §1.1a and §6. |
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |

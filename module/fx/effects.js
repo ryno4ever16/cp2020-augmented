@@ -779,7 +779,7 @@ export const HIT_CONFIRM = Object.freeze({
  * still holds: the call site is still outside the round loop, so the loop can never multiply this, and
  * `maxPerPayload` bounds what one placement may draw regardless of how many rounds landed.
  *
- * ⚠ AND A SECOND BOUND, because these now live for the best part of a minute: `maxLive` is a cap on
+ * ⚠ AND A SECOND BOUND, because these live for tens of seconds: `maxLive` is a cap on
  * how many flames may be burning on a scene AT ONCE, across bursts, enforced by ending the OLDEST
  * before placing (fxGroundFire). Evicting the oldest rather than refusing the newest is the right way
  * round: the shot a viewer is watching is the one that must be drawn.
@@ -787,9 +787,11 @@ export const HIT_CONFIRM = Object.freeze({
  * `lifetimeMs` IS THE "STAYED BURNING" REQUIREMENT, and it is a look call rather than a measurement —
  * tens of seconds, on the precedent the (since-removed, see the block below) ground mark set for a
  * session-bound element with a cap in place of a persistence ruling. The precedent outlived the
- * element that set it: this number is still a cap, and it is still not forever.
+ * element that set it: this number is still a cap, and it is still not forever. ⏱ Trimmed 45 s → 25 s
+ * on 2026-08-13 with the scene cap; the revert values and the profiled reason are recorded at the two
+ * fields themselves.
  * `fadeOutMs` is a burn-DOWN at the very end and not a dim-through: it
- * is 5.6% of the life here, against the 28% that produced the report.
+ * is 10% of the life here, against the 28% that produced the report.
  *
  * ⚠⚠ THE TRADE, ACCEPTED BY THE USER RATHER THAN HIDDEN: this is self-luminous, so it takes the
  * above-lighting route (LIT_SPRITE_ABOVE_LIGHTING) like every other thing on this rail that emits
@@ -803,7 +805,7 @@ export const HIT_CONFIRM = Object.freeze({
  * settleTag name, and presentationTailMs takes no term for it. The apply window opens when the last
  * ROUND has finished, per the 2026-08-08 ruling; a fire that is meant to go on burning afterwards is
  * scene dressing in exactly the sense that ruling names, and waiting for it would hold the damage
- * window shut for three quarters of a minute.
+ * window shut for the whole time the ground burns.
  */
 export const GROUND_FIRE = Object.freeze({
   key: "jb2a.flames.orange.03.1x1",
@@ -811,7 +813,21 @@ export const GROUND_FIRE = Object.freeze({
   // measured on the dark range against 0.5 / 0.7 / 1.0 / 1.6 side by side, 0.5 reads as a spark and
   // 1.6 reads as a bonfire covering the square. 0.9 is a fire a body could stand next to.
   squares: 0.9,
-  lifetimeMs: 45000,
+  // ⏱ TRIMMED 2026-08-13 (user ruled the trim; ⚠ THE NUMBER ITSELF IS THE BUILD LANE'S PROPOSAL and
+  // the user may re-tune it by eye — it is a look call, not a measurement). ⏪ REVERT IS THIS ONE
+  // FIELD: the previous value was 45000.
+  //
+  // WHY: a flame is a looping sprite, and the presentation profile put a live one at roughly 0.36 % of
+  // a frame's budget at 60 Hz — for as long as it burns, forever, whether or not anyone is still
+  // looking at that square. A full scene's worth of them is the standing cost this trims; nothing about
+  // one flame's picture changes.
+  //
+  // ⚠ THE "STAYED BURNING" REQUIREMENT STILL HOLDS AT 25 s, and that is the reason this is the number
+  // rather than something shorter. The requirement that shaped this element was that a burning load
+  // leaves the ground alight for long enough that a table SEES it go on burning after the shot is over
+  // — tens of seconds, on the precedent recorded below — and twenty-five seconds is several combat
+  // rounds. It is still a cap, and it is still not forever.
+  lifetimeMs: 25000,
   fadeInMs: 250,
   fadeOutMs: 2500,
   opacity: 0.9,
@@ -823,7 +839,16 @@ export const GROUND_FIRE = Object.freeze({
   // The most flames one PATTERN may scatter down its own length (the shot-pattern flow).
   maxPerPattern: 5,
   // The most flames that may be burning on a scene at once, across bursts. Oldest out.
-  maxLive: 24,
+  //
+  // ⏱ TRIMMED 2026-08-13 alongside the lifetime, same ruling, same caveat: ⚠ THE NUMBER IS THE BUILD
+  // LANE'S PROPOSAL and the user may re-tune it by eye. ⏪ REVERT IS THIS ONE FIELD: the previous value
+  // was 24. This is the OTHER half of the standing cost — the lifetime bounds how long one flame is
+  // paid for, this bounds how many are being paid for at once, and the profile figure (~0.36 % of a
+  // frame each) multiplies by exactly this number in the worst case. Twelve is still three full
+  // payloads' worth (maxPerPayload 4) or two patterns' plus a payload, so an ordinary exchange never
+  // reaches it; a scene that does reach it drops its OLDEST flame, which is the right way round —
+  // the shot a viewer is watching is the one that must be drawn.
+  maxLive: 12,
 });
 
 /** The name every burning-ground flame is stamped with, so the scene cap can find and evict them. */
@@ -4221,6 +4246,35 @@ export function liveGroundFires() {
  * both rulings. Returns what it queued so the gates, the counts and the lifetimes are assertable by
  * value.
  */
+/**
+ * Bring the scene back under `GROUND_FIRE.maxLive` by ending the OLDEST flames. Returns how many were
+ * ended. Called twice per placement — once before queueing (making room for what is about to be drawn)
+ * and once when that placement's flames actually exist (see the note at the release in fxGroundFire).
+ *
+ * ⚠ THE PENDING TALLY IS PART OF THE COUNT, and it is not bookkeeping for its own sake. This path is
+ * fire-and-forget and the engine does not create an effect until its own play resolves — and every
+ * placement here is delayed by the rounds' arrival time on top of that — so a placement that has been
+ * QUEUED is invisible to `liveGroundFires` for hundreds of milliseconds. Two placements issued inside
+ * that window would otherwise both read the same "live" number and both under-evict.
+ *
+ * ⚠ AND IT CAN ONLY EVICT WHAT EXISTS. When the count says the scene is over its cap but the excess is
+ * still in flight, this pass genuinely cannot end it; that is what the second call exists for.
+ *
+ * @param {number} incoming flames about to be queued by the caller, counted but not yet pending
+ */
+function _enforceGroundFireCap(incoming = 0) {
+  if (!fxDbEntryExists(GROUND_FIRE.key)) return 0;
+  const live = liveGroundFires();
+  const overBy = live.length + _pendingGroundFires + (Number(incoming) || 0) - GROUND_FIRE.maxLive;
+  if (overBy <= 0) return 0;
+  const names = live.slice(0, Math.min(overBy, live.length)).map((e) => e?.data?.name).filter(Boolean);
+  for (const name of names) {
+    globalThis.Sequencer?.EffectManager?.endEffects?.({ name })
+      ?.catch?.((err) => console.warn(`${SCOPE} | ground fire eviction failed`, err));
+  }
+  return names.length;
+}
+
 export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxPerPayload } = {}) {
   const out = { fires: 0, fireMs: 0, evicted: 0, at: [] };
   const list = (Array.isArray(points) ? points : [points])
@@ -4230,27 +4284,9 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
   try {
     // THE CAP, applied before anything is queued: make room for this placement by ending the oldest.
-    //
-    // ⚠ THE PENDING TALLY IS PART OF THE COUNT, and it is not bookkeeping for its own sake. This verb
-    // is fire-and-forget and the engine does not create an effect until its own play resolves, so a
-    // placement that has been QUEUED is invisible to liveGroundFires until a beat later. Two placements
-    // issued inside that beat therefore both read the same "live" number and both under-evict. That was
-    // unreachable while the fan-out loop ran at twice its own length; the anchored loop (see
-    // FX_DROP_LAG_FRACTION) hands bursts over fast enough to reach it, and the rig caught it immediately —
-    // eight bursts left 28 flames alive against a cap of 24. Counting what is already on its way is
-    // what makes the cap hold rather than approximately hold.
-    if (fxDbEntryExists(GROUND_FIRE.key)) {
-      const live = liveGroundFires();
-      const overBy = live.length + _pendingGroundFires + list.length - GROUND_FIRE.maxLive;
-      if (overBy > 0) {
-        const names = live.slice(0, Math.min(overBy, live.length)).map((e) => e?.data?.name).filter(Boolean);
-        out.evicted = names.length;
-        for (const name of names) {
-          globalThis.Sequencer?.EffectManager?.endEffects?.({ name })
-            ?.catch?.((err) => console.warn(`${SCOPE} | ground fire eviction failed`, err));
-        }
-      }
-    }
+    // Applied AGAIN once this placement's own flames actually exist — see the release below for why
+    // one pass cannot be enough.
+    out.evicted = _enforceGroundFireCap(list.length);
     const seq = new globalThis.Sequence();
     if (fxDbEntryExists(GROUND_FIRE.key)) {
       for (const p of list) {
@@ -4278,10 +4314,40 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
       // Held on the tally from the moment they are queued until the engine has actually made them, at
       // which point liveGroundFires can see them and the tally must let go — released in a finally so
       // a play that throws cannot strand the count high and starve every later placement.
+      //
+      // ⚠ AND THE DELAY IS PART OF THAT WINDOW, which is the half this originally missed. `play()`
+      // resolves when the SEQUENCE starts, not when a delayed section's effects exist — and every
+      // placement on this path is delayed by the rounds' own arrival time, hundreds of milliseconds.
+      // Releasing on play alone therefore dropped the tally while the flames were still invisible to
+      // liveGroundFires, so the next burst counted a scene emptier than it was and under-evicted.
+      // Measured once the scene cap was trimmed to 12: five back-to-back bursts left THIRTEEN burning.
+      // (Invisible at the old cap of 24, where five bursts of four never reached it at all.) Holding
+      // the tally across the delay as well closes the window without making the caller wait for it.
       _pendingGroundFires += out.fires;
+      const release = () => {
+        _pendingGroundFires = Math.max(0, _pendingGroundFires - out.fires);
+        // ⭐ AND THE CAP IS RE-APPLIED HERE, which is the half that makes it actually hold. The pass
+        // before the queue can only END WHAT ALREADY EXISTS: when several bursts land inside one
+        // arrival delay, the tally correctly says the scene is over its cap but there is nothing yet
+        // burning to evict, so the pass falls short and the flames that were still on their way all
+        // arrive anyway. That is the whole of the "13 alive against a cap of 12" reading the rig took
+        // once the cap was trimmed. Asking again at the moment this placement's own flames exist makes
+        // the cap eventually-consistent rather than approximate — a scene can be briefly over while a
+        // delayed placement lands, and is brought back the instant it does. Evicting the OLDEST is
+        // still the rule, so what a viewer is watching is what survives.
+        //
+        // ⚠ THE DIRECTION IT ERRS IN, stated rather than discovered later: back-to-back bursts land
+        // BELOW the cap rather than at it. While several placements are in flight the count correctly
+        // says the scene is heading over its limit, so each pass ends everything it can reach — and
+        // what it can reach is the older flames, not the ones still arriving. Five bursts of four
+        // settle at four burning rather than twelve. That is the right way round for the ruling this
+        // cap serves (the newest shot is always the one drawn), and it is strictly better than the
+        // leak it replaces, but it does mean a long exchange shows fewer fires than the cap allows.
+        _enforceGroundFireCap(0);
+      };
       seq.play()
         .catch((err) => console.warn(`${SCOPE} | ground fire play failed`, err))
-        .finally(() => { _pendingGroundFires = Math.max(0, _pendingGroundFires - out.fires); });
+        .finally(() => { if (delay > 0) setTimeout(release, delay); else release(); });
     }
   } catch (err) {
     console.warn(`${SCOPE} | ground fire failed`, err);

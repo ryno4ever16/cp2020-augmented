@@ -4744,10 +4744,15 @@ try {
       ok("burning ground: the installed clip does NOT decay — its tail is as bright as its middle",
         false, `decode failed: ${String(err?.message ?? err)}`);
     }
-    ok("burning ground: the fire is TENS OF SECONDS and it is CAPPED",
-      fx.GROUND_FIRE.lifetimeMs >= 20000 && fx.GROUND_FIRE.lifetimeMs <= 120000
-      && Number.isFinite(fx.GROUND_FIRE.lifetimeMs),
+    // ⏱ PINNED BY VALUE at the ruled figure (2026-08-13), not to a band. The band this used to assert
+    // could not tell 45 s from 25 s, so it could not have caught the trim going in — or coming back out.
+    // The "stayed burning" requirement is the OTHER half of the pair: tens of seconds, several combat
+    // rounds, and still a cap rather than forever.
+    ok("burning ground: the fire burns for the ruled 25 s — tens of seconds, and still CAPPED",
+      fx.GROUND_FIRE.lifetimeMs === 25000 && Number.isFinite(fx.GROUND_FIRE.lifetimeMs),
       `fire ${fx.GROUND_FIRE.lifetimeMs}ms`);
+    ok("burning ground: and that is still long enough to satisfy the 'stayed burning' requirement",
+      fx.GROUND_FIRE.lifetimeMs >= 20000, `${fx.GROUND_FIRE.lifetimeMs}ms`);
     // ⏪ THE GROUND MARK IS GONE (user ruling 2026-08-10, verbatim "kill it"). The long-lived dark
     // decal that used to be drawn under the flames is removed outright — the constant, the draw and
     // the two fields it reported. These legs pin the ABSENCE at all three levels so a later edit
@@ -4770,8 +4775,12 @@ try {
     // ⭐ THE REPORTED DEFECT AS A NUMBER. The old element spent 900ms of a 3200ms life fading — 28% of
     // it was a dim-down, which is what "darkens and cools" describes. The replacement's fade must be a
     // burn-DOWN at the very end, not a dim-through.
+    // ⏱ The RATIO moved with the trim and the threshold moved with it: 2500 of 25 000 is 10 % where it
+    // was 5.6 % of 45 000. Still a burn-DOWN at the very end and nowhere near the 28 % dim-through that
+    // produced the original report, which is the comparison this leg actually makes.
     ok("burning ground: the fade is a small tail of the life, not a quarter of it",
-      fx.GROUND_FIRE.fadeOutMs / fx.GROUND_FIRE.lifetimeMs < 0.1
+      fx.GROUND_FIRE.fadeOutMs / fx.GROUND_FIRE.lifetimeMs <= 0.1
+      && fx.GROUND_FIRE.fadeOutMs / fx.GROUND_FIRE.lifetimeMs < (900 / 3200) / 2
       && 900 / 3200 > 0.25,
       `${fx.GROUND_FIRE.fadeOutMs}/${fx.GROUND_FIRE.lifetimeMs} = ${(fx.GROUND_FIRE.fadeOutMs / fx.GROUND_FIRE.lifetimeMs).toFixed(3)}`);
     ok("burning ground: every bound is declared — per payload, per pattern, and per scene",
@@ -4779,6 +4788,12 @@ try {
       && fx.GROUND_FIRE.maxPerPattern > 0 && fx.GROUND_FIRE.maxPerPattern <= 8
       && fx.GROUND_FIRE.maxLive >= fx.GROUND_FIRE.maxPerPayload && fx.GROUND_FIRE.maxLive <= 64,
       JSON.stringify({ payload: fx.GROUND_FIRE.maxPerPayload, pattern: fx.GROUND_FIRE.maxPerPattern, live: fx.GROUND_FIRE.maxLive }));
+    // ⏱ AND THE SCENE CAP BY VALUE (2026-08-13), for the same reason the lifetime is: the bound above
+    // spans 4 to 64 and would not notice the trim in either direction. Twelve is still three full
+    // payloads' worth, which is what keeps an ordinary exchange clear of the eviction path.
+    ok("burning ground: the scene cap is the ruled 12, and still three payloads' worth",
+      fx.GROUND_FIRE.maxLive === 12 && fx.GROUND_FIRE.maxLive === fx.GROUND_FIRE.maxPerPayload * 3,
+      `${fx.GROUND_FIRE.maxLive} live / ${fx.GROUND_FIRE.maxPerPayload} per payload`);
     ok("burning ground: the fire is not waited for — the tail is far shorter than it, under the cap",
       fx.presentationTailMs("rifle", "api") < fx.GROUND_FIRE.lifetimeMs
       && fx.presentationMs(30, "rifle", "api") < fx.PRESENTATION_CAP_MS,
@@ -5163,10 +5178,25 @@ try {
       game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWasLive, String(spreadWasLive));
     await endAll();
 
-    // ⭐ THE SCENE CAP, driven rather than reasoned about: these burn for 45 seconds, so across a
+    // ⭐ THE SCENE CAP, driven rather than reasoned about: these burn for ⏱ 25 seconds, so across a
     // firefight they accumulate in a way a 3-second element never could. Enough bursts to exceed the
-    // cap must leave the cap's worth burning, not the sum.
+    // cap must leave the cap's worth burning, not the sum. The cap itself is pinned by VALUE up in the
+    // constants section (12, ⏪ was 24) — this half drives it and reads what is actually alive.
     clearSpawns();
+    // ⚠ DRAIN TO ZERO FIRST, and poll rather than sleep. The placements above are fire-and-forget AND
+    // delayed by their own arrival time, so one can materialise AFTER an `endAllEffects` that was
+    // issued before it resolved — a single straggler, which is exactly enough to make a cap leg read
+    // one over. (Invisible while the cap was 24 and this loop only ever queued 20: the cap was never
+    // reached, so the leg was passing without exercising eviction at all. The trim to 12 is what put
+    // it under the cap's own rule.)
+    // ⚠ ASKED ONCE, THEN WAITED OUT. Repeating the end call in the poll reaches effects that are
+    // mid-initialisation and makes the engine itself throw (`_createSprite` on a torn-down effect),
+    // which then fails the spec's own zero-console-errors leg for a reason that has nothing to do
+    // with the mechanism.
+    try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ }
+    for (let i = 0; i < 40 && fx.liveGroundFires().length; i++) await sleep(150);
+    ok("live: the scene is drained before the cap is driven (setup, negative)",
+      fx.liveGroundFires().length === 0, String(fx.liveGroundFires().length));
     const bursts = Math.ceil(fx.GROUND_FIRE.maxLive / fx.GROUND_FIRE.maxPerPayload) + 2;
     for (let i = 0; i < bursts; i++) {
       await fx.fxWeaponFired(payload({
@@ -5174,10 +5204,19 @@ try {
         areaDamages: { Torso: [{ damage: i + 1 }, { damage: 3 }, { damage: 2 }, { damage: 1 }] },
       }));
     }
-    await sleep(1200);
-    const liveNow = fx.liveGroundFires().length;
+    // ⚠ POLLED TO A SETTLED READING, not read on a fixed sleep. Every placement here is DELAYED by the
+    // rounds' own arrival time, so the last burst's flames do not exist yet when its fan-out returns —
+    // and the cap is re-applied at the moment they do. A fixed sleep reads the scene mid-landing and
+    // says nothing about whether the cap holds; this waits for two consecutive identical readings.
+    let liveNow = -1, prevLive = -2;
+    for (let i = 0; i < 30; i++) {
+      await sleep(250);
+      prevLive = liveNow;
+      liveNow = fx.liveGroundFires().length;
+      if (i >= 4 && liveNow === prevLive) break;
+    }
     ok("live: the scene cap holds across bursts — the oldest are evicted, the newest are drawn",
-      liveNow <= fx.GROUND_FIRE.maxLive && liveNow >= fx.GROUND_FIRE.maxPerPayload
+      liveNow <= 12 && liveNow <= fx.GROUND_FIRE.maxLive && liveNow >= fx.GROUND_FIRE.maxPerPayload
       && spawned.filter(isFire).length === bursts * fx.GROUND_FIRE.maxPerPayload,
       `${bursts} bursts queued ${spawned.filter(isFire).length} flames, ${liveNow} alive against a cap of ${fx.GROUND_FIRE.maxLive}`);
     await endAll();
