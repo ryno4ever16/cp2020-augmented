@@ -427,9 +427,11 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     ];
     const supRows = _collectParentRows(root, supSelectors);
 
+    // The autofire round count is the BASE system's `fullAutoRoundsFired` field — see the row in
+    // lookups.js for why the name is load-bearing.
     const autoSelectors = [
-      '.field[data-path="autoRounds"]',
-      'input[name="fields.autoRounds"], input[name="autoRounds"]',
+      '.field[data-path="fullAutoRoundsFired"]',
+      'input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"]',
     ];
     const autoRows = _collectParentRows(root, autoSelectors);
 
@@ -440,16 +442,46 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const dualWieldRows = _collectParentRows(root,
       (this._dualWieldGearPaths ?? []).flatMap(p => [`input[name="fields.${p}"]`, `input[name="${p}"]`]));
 
+    // ── Autofire round count: the base system's own bounds check, ported ──
+    // The shared number field renders its bounds as `data-min`/`data-max` rather than as native
+    // `min`/`max` attributes, so a browser enforces nothing by itself and the check has to be asked
+    // for. The base dialog asks for it (`validateFullAutoRoundsInput`); ours replaces that dialog, so
+    // without this the field would accept any number and lean entirely on the fire path's clamp —
+    // which works, but silently, and a shooter who typed 99 would never learn their burst was cut.
+    // Same message key as the base, so the two dialogs say the same thing in every language.
+    // ⚠ Only while FULL AUTO is selected: the row is hidden in every other mode and a hidden field
+    // that reports invalid blocks the whole form.
+    const autoRoundsEl = root.querySelector(
+      'input[name="fields.fullAutoRoundsFired"], input[name="fullAutoRoundsFired"]'
+    );
+    const validateAutoRounds = () => {
+      if (!autoRoundsEl) return;
+      autoRoundsEl.setCustomValidity("");
+      if ((fireModeEl?.value ?? "") !== fireModes.fullAuto) return;
+      const raw = String(autoRoundsEl.value ?? "").trim();
+      const value = Number(raw);
+      const min = Math.max(1, Math.floor(Number(autoRoundsEl.dataset.min) || 1));
+      const max = Math.max(0, Math.floor(Number(autoRoundsEl.dataset.max) || 0));
+      // No rounds available at all: the weapon roll's own NoAmmo guard is the right place to say so.
+      if (max <= 0) return;
+      const invalid = raw === "" || !Number.isFinite(value) || !Number.isInteger(value)
+        || value < min || value > max;
+      if (invalid) autoRoundsEl.setCustomValidity(localizeParam("FullAutoRoundsInvalid", { min, max }));
+    };
+
     const updateVisibility = () => {
       const mode = fireModeEl?.value ?? "";
       _setVisible(supRows,  mode === fireModes.suppressive);
       _setVisible(autoRows, mode === fireModes.fullAuto);
       _setVisible(dualWieldRows, !!dualWieldEl?.checked);
+      validateAutoRounds();
     };
 
     updateVisibility();
     fireModeEl?.addEventListener("change", updateVisibility);
     dualWieldEl?.addEventListener("change", updateVisibility);
+    autoRoundsEl?.addEventListener("input", validateAutoRounds);
+    autoRoundsEl?.addEventListener("change", validateAutoRounds);
   }
 
   /** Form handler — called when the submit button is clicked. */

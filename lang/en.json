@@ -1678,7 +1678,6 @@
       "TorsoFree": "free: 1 Light + 1 Heavy"
     },
     "Arrow": "Arrow",
-    "AutofireRounds": "Rounds to Fire",
     "Basic": "Basic",
     "BlockParryHint": "Defensive: block or parry an incoming melee attack outright — no damage if you win the contest. Blades must save or break. -3 to your actions while blocking.",
     "Brass-cased": "Brass-cased",

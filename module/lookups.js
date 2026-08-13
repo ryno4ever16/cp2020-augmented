@@ -728,10 +728,23 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
         {localKey:"Ricochet", dataPath:"ricochet",defaultValue: false},
         {localKey:"Running", dataPath:"running",defaultValue: false},
         {localKey:"TurnFace", dataPath:"turningToFace",defaultValue: false},
-        // Full-auto only: how many rounds of the burst to fire (1..ROF). Shown for fullAuto, hidden otherwise.
-        // min/max constrain the input itself so the player can't enter more than ROF (it was only
-        // silently capped at fire time before, which was confusing).
-        {localKey:"AutofireRounds", dataPath:"autoRounds", dtype:"Number", defaultValue: rof, min: 1, max: rof},
+        // Full-auto only: how many rounds of the burst to fire. Shown for fullAuto, hidden otherwise.
+        //
+        // ⭐⭐ THIS IS THE BASE SYSTEM'S OWN FIELD, NOT ONE OF OURS, AND THE NAME IS THE WHOLE POINT.
+        // `CyberpunkItem._resolveFullAutoRounds` (systems/cyberpunk2020/module/item/item.js) is the
+        // single site that decides how long a burst is: it clamps a requested count into
+        // 1..min(ROF, shotsLeft), reads a bare 0 or a missing value as "no preference" and hands back
+        // the full maximum, and its answer drives BOTH the rounds actually fired and the ranged to-hit
+        // term (+1/-1 per ten rounds). It reads exactly one key off the submitted modifiers:
+        // `fullAutoRoundsFired`. A row under any other name is a number the fire path never sees —
+        // which is what this row was until 2026-08-13, when it was called `autoRounds`: the shooter
+        // could type any burst length they liked and every burst still fired the weapon's whole ROF.
+        //
+        // The bounds mirror the resolver's own clamp rather than plain ROF, so the input cannot offer
+        // a number that would be quietly reduced at fire time; `roundsFiredMax` above is that same
+        // min(ROF, shotsLeft). `extraClasses` matches the base's own row so its stylesheet applies.
+        {localKey:"FullAutoRoundsFired", dataPath:"fullAutoRoundsFired", dtype:"Number",
+         defaultValue: roundsFiredMax, min: 1, max: roundsFiredMax, step: 1, extraClasses: "full-auto-rounds"},
         // Suppressive fire declares a zone WIDTH (metres) plus the rounds fired. The width SEEDS the canvas
         // placement preview's opening corridor (module/combat/suppressive-placement.js) — the shooter can then
         // re-size it there — and it keeps the base system's own suppressive DC honest when the zone automation
