@@ -243,19 +243,43 @@ export function rollCoverageDie() {
 }
 
 /**
- * Decide whether the vehicle covers its own rider for THIS attack, and say so in words.
- * @returns {{covered:boolean, note:string, chance:number|null, roll:number|null}}
+ * Decide whether the vehicle covers its own rider for THIS attack.
+ *
+ * ⚠ IT RETURNS THE VERDICT, NOT THE WORDS — the caller composes the label, because the label needs
+ * the row's FINAL name (which part of the vehicle the line crossed) and that is not settled until
+ * the geometry has run. See `riderCoverRowLabel`.
+ *
+ * @returns {{covered:boolean, chance:number|null, roll:number|null}}
  */
 export function resolveRiderCover(row, mode) {
-  const name = row?.actor?.name ?? row?.label ?? "";
-  if (mode === "none") return { covered: false, note: "", chance: null, roll: null };
-  if (mode !== "75" && mode !== "50") return { covered: true, note: "", chance: null, roll: null };
+  if (mode === "none") return { covered: false, chance: null, roll: null };
+  if (mode !== "75" && mode !== "50") return { covered: true, chance: null, roll: null };
   const chance = riderCoverChance(mode);
   const roll = rollCoverageDie();
-  const covered = roll <= chance;
-  return {
-    covered, chance, roll,
-    note: localizeParam(covered ? "Vehicle.RiderCoveredThisAttack" : "Vehicle.RiderExposedThisAttack",
-      { name, pct: chance }),
-  };
+  return { covered: roll <= chance, chance, roll };
+}
+
+/**
+ * The cover row's own LABEL, carrying the per-attack verdict — "Riot 8 — covered this attack (75%)".
+ *
+ * ⭐ THE VERDICT BELONGS IN THE ROW'S NAME (user ruling 2026-08-13). It was first shown as a separate
+ * sentence beside the Cover SP field, which made this one cover row read differently from every other
+ * one: a wall, a zone and a vehicle all state what they are in their own label, and only this row had
+ * its statement parked somewhere else. The user's question settles it — "shouldn't it be treated the
+ * same as any other cover row?"
+ *
+ * ⛔ IT IS A DISPLAY LABEL AND ONLY A DISPLAY LABEL. What a round COSTS the vehicle is a fact about
+ * the vehicle, not about one attack's coverage roll, so the chew receipt keeps the clean name and this
+ * string never reaches it — otherwise a wear card would read "Riot 8 — covered this attack (75%)
+ * absorbed 12 damage", which is the deviation this ruling replaces rather than a reason for it. The
+ * two names live in two fields (`label` clean, `displayLabel` decorated) precisely so neither can be
+ * mistaken for the other.
+ *
+ * The exposed form names no percentage: a roll that went the other way is not a coverage the row has.
+ */
+export function riderCoverRowLabel(baseLabel, verdict) {
+  if (!verdict || verdict.chance === null) return String(baseLabel ?? "");
+  return verdict.covered
+    ? localizeParam("Vehicle.RiderCoveredThisAttack", { name: baseLabel, pct: verdict.chance })
+    : localizeParam("Vehicle.RiderExposedThisAttack", { name: baseLabel });
 }

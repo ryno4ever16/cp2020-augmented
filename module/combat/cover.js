@@ -37,7 +37,7 @@ import { localize, localizeParam } from "../utils.js";
 import { COVER_ZONE_BEHAVIOR } from "./cover-zone-behavior.js";
 import {
   vehicleCoverRowsOn, vehicleCoverSpAlong, vehicleCoverLabel, chewVehicleCover,
-  isVehicleCoverUuid, boardedVehicleIdOf, riderCoverModeFor, resolveRiderCover,
+  isVehicleCoverUuid, boardedVehicleIdOf, riderCoverModeFor, resolveRiderCover, riderCoverRowLabel,
 } from "../vehicle/vehicle-cover.js";
 
 const SCOPE = "cp2020-augmented";
@@ -218,6 +218,9 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
   for (const r of coverChoicesFor(targetTokenDoc)) {
     if (r.destroyed) continue;
     let crossed = false;
+    // The rider-cover draw for THIS row, when one was made. Held so the row's name can be composed
+    // once, after the geometry has finished deciding what to call it.
+    let riderVerdict = null;
     try {
       if (r.vehicle) {
         if (excludedVehicle(r)) continue;
@@ -225,12 +228,18 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
           const mode = riderCoverModeFor(r.actor.system);
           if (mode === "none") continue;               // an open frame hides nobody
           const verdict = resolveRiderCover(r, mode);
-          r.note = verdict.note;
           if (!verdict.covered) {
             r.sp = 0;
+            // The row still says what happened, in its own name — see riderCoverRowLabel. An exposed
+            // row never reaches the geometry below, so its label is final here.
+            r.displayLabel = riderCoverRowLabel(r.label, verdict);
             exposed.push(r);
             continue;
           }
+          // A covered row goes on to the geometry, which may rename it after the part the line
+          // crossed ("… — engine block"). The verdict is folded in AFTER that, so the row's name
+          // reads in the order it was decided.
+          riderVerdict = verdict;
         }
         // WHICH cells the line crossed decides the SP, so the row's own numbers are settled here
         // rather than at row-build time: body 10 unless it went through the engine block, 35 if it
@@ -262,10 +271,16 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
         }
       }
     } catch (e) { crossed = false; }
-    if (crossed) out.push(r);
+    if (crossed) {
+      // The row's DISPLAY name, settled last so it carries whatever the geometry decided to call the
+      // row plus the per-attack verdict when there was one. `label` stays the clean name — it is what
+      // the wear receipt is written against (see riderCoverRowLabel).
+      if (riderVerdict) r.displayLabel = riderCoverRowLabel(r.label, riderVerdict);
+      out.push(r);
+    }
   }
-  // Anything a rider was exposed to this attack trails the real crossings: it carries no SP, only
-  // the note that says the roll happened and which way it went.
+  // Anything a rider was exposed to this attack trails the real crossings: it carries no SP, only a
+  // name that says the roll happened and which way it went.
   return [...out, ...exposed];
 }
 

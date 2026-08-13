@@ -161,7 +161,9 @@ const openAndRead = async () => {
     const root = document.querySelector("form.damage-dialog");
     return {
       sp: root.querySelector('input[name="coverSP"]')?.value ?? null,
-      note: root.querySelector(".cp-cover-note-text")?.textContent?.trim() ?? "",
+      // The cover ROW'S OWN LABEL. The per-attack verdict lives in here now (ruled 2026-08-13) rather
+      // than in a sentence parked beside the field, so this row reads like every other cover row.
+      label: root.querySelector(".cp-cover-note-text")?.textContent?.trim() ?? "",
       afterSp: [...root.querySelectorAll("input.after-sp-override")].map(i => i.value),
     };
   });
@@ -187,50 +189,57 @@ const setMode = (mode) => gm.page.evaluate(async ({ carId, mode }) => {
 /* enclosed (the by-type default for a car) */
 const enclosed = await openAndRead();
 check("an enclosed vehicle shields its rider: SP seeded from the crossed square", enclosed.sp === "10", String(enclosed.sp));
-check("nothing was rolled, so nothing is stated", enclosed.note === "", enclosed.note);
+check("nothing was rolled, so the row is named plainly and claims no verdict",
+  enclosed.label === "__PWR__Ride", enclosed.label);
 
-/* 75% — covered this attack */
+/* 75% — covered this attack. The label is asserted WHOLE: this is the shipped wording. */
 await setMode("75");
 await pinDice(0.001);
 const covered = await openAndRead();
 check("an open vehicle that covers its rider still folds its SP in", covered.sp === "10", String(covered.sp));
-check("the window says the rider was covered, and at what odds",
-  /covered this attack/i.test(covered.note) && covered.note.includes("75"), covered.note);
-check("the note names the vehicle", covered.note.includes("__PWR__Ride"), covered.note);
-check("the note leaks no raw key", !covered.note.includes("CYBERPUNK."), covered.note);
+check("the row's own label states the covered verdict, in full",
+  covered.label === "__PWR__Ride — covered this attack (75%)", covered.label);
+check("the label leaks no raw key", !covered.label.includes("CYBERPUNK."), covered.label);
 
-/* 75% — exposed this attack */
+/* 75% — exposed this attack. No percentage: a roll that went the other way is not a coverage it has. */
 await pinDice(0.99);
 const exposedRow = await openAndRead();
 check("an open vehicle that fails its roll folds no SP", exposedRow.sp === "0", String(exposedRow.sp));
-check("the window says the rider was exposed, and at what odds",
-  /exposed this attack/i.test(exposedRow.note) && exposedRow.note.includes("75"), exposedRow.note);
+check("the row's own label states the exposed verdict, in full and without odds",
+  exposedRow.label === "__PWR__Ride — exposed this attack", exposedRow.label);
 check("an exposed rider takes the full roll", exposedRow.afterSp[0] === "12", exposedRow.afterSp.join(","));
 
 /* 50% — the other printed preset, still decided per attack */
 await setMode("50");
 await pinDice(0.001);
 const fifty = await openAndRead();
-check("the 50% preset covers on a low roll", fifty.sp === "10" && /covered this attack/i.test(fifty.note), `${fifty.sp} / ${fifty.note}`);
-check("the 50% preset states its own odds", fifty.note.includes("50"), fifty.note);
+check("the 50% preset covers on a low roll and names its own odds",
+  fifty.sp === "10" && fifty.label === "__PWR__Ride — covered this attack (50%)", `${fifty.sp} / ${fifty.label}`);
 await pinDice(0.6);
 const fiftyOut = await openAndRead();
 check("negative case: 60 beats a 50% chance and the rider is exposed",
-  fiftyOut.sp === "0" && /exposed this attack/i.test(fiftyOut.note), `${fiftyOut.sp} / ${fiftyOut.note}`);
-await unpinDice();
+  fiftyOut.sp === "0" && fiftyOut.label === "__PWR__Ride — exposed this attack", `${fiftyOut.sp} / ${fiftyOut.label}`);
 
-/* none — an open frame hides nobody, and says nothing */
+/* none — an open frame hides nobody, so there is no row to name */
+await unpinDice();
 await setMode("none");
 const none = await openAndRead();
 check("a vehicle whose riders are in the open contributes no cover", none.sp === "0", String(none.sp));
-check("…and states nothing, because nothing was decided", none.note === "", none.note);
+check("…and names no row, because no row was picked", none.label === "", none.label);
 
-/* ── the round trip: the covered case, applied ── */
-await setMode("enclosed");
+/* ── the round trip: the covered case, applied, WITH a verdict in play ────────────────────────
+   ⛔ The apply is driven at 75% and a forced covered roll rather than on the enclosed default,
+   because the thing under test is that the verdict does NOT travel: the row's decorated label is
+   for this window, and what a round costs the vehicle is a fact about the vehicle. Applied on
+   `enclosed` there would be no verdict to leak and the chew leg below would pass vacuously. */
+await setMode("75");
+await pinDice(0.001);
 const msgIdsBefore = await gm.page.evaluate(() => game.messages.map(m => m.id));
 const applyRead = await openAndRead();
-check("back on enclosed, the window seeds the crossed square again", applyRead.sp === "10", String(applyRead.sp));
+check("the window about to be applied is the covered one", applyRead.sp === "10"
+  && applyRead.label === "__PWR__Ride — covered this attack (75%)", `${applyRead.sp} / ${applyRead.label}`);
 await pl.page.click('.damage-dialog button[data-action="applyDamage"]');
+await unpinDice();
 
 const after = await gm.page.evaluate(async ({ riderId, carId, hp0 }) => {
   const read = () => ({
@@ -265,6 +274,12 @@ const card = await gm.page.evaluate(async (before) => {
 }, msgIdsBefore);
 check("exactly one chew card reaches the table", card.count === 1, String(card.count));
 check("the card names the vehicle the rider was sitting in", /__PWR__Ride/.test(card.content), card.content.replace(/<[^>]+>/g, " ").slice(0, 160));
+// ⛔ THE VERDICT DOES NOT TRAVEL. The window that produced this wear was labelled "…— covered this
+// attack (75%)"; what a round cost the vehicle is a fact about the vehicle, so the receipt carries
+// the clean name. Anything else reads as "Riot 8 — covered this attack (75%) absorbed 12 damage".
+check("the wear receipt carries the vehicle's clean name, with no per-attack verdict on it",
+  !/covered this attack|exposed this attack/i.test(card.content),
+  card.content.replace(/<[^>]+>/g, " ").slice(0, 200));
 check("the card reports the structure left (28 / 40)", /28 \/ 40/.test(card.content), card.content.replace(/<[^>]+>/g, " ").slice(0, 200));
 
 /* ── cleanup + rig hygiene ── */

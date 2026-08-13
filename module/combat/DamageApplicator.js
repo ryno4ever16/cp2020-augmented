@@ -529,7 +529,10 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
         // combined value the math used — read off armorBase itself, never re-folded.
         layerBonus: Math.max(0, armorBase - layerMax),
         armorBase, armorMult, armorSP: currentSP,
-        coverName: String(cover?.label ?? ""),
+        // The row's DISPLAY name — the one that carries a per-attack verdict when the row had one
+        // (combat/cover.js). `label` is the clean name and stays the one the wear receipt is written
+        // against; this is what the apply window's breakdown line calls the row.
+        coverName: String(cover?.displayLabel || cover?.label || ""),
         coverSP: roundCoverSP,
         effectiveSP: spFull,
         apHalved: !!ap && armorMode !== ARMOR_MODES.NONE && spUsed !== spFull,

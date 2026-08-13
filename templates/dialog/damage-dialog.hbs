@@ -117,11 +117,12 @@
         style="width:52px; text-align:right;"
         title="{{CPLocal 'DamageDlgCoverSpExamples'}}">
     </div>
-    {{#if coverNote}}
-    {{!-- What the auto-detect decided, in words, when the decision involved a roll: an open-topped
-          vehicle covers its riders only part of the time, and a GM must be able to see which way it
-          landed and type over it. Assembled in JS (it names the vehicle and the odds). --}}
-    <div class="field cp-cover-note"><span class="cp-cover-note-text">{{coverNote}}</span></div>
+    {{#if coverRowLabel}}
+    {{!-- The picked cover row's own name — what the shot was found to be behind. When the row was
+          decided by a roll (an open-topped vehicle covers its riders only part of the time) the name
+          carries that verdict, exactly as a vehicle row's name carries the part that was crossed, so
+          a GM can see which way it landed and type over the SP. Assembled in JS. --}}
+    <div class="field cp-cover-note"><span class="cp-cover-note-text">{{coverRowLabel}}</span></div>
     {{/if}}
 
     <div class="field">
