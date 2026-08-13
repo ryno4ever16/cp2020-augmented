@@ -27,8 +27,10 @@
  *     the region is planted on the DECLARED axis rather than the target axis, and the shot ends in a
  *     RESOLUTION CARD — posted once the presentation is over, listing who the corridor caught, with the
  *     region still on the table and nothing applied until somebody presses its one Apply control
- * §11 the aim preview's REACH WHEEL — a step out and a step back, read through the readout the rule
- *     derives and through the confirmed corridor's own reachM, plus the board gate and the plant's floor
+ * §11 the aim preview's TWO WHEELS — the plain one is the house WIDTH override (a metre a notch, floored
+ *     at a metre, marked in the readout, planted on the region), shift+wheel is the reach fine-tune;
+ *     read through the readout the rule derives, the confirmed corridor and the planted region, plus the
+ *     board gate, both floors, the per-aim reset, and the plant's own floor
  * §12 a pattern nobody applied is still collected by its own clock (the card does not make it immortal)
  * §13 the save cadences — one death prompt per application batch, a stun prompt per damage event
  *
@@ -840,12 +842,16 @@ const res = await page.evaluate(async () => {
   ok("§10 the aim preview writes no document of its own (it is a client-local ghost)",
     !/createEmbeddedDocuments|\.update\(|setFlag/.test(placeSrc));
 
-  /* ── §11  the aim preview's REACH WHEEL ──────────────────────────────────────────────────── */
-  // The one gesture in the preview with no coverage at all. The wheel does NOT set the corridor's width
-  // (that is the book's spread, a pure function of the band); it pushes the corridor's END past or short
-  // of the cursor, and the band, the width and the banded formula re-derive from the new reach. So every
-  // leg here reads the DERIVED consequence — the readout's text, then the confirmed corridor's own
-  // reachM — rather than poking at the private state that produces it.
+  /* ── §11  the aim preview's TWO WHEELS ───────────────────────────────────────────────────── */
+  // ⭐ THE MAPPING IS THE THING UNDER TEST (user ruling 2026-08-13: the wheel "lengthens instead of
+  // widening… It should go meter by meter"). The PLAIN wheel is the corridor's WIDTH — a house override
+  // added on top of the book's banded width, a metre a notch, floored so a corridor is never narrower
+  // than a metre. SHIFT+wheel is the reach fine-tune the plain wheel used to be. The band and the banded
+  // damage stay a pure function of the REACH either way, so a width override must move neither — which
+  // is what most of the negatives below say.
+  //
+  // Every leg reads the DERIVED consequence — the readout's sentence, then the confirmed corridor's own
+  // numbers, then the planted region's own flag — rather than poking at the private state behind them.
   //
   // The preview is armed DIRECTLY rather than through the fire control, because this file spends nothing
   // and confirms into a plain object: no window opens, no roll is made, no round leaves the magazine, so
@@ -857,26 +863,30 @@ const res = await page.evaluate(async () => {
   const viewBefore = { x: canvas.stage.pivot.x, y: canvas.stage.pivot.y, scale: canvas.stage.scale.x };
   // Dispatched ON THE BOARD: the wheel listener gates on ev.target being the game canvas
   // (spread-placement.js _isCanvasEvent), so a wheel over a sheet or the sidebar scrolls it as normal.
-  const wheelOnBoard = async (deltaY, times = 1) => {
+  const wheelOnBoard = async (deltaY, times = 1, shiftKey = false) => {
     for (let i = 0; i < times; i++) {
-      canvas.app.view.dispatchEvent(new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }));
+      canvas.app.view.dispatchEvent(new WheelEvent("wheel", { deltaY, shiftKey, bubbles: true, cancelable: true }));
     }
     await sleep(120);
   };
   const readout = () => document.querySelector(".cp-spread-preview-readout")?.textContent ?? "";
-  // What the readout must SAY for a given corridor reach — derived from the same shared ladder the
-  // preview reads, so this is a re-derivation of the rule rather than a copy of the sentence.
-  const readoutFor = (reachM) => {
+  // What the readout must SAY for a given reach and width override — re-derived from the same shared
+  // ladder the preview reads plus the house floor, so this is a re-derivation of the rule rather than a
+  // copy of the sentence. A non-zero override carries the house mark; a zero one must not.
+  const widthFor = (reachM, biasM = 0) =>
+    Math.max(placement.SPREAD_MIN_WIDTH_M, lookup.spreadBandSpec(reachM).widthM + biasM);
+  const readoutFor = (reachM, biasM = 0) => {
     const spec = lookup.spreadBandSpec(reachM);
-    return `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${spec.widthM}m wide, ${lookup.spreadBandDamage(spec.band)}`;
+    const line = `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${widthFor(reachM, biasM)}m wide, ${lookup.spreadBandDamage(spec.band)}`;
+    return biasM === 0 ? line : `${line} ${game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")}`;
   };
 
-  /* §11a — a wheel up reaches further, and the readout re-derives */
+  /* §11a — the PLAIN wheel widens the corridor, a metre a notch, and moves nothing else */
   let wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);           // cursor reach = 15m on this scene's grid → Medium band
   const baseReadout = readout();
-  ok("§11 the wheel section starts on the cursor's own reach, by value", baseReadout === readoutFor(expectM),
+  ok("§11 the wheel section starts on the book's own banded width, unmarked", baseReadout === readoutFor(expectM),
     `${baseReadout} | expected ${readoutFor(expectM)}`);
 
   // ⚠ THE NEGATIVE IS READ AFTER A RE-AIM, ON PURPOSE. A wheel the preview declines still reaches CORE,
@@ -887,34 +897,79 @@ const res = await page.evaluate(async () => {
   for (let i = 0; i < 3; i++) document.body.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true }));
   await sleep(200);
   await aimAt(aimWorld.x, aimWorld.y);
-  ok("§11 a wheel that did not land on the board adds no reach of its own (negative)",
+  ok("§11 a wheel that did not land on the board changes nothing at all (negative)",
     readout() === baseReadout, `${baseReadout} → ${readout()}`);
 
-  await wheelOnBoard(-100, 3);                   // three steps further out, on the board this time
-  ok("§11 three steps out stay inside the same band, so the width and formula do not move (negative)",
-    readout() === readoutFor(expectM + 3), `${readout()} | expected ${readoutFor(expectM + 3)}`);
-  // Confirm and read the corridor back: reachM is the cursor's reach plus exactly the steps taken.
+  await wheelOnBoard(-100, 2);                   // two notches wider, on the board this time
+  ok("§11 two plain notches widen the corridor by two metres and say so, by value",
+    readout() === readoutFor(expectM, 2), `${readout()} | expected ${readoutFor(expectM, 2)}`);
+  ok("§11 the readout carries the house-override mark once the width is the table's, not the book's",
+    readout().includes(game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")) && !baseReadout.includes(game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")),
+    `${baseReadout} → ${readout()}`);
+  ok("§11 and the band and the banded damage are untouched by a width override (negative)",
+    readout().includes(game.i18n.localize(`CYBERPUNK.SpreadBand${expectSpec.band}`)) && readout().includes(expectDmg),
+    `${readout()} | band ${expectSpec.band} dmg ${expectDmg}`);
+  // Confirm and read the corridor back: the width carries the override, the reach is still the cursor's.
   let wheelClick = await aimAt(aimWorld.x, aimWorld.y);
   canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
   let wheelAim = await wheelGesture;
-  ok("§11 the confirmed corridor's reach carries the wheel's steps, by value",
+  ok("§11 the confirmed corridor's WIDTH carries the plain wheel's notches, by value",
+    Number(wheelAim?.widthM) === widthFor(expectM, 2), `${lookup.spreadBandSpec(expectM).widthM} + 2 → ${wheelAim?.widthM}`);
+  ok("§11 and its reach is still the cursor's own, unmoved by the plain wheel (negative)",
+    Math.abs(Number(wheelAim?.reachM) - expectM) < 0.01 && wheelAim?.band === expectSpec.band,
+    JSON.stringify({ reachM: wheelAim?.reachM, band: wheelAim?.band }));
+  // End to end: the overridden width is what the REGION is planted with, not just what the ghost showed.
+  await wipeZones(); await wipeCards();
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 1, spreadAim: wheelAim }));
+  await sleep(500);
+  ok("§11 the planted region is the width the table set, by value",
+    Number(myZones()[0]?.flags?.[SCOPE]?.widthM) === widthFor(expectM, 2),
+    String(myZones()[0]?.flags?.[SCOPE]?.widthM));
+  await wipeZones(); await wipeCards();
+
+  /* §11b — the width floor holds: a corridor is never narrower than a metre */
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  await sleep(300);
+  await aimAt(aimWorld.x, aimWorld.y);
+  await wheelOnBoard(100, 40);                   // far more notches down than there is width to give
+  ok("§11 narrowing stops at the house floor, by value",
+    readout() === readoutFor(expectM, placement.SPREAD_MIN_WIDTH_M - lookup.spreadBandSpec(expectM).widthM),
+    `${readout()} | expected width ${placement.SPREAD_MIN_WIDTH_M}`);
+  wheelClick = await aimAt(aimWorld.x, aimWorld.y);
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
+  wheelAim = await wheelGesture;
+  ok("§11 and the floored corridor confirms at the floor, by value",
+    Number(wheelAim?.widthM) === placement.SPREAD_MIN_WIDTH_M, String(wheelAim?.widthM));
+  ok("§11 the floor is the ruled one metre", placement.SPREAD_MIN_WIDTH_M === 1, String(placement.SPREAD_MIN_WIDTH_M));
+
+  /* §11c — SHIFT+wheel is the reach fine-tune, and the band follows it */
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  await sleep(300);
+  await aimAt(aimWorld.x, aimWorld.y);
+  await wheelOnBoard(-100, 3, true);             // three steps further out
+  ok("§11 three SHIFT steps push the reach out, and the width stays the book's (negative on the mark)",
+    readout() === readoutFor(expectM + 3), `${readout()} | expected ${readoutFor(expectM + 3)}`);
+  wheelClick = await aimAt(aimWorld.x, aimWorld.y);
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
+  wheelAim = await wheelGesture;
+  ok("§11 the confirmed corridor's REACH carries the shift wheel's steps, by value",
     Math.abs(Number(wheelAim?.reachM) - (expectM + 3)) < 0.01, `${expectM} + 3 → ${wheelAim?.reachM}`);
   ok("§11 and the band/width the reach derives travel with it",
     wheelAim?.band === lookup.spreadBandSpec(expectM + 3).band
     && wheelAim?.widthM === lookup.spreadBandSpec(expectM + 3).widthM,
     JSON.stringify({ band: wheelAim?.band, widthM: wheelAim?.widthM }));
 
-  /* §11b — enough steps cross a band boundary, and the whole corridor changes with it */
+  /* §11d — enough shift steps cross a band boundary, and the whole corridor changes with it */
   wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
-  await wheelOnBoard(-100, 11);                  // 15m + 11 → 26m, past the Medium/Long boundary at 25m
+  await wheelOnBoard(-100, 11, true);            // 15m + 11 → 26m, past the Medium/Long boundary at 25m
   ok("§11 crossing the band boundary re-derives the band, the width AND the formula, by value",
     readout() === readoutFor(expectM + 11) && lookup.spreadBandSpec(expectM + 11).band === "Long",
     `${readout()} | expected ${readoutFor(expectM + 11)}`);
 
-  /* §11c — a wheel down pulls back, and stops at the plantable floor */
-  await wheelOnBoard(100, 40);                   // far more steps down than there is corridor to give
+  /* §11e — a shift wheel down pulls back, and stops at the plantable floor */
+  await wheelOnBoard(100, 40, true);             // far more steps down than there is corridor to give
   ok("§11 pulling back stops at the shortest corridor the plant accepts, by value",
     readout() === readoutFor(placement.SPREAD_MIN_LENGTH_M), `${readout()} | expected ${readoutFor(placement.SPREAD_MIN_LENGTH_M)}`);
   wheelClick = await aimAt(aimWorld.x, aimWorld.y);
@@ -922,9 +977,25 @@ const res = await page.evaluate(async () => {
   wheelAim = await wheelGesture;
   ok("§11 and the floored corridor confirms at that floor rather than at the cursor, by value",
     Math.abs(Number(wheelAim?.reachM) - placement.SPREAD_MIN_LENGTH_M) < 0.01, String(wheelAim?.reachM));
+
+  /* §11f — the override is per-aim: a fresh gesture starts on the book's width again */
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  await sleep(300);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 a NEW aim starts on the book's banded width — the override does not outlive its gesture (negative)",
+    readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
+  placement.cancelSpreadPreview();
+  await wheelGesture;
+  await sleep(200);
+
   ok("§11 the whole section spent nothing — the magazine is untouched, by value",
     magazine() === wheelMagBefore, `${wheelMagBefore} → ${magazine()}`);
-  ok("§11 and planted no pattern (the preview writes no documents) (negative)", myZones().length === 0, String(myZones().length));
+  ok("§11 and planted no pattern of its own beyond the one it wiped (negative)", myZones().length === 0, String(myZones().length));
+  // The suppressive lane's own widths are NOT the shooter's to override — the ruling is spread-corridor
+  // only, so its preview must carry no width gesture at all.
+  const suppSrc = await (await fetch(`/modules/${SCOPE}/module/combat/suppressive-placement.js`, { cache: "no-store" })).text();
+  ok("§11 the suppressive preview took no width override (the ruling is the shot pattern's alone) (negative)",
+    !/widthBiasM/.test(suppSrc));
   await canvas.animatePan({ ...viewBefore, duration: 0 }).catch(() => {});
   await sleep(200);
 

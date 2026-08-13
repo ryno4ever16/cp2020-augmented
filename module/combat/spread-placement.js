@@ -11,6 +11,12 @@
  * a left click confirms the corridor → the ordinary modifiers window opens → the roll commits → the rail
  * draws along the confirmed corridor → the pattern resolves at the end of that presentation.
  *
+ * ⭐ AND TWO WHEELS, ONE OF WHICH IS A HOUSE RULE (user ruling 2026-08-13). The PLAIN wheel sets the
+ * corridor's WIDTH — a metre a notch, on top of the width the book's band gives, floored at a metre and
+ * marked in the readout as the table's number rather than the source material's. SHIFT+wheel is the
+ * reach fine-tune. The band label and the banded damage stay derived from the REACH in both cases: the
+ * ruling is about the shape of the corridor, not about what a shell does to whoever is standing in it.
+ *
  * ⚠ THIS FILE SPENDS NOTHING. It is armed BEFORE any roll, so an Esc (or a right click) returns null and
  * the fire flow simply stops: no roll, no ammunition spent, no pattern planted. The magazine is only
  * decremented inside the base system's own fire methods, which are several steps further down.
@@ -36,6 +42,16 @@ import { localize, localizeParam } from "../utils.js";
 
 /** The shortest corridor the plant will accept, in metres — mirrors the plant's own floor. */
 export const SPREAD_MIN_LENGTH_M = 2;
+
+/**
+ * The narrowest corridor the house width override may be pulled down to, in metres.
+ *
+ * A floor rather than a rule: the book's own narrowest band is 1 m (lookups.js `spreadBandSpec`), so
+ * this lets the table tighten a pattern to the tightest thing the source material describes and no
+ * further. A zero-width corridor is a line, which the plant's polygon cannot express and no figure can
+ * ever stand inside — it would be a shot that silently hits nobody.
+ */
+export const SPREAD_MIN_WIDTH_M = 1;
 
 /**
  * How solid the ghost is WHILE IT IS BEING AIMED, and it is deliberately not the planted pattern's own
@@ -151,11 +167,25 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   const state = {
     angleDeg: facingDeg,
     reachPx: metersToPixels(scene, 10),
-    // Wheel-set reach adjustment, in metres, added on top of the cursor distance. The corridor's WIDTH
-    // is the book's spread — a pure function of the distance band and the load — so the wheel does not
-    // set width directly; it pushes the corridor's END past (or short of) the cursor, and the band,
-    // width and damage follow in the readout. Mirrors the suppressive preview's wheel gesture.
+    // ⭐ TWO BIASES, AND WHICH WHEEL SETS WHICH IS A RULING (2026-08-13). The user, watching the gesture:
+    // *"shotgun region placement scroll wheel lengthens instead of widening. It should go meter by
+    // meter."* So the PLAIN wheel is the WIDTH — which is also what the suppressive lane's wheel has
+    // always done (suppressive-placement.js `onWheel` sets `state.widthM`), so the two previews now read
+    // the same way under the same finger — and SHIFT+wheel is the reach fine-tune the plain wheel used
+    // to be. Both are per-aim: they live on this object, which the gesture drops when it settles, so a
+    // corridor's override never leaks into the next shot.
+    //
+    // `reachBiasM` — metres added on top of the CURSOR distance, pushing the corridor's END past (or
+    // short of) where the pointer is. The band, the book's width and the banded damage all re-derive
+    // from the new reach, so this one moves the whole corridor.
     reachBiasM: 0,
+    // `widthBiasM` — metres added on top of the BAND-DERIVED width, and it is a HOUSE OVERRIDE rather
+    // than a reading of the rules: the book gives one width per band (Close 1 m / Medium 2 m / Long 3 m,
+    // or the load's own), and this lets the table say otherwise for one shot. Nothing else moves with
+    // it — the band label and the banded damage stay a pure function of the REACH, because the ruling
+    // covers the corridor's geometry and not what a shell does inside it. Marked as an override in the
+    // readout so nobody mistakes a set width for the book's.
+    widthBiasM: 0,
     lastClientX: window.innerWidth / 2,
     lastClientY: window.innerHeight / 2,
   };
@@ -173,11 +203,22 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   const fillColor = Number(foundry.utils.Color.from(SPREAD_ZONE_LOOK.fillColor));
   const lineColor = Number(foundry.utils.Color.from(SPREAD_ZONE_LOOK.outlineColor));
 
+  /** The band-derived width this reach earns, before any house override — the book's own answer. */
+  const bandWidthAt = (distM) => spreadBandSpec(distM, widths).widthM;
+
   /** The corridor the current cursor position describes — the ONE derivation both halves read. */
   const specNow = () => {
     const distM = Math.max(SPREAD_MIN_LENGTH_M, pixelsToMeters(scene, state.reachPx) + state.reachBiasM);
     const { band, widthM } = spreadBandSpec(distM, widths);
-    return { distM, band, widthM, dmgFormula: spreadBandDamage(band, formulas) };
+    return {
+      distM, band,
+      // The override rides ON TOP of the book's width and is floored again here rather than only at the
+      // wheel: the bias is clamped against the band it was set in, and a corridor pushed into a NARROWER
+      // band afterwards would otherwise carry a bias that band cannot afford.
+      widthM: Math.max(SPREAD_MIN_WIDTH_M, widthM + state.widthBiasM),
+      widthOverridden: state.widthBiasM !== 0,
+      dmgFormula: spreadBandDamage(band, formulas),
+    };
   };
 
   const redraw = () => {
@@ -185,9 +226,13 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
     const shape = rayPolygonShape(origin.x, origin.y, state.angleDeg,
       metersToPixels(scene, spec.distM), metersToPixels(scene, spec.widthM));
     _drawCorridor(graphics, shape.points, fillColor, lineColor);
-    readout.textContent = localizeParam("SpreadPreviewReadout", {
+    // The mark is appended rather than folded into the sentence so the unmarked readout is byte-for-byte
+    // the one the rest of the module already quotes — a reader who has never touched the wheel sees
+    // exactly what they saw before, and a width that is the TABLE'S says so out loud.
+    const line = localizeParam("SpreadPreviewReadout", {
       band: localize(`SpreadBand${spec.band}`), width: spec.widthM, dmg: spec.dmgFormula,
     });
+    readout.textContent = spec.widthOverridden ? `${line} ${localize("SpreadWidthHouseMark")}` : line;
     readout.style.left = `${state.lastClientX + 16}px`;
     readout.style.top = `${state.lastClientY + 16}px`;
   };
@@ -205,11 +250,24 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
     if (!_isCanvasEvent(ev)) return;         // a wheel over a sheet/sidebar scrolls it like normal
     ev.preventDefault();
     ev.stopPropagation();
-    // Scroll up reaches further, scroll down pulls back (never below the plantable floor). Band, width
-    // and damage re-derive from the new reach on the next redraw.
+    // A metre a notch either way, which is the unit the user asked for. Scroll up gives more (wider, or
+    // further), scroll down gives less.
     const step = ev.deltaY < 0 ? 1 : -1;
-    const cursorM = pixelsToMeters(scene, state.reachPx);
-    state.reachBiasM = Math.max(SPREAD_MIN_LENGTH_M - cursorM, state.reachBiasM + step);
+    if (ev.shiftKey) {
+      // SHIFT — the REACH fine-tune. Clamped against the CURSOR's own distance rather than against the
+      // bias alone, so pulling back stops exactly at the shortest corridor the plant will accept instead
+      // of running the bias arbitrarily negative and making the way back out take as many notches as the
+      // way down took. Band, width and damage all re-derive from the new reach on the next redraw.
+      const cursorM = pixelsToMeters(scene, state.reachPx);
+      state.reachBiasM = Math.max(SPREAD_MIN_LENGTH_M - cursorM, state.reachBiasM + step);
+    } else {
+      // PLAIN — the house WIDTH override. Clamped the same way, against the width this reach's band
+      // already earns, so the narrowest a corridor goes is the house floor and one notch back out widens
+      // it again immediately.
+      const bandWidthM = bandWidthAt(
+        Math.max(SPREAD_MIN_LENGTH_M, pixelsToMeters(scene, state.reachPx) + state.reachBiasM));
+      state.widthBiasM = Math.max(SPREAD_MIN_WIDTH_M - bandWidthM, state.widthBiasM + step);
+    }
     redraw();
   };
 

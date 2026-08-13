@@ -1428,6 +1428,16 @@ and the same pure band ladder (`lookups.js spreadBandSpec`) that the planted reg
 and the region are the same shape. It spends nothing: the magazine is decremented inside the base
 system's own fire methods, which are two steps further down, so Esc cancels a shot that never happened.
 
+**Two wheels, and one of them is a house rule** (⏪ 2026-08-13, §6). The **plain** wheel sets the
+corridor's **width**: ±1 m a notch on top of the width the band gives, floored at `SPREAD_MIN_WIDTH_M`
+= **1 m** (the book's own narrowest band — a zero-width corridor is a line nobody can stand in), and the
+readout appends `SpreadWidthHouseMark` so a set width is never mistaken for the source material's.
+**Shift+wheel** is the **reach** fine-tune, ±1 m a notch on top of the cursor's own distance, floored at
+`SPREAD_MIN_LENGTH_M` = 2 m. Both biases live on the aim's own state object, so neither outlives the
+gesture. The band label and the banded damage stay a pure function of the **reach** either way — the
+ruling is about the corridor's shape, not about what a shell does inside it — and the overridden width
+travels through `spreadAim.widthM` into the planted region exactly as the derived one always did.
+
 What reaches this file is one field on the payload — `spreadAim` — carrying an **angle and two reaches**
 rather than a point:
 
@@ -1606,6 +1616,25 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-13 — ⏪ the aim wheel sets WIDTH, and the width is the table's to set.**
+The user, watching the gesture: *"shotgun region placement scroll wheel lengthens instead of widening.
+It should go meter by meter."* Two decisions in one sentence. **What the plain wheel does**: the
+corridor's width, ±1 m a notch — which is also what the suppressive lane's wheel has always done
+(`suppressive-placement.js` sets `state.widthM` on a plain wheel), so the two previews now read the same
+way under the same finger. The reach fine-tune the plain wheel used to do moves to **shift+wheel**,
+unchanged otherwise. **And that width is a HOUSE OVERRIDE**: the book gives one width per band (Close
+1 m / Medium 2 m / Long 3 m, or the load's own) and the table may now say otherwise for one shot, so the
+readout marks it (`SpreadWidthHouseMark`) rather than letting a set width pass as the source material's.
+
+| Ruling | Value | Why |
+|---|---|---|
+| plain wheel = width | `widthBiasM`, ±1 m a notch | the user's own words, and the suppressive preview's existing gesture |
+| shift+wheel = reach | `reachBiasM`, unchanged behaviour | the fine-tune still has to exist; it stops being the default |
+| the width floor | `SPREAD_MIN_WIDTH_M` = 1 m | the book's own narrowest band. Below it a corridor is a line no figure can stand inside — a shot that silently hits nobody |
+| band + damage stay **reach**-derived | untouched | the ruling is the corridor's geometry, not what a shell does to whoever is in it |
+| the override is **per aim** | both biases live on the gesture's state object | a corridor widened for one shot must not widen the next |
+| the suppressive lane is **not** in scope | no `widthBiasM` there | it already had the gesture; nothing was asked of it |
 
 **2026-08-13 — ⏪ the apply moment comes back: a declared corridor ends in a card, not in damage.**
 The 2026-08-11 gesture ruling moved the aiming to the front of the shot, and the build read "the
@@ -2136,9 +2165,11 @@ scan for the two ways this could silently rot (the stored flag being read again,
 `region.behaviors.length`) · the whole placement-forward gesture as a real gesture, ending in the
 **apply moment**: the resolution card arrives after the presentation floor with *nothing applied*
 (no result card, the figure's damage still 0, the region still on the table), the press lands it, the
-region goes, and a second press resolves nothing · the aim preview's **reach wheel**, read through the
-readout the shared ladder derives and through the confirmed corridor's own `reachM`, with the
-board-target gate and the plant's floor as its two negatives · and the two save **cadences**, counted
+region goes, and a second press resolves nothing · the aim preview's **two wheels** — the plain one
+widening the corridor a metre a notch (read through the readout, the confirmed corridor's `widthM` and
+the planted region's own flag), shift+wheel moving the reach — with both floors, the house mark, the
+per-aim reset, the board-target gate and a source scan proving the suppressive lane was left alone ·
+and the two save **cadences**, counted
 as cards: one death prompt for a three-shell burst on a Mortal figure, one stun prompt per damage
 event below Mortal.
 
