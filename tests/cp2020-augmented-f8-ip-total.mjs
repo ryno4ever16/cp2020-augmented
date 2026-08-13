@@ -163,6 +163,9 @@ try {
       ok("pending banked once, not twice", IP.pendingForSkill(actor.items.get(skill.id)) === 5, IP.pendingForSkill(actor.items.get(skill.id)));
 
       // 4. The amount field's validity matches what the engine will actually accept.
+      // RAW mode from here: the queue section only exists where per-skill attribution does, so a
+      // Simple-mode tracker paints no rows at all to read a field off (tracker redesign, 2026-08-13).
+      await game.settings.set(SCOPE, "ipRawTracking", true);
       await game.settings.set(SCOPE, "ipQueue", [{
         id: "__PW__row", actorId: actor.id, skillId: skill.id, actorName: actor.name,
         skillName: skill.name, total: 12, ip: 0, success: false, ts: Date.now(),
