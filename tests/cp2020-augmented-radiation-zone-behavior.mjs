@@ -109,8 +109,146 @@ const r = await p.evaluate(async () => {
     await sleep(400);
     check("NEGATIVE: a region without the behavior doses nobody", flagsSnap(aPlain) === beforePlain, { before: beforePlain, after: flagsSnap(aPlain) });
 
+    // ══ ENTRY FEEDBACK (2026-08-13) ═══════════════════════════════════════════════════════════
+    // A token entering a rad field used to say NOTHING until a combat round elapsed — and out of
+    // combat, nothing ever, because the dosing rides the round-advance sweep. Reported from live play
+    // as the feature being dead. Every leg below reads the REAL chat log the cue posts into.
+    //
+    // ⚠ ENTRY IS DRIVEN BY CREATING THE FIGURE INSIDE, NOT BY WALKING IT IN, and that is a rig
+    // constraint rather than a narrowing of the feature. TOKEN_ENTER fires for four documented ways a
+    // token comes to be inside a region (see the behavior's `static events` note); this drives the
+    // CREATED-INSIDE one — the "drop four corpsec into the reactor room" case, and precisely the case
+    // TOKEN_MOVE_IN would have missed. The walked-in case rides the same single event and could not be
+    // driven here: programmatic position updates on this core are collision-constrained, and the scene
+    // this suite runs on is the cover review scene, which is full of walls (measured: a move request
+    // from outside the box to its centre left the figure where it started, under three different
+    // update forms including the displace waypoint).
+    // ⚠ NAMES THAT DO NOT PREFIX ONE ANOTHER. These filters are substring matches, so a fixture called
+    // "…Walker" and one called "…Walker2" are indistinguishable to them — which is exactly how the
+    // in-combat entrant's cue got counted against the out-of-combat leg. Alpha / Beta / Gamma share no
+    // prefix.
+    // And a PRE-SWEEP: a run that dies before its own teardown leaves its cards in the log, and the
+    // first leg here is a "nothing has happened yet" negative that would read them as this run's.
+    for (const m of [...game.messages].filter(m => /__PW__Rad(Alpha|Beta|Gamma)/.test(m.content ?? ""))) {
+      try { await m.delete(); } catch (e) { /* gone */ }
+    }
+    const anyCardNaming = () => [...game.messages].filter(m => (m.content ?? "").includes("__PW__RadAlpha"));
+    // ⚠ MATCH THE CUE, NOT THE NAME. The per-round tick posts its OWN card naming whoever suffered an
+    // effect, and at 100 rads a round this figure does — so a filter on the token name alone would count
+    // a dosing card as an entry cue and the "the tick does not re-fire the cue" leg would measure
+    // nothing. The cue is identified by the sentence only it carries.
+    const radCards = () => anyCardNaming().filter(m => /each combat round/i.test(m.content ?? ""));
+    const waitCards = async (n, tries = 40) => {
+      for (let i = 0; i < tries && radCards().length < n; i++) await sleep(200);
+      return radCards();
+    };
+
+    // NEGATIVE first: a figure created OUTSIDE the zone raises nothing at all.
+    const aOutside = await Actor.create({ name: "__PW__RadGamma", type: "character" }); madeActors.push(aOutside.id);
+    await scene.createEmbeddedDocuments("Token", [{
+      name: aOutside.name, actorId: aOutside.id, actorLink: true,
+      x: outside.x, y: outside.y + 400, width: 1, height: 1,
+    }]);
+    await sleep(900);
+    check("NEGATIVE: a figure that appears outside the zone raises no cue",
+      anyCardNaming().length === 0, anyCardNaming().length);
+
+    // ── out of combat: the cue must fire, because no round will ever elapse to speak for it ──
+    const aWalk = await Actor.create({ name: "__PW__RadAlpha", type: "character" }); madeActors.push(aWalk.id);
+    const beforeWalk = flagsSnap(aWalk);
+    const [tWalk] = await scene.createEmbeddedDocuments("Token", [{
+      name: aWalk.name, actorId: aWalk.id, actorLink: true,
+      x: inside.x - 50, y: inside.y - 50, width: 1, height: 1,
+    }]);
+    const outOfCombat = await waitCards(1);
+    check("ENTRY (out of combat): entering posts a cue — the case that was silent forever",
+      outOfCombat.length === 1, outOfCombat.length);
+    const cueText = (outOfCombat[0]?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    check("the cue names the token, the zone's own label, and the rads formula",
+      /__PW__RadAlpha/.test(cueText) && /Probe/.test(cueText) && /100/.test(cueText), cueText.slice(0, 200));
+    check("the cue says WHEN it doses, so a GM is not left waiting on nothing",
+      /each combat round/i.test(cueText), cueText.slice(0, 200));
+    check("the cue leaks no raw i18n key", !/CYBERPUNK\./.test(outOfCombat[0]?.content ?? ""), cueText.slice(0, 120));
+    // ⛔ GM-ONLY, concretely: the recipient list IS the GM ids, not "probably hidden".
+    const gmIds = (globalThis.ChatMessage?.getWhisperRecipients?.("GM") ?? []).map(u => u.id).sort();
+    const cueWhisper = [...(outOfCombat[0]?.whisper ?? [])].sort();
+    check("the cue is whispered to exactly the GM ids (players are not told they are irradiated)",
+      gmIds.length > 0 && JSON.stringify(cueWhisper) === JSON.stringify(gmIds),
+      { whisper: cueWhisper, gmIds });
+    check("NEGATIVE: entering did not itself dose anybody — the cue is a notice, not a tick",
+      flagsSnap(aWalk) === beforeWalk, { before: beforeWalk, after: flagsSnap(aWalk) });
+
+    // ── the ROUND-TICK path itself, driven as the real gesture ──────────────────────────────────
+    // ⛔ NOT `runRadZoneTick()` — that is the leg further up. The user's report was "nothing happened"
+    // in PLAY, so this drives the shipped road: a real Combat, a real round advance, on the active GM,
+    // through the updateCombat hook. If this is red the feature is broken where it matters.
+    let combat = null;
+    let tickWas;
+    try {
+      // The round-tick MASTER gates this whole path (_hookRadZonePerTurn's first line). A rig with it
+      // off would make the dosing leg red for a reason that is a setting, not a defect.
+      try {
+        tickWas = game.settings.get(SCOPE, "mechRoundTickAutomation");
+        if (tickWas === false) await game.settings.set(SCOPE, "mechRoundTickAutomation", true);
+      } catch (e) { /* key absent on this build — mechRoundTickEnabled() then defaults to on */ }
+
+      for (let i = 0; i < 40 && ![...(reg.tokens ?? [])].some(t => t.id === tWalk.id); i++) await sleep(200);
+      check("the region registers the figure before the round is advanced",
+        [...(reg.tokens ?? [])].some(t => t.id === tWalk.id), [...(reg.tokens ?? [])].map(t => t.name));
+
+      combat = await Combat.create({ scene: scene.id });
+      await combat.createEmbeddedDocuments("Combatant", [{ tokenId: tWalk.id, actorId: aWalk.id }]);
+      await combat.activate();
+      await combat.startCombat();
+      await sleep(600);
+      const beforeRound = flagsSnap(aWalk);
+      const cardsBeforeRound = radCards().length;
+      await combat.update({ round: (Number(combat.round) || 1) + 1, turn: 0 });
+      // The hook chain is async (roll → applyRadiationDose → flag writes).
+      // ⚠ WAIT FOR BOTH WRITES. applyRadiationDose sets radExposure and radHistory as two sequential
+      // flag writes; a poll that wakes on "the flags changed at all" reads between them and sees the
+      // second as null (measured on v13). Poll for the pair.
+      for (let i = 0; i < 60 && !(Number.isFinite(Number(aWalk.getFlag(SCOPE, "radExposure")))
+        && Number.isFinite(Number(aWalk.getFlag(SCOPE, "radHistory")))); i++) await sleep(250);
+      check("ROUND TICK: advancing a real combat round doses the figure inside the zone",
+        flagsSnap(aWalk) !== beforeRound, { before: beforeRound, after: flagsSnap(aWalk) });
+      // The dose surface: `radExposure` is the current exposure's cumulative rads (what the effects
+      // table keys on), `radHistory` is lifetime. One round of a fixed "100" formula = exactly 100 on a
+      // figure that started clean, with no RSP subtraction because nothing is worn.
+      const exposure = Number(aWalk.getFlag(SCOPE, "radExposure") ?? NaN);
+      const history = Number(aWalk.getFlag(SCOPE, "radHistory") ?? NaN);
+      check("ROUND TICK: the dose is the zone's own formula, by value (100 rads in one round)",
+        exposure === 100 && history === 100, { radExposure: exposure, radHistory: history, formula: "100" });
+      check("ROUND TICK: the round advance did not re-fire the entry cue (a notice, not a heartbeat)",
+        radCards().length === cardsBeforeRound, { before: cardsBeforeRound, after: radCards().length });
+
+      // ── entry DURING combat raises the cue too ──
+      const aJoin = await Actor.create({ name: "__PW__RadBeta", type: "character" }); madeActors.push(aJoin.id);
+      const joinCards = () => [...game.messages].filter(m => (m.content ?? "").includes("__PW__RadBeta")
+        && /each combat round/i.test(m.content ?? ""));
+      await scene.createEmbeddedDocuments("Token", [{
+        name: aJoin.name, actorId: aJoin.id, actorLink: true,
+        x: inside.x + 50, y: inside.y + 50, width: 1, height: 1,
+      }]);
+      for (let i = 0; i < 40 && joinCards().length < 1; i++) await sleep(200);
+      check("ENTRY (in combat): entering during a fight posts the cue as well",
+        joinCards().length === 1, joinCards().length);
+    } finally {
+      try { if (combat) await combat.delete(); } catch (e) { /* gone */ }
+      try { if (tickWas === false) await game.settings.set(SCOPE, "mechRoundTickAutomation", false); } catch (e) { /* not set */ }
+      // Every fixture's cards, not just the first one's — Beta's in-combat cue lives here too.
+      for (const m of [...game.messages].filter(m => /__PW__Rad(Alpha|Beta|Gamma)/.test(m.content ?? ""))) {
+        try { await m.delete(); } catch (e) { /* gone */ }
+      }
+    }
+
     // ── Migration: a legacy flag-tagged region gains the behavior + loses the flag (no double dose) ──
-    const legacy = await makeRegion({ behavior: false, formula: "50", flagLegacy: true });
+    // On its OWN box: this region gains a rad-zone behavior when it migrates, and a behavior becoming
+    // active raises TOKEN_ENTER for everyone already inside it (one of the four documented entry
+    // cases). Sharing BOX with the live zone therefore re-cued every entry fixture still standing
+    // there — correct behaviour, counted as noise by the legs above.
+    const LEGACY_BOX = { x: 9000, y: 9000, w: 800, h: 800 };
+    const legacy = await makeRegion({ behavior: false, formula: "50", flagLegacy: true, box: LEGACY_BOX });
     check("legacy region starts with the isRadZone flag, no behavior", !!legacy.flags?.[SCOPE]?.isRadZone && !legacy.behaviors?.some(x=>x.type===T), null);
     // The pass carries a world completion stamp (it is a one-time upgrade, not a per-boot sweep), so a
     // fixture placed after that stamp is picked up through the same `force` the module api exposes.

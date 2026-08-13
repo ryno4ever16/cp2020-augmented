@@ -18,9 +18,52 @@
  * Fields (behavior.system): radsFormula (per-round rads roll, per token inside) + sourceLabel (free text,
  * blank ok — its generic fallback is localized at DISPLAY time so a stored value never freezes the UI
  * language). The auto-generated behavior sheet renders both from their i18n label/hint keys.
+ *
+ * ⏩ AND ONE THING THAT HAPPENS AT THE MOMENT OF AN EVENT (2026-08-13): entering a zone posts a
+ * GM-whispered cue. The dosing is still the per-round sweep in radiation-zones.js — nothing about the
+ * mechanics moved here — but a hazard that says nothing until a combat round elapses reads as a dead
+ * feature, and out of combat it never elapses at all. See the `static events` block for the event
+ * choice and what it does and does not cover.
  */
 
+import { localize, localizeParam } from "../utils.js";
+import { postSavePromptCard, getGMUserIds } from "../compat.js";
+
 const SCOPE = "cp2020-augmented";
+
+/**
+ * ⭐ THE ENTRY CUE (2026-08-13, user ruling from live testing: *"There should be some kind of
+ * feedback"*).
+ *
+ * Until now a token walking into a radiation field was COMPLETELY SILENT until a combat round
+ * elapsed — and out of combat, silent forever, because the dosing rides the round-advance sweep. At
+ * the table that reads as the feature being dead, which is exactly what was reported. So entering a
+ * zone now says so, once, at the moment it happens.
+ *
+ * ⛔ GM-WHISPERED, and that is the ruled visibility, not caution. A rad-zone region defaults to
+ * GAMEMASTER visibility (see registerRadiationZoneVisibilityDefault) precisely so players are not told
+ * they are standing in something until the GM reveals it. A public cue would hand them the answer the
+ * region deliberately withholds.
+ *
+ * ⚠ ONE WHISPER, NOT ONE PER GM CLIENT. A region event is dispatched on EVERY client, so without the
+ * active-GM gate a two-GM table gets two of everything — the standing idiom in this module (the
+ * per-round tick gates the same way, and for the same reason).
+ *
+ * The source label is localized AT DISPLAY TIME from a possibly-blank stored value, the discipline the
+ * rest of the radiation code follows so a stored string never freezes the UI language.
+ */
+async function _postRadZoneEntryCue(behaviorSystem, tokenDoc) {
+  if (!tokenDoc?.name) return;
+  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+  const sys = behaviorSystem ?? {};
+  const source = String(sys.sourceLabel ?? "").trim() || localize("RadiationSourceDefault");
+  const formula = String(sys.radsFormula ?? "").trim() || "1d10";
+  await postSavePromptCard({
+    title: localizeParam("RadZoneEntryTitle", { source }),
+    body: localizeParam("RadZoneEntryBody", { name: tokenDoc.name, source, formula }),
+    whisper: getGMUserIds(),
+  });
+}
 
 /** The behavior document type string (module-namespaced, matches module.json). */
 export const RAD_ZONE_BEHAVIOR = `${SCOPE}.radiationZone`;
@@ -46,6 +89,37 @@ export function registerRadiationZoneBehavior() {
   const fields = foundry.data.fields;
 
   class RadiationZoneBehavior extends Base {
+    /**
+     * ⭐ THE EVENT, AND WHY THIS ONE. Core's `RegionBehavior#_handleRegionEvent` looks the event name up
+     * in `this.constructor.events` and calls the handler with the behavior's SYSTEM as `this` — the
+     * dispatch is byte-identical on v13.350 and v14.364 (both were read from the running cores' own
+     * `foundry.mjs` before this was written), and `CONST.REGION_EVENTS` carries the same names on both.
+     * So the declared-events route needs no version fork and no external hook.
+     *
+     * ⚠ TOKEN_ENTER, NOT TOKEN_MOVE_IN — a deliberate widening, recorded rather than quietly taken.
+     * `TOKEN_MOVE_IN` fires only when a token's own geometry changes such that it is now inside; core's
+     * own documentation for `TOKEN_ENTER` lists four ways a token comes to be inside a region:
+     *   · it MOVES in — a drag, a teleport, any x/y/elevation/size change (MOVE_IN's whole scope),
+     *   · it is CREATED inside — dropping a figure straight into the reactor room, which is precisely
+     *     how this module's own deploy paths put tokens on a map, and which MOVE_IN misses entirely,
+     *   · the REGION's boundary changes so the token is now inside — the GM drawing the field over
+     *     people who were already standing there,
+     *   · the BEHAVIOR becomes active (created or enabled) — the GM adding the hazard to an existing
+     *     region, which fires once per token already inside.
+     * The last two are one-time bursts when a GM builds a zone on top of occupied ground; they are
+     * honest ("you just put a rad field on these three") rather than noise, and the alternative is a cue
+     * that stays silent in the two cases a GM is most likely to hit while setting an encounter up.
+     */
+    static events = {
+      [CONST.REGION_EVENTS.TOKEN_ENTER]: async function (event) {
+        try {
+          await _postRadZoneEntryCue(this, event?.data?.token);
+        } catch (e) {
+          console.warn(`${SCOPE} | rad-zone entry cue failed`, e);
+        }
+      },
+    };
+
     static defineSchema() {
       return {
         radsFormula: new fields.StringField({

@@ -1163,6 +1163,8 @@
     "RadZoneBehaviorSourceHint": "Optional name for the hazard (e.g. Reactor breach), shown on the round summary card.",
     "RadZoneTurnTitle": "Radiation Zone — {source}",
     "RadZoneTurnBody": "Irradiated this turn: {names}.",
+    "RadZoneEntryTitle": "Radiation Zone — {source}",
+    "RadZoneEntryBody": "<b>{name}</b> is standing in {source}. It doses {formula} rads each combat round.",
     "RadZoneDispersedBody": "The radiation zone ({source}) disperses.",
     "RadLongTermTitle": "{name} — Long-Term Radiation Effects",
     "RadLongTermIntro": "Lifetime radiation history: <b>{history}</b> rads. Long-term radiation is Referee-adjudicated over years — nothing here is applied automatically. Effects reached at this lifetime dose:",

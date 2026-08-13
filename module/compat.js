@@ -472,10 +472,14 @@ export function renderChatCard(name, data) {
  * `title`/`body` are PRE-LOCALIZED strings (may carry light <b> emphasis); `speaker`/`flags`
  * pass through to ChatMessage.create. Returns the create() promise.
  */
-export async function postSavePromptCard({ title = "", body = "", speaker, flags } = {}) {
+export async function postSavePromptCard({ title = "", body = "", speaker, flags, whisper } = {}) {
   const content = await renderChatCard("save-prompt.hbs", { title, body });
   const cardData = { content };
   if (speaker) cardData.speaker = speaker;
   if (flags) cardData.flags = flags;
+  // `whisper` passes straight through to ChatMessage, so a notice that is nobody's business but the
+  // GM's stays that way (getGMUserIds above builds the usual recipient list). Omitted = public, which
+  // is what every existing caller gets, unchanged.
+  if (Array.isArray(whisper) && whisper.length) cardData.whisper = whisper;
   return ChatMessage.create(cardData);
 }
