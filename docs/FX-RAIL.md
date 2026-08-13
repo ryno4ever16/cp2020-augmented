@@ -1677,6 +1677,15 @@ already owns it (`save-rolls.js`, world setting `autoDeathSavePerTurn`, which ho
 The batch is keyed by TOKEN id rather than actor id: an unlinked token's synthetic actor shares the
 world actor's id, and an actor-keyed set would silence a prompt a second body is owed.
 
+⏪ **Amended 2026-08-13 — at Mortal it is BOTH saves, not the death save alone** (user ruling: *"both"*).
+The batching above was right and the *pairing* was wrong: this flow posted the death prompt and stopped,
+while the single-target rail has always posted the pair at Mortal (`save-rolls.js postSavePrompts`, on
+p.99 — the stun save governs whether the body stays on its feet, the death save whether it survives at
+all). So a figure shot to Mortal by a pattern or a blast was never asked whether it was still conscious.
+`_postWoundSavePrompts` now emits both there, on the two clocks unchanged: **one** death prompt per
+application batch, **one stun prompt per damage event** — so a three-shell burst on a Mortal figure owes
+one death save and three stun saves. Death is asked first, in the single-target rail's own order.
+
 **2026-08-12 — ⏪ the rings go UNDER the mini: "reference exact", and the darkness cost is accepted.**
 The open call the ring rework left behind (§8, "needs eyes") came back the same day with one answer:
 **reference exact**. So the four ring rows join the ground row below the tokens — `below: true`,

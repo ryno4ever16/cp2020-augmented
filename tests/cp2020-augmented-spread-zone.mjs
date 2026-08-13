@@ -32,7 +32,8 @@
  *     read through the readout the rule derives, the confirmed corridor and the planted region, plus the
  *     board gate, both floors, the per-aim reset, and the plant's own floor
  * §12 a pattern nobody applied is still collected by its own clock (the card does not make it immortal)
- * §13 the save cadences — one death prompt per application batch, a stun prompt per damage event
+ * §13 the save cadences — at Mortal BOTH saves are asked for, on their two clocks: one death prompt per
+ *     application batch, a stun prompt per damage event
  *
  * ⛔ The three cover regions, the showcase combat and the four review targets on this rig belong to the
  * user's morning review; every fixture here is named __PWK__SPREAD and is deleted on the way out, and
@@ -1015,12 +1016,15 @@ const res = await page.evaluate(async () => {
     sweptIgnored === 1 && myZones().length === 0, `swept=${sweptIgnored} left=${myZones().length}`);
   await wipeZones(); await wipeCards();
 
-  /* ── §13  the death save's cadence — ONE per application batch, not one per shell ──────────── */
+  /* ── §13  the two save cadences — BOTH saves at Mortal, on their two different clocks ───────── */
   // CP2020 p.104 gives the two saves two different clocks and this flow used to run both on one:
   //   stun  — "every time a character takes damage" → per damage event, kept
   //   death — "a new save required every turn that the character remains untreated" → per TURN
-  // A three-shell burst on a Mortal figure therefore owes ONE death prompt, not three. The legs count
-  // the prompt CARDS the burst produced, which is the thing the table actually has to resolve.
+  // A three-shell burst on a Mortal figure therefore owes ONE death prompt, not three. And it owes the
+  // stun prompt as well: at Mortal the single-target rail posts BOTH (save-rolls.js `postSavePrompts`,
+  // p.99 — the stun save governs consciousness, the death save survival), and this flow used to post the
+  // death prompt alone. The legs count the prompt CARDS each burst produced, which is the thing the
+  // table actually has to resolve.
   const deathCards = (since) => [...game.messages].filter(m => !since.has(m.id) && (m.content ?? "").includes("death-save-prompt"));
   const stunCards  = (since) => [...game.messages].filter(m => !since.has(m.id) && (m.content ?? "").includes("cp-stun-save-roll"));
   const wipeSaveCards = async () => {
@@ -1043,6 +1047,15 @@ const res = await page.evaluate(async () => {
     deathCards(sinceIds).length === 1, String(deathCards(sinceIds).length));
   ok("§13 and the burst really did land three times (so the count above is a cadence, not a miss)",
     Number(victim13.system?.damage ?? 0) > 14, String(victim13.system?.damage));
+  // ⭐ BOTH SAVES AT MORTAL (user ruling: "both"). The single-target rail has always posted the pair
+  // there — save-rolls.js `postSavePrompts`, on p.99's reading that the stun save governs consciousness
+  // while the death save governs survival — and this flow posted the death prompt alone, so a figure
+  // shot to Mortal by a pattern was never asked whether it stayed on its feet. The two keep their own
+  // cadences: death once for the batch (above), stun once per damage event, which for three shells is
+  // three.
+  ok("§13 and the same burst asks for a stun save per damage event — BOTH saves at Mortal, as the single-target rail does",
+    stunCards(sinceIds).length === 3,
+    `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length}`);
   await wipeZones(); await wipeCards(); await wipeSaveCards();
 
   /* §13b — below Mortal the stun prompt keeps its per-damage-event cadence (negative control) */

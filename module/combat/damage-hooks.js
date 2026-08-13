@@ -1850,7 +1850,10 @@ async function _runManualRoundTick(combat) {
  * once per damage event — and that is right for only one of them:
  *
  *   Stun/Shock — "Every time a character takes damage, he must make a save." A per-damage-event prompt
- *                is exactly the rule. Unchanged: every event that gets through still asks for one.
+ *                is exactly the rule. Unchanged: every event that gets through still asks for one, AT
+ *                EVERY WOUND LEVEL — including Mortal, where this flow used to ask for the death save
+ *                alone and leave the consciousness question unasked (user ruling: "both"; the single-
+ *                target rail has always posted the pair, save-rolls.js `postSavePrompts`, p.99).
  *   Death      — "Determining whether he survives requires that a Death Save be made, with a new save
  *                required every turn that the character remains untreated… Each turn, you must make
  *                another Death Save to see if you survive to the next turn." That is a PER-TURN
@@ -1873,12 +1876,21 @@ async function _postWoundSavePrompts(actor, tok, batch = null) {
   const ws = actor?.woundState?.() ?? 0;
   if (ws <= 0) return;
   if (ws < 4) { await postStunSavePrompt(actor, tok); return; }
+  // ⭐ AT MORTAL, BOTH — and that is a correction, not a new rule (user ruling: "both"). The single-
+  // target rail has always posted the pair here (save-rolls.js `postSavePrompts`, on p.99's reading:
+  // the stun save governs whether the body stays on its feet, the death save whether it survives at
+  // all), while this one posted the death prompt alone — so a figure shot to Mortal by a pattern or a
+  // blast was never asked whether it was still conscious. The two keep the DIFFERENT clocks the section
+  // above sets out: the death prompt is offered once for the whole application batch, the stun prompt
+  // once per damage event, exactly as it is below Mortal. Death goes first, in the single-target rail's
+  // own order — the more urgent question is the one a reader should meet first.
   const body = tok?.document?.id ?? tok?.id ?? actor.id;
-  if (batch) {
-    if (batch.has(body)) return;
-    batch.add(body);
+  const deathOwed = !batch || !batch.has(body);
+  if (deathOwed) {
+    batch?.add(body);
+    await postDeathSavePrompt(actor, tok);
   }
-  await postDeathSavePrompt(actor, tok);
+  await postStunSavePrompt(actor, tok);
 }
 
 /** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct).
