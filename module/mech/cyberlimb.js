@@ -17,7 +17,7 @@
  *
  * Pure helpers are exported for the rig spec; the combat routing lives in combat/DamageApplicator.js.
  */
-import { localize, localizeParam } from "../utils.js";
+import { deleteFieldUpdate, localize, localizeParam } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 import { isFullBorg } from "./borg.js";
 import { cyberlimbRepairGmOnly } from "../settings.js";
@@ -238,12 +238,13 @@ export async function repairCyberlimb(actor, zone) {
   if (!routesToSdp(actor, zone)) return false;   // a borg's Head/Torso are repairable too
   const max = Number(actor?.system?.sdp?.sum?.[zone]) || 0;
   // Restore SDP + remove ONLY this zone's limbStatus entry. A flag object merges on write, so a
-  // deleted key would linger — use Foundry's `-=` deletion path to drop just this zone.
-  // Whole-object write (siblings-safe, see absorbCyberlimbHit) + the sticky-flag `-=` delete.
+  // deleted key would linger — delete just this zone through deleteFieldUpdate (utils), which picks
+  // whichever deletion form the running core supports. Whole-object write (siblings-safe, see
+  // absorbCyberlimbHit) + the sticky-flag delete.
   const nextCurrent = { ...(actor.system?.sdp?.current ?? {}), [zone]: max };
   await actor.update({
     "system.sdp.current": nextCurrent,
-    [`flags.${SCOPE}.limbStatus.-=${zone}`]: null
+    ...deleteFieldUpdate(`flags.${SCOPE}.limbStatus.${zone}`)
   }, { render: false, fromCyberpunkDamageSystem: true });
   await postSavePromptCard({
     body: localizeParam("CyberlimbRepairedBody", { limb: localize(zone), max }),
@@ -273,10 +274,10 @@ export async function clearFleshLimb(actor, zone) {
   // should clear whatever is recorded.
   const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
   if (!(zone in store)) return false;   // nothing recorded for this zone
-  // Flag objects MERGE on write, so a deleted key would linger — drop just this zone via the `-=`
-  // path (siblings survive), the same shape repairCyberlimb uses for limbStatus.
+  // Flag objects MERGE on write, so a deleted key would linger — drop just this zone through
+  // deleteFieldUpdate (siblings survive), the same shape repairCyberlimb uses for limbStatus.
   await actor.update({
-    [`flags.${SCOPE}.${FLESH_STATUS_FLAG}.-=${zone}`]: null
+    ...deleteFieldUpdate(`flags.${SCOPE}.${FLESH_STATUS_FLAG}.${zone}`)
   }, { render: false, fromCyberpunkDamageSystem: true });
   await postSavePromptCard({
     body: localizeParam("FleshLimbClearedBody", { limb: localize(zone) }),
@@ -392,7 +393,7 @@ export function registerMechCyberlimb() {
     delete nextCurrent[zone];   // unset → the base prep re-seeds it to the new sum
     await actor.update({
       "system.sdp.current": nextCurrent,
-      [`flags.${SCOPE}.limbStatus.-=${zone}`]: null
+      ...deleteFieldUpdate(`flags.${SCOPE}.limbStatus.${zone}`)
     }, { render: false, fromCyberpunkDamageSystem: true }).catch(() => {});
   };
   Hooks.on("createItem", (item, options, userId) => clearZoneOnInstall(item, userId));

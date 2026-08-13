@@ -254,7 +254,7 @@ export async function resetChipChoice(chipItem) {
   await replaceChipSkills(chipItem, original);
   await chipItem.update({
     "system.CyberWorkType.ChipActive": false,
-    [`flags.${SCOPE}.-=${ORIGINAL_FLAG}`]: null
+    ...deleteFieldUpdate(`flags.${SCOPE}.${ORIGINAL_FLAG}`)
   });
   return true;
 }

@@ -15,7 +15,7 @@
 
 import { mechTokenWritesEnabled } from "../settings.js";
 import { contributingItems } from "./cyberlimb.js";
-import { cwIsEnabled } from "../utils.js";
+import { cwIsEnabled, deleteFieldUpdate } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 const BASE_FLAG = "mechBaseLight";
@@ -131,7 +131,7 @@ async function _applyActorLight(actor) {
         if (base === undefined) patch[`flags.${SCOPE}.${BASE_FLAG}`] = foundry.utils.deepClone(tokenDoc._source?.light ?? {});
         await updateTokenDoc(tokenDoc, patch);
       } else if (base !== undefined) {
-        await updateTokenDoc(tokenDoc, { light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
+        await updateTokenDoc(tokenDoc, { light: base, ...deleteFieldUpdate(`flags.${SCOPE}.${BASE_FLAG}`) });
       }
     } catch (err) {
       console.warn("cp2020-augmented | mech-light token update failed:", err);
@@ -147,7 +147,7 @@ async function restoreTokenLight(tokenDoc) {
   try {
     const base = tokenDoc.getFlag(SCOPE, BASE_FLAG);
     if (base === undefined) return;
-    await updateTokenDoc(tokenDoc, { light: base, [`flags.${SCOPE}.-=${BASE_FLAG}`]: null });
+    await updateTokenDoc(tokenDoc, { light: base, ...deleteFieldUpdate(`flags.${SCOPE}.${BASE_FLAG}`) });
   } catch (err) {
     console.warn("cp2020-augmented | mech-light restore failed:", err);
   }

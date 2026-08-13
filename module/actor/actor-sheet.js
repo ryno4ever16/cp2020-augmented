@@ -2856,12 +2856,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         "system.CyberBodyType.Location": "",
       };
       // Restore a MountZone that host-nesting overwrote (stashed under the origMountZone flag), then
-      // drop the stash with the `-=` deletion idiom — otherwise the freed option stays routed to the
-      // now-detached host's zone. No stash flag ⇒ never nested cross-zone ⇒ leave MountZone alone.
+      // drop the stash — otherwise the freed option stays routed to the now-detached host's zone. The
+      // delete goes through deleteFieldUpdate (utils) so it uses whichever deletion form the running
+      // core supports. No stash flag ⇒ never nested cross-zone ⇒ leave MountZone alone.
       const orig = it?.getFlag?.("cp2020-augmented", "origMountZone");
       if (orig !== undefined) {
         patch["system.MountZone"] = orig;
-        patch["flags.cp2020-augmented.-=origMountZone"] = null;
+        Object.assign(patch, deleteFieldUpdate("flags.cp2020-augmented.origMountZone"));
       }
       return patch;
     });

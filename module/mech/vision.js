@@ -29,7 +29,7 @@
 
 import { tokensOf, iAmTheApplier, someoneElseIsTheApplier, enqueueApply, updateTokenDoc } from "./light.js";
 import { contributingItems } from "./cyberlimb.js";
-import { cwIsEnabled } from "../utils.js";
+import { cwIsEnabled, deleteFieldUpdate } from "../utils.js";
 import { mechTokenWritesEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
@@ -170,9 +170,10 @@ export function applyActorVision(actor) {
 /**
  * Detection-modes patch keys for adding/removing OUR heat-sense entry, shape-aware:
  *   v14: `detectionModes` is a TypedObjectField keyed by mode id — per-key merge, so a dotted
- *        add (`detectionModes.cpHeatSense`) / deletion key (`-=`) never touches other modes.
+ *        add (`detectionModes.cpHeatSense`) or a per-key delete never touches other modes.
  *   v13: an ArrayField — arrays replace wholesale, so rebuild the array keeping foreign entries.
- * No snapshot needed either way: we only ever own our single entry.
+ * The delete goes through deleteFieldUpdate (utils) so it uses whichever deletion form the running
+ * core supports. No snapshot needed either way: we only ever own our single entry.
  */
 function heatSensePatch(tokenDoc, wanted, range) {
   const src = tokenDoc._source?.detectionModes;
@@ -183,7 +184,7 @@ function heatSensePatch(tokenDoc, wanted, range) {
   }
   const has = !!src?.[HEAT_SENSE_ID];
   if (wanted) return { [`detectionModes.${HEAT_SENSE_ID}`]: { enabled: true, range } };
-  return has ? { [`detectionModes.-=${HEAT_SENSE_ID}`]: null } : {};
+  return has ? deleteFieldUpdate(`detectionModes.${HEAT_SENSE_ID}`) : {};
 }
 
 async function _applyActorVision(actor) {
@@ -206,7 +207,7 @@ async function _applyActorVision(actor) {
       } else if (base !== undefined) {
         await updateTokenDoc(tokenDoc, {
           sight: base,
-          [`flags.${SCOPE}.-=${BASE_FLAG}`]: null,
+          ...deleteFieldUpdate(`flags.${SCOPE}.${BASE_FLAG}`),
           ...heatSensePatch(tokenDoc, false, 0)
         });
       }
@@ -226,7 +227,7 @@ async function restoreTokenVision(tokenDoc) {
     if (base === undefined) return;
     await updateTokenDoc(tokenDoc, {
       sight: base,
-      [`flags.${SCOPE}.-=${BASE_FLAG}`]: null,
+      ...deleteFieldUpdate(`flags.${SCOPE}.${BASE_FLAG}`),
       ...heatSensePatch(tokenDoc, false, 0)
     });
   } catch (err) {

@@ -147,6 +147,26 @@ const r = await p.evaluate(async () => {
   await CL.repairCyberlimb(actor, "rArm"); await sleep(500);
   out.gateRepaired = { inList: inList(), inProviders: inProviders() };
 
+  // ── (4) PER-KEY DELETION FORM — the representative leg for the deleteFieldUpdate sweep ────
+  // Every sticky-flag delete in the module now routes through utils.deleteFieldUpdate, which picks
+  // whichever deletion form the RUNNING core supports (a per-key operator value where one exists, the
+  // legacy dotted key otherwise). Three things have to hold, and repairCyberlimb is the cheapest real
+  // caller to prove them on: the named key is truly gone from the PERSISTED source (not merely absent
+  // from a prepared view), a SIBLING key under the same flag object survives with its exact value, and
+  // nothing left a literal deletion key sitting in the data pretending to be an entry.
+  await actor.update({ "flags.cp2020-augmented.limbStatus": { rArm: "destroyed", lArm: "disabled" } });
+  await sleep(400);
+  const beforeDelete = foundry.utils.deepClone(actor._source.flags?.["cp2020-augmented"]?.limbStatus ?? {});
+  await CL.repairCyberlimb(actor, "rArm"); await sleep(500);
+  const persisted = foundry.utils.deepClone(actor._source.flags?.["cp2020-augmented"]?.limbStatus ?? {});
+  out.deletionForm = {
+    seeded: beforeDelete,
+    persisted,
+    targetGone: persisted.rArm === undefined,
+    siblingKept: persisted.lArm,
+    literalKeys: Object.keys(persisted).filter(k => k.includes("-="))
+  };
+
   await actor.delete().catch(() => {});
   return out;
 });
@@ -172,6 +192,10 @@ const checks = [
   ["M19 gate wrecked: destroyed zone drops the source from list, providers, and strip", r.gateWrecked.zoneState === "destroyed" && r.gateWrecked.inList === false && r.gateWrecked.inProviders === false && r.gateWrecked.stripRow === false],
   ["M19 notice: the use event posts the zone-state card exactly once", r.noticeWrecked.cards === 1],
   ["M19 repair lifts the gate: the source contributes again", r.gateRepaired.inList === true && r.gateRepaired.inProviders === true],
+  ["deletion form: the seed really wrote both zones (guard against a vacuous next check)", r.deletionForm.seeded.rArm === "destroyed" && r.deletionForm.seeded.lArm === "disabled"],
+  ["deletion form: the named key is gone from the PERSISTED source", r.deletionForm.targetGone === true],
+  ["deletion form: the sibling key survives with its exact value", r.deletionForm.siblingKept === "disabled"],
+  ["deletion form: no literal `-=` key was persisted as a fake entry", r.deletionForm.literalKeys.length === 0],
   ["0 console errors", errors.length === 0]
 ];
 let fail = 0;

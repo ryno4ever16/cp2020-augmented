@@ -40,7 +40,7 @@
  *   Reused EXISTING key (from radiation.js): RadiationSourceDefault — the generic source-label fallback.
  */
 
-import { localize, localizeParam } from "../utils.js";
+import { deleteFieldUpdate, localize, localizeParam } from "../utils.js";
 import { mechRoundTickEnabled } from "../settings.js";
 import { postSavePromptCard } from "../compat.js";
 import { areasByFlag, tokensInArea, deleteArea } from "../combat/area-shapes.js";
@@ -214,14 +214,15 @@ export async function migrateLegacyRadZones({ force = false } = {}) {
               sourceLabel: String(flags.sourceLabel ?? ""),
             },
           }]);
-          // Drop the tag AND its now-inert data flags (the behavior owns the values from here on); a
-          // `-=` delete of a key that was never set is a harmless no-op.
+          // Drop the tag AND its now-inert data flags (the behavior owns the values from here on).
+          // deleteFieldUpdate picks whichever deletion form the running core supports, and a delete
+          // of a key that was never set is a harmless no-op either way.
           await region.update({
-            [`flags.${SCOPE}.-=isRadZone`]: null,
-            [`flags.${SCOPE}.-=radsFormula`]: null,
-            [`flags.${SCOPE}.-=sourceLabel`]: null,
-            [`flags.${SCOPE}.-=turnsLeft`]: null,
-            [`flags.${SCOPE}.-=createdRound`]: null,
+            ...deleteFieldUpdate(`flags.${SCOPE}.isRadZone`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.radsFormula`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.sourceLabel`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.turnsLeft`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.createdRound`),
           });
         } catch (e) {
           console.warn(`${SCOPE} | rad-zone migration failed for a region`, e);

@@ -24,6 +24,7 @@
  * Pure helpers are exported for the rig spec; hooks are wired by registerMechLoadout().
  */
 
+import { deleteFieldUpdate } from "../utils.js";
 import { mechDocumentAutomationEnabled } from "../settings.js";
 import { descendantIds, detachPatch } from "./container.js";
 
@@ -260,10 +261,12 @@ export function registerMechLoadout() {
   // The materialized-guard flag refers to the OPTION ITEMS of one specific body document — a
   // copy is a NEW document whose options never followed it (source flags point at the old id),
   // so an arriving copy must shed the flag or it lands "installed" with nothing materialized.
+  // The shed goes through deleteFieldUpdate (utils) like every other deletion in the module —
+  // `updateSource` honours the same deletion forms a document update does.
   Hooks.on("preCreateItem", (doc, data) => {
     if (foundry.utils.getProperty(data ?? {}, `flags.${SCOPE}.${INSTALLED_FLAG}`) === undefined) return;
     if (!hasLoadout(doc)) return;
-    doc.updateSource({ [`flags.${SCOPE}.-=${INSTALLED_FLAG}`]: null });
+    doc.updateSource(deleteFieldUpdate(`flags.${SCOPE}.${INSTALLED_FLAG}`));
   });
 
   // A body imported already-installed (e.g. a pre-configured drop) materializes on arrival.

@@ -15,7 +15,7 @@
  * and the delete-cascade hook touch documents.
  */
 
-import { cwHasType, pickCwType } from "../utils.js";
+import { cwHasType, deleteFieldUpdate, pickCwType } from "../utils.js";
 import { mechDocumentAutomationEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
@@ -244,7 +244,8 @@ export function descendantIds(items, parentId) {
  * and restore its stashed native MountZone when present — so a detached implant lands truly loose in
  * Carried Options rather than lingering equipped-but-hostless as a standalone zone root
  * (02-CONTAINERS-UI #4; mirrors the sheet's _cpUninstallCyber). A MISC child just clears its own
- * containment field (pushing cyberware keys at it would be stripped by its DataModel). Pure.
+ * containment field (pushing cyberware keys at it would be stripped by its DataModel). Pure apart
+ * from the deletion key it builds — deleteFieldUpdate reads the running core to pick a form.
  */
 export function detachPatch(item) {
   if (item?.type !== "cyberware") return { "system.mechContainer.installedIn": "" };
@@ -256,11 +257,12 @@ export function detachPatch(item) {
   };
   // The nest gesture stashes the option's own MountZone (before overwriting it with the host's zone)
   // in `flags["cp2020-augmented"].origMountZone`; restore it on detach so the freed option returns to
-  // its native zone, then drop the stash. Absent (a materialized/never-nested option) ⇒ leave zone.
+  // its native zone, then drop the stash through deleteFieldUpdate (utils), which picks whichever
+  // deletion form the running core supports. Absent (a materialized/never-nested option) ⇒ leave zone.
   const orig = item.getFlag?.(SCOPE, "origMountZone") ?? item.flags?.[SCOPE]?.origMountZone;
   if (orig != null) {
     patch["system.MountZone"] = orig;
-    patch[`flags.${SCOPE}.-=origMountZone`] = null;
+    Object.assign(patch, deleteFieldUpdate(`flags.${SCOPE}.origMountZone`));
   }
   return patch;
 }

@@ -76,7 +76,7 @@ import { registerSeamShim } from "./seam-shim.js";
 import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js";
 import { registerIconNormalizationShim } from "./icon-normalization-shim.js";
 import { hostProvides } from "./system-api.js";
-import { localize, localizeParam } from "./utils.js";
+import { deleteFieldUpdate, localize, localizeParam } from "./utils.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
@@ -446,8 +446,10 @@ async function migrateAugmentedSettings() {
  * kinds of limb wound shared `flags.cp2020-augmented.limbStatus`; the flesh models now write a
  * separate `fleshLimbStatus`, but any state a pre-M18 build persisted still sits under the old shared
  * key and is misread as structural cyberlimb state. This pass moves every `limbStatus` entry whose
- * zone carries NO structural SDP pool into `fleshLimbStatus` and deletes it from the old key (the
- * `-=` idiom); zones that DO carry a structural pool (a real cyberlimb / borg chassis) keep their
+ * zone carries NO structural SDP pool into `fleshLimbStatus` and deletes it from the old key (through
+ * deleteFieldUpdate — the deletion form follows the core running NOW, which is what the write has to
+ * satisfy, not the vintage of the data being migrated); zones that DO carry a structural pool (a
+ * real cyberlimb / borg chassis) keep their
  * `limbStatus` untouched. World actors AND unlinked scene-token actor deltas are both swept. Guarded
  * by a world flag so it runs exactly once. Safe to fail — a missed actor just keeps its old flags.
  *
@@ -472,7 +474,7 @@ async function migrateFleshLimbStatus({ force = false } = {}) {
     for (const [zone, state] of Object.entries(old)) {
       if (!state || cyberlimbSdp(actor, zone).max > 0) continue;   // structural pool → leave as-is
       flesh[zone] = state;
-      update[`flags.${SCOPE}.limbStatus.-=${zone}`] = null;
+      Object.assign(update, deleteFieldUpdate(`flags.${SCOPE}.limbStatus.${zone}`));
       moved = true;
     }
     if (!moved) return;
