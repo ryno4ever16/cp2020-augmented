@@ -74,6 +74,10 @@ const setup = await page.evaluate(async (SCOPE) => {
   Hooks.on("cyberpunk2020.weaponFired", (p) => { g.raw.push(p); g.payloads.push({
     weaponName: p.weaponName, modifier: p.modifier ?? null, caliber: p.caliber ?? null,
     spreadMode: p.spreadMode ?? null, shotsFired: p.shotsFired, shotsHit: p.shotsHit,
+    // The base system's own verdict, carried so a section that depends on a shot having LANDED can
+    // state that precondition instead of assuming it (see E).
+    attackTotal: p.attackTotal ?? null, toHitDC: p.toHitDC ?? null,
+    scattered: !!p.spreadScatter,
     landed: Object.values(p.areaDamages ?? {}).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0),
   }); });
   Hooks.on("createChatMessage", (m) => g.cards.push(m.id));
@@ -121,7 +125,7 @@ const setup = await page.evaluate(async (SCOPE) => {
 console.log(`\nbench guns found: ${Object.keys(setup.guns).length} · baseline: ${setup.baseline.regions.length} region(s), ${setup.baseline.effects} live effect(s), ${setup.baseline.cards} card(s)`);
 
 /* ── the firing gesture, exactly as a reviewer performs it ───────────────────────────────────── */
-async function fire(num, targetName) {
+async function fire(num, targetName, { forceHit = false } = {}) {
   const gun = setup.guns[num];
   await page.evaluate(async ({ actorId, gunId, tokenId }) => {
     const g = globalThis.__smoke;
@@ -175,14 +179,31 @@ async function fire(num, targetName) {
   await page.waitForFunction(() => [...foundry.applications.instances.values()]
     .some(a => /ModifiersDialog/.test(a?.constructor?.name ?? "") && a.rendered === true), null, { timeout: 25000 });
   // Cap an automatic's burst so the smoke run does not dump a 30-round fan-out on the canvas.
-  await page.evaluate(() => {
+  // `forceHit` pins the attack verdict for the sections whose subject depends on it — see the note at
+  // its one caller. Both halves are restored the moment the roll is over.
+  await page.evaluate(async ({ actorId, forceHit }) => {
+    const shooter = game.actors.get(actorId);
+    let refWas;
+    if (forceHit) {
+      refWas = shooter.system.stats?.ref?.base;
+      await shooter.update({ "system.stats.ref.base": 10 });
+      // 9, NEVER 10: the base die is `1d10x10`, so a forced maximum explodes forever. 9 + REF 10
+      // clears the Close DC with room to spare.
+      globalThis.__smokeRU = CONFIG.Dice.randomUniform;
+      CONFIG.Dice.randomUniform = (() => { const Q = [1 - (9 - 0.5) / 10]; return () => (Q.length ? Q.shift() : 0.5); })();
+    }
     const dlg = [...foundry.applications.instances.values()].find(a => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
     const rounds = dlg.element.querySelector('input[name*="fullAutoRoundsFired"], input.full-auto-rounds');
     if (rounds) { rounds.value = "3"; rounds.dispatchEvent(new Event("change", { bubbles: true })); }
     const btn = dlg.element.querySelector('button[type="submit"], footer button');
     if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     else dlg.element.requestSubmit();
-  });
+    if (forceHit) {
+      await new Promise(r => setTimeout(r, 1500));
+      CONFIG.Dice.randomUniform = globalThis.__smokeRU;
+      await shooter.update({ "system.stats.ref.base": refWas });
+    }
+  }, { actorId: setup.actorId, forceHit });
   await page.waitForFunction(() => globalThis.__smoke.payloads.length > 0, null, { timeout: 25000 }).catch(() => {});
   // Past PRESENTATION_CAP_MS (8 s): the fan-out, the fires, the blood AND any deferred apply window.
   await page.waitForTimeout(9000);
@@ -196,11 +217,21 @@ async function fire(num, targetName) {
   }));
 }
 const landed = (r) => (r.payloads[0]?.landed ?? 0) > 0;
-/** Fire until a round LANDS. A natural 1 is a ruled fumble and draws nothing at all by design, so a
- *  leg that needs an impact must be allowed to take the shot again rather than call the rail broken. */
-async function fireUntilHit(num, targetName, tries = 6) {
-  let r = await fire(num, targetName);
-  for (let i = 1; i < tries && !landed(r); i++) r = await fire(num, targetName);
+/**
+ * Fire ONE shot that LANDS, for the sections whose subject is what a landing round draws.
+ *
+ * ⭐ IT FORCES THE VERDICT NOW, AND TAKES ONE SHOT INSTEAD OF UP TO SIX (2026-08-13). It used to
+ * simply re-fire until something landed, because a natural 1 is a ruled fumble that draws nothing —
+ * true, but the cure cost a magazine: two sections sharing the bench pistol could spend twelve rounds
+ * between them, and a gun that runs dry raises NO PAYLOAD AT ALL, which surfaced as
+ * "undefined location(s)" against a section that had nothing wrong with it. Forcing the roll pins the
+ * one variable these sections do not mean to measure and takes one round to do it.
+ *
+ * The retry is kept as a fall-through for anything the forcing does not model, not as the mechanism.
+ */
+async function fireUntilHit(num, targetName, tries = 3) {
+  let r = await fire(num, targetName, { forceHit: true });
+  for (let i = 1; i < tries && !landed(r); i++) r = await fire(num, targetName, { forceHit: true });
   return r;
 }
 const drew = (files, key) => files.some(f => f === key || f.startsWith(`${key}.`));
@@ -262,7 +293,19 @@ ok("D: the fires are really alive on the canvas afterwards", liveFires > 0, `${l
 // with nothing applied and the pattern still on the canvas — and only then, on the press, the damage.
 console.log(`
 ── E · 10 Arasaka RAS-12 Buckshot → Review · Target (flesh) ──`);
-r = await fire("10", "Review · Target");   // NOT retried: a pattern is thrown hit or miss, and two would be two
+// ⭐ THE SHOT IS FORCED TO LAND, and it has to be as of 2026-08-13. A declared corridor that MISSES
+// now scatters to the grenade table, and a scattered corridor usually catches nobody — at which point
+// the confirm correctly posts NO result card (`_confirmSpreadZone` only posts when the corridor caught
+// someone; an empty one says so with a notification). So the last leg of this section, "the press
+// lands the shot", was reading the dice: it went red roughly one run in several, reported as 38/39.
+// Nothing was masked — the behaviour it measures needs a shot that HIT, and that is now pinned the
+// same way the spread spec pins it (REF 10 + an attack die queued at 9; never a forced 10, the base
+// die explodes). The MISS half has its own home, with both rails asserted: spread-zone §14.
+// Still NOT retried: one aim, one pattern.
+r = await fire("10", "Review · Target", { forceHit: true });
+ok("E: the forced shot LANDED, so this section is reading the mechanism and not the dice",
+  Number(r.payloads[0]?.attackTotal) >= Number(r.payloads[0]?.toHitDC) && r.payloads[0]?.scattered === false,
+  `${r.payloads[0]?.attackTotal} vs DC ${r.payloads[0]?.toHitDC}, scattered=${r.payloads[0]?.scattered}`);
 ok("E: the cartridge resolves to the BUCK pattern, not a single-target shot",
   r.payloads[0]?.caliber === "00", `caliber=${r.payloads[0]?.caliber} spreadMode=${r.payloads[0]?.spreadMode}`);
 const pat = { zones: r.patterns };
