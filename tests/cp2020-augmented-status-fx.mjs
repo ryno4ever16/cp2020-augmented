@@ -235,9 +235,18 @@ eq("flag cleared → the mark is gone", live2.after, []);
 console.log("\n§4b the lasting-damage flags mirror onto core's own conditions");
 const mirror = await page.evaluate(async ({ actorId, tokenId }) => {
   const saves = await import("/modules/cp2020-augmented/module/combat/save-rolls.js");
+  const M = await import("/modules/cp2020-augmented/module/fx/status-fx.js");
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const SCOPE = "cp2020-augmented";
   const actor = game.actors.get(actorId);
+  // ⚠ THE RACE THIS MIRROR COULD HAVE OPENED, asked about directly. One apply now raises TWO document
+  // events on the same figure — the flag write (updateActor) and the status toggle (createActiveEffect)
+  // — and the overlay reconciler answers both. If it cannot see its own in-flight draw, both passes
+  // find the mark missing and the figure ends up wearing two of them. Counted on THIS client's own
+  // creations, for the reason the header gives.
+  const ownMarks = () => M.liveStatusFx()
+    .filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+              && String(e?.data?.name ?? "").includes(tokenId)).length;
   const out = { activeGM: game.users.activeGM?.name ?? null, isSelfActiveGM: game.users.activeGM?.id === game.user.id };
   const statusesNow = () => [...(actor.statuses ?? [])];
   const effectStatuses = () => actor.effects.map(e => [...(e.statuses ?? [])]).flat();
@@ -254,7 +263,8 @@ const mirror = await page.evaluate(async ({ actorId, tokenId }) => {
     await saves.applyFireDotState(actor, "Torso", 2, "1d6");
     await sleep(1200);
     out.afterFireApply = { statuses: statusesNow(), effects: effectStatuses(),
-                           flag: (actor.getFlag(SCOPE, "fireDotState") ?? []).length };
+                           flag: (actor.getFlag(SCOPE, "fireDotState") ?? []).length,
+                           marks: ownMarks() };
 
     /* §4b-ii — an acid DoT likewise raises `corrode`, beside the burn rather than instead of it */
     await saves.applyAcidDotState(actor, "Torso", 1, "1d6");
@@ -304,6 +314,8 @@ check("and it is a real ActiveEffect carrying that status, not just a derived se
   mirror.afterFireApply.effects.includes("burning"), JSON.stringify(mirror.afterFireApply.effects));
 check("the burn's own marker was written beside it, by value",
   mirror.afterFireApply.flag === 1, String(mirror.afterFireApply.flag));
+check("and the two events one apply raises still draw ONE mark, not two (the reconciler sees its own in-flight draw)",
+  mirror.afterFireApply.marks === 1, `${mirror.afterFireApply.marks} marks`);
 check("an acid DoT raises `corrode` and leaves the burn's status standing",
   mirror.afterAcidApply.statuses.includes("corrode") && mirror.afterAcidApply.statuses.includes("burning"),
   JSON.stringify(mirror.afterAcidApply));
