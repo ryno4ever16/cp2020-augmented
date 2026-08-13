@@ -37,6 +37,12 @@
  * actor, or any world setting except that it turns the gore switch ON if it is off (the spec asks
  * for blood without fiddling).
  *
+ * ⭐ THE SELF-SHOT NEEDS NO FIXTURE, and that is why none was added for it (2026-08-13). Firing at
+ * one's own token is a TARGETING choice, not a load or an asset: target the shooter itself and pull
+ * the trigger with any gun on the list. The rail classifies the discharge and draws its point half
+ * only (fx/effects.js SELF_SHOT_SQUARES), so the case a reviewer would want to see — flash and impact
+ * on the shooter's own square, no streak crossing nothing — is reachable from this bench as it stands.
+ *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=<pw> node cp2020-augmented-provision-review-bench.mjs
  */
 import { chromium } from "@playwright/test";

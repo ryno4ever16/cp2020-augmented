@@ -646,9 +646,19 @@ const res = await page.evaluate(async () => {
   // So this leg reads the LAYER THE ENGINE ACTUALLY PUT IT IN, not the builder call — a route that
   // stops working would leave the builder call untouched and only show up here. Driven on the PISTOL,
   // which is where the defect was reported and the thinnest asset the table maps.
+  // ⚠ SCOPED TO THIS SHOT'S OWN SPRITES, and that is a correction this leg needed (2026-08-13). It used
+  // to read EVERY effect alive on the client, which was only ever right by accident: since the
+  // reference-exact ruling the condition overlays are drawn BELOW the tokens on purpose — a figure
+  // burning anywhere on the scene put a legitimately-below sprite in the sample and turned this red for
+  // something that is not this shot and not this rule. Two filters, because either alone leaves a hole:
+  // created at or after this shot, and never one of the persistent condition marks (which carry the
+  // overlay rail's own stamped name).
+  const routeT0 = Date.now();
   const routeShot = await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "pistol", hit: true, light: false });
   await sleep(500);
   const routed = [...(globalThis.Sequencer?.EffectManager?.effects ?? [])]
+    .filter(e => Number(e.data?.creationTimestamp ?? 0) >= routeT0
+              && !String(e.data?.name ?? "").startsWith("cp2020-augmented.statusfx."))
     .map(e => ({ file: String(e.data?.file ?? "").split("/").pop(), above: !!e.data?.aboveLighting,
                  inPrimary: e.parent === canvas.primary }));
   const routedTracer = routed.filter(e => /bullet/.test(e.file));
@@ -1524,10 +1534,51 @@ const res = await page.evaluate(async () => {
   /* ── 9. the installed engine, then the two branches it cannot show ─────── */
   // Against the REAL engine + the real asset tier: a mapped shot must claim both sprite parts (the
   // rendered result itself is the eyes-on record, not something a headless assertion can stand in for).
-  const realShot = await fx.fxShot(tokenDoc, tokenDoc, { weaponClass: "rifle", hit: true, light: false });
+  // ⚠ FIRED AT THE OTHER TOKEN, and that is a correction: this leg used to pass the SAME token as
+  // shooter and target, which is a self-shot — a case with no span to draw at all (§9-self below). It
+  // read as a normal shot only because nothing distinguished the two before that section existed.
+  const realShot = await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "rifle", hit: true, light: false });
   await sleep(300);
   ok("installed engine: a mapped shot claims both the flash and the tracer",
     realShot.muzzle === true && realShot.tracer === true, JSON.stringify(realShot));
+
+  /* ── 9-self. THE SELF-SHOT: a discharge with no span, drawn as a point ──── */
+  // User report: firing at your own token raised the engine's own `stretchTo - You are stretching over
+  // a distance of "0"`. The constraint behind it is that a stretched asset resolves its FILE by
+  // DISTANCE, so a zero-length ray has no file to pick — and a self-shot is a legitimate table action
+  // (the mercy shot), not an input error to reject. So the rail classifies it and draws the POINT half
+  // of the shot at the shooter's own square while skipping everything that spans the shooter→target
+  // line. Read three ways: the report by value, the engine's silence, and a normal shot afterwards
+  // proving the guard took nothing else with it.
+  // Cleared first, so "the engine drew something" is THIS shot's doing and not the previous one's.
+  Sequencer.EffectManager.endAllEffects();
+  await sleep(500);
+  const selfShot = await fx.fxShot(tokenDoc, tokenDoc, { weaponClass: "rifle", hit: true, light: false });
+  await sleep(1200);
+  ok("self-shot: the rail classifies a zero-span discharge as one, by value",
+    selfShot.selfShot === true, JSON.stringify(selfShot));
+  ok("self-shot: nothing that spans the shot is queued — no tracer, no volley (negative)",
+    selfShot.tracer === false && selfShot.volley === false && selfShot.pellets === 0,
+    JSON.stringify(selfShot));
+  ok("self-shot: the POINT elements still play — the muzzle flash and the impact both land",
+    selfShot.muzzle === true && selfShot.impact === true, JSON.stringify(selfShot));
+  ok("self-shot: and the engine drew something rather than nothing",
+    Sequencer.EffectManager.getEffects().length > 0,
+    String(Sequencer.EffectManager.getEffects().length));
+  // A shell too, because the volley/fan branch is the other span-shaped one.
+  const selfShell = await fx.fxShot(tokenDoc, tokenDoc, { weaponClass: "shotgun", hit: true, light: false });
+  await sleep(1200);
+  ok("self-shot: a pellet class fans nothing either, and still marks the square",
+    selfShell.selfShot === true && selfShell.tracer === false && selfShell.pellets === 0
+    && selfShell.muzzle === true, JSON.stringify(selfShell));
+  // The regression guard: the span-drawing shot that follows is untouched by the guard.
+  const afterSelf = await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "rifle", hit: true, light: false });
+  await sleep(600);
+  ok("self-shot: a normal shot after one still draws its streak (no regression)",
+    afterSelf.selfShot === false && afterSelf.tracer === true && afterSelf.muzzle === true,
+    JSON.stringify(afterSelf));
+  Sequencer.EffectManager.endAllEffects();
+  await sleep(400);
 
   /* ── 9a-ii. what the two tracer shapes MEASURE on the real engine ──────── */
   // The builder legs below pin what the adapter ASKS for; this pins what the engine then DRAWS, in
@@ -4811,10 +4862,17 @@ try {
       name: "__PW__AMMO rifle", type: "weapon",
       system: { weaponType: "Rifle", attackType: "Auto", damage: "1d6", range: 50, rof: 1, shots: 40, shotsLeft: 40 },
     }]);
-    const [shooterDoc, targetDoc] = await scene.createEmbeddedDocuments("Token", [
+    const ammoDocs = await scene.createEmbeddedDocuments("Token", [
       { name: "__PW__AMMO Shooter", actorId: shooterActor.id, x: 1000, y: 1500, width: 1, height: 1 },
       { name: "__PW__AMMO Target", actorId: targetActor.id, x: 1700, y: 1500, width: 1, height: 1 },
     ]);
+    // ⚠ RESOLVED BY NAME, NEVER BY POSITION IN THE RETURN. `createEmbeddedDocuments` does not
+    // promise the order it was handed — a documented trap on this rig — and a swapped pair here is
+    // invisible until something downstream reads the geometry: the fan-out resolves its shooter from
+    // the ACTOR and its aim from the payload's token id, so a swap silently pointed a burst at the
+    // shooter's own square. It read as a normal shot for as long as nothing minded a zero-length ray.
+    const shooterDoc = ammoDocs.find(d => d.name === "__PW__AMMO Shooter");
+    const targetDoc = ammoDocs.find(d => d.name === "__PW__AMMO Target");
     await sleep(400);
     const shooterTok = canvas.tokens.get(shooterDoc.id);
     const targetTok = canvas.tokens.get(targetDoc.id);
@@ -6399,10 +6457,17 @@ try {
     const targetActor = await Actor.create({ name: "__PW__SF Target", type: "character" });
     const [gun] = await shooterActor.createEmbeddedDocuments("Item", [{ name: "__PW__SF rifle", type: "weapon",
       system: { weaponType: "Rifle", attackType: "auto", damage: "1d6", range: 50, rof: 20, shots: 40, shotsLeft: 40 } }]);
-    const [shooterDoc, targetDoc] = await scene.createEmbeddedDocuments("Token", [
+    const sfDocs = await scene.createEmbeddedDocuments("Token", [
       { name: "__PW__SF Shooter", actorId: shooterActor.id, actorLink: true, x: 1000, y: 2200 },
       { name: "__PW__SF Target", actorId: targetActor.id, actorLink: true, x: 1800, y: 2200 },
     ]);
+    // ⚠ RESOLVED BY NAME, NEVER BY POSITION IN THE RETURN. `createEmbeddedDocuments` does not
+    // promise the order it was handed — a documented trap on this rig — and a swapped pair here is
+    // invisible until something downstream reads the geometry: the fan-out resolves its shooter from
+    // the ACTOR and its aim from the payload's token id, so a swap silently pointed a burst at the
+    // shooter's own square. It read as a normal shot for as long as nothing minded a zero-length ray.
+    const shooterDoc = sfDocs.find(d => d.name === "__PW__SF Shooter");
+    const targetDoc = sfDocs.find(d => d.name === "__PW__SF Target");
     await sleep(500);
     const shooterTok = canvas.tokens.get(shooterDoc.id);
     const targetTok = canvas.tokens.get(targetDoc.id);
@@ -7368,6 +7433,12 @@ console.log(`  attack window lifetime: ${JSON.stringify(res.attackWindow)}`);
 console.log(`  write authority (non-GM, own card vs another's): ${JSON.stringify(res.writeAuthority)}`);
 console.log(`  ten-round burst cost: ${JSON.stringify(res.burstCost)}`);
 console.log(`  engine teardown races absorbed (this spec's own endAllEffects, not the product): ${engineRaces.length}`);
+// THE SELF-SHOT'S OWN NEGATIVE, named rather than left to the catch-all below: the engine resolves a
+// stretched asset's FILE by distance, so a zero-length ray makes it complain by this exact signature.
+// Asserted across the whole run, because the signature belongs to nothing else.
+const ZERO_STRETCH = /stretching over a distance/i;
+check("self-shot: the engine raised no zero-distance stretch complaint anywhere in this run",
+  !errors.some(e => ZERO_STRETCH.test(e)), errors.filter(e => ZERO_STRETCH.test(e)).slice(0, 2).join(" | "));
 check("0 console errors", errors.length === 0, errors.slice(0, 5).join(" | "));
 console.log(`\nRESULT: ${fail === 0 ? "PASS" : "FAIL"} — ${pass}/${pass + fail}`);
 await browser.close();

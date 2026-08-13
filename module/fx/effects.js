@@ -203,6 +203,37 @@ export const MUZZLE_MODE = "cone";
 export const FACING_AIM_SQUARES = 3;
 
 /**
+ * HOW SHORT A SHOT COUNTS AS FIRED AT ONESELF, in grid squares.
+ *
+ * ⭐ THE CONSTRAINT, which is the engine's and not ours: a stretched element resolves its FILE BY
+ * DISTANCE — the database hands back a different source clip per range band — so a ray of length zero
+ * has no file to pick and the engine says so ("stretching over a distance of 0"). Reported from a real
+ * table: a figure fired at ITS OWN token, source and target coincided, and the complaint took the whole
+ * sequence down with it — no streak, and no muzzle flash or impact either, because the throw came out
+ * of the middle of a builder chain that had not been played yet.
+ *
+ * ⚠ AND IT IS A LEGITIMATE ACTION, not bad input. A mercy shot is a thing that happens in this game, so
+ * the rail classifies the discharge rather than refusing it: everything that SPANS the shooter→target
+ * line is skipped (there is nothing meaningful to draw along a ray of zero length), and everything that
+ * happens AT a point still plays on the shooter's own square — the flash, the impact, the blood, the
+ * sounds, a burning ground if the load leaves one. The action still reads at the table; only the travel
+ * is gone.
+ *
+ * A quarter of a square: far enough inside the shooter's own figure that any aim point landing there is
+ * its own body, and far enough above zero that it also catches the near-misses of an aim REBUILT from
+ * an angle and a reach (declaredAimPointOf), where floating point can leave a few pixels of span that
+ * are visually nothing but arithmetically non-zero.
+ */
+export const SELF_SHOT_SQUARES = 0.25;
+
+/** Is this discharge pointed at its own muzzle? Pure — the one place the question is asked. */
+export function isSelfShot(from, to, gridSizePx = 100) {
+  if (!from || !to) return false;
+  const px = Number(gridSizePx) > 0 ? Number(gridSizePx) : 100;
+  return Math.hypot(to.x - from.x, to.y - from.y) < SELF_SHOT_SQUARES * px;
+}
+
+/**
  * Muzzle-flash light spec (design doc §2.3) — THE one editable block for the flash.
  *
  * Radii are in GRID SQUARES and are multiplied by the scene's grid distance, then by the scene's
@@ -3563,7 +3594,7 @@ function _held(effect) {
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
 export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null } = {}) {
-  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0 };
+  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0, selfShot: false };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
   // the same code for every load. The KEY is passed in rather than resolved here because there is no
@@ -3578,6 +3609,13 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
   // sprite, the spark and the tracer cannot disagree about where the shot is pointed.
   const to = (aimPoint && Number.isFinite(aimPoint.x) && Number.isFinite(aimPoint.y))
     ? aimPoint : aimPointOf(shooterToken, targetToken, gridPx);
+  // ⭐ ASKED ONCE, HERE, ABOUT THE GEOMETRY — not at each builder call. Every element below that draws
+  // a SPAN reads this one answer, so there is a single place a reader goes to find out why a self-shot
+  // looks the way it does, and no way for one span element to be guarded while another is missed. See
+  // SELF_SHOT_SQUARES for the engine constraint that makes the case special and for why the shot is
+  // still drawn rather than refused.
+  const selfShot = isSelfShot(from, to, gridPx);
+  out.selfShot = selfShot;
   // Where the sprites are planted: the shooter's forward edge, walked along that axis by a fraction
   // of the token's OWN width. The previous build put everything on the centre unconditionally.
   const muzzle = muzzlePoint(from, to, tokenRadiusPx(shooterToken, gridPx) * 2 * MUZZLE_SPRITE.edgeFraction);
@@ -3655,7 +3693,9 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       //
       // TERMINAL ELEMENT: this is the only thing the round draws that lasts, so it carries the settle
       // name that the tracer and the impact carry on every other load.
-      const volleyOk = volley && to && fxDbEntryExists(volley.key);
+      // SPAN ELEMENT — skipped on a self-shot: the volley sprite IS the whole discharge drawn from the
+      // muzzle to the endpoint, and stretched across nothing it has neither a length nor a file.
+      const volleyOk = volley && to && !selfShot && fxDbEntryExists(volley.key);
       if (volleyOk) {
         const chaos = volleyChaosFor(shotSeed);
         const aimed = hit ? rotateAbout(from, to, chaos.jitterDeg) : missEndpoint(from, to);
@@ -3682,7 +3722,11 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // base shell is the answer, not the absence of one.
         out.volleyColor = entry.tracerColor ?? null;
       }
-      if (!volleyOk && to && fxDbEntryExists(entry.tracer)) {
+      // SPAN ELEMENTS — the same skip, and it covers BOTH tracer shapes for the same reason: the
+      // stretched streak has no file to resolve over a zero ray, and the travelled dash has nowhere to
+      // travel to. A pellet fan is span-shaped as well (its endpoints are angles off the aim line), so
+      // it goes with them rather than collapsing into a cluster on the shooter's own square.
+      if (!volleyOk && to && !selfShot && fxDbEntryExists(entry.tracer)) {
         // A class carrying a pellet count draws its round as a FAN of tracers instead of one bolt;
         // every other class omits the field and takes the single endpoint. `out.tracer` stays the same
         // boolean either way (did this shot claim a tracer at all) and `out.pellets` reports how many

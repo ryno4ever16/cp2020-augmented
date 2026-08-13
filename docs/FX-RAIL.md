@@ -1508,6 +1508,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `MUZZLE_SPRITE.endMs` | 110 | lance trim — beyond this the clip's smoke-and-fire plume returns |
 | `MUZZLE_SPRITE.edgeFraction` | 0.5 | how far along the aim the sprite is planted, as a fraction of token width |
 | `FACING_AIM_SQUARES` | 3 | how far the synthesized aim point sits for an untargeted shot |
+| `SELF_SHOT_SQUARES` | 0.25 | how short a shot counts as fired at oneself — under it, every span element is skipped and only the point elements play (§6, 2026-08-13) |
 | `SPREAD_PREVIEW_FILL_ALPHA` ⭐ | **0.18** | how solid the aim ghost is while it is being dragged (`module/combat/spread-placement.js` — the one knob in this index that is not in `effects.js`, listed here because it is the shot's own look). Revert to `SPREAD_ZONE_LOOK.fillAlpha` (0.10) to make the dragged ghost identical to the planted one |
 | `SPREAD_MIN_LENGTH_M` ⭐ | **2** | the shortest corridor an aim may confirm, in metres — mirrors the plant's own floor |
 | `FX_CLASSES.shotgun.muzzleSquares` | **1.9** | the shell's lance width in grid units — between the rifle's 1.6 and the heavy's 2.1; measured 190 px on a 100 px grid |
@@ -1685,6 +1686,28 @@ all). So a figure shot to Mortal by a pattern or a blast was never asked whether
 `_postWoundSavePrompts` now emits both there, on the two clocks unchanged: **one** death prompt per
 application batch, **one stun prompt per damage event** — so a three-shell burst on a Mortal figure owes
 one death save and three stun saves. Death is asked first, in the single-target rail's own order.
+
+**2026-08-13 — a shot fired at oneself is drawn as a point, not refused.**
+User report: firing at your own token raised the engine's own
+`stretchTo - You are stretching over a distance of "0"`. The constraint is the engine's: a stretched
+element resolves its **file by distance**, so a zero-length ray has no clip to pick — and because the
+complaint comes out of the middle of a builder chain, it took the WHOLE sequence with it. A self-shot
+drew nothing at all: no streak, and no flash or impact either.
+
+| Ruling | Value | Why |
+|---|---|---|
+| a self-shot is a legitimate action | classified, never refused | the mercy shot is a thing that happens at this table; a presentation rail does not reject a table's move |
+| the question is asked **once, about the geometry** | `isSelfShot(from, to, gridPx)` in `fxShot`, reported as `out.selfShot` | one place a reader goes; no way for one span element to be guarded while a sibling is missed |
+| **span** elements are skipped | the volley sprite, the stretched streak, the travelled dash, the pellet fan | there is nothing meaningful to draw along a ray of zero length |
+| **point** elements still play | muzzle flash, impact, blood, sounds, ground fire | the action still reads at the table; only the travel is gone |
+| the threshold | `SELF_SHOT_SQUARES` = 0.25 squares | inside the shooter's own figure, and above the few pixels of span an aim REBUILT from an angle and a reach can leave |
+
+⭐ **Survey of the other span-shaped operations on this path, since a zero ray reaches all of them**:
+`muzzlePoint`, `pointAlong` and `faceTargetRotation` already return the origin (or null) at zero length;
+`missEndpoint`, `pelletEndpoints` and `smokePuffPlan` already floor their divisor with `|| 1`;
+`rotateAbout` returns the origin unchanged; and the blood splash already tests `from ≠ at` and falls
+back to `randomRotation`. **Nothing else needed a fix** — `stretchTo` was the only operation that
+resolves an ASSET by distance, which is why it was the only one that failed rather than degrading.
 
 **2026-08-13 — the lasting-damage flags speak core's vocabulary too.**
 User report: a figure set on fire wore the ring and had **nothing** in its Active Effects. The two
