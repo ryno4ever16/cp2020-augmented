@@ -1,5 +1,6 @@
 import { getCalibers, AMMO_MODIFIERS, modifierAppliesToCaliber, getCaliberBox, getAmmoBoxPrice, normalizeCaliber } from "../lookups.js";
 import { localize } from "../utils.js";
+import { isShopSetupMode } from "./setup-mode.js";
 
 const SCOPE = "cp2020-augmented";
 const AMMO_IMG = "modules/cp2020-augmented/img/weapon-icon.svg";
@@ -85,7 +86,9 @@ export async function purchaseAmmo(actor, { caliber, modifier = "standard", boxe
   const n = Math.max(1, Math.floor(Number(boxes) || 1));
   const box = getCaliberBox(caliber);
   const unitPrice = getAmmoBoxPrice(caliber, modifier);
-  const totalCost = unitPrice * n;
+  // GM setup mode: the rounds are real and the load is honoured; only the bill is waived
+  // (module/shop/setup-mode.js).
+  const totalCost = isShopSetupMode() ? 0 : unitPrice * n;
   const totalRounds = (Number(box.box) || 1) * n;
 
   const funds = Number(actor.system?.eurobucks ?? 0);

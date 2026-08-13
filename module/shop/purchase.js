@@ -1,5 +1,6 @@
 import { canShop, getShopPriceOverride } from "../settings.js";
 import { localize } from "../utils.js";
+import { isShopSetupMode } from "./setup-mode.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -144,7 +145,12 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
   const name = data?.name ?? "item";
   const n = Math.max(1, Math.floor(Number(qty) || 1));
   const base = Number(unitPrice ?? data.system?.cost ?? 0);
-  const total = Math.max(0, Math.round(base * n));
+  // GM setup mode: a free, silent grant of the REAL item. The price is zeroed here rather than at the
+  // call sites so every route in — the Buy button, buy-for-NPC, drag-to-sheet — gets it from one place
+  // and none of them can be forgotten. Everything below (the compendium-source stamp, the flag patch,
+  // the quantity-vs-copies decision) is untouched, which is the point: same goods, no invoice.
+  const setup = isShopSetupMode();
+  const total = setup ? 0 : Math.max(0, Math.round(base * n));
 
   const funds = Number(actor.system?.eurobucks ?? 0);
   if (funds < total) {
@@ -185,7 +191,9 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
     return false;
   }
 
-  ChatMessage.create({
+  // Setup mode posts nothing. A "Bought Kevlar for 0eb" card in the log is a purchase that did not
+  // happen, and a GM furnishing twenty NPCs would fill the scrollback with twenty of them.
+  if (!setup) ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
     content: game.i18n.format("CYBERPUNK.ShopBought", {
       qty: n, name, cost: total, label: priceLabel ? ` (${priceLabel})` : ""

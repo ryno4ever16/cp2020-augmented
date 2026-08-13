@@ -1,5 +1,6 @@
 import { canShop } from "../settings.js";
 import { localize } from "../utils.js";
+import { isShopSetupMode } from "./setup-mode.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -104,14 +105,16 @@ export async function payOneOffService(actor, source, { unitPrice, priceLabel = 
   if (!actor) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
   if (!canShop()) { ui.notifications?.warn(localize("ShopNotAllowed")); return false; }
   const name = source?.name ?? "service";
-  const cost = Math.max(0, Math.round(Number(unitPrice ?? source?.system?.cost ?? 0)));
+  // GM setup mode: free and silent, exactly as for gear (module/shop/setup-mode.js).
+  const setup = isShopSetupMode();
+  const cost = setup ? 0 : Math.max(0, Math.round(Number(unitPrice ?? source?.system?.cost ?? 0)));
   const funds = Number(actor.system?.eurobucks) || 0;
   if (funds < cost) {
     ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopInsufficientFunds", { name, cost, funds }));
     return false;
   }
   await actor.update({ "system.eurobucks": funds - cost });
-  ChatMessage.create({
+  if (!setup) ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
     content: game.i18n.format("CYBERPUNK.ServicePaid", { name, cost, label: priceLabel ? ` (${priceLabel})` : "" })
   });

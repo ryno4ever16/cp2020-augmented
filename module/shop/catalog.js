@@ -6,6 +6,7 @@ import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSuppleme
 import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
+import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
 import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature } from "../lookups.js";
@@ -171,6 +172,20 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._cats = new Set();
     this._books = new Set();
     this._catalogIndexWait = null;   // the one pending "re-render when the index lands" (see _awaitCatalogIndex)
+    /**
+     * Per-row dropdown choices the GM/player has made — the ammo LOAD and the clothing STYLE — keyed by
+     * row identity and re-applied after every render (see _activateRowChoices).
+     *
+     * ⛔ WHY THIS EXISTS. Every buy ends in `this.render()`, and a render rebuilds the rows from the
+     * template, where both selects are emitted at their DEFAULT option. So picking Armor-Piercing and
+     * buying a box silently reset the row to Standard — and the next box, bought by clicking the same
+     * button in the same place, was a different kind of ammunition. The reset was invisible unless you
+     * happened to re-read the dropdown, which is exactly the sort of thing nobody re-reads.
+     *
+     * Instance state, not a setting: it is a working choice inside one window session, so it lives as
+     * long as the window and dies with it. Reopening the shop is a fresh counter.
+     */
+    this._rowChoices = new Map();
   }
 
   static DEFAULT_OPTIONS = {
@@ -350,7 +365,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       buyerFunds: this.buyer ? (Number(this.buyer.system?.eurobucks) || 0) : 0,
       buyerOptions: this._buyerOptions(),
       fashionStyles: shopFashionStyleOptions(), showSource: shopShowSource(), search: this._search,
-      searching: !!this._search.trim()
+      searching: !!this._search.trim(),
+      // GM setup mode is CLIENT state (module/shop/setup-mode.js), so it is read fresh into every
+      // render rather than stored on the app — two shop windows on one client agree by construction.
+      setupMode: isShopSetupMode()
     };
     if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
 
@@ -484,17 +502,54 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     return purchaseAmmo(this.buyer, { caliber, modifier, boxes });
   }
 
-  /** Live re-price ammo rows when the load dropdown changes (box price varies a lot by load). Boxes
-   *  multiply at purchase — the displayed price stays PER BOX, matching every other catalog row. */
-  _activateAmmoRows(root) {
-    if (this.view !== "catalog") return;
-    root.querySelectorAll(".cp-catalog-row[data-ammo-caliber]").forEach(row => {
-      const sel = row.querySelector(".cp-catalog-ammo-load");
-      sel?.addEventListener("change", () => {
-        const pe = row.querySelector(".cp-cat-price b");
-        if (pe) pe.textContent = getAmmoBoxPrice(row.dataset.ammoCaliber, sel.value);
-      });
-    });
+  /** A row's stable identity for `_rowChoices`. Generated ammo rows are not compendium documents and
+   *  carry no source key, so they key on their caliber; everything else keys on the source key (or the
+   *  item id, which the vendor rows carry instead). */
+  _rowChoiceKey(rowEl) {
+    if (rowEl.dataset.ammoCaliber) return `ammo:${rowEl.dataset.ammoCaliber}`;
+    return rowEl.dataset.sourceKey || rowEl.dataset.itemId || "";
+  }
+
+  /**
+   * Restore, then remember, the per-row dropdown choices — the ammo LOAD and the clothing STYLE.
+   *
+   * Runs on EVERY render (it is called from activateListeners), so the order matters: the stored value
+   * is written back onto the freshly-rendered `<select>` FIRST, and only then is the price readout
+   * refreshed from it. Doing it the other way round would show the restored load beside the default
+   * load's price.
+   *
+   * The listeners are bound to elements this render created and die with them, so there is nothing to
+   * tear down — but the map they write to outlives the render, which is the whole point.
+   */
+  _activateRowChoices(root) {
+    if (this.view !== "catalog" && this.view !== "storefront") return;
+    for (const row of root.querySelectorAll(".cp-catalog-row")) {
+      const key = this._rowChoiceKey(row);
+      if (!key) continue;
+      const saved = this._rowChoices.get(key);
+
+      const load = row.querySelector(".cp-catalog-ammo-load");
+      if (load) {
+        // Only restore a value the row still offers: the per-caliber load list is filtered by family,
+        // and a GM who removes a custom load should not leave rows stuck on a value that is gone.
+        if (saved?.load && [...load.options].some(o => o.value === saved.load)) load.value = saved.load;
+        const price = row.querySelector(".cp-cat-price b");
+        if (price && row.dataset.ammoCaliber) price.textContent = getAmmoBoxPrice(row.dataset.ammoCaliber, load.value);
+        load.addEventListener("change", () => {
+          this._rowChoices.set(key, { ...(this._rowChoices.get(key) ?? {}), load: load.value });
+          const pe = row.querySelector(".cp-cat-price b");
+          if (pe && row.dataset.ammoCaliber) pe.textContent = getAmmoBoxPrice(row.dataset.ammoCaliber, load.value);
+        });
+      }
+
+      const style = row.querySelector(".cp-catalog-style");
+      if (style) {
+        if (saved?.style && [...style.options].some(o => o.value === saved.style)) style.value = saved.style;
+        style.addEventListener("change", () => {
+          this._rowChoices.set(key, { ...(this._rowChoices.get(key) ?? {}), style: style.value });
+        });
+      }
+    }
   }
 
   async _openItemSheet(rowEl) {
@@ -653,7 +708,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._activateBuildControls(root, isGM);
     this._activateCatalogShopAdd(root, isGM);
     this._activatePurchaseDrag(root);
-    this._activateAmmoRows(root);
+    this._activateRowChoices(root);
+    this._activateSetupMode(root, isGM);
 
     // A render rebuilt the rows — re-apply any active text search so it composes with filter changes.
     this._applySearch(root);
@@ -700,6 +756,25 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     }
     const nomatch = list.querySelector(".cp-catalog-nomatch");
     if (nomatch) nomatch.style.display = (term && !anyVisible) ? "" : "none";
+  }
+
+  /**
+   * The GM setup-mode badge. GM-only, client-local, and loud about being on.
+   *
+   * The lit state is a CLASS toggle (`.cp-active`), never a colour computed here — the module's
+   * standing idiom for a badge that means something, so the palette lives in the stylesheet where a
+   * human can restyle it. Flipping it re-renders, because the Buy buttons' own labels and the badge
+   * both have to agree about what pressing them will do.
+   */
+  _activateSetupMode(root, isGM) {
+    const btn = root.querySelector(".cp-shop-setup-toggle");
+    if (!btn) return;
+    if (!isGM) { btn.remove(); return; }     // belt-and-braces: the template already gates on isGM
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      toggleShopSetupMode();
+      this.render();
+    });
   }
 
   /** Catalog-view GM "Add to shop": a compact cart icon per row that opens a shop-picker menu
@@ -951,7 +1026,10 @@ export async function purchaseShopItem(buyer, shopId, sourceKey, { qty } = {}) {
     else if (svc === "recurring") ok = await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } });
     else ok = await buyItem(buyer, doc, { qty: n, unitPrice, priceLabel: label });
   }
-  if (ok !== false && !e.unlimited) {
+  // GM setup mode takes nothing off the shelf. A GM kitting an NPC out of a vendor's stock is not a
+  // customer, and emptying the shop while furnishing is the half of the old behaviour that was hardest
+  // to notice and hardest to undo (module/shop/setup-mode.js).
+  if (ok !== false && !e.unlimited && !isShopSetupMode()) {
     if (game.user.isGM) await decrementShopStock(def.id, sourceKey, n, { buyerName: buyer?.name ?? "" });
     else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "shopBuyRelay", shopId: def.id, sourceKey, qty: n, buyerName: buyer?.name ?? "" });
   }

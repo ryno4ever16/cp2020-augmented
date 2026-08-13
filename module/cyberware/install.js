@@ -3,6 +3,7 @@ import { localize, tryLocalize } from "../utils.js";
 import { canShop } from "../settings.js";
 import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage, renderChatCard } from "../compat.js";
 import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
+import { isShopSetupMode } from "../shop/setup-mode.js";
 
 /**
  * Cyberware buy-and-install flow (Shopping #14 — [[shopping-design]]).
@@ -175,7 +176,10 @@ export async function installCyberware(actor, item, opts = {}) {
     return false;
   }
   const surgery = getSurgery(item.system?.surgCode);
-  const surgeryCost = chargeSurgery ? surgery.cost : 0;
+  // GM setup mode waives the FEE and nothing else: the confirm dialog, the Humanity roll, the surgical
+  // damage and the summary card all still happen, because installing chrome is a decision the GM wants
+  // to see even while they are furnishing (module/shop/setup-mode.js — the user's own amendment).
+  const surgeryCost = (chargeSurgery && !isShopSetupMode()) ? surgery.cost : 0;
 
   let choices = { proceed: true, rollHumanity: true, applyDamage: true };
   if (confirm) {
@@ -268,9 +272,13 @@ export function cyberwareTerms(source, partPriceOverride) {
     const corr = correctionFor(source.pack, source.id);
     if (corr) { applyCorrectionToItemData(data, corr); markCorrectionApplied(data); }
   }
-  const partPrice = Math.max(0, Math.round(Number(partPriceOverride ?? data.system?.cost ?? 0)));
+  // In GM setup mode both halves of the bill go to zero — the part and the surgery — while the terms
+  // themselves (the surgery's label, its damage, the Humanity cost) travel unchanged, so every card
+  // downstream still shows the GM what the operation actually does.
+  const setup = isShopSetupMode();
+  const partPrice = setup ? 0 : Math.max(0, Math.round(Number(partPriceOverride ?? data.system?.cost ?? 0)));
   const surgery = getSurgery(data.system?.surgCode);
-  return { data, partPrice, surgery, surgeryCost: surgery.cost };
+  return { data, partPrice, surgery, surgeryCost: setup ? 0 : surgery.cost };
 }
 
 /** Charge, then create — and refund if the create fails. Same discipline, and the same order, as

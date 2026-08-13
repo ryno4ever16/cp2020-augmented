@@ -770,6 +770,20 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-preset-confirm .cp-preset-confirm-count { margin: 0 0 6px; font-size: 0.88em; opacity: 0.8; }
 .cp-preset-confirm .cp-preset-confirm-note { margin: 0; font-size: 0.8em; opacity: 0.65; font-style: italic; }
 
+/* ===== GM setup mode: the header badge + the standing banner. Idle is quiet; ON is unmistakable,
+ * because a mode that silently makes everything free must never be something you forget is on.
+ * Dynamic state is the .cp-active class, never a colour computed in JS. ===== */
+.cp-shop-setup-toggle { width: auto; flex: 0 0 auto; opacity: 0.7; }
+.cp-shop-setup-toggle.cp-active {
+  opacity: 1; font-weight: bold;
+  color: #c0791a; border-color: #c0791a; background: rgba(192, 121, 26, 0.15);
+}
+.cp-shop-setup-banner {
+  margin: 0 0 6px; padding: 4px 8px; border-radius: 3px;
+  border: 1px solid rgba(192, 121, 26, 0.5); background: rgba(192, 121, 26, 0.12);
+  color: #c0791a; font-size: 0.85em; font-weight: bold; text-align: center;
+}
+
 /* ===== NPC generator (ApplicationV2) + its Actors-directory button. Shares the preset-picker
  * palette so the module's two GM tool windows read as one family. The directory button is sized to
  * match the IP Tracker's, which sits beside it and takes the sidebar's default button styling. ===== */

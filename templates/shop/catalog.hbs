@@ -42,10 +42,21 @@
         {{else}}
             <h2>{{localize "CYBERPUNK.CatalogTitle"}}</h2>
         {{/if}}
+        {{!-- GM setup mode: free, silent acquisitions on THIS client only. Lit state is a class, so the
+              colour lives in the stylesheet. Players never see the control and never see the effect. --}}
+        {{#if isGM}}
+        <button type="button" class="cp-shop-setup-toggle{{#if setupMode}} cp-active{{/if}}"
+                title="{{localize "CYBERPUNK.ShopSetupModeHint"}}">
+            <i class="fa-solid fa-screwdriver-wrench"></i> {{localize "CYBERPUNK.ShopSetupMode"}}
+        </button>
+        {{/if}}
         {{#unless isBuild}}
         <span class="cp-catalog-buyer">{{> "modules/cp2020-augmented/templates/shop/buyer-bar.hbs"}}</span>
         {{/unless}}
     </div>
+    {{#if setupMode}}
+    <p class="cp-shop-setup-banner">{{localize "CYBERPUNK.ShopSetupModeBanner"}}</p>
+    {{/if}}
 
     {{#if missing}}<p class="cp-src-none">{{localize "CYBERPUNK.ShopGone"}}</p>{{/if}}
     {{#if closed}}<p class="cp-src-none">⚫ {{localize "CYBERPUNK.ShopClosed"}}</p>{{/if}}
