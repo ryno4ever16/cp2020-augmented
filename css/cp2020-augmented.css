@@ -770,6 +770,43 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-preset-confirm .cp-preset-confirm-count { margin: 0 0 6px; font-size: 0.88em; opacity: 0.8; }
 .cp-preset-confirm .cp-preset-confirm-note { margin: 0; font-size: 0.8em; opacity: 0.65; font-style: italic; }
 
+/* ===== NPC generator (ApplicationV2) + its Actors-directory button. Shares the preset-picker
+ * palette so the module's two GM tool windows read as one family. The directory button is sized to
+ * match the IP Tracker's, which sits beside it and takes the sidebar's default button styling. ===== */
+.cp2020ae-npcgen-btn { width: 100%; }
+.cp-npcgen { padding: 8px 4px; font-size: 0.9em; line-height: 1.5; }
+.cp-npcgen .cp-npcgen-modes { display: flex; gap: 6px; margin-bottom: 10px; }
+.cp-npcgen .cp-npcgen-mode { flex: 1 1 auto; width: auto; opacity: 0.7; }
+/* Active state is a CLASS toggle, never a colour computed in JS (the .cp-active idiom). */
+.cp-npcgen .cp-npcgen-mode.cp-active { opacity: 1; font-weight: bold; border-color: rgba(30, 100, 180, 0.7); }
+.cp-npcgen .cp-npcgen-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.cp-npcgen .cp-npcgen-label { flex: 0 0 34%; font-weight: bold; }
+.cp-npcgen .cp-npcgen-row select,
+.cp-npcgen .cp-npcgen-row input { flex: 1 1 auto; min-width: 0; }
+.cp-npcgen .cp-npcgen-section { font-weight: bold; margin: 12px 0 4px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.cp-npcgen .cp-npcgen-hint { margin: 0 0 8px; font-size: 0.8em; opacity: 0.7; font-style: italic; }
+.cp-npcgen .cp-npcgen-warn { margin: 0 0 8px; font-size: 0.82em; color: #c0791a; }
+.cp-npcgen .cp-npcgen-pending { margin: 16px 4px; opacity: 0.75; font-style: italic; }
+.cp-npcgen .cp-npcgen-dials { margin-bottom: 4px; }
+.cp-npcgen .cp-npcgen-preview { max-height: 300px; overflow-y: auto; }
+.cp-npcgen .cp-npcgen-preview-npc {
+  border: 1px solid rgba(30, 100, 180, 0.3); background: rgba(30, 100, 180, 0.10);
+  border-radius: 4px; padding: 6px 8px; margin-bottom: 6px;
+}
+.cp-npcgen .cp-npcgen-preview-name { font-weight: bold; margin: 0 0 2px; }
+.cp-npcgen .cp-npcgen-preview-npc p { margin: 0 0 2px; font-size: 0.85em; }
+.cp-npcgen .cp-npcgen-preview-skills { opacity: 0.85; }
+.cp-npcgen .cp-npcgen-buttons { display: flex; gap: 6px; margin-top: 12px; }
+.cp-npcgen .cp-npcgen-btn { flex: 1 1 auto; width: auto; }
+.cp-npcgen .cp-npcgen-create { font-weight: bold; }
+.cp-npcgen .cp-npcgen-note { margin: 8px 0 0; font-size: 0.8em; opacity: 0.65; font-style: italic; }
+
+.cp-npcgen-card .cp-npcgen-card-title { margin: 0 0 6px; font-size: 1em; }
+.cp-npcgen-card .cp-npcgen-card-npc { margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.10); }
+.cp-npcgen-card .cp-npcgen-card-npc p { margin: 0 0 2px; font-size: 0.85em; }
+.cp-npcgen-card .cp-npcgen-card-tier { opacity: 0.75; font-size: 0.9em; }
+.cp-npcgen-card .cp-npcgen-card-note { margin: 6px 0 0; font-size: 0.8em; font-style: italic; }
+
 /* ===================================================================================
  * Augmented actor-sheet styling — vendored DELTA over the base cyberpunk2020 system CSS.
  * Auto-extracted (rule-level): every fork css/cyberpunk2020.css rule whose selector+body

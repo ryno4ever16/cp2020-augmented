@@ -81,6 +81,7 @@ import { localize, localizeParam } from "./utils.js";
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
 import { registerShopHooks, openShopWindow } from "./shop/catalog.js";
+import { registerNpcGenHooks } from "./npcgen/npcgen-app.js";
 // Full character/NPC + item sheets (Option B): on a host that doesn't ship the augmented sheets (his
 // vanilla 1.1.1), the module REGISTERS our own V2 sheets as default — replacing ALL the old in-sheet
 // injectors (martial panel / services / IP / cyberware-install button / martial-skill editor), which
@@ -694,6 +695,12 @@ Hooks.once("ready", function () {
     // Sidebar cart button + chat links + live buyer sync + the GM stock-decrement relay.
     wire("shop hooks", registerShopHooks);
   }
+
+  // NPC generator — a GM tool that does nothing until a GM opens it and presses Generate, so it needs
+  // no automation gate of its own; the master setting only decides whether its directory button exists.
+  // It rides the shop's catalog index for gear, but registers independently: a shop layer the host
+  // provides does not take the generator with it.
+  wire("NPC generator", registerNpcGenHooks);
 
   // Martial-arts layer (Option B): martial features now ship entirely with our registered sheets — the
   // combat-tab panel via the actor sheet, and the skill martial-art editor via the item sheet (skill

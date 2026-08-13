@@ -1,0 +1,38 @@
+{{!-- NPC generator summary card, GM-whispered (rendered via compat.renderChatCard). One card per
+      generation, listing what was actually created rather than what was planned — the missing/over-budget
+      lines are the honest half and are only shown when they apply. --}}
+<div class="cp-npcgen-card">
+  <h3 class="cp-npcgen-card-title">{{CPLocal "NpcGen.CardTitle" n=count folder=folder}}</h3>
+
+  {{#each npcs as |n|}}
+  <div class="cp-npcgen-card-npc">
+    <p class="cp-npcgen-card-name"><b>{{n.name}}</b> <span class="cp-npcgen-card-tier">{{n.tier}}</span></p>
+    <p class="cp-npcgen-card-stats">{{n.statLine}} · {{CPLocal "NpcGen.CardHumanity" humanity=n.humanity}}</p>
+    {{#if n.weapons.length}}
+    <p class="cp-npcgen-card-line">{{localize "CYBERPUNK.NpcGen.CardWeapons"}} {{#each n.weapons as |w|}}{{w}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+    {{/if}}
+    {{#if n.armor.length}}
+    <p class="cp-npcgen-card-line">{{localize "CYBERPUNK.NpcGen.CardArmor"}} {{#each n.armor as |a|}}{{a}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+    {{/if}}
+    {{#if n.hasChrome}}
+    <p class="cp-npcgen-card-line">{{localize "CYBERPUNK.NpcGen.CardChrome"}} {{#each n.chrome as |c|}}{{c}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+    {{/if}}
+    {{#if n.hasMissing}}
+    <p class="cp-npcgen-card-line result-warn">{{localize "CYBERPUNK.NpcGen.CardMissing"}} {{#each n.missing as |m|}}{{m}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+    {{/if}}
+    {{#if n.overBudget}}
+    <p class="cp-npcgen-card-line result-warn">{{localize "CYBERPUNK.NpcGen.CardOverBudget"}}</p>
+    {{/if}}
+  </div>
+  {{/each}}
+
+  {{#if anyChrome}}
+  {{!-- The honest limitation, stated on every card that has chrome on it: the book's COUNT was rolled
+        and the items came from our packs, but nothing was surgically installed. --}}
+  <p class="cp-npcgen-card-note result-note">{{carriedNote}}</p>
+  {{/if}}
+
+  {{#if placeholderNames}}
+  <p class="cp-npcgen-card-note">{{localize "CYBERPUNK.NpcGen.PlaceholderNames"}}</p>
+  {{/if}}
+</div>

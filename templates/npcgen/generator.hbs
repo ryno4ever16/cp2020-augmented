@@ -1,0 +1,138 @@
+{{!-- NPC generator window (ApplicationV2). Markup only: text from lang/*.json, styling from
+      css/cp2020-augmented.css (.cp-npcgen-app). Two modes share one form — QUICK shows archetype /
+      tier / count, FULL adds the four dials, the seed, and the preview stage. Every control the JS
+      reads back is selected by its cp-npcgen-* class (_readForm), so renaming one breaks the read. --}}
+<div class="cp-npcgen">
+
+  <div class="cp-npcgen-modes">
+    <button type="button" class="cp-npcgen-mode{{#if isQuick}} cp-active{{/if}}" data-action="npcGenMode" data-mode="quick">
+      {{localize "CYBERPUNK.NpcGen.ModeQuick"}}
+    </button>
+    <button type="button" class="cp-npcgen-mode{{#if isFull}} cp-active{{/if}}" data-action="npcGenMode" data-mode="full">
+      {{localize "CYBERPUNK.NpcGen.ModeFull"}}
+    </button>
+  </div>
+
+  {{#if catalogLoading}}
+  {{!-- The catalog index is still building. Awaiting it in _prepareContext would hold the window shut
+        on first open, so this panel stands in and the window re-renders itself when the build lands. --}}
+  <p class="cp-npcgen-pending">{{localize "CYBERPUNK.NpcGen.CatalogLoading"}}</p>
+  {{else}}
+
+  <div class="cp-npcgen-row">
+    <label class="cp-npcgen-label" for="cp-npcgen-archetype">{{localize "CYBERPUNK.NpcGen.ArchetypeLabel"}}</label>
+    <select id="cp-npcgen-archetype" class="cp-npcgen-archetype">
+      {{#each archetypes as |a|}}
+      <option value="{{a.key}}" {{#if a.selected}}selected{{/if}}>{{a.label}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  {{#if archetypePlaceholder}}
+  <p class="cp-npcgen-warn">{{localize "CYBERPUNK.NpcGen.PlaceholderArchetype"}}</p>
+  {{/if}}
+
+  <div class="cp-npcgen-row">
+    <label class="cp-npcgen-label" for="cp-npcgen-tier">{{localize "CYBERPUNK.NpcGen.TierLabel"}}</label>
+    <select id="cp-npcgen-tier" class="cp-npcgen-tier">
+      {{#each tiers as |t|}}
+      <option value="{{t.key}}" {{#if t.selected}}selected{{/if}}>{{t.label}} — {{t.benchmark}}</option>
+      {{/each}}
+    </select>
+  </div>
+
+  <div class="cp-npcgen-row">
+    <label class="cp-npcgen-label" for="cp-npcgen-count">{{CPLocal "NpcGen.Count" max=maxCount}}</label>
+    <input id="cp-npcgen-count" class="cp-npcgen-count" type="number" min="1" max="{{maxCount}}" value="{{count}}" />
+  </div>
+
+  {{#if isFull}}
+  <div class="cp-npcgen-dials">
+    <p class="cp-npcgen-section">{{localize "CYBERPUNK.NpcGen.Dials"}}</p>
+    <p class="cp-npcgen-hint">{{localize "CYBERPUNK.NpcGen.DialsHint"}}</p>
+
+    <div class="cp-npcgen-row">
+      <label class="cp-npcgen-label" for="cp-npcgen-dial-skill">{{localize "CYBERPUNK.NpcGen.DialSkill"}}</label>
+      <select id="cp-npcgen-dial-skill" class="cp-npcgen-dial-skill">
+        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
+        {{#each skillDial as |d|}}
+        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-npcgen-row">
+      <label class="cp-npcgen-label" for="cp-npcgen-dial-weapons">{{localize "CYBERPUNK.NpcGen.DialWeapons"}}</label>
+      <select id="cp-npcgen-dial-weapons" class="cp-npcgen-dial-weapons">
+        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
+        {{#each weaponsDial as |d|}}
+        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-npcgen-row">
+      <label class="cp-npcgen-label" for="cp-npcgen-dial-armor">{{localize "CYBERPUNK.NpcGen.DialArmor"}}</label>
+      <select id="cp-npcgen-dial-armor" class="cp-npcgen-dial-armor">
+        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
+        {{#each armorDial as |d|}}
+        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-npcgen-row">
+      <label class="cp-npcgen-label" for="cp-npcgen-dial-toughness">{{localize "CYBERPUNK.NpcGen.DialToughness"}}</label>
+      <select id="cp-npcgen-dial-toughness" class="cp-npcgen-dial-toughness">
+        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
+        {{#each toughnessDial as |d|}}
+        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-npcgen-row">
+      <label class="cp-npcgen-label" for="cp-npcgen-seed">{{localize "CYBERPUNK.NpcGen.Seed"}}</label>
+      <input id="cp-npcgen-seed" class="cp-npcgen-seed" type="text" value="{{seed}}" />
+    </div>
+    <p class="cp-npcgen-hint">{{localize "CYBERPUNK.NpcGen.SeedHint"}}</p>
+  </div>
+  {{/if}}
+
+  {{#if hasPreview}}
+  <div class="cp-npcgen-preview">
+    <p class="cp-npcgen-section">{{localize "CYBERPUNK.NpcGen.Preview"}}</p>
+    {{#each preview as |n|}}
+    <div class="cp-npcgen-preview-npc">
+      <p class="cp-npcgen-preview-name">{{n.name}}</p>
+      <p class="cp-npcgen-preview-stats">{{n.statLine}}</p>
+      <p class="cp-npcgen-preview-skills">{{n.skills}}</p>
+      {{#if n.gear.length}}
+      <p class="cp-npcgen-preview-gear">{{localize "CYBERPUNK.NpcGen.PreviewGear"}} {{#each n.gear as |g|}}{{g}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+      {{/if}}
+      {{#if n.hasChrome}}
+      <p class="cp-npcgen-preview-chrome">{{localize "CYBERPUNK.NpcGen.PreviewChrome"}} {{#each n.chrome as |c|}}{{c}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+      {{/if}}
+    </div>
+    {{/each}}
+  </div>
+  {{/if}}
+
+  <div class="cp-npcgen-buttons">
+    <button type="button" class="cp-npcgen-btn" data-action="npcGenPreview">
+      <i class="fas fa-eye"></i> {{localize "CYBERPUNK.NpcGen.DoPreview"}}
+    </button>
+    {{#if hasPreview}}
+    <button type="button" class="cp-npcgen-btn" data-action="npcGenReroll">
+      <i class="fas fa-dice"></i> {{localize "CYBERPUNK.NpcGen.Reroll"}}
+    </button>
+    {{/if}}
+    <button type="button" class="cp-npcgen-btn cp-npcgen-create" data-action="npcGenCreate">
+      <i class="fas fa-user-plus"></i> {{localize "CYBERPUNK.NpcGen.Generate"}}
+    </button>
+  </div>
+
+  <p class="cp-npcgen-note">{{localize "CYBERPUNK.NpcGen.PlaceholderNames"}}</p>
+
+  {{/if}}
+</div>

@@ -807,6 +807,34 @@ export function registerAugmentedSettings() {
   // read it. See module/shop/shops.js for the ShopDef shape + CRUD.
   game.settings.register(SCOPE, "shops", { scope: "world", config: false, type: Object, default: {} });
 
+  // --- NPC generator (module/npcgen/*) ---
+  // ⭐ DEFAULT ON, which reads oddly against this module's "automation OFF by default" stance until you
+  // notice the feature automates NOTHING: it does nothing at all until a GM presses a button and then
+  // presses Generate. There is no hook, no tick, no listener that fires on its own. What the master
+  // switch actually controls is whether the Actors-directory button exists — so defaulting it off would
+  // hide the feature from every GM who never reads the settings page, to protect them from a thing that
+  // cannot happen by itself. (Design §Settings flagged this as an open question and leaned the same way.)
+  game.settings.register(SCOPE, "npcGenEnabled", {
+    name: "SETTINGS.NpcGenEnabled",
+    hint: "SETTINGS.NpcGenEnabledHint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  // Optional wildcard token art (design §Q5C): a folder path, and every generated token rolls its own
+  // face out of it. Blank — the default — falls back to the base system's own edgerunner icon, which is
+  // why this ships no art of its own and adds no licensing surface.
+  game.settings.register(SCOPE, "npcGenTokenArtFolder", {
+    name: "SETTINGS.NpcGenTokenArtFolder",
+    hint: "SETTINGS.NpcGenTokenArtFolderHint",
+    scope: "world",
+    config: true,
+    type: String,
+    default: ""
+  });
+
   // Ammunition purchasing access (used by the catalog's generated ammo rows).
   game.settings.register(SCOPE, "playersCanBuyAmmo", {
     name: "SETTINGS.PlayersCanBuyAmmo",
@@ -997,6 +1025,15 @@ export function ipShowPending() {
 /** Master gate: is the Augmented shop enabled at all? (Off when the setting is missing.) */
 export function shoppingEnabled() {
   try { return game.settings.get(SCOPE, "shoppingEnabled") === true; } catch { return false; }
+}
+/** Whether the NPC generator's entry point is offered at all. Read at the directory button AND again in
+ *  `openNpcGenerator`, so a macro meets the same gate the button does. */
+export function npcGenEnabled() {
+  try { return game.settings.get(SCOPE, "npcGenEnabled") === true; } catch { return false; }
+}
+/** Wildcard token-art folder for generated NPCs; "" (the default) means the built-in icon. */
+export function npcGenTokenArtFolder() {
+  try { return String(game.settings.get(SCOPE, "npcGenTokenArtFolder") ?? ""); } catch { return ""; }
 }
 /** Whether the current user may purchase. GMs always may; players only when allowed by the setting. */
 export function canShop() {
