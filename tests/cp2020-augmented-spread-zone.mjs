@@ -646,7 +646,10 @@ const res = await page.evaluate(async () => {
   const fireGesture = sheet._cpOpenWeaponAttackDialog(aimGun);
   await sleep(400);
   const clickAt = await aimAt(aimWorld.x, aimWorld.y);
-  window.dispatchEvent(new PointerEvent("pointerdown", { clientX: clickAt.x, clientY: clickAt.y, button: 0, bubbles: true }));
+  // Dispatched ON THE BOARD, not window: the aim listeners gate on ev.target being the game canvas
+  // (spread-placement.js `_isCanvasEvent` — a sheet click must not place the corridor). This is the
+  // same element a real click lands on.
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: clickAt.x, clientY: clickAt.y, button: 0, bubbles: true }));
   const fireDialog = await fireGesture;
   await sleep(600);
   ok("§10 confirming the corridor opens the ordinary modifiers window",

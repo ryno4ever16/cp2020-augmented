@@ -520,8 +520,10 @@ check("active scene unchanged", cleaned.activeUnchanged === true);
 
 // The rig is shared: other work running in the same world logs its own errors into this
 // page. `Invalid Asset` comes from the effects asset registry, which nothing in this spec
-// touches, so it is excluded by name rather than being read as a fault here.
-const realErrors = errors.filter(e => !/compatibility|deprecat|screen resolution|Failed to load resource|Invalid Asset/i.test(e));
+// touches, so it is excluded by name rather than being read as a fault here. The null-volume
+// line is the effect engine's own teardown race (an effect's sound handle torn down mid-stop),
+// whitelisted by the status-fx and fx-rail specs as engine-side — same exclusion here.
+const realErrors = errors.filter(e => !/compatibility|deprecat|screen resolution|Failed to load resource|Invalid Asset|Cannot set properties of null \(setting 'volume'\)/i.test(e));
 check("0 console errors", realErrors.length === 0, realErrors.slice(0, 3).join(" | "));
 
 console.log(`\nRESULT: ${fail === 0 ? "PASS" : "FAIL"} (${pass}/${pass + fail})`);

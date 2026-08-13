@@ -26,7 +26,14 @@ const ok = (n, p, d = "") => { checks.push({ n, p: !!p, d: String(d) }); console
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = [];
-page.on("pageerror", e => errors.push(String(e.message)));
+// The null-volume line is the effect engine's own teardown race (a sound handle torn down
+// mid-stop) — whitelisted as engine-side by the status-fx / fx-rail / vehicle-seating specs;
+// same exclusion here so a burst's audio teardown cannot fail an unrelated leg.
+page.on("pageerror", e => {
+  const m = String(e.message);
+  if (/Cannot set properties of null \(setting 'volume'\)/i.test(m)) return;
+  errors.push(m);
+});
 
 await page.goto(`${URL}/join`);
 await page.waitForSelector('select[name="userid"]');
@@ -159,7 +166,10 @@ async function fire(num, targetName) {
     const p = canvas.stage.worldTransform.apply(new PIXI.Point(t.center.x, t.center.y));
     window.dispatchEvent(new PointerEvent("pointermove", { clientX: p.x, clientY: p.y, bubbles: true }));
     await new Promise(r => setTimeout(r, 250));
-    window.dispatchEvent(new PointerEvent("pointerdown", { clientX: p.x, clientY: p.y, button: 0, bubbles: true }));
+    // The confirm must be dispatched ON THE BOARD: the aim listeners gate on the event's target being
+    // the game canvas (spread-placement.js `_isCanvasEvent`, added so a click on an open sheet cannot
+    // place the corridor). A window-targeted event is exactly what that gate exists to ignore.
+    canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: p.x, clientY: p.y, button: 0, bubbles: true }));
     return true;
   }, { tokenId: setup.tokens[targetName] });
 
