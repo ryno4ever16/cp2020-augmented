@@ -17,8 +17,8 @@ import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout
 import { getAutoLayerOrder } from "../combat/armor-layers.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
-import { ipCost, ipLockState, canEditSkillLevels, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
-import { shoppingEnabled, ipEnabled, ipRawTracking, ipShowPending, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
+import { ipDisplayForActor, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
+import { shoppingEnabled, autoRangefindingEnabled, cyberlimbRepairGmOnly } from "../settings.js";
 import { actorExposure, actorHistory, actorRSP, radMarkersFor, actorHasRadiation, clearExposure, cureRadiation, resetRadiation, postLongTermCard } from "../radiation/radiation.js";
 import { openApplyDoseDialog } from "../radiation/radiation-tools.js";
 
@@ -1772,34 +1772,18 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     this._prepareIp(sheetData);
   }
 
-  /** Build the IP display data (global flags + per-skill cost/banked/pending/canLevel). */
+  /** Build the IP display data (global flags + per-skill cost/banked/pending/canLevel).
+   *  The numbers live in MODULE FLAGS, not on system.*, so the one producer that reads them —
+   *  ip.js's `ipDisplayForActor` — is the source. The sheet only splits its payload into the two
+   *  context slots the skills templates read (`ip` + `ipBySkill`); it must never re-derive the
+   *  values, or the sheet and the engine drift apart. */
   _prepareIp(sheetData) {
-    let on = false;
-    try { on = ipEnabled(); } catch (e) { on = false; }
-    if (!on) { sheetData.ip = { enabled: false }; sheetData.ipBySkill = {}; return; }
-
-    const simple = !ipRawTracking();
-    const isGM = game.user.isGM;
-    const lock = ipLockState(this.actor);
-    const pool = Number(this.actor.system?.ipPool) || 0;
-    sheetData.ip = {
-      enabled: true, simple, isGM,
-      showPending: isGM && ipShowPending(),
-      locked: !canEditSkillLevels(this.actor),
-      lockOwner: lock.owner, lockGm: lock.gm, lockMode: lock.mode,
-      pool
-    };
-
-    const map = {};
-    for (const s of sheetData.skillDisplayList) {
-      if (s.type !== "skill") continue;
-      const cost = ipCost(s);
-      const banked = Number(s.system?.ip) || 0;
-      // Dual-bucket (Model A): available = the skill's own bank + the fungible pool, in every mode.
-      const have = banked + pool;
-      map[s.id] = { cost, banked, pending: Number(s.system?.ipPending) || 0, canLevel: have >= cost };
-    }
-    sheetData.ipBySkill = map;
+    let display;
+    try { display = ipDisplayForActor(this.actor); }
+    catch (e) { display = { enabled: false, bySkill: {} }; }
+    const { bySkill = {}, ...ip } = display ?? {};
+    sheetData.ip = ip;
+    sheetData.ipBySkill = bySkill;
   }
   _getSortedSkillIDs(sheetData) {
     const system = sheetData?.system ?? this.actor.system;
