@@ -185,7 +185,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     else cands = (game.actors?.contents ?? []).filter(a => a?.isOwner);
     const seen = new Set();
     return cands
-      .filter(a => a?.type === "character" && !seen.has(a.id) && seen.add(a.id))
+      .filter(a => (a?.type === "character" || a?.type === "npc") && !seen.has(a.id) && seen.add(a.id))
       .map(a => ({ id: a.id, name: a.name, selected: a.id === this.buyer?.id }))
       .sort((x, y) => x.name.localeCompare(y.name));
   }
@@ -1021,10 +1021,18 @@ async function promptText(title, initial = "") {
 }
 
 // ── Window + entry points ─────────────────────────────────────────────────────
+/** Can this actor stand at the counter? Characters AND npcs — the two types share the same `gear`
+ *  template (eurobucks + inventory), so the purchase engine treats them identically; the old
+ *  character-only filter just made "buy ammo for an NPC" silently impossible (user-hit 2026-08-12:
+ *  a selected npc token was filtered out and the shop kept demanding a buyer). */
+function canShopAs(actor) {
+  return actor?.type === "character" || actor?.type === "npc";
+}
+
 function resolveSidebarBuyer() {
-  const tok = canvas?.tokens?.controlled?.find(t => t.actor?.type === "character");
+  const tok = canvas?.tokens?.controlled?.find(t => canShopAs(t.actor));
   if (tok?.actor) return tok.actor;
-  if (game.user.character?.type === "character") return game.user.character;
+  if (canShopAs(game.user.character)) return game.user.character;
   return null;
 }
 
