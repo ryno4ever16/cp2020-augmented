@@ -1844,6 +1844,43 @@ async function _runManualRoundTick(combat) {
   await runRadZoneTick(combat);
 }
 
+/**
+ * The two save prompts a landed hit owes, on the two DIFFERENT cadences the printed rules give them
+ * (CP2020 p.104, read off the text rather than inferred). This file used to run both on one clock —
+ * once per damage event — and that is right for only one of them:
+ *
+ *   Stun/Shock — "Every time a character takes damage, he must make a save." A per-damage-event prompt
+ *                is exactly the rule. Unchanged: every event that gets through still asks for one.
+ *   Death      — "Determining whether he survives requires that a Death Save be made, with a new save
+ *                required every turn that the character remains untreated… Each turn, you must make
+ *                another Death Save to see if you survive to the next turn." That is a PER-TURN
+ *                cadence, not a per-hit one. A three-shell burst that dropped a figure to Mortal used
+ *                to post three death prompts for one moment of the fight, and each was a separate roll
+ *                the table had to resolve — three chances to die where the book gives one per turn.
+ *
+ * So a caller that applies several hits as ONE moment passes a `batch` set and the death prompt is
+ * offered once for each body in it. The recurring per-turn prompt is not this function's job and is
+ * already built: save-rolls.js posts one on every round/turn advance for a Mortal, unstabilized actor
+ * (world setting `autoDeathSavePerTurn`), which is the cadence the book describes and the place the
+ * "only way out is stabilization" reading is already honored.
+ *
+ * ⚠ The batch is keyed by TOKEN id, not actor id. An unlinked token's synthetic actor shares the world
+ * actor's id (see the combat data hazards note), so an actor-keyed set would collapse two different
+ * bodies onto one entry and silence a prompt the second body is owed. A caller that passes no batch
+ * keeps the per-event behaviour, so every single-hit path through here is unchanged.
+ */
+async function _postWoundSavePrompts(actor, tok, batch = null) {
+  const ws = actor?.woundState?.() ?? 0;
+  if (ws <= 0) return;
+  if (ws < 4) { await postStunSavePrompt(actor, tok); return; }
+  const body = tok?.document?.id ?? tok?.id ?? actor.id;
+  if (batch) {
+    if (batch.has(body)) return;
+    batch.add(body);
+  }
+  await postDeathSavePrompt(actor, tok);
+}
+
 /** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct).
  *
  * ⭐ THE LOAD'S PER-HIT RIDERS ARE APPLIED HERE TOO (2026-08-10), and they are the single-target flow's
@@ -1857,7 +1894,8 @@ async function _runManualRoundTick(combat) {
  * Once per landed shell per token, which is what the pattern flow already does with everything else it
  * applies (N shells = N banded rolls = N trips through the armour pipeline). */
 async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
-                                                stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula }) {
+                                                stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula },
+                                    deathPrompted = null) {
   if (!tok?.actor || dmg <= 0) return 0;
   const loc = (await rollLocation(tok.actor, null)).areaHit;
   const hits = await applyAreaDamages({
@@ -1889,11 +1927,9 @@ async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, 
   // is this shell's own rolled one, which is what the single-target flow passes as well.
   await applyDotFromPayload(tok.actor, hits[0]?.location ?? loc, rider, hits.some(h => h.penetrates));
   const total = hits.reduce((s, h) => s + h.netDamage, 0);
-  if (total > 0) {
-    const ws = tok.actor.woundState?.() ?? 0;
-    if (ws >= 4) await postDeathSavePrompt(tok.actor, tok);
-    else if (ws > 0) await postStunSavePrompt(tok.actor, tok);
-  }
+  // The shell's own stun prompt is per damage event, as the book has it; the death prompt is offered
+  // once per application batch when the caller named one (a burst of shells is one moment of the fight).
+  if (total > 0) await _postWoundSavePrompts(tok.actor, tok, deathPrompted);
   return total;
 }
 
@@ -1918,7 +1954,7 @@ function _isOccluded(ox, oy, tok) {
  * permanent HP and half is stun (a Stun Save is always prompted). Soft armor at the torso loses
  * 2 SP. Used by the explosion blast when Detailed Explosives is enabled.
  */
-async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize("WpnExplosion") } = {}) {
+async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize("WpnExplosion") } = {}, deathPrompted = null) {
   if (!tok?.actor || falloffDmg <= 0) return 0;
   const actor = tok.actor;
   const btm = Number(actor.system.stats?.bt?.modifier) || 0;
@@ -1939,11 +1975,7 @@ async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize(
   });
   // Half the blow is stun/blunt → a consciousness check, but only for flesh: a cyberlimb/borg zone
   // that soaked the hit into SDP takes no stun (a destroyed core already ran its own death via the seam).
-  if (!outcome.cyberlimb) {
-    const ws = actor.woundState?.() ?? 0;
-    if (ws >= 4) await postDeathSavePrompt(actor, tok);
-    else await postStunSavePrompt(actor, tok);
-  }
+  if (!outcome.cyberlimb) await _postWoundSavePrompts(actor, tok, deathPrompted);
   return permanent;
 }
 
@@ -2060,6 +2092,11 @@ async function _confirmExplosion(templateId) {
   });
   if (!tokens.length) { ui.notifications.info(localize("NoTokensInBlast")); return; }
 
+  // One detonation is ONE application batch, which matters most on the detailed branch: the blow and the
+  // fragments it throws are two applications on the same body at the same instant, and each used to post
+  // its own death prompt. The set names the bodies already offered one (_postWoundSavePrompts).
+  const deathPrompted = new Set();
+
   for (const td of tokens) {
     // Get pixel position from either a TokenDocument or a placeable.
     const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
@@ -2078,15 +2115,16 @@ async function _confirmExplosion(templateId) {
 
     if (detailed) {
       // HEP concussion (SP ignored, ½ permanent + ½ stun, soft armor −2). Optional shrapnel on top.
-      await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) });
+      await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, deathPrompted);
       if (f.blastShrapnel) {
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
-          { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) });
+          { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) },
+          deathPrompted);
       }
     } else {
       // Core blast: range-banded damage through normal armor.
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) });
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, deathPrompted);
     }
   }
 }
@@ -2348,35 +2386,102 @@ export async function _placeSpreadZone(payload) {
     });
     if (!handle?.doc) { console.warn("CP2020 | Spread area creation failed"); return; }
 
-    // ⭐ A CORRIDOR THE SHOOTER ALREADY CONFIRMED NEEDS NO SECOND CONFIRMATION (2026-08-11). The click
-    // that used to sit on the chat card did two jobs — it aimed the pattern and it resolved the shot —
-    // and the ruling moved the aiming half to the front of the gesture. What is left is "resolve now",
-    // which the roll has already committed to, so the pattern resolves itself at the end of the shot's
-    // own presentation: the rounds cross the corridor, and the damage lands as they arrive. Damage and
-    // animation are one event, which is what retires the late-window complaint the review raised.
+    // ⭐ THE APPLY MOMENT IS A MOMENT SOMEBODY TAKES (2026-08-13, user ruling). A declared corridor used
+    // to resolve ITSELF here — the shot's presentation ended and the damage simply landed, with nobody
+    // left to press anything. That removed the one beat at which a reader can look at who the corridor
+    // caught and decide. The corridor stays the shooter's (it was aimed and confirmed before the roll);
+    // what comes back is the APPLY, on a card, at the end of the shot rather than over the top of it.
+    //
+    // So both corridors now end in a card, and the difference between them is only WHAT the card is
+    // asking and WHEN it arrives:
+    //   declared   — the shooter already aimed it, so the card is posted once the shot has finished
+    //                being presented, lists who is standing in the corridor, and asks for the apply.
+    //   undeclared — nobody aimed it, so the card is posted at once and asks the reader to look at a
+    //                corridor this function GUESSED before it resolves.
+    // Both carry the same `.cp-confirm-spread-zone` button, so ONE dispatch resolves either of them
+    // (see registerDamageHooks) and neither can be resolved twice (card-lock.js).
     //
     // The wait is the rail's own completion signal, the same one the single-target window waits out
     // (fx/effects.js presentationSettled) — the signal on the client that drew the shot, and the honest
     // arithmetic floor on a client that did not (a player's shot relayed here, where no fan-out ran).
     // Nothing is held open by it: the cap inside presentationSettled bounds the wait either way.
-    //
-    // ⏪ AN UNDECLARED CORRIDOR STILL POSTS THE CARD, and that is the whole of the difference. A shell
-    // fired by something that never armed the aim gesture has a corridor this function GUESSED, so the
-    // reader is still owed the chance to look at it before it resolves.
+    const speaker = ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined });
     if (declared) {
       await presentationSettled(payload);
-      await _confirmSpreadZone(handle.doc.id);
+      // The region is still on the scene and stays there until the apply resolves it — the reader is
+      // being asked about a corridor they can see. Its two expiry clocks still own an IGNORED pattern
+      // (round advance in combat, the wall clock outside one), which is what stops an unpressed card
+      // from leaving a corridor on the table forever.
+      await _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker });
       return;
     }
 
-    const spreadCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
-      "modules/cp2020-augmented/templates/chat/spread-confirm.hbs",
-      { weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1, templateId: handle.doc.id }
-    );
-    await ChatMessage.create({
-      content: spreadCard,
-      speaker: ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined }),
-    });
+    const spreadCard = await renderChatCard("spread-confirm.hbs",
+      { weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1, templateId: handle.doc.id });
+    await ChatMessage.create({ content: spreadCard, speaker });
+}
+
+/**
+ * Who is standing in a placed pattern right now, and who cover exempts — ONE reader, so the card a
+ * reader is looking at and the resolution the button runs cannot disagree about the same corridor.
+ *
+ * Reads only; no document is written here, which is what lets the resolution card be built from it on
+ * the presentation path. The attacker is never their own target, and cover between the pattern's origin
+ * and a space exempts that space (CP2020 p.108) — the same two rules the resolution applied inline
+ * before this was lifted out of it.
+ *
+ * Returns placeables where the scene has them and the token documents otherwise, which is what both
+ * callers already coped with.
+ */
+function _spreadPatternOccupants(handle) {
+  const scene = canvas?.scene;
+  const f = handle?.doc?.flags?.["cp2020-augmented"] ?? {};
+  // Origin for cover checks: stored as originX/originY in flags at creation, with a doc.x/y
+  // fallback for legacy zones (v14 Regions have no top-level x/y).
+  const originX = Number(f.originX ?? handle?.doc?.x ?? 0);
+  const originY = Number(f.originY ?? handle?.doc?.y ?? 0);
+  const candidates = (scene?.tokens?.contents ?? canvas?.tokens?.placeables?.map(t => t.document ?? t) ?? [])
+    .filter(td => (td.actor ?? td.document?.actor) && (td.actor?.id ?? td.document?.actor?.id) !== f.attackerId);
+  const exposed = [], covered = [];
+  for (const td of tokensInArea(handle, candidates)) {
+    const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
+    (_isOccluded(originX, originY, tok) ? covered : exposed).push(tok);
+  }
+  return { originX, originY, exposed, covered };
+}
+
+/** The name a pattern card prints for one figure, from a placeable or a bare token document. */
+function _spreadRowName(tok) {
+  return tok?.name ?? tok?.document?.name ?? "?";
+}
+
+/**
+ * The pattern's RESOLUTION CARD: what the corridor caught, and one button that applies it.
+ *
+ * Posted for a DECLARED corridor once the shot has finished being presented. It states the corridor's
+ * own terms (band, width, the banded formula, how many shells ride it), then one row per figure the
+ * corridor contains — each row saying whether that figure is IN the pattern or exempted by cover — and
+ * the p.108 basis the rows rest on: everyone in the pattern takes the banded damage and nobody is rolled
+ * against individually. The button is the same `.cp-confirm-spread-zone` the guessed-corridor card
+ * carries, so it runs the same resolution through the same dispatch and the same GM relay.
+ *
+ * The rows are a SNAPSHOT of the moment the card is posted; the resolution re-reads the corridor when
+ * the button is pressed, so a figure who walks in or out between the two is resolved as it stands then.
+ * That is deliberate — the region is on the table for exactly that reason.
+ */
+async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker }) {
+  const { exposed, covered } = _spreadPatternOccupants(handle);
+  // Status is assembled in JS and passed as a localized param (the GasCloudPenaltyClause pattern), so the
+  // template stays one declarative row shape rather than branching per figure.
+  const rows = [
+    ...exposed.map(t => ({ name: _spreadRowName(t), status: localize("SpreadRowInPattern") })),
+    ...covered.map(t => ({ name: _spreadRowName(t), status: localize("SpreadRowCovered") })),
+  ];
+  const content = await renderChatCard("spread-resolution.hbs", {
+    weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1,
+    templateId: handle.doc.id, rows, anyRows: rows.length > 0,
+  });
+  await ChatMessage.create({ content, speaker });
 }
 
 /**
@@ -2396,25 +2501,20 @@ export async function _confirmSpreadZone(templateId) {
   const f = handle.doc.flags?.["cp2020-augmented"];
   if (!f?.isSpreadZone) return;
 
-  // Origin for cover checks: stored as originX/originY in flags at creation, with a doc.x/y
-  // fallback for legacy zones (v14 Regions have no top-level x/y).
-  const originX = Number(f.originX ?? handle.doc.x ?? 0);
-  const originY = Number(f.originY ?? handle.doc.y ?? 0);
   const shells = Math.max(1, Math.floor(Number(f.shells) || 1));
 
-  // Token containment via shim; exclude the attacker; apply cover check.
-  const candidates = (scene.tokens?.contents ?? canvas.tokens.placeables.map(t => t.document ?? t))
-    .filter(td => (td.actor ?? td.document?.actor) && (td.actor?.id ?? td.document?.actor?.id) !== f.attackerId);
-  const inPattern = tokensInArea(handle, candidates);
-  const tokens = inPattern.filter(td => {
-    const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
-    return !_isOccluded(originX, originY, tok);    // intervening cover exempts spaces behind it
-  });
+  // Who the corridor caught, read through the SAME reader the resolution card was built from, so the
+  // rows a reader pressed the button on and the figures this loop resolves against are one answer to
+  // one question (containment, minus the attacker, minus whatever cover exempts).
+  const { originX, originY, exposed: tokens } = _spreadPatternOccupants(handle);
 
   const weaponName = localizeParam("WpnVariantSpread", { name: f.weaponName ?? localize("WpnShotgun") });
+  // ONE APPLICATION BATCH: every shell of this burst, against every figure in the corridor, is one
+  // moment of the fight. The set names the bodies already offered a death save by it — see
+  // _postWoundSavePrompts for why a burst owes at most one.
+  const deathPrompted = new Set();
   const rows = [];
-  for (const td of tokens) {
-    const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
+  for (const tok of tokens) {
     // ⭐ N ROLLS, NOT ONE ROLL APPLIED N TIMES. Each shell is its own discharge of shot, so each gets
     // its own banded roll and its own trip through the armour pipeline — which is a different number
     // from N × one roll the moment armour is in the way, because SP is subtracted per hit.
@@ -2423,9 +2523,9 @@ export async function _confirmSpreadZone(templateId) {
       const dmgRoll = await new Roll(f.dmgFormula || "3d6").evaluate();
       const dmg = Math.max(0, Math.floor(dmgRoll.total));
       shots.push(dmg);
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName });
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, deathPrompted);
     }
-    rows.push({ name: tok.name ?? tok.document?.name ?? "?", rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0) });
+    rows.push({ name: _spreadRowName(tok), rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0) });
   }
 
   // ONE resolution card for the whole burst, so N shells are readable as N numbers rather than as N

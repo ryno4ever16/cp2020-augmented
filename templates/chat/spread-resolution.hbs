@@ -1,0 +1,37 @@
+{{!--
+  Shot-pattern RESOLUTION card (CP2020 p.108) — posted for a corridor the shooter already aimed, once
+  the shot has finished being presented, in place of resolving it unattended. Rendered via
+  renderChatCard with
+  { weaponName, band, widthM, dmgFormula, shells, multiShell, templateId,
+    rows: [{ name, status }], anyRows }.
+  `status` arrives PRE-LOCALIZED from JS (in pattern / behind cover), so the row stays one declarative
+  shape rather than branching per figure. Rows are DIVs for the same reason spread-result.hbs uses
+  them: core's layered `ul` styling wins over a module rule on this build, and a chat card wants no
+  markers.
+
+  The cp-confirm-spread-zone button + data-template-id are verbatim from spread-confirm.hbs — one
+  dispatch (damage-hooks.js registerDamageHooks) resolves either card, relays to the active GM, and
+  locks the card against a second press. i18n via CPLocal; triple-stash where the string carries <b>.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "SpreadConfirmTitle" weapon=weaponName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "SpreadConfirmSummary" band=band width=widthM dmg=dmgFormula}}}</span><br>
+    {{#if multiShell}}
+      <span>{{{CPLocal "SpreadConfirmShells" shells=shells dmg=dmgFormula}}}</span><br>
+    {{/if}}
+    <div class="cp-spread-resolve-list">
+      {{#if anyRows}}
+        {{#each rows}}
+          <div class="cp-spread-resolve-row">{{{CPLocal "SpreadResolveRow" name=this.name status=this.status}}}</div>
+        {{/each}}
+      {{else}}
+        <div class="cp-spread-resolve-row">{{CPLocal "SpreadResolveNobody"}}</div>
+      {{/if}}
+    </div>
+    <span class="save-note">{{CPLocal "SpreadResolveBasis"}}</span>
+  </div>
+  <div class="save-buttons">
+    <button class="cp-confirm-spread-zone" data-template-id="{{templateId}}">{{CPLocal "SpreadResolveBtn"}}</button>
+  </div>
+</div>

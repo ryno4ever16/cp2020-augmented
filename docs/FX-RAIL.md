@@ -1450,17 +1450,22 @@ harmless only while there was one possible answer. The fan-out now **reports** w
 `aimSquares`, `aimDeclared`) for the same reason it reports its pacing: an axis that can only be checked
 by looking at the canvas is an axis nothing can assert.
 
-**Damage and animation are one event.** A corridor the shooter already confirmed needs no second
-confirmation, so the chat card's Confirm button — which used to do two jobs, aiming *and* resolving —
-keeps only the job the roll has already committed to, and the pattern resolves itself when the rail says
-the shot is over (`presentationSettled`, the same signal the single-target apply window waits out). On a
-client that did not draw the shot (a player's shell relayed to the GM) that call takes its arithmetic
-route, which is the honest floor. This is what retires review finding F4's late-window complaint for this
-flow: the rounds cross the corridor and the damage lands as they arrive.
+**The card arrives when the shot is over.** The chat card's button used to do two jobs — aiming *and*
+resolving — and the gesture ruling took the aiming half to the front of the shot. What is left is the
+**apply**, and it is still a press somebody takes (⏪ 2026-08-13; the earlier build ran it unattended, see
+§6 and §8). So the plant waits for the rail to say the shot is over (`presentationSettled`, the same
+signal the single-target apply window waits out) and then posts the **resolution card**
+(`spread-resolution.hbs`) rather than resolving on the spot. On a client that did not draw the shot (a
+player's shell relayed to the GM) that call takes its arithmetic route, which is the honest floor. This
+is what retires review finding F4's late-window complaint for this flow: the reader is asked once, at
+the end of the action rather than over the top of it, about a corridor still drawn on the canvas.
 
-⏪ **A shell nobody aimed still gets the card.** A payload with no `spreadAim` — a macro, a keeper driving
-the roll directly — is planted on a corridor the module *guessed* from the target axis, exactly as every
-shell was before this unit, and a guessed corridor is still shown to a reader before it resolves.
+⏪ **A shell nobody aimed still gets the card, and gets it at once.** A payload with no `spreadAim` — a
+macro, a keeper driving the roll directly — is planted on a corridor the module *guessed* from the target
+axis, exactly as every shell was before this unit, and its card (`spread-confirm.hbs`) is posted
+immediately: there is no presentation to wait out and the corridor itself is the thing being shown. Both
+cards carry the same `.cp-confirm-spread-zone` control, so the two differ only in *what they ask* and
+*when they arrive*, never in what resolves them.
 
 ---
 
@@ -1601,6 +1606,36 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-13 — ⏪ the apply moment comes back: a declared corridor ends in a card, not in damage.**
+The 2026-08-11 gesture ruling moved the aiming to the front of the shot, and the build read "the
+resolution opens at the animation's content end" as *the resolution runs there* — so a declared
+corridor applied its own damage the moment `presentationSettled` returned and nobody was left to
+press anything. §8 recorded that as a decision rather than a surprise, with the alternative branch
+written down. The user ruled for the alternative: **restore the apply moment.** The wait is
+unchanged; what happens after it is a card. `_placeSpreadZone` now posts
+`templates/chat/spread-resolution.hbs` — the corridor's own band, width, banded formula and shell
+count, one row per figure the corridor caught (in pattern / behind cover — exempt), the p.108 basis
+in one line, and one `.cp-confirm-spread-zone` control. That is the SAME control the guessed-corridor
+card carries, deliberately: one dispatch (`registerDamageHooks`), one relay to the active GM
+(`_claimAreaConfirm`), one card-lock, and no second code path to keep in step. The region stays on
+the scene until the press resolves it, so the reader is asked about a corridor they can still see;
+an unpressed card does not make it immortal, because the round-advance and wall-clock expiries it
+already had still collect it. Both cards are read through one occupant reader
+(`_spreadPatternOccupants`), so the rows a reader pressed on and the figures the resolution damages
+cannot disagree about the same corridor.
+
+**2026-08-13 — the death save is a per-TURN cadence, not a per-hit one (CP2020 p.104, printed text).**
+`_applyAreaHitToToken` posted a death prompt after *every* shell that got through on a Mortal figure,
+so a three-shell burst asked the table for three death saves in one moment of the fight. The printed
+rules give the two saves two different clocks: Stun/Shock is "every time a character takes damage,
+he must make a save" (per damage event — kept, unchanged), while Death is "a new save required every
+turn that the character remains untreated… Each turn, you must make another Death Save". So an
+application BATCH — a burst of shells, or a blast's concussion plus the fragments it throws — owes at
+most **one** death prompt per body, and the recurring per-turn one is left to the cadence that
+already owns it (`save-rolls.js`, world setting `autoDeathSavePerTurn`, which honours `stabilized`).
+The batch is keyed by TOKEN id rather than actor id: an unlinked token's synthetic actor shares the
+world actor's id, and an actor-keyed set would silence a prompt a second body is owed.
 
 **2026-08-12 — ⏪ the ring standard: condition overlays wear the reference's rim ring.**
 User, on seeing the centered flame on the review target: it is "not going to cut it… the reference
@@ -2086,9 +2121,9 @@ off, exactly ONE splash from a ten-round burst, nothing on a vehicle, nothing on
 nothing on a ruled fumble, nothing on a burst that misses, nothing when no token was aimed at, and the
 scheduled tail identical with the switch on and off.
 
-**The shot pattern has its own spec**, `tests/cp2020-augmented-spread-zone.mjs` (81 checks), because
+**The shot pattern has its own spec**, `tests/cp2020-augmented-spread-zone.mjs` (156 checks), because
 what it tests is the damage rail and a canvas document's lifetime rather than anything the effect
-engine draws. Eight sections: the derivation asserted by value across the whole caliber × load matrix
+engine draws. Thirteen sections: the derivation asserted by value across the whole caliber × load matrix
 (including every gauge alias and both blanks) · the seam carrying the cartridge, checked against the
 **shipped shell compendium** rather than a fixture, so a catalogue that stopped recording gauges would
 fail here · the either/or, driven by raising the real hook and asking whether the single-target flow
@@ -2096,9 +2131,16 @@ fail here · the either/or, driven by raising the real hook and asking whether t
 core's own 0.5-and-hatched values asserted on an untouched region before ours are asserted on
 ours · per-shell resolution against a **fixtured** band formula, so three shells must read `5, 5, 5`
 and can never be one roll counted three times, driven by a real DOM click on the posted card's
-button · both expiry rules as pure predicates by value, then driven live · cover occlusion · and a
-source scan for the two ways this could silently rot (the stored flag being read again, and
-`region.behaviors.length`).
+button · both expiry rules as pure predicates by value, then driven live · cover occlusion · a source
+scan for the two ways this could silently rot (the stored flag being read again, and
+`region.behaviors.length`) · the whole placement-forward gesture as a real gesture, ending in the
+**apply moment**: the resolution card arrives after the presentation floor with *nothing applied*
+(no result card, the figure's damage still 0, the region still on the table), the press lands it, the
+region goes, and a second press resolves nothing · the aim preview's **reach wheel**, read through the
+readout the shared ladder derives and through the confirmed corridor's own `reachM`, with the
+board-target gate and the plant's floor as its two negatives · and the two save **cadences**, counted
+as cards: one death prompt for a three-shell burst on a Mortal figure, one stun prompt per damage
+event below Mortal.
 
 ⛔ **The spec must not disturb the review rig**, and two of its legs exist only because of that. The
 showcase encounter on :30004 is the user's, so the round rule is driven by raising `updateCombat` with
@@ -2179,17 +2221,22 @@ loads. ⏪ Since 2026-08-09 **three** of those loads deliberately draw nothing o
 to prove a *sameness* rather than a difference. The range is set up with it: three labelled targets (flesh · cyberlimb · vehicle) at 10–11 m,
 inside every bench gun's Close band and in the pattern's Medium band, at zero damage, gore ON.
 
-**The bench's own smoke test.** `tests/cp2020-augmented-review-bench-smoke.mjs` (36 checks) is not a
+**The bench's own smoke test.** `tests/cp2020-augmented-review-bench-smoke.mjs` (39 checks) is not a
 keeper — it pins no values. It answers one question: can each gun be picked up and fired with zero
 loading steps, and does the thing that row exists to show actually reach the canvas? Every shot goes
 through the **real UI path** (the sheet's fire button → the modifiers dialog → its submit) and every
 claim is read off the **engine**: the payload the seam raised, the database keys Sequencer was handed
 (`createSequencerEffect`), the region documents the pattern flow wrote. It drives blood on flesh and its
 absence on the vehicle, the baton asset and its dust mark, the burning ground and (⏪ since 2026-08-10)
-the absence of any mark under it, the buck
-pattern's placement / confirm / deletion, the incendiary shell's fires arriving only **on confirm**, and
-the either/or by value on both sides — `payload.handled` unset for buckshot and `"cp2020-augmented"` for
-the slug. It restores everything it disturbs.
+the absence of any mark under it, the buck pattern's whole arc — planted on the declared corridor, a
+**resolution card with nothing applied and the region still on the canvas**, then the press that lands
+it and clears it — the incendiary shell's fires arriving **only on that press** (with their absence
+while the card waits as the negative), and the either/or by value on both sides — `payload.handled`
+unset for buckshot and `"cp2020-augmented"` for the slug. It restores everything it disturbs.
+
+⚠ **A resolution card is SPENT, not deleted**, so more than one sits in the log across a run. Both
+sections that press one take the **newest** (`.at(-1)`); a first-match lookup presses an earlier
+section's button, whose pattern is already gone, and the press reads as having done nothing.
 
 ⚠ **Two traps it hit, recorded because the next leg will hit them too.** `createSequencerEffect` reports
 the **database key** a section was handed (sometimes with a variant suffix, `…yellow.1`), *not* a resolved
@@ -2273,7 +2320,7 @@ presented while the screen stayed empty.
 | ~~Whether the stun-dart load should be allowed on ordinary cartridges~~ | ✅ **CLOSED 2026-08-11 — leave it as it is.** Asked whether to widen `AMMO_MODIFIERS.stundart.families` past the shotgun family so the load could reach a stream-firing weapon, the user ruled the question shut along with the bench row that raised it: the bench is for the loads the product ships, not for arranging a state it cannot otherwise reach. The family lock stands, the registry gate and the ammo sheet keep refusing the pairing, and no data was changed. The revival path, if it is ever wanted, is in §6 under the same date. |
 | **The shell lance at 1.9 squares is a build-lane pick** | ⚠ The *restoration* is the user's ruling; the *width* is mine, chosen against the ladder (rifle 1.6, heavy 2.1) and verified as a drawn 190 px on a 100 px grid. One constant, `FX_CLASSES.shotgun.muzzleSquares`. Capture 67d has the two shells and the rifle in one frame. |
 | ⭐ **A second volley variant exists and has never been drawn** | ⚠ **Found during the 2026-08-11 veto, needs eyes before anything changes.** `jb2a.volley_of_projectiles_Line.bullet.001.002.orangeyellow` decodes as 32 small blobs at mixed depths where the vetoed variant decodes as 7 in two aligned ranks — i.e. it may be the "small balls, irregular grouped spread" the ruling asked for, in one asset. Not adopted: the ruling requires captures first, and at 4867 ms it would need a trim and an engine-wait cap before it could carry a settle tag. §3.2b has the decode. |
-| **The pattern now resolves itself, with nobody left to press anything** | ⚠ **Stated so it is a decision, not a surprise.** The ruling says the damage resolution *opens* at the animation's content end, and for the pattern flow there is no window to open — the resolution IS the application plus its result card. So a declared corridor applies its damage automatically when the rail settles, and the only thing a reader can still stop is a shell nobody aimed (which keeps its card). If what was wanted was a card that appears at the content end and still waits for a click, that is one branch: post the confirm card instead of calling `_confirmSpreadZone` in `_placeSpreadZone`, after the same `presentationSettled` await. |
+| ~~The pattern now resolves itself, with nobody left to press anything~~ | ✅ **CLOSED 2026-08-13 — the branch was taken.** The item offered two readings of "the resolution opens at the content end" and the user ruled for the second: **restore the apply moment.** `_placeSpreadZone` still awaits the same `presentationSettled(payload)`, and then posts a **resolution card** (`templates/chat/spread-resolution.hbs`) instead of calling `_confirmSpreadZone`. The card states the corridor's band, width, banded formula and shell count, lists **one row per figure the corridor caught** (in pattern / behind cover — exempt), says the p.108 basis in one line (`SpreadResolveBasis`), and carries **one** `.cp-confirm-spread-zone` control — the same class the guessed-corridor card uses, so one dispatch, one GM relay and one card-lock serve both. The region **stays on the scene** until that press resolves it; an unpressed one is still collected by the two expiry clocks it already had (round advance in combat, `SPREAD_ZONE_TTL_MS` outside one). Nothing about the rail moved: the wait, its floor and its cap are unchanged, and the card is posted from the damage rail rather than from the presentation. Pinned by `tests/cp2020-augmented-spread-zone.mjs` §10g (card arrives after the presentation floor, **nothing applied** — no result card and the figure's damage still 0 — then the press lands it, the region goes, and a second press resolves nothing) and §12 (an ignored card does not make the pattern immortal). |
 | **The aim ghost's alpha and the readout's wording are build-lane calls** | ⚠ The gesture and its order are the user's; the ghost is drawn at **0.18** where the planted pattern sits at 0.10 (it is being dragged, against a dark map, by the person who owns it), and the readout reads `"{band} band — {width}m wide, {dmg}"`. One constant (`SPREAD_PREVIEW_FILL_ALPHA`) and one i18n key (`SpreadPreviewReadout`). |
 | **The buckshot fan's new look is not signed off** | ⚠ **The open item of this unit.** The *veto* and the *direction* are the user's; the numbers are the build lane's, made from the bench report rather than in front of the user. Four constants and a fifth: `PELLET_CHAOS.slotFraction` **0.9** · `.reachFraction` **0.35** · `.sizeFraction` **0.25** · `.staggerMs` **45**, plus `FX_CLASSES.shotgun.dashSquares` **0.7** (revert **1**; not taken to **0.5**, the value already rejected by eye on this row). A veto on any one is a one-number edit. §3.2b. |
 | **The pellet arrival marks are a build-lane call, and so is the razor split** | ⚠ **The open item of this unit.** The ruling says "small arrival marks at pellet endpoints, ≤ 50 % of the volley's fireballs" and "fire arrivals reserved for the incendiary shell". The size (**0.45 sq**, under 40 % of the class's own aim mark) and the trim (**500 ms**) are mine; the *split* is implemented as one gate (`entry.groundFire`) rather than as two assets, so the incendiary shell keeps the fires it already sets and gets no dust over them — which is also what keeps the withdrawn 2026-08-09 blast-ring ruling honoured. If the intent was a fire mark **as well**, that is a different build. §3.2b. |

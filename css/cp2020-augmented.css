@@ -1082,11 +1082,16 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 
 .cyberpunk .save-prompt .save-buttons { margin-top: 6px; }
 
-/* Shot-pattern resolution card: one line per token caught in the pattern, each carrying that token's
-   per-shell rolls. The rows are DIVs (the template says why), so all this owes them is the gap. */
-.cyberpunk .save-prompt .cp-spread-result-list { margin-top: 4px; }
+/* Shot-pattern cards: one line per token the pattern caught. The `resolve` pair is the card that ASKS
+   (each row names a figure and whether cover exempts it); the `result` pair is the card that REPORTS
+   (each row carries that figure's per-shell rolls). Two class names because the two cards are told
+   apart by them, one rule because they owe the same thing — the rows are DIVs (the templates say why),
+   so all this owes them is the gap. */
+.cyberpunk .save-prompt .cp-spread-result-list,
+.cyberpunk .save-prompt .cp-spread-resolve-list { margin-top: 4px; }
 
-.cyberpunk .save-prompt .cp-spread-result-row { margin: 2px 0; }
+.cyberpunk .save-prompt .cp-spread-result-row,
+.cyberpunk .save-prompt .cp-spread-resolve-row { margin: 2px 0; }
 
 /* Suppressive-fire placement preview readout — a floating label pinned to the cursor while the shooter
    aims + sizes the fire lane (module/combat/suppressive-placement.js). left/top are set in JS to follow
