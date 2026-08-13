@@ -33,6 +33,7 @@ import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disemba
 import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFromItem, registerCivilianSheetMigration } from "./vehicle/vehicle-deploy-request.js";
 import { registerVehicleBoardingHud } from "./vehicle/vehicle-boarding-hud.js";
 import { registerVehicleOccupancyHooks } from "./vehicle/vehicle-occupancy.js";
+import { registerVehicleOutlineHooks } from "./vehicle/vehicle-outline.js";
 import { registerVehicleAboardBanner } from "./vehicle/vehicle-aboard-banner.js";
 import { openControlRollDialog } from "./vehicle/vehicle-control.js";
 import { openVehicleDamageDialog } from "./vehicle/vehicle-damage.js";
@@ -357,6 +358,7 @@ Hooks.once("init", function () {
   // Occupancy badge on the handle + the client-local occupant fade; and the "aboard" strip on a
   // rider's own character sheet. Both are presentation only — no document writes.
   registerVehicleOccupancyHooks();
+  registerVehicleOutlineHooks();
   registerVehicleAboardBanner();
   // One-time stamp: pre-civilian-split vehicle actors keep the MM combat sheet.
   registerCivilianSheetMigration();

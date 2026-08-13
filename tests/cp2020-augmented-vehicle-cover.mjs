@@ -137,6 +137,31 @@ const res = await page.evaluate(async (SCOPE) => {
   await car.update({ "system.layout.bodySp": null });
   ok("clearing the field returns to the type prefill", cov.coverBetween(aBody, tBody)[0]?.sp === 10, String(cov.coverBetween(aBody, tBody)[0]?.sp));
 
+  /* A TURNED car: the footprint the ray reads swings with the token's own rotation, at any angle.
+     The car is 4 wide x 2 deep at (10G,10G); a quarter turn makes it 2 wide x 4 deep about the same
+     centre, so the line that used to run down its engine column now misses the vehicle entirely,
+     and a line one column west crosses the engine block where it has swung to. */
+  const aSpin = await mkTok("__PWV__ShooterSpin", shooter, 12, 6);
+  const tSpin = await mkTok("__PWV__VictimSpin", victim, 12, 16);
+  await carTok.update({ rotation: 90 });
+  const spunEngine = cov.coverBetween(aSpin, tSpin);
+  const spunMiss = cov.coverBetween(aEng, tEng);
+  ok("a turned car still reads its engine block, at its new place", spunEngine[0]?.sp === 35, String(spunEngine[0]?.sp));
+  ok("the line that used to cross it now misses the turned footprint", spunMiss.length === 0,
+    spunMiss.map(r => `${r.label}:${r.sp}`).join(","));
+  await carTok.update({ rotation: 37 });
+  const odd = cov.coverBetween(aSpin, tSpin);
+  ok("an odd heading is read as given, not snapped", odd.length === 1 && odd[0].sp > 0,
+    odd.map(r => `${r.label}:${r.sp}`).join(","));
+  // Read the STORED angle: the core animates rotation, so the prepared value is mid-tween for the
+  // half second after a turn (measured ~30 while 37 was stored) — which is exactly why the module
+  // reads _source too.
+  ok("the token's own rotation is what carries it", carTok._source.rotation === 37, String(carTok._source.rotation));
+  await carTok.update({ rotation: 0 });
+  ok("turning back restores the unturned readings",
+    cov.coverBetween(aBody, tBody)[0]?.sp === 10 && cov.coverBetween(aEng, tEng)[0]?.sp === 35,
+    `${cov.coverBetween(aBody, tBody)[0]?.sp} / ${cov.coverBetween(aEng, tEng)[0]?.sp}`);
+
   /* An open frame contributes nothing (ruled: bikes are not cover). */
   const bike = await Actor.create({
     name: "__PWV__Bike", type: `${SCOPE}.vehicle`,

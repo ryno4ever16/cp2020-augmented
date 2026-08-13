@@ -31,8 +31,8 @@
 
 import { localizeParam } from "../utils.js";
 import { footprintCells } from "./vehicle-seating.js";
-import { layoutFor, coverSpFor, segmentHitsRect } from "./vehicle-layout.js";
-import { isVehicleTokenDoc } from "./vehicle-canvas.js";
+import { layoutFor, coverSpFor, segmentHitsRect, segmentIntoLocalFrame } from "./vehicle-layout.js";
+import { isVehicleTokenDoc, tokenHeadingOf } from "./vehicle-canvas.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_ACTOR_TYPE = "cp2020-augmented.vehicle";
@@ -80,6 +80,9 @@ export function vehicleCoverRowsOn(scene) {
       destroyed: tracked ? (pool <= 0 || system.destroyed === true) : false,
       center: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
       rect, grid,
+      // The token's own rotation IS the vehicle's heading on the map — read straight, at whatever
+      // angle the GM's gesture produced, with no snapping of ours in front of it.
+      rotation: tokenHeadingOf(tokenDoc),
       engineCells: layoutFor(w, h, system.layout?.front, system.layout?.cells).engine,
       footprint: { w, h },
     });
@@ -95,6 +98,10 @@ export function vehicleCoverRowsOn(scene) {
  */
 export function vehicleCoverSpAlong(row, a, b) {
   if (!row || !a || !b) return { sp: 0, engine: false };
+  // A turned vehicle is handled by turning the SHOT, not the car: both endpoints go back into the
+  // vehicle's own frame once, and every cell test below is the plain axis-aligned one again.
+  const local = segmentIntoLocalFrame(a, b, row.rect, row.rotation);
+  a = local.a; b = local.b;
   const cells = footprintCells(row.rect, row.grid);
   const engineSet = new Set(row.engineCells ?? []);
   let sp = 0, engine = false;

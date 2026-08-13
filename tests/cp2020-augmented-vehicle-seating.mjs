@@ -700,6 +700,102 @@ check("after Reset the rider sits in the derived driver's seat (exact)",
   paint.afterReset.riderX === paint.vx + paint.grid && paint.afterReset.riderY === paint.vy + 2 * paint.grid,
   `x=${paint.afterReset.riderX} y=${paint.afterReset.riderY}`);
 
+/* ------------------------------------------------------------------ P. free rotation (Layer 4) */
+
+const spin = await page.evaluate(async ({ sceneId }) => {
+  const out = { checks: [] };
+  const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+  const L = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-layout.js`);
+  const S = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-seating.js`);
+
+  // A 4-wide, 2-deep car at a known place, so every expectation below is a concrete coordinate.
+  const rect = { x: 1000, y: 1000, w: 400, h: 200 };
+  const order = L.layoutFor(4, 2, "", "").seats;          // derived east: [2,6,1,5,0,4]
+  const seat = (i, deg) => S.seatSlotPosition(rect, 100, i, { w: 1, h: 1 }, order, deg);
+  const j = (v) => JSON.stringify(v);
+
+  ok("unturned, the driver sits in the derived cell (1200,1000)", j(seat(0, 0)) === '{"x":1200,"y":1000}', j(seat(0, 0)));
+  ok("turned a quarter, the driver's seat swings to (1200,1100)", j(seat(0, 90)) === '{"x":1200,"y":1100}', j(seat(0, 90)));
+  ok("the passenger swings with them, to (1100,1100)", j(seat(1, 90)) === '{"x":1100,"y":1100}', j(seat(1, 90)));
+  ok("at 45° the seat lands off the grid, as it should (1221,1050)", j(seat(0, 45)) === '{"x":1221,"y":1050}', j(seat(0, 45)));
+  ok("an odd angle is carried as given, not snapped (37° → 1220,1040)", j(seat(0, 37)) === '{"x":1220,"y":1040}', j(seat(0, 37)));
+
+  // Containment: a point the TRUE footprint contains at 45°, which the axis-aligned box does not.
+  const p = { x: 1341, y: 1241 };
+  const inPlainBox = p.x >= 1000 && p.x <= 1400 && p.y >= 1000 && p.y <= 1200;
+  ok("the turned footprint contains the point at its swung-out nose", L.pointInRotatedRect(p, rect, 45) === true);
+  ok("the axis-aligned box would have missed that point", inPlainBox === false);
+  ok("negative case: a point outside the turned footprint is still outside",
+    L.pointInRotatedRect({ x: 1600, y: 1600 }, rect, 45) === false);
+  ok("at 0° the turned test and the plain rectangle agree",
+    L.pointInRotatedRect({ x: 1100, y: 1100 }, rect, 0) === true
+    && L.pointInRotatedRect({ x: 1341, y: 1241 }, rect, 0) === false);
+  return out;
+}, setup);
+for (const c of spin.checks) check(c.n, c.p, c.d);
+
+const spinLive = await page.evaluate(async ({ sceneId }) => {
+  const scene = game.scenes.get(sceneId);
+  const vehicle = game.actors.getName("__PW__Ride");
+  const vTok = scene.tokens.find(t => t.actorId === vehicle.id);
+  const rider = scene.tokens.find(t => t.name === "__PW__Rider");
+  const before = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
+
+  await vTok.update({ rotation: 90 });
+  // The re-seat waits out a quiet interval after the last rotation update, so give the settle room.
+  await new Promise(r => setTimeout(r, 1400));
+  await window.__pwSettle(scene.id, rider.id);
+  const after = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
+
+  const placeable = canvas.tokens.get(vTok.id);
+  placeable?.renderFlags?.set?.({ refresh: true });
+  await new Promise(r => setTimeout(r, 400));
+  const drawn = canvas.tokens.get(vTok.id);
+
+  const shape = {
+    outline: !!drawn?.cpFootprintOutline && drawn.cpFootprintOutline.destroyed !== true,
+    isGraphics: drawn?.cpFootprintOutline instanceof PIXI.Graphics,
+    childOfToken: drawn?.cpFootprintOutline?.parent === drawn,
+    clickThrough: drawn?.cpFootprintOutline?.eventMode === "none",
+    borderAlpha: drawn?.border?.alpha ?? null,
+    tokenImg: drawn?.document?.texture?.src ?? "",
+    docRotation: scene.tokens.get(vTok.id).rotation,
+    docWidth: scene.tokens.get(vTok.id).width,
+    docHeight: scene.tokens.get(vTok.id).height,
+  };
+  await vTok.update({ rotation: 0 });
+  await new Promise(r => setTimeout(r, 1400));
+  await window.__pwSettle(scene.id, rider.id);
+  const restored = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
+  return { vx: vTok.x, vy: vTok.y, before, after, restored, shape };
+}, setup);
+
+// 2-wide, 4-deep, derived south: seat 0 is cell 5 (centre one square right and 2.5 squares down of
+// the footprint's top-left). Turned a quarter clockwise about the footprint's centre, that centre
+// lands one square right and 2.5 down of… the LEFT edge — i.e. the seat's top-left is (vx, vy+200).
+check("the rider re-seats to the turned cell after the heading settles (exact)",
+  spinLive.after.x === spinLive.vx && spinLive.after.y === spinLive.vy + 200,
+  `after=${spinLive.after.x},${spinLive.after.y} v=${spinLive.vx},${spinLive.vy}`);
+check("that is a different square from the unturned one",
+  !(spinLive.after.x === spinLive.before.x && spinLive.after.y === spinLive.before.y),
+  `before=${spinLive.before.x},${spinLive.before.y}`);
+check("turning back restores the unturned seat exactly",
+  spinLive.restored.x === spinLive.before.x && spinLive.restored.y === spinLive.before.y,
+  `restored=${spinLive.restored.x},${spinLive.restored.y}`);
+check("the handle carries our own footprint outline", spinLive.shape.outline === true);
+check("the outline is drawn as the token's own child graphic",
+  spinLive.shape.isGraphics === true && spinLive.shape.childOfToken === true,
+  `graphics=${spinLive.shape.isGraphics} child=${spinLive.shape.childOfToken}`);
+check("the outline never eats a click meant for the token", spinLive.shape.clickThrough === true,
+  String(spinLive.shape.clickThrough));
+check("core's own rectangular frame is dimmed on a vehicle handle", spinLive.shape.borderAlpha === 0.2,
+  String(spinLive.shape.borderAlpha));
+check("the token keeps its image and its footprint document fields",
+  !!spinLive.shape.tokenImg && spinLive.shape.docWidth === 2 && spinLive.shape.docHeight === 4,
+  `${spinLive.shape.docWidth}x${spinLive.shape.docHeight} img=${spinLive.shape.tokenImg}`);
+check("the heading is stored on the token itself, unsnapped", spinLive.shape.docRotation === 90,
+  String(spinLive.shape.docRotation));
+
 /* ------------------------------------------------------------------ L. chemical shell leaves a cloud on this core */
 
 const cloud = await page.evaluate(async ({ sceneId }) => {

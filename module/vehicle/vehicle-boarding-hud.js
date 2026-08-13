@@ -12,13 +12,19 @@
  * fiction constantly.
  */
 
-import { boardVehicle, disembark, isVehicleTokenDoc } from "./vehicle-canvas.js";
+import { boardVehicle, disembark, isVehicleTokenDoc, tokenHeadingOf } from "./vehicle-canvas.js";
+import { pointInRotatedRect } from "./vehicle-layout.js";
 import { occupancyOf, toggleOccupantFade, isVehicleFaded } from "./vehicle-occupancy.js";
 import { localizeParam, tryLocalize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 
-/** Vehicle placeables whose footprint (grown by one grid square) contains the token's centre. */
+/**
+ * Vehicle placeables whose footprint — grown by one grid square, and TURNED to the vehicle's own
+ * heading — contains the token's centre. The rotated test is what makes a car parked at an angle
+ * reachable from the kerb it is actually next to, rather than from the corners of a bounding box
+ * that contains half a pavement it is nowhere near.
+ */
 function _vehiclesInReach(tokenDoc) {
   const scene = tokenDoc.parent;
   const grid = scene?.grid?.size ?? 100;
@@ -27,9 +33,11 @@ function _vehiclesInReach(tokenDoc) {
   const hits = [];
   for (const t of scene?.tokens ?? []) {
     if (t.id === tokenDoc.id || !isVehicleTokenDoc(t) || !t.actor) continue;
-    const x0 = t.x - grid, y0 = t.y - grid;
-    const x1 = t.x + t.width * grid + grid, y1 = t.y + t.height * grid + grid;
-    if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) {
+    const reach = {
+      x: t.x - grid, y: t.y - grid,
+      w: t.width * grid + 2 * grid, h: t.height * grid + 2 * grid,
+    };
+    if (pointInRotatedRect({ x: cx, y: cy }, reach, tokenHeadingOf(t))) {
       const vx = t.x + (t.width * grid) / 2, vy = t.y + (t.height * grid) / 2;
       hits.push({ token: t, d2: (vx - cx) ** 2 + (vy - cy) ** 2 });
     }

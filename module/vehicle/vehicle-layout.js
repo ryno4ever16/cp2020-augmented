@@ -259,6 +259,68 @@ export function segmentHitsRect(a, b, rect) {
   return true;
 }
 
+/* ──────────────────────────── the rotated footprint (Layer 4) ──────────────────────────── */
+
+/**
+ * A core token frame is an axis-aligned rectangle and cannot tilt, so a car parked across a street
+ * at 30° has a footprint the platform simply cannot express. The honest architecture (ruled
+ * 2026-08-13, FREE rotation — steps were rejected as not granular enough) is that the vehicle's
+ * TRUE footprint is a module-owned ROTATED RECTANGLE: the token's own rect, turned about its
+ * centre by the token's own rotation, at any angle the GM's gesture produces.
+ *
+ * Nothing here changes what the token is. The document keeps its axis-aligned x/y/width/height —
+ * that is what core, targeting, the HUD and every other module read — and the rotated rect is
+ * metadata OUR mechanics read on top of it: containment, seat positions, the engine region, the
+ * cover ray.
+ *
+ * ⭐ THE TRICK THAT KEEPS ALL OF IT SIMPLE: rather than rotating the geometry, rotate the
+ * QUESTION. A point or a segment is turned by −θ about the rect's centre, and every existing
+ * axis-aligned test then answers correctly in the vehicle's own frame. One helper, and cells,
+ * seats and the cover ray all become angle-agnostic for free.
+ */
+
+/** Turn a point about a centre by `deg` degrees (clockwise on screen, as token rotation reads). */
+export function rotatePointAbout(p, center, deg) {
+  const d = Number(deg) || 0;
+  if (!d) return { x: p.x, y: p.y };
+  const r = (d * Math.PI) / 180;
+  const cos = Math.cos(r), sin = Math.sin(r);
+  const dx = p.x - center.x, dy = p.y - center.y;
+  return { x: center.x + dx * cos - dy * sin, y: center.y + dx * sin + dy * cos };
+}
+
+/** The centre of a `{x,y,w,h}` rectangle. */
+export function rectCenter(rect) {
+  return { x: (Number(rect?.x) || 0) + (Number(rect?.w) || 0) / 2, y: (Number(rect?.y) || 0) + (Number(rect?.h) || 0) / 2 };
+}
+
+/** The four corners of a rectangle turned about its own centre, top-left first, clockwise. */
+export function rotatedRectCorners(rect, deg) {
+  const c = rectCenter(rect);
+  const x0 = Number(rect?.x) || 0, y0 = Number(rect?.y) || 0;
+  const x1 = x0 + (Number(rect?.w) || 0), y1 = y0 + (Number(rect?.h) || 0);
+  return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }]
+    .map(p => rotatePointAbout(p, c, deg));
+}
+
+/**
+ * Is a point inside the rotated footprint? Answered by turning the POINT back into the vehicle's
+ * own frame — where the footprint is the plain rectangle it always was.
+ */
+export function pointInRotatedRect(p, rect, deg) {
+  if (!p || !rect) return false;
+  const local = rotatePointAbout(p, rectCenter(rect), -(Number(deg) || 0));
+  return local.x >= rect.x && local.x <= rect.x + rect.w
+    && local.y >= rect.y && local.y <= rect.y + rect.h;
+}
+
+/** The same trick for a segment: both endpoints back into the vehicle's frame, once, up front. */
+export function segmentIntoLocalFrame(a, b, rect, deg) {
+  const c = rectCenter(rect);
+  const d = -(Number(deg) || 0);
+  return { a: rotatePointAbout(a, c, d), b: rotatePointAbout(b, c, d) };
+}
+
 /* ────────────────────────────── cover profile by vehicle type ────────────────────────────── */
 
 /**

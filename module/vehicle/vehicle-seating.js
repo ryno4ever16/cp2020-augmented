@@ -24,6 +24,8 @@
  *   reading order remains the fallback for any caller with no vehicle to ask.
  */
 
+import { rotatePointAbout, rectCenter } from "./vehicle-layout.js";
+
 /** Grid cells of a footprint, in reading order. Each entry is the cell's top-left pixel point. */
 export function footprintCells(rect, gridSize) {
   const g = Math.max(1, Number(gridSize) || 100);
@@ -49,7 +51,7 @@ export function footprintCells(rect, gridSize) {
  * which is what every vehicle did before Front existed and what a caller with no actor to read
  * still gets.
  */
-export function seatSlotPosition(rect, gridSize, index, size = {}, order = null) {
+export function seatSlotPosition(rect, gridSize, index, size = {}, order = null, rotation = 0) {
   const g = Math.max(1, Number(gridSize) || 100);
   const cells = footprintCells(rect, gridSize);
   const seats = (Array.isArray(order) && order.length)
@@ -63,10 +65,15 @@ export function seatSlotPosition(rect, gridSize, index, size = {}, order = null)
   const th = (Math.max(0.1, Number(size.h) || 1)) * g;
   // Centre the token in its cell, then offset each additional wrap by a quarter square so
   // over-capacity riders never share an identical point.
-  return {
-    x: Math.round(cell.x + (g - tw) / 2 + wrap * (g / 4)),
-    y: Math.round(cell.y + (g - th) / 2 + wrap * (g / 4)),
-  };
+  const x = cell.x + (g - tw) / 2 + wrap * (g / 4);
+  const y = cell.y + (g - th) / 2 + wrap * (g / 4);
+  const deg = Number(rotation) || 0;
+  if (!deg) return { x: Math.round(x), y: Math.round(y) };
+  // A turned vehicle carries its seats round with it. The rider token stays an upright square —
+  // people do not tip over when the car does — so what rotates is where its CENTRE lands, and the
+  // top-left is measured back from there.
+  const spun = rotatePointAbout({ x: x + tw / 2, y: y + th / 2 }, rectCenter(rect), deg);
+  return { x: Math.round(spun.x - tw / 2), y: Math.round(spun.y - th / 2) };
 }
 
 /** Do two rectangles share any area? Touching edges do not count as overlapping. */
