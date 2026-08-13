@@ -36,6 +36,12 @@
  * entry, not a code change.
  */
 
+// ⚠ `LIT_SPRITE_ABOVE_LIGHTING` is imported and NOT currently read by any row, deliberately. Since the
+// reference-exact ruling (2026-08-12) every row draws below the tokens, and the recorded way back for
+// any one of them is to restore `aboveLighting: LIT_SPRITE_ABOVE_LIGHTING` — one field, at the row. It
+// stays imported so that revert remains one field rather than one field plus an import, and so the
+// header's claim that this file asks every capability question through the rail's own answers stays
+// literally true.
 import {
   sequencerActive, fxDbEntryExists, tokenRadiusPx, LIT_SPRITE_ABOVE_LIGHTING,
 } from "./effects.js";
@@ -131,16 +137,20 @@ export const STATUS_FX_ROWS = Object.freeze([
     // (module/combat/damage-hooks.js). The core id is honoured as well so a GM who reaches for the
     // token HUD gets the same picture as the load does.
     //
-    // RING (reference "On Fire (Mild)" = the below-token fire ring). The reference draws the Below
-    // asset UNDER the mini; here it rides over-token so `aboveLighting` keeps it visible on unlit
-    // squares (the rail's standing visibility ruling) — `below: true` on this row is the
-    // reference-exact revert. Stronger tier = `jb2a.shield_themed.above.fire.01.orange`, one key
-    // away, but see the header: that clip decays across itself and pulses when looped.
+    // RING (reference "On Fire (Mild)" = the below-token fire ring), drawn UNDER the mini exactly as the
+    // reference draws it — user ruling 2026-08-12: "reference exact", taken with its cost stated. THE
+    // COST: below the tokens is below the LIGHTING, so on an unlit square this ring is not there to be
+    // seen. The table accepted that in exchange for the reference's own composition, where an over-token
+    // ring sat on the figure rather than under it. THE WAY BACK IS THE SAME ONE FIELD IT ALWAYS WAS: drop
+    // `below` and restore `aboveLighting: LIT_SPRITE_ABOVE_LIGHTING`, which buys visibility in the dark
+    // at the price of the fidelity that was asked for. Stronger tier =
+    // `jb2a.shield_themed.above.fire.01.orange`, one key away, but see the header: that clip decays
+    // across itself and pulses when looped.
     // Superseded key (centered flame, ruled out 2026-08-12): "jb2a.flames.02.orange" @ body 1.15.
     id: "burning", statuses: ["burning"], flags: ["fireDotState"],
     key: "jb2a.shield_themed.below.fire.01.orange", placement: "ring",
     scale: 1.18,   // frame 400 ÷ ink 339 — the ring's drawn diameter lands on the rim
-    opacity: 0.85, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    opacity: 0.85, aboveLighting: false, below: true,
   }),
   Object.freeze({
     // No module mechanism raises this today — it is the core id only, which is exactly what a GM
@@ -148,25 +158,31 @@ export const STATUS_FX_ROWS = Object.freeze([
     // approximate: this rail does not invent a mechanism to have something to draw.
     //
     // RING: the free tier's one true smoke ring loop, authored blue-purple; rotated toward a fume
-    // green. One constant (drop `colour`) reverts to the asset's own colour.
+    // green. One constant (drop `colour`) reverts to the asset's own colour. Drawn UNDER the mini with
+    // every other row (2026-08-12, reference-exact) and carrying the same accepted cost — invisible on
+    // an unlit square — with the same one-field way back: drop `below`, restore
+    // `aboveLighting: LIT_SPRITE_ABOVE_LIGHTING`.
     // Superseded key (badge, ruled out 2026-08-12): "jb2a.markers.poison.dark_green.02" @ badge.
     id: "poison", statuses: ["poison"], flags: [],
     key: "jb2a.markers.smoke.ring.loop.bluepurple", placement: "ring",
     colour: Object.freeze({ hue: 130, saturate: 0.1, brightness: 1.0 }),
     scale: 1.0,    // ink reaches the frame edge — the frame IS the ring extent
-    opacity: 0.85, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    opacity: 0.85, aboveLighting: false, below: true,
   }),
   Object.freeze({
     // The acid load degrades armour over turns and keeps its countdown in `dotState`; core's own
     // `corrode` is the hand-toggled equivalent. THE COLOUR IS OURS: the ring set has no green, so the
     // molten-earth ring is rotated to an acid green rather than replaced by a clip that is the right
-    // colour and the wrong motion. One constant reverts it to the asset's own orange.
+    // colour and the wrong motion. One constant reverts it to the asset's own orange. Drawn UNDER the
+    // mini with every other row (2026-08-12, reference-exact), invisible on an unlit square by the same
+    // accepted trade, and back over the lighting by the same one field: drop `below`, restore
+    // `aboveLighting: LIT_SPRITE_ABOVE_LIGHTING`.
     // Superseded key (centered bubbles, ruled out 2026-08-12): "jb2a.bubble.002.001.loop.blue" @ 0.9.
     id: "acid", statuses: ["corrode"], flags: ["dotState"],
     key: "jb2a.shield_themed.below.molten_earth.01.orange", placement: "ring",
     colour: Object.freeze({ hue: -120, saturate: 0.15, brightness: 1.0 }),
     scale: 1.05,   // frame 400 ÷ ink 382
-    opacity: 0.8, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    opacity: 0.8, aboveLighting: false, below: true,
   }),
   Object.freeze({
     // ⭐ BOTH IDS, because this engine's stun outcome IS `unconscious`: a failed stun save calls
@@ -175,11 +191,14 @@ export const STATUS_FX_ROWS = Object.freeze([
     // Whether those two deserve two different looks is an open call — docs/FX-RAIL.md §8.
     //
     // RING: the eldritch-web ring — native purple, the longest and flattest loop of the set (10 s,
-    // seam 2.87). Superseded key (badge, ruled out 2026-08-12): "jb2a.markers.stun.purple.02".
+    // seam 2.87). Drawn UNDER the mini with every other row (2026-08-12, reference-exact): gone on an
+    // unlit square, which the table accepted, and back over the lighting by dropping `below` and
+    // restoring `aboveLighting: LIT_SPRITE_ABOVE_LIGHTING`.
+    // Superseded key (badge, ruled out 2026-08-12): "jb2a.markers.stun.purple.02".
     id: "stunned", statuses: ["stun", "unconscious"], flags: [],
     key: "jb2a.shield_themed.below.eldritch_web.01.dark_purple", placement: "ring",
     scale: 1.25,   // frame 400 ÷ ink 320
-    opacity: 0.9, aboveLighting: LIT_SPRITE_ABOVE_LIGHTING,
+    opacity: 0.9, aboveLighting: false, below: true,
     // A corpse wearing a stun ring is noise: `dead` and `unconscious` genuinely stand together here,
     // because the applicator sets one and the stun save had already set the other.
     suppressedBy: "dead",
@@ -189,8 +208,9 @@ export const STATUS_FX_ROWS = Object.freeze([
     // token, so this exists to say "out" at a glance across a table, not to restate the icon — a dim
     // ring on the ground under the figure, drawn BELOW the tokens so it never covers the mini.
     // ⚠ THE TRADE: below the tokens is also below the lighting, so on an unlit square the ring is not
-    // there to be seen. It is the one row where that is acceptable, because the token's own core icon
-    // is unaffected and still carries the fact. One field (`placement: "badge"`) moves it out.
+    // there to be seen. It was the FIRST row where that was acceptable — the token's own core icon is
+    // unaffected and still carries the fact — and since the reference-exact ruling (2026-08-12) it is
+    // the trade every row above makes as well. One field (`placement: "badge"`) moves this one out.
     id: "dead", statuses: ["dead"], flags: [],
     key: "jb2a.markers.simple.001.loop.001.red", placement: "ground",
     scale: 1.25, opacity: 0.55, aboveLighting: false, below: true,

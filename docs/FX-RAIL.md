@@ -415,10 +415,10 @@ flame / badge treatments are superseded, each row's old key recorded at its site
 
 | Row | Raised by | Database key | Placement | Size / opacity |
 |---|---|---|---|---|
-| `burning` | `burning` · `fireDotState` | `jb2a.shield_themed.below.fire.01.orange` | **ring**, above lighting | `scaleToObject` 1.18 (= 400/339 ink), opacity 0.85 |
-| `poison` | `poison` | `jb2a.markers.smoke.ring.loop.bluepurple` **recoloured** | **ring**, above lighting | `scaleToObject` 1.0 (ink is full-frame), opacity 0.85 |
-| `acid` | `corrode` · `dotState` | `jb2a.shield_themed.below.molten_earth.01.orange` **recoloured** | **ring**, above lighting | `scaleToObject` 1.05 (= 400/382), opacity 0.8 |
-| `stunned` | `stun` · `unconscious` | `jb2a.shield_themed.below.eldritch_web.01.dark_purple` | **ring**, above lighting | `scaleToObject` 1.25 (= 400/320), opacity 0.9 |
+| `burning` | `burning` · `fireDotState` | `jb2a.shield_themed.below.fire.01.orange` | **ring**, **below tokens** | `scaleToObject` 1.18 (= 400/339 ink), opacity 0.85 |
+| `poison` | `poison` | `jb2a.markers.smoke.ring.loop.bluepurple` **recoloured** | **ring**, **below tokens** | `scaleToObject` 1.0 (ink is full-frame), opacity 0.85 |
+| `acid` | `corrode` · `dotState` | `jb2a.shield_themed.below.molten_earth.01.orange` **recoloured** | **ring**, **below tokens** | `scaleToObject` 1.05 (= 400/382), opacity 0.8 |
+| `stunned` | `stun` · `unconscious` | `jb2a.shield_themed.below.eldritch_web.01.dark_purple` | **ring**, **below tokens** | `scaleToObject` 1.25 (= 400/320), opacity 0.9 |
 | `dead` | `dead` | `jb2a.markers.simple.001.loop.001.red` | **ground**, below tokens | `scaleToObject` 1.25, opacity 0.55 — already a ring; unchanged |
 
 **Every key was decoded before it was chosen** (§9 A/4). The ring set, read off the installed clips
@@ -441,10 +441,19 @@ git history at this section; their verdicts still hold for what they measured.
 orange to green. Poison: hue **+130**, saturate +0.1 rotates the smoke ring's blue-purple to a fume
 green. Reverting either is deleting one field.
 
-**Reference-fidelity note.** The reference draws its `Below` ring UNDER the mini; ours rides above
-the token so `aboveLighting` keeps it visible on unlit squares (the rail's standing visibility
-ruling). `below: true` on a row is the reference-exact revert — at the cost of vanishing in
-darkness, the dead row's documented trade.
+**⏪ Reference-exact, and what it costs** (user ruling 2026-08-12: *"reference exact"*). The reference
+draws its `Below` ring UNDER the mini. Ours briefly rode ABOVE the token so `aboveLighting` could keep
+it visible on unlit squares — the rail's standing visibility ruling — and the user ruled the other way:
+every row now carries `below: true` with `aboveLighting: false`, so all five draw under the figure.
+
+**The accepted cost, stated plainly:** below the tokens is below the **lighting**, so on an unlit
+square a condition ring is not there to be seen. That was the `dead` row's documented trade and it is
+now every row's. The token's own core status icon is unaffected either way and still carries the fact.
+
+**The way back is one field, per row:** drop `below` and restore
+`aboveLighting: LIT_SPRITE_ABOVE_LIGHTING`, which buys darkness visibility at the price of the fidelity
+that was asked for. `LIT_SPRITE_ABOVE_LIGHTING` stays imported in `status-fx.js` for exactly that
+reason, unread by any row today — the import site says so.
 
 ### 2a.3 Stacking, and the rule that stops marks from sliding
 
@@ -452,8 +461,10 @@ Three placement families, each with its own answer, because one offset scheme fo
 a badge on a figure's chest or a flame on the floor:
 
 - **ring** (the house standard since 2026-08-12) — `scaleToObject` at the row's ink-fraction scale,
-  **centred, no slot offset**: rings stack CONCENTRICALLY, and their differing rim scales (1.0 /
-  1.05 / 1.18 / 1.25) are what keep simultaneous conditions apart. All four non-ground rows use it.
+  **centred, no slot offset**, drawn **below the tokens**: rings stack CONCENTRICALLY, and their
+  differing rim scales (1.0 / 1.05 / 1.18 / 1.25) are what keep simultaneous conditions apart. All
+  four non-ground rows use it, and since the reference-exact ruling all four share the ground row's
+  routing as well — `below: true`, `aboveLighting: false`, `sortLayer` 600 in the engine's own data.
 - **body** — `scaleToObject`, nudged sideways by `bodySpread` (**0.22**) × the figure's own width.
   No shipped row uses it since the ring rework; the family and its constant stay for a future row
   that is genuinely a body treatment.
@@ -1666,6 +1677,18 @@ already owns it (`save-rolls.js`, world setting `autoDeathSavePerTurn`, which ho
 The batch is keyed by TOKEN id rather than actor id: an unlinked token's synthetic actor shares the
 world actor's id, and an actor-keyed set would silence a prompt a second body is owed.
 
+**2026-08-12 — ⏪ the rings go UNDER the mini: "reference exact", and the darkness cost is accepted.**
+The open call the ring rework left behind (§8, "needs eyes") came back the same day with one answer:
+**reference exact**. So the four ring rows join the ground row below the tokens — `below: true`,
+`aboveLighting: false` — and the rail's standing visibility ruling gives way for these five elements.
+
+| Ruling | Value | Why |
+|---|---|---|
+| every row draws **below the tokens** | `below: true`, `aboveLighting: false` on all five | the user's answer; the reference draws its `Below` ring under the mini and that is what was asked for |
+| the **cost is accepted**, not fixed | a ring on an unlit square is not drawn at all | below the tokens is below the lighting. The token's own core status icon is unaffected and still carries the fact, which is what makes the trade payable |
+| the way back stays **one field per row** | drop `below`, restore `aboveLighting: LIT_SPRITE_ABOVE_LIGHTING` | if a table ever wants visibility over fidelity. The constant stays imported in `status-fx.js` unread for exactly this, and its import site says so |
+| the `dead` row is **untouched** | already below | it was the first row to make this trade; the comment now records that it is no longer the only one |
+
 **2026-08-12 — ⏪ the ring standard: condition overlays wear the reference's rim ring.**
 User, on seeing the centered flame on the review target: it is "not going to cut it… the reference
 has a sort of glass sheen effect with a fire spinning around the circular rim of the token" — then,
@@ -1678,7 +1701,7 @@ Reversal of the 2026-08-11 unit's centered-flame/badge looks (their decodes and 
 | every non-ground row is a **ring** | new placement family `ring`, concentric, no slot offset | the user's directive; the reference's own composition (its "On Fire" tiers are `shield_themed` fire rings) |
 | burning = the reference's own key | `jb2a.shield_themed.below.fire.01.orange` | free tier carries the exact file the reference names; only the `_03` "Deadly" tier is patreon-gated |
 | ring diameter compensates ink | scale = frame ÷ ink extent per decode | a ring drawn at frame scale sits inside the rim by its own padding |
-| rings ride OVER the token, above lighting | `aboveLighting`, no `below` | visibility on unlit squares (the rail's standing ruling); `below: true` per row = reference-exact underlay — **user call open, §8** |
+| rings ride OVER the token, above lighting | `aboveLighting`, no `below` | visibility on unlit squares (the rail's standing ruling); `below: true` per row = reference-exact underlay — **left open at the time; ⏪ CLOSED the same day, below** |
 
 **2026-08-12 — a referee can call in an arrival, and it hovers.**
 The docket described a recorded reference: a marked rectangular area with caution marks and a
@@ -2380,7 +2403,8 @@ presented while the screen stayed empty.
 | **Whether `stun` and `unconscious` deserve two different looks** | ⚠ They share one row today because this engine's stun outcome IS `unconscious` (the failed check sets it, the recovery check lifts it) and core's `stun` is only ever hand-set. If a table wants "rattled" to read differently from "out cold", that is a second row and a second key. |
 | **The acid row's colour is a build-lane pick** | ⚠ Carried across the ring rework: hue **−120**, saturate **+0.15** now rotates the molten-earth ring's orange to acid green (the ring set has no green). Deleting the `colour` field restores the asset's own orange. |
 | **The poison row's colour is a build-lane pick** | ⚠ New with the ring rework: hue **+130**, saturate **+0.1** rotates the smoke ring's blue-purple toward a fume green. Deleting the `colour` field restores the asset's own colour. |
-| **Rings ride OVER the token; the reference draws its Below ring UNDER the mini** | ⚠ **The look call of the ring rework, needs eyes.** Over-token + `aboveLighting` keeps a condition visible on unlit squares (the rail's standing visibility ruling) at the cost of flames/web overlapping the mini's edges — which is also roughly what the reference's *Strong* tier looks like. `below: true` on a row restores the reference-exact underlay and inherits the dead row's darkness trade. One field per row. |
+| ~~Rings ride OVER the token; the reference draws its Below ring UNDER the mini~~ | ⏪ **CLOSED 2026-08-12 — the user ruled "reference exact".** All four ring rows joined the ground row under the mini (`below: true`, `aboveLighting: false`), and the darkness cost is accepted rather than fixed: on an unlit square a condition ring is not drawn. Full entry in §6; the one-field way back is recorded at each row. |
+| ⛔ **Every connected client's rail broadcasts its own overlay** | ⚠ **NEW 2026-08-13, needs a call — found while certifying the row above, NOT fixed.** The file's design is that "the overlays are drawn by each client for itself", but the draw goes out through Sequencer's default push, so each client's rail plays its copy on *every* client: with two GMs signed in, one burning figure wears **two** stacked rings on both screens; with four clients, four. Proven on the rig — the second entry's `creatorUserId` is the other client's id, and a `_setDbProbe` set locally could not suppress it. Two candidate fixes and they are not equivalent: **(a)** play locally (`.locally()` on the effect section — Sequencer 4.2.3 has it), which matches the stated design and needs the matching question answered for `EffectManager.endEffects`, whose push would otherwise end another client's copy; **(b)** one designated drawer (the active GM) broadcasting for everyone, which halves the work but makes the picture depend on who is connected. The keeper is scoped to this client's own creations meanwhile and prints the foreign count on every run, so this cannot go quiet. |
 | **A stronger burning tier is one key away, and it pulses** | ⚠ The reference tiers its fire (Mild = below ring, Strong = above ring, Deadly = both at `_03`, patreon-gated). Our single `fireDotState` ships the below ring. `shield_themed.above.fire.01.orange` is installed and free — but it DECAYS across its own clip (thirds 60.2/49.9/40.9) and pulses every 5 s when looped. If a stronger look is wanted, layering below+above at `_01` is the honest free-tier approximation; the pulse rides along and is recorded here first. |
 | **The dead ring is invisible on an unlit square** | ⚠ **Stated so it is a decision, not a surprise.** It is drawn **below the tokens**, which is also below the lighting, so on a dark scene it is not there to be seen. Accepted on this row alone because core's own skull icon on the token is unaffected and still carries the fact. One field (`placement: "badge"`) lifts it out. |
 | **The ring opacities are build-lane picks; the scales are measured** | ⚠ Each ring's `scaleToObject` is the decode's ink-fraction compensation (burning 1.18 = 400/339 · acid 1.05 · stunned 1.25 · poison 1.0) — measured, not chosen. The OPACITIES are mine: 0.85 / 0.8 / 0.9 / 0.85, dead 0.55. Every one is a single constant and a veto costs nothing. |

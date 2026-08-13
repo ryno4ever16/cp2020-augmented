@@ -8,6 +8,8 @@
  *  - the LIVE path on a real figure: a condition set draws the exact database key under the exact
  *    stamped name; the condition cleared takes it down again
  *  - the module-flag road driven through the real flag write, and its clear
+ *  - the ruled ROUTING: every row — the four rings and the ground mark — is drawn BELOW the figures
+ *    (reference-exact, user ruling 2026-08-12), asserted on the table and again on what the engine did
  *  - two conditions at once drawing two marks at two offsets
  *  - RELOAD: a full page reload with the condition still on redraws it (nothing is persisted)
  *  - figure deleted → its marks swept by name
@@ -85,6 +87,8 @@ const pure = await page.evaluate(async (mod) => {
     unrelated:    r({ statuses: ["prone", "blind", "fly"] }),
     rowIds:       M.STATUS_FX_ROWS.map(x => x.id),
     rowKeys:      M.STATUS_FX_ROWS.map(x => x.key),
+    rowBelow:     M.STATUS_FX_ROWS.map(x => x.below === true),
+    rowAbove:     M.STATUS_FX_ROWS.map(x => x.aboveLighting === false),
     namesFor:     M.statusFxNameFor("TOKENID", "burning"),
   };
 }, MOD);
@@ -111,6 +115,11 @@ eq("the shipped database keys", pure.rowKeys, [
   "jb2a.markers.simple.001.loop.001.red",
 ]);
 check("the stamped name encodes figure then row", pure.namesFor === "cp2020-augmented.statusfx.TOKENID.burning", pure.namesFor);
+// ⭐ REFERENCE-EXACT, BELOW THE TOKEN (user ruling 2026-08-12). Every row — the four rings and the
+// ground mark — declares `below: true` and `aboveLighting: false`. The table is asserted first because
+// it is the one field the revert moves; §5b then reads what the engine actually did with it.
+eq("every row is declared below-token", pure.rowBelow, [true, true, true, true, true]);
+eq("and no row asks to be lifted above the lighting", pure.rowAbove, [true, true, true, true, true]);
 
 console.log("\n§2 slot geometry (pure)");
 const geo = await page.evaluate(async (mod) => {
@@ -149,37 +158,62 @@ console.log(`\n(fixture: figure ${fixture.tokenId} on "${fixture.sceneName}")`);
 // and this rail draws for those too — correctly. A leg that counted every mark on the client would be
 // asserting the rig's contents rather than this mechanism, so every census below is filtered to the
 // figure this spec made.
+//
+// ⚠⚠ AND SCOPED TO THIS CLIENT'S OWN DRAWS (`creatorUserId`), which is not tidiness — it is the shape
+// of a defect this spec turned up on 2026-08-13 and does not itself test. The rail is designed so that
+// "the overlays are drawn by each client for itself" (status-fx.js header), but the draw is played
+// through Sequencer's DEFAULT push, so every connected client's rail broadcasts its copy to every other
+// one: with a second GM signed in, one burning figure wears TWO stacked rings on both screens, with
+// three clients, three. Proven on the rig — the extra entry's `creatorUserId` is the OTHER client's id,
+// and the local `_setDbProbe` negative could not suppress it. The mechanism THIS spec is for is what
+// this client's rail decides and draws, so every census filters to this client's own creations and the
+// foreign count is reported below rather than swallowed. ⛔ The broadcast policy itself is an open call
+// (locally-only draw vs. a designated drawer) and is NOT fixed here. Each section below declares the
+// same two readers — `own()` for this client's marks, `foreign()` for the count of everyone else's.
 
 /* ─────────────────── §3 the live path, core condition ─────────────────── */
 console.log("\n§3 live path — a core condition draws and clears");
 const live1 = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
+  const foreign = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) !== game.user.id
+                                                 && String(e?.data?.name ?? "").includes(TID)).length;
   const actor = game.actors.get(actorId);
   await actor.toggleStatusEffect("burning", { active: true });
   await new Promise(r => setTimeout(r, 2000));
-  const drawn = M.liveStatusFx().map(e => e?.data?.name).filter(n => String(n).includes(TID));
-  const files = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).map(e => String(e?.data?.file ?? ""));
+  const drawn = own().map(e => e?.data?.name);
+  const files = own().map(e => String(e?.data?.file ?? ""));
+  const foreignCopies = foreign();
+  const otherClients = game.users.filter(u => u.active && u.id !== game.user.id).map(u => u.name);
   await actor.toggleStatusEffect("burning", { active: false });
   await new Promise(r => setTimeout(r, 1500));
-  return { drawn, files, after: M.liveStatusFx().map(e => e?.data?.name).filter(n => String(n).includes(TID)) };
+  return { drawn, files, foreignCopies, otherClients, after: own().map(e => e?.data?.name) };
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 const burnName = `cp2020-augmented.statusfx.${fixture.tokenId}.burning`;
 eq("condition set → exactly one mark, under the stamped name", live1.drawn, [burnName]);
 eq("the drawn entry is the decoded rim-ring key", live1.files, ["jb2a.shield_themed.below.fire.01.orange"]);
 eq("condition cleared → the mark is gone", live1.after, []);
+// ⚠ NOT A CHECK — the standing report of the broadcast defect described above. One copy per OTHER
+// connected client is what a table would see stacked on the figure.
+console.log(`  (other clients signed in: ${live1.otherClients.length ? live1.otherClients.join(", ") : "none"}`
+  + ` · foreign copies of this figure's mark: ${live1.foreignCopies}`
+  + `${live1.foreignCopies ? " ⛔ each connected client's rail broadcasts its own — open call" : ""})`);
 
 /* ─────────────────── §4 the module-flag road ─────────────────── */
 console.log("\n§4 live path — the module's own lasting-damage flag");
 const live2 = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
   const actor = game.actors.get(actorId);
   await actor.setFlag("cp2020-augmented", "dotState", [{ location: "Torso", turnsLeft: 3 }]);
   await new Promise(r => setTimeout(r, 2000));
-  const drawn = M.liveStatusFx().map(e => e?.data?.name).filter(n => String(n).includes(TID));
-  const files = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).map(e => String(e?.data?.file ?? ""));
+  const drawn = own().map(e => e?.data?.name);
+  const files = own().map(e => String(e?.data?.file ?? ""));
   await actor.unsetFlag("cp2020-augmented", "dotState");
   await new Promise(r => setTimeout(r, 1500));
-  return { drawn, files, after: M.liveStatusFx().map(e => e?.data?.name).filter(n => String(n).includes(TID)) };
+  return { drawn, files, after: own().map(e => e?.data?.name) };
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 eq("armour-degradation flag written → the acid mark appears", live2.drawn,
   [`cp2020-augmented.statusfx.${fixture.tokenId}.acid`]);
@@ -190,20 +224,25 @@ eq("flag cleared → the mark is gone", live2.after, []);
 console.log("\n§5 two conditions at once");
 const stack = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
   const actor = game.actors.get(actorId);
   await actor.toggleStatusEffect("burning", { active: true });
   await actor.toggleStatusEffect("poison", { active: true });
   await new Promise(r => setTimeout(r, 2500));
-  const eff = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID));
+  const eff = own();
   const out = {
     names: eff.map(e => e?.data?.name).sort(),
     offsets: eff.map(e => ({ n: String(e?.data?.name ?? "").split(".").pop(), x: e?.data?.spriteOffset?.x ?? null })),
+    // `sortLayer` 600 is where Sequencer records belowTokens — read here so the two rings drawn at once
+    // are both proven to be under the mini, not just the one §5b grabs on its own.
+    layers: eff.map(e => ({ n: String(e?.data?.name ?? "").split(".").pop(), layer: e?.data?.sortLayer ?? null })),
     sceneFlagKeys: Object.keys(canvas.scene.flags?.sequencer ?? {}).length,
   };
   await actor.toggleStatusEffect("burning", { active: false });
   await actor.toggleStatusEffect("poison", { active: false });
   await new Promise(r => setTimeout(r, 1500));
-  out.after = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+  out.after = own().length;
   return out;
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 eq("both marks are drawn, one per condition", stack.names, [
@@ -215,33 +254,45 @@ const offX = Object.fromEntries(stack.offsets.map(o => [o.n, o.x]));
 check("ring marks stack concentrically — neither takes a slot offset",
   (offX.burning === null || offX.burning === 0) && (offX.poison === null || offX.poison === 0),
   JSON.stringify(offX));
+const layerOf = Object.fromEntries(stack.layers.map(o => [o.n, o.layer]));
+check("both rings are drawn UNDER the figure, by value", layerOf.burning === 600 && layerOf.poison === 600,
+  JSON.stringify(layerOf));
 check("no document was written: the scene carries no effect flags", stack.sceneFlagKeys === 0, String(stack.sceneFlagKeys));
 check("both cleared → nothing left", stack.after === 0, String(stack.after));
 
-/* ─────────────────── §5b the other two placement branches ─────────────────── */
-console.log("\n§5b the ground branch and the recolour");
+/* ─────────────────── §5b every row's routing, and the recolour ─────────────────── */
+console.log("\n§5b the below-token routing and the recolour");
 const branches = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
   const actor = game.actors.get(actorId);
   const grab = (id) => {
-    const e = M.liveStatusFx().find(x => String(x?.data?.name ?? "") === `cp2020-augmented.statusfx.${TID}.${id}`);
+    const e = own().find(x => String(x?.data?.name ?? "") === `cp2020-augmented.statusfx.${TID}.${id}`);
     // `sortLayer` is where Sequencer records belowTokens (600); `aboveLighting` is the other routing.
     return e ? { file: String(e.data.file ?? ""), sortLayer: e.data.sortLayer ?? null,
                  aboveLighting: e.data.aboveLighting ?? null,
                  filters: JSON.stringify(e.data.filters ?? e.data.filter ?? null).slice(0, 200) } : null;
   };
   const out = {};
-  // A body row for contrast, so "routed differently" is a comparison and not a lone constant.
+  // A ring row: since the reference-exact ruling it takes the SAME below-tokens branch the ground row
+  // does, so the two readings below are a match rather than a contrast.
   await actor.toggleStatusEffect("burning", { active: true });
   await new Promise(r => setTimeout(r, 2000));
   out.burning = grab("burning");
   await actor.toggleStatusEffect("burning", { active: false });
   await new Promise(r => setTimeout(r, 1200));
-  // The ground row, which is the only one taking the below-tokens branch.
+  // The stunned ring, so all four rings are read live somewhere in this spec rather than only in the table.
+  await actor.toggleStatusEffect("stun", { active: true });
+  await new Promise(r => setTimeout(r, 2000));
+  out.stunned = grab("stunned");
+  await actor.toggleStatusEffect("stun", { active: false });
+  await new Promise(r => setTimeout(r, 1200));
+  // The ground row, which took this branch before every other row joined it.
   await actor.toggleStatusEffect("dead", { active: true });
   await new Promise(r => setTimeout(r, 2000));
   out.dead = grab("dead");
-  out.deadNames = M.liveStatusFx().map(e => e?.data?.name).filter(n => String(n).includes(TID));
+  out.deadNames = own().map(e => e?.data?.name);
   await actor.toggleStatusEffect("dead", { active: false });
   await new Promise(r => setTimeout(r, 1200));
   // The recoloured row, which is the only one taking the filter branch.
@@ -250,7 +301,7 @@ const branches = await page.evaluate(async ({ mod, actorId, TID }) => {
   out.acid = grab("acid");
   await actor.unsetFlag("cp2020-augmented", "dotState");
   await new Promise(r => setTimeout(r, 1200));
-  out.after = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+  out.after = own().length;
   return out;
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 eq("the ground row draws exactly one mark, and the stunned row is not raised with it",
@@ -259,9 +310,19 @@ check("the ground row carries the simple-marker loop key",
   branches.dead?.file === "jb2a.markers.simple.001.loop.001.red", JSON.stringify(branches.dead));
 check("the ground row is routed below the figures", branches.dead?.sortLayer === 600,
   `sortLayer ${branches.dead?.sortLayer}`);
-check("and the two routings genuinely differ: the body row is lifted above the lighting instead",
-  branches.burning?.aboveLighting === true && branches.burning?.sortLayer !== 600,
-  `body ${JSON.stringify(branches.burning)} vs ground ${JSON.stringify(branches.dead)}`);
+// ⭐ THE RULED ROUTING (2026-08-12, reference-exact): the rings go under the mini exactly as the ground
+// mark does. Below the tokens is below the LIGHTING — the accepted trade — so the negative beside it is
+// that no row asks for the lighting lift any more.
+check("a ring row is routed below the figures too, by value", branches.burning?.sortLayer === 600,
+  `burning sortLayer ${branches.burning?.sortLayer}`);
+check("the stunned ring likewise", branches.stunned?.sortLayer === 600,
+  `stunned sortLayer ${branches.stunned?.sortLayer}`);
+check("the recoloured acid ring likewise", branches.acid?.sortLayer === 600,
+  `acid sortLayer ${branches.acid?.sortLayer}`);
+check("NEGATIVE: no row is lifted above the lighting any more",
+  branches.burning?.aboveLighting !== true && branches.stunned?.aboveLighting !== true
+  && branches.acid?.aboveLighting !== true && branches.dead?.aboveLighting !== true,
+  `burning ${branches.burning?.aboveLighting} stunned ${branches.stunned?.aboveLighting} acid ${branches.acid?.aboveLighting} dead ${branches.dead?.aboveLighting}`);
 check("the recoloured row carries a colour matrix",
   /ColorMatrix/i.test(branches.acid?.filters ?? ""), String(branches.acid?.filters));
 check("both branches cleared", branches.after === 0, String(branches.after));
@@ -277,10 +338,12 @@ await joinGM(page);
 await page.waitForTimeout(4000);
 const afterReload = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
-  const out = { drawn: M.liveStatusFx().map(e => e?.data?.name).filter(n => String(n).includes(TID)) };
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
+  const out = { drawn: own().map(e => e?.data?.name) };
   await game.actors.get(actorId).toggleStatusEffect("burning", { active: false });
   await new Promise(r => setTimeout(r, 1500));
-  out.after = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+  out.after = own().length;
   return out;
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
 check("nothing was persisted into the scene before the reload", flagsBeforeReload === 0, String(flagsBeforeReload));
@@ -291,28 +354,30 @@ check("and it still clears with the condition", afterReload.after === 0, String(
 console.log("\n§7 the world switch");
 const sw = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
   const actor = game.actors.get(actorId);
   const prior = game.settings.get("cp2020-augmented", "combatFxEnabled");
   const out = {};
   try {
     await actor.toggleStatusEffect("burning", { active: true });
     await new Promise(r => setTimeout(r, 1800));
-    out.onCount = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+    out.onCount = own().length;
     await game.settings.set("cp2020-augmented", "combatFxEnabled", false);
     // The switch is read per event, so the sweep is what a next event would do.
     M.syncSceneStatusFx();
     await new Promise(r => setTimeout(r, 1500));
-    out.sweptCount = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+    out.sweptCount = own().length;
     await actor.toggleStatusEffect("burning", { active: false });
     await actor.toggleStatusEffect("poison", { active: true });
     await new Promise(r => setTimeout(r, 1800));
-    out.offCount = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+    out.offCount = own().length;
   } finally {
     await game.settings.set("cp2020-augmented", "combatFxEnabled", prior);
     await actor.toggleStatusEffect("poison", { active: false }).catch(() => {});
     await new Promise(r => setTimeout(r, 1200));
     out.restored = game.settings.get("cp2020-augmented", "combatFxEnabled");
-    out.finalCount = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+    out.finalCount = own().length;
   }
   return out;
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
@@ -326,6 +391,8 @@ check("nothing left behind", sw.finalCount === 0, String(sw.finalCount));
 console.log("\n§8 an asset tier without the key");
 const degrade = await page.evaluate(async ({ mod, actorId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
   const FX = await import("/modules/cp2020-augmented/module/fx/effects.js");
   const actor = game.actors.get(actorId);
   const out = {};
@@ -333,12 +400,12 @@ const degrade = await page.evaluate(async ({ mod, actorId, TID }) => {
     FX._setDbProbe(() => false);
     await actor.toggleStatusEffect("burning", { active: true });
     await new Promise(r => setTimeout(r, 1500));
-    out.drawn = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+    out.drawn = own().length;
   } finally {
     FX._setDbProbe(null);
     await actor.toggleStatusEffect("burning", { active: false }).catch(() => {});
     await new Promise(r => setTimeout(r, 1200));
-    out.after = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+    out.after = own().length;
   }
   return out;
 }, { mod: MOD, actorId: fixture.actorId, TID: fixture.tokenId });
@@ -346,19 +413,33 @@ check("NEGATIVE: a key the installed tier lacks is skipped, not played", degrade
 check("and the seam restored cleanly", degrade.after === 0, String(degrade.after));
 
 /* ─────────────────── §9 figure deleted ─────────────────── */
+// ⛔ THIS SECTION IS RED WHILE A SECOND CLIENT IS SIGNED IN, and the failure is the broadcast defect
+// described at the top rather than this sweep. The mechanism: two clients draw two effects under the
+// SAME stamped name, `clearTokenStatusFx` ends that name once and registers ONE intent, and the engine
+// then reports TWO ends — so the second report reads as an expiry rather than as our own end, and the
+// re-issue draws the mark again. The user-facing symptom is worth stating plainly: with two GMs online,
+// deleting a burning figure can leave a ring behind on the canvas. Left failing on purpose; the count
+// of other clients is printed with it so the reason is never a mystery.
 console.log("\n§9 the figure is deleted while wearing a mark");
 const del = await page.evaluate(async ({ mod, actorId, tokenId, TID }) => {
   const M = await import(mod);
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
   const actor = game.actors.get(actorId);
   await actor.toggleStatusEffect("burning", { active: true });
   await new Promise(r => setTimeout(r, 1800));
-  const before = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length;
+  const before = own().length;
   await canvas.scene.deleteEmbeddedDocuments("Token", [tokenId]);
   await new Promise(r => setTimeout(r, 1800));
-  return { before, after: M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID)).length };
+  return {
+    before, after: own().length,
+    others: game.users.filter(u => u.active && u.id !== game.user.id).length,
+  };
 }, { mod: MOD, actorId: fixture.actorId, tokenId: fixture.tokenId, TID: fixture.tokenId });
 check("the mark was up before the delete", del.before === 1, String(del.before));
-check("the figure's marks are swept by name when it goes", del.after === 0, String(del.after));
+check("the figure's marks are swept by name when it goes", del.after === 0,
+  `${del.after} left`
+  + (del.after && del.others ? ` — ${del.others} other client(s) signed in; the duplicate-name end re-issues (broadcast defect, §8)` : ""));
 
 /* ─────────────────── cleanup ─────────────────── */
 await page.evaluate(async ({ actorId, tokenId }) => {
