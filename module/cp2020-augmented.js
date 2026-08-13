@@ -427,10 +427,12 @@ async function migrateFleshLimbStatus({ force = false } = {}) {
 
   // ⭐ THE COMPLETION FLAG IS WRITTEN BEFORE THE SWEEP, DELIBERATELY.
   // Reading `token.actor` on an unlinked token materializes that token's synthetic actor, so this
-  // sweep builds one for every unlinked token on every scene in the world — the largest single burst
-  // this module produces at load. Written AFTER the sweep (as it was), any throw left the flag unset,
-  // so the whole burst repeated on every boot of that world forever and never got past the throw.
-  // Writing it first bounds the cost at one attempt per world.
+  // sweep used to build one for every unlinked token on every scene in the world — the largest
+  // single burst this module produced at load (the delta peek in the loop below now skips tokens
+  // with nothing to migrate, which is nearly all of them). Written AFTER the sweep (as it was), any
+  // throw — or a browser that died under the burst before finishing — left the flag unset, so the
+  // whole burst repeated on every boot of that world forever. Writing it first bounds the cost at
+  // one attempt per world.
   // THE TRADE: a sweep that stops part-way is no longer retried on its own — the actors it never
   // reached keep their pre-split flags. That is why the failure below is a console.error that names
   // the re-run entry point, not a quiet warn.
@@ -440,6 +442,14 @@ async function migrateFleshLimbStatus({ force = false } = {}) {
     for (const scene of game.scenes ?? []) {
       for (const token of scene.tokens ?? []) {
         if (token.actorLink) continue;      // linked tokens share the world actor migrated above
+        // Peek at the RAW delta data before touching `token.actor` — that getter is what builds the
+        // synthetic actor (the whole document, every embedded item, validated), and a profiled field
+        // world showed this loop spending 25+ unbroken seconds doing exactly that for thousands of
+        // tokens that had nothing to migrate. The old key can only exist token-side if the token's
+        // own DELTA carries it (a synthetic actor's flag writes land on the delta); a delta without
+        // it has nothing token-level to move — whatever shows through came from the base actor,
+        // which the world-actor sweep above has already migrated. Plain object read, no construction.
+        if (!token.delta?._source?.flags?.[SCOPE]?.limbStatus) continue;
         await migrateActor(token.actor);    // the unlinked token's synthetic delta actor
       }
     }
