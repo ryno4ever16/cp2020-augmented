@@ -516,6 +516,25 @@ const layoutPure = await page.evaluate(async () => {
   ok("clicking a cell cycles body → seat → engine → body",
     L.cycleCell(".") === "S" && L.cycleCell("S") === "E" && L.cycleCell("E") === ".");
 
+  // ⭐ PAINTED SEATS FILL FRONT-RELATIVE, NOT IN READING ORDER (user ruling 2026-08-13). The two
+  // orders are the same thing on a north-facing vehicle — which is why every painted leg above is
+  // blind to the difference — and they disagree outright the moment the nose points sideways. This
+  // is that case, stated in coordinates: a 4-wide 2-deep car facing EAST, seats painted in the two
+  // top corners. Reading order would make the top-LEFT cell (index 0) the driver's, which on this
+  // car is the REAR-left seat; the vehicle's own rank/file order makes it index 3, the FRONT-left
+  // seat — the same cell the derived layout would call the driver's. One car, one driver's seat.
+  const east = L.layoutFor(4, 2, "e", "S..S....");
+  ok("an east-facing car fills its painted seats front-rank first",
+    j(east.seats) === "[3,0]", j(east.seats));
+  ok("so the painted driver takes the FRONT-left seat, not the top-left cell",
+    east.seats[0] === L.cellIndexAt(4, 2, "e", 0, 0) && east.seats[0] !== 0,
+    `driver cell ${east.seats[0]}, front-left is ${L.cellIndexAt(4, 2, "e", 0, 0)}, top-left is 0`);
+  ok("painted and derived agree about which cell is the driver's on the same car",
+    L.layoutFor(4, 2, "e", "..S.S...").seats[0] === L.layoutFor(4, 2, "e", "").seats[0],
+    j({ painted: L.layoutFor(4, 2, "e", "..S.S...").seats, derived: L.layoutFor(4, 2, "e", "").seats }));
+  ok("a north-facing car is unaffected — its ranks already run in reading order (negative)",
+    j(L.layoutFor(2, 4, "n", "..SSSSEE").seats) === "[2,3,4,5]", j(L.layoutFor(2, 4, "n", "..SSSSEE").seats));
+
   // Type-aware cover prefills (Core p.99 values, ruled D2).
   ok("cycle types contribute no cover", L.coverProfileFor("cycle").providesCover === false && L.coverProfileFor("cycle").bodySp === 0, j(L.coverProfileFor("cycle")));
   ok("AV types prefill body SP 40", L.coverProfileFor("AV-4").bodySp === 40 && L.coverProfileFor("AV-6").bodySp === 40, j(L.coverProfileFor("AV-4")));
@@ -699,6 +718,62 @@ check("after Reset the grid shows the derived roles again",
 check("after Reset the rider sits in the derived driver's seat (exact)",
   paint.afterReset.riderX === paint.vx + paint.grid && paint.afterReset.riderY === paint.vy + 2 * paint.grid,
   `x=${paint.afterReset.riderX} y=${paint.afterReset.riderY}`);
+
+/* ------------------------------ O2. painted seats fill front-relative, driven on a real car ----- */
+// The pure legs above state the ruling; this one puts a rider in the seat. A 4-wide 2-deep car facing
+// EAST with seats painted in its two top corners is the case where reading order and the vehicle's own
+// order disagree: reading order seats the driver in the REAR-left cell, front-relative order in the
+// FRONT-left one. The car is put back the way this section found it afterwards.
+const eastSeat = await page.evaluate(async ({ sceneId }) => {
+  const scene = game.scenes.get(sceneId);
+  const vehicle = game.actors.getName("__PW__Ride");
+  const grid = scene.grid.size;
+  const canvasMod = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-canvas.js`);
+  const rider = scene.tokens.find(t => t.name === "__PW__Rider");
+  const driver2 = scene.tokens.find(t => t.name === "__PW__Driver2");
+
+  for (const t of [rider, driver2]) await canvasMod.disembark(scene.tokens.get(t.id)).catch(() => {});
+  await new Promise(r => setTimeout(r, 700));
+
+  await vehicle.update({
+    "prototypeToken.width": 4, "prototypeToken.height": 2,
+    "system.layout.front": "e", "system.layout.cells": "S..S....",
+  });
+  await new Promise(r => setTimeout(r, 1200));
+  const vTok = scene.tokens.find(t => t.actorId === vehicle.id);
+  await vTok.update({ width: 4, height: 2 });
+  await new Promise(r => setTimeout(r, 900));
+
+  await canvasMod.boardVehicle(scene.tokens.get(rider.id), vehicle, vTok);
+  await window.__pwSettle(scene.id, rider.id);
+  const seated = scene.tokens.get(rider.id);
+  const out = {
+    grid, vx: vTok.x, vy: vTok.y,
+    x: seated.x, y: seated.y, idx: seated.flags["cp2020-augmented"].seatIndex,
+  };
+
+  // Put the car back: out of the seat, original footprint, no painted grid, no picked heading.
+  await canvasMod.disembark(scene.tokens.get(rider.id)).catch(() => {});
+  await new Promise(r => setTimeout(r, 600));
+  await vehicle.update({
+    "prototypeToken.width": 2, "prototypeToken.height": 4,
+    "system.layout.front": "", "system.layout.cells": "",
+  });
+  await vTok.update({ width: 2, height: 4 });
+  await new Promise(r => setTimeout(r, 900));
+  await canvasMod.boardVehicle(scene.tokens.get(rider.id), vehicle, vTok);
+  await window.__pwSettle(scene.id, rider.id);
+  out.restoredWidth = scene.tokens.find(t => t.actorId === vehicle.id).width;
+  return out;
+}, setup);
+
+check("the painted driver's seat is the car's FRONT-left cell, in coordinates",
+  eastSeat.idx === 0 && eastSeat.x === eastSeat.vx + 3 * eastSeat.grid && eastSeat.y === eastSeat.vy,
+  `idx=${eastSeat.idx} x=${eastSeat.x} y=${eastSeat.y} (front-left is ${eastSeat.vx + 3 * eastSeat.grid},${eastSeat.vy}; top-left would be ${eastSeat.vx},${eastSeat.vy})`);
+check("and it is NOT the top-left cell reading order would have picked (negative)",
+  eastSeat.x !== eastSeat.vx, `x=${eastSeat.x} vs vehicle x=${eastSeat.vx}`);
+check("the car is put back on its original footprint for the sections that follow",
+  eastSeat.restoredWidth === 2, String(eastSeat.restoredWidth));
 
 /* ------------------------------------------------------------------ P. free rotation (Layer 4) */
 

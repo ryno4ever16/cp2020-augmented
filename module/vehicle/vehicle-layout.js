@@ -184,21 +184,30 @@ export function derivedCells(w, h, front) {
 }
 
 /**
- * The order riders take PAINTED seats.
+ * The order riders take PAINTED seats — ranks front-to-back, driver's-left first within a rank, so
+ * the driver is the front-most, left-most painted seat.
  *
- * ⚠ RULED "reading order" (VEHICLE-LAYOUT-DESIGN.md L2: "driver = first painted seat in reading
- * order"), and that is what this returns: row-major, top-left first, INDEPENDENT of the Front
- * heading. Worth knowing that it pulls against the L1 correction one day later, which moved the
- * DERIVED driver from the top-left cell to the front-left one — so on an east-facing car the
- * painted driver sits in the rear-left seat while the derived driver sits in the front-left. The
- * two orders differ only for a hand-painted grid, and switching this function to the vehicle's own
- * rank/file order (the commented line) is the whole change if that reading is preferred.
+ * ⭐ RULED FRONT-RELATIVE (user, 2026-08-13): painted and derived layouts agree about what "first
+ * seat" means. The original L2 wording was "driver = first painted seat in reading order", which
+ * pulled against the L1 correction made one day later — that moved the DERIVED driver from the
+ * top-left cell to the front-left one. Reading order is a fact about the STRING; the two layers are
+ * describing the same vehicle, so the order that matters is a fact about the VEHICLE. On an
+ * east-facing car the two disagree outright: reading order seats the driver at the rear-left while
+ * the derived layout seats them at the front-left, and one car cannot have its driver in two places
+ * depending on which way its seats were entered.
+ *
+ * The walk is `derivedSeatOrder`'s, minus the engine-rank skip: every rank is offered, front first,
+ * and only the cells actually painted as seats are taken. A painted grid states its own engine
+ * region (possibly none), so there is no rank to skip on faith here.
  */
 export function paintedSeatOrder(painted, w, h, front) {
+  const fr = layoutFrame(w, h, front);
   const out = [];
-  for (let i = 0; i < painted.length; i++) if (painted[i] === CELL_SEAT) out.push(i);
-  // Front-relative alternative: order `out` by (rank, file) via cellIndexAt(w, h, front, …).
-  void front; void w; void h;
+  for (let rank = 0; rank < fr.ranks; rank++) {
+    for (const i of rankCells(w, h, front, rank)) {
+      if (painted[i] === CELL_SEAT) out.push(i);
+    }
+  }
   return out;
 }
 
