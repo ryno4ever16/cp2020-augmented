@@ -70,6 +70,10 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       layout: new f.SchemaField({
         // "" = derive from the footprint (wide ⇒ east, tall ⇒ south); else n/e/s/w.
         front:    new f.StringField({ initial: "" }),
+        // The painted grid: one character per footprint cell, row-major ("." body / "S" seat /
+        // "E" engine). "" = nothing painted, use the derived layout. A string whose length no
+        // longer matches the footprint is ignored rather than repaired (see parseCells).
+        cells:    new f.StringField({ initial: "" }),
         // Cover SP overrides. null = use the type's book prefill (vehicle-layout.js coverProfileFor);
         // a typed 0 is a real answer ("this stops nothing") and is kept.
         bodySp:   new f.NumberField({ initial: null, nullable: true, required: false }),

@@ -30,6 +30,27 @@
                placeholder="{{layout.engineSp}}" min="0" step="1">
     </span>
 </div>
+{{!-- The paint grid: the footprint drawn as clickable cells, one click per role change
+      (body → seat → engine → body). Rows are real rows rather than a CSS grid so no column count
+      has to be written into a style attribute. An unpainted vehicle shows its DERIVED layout, so
+      the grid opens on what the vehicle is already doing. --}}
+<div class="field span-two-cells cp-veh-cellblock">
+    <label title="{{CPLocal 'Vehicle.LayoutGridTip'}}">{{CPLocal "Vehicle.LayoutGridLabel"}}</label>
+    <span class="cp-veh-cellgrid-wrap">
+        <span class="cp-veh-cellgrid">
+            {{#each layout.grid}}
+            <span class="cp-veh-cellrow">
+                {{#each this}}
+                <button type="button" class="cp-veh-cell cp-veh-cell-{{role}}" data-action="layoutCell"
+                        data-index="{{index}}" title="{{title}}" aria-label="{{title}}">{{#if icon}}<i class="{{icon}}"></i>{{/if}}</button>
+                {{/each}}
+            </span>
+            {{/each}}
+        </span>
+        <a class="cp-veh-layout-reset" data-action="layoutReset"
+           title="{{CPLocal 'Vehicle.LayoutResetTip'}}">{{CPLocal "Vehicle.LayoutResetLabel"}}</a>
+    </span>
+</div>
 {{#unless layout.providesCover}}
 <div class="field span-two-cells">
     <label class="cp-veh-nocover" title="{{CPLocal 'Vehicle.CoverNoneTip'}}">{{CPLocal "Vehicle.CoverNoneLabel"}}</label>

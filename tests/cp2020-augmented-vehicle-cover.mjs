@@ -117,6 +117,18 @@ const res = await page.evaluate(async (SCOPE) => {
     `${turnedBody[0]?.sp} / ${turnedEng[0]?.sp}`);
   await car.update({ "system.layout.front": "" });
 
+  /* A PAINTED engine replaces the derived one: put the engine block in the column the bodywork
+     line crosses, and the two answers swap over. */
+  await car.update({ "system.layout.cells": ".E...E.." });
+  const paintedBody = cov.coverBetween(aBody, tBody);
+  const paintedEng = cov.coverBetween(aEng, tEng);
+  ok("the ray reads the PAINTED engine cells", paintedBody[0]?.sp === 35, String(paintedBody[0]?.sp));
+  ok("the painted row names the engine block", /engine block/i.test(paintedBody[0]?.label ?? ""), String(paintedBody[0]?.label));
+  ok("the column the derived engine used to occupy is now bodywork", paintedEng[0]?.sp === 10, String(paintedEng[0]?.sp));
+  await car.update({ "system.layout.cells": "" });
+  ok("clearing the grid restores the derived engine", cov.coverBetween(aEng, tEng)[0]?.sp === 35,
+    String(cov.coverBetween(aEng, tEng)[0]?.sp));
+
   /* Type prefills + typed override. */
   await car.update({ "system.vehicleType": "AV-4" });
   ok("an AV prefills the armoured 40", cov.coverBetween(aBody, tBody)[0]?.sp === 40, String(cov.coverBetween(aBody, tBody)[0]?.sp));

@@ -9,7 +9,7 @@ import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 import { localize, localizeParam } from "../utils.js";
 import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
-import { FRONTS, resolveFront, coverSpFor } from "../vehicle/vehicle-layout.js";
+import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells } from "../vehicle/vehicle-layout.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -60,6 +60,8 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaSystemDelete: CyberpunkVehicleSheet._onAcpaSystemDelete,
       occupantDisembark: CyberpunkVehicleSheet._onOccupantDisembark,
       layoutFront:      CyberpunkVehicleSheet._onLayoutFront,
+      layoutCell:       CyberpunkVehicleSheet._onLayoutCell,
+      layoutReset:      CyberpunkVehicleSheet._onLayoutReset,
     },
   };
 
@@ -276,8 +278,29 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     // keeps deriving — including when the GM later changes the vehicle's type.
     const cover = coverSpFor(system);
     const storedSp = (v) => (typeof v === "number" && Number.isFinite(v)) ? v : "";
+    // The paint grid, as rows of cells. An unpainted vehicle shows its DERIVED roles, so the grid
+    // opens on what the vehicle is already doing rather than a blank slate — and the first click
+    // materializes that same layout with one cell changed.
+    const resolved = layoutFor(w, h, system?.layout?.front, system?.layout?.cells);
+    const ROLE = {
+      ".": { role: "body", icon: "", key: "Vehicle.CellBody" },
+      "S": { role: "seat", icon: "fa-solid fa-user", key: "Vehicle.CellSeat" },
+      "E": { role: "engine", icon: "fa-solid fa-gear", key: "Vehicle.CellEngine" },
+    };
+    const grid = [];
+    for (let row = 0; row < h; row++) {
+      const cells = [];
+      for (let col = 0; col < w; col++) {
+        const index = row * w + col;
+        const spec = ROLE[resolved.cells[index]] ?? ROLE["."];
+        cells.push({ index, role: spec.role, icon: spec.icon, title: localize(spec.key) });
+      }
+      grid.push(cells);
+    }
     return {
       front,
+      grid,
+      painted: resolved.painted,
       providesCover: cover.providesCover,
       bodySp: cover.bodySp,
       engineSp: cover.engineSp,
@@ -421,6 +444,36 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     if (!FRONTS.includes(next)) return;
     if (next === String(this.actor.system?.layout?.front ?? "")) return;
     await this.actor.update({ "system.layout.front": next });
+  }
+
+  /**
+   * Paint one footprint cell: body → seat → engine → body. The write is the WHOLE string, built
+   * from the layout currently in force — so the first click on an unpainted vehicle materializes
+   * its derived layout with exactly one cell changed, and the GM never starts from a blank grid.
+   */
+  static async _onLayoutCell(event, target) {
+    event.preventDefault();
+    if (!this.isEditable) return;
+    const index = Number(target?.dataset?.index);
+    if (!Number.isInteger(index) || index < 0) return;
+    const w = Number(this.actor.prototypeToken?.width) || 1;
+    const h = Number(this.actor.prototypeToken?.height) || 1;
+    const layout = this.actor.system?.layout ?? {};
+    const cells = [...layoutFor(w, h, layout.front, layout.cells).cells];
+    if (index >= cells.length) return;
+    cells[index] = cycleCell(cells[index]);
+    await this.actor.update({ "system.layout.cells": formatCells(cells) });
+  }
+
+  /**
+   * Back to the defaults: drop the painted grid AND the picked heading, so the vehicle derives both
+   * from its footprint again. Clearing the grid alone would leave a vehicle half-overridden, which
+   * is harder to reason about than either end state.
+   */
+  static async _onLayoutReset(event, _target) {
+    event.preventDefault();
+    if (!this.isEditable) return;
+    await this.actor.update({ "system.layout.cells": "", "system.layout.front": "" });
   }
 
   static _onVehicleDamage(event, _target) {

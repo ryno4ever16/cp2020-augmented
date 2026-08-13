@@ -13,7 +13,7 @@
 
 import { deleteFieldUpdate, localizeParam } from "../utils.js";
 import { seatSlotPosition, placeBeside } from "./vehicle-seating.js";
-import { derivedSeatOrder } from "./vehicle-layout.js";
+import { layoutFor } from "./vehicle-layout.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_SORT = -100;            // render below crew tokens
@@ -91,7 +91,8 @@ function tokenRect(doc, gridSize) {
 export function seatOrderFor(vehicleActor, vehicleTokenDoc) {
   const w = Number(vehicleTokenDoc?.width) || Number(vehicleActor?.prototypeToken?.width) || 1;
   const h = Number(vehicleTokenDoc?.height) || Number(vehicleActor?.prototypeToken?.height) || 1;
-  return derivedSeatOrder(w, h, vehicleActor?.system?.layout?.front);
+  const layout = vehicleActor?.system?.layout ?? {};
+  return layoutFor(w, h, layout.front, layout.cells).seats;
 }
 
 /**
@@ -279,17 +280,19 @@ export function registerVehicleCanvasHooks() {
   });
 
   // Layout follows the sheet: when a vehicle actor's prototype-token size changes (the Footprint
-  // field) OR its Front heading does (the Front picker), resize its handle tokens on every scene
-  // and re-seat anyone aboard. Both edits move seats — the footprint changes which cells exist, the
-  // heading changes which of them are seats and in what order — and a rider's stored seat INDEX is
-  // the only thing that survives either, by design. Runs on the active GM's client only (one
-  // writer, and the GM can modify any token) — the same gating as the crew-follow relay.
+  // field), its Front heading does (the picker) or its painted grid does, resize its handle tokens
+  // on every scene and re-seat anyone aboard. All three edits move seats — the footprint changes
+  // which cells exist, the heading changes which of them are seats and in what order, the paint
+  // grid names them outright — and a rider's stored seat INDEX is the only thing that survives any
+  // of them, by design. Runs on the active GM's client only (one writer, and the GM can modify any
+  // token) — the same gating as the crew-follow relay.
   Hooks.on("updateActor", async (actor, change) => {
     if (actor.type !== "cp2020-augmented.vehicle") return;
     const pt = change?.prototypeToken;
     const sizeChanged = !!pt && (pt.width !== undefined || pt.height !== undefined);
-    const frontChanged = change?.system?.layout?.front !== undefined;
-    if (!sizeChanged && !frontChanged) return;
+    const layoutChanged = change?.system?.layout?.front !== undefined
+      || change?.system?.layout?.cells !== undefined;
+    if (!sizeChanged && !layoutChanged) return;
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
     const gw = Math.max(1, Number(actor.prototypeToken?.width) || 1);
     const gh = Math.max(1, Number(actor.prototypeToken?.height) || 1);
@@ -304,7 +307,7 @@ export function registerVehicleCanvasHooks() {
       // rig-measured, the doc still answered with its old footprint on the pass that had just
       // resized it, so the rect was the new shape while the seat order was still the old one and
       // riders landed in cells that belonged to neither.
-      const order = derivedSeatOrder(gw, gh, actor.system?.layout?.front);
+      const order = layoutFor(gw, gh, actor.system?.layout?.front, actor.system?.layout?.cells).seats;
       const updates = [];
       const movement = {};
       for (const t of scene.tokens) {

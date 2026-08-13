@@ -123,6 +123,113 @@ export function derivedSeatOrder(w, h, front) {
   return out;
 }
 
+/* ──────────────────────────────── the painted grid (Layer 2) ──────────────────────────────── */
+
+/**
+ * A vehicle whose shape the defaults get wrong — a rear-engine car, a bus, a pickup bed, a gunner
+ * standing where a passenger would sit — is edited by PAINTING its footprint: one character per
+ * cell, row-major, read straight off the sheet's grid.
+ *
+ *   "." body (the default)   "S" seat   "E" engine
+ *
+ * Painted cells REPLACE the derived layer wholesale rather than merging with it: seats become the
+ * painted seats, the engine region becomes the painted engine cells (possibly none at all, which
+ * is how a trailer or an electric runabout says it has no engine block). Nothing painted = the
+ * Layer-1 defaults, so the string is absent on every vehicle that never needed it.
+ */
+export const CELL_BODY = ".";
+export const CELL_SEAT = "S";
+export const CELL_ENGINE = "E";
+const CELL_CYCLE = [CELL_BODY, CELL_SEAT, CELL_ENGINE];
+
+/**
+ * The painted grid as an array of cell characters, or null when there is nothing usable to read.
+ * A string whose length does not match the footprint is treated as ABSENT rather than repaired:
+ * it was painted for a different shape, and silently stretching it would put seats in cells the
+ * GM never chose. Resizing a vehicle therefore drops back to the derived layout, which is visible
+ * on the sheet the moment it is opened.
+ */
+export function parseCells(cells, w, h) {
+  const gw = Math.max(1, Math.round(Number(w) || 1));
+  const gh = Math.max(1, Math.round(Number(h) || 1));
+  const s = String(cells ?? "").trim().toUpperCase();
+  if (!s || s.length !== gw * gh) return null;
+  const arr = [...s];
+  if (!arr.every(c => CELL_CYCLE.includes(c))) return null;
+  return arr;
+}
+
+/** The stored form of a painted grid. */
+export function formatCells(arr) {
+  return (arr ?? []).map(c => (CELL_CYCLE.includes(c) ? c : CELL_BODY)).join("");
+}
+
+/** Body → Seat → Engine → Body. The whole editor is this one step, repeated by clicking. */
+export function cycleCell(ch) {
+  const i = CELL_CYCLE.indexOf(String(ch ?? CELL_BODY).toUpperCase());
+  return CELL_CYCLE[(i < 0 ? 0 : i + 1) % CELL_CYCLE.length];
+}
+
+/**
+ * The cell roles a vehicle STARTS from when the GM first paints one — the derived layout written
+ * out, so the grid opens showing what the vehicle is already doing instead of a blank slate.
+ */
+export function derivedCells(w, h, front) {
+  const gw = Math.max(1, Math.round(Number(w) || 1));
+  const gh = Math.max(1, Math.round(Number(h) || 1));
+  const arr = new Array(gw * gh).fill(CELL_BODY);
+  for (const i of derivedEngineCells(gw, gh, front)) arr[i] = CELL_ENGINE;
+  for (const i of derivedSeatOrder(gw, gh, front)) arr[i] = CELL_SEAT;
+  return arr;
+}
+
+/**
+ * The order riders take PAINTED seats.
+ *
+ * ⚠ RULED "reading order" (VEHICLE-LAYOUT-DESIGN.md L2: "driver = first painted seat in reading
+ * order"), and that is what this returns: row-major, top-left first, INDEPENDENT of the Front
+ * heading. Worth knowing that it pulls against the L1 correction one day later, which moved the
+ * DERIVED driver from the top-left cell to the front-left one — so on an east-facing car the
+ * painted driver sits in the rear-left seat while the derived driver sits in the front-left. The
+ * two orders differ only for a hand-painted grid, and switching this function to the vehicle's own
+ * rank/file order (the commented line) is the whole change if that reading is preferred.
+ */
+export function paintedSeatOrder(painted, w, h, front) {
+  const out = [];
+  for (let i = 0; i < painted.length; i++) if (painted[i] === CELL_SEAT) out.push(i);
+  // Front-relative alternative: order `out` by (rank, file) via cellIndexAt(w, h, front, …).
+  void front; void w; void h;
+  return out;
+}
+
+/**
+ * THE one layout answer every consumer reads — seating, the engine region, the cover ray and the
+ * sheet's own grid all come through here, so they cannot disagree about the same vehicle.
+ * @returns {{front:string, painted:boolean, cells:string[], engine:number[], seats:number[]}}
+ */
+export function layoutFor(w, h, front, cells) {
+  const gw = Math.max(1, Math.round(Number(w) || 1));
+  const gh = Math.max(1, Math.round(Number(h) || 1));
+  const f = resolveFront(front, gw, gh);
+  const painted = parseCells(cells, gw, gh);
+  if (!painted) {
+    return {
+      front: f, painted: false, cells: derivedCells(gw, gh, f),
+      engine: derivedEngineCells(gw, gh, f), seats: derivedSeatOrder(gw, gh, f),
+    };
+  }
+  const engine = [];
+  for (let i = 0; i < painted.length; i++) if (painted[i] === CELL_ENGINE) engine.push(i);
+  const seats = paintedSeatOrder(painted, gw, gh, f);
+  return {
+    front: f, painted: true, cells: painted, engine,
+    // A grid painted with no seats at all would be a vehicle nobody can board, which reads as a
+    // slip rather than an instruction — fall back to the derived seating and leave the painted
+    // engine region standing.
+    seats: seats.length ? seats : derivedSeatOrder(gw, gh, f),
+  };
+}
+
 /* ─────────────────────────────────── segment geometry ─────────────────────────────────── */
 
 /**

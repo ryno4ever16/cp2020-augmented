@@ -31,7 +31,7 @@
 
 import { localizeParam } from "../utils.js";
 import { footprintCells } from "./vehicle-seating.js";
-import { derivedEngineCells, coverSpFor, segmentHitsRect } from "./vehicle-layout.js";
+import { layoutFor, coverSpFor, segmentHitsRect } from "./vehicle-layout.js";
 import { isVehicleTokenDoc } from "./vehicle-canvas.js";
 
 const SCOPE = "cp2020-augmented";
@@ -80,7 +80,7 @@ export function vehicleCoverRowsOn(scene) {
       destroyed: tracked ? (pool <= 0 || system.destroyed === true) : false,
       center: { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 },
       rect, grid,
-      engineCells: derivedEngineCells(w, h, system.layout?.front),
+      engineCells: layoutFor(w, h, system.layout?.front, system.layout?.cells).engine,
       footprint: { w, h },
     });
   }

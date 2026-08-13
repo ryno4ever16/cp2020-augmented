@@ -501,6 +501,21 @@ const layoutPure = await page.evaluate(async () => {
   ok("single-rank footprint declares no engine region", j(L.derivedEngineCells(4, 1, "n")) === "[]", j(L.derivedEngineCells(4, 1, "n")));
   ok("single-rank footprint keeps every cell as seating", j(L.derivedSeatOrder(4, 1, "n")) === "[0,1,2,3]", j(L.derivedSeatOrder(4, 1, "n")));
 
+  // The painted grid (Layer 2): painted roles replace the derived ones wholesale.
+  ok("nothing painted reads as the derived layout", L.layoutFor(2, 4, "n", "").painted === false);
+  ok("an unpainted grid shows the derived roles", L.formatCells(L.layoutFor(2, 4, "n", "").cells) === "EESSSSSS",
+    L.formatCells(L.layoutFor(2, 4, "n", "").cells));
+  const bus = L.layoutFor(2, 4, "n", "..SSSSEE");
+  ok("a painted grid reads as painted", bus.painted === true);
+  ok("painted seats replace the derived order", j(bus.seats) === "[2,3,4,5]", j(bus.seats));
+  ok("a painted rear engine replaces the derived front one", j(bus.engine) === "[6,7]", j(bus.engine));
+  ok("the painted string round-trips", L.formatCells(bus.cells) === "..SSSSEE", L.formatCells(bus.cells));
+  ok("a grid painted for a different footprint is ignored, not stretched", L.layoutFor(2, 4, "n", "..S").painted === false);
+  ok("negative case: a grid with no seats falls back to derived seating",
+    j(L.layoutFor(2, 4, "n", "EEEE....").seats) === "[2,3,4,5,6,7]", j(L.layoutFor(2, 4, "n", "EEEE....").seats));
+  ok("clicking a cell cycles body → seat → engine → body",
+    L.cycleCell(".") === "S" && L.cycleCell("S") === "E" && L.cycleCell("E") === ".");
+
   // Type-aware cover prefills (Core p.99 values, ruled D2).
   ok("cycle types contribute no cover", L.coverProfileFor("cycle").providesCover === false && L.coverProfileFor("cycle").bodySp === 0, j(L.coverProfileFor("cycle")));
   ok("AV types prefill body SP 40", L.coverProfileFor("AV-4").bodySp === 40 && L.coverProfileFor("AV-6").bodySp === 40, j(L.coverProfileFor("AV-4")));
@@ -580,6 +595,110 @@ check("the lit heading follows the click", frontLive.litAfter.length === 1 && fr
   frontLive.litAfter.join(","));
 check("the picker leaks no raw key", frontLive.rawKeyLeak === false);
 check("the Maximum Metal layout carries the same picker", frontLive.mmHasPicker === true);
+
+/* ------------------------------------------------------------------ O. the paint grid, driven */
+
+const paint = await page.evaluate(async ({ sceneId }) => {
+  const scene = game.scenes.get(sceneId);
+  const vehicle = game.actors.getName("__PW__Ride");
+  const grid = scene.grid.size;
+  await vehicle.update({ "system.layout.front": "n", "system.layout.cells": "" });
+  await new Promise(r => setTimeout(r, 500));
+
+  await vehicle.sheet.render(true);
+  await new Promise(r => setTimeout(r, 900));
+  const cellsOf = () => [...vehicle.sheet.element.querySelectorAll(".cp-veh-cell")];
+  const rowsOf = () => [...vehicle.sheet.element.querySelectorAll(".cp-veh-cellrow")];
+  const roleOf = (btn) => [...btn.classList].find(c => c.startsWith("cp-veh-cell-"))?.replace("cp-veh-cell-", "") ?? "";
+
+  const opened = {
+    count: cellsOf().length,
+    rows: rowsOf().length,
+    perRow: rowsOf()[0]?.querySelectorAll(".cp-veh-cell").length ?? 0,
+    roles: cellsOf().map(roleOf),
+    rawKeyLeak: cellsOf().some(b => /CYBERPUNK\./.test(b.title)),
+  };
+
+  // Two real clicks on the top-left cell: engine → body → seat (it opens as engine, since the nose
+  // is north and that is the derived hood).
+  const clickCell = async (idx) => {
+    cellsOf().find(b => Number(b.dataset.index) === idx)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise(r => setTimeout(r, 700));
+  };
+  await clickCell(0);
+  const afterOne = { stored: vehicle.system.layout.cells, role: roleOf(cellsOf()[0]) };
+  await clickCell(0);
+  const afterTwo = { stored: vehicle.system.layout.cells, role: roleOf(cellsOf()[0]) };
+  await vehicle.sheet.close();
+
+  // A bus: rear engine, four seats down the middle.
+  await vehicle.update({ "system.layout.cells": "..SSSSEE" });
+  await new Promise(r => setTimeout(r, 700));
+  const rider = scene.tokens.find(t => t.name === "__PW__Rider");
+  const driver2 = scene.tokens.find(t => t.name === "__PW__Driver2");
+  const canvasMod = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-canvas.js`);
+  const vTok = scene.tokens.find(t => t.actorId === vehicle.id);
+  // Both riders out first, so the painted seats are filled from the top.
+  await canvasMod.disembark(rider);
+  await canvasMod.disembark(driver2).catch(() => {});
+  await new Promise(r => setTimeout(r, 700));
+  await canvasMod.boardVehicle(scene.tokens.get(rider.id), vehicle, vTok);
+  await canvasMod.boardVehicle(scene.tokens.get(driver2.id), vehicle, vTok);
+  await window.__pwSettle(scene.id, rider.id);
+  await window.__pwSettle(scene.id, driver2.id);
+  // Snapshot NOW, by value: these are live documents and the Reset below re-seats both riders.
+  const snap = (t) => ({ x: t.x, y: t.y, idx: t.flags["cp2020-augmented"].seatIndex });
+  const seatA = snap(scene.tokens.get(rider.id));
+  const seatB = snap(scene.tokens.get(driver2.id));
+
+  // Reset, driven from the sheet.
+  await vehicle.sheet.render(true);
+  await new Promise(r => setTimeout(r, 900));
+  vehicle.sheet.element.querySelector(".cp-veh-layout-reset")
+    ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await new Promise(r => setTimeout(r, 1000));
+  const afterReset = {
+    cells: vehicle.system.layout.cells,
+    front: vehicle.system.layout.front,
+    roles: [...vehicle.sheet.element.querySelectorAll(".cp-veh-cell")].map(roleOf),
+  };
+  await window.__pwSettle(scene.id, rider.id);
+  afterReset.riderX = scene.tokens.get(rider.id).x;
+  afterReset.riderY = scene.tokens.get(rider.id).y;
+  await vehicle.sheet.close();
+
+  return {
+    grid, vx: vTok.x, vy: vTok.y, opened, afterOne, afterTwo, afterReset, seatA, seatB,
+  };
+}, setup);
+
+check("the grid draws one cell per footprint square", paint.opened.count === 8, String(paint.opened.count));
+check("the grid is laid out as the footprint's rows", paint.opened.rows === 4 && paint.opened.perRow === 2,
+  `${paint.opened.rows}x${paint.opened.perRow}`);
+check("an unpainted grid opens showing the derived roles",
+  paint.opened.roles.join(",") === "engine,engine,seat,seat,seat,seat,seat,seat", paint.opened.roles.join(","));
+check("the grid leaks no raw key", paint.opened.rawKeyLeak === false);
+check("one click cycles the cell and materializes the whole grid",
+  paint.afterOne.stored === ".ESSSSSS" && paint.afterOne.role === "body", `${paint.afterOne.stored} / ${paint.afterOne.role}`);
+check("a second click carries it on round the cycle",
+  paint.afterTwo.stored === "SESSSSSS" && paint.afterTwo.role === "seat", `${paint.afterTwo.stored} / ${paint.afterTwo.role}`);
+check("boarding fills the first painted seat (exact)",
+  paint.seatA.idx === 0 && paint.seatA.x === paint.vx && paint.seatA.y === paint.vy + paint.grid,
+  `idx=${paint.seatA.idx} x=${paint.seatA.x} y=${paint.seatA.y}`);
+check("the next rider takes the second painted seat (exact)",
+  paint.seatB.idx === 1 && paint.seatB.x === paint.vx + paint.grid && paint.seatB.y === paint.vy + paint.grid,
+  `idx=${paint.seatB.idx} x=${paint.seatB.x} y=${paint.seatB.y}`);
+check("Reset clears the painted grid and the picked heading",
+  paint.afterReset.cells === "" && paint.afterReset.front === "",
+  `cells="${paint.afterReset.cells}" front="${paint.afterReset.front}"`);
+// Reset drops back to the derived heading for a 2-wide 4-deep footprint, which is SOUTH: the
+// engine is the bottom row and the driver's seat the right-hand cell of the row above it.
+check("after Reset the grid shows the derived roles again",
+  paint.afterReset.roles.join(",") === "seat,seat,seat,seat,seat,seat,engine,engine",
+  paint.afterReset.roles.join(","));
+check("after Reset the rider sits in the derived driver's seat (exact)",
+  paint.afterReset.riderX === paint.vx + paint.grid && paint.afterReset.riderY === paint.vy + 2 * paint.grid,
+  `x=${paint.afterReset.riderX} y=${paint.afterReset.riderY}`);
 
 /* ------------------------------------------------------------------ L. chemical shell leaves a cloud on this core */
 
