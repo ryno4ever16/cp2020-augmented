@@ -26,7 +26,7 @@ import { markCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
-import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard } from "./save-rolls.js";
+import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { mechRoundTickEnabled } from "../settings.js";
 import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, localizeParam } from "../utils.js";
@@ -1228,10 +1228,16 @@ async function _runOverTimeTick(combat) {
           surviving.push({ location, turnsLeft: newTurnsLeft, formula });
         }
       }
+      // ⭐ THE CORE CONDITION GOES WITH THE LAST MARKER, AND ONLY WITH THE LAST ONE. The flag is
+      // mirrored onto core's `corrode` when the etch is applied (save-rolls.js mirrorDotStatus), so the
+      // token HUD and the effects list say what the flag says; this is the other end of that. Lowering
+      // it while entries survive would clear the mark off a figure that is still being eaten — hence
+      // the branch rather than an unconditional clear at the end of the pass.
       if (surviving.length > 0) {
         await actor.setFlag("cp2020-augmented", "dotState", surviving);
       } else {
         await actor.unsetFlag("cp2020-augmented", "dotState");
+        await mirrorDotStatus(actor, "corrode", false);
       }
     }
   }
@@ -1294,10 +1300,13 @@ async function _runOverTimeTick(combat) {
           surviving.push({ location, turnsLeft: newTurnsLeft, formula, mult: mult / 2 });
         }
       }
+      // The burn's own end of the same mirror (see the acid branch above): `burning` comes off when the
+      // LAST fire marker expires, never while one is still counting down at another location.
       if (surviving.length > 0) {
         await actor.setFlag("cp2020-augmented", "fireDotState", surviving);
       } else {
         await actor.unsetFlag("cp2020-augmented", "fireDotState");
+        await mirrorDotStatus(actor, "burning", false);
       }
     }
   }
