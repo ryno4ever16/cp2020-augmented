@@ -172,6 +172,7 @@ the shot. Each element reaches the other clients differently:
 | Shot audio | `AudioHelper.play(..., true)` broadcast | interface channel, so each player's own slider governs it |
 | Muzzle **light** | the module's own socket channel, drawn locally by every receiver | no document is written |
 | Sprites (lance, tracer/volley, impact, smoke, ground fire) | Sequencer's own socket | |
+| **Condition overlays** (§2a) | **none — each client draws its own** | the one element that is deliberately NOT transported. Every client reconciles the same public condition state and reaches the same answer, so a push would only stack duplicates. `.locally()` on the draw, `push = false` on the end; ruled 2026-08-13 |
 | Face-target turn | an ordinary token document update | **the only document write on this rail** |
 
 ### 1.3 Dependency policy
@@ -538,6 +539,14 @@ reasons before it passed.
   condition with a shipped row is already public: core draws its own status icon for every client, and
   the module's lasting-damage cards post to chat. **There is no GM-only condition on this system to
   mirror** — the survey found none.
+- **⭐⭐ Drawn AND ended LOCALLY** (`.locally()` on the effect section; `endEffects({name}, false)`),
+  fixed 2026-08-13. Every client reconciles the same public state and reaches the same answer, so
+  nothing needs to be sent: with the section's user list holding only the caller, Sequencer does not
+  push at all. The end is local for the mirror reason — a pushed end reaches across and takes down a
+  copy another client is still reconciling against, and that client, holding no intent for it, reads
+  its own effect vanishing as an expiry and draws it straight back. Both halves together are what makes
+  the "each client for itself" contract hold; either half alone does not. Pinned by the keeper's §11,
+  which signs a second session in and counts **one** ring per canvas and **zero** after the delete.
 - **Attached, not planted** (`attachTo`, `followRotation: false`), so a figure that walks carries its
   condition and a badge stays upright when the rail turns a token to face a shot.
 
@@ -1629,6 +1638,27 @@ is the table, so a sixth condition is a row rather than a change:
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
 
+**2026-08-13 — a condition overlay is drawn AND ended by each client alone.**
+The open call raised the same day (§8) offered two answers: play locally, or nominate one client to
+draw for everyone. **Ruled (a), locally.** The reasoning is that the file is a reconciler, not a
+broadcaster — every client already computes the same answer from the same public condition state, so a
+push is not sharing information, it is a second client asserting the same fact a second time, and the
+screen shows one ring per connected client. Option (b) halves the drawing work but makes what a table
+sees depend on who happens to be logged in, which is a worse property than the cost it saves. The half
+that is easy to miss: `.locally()` on the draw is **not enough on its own**. `EffectManager.endEffects`
+pushes by default too, so one client's sweep would reach across and end a copy another client is still
+reconciling against; that client registered no intent for it, reads its own effect vanishing as an
+expiry, and draws the mark straight back — which is exactly how deleting a burning figure could leave a
+ring behind with two GMs online. Both ends had to move together.
+
+| Ruling | Value | Why |
+|---|---|---|
+| the draw is local | `.locally()` on the effect section | with the section's user list holding only the caller, Sequencer skips the socket entirely (`push` is computed from exactly that) |
+| the end is local | `endEffects({ name }, false)` | the mirror of the above; a pushed end cancels another client's copy and triggers its re-issue |
+| the stamped name is **unchanged** | `cp2020-augmented.statusfx.<tokenId>.<rowId>` | every client draws the same name for the same figure — they no longer collide because they no longer share a canvas |
+| not option (b), a designated drawer | — | the picture would depend on who is connected |
+| proof is two real sessions | keeper §11 | one ring per canvas, its own, zero on both after the delete — counted, not reasoned about |
+
 **2026-08-13 — ⏪ the aim wheel sets WIDTH, and the width is the table's to set.**
 The user, watching the gesture: *"shotgun region placement scroll wheel lengthens instead of widening.
 It should go meter by meter."* Two decisions in one sentence. **What the plain wheel does**: the
@@ -2451,7 +2481,7 @@ presented while the screen stayed empty.
 | **The acid row's colour is a build-lane pick** | ⚠ Carried across the ring rework: hue **−120**, saturate **+0.15** now rotates the molten-earth ring's orange to acid green (the ring set has no green). Deleting the `colour` field restores the asset's own orange. |
 | **The poison row's colour is a build-lane pick** | ⚠ New with the ring rework: hue **+130**, saturate **+0.1** rotates the smoke ring's blue-purple toward a fume green. Deleting the `colour` field restores the asset's own colour. |
 | ~~Rings ride OVER the token; the reference draws its Below ring UNDER the mini~~ | ⏪ **CLOSED 2026-08-12 — the user ruled "reference exact".** All four ring rows joined the ground row under the mini (`below: true`, `aboveLighting: false`), and the darkness cost is accepted rather than fixed: on an unlit square a condition ring is not drawn. Full entry in §6; the one-field way back is recorded at each row. |
-| ⛔ **Every connected client's rail broadcasts its own overlay** | ⚠ **NEW 2026-08-13, needs a call — found while certifying the row above, NOT fixed.** The file's design is that "the overlays are drawn by each client for itself", but the draw goes out through Sequencer's default push, so each client's rail plays its copy on *every* client: with two GMs signed in, one burning figure wears **two** stacked rings on both screens; with four clients, four. Proven on the rig — the second entry's `creatorUserId` is the other client's id, and a `_setDbProbe` set locally could not suppress it. Two candidate fixes and they are not equivalent: **(a)** play locally (`.locally()` on the effect section — Sequencer 4.2.3 has it), which matches the stated design and needs the matching question answered for `EffectManager.endEffects`, whose push would otherwise end another client's copy; **(b)** one designated drawer (the active GM) broadcasting for everyone, which halves the work but makes the picture depend on who is connected. The keeper is scoped to this client's own creations meanwhile and prints the foreign count on every run, so this cannot go quiet. |
+| ~~⛔ **Every connected client's rail broadcasts its own overlay**~~ | ⏪ **CLOSED 2026-08-13 — ruled (a), built, and pinned by two real sessions.** Full entry in §6. The defect: the draw went out through Sequencer's default push, so each client played its copy on *every* client and one burning figure wore one ring per connected client on every screen. The fix is **both halves local**, which is the part worth carrying forward — `.locally()` on the draw alone would have left `endEffects` pushing, and a pushed end cancels a copy the other client is still reconciling against, which that client then reads as an expiry and redraws. Option (b), a single designated drawer, was not taken: it halves the work but makes the picture depend on who is connected. Keeper §11 signs a second GM in and asserts one ring per canvas, its own, and zero on both after the figure is deleted. |
 | **A stronger burning tier is one key away, and it pulses** | ⚠ The reference tiers its fire (Mild = below ring, Strong = above ring, Deadly = both at `_03`, patreon-gated). Our single `fireDotState` ships the below ring. `shield_themed.above.fire.01.orange` is installed and free — but it DECAYS across its own clip (thirds 60.2/49.9/40.9) and pulses every 5 s when looped. If a stronger look is wanted, layering below+above at `_01` is the honest free-tier approximation; the pulse rides along and is recorded here first. |
 | **The dead ring is invisible on an unlit square** | ⚠ **Stated so it is a decision, not a surprise.** It is drawn **below the tokens**, which is also below the lighting, so on a dark scene it is not there to be seen. Accepted on this row alone because core's own skull icon on the token is unaffected and still carries the fact. One field (`placement: "badge"`) lifts it out. |
 | **The ring opacities are build-lane picks; the scales are measured** | ⚠ Each ring's `scaleToObject` is the decode's ink-fraction compensation (burning 1.18 = 400/339 · acid 1.05 · stunned 1.25 · poison 1.0) — measured, not chosen. The OPACITIES are mine: 0.85 / 0.8 / 0.9 / 0.85, dead 0.55. Every one is a single constant and a veto costs nothing. |

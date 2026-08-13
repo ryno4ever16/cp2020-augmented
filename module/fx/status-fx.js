@@ -4,7 +4,10 @@
  * A looping sprite that rides a figure for exactly as long as the condition that caused it is on that
  * figure, and goes the moment it clears. Nothing here is written anywhere: the overlays are drawn by
  * each client for itself, on the scene it is looking at, and a reload rebuilds them from the
- * conditions that are still there. That is the same bargain the burning ground struck (module/fx/
+ * conditions that are still there. "For itself" is enforced and not merely intended — both the draw
+ * and the end are LOCAL to the client that decides on them (`drawStatusFx`, `endStatusFx`), because a
+ * reconciler that broadcasts is a reconciler that fights every other copy of itself. That is the same
+ * bargain the burning ground struck (module/fx/
  * effects.js, GROUND_FIRE) and this file is deliberately built to its shape — cap, census-by-query,
  * eviction through the engine's own manager, a stamped name under one prefix, no document writes.
  *
@@ -308,6 +311,13 @@ export function liveStatusFx() {
 /**
  * End one overlay by name, on purpose. Registers the intent first so the ended-hook stays quiet.
  *
+ * ⭐⭐ THE END IS LOCAL, BECAUSE THE DRAW IS (see `drawStatusFx`). The engine's `endEffects` pushes to
+ * every other client by default, and a pushed end is the exact mirror of a pushed draw: this client
+ * would reach across and take down a copy another client drew for itself and is still reconciling
+ * against, and that client — which registered no intent — would read its own effect vanishing as an
+ * expiry and draw it straight back. Passing `push = false` keeps each client's sweep inside its own
+ * canvas, which is what makes the reconciler's "each client for itself" contract hold at both ends.
+ *
  * ⚠ THE INTENT REGISTER IS BOUNDED. An entry is normally consumed by the engine's own report a beat
  * later, but an end aimed at a name the engine has already forgotten is never reported and its entry
  * would sit there for the session. Names are short and the bound is generous, so this is housekeeping
@@ -320,7 +330,7 @@ function endStatusFx(name) {
   }
   _intentionalEnds.add(name);
   try {
-    globalThis.Sequencer?.EffectManager?.endEffects?.({ name })
+    globalThis.Sequencer?.EffectManager?.endEffects?.({ name }, false)
       ?.catch?.((err) => console.warn(`${SCOPE} | condition overlay end failed`, err));
   } catch (err) {
     console.warn(`${SCOPE} | condition overlay end failed`, err);
@@ -359,6 +369,14 @@ export function statusSourceOf(actor) {
  * ⭐ ATTACHED, NOT PLANTED. `attachTo` makes the engine carry the sprite with the figure, so a token
  * that walks does not leave its condition behind; `followRotation: false` keeps a badge upright when a
  * figure turns to face a shot (the rail turns tokens — see effects.js `faceTarget`).
+ *
+ * ⭐⭐ DRAWN LOCALLY. `.locally()` restricts the section to this client, and the engine reads that as
+ * "do not push" — with the section's user list holding exactly this user, nothing is sent over the
+ * socket at all. Without it the default push made every client broadcast its own copy of a mark every
+ * other client had already drawn for itself, so one burning figure wore one ring per connected client
+ * on every screen. This file's whole design is a reconciler that each client runs against the
+ * conditions it can already see (see the hook wiring's "who sees them"), which only works if the draw
+ * stops at the client that decided on it. The end is local for the same reason — see `endStatusFx`.
  */
 function drawStatusFx(token, row) {
   const name = statusFxNameFor(token.document.id, row.id);
@@ -367,6 +385,7 @@ function drawStatusFx(token, row) {
   const offset = statusFxOffset(row.id, widthSquares);
   const seq = new globalThis.Sequence();
   const fx = _heldStatus(seq.effect().file(row.key))
+    .locally()
     .attachTo(token, { followRotation: false })
     .opacity(row.opacity ?? 1)
     .name(name)
@@ -534,7 +553,9 @@ function _onEffectEnded(effect) {
  * ⭐ WHO SEES THEM: everyone. These are state visibility rather than a GM's secret, and every condition
  * with a shipped row is already public on this system — core draws its own status icon on the token for
  * every client, and the module's own lasting-damage cards post to chat. So the sync runs on each client
- * for itself, with no GM gate; there is no GM-only condition on this system to mirror.
+ * for itself, with no GM gate; there is no GM-only condition on this system to mirror. Everyone seeing
+ * a mark is what makes the LOCAL draw correct rather than a compromise: every client reaches the same
+ * answer from the same public state, so nobody needs to be told.
  */
 export function registerStatusFx() {
   const syncFromDoc = (doc) => {

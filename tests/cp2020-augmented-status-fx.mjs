@@ -16,6 +16,7 @@
  *  - the world switch off → nothing drawn, and the sweep takes down what was already there
  *  - no document is written: the scene's own effect flags stay empty throughout
  *  - the missing-key degrade, through the rail's existing database seam
+ *  - TWO SESSIONS on one figure: one ring each, its own, and the delete clears both canvases
  *  - 0 console errors
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
@@ -159,17 +160,14 @@ console.log(`\n(fixture: figure ${fixture.tokenId} on "${fixture.sceneName}")`);
 // asserting the rig's contents rather than this mechanism, so every census below is filtered to the
 // figure this spec made.
 //
-// ⚠⚠ AND SCOPED TO THIS CLIENT'S OWN DRAWS (`creatorUserId`), which is not tidiness — it is the shape
-// of a defect this spec turned up on 2026-08-13 and does not itself test. The rail is designed so that
-// "the overlays are drawn by each client for itself" (status-fx.js header), but the draw is played
-// through Sequencer's DEFAULT push, so every connected client's rail broadcasts its copy to every other
-// one: with a second GM signed in, one burning figure wears TWO stacked rings on both screens, with
-// three clients, three. Proven on the rig — the extra entry's `creatorUserId` is the OTHER client's id,
-// and the local `_setDbProbe` negative could not suppress it. The mechanism THIS spec is for is what
-// this client's rail decides and draws, so every census filters to this client's own creations and the
-// foreign count is reported below rather than swallowed. ⛔ The broadcast policy itself is an open call
-// (locally-only draw vs. a designated drawer) and is NOT fixed here. Each section below declares the
-// same two readers — `own()` for this client's marks, `foreign()` for the count of everyone else's.
+// ⚠⚠ AND SCOPED TO THIS CLIENT'S OWN DRAWS (`creatorUserId`). That filter was added on 2026-08-13 to
+// work around a defect — the draw went out through Sequencer's default push, so every connected
+// client's rail broadcast its copy to every other one and a burning figure wore one ring per client on
+// every screen. That is FIXED: the draw and the end are both local now (status-fx.js `drawStatusFx` /
+// `endStatusFx`), and §11 below proves it with two real sessions. The filter STAYS anyway, because it
+// is also what keeps these censuses honest about the rig's own standing figures, and because a foreign
+// copy reappearing is exactly the regression worth catching — `foreign()` is reported at §3 and
+// asserted at zero in §11. Each section declares the same two readers.
 
 /* ─────────────────── §3 the live path, core condition ─────────────────── */
 console.log("\n§3 live path — a core condition draws and clears");
@@ -194,11 +192,11 @@ const burnName = `cp2020-augmented.statusfx.${fixture.tokenId}.burning`;
 eq("condition set → exactly one mark, under the stamped name", live1.drawn, [burnName]);
 eq("the drawn entry is the decoded rim-ring key", live1.files, ["jb2a.shield_themed.below.fire.01.orange"]);
 eq("condition cleared → the mark is gone", live1.after, []);
-// ⚠ NOT A CHECK — the standing report of the broadcast defect described above. One copy per OTHER
-// connected client is what a table would see stacked on the figure.
+// The standing report of who else was online while this ran. A foreign copy here would mean the local
+// draw has regressed; §11 asserts it at zero with a second session deliberately opened.
 console.log(`  (other clients signed in: ${live1.otherClients.length ? live1.otherClients.join(", ") : "none"}`
-  + ` · foreign copies of this figure's mark: ${live1.foreignCopies}`
-  + `${live1.foreignCopies ? " ⛔ each connected client's rail broadcasts its own — open call" : ""})`);
+  + ` · foreign copies of this figure's mark: ${live1.foreignCopies})`);
+check("no other client's copy of this figure's mark reached this canvas", live1.foreignCopies === 0, String(live1.foreignCopies));
 
 /* ─────────────────── §4 the module-flag road ─────────────────── */
 console.log("\n§4 live path — the module's own lasting-damage flag");
@@ -528,13 +526,12 @@ check("NEGATIVE: a key the installed tier lacks is skipped, not played", degrade
 check("and the seam restored cleanly", degrade.after === 0, String(degrade.after));
 
 /* ─────────────────── §9 figure deleted ─────────────────── */
-// ⛔ THIS SECTION IS RED WHILE A SECOND CLIENT IS SIGNED IN, and the failure is the broadcast defect
-// described at the top rather than this sweep. The mechanism: two clients draw two effects under the
-// SAME stamped name, `clearTokenStatusFx` ends that name once and registers ONE intent, and the engine
-// then reports TWO ends — so the second report reads as an expiry rather than as our own end, and the
-// re-issue draws the mark again. The user-facing symptom is worth stating plainly: with two GMs online,
-// deleting a burning figure can leave a ring behind on the canvas. Left failing on purpose; the count
-// of other clients is printed with it so the reason is never a mystery.
+// This section used to be RED whenever a second client was signed in, and the failure was the broadcast
+// defect rather than this sweep: two clients drew two effects under the SAME stamped name, the sweep
+// ended that name once and registered ONE intent, and the engine reported TWO ends — the second read as
+// an expiry and the mark was drawn again, so with two GMs online deleting a burning figure could leave
+// a ring behind. Both halves are local now, so one client's sweep ends exactly what that client drew.
+// §11 runs the same delete with a second session actually open.
 console.log("\n§9 the figure is deleted while wearing a mark");
 const del = await page.evaluate(async ({ mod, actorId, tokenId, TID }) => {
   const M = await import(mod);
@@ -555,6 +552,99 @@ check("the mark was up before the delete", del.before === 1, String(del.before))
 check("the figure's marks are swept by name when it goes", del.after === 0,
   `${del.after} left`
   + (del.after && del.others ? ` — ${del.others} other client(s) signed in; the duplicate-name end re-issues (broadcast defect, §8)` : ""));
+
+/* ─────────────────── §11 two sessions, one figure ─────────────────── */
+// THE POINT OF THE WHOLE LOCALITY RULING, counted rather than argued: with two sessions signed in and
+// looking at the same figure, each canvas must hold exactly ONE ring for it — its own — and deleting
+// the figure must leave ZERO on both. The failure this replaces was two-sided: a broadcast draw put a
+// second ring on each screen, and a broadcast end let one client's sweep cancel the other's while the
+// other read the cancellation as an expiry and drew the mark back.
+console.log("\n§11 two sessions — one mark each, and the delete clears both");
+const second = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+const secondErrors = [];
+second.on("pageerror", e => {
+  const stack = String(e.stack ?? "").replace(/\s+/g, " ").slice(0, 300);
+  if (ENGINE_TEARDOWN_RACE.test(e.message) && /_createSprite/.test(stack) && /sequencer/i.test(stack)) return;
+  secondErrors.push(e.message);
+});
+
+// A second seat at the table. Role 4 = gamemaster, no password, deleted at the end of the section.
+const gm2 = await page.evaluate(async () => {
+  for (const u of game.users.filter(u => u.name === "__PW__GM2")) await u.delete().catch(() => {});
+  const u = await User.create({ name: "__PW__GM2", role: CONST.USER_ROLES.GAMEMASTER });
+  return { id: u.id, name: u.name };
+});
+
+async function joinAs(p, name) {
+  await p.goto(`${URL}/join`);
+  await p.waitForSelector('select[name="userid"]');
+  await p.evaluate((n) => {
+    const sel = document.querySelector('select[name="userid"]');
+    sel.value = [...sel.options].find(o => o.textContent.trim() === n).value;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }, name);
+  await p.click('button[name="join"]');
+  await p.waitForFunction(() => window.game?.ready === true, null, { timeout: 60000 });
+  await p.waitForTimeout(6000);   // past sequencerReady, whose catch-up sweep is what draws on arrival
+}
+await joinAs(second, gm2.name);
+
+// Both sessions must be looking at the same scene for either to draw.
+const twoFixture = await page.evaluate(async () => {
+  for (const a of game.actors.filter(a => a.name === "__PW__TwoClientSubject")) await a.delete().catch(() => {});
+  const actor = await Actor.create({ name: "__PW__TwoClientSubject", type: "character" });
+  const proto = await actor.getTokenDocument({ x: 1400, y: 1000, actorLink: true });
+  const [tokenDoc] = await canvas.scene.createEmbeddedDocuments("Token", [proto.toObject()]);
+  return { actorId: actor.id, tokenId: tokenDoc.id, sceneId: canvas.scene.id };
+});
+await second.evaluate(async ({ sceneId }) => {
+  if (game.user.viewedScene !== sceneId) await game.scenes.get(sceneId)?.view();
+  await new Promise(r => setTimeout(r, 2500));
+}, { sceneId: twoFixture.sceneId });
+
+const census = (p, TID) => p.evaluate(async ({ mod, TID }) => {
+  const M = await import(mod);
+  const all = M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID));
+  return {
+    total: all.length,
+    own: all.filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id).length,
+    foreign: all.filter(e => (e?.data?.creatorUserId ?? game.user.id) !== game.user.id).length,
+    names: all.map(e => String(e?.data?.name ?? "")),
+  };
+}, { mod: MOD, TID });
+
+await page.evaluate(async ({ actorId }) => {
+  await game.actors.get(actorId).toggleStatusEffect("burning", { active: true });
+  await new Promise(r => setTimeout(r, 2500));
+}, { actorId: twoFixture.actorId });
+await second.waitForTimeout(2500);
+
+const c1 = await census(page, twoFixture.tokenId);
+const c2 = await census(second, twoFixture.tokenId);
+check("session 1 holds exactly one ring for the figure", c1.total === 1, `${c1.total} (own ${c1.own}, foreign ${c1.foreign})`);
+check("session 2 holds exactly one ring for the figure", c2.total === 1, `${c2.total} (own ${c2.own}, foreign ${c2.foreign})`);
+check("session 1's ring is its own creation", c1.own === 1 && c1.foreign === 0, `own ${c1.own} foreign ${c1.foreign}`);
+check("session 2's ring is its own creation", c2.own === 1 && c2.foreign === 0, `own ${c2.own} foreign ${c2.foreign}`);
+eq("both sessions stamp the same name", [...new Set([...c1.names, ...c2.names])],
+  [`cp2020-augmented.statusfx.${twoFixture.tokenId}.burning`]);
+
+await page.evaluate(async ({ tokenId }) => {
+  await canvas.scene.deleteEmbeddedDocuments("Token", [tokenId]);
+  await new Promise(r => setTimeout(r, 3000));
+}, { tokenId: twoFixture.tokenId });
+await second.waitForTimeout(3000);
+
+const d1 = await census(page, twoFixture.tokenId);
+const d2 = await census(second, twoFixture.tokenId);
+check("deleting the figure leaves nothing on session 1", d1.total === 0, `${d1.total} left: ${d1.names.join(",")}`);
+check("deleting the figure leaves nothing on session 2", d2.total === 0, `${d2.total} left: ${d2.names.join(",")}`);
+check("0 console errors on the second session", secondErrors.length === 0, secondErrors.slice(0, 3).join(" | "));
+
+await second.close();
+await page.evaluate(async ({ actorId, userId }) => {
+  try { await game.actors.get(actorId)?.delete(); } catch (_e) { /* already gone */ }
+  try { await game.users.get(userId)?.delete(); } catch (_e) { /* already gone */ }
+}, { actorId: twoFixture.actorId, userId: gm2.id });
 
 /* ─────────────────── cleanup ─────────────────── */
 await page.evaluate(async ({ actorId, tokenId }) => {
