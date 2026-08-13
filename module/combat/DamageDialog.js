@@ -343,6 +343,9 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!summary || summary.absorbed <= 0) return;
     requestCoverChew({
       behaviorUuid: summary.uuid,
+      // The row's label can name the PART that was crossed (a vehicle's engine block), so it rides
+      // along rather than being re-derived from the document on the GM's side.
+      label: summary.label,
       damage: summary.absorbed,
       weaponName: String(this.payload?.weaponName || ""),
       rounds: summary.rounds,

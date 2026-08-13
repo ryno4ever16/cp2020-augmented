@@ -35,6 +35,10 @@
 
 import { localize, localizeParam } from "../utils.js";
 import { COVER_ZONE_BEHAVIOR } from "./cover-zone-behavior.js";
+import {
+  vehicleCoverRowsOn, vehicleCoverSpAlong, vehicleCoverLabel, chewVehicleCover,
+  isVehicleCoverUuid, boardedVehicleIdOf,
+} from "../vehicle/vehicle-cover.js";
 
 const SCOPE = "cp2020-augmented";
 const MSG_CHEW = "coverChew";
@@ -159,11 +163,13 @@ function _tokenCenter(tokenDoc) {
   };
 }
 
-/** Candidate cover rows for a target token's scene — zones AND cover-flagged walls, nearest first
- *  (unknown-centre rows last). Every row carries a uuid; the chew entry point dispatches on it. */
+/** Candidate cover rows for a target token's scene — zones, cover-flagged walls AND deployed
+ *  vehicles, nearest first (unknown-centre rows last). Every row carries a uuid the chew entry
+ *  point dispatches on, except a vehicle with no printed structure, which is cover that cannot be
+ *  charged (see vehicle-cover.js). */
 export function coverChoicesFor(tokenDoc) {
   const scene = tokenDoc?.parent ?? canvas?.scene;
-  const rows = [...coverZonesOn(scene), ...coverWallsOn(scene)];
+  const rows = [...coverZonesOn(scene), ...coverWallsOn(scene), ...vehicleCoverRowsOn(scene)];
   const { x: tx, y: ty } = _tokenCenter(tokenDoc);
   for (const r of rows) {
     const c = r.center ?? _regionCenter(r.region);
@@ -194,12 +200,32 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
   const t0 = Math.min(0.4, (grid / 2) / len);
   const o = { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 };
 
+  // A vehicle is never cover for the shot it is part of: not the car being aimed at, not the car
+  // the shooter is sitting in, not the car doing the shooting. Without these three the first
+  // vehicle-mounted burst would be stopped by its own bodywork.
+  const attackerVehicleId = boardedVehicleIdOf(attackerTokenDoc);
+  const excludedVehicle = (row) => row.tokenDoc?.id === targetTokenDoc.id
+    || row.tokenDoc?.id === attackerTokenDoc.id
+    || (!!attackerVehicleId && row.actor?.id === attackerVehicleId);
+
   const out = [];
   for (const r of coverChoicesFor(targetTokenDoc)) {
     if (r.destroyed) continue;
     let crossed = false;
     try {
-      if (r.wall) {
+      if (r.vehicle) {
+        if (excludedVehicle(r)) continue;
+        // WHICH cells the line crossed decides the SP, so the row's own numbers are settled here
+        // rather than at row-build time: body 10 unless it went through the engine block, 35 if it
+        // did. The label follows, because a 35 that does not say "engine block" reads as a typo.
+        const hit = vehicleCoverSpAlong(r, o, b);
+        if (hit.sp > 0) {
+          r.sp = hit.sp;
+          r.engine = hit.engine;
+          r.label = vehicleCoverLabel(r, hit.engine);
+          crossed = true;
+        }
+      } else if (r.wall) {
         const c = r.wall.c ?? [];
         crossed = c.length >= 4
           && !!foundry.utils.lineSegmentIntersects(o, b, { x: c[0], y: c[1] }, { x: c[2], y: c[3] });
@@ -405,9 +431,9 @@ export async function chewCoverWall({ wallUuid, damage, weaponName = "", rounds 
 }
 
 /**
- * Type dispatcher for chew payloads: the picker rows carry either a RegionBehavior uuid (zone)
- * or a Wall uuid (Unit 3) in the same `behaviorUuid` field — the historical name is kept so the
- * socket message shape stays stable across the two row kinds.
+ * Type dispatcher for chew payloads: the picker rows carry a RegionBehavior uuid (zone), a Wall
+ * uuid (Unit 3) or a vehicle Actor uuid in the same `behaviorUuid` field — the historical name is
+ * kept so the socket message shape stays stable across every row kind.
  */
 export async function chewCover(payload) {
   const uuid = String(payload?.uuid ?? payload?.behaviorUuid ?? "");
@@ -420,6 +446,11 @@ export async function chewCover(payload) {
     destroyedAtRound: Number(payload?.destroyedAtRound) || 0,
   };
   if (doc?.documentName === "Wall") return chewCoverWall({ wallUuid: uuid, ...common });
+  // The label travels with the payload for a vehicle because the row's own label may name the part
+  // that was crossed ("… — engine block"), which is what the card should report too.
+  if (isVehicleCoverUuid(doc)) {
+    return chewVehicleCover({ actorUuid: uuid, label: String(payload?.label ?? ""), ...common });
+  }
   return chewCoverZone({ behaviorUuid: uuid, ...common });
 }
 

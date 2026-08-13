@@ -12,3 +12,26 @@
         {{/each}}
     </span>
 </div>
+{{!-- What this vehicle stops when someone shoots THROUGH it (Core p.99). Both fields are left
+      EMPTY when the book prefill for the vehicle's type is in force — the placeholder shows the
+      number actually in play — so an untouched sheet never freezes a prefill into stored data.
+      Open frames prefill 0 and say so; typing a number over that is how an unusual one opts in. --}}
+<div class="field" title="{{CPLocal 'Vehicle.CoverBodySpTip'}}">
+    <label>{{CPLocal "Vehicle.CoverBodySpLabel"}}</label>
+    <span class="flexrow flex-pad">
+        <input type="number" name="system.layout.bodySp" value="{{layout.bodySpStored}}"
+               placeholder="{{layout.bodySp}}" min="0" step="1">
+    </span>
+</div>
+<div class="field" title="{{CPLocal 'Vehicle.CoverEngineSpTip'}}">
+    <label>{{CPLocal "Vehicle.CoverEngineSpLabel"}}</label>
+    <span class="flexrow flex-pad">
+        <input type="number" name="system.layout.engineSp" value="{{layout.engineSpStored}}"
+               placeholder="{{layout.engineSp}}" min="0" step="1">
+    </span>
+</div>
+{{#unless layout.providesCover}}
+<div class="field span-two-cells">
+    <label class="cp-veh-nocover" title="{{CPLocal 'Vehicle.CoverNoneTip'}}">{{CPLocal "Vehicle.CoverNoneLabel"}}</label>
+</div>
+{{/unless}}

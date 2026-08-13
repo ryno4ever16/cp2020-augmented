@@ -9,7 +9,7 @@ import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 import { localize, localizeParam } from "../utils.js";
 import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
-import { FRONTS, resolveFront } from "../vehicle/vehicle-layout.js";
+import { FRONTS, resolveFront, coverSpFor } from "../vehicle/vehicle-layout.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -271,8 +271,18 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     const front = resolveFront(system?.layout?.front, w, h);
     const ICONS = { n: "fa-solid fa-arrow-up", e: "fa-solid fa-arrow-right", s: "fa-solid fa-arrow-down", w: "fa-solid fa-arrow-left" };
     const KEYS = { n: "Vehicle.FrontNorth", e: "Vehicle.FrontEast", s: "Vehicle.FrontSouth", w: "Vehicle.FrontWest" };
+    // Cover SP: the numbers in play (type prefill unless overridden) drive the PLACEHOLDERS, while
+    // the inputs carry only what is actually stored. An untouched field therefore stays empty and
+    // keeps deriving — including when the GM later changes the vehicle's type.
+    const cover = coverSpFor(system);
+    const storedSp = (v) => (typeof v === "number" && Number.isFinite(v)) ? v : "";
     return {
       front,
+      providesCover: cover.providesCover,
+      bodySp: cover.bodySp,
+      engineSp: cover.engineSp,
+      bodySpStored: storedSp(system?.layout?.bodySp),
+      engineSpStored: storedSp(system?.layout?.engineSp),
       // "" in storage means the heading is still the footprint-derived default — worth knowing when
       // reading a sheet, and the Reset path in the paint grid returns to exactly this state.
       frontStored: String(system?.layout?.front ?? ""),

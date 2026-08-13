@@ -123,6 +123,35 @@ export function derivedSeatOrder(w, h, front) {
   return out;
 }
 
+/* ─────────────────────────────────── segment geometry ─────────────────────────────────── */
+
+/**
+ * Does the segment a→b touch the axis-aligned rectangle `{x,y,w,h}`? Liang-Barsky clipping: walk
+ * the rectangle's four edge planes, narrowing the parameter window the segment is allowed to live
+ * in, and answer no the moment the window closes. Exact — no sampling, so a shot cannot slip
+ * between two probe points and miss a cell it really crossed.
+ *
+ * Axis-aligned is not a limitation on rotated vehicles: a rotated footprint is tested by rotating
+ * the SEGMENT into the vehicle's own frame first, where its cells are square again.
+ */
+export function segmentHitsRect(a, b, rect) {
+  if (!a || !b || !rect) return false;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const p = [-dx, dx, -dy, dy];
+  const q = [a.x - rect.x, rect.x + rect.w - a.x, a.y - rect.y, rect.y + rect.h - a.y];
+  let t0 = 0, t1 = 1;
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) {
+      if (q[i] < 0) return false;               // parallel to this edge and outside it
+      continue;
+    }
+    const r = q[i] / p[i];
+    if (p[i] < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+    else          { if (r < t0) return false; if (r < t1) t1 = r; }
+  }
+  return true;
+}
+
 /* ────────────────────────────── cover profile by vehicle type ────────────────────────────── */
 
 /**
