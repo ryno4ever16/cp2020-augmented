@@ -1481,7 +1481,6 @@ rounds did leave the muzzle on that heading — but they are visibly two differe
 gap means rolling the scatter before the fan-out reads the payload (dice in the seam, or a pre-pass),
 which is a bigger change than the unit was scoped for. **Open item (§8).**
 
-
 ⭐ **It is a description, not a position, and that is the point.** Every consumer rebuilds the corridor
 off the shooter's figure **as it stands** (`declaredAimPointOf`), so a token nudged between the aim and
 the roll still fires along the line that was drawn, out of the barrel it is actually holding. A stored
@@ -1528,6 +1527,9 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `MUZZLE_LIGHT.referenceColor` | `#943400` | dark-regime colour (`#ffae42` is the earlier warm option) |
 | `MUZZLE_LIGHT.darknessColorThreshold` | 0.25 | where the colour regime switches |
 | `MUZZLE_LIGHT.brightSquares` / `dimSquares` | 12.5 / 12.5 | equal on purpose — attenuation does *all* the falloff |
+| `MUZZLE_BURST_LIGHT.enabled` ⭐ | **true** — *ruled 2026-08-13* | one light **held** for a whole burst instead of one per round. **False restores the per-round strobe** with no other edit (§6) |
+| `MUZZLE_BURST_LIGHT.minRounds` ⭐ | **2** | below this a discharge keeps the per-round envelope — a single shot is byte-for-byte what it always was |
+| `MUZZLE_BURST_LIGHT.maxHoldMs` ⭐ | **8000** | leak bound on a held light, not a look call. The fan-out's own worst case is 30 rounds × the shell's 180 ms = 5.22 s |
 | `MUZZLE_SPRITE.endMs` | 110 | lance trim — beyond this the clip's smoke-and-fire plume returns |
 | `MUZZLE_SPRITE.edgeFraction` | 0.5 | how far along the aim the sprite is planted, as a fraction of token width |
 | `FACING_AIM_SQUARES` | 3 | how far the synthesized aim point sits for an untargeted shot |
@@ -1651,6 +1653,29 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-13 — the muzzle flash's LIGHT is scoped to the burst, not to the round. Ruled: *yes*.**
+The presentation profile named this the most hitch-shaped cost it measured. The flash is a real light
+source, and core recomputes the scene's lighting whenever one is added, changed or removed — so the
+per-round transport asked for a full sweep on every frame of every round's envelope, plus one at each
+end of it, and because the envelope (five frames, ~85 ms) is shorter than most classes' cadence a burst
+genuinely destroyed and rebuilt its source set once per round. Order of 30 builds and ~200 sweeps for
+one trigger pull.
+
+A burst now opens **one** source set, ramps it in on the first round, **holds** it at full for the
+burst's own span, and decays it out at the end; every later round of that burst only re-points it. While
+the light is held the intensity does not move, so the frame driver writes nothing and asks core for
+nothing — the whole burst costs the ramp, the decay, one build and one teardown.
+
+| Ruling | Value | Why |
+|---|---|---|
+| one light per burst | `MUZZLE_BURST_LIGHT.enabled = true` | ~30 lighting sweeps per burst → 1 build + 1 teardown and a handful of ramp/decay frames |
+| the span | `burstLightHoldMs(shots, cadenceMs)` = `(shots − 1) × cadence` | first round's start to the last round's; the envelope's own decay then carries it past the final round |
+| a single shot is untouched | `minRounds = 2` | one round is still one envelope with one light, frame for frame identical to what shipped |
+| **⚠ the trade, accepted not hidden** | the strobe becomes a **held glow** | the room is lit once and stays lit until the firing stops. What still pulses is the per-round muzzle **sprite**, which is completely unchanged — every round draws its own lance |
+| a held light is bounded | `maxHoldMs = 8000` | a leak bound, not a look call — a corrupt round count must not hold a source open indefinitely |
+| the span rides the socket | `holdMs` on the flash datagram | every client holds its copy for the same time, or a burst strobes for watchers and glows for the shooter |
+| revert | `enabled: false` | restores the per-round strobe with no other edit |
 
 **2026-08-13 — a condition overlay is drawn AND ended by each client alone.**
 The open call raised the same day (§8) offered two answers: play locally, or nominate one client to

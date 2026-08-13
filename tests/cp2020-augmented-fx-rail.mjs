@@ -1040,6 +1040,87 @@ const res = await page.evaluate(async () => {
   await sleep(250);
   ok("cap: clearing drops every live flash on this client", fx.liveFlashCount() === 0 && flashSources().length === 0, String(flashSources().length));
 
+  /* ── 5d2. ONE LIGHT PER BURST, not one per round (ruled 2026-08-13) ─────── */
+  // ⭐ THE COST THIS REMOVES, and why a live count could never have caught it. `liveFlashCount` reads
+  // what is on the canvas RIGHT NOW, and that was already 1 for a burst — but the envelope is shorter
+  // than most classes' cadence, so between rounds the set was DESTROYED and the next round BUILT a new
+  // one, each build and each teardown asking core to recompute the scene's lighting, on top of one
+  // sweep per frame of every round's envelope. So the counters are what the claim is read through:
+  // how many source sets were built across the burst, and how many lighting recomputations it cost.
+  const burstSpan = fx.burstLightHoldMs(10, fx.SHOT_CADENCE_MS);
+  ok("burst light: the span is the burst's own — first round to the END of the last round's flash",
+    burstSpan === 9 * fx.SHOT_CADENCE_MS + fx.muzzleEnvelopeDurationMs(),
+    `${burstSpan} vs ${9 * fx.SHOT_CADENCE_MS} + ${fx.muzzleEnvelopeDurationMs()}`);
+  ok("burst light: a SINGLE shot asks for no hold at all, so a lone round is unchanged (negative)",
+    fx.burstLightHoldMs(1, fx.SHOT_CADENCE_MS) === 0 && fx.MUZZLE_BURST_LIGHT.minRounds === 2,
+    String(fx.burstLightHoldMs(1, fx.SHOT_CADENCE_MS)));
+  ok("burst light: a held light is bounded — a corrupt round count cannot hold a source open forever",
+    fx.burstLightHoldMs(100000, 1000) === fx.MUZZLE_BURST_LIGHT.maxHoldMs
+    && fx.MUZZLE_BURST_LIGHT.maxHoldMs > fx.MAX_FX_SHOTS * 180,
+    `${fx.burstLightHoldMs(100000, 1000)} / cap ${fx.MUZZLE_BURST_LIGHT.maxHoldMs}`);
+
+  // Ten rounds at the shipped cadence, driven through the local runner exactly as the fan-out drives
+  // it — every round announces, and the runner decides what that costs.
+  fx.clearFlashes();
+  fx._resetFlashCounters();
+  for (let i = 0; i < 10; i++) {
+    if (i) await sleep(fx.SHOT_CADENCE_MS);
+    fx.muzzleFlashLocal(tokenDoc.id, flashAim, { holdMs: burstSpan });
+  }
+  // Read in the LAST round's own tick, not after a further cadence gap: the claim is that the light is
+  // still the same one when the burst ends, and a sleep afterwards would be asking a different question.
+  const burstBuilds = fx.flashBuildCount();
+  const heldDuringBurst = fx.flashInFlight(tokenDoc.id);
+  const heldSources = flashSources(tokenDoc.id).length;
+  const burstSweeps = fx.flashSweepCount();
+  ok("burst light: a ten-round burst builds exactly ONE light source set",
+    burstBuilds === 1, `${burstBuilds} builds`);
+  ok("burst light: and it is STILL THE SAME LIGHT when the last round goes out",
+    heldDuringBurst === true && heldSources > 0, `${heldSources} sources still up`);
+  // The sweeps are the actual saving, and they are bounded rather than pinned: this rig's ticker runs
+  // far slower than a real client's, so the exact frame count is not a fact about the mechanism. What
+  // IS a fact is the shape — a per-round transport asked for one sweep per frame of ten envelopes plus
+  // twenty builds and teardowns; a held one asks for the ramp, one write, and nothing while it is held.
+  ok("burst light: and it costs a handful of lighting recomputations, not one per frame per round",
+    burstSweeps <= 8, `${burstSweeps} sweeps across 10 rounds`);
+  fx.clearFlashes();
+  await sleep(250);
+
+  // THE NEGATIVE, same runner, same token: no hold asked for. The per-round transport is untouched —
+  // separate single shots each build their own set, which is exactly the behaviour the burst-scoped
+  // light replaces and exactly what a lone shot still gets.
+  //
+  // ⚠ EACH SHOT WAITS FOR THE PREVIOUS FLASH TO ACTUALLY END rather than for a fixed sleep. The
+  // envelope is counted in RENDERED FRAMES, and this rig's ticker runs at a small fraction of a real
+  // client's rate — a 400 ms sleep is comfortably longer than five frames at 60 Hz and comfortably
+  // SHORTER than five frames here, which made the leg read one build for three shots and say nothing
+  // about the mechanism. Polling the runner's own report is rate-independent.
+  fx._resetFlashCounters();
+  const flashGone = () => new Promise((res) => {
+    let f = 0;
+    const tick = () => { f++; if (fx.flashInFlight(tokenDoc.id) && f < 900) requestAnimationFrame(tick); else res(); };
+    requestAnimationFrame(tick);
+  });
+  for (let i = 0; i < 3; i++) {
+    fx.muzzleFlashLocal(tokenDoc.id, flashAim);
+    await flashGone();
+  }
+  ok("burst light: three UNHELD shots still build three sets — the single-shot path is unchanged",
+    fx.flashBuildCount() === 3, `${fx.flashBuildCount()} builds`);
+  fx.clearFlashes();
+  fx._resetFlashCounters();
+  await sleep(200);
+
+  // The sprites are NOT coalesced, which is the half of the trade that had to survive: a burst still
+  // draws one muzzle lance per round, and only the LIGHT is held.
+  const burstFxSrc = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
+  ok("burst light: the trade is the light only — the fan-out still announces a flash per round",
+    /flashes\+\+/.test(burstFxSrc) && /lightHoldMs/.test(burstFxSrc)
+    && /burstLightHoldMs\(shots, cadenceMs\)/.test(burstFxSrc));
+  ok("burst light: reverting is one field — the block declares its own off switch",
+    fx.MUZZLE_BURST_LIGHT.enabled === true && "enabled" in fx.MUZZLE_BURST_LIGHT,
+    JSON.stringify(fx.MUZZLE_BURST_LIGHT));
+
   /* ── 5e. the socket announcement ───────────────────────────────────────── */
   // One ping per shot on the module's own channel, in the module's own type-dispatch shape. The
   // emitter never receives its own datagram, so the firing client's flash comes from the local call.

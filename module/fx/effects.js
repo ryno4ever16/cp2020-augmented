@@ -408,7 +408,8 @@ export const MUZZLE_LIGHT = Object.freeze({
  * ⚠ WHAT WE DO DIFFERENTLY, DELIBERATELY — the strobe. The reference flashes by animating the
  * RADIUS: its keyframes drive dim and bright 0 → 25 → 0, about 50ms on per shot, repeated at the
  * animation's own cadence (ten times for autofire). We hold the radii CONSTANT and animate INTENSITY
- * instead (muzzleFrameLevels, restarted per round at classCadenceMs). The two read the same at a true
+ * instead (muzzleFrameLevels; for a BURST the envelope is opened once and held — MUZZLE_BURST_LIGHT —
+ * and for a lone shot it runs its five frames as before). The two read the same at a true
  * frame rate — a light that appears and vanishes inside three frames does not show which parameter
  * moved — and the intensity form is the one that CANNOT reproduce the "radiates out visibly" ring
  * this transport was rewritten to remove: a radius that grows and shrinks draws an expanding ring the
@@ -425,6 +426,70 @@ export const MUZZLE_LIGHT = Object.freeze({
  * Well clear of the envelope even on a client rendering at a few frames per second.
  */
 export const MUZZLE_MAX_MS = 2000;
+
+/**
+ * ⭐ ONE LIGHT PER BURST, NOT ONE PER ROUND (user ruling 2026-08-13: *"yes"*).
+ *
+ * WHAT WAS MEASURED. The flash is a real light source, and core recomputes the scene's lighting every
+ * time one is added, changed or removed (`canvas.perception.update({ refreshLighting: true })`). The
+ * per-round transport asked for that sweep on every frame of every round's envelope AND on the build
+ * and the teardown at each end of it — and because the envelope is shorter than most classes' cadence
+ * (five frames, ~85 ms, against the shell's 180 ms), a burst genuinely destroyed and rebuilt its
+ * source set once per round. On a thirty-round burst that is thirty builds, thirty teardowns and of
+ * the order of two hundred full lighting recomputations for one trigger pull — the most hitch-shaped
+ * cost the presentation profile found.
+ *
+ * WHAT REPLACES IT. A burst opens ONE source set, ramps it in on the first round, HOLDS it at full for
+ * the length of the burst, and decays it out at the end. Every subsequent round of the burst re-points
+ * that one light and asks for nothing else. While the light is held, the intensity does not move, so
+ * the frame driver has nothing to write and issues no sweep at all: the whole burst costs the ramp,
+ * the decay, one build and one teardown.
+ *
+ * ⚠⚠ THE TRADE, AND IT IS A LOOK TRADE, ACCEPTED RATHER THAN HIDDEN: THE STROBE BECOMES A HELD GLOW.
+ * A burst used to pulse the room once per round; it now lights the room once and holds it until the
+ * firing stops. What a viewer still sees pulsing is the per-round muzzle SPRITE, which is untouched —
+ * every round draws its own lance, exactly as before, and nothing in the sprite path knows this block
+ * exists. So the flicker is still there, in the sprite; the room's illumination is not.
+ *
+ * ⚠ A SINGLE SHOT IS UNCHANGED, by construction: `minRounds` holds the hold off below two rounds, so
+ * one round is still one envelope with one light, frame for frame identical to what shipped.
+ *
+ * REVERT IS ONE FIELD: `enabled: false` restores the per-round strobe with no other edit. `minRounds`
+ * is the other dial — raising it exempts short bursts, which is where the strobe reads best anyway.
+ */
+export const MUZZLE_BURST_LIGHT = Object.freeze({
+  enabled: true,
+  // Below this many rounds a discharge keeps the per-round envelope. Two, because the whole cost this
+  // block exists to remove only appears once a payload has more than one round in it.
+  minRounds: 2,
+  // The leak bound on a held light, in wall-clock milliseconds. Not a look call — a payload claiming a
+  // corrupt round count must not be able to hold a light source open forever, and the fan-out's own
+  // worst case is MAX_FX_SHOTS (30) rounds at the slowest shipped cadence (the shell's 180 ms), which
+  // is 5.22 s. Comfortably clear of that, and far short of "indefinitely".
+  maxHoldMs: 8000,
+});
+
+/**
+ * How long a payload's flash light is HELD, in milliseconds — first round's start to the last round's.
+ * Pure, so the arithmetic is assertable without a canvas.
+ *
+ * The rounds are spaced `cadenceMs` apart, so the last one leaves the muzzle `(shots − 1) × cadence`
+ * after the first, and one envelope's worth is added on top so the hold reaches the END of that last
+ * round's flash rather than its start. Zero means "no hold" — a single shot, a switched-off block, or a
+ * payload with nothing sensible in it — and zero is the value that leaves the per-round transport
+ * exactly as it was.
+ *
+ * ⚠ This is the NOMINAL span, and a real loop does not deliver rounds on the nominal beat. The runner
+ * extends the hold from each round that actually arrives (muzzleFlashLocal), so this number is a floor
+ * rather than the whole answer; both are clamped to the same leak bound.
+ */
+export function burstLightHoldMs(shots, cadenceMs) {
+  if (!MUZZLE_BURST_LIGHT.enabled) return 0;
+  const n = Math.trunc(Number(shots) || 0);
+  const c = Number(cadenceMs);
+  if (n < MUZZLE_BURST_LIGHT.minRounds || !Number.isFinite(c) || c <= 0) return 0;
+  return Math.min(MUZZLE_BURST_LIGHT.maxHoldMs, (n - 1) * c + muzzleEnvelopeDurationMs());
+}
 
 /** Miss divergence for the tracer (design doc §2.4): angle offset and how far short/wide it lands. */
 export const MISS_SPREAD_RAD = 0.209;   // ≈12°
@@ -2768,11 +2833,14 @@ export function muzzleSourceSpecs({ gridDistance = 1, pixelsPerUnit = 1, aimRad 
 }
 
 // Flashes currently drawn on THIS client, keyed by token id. One entry per token is the whole
-// concurrency story: a second shot from a token that is already flashing RESTARTS the running
-// envelope in place (frame counter back to zero, aim re-pointed) rather than adding a second set of
-// sources. At the automatic cadence — a shot every ~80ms against a ~5-frame envelope — that is what
-// produces the continuous flicker the reference shows, and it bounds a burst of any length to one
-// source set per shooter. Nothing here is persisted, so nothing here needs cleaning up on reload.
+// concurrency story, and a second shot from a token that is already flashing takes one of two paths:
+//  - a HELD light (a burst — see MUZZLE_BURST_LIGHT) is only RE-POINTED. It was opened for the whole
+//    burst, so the round adds nothing and asks core for nothing.
+//  - an un-held one RESTARTS the running envelope in place (frame counter back to zero, aim
+//    re-pointed) rather than adding a second set of sources — the behaviour every shot had before the
+//    burst-scoped light, and still what two separate single shots in quick succession do.
+// Either way a burst of any length is bounded to one source set per shooter. Nothing here is
+// persisted, so nothing here needs cleaning up on reload.
 const _flashes = new Map();
 
 /** Is a flash currently drawn for this token on this client? (Read by the keeper and diagnostics.) */
@@ -2784,6 +2852,29 @@ export function flashInFlight(token) {
 /** How many flashes this client is drawing right now. */
 export function liveFlashCount() {
   return _flashes.size;
+}
+
+// How many SOURCE SETS this client has built since it loaded, and how many full lighting recomputations
+// the flash driver has asked core for. Counters, not lists — the only questions asked of them are "did
+// a burst build one set or thirty" and "how many sweeps did that burst cost", which is exactly the
+// claim the burst-scoped light makes and the only way to check it from outside (a live count cannot see
+// a set that was already destroyed and rebuilt). Diagnostics + the keeper; nothing branches on either.
+let _flashBuilds = 0;
+let _flashSweeps = 0;
+
+/** How many flash source SETS this client has built since load. */
+export function flashBuildCount() { return _flashBuilds; }
+
+/** How many lighting recomputations the flash driver has asked core for since load. */
+export function flashSweepCount() { return _flashSweeps; }
+
+/** Zero both counters (the keeper brackets a burst with this; nothing in the flow calls it). */
+export function _resetFlashCounters() { _flashBuilds = 0; _flashSweeps = 0; }
+
+/** The one place the flash asks core to recompute lighting, so the count cannot drift from the calls. */
+function _sweepLighting() {
+  _flashSweeps++;
+  try { canvas?.perception?.update?.({ refreshLighting: true }); } catch (_e) { /* canvas torn down */ }
 }
 
 // Capture seam: replaces the per-frame level list so a screenshot pass can hold a flash open long
@@ -2802,8 +2893,13 @@ export function _setFlashLevels(levels) {
  * given room proportional to the frames it asked for, or the cap meant to catch a stalled renderer
  * would instead cut short a capture that is working exactly as intended.
  */
-function _deadlineMs(levels) {
-  return _levelsOverride ? Math.max(MUZZLE_MAX_MS, levels.length * 200) : MUZZLE_MAX_MS;
+function _deadlineMs(levels, holdMs = 0) {
+  const base = _levelsOverride ? Math.max(MUZZLE_MAX_MS, levels.length * 200) : MUZZLE_MAX_MS;
+  // A HELD light legitimately outlives the flat cap — a thirty-round burst runs for seconds — so the
+  // deadline is pushed out by exactly the hold it was asked for and no further. It is still a hard stop
+  // (the hold itself is already bounded by MUZZLE_BURST_LIGHT.maxHoldMs), so a client whose renderer
+  // stops mid-burst still has its light collected rather than left lit.
+  return (Number(holdMs) > 0) ? base + Number(holdMs) : base;
 }
 
 function _endFlash(id) {
@@ -2815,7 +2911,7 @@ function _endFlash(id) {
   for (const source of state.sources) {
     try { source.destroy(); } catch (_e) { /* already detached */ }
   }
-  try { canvas?.perception?.update?.({ refreshLighting: true }); } catch (_e) { /* canvas torn down */ }
+  _sweepLighting();
 }
 
 /** Drop every flash this client is drawing (scene change, or the rail being switched off). */
@@ -2829,8 +2925,12 @@ export function clearFlashes() {
  * `tokenRef` may be an id (what the socket carries) or a token/placeable. `aim` is the canvas point
  * the shot is pointed at, or null. A token that is not drawn on this client's canvas gets nothing —
  * there is no lighting to affect — and a payload for a scene this client is not viewing is dropped.
+ *
+ * `holdMs` is a BURST's own span (burstLightHoldMs). Above zero the envelope stops at its last
+ * full-intensity frame and stays there until the span is spent, then decays and ends — so a burst is
+ * one light held open rather than one light per round. Zero is the single-shot behaviour, unchanged.
  */
-export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = MUZZLE_MODE, ammoColor = null } = {}) {
+export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = MUZZLE_MODE, ammoColor = null, holdMs = 0 } = {}) {
   const SourceClass = pointLightSourceClass();
   const ticker = _ticker();
   if (!SourceClass || !ticker || !canvas?.ready) return false;
@@ -2856,8 +2956,44 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
   // for with a source rebuild per round.
   const running = _flashes.get(id);
   if (running) {
+    // ⭐ A HELD LIGHT IS NOT RESTARTED BY ITS OWN BURST'S NEXT ROUND. Re-punching the envelope would
+    // walk the intensity back down to the attack level and up again — a strobe, and a full lighting
+    // recomputation for every frame of it — which is the whole of what the burst-scoped light removes.
+    // The round is not ignored: the aim is re-pointed, so a burst that tracks across the room follows.
+    // The hold's own deadline stands (it was opened for the whole burst), so nothing extends here.
+    if (running.holdMs > 0) {
+      running.aimRad = aimRad;
+      // ⚠ AND EACH ROUND CARRIES THE HOLD PAST WHERE THE NEXT ONE IS DUE, measured rather than assumed.
+      //
+      // The nominal span is arithmetic — rounds × cadence — and a real loop does not deliver rounds on
+      // the nominal beat. Measured on the rig, where the client is slow enough to make the effect
+      // obvious: rounds nominally 80 ms apart actually arrived ~215 ms apart, so the hold ran out
+      // three quarters of the way through its own burst. What happened then was worse than a lapse —
+      // the envelope walked one frame INTO the decay, the next round's extension pulled it back to
+      // full, and the pair repeated for every remaining round. Two lighting recomputations per round,
+      // which is most of the cost this whole block exists to remove.
+      //
+      // So the hold is extended by THIS BURST'S OWN OBSERVED SPACING plus one envelope: whatever gap
+      // the last two rounds actually had, the light survives another one of them. It is self-tuning
+      // (no cadence has to be passed in and no client speed has to be assumed), it settles the
+      // oscillation by construction, and it stays bounded — the ceiling is the same leak bound the
+      // opening hold was clamped to. The cost is that the glow outlives the final round by about one
+      // round's spacing rather than by one envelope, which is a held light ending a beat late.
+      const now = performance.now();
+      const gap = Math.max(0, now - (running.lastRoundAt ?? running.startedAt));
+      running.lastRoundAt = now;
+      const wanted = Math.min(MUZZLE_BURST_LIGHT.maxHoldMs,
+        (now - running.startedAt) + gap + muzzleEnvelopeDurationMs());
+      if (wanted > running.holdMs) {
+        running.holdMs = wanted;
+        clearTimeout(running.deadline);
+        running.deadline = setTimeout(() => _endFlash(id), _deadlineMs(running.levels, running.holdMs));
+      }
+      return true;
+    }
     running.levels = _levelsOverride ?? muzzleFrameLevels();
     running.frame = 0;
+    running.applied = null;
     running.startedAt = performance.now();
     running.aimRad = aimRad;
     // The restarted envelope gets its own deadline, or a burst would be cut off by the FIRST round's.
@@ -2893,16 +3029,29 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
       source.add();
       sources.push(source);
     }
+    _flashBuilds++;
   } catch (err) {
     for (const s of sources) { try { s.destroy(); } catch (_e) { /* not attached */ } }
     console.warn(`${SCOPE} | muzzle flash source failed`, err);
     return false;
   }
 
+  const levels = _levelsOverride ?? muzzleFrameLevels();
+  const hold = Math.max(0, Number(holdMs) || 0);
   const state = {
-    sources, specs, aimRad,
-    levels: _levelsOverride ?? muzzleFrameLevels(),
+    sources, specs, aimRad, levels,
     frame: 0,
+    // The last frame of the envelope that sits at FULL intensity — where a held light parks. Derived
+    // from the level list rather than from the frame counts, so the capture seam's own list (which
+    // replaces the list, not the counts) parks in the right place too.
+    holdIndex: levels.lastIndexOf(Math.max(...levels)),
+    holdMs: hold,
+    // When the most recent round of this burst arrived — the basis for the spacing measurement above.
+    lastRoundAt: null,
+    // The last level actually written to the sources. A frame that would write the same number writes
+    // nothing and asks for no lighting recomputation — which is what makes a HELD light cost nothing
+    // per frame instead of one full sweep per frame.
+    applied: null,
     startedAt: performance.now(),
     step: null,
     deadline: null,
@@ -2914,9 +3063,19 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
   state.step = () => {
     const live = _flashes.get(id);
     if (live !== state) return;
-    if (performance.now() - state.startedAt > _deadlineMs(state.levels)) { _endFlash(id); return; }
+    if (performance.now() - state.startedAt > _deadlineMs(state.levels, state.holdMs)) { _endFlash(id); return; }
+    // ⭐ THE HOLD. While a burst is still firing, the envelope parks on its last full-intensity frame
+    // instead of walking on into the decay — so the light is opened once, held for the burst, and only
+    // then allowed to fall off. Since the level does not move while it is parked, the write below is
+    // skipped and core is never asked to recompute the scene's lighting.
+    if (state.holdMs > 0 && state.frame > state.holdIndex
+        && (performance.now() - state.startedAt) < state.holdMs) {
+      state.frame = state.holdIndex;
+    }
     const level = state.levels[state.frame++];
     if (level === undefined) { _endFlash(id); return; }
+    if (level === state.applied) return;
+    state.applied = level;
     try {
       for (let i = 0; i < state.sources.length; i++) {
         const spec = state.specs[i];
@@ -2931,7 +3090,7 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
           luminosity: Number((spec.luminosity * level).toFixed(4)),
         });
       }
-      canvas.perception.update({ refreshLighting: true });
+      _sweepLighting();
     } catch (err) {
       console.warn(`${SCOPE} | muzzle flash frame failed`, err);
       _endFlash(id);
@@ -2940,10 +3099,10 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
 
   _flashes.set(id, state);
   ticker.add(state.step);
-  state.deadline = setTimeout(() => _endFlash(id), _deadlineMs(state.levels));
+  state.deadline = setTimeout(() => _endFlash(id), _deadlineMs(state.levels, state.holdMs));
   // The sources are already at full spec values, so the first drawn frame is a lit flash rather than
   // a dark one waiting for the ticker; the driver takes over from the frame after.
-  try { canvas.perception.update({ refreshLighting: true }); } catch (_e) { /* canvas torn down */ }
+  _sweepLighting();
   return true;
 }
 
@@ -2955,7 +3114,7 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
  * question to answer — nothing is written — so a player firing a GM-owned token, or a GM firing
  * anyone's, all take the identical path.
  */
-export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MODE, ammoColor = null } = {}) {
+export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MODE, ammoColor = null, holdMs = 0 } = {}) {
   const doc = shooterToken?.document ?? shooterToken;
   const tokenId = typeof shooterToken === "string" ? shooterToken : doc?.id;
   if (!tokenId) return false;
@@ -2968,11 +3127,14 @@ export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MOD
     // one's. It is a COLOUR and not an ammo id deliberately: the receiving client then needs no
     // registry lookup and no agreement about tables, and a client that cannot resolve the id anyway
     // (an older module version) simply receives a field it ignores.
-    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_FLASH, sceneId, tokenId, aim, ammoColor: ammoColor ?? null });
+    // The burst's own span rides the datagram beside the colour, and for the same reason: every
+    // client must hold its copy of the light for the same length of time the firing one does, or a
+    // burst strobes on the watchers' screens and glows on the shooter's.
+    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_FLASH, sceneId, tokenId, aim, ammoColor: ammoColor ?? null, holdMs: Number(holdMs) || 0 });
   } catch (err) {
     console.warn(`${SCOPE} | muzzle flash announce failed`, err);
   }
-  return muzzleFlashLocal(tokenId, aim, { sceneId, mode, ammoColor });
+  return muzzleFlashLocal(tokenId, aim, { sceneId, mode, ammoColor, holdMs });
 }
 
 /* ══════════════════════════ Sequencer verbs (optional-only) ══════════════════════════ */
@@ -3593,7 +3755,7 @@ function _held(effect) {
  *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null } = {}) {
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null, lightHoldMs = 0 } = {}) {
   const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0, selfShot: false };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
@@ -3633,7 +3795,10 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
   // The ammo's own flash colour where its overlay names one. It reaches the source through the
   // darkness gate (flashColorFor), so it can only ever appear in the regime the gate already allows a
   // colour in — a lit scene draws the same uncoloured flash it drew before this existed.
-  if (light && shooterToken) out.light = fxMuzzleFlash(shooterToken, to, { mode, ammoColor: entry.flashColor ?? null });
+  // `lightHoldMs` is the BURST's span, resolved once by the fan-out and handed to every round of it.
+  // The first round opens the held light; the rest re-point it and add nothing (muzzleFlashLocal). A
+  // caller with no burst to declare passes nothing and gets the per-round envelope it always had.
+  if (light && shooterToken) out.light = fxMuzzleFlash(shooterToken, to, { mode, ammoColor: entry.flashColor ?? null, holdMs: lightHoldMs });
 
   if (sequencerActive() && shooterToken) {
     try {
@@ -4885,6 +5050,12 @@ export async function fxWeaponFired(payload) {
   // paced by the same number — there is one wait in the loop and everything a round does happens after
   // it. A class that names no cadence of its own gets the default (classCadenceMs).
   const cadenceMs = classCadenceMs(weaponClass);
+  // ⭐ AND THE LIGHT'S OWN SPAN, resolved ONCE here for the same reason the cadence is: the flash light
+  // is now a BURST-scoped element, so every round of this payload has to be able to hand the runner the
+  // identical number or the first round would open a hold the fifth round quietly contradicts. Zero for
+  // a single shot, which is what leaves a lone round's flash exactly as it always was. See
+  // MUZZLE_BURST_LIGHT for what the hold costs and what it buys.
+  const lightHoldMs = burstLightHoldMs(shots, cadenceMs);
   // Aim for the sprite/tracer. The payload carries the aimed-at token in two places because they mean
   // two different things (see the note at the emit in seam-shim.js): `targetTokenId` is the field the
   // DAMAGE flow routes on, set only where the fire card resolved a target itself; `fxTargetTokenId` is
@@ -5121,9 +5292,10 @@ export async function fxWeaponFired(payload) {
     sfx(weaponClass, { burst });
     // Flash + sprite + tracer all start in the SAME tick as this shot's audio, and none of them is
     // awaited: the loop's timer is the cadence a viewer and a listener both read. Every round of a
-    // burst announces its own flash — the per-token cap that keeps that bounded lives in the local
-    // runner (one source set per token, each round restarting the envelope), not here, so a round is
-    // never silently dropped on the way out.
+    // burst still announces its own flash — a round is never silently dropped on the way out — and what
+    // that announcement DOES is the local runner's business: for a burst it re-points one held light
+    // (MUZZLE_BURST_LIGHT), for a lone shot it opens the per-round envelope. Either way the cap that
+    // keeps a burst bounded to one source set per token lives there, not here.
     // THE SINGLE DISCHARGE'S PUFF. What is left of the smoke system after FR#22: one puff, for one
     // round, on a class that asks for it. Not awaited — it must never delay its own round.
     if (shooter && smokes) {
@@ -5148,7 +5320,7 @@ export async function fxWeaponFired(payload) {
       // THE ARRIVAL IS HANDED DOWN rather than re-derived: one derivation per payload, so this round's
       // mark and this round's spray (issued above) are hung on the identical number.
       fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
-        volley, arrivalMs, shotSeed: shotSeedFor(i), aimPoint: aim })
+        volley, arrivalMs, shotSeed: shotSeedFor(i), aimPoint: aim, lightHoldMs })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
       // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock, and the mark counted
       // against the same budget the refused rounds draw from. The hits are the LEADING rounds of the
@@ -5171,7 +5343,9 @@ export async function fxWeaponFired(payload) {
   const settleTailMs = presentationTailMs(weaponClass, ammoKey, volley, arrivalMs);
   _watchSettleTag(settleTag, settleTailMs, settle);
 
-  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, motes: ambience.motes, smokePuffs,
+  // `lightHoldMs` is reported for the same reason the cadence is: "this burst was one held light rather
+  // than N strobed ones" is a claim, and a number in the result is what lets a test say whether it held.
+  return { ...result, shots, hits, flashes, weaponClass, cadenceMs, lightHoldMs, motes: ambience.motes, smokePuffs,
     turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood, volley,
     // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
     arrival, impacts,
@@ -5300,7 +5474,7 @@ export function registerCombatFx() {
     if (data?.type !== MSG_FLASH) return;
     if (!combatFxEnabled()) return;
     try {
-      muzzleFlashLocal(data.tokenId, data.aim ?? null, { sceneId: data.sceneId ?? null, ammoColor: data.ammoColor ?? null });
+      muzzleFlashLocal(data.tokenId, data.aim ?? null, { sceneId: data.sceneId ?? null, ammoColor: data.ammoColor ?? null, holdMs: Number(data.holdMs) || 0 });
     } catch (err) {
       console.warn(`${SCOPE} | muzzle flash relay failed`, err);
     }
