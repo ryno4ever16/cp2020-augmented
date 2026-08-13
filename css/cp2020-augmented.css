@@ -1271,6 +1271,33 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .vehicle-control-dialog fieldset label { display: flex; align-items: center; gap: 6px; margin: 0; width: 100%; }
 .vehicle-control-dialog fieldset label input[type="checkbox"] { flex: 0 0 auto; margin: 0; }
 
+/* --- Attack-modifiers dialog: a long dropdown must shrink, not push the row off the window.
+   The base system already solved this, in a block keyed on `#weapon-modifier` — the fixed
+   application id ITS dialog carried. Ours deliberately carries none: a fixed id makes
+   ApplicationV2 treat the window as a singleton, so opening the dialog for a second weapon
+   replaced the first window in place and orphaned its callback (module/dialog/modifiers.js says
+   so at the site). Dropping the id took the base's whole block with it, silently. These are the
+   same rules against the class the template actually carries.
+   Rig-measured before the fix, on a martial action: the two dropdowns' longest options — a martial
+   art name and a cyber-terminus label — sized the .field-list's `1fr 1fr` tracks to 284px + 339px
+   inside a 466px content box (scrollWidth 626 vs clientWidth 466), and .window-content clips
+   overflow-x, so the second dropdown ran off the window edge. `min-width: 0` on the cell is what
+   lets a `1fr` track fall below its content's minimum, which is the whole mechanism. */
+.cyberpunk.weapon-modifiers .field { min-width: 0; }
+.cyberpunk.weapon-modifiers .field > * { min-width: 0; }
+.cyberpunk.weapon-modifiers .field select { min-width: 0; max-width: 100%; }
+.cyberpunk.weapon-modifiers .field input[type="text"],
+.cyberpunk.weapon-modifiers .field input[type="number"] { min-width: 0; }
+/* And the same window treatment the base block gave it: tall option sets scroll inside the window
+   instead of growing it past the viewport. Scoped with :has, since .window-content is an ancestor
+   of the content div rather than inside it. */
+.application:has(.cyberpunk.weapon-modifiers) .window-content {
+  height: auto;
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
 .vehicle-fire-dialog fieldset { border: 1px solid var(--color-border-light-tertiary); padding: 4px 6px; }
 
 .vehicle-fire-dialog fieldset legend { font-size: 0.8em; }
