@@ -2,7 +2,7 @@
   "_id": "PdEyBwIpXltB908f",
   "name": "Hydrosubsidium \"Pelagic\" Working-Class Sub",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/submarine.svg",
   "system": {
     "flavor": "",
     "notes": "",

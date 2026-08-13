@@ -2,7 +2,7 @@
   "_id": "ZUdJOgpJd1KCHVt7",
   "name": "MedicGear Combat Armor",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "Full-body combat armor with an integrated medical support system. Provides +2 to Medical Tech rolls.",
     "notes": "",

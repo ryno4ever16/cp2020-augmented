@@ -2,7 +2,7 @@
   "_id": "ee7Xt3LMqLPdWJKe",
   "name": "Tsunami UB Microwaver",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "The microwaver variant of Tsunami's underbarrel capacitor weapon system. Delivers microwave energy in a compact under-barrel package.",
     "notes": "",

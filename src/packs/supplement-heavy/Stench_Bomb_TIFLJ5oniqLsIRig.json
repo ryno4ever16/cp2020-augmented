@@ -2,7 +2,7 @@
   "_id": "TIFLJ5oniqLsIRig",
   "name": "Stench Bomb",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "effects": [],
   "folder": null,
   "sort": 16600000,

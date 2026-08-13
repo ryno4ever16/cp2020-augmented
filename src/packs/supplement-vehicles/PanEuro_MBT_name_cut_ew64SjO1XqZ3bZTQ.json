@@ -2,7 +2,7 @@
   "_id": "ew64SjO1XqZ3bZTQ",
   "name": "PanEuro MBT (name cut)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 NAME LINE CUT (9M eb MBT: decent armament/range/serviceability, airship-transportable, 41t, crew4). Your eyes for the designation. | [Audit row +352 — Firestorm: Shockwave p.70]</p>",

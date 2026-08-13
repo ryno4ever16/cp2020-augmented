@@ -2,7 +2,7 @@
   "_id": "3HvI34e9aXOiM9jC",
   "name": "Shuttle II",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Standard NASA reusable shuttle, launched by rocket or lifting platform to carry work crews and substantial cargo to high orbit.</p><p>Spacecraft code (Deep Space p.29): Shuttle II · 200 · 2 · 0 · Chemical · 10 · Battery, Fuel Cell · 50% · 3 · 200m3 · 2 · 6 · 2 · 12 · 4 · 1 x Flitter</p><p>Decoded (Deep Space p.28 legend): Cost 200 million eb; Crew 2; Passengers 0; Drive Type Chemical; Burn Elements 10; Power Type Battery, Fuel Cell; Sensors 50%; Computers 3; Cargo 200m3; Actions 2; Weapon Spaces 6; Armor (max SP) 2; Damage Points 12; Overkill Points 4; Shuttlecraft 1 x Flitter.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

@@ -2,7 +2,7 @@
   "_id": "96AiY8Bs8kVRKwu5",
   "name": "Disguise +3",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "WjEhKzxpGXNVcz4K",
   "name": "Kick Ass",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "COOL +2 (11); EMP -2 (1); enhances aggression.",
     "notes": "",

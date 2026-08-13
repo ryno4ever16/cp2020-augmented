@@ -2,7 +2,7 @@
   "_id": "FCbxfGFdstnH9J3F",
   "name": "Enforcer",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 30 all zones; SDP disabled/destroyed = Head/limbs 25/35, Torso 35/45.</p><p><strong>Option spaces:</strong> Head optic 1&1, audio 3; Torso 4; R.Arm 1/L.Arm 1; R.Leg 1/L.Leg 1.</p><p><strong>Prebuilt options:</strong> cyberoptics + cyberaudio suite; leg holster; grenade storage; taser grips; black-book micro-computer; striptape dispenser; light bars.</p>",

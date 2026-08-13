@@ -2,7 +2,7 @@
   "_id": "p4ipAoFVepSUZ4D5",
   "name": "Hundalini 'Torpedo' Police Interceptor Cycle",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "",

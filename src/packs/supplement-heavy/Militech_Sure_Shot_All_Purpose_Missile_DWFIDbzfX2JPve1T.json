@@ -2,7 +2,7 @@
   "_id": "DWFIDbzfX2JPve1T",
   "name": "Militech \"Sure-Shot\" All-Purpose Missile",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

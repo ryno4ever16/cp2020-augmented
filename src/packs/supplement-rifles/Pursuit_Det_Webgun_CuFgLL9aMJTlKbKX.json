@@ -2,7 +2,7 @@
   "_id": "CuFgLL9aMJTlKbKX",
   "name": "Pursuit Det-Webgun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "The Pursuit Webgun loaded with a Det-Web, replacing the nylon strands with Detcord strips. When detonated the explosive charges deal a 40-point AP hit to every body location, capable of destroying all but the most heavily armored targets.",
     "notes": "",

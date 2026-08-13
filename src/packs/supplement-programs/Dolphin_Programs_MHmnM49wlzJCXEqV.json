@@ -2,7 +2,7 @@
   "_id": "MHmnM49wlzJCXEqV",
   "name": "Dolphin Programs",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

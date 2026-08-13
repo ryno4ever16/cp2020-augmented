@@ -2,7 +2,7 @@
   "_id": "F8HnhUNmhXIqMJ1D",
   "name": "Bell Bumblebee Remote Rotocraft",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

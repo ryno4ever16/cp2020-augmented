@@ -2,7 +2,7 @@
   "_id": "3pt95x2HoDIqDny0",
   "name": "Stein & Wasserman Model F",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index-priced. | [Audit row +114 — Chromebook 1 p.93]</p><p>Stat line backfilled from Chromebook 1 p.54 text layer: RIF 0 L P 13mm Mixed 8 1 VR. 'Cyborg Assault' weapon system — fires a selection of special 13mm rounds; muzzle-adapted for DCR rifle grenades. [Backfill 2026-07-17]</p>",

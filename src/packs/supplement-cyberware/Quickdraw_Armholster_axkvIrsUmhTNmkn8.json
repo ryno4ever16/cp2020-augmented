@@ -2,7 +2,7 @@
   "_id": "axkvIrsUmhTNmkn8",
   "name": "Quickdraw Armholster",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Forearm spring holster launches P-conceal pistol/knife into hand (+2 Initiative on declared fast draw); 1 space. | [Audit row +122 — Chromebook 2 p.6]</p>",

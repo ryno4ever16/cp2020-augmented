@@ -2,7 +2,7 @@
   "_id": "phfPouOdfCABZITj",
   "name": "Lexus ZS-5000SR (Security Retrofit)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "h9iyvu0FpYB2B4U2",
   "name": "Militech Military/Police Shotgun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Riot/duty shotgun, 300eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +294 — Blackhand's Street Weapons p.23]</p><p>Stat line backfilled from Blackhand's p.23 text layer: SHT 0/-1 N/L C 4D6 (12ga/#00) 8 2 ST 50m. Folding stock (second Acc./Conceal. are stock-folded). 10-gauge variant: 5D6, six-round, no folding stock. [Backfill 2026-07-17]</p>",

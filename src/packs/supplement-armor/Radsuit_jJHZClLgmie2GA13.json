@@ -2,7 +2,7 @@
   "_id": "jJHZClLgmie2GA13",
   "name": "Radsuit",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Radiation-hardened suit (Deep Space): radiation-SP 6 — against a radiation hit this layer contributes 6 (its ballistic SP does not stop radiation); against conventional damage its normal SP applies.</p>",

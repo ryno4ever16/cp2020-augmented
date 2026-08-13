@@ -2,7 +2,7 @@
   "_id": "VDMnibaopE7F4R8h",
   "name": "Eclipse",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 25 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 0&0, audio 1; Torso 0; R.Arm 2/L.Arm 2; R.Leg 1/L.Leg 1.</p><p><strong>Prebuilt options:</strong> full optic+audio suite in sensory boom; retractable monoblade 2d6+7; silenced pop-up 10mm; modular cyberhand; venomhand; secret leg spaces; gyro-balancer; grip/stealth foot; pain editor; chameleon covering (-4 Aware); ECM; sound canceller; IR thermal dam.</p>",

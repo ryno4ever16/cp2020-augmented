@@ -2,7 +2,7 @@
   "_id": "L978lwqXgcrg6MLO",
   "name": "Maclaren/Jaguar Sports Aerodyne",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

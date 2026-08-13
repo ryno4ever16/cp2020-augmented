@@ -2,7 +2,7 @@
   "_id": "bbKpZZJFuw1igKoh",
   "name": "Militech AVX-9C \"Viper\" Attack Aerodyne",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

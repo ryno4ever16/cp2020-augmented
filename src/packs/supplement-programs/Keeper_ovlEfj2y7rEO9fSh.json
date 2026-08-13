@@ -2,7 +2,7 @@
   "_id": "ovlEfj2y7rEO9fSh",
   "name": "Keeper",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

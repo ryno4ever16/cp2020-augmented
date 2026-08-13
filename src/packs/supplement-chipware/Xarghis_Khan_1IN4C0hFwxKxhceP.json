@@ -2,7 +2,7 @@
   "_id": "1IN4C0hFwxKxhceP",
   "name": "Xarghis Khan",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "EMP 1; COOL 10; user wants to torture and kill",
     "notes": "",

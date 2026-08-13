@@ -2,7 +2,7 @@
   "_id": "VY2KE25NgEA5Wix9",
   "name": "Security Chip (Type I)",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>+base chip price. Erased-stays-erased (IMPOSSIBLE Computer Tech to recover). Type II 75eb+base: meltable silicon, unrecoverable. | [Audit row +79 — Chromebook 1 p.73]</p>",

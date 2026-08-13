@@ -2,7 +2,7 @@
   "_id": "mFWRCm0vb8G3b01L",
   "name": "Adrek Robotics \"Chacmool\" Combat & Security Cybercat",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

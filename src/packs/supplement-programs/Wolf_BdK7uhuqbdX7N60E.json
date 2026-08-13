@@ -2,7 +2,7 @@
   "_id": "BdK7uhuqbdX7N60E",
   "name": "Wolf",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

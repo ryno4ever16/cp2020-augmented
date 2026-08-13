@@ -2,7 +2,7 @@
   "_id": "cagCGrd4edBsNbGW",
   "name": "Cycler",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Massive open-structure craft permanently cycling between Earth and Mars; code is for one half.</p><p>Spacecraft code (Deep Space p.37): Cycler (one half) · 250 · 4 · 20 (up to 200 in proposed models) · Chemical, Ion · 6, 2 · Batteries, Solar · 60% · 3 · 1000m3 · 2 · None · 0 · 8 · 4 · 3-4 OTVs, 2 Landers</p><p>Decoded (Deep Space p.28 legend): Cost 250 million eb; Crew 4; Passengers 20 (up to 200 in proposed models); Drive Type Chemical, Ion; Burn Elements 6, 2; Power Type Batteries, Solar; Sensors 60%; Computers 3; Cargo 1000m3; Actions 2; Weapon Spaces None; Armor (max SP) 0; Damage Points 8; Overkill Points 4; Shuttlecraft 3-4 OTVs, 2 Landers.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

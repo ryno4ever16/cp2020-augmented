@@ -2,7 +2,7 @@
   "_id": "ruzxcnysECYWOOxv",
   "name": "NAM Drifter RV",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Recreational vehicle; 2 bunks + couch; kitchen; diagnostic computer + modular repairs; auxiliary electric motor. | [Audit row +63 — Chromebook 1 p.88]</p>",

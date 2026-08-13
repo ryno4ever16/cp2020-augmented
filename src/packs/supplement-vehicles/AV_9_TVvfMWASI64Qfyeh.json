@@ -2,7 +2,7 @@
   "_id": "TVvfMWASI64Qfyeh",
   "name": "AV-9",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>1.3M eb (index). Product page elsewhere in book. | [Audit row +64 — Chromebook 1 p.93]</p>",

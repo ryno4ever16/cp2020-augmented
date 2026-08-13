@@ -2,7 +2,7 @@
   "_id": "VACVoFHMnkQl3fNL",
   "name": "Self-Propelled Grenade Cyberfinger",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>First joint = SP grenade, 7m range, 2D6/2m diameter; replacements 25eb. Black market most regions. | [Audit row +285 — Chromebook 2 p.4]</p>",

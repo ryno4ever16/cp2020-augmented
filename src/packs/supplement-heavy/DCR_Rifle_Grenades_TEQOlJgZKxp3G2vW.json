@@ -2,7 +2,7 @@
   "_id": "TEQOlJgZKxp3G2vW",
   "name": "DCR Rifle Grenades",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Blackhand's idx42 'DCR Rifle Grenades': 50eb — corroborates. | 50eb/100eb (index). | [Audit row +107 — Chromebook 1 p.93]</p><p>Damage backfilled from Chromebook 1 p.50 text layer: Varies — HE 7D6 frag to 5m + 3D6 frag 6-10m, Smoke 10m, HEAT 5D10HEAT + 3D6 frag to 5m (WA +0). 22mm muzzle adaptor (200eb) fits any rifle; fired at ROF 1/2 turns. [Backfill 2026-07-17]</p>",

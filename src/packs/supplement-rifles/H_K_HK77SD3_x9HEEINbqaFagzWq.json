@@ -2,7 +2,7 @@
   "_id": "x9HEEINbqaFagzWq",
   "name": "H&K HK77SD3",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "",
     "notes": "",

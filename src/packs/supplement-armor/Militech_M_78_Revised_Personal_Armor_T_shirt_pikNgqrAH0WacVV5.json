@@ -2,7 +2,7 @@
   "_id": "pikNgqrAH0WacVV5",
   "name": "Militech M-78 Revised Personal Armor (T-shirt)",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

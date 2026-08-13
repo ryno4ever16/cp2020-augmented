@@ -2,7 +2,7 @@
   "_id": "oUvScJKfWVXPqJAG",
   "name": "Redundancy Loop",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Will screw up at a crucial moment. Cost is 50-75% of the chip",
     "notes": "<p>Printed price: <b>50–75% of a normal skill chip</b> (Chromebook 1 p.75) — GM sets the eb value from the chip it modifies. The looped chip errs at a crucial moment: the Ref secretly rolls the skill check alongside the player and the LOWER roll stands.</p>",

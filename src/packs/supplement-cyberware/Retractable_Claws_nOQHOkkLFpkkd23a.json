@@ -2,7 +2,7 @@
   "_id": "nOQHOkkLFpkkd23a",
   "name": "Retractable Claws",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Per limb; 1D6; nanotech bone-grown; −3 fingertip-manipulation. Surgery M. | [Audit row +139 — Chromebook 2 p.102]</p>",

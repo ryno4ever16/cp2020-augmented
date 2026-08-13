@@ -2,7 +2,7 @@
   "_id": "TkVWMeFoi5ua0hqB",
   "name": "Death Trance",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "1-3 minutes to enter. Medtech 25+ to detect life",
     "notes": "<p>APTR death-like trance (timer recovery); 1-3 min to enter; Medtech 25+ to detect life. | [Audit row +95 — Chromebook 1 p.75]</p>",

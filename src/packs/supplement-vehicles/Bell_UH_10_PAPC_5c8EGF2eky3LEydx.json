@@ -2,7 +2,7 @@
   "_id": "5c8EGF2eky3LEydx",
   "name": "Bell UH-10 PAPC",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

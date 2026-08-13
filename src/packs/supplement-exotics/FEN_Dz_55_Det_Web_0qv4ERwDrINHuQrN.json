@@ -2,7 +2,7 @@
   "_id": "0qv4ERwDrINHuQrN",
   "name": "FEN Dz-55 Det-Web",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Detonating web (Dz family with Dz-22 Saucer / Dz-25 Det Card). 450eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +301 — Blackhand's Street Weapons p.9]</p><p>Damage backfilled from Blackhand's p.9 text layer: one-use anti-borg net of Detcord — when triggered, does 40 points of AP damage to every body location. Accuracy/range +0/25m. [Backfill 2026-07-17]</p>",

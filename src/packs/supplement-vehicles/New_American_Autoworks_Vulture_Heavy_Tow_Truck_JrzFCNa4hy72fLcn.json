@@ -2,7 +2,7 @@
   "_id": "JrzFCNa4hy72fLcn",
   "name": "New American Autoworks 'Vulture' Heavy Tow Truck",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

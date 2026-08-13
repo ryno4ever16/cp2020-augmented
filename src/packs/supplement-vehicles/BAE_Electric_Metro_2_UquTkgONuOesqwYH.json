@@ -2,7 +2,7 @@
   "_id": "UquTkgONuOesqwYH",
   "name": "BAE Electric Metro 2",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Four-passenger electric city car (1+3); 1t; crash control + auto-pilot; ~30% of the UK car market. RGUK p.40. | [Audit row +361 — Rough Guide to the UK p.40]</p>",

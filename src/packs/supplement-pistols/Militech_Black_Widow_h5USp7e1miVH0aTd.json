@@ -2,7 +2,7 @@
   "_id": "h5USp7e1miVH0aTd",
   "name": "Militech Black Widow",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

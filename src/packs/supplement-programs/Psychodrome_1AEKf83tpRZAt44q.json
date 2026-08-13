@@ -2,7 +2,7 @@
   "_id": "1AEKf83tpRZAt44q",
   "name": "Psychodrome",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "ey9MCaQOAvIMFpk3",
   "name": "PanEurope Gladiator Armored Car",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-tank.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Wheeled 'tank-alike' IFV. 60mph, crew3, 1.1M eb. | [Audit row +316 — Firestorm: Shockwave p.63]</p>",

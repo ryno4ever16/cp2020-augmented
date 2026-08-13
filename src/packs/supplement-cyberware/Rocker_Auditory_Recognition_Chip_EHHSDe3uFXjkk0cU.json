@@ -2,7 +2,7 @@
   "_id": "EHHSDe3uFXjkk0cU",
   "name": "Rocker Auditory Recognition Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>150eb/level (to 2). Instruments/songs (lyrics readout)/singing voices; monthly updates. | [Audit row +11 — Chromebook 3 p.39]</p>",

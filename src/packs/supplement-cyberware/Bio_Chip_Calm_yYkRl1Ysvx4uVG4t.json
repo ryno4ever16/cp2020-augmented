@@ -2,7 +2,7 @@
   "_id": "yYkRl1Ysvx4uVG4t",
   "name": "Bio-Chip (Calm)",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 name OCR-garbled ('Btre-') — verify printed name. Biofeedback calm: +1 COOL (combat morale), +1 EMP (interactive skills); relieves migraines/hypertension. | [Audit row +91 — Chromebook 1 p.75]</p>",

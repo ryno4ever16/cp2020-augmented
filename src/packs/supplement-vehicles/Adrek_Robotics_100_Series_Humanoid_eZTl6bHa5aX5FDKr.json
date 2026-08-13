@@ -2,7 +2,7 @@
   "_id": "eZTl6bHa5aX5FDKr",
   "name": "Adrek Robotics \"100 Series\" Humanoid",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

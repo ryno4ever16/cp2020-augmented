@@ -2,7 +2,7 @@
   "_id": "2gCRNpZzLAC9BQdw",
   "name": "Militech IVa Central Mobile Command and Control Center (CMCCC)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "3YREgjDS6b3w6uqe",
   "name": "OTEC \"Hammerhead\" Taxi/Shuttlesub",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/submarine.svg",
   "system": {
     "flavor": "",
     "notes": "",

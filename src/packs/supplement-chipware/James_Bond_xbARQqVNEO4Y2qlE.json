@@ -2,7 +2,7 @@
   "_id": "xbARQqVNEO4Y2qlE",
   "name": "James Bond",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "COOL +1 (max 11); user is a top British agent",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "tFeDl2q4tdwgMJZq",
   "name": "SomaWare Sleep Induction Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Normal sleep (after 15 uses COOL 15+ to sleep)",
     "notes": "",

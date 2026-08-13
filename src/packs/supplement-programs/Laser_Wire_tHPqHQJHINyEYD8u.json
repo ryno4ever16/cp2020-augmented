@@ -2,7 +2,7 @@
   "_id": "tHPqHQJHINyEYD8u",
   "name": "Laser Wire",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

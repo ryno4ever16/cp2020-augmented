@@ -2,7 +2,7 @@
   "_id": "mxtduAYGndn7udit",
   "name": "MRAM MemoryChips",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Chips INT and other cognitive skills",
     "notes": "<p>The MRAM chip CLASS (Core p.83): information-only chips rated +1 to +3, applied as a skill of the chip's type. Priced per specific chip and level — see the individual +1/+2/+3 knowledge chips in this catalog; this generic entry carries no single price.</p>",

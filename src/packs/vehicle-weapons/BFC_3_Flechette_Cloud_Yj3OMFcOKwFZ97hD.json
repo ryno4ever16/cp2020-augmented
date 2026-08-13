@@ -1,7 +1,7 @@
 {
   "name": "BFC-3 Flechette Cloud",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/turret.svg",
   "system": {
     "weight": 2,
     "magWeight": 0,

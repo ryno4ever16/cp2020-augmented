@@ -2,7 +2,7 @@
   "_id": "V2XqUpXZ9nGrJbYB",
   "name": "U.S. M-20 Superheavy",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-tank.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Superheavy MBT; needs concrete-grade ground. 40mph, crew3, 100t. | [Audit row +347 — Firestorm: Shockwave p.69]</p>",

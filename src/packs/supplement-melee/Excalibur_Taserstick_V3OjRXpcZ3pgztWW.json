@@ -2,7 +2,7 @@
   "_id": "V3OjRXpcZ3pgztWW",
   "name": "Excalibur Taserstick",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/baton.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Sibling of the Excalibur Nightstick (already in sheet, same p.34); taser-charge baton, 8 charges. Stats from Reference Book. | [Audit row +372 — Protect & Serve p.34]</p>",

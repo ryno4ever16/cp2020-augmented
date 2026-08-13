@@ -2,7 +2,7 @@
   "_id": "3FSAQLho9WfO4lwb",
   "name": "Mi-52 Attack AV",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "FKBv5UKS05VkBEn8",
   "name": "Wall of Static",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

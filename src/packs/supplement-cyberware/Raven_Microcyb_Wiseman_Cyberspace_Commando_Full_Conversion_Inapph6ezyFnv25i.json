@@ -2,7 +2,7 @@
   "_id": "Inapph6ezyFnv25i",
   "name": "Raven Microcyb 'Wiseman' Cyberspace Commando Full Conversion",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 3). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 25 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 0&0, audio 2; Torso 0; R.Arm 0/L.Arm 0; R.Leg 1/L.Leg 1.</p><p><strong>Prebuilt options:</strong> netrunner rig: video-imager/net-vision/times-sq+ optics; micro-recorder/phone/scrambler/tight-beam audio; INT-3 computer; techscanner+CTD; chip ports; chronometer; cybermodem link; cellular cybermodem; extra 20MU databank/limb; auto-punchout; rip switch.</p>",

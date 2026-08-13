@@ -2,7 +2,7 @@
   "_id": "9HCkzhZrY7RrMixC",
   "name": "Towa Manufacturing Type-8 Medium Machine Gun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "effects": [],
   "folder": null,
   "sort": 14900000,

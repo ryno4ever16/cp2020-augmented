@@ -2,7 +2,7 @@
   "_id": "NAZwPgRV6hVePaOU",
   "name": "Wyland Electronics Handbox",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index-priced. | [Audit row +240 — Chromebook 3 p.125]</p>",

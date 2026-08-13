@@ -2,7 +2,7 @@
   "_id": "QZNHNqr5zUbALnDv",
   "name": "\"Drifter\" Mobile Environment",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>'Drifter' Mobile Environment: a netrunning-optimized version of the Drifter Recreational Vehicle (base RV detailed in Chromebook 1, p.88-89). It adds a comprehensive communications suite including a sat-linker and the same drive-by-wire control features as the Nasuko DataCycle, so a netrunner strapped into the bed (or in the front seat) can drive the RV while running the Net.</p><p>Printed stats (Brainware Blowout p.96): Top Speed 80mph; Acc/Dec 15/40mph; Crew 1; Passengers 1; Range 700 miles; Cargo 3.5 spaces (640kg); Maneuver -2; SDP 80 (body 4); SP 10 (armor 0); Mass 3,200kg; Type pick-up; Cost 80,000eb. Special equipment: crash-control systems for 3, 2 beds, mini-galley, shower, toilet, cellular phone, radio, satellite uplink, auto-pilot and civilian navigation, cybernetic linkage, TV/stereo.</p>",

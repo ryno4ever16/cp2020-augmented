@@ -2,7 +2,7 @@
   "_id": "pkJ3dLnMMLWBq91j",
   "name": "Arasaka WMA Submachinegun (Silenced)",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "",

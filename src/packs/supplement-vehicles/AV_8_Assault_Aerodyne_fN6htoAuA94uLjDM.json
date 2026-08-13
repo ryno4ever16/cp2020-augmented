@@ -2,7 +2,7 @@
   "_id": "fN6htoAuA94uLjDM",
   "name": "AV-8 Assault Aerodyne",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Attack AV: painting laser turret, 2 AAMs, 1300kg pod wings. 495mph, crew2, 1320mi. 👁 SDP/SP lines cut. | [Audit row +334 — Firestorm: Shockwave p.67]</p>",

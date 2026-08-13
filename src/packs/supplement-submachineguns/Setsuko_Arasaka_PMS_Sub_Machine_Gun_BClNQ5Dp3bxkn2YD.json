@@ -2,7 +2,7 @@
   "_id": "BClNQ5Dp3bxkn2YD",
   "name": "Setsuko-Arasaka \"PMS\" Sub-Machine Gun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "effects": [],
   "folder": null,
   "sort": 12200000,

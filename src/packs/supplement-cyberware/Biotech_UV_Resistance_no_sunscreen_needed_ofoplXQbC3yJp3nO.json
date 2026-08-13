@@ -2,7 +2,7 @@
   "_id": "ofoplXQbC3yJp3nO",
   "name": "Biotech: UV Resistance (no sunscreen needed)",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Biological adaptation (Eurosource Plus): UV resistance — no sunscreen needed; immune to sunburn and UV-driven skin damage. Narrative protection; no roll payload is printed and no engine consumes a UV hazard, so nothing is auto-wired.</p>",

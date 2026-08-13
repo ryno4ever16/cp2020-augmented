@@ -2,7 +2,7 @@
   "_id": "8VfUKNDIl4oxti1d",
   "name": "Pilot (Fixed Wing) +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

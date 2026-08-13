@@ -2,7 +2,7 @@
   "_id": "u5r4YCDyzfC8NGbS",
   "name": "Bell F-152 Autogyro",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Cheap autogyro; minimal pilot protection. 195mph, crew1, 50mi range, 1500kg. Cost OCR 'l45,OOO'=145,000. | [Audit row +327 — Firestorm: Shockwave p.65]</p>",

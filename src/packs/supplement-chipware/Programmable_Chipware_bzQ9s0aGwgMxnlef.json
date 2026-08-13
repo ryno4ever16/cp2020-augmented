@@ -2,7 +2,7 @@
   "_id": "bzQ9s0aGwgMxnlef",
   "name": "Programmable Chipware",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Provides basic knowledge of a procedure",
     "notes": "<p>50eb/chip (400eb/10); Chip Programming Module (CPM) 1000eb. Job routines/policies — knowledge, not skill levels. | [Audit row +85 — Chromebook 1 p.74]</p>",

@@ -2,7 +2,7 @@
   "_id": "zq1C8KgnXdQWTNjt",
   "name": "Home Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Very Difficult Cool/Resist Torture roll to resist",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "h9OSYbz3t5whUSbE",
   "name": "Militech \"Cowboy\" U-55 Grenade Launcher",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "effects": [],
   "folder": null,
   "sort": 15400000,

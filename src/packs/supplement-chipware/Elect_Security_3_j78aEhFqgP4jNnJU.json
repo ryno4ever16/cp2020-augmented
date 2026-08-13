@@ -2,7 +2,7 @@
   "_id": "j78aEhFqgP4jNnJU",
   "name": "Elect. Security +3",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

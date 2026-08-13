@@ -2,7 +2,7 @@
   "_id": "w16X5qDByBV1SnXW",
   "name": "Mitsubishi Taser",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "effects": [],
   "folder": null,
   "sort": 3000000,

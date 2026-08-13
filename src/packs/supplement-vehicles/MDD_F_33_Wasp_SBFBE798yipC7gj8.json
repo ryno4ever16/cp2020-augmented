@@ -2,7 +2,7 @@
   "_id": "SBFBE798yipC7gj8",
   "name": "MDD F-33 Wasp",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

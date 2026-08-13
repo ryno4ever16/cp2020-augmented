@@ -2,7 +2,7 @@
   "_id": "elGsfB1yPZx5SFMU",
   "name": "Cadence Industries Hovervan",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

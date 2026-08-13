@@ -2,7 +2,7 @@
   "_id": "nF83fKgGZBChUsR2",
   "name": "Fabrica de Armes M-2012HB SAW",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Heavy-barrel SAW variant of the M-2012 (base gun in packs). 1600eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +295 — Blackhand's Street Weapons p.34]</p><p>Stat line backfilled from Blackhand's p.34 text layer (Solo of Fortune): HVY +2 N P 5D6+3 (6.5mm) 100 30 VR 450m. 100-round drum, 31-inch ceramic-clad heavy barrel, K&K 2x laser reflex scope. [Backfill 2026-07-17]</p>",

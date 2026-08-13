@@ -2,7 +2,7 @@
   "_id": "SHCrWeR8bY7DlYwk",
   "name": "Nomad Boomerang",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "effects": [],
   "folder": null,
   "sort": 12800000,

@@ -2,7 +2,7 @@
   "_id": "D80Bvw7FRMH1Ud9B",
   "name": "Salamander Pants",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Typed armor (Chromebook 1): SP 20 against FIRE damage only — no protection against any other damage type. The coverage SP (20 on the garment's locations) counts ONLY against fire hits; on any other hit the layer is skipped entirely. Coverage anatomy is editable.</p>",

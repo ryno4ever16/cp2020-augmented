@@ -2,7 +2,7 @@
   "_id": "su9s1uoqAyhbyQNS",
   "name": "Eradicator",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

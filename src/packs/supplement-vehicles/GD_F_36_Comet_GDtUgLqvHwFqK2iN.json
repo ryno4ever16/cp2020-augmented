@@ -2,7 +2,7 @@
   "_id": "GDtUgLqvHwFqK2iN",
   "name": "GD F-36 Comet",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

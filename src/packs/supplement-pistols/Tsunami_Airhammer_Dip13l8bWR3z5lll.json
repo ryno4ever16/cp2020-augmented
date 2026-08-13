@@ -2,7 +2,7 @@
   "_id": "Dip13l8bWR3z5lll",
   "name": "Tsunami \"Airhammer\"",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Designed for Crystal Palace Security, the Airhammer fires a 5.3x19mm cartridge using compressed gas propulsion. Three settings: Target (half damage), Combat (normal), and Overload (+3 damage, UR reliability). Available rounds include Kendachi fragmentation flechette, gas, gel, and practice. Available in a 5-round cylinder model with laser sight and gun camera, or a 7-round Mark 2 with an integral smartgun rig.",
     "notes": "",

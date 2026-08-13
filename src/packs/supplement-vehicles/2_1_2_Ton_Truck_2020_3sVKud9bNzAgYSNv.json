@@ -2,7 +2,7 @@
   "_id": "3sVKud9bNzAgYSNv",
   "name": "2 1/2-Ton Truck (2020)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Modern descendant of the Deuce-and-a-Half; 2500kg over almost any terrain. 80mph, 5t. | [Audit row +314 — Firestorm: Shockwave p.63]</p>",

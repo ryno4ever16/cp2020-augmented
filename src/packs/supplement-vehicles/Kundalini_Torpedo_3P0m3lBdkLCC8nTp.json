@@ -2,7 +2,7 @@
   "_id": "3P0m3lBdkLCC8nTp",
   "name": "Kundalini Torpedo",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index-priced. | [Audit row +203 — Chromebook 3 p.124]</p>",

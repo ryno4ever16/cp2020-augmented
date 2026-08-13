@@ -2,7 +2,7 @@
   "_id": "cyby5GfrgnDugFZH",
   "name": "Flitter",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Small short-range craft holding up to four people; used for transport between habitats. Cannot land.</p><p>Spacecraft code (Deep Space p.35): Flitter · 10 · 2 · 2 · Chemical · 3 · Batteries · 30% · 1(10MU) · 4m3 · 1 · None · 0 · 3 · 1 · None</p><p>Decoded (Deep Space p.28 legend): Cost 10 million eb; Crew 2; Passengers 2; Drive Type Chemical; Burn Elements 3; Power Type Batteries; Sensors 30%; Computers 1 (10MU); Cargo 4m3; Actions 1; Weapon Spaces None; Armor (max SP) 0; Damage Points 3; Overkill Points 1; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

@@ -2,7 +2,7 @@
   "_id": "75JxoJ47ZoonzDG7",
   "name": "Play Instrument +1",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

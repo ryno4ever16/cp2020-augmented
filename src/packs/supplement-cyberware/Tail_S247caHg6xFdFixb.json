@@ -2,7 +2,7 @@
   "_id": "S247caHg6xFdFixb",
   "name": "Tail",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Mobile but weak (~3 lbs force). Surgery MA. | [Audit row +140 — Chromebook 2 p.102]</p>",

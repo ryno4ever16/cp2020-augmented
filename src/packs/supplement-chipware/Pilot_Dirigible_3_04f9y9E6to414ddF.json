@@ -2,7 +2,7 @@
   "_id": "04f9y9E6to414ddF",
   "name": "Pilot (Dirigible) +3",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

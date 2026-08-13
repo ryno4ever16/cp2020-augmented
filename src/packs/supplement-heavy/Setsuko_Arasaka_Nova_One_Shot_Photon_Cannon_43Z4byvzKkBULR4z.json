@@ -2,7 +2,7 @@
   "_id": "43Z4byvzKkBULR4z",
   "name": "Setsuko-Arasaka \"Nova\" One-Shot Photon Cannon",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "lOKA5U2JetVUrI53",
   "name": "40-Ton 8x8 Truck",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "IVYuqsr4yLTtCuM2",
   "name": "Militech RPV-400 Light Combat Tiltrotor Remote",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

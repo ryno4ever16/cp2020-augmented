@@ -2,7 +2,7 @@
   "_id": "QrqCljF4Gg1zLIJN",
   "name": "Demolitions +3",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

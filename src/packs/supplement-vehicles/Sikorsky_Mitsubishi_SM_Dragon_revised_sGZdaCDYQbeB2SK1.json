@@ -2,7 +2,7 @@
   "_id": "sGZdaCDYQbeB2SK1",
   "name": "Sikorsky-Mitsubishi SM-Dragon (revised)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>REVISED stats for the Chromebook 1 Dragon: 120mph, crew2+30, 4t cargo, 12t. Cross-ref the CB1 vehicle row. | [Audit row +330 — Firestorm: Shockwave p.66]</p>",

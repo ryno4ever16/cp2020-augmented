@@ -2,7 +2,7 @@
   "_id": "TLSlJfdRmH4cGSnq",
   "name": "Gemini",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 25 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 4&4, audio 6; Torso 2; R.Arm 1/L.Arm 1; R.Leg 1/L.Leg 1.</p><p><strong>Prebuilt options:</strong> realskin/exoderm infiltration body; sexual implant; +5 Disguise option (1000eb).</p>",

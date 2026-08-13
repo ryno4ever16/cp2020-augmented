@@ -2,7 +2,7 @@
   "_id": "whr4LIFDRnXpVIij",
   "name": "APEX Mobile Point Defense System",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Blackhand's idx6: 10,000eb full entry (mobile point-defense). | Index-priced. (The Masterpiece penthouse mounts 6 'Apex minigun turrets, pg.53'.) | [Audit row +105 — Chromebook 1 p.93]</p><p>Stat line backfilled from Chromebook 1 p.53 text layer: 2D6+4 (9mm caseless) 400 40 ST 200m. Automated point-defense turret — WA is the system's own targeting, not a wielder skill. [Backfill 2026-07-17]</p>",

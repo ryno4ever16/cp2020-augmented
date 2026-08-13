@@ -2,7 +2,7 @@
   "_id": "08NsG7mzu99Gosht",
   "name": "Special Operative Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Language +1; Geography; and one other skill",
     "notes": "<p>Per-country: Language+1, Spec.Know[geography]+1, + choice of Wilderness Survival+1 / SK[police]+1 / Culture+1 / SK[military org]+1. | [Audit row +81 — Chromebook 1 p.73]</p>",

@@ -2,7 +2,7 @@
   "_id": "nXAvhxbwYvk8X7GB",
   "name": "Maclaren/Jaguar XJ220C-P Police Interceptor",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

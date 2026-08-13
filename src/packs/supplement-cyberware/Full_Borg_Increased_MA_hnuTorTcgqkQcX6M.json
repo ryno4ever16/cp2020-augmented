@@ -2,7 +2,7 @@
   "_id": "hnuTorTcgqkQcX6M",
   "name": "Full Borg: Increased MA",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>+1 MA per purchase (equip one copy per +1), to the printed maximum of 25. 1500eb and 2 Humanity per +1. Whole-body chassis upgrade — applies through the borg engine. | [Chromebook 2 p.85]</p>",

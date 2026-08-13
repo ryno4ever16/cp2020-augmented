@@ -2,7 +2,7 @@
   "_id": "pOV7iPenH9xGkbeW",
   "name": "Programming +1",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill chip",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "JPwP8TlJ9PtIL8xC",
   "name": "Security Chips",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Eraseable/destroyable chips; cost per 75 chips",
     "notes": "",

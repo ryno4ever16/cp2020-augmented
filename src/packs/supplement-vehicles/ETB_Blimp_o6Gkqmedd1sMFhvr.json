@@ -2,7 +2,7 @@
   "_id": "o6Gkqmedd1sMFhvr",
   "name": "ETB Blimp",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Advertising/regional patrol/area denial dirigible; envelope is a flexible video display screen; crew 5+1 (pilot, commander, 2 gunners, ECM officer), 10t, 2.5t cargo; 2x 7.62 miniguns in stabilized turrets; long-range radio, scrambler, anti-laser aerosol, chaff/flares, 2x +2 targeting computers, mini-galley, damage + environment control, radar, autopilot/nav, ECM, image enhancement, IR, light amp, radar detector, thermal imaging, telescopic optics, 5x ejection seats. Feared/hated by Nomads and rural residents. RGUK p.43. | [Audit row +365 — Rough Guide to the UK p.43]</p>",

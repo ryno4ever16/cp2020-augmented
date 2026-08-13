@@ -2,7 +2,7 @@
   "_id": "OSsRmhbfxHDcZ1i0",
   "name": "Armor Weave (biotech)",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>OCR 'A,OOO'=4000. New biotech. Surgery N. | [Audit row +148 — Chromebook 2 p.102]</p>",

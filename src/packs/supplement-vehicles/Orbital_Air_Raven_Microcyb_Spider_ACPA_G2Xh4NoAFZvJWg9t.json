@@ -2,7 +2,7 @@
   "_id": "G2Xh4NoAFZvJWg9t",
   "name": "Orbital Air/Raven Microcyb Spider (ACPA)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>ACPA suit: STR27, 620kg. Orbital-assault specialist w/ ECM suites; VRI (+4 init/+3 direct fire), zero-G jets, 5hr life support. | [Audit row +304 — Firestorm: Shockwave p.61]</p>",

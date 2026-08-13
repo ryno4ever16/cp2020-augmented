@@ -2,7 +2,7 @@
   "_id": "nlcEKTJaPzg61ix2",
   "name": "Poser Impersonation Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Specific Know [subject] +2; Perform +1; Cost range 900-1100eb",
     "notes": "<p>900–1100eb; +200eb biofeedback gestures. Spec.Know[subject]+2, Perform+1; role-model database incl. voice matching. | [Audit row +82 — Chromebook 1 p.73]</p>",

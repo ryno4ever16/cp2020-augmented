@@ -2,7 +2,7 @@
   "_id": "SgSKaeW33gIMvrFv",
   "name": "Corporate Officer VR Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>100eb/level to +3; quarterly updates 50/100/150eb by level; corp employees only. Officer/document/operation recognition + bios. | [Audit row +99 — Chromebook 1 p.76]</p>",

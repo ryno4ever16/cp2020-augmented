@@ -2,7 +2,7 @@
   "_id": "eyHbyUaFtiPW0skz",
   "name": "Sunny Day",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Feel happy; +4 vs Intimidation; +2 Resist Torture",
     "notes": "",

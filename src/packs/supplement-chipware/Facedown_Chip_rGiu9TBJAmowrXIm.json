@@ -2,7 +2,7 @@
   "_id": "rGiu9TBJAmowrXIm",
   "name": "Facedown Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "+1 bonus on Facedown rolls",
     "notes": "",

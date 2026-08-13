@@ -2,7 +2,7 @@
   "_id": "t68CVgFjETR2FhR5",
   "name": "Soundmachine",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "b2M6vZzgDj2Qwnfj",
   "name": "Militech 20L Autocannon",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
   "system": {
     "flavor": "",
     "notes": "",

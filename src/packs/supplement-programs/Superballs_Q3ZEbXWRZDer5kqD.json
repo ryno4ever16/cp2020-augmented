@@ -2,7 +2,7 @@
   "_id": "Q3ZEbXWRZDer5kqD",
   "name": "Superballs",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

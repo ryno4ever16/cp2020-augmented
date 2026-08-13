@@ -2,7 +2,7 @@
   "_id": "8K3cIIP8h2gPYg7S",
   "name": "U-barrel Sharpwire Net",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "An underbarrel-mounted single-shot net launcher that fires a carbosteel sharpwire net. The net delivers BOD/2 blade-type damage to any location it wraps. Accuracy +2, range 10m.",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "pE7Sjyo83QriSCxz",
   "name": "Weaponmasters Martial Art Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "ArasakaTe; and Thamoc available (max +3); cost per level",
     "notes": "",

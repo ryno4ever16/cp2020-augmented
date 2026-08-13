@@ -2,7 +2,7 @@
   "_id": "lWBfMNodBA7SCGx6",
   "name": "Opera Cloak",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

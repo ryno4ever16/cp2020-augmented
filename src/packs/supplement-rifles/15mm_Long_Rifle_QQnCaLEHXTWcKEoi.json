@@ -2,7 +2,7 @@
   "_id": "QQnCaLEHXTWcKEoi",
   "name": "15mm 'Long' Rifle",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "",
     "notes": "",

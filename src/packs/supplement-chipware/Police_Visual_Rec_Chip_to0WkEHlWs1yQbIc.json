@@ -2,7 +2,7 @@
   "_id": "to0WkEHlWs1yQbIc",
   "name": "Police Visual Rec Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Visual ID's on criminals and licenses; cost per level",
     "notes": "",

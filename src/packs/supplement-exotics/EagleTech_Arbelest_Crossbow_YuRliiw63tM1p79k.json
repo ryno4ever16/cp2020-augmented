@@ -2,7 +2,7 @@
   "_id": "YuRliiw63tM1p79k",
   "name": "EagleTech \"Arbelest\" Crossbow",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/crossbow.svg",
   "effects": [],
   "folder": null,
   "sort": 2300000,

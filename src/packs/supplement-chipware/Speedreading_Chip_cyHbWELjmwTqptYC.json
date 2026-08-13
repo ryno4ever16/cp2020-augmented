@@ -2,7 +2,7 @@
   "_id": "cyHbWELjmwTqptYC",
   "name": "Speedreading Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Requires optic. Half to a third normal reading time",
     "notes": "",

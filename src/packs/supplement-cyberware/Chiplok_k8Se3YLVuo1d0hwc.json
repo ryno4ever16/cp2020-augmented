@@ -2,7 +2,7 @@
   "_id": "k8Se3YLVuo1d0hwc",
   "name": "Chiplok",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Socket lock: chips fixed until electronic key; used for Pacifism/Exile chip enforcement. | [Audit row +267 — Chromebook 4 p.15]</p>",

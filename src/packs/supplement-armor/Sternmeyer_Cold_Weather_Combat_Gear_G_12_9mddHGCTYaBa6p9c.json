@@ -2,7 +2,7 @@
   "_id": "9mddHGCTYaBa6p9c",
   "name": "Sternmeyer Cold Weather Combat Gear (G-12)",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

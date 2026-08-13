@@ -2,7 +2,7 @@
   "_id": "aCsSoUsNjfugy8V4",
   "name": "Photo Memory RAM Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "INT roll +2 [15+] to get a specific memory",
     "notes": "",

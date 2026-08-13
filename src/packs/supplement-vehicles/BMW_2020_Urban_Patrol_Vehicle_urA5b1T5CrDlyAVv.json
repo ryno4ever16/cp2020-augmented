@@ -2,7 +2,7 @@
   "_id": "urA5b1T5CrDlyAVv",
   "name": "BMW 2020 Urban Patrol Vehicle",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

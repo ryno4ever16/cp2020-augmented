@@ -2,7 +2,7 @@
   "_id": "uRJ5sy31ciL5PSfN",
   "name": "History +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill chip",
     "notes": "",

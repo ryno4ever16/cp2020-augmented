@@ -2,7 +2,7 @@
   "_id": "BEVIZElekMtc0tR4",
   "name": "Soviet Military Industries Armored Greatcoat",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

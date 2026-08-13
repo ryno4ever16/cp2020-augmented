@@ -2,7 +2,7 @@
   "_id": "jSvKS2ppwm865mh6",
   "name": "Muzzle (Long)",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Dog/horse-style muzzle. Surgery MA. | [Audit row +135 — Chromebook 2 p.102]</p>",

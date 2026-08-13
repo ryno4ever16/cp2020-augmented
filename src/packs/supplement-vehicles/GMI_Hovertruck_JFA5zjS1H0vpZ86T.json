@@ -2,7 +2,7 @@
   "_id": "JFA5zjS1H0vpZ86T",
   "name": "GMI Hovertruck",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>USMC APC variant refitted as troop/cargo hover. 100mph, crew2. | [Audit row +324 — Firestorm: Shockwave p.65]</p>",

@@ -2,7 +2,7 @@
   "_id": "siZB0HZxwUT9NWPV",
   "name": "Bio-Askari Motion Restraints",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Blackhand's idx41 'Biotech-Askari Motion Restraint Bomb': 60eb — corroborates. | 60eb +25eb extras (index). | [Audit row +106 — Chromebook 1 p.93]</p><p>Stat line backfilled from Chromebook 1 p.48 text layer: EX 0 P P Special 1 1 UR. 1m-radius web; V.Difficult REF (Dodge/Escape) or Near Impossible BOD (Strength Feat) to escape; clamps on quick or violent motion. [Backfill 2026-07-17]</p>",

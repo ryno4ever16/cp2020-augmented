@@ -2,7 +2,7 @@
   "_id": "Mz2lvPDNkzeeJwee",
   "name": "Battlesuit",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Upgraded worksuit with limited exoskeletal support: +1 to STR/BOD to a maximum of 11 (Deep Space) — wired as Body +1, capped at 11 (CP2020 folds strength into BOD). The suit's radiation protection joins the typed-SP treatment separately.</p>",

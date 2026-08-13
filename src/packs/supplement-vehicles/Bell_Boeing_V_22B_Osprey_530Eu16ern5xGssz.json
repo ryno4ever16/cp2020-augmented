@@ -2,7 +2,7 @@
   "_id": "530Eu16ern5xGssz",
   "name": "Bell-Boeing V-22B Osprey",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>'Whirly Bird' tilt-rotor workhorse. 315mph, crew2+20, 9t cargo, 25t. | [Audit row +340 — Firestorm: Shockwave p.68]</p>",

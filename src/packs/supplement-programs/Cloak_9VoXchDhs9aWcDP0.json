@@ -2,7 +2,7 @@
   "_id": "9VoXchDhs9aWcDP0",
   "name": "Cloak",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

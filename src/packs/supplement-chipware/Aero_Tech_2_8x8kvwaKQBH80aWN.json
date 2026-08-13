@@ -2,7 +2,7 @@
   "_id": "8x8kvwaKQBH80aWN",
   "name": "Aero Tech +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

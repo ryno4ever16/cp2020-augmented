@@ -2,7 +2,7 @@
   "_id": "wrESYiWAvBfpzU8n",
   "name": "Navy M-40 GEV",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Ground-effect patrol craft; most-encountered by panzer smugglers. 180mph, crew4, 10t. | [Audit row +322 — Firestorm: Shockwave p.64]</p>",

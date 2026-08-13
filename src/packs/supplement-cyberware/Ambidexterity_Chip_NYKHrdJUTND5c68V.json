@@ -2,7 +2,7 @@
   "_id": "NYKHrdJUTND5c68V",
   "name": "Ambidexterity Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Motor-control rerouting: use two one-handed tools/weapons at once (single objective unless +250eb second chip w/ twin cyberoptics). | [Audit row +94 — Chromebook 1 p.75]</p>",

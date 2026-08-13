@@ -2,7 +2,7 @@
   "_id": "A2NSZftpa57kiIqP",
   "name": "Variable-Chambered Heart Option",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>+450eb to cyberheart: crocodile-style bypass doubles breath-holding (10-20 min), +1 Endurance; Overdrive+Bypass together = stroke! Surgery N. | [Audit row +259 — Chromebook 4 p.9]</p>",

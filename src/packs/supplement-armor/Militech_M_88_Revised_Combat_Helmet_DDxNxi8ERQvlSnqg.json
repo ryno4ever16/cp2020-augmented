@@ -2,7 +2,7 @@
   "_id": "DDxNxi8ERQvlSnqg",
   "name": "Militech M-88 Revised Combat Helmet",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

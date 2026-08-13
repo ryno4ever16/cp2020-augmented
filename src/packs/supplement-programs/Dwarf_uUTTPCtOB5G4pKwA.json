@@ -2,7 +2,7 @@
   "_id": "uUTTPCtOB5G4pKwA",
   "name": "Dwarf",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

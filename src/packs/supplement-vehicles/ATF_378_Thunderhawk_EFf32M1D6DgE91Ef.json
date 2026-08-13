@@ -2,7 +2,7 @@
   "_id": "EFf32M1D6DgE91Ef",
   "name": "ATF-378 Thunderhawk",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "qtidwZeoXjaJpr1d",
   "name": "Mystic Technologies Arrow Gun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "effects": [],
   "folder": null,
   "sort": 3100000,

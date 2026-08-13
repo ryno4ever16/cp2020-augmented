@@ -2,7 +2,7 @@
   "_id": "HbBs2IdOepcBbV8H",
   "name": "Uniware Legpads",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

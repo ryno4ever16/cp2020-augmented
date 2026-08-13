@@ -2,7 +2,7 @@
   "_id": "GcakDMzy6gEHoATh",
   "name": "Aries II Spaceplane",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>ESA-built Aries-series spaceplane (TAV); reaches low Earth orbit via jet, scramjet and rocket. Not designed for deep-space travel.</p><p>Spacecraft code (Deep Space p.32): Aries II · 350 · 5 · 48 · Chemical · 8 · Batteries, Fuel Cell · 50% · 3 · 30m3 · 3 · 40 · 0 · 7 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 350 million eb; Crew 5; Passengers 48; Drive Type Chemical; Burn Elements 8; Power Type Batteries, Fuel Cell; Sensors 50%; Computers 3; Cargo 30m3; Actions 3; Weapon Spaces 40; Armor (max SP) 0; Damage Points 7; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

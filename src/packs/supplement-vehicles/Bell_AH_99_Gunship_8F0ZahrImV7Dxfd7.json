@@ -2,7 +2,7 @@
   "_id": "8F0ZahrImV7Dxfd7",
   "name": "Bell AH-99 Gunship",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Attack helicopter. 180mph, crew2, 4t. | [Audit row +329 — Firestorm: Shockwave p.66]</p>",

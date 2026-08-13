@@ -2,7 +2,7 @@
   "_id": "psfSgAPPBhwrEU3n",
   "name": "Bell-Boeing Falcon-6",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Commuter osprey; Falcon-B = armored military version. 315mph, crew1+9, 4t, 12.5t. | [Audit row +339 — Firestorm: Shockwave p.68]</p>",

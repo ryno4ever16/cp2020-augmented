@@ -2,7 +2,7 @@
   "_id": "Vm1sphoiJ6JyC0Su",
   "name": "Micromissiles",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

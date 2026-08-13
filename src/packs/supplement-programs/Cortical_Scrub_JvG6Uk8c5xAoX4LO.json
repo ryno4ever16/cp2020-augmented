@@ -2,7 +2,7 @@
   "_id": "JvG6Uk8c5xAoX4LO",
   "name": "Cortical Scrub",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

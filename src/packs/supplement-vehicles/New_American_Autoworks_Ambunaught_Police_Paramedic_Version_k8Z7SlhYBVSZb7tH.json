@@ -2,7 +2,7 @@
   "_id": "k8Z7SlhYBVSZb7tH",
   "name": "New American Autoworks Ambunaught (Police Paramedic Version)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Police paramedic version of the New American Autoworks Ambunaught, built to extract wounded from hazardous environments. Armament: two 1800 Grenade Launchers (equal to Militech drum-type GLs w/Tear Gas), or a remote turret-mounted Deluge Crowd Control Weapon.</p><p>All armor for the vehicle is identical to the standard Ambunaught (Chromebook); armor SP/SDP are not restated in Protect &amp; Serve, so SP and SDP are left at 0 here (see the standard Ambunaught for armor and passenger capacity). Standard paramedic inventory: Medscanner, 2x Surgical Kits, Cryotank, Spray Skin, Airhypos, Mastoid Communicators, Tech Tool Kit, Respirators; cab locker with 2x Armalite .44, 1x Militech Ronin, tool kit. Cost 76,000 eb. [Protect &amp; Serve p.36-37]</p>",

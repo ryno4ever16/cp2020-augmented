@@ -2,7 +2,7 @@
   "_id": "pD7Gi4tNZr8kyxJC",
   "name": "Monitor",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "hFhjzQwqix8FneDt",
   "name": "Dream Suppressant Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Dream free sleep; lose 1 EMP every week of use",
     "notes": "",

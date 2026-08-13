@@ -2,7 +2,7 @@
   "_id": "e4vVxD3YWfhQQy6k",
   "name": "HMMWV \"Hummer\" (2020)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Military pickup under license by a dozen manufacturers (artificially low price). 100mph, crew1+5, 1250kg, 2.25t. | [Audit row +312 — Firestorm: Shockwave p.63]</p>",

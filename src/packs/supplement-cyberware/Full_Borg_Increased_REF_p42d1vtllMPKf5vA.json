@@ -2,7 +2,7 @@
   "_id": "p42d1vtllMPKf5vA",
   "name": "Full Borg: Increased REF",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>+1 REF per purchase (equip one copy per +1), to the printed maximum of 15. 2000eb and 2 Humanity per +1. Whole-body chassis upgrade — applies through the borg engine. | [Chromebook 2 p.85]</p>",

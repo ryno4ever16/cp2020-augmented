@@ -2,7 +2,7 @@
   "_id": "RtAac7mwILFQtapk",
   "name": "Tourism Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Language +1; Culture +1; General Knowledge +1",
     "notes": "<p>Per-country: Language+1, Culture+1, General Knowledge+1. | [Audit row +88 — Chromebook 1 p.74]</p>",

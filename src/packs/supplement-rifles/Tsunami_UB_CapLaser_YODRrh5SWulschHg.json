@@ -2,7 +2,7 @@
   "_id": "YODRrh5SWulschHg",
   "name": "Tsunami UB CapLaser",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "An underbarrel capacitor laser from Tsunami Arms. Negates the need for bulky power units by using advanced superconducting capacitor packs. Designed to mount on medium SMGs or larger.",
     "notes": "",

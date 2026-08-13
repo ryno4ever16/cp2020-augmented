@@ -2,7 +2,7 @@
   "_id": "ZAx1tLQRTThaor5T",
   "name": "Tracking Device Cyberfinger",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>3km tracker → TimesSquare; launches 2 magnetic tracer bugs to 3m (10eb each). | [Audit row +119 — Chromebook 2 p.4]</p>",

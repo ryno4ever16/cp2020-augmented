@@ -2,7 +2,7 @@
   "_id": "jpWppu6b1w8QSJ5r",
   "name": "Max Interceptor",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

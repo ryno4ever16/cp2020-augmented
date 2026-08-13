@@ -2,7 +2,7 @@
   "_id": "O0H2gvdZe8jP7TQu",
   "name": "Full Borg: Increased Stats",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Class entry: the per-stat upgrades are the separate items \"Full Borg: Increased REF / MA / BODY\" — equip one copy per +1 (REF 2000eb max 15; MA 1500eb max 25; BOD 1000eb max 20; HC 2 per +1). This generic entry carries no bonus of its own. | [Audit row +127 — Chromebook 2 p.85]</p>",

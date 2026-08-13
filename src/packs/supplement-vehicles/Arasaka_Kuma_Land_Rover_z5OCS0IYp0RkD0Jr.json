@@ -2,7 +2,7 @@
   "_id": "z5OCS0IYp0RkD0Jr",
   "name": "Arasaka Kuma Land Rover",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>4x4 (Car). 90mph, crew1+3, 650kg cargo, 2t. Arasaka pays manufacturer's price 15,000eb. | [Audit row +311 — Firestorm: Shockwave p.63]</p>",

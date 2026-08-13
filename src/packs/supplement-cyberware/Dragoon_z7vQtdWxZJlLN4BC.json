@@ -2,7 +2,7 @@
   "_id": "z7vQtdWxZJlLN4BC",
   "name": "Dragoon",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 40 all zones; SDP disabled/destroyed = Head/limbs 40/50, Torso 50/60.</p><p><strong>Option spaces:</strong> Head optic 0&0, audio 0; Torso 0; R.Arm 4/L.Arm 4; R.Leg 2/L.Leg 2.</p><p><strong>Prebuilt options:</strong> 5-optic front mount; twin sensory booms; sniffer/sonar/radar/radiation detector; ALL FOUR limbs on Quick-Change weapon mounts (.22 -> railcannon); interchangeable biopod + behavioral inhibitor; chipware socket; pain editor; ambidexterity sub-processor; combat crystal; IR thermal dam; black-box recorder; environmental assimilation (24 camo); autoinjector; ammo hopper (20x mag); locator beacon; IFF transponder; satellite link + GPS; micro-computer; EMP shielding.</p>",

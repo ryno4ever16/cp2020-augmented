@@ -2,7 +2,7 @@
   "_id": "YErlEiOAH8WR1pC1",
   "name": "U.S. M-50 Tank Hunter",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-tank.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Tank destroyer. 80mph, crew2, 300mi, 14t. | [Audit row +351 — Firestorm: Shockwave p.70]</p>",

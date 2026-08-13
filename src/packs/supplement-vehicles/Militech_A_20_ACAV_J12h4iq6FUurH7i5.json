@@ -2,7 +2,7 @@
   "_id": "J12h4iq6FUurH7i5",
   "name": "Militech A-20 ACAV",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Air-cushion assault vehicle ('panzer'): strike fast w/ missiles + cut out. 200mph, crew3, 3t cargo, 10t. | Full stat block also in Forlorn Hope p.41: 'Militech A-20 Air Cushion Assault Vehicle (Panzer)' — 200mph (100 offroad), 800 gal/600 mi, 3 crew; turret Militech 20mm cannon (4D10+2AP, 500 rds) + coax 7.62 MG + 4x turret TOW (6D10); chaff/flare, 20x smoke, ECM, AP frag grenades at 7 hull points; skirts SP10 SDP15/panel, turret SP60 SDP60, body SP50 SDP100, windshield SP30 SDP30, plenum SP40 SDP40. | [Audit row +325 — Firestorm: Shockwave p.65]</p>",

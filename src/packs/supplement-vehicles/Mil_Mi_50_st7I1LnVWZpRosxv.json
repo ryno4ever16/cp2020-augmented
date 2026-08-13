@@ -2,7 +2,7 @@
   "_id": "st7I1LnVWZpRosxv",
   "name": "Mil Mi-50",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Large, crude Soviet Airjeep analog. 225mph, crew1+6, 1450kg, 4400kg. 👁 SDP/SP lines cut. | [Audit row +337 — Firestorm: Shockwave p.67]</p>",

@@ -1,7 +1,7 @@
 {
   "name": "Red Knight SAM",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/rocket.svg",
   "system": {
     "weight": 23,
     "magWeight": 0,

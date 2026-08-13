@@ -2,7 +2,7 @@
   "_id": "SGETJUmwTlgAlfZ3",
   "name": "GKN Sankey-Landrover Police Control Cruiser",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Pickup, crew 2+6, 2.4t; crash control, fire extinguisher system, tear-gas smoke launcher, military radio, IR active systems, light amp, searchlight, shocker taser grid, two-space stabilized weapon turret. RGUK p.40. | [Audit row +362 — Rough Guide to the UK p.40]</p>",

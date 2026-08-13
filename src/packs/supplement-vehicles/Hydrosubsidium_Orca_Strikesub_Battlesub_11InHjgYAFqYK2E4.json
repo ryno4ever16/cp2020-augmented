@@ -2,7 +2,7 @@
   "_id": "11InHjgYAFqYK2E4",
   "name": "Hydrosubsidium \"Orca\" Strikesub (Battlesub)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/submarine.svg",
   "system": {
     "flavor": "",
     "notes": "",

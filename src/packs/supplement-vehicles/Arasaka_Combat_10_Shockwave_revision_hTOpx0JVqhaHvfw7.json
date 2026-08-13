@@ -2,7 +2,7 @@
   "_id": "hTOpx0JVqhaHvfw7",
   "name": "Arasaka Combat 10 (Shockwave revision)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Urban-assault IFV (not for full-scale war). 80mph, crew2+10, 2.5t cargo, 25t. | Shockwave-revised stats/price; the Corpbook 1 original ('Arasaka Combat 10 Heavy Assault Vehicle', 1,500,000eb) is a separate catalog entry. [Audit row +315 — Firestorm: Shockwave p.63]</p>",

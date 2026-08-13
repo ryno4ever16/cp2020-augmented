@@ -2,7 +2,7 @@
   "_id": "0jxDPIw9j6Q79WH8",
   "name": "Air Hypo Cyberfinger",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>4 injections per air container (3eb); drug container below knuckle. | [Audit row +118 — Chromebook 2 p.4]</p>",

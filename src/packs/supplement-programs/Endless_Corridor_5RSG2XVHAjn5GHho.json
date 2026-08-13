@@ -2,7 +2,7 @@
   "_id": "5RSG2XVHAjn5GHho",
   "name": "Endless Corridor",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

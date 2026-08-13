@@ -2,7 +2,7 @@
   "_id": "qQzxt7IMT8Z5KLkn",
   "name": "EEC Airjeep",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Slow, reliable, ugly, functional, cheap (Kubelwagen-looking). 150mph, crew1+5, 525mi, 2t. | [Audit row +336 — Firestorm: Shockwave p.67]</p>",

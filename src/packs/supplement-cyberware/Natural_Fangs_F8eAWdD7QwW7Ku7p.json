@@ -2,7 +2,7 @@
   "_id": "F8eAWdD7QwW7Ku7p",
   "name": "Natural Fangs",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>1D6 in combat (grappled targets). Surgery N. | [Audit row +137 — Chromebook 2 p.102]</p>",

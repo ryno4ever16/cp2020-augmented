@@ -2,7 +2,7 @@
   "_id": "59VkPby5JNmbwUde",
   "name": "Cookie Cutter",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Smartgun required. Stops trigger on targets with badges (15eb)",
     "notes": "",

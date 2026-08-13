@@ -2,7 +2,7 @@
   "_id": "hCf9SvOqx6S6dOAf",
   "name": "IMI \"Gamdaii\" Dual-Purpose SMG",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "0tqYu0SdD02d8PNF",
   "name": "Army General Unit-12A2 Grunt",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>U.S. armed-forces powered armor (game rules in Maximum Metal; stats printed in Home of the Brave).</p><p>Manufacturer: Militech/GE. Chassis: Gunslinger, STR 25. Chassis weight: 138 kg. Capacity/carry: 1250 kg / 375 kg. Reflexes: Low-Boost Reflexes. SIB/DFB: 0/+2. Punch 3D10, Kick 5D10, Crush 4D10. Toughness mod: -7. Trooper size: 115 kg. Total weight: 885 kg. Total cost: 139,400 eb.</p><p>Per-limb armor: all locations SP 40. Main/loadout: 25mm autocannon (PA monosword; 7.62mm LMG; 40mm auto grenade launcher; Dragon flamer).</p><p>The per-location internal/external SDP and full weapon-slot loadout are printed as an interleaved grid; only cleanly readable cells are transcribed here. See Home of the Brave p.90 image for the complete grid.</p>",

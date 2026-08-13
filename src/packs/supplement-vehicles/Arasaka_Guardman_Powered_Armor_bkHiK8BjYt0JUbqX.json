@@ -2,7 +2,7 @@
   "_id": "bkHiK8BjYt0JUbqX",
   "name": "Arasaka Guardman (Powered Armor)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Powered armor (index). | [Audit row +210 — Chromebook 3 p.125]</p>",

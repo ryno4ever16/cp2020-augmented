@@ -2,7 +2,7 @@
   "_id": "deIVZ8yVfma8Hx92",
   "name": "Colt-Mauser M2X Cannon",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
   "system": {
     "flavor": "",
     "notes": "",

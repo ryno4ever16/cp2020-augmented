@@ -2,7 +2,7 @@
   "_id": "2HhCdu1AdPPfhGdi",
   "name": "AmbidexterityChip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Makes user ambidextrous",
     "notes": "",

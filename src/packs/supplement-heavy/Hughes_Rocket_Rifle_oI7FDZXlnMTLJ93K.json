@@ -2,7 +2,7 @@
   "_id": "oI7FDZXlnMTLJ93K",
   "name": "Hughes Rocket Rifle",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

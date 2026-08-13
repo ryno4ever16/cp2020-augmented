@@ -2,7 +2,7 @@
   "_id": "N1gATZspqMHrgIPP",
   "name": "Darkwarrior Assault Motorcycle",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Armed cycle: pair of light MGs + improved armor. 100mph, 140kg. | [Audit row +313 — Firestorm: Shockwave p.63]</p>",

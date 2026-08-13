@@ -2,7 +2,7 @@
   "_id": "3YleSoH1dDUgM8mu",
   "name": "Medical Modular Hand",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>5 med instruments: monoedge scalpel, 4-dose air hypo, dermal stapler, clamp/forceps, biomonitor probe. W/ cyberarm Surg N (HC +1D6/2); independent hand Surg MA (HC 1D6+2). | [Audit row +253 — Chromebook 4 p.5]</p>",

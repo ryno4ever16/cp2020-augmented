@@ -2,7 +2,7 @@
   "_id": "ZvPVHj8dAeZzWMMm",
   "name": "MiTech ITT-E (Powered Armor)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 index name garbled ('MlnECHITTI ~E') — verify. | [Audit row +211 — Chromebook 3 p.125]</p>",

@@ -1,7 +1,7 @@
 {
   "name": "Painting Laser",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/laser-turret.svg",
   "system": {
     "flavor": "",
     "notes": "Pre-existing. Target designator for laser-guided weapons; no damage, but 90% chance to permanently blind unshielded biological eyes; blocked by smoke/anti-laser aerosol.",

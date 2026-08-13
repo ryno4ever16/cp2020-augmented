@@ -2,7 +2,7 @@
   "_id": "VaLB7fJTW1NcT8aF",
   "name": "Bell Huey Cop-Chopper (revised)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>REVISED stats for the Protect & Serve Huey PH. 150mph, crew2+4, 6.5t. | [Audit row +331 — Firestorm: Shockwave p.66]</p>",

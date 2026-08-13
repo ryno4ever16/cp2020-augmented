@@ -2,7 +2,7 @@
   "_id": "dgvGEyrTrqPt9Lo4",
   "name": "Utility Sword/Machete",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/katana.svg",
   "system": {
     "flavor": "",
     "notes": "",

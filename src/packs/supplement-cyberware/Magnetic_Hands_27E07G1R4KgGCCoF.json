@@ -2,7 +2,7 @@
   "_id": "27E07G1R4KgGCCoF",
   "name": "Magnetic Hands",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Electrostatic palms for Low Earth Orbit wall-walking. Per pair. (Split from the original \"Magnetic Feet/Hands\" catalog entry.)</p>",

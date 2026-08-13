@@ -2,7 +2,7 @@
   "_id": "0TZs9oG5EDF8wbZz",
   "name": "Militech Viper Sub-Machinegun",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

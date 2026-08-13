@@ -2,7 +2,7 @@
   "_id": "pTESXHHrYHIcgRPv",
   "name": "Arasaka Security Services Knowledge Chip",
   "type": "cyberware",
-  "img": "icons/svg/item-bag.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Expert: Arasaka Security Services +3",
     "notes": "<p>A knowledge skill chip listing Arasaka Security's services, options and prices: +3 Knowledge of Arasaka Security Services Available; it contains no information usable for penetrating Arasaka security (Corpbook 1). Granted as the Expert: Arasaka Security Services skill while slotted and active.</p>",

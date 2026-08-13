@@ -2,7 +2,7 @@
   "_id": "UCgBdGmxke7P0SlB",
   "name": "Pit Viper (Raven Microcyb Viper Suit)",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",
