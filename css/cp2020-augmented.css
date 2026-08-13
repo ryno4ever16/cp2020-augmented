@@ -101,6 +101,7 @@
 .cp-ip-tracker .cp-ip-balances { flex: 0 1 auto; min-height: 40px; max-height: 40%; overflow-y: auto; }
 .cp-ip-tracker .cp-ip-empty { opacity: 0.6; padding: 6px; }
 .cp-ip-tracker .cp-ip-footer { flex: 0 0 auto; opacity: 0.55; font-size: 0.74em; line-height: 1.35; margin: 4px 0 0; }
+.cp-ip-tracker .cp-ip-footer-offline { margin-top: 2px; font-style: italic; }
 /* The pipeline strip: queued → pending → banked, with the live count at each stage. */
 .cp-ip-tracker .cp-ip-pipeline {
   flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;

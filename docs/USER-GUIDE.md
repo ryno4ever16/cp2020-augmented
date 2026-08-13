@@ -67,7 +67,57 @@ world setting, off by default.
 
 ## 7. Radiation & hazard zones (stub)
 
-## 8. Improvement Points (stub)
+## 8. Improvement Points
+
+Two modes, one setting. **Simple** (the default) gives every character a fungible IP pool the GM
+tops up by hand — ignorable if your table doesn't track advancement. **RAW auto-tracking**
+(*Improvement Points: RAW auto-tracking*) turns on the full per-skill system described here: skill
+rolls collect themselves for the GM to rule on, IP banks per skill, and players level a skill from
+its own bank (then the pool).
+
+**The pipeline.** IP moves through three stages, named across the top of the tracker:
+
+`roll → QUEUED → PENDING → BANKED`
+
+- **Queued** — a player rolls a skill; the roll lands in the GM's queue. Nothing is awarded yet.
+- **Pending** — the GM awards a queued row an amount. Pending IP is the GM's working figure and is
+  **hidden from the player**, so you can revise it, or hand out a session's worth at once.
+- **Banked** — **Apply** releases all pending IP to the players. Banked IP is what a player spends.
+
+**Apply applies, and nothing else.** It banks pending IP and starts a new throttle cycle. It does
+not award, skip or discard anything in the queue: rows you haven't ruled on are still there
+afterwards, and awarding one later simply puts it in the next cycle's pending. To throw queued rolls
+away, use **Clear queue** — it asks first and tells you how many rolls are about to go.
+
+**Working the queue.** Each row is one character + one skill. Type the IP and press **Enter** (or
+click ✓) to award it; ✕ discards that row. Under the manual model a row arrives carrying the last
+figure you typed, so a run of equal awards is Enter, Enter, Enter. Under the *Auto baseline + GM
+bonus* model a row arrives already ticked as a success — worth the baseline as it stands — and the
+number field beside it adds a bonus on top; untick the tick if the use taught nothing.
+
+**Repeat rolls group.** Rolling the same skill five times makes ONE row reading `Name · Skill ×5`,
+not five rows. The count is all the row says — no average, no best-of, because a summary invites
+ruling on the summary and hides the roll that mattered. Click the row to open it: every roll is
+listed newest first with its total and how long ago it happened, and each carries a small ✕ that
+**drops that roll out of the group** (junk and spam come out; the count follows). The award stays at
+group level — one amount, one ✓, one throttle count for the row. Want to pay for exactly one roll?
+Prune the group down to it.
+
+**Balances.** Below the queue, one collapsed line per character shows their pool and everything they
+have banked; open it for the per-skill rows. Pool and banked are editable — type an absolute value
+to correct a mis-award. The filter box matches characters and skills as you type.
+
+**While no GM is connected, skill rolls are not queued.** They are not held and delivered later,
+by design: a login should not detonate a backlog. Weapon fire never queues in any case — only skill
+rolls do. The tracker states this in its footer.
+
+**Two safety rails.** The queue holds 100 rows; beyond that the oldest age out, announced once.
+(Repeat rolls are cap-neutral — a spree of one skill is one row.) And if 20 rows sit un-awarded, a
+one-time prompt offers to open the tracker, clear the backlog, or turn RAW tracking off.
+
+Other settings worth knowing: **award model** (manual vs auto baseline + amount), the **anti-grind
+throttle** (off / diminishing returns / one award per skill per cycle), **skill lock** (who may
+hand-edit skill levels), and **hide the IP UI entirely** for tables that don't use it at all.
 
 ## 9. Chipware & skill chips (stub)
 

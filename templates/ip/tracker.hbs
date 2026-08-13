@@ -112,4 +112,7 @@
     </div>
 
     <p class="cp-ip-footer">{{localize "CYBERPUNK.IpTrackerFooter"}}</p>
+    {{!-- Standing condition, not an error state: a roll made while no GM is connected is not held
+          anywhere, so the line stays on screen rather than appearing after the fact. --}}
+    <p class="cp-ip-footer cp-ip-footer-offline">{{localize "CYBERPUNK.IpFooterOffline"}}</p>
 </div>
