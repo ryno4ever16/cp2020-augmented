@@ -2869,3 +2869,25 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Vehicle map layout (Front picker) ────────────────────────────────────────────────────────
+   Four compass buttons living in one .field cell beside the Footprint inputs. Foundry's app
+   context makes buttons fill their container, so each one is pinned to its glyph's width; the lit
+   heading is a .cp-active modifier (never a colour computed in JS). */
+.cyberpunk .cp-veh-front { gap: 2px; flex-wrap: nowrap; }
+.cyberpunk .cp-veh-front-btn {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 22px;
+  height: 22px;
+  line-height: 1;
+  padding: 0 4px;
+  margin: 0;
+  opacity: 0.55;
+}
+.cyberpunk .cp-veh-front-btn:hover { opacity: 0.9; }
+.cyberpunk .cp-veh-front-btn.cp-active {
+  opacity: 1;
+  color: #ffcc00;
+  border-color: #ffcc00;
+}

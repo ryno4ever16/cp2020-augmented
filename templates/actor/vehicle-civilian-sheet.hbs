@@ -74,6 +74,7 @@
                 <input type="number" name="prototypeToken.height" value="{{actor.prototypeToken.height}}" min="1" step="1">
             </span>
         </div>
+        {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-layout.hbs"}}
         {{#if unmodeledSubtype}}
         <div class="field span-two-cells">
             <label class="cp-veh-unmodeled" title="{{CPLocal 'VehicleUnmodeledTip'}}">{{CPLocal "VehicleUnmodeled" subtype=system.vehicleTypeText}}</label>

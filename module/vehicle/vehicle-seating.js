@@ -17,6 +17,11 @@
  *   footprint, so every client computes the same seat for the same occupant index.
  *   More occupants than cells (a crowded truck) wrap around to slot 0 again, each wrap nudged by
  *   a quarter square along the diagonal so two riders in one cell are still separately clickable.
+ *
+ *   ⭐ WHICH cell is slot 0 moved out of this file (2026-08-13). Reading order put the driver on
+ *   the hood, because it has no idea which end of the art is the nose. vehicle-layout.js answers
+ *   that from the sheet's Front picker and hands the resulting order to seatSlotPosition below;
+ *   reading order remains the fallback for any caller with no vehicle to ask.
  */
 
 /** Grid cells of a footprint, in reading order. Each entry is the cell's top-left pixel point. */
@@ -37,13 +42,23 @@ export function footprintCells(rect, gridSize) {
  * Where occupant #index sits inside `rect`. Returns the TOP-LEFT pixel position for a token of
  * `size` grid squares (`{w, h}`, defaulting to 1x1), centred within its cell so a larger token
  * doesn't hang off its seat.
+ *
+ * `order` (optional) is the vehicle's seat order as row-major cell indices — the list
+ * vehicle-layout.js derives from the Front picker, which skips the engine rank and starts at the
+ * driver's seat. Without one, seats fall back to plain reading order (every cell, top-left first),
+ * which is what every vehicle did before Front existed and what a caller with no actor to read
+ * still gets.
  */
-export function seatSlotPosition(rect, gridSize, index, size = {}) {
+export function seatSlotPosition(rect, gridSize, index, size = {}, order = null) {
   const g = Math.max(1, Number(gridSize) || 100);
   const cells = footprintCells(rect, gridSize);
+  const seats = (Array.isArray(order) && order.length)
+    ? order.map(i => cells[i]).filter(Boolean)
+    : cells;
+  const slots = seats.length ? seats : cells;
   const i = Math.max(0, Math.trunc(Number(index) || 0));
-  const cell = cells[i % cells.length];
-  const wrap = Math.floor(i / cells.length);
+  const cell = slots[i % slots.length];
+  const wrap = Math.floor(i / slots.length);
   const tw = (Math.max(0.1, Number(size.w) || 1)) * g;
   const th = (Math.max(0.1, Number(size.h) || 1)) * g;
   // Centre the token in its cell, then offset each additional wrap by a quarter square so

@@ -9,6 +9,7 @@ import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 import { localize, localizeParam } from "../utils.js";
 import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
+import { FRONTS, resolveFront } from "../vehicle/vehicle-layout.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
@@ -58,6 +59,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaSystemEdit:   CyberpunkVehicleSheet._onAcpaSystemEdit,
       acpaSystemDelete: CyberpunkVehicleSheet._onAcpaSystemDelete,
       occupantDisembark: CyberpunkVehicleSheet._onOccupantDisembark,
+      layoutFront:      CyberpunkVehicleSheet._onLayoutFront,
     },
   };
 
@@ -176,6 +178,12 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       acpaBuildValid = issues.length === 0;
     } catch (e) { /* defaults above */ }
 
+    // Map layout (L1): the Front picker's four buttons, with the live heading lit. Built here rather
+    // than in the template because the ACTIVE one depends on the derived default when nothing is
+    // stored — the same resolveFront the seating and cover code calls, so the sheet can never show a
+    // different heading from the one the mechanics use.
+    const layout = this._cpLayoutContext(system);
+
     // Effective ACPA combat pole for display (Unit D): the stored override, else the pilot-based default.
     const acpaModeEffective = system?.isACPA ? acpaResolveMode(system) : null;
     // Ready-made localized label for the read-only "Active model" field (avoids concat/capitalize helpers
@@ -224,6 +232,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       // with a way to put each one back on the ground). Read across scenes so a sheet opened from
       // the sidebar answers the same as the canvas.
       occupancy: { ...occupancyAcrossScenes(actor), canManage: game.user?.isGM === true || owner },
+      layout,
       controlEnabled,
       damageEnabled,
       reactiveWear,
@@ -248,6 +257,28 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       // The operating-REF cap override input is a GM adjudication control (the interlocked-cyborg
       // exception) — rendered for the GM only.
       userIsGM: game.user?.isGM === true,
+    };
+  }
+
+  /**
+   * The Front picker's render data. `front` is the heading in force (stored, else derived from the
+   * footprint), and each option carries its own arrow icon + localized compass name so the template
+   * stays a plain {{#each}} and no bare string is built in JS.
+   */
+  _cpLayoutContext(system) {
+    const w = Number(this.actor.prototypeToken?.width) || 1;
+    const h = Number(this.actor.prototypeToken?.height) || 1;
+    const front = resolveFront(system?.layout?.front, w, h);
+    const ICONS = { n: "fa-solid fa-arrow-up", e: "fa-solid fa-arrow-right", s: "fa-solid fa-arrow-down", w: "fa-solid fa-arrow-left" };
+    const KEYS = { n: "Vehicle.FrontNorth", e: "Vehicle.FrontEast", s: "Vehicle.FrontSouth", w: "Vehicle.FrontWest" };
+    return {
+      front,
+      // "" in storage means the heading is still the footprint-derived default — worth knowing when
+      // reading a sheet, and the Reset path in the paint grid returns to exactly this state.
+      frontStored: String(system?.layout?.front ?? ""),
+      frontOptions: FRONTS.map(key => ({
+        key, icon: ICONS[key], label: localize(KEYS[key]), active: key === front,
+      })),
     };
   }
 
@@ -365,6 +396,21 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     if (!tokenDoc) return;
     await disembark(tokenDoc);
     this.render(false);
+  }
+
+  /**
+   * Point the vehicle's nose. Writes the one dotted key (the schema's nested SchemaField merges it
+   * per key), which the canvas hook picks up to re-seat anyone already aboard. A click always SETS
+   * a heading — the un-set "derive from the footprint" state is where a vehicle starts, not
+   * somewhere a picker click should drop it by surprise.
+   */
+  static async _onLayoutFront(event, target) {
+    event.preventDefault();
+    if (!this.isEditable) return;
+    const next = String(target?.dataset?.front ?? "");
+    if (!FRONTS.includes(next)) return;
+    if (next === String(this.actor.system?.layout?.front ?? "")) return;
+    await this.actor.update({ "system.layout.front": next });
   }
 
   static _onVehicleDamage(event, _target) {

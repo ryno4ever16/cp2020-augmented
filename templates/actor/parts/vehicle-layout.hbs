@@ -1,0 +1,14 @@
+{{!-- Map layout: which way the nose points. One click here is the single fact the module cannot
+      guess from a vehicle's artwork, and seating, the engine region and the cover ray all read it.
+      Rendered by BOTH vehicle layouts, next to the Footprint field; the option list (icon, label,
+      which one is lit) is assembled in the sheet's _prepareContext. --}}
+<div class="field cp-veh-layout" title="{{CPLocal 'Vehicle.FrontTip'}}">
+    <label>{{CPLocal "Vehicle.FrontLabel"}}</label>
+    <span class="flexrow flex-pad cp-veh-front">
+        {{#each layout.frontOptions}}
+        <button type="button" class="cp-veh-front-btn{{#if active}} cp-active{{/if}}"
+                data-action="layoutFront" data-front="{{key}}"
+                title="{{label}}" aria-label="{{label}}"><i class="{{icon}}"></i></button>
+        {{/each}}
+    </span>
+</div>

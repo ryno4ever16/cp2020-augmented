@@ -13,6 +13,7 @@
 
 import { deleteFieldUpdate, localizeParam } from "../utils.js";
 import { seatSlotPosition, placeBeside } from "./vehicle-seating.js";
+import { derivedSeatOrder } from "./vehicle-layout.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_SORT = -100;            // render below crew tokens
@@ -82,6 +83,18 @@ function tokenRect(doc, gridSize) {
 }
 
 /**
+ * The seat order for a deployed vehicle: which footprint cells are seats, in the order riders take
+ * them. Derived from the handle's own footprint and the vehicle's Front heading, so both clients
+ * and both call sites (boarding, and the re-seat that follows a footprint change) agree without
+ * storing anything per rider beyond the seat INDEX they already carry.
+ */
+export function seatOrderFor(vehicleActor, vehicleTokenDoc) {
+  const w = Number(vehicleTokenDoc?.width) || Number(vehicleActor?.prototypeToken?.width) || 1;
+  const h = Number(vehicleTokenDoc?.height) || Number(vehicleActor?.prototypeToken?.height) || 1;
+  return derivedSeatOrder(w, h, vehicleActor?.system?.layout?.front);
+}
+
+/**
  * Update options that carry the update's new x/y as a single instant `displace` movement waypoint —
  * the core's replacement for the deprecated `teleport: true` option (same shape on v13 and v14).
  * Getting into a car is not a walk across the map: without this the core animates the token along
@@ -142,7 +155,7 @@ export async function boardVehicle(crewTokenDoc, vehicleActor, vehicleTokenDoc =
     const src = crewTokenDoc._source ?? crewTokenDoc;
     const seatIndex = nextFreeSeatIndex(scene, vehicleActor.id, crewTokenDoc.id);
     const seat = seatSlotPosition(tokenRect(vehicleDoc, grid), grid, seatIndex,
-      { w: crewTokenDoc.width, h: crewTokenDoc.height });
+      { w: crewTokenDoc.width, h: crewTokenDoc.height }, seatOrderFor(vehicleActor, vehicleDoc));
     // Only record the restore point on the FIRST boarding — re-seating an already-aboard token
     // must not overwrite the original size/position with the boarded presentation.
     if (!crewTokenDoc.flags?.[SCOPE]?.boardedRestore) {
@@ -265,30 +278,40 @@ export function registerVehicleCanvasHooks() {
     }
   });
 
-  // Footprint follows the sheet: when a vehicle actor's prototype-token size changes (the sheet's
-  // Footprint field), resize its handle tokens on every scene and re-seat anyone aboard — seats
-  // derive from footprint cells, so a resize moves them. Runs on the active GM's client only (one
+  // Layout follows the sheet: when a vehicle actor's prototype-token size changes (the Footprint
+  // field) OR its Front heading does (the Front picker), resize its handle tokens on every scene
+  // and re-seat anyone aboard. Both edits move seats — the footprint changes which cells exist, the
+  // heading changes which of them are seats and in what order — and a rider's stored seat INDEX is
+  // the only thing that survives either, by design. Runs on the active GM's client only (one
   // writer, and the GM can modify any token) — the same gating as the crew-follow relay.
   Hooks.on("updateActor", async (actor, change) => {
     if (actor.type !== "cp2020-augmented.vehicle") return;
     const pt = change?.prototypeToken;
-    if (!pt || (pt.width === undefined && pt.height === undefined)) return;
+    const sizeChanged = !!pt && (pt.width !== undefined || pt.height !== undefined);
+    const frontChanged = change?.system?.layout?.front !== undefined;
+    if (!sizeChanged && !frontChanged) return;
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
     const gw = Math.max(1, Number(actor.prototypeToken?.width) || 1);
     const gh = Math.max(1, Number(actor.prototypeToken?.height) || 1);
     for (const scene of game.scenes ?? []) {
       const handle = vehicleTokenFor(scene, actor.id);
-      if (!handle || (handle.width === gw && handle.height === gh)) continue;
-      await handle.update({ width: gw, height: gh });
+      if (!handle) continue;
+      if (handle.width !== gw || handle.height !== gh) await handle.update({ width: gw, height: gh });
       const grid = scene.grid?.size ?? 100;
       const rect = { x: handle.x, y: handle.y, w: gw * grid, h: gh * grid };
+      // The order is derived from gw/gh — the SAME figures the rect is built from — and never from
+      // the handle document. Reading the token back after its resize looked equivalent and was not:
+      // rig-measured, the doc still answered with its old footprint on the pass that had just
+      // resized it, so the rect was the new shape while the seat order was still the old one and
+      // riders landed in cells that belonged to neither.
+      const order = derivedSeatOrder(gw, gh, actor.system?.layout?.front);
       const updates = [];
       const movement = {};
       for (const t of scene.tokens) {
         if (t.flags?.[SCOPE]?.boardedVehicle !== actor.id) continue;
         const idx = Number(t.flags?.[SCOPE]?.seatIndex);
         if (!Number.isInteger(idx) || idx < 0) continue;
-        const seat = seatSlotPosition(rect, grid, idx, { w: t.width, h: t.height });
+        const seat = seatSlotPosition(rect, grid, idx, { w: t.width, h: t.height }, order);
         if (seat.x === t.x && seat.y === t.y) continue;
         updates.push({ _id: t.id, x: seat.x, y: seat.y });
         movement[t.id] = displaceWaypointFor(t, seat);

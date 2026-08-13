@@ -61,6 +61,13 @@ await page.evaluate(() => {
 /* ------------------------------------------------------------------ setup */
 
 const setup = await page.evaluate(async (SCOPE) => {
+  // The startup "Setup & What's New" window re-opens after any module version change and sits over
+  // the middle of the canvas — which is exactly where the click legs below aim. Probe-proven: with
+  // it open, elementFromPoint at the seat square answers the dialog's table cell and the click never
+  // reaches the board. Close it before touching the canvas.
+  for (const app of [...foundry.applications.instances.values()]) {
+    if (app.id === "cp-automation-notice") await app.close().catch(() => {});
+  }
   const activeBefore = game.scenes.active?.id ?? null;
   // stale runs
   for (const s of [...game.scenes]) if (s.name.startsWith("__PW__")) await s.delete();
@@ -251,13 +258,16 @@ const seating = await page.evaluate(async ({ sceneId, riderId, driverId, grid })
   };
 }, setup);
 
+// Seats are no longer the footprint's reading order: the 4x2 handle derives an eastward heading,
+// which puts the engine in the right-hand column and the driver in the cell behind it, top row
+// (facing east, the driver's left is the top of the screen). Seat 1 sits beside them, one row down.
 const g = setup.grid;
-check("first rider takes seat 0 = the footprint's first square (exact)",
-  seating.seat1.idx === 0 && seating.seat1.x === seating.vehicle.x && seating.seat1.y === seating.vehicle.y,
+check("first rider takes the driver's seat, behind the engine rank (exact)",
+  seating.seat1.idx === 0 && seating.seat1.x === seating.vehicle.x + 2 * g && seating.seat1.y === seating.vehicle.y,
   `idx=${seating.seat1.idx} x=${seating.seat1.x} y=${seating.seat1.y}`);
-check("second rider takes seat 1 = the next square along (exact)",
-  seating.seat2.idx === 1 && seating.seat2.x === seating.vehicle.x + g && seating.seat2.y === seating.vehicle.y,
-  `idx=${seating.seat2.idx} x=${seating.seat2.x}`);
+check("second rider takes seat 1 = the next cell in that rank (exact)",
+  seating.seat2.idx === 1 && seating.seat2.x === seating.vehicle.x + 2 * g && seating.seat2.y === seating.vehicle.y + g,
+  `idx=${seating.seat2.idx} x=${seating.seat2.x} y=${seating.seat2.y}`);
 check("riders sit inside the vehicle footprint", seating.inFootprint === true);
 check("riders occupy separate squares (never point-stacked)", seating.distinct === true);
 check("art scale multiplies the rider's own scale by 0.6 (1.2 → 0.72)",
@@ -458,7 +468,118 @@ const reseat = await page.evaluate(async ({ sceneId }) => {
   return { idx: t.flags["cp2020-augmented"].seatIndex, x: t.x, y: t.y, vx: vTok.x, vy: vTok.y };
 }, setup);
 check("a freed seat is re-used by the next rider (lowest free index)",
-  reseat.idx === 0 && reseat.x === reseat.vx && reseat.y === reseat.vy, `idx=${reseat.idx}`);
+  reseat.idx === 0 && reseat.x === reseat.vx + 2 * setup.grid && reseat.y === reseat.vy, `idx=${reseat.idx} x=${reseat.x}`);
+
+/* ------------------------------------------------------------------ M. Layer-1 layout defaults */
+
+const layoutPure = await page.evaluate(async () => {
+  const out = [];
+  const ok = (n, p, d) => out.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+  const L = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-layout.js`);
+  const j = (v) => JSON.stringify(v);
+
+  // A 2-wide, 4-deep car with its nose north: hood across the top, driver behind it on the left.
+  ok("front rank of a north-facing footprint is the engine region", j(L.derivedEngineCells(2, 4, "n")) === "[0,1]", j(L.derivedEngineCells(2, 4, "n")));
+  ok("driver's seat is the left cell of the rank behind the engine", L.derivedSeatOrder(2, 4, "n")[0] === 2, j(L.derivedSeatOrder(2, 4, "n")));
+  ok("the passenger sits beside them, right of the driver", L.derivedSeatOrder(2, 4, "n")[1] === 3);
+  ok("remaining seats run rank by rank to the tail", j(L.derivedSeatOrder(2, 4, "n")) === "[2,3,4,5,6,7]", j(L.derivedSeatOrder(2, 4, "n")));
+  ok("no cell is both engine and seat", L.derivedSeatOrder(2, 4, "n").every(i => !L.derivedEngineCells(2, 4, "n").includes(i)));
+
+  // The heading is what turns the layout, not the footprint.
+  ok("turning the same footprint south mirrors the whole order", j(L.derivedSeatOrder(2, 4, "s")) === "[5,4,3,2,1,0]", j(L.derivedSeatOrder(2, 4, "s")));
+  ok("south-facing engine sits on the bottom rank", j(L.derivedEngineCells(2, 4, "s")) === "[7,6]", j(L.derivedEngineCells(2, 4, "s")));
+  ok("an east-facing engine is the right-hand column", j(L.derivedEngineCells(2, 4, "e")) === "[1,3,5,7]", j(L.derivedEngineCells(2, 4, "e")));
+  ok("an east-facing driver sits top-left of the remaining cells", L.derivedSeatOrder(2, 4, "e")[0] === 0, j(L.derivedSeatOrder(2, 4, "e")));
+
+  // Unset heading: derived from the footprint's shape.
+  ok("a wide footprint derives an eastward heading", L.defaultFrontFor(4, 2) === "e", L.defaultFrontFor(4, 2));
+  ok("a tall footprint derives a southward heading", L.defaultFrontFor(2, 4) === "s", L.defaultFrontFor(2, 4));
+  ok("an unset heading resolves to the derived one", L.resolveFront("", 4, 2) === "e" && L.resolveFront(null, 2, 4) === "s");
+  ok("negative case: a nonsense heading falls back to derived", L.resolveFront("up", 4, 2) === "e", L.resolveFront("up", 4, 2));
+
+  // A footprint only one rank deep has no room for an engine region.
+  ok("single-rank footprint declares no engine region", j(L.derivedEngineCells(4, 1, "n")) === "[]", j(L.derivedEngineCells(4, 1, "n")));
+  ok("single-rank footprint keeps every cell as seating", j(L.derivedSeatOrder(4, 1, "n")) === "[0,1,2,3]", j(L.derivedSeatOrder(4, 1, "n")));
+
+  // Type-aware cover prefills (Core p.99 values, ruled D2).
+  ok("cycle types contribute no cover", L.coverProfileFor("cycle").providesCover === false && L.coverProfileFor("cycle").bodySp === 0, j(L.coverProfileFor("cycle")));
+  ok("AV types prefill body SP 40", L.coverProfileFor("AV-4").bodySp === 40 && L.coverProfileFor("AV-6").bodySp === 40, j(L.coverProfileFor("AV-4")));
+  ok("armoured ground types prefill body SP 40", L.coverProfileFor("tank").bodySp === 40 && L.coverProfileFor("APC").bodySp === 40);
+  ok("ordinary vehicles prefill the car-body 10", L.coverProfileFor("car").bodySp === 10 && L.coverProfileFor("truck").bodySp === 10, j(L.coverProfileFor("truck")));
+  ok("the engine-block prefill is 35 everywhere it applies", L.coverProfileFor("car").engineSp === 35 && L.coverProfileFor("tank").engineSp === 35);
+  ok("a typed SP overrides the type prefill", L.coverSpFor({ vehicleType: "car", layout: { bodySp: 25 } }).bodySp === 25);
+  ok("a typed 0 is kept as a real answer, not treated as unset", L.coverSpFor({ vehicleType: "car", layout: { bodySp: 0 } }).bodySp === 0);
+  ok("an unset override falls back to the type prefill", L.coverSpFor({ vehicleType: "AV-4", layout: {} }).bodySp === 40);
+  return out;
+});
+for (const c of layoutPure) check(c.n, c.p, c.d);
+
+/* ------------------------------------------------------------------ N. Front picker + live re-seat */
+
+const frontLive = await page.evaluate(async ({ sceneId }) => {
+  const scene = game.scenes.get(sceneId);
+  const vehicle = game.actors.getName("__PW__Ride");
+  const vTok = scene.tokens.find(t => t.actorId === vehicle.id);
+  const rider = scene.tokens.find(t => t.name === "__PW__Rider");
+  const grid = scene.grid.size;
+
+  // A 2-wide, 4-deep car facing north — the shape the seating rule is written about.
+  await vehicle.update({ "prototypeToken.width": 2, "prototypeToken.height": 4, "system.layout.front": "n" });
+  for (let i = 0; i < 40 && !(scene.tokens.get(vTok.id).width === 2 && scene.tokens.get(vTok.id).height === 4); i++) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+  await window.__pwSettle(scene.id, rider.id);
+  const v = scene.tokens.get(vTok.id);
+  const north = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
+
+  // Same footprint, nose turned around: the driver's seat moves to the mirrored cell.
+  await vehicle.update({ "system.layout.front": "s" });
+  await new Promise(r => setTimeout(r, 600));
+  await window.__pwSettle(scene.id, rider.id);
+  const south = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
+
+  // The picker itself, driven as a user drives it.
+  await vehicle.sheet.render(true);
+  await new Promise(r => setTimeout(r, 900));
+  const root = vehicle.sheet.element;
+  const btns = [...root.querySelectorAll(".cp-veh-front-btn")];
+  const litBefore = btns.filter(b => b.classList.contains("cp-active")).map(b => b.dataset.front);
+  const rawKeyLeak = /CYBERPUNK\./.test(root.querySelector(".cp-veh-layout")?.textContent ?? "")
+    || btns.some(b => /CYBERPUNK\./.test(b.title));
+  btns.find(b => b.dataset.front === "w")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  await new Promise(r => setTimeout(r, 900));
+  const storedAfterClick = vehicle.system.layout.front;
+  const litAfter = [...vehicle.sheet.element.querySelectorAll(".cp-veh-front-btn.cp-active")].map(b => b.dataset.front);
+  await vehicle.sheet.close();
+
+  // The combat layout carries the same picker (it renders only under the Maximum Metal gate, so the
+  // include is asserted at the source rather than by flipping a world setting mid-run).
+  const mmSrc = await fetch("/modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs").then(r => r.text());
+
+  return {
+    grid, vx: v.x, vy: v.y, north, south,
+    buttonCount: btns.length, litBefore, litAfter, storedAfterClick, rawKeyLeak,
+    mmHasPicker: mmSrc.includes("parts/vehicle-layout.hbs"),
+    handle: { w: v.width, h: v.height },
+  };
+}, setup);
+
+check("footprint change resizes the handle to 2x4", frontLive.handle.w === 2 && frontLive.handle.h === 4,
+  `${frontLive.handle.w}x${frontLive.handle.h}`);
+check("north-facing driver sits in the left cell of rank 2 (exact)",
+  frontLive.north.x === frontLive.vx && frontLive.north.y === frontLive.vy + frontLive.grid,
+  `x=${frontLive.north.x} y=${frontLive.north.y} vs v=${frontLive.vx},${frontLive.vy}`);
+check("turning the nose south re-seats the rider to the mirrored cell (exact)",
+  frontLive.south.x === frontLive.vx + frontLive.grid && frontLive.south.y === frontLive.vy + 2 * frontLive.grid,
+  `x=${frontLive.south.x} y=${frontLive.south.y}`);
+check("the picker offers all four headings", frontLive.buttonCount === 4, String(frontLive.buttonCount));
+check("exactly the stored heading is lit", frontLive.litBefore.length === 1 && frontLive.litBefore[0] === "s",
+  frontLive.litBefore.join(","));
+check("clicking a heading stores it", frontLive.storedAfterClick === "w", String(frontLive.storedAfterClick));
+check("the lit heading follows the click", frontLive.litAfter.length === 1 && frontLive.litAfter[0] === "w",
+  frontLive.litAfter.join(","));
+check("the picker leaks no raw key", frontLive.rawKeyLeak === false);
+check("the Maximum Metal layout carries the same picker", frontLive.mmHasPicker === true);
 
 /* ------------------------------------------------------------------ L. chemical shell leaves a cloud on this core */
 

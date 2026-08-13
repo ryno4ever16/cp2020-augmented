@@ -62,6 +62,20 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       crewSlots:      numberField(1),
       passengerSlots: numberField(0),
 
+      // ── Map layout: where the nose points and what the footprint's cells are used for. A nested
+      // SchemaField (never a bare objectField) so a partial dotted write — the sheet's Front picker
+      // sends exactly one key — merges per key instead of expanding into a full object of defaults
+      // and wiping its siblings. Every field is additive with an empty/derive default, so a vehicle
+      // saved before this existed loads with the derived Layer-1 behaviour and no migration runs.
+      layout: new f.SchemaField({
+        // "" = derive from the footprint (wide ⇒ east, tall ⇒ south); else n/e/s/w.
+        front:    new f.StringField({ initial: "" }),
+        // Cover SP overrides. null = use the type's book prefill (vehicle-layout.js coverProfileFor);
+        // a typed 0 is a real answer ("this stops nothing") and is kept.
+        bodySp:   new f.NumberField({ initial: null, nullable: true, required: false }),
+        engineSp: new f.NumberField({ initial: null, nullable: true, required: false }),
+      }),
+
       // ── Whole-vehicle (catalog) layer — additive (unified-sheet plan Phase 1). The civilian
       // sheet mirrors the vehicle ITEM sheet, and these carry what the actor lacked. The combat
       // scalars above (topSpeed/safeSpeed/acc/dec) remain canonical — resolvers untouched.
