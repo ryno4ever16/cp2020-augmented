@@ -299,7 +299,10 @@ async function _enqueue(row) {
       id: foundry.utils.randomID(),
       actorId: row.actorId, skillId: row.skillId,
       actorName: row.actorName ?? "", skillName: row.skillName ?? "",
-      total: roll.total, rolls: [roll], ip: 0, success: false, ts: roll.ts
+      // Under the auto-baseline model a use is worth the baseline unless the GM says otherwise, so
+      // the row arrives already ticked and ✓ (or Enter) is the whole gesture; unticking sticks,
+      // because the tick is stored on the row rather than defaulted at paint time.
+      total: roll.total, rolls: [roll], ip: 0, success: ipAwardModel() === "autoBaseline", ts: roll.ts
     });
   }
   let overflowed = false;

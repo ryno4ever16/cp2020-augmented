@@ -3,7 +3,7 @@ import {
   dismissQueueRow, clearQueue, applyPending, resetThrottle, awardPending, addToPool, pendingForSkill,
   bankForSkill, poolForActor, setActorPool, setSkillBank
 } from "./ip.js";
-import { ipRawTracking, ipAwardModel, ipThrottle } from "../settings.js";
+import { ipRawTracking, ipAwardModel, ipThrottle, ipAutoBaselineAmount } from "../settings.js";
 import { localize } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -37,6 +37,7 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
       ipApply:  IpTracker._onApply,
       ipClear:  IpTracker._onClear,
       ipOpenRow: IpTracker._onOpenRow,
+      ipOpenActor: IpTracker._onOpenActor,
       ipPruneRoll: IpTracker._onPruneRoll,
       ipReset:  IpTracker._onReset,
       ipManual: IpTracker._onManual,
@@ -49,9 +50,13 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     main: { template: "modules/cp2020-augmented/templates/ip/tracker.hbs" },
   };
 
-  /** Which coalesced rows the GM has opened. Held on the window, not in the store: it is a view
-   *  state, and it must survive the re-render every queue write triggers. */
+  /** View state, held on the window rather than in the store, and re-applied on every render — the
+   *  queue re-renders on every write, and an open group, an opened character, a half-typed filter or
+   *  the figure the GM has been awarding all evening must not blink out from under them. */
   _openRows = new Set();
+  _openActors = new Set();
+  _filter = "";
+  _lastAmount = 0;
 
   async _prepareContext(_options) {
     const auto = ipAwardModel() === "autoBaseline";
@@ -74,26 +79,31 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     // Forget rows that have since been awarded or discarded, so the open-set can't grow forever.
     this._openRows = new Set(rows.filter(r => r.open).map(r => r.id));
 
-    // GM correction / balances view: each party actor's fungible pool + every skill that carries IP
-    // (banked or pending). Pool + bank are GM-editable in the template; pending is shown read-only.
+    // GM correction / balances view: one collapsed header per actor (pool + everything banked),
+    // opening to the skills that carry IP. Pool + bank are GM-editable; pending is read-only.
     const balances = [];
     let pendingTotal = 0;
+    let bankedTotal = 0;
     for (const a of game.actors.filter(x => x.type === "character" || x.type === "npc")) {
       const skills = [];
+      let bankTotal = 0;
       for (const s of a.items) {
         if (s.type !== "skill") continue;
         const bank = bankForSkill(s);
         const pend = pendingForSkill(s);
         pendingTotal += pend;
+        bankedTotal += bank;
+        bankTotal += bank;
         if (bank > 0 || pend > 0) skills.push({ skillId: s.id, skillName: s.name, bank, pending: pend });
       }
       const pool = poolForActor(a);
       if (pool > 0 || skills.length) {
         skills.sort((x, y) => x.skillName.localeCompare(y.skillName));
-        balances.push({ actorId: a.id, actorName: a.name, pool, skills });
+        balances.push({ actorId: a.id, actorName: a.name, pool, bankTotal, skills, open: this._openActors.has(a.id) });
       }
     }
     balances.sort((x, y) => x.actorName.localeCompare(y.actorName));
+    this._openActors = new Set(balances.filter(b => b.open).map(b => b.actorId));
 
     return {
       auto,
@@ -101,9 +111,16 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
       throttle: ipThrottle(),
       rows,
       rowCount: rows.length,
+      // The amount a row arrives carrying, so ✓ (or Enter) is the whole gesture in the common case.
+      // Under the auto-baseline model the row already carries the baseline via its success tick, so
+      // the number field stays a pure bonus; under the manual model it repeats the last figure typed.
+      prefill: auto ? 0 : this._lastAmount,
+      baseline: ipAutoBaselineAmount(),
       balances,
       hasBalances: balances.length > 0,
       pendingTotal,
+      bankedTotal,
+      filter: this._filter,
     };
   }
 
@@ -113,12 +130,59 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!root) return;
     const rowId = (el) => el.closest("[data-row-id]")?.dataset?.rowId;
 
-    root.querySelectorAll(".cp-ip-amount").forEach(el => el.addEventListener("change", (ev) => {
-      updateQueueRow(rowId(ev.currentTarget), { ip: Math.max(0, parseInt(ev.currentTarget.value, 10) || 0) });
-    }));
+    root.querySelectorAll(".cp-ip-amount").forEach(el => {
+      el.addEventListener("change", (ev) => {
+        const value = Math.max(0, parseInt(ev.currentTarget.value, 10) || 0);
+        this._lastAmount = value;            // the next row arrives carrying it
+        updateQueueRow(rowId(ev.currentTarget), { ip: value });
+      });
+      // Enter awards the row being typed into — working a queue is type, Enter, type, Enter.
+      el.addEventListener("keydown", async (ev) => {
+        if (ev.key !== "Enter") return;
+        ev.preventDefault();
+        const row = ev.currentTarget.closest("[data-row-id]");
+        this._lastAmount = Math.max(0, parseInt(ev.currentTarget.value, 10) || 0);
+        await IpTracker._awardRow(row);
+      });
+    });
     root.querySelectorAll(".cp-ip-success").forEach(el => el.addEventListener("change", (ev) => {
       updateQueueRow(rowId(ev.currentTarget), { success: ev.currentTarget.checked });
     }));
+
+    // Balances filter: a live text match over character AND skill names. Filtering is done on the
+    // painted rows rather than by re-rendering, so the box keeps focus and the caret while typing.
+    const filter = root.querySelector(".cp-ip-filter");
+    if (filter) {
+      filter.addEventListener("input", (ev) => {
+        this._filter = ev.currentTarget.value;
+        this._applyBalanceFilter();
+      });
+      if (this._filter) this._applyBalanceFilter();
+    }
+  }
+
+  /**
+   * Show only the characters and skills matching the filter box. A character whose own name matches
+   * keeps all of their skills; a character kept for a skill match is opened onto just those skills,
+   * because a hit you cannot see is the same as no hit. An empty box restores the accordion.
+   */
+  _applyBalanceFilter() {
+    const root = this.element;
+    if (!root) return;
+    const term = (this._filter || "").trim().toLowerCase();
+    for (const block of root.querySelectorAll(".cp-ip-bal-block")) {
+      const actorName = (block.dataset.actorName || "").toLowerCase();
+      const actorHit = !!term && actorName.includes(term);
+      let skillHits = 0;
+      for (const skillRow of block.querySelectorAll(".cp-ip-bal-skill")) {
+        const hit = !term || actorHit || (skillRow.dataset.skillName || "").toLowerCase().includes(term);
+        skillRow.classList.toggle("cp-hidden", !hit);
+        if (hit) skillHits++;
+      }
+      block.classList.toggle("cp-hidden", !!term && !actorHit && skillHits === 0);
+      const skills = block.querySelector(".cp-ip-bal-skills");
+      if (skills) skills.classList.toggle("cp-hidden", term ? false : !this._openActors.has(block.dataset.actorId));
+    }
 
     // GM correction: edit a skill's banked IP or an actor's pool to an absolute value (add or remove).
     // No re-render — the field already shows the typed value, and a re-render would steal focus.
@@ -170,15 +234,34 @@ export class IpTracker extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   static async _onAward(event, target) {
-    const r = target.closest("[data-row-id]");
-    const rowId = r?.dataset?.rowId;
-    const amt = r?.querySelector(".cp-ip-amount");
-    const suc = r?.querySelector(".cp-ip-success");
+    await IpTracker._awardRow(target.closest("[data-row-id]"));
+  }
+
+  /** Award one row from what its controls currently show — the ✓ button and the Enter key are the
+   *  same act, so they run the same code. The row's own fields are read at press time because a
+   *  typed figure that hasn't blurred yet is still the GM's answer. */
+  static async _awardRow(row) {
+    const rowId = row?.dataset?.rowId;
+    if (!rowId) return;
+    const amt = row.querySelector(".cp-ip-amount");
+    const suc = row.querySelector(".cp-ip-success");
     const patch = {};
     if (amt) patch.ip = Math.max(0, parseInt(amt.value, 10) || 0);
     if (suc) patch.success = suc.checked;
     await updateQueueRow(rowId, patch);
     await resolveQueueRow(rowId);
+  }
+
+  /** Open (or close) one character's skill rows in the balances accordion. */
+  static _onOpenActor(event, target) {
+    const block = target.closest(".cp-ip-bal-block");
+    const actorId = block?.dataset?.actorId;
+    const skills = block?.querySelector(".cp-ip-bal-skills");
+    if (!actorId || !skills) return;
+    const open = skills.classList.contains("cp-hidden");
+    skills.classList.toggle("cp-hidden", !open);
+    block.classList.toggle("cp-ip-bal-open", open);
+    if (open) this._openActors.add(actorId); else this._openActors.delete(actorId);
   }
 
   static async _onSkip(event, target) {

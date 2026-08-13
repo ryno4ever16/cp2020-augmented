@@ -86,11 +86,30 @@
 .cp-ip-neglect .cp-ip-neglect-lead { margin: 0 0 6px; }
 .cp-ip-neglect .cp-ip-neglect-q { margin: 0 0 10px; font-weight: bold; }
 .cp-ip-neglect .cp-ip-neglect-mute-label { display: flex; align-items: center; gap: 5px; font-size: 0.85em; cursor: pointer; }
-/* IP tracker: RAW-off explainer banner + GM balances panel. */
-.cp-ip-tracker .cp-ip-rawoff-note {
-  margin: 2px 0 4px; padding: 5px 8px; font-size: 0.82em; line-height: 1.4;
-  border-left: 3px solid #c0791a; background: rgba(192, 121, 26, 0.12); border-radius: 2px;
+/* IP tracker frame: fixed toolbar + pipeline strip, the QUEUE as the one grower, the balances
+   ledger bounded under it, footer pinned. (The window-content chain is what lets either list
+   scroll instead of pushing the footer off the bottom.) */
+.cp-ip-tracker .window-content { display: flex; flex-direction: column; min-height: 0; }
+.cp-ip-tracker .cp-ip-tracker-window { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cp-ip-tracker .cp-ip-toolbar { flex: 0 0 auto; align-items: center; gap: 8px; padding: 4px 0; }
+.cp-ip-tracker .cp-ip-toolbar button { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
+.cp-ip-tracker .cp-ip-toolbar-pad { flex: 1 1 auto; }
+.cp-ip-tracker .cyber-section-header { flex: 0 0 auto; }
+.cp-ip-tracker .cp-ip-queue { flex: 1 1 auto; min-height: 60px; overflow-y: auto; }
+.cp-ip-tracker .cp-ip-filter-row { flex: 0 0 auto; padding: 2px 0 3px; }
+.cp-ip-tracker .cp-ip-filter { flex: 1 1 auto; width: 100%; }
+.cp-ip-tracker .cp-ip-balances { flex: 0 1 auto; min-height: 40px; max-height: 40%; overflow-y: auto; }
+.cp-ip-tracker .cp-ip-empty { opacity: 0.6; padding: 6px; }
+.cp-ip-tracker .cp-ip-footer { flex: 0 0 auto; opacity: 0.55; font-size: 0.74em; line-height: 1.35; margin: 4px 0 0; }
+/* The pipeline strip: queued → pending → banked, with the live count at each stage. */
+.cp-ip-tracker .cp-ip-pipeline {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 2px 0 4px; padding: 3px 6px; font-size: 0.85em;
+  border: 1px solid rgba(192, 160, 98, 0.35); border-radius: 2px; background: rgba(255, 255, 255, 0.04);
 }
+.cp-ip-tracker .cp-ip-pipe-step { flex: 0 0 auto; white-space: nowrap; opacity: 0.85; }
+.cp-ip-tracker .cp-ip-pipe-step b { opacity: 1; color: #c0a062; }
+.cp-ip-tracker .cp-ip-pipe-arrow { flex: 0 0 auto; opacity: 0.5; }
 /* Queue rows. One row per character+skill; repeats hide behind a count and open in place. */
 .cp-ip-tracker .cp-ip-row { padding: 2px 4px; }
 .cp-ip-tracker .cp-ip-row-main { align-items: center; gap: 6px; }
@@ -108,9 +127,18 @@
 .cp-ip-tracker .cp-ip-roll-age { flex: 1 1 auto; min-width: 0; opacity: 0.6; }
 .cp-ip-tracker .cp-ip-roll-prune { flex: 0 0 auto; cursor: pointer; opacity: 0.65; }
 .cp-ip-tracker .cp-ip-roll-prune:hover { opacity: 1; color: #d1502f; }
-.cp-ip-tracker .cp-ip-bal-actor { border-top: 1px solid rgba(255, 255, 255, 0.10); margin-top: 2px; }
-.cp-ip-tracker .cp-ip-balances label { font-size: 0.8em; opacity: 0.85; }
-.cp-ip-tracker .cp-ip-pend-badge { color: #ffcc00; font-size: 0.85em; opacity: 0.9; }
+/* Balances accordion: one line per character, opening to the skills that carry IP. */
+.cp-ip-tracker .cp-ip-bal-actor { border-top: 1px solid rgba(255, 255, 255, 0.10); margin-top: 2px; align-items: center; gap: 6px; padding: 3px 4px 1px; }
+.cp-ip-tracker .cp-ip-bal-toggle { flex: 1 1 auto; min-width: 0; cursor: pointer; }
+.cp-ip-tracker .cp-ip-bal-toggle:hover { color: #ffcc00; }
+.cp-ip-tracker .cp-ip-bal-caret { transition: transform 80ms linear; }
+.cp-ip-tracker .cp-ip-bal-open .cp-ip-bal-caret { transform: rotate(90deg); }
+.cp-ip-tracker .cp-ip-bal-sum { flex: 0 0 auto; font-size: 0.8em; opacity: 0.8; white-space: nowrap; }
+.cp-ip-tracker .cp-ip-bal-skill { align-items: center; gap: 6px; padding: 1px 4px 1px 18px; }
+.cp-ip-tracker .cp-ip-bal-skill-name { flex: 1 1 auto; min-width: 0; }
+.cp-ip-tracker .cp-ip-balances label { flex: 0 0 auto; font-size: 0.8em; opacity: 0.85; }
+.cp-ip-tracker .cp-ip-pool, .cp-ip-tracker .cp-ip-bank { width: 54px; }
+.cp-ip-tracker .cp-ip-pend-badge { flex: 0 0 auto; color: #ffcc00; font-size: 0.85em; opacity: 0.9; }
 /* Layout (scoped to out-specify Foundry core's .flexrow{align-items:center} + .flexcol>*{flex:none}). */
 .cp-catalog .window-content { display: flex; flex-direction: column; }
 .cp-catalog .cp-catalog-window { display: flex; flex-direction: column; height: 100%; min-height: 0; }
