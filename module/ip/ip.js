@@ -345,7 +345,12 @@ async function _throttleAward(skillId, amount, { bypass = false } = {}) {
  */
 export async function awardPending(actor, skill, amount, { bypassThrottle = false } = {}) {
   if (!actor || !skill) return false;
-  const award = await _throttleAward(skill.id, Math.max(0, Math.floor(Number(amount) || 0)), { bypass: bypassThrottle });
+  const typed = Math.max(0, Math.floor(Number(amount) || 0));
+  const award = await _throttleAward(skill.id, typed, { bypass: bypassThrottle });
+  // The throttle silently eating a GM's typed figure reads as a broken button — under "hardcap" the
+  // second award for a skill in one cycle comes back as 0 and the row is dropped either way. Say so
+  // here, the one place that knows both the number asked for and the number granted.
+  if (award < typed) ui.notifications?.warn(localize("IpThrottleReduced", { skill: skill.name, typed, awarded: award }));
   if (award <= 0) return false;
   await skill.setFlag(SCOPE, "ipPending", skillPending(skill) + award);
   return true;
