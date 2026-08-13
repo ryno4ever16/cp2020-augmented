@@ -2,7 +2,7 @@
   "_id": "uLDcbYBUpVo8tH3y",
   "name": "\"Rockfish\" Modular Multi-Role Submarine",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/submarine.svg",
   "system": {
     "flavor": "",
     "notes": "",

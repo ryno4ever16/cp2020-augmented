@@ -2,7 +2,7 @@
   "_id": "Hm42Y9eplutTXK0G",
   "name": "Militech 25mm Launched Grenades",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "effects": [],
   "folder": null,
   "sort": 17200000,

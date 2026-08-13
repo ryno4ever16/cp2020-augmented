@@ -2,7 +2,7 @@
   "_id": "P0JvvfoSZAg3WGCo",
   "name": "Spraypaint Grenade",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Damage backfilled from Chromebook 2 p.49 text layer: Special — paint over a 3-4m area, 15 colors; can blind a dead-center target for 1D6/3 minutes; no direct damage. [Backfill 2026-07-17]</p>",

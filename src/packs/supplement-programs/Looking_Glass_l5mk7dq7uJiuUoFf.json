@@ -2,7 +2,7 @@
   "_id": "l5mk7dq7uJiuUoFf",
   "name": "Looking Glass",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

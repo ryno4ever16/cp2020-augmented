@@ -2,7 +2,7 @@
   "_id": "5imfTTANeGJONVyG",
   "name": "Memory Compression",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "3 skills; skill level +3 total; Cost is range of 200-400eb",
     "notes": "",

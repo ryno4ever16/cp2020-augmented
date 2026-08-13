@@ -2,7 +2,7 @@
   "_id": "9dlVGj88AisgNAcD",
   "name": "Packet Virtual Reality",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

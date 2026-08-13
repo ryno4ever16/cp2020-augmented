@@ -2,7 +2,7 @@
   "_id": "sYNA2ayCvQb4GzuF",
   "name": "5.56mm Caseless \"SMG\" (Full Borg)",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "",

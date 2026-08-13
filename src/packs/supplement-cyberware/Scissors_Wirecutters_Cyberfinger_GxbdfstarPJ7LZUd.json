@@ -2,7 +2,7 @@
   "_id": "GxbdfstarPJ7LZUd",
   "name": "Scissors/Wirecutters Cyberfinger",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>DIGITS line; middle+index cutters; 1D6/3 as weapon. (Dynalar buys back used cyberfingers at 30eb.) | [Audit row +74 — Chromebook 1 p.32]</p>",

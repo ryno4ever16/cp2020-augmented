@@ -2,7 +2,7 @@
   "_id": "EXI4Lw2i8U2sDjsZ",
   "name": "Bell UH-9",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Troop-mover helicopter (the reasonable SM-Dragon alternative). 165mph, crew2+20, 2500kg, 8t. | [Audit row +326 — Firestorm: Shockwave p.65]</p>",

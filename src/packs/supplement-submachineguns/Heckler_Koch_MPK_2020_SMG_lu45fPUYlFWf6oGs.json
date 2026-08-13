@@ -2,7 +2,7 @@
   "_id": "lu45fPUYlFWf6oGs",
   "name": "Heckler & Koch MPK-2020 SMG",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Distinct from MPK-9/MPK-11 (both in packs). 750eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +292 — Blackhand's Street Weapons p.21]</p><p>Stat line backfilled from Blackhand's p.21 text layer: SMG +2* L P 4D6+1 (12mm) 60 30 ST 200m (*laser sight). [Backfill 2026-07-17]</p>",

@@ -2,7 +2,7 @@
   "_id": "FokvFom8q36olt5m",
   "name": "Vosper/Wolf Riverine Patrol Craft",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Shallow-water patrol boat for flooded coastal Britain; crew 5+1; 5t, 1.6t cargo; non-metallic armored buoyant hull, crew stations sealed under armor. Fwd stabilized turret: 2x BRG-15 15mm HMG + twin Milan-C ATGM; aft turret: 15mm HMG + 2x 40mm auto-GL; tamped directional Claymores vs boarders; chaff/flare/smoke, satellite uplink, scrambler, radar+ID, thermograph, IR, ECM/ECCM, +2 gunnery, autopilot/nav, magnetometer, damage + environment control. RGUK p.42. | [Audit row +364 — Rough Guide to the UK p.42]</p>",

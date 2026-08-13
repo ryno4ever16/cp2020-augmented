@@ -1,7 +1,7 @@
 {
   "name": "EMP Capacitor",
   "type": "cp2020-augmented.acpaSystem",
-  "img": "icons/svg/chest.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "htmlFields": [
       "notes"

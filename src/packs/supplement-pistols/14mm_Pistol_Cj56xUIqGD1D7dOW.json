@@ -2,7 +2,7 @@
   "_id": "Cj56xUIqGD1D7dOW",
   "name": "14mm Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

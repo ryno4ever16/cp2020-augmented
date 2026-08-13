@@ -2,7 +2,7 @@
   "_id": "J9FKHTgyUbhXKAem",
   "name": "PGU-10D \"Pigman\" ACPA",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>US military heavy ACPA: STR40, 1566kg. | [Audit row +310 — Firestorm: Shockwave p.86]</p>",

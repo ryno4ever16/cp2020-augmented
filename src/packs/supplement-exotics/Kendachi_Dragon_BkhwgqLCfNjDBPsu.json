@@ -2,7 +2,7 @@
   "_id": "BkhwgqLCfNjDBPsu",
   "name": "Kendachi Dragon",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/flamethrower.svg",
   "effects": [],
   "folder": null,
   "sort": 2900000,

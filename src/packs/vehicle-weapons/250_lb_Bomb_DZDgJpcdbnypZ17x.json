@@ -1,7 +1,7 @@
 {
   "name": "250-lb Bomb",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/turret.svg",
   "system": {
     "flavor": "",
     "notes": "",

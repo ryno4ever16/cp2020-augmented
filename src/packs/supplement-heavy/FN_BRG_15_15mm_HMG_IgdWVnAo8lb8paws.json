@@ -2,7 +2,7 @@
   "_id": "IgdWVnAo8lb8paws",
   "name": "FN BRG-15 15mm HMG",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Mounted on the Vosper/Wolf patrol craft (RGUK p.42; page stat line garbled) — full stats from Reference Book. Also appears in Maximum Metal. | [Audit row +369 — Rough Guide to the UK p.42]</p>",

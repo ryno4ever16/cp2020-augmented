@@ -2,7 +2,7 @@
   "_id": "8xR1UM1wXPQAuXal",
   "name": "ICON Bomber Jacket",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/armor-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "c12RGENczhLdWspv",
   "name": "Rocker VR Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>100eb/level to +3. Instruments, songs, sheet-music HUD; music-exec/scout ID (images 50eb/yr). | [Audit row +102 — Chromebook 1 p.76]</p>",

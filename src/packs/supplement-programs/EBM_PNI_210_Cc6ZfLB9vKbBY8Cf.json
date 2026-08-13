@@ -2,7 +2,7 @@
   "_id": "Cc6ZfLB9vKbBY8Cf",
   "name": "EBM PNI 210",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

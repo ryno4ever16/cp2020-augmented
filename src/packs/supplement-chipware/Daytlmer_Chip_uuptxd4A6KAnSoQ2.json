@@ -2,7 +2,7 @@
   "_id": "uuptxd4A6KAnSoQ2",
   "name": "Daytimer Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill chip",
     "notes": "",

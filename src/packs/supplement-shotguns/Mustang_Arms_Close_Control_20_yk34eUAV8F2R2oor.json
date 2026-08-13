@@ -2,7 +2,7 @@
   "_id": "yk34eUAV8F2R2oor",
   "name": "Mustang Arms Close Control 20",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "A semi-auto 20-gauge bullpup in lightweight composites, designed as a reliable antipersonnel weapon that will not devastate an enclosed area. Only 26 inches long.",
     "notes": "<p>Solo of Fortune 2 p.33 text layer: SHG -1 N P 3D6 (20-Gauge) 15 2 STD 50m 350eb. Not reprinted in Blackhand's Street Weapons.</p><p>Loads buckshot, slugs, anti-riot baton rounds or flechette shells from a clear-plastic 15-round box magazine. Built for urban, house-to-house and riot situations.</p>",

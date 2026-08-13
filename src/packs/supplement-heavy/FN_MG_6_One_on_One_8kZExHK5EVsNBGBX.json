@@ -2,7 +2,7 @@
   "_id": "8kZExHK5EVsNBGBX",
   "name": "FN MG-6 \"One-on-One\"",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -1,7 +1,7 @@
 {
   "name": "IR Baffling",
   "type": "cp2020-augmented.acpaSystem",
-  "img": "icons/svg/chest.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Printed price: <b>10% of the chassis cost</b> (Maximum Metal, ACPA systems) — GM-entered per suit. Reduces IR signature only; takes no spaces, has no SDP or SP.</p>",

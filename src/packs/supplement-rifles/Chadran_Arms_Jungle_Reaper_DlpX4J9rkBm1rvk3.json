@@ -2,7 +2,7 @@
   "_id": "DlpX4J9rkBm1rvk3",
   "name": "Chadran Arms Jungle Reaper",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "An over-and-under assault rifle with an underslung 25mm grenade launcher - the field big brother of Chadran's City Reaper.",
     "notes": "<p>Interface Magazine Vol.1 Issue 3 p.30 (PDF idx 29) OCR text layer, confirmed by a fresh tesseract pass at three zoom/psm settings: Over: RIF +1 NC Poor 5D6 60 20 VR 200m / Under: GL -2 NC Poor Var 6 2 ST 50m, $1550 for the pair. The printed concealability token is 'NC' (no conceal); it is mapped to the N enum.</p><p>Ammunition, range and the 5.56mm designation from Blackhand's Street Weapons p.27 (PDF idx 28), which prints it complete: RIF +1 N P 5D6 (5.56MM) 60 20 VR 400M plus HVY -2 VARIES (25MM) 6 ..., 1,550eb. Interface's printed 200m is kept. The underslung launcher is not modelled as a separate item.</p>",

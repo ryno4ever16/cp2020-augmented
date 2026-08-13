@@ -2,7 +2,7 @@
   "_id": "9pW3H77f9xO5Pb9R",
   "name": "Generic 7.62mm Bolt-Action Rifle",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/winchester-rifle.svg",
   "system": {
     "flavor": "A fourth or fifth-generation copy of an original design, a time-tested survivor of the 20th century differing very little from its predecessors. Examples include the M70 sniper rifles used by the US Army and Marine Corps before the Collapse.",
     "notes": "<p>Neo Tribes, nomad weapons section, PDF idx 65 text layer (confirmed by a fresh tesseract OCR pass at two zoom levels): RIF +2 N C 6D6+1 (7.62) 6 1 VR 400m 500eb. Neo Tribes prints no recoverable page folio; the PDF index is recorded instead.</p><p>Blackhand's Street Weapons p.31 (PDF idx 32) reprints it as 'Nomad 7.62mm Bolt-Action Rifle' with 6D6+2; Neo Tribes' own printed 6D6+1 is kept.</p>",

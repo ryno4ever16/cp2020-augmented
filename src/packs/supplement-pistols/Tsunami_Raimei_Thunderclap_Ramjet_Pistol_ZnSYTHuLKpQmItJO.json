@@ -2,7 +2,7 @@
   "_id": "ZnSYTHuLKpQmItJO",
   "name": "Tsunami Raimei (Thunderclap) Ramjet Pistol",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

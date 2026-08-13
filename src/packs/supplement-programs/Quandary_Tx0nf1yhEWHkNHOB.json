@@ -2,7 +2,7 @@
   "_id": "Tx0nf1yhEWHkNHOB",
   "name": "Quandary",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

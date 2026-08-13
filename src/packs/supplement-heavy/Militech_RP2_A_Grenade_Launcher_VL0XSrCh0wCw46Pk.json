@@ -2,7 +2,7 @@
   "_id": "VL0XSrCh0wCw46Pk",
   "name": "Militech RP2-A Grenade Launcher",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 designation OCR 'RPii-A' = RP2-A (RPG-A?). 1500eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +300 — Blackhand's Street Weapons p.37]</p><p>Stat line backfilled from Blackhand's p.37 text layer: HVY -2 N R 6D10 1 1 VR 750m, tagged [Cyberpunk 2020]. [Backfill 2026-07-17]</p>",

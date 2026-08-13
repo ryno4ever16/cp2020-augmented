@@ -2,7 +2,7 @@
   "_id": "X14eZW3TZFV5i2PP",
   "name": "Arasaka WCCA \"Susano-O\" Grenade Rifle",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Stat line backfilled from Firestorm: Shockwave p.33 text layer: HVY +0 N P Varies (25mm) 9 2 VR 200m. Revolver-cylinder grenade rifle — choose the grenade type per shot. [Backfill 2026-07-17]</p>",

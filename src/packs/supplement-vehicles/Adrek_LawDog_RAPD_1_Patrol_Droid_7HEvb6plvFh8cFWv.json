@@ -2,7 +2,7 @@
   "_id": "7HEvb6plvFh8cFWv",
   "name": "Adrek \"LawDog\" RAPD-1 Patrol Droid",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Adrek 'LawDog' RAPD-1 (Remote / Autonomous Patrol Droid): a vaguely humanoid patrol droid for high-threat areas, prisons, urban centers and crowd control. Size 2.1m x 0.7m dia; weight 375kg; functional REF 6; max ground speed 30kph.</p><p>Armor by area (SP): central torso SP 30 (SDP 40/50); 2x manipulator arms SP 30 (SDP 30/40); 4x legs SP 15 (SDP 20/35). Crippling the central torso disables the unit. Microwave/EMP shielding standard.</p><p>Weapons: torso Constitution Arms Deluge CCW (600-round mag); each arm carries Militech Tasers, an Avante P-1135 Needlegun (100-round mag) and Wolvers; one spare magazine for every weapon; all treated as smart weapons. Four external weapon mounts + links (2x hips, 2x shoulders); common add-ons are the Constitution Arms Hurricane or Cyclone.</p><p>Control: remote-controlled by a human or AI at 100km standard range (boostable); optional interface link +500eb (+2 to operating skills). Limited autonomous CPU (not a true AI); stores up to six skill levels via skill chips (each priced as the comparable skill chip). Cost 125,000 eb. [Solo of Fortune 2 p.88]</p>",

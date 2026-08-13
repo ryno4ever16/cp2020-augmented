@@ -2,7 +2,7 @@
   "_id": "9Qf9iM2NY0TANdb5",
   "name": "Rifle +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

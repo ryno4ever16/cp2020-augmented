@@ -2,7 +2,7 @@
   "_id": "TMsj16nTc5PoUKcM",
   "name": "Longevity Module",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Med computer + synthesizer + nanosurgeons: near-immune to disease, projected 3× lifespan; monitors borg biosystems. | [Audit row +131 — Chromebook 2 p.85]</p>",

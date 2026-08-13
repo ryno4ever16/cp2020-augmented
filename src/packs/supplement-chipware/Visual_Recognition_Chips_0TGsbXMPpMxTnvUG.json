@@ -2,7 +2,7 @@
   "_id": "0TGsbXMPpMxTnvUG",
   "name": "Visual Recognition Chips",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "INT+chip+1d10+Skill. Tech; Corp; Rocker; etc; cost per level",
     "notes": "",

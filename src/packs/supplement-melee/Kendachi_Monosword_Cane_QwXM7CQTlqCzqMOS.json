@@ -2,7 +2,7 @@
   "_id": "QwXM7CQTlqCzqMOS",
   "name": "Kendachi Monosword Cane",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/katana.svg",
   "system": {
     "flavor": "",
     "notes": "",

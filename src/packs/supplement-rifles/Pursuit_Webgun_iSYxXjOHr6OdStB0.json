@@ -2,7 +2,7 @@
   "_id": "iSYxXjOHr6OdStB0",
   "name": "Pursuit Webgun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "Pursuit Security's 'long-range mantrap.' A single-shot weapon that fires four elliptical weights attached to a spiderweb nylon net. Victims must make Near Impossible BOD and REF checks to escape. The net can be cut by any blade the target holds.",
     "notes": "",

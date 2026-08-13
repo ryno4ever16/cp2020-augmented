@@ -2,7 +2,7 @@
   "_id": "8ngkd6mVd5OSRvyg",
   "name": "Increased Neural Feedback APTR",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>+400eb over normal APTR price: chip-in time halved, chip burns out after 24hrs of use. | [Audit row +93 — Chromebook 1 p.75]</p>",

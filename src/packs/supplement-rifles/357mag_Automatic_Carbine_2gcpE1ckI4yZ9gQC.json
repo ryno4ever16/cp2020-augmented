@@ -2,7 +2,7 @@
   "_id": "2gcpE1ckI4yZ9gQC",
   "name": ".357mag Automatic Carbine",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "Based on the same concepts as the Uzi and AK-47, this is carried by nomads who expect action and use their weapons a great deal.",
     "notes": "<p>Neo Tribes, nomad weapons section, PDF idx 65 text layer (confirmed by a fresh tesseract OCR pass): RIF 0/+1 L C 2D6+3 (.357mag) 30 2/3 VR 100m 400eb. Neo Tribes prints no recoverable page folio.</p><p>Printed WA is 0/+1: +1 when fired single-shot (ROF 2). The weapon fires single shots or three-round bursts and is intentionally NOT capable of true automatic fire. Corroborated by Blackhand's Street Weapons p.31 (PDF idx 32), citing [NeoTribes].</p>",

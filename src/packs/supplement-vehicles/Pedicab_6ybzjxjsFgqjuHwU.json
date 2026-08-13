@@ -2,7 +2,7 @@
   "_id": "6ybzjxjsFgqjuHwU",
   "name": "Pedicab",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Pedal cab; fare ~1.5eb/mile; 25mph level; 75% of gunfire = cosmetic only. | [Audit row +59 — Chromebook 1 p.22]</p>",

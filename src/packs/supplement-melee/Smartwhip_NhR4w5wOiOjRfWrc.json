@@ -2,7 +2,7 @@
   "_id": "NhR4w5wOiOjRfWrc",
   "name": "Smartwhip",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/bowie-knife.svg",
   "system": {
     "flavor": "",
     "notes": "",

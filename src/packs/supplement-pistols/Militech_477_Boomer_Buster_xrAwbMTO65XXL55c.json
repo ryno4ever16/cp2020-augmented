@@ -2,7 +2,7 @@
   "_id": "xrAwbMTO65XXL55c",
   "name": "Militech .477 Boomer Buster",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Now, a close-in support weapon that can stop a cyberpsycho cold; nearly an express rifle in design! A four-chamber, pepperbox-style gun with a folding arm brace for support.",
     "notes": "<p>Solo of Fortune p.50 (PDF idx 51) text layer prints: R 1 N E .477* 4 2 VR, $450, with the range-damage footnote *PB&amp;CL=5D6, M&amp;L=3D6+4, E=2D6 (recorded in rangeDamages).</p><p>Stat cells taken from Blackhand's Street Weapons p.17 (PDF idx 18), which reprints it complete and cites [Solo of Fortune]: P +1/-1 J/L P 5D6AP (.477) 4 1 VR 50M, 450eb. Blackhand's note: Acc. and Conceal. drop to -1 / L unless the firer has the brace deployed or a cyberarm. Blackhand's classes it a heavy handgun; SoF prints type R.</p>",

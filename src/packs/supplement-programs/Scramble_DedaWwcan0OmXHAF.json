@@ -2,7 +2,7 @@
   "_id": "DedaWwcan0OmXHAF",
   "name": "Scramble",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

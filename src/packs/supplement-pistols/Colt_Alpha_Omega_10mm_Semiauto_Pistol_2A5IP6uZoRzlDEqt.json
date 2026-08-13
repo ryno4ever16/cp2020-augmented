@@ -2,7 +2,7 @@
   "_id": "2A5IP6uZoRzlDEqt",
   "name": "Colt Alpha-Omega 10mm Semiauto Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "A semi-auto, double-action pistol with a ten-round magazine in the shooter's choice of .45 ACCP or 10mm caseless. Comes with a barrel compensator and shooter's interface as standard factory options.",
     "notes": "<p>Chromebook 1 p.43 (PDF idx 44) text layer, cross-checked against a fresh tesseract pass over the page image: P 2 J C 2D6+2 (.45 ACCP) or 2D6+3 (10mm) 10 2 VR, 500eb. Chromebook 1's weapon table prints no range column.</p><p>Alternate chambering: .45 ACCP for 2D6+2 (the book's own spelling). Range 50m from Blackhand's Street Weapons p.11 (PDF idx 12), which reprints it as the 'Colt Alpha-Omega Competition Pistol' citing [Chromebook 1]: P +2 J C 2D6+2 OR 2D6+3 10 2 VR 50M, 500eb. A Nikon COT sight system may be factory-ordered for an extra 3,900eb.</p>",

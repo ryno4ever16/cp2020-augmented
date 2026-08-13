@@ -2,7 +2,7 @@
   "_id": "STOjTIO7OJ5NwIdG",
   "name": "Space Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Space Survival +2; Highrider Culture +1",
     "notes": "<p>Space Survival+2, Highrider Culture+1. | [Audit row +89 — Chromebook 1 p.74]</p>",

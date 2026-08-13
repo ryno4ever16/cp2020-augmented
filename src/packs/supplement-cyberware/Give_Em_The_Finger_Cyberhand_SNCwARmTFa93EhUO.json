@@ -2,7 +2,7 @@
   "_id": "SNCwARmTFa93EhUO",
   "name": "Give 'Em The Finger Cyberhand",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "Q3K2rz3X6GTc1NGh",
   "name": "Nomad .44 Mag Lever",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/winchester-rifle.svg",
   "system": {
     "flavor": "",
     "notes": "",

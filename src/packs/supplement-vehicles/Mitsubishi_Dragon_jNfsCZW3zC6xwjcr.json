@@ -2,7 +2,7 @@
   "_id": "jNfsCZW3zC6xwjcr",
   "name": "Mitsubishi Dragon",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>2.5M eb (index). | [Audit row +68 — Chromebook 1 p.93]</p>",

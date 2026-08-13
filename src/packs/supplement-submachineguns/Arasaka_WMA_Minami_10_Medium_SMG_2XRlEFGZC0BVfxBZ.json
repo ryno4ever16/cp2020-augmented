@@ -2,7 +2,7 @@
   "_id": "2XRlEFGZC0BVfxBZ",
   "name": "Arasaka WMA “Minami-10” Medium SMG",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "",

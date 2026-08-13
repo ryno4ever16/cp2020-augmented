@@ -2,7 +2,7 @@
   "_id": "WxjVfCz1Ejc2vV2r",
   "name": "Barrett M-90 Sniper Rifle",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/winchester-rifle.svg",
   "system": {
     "flavor": "",
     "notes": "",

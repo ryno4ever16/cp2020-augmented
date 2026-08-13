@@ -2,7 +2,7 @@
   "_id": "dbPNyJ23S90b2ErI",
   "name": "Arasaka Wakizashi",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/katana.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Arasaka field sword (duisho): orbit-grown crystalline blade, stronger and sharper than terrestrial metal — it won't break on a mere fumble. Armor-piercing wedge tip: a THRUST treats hard armor as 1/2 SP. <b>Not for sale</b> — awarded to Arasaka field soldiers with promotion (Firestorm: Shockwave p.78); price is the GM's call if one ever surfaces.</p>",

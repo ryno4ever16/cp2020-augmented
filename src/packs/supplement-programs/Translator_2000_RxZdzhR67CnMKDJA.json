@@ -2,7 +2,7 @@
   "_id": "RxZdzhR67CnMKDJA",
   "name": "Translator 2000",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

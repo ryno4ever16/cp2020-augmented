@@ -2,7 +2,7 @@
   "_id": "4wFamouerW5IxFq6",
   "name": "Arasaka WSSA Sniper System",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/winchester-rifle.svg",
   "system": {
     "flavor": "Heavy-barrelled semi-auto sniper system for urban-deployed corporate enforcement teams, with a 40-round helical magazine of saboted 3.5mm frag-flechettes, silencer, flash suppressor and a Zeiss 12x scope with computer-enhanced laser sighting. Loaded weight 3.8kg.",
     "notes": "<p>Solo of Fortune 2 p.32 text layer: RIF +5 (with smartrig) N P 4D6 (3.5mm FF) 40 2 VR 600m 2400eb. The printed WA already assumes the integral smartchipping; the system also gives +2 to Awareness, night vision and rangefinding.</p><p>Blackhand's Street Weapons p.29 (PDF idx 30) reprints it, citing [Solo of Fortune 2], with 6D6 instead of 4D6 - SoF2's printed 4D6 is kept. SoF2's review notes very poor penetration against hardened targets (the projectile only defeats cloth-based armor) and heavy deflection through foliage, glass or walls.</p>",

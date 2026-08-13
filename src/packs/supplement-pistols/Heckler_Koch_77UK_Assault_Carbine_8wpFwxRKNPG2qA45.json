@@ -2,7 +2,7 @@
   "_id": "8wpFwxRKNPG2qA45",
   "name": "Heckler & Koch 77UK Assault Carbine",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

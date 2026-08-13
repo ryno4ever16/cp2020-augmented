@@ -2,7 +2,7 @@
   "_id": "hjiwZTgb3ZQf1Lqw",
   "name": "Brennan Hermes",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 250eb for a vehicle — verify (scooter/board?). | [Audit row +198 — Chromebook 3 p.124]</p>",

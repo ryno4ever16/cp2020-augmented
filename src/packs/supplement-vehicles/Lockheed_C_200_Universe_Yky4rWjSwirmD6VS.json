@@ -2,7 +2,7 @@
   "_id": "Yky4rWjSwirmD6VS",
   "name": "Lockheed C-200 Universe",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Largest STOL jet; fast cargo-lifter. 600mph, crew3, 100 pax OR 42t, 80t. | [Audit row +341 — Firestorm: Shockwave p.68]</p>",

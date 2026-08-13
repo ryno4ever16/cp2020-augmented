@@ -2,7 +2,7 @@
   "_id": "9QXE81s2UolBAW8u",
   "name": "Arasaka Tsunami Grenade Launcher (\"Pocket Tsunami\")",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

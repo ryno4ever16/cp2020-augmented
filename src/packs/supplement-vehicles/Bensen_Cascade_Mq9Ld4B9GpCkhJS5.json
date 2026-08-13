@@ -2,7 +2,7 @@
   "_id": "Mq9Ld4B9GpCkhJS5",
   "name": "Bensen Cascade",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index-priced. | [Audit row +65 — Chromebook 1 p.93]</p>",

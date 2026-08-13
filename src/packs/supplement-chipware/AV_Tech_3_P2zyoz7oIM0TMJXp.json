@@ -2,7 +2,7 @@
   "_id": "P2zyoz7oIM0TMJXp",
   "name": "AV Tech +3",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

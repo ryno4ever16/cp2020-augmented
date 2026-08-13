@@ -2,7 +2,7 @@
   "_id": "H5AuMreK5xOI6F2r",
   "name": "Deckshield One",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

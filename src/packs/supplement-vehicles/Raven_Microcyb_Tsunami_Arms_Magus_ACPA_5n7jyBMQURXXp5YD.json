@@ -2,7 +2,7 @@
   "_id": "5n7jyBMQURXXp5YD",
   "name": "Raven Microcyb/Tsunami Arms Magus (ACPA)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>ACPA C4I suit: STR40, 920kg. Deathwind railgun debut (+3, 5d10+10 AP, 1250m); massive EW/comms/countermeasures battery. | [Audit row +305 — Firestorm: Shockwave p.61]</p>",

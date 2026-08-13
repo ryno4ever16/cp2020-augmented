@@ -2,7 +2,7 @@
   "_id": "TqSIM5HzFF2Fji9c",
   "name": "Cyber Tech +1",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

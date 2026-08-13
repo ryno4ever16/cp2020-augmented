@@ -1,7 +1,7 @@
 {
   "name": "\"Photon\" Assault Cannon",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
   "system": {
     "flavor": "",
     "notes": "Pre-existing. Meta-Armson dual-element combat laser. Power-adjustable from the fire dialog's shell dropdown: Full 10D6/Pen4 down to 2D6/Pen0 (MM p.72). 30 shots off a backpack battery; UR reliability.",

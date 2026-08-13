@@ -2,7 +2,7 @@
   "_id": "YPiBtmWqCHnZKGD8",
   "name": "Militech Taser 2",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/electric.svg",
   "system": {
     "flavor": "The compact successor to the Militech Taser. Touch-operated design for close-quarters use.",
     "notes": "",

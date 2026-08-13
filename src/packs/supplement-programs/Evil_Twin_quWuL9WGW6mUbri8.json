@@ -2,7 +2,7 @@
   "_id": "quWuL9WGW6mUbri8",
   "name": "Evil Twin",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

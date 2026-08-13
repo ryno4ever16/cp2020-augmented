@@ -2,7 +2,7 @@
   "_id": "OvoR5lRe39yVUsQB",
   "name": "NAA Ambunaught",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Armored paramedic 4×4; environment-sealed, fireproof; 16 man-hours life support; 4 stretchers + 2 medics. | [Audit row +60 — Chromebook 1 p.23]</p>",

@@ -2,7 +2,7 @@
   "_id": "UwIAof7qZkSBO7oL",
   "name": "Glock Thirty Machine Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 name from OCR '&lock Thirty' = Glock 30(?). Machine pistol, 705eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +288 — Blackhand's Street Weapons p.13]</p><p>Stat line backfilled from Blackhand's p.13 text layer: P +2 J C 2D6+3 (10mm) 20/30 1/3 VR 50m. Selective single-shot or 3-round burst; also takes the standard 20-round pistol magazine. [Backfill 2026-07-17]</p>",

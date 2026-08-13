@@ -2,7 +2,7 @@
   "_id": "JGcEtRaZAWwRGslr",
   "name": "GMI Wolverine",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Border/territory patrol APC. 110mph, crew3, 2500kg, 7.5t. | [Audit row +321 — Firestorm: Shockwave p.64]</p>",

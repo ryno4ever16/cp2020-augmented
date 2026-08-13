@@ -2,7 +2,7 @@
   "_id": "B970q4STYYSAI8QN",
   "name": "Militech \"Satchel Charge\" (Net Program)",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

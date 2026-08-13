@@ -2,7 +2,7 @@
   "_id": "baimn3C4Q0Lgj2aQ",
   "name": "GEV Duster",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 OCR '1 GEBDUSTER' — crop-duster-class maritime-patrol hovercraft. 150mph, crew1. | [Audit row +323 — Firestorm: Shockwave p.65]</p>",

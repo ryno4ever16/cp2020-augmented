@@ -2,7 +2,7 @@
   "_id": "OCXBqLCE4P13ClxD",
   "name": "Bell Evil-Eye 19",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Military Spy-Eye 18: light support/recon, pocket gunship. 180mph, crew2+2, 400mi, 6500kg. 👁 SDP line cut. | [Audit row +328 — Firestorm: Shockwave p.65]</p>",

@@ -2,7 +2,7 @@
   "_id": "snV8rxDh5INooRhR",
   "name": "Adrenaline/Endorphin Surge",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Ignore Pain/Exhaustion; +1 BOD 3 times in 24 hrs",
     "notes": "<p>Blanks pain/exhaustion 48hrs (not head wounds); 3×/24hr adrenaline (BOD+1 for BTM/saves/skills, 1 min). Afterward sleep 2hr per 1hr over; stats halved. | [Audit row +92 — Chromebook 1 p.75]</p>",

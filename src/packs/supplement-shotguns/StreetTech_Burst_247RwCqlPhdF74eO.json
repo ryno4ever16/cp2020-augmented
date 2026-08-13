@@ -2,7 +2,7 @@
   "_id": "247RwCqlPhdF74eO",
   "name": "StreetTech \"Burst\"",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "The latest in self-defense weapons from StreetTech. The Burst looks like a small flashlight; unlocking its built-in safety and thumbing the switch electronically detonates the propellant and fires its payload of pellets.",
     "notes": "<p>Protect &amp; Serve p.34 (PDF idx 34) text layer: SHT Var P E 2d6+1 (28ga.) 1 1 VR 3m 33eb. Confirmed verbatim by Blackhand's Street Weapons p.8 (PDF idx 9): 33eb, SHT VAR P E 2D6+1 (28GA) 1 1 VR 3M.</p><p>The printed WA cell is 'Var' - the pellets lose their destructive power fast: -1 at 0-1m, -2 at 1-2m, -3 at 2-3m, and they are ineffective beyond 3m. Accuracy is stored as 0 with the range band applied by the GM. Designer key-ring models for the executive market are 40eb each.</p>",

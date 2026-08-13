@@ -2,7 +2,7 @@
   "_id": "wD7w8YLDKZ8PrBjS",
   "name": "Militech M73 Mirage Gear",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "A full-body camouflage suit with SP 12. Imposes a -2 penalty to Awareness/Notice checks against the wearer.",
     "notes": "",

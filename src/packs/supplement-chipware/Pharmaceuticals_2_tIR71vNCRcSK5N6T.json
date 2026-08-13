@@ -2,7 +2,7 @@
   "_id": "tIR71vNCRcSK5N6T",
   "name": "Pharmaceuticals +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

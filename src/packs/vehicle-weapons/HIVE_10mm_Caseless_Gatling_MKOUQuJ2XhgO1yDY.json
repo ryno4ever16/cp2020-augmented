@@ -1,7 +1,7 @@
 {
   "name": "HIVE 10mm Caseless Gatling",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/minigun.svg",
   "system": {
     "weight": 50,
     "magWeight": 25,

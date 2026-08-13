@@ -2,7 +2,7 @@
   "_id": "C3ka9ZMSVyCZ9yk9",
   "name": "Arasaka Arms Half-Bow",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/bow-arrow.svg",
   "effects": [],
   "folder": null,
   "sort": 2600000,

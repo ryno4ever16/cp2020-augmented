@@ -2,7 +2,7 @@
   "_id": "BkHyBtcV1gZb7ajW",
   "name": "BMW 901Bs",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index ✓100,000 (page price garbled). Handbuilt luxury sedan, 6 seats, full cybernetic controls, bespoke options. | [Audit row +58 — Chromebook 1 p.19]</p>",

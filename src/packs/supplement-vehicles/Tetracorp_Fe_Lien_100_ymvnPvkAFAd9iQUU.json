@@ -2,7 +2,7 @@
   "_id": "ymvnPvkAFAd9iQUU",
   "name": "Tetracorp Fe Lien 100",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index-priced. | [Audit row +209 — Chromebook 3 p.124]</p>",

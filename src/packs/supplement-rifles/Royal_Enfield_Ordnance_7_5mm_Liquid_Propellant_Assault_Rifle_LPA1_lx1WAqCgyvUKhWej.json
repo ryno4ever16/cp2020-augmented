@@ -2,7 +2,7 @@
   "_id": "lx1WAqCgyvUKhWej",
   "name": "Royal Enfield Ordnance 7.5mm Liquid Propellant Assault Rifle LPA1",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "A twin-magazine, liquid-propellant, variable-velocity bullpup assault rifle entering limited test service with the BCF. The propellant sits in a self-sealing armoured cassette in the butt; twin helical magazines of 45 caseless rounds each flank the receiver, so mixed ammunition types can be carried.",
     "notes": "<p>Cyberpunk 2020 CP3281 Rough Guide to the UK p.34 (PDF idx 34) text layer: RIF +1 N R Special 2x45 1/3/20 VR 500m 1800Eb. Three velocity settings, selected manually or by smart-link command: (1) Low - riot, 2D6+1; (2) Medium - urban, 4D6; (3) High - full combat, 6D6. Shots stored as the 90-round total of the two 45-round magazines.</p><p>Confirmed verbatim by Blackhand's Street Weapons p.29 (PDF idx 30), citing [Rough Guide UK]: 1800eb, RIF +1 N R VARIES (7.5MM) 2x45 1/3/20 VR 500M. The SAS 'Wasp Flechette' Reaper Round holds three darts backed with Royal Enfield B5 HE; each dart does the velocity setting in D6 with soft armor having no effect and hard armor at half SP.</p>",

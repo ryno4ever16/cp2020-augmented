@@ -2,7 +2,7 @@
   "_id": "77Te9AeDzTC9IrTO",
   "name": "Militech MTL-1 \"Manhunter\" Mini-Torpedo Launcher",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

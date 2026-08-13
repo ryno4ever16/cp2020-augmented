@@ -2,7 +2,7 @@
   "_id": "3B4W4wJCNXX4xxWg",
   "name": "Nerve Labyrinth",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

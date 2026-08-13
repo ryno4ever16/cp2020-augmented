@@ -2,7 +2,7 @@
   "_id": "IrSKdDAji1cLYotH",
   "name": "U.S. M-11 MBT",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-tank.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Army state-of-the-art cyberlinked MBT. 60mph, crew3, 60t. | [Audit row +346 — Firestorm: Shockwave p.69]</p>",

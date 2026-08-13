@@ -2,7 +2,7 @@
   "_id": "ZAWfvZ6OS1vwIEm8",
   "name": "GU-12A2 \"Grunt\" ACPA",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>US military line ACPA: STR25, 885kg. (See Panzerboy/ACPA sections.) | [Audit row +309 — Firestorm: Shockwave p.86]</p>",

@@ -2,7 +2,7 @@
   "_id": "mG4u8xoeJetmbBCp",
   "name": "Dynatech Industries Hand Taser",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/electric.svg",
   "effects": [],
   "folder": null,
   "sort": 2800000,

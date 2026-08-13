@@ -2,7 +2,7 @@
   "_id": "Om7wmgokolJ1rTsF",
   "name": "Kestrel Medium Helicopter",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 full designation/manufacturer cut by page art. BCF gunship/patrol helicopter; single cyber-augmented pilot controls ground+airspace to 50-mile radius; turret cannon w/ 750-rd magazine 👁 + two weapon wings (8t total, must balance); chaff/flares, +5 gunnery computer, terrain-following military radar, thermal/IR, laser comm + detect, ECM/ECCM, anti-laser aerosol, telescopic optics. RGUK p.41. | [Audit row +363 — Rough Guide to the UK p.41]</p>",

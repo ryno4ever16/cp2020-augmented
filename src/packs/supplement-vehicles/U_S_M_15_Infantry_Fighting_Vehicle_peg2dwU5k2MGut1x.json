@@ -2,7 +2,7 @@
   "_id": "peg2dwU5k2MGut1x",
   "name": "U.S. M-15 Infantry Fighting Vehicle",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-tank.svg",
   "system": {
     "flavor": "",
     "notes": "<p>IFV (still can't float). 80mph, crew2+8, 6t external, 20t. | [Audit row +350 — Firestorm: Shockwave p.70]</p>",

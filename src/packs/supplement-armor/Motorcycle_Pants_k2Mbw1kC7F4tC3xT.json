@@ -2,7 +2,7 @@
   "_id": "k2Mbw1kC7F4tC3xT",
   "name": "Motorcycle Pants",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

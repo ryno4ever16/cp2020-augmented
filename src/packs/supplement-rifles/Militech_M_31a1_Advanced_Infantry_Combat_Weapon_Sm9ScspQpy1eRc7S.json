@@ -2,7 +2,7 @@
   "_id": "Sm9ScspQpy1eRc7S",
   "name": "Militech M-31a1 Advanced Infantry Combat Weapon",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "An over-and-under 4.5mm liquid-propellant assault weapon atop a pump-action mini grenade launcher. A propellant and oxidizer are mixed in the firing chamber and electrically fired, launching a 50-grain copper-jacketed bullet and cycling the action.",
     "notes": "<p>Chromebook 1 p.45 (PDF idx 46) text layer, cross-checked against a fresh tesseract pass over the page image: RIF 2 N R 4D6 (4.5mm) 150 30 ST/VR, 1695eb. Chromebook 1's table prints no range column; the reliability cell is printed as two values (ST/VR) for the rifle and the underslung launcher.</p><p>Range and the mini-grenade launcher block from Blackhand's Street Weapons p.28 (PDF idx 29), citing [Chromebook 1]: RIF +2 N R 4D6 (4.5MM) 150 3/30 ST 400M, plus MGL -1 VARIES (25MM MINI-GREN) 4 ... The magazine holds 150 projectiles plus the liquid propellant to fire them.</p>",

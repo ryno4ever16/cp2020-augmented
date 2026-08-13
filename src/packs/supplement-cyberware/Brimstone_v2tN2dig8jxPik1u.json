@@ -2,7 +2,7 @@
   "_id": "v2tN2dig8jxPik1u",
   "name": "Brimstone",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 30 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 4&4, audio 6; Torso 4; R.Arm 3/L.Arm 3; R.Leg 2/L.Leg 2.</p><p><strong>Prebuilt options:</strong> radar 100m; audio suite; waterhose system; CO2 fire extinguisher; pain editor; light bars.</p>",

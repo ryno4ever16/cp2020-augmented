@@ -2,7 +2,7 @@
   "_id": "BUEBlz3he6P0zwAF",
   "name": "Arasaka Nauseator",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "A large-scale crowd control device that generates focused ultrasound. All targets within range must make a Very Difficult BOD check or suffer disorientation and nausea. On failed saves the effects range from debilitation (-4 to all actions) to complete incapacitation. Special damage: BOD vs. 25.",
     "notes": "",

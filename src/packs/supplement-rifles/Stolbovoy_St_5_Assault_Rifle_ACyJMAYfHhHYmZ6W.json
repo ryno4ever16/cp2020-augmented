@@ -2,7 +2,7 @@
   "_id": "ACyJMAYfHhHYmZ6W",
   "name": "Stolbovoy St-5 Assault Rifle",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "A light, sturdy bullpup designed to withstand the rugged environmental conditions of the Soviet Union - heat, cold, mud, damp, sand and grit, lubricant contamination and corrosive environments. One of the toughest, most reliable assault rifles in the world; troops say 'It never breaks!'",
     "notes": "<p>Corporate Report 2020: Corpbook 3 p.71 (PDF idx 71) text layer: RIF -1 N C/R 5D6 (5.45mm) 30 1/30 VR 400m, 900eb, 1800eb smartchipped. Comes with iron sights but can be scoped; long- and short-barrelled versions.</p><p>Availability is printed C/R: all Stolbovoy weapons are Common in the Soviet Union and Eastern Europe and Rare in the US. Corpbook 3 also notes that on the FNFF reliability table every Stolbovoy weapon jams only on a roll of 1. Confirmed verbatim by Blackhand's Street Weapons p.29 (PDF idx 30).</p>",

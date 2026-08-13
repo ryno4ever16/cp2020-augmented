@@ -2,7 +2,7 @@
   "_id": "jmhX84SeP34A4rI1",
   "name": "Toyo-Chevrolet '17 Chevy",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

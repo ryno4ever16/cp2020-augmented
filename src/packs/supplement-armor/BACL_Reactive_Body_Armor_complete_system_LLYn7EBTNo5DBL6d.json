@@ -2,7 +2,7 @@
   "_id": "LLYn7EBTNo5DBL6d",
   "name": "BACL Reactive Body Armor (complete system)",
   "type": "armor",
-  "img": "icons/svg/shield.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "<p>RGUK p.37. 20SP Flack Vest (EV+1) + 20SP fully-enclosed nylon battle helmet (respirator/anti-gas, smart goggles, UV imaging, anti-dazzle, infra-red, closed-circuit comms; optional direct-feed video). Multi-spectrum receptors in vest warn wearer of laser/smartgun acquisition on helmet HUD: negates Ambush modifier vs those systems; boosted-reflex wearer may dodge (roll > to-hit). British special forces; extremely rare. | [Audit row +371 — Rough Guide to the UK p.37]</p>",

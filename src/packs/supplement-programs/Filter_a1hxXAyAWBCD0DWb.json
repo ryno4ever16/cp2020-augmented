@@ -2,7 +2,7 @@
   "_id": "a1hxXAyAWBCD0DWb",
   "name": "Filter",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

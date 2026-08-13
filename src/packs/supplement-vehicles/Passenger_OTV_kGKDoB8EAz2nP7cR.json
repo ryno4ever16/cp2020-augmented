@@ -2,7 +2,7 @@
   "_id": "kGKDoB8EAz2nP7cR",
   "name": "Passenger OTV",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Orbital Transfer Vehicle (passenger); moves between LEO, higher orbits and the LaGrange points.</p><p>Spacecraft code (Deep Space p.34): Passenger OTV · 50 · 4 · 16 · Chemical · 10 · Batteries, Fuel Cell or Solar Arrays · 50% · 2(10MU) · 2x10m3 · 1 · None · 1-3 · 5 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 50 million eb; Crew 4; Passengers 16; Drive Type Chemical; Burn Elements 10; Power Type Batteries, Fuel Cell or Solar Arrays; Sensors 50%; Computers 2 (10MU); Cargo 2 x 10m3; Actions 1; Weapon Spaces None; Armor (max SP) 1-3; Damage Points 5; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

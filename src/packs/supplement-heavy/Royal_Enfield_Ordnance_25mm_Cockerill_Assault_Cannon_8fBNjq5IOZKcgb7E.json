@@ -2,7 +2,7 @@
   "_id": "8fBNjq5IOZKcgb7E",
   "name": "Royal Enfield Ordnance 25mm Cockerill Assault Cannon",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/cannon.svg",
   "system": {
     "flavor": "",
     "notes": "<p>7400eb 25mm assault cannon. (Pg = PDF index; Blackhand's folios unmapped.) | Full writeup found: Rough Guide UK p.35 (7400eb ✓ matches; low-pressure rocket-assisted 25mm; AP Pen 5 / HEP Pen 6 / APF flechette rounds; BOD 6+ to carry, 8+ to hip-fire, WA -1 from hip). | [Audit row +299 — Blackhand's Street Weapons p.37]</p><p>Stat line backfilled from Blackhand's p.36 text layer: HVY +1 N R 5D10+10AP (25mm) 12 1 ST 1500m. Round types (REF): AP 5D10+10AP (Pen 5), HEP 5D10+10HEP (Pen 6), Flechette 1D6+3 x 1D6+1 AP. [Backfill 2026-07-17]</p>",

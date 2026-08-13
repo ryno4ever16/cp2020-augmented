@@ -2,7 +2,7 @@
   "_id": "kyTKs80EFTOsbFXw",
   "name": "Sneaksuit Flak Vest",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "A flak vest designed to be worn over a sneaksuit without revealing the stealth layer beneath.",
     "notes": "",

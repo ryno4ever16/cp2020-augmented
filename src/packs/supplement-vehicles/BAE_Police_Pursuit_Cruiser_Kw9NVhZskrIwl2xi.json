@@ -2,7 +2,7 @@
   "_id": "Kw9NVhZskrIwl2xi",
   "name": "BAE Police Pursuit Cruiser",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Crew 2+2; 4t; crash control, environment control, +1 gunnery computer, auto-pilot, cyberlink, image enhancement, light amp, radar, nav, security shocker system, searchlight. Cost 'aprox.' per book. RGUK p.39-40. | [Audit row +360 — Rough Guide to the UK p.39]</p>",

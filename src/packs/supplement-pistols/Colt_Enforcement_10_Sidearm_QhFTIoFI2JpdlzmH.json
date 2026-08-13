@@ -2,7 +2,7 @@
   "_id": "QhFTIoFI2JpdlzmH",
   "name": "Colt Enforcement 10 Sidearm",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Colt's latest automatic pistol, aimed at the military and law-enforcement markets. Built on a solid heavy frame to absorb the recoil of the potent 10mm round, with a receiver and slide of Sortex ceramic composite. Standard sidearm for all of Petrochem's security guards, soldiers and naval personnel.",
     "notes": "<p>Corporate Report 2020: Corpbook 3 p.30 (PDF idx 30) text layer: P +1 J C 2D6+3 (10mm) 14 2 VR 50m. Printed prices: 550eb basic, 600eb camouflaged, 650eb custom camouflaged, +550eb smartchipped.</p><p>Confirmed verbatim by Blackhand's Street Weapons p.11 (PDF idx 12), citing [Corpbook 3].</p>",

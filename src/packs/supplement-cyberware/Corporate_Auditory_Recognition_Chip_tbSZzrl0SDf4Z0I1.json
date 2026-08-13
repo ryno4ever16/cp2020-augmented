@@ -2,7 +2,7 @@
   "_id": "tbSZzrl0SDf4Z0I1",
   "name": "Corporate Auditory Recognition Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>150eb/level (to 2); quarterly updates 35eb/level. Corp jingles + voice prints; corporate employees only. | [Audit row +9 — Chromebook 3 p.39]</p>",

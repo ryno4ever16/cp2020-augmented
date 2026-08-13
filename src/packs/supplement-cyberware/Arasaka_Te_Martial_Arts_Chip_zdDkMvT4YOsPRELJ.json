@@ -2,7 +2,7 @@
   "_id": "zdDkMvT4YOsPRELJ",
   "name": "Arasaka-Te Martial Arts Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>270eb/LEVEL, to +3. Style (diff 1), USER-VERIFIED: Strike+1 Kick+1 Block+1 Dodge+1 Throw+1 Hold+1 Escape+1 Choke+2 Sweep— Grapple+1. | [Audit row +6 — Chromebook 3 p.38]</p>",

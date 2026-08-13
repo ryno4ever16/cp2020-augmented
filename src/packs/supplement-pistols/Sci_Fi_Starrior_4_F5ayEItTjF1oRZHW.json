@@ -2,7 +2,7 @@
   "_id": "F5ayEItTjF1oRZHW",
   "name": "Sci Fi Starrior 4",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Blaster copy from a 20th century movie called Star Trek Wars.",
     "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E 9mm 12 2 UR, $60. SoF's polymer one-shot table has NO damage and NO range column, and Blackhand's Street Weapons does not reprint this weapon.</p><p>Damage 2D6+1 = the printed 9mm value in Neo Tribes, Pacific Rim p.77 and Blackhand's p.10-12; range 50m from the sibling polymer one-shots in Blackhand's p.10-12. Both are derivations from other RTG books, not printed in SoF.</p>",

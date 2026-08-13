@@ -2,7 +2,7 @@
   "_id": "JAhyxF7nEDvfNbBa",
   "name": "Maximum Lover Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "+2 Seduction",
     "notes": "<p>+2 Seduction; 65K Kama Sutra + 154-line phrase database via cyberaudio/TimesSquare. | [Audit row +90 — Chromebook 1 p.74]</p>",

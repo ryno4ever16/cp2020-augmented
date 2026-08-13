@@ -2,7 +2,7 @@
   "_id": "bGdvgJWpLh4MVDDX",
   "name": "30mm HiVel Caseless Auto-GL (Full Borg)",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "effects": [],
   "folder": null,
   "sort": 16500000,

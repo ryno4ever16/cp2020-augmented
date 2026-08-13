@@ -2,7 +2,7 @@
   "_id": "gnNinqLIAL9B7972",
   "name": "Pick lock +1",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "wlc4qbOMGUAPBLxA",
   "name": "GMI Commando",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Militarized car; city or country. 80mph, crew2+2, 1t cargo, 3t. (Not the ACPA of the same name.) | [Audit row +319 — Firestorm: Shockwave p.64]</p>",

@@ -2,7 +2,7 @@
   "_id": "OgCICTUen7mpxtP8",
   "name": "Hundalini Roadworks 'Dart'",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "",

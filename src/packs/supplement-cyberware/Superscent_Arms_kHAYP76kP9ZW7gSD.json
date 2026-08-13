@@ -2,7 +2,7 @@
   "_id": "kHAYP76kP9ZW7gSD",
   "name": "Superscent Arms",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 index 'SUPERSam ARMs 4000-SOOOEB' — name + range garbled (4000-5000/6000?). | [Audit row +228 — Chromebook 3 p.124]</p>",

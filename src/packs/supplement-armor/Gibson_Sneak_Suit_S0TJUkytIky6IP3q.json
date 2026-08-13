@@ -2,7 +2,7 @@
   "_id": "S0TJUkytIky6IP3q",
   "name": "Gibson Sneak Suit",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "A full-body suit designed for covert operations. Provides SP 10 and a -4 to Awareness/Notice checks against the wearer in dark conditions.",
     "notes": "",

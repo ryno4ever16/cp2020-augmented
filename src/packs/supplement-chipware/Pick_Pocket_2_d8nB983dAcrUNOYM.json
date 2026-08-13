@@ -2,7 +2,7 @@
   "_id": "d8nB983dAcrUNOYM",
   "name": "Pick Pocket +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill chip",
     "notes": "",

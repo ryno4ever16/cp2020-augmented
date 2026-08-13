@@ -2,7 +2,7 @@
   "_id": "k63gVdJdL1NEmnn8",
   "name": "Nova Model 757 Cityhunter",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "An unusual double-action design from Nova Arms. The Cityhunter fires 11mm caseless 'trounds' - each bullet embedded in a triangular propellant block - from an internal cylinder enclosed in the tubular body of the gun, with an integral laser sight along the centreline.",
     "notes": "<p>Blackhand's Street Weapons p.15 (PDF idx 16) text layer: 480eb, P +2 J P 3D6 (11MM) 18 2 ST 50M. Page derived from Blackhand's own contents listing, which prints 'Nova Model 757 Cityhunter (p15)'.</p><p>The cylinder's chambers are open on the outer surface; each tround drops into the breach under the cylinder where an electrical igniter fires it. Ahead of the cylinder the shaft carries another two loads (12 rounds), racked forward with the external slider when the cylinder runs dry.</p>",

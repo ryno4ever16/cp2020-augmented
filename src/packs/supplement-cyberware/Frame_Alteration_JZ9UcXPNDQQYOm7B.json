@@ -2,7 +2,7 @@
   "_id": "JZ9UcXPNDQQYOm7B",
   "name": "Frame Alteration",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Surgery CR. | [Audit row +146 — Chromebook 2 p.102]</p>",

@@ -2,7 +2,7 @@
   "_id": "TbhtUxLGyrG2V1XJ",
   "name": "Arasaka Riot-VIII",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Crowd control: turreted water cannon (30m; steam 10m), roof grenade launcher (18 std grenades, 300m, 180° arc); troops 75% cover. | [Audit row +61 — Chromebook 1 p.24]</p>",

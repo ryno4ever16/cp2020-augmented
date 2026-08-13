@@ -2,7 +2,7 @@
   "_id": "5keiTBRnS7FlaEhV",
   "name": "Militech Man-Pack Artillery Rocket",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

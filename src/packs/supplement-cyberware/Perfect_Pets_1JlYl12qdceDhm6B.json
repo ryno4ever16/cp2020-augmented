@@ -2,7 +2,7 @@
   "_id": "1JlYl12qdceDhm6B",
   "name": "Perfect Pets",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "",

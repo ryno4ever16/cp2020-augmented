@@ -2,7 +2,7 @@
   "_id": "J3gYfwDDhsK7QrpV",
   "name": "BRDM-11 (Cannon)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-tank.svg",
   "system": {
     "flavor": "",
     "notes": "",

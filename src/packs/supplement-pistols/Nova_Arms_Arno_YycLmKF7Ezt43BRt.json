@@ -2,7 +2,7 @@
   "_id": "YycLmKF7Ezt43BRt",
   "name": "Nova Arms \"Arno\"",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

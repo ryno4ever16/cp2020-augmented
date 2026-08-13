@@ -2,7 +2,7 @@
   "_id": "L4MUoK0jLW0uwpij",
   "name": "Certgun Cyberfinger",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>DIGITS line (requires cyberhand/arm, any make). Compressed-air dart, 3m. | [Audit row +70 — Chromebook 1 p.32]</p>",

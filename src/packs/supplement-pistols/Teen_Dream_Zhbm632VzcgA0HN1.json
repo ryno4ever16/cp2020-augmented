@@ -2,7 +2,7 @@
   "_id": "Zhbm632VzcgA0HN1",
   "name": "Teen Dream",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 'Teen Oreem 36eb' — cheap polymer pistol; name + price need eyes. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +289 — Blackhand's Street Weapons p.14]</p><p>Stat line backfilled from Blackhand's p.14 text layer (Solo of Fortune): P -1 J E 2D6+1 (9mm) 10 2/10 UR 50m. Tends to melt under full autofire (60%). [Backfill 2026-07-17]</p>",

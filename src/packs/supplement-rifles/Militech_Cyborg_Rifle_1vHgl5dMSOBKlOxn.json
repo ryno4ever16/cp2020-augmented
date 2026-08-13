@@ -2,7 +2,7 @@
   "_id": "1vHgl5dMSOBKlOxn",
   "name": "Militech Cyborg Rifle",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "",
     "notes": "",

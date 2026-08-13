@@ -2,7 +2,7 @@
   "_id": "ipqexrmdgbs3EQ9d",
   "name": "Techie Auditory Recognition Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>150eb/LEVEL (to 2); OCR 'lSOebllevel'. Req. cyberaudio w/ Amplified Hearing + Sound Editing. INT+chip+1D10(+Spec.Knowledge). Machinery-fault ID by sound; valid to manufacture date. | [Audit row +8 — Chromebook 3 p.39]</p>",

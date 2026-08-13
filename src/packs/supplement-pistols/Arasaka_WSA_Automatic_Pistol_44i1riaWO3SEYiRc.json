@@ -2,7 +2,7 @@
   "_id": "44i1riaWO3SEYiRc",
   "name": "Arasaka WSA Automatic Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Standard issue sidearm for all Arasaka troops, as well as executives who want to pack a little punch.",
     "notes": "<p>Corporate Report 2020: Corpbook 1 p.25 (PDF idx 25) text layer: P 0 J C 2D6+3 (10mm) 15 2 VR 50m, 400eb.</p><p>Confirmed verbatim by Blackhand's Street Weapons p.10 (PDF idx 11), citing [Corpbook 1].</p>",

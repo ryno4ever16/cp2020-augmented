@@ -2,7 +2,7 @@
   "_id": "cKYp834LxTr6thsu",
   "name": "FEN Dz 22 Saucer",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Blackhand's idx41 'FEN Dz 22 Saucer Grenades': 65eb — corroborates. | Index-priced. | [Audit row +109 — Chromebook 1 p.93]</p><p>Damage backfilled from Chromebook 1 p.48 text layer: 160 hardened steel pellets, 15m fragmentation zone, Damage 2D6+3; +2 Athletics to throw (saucer shape), 6-second delay, rubber edge for caroms. [Backfill 2026-07-17]</p>",

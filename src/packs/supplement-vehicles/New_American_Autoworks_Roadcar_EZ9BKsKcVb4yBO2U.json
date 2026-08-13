@@ -2,7 +2,7 @@
   "_id": "EZ9BKsKcVb4yBO2U",
   "name": "New American Autoworks Roadcar",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

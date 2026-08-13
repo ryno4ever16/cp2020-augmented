@@ -2,7 +2,7 @@
   "_id": "5pA0ZVGZc86uMlhr",
   "name": "Carrier",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Proposed USAF warship, a cross between a Deep Space Explorer and a Clipper, relying on fast-deploying mini-shuttles or deltas. None exist.</p><p>Spacecraft code (Deep Space p.38): Carrier · 1400 · 6 · 6 · Chemical, Nuclear · 6, 12 · Nuclear, Fuel Cell, Solar · 80% · 3 · 125m3 · 4 · 7 · 3 · 15 · 4 · 6 deltas or 5 mini-shuttles, 1 cargo/passenger OTV</p><p>Decoded (Deep Space p.28 legend): Cost 1400 million eb; Crew 6; Passengers 6; Drive Type Chemical, Nuclear; Burn Elements 6, 12; Power Type Nuclear, Fuel Cell, Solar; Sensors 80%; Computers 3; Cargo 125m3; Actions 4; Weapon Spaces 7; Armor (max SP) 3; Damage Points 15; Overkill Points 4; Shuttlecraft 6 deltas or 5 mini-shuttles, 1 cargo/passenger OTV.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

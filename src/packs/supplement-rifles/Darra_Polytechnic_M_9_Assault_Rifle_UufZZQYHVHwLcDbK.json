@@ -2,7 +2,7 @@
   "_id": "UufZZQYHVHwLcDbK",
   "name": "Darra-Polytechnic M-9 Assault Rifle",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "The first assault rifle using a caseless cartridge built entirely in the Hindu-Chinese Confederation. Designed around the 5.5mm caseless (Chinese), its lineage is clearly Kalashnikov. Side-folding stock and a 1.2x optical sight are standard.",
     "notes": "<p>Chromebook 1 p.50 (PDF idx 51) text layer, cross-checked against a fresh tesseract pass over the page image: RIF 0 N P 4D6+2 (5.5mm) 40 25 ST, 300eb. Chromebook 1's table prints no range column.</p><p>The gun normally uses special hollow-nosed ammunition: armor SP is x2 and any damage that penetrates is x1.5; with standard ball it would do 4D6. Range and the folded-stock cells from Blackhand's Street Weapons p.27 (PDF idx 28), citing [Chromebook 1]: RIF 0/-1 N/L P 4D6+2 (5.5MM) 40 2/25 ST 200M.</p>",

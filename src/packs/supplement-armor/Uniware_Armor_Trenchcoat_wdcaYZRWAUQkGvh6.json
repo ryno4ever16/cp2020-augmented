@@ -2,7 +2,7 @@
   "_id": "wdcaYZRWAUQkGvh6",
   "name": "Uniware Armor Trenchcoat",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "",
     "notes": "",

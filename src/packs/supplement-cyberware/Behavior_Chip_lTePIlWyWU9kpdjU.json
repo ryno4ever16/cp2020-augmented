@@ -2,7 +2,7 @@
   "_id": "lTePIlWyWU9kpdjU",
   "name": "Behavior Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Surgery N. | [Audit row +147 — Chromebook 2 p.102]</p>",

@@ -2,7 +2,7 @@
   "_id": "543wJatL9cDGM6UZ",
   "name": "Mind Games",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Over 300 games available",
     "notes": "<p>40eb/gamechip; 300 video games in-mind; multiplayer via plug cables. | [Audit row +86 — Chromebook 1 p.74]</p>",

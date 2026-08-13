@@ -2,7 +2,7 @@
   "_id": "bAt3xjUGka4tbdtq",
   "name": "Skunker",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "A small handheld device that delivers up to 4 doses of non-lethal gas of the purchaser's choice. Compact and discreet.",
     "notes": "",

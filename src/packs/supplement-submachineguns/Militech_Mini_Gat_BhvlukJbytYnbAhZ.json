@@ -2,7 +2,7 @@
   "_id": "BhvlukJbytYnbAhZ",
   "name": "Militech Mini-Gat",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "",

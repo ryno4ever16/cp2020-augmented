@@ -2,7 +2,7 @@
   "_id": "gjRK9oW4EkIbQRG4",
   "name": "Vidcam Cyberfinger",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Mini videocam → Kiroshi Video Imager. Options: Passive IR 200eb, Teleoptics(10x) 225eb, Lowlite 100eb. | [Audit row +284 — Chromebook 2 p.4]</p>",

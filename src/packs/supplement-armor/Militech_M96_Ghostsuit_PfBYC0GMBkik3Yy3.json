@@ -2,7 +2,7 @@
   "_id": "PfBYC0GMBkik3Yy3",
   "name": "Militech M96 Ghostsuit",
   "type": "armor",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/kevlar-vest.svg",
   "system": {
     "flavor": "A full-body stealth suit from Militech. Provides SP 10 protection and a -4 penalty to Awareness/Notice checks against the wearer.",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "K1EqbTNv3won04Gm",
   "name": "Copernicus",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p><strong>Full Body Conversion</strong> (Chromebook 2). Whole-body cyborg chassis: takes Structural Damage per zone, not the human wound track - Head or Torso destroyed = the borg dies. SP 25 all zones; SDP disabled/destroyed = Head/limbs 20/30, Torso 30/40.</p><p><strong>Option spaces:</strong> Head optic 3&3, audio 4; Torso 0; R.Arm 2/L.Arm 1; R.Leg 0/L.Leg 0.</p><p><strong>Prebuilt options:</strong> radar/radio-beacon/flare-comp/spotlights; toolhand; dual-purpose legs (as arms, -3 REF); goop-ball launcher; gyroscope; maneuver verniers+back thruster; grapple line; magnetic hands/feet; EM shielding.</p>",

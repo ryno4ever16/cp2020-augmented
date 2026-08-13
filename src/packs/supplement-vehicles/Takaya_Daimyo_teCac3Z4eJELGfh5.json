@@ -2,7 +2,7 @@
   "_id": "teCac3Z4eJELGfh5",
   "name": "Takaya Daimyo",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

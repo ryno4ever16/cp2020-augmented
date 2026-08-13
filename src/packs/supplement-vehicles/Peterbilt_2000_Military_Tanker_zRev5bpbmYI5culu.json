@@ -2,7 +2,7 @@
   "_id": "zRev5bpbmYI5culu",
   "name": "Peterbilt 2000 Military Tanker",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Fuel truck; multi-fuel with a little tinkering. 100mph, 6.7t. 👁 name line partly cut — verify designation. | [Audit row +320 — Firestorm: Shockwave p.64]</p>",

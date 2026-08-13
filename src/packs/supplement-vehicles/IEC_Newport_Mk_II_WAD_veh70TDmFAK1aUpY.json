@@ -2,7 +2,7 @@
   "_id": "veh70TDmFAK1aUpY",
   "name": "IEC Newport Mk. II (WAD)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>WAD: Gunslinger chassis STR25; 4 legs (front/back pairs), no protective shell; punch 3D10/kick 5D10; cellular control, adv. reflex. | [Audit row +196 — Chromebook 3 p.118]</p>",

@@ -2,7 +2,7 @@
   "_id": "ecSQRLzbxcvLkOfa",
   "name": "FN-MAG Machine Gun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "system": {
     "flavor": "",
     "notes": "<p>RGUK p.37 older-weapons table; ROF cell cramped in print 👁. | [Audit row +368 — Rough Guide to the UK p.37]</p>",

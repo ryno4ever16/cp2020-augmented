@@ -2,7 +2,7 @@
   "_id": "LNB6USobTaWUOddr",
   "name": "Militech 10 Submachine Gun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 'Militech 10' designation — verify vs Militech SMG family. 455eb. (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +293 — Blackhand's Street Weapons p.20]</p><p>Stat line backfilled from Blackhand's p.20 text layer: SMG +1 J E 2D6+3 (10mm) or 2D6+2 (.45 ACP) 30 20 ST 200m. Two factory calibers; this entry is the 10mm PlasticCase chambering. [Backfill 2026-07-17]</p>",

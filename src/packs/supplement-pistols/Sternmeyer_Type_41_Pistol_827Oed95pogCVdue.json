@@ -2,7 +2,7 @@
   "_id": "827Oed95pogCVdue",
   "name": "Sternmeyer Type 41 Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "A lighter pistol common among IEC executives who want something a little easier to handle, and with a greater magazine capacity than the hefty 11mm Type 35.",
     "notes": "<p>Corporate Report 2020: Corpbook 1 p.66 (PDF idx 66) text layer: P 0 J C 2D6+3 (10mm) 12 2 VR 50m, 425eb. Printed in the International Electric equipment section alongside the Type 35.</p><p>Note: the scraped copy in the base pistols-add pack tags this as Corporate Report 2 - the entry is in Corpbook 1. Not reprinted in Blackhand's Street Weapons.</p>",

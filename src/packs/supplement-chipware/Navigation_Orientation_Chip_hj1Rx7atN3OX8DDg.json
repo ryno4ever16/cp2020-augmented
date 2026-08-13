@@ -2,7 +2,7 @@
   "_id": "hj1Rx7atN3OX8DDg",
   "name": "Navigation/Orientation Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Requires Phone Splice/Radio Link; accurate 5m",
     "notes": "<p>OCR '2SOeb'=250eb. Chipware. Requires Phone Splice or Radio Link + cyberaudio; 5m fix via WorldSat; display TimesSquare/Subdermal. | [Audit row +2 — Chromebook 3 p.37]</p>",

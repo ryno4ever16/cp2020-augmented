@@ -2,7 +2,7 @@
   "_id": "0aoNOy2BtMlEIVxW",
   "name": "Militech 25mm Pistol-Grenades",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Damage backfilled 2026-07-17: grenade family — Varies by type (REF: Concussion 3D6 Stun SP1/3 4m - Def.Frag 2D6+1 3m - FlashBomb Stun save - HEP 5D6 - Incendiary 4/3/2D6 - Off.Frag 5D6 3m - Chemical). Fired from a Militech muzzle adaptor (200eb) on any pistol/SMG. [Backfill 2026-07-17]</p>",

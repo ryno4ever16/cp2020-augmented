@@ -1,7 +1,7 @@
 {
   "name": "G-20 Caseless 10mm MG",
   "type": "cp2020-augmented.vehicleWeapon",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/machine-gun.svg",
   "system": {
     "weight": 15,
     "magWeight": 3,

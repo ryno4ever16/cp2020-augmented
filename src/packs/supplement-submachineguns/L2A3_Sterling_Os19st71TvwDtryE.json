@@ -2,7 +2,7 @@
   "_id": "Os19st71TvwDtryE",
   "name": "L2A3 Sterling",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "<p>RGUK p.37 'Older Weapons using Cased Ammunition' table (image-typeset page, unlocked by fresh OCR build). Shots col printed '10/34' 👁 (mag options?). | [Audit row +366 — Rough Guide to the UK p.37]</p>",

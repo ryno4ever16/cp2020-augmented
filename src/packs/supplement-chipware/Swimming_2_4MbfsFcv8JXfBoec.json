@@ -2,7 +2,7 @@
   "_id": "4MbfsFcv8JXfBoec",
   "name": "Swimming +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "APTR Skill Chip",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "s1P1ZcS5vaFLEuMS",
   "name": "CyberPillow Cases",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "",

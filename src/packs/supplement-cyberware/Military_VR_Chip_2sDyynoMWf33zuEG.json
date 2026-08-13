@@ -2,7 +2,7 @@
   "_id": "2sDyynoMWf33zuEG",
   "name": "Military VR Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "",
     "notes": "<p>100eb/level to +3; replace annually (2yr+ old at ½ price). Uniform/unit recognition; weapon/vehicle specs from silhouettes. | [Audit row +101 — Chromebook 1 p.76]</p>",

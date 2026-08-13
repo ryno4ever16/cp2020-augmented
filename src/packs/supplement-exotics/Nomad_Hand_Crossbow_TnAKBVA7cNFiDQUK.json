@@ -2,7 +2,7 @@
   "_id": "TnAKBVA7cNFiDQUK",
   "name": "Nomad Hand Crossbow",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/crossbow.svg",
   "effects": [],
   "folder": null,
   "sort": 2500000,

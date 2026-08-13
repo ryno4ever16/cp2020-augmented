@@ -2,7 +2,7 @@
   "_id": "Cg8Oe9Vb9mGxZBBf",
   "name": "IMI Gamdall",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 SMG sibling of the Gamad pistol; OCR 'Gamdall' — verify spelling (Gamdal?). (Pg = PDF index; Blackhand's folios unmapped.) | [Audit row +290 — Blackhand's Street Weapons p.20]</p><p>Stat line backfilled from Blackhand's p.20 text layer: SMG +2 N E 2D6+3 (10mm) 35x2 25 VR 200m. Dual-feed twin magazines (ammo selection by thumb lever) + integral single-shot 25mm grenade launcher (special low-velocity rounds only, +50% cost, 100m; 10ga with sleeve). [Backfill 2026-07-17]</p>",

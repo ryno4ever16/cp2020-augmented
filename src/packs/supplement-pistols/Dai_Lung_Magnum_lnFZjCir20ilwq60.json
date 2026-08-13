@@ -2,7 +2,7 @@
   "_id": "lnFZjCir20ilwq60",
   "name": "Dai Lung Magnum",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Automag copy commonly used by cheap hoods.",
     "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E .357 caseless 10 2 UR, About $60.</p><p>Damage and range from Blackhand's Street Weapons p.14 (PDF idx 15), citing [Solo of Fortune]: P 1 J E 3D6+1 (.357MAG) 10 2 UR 50M, 60eb. Blackhand's adds: on a jam/fumble the gun has a 60% chance of injuring the firer.</p>",

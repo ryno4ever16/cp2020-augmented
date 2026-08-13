@@ -2,7 +2,7 @@
   "_id": "HlkfnZsne7tS3pnG",
   "name": "Budget Arms C-41",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Ten shot, high-caliber pistol with good reliability.",
     "notes": "<p>Solo of Fortune p.44 (PDF idx 45) text layer prints: P 1 J E .41 (9mm) 10 3 VR. Price from the same article's prose, SoF p.46 (PDF idx 47): 'The basic pistol is $600.00'. The Nikon COT scope tested with it is a separate 4,000eb item (+3 WA).</p><p>Damage and range from Blackhand's Street Weapons p.11 (PDF idx 12), citing [Solo of Fortune]: P +1 J E 2D6+1 (.41 C) 10 3 VR 50M, 600eb.</p>",

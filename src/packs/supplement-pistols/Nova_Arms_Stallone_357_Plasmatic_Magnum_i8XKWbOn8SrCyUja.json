@@ -2,7 +2,7 @@
   "_id": "i8XKWbOn8SrCyUja",
   "name": "Nova Arms \"Stallone\" .357 Plasmatic Magnum",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/revolver.svg",
   "system": {
     "flavor": "Electrothermal wheelgun - the cased-ammunition revolver reborn. Complete with electrical firing system.",
     "notes": "<p>Solo of Fortune 2 p.37 text layer (the Nova Arms Plasmatic advertisement): 'Nova Arms \"Stallone\" .357 Plasmatic Magnum - 999eb Cheap!!!' / P +1 J P .357/4D6 6 2 VR 60m. Corroborated by Blackhand's Street Weapons p.17 (PDF idx 18): 999EB, P +1 J P 4D6 (.357) 6 2 VR 60M.</p><p>Completes the Plasmatic line already in the packs (Bronson .41 / Eastwood .44 / Arno .454). Plasmatic ammunition is sold only by Nova Arms: 75eb per 50 rounds; 100-shot batteries 200eb each; moisture-proofing and insulation extra.</p>",

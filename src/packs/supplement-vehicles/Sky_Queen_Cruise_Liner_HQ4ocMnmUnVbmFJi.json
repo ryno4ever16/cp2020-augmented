@@ -2,7 +2,7 @@
   "_id": "HQ4ocMnmUnVbmFJi",
   "name": "Sky Queen Cruise-Liner",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "",

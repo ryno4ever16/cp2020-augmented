@@ -2,7 +2,7 @@
   "_id": "ly4JyxpkMl4WJANp",
   "name": "Towa Manufacturing Type-12 Police Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/revolver.svg",
   "system": {
     "flavor": "Standard pistol for Japanese policewomen; high-rankers also carry it. Designed to stop or intimidate criminals - an incredibly reliable revolver.",
     "notes": "<p>Pacific Rim p.17 (PDF idx 17). The shipped OCR layer drops the bore digit ('1D6+1(mm'); a fresh tesseract pass over the page image at two zoom levels resolves it: P +3 J P 1D6+1 (6mm) 8 2 VR 50m 450 Eb. Confirmed independently by Blackhand's Street Weapons p.10 (PDF idx 11), citing [Pacific Rim]: P +3 J P 1D6+1 (6MM) 6 2 VR 50M, 450eb (Blackhand's prints 6 shots; Pacific Rim's 8 is kept).</p><p>Smartchipping is available for those with the link: WA +5, 810eb.</p>",

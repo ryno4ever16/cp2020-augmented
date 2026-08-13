@@ -2,7 +2,7 @@
   "_id": "5CowlodN1b4MlDtH",
   "name": "Animal Basic Processor",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "",

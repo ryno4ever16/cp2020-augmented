@@ -2,7 +2,7 @@
   "_id": "MMgJkSHLdIHruCZ1",
   "name": "AV-6 Combat Aerodyne",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Multipurpose AV: delivery to assault; military version heavier-armed. 350mph, crew1-2+6, 1300kg, 4t. | [Audit row +333 — Firestorm: Shockwave p.66]</p>",

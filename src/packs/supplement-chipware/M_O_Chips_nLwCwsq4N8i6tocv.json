@@ -2,7 +2,7 @@
   "_id": "nLwCwsq4N8i6tocv",
   "name": "M.O. Chips",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "On eyes/no answer for INT 15+ roll",
     "notes": "<p>MRAM criminal-personality construct (M.O., contacts, traits): 1 yes/no Q per INT roll (INT+1D10 vs 15). First use: EMP+1D10>=10 or personality shifts to the criminal's (therapy EMP>=12 weekly to recover). Black-market value 1200eb. | [Audit row +77 — Chromebook 1 p.73]</p>",

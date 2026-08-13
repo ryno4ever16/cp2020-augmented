@@ -2,7 +2,7 @@
   "_id": "6IeCN0xQyiB0Qkfz",
   "name": "HL-25 Shuttle",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>NASA mini-shuttle optimized for cargo.</p><p>Spacecraft code (Deep Space p.29): HL-25 Shuttle · 100 · 2 · 2 · Chemical · 5 · Battery · 50% · 2 · 50m3 · 2 · 4 · 1 · 7 · 3 · None</p><p>Decoded (Deep Space p.28 legend): Cost 100 million eb; Crew 2; Passengers 2; Drive Type Chemical; Burn Elements 5; Power Type Battery; Sensors 50%; Computers 2; Cargo 50m3; Actions 2; Weapon Spaces 4; Armor (max SP) 1; Damage Points 7; Overkill Points 3; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

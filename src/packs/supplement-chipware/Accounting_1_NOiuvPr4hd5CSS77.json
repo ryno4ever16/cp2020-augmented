@@ -2,7 +2,7 @@
   "_id": "NOiuvPr4hd5CSS77",
   "name": "Accounting +1",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill chip",
     "notes": "",

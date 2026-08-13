@@ -2,7 +2,7 @@
   "_id": "Kcq1wGywTsmL0Cl4",
   "name": "GM/Hyundai Worker Bee",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index ✓5000 (page '5 1DDDeb' garbled). Semi-autonomous warehouse robot; 2t cargo; secondary arms 400kg. | [Audit row +62 — Chromebook 1 p.25]</p>",

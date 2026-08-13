@@ -2,7 +2,7 @@
   "_id": "0gXHGIN44ijhhFRj",
   "name": "Zetatech Grasshopper (ACPA)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>ACPA light scout suit: STR25, 462kg. | [Audit row +308 — Firestorm: Shockwave p.62]</p>",

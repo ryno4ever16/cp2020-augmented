@@ -2,7 +2,7 @@
   "_id": "yAwAOGSDAHykA1PF",
   "name": "Drennan 'Hermes' Courier Motorcycle",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "",

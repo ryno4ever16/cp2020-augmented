@@ -2,7 +2,7 @@
   "_id": "QPHWRJEkJJYWojWf",
   "name": "Full Borg: Increased SDP",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Per +5 overall SDP, max +20; +55 lbs. | [Audit row +126 — Chromebook 2 p.84] Equip one copy per +5 SDP step (all zones, printed max +20).</p>",

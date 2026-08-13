@@ -2,7 +2,7 @@
   "_id": "dGR79cHaIt6aTHF7",
   "name": "Techtronica Volt Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Inside the Volt Pistol's sleek metallic frame is a low-intensity laser projector that ionizes the air. The weapon then releases an electrical charge along that path, creating a directed lightning bolt. Damage is 1/2 real and 1/2 stun. Cyberlimbs hit are shorted out for 1d6+3 turns. Normal armor offers no protection.",
     "notes": "",

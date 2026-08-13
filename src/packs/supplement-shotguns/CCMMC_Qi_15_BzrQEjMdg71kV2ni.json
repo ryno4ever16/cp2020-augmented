@@ -2,7 +2,7 @@
   "_id": "BzrQEjMdg71kV2ni",
   "name": "CCMMC Qi-15",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "The assault shotgun favoured by the PLA and Public Security for quelling riots. Bullpup configuration, fed from a top-loading helical magazine - full auto preferred.",
     "notes": "<p>Pacific Rim p.77 (PDF idx 77). The shipped OCR layer renders this stat row unreadable; a fresh tesseract pass over the page image at three zoom/psm settings resolves it consistently: SHT -2 N P 4d6 (00) 15 10 ST 50m. Price printed as 600 YY (150 Eb).</p><p>Confirmed by Blackhand's Street Weapons p.21 (PDF idx 22), citing [Pacific Rim]: 600YY (150eb), SHT -2 N P 4D6 (12GA/#00) 15 2/10 ST 50M. Available only to military police in China.</p>",

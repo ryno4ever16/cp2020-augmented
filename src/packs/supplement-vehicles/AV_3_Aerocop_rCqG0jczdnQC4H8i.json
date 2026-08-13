@@ -2,7 +2,7 @@
   "_id": "rCqG0jczdnQC4H8i",
   "name": "AV-3 Aerocop",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Dual-mode AV (flies + wheels). Cop favorite. 350mph, crew2+3, 650kg, 2t. | [Audit row +332 — Firestorm: Shockwave p.66]</p>",

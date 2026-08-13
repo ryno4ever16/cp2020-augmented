@@ -2,7 +2,7 @@
   "_id": "79aH9JVVfvJAMNGD",
   "name": "GM HovTransport",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Index-priced. | [Audit row +201 — Chromebook 3 p.124]</p>",

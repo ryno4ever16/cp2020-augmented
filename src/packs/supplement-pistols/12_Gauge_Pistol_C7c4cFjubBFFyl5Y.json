@@ -2,7 +2,7 @@
   "_id": "C7c4cFjubBFFyl5Y",
   "name": "12-Gauge Pistol",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

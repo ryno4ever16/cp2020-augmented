@@ -2,7 +2,7 @@
   "_id": "AdV9J4AHoluDQn77",
   "name": "Militech Ninja",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/fn-fal.svg",
   "system": {
     "flavor": "A highly reliable caseless design with few moving parts and an integral silencer. A fully plastic magazine and an electrical firing pin make this assault carbine incredibly quiet - perfect for black operations. In grey, camouflage or black.",
     "notes": "<p>Solo of Fortune p.50 (PDF idx 51) text layer prints: RIF 1 N E .22 30 30 VR, $650-700.</p><p>Damage, range and burst mode from Blackhand's Street Weapons p.31 (PDF idx 32), citing [Solo of Fortune]: RIF +1 L C 1D6 (5MM/.22) 30 3/30 VR 250M, 650eb. Concealability and availability kept at SoF's printed N / E (Blackhand's prints L / C).</p>",

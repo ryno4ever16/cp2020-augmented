@@ -2,7 +2,7 @@
   "_id": "Hk7g9TLTrPcnI0Z8",
   "name": "BIM Minelet Volly",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "x5UlrUbSRqumZHnQ",
   "name": "Federated Arms Impact",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Ten shot, low caliber pistol with good reliability.",
     "notes": "<p>Solo of Fortune p.48 (PDF idx 49) text layer prints: P 1 J E .22 10 10 VR, $60.</p><p>Damage and range from Blackhand's Street Weapons p.10 (PDF idx 11), citing [Solo of Fortune]: P +1 J E 1D6 (.22) 10 2 VR 50M, 60eb. ROF kept at Blackhand's 2 (SoF's cell scans as 10 for every entry in that column).</p>",

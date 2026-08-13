@@ -2,7 +2,7 @@
   "_id": "A9tL7TistSvDVeAU",
   "name": "Business Trip Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "+1 Language; Culture; W/S or Business Law",
     "notes": "<p>Memory-Compression country chip: Language+1, Culture+1, + Wardrobe/Style+1 or Business Law+1. | [Audit row +87 — Chromebook 1 p.74]</p>",

@@ -2,7 +2,7 @@
   "_id": "tNw1qjf0ngQNj4kl",
   "name": "Looney Goon",
   "type": "program",
-  "img": "icons/svg/book.svg",
+  "img": "modules/cp2020-augmented/img/icons/processor.svg",
   "system": {
     "flavor": "",
     "notes": "",

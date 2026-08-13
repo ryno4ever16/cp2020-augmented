@@ -2,7 +2,7 @@
   "_id": "6wcCCYIlFFsN1fA0",
   "name": "Militech M-232 Squad Assault/Automatic Weapon",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "effects": [],
   "folder": null,
   "sort": 14700000,

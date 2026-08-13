@@ -2,7 +2,7 @@
   "_id": "dDzyBHMKvVESA5bG",
   "name": "Enfield LastChance",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "",
     "notes": "",

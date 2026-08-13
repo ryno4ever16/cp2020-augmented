@@ -2,7 +2,7 @@
   "_id": "21hxhD8qKaxIGgbP",
   "name": "Flashbang Grenade",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "system": {
     "flavor": "",
     "notes": "",

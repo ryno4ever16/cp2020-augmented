@@ -2,7 +2,7 @@
   "_id": "RD3Z5rBDHTr2ckvT",
   "name": "Federated Arms X-38",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Inexpensive .38 caseless automatic.",
     "notes": "<p>Solo of Fortune p.48 (PDF idx 49) text layer prints: P 1 J E .38 10 10 R, $35.</p><p>Damage, ROF and reliability from Blackhand's Street Weapons p.10 (PDF idx 11), which cites [Solo of Fortune]: P +1 J E 2D6 (.38) 10 2 ST 50M, 35eb. SoF's ROF/reliability cell scans as '10 R'; Blackhand's resolves it to ROF 2 / ST.</p>",

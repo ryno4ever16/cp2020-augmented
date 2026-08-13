@@ -2,7 +2,7 @@
   "_id": "xFuACnDSiNL8r48G",
   "name": "Arasaka APW Mk IV Mini-Torp Launcher",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
     "notes": "",

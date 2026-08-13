@@ -2,7 +2,7 @@
   "_id": "YZWryFD3hmo5jMNA",
   "name": "Personal Weapon Derivatives",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

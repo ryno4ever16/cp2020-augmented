@@ -2,7 +2,7 @@
   "_id": "MgqP5JbwCW4xWiB3",
   "name": "Interchangeable Biopod",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Biosystem in a life-support module (~2 cu.ft), swappable between fitted borg bodies; buy only at transplant time; humanity index varies by body (total HC − 16D6). | [Audit row +130 — Chromebook 2 p.85]</p>",

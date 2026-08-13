@@ -2,7 +2,7 @@
   "_id": "dEheUfTB2UAeUPvt",
   "name": "S&New Autotech Nomad",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>👁 maker garbled ('5ANEw AUTOTEOi') — verify. | [Audit row +208 — Chromebook 3 p.124]</p>",

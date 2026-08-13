@@ -2,7 +2,7 @@
   "_id": "t9Qe4ecJlswFQs2B",
   "name": "S&W Handcannon",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/revolver.svg",
   "system": {
     "flavor": "",
     "notes": "",

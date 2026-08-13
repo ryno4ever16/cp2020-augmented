@@ -2,7 +2,7 @@
   "_id": "iCEHyZkfQWmh7VxW",
   "name": "Full Borg: Increased SP",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Per +5 overall SP (arms/legs/head/torso), max SP40; +10-50 lbs by step. Whole body only. | [Audit row +125 — Chromebook 2 p.84] Equip one copy per +5 SP step (all zones, printed max SP 40).</p>",

@@ -2,7 +2,7 @@
   "_id": "tYjCRDSyxlIjfWr1",
   "name": "S&W \"Tri-Star\"",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "",
     "notes": "",

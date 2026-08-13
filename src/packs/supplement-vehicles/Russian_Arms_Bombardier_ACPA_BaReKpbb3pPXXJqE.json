@@ -2,7 +2,7 @@
   "_id": "BaReKpbb3pPXXJqE",
   "name": "Russian Arms Bombardier (ACPA)",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/battle-mech.svg",
   "system": {
     "flavor": "",
     "notes": "<p>ACPA artillery suit: STR52, 1340kg (cost varies w/ weapon fit). 2x60mm breech-loading direct-fire mortars (8d10, 2000m). | [Audit row +306 — Firestorm: Shockwave p.62]</p>",

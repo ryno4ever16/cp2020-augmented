@@ -2,7 +2,7 @@
   "_id": "JP4eNnUjtWxfCwzV",
   "name": "Chemistry +2",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill chip",
     "notes": "",

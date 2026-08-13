@@ -2,7 +2,7 @@
   "_id": "QXxJ8oK8iXllUXJU",
   "name": "Auditory Recognition II Chips",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Require Amp Hearing and Sound Edit; +2",
     "notes": "",

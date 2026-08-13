@@ -2,7 +2,7 @@
   "_id": "Go72A1LpH7ckvJhj",
   "name": "Mitsuzuki MSX900 Bakushin",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "",

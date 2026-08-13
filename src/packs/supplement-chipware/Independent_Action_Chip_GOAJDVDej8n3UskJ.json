@@ -2,7 +2,7 @@
   "_id": "GOAJDVDej8n3UskJ",
   "name": "Independent Action Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Independent action for each arm. Amb +2 optics",
     "notes": "",

@@ -2,7 +2,7 @@
   "_id": "y53tt1hAvvymGOzF",
   "name": "Petrochem Drug-A-Thug",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "A PetroChem contact delivery device that injects a paralysing or sleep-inducing drug dose on touch. Compatible with any standard paralyzing or sleep agent.",
     "notes": "",

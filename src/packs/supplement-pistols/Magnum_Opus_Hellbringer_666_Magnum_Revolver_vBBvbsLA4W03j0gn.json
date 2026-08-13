@@ -2,7 +2,7 @@
   "_id": "vBBvbsLA4W03j0gn",
   "name": "Magnum Opus \"Hellbringer\" .666 Magnum Revolver",
   "type": "weapon",
-  "img": "icons/svg/sword.svg",
+  "img": "modules/cp2020-augmented/img/icons/revolver.svg",
   "system": {
     "flavor": "",
     "notes": "",

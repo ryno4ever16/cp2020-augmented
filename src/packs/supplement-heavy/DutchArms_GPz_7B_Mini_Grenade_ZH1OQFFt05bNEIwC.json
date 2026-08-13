@@ -2,7 +2,7 @@
   "_id": "ZH1OQFFt05bNEIwC",
   "name": "DutchArms GPz-7B Mini-Grenade",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/grenade.svg",
   "effects": [],
   "folder": null,
   "sort": 16900000,

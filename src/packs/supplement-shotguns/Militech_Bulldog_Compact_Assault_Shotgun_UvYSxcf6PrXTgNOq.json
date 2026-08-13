@@ -2,7 +2,7 @@
   "_id": "UvYSxcf6PrXTgNOq",
   "name": "Militech Bulldog Compact Assault Shotgun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "A compact, twelve-gauge selective-fire shotgun fed from a twenty-one round curved magazine, with gas porting and spring compensation to tame the recoil and an integral diffraction laser sight that paints a circle of red light the size of the pattern at the point of impact.",
     "notes": "<p>Corporate Report 2020: Corpbook 2 p.62 (PDF idx 62) text layer: SHT 0 L P 4D6(00) / 3D6 AP(SLUG) / 2D6 EXPL(GREN) 21 3/10 ST 50M, Price 800eb. Fires single shots, three-round bursts or fully automatically. Factory smartgun mod 500eb extra.</p><p>Load options: jacketed armor-piercing slug (3D6 AP) and a singly-loaded twelve-gauge grenade (2D6, 2m explosion area; on a 1D10 roll of 1-2 the grenade does not detonate but still does 1D6 on a direct hit). Blackhand's Street Weapons p.22 (PDF idx 23), citing [Corpbook 2], prints the price as 1000eb and the damage cell as VARIES (12GA.).</p>",

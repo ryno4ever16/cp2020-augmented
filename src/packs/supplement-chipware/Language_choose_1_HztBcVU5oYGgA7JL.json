@@ -2,7 +2,7 @@
   "_id": "HztBcVU5oYGgA7JL",
   "name": "Language (choose) +1",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill chip",
     "notes": "",

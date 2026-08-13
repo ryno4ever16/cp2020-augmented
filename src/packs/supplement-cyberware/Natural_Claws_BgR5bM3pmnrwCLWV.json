@@ -2,7 +2,7 @@
   "_id": "BgR5bM3pmnrwCLWV",
   "name": "Natural Claws",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Per limb; 1D6 combat. Surgery N. | [Audit row +138 — Chromebook 2 p.102]</p>",

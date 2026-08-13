@@ -2,7 +2,7 @@
   "_id": "TuxfhkzmnnQmNbt5",
   "name": "Beretta M-24 Advanced Submachine Gun",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/mp5.svg",
   "effects": [],
   "folder": null,
   "sort": 12500000,

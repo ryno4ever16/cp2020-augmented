@@ -2,7 +2,7 @@
   "_id": "Q2U2FdexxWPCD1GP",
   "name": "Espinoza One Shot",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "One shot, heavy caliber. Tends to explode or misfire (60% chance).",
     "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E 50cal caseless 1 2 UR, $75. The same SoF text block carries a range-damage footnote (*PB&amp;CL=2D6+2, M&amp;L=1D6+3, E=1D6+2) whose ownership is ambiguous - it is NOT applied here because it contradicts the printed damage below. Left for the user's eyes.</p><p>Damage, caliber name and range from Blackhand's Street Weapons p.14 (PDF idx 15), citing [Solo of Fortune]: P -1 J E 3D6 (.50 SHORT) 1 2 UR 50M, 75eb. Blackhand's adds: a misfire/jam explodes for 2D6+1. WA kept at SoF's printed 1 (Blackhand's prints -1).</p>",

@@ -2,7 +2,7 @@
   "_id": "FP0DhU8V6Da4G4rp",
   "name": "Huey Police Helicopter",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/helicopter.svg",
   "system": {
     "flavor": "",
     "notes": "",

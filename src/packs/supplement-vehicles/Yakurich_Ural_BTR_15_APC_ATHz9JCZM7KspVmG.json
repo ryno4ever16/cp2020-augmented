@@ -2,7 +2,7 @@
   "_id": "ATHz9JCZM7KspVmG",
   "name": "Yakurich-Ural BTR-15 APC",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>APC: 80mph, crew2+8, 1000kg external, 10t. | [Audit row +317 — Firestorm: Shockwave p.64]</p>",

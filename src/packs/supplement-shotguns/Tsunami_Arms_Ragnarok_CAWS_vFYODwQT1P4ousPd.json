@@ -2,7 +2,7 @@
   "_id": "vFYODwQT1P4ousPd",
   "name": "Tsunami Arms \"Ragnarok\" CAWS",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/sawed-off-shotgun.svg",
   "system": {
     "flavor": "Tsunami's close assault weapon: special #00 buckshot with Electrothermal Ammo Enhancement, a dual-barrel reciprocating action and hydro-shock recoil compensation. Designed for the 2021 SDF arms trials; Tokyo C-SWAT already has a couple.",
     "notes": "<p>Pacific Rim p.18 (PDF idx 18). The shipped OCR layer drops the ROF cell; a fresh tesseract pass over the page image at two zoom levels resolves it: SHT 0 N R 6D6 (#00) 40 2/20 ST 70m 4500 Eb. Confirmed by Blackhand's Street Weapons p.22 (PDF idx 23), citing [Pacific Rim]: SHT 0 N R 6D6 (12GA/#00 EAE) 40 2/20 ST 70M, 4500eb.</p><p>Batteries mount on the stock; up to five can be carried.</p>",

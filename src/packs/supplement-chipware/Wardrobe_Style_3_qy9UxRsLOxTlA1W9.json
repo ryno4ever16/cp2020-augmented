@@ -2,7 +2,7 @@
   "_id": "qy9UxRsLOxTlA1W9",
   "name": "Wardrobe & Style +3",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "MRAM Skill Chip",
     "notes": "",

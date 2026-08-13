@@ -2,7 +2,7 @@
   "_id": "YkyoIUhhWsdZuZa3",
   "name": "Surprising Stranger",
   "type": "weapon",
-  "img": "systems/cyberpunk2020/img/weapon-icon.svg",
+  "img": "modules/cp2020-augmented/img/icons/pistol-gun.svg",
   "system": {
     "flavor": "Four shot, pepperbox design. Loaded by prying the primers out of four 10mm caseless rounds and seating them against the electrical spikes in the chamber; a nine-volt battery goes in the grip. Almost no metal - it will not trip airport detectors.",
     "notes": "<p>Solo of Fortune p.47 (PDF idx 48) text layer prints: P 1 J E 10mm caseless (use 9mm) 4 2 UR, About $15. SoF's polymer one-shot table has NO damage and NO range column.</p><p>Damage 2D6+1 follows the book's own instruction '(use 9mm)': 9mm is printed as 2D6+1 in Neo Tribes (Calico 9mm), Pacific Rim p.77 (CCMMC Goaxing) and Blackhand's Street Weapons p.10-12. Range 50m follows the sibling polymer one-shots printed in Blackhand's p.10-12. Not in Blackhand's under this name.</p>",

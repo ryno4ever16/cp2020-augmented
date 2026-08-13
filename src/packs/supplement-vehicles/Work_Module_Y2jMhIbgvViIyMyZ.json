@@ -2,7 +2,7 @@
   "_id": "Y2jMhIbgvViIyMyZ",
   "name": "Work Module",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/jeep.svg",
   "system": {
     "flavor": "",
     "notes": "<p>One-man construction capsule with manipulator arms and rocket thrusters; very limited range.</p><p>Spacecraft code (Deep Space p.35): Work Module · 5 · 1 · 0 · Chemical · 2 · Batteries, Solar Arrays · 30% · 1 · 4m3 · 1 · 7 · 1 · 4 · 2 · None</p><p>Decoded (Deep Space p.28 legend): Cost 5 million eb; Crew 1; Passengers 0; Drive Type Chemical; Burn Elements 2; Power Type Batteries, Solar Arrays; Sensors 30%; Computers 1; Cargo 4m3; Actions 1; Weapon Spaces 7; Armor (max SP) 1; Damage Points 4; Overkill Points 2; Shuttlecraft None.</p><p>Speed is not part of the Deep Space spacecraft code (drive is rated by Burn Elements, not kph); speed fields left at 0.</p>",

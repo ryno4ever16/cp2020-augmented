@@ -2,7 +2,7 @@
   "_id": "DsYLxMBDjQtX6lze",
   "name": "Combat Tail",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "<p>Muscled tail w/ spikes/knob: 1D6+BOD-mod; stinger version +500eb (knife damage + drug/toxin). Surgery MA. | [Audit row +141 — Chromebook 2 p.102]</p>",

@@ -2,7 +2,7 @@
   "_id": "jfni1W3EdWJNprcs",
   "name": "Courier Chip",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/microchip.svg",
   "system": {
     "flavor": "Imprints data on users brain",
     "notes": "<p>CPM chip imprints data on courier's brain; recall only on spoken 10-char code; courier trance-delivers, no memory after. VD-Near Impossible Interrogation to extract early. | [Audit row +78 — Chromebook 1 p.73]</p>",

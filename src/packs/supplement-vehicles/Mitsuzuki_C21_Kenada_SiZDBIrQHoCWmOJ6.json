@@ -2,7 +2,7 @@
   "_id": "SiZDBIrQHoCWmOJ6",
   "name": "Mitsuzuki C21 Kenada",
   "type": "vehicle",
-  "img": "icons/svg/explosion.svg",
+  "img": "modules/cp2020-augmented/img/icons/aero-bike.svg",
   "system": {
     "flavor": "",
     "notes": "",

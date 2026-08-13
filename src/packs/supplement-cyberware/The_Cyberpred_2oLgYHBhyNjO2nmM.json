@@ -2,7 +2,7 @@
   "_id": "2oLgYHBhyNjO2nmM",
   "name": "The Cyberpred",
   "type": "cyberware",
-  "img": "icons/svg/biohazard.svg",
+  "img": "modules/cp2020-augmented/img/icons/mechanical-arm.svg",
   "system": {
     "flavor": "",
     "notes": "",
