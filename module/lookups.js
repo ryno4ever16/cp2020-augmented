@@ -817,6 +817,25 @@ export function martialOptions(actor, savedOptions={}) {
             defaultValue: martialArtDefault,
             choices: martialChoices
         },
+        // The called-shot row. This is the BASE SYSTEM'S row, kept at his dataPath, because his engine
+        // is the one that reads it: `CyberpunkItem.__martialBonk`
+        // (systems/cyberpunk2020/module/item/item.js) computes `targetAreaMod = attackMods.targetArea
+        // ? -4 : 0` and folds it into the attack formula, then hands the same value to
+        // `rollLocation(targetActor, targetArea)` so a declared area is the location that takes the
+        // damage instead of a rolled one. Blank means "no called shot": no penalty, location rolled.
+        //
+        // Our combat-tab button panel replaced his Action dropdown, and the row went out with it —
+        // from then until 2026-08-13 a martial called shot was unreachable, `targetAreaMod` was
+        // permanently 0, and every strike rolled its location. Ranged (above) and melee
+        // (meleeBonkOptions, below) kept theirs; martial alone lost it. Restored as HIS row —
+        // same dataPath, same choices source, same allowBlank/default — so one field feeds all three.
+        {
+            localKey: "TargetArea",
+            dataPath: "targetArea",
+            defaultValue: "",
+            choices: defaultTargetLocations,
+            allowBlank: true
+        },
         {
             localKey: "CyberTerminus",
             dataPath: "cyberTerminus",

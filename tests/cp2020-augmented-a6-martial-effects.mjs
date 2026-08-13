@@ -187,7 +187,10 @@ try {
       };
 
       const wide = survey("default");
-      ok("two dropdowns are on the row (the case that used to overflow)", wide.count === 2, wide.count);
+      // THREE dropdowns since the called-shot row was restored (2026-08-13). The overflow this section
+      // was written for was measured with two, so the count is pinned: a third track on the same row is
+      // strictly the harder case, and a silent drop back to two would mean the row went missing again.
+      ok("three dropdowns are on the row (the case that used to overflow, now one wider)", wide.count === 3, wide.count);
       ok("every dropdown declares a zero floor so its track can shrink",
         wide.selectMinWidths.every(v => v === "0px"), wide.selectMinWidths.join("/"));
       ok("the field row fits its own box at the shipped width",
@@ -218,6 +221,106 @@ try {
   if (G.error) { console.error("IN-PAGE ERROR (geometry):", G.error); failures++; }
   console.log("\nattack-modifiers dialog fit\n" + G.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(60)} got=${c.got}`).join("\n"));
   failures += G.checks.filter(c => !c.pass).length;
+
+  // ── THE DECLARED AREA (2026-08-13). The base system charges −4 to hit for naming a location and then
+  //    puts the damage THERE instead of rolling for it; the dialog row that declares it is the base's own
+  //    `targetArea` field, read by `__martialBonk` in two places. Our combat-tab button panel replaced the
+  //    base's Action dropdown and the row went out with it, so from then until this unit every unarmed
+  //    strike was un-aimable: the modifier was permanently 0 and the location was always rolled.
+  //
+  //    Both legs drive the REAL dialog and read the REAL card. The modifier is read as the roll's
+  //    constant part (total minus every die's total), which is exact regardless of what the dice did —
+  //    the two runs differ by exactly 4 and by nothing else, because nothing else about them differs.
+  const A = await page.evaluate(async () => {
+    const out = { checks: [] };
+    const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    let actor = null, sheet = null, weaponId = null;
+    const AREAS = ["Head", "Torso", "lArm", "rArm", "lLeg", "rLeg"];
+    try {
+      const L = await import("/modules/cp2020-augmented/module/lookups.js");
+      for (const a of game.actors.filter(a => a.name === "__PW__CalledShot")) await a.delete().catch(() => {});
+      actor = await Actor.create({ name: "__PW__CalledShot", type: "character" });
+
+      /* structural: the row is in the table, at the base system's own path and semantics */
+      const rows = L.martialOptions(actor).flat();
+      const row = rows.find(r => r.dataPath === "targetArea");
+      ok("the modifier table carries the base system's targetArea row", !!row, row ? "present" : "ABSENT");
+      ok("it offers every hit location and no called shot by default",
+        !!row && row.allowBlank === true && row.defaultValue === "" && AREAS.every(a => row.choices.includes(a)),
+        row ? `allowBlank=${row.allowBlank} default=${JSON.stringify(row.defaultValue)} choices=${row.choices}` : "n/a");
+
+      // A damage-bearing implement: the base takes the roll-only path for an action that deals none, and
+      // the location is only resolved on the damaging path, so an empty-handed fixture would measure
+      // nothing. `Martial` is the base's own melee attack type for this route.
+      const made = await actor.createEmbeddedDocuments("Item", [{
+        name: "__PW__Fist", type: "weapon",
+        system: { attackType: "Martial", weaponType: "Melee", damage: "1d6", accuracy: 0 },
+      }]);
+      weaponId = made[0].id;
+
+      sheet = actor.sheet;
+      await sheet.render(true);
+      await sleep(1200);
+
+      /** Open the dialog, write the area (null = leave blank), submit, and read back the card. */
+      const strike = async (area) => {
+        const seen = [];
+        const hookId = Hooks.on("cyberpunk2020.weaponFired", p => seen.push(p));
+        const before = new Set(game.messages.map(m => m.id));
+        sheet._cpOpenMartialActionDialog({ dataset: { action: "Strike", itemId: weaponId } });
+        await sleep(1400);
+        const dlg = [...foundry.applications.instances.values()]
+          .find(a => a.element?.querySelector?.(".weapon-modifiers"));
+        const sel = dlg?.element?.querySelector('select[name="targetArea"], select[name="fields.targetArea"]');
+        const optionValues = sel ? [...sel.options].map(o => o.value) : null;
+        if (sel && area !== null) { sel.value = area; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+        const wrote = sel?.value ?? null;
+        const btn = dlg?.element?.querySelector('button.fire, button[type="submit"]');
+        if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        for (let i = 0; i < 60 && !seen.length; i++) await sleep(100);
+        await sleep(600);
+        Hooks.off("cyberpunk2020.weaponFired", hookId);
+        const card = [...game.messages].reverse().find(m => !before.has(m.id) && (m.rolls?.length ?? 0) > 0);
+        const atk = card?.rolls?.[0] ?? null;
+        // The constant part of the attack roll: everything the dice did not contribute.
+        const constants = atk
+          ? Number(atk.total) - atk.dice.reduce((s, d) => s + Number(d.total), 0)
+          : null;
+        try { await dlg?.close?.(); } catch (e) { /* already closed */ }
+        return { optionValues, wrote, constants,
+          locations: Object.keys(seen[0]?.areaDamages ?? {}), cardId: card?.id ?? null };
+      };
+
+      const head = await strike("Head");
+      ok("the dialog offers the row with a blank first choice and all six locations",
+        Array.isArray(head.optionValues) && head.optionValues[0] === "" && AREAS.every(a => head.optionValues.includes(a)),
+        head.optionValues === null ? "NO SUCH SELECT — the row never rendered" : head.optionValues.join("/"));
+      ok("the declared area is the one the field holds at submit", head.wrote === "Head", head.wrote);
+      ok("a declared area is the area that takes the damage — no location roll",
+        head.locations.length === 1 && head.locations[0] === "Head", head.locations.join(",") || "none");
+
+      const blank = await strike(null);
+      ok("leaving it blank declares nothing, and the location is rolled from the table",
+        blank.locations.length === 1 && AREAS.includes(blank.locations[0]), blank.locations.join(",") || "none");
+      ok("declaring an area costs exactly 4 off the attack, and blank costs nothing",
+        head.constants !== null && blank.constants !== null && (blank.constants - head.constants) === 4,
+        `blank ${blank.constants} vs declared ${head.constants} (difference ${blank.constants - head.constants}, expected 4)`);
+
+      for (const id of [head.cardId, blank.cardId]) {
+        if (id) { try { await game.messages.get(id)?.delete(); } catch (e) { /* gone */ } }
+      }
+    } catch (e) {
+      out.error = e?.stack || e?.message || String(e);
+    } finally {
+      try { if (sheet) await sheet.close(); } catch {}
+      try { if (actor) await actor.delete(); } catch {}
+    }
+    return out;
+  });
+  if (A.error) { console.error("IN-PAGE ERROR (called shot):", A.error); failures++; }
+  console.log("\nmartial called shot\n" + A.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(60)} got=${c.got}`).join("\n"));
+  failures += A.checks.filter(c => !c.pass).length;
 
   console.log(`\n${failures === 0 ? "ALL GREEN" : failures + " FAILURE(S)"}`);
   process.exitCode = failures === 0 ? 0 : 1;
