@@ -82,6 +82,66 @@ const r = await p.evaluate(async () => {
   const armCards = game.messages.contents.slice(q).filter(m => (m.content||"").includes(actor.name) && (m.content||"").includes(crippledWord)).length;
   check("weaponFired: a CRIPPLED flesh arm posts the arm-use notice", armCards >= 1, armCards);
 
+  // (6) THE M18 SPLIT MIGRATION, through its own exposed re-run seam. Before M18 both kinds of limb
+  //     wound shared `limbStatus`; the flesh models now write `fleshLimbStatus`, so pre-M18 state has
+  //     to move — but only for a zone with no structural pool, and only for documents that carry the
+  //     old key at all. Driven here rather than through a reload, because the reload path is the boot
+  //     hook and what is worth pinning is the sweep's own decisions.
+  //     ⚠ NOT PINNED HERE: the hotfix's other half, that a clean unlinked token's synthetic actor is
+  //     never built. On this core it cannot be observed — core prepares every scene's token documents
+  //     at world load (Scene.prepareEmbeddedDocuments → TokenDocument.applyActiveEffects reads
+  //     `token.actor` for every unlinked token, drawn scene or not), so the read has already happened
+  //     before any sweep runs. The guard still saves the sweep from doing it a second time per token;
+  //     it is simply not attributable from a spy on this core.
+  const scene = game.scenes.active ?? game.scenes.viewed;
+  for (const a of game.actors.filter(a => /^__PW__MIG/.test(a.name))) await a.delete().catch(()=>{});
+  for (const t of (scene?.tokens ?? []).filter(t => /^__PW__MIG/.test(t.name))) await scene.deleteEmbeddedDocuments("Token",[t.id]).catch(()=>{});
+  const migWorld = await Actor.create({ name: "__PW__MIG World", type: "character",
+    flags: { [SCOPE]: { limbStatus: { lArm: { severity: "mangled" } } } } });
+  const migBase = await Actor.create({ name: "__PW__MIG Base", type: "character" });
+  const proto = { actorId: migBase.id, actorLink: false, width: 1, height: 1, y: 1600 };
+  const made = await scene.createEmbeddedDocuments("Token", [
+    { ...proto, name: "__PW__MIG Dirty", x: 1600 },
+    { ...proto, name: "__PW__MIG Clean", x: 1800 },
+  ]);
+  const dirty = scene.tokens.get(made.find(t => /Dirty/.test(t.name)).id);
+  const clean = scene.tokens.get(made.find(t => /Clean/.test(t.name)).id);
+  await dirty.actor.update({ [`flags.${SCOPE}.limbStatus`]: { rLeg: { severity: "broken" } } });
+  await sleep(300);
+  const rawFlags = (td) => foundry.utils.deepClone(td.delta?._source?.flags ?? {});
+  const migrate = game.modules.get(SCOPE)?.api?.migrations?.fleshLimbStatus;
+  check("migration: the forced re-run seam is exposed on the module api", typeof migrate === "function", typeof migrate);
+  await migrate({ force: true });
+  await sleep(700);
+  check("migration: a world actor's flesh state moves to fleshLimbStatus, by value",
+    migWorld._source.flags?.[SCOPE]?.fleshLimbStatus?.lArm?.severity === "mangled",
+    JSON.stringify(migWorld._source.flags?.[SCOPE]));
+  check("migration: and the old limbStatus zone is gone from its source",
+    migWorld._source.flags?.[SCOPE]?.limbStatus?.lArm === undefined,
+    JSON.stringify(migWorld._source.flags?.[SCOPE]?.limbStatus));
+  check("migration: an unlinked token's DELTA shows the same move, by value",
+    rawFlags(dirty)?.[SCOPE]?.fleshLimbStatus?.rLeg?.severity === "broken"
+    && rawFlags(dirty)?.[SCOPE]?.limbStatus?.rLeg === undefined,
+    JSON.stringify(rawFlags(dirty)?.[SCOPE]));
+  check("migration: a token with nothing to move is left alone (negative)",
+    !rawFlags(clean)?.[SCOPE]?.limbStatus && !rawFlags(clean)?.[SCOPE]?.fleshLimbStatus,
+    JSON.stringify(rawFlags(clean)));
+  check("migration: no literal `-=` key was persisted anywhere it wrote",
+    !JSON.stringify(migWorld._source.flags ?? {}).includes("-=")
+    && !JSON.stringify(dirty.delta?._source ?? {}).includes("-="),
+    `${JSON.stringify(migWorld._source.flags?.[SCOPE])} | ${JSON.stringify(rawFlags(dirty))}`);
+  check("migration: the completion flag is stamped", game.settings.get(SCOPE, "fleshLimbStatusMigrated") === true,
+    game.settings.get(SCOPE, "fleshLimbStatusMigrated"));
+  const beforeSecond = JSON.stringify([migWorld._source.flags?.[SCOPE], rawFlags(dirty), rawFlags(clean)]);
+  await migrate({ force: true });
+  await sleep(600);
+  check("migration: running it again changes nothing (it is a move, not an accumulator)",
+    JSON.stringify([migWorld._source.flags?.[SCOPE], rawFlags(dirty), rawFlags(clean)]) === beforeSecond,
+    JSON.stringify([migWorld._source.flags?.[SCOPE], rawFlags(dirty), rawFlags(clean)]));
+  for (const t of (scene?.tokens ?? []).filter(t => /^__PW__MIG/.test(t.name))) await scene.deleteEmbeddedDocuments("Token",[t.id]).catch(()=>{});
+  await migWorld.delete().catch(()=>{});
+  await migBase.delete().catch(()=>{});
+
   // cleanup + restore
   await actor.delete().catch(()=>{});
   await game.settings.set(SCOPE,"limbLossEnabled",prior.limb);

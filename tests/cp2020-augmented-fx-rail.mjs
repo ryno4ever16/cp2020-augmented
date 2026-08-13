@@ -2188,10 +2188,20 @@ const res = await page.evaluate(async () => {
     moteEntries.every(e => e.size?.width === fx.MUZZLE_MOTES.sizeSquares && e.sizeOpts?.gridUnits === true)
     && fx.MUZZLE_MOTES.sizeSquares < 0.25,
     `${fx.MUZZLE_MOTES.sizeSquares} squares`);
+  // ⚠ COUNTED AT FULL PRECISION, WITH ONE PIXEL COLLISION FORGIVEN. The thing being excluded is one
+  // endpoint drawn N times, and two computed points being byte-identical is exactly that — so the raw
+  // set must be complete. Rounding to whole pixels is a different question, and on 13 independent
+  // points inside one cone a pair sharing a pixel is arithmetic rather than a defect: measured at
+  // roughly one run in two hundred, which is a flake, not a finding. The rounded set is still required
+  // to be all-but-one distinct, so a scatter that collapsed to a smear would still fail.
+  const moteRaw = new Set(moteEntries.map(e => `${e.moveTowards.x},${e.moveTowards.y}`));
+  const motePx = new Set(moteEntries.map(e => `${Math.round(e.moveTowards.x)},${Math.round(e.moveTowards.y)}`));
   ok("ambience: each speck travels to its OWN endpoint - a scatter, not one point drawn N times",
     moteEntries.every(e => Number.isFinite(e.moveTowards?.x))
-    && new Set(moteEntries.map(e => `${Math.round(e.moveTowards.x)},${Math.round(e.moveTowards.y)}`)).size === moteEntries.length,
-    moteEntries.map(e => `${Math.round(e.moveTowards.x)},${Math.round(e.moveTowards.y)}`).join(" "));
+    && moteRaw.size === moteEntries.length
+    && motePx.size >= moteEntries.length - 1,
+    `${moteRaw.size} distinct of ${moteEntries.length} (${motePx.size} at whole-pixel resolution): `
+    + moteEntries.map(e => `${Math.round(e.moveTowards.x)},${Math.round(e.moveTowards.y)}`).join(" "));
   const moteDurs = moteEntries.map(e => e.duration);
   ok("ambience: each speck crosses in its own time, inside the mapped band",
     moteDurs.every(d => d >= fx.MUZZLE_MOTES.travelMinMs && d <= fx.MUZZLE_MOTES.travelMaxMs)
