@@ -117,6 +117,12 @@
         style="width:52px; text-align:right;"
         title="{{CPLocal 'DamageDlgCoverSpExamples'}}">
     </div>
+    {{#if coverNote}}
+    {{!-- What the auto-detect decided, in words, when the decision involved a roll: an open-topped
+          vehicle covers its riders only part of the time, and a GM must be able to see which way it
+          landed and type over it. Assembled in JS (it names the vehicle and the odds). --}}
+    <div class="field cp-cover-note"><span class="cp-cover-note-text">{{coverNote}}</span></div>
+    {{/if}}
 
     <div class="field">
       <label>{{CPLocal "DamageDlgArmorMode"}}</label>

@@ -78,6 +78,9 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
         // a typed 0 is a real answer ("this stops nothing") and is kept.
         bodySp:   new f.NumberField({ initial: null, nullable: true, required: false }),
         engineSp: new f.NumberField({ initial: null, nullable: true, required: false }),
+        // How much of the vehicle its own riders get to hide behind: "" = by type (enclosed for
+        // everything with a cabin, none for a cycle), else enclosed / 75 / 50 / none.
+        riderCover: new f.StringField({ initial: "" }),
       }),
 
       // ── Whole-vehicle (catalog) layer — additive (unified-sheet plan Phase 1). The civilian

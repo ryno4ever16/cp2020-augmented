@@ -2931,3 +2931,6 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
 }
 .cyberpunk .cp-veh-layout-reset { flex: 0 0 auto; font-size: 11px; text-decoration: underline; cursor: pointer; }
 .cyberpunk .cp-veh-nocover { opacity: 0.75; font-style: italic; }
+/* The apply window's rolled-cover note: a quiet line under the Cover SP field stating what the
+   coverage roll decided, so a rider-cover verdict is never silent. */
+.cyberpunk.damage-dialog .cp-cover-note { opacity: 0.85; font-size: 11px; font-style: italic; }

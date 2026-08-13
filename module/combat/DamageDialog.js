@@ -56,6 +56,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // (a hand-typed Cover SP still folds into the math, it just has nothing to debit).
     this._coverZoneUuid = "";
     this._coverRow      = null;   // the detected row snapshot: label / sp / pool / poolMax
+    this._coverNote     = "";     // a rolled row's outcome in words (rider cover), shown in the window
     // The segment auto-detect is a ONE-SHOT seed on the first context build — this latch is what
     // keeps a later re-render from re-picking over a value the GM typed.
     this._autoCoverTried = false;
@@ -119,6 +120,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
           this._coverZoneUuid = picked.uuid;
           this._coverRow = { uuid: picked.uuid, label: picked.label, sp: picked.sp, pool: picked.pool, poolMax: picked.poolMax, destroyed: picked.destroyed };
           this._coverSP = Math.max(0, Number(picked.sp) || 0);
+          // Some rows are decided by a roll rather than by geometry alone (an open-topped vehicle
+          // covers its riders only part of the time). Those carry a note saying which way it landed;
+          // it is shown beside the Cover SP field so the GM can see it and type over it.
+          this._coverNote = String(picked.note ?? "");
         }
       } catch (e) { /* auto-pick is best-effort; a typed Cover SP is the fallback */ }
     }
@@ -185,6 +190,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       damageType:   this._damageType ?? "",
       ap:           Boolean(this.payload.ap),
       coverSP,
+      coverNote:    this._coverNote,
     };
   }
 

@@ -11,6 +11,7 @@ import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
 import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells } from "../vehicle/vehicle-layout.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
+import { RIDER_COVER_MODES, derivedRiderCoverFor } from "../vehicle/vehicle-cover.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -297,10 +298,27 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       }
       grid.push(cells);
     }
+    // Rider cover: the stored choice, with the by-type default named in the first option so the GM
+    // can see what "leave it alone" actually means for this vehicle.
+    const riderStored = String(system?.layout?.riderCover ?? "");
+    const RIDER_KEYS = {
+      enclosed: "Vehicle.RiderCoverEnclosed", 75: "Vehicle.RiderCover75",
+      50: "Vehicle.RiderCover50", none: "Vehicle.RiderCoverNone",
+    };
+    const riderDerived = derivedRiderCoverFor(system?.vehicleType);
+    const riderCoverOptions = [
+      {
+        key: "", selected: !RIDER_COVER_MODES.includes(riderStored),
+        label: localizeParam("Vehicle.RiderCoverDefault", { mode: localize(RIDER_KEYS[riderDerived]) }),
+      },
+      ...RIDER_COVER_MODES.map(key => ({ key, selected: riderStored === key, label: localize(RIDER_KEYS[key]) })),
+    ];
+
     return {
       front,
       grid,
       painted: resolved.painted,
+      riderCoverOptions,
       providesCover: cover.providesCover,
       bodySp: cover.bodySp,
       engineSp: cover.engineSp,

@@ -178,3 +178,77 @@ export function boardedVehicleIdOf(tokenDoc) {
   const id = tokenDoc?.flags?.[SCOPE]?.boardedVehicle;
   return (typeof id === "string" && id) ? id : null;
 }
+
+/* ─────────────────────────────── rider cover (ruled D4 / L3) ─────────────────────────────── */
+
+/**
+ * How much of a vehicle its own riders get to hide behind.
+ *
+ * Maximum Metal states this as a fraction of the TIME rather than a fraction of the body: the
+ * Riot 8 is open-topped and "troops inside it only receive SP cover 75% of the time"; the Airjeep's
+ * "riders only count as in cover 50% of the time." So the two open presets are a per-attack
+ * question, not a modifier — which is why the seed rolls it once per apply window and says out loud
+ * which way it landed. An enclosed vehicle always covers its riders; an open frame never does.
+ */
+export const RIDER_COVER_MODES = ["enclosed", "75", "50", "none"];
+
+/** The mode in force: the sheet's choice, else the vehicle type's own answer. */
+export function riderCoverModeFor(system) {
+  const stored = String(system?.layout?.riderCover ?? "").trim();
+  if (RIDER_COVER_MODES.includes(stored)) return stored;
+  return derivedRiderCoverFor(system?.vehicleType);
+}
+
+/**
+ * The default by type. Every modelled type is an enclosed cabin except a cycle, which has no cabin
+ * at all. The book's two OPEN examples (Riot 8, Airjeep) are individual vehicles rather than a
+ * class — there is no "open-topped" vehicle type to key off — so 75/50 are presets a GM picks per
+ * vehicle rather than something a type is silently given.
+ */
+export function derivedRiderCoverFor(vehicleType) {
+  return String(vehicleType ?? "").trim() === "cycle" ? "none" : "enclosed";
+}
+
+/** The percentage a mode covers at, or null for the modes that never roll. */
+export function riderCoverChance(mode) {
+  if (mode === "75") return 75;
+  if (mode === "50") return 50;
+  return null;
+}
+
+/**
+ * One coverage draw, 1-100. Synchronous, because the apply window builds its context
+ * synchronously and a private determination like this has no card to post — the OUTCOME is what
+ * gets surfaced, in the window itself, where it can be overridden.
+ *
+ * ⚠ It draws from `CONFIG.Dice.randomUniform` — core's own uniform source, the one every die face
+ * is drawn from — rather than through a Roll. Rig-proven on core 14.364: `Roll#evaluateSync` does
+ * not evaluate a DICE term at all and answers a total of 0, which sailed under a `|| 0` and made
+ * every rider "covered" on every attack. A draw that always returns the same answer is worse than
+ * no roll at all, so the die comes straight off the RNG the core exposes, with Math.random as the
+ * fallback if a future core stops exposing it.
+ */
+export function rollCoverageDie() {
+  let u = NaN;
+  try { u = Number(CONFIG?.Dice?.randomUniform?.()); } catch (e) { /* fall through */ }
+  if (!Number.isFinite(u) || u < 0 || u > 1) u = Math.random();
+  return Math.min(100, Math.max(1, Math.ceil(u * 100)));
+}
+
+/**
+ * Decide whether the vehicle covers its own rider for THIS attack, and say so in words.
+ * @returns {{covered:boolean, note:string, chance:number|null, roll:number|null}}
+ */
+export function resolveRiderCover(row, mode) {
+  const name = row?.actor?.name ?? row?.label ?? "";
+  if (mode === "none") return { covered: false, note: "", chance: null, roll: null };
+  if (mode !== "75" && mode !== "50") return { covered: true, note: "", chance: null, roll: null };
+  const chance = riderCoverChance(mode);
+  const roll = rollCoverageDie();
+  const covered = roll <= chance;
+  return {
+    covered, chance, roll,
+    note: localizeParam(covered ? "Vehicle.RiderCoveredThisAttack" : "Vehicle.RiderExposedThisAttack",
+      { name, pct: chance }),
+  };
+}

@@ -51,6 +51,19 @@
            title="{{CPLocal 'Vehicle.LayoutResetTip'}}">{{CPLocal "Vehicle.LayoutResetLabel"}}</a>
     </span>
 </div>
+{{!-- Rider cover: how much of the vehicle the people INSIDE it get to hide behind. The two open
+      presets are per-attack odds (Maximum Metal states them as a fraction of the time), and the
+      apply window says out loud which way each attack landed. --}}
+<div class="field" title="{{CPLocal 'Vehicle.RiderCoverTip'}}">
+    <label>{{CPLocal "Vehicle.RiderCoverLabel"}}</label>
+    <span class="flexrow flex-pad">
+        <select name="system.layout.riderCover">
+            {{#each layout.riderCoverOptions}}
+            <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+            {{/each}}
+        </select>
+    </span>
+</div>
 {{#unless layout.providesCover}}
 <div class="field span-two-cells">
     <label class="cp-veh-nocover" title="{{CPLocal 'Vehicle.CoverNoneTip'}}">{{CPLocal "Vehicle.CoverNoneLabel"}}</label>

@@ -37,7 +37,7 @@ import { localize, localizeParam } from "../utils.js";
 import { COVER_ZONE_BEHAVIOR } from "./cover-zone-behavior.js";
 import {
   vehicleCoverRowsOn, vehicleCoverSpAlong, vehicleCoverLabel, chewVehicleCover,
-  isVehicleCoverUuid, boardedVehicleIdOf,
+  isVehicleCoverUuid, boardedVehicleIdOf, riderCoverModeFor, resolveRiderCover,
 } from "../vehicle/vehicle-cover.js";
 
 const SCOPE = "cp2020-augmented";
@@ -208,13 +208,30 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
     || row.tokenDoc?.id === attackerTokenDoc.id
     || (!!attackerVehicleId && row.actor?.id === attackerVehicleId);
 
+  // The vehicle the TARGET is riding in is the rider-cover case (ruled D4): it is cover for them,
+  // but only as much of the time as its own bodywork allows. A row that loses that roll is still
+  // returned — at SP 0, and LAST, so it neither hides a real crossing nor resolves silently.
+  const targetVehicleId = boardedVehicleIdOf(targetTokenDoc);
+
   const out = [];
+  const exposed = [];
   for (const r of coverChoicesFor(targetTokenDoc)) {
     if (r.destroyed) continue;
     let crossed = false;
     try {
       if (r.vehicle) {
         if (excludedVehicle(r)) continue;
+        if (!!targetVehicleId && r.actor?.id === targetVehicleId) {
+          const mode = riderCoverModeFor(r.actor.system);
+          if (mode === "none") continue;               // an open frame hides nobody
+          const verdict = resolveRiderCover(r, mode);
+          r.note = verdict.note;
+          if (!verdict.covered) {
+            r.sp = 0;
+            exposed.push(r);
+            continue;
+          }
+        }
         // WHICH cells the line crossed decides the SP, so the row's own numbers are settled here
         // rather than at row-build time: body 10 unless it went through the engine block, 35 if it
         // did. The label follows, because a 35 that does not say "engine block" reads as a typo.
@@ -247,7 +264,9 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
     } catch (e) { crossed = false; }
     if (crossed) out.push(r);
   }
-  return out;
+  // Anything a rider was exposed to this attack trails the real crossings: it carries no SP, only
+  // the note that says the roll happened and which way it went.
+  return [...out, ...exposed];
 }
 
 /* ═════════════════════ Per-round structure ledger (pure, no document writes) ═════════════════════ */
