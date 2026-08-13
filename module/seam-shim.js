@@ -360,6 +360,26 @@ function installRenderEmit() {
           // consumer treats a null as "nobody declared an aim" and computes one, which is the behaviour
           // that shipped before the placement gesture existed.
           spreadAim: _fireCtx.spreadAim ?? null,
+          // ⭐ WHETHER THE SHOT ACTUALLY HIT WHAT IT WAS POINTED AT, as the BASE SYSTEM already ruled it.
+          //
+          // The base rolls one attack per card — REF + the attack skill + every modifier the window
+          // folded in + the weapon's accuracy — and compares it against the DC its own range table
+          // gives the declared band (`rangeDCs`, lookups.js). Both numbers are already on the card's
+          // computed data by the time this render runs, so they are carried rather than re-derived:
+          // a pattern that decided hit-or-miss with a second roll would sit in the same chat log as
+          // the base's own card saying the opposite, and a pattern that re-derived the DC from the
+          // aim's distance would do the same for the same reason. One shot, one roll, one verdict.
+          //
+          // Read by the shot-pattern flow ONLY (combat/damage-hooks.js) — the ordinary single-target
+          // damage path takes its outcome from the card's `areaDamages` exactly as before. Undefined
+          // on any card that does not compute them, in which case the pattern behaves as it did
+          // before this field existed and resolves where it was aimed.
+          // ⚠ NULL, NOT NaN, when the card computes neither. This payload is also RELAYED over the
+          // socket (a player's shot reaches the GM as JSON), and JSON turns a NaN into a null that
+          // `Number()` then reads back as a perfectly finite ZERO — which would rule every relayed
+          // shot a hit against a DC of zero. Nulled at the source and null-checked at the reader.
+          attackTotal: Number.isFinite(Number(data?.attackRoll?.total)) ? Number(data.attackRoll.total) : null,
+          toHitDC: Number.isFinite(Number(data?.toHit)) ? Number(data.toHit) : null,
           // WHO PULLED THE TRIGGER. This hook is a LOCAL `Hooks.callAll` — it is raised only on the
           // client that resolved the shot, never broadcast — so this field names the one client that
           // has the shot in hand. The damage handler uses it to decide who presents the result:

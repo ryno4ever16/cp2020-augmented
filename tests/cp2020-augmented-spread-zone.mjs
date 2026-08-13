@@ -684,11 +684,26 @@ const res = await page.evaluate(async () => {
   ok("§10 no pattern exists yet either — the region waits for the roll (negative)", myZones().length === 0, String(myZones().length));
 
   /* §10e — the roll commits, and the corridor rides it */
+  // ⭐ THE SHOT IS FORCED TO LAND, and it has to be as of 2026-08-13: a declared corridor that MISSES
+  // now scatters to the grenade table (§14), so a section whose subject is "the corridor is planted
+  // and resolved exactly where the shooter declared it" has to pin the verdict or it is testing the
+  // dice. Two halves, both restored afterwards: the fixture is given a competent REF, and the attack
+  // die is queued at 9 (NOT 10 — the base die is `1d10x10`, so a forced maximum explodes forever).
+  // 9 + REF 10 clears the Close DC of 15 with room to spare. The MISS half is §14's subject.
+  const refWas = shooter.system.stats?.ref?.base;
+  await shooter.update({ "system.stats.ref.base": 10 });
   const rollAt = Date.now();
+  const origRU10 = CONFIG.Dice.randomUniform;
+  CONFIG.Dice.randomUniform = (() => { const Q = [1 - (9 - 0.5) / 10]; return () => (Q.length ? Q.shift() : 0.5); })();
   const fireForm = fireDialog.element?.tagName === "FORM" ? fireDialog.element : fireDialog.element?.querySelector("form");
   if (fireForm?.requestSubmit) fireForm.requestSubmit();
   else fireForm?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await sleep(1500);
+  CONFIG.Dice.randomUniform = origRU10;
+  await shooter.update({ "system.stats.ref.base": refWas });
+  ok("§10 the forced shot LANDED, so the corridor below is the declared one and not a scattered one",
+    firedPayload?.attackTotal >= firedPayload?.toHitDC,
+    `${firedPayload?.attackTotal} vs ${firedPayload?.toHitDC}`);
   const aimOnPayload = firedPayload?.spreadAim ?? null;
   ok("§10 the fired payload carries the confirmed corridor, by value",
     !!aimOnPayload && Math.abs(Number(aimOnPayload.angleDeg) - 90) < 0.5
@@ -709,6 +724,8 @@ const res = await page.evaluate(async () => {
   const dz = declaredZone?.flags?.[SCOPE] ?? {};
   ok("§10 the pattern is planted", !!declaredZone, declaredZone?.name);
   ok("§10 it records that the corridor was DECLARED, not guessed", dz.declaredAim === true, String(dz.declaredAim));
+  ok("§10 and that it landed where it was declared — no scatter on a hit (negative)",
+    dz.scattered === false, String(dz.scattered));
   ok("§10 it is planted on the declared axis and geometry, by value",
     Math.abs(Number(dz.dirDeg) - 90) < 0.5 && Math.abs(Number(dz.lengthM) - Number(aimOnPayload.lengthM)) < 0.01
     && Number(dz.widthM) === expectSpec.widthM && dz.band === expectSpec.band,
@@ -1135,6 +1152,211 @@ const res = await page.evaluate(async () => {
   ok("§13 a round advance is where the recurring death prompt lives, and it respects stabilization",
     /autoDeathSavePerTurn/.test(savesSrc) && /stabilized/.test(savesSrc)
     && typeof game.settings.get(SCOPE, "autoDeathSavePerTurn") === "boolean");
+
+  /* ── §14  a declared corridor can still MISS, and a miss goes to the grenade table ───────── */
+  // CP2020 p.108: a pattern that misses has its TRUE CENTRE determined on the grenade table — 1d10 for
+  // a direction, 1d10 for the metres. Nothing is rolled by the pattern flow to decide hit or miss: the
+  // base system already rolled one attack for this card and the payload carries that total and the DC
+  // it was measured against, so the pattern and the base's own card cannot print opposite verdicts.
+  await wipeZones(); await wipeCards();
+
+  // §14a — the verdict reader, by value, including the two shapes that must read as "nobody asked".
+  ok("§14 the base's total at or above its DC is a hit, below it is a miss",
+    hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20 })?.hit === true
+    && hooks.spreadAttackOutcome({ attackTotal: 19, toHitDC: 20 })?.hit === false,
+    JSON.stringify(hooks.spreadAttackOutcome({ attackTotal: 19, toHitDC: 20 })));
+  ok("§14 a payload carrying no roll answers null — not a hit, not a miss (negative)",
+    hooks.spreadAttackOutcome({}) === null && hooks.spreadAttackOutcome(basePayload()) === null);
+  ok("§14 and a RELAYED payload whose fields serialized to null answers null, not a hit at DC zero",
+    hooks.spreadAttackOutcome(JSON.parse(JSON.stringify({ attackTotal: NaN, toHitDC: NaN }))) === null,
+    JSON.stringify(JSON.parse(JSON.stringify({ attackTotal: NaN, toHitDC: NaN }))));
+
+  // §14b — the rose and the drift, by value. Diagonals are unit-normalised, so a 3 travels the rolled
+  // distance south-east rather than that distance on each axis; faces 5 and 10 are the no-drift results.
+  const drift3 = hooks.scatterDriftM(3, 10);
+  ok("§14 a diagonal face travels the rolled distance, not that distance per axis",
+    Math.abs(Math.hypot(drift3.dxM, drift3.dyM) - 10) < 1e-9 && drift3.dxM > 0 && drift3.dyM > 0,
+    JSON.stringify(drift3));
+  ok("§14 south is +y on screen axes, and its drift is the rolled metres exactly",
+    hooks.scatterDriftM(2, 7).dyM === 7 && hooks.scatterDriftM(2, 7).dxM === 0 && hooks.scatterDriftM(8, 7).dyM === -7,
+    JSON.stringify(hooks.scatterDriftM(2, 7)));
+  ok("§14 both no-drift faces report zero however the distance die fell",
+    hooks.scatterDriftM(5, 10).distanceM === 0 && hooks.scatterDriftM(10, 10).distanceM === 0
+    && hooks.scatterDriftM(5, 10).name === "on-target" && hooks.scatterDriftM(10, 10).name === "direct hit");
+  ok("§14 the rose has ten faces and this is the GRENADE table, not the indirect-fire one",
+    Object.keys(hooks.SCATTER_ROSE).length === 10
+    && (await import(`/modules/${SCOPE}/module/vehicle/vehicle-indirect.js`)).scatterDirectionDeg(3) === 72,
+    Object.keys(hooks.SCATTER_ROSE).length);
+
+  // §14c — the corridor re-derives from the MUZZLE to the scattered centre. A 20 m corridor that drifts
+  // 7 m south is 21.19 m long on a heading of 19.29°, which is still the Medium band.
+  const scDeclared = { angleDeg: 0, reachM: 20, lengthM: 20, widthM: 2, band: "Medium" };
+  const sc = hooks.scatteredSpreadCorridor({
+    originX: 0, originY: 0, declared: scDeclared, pixelsPerMeter: 10, dirFace: 2, distFace: 7,
+  });
+  ok("§14 the scattered centre is the AIMED point moved by the drift, in pixels",
+    Math.abs(sc.aimX - 200) < 1e-6 && Math.abs(sc.aimY - 70) < 1e-6, JSON.stringify({ x: sc.aimX, y: sc.aimY }));
+  ok("§14 the reach is re-measured from the unmoved muzzle, by value",
+    Math.abs(sc.reachM - Math.hypot(20, 7)) < 1e-9, `${sc.reachM} vs ${Math.hypot(20, 7)}`);
+  ok("§14 the heading is re-read from the muzzle to where the shell landed, by value",
+    Math.abs(sc.angleDeg - (Math.atan2(7, 20) * 180 / Math.PI)) < 1e-9, String(sc.angleDeg));
+  ok("§14 band, width and the banded damage all re-derive from the NEW distance",
+    sc.band === lookup.spreadBandSpec(sc.reachM).band && sc.widthM === lookup.spreadBandSpec(sc.reachM).widthM
+    && lookup.spreadBandDamage(sc.band) === "3d6",
+    JSON.stringify({ band: sc.band, widthM: sc.widthM }));
+  // A long scatter walks the corridor into the outermost band and stops there — the ladder saturates,
+  // so pellets never gain reach they did not have.
+  const scLong = hooks.scatteredSpreadCorridor({
+    originX: 0, originY: 0, declared: { ...scDeclared, reachM: 24, widthM: 2 }, pixelsPerMeter: 10, dirFace: 6, distFace: 10,
+  });
+  ok("§14 a scatter past the band ladder's end lands in the outermost band and no further",
+    scLong.band === "Long" && scLong.widthM === 3 && lookup.spreadBandDamage(scLong.band) === "2d6",
+    JSON.stringify({ reachM: scLong.reachM, band: scLong.band, widthM: scLong.widthM }));
+  // The table's house width override survives the scatter: it is recovered from the declared corridor
+  // and re-applied on top of whatever width the NEW band earns.
+  const scHouse = hooks.scatteredSpreadCorridor({
+    originX: 0, originY: 0, declared: { ...scDeclared, widthM: 4 }, pixelsPerMeter: 10, dirFace: 2, distFace: 7,
+  });
+  ok("§14 a house width override rides the scatter — +2 m over the book, still +2 m after",
+    scHouse.widthM === lookup.spreadBandSpec(scHouse.reachM).widthM + 2, String(scHouse.widthM));
+  ok("§14 and the override can never take the scattered corridor under the one-metre floor",
+    hooks.scatteredSpreadCorridor({
+      originX: 0, originY: 0, declared: { ...scDeclared, widthM: 1 }, pixelsPerMeter: 10, dirFace: 3, distFace: 10,
+    }).widthM >= placement.SPREAD_MIN_WIDTH_M);
+  // Off the map: the centre is clamped onto the scene rect rather than being left where nobody can read it.
+  const rect = { x: 0, y: 0, width: 210, height: 210 };
+  const scClamp = hooks.scatteredSpreadCorridor({
+    originX: 0, originY: 0, declared: scDeclared, pixelsPerMeter: 10, dirFace: 6, distFace: 10, sceneRect: rect,
+  });
+  ok("§14 a centre that drifts off the map is clamped onto the scene rect and says so",
+    scClamp.clamped === true && scClamp.aimX === 210 && scClamp.aimX <= rect.x + rect.width,
+    JSON.stringify({ x: scClamp.aimX, clamped: scClamp.clamped }));
+  ok("§14 a centre that stays on the map is not clamped (negative)",
+    hooks.scatteredSpreadCorridor({
+      originX: 0, originY: 0, declared: scDeclared, pixelsPerMeter: 10, dirFace: 2, distFace: 7, sceneRect: { x: 0, y: 0, width: 1000, height: 1000 },
+    }).clamped === false);
+
+  // §14d — END TO END THROUGH THE PLANT, with two figures standing where the two answers put the
+  // corridor: one on the point that was AIMED at, one where the shell lands after the rolled drift.
+  // Foundry v14 maps a face as Math.ceil((1 − u) · faces), so u = 1 − (k − 0.5)/N forces a d10 to k
+  // (the a1a5 harness's D()).
+  const scOrigin = shooterPlaceable.center;
+  const scPpm = grid.metersToPixels(scene, 1);
+  const scHalfSq = canvas.dimensions.size / 2;
+  // The overshoot rule, in metres: half a one-square figure's own width. Both answers below run the
+  // corridor that far past the centre so the figure standing on it is unambiguously inside.
+  const scOvershootM = grid.pixelsToMeters(scene, canvas.dimensions.size) / 2;
+  const scAimPt = { x: scOrigin.x + 20 * scPpm, y: scOrigin.y };
+  const scHitPt = { x: scOrigin.x + 20 * scPpm, y: scOrigin.y + 7 * scPpm };
+  const [scAimTok] = await scene.createEmbeddedDocuments("Token", [{
+    name: "__PWK__SPREAD Aimed", actorId: (await Actor.create({ name: "__PWK__SPREAD Aimed Actor", type: "character" })).id,
+    x: scAimPt.x - scHalfSq, y: scAimPt.y - scHalfSq, width: 1, height: 1,
+  }]);
+  const [scHitTok] = await scene.createEmbeddedDocuments("Token", [{
+    name: "__PWK__SPREAD Landed", actorId: (await Actor.create({ name: "__PWK__SPREAD Landed Actor", type: "character" })).id,
+    x: scHitPt.x - scHalfSq, y: scHitPt.y - scHalfSq, width: 1, height: 1,
+  }]);
+  await sleep(400);
+
+  const declaredAim = {
+    sceneId: scene.id, originX: scOrigin.x, originY: scOrigin.y,
+    angleDeg: 0, reachM: 20, lengthM: 20 + scOvershootM, widthM: 2, band: "Medium", dmgFormula: "3d6",
+  };
+  const newCardSince = async (since) => {
+    for (let i = 0; i < 40; i++) {
+      const c = resolveCards().filter(m => !since.has(m.id));
+      if (c.length) return c[c.length - 1];
+      await sleep(250);
+    }
+    return null;
+  };
+  const plain = (m) => (m?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+
+  // HIT — the corridor stays exactly where it was aimed, and the card says so.
+  let sinceScatter = new Set(game.messages.map(m => m.id));
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }));
+  const scHitCard = await newCardSince(sinceScatter);
+  const scF = myZones()[0]?.flags?.[SCOPE] ?? {};
+  ok("§14 a HIT plants the corridor exactly as aimed — heading, reach and width untouched",
+    scF.scattered === false && Math.abs(Number(scF.dirDeg) - 0) < 1e-9
+    && Math.abs(Number(scF.lengthM) - (20 + scOvershootM)) < 1e-9 && Number(scF.widthM) === 2,
+    JSON.stringify({ scattered: scF.scattered, dirDeg: scF.dirDeg, lengthM: scF.lengthM, widthM: scF.widthM }));
+  ok("§14 its card carries the roll line with the verdict, and NO scatter line (negative)",
+    /30/.test(plain(scHitCard)) && /HIT/.test(plain(scHitCard)) && !/Scatter/i.test(plain(scHitCard)),
+    plain(scHitCard).slice(0, 180));
+  ok("§14 and the figure standing on the aimed point is the one the card lists",
+    /__PWK__SPREAD Aimed/.test(plain(scHitCard)) && !/__PWK__SPREAD Landed/.test(plain(scHitCard)),
+    plain(scHitCard).slice(0, 220));
+  await wipeZones(); await wipeCards();
+
+  // MISS — two forced d10s send the true centre 7 m south, and every number re-derives from there.
+  const origRU = CONFIG.Dice.randomUniform;
+  const D10 = (k) => 1 - (k - 0.5) / 10;
+  const queue = (...ks) => { const Q = ks.map(D10); CONFIG.Dice.randomUniform = () => (Q.length ? Q.shift() : 0.5); };
+  let scMissF = null, scMissCard = null, scSelfCheck = null;
+  try {
+    // Self-check the override before leaning on it (the a1a5 lesson): if the queue does not drive Roll
+    // on this core, every number below is meaningless rather than merely wrong.
+    queue(2);
+    scSelfCheck = (await new Roll("1d10").evaluate()).total;
+    queue(2, 7);
+    sinceScatter = new Set(game.messages.map(m => m.id));
+    await hooks._placeSpreadZone(basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }));
+    scMissCard = await newCardSince(sinceScatter);
+    scMissF = myZones()[0]?.flags?.[SCOPE] ?? {};
+  } finally {
+    CONFIG.Dice.randomUniform = origRU;
+  }
+  ok("§14 the forced dice really do drive the roll (self-check)", scSelfCheck === 2, String(scSelfCheck));
+  const wantReach = Math.hypot(20, 7), wantDeg = Math.atan2(7, 20) * 180 / Math.PI;
+  ok("§14 a MISS moves the true centre by the rolled vector — face 2 is south, 7 metres — and records it",
+    scMissF.scattered === true && scMissF.scatterDirFace === 2 && scMissF.scatterDriftM === 7,
+    JSON.stringify({ scattered: scMissF.scattered, face: scMissF.scatterDirFace, drift: scMissF.scatterDriftM }));
+  ok("§14 the planted corridor's heading and reach are re-derived from the unmoved muzzle, by value",
+    Math.abs(Number(scMissF.dirDeg) - wantDeg) < 0.01
+    && Math.abs(Number(scMissF.lengthM) - (wantReach + scOvershootM)) < 0.01,
+    JSON.stringify({ dirDeg: scMissF.dirDeg, lengthM: scMissF.lengthM, wantDeg, wantLength: wantReach + scOvershootM }));
+  ok("§14 and its band, width and banded damage are the NEW distance's, not the aim's",
+    scMissF.band === lookup.spreadBandSpec(wantReach).band
+    && Number(scMissF.widthM) === lookup.spreadBandSpec(wantReach).widthM
+    && scMissF.dmgFormula === lookup.spreadBandDamage(lookup.spreadBandSpec(wantReach).band),
+    JSON.stringify({ band: scMissF.band, widthM: scMissF.widthM, dmg: scMissF.dmgFormula }));
+  ok("§14 the card states the miss and the drift it took",
+    /MISS/.test(plain(scMissCard)) && /Scatter/i.test(plain(scMissCard)) && /7m/.test(plain(scMissCard)),
+    plain(scMissCard).slice(0, 220));
+
+  // §14e — the OCCUPANTS are re-read on the corridor that was actually PLANTED, so the card lists the
+  // figure standing where the shell landed and not the one standing on the aimed point.
+  ok("§14 the figure standing where the shell LANDED is the one the scattered card lists",
+    /__PWK__SPREAD Landed/.test(plain(scMissCard)), plain(scMissCard).slice(0, 260));
+  ok("§14 and the figure standing on the point that was AIMED at is not (negative)",
+    !/__PWK__SPREAD Aimed/.test(plain(scMissCard)), plain(scMissCard).slice(0, 260));
+  // The same answer read off the region itself rather than off the card, so a card built from a stale
+  // snapshot could not pass the pair.
+  const scInside = areas.tokensInArea(areas.areaById(scene, myZones()[0].id), [...(scene.tokens ?? [])])
+    .map(td => td.name ?? td.document?.name);
+  ok("§14 and the region agrees with its own card about who is standing in it",
+    scInside.includes("__PWK__SPREAD Landed") && !scInside.includes("__PWK__SPREAD Aimed"), scInside.join(" | "));
+
+  // §14f — THE SHOOTER STAYS OUT OF THEIR OWN PATTERN, scattered or not, and this is a DESIGN CALL
+  // rather than an oversight: the corridor is anchored at the muzzle and runs outward, so the shooter
+  // sits at the polygon's start on EVERY shot they fire, hit or miss. Dropping the attacker exemption
+  // "so a scattered pattern can catch them" would therefore catch them on every shot ever fired, which
+  // is not what p.108 describes. A pattern that can turn on its thrower needs detached geometry, and
+  // that is a different ruling. The exemption is untouched; this pins that it still holds after a scatter.
+  ok("§14 the shooter is not listed in their own scattered pattern (the attacker exemption still holds)",
+    !/__PWK__SPREAD Gunner/.test(plain(scMissCard)), plain(scMissCard).slice(0, 260));
+  await wipeZones(); await wipeCards();
+
+  // §14g — a corridor NOBODY declared is untouched by all of this: no verdict is consulted, no scatter
+  // is rolled, and the guessed-corridor card still asks the reader to look before it resolves.
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 1, attackTotal: 2, toHitDC: 30 }));
+  await sleep(700);
+  ok("§14 an UNDECLARED corridor never scatters, however badly the roll went (negative)",
+    myZones()[0]?.flags?.[SCOPE]?.scattered === false && myZones()[0]?.flags?.[SCOPE]?.declaredAim === false,
+    JSON.stringify({ scattered: myZones()[0]?.flags?.[SCOPE]?.scattered, declared: myZones()[0]?.flags?.[SCOPE]?.declaredAim }));
+  await wipeZones(); await wipeCards();
+  for (const t of [scAimTok, scHitTok]) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
 
   /* ── cleanup ────────────────────────────────────────────────────────────────────────────── */
   await wipeZones();

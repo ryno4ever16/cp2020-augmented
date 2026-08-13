@@ -33,7 +33,7 @@ import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 import { mechRoundTickEnabled } from "../settings.js";
-import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, localizeParam } from "../utils.js";
+import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, localizeParam, tryLocalize } from "../utils.js";
 import { renderChatCard }                                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegions, moveArea } from "./area-shapes.js";
@@ -42,7 +42,12 @@ import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./supp
 import { rayPolygonShape } from "./area-geometry.js";
 import { spreadFlowModeOf, spreadBandSpec, spreadBandDamage, SPREAD_MODE_SINGLE } from "../lookups.js";
 import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
-import { pixelsToMeters } from "../vehicle/vehicle-grid.js";
+// The two floors a corridor may not go under, taken from the gesture that declares one rather than
+// re-typed here: the aim preview and the plant have always had to agree about them, and the note at
+// their definition says so. Nothing else in the aim module is touched (it is a client-side preview),
+// and it reaches for no canvas at import time.
+import { SPREAD_MIN_LENGTH_M, SPREAD_MIN_WIDTH_M } from "./spread-placement.js";
+import { pixelsToMeters, metersToPixels } from "../vehicle/vehicle-grid.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
@@ -2160,6 +2165,61 @@ async function _confirmExplosion(templateId) {
   }
 }
 
+/**
+ * THE GRENADE TABLE'S DIRECTION ROSE (CP2020 p.108) — a d10 face to a unit heading, and its name.
+ *
+ * ⭐ LIFTED OUT OF THE GRENADE FLOW so a second reader cannot invent a second rose. It was a pair of
+ * locals inside `_scatterExplosion` while a missed grenade was the only thing that scattered; the shot
+ * pattern misses on the SAME table (p.108 sends a missed pattern to the grenade rules by name), and a
+ * copy of a direction table is how two flows start disagreeing about which way a 3 goes.
+ *
+ * The layout is a NUMPAD around the aim point, so the face reads off the keypad a table already has
+ * under its hand, and screen axes apply: +y is DOWN, which is why south is +1. Faces 5 and 10 are the
+ * table's two no-drift results — a shot that missed the roll can still land where it was pointed, and
+ * that is the book's own answer rather than a rounding of ours.
+ *
+ * ⚠ THIS IS NOT THE ONLY SCATTER ROSE IN THE MODULE, deliberately. `vehicle-indirect.js`
+ * `scatterDirectionDeg` spaces ten headings 36° apart with no no-drift face, because it serves
+ * Maximum Metal's indirect-fire and bombing tables (MM p.8-9) and those deviate by a computed distance
+ * that is never zero. Two different books, two different tables; they are kept apart on purpose.
+ *
+ * The NAMES stay English here — this is data, and the render edge wraps them with `tryLocalize` (the
+ * value-is-key convention, lookups.js line 2), so a table that adds `CYBERPUNK.SW` gets its own word
+ * and one that does not keeps the compass point unchanged.
+ */
+export const SCATTER_ROSE = Object.freeze({
+  1:  Object.freeze({ vx: -1, vy:  1, name: "SW" }),
+  2:  Object.freeze({ vx:  0, vy:  1, name: "S" }),
+  3:  Object.freeze({ vx:  1, vy:  1, name: "SE" }),
+  4:  Object.freeze({ vx: -1, vy:  0, name: "W" }),
+  5:  Object.freeze({ vx:  0, vy:  0, name: "on-target" }),
+  6:  Object.freeze({ vx:  1, vy:  0, name: "E" }),
+  7:  Object.freeze({ vx: -1, vy: -1, name: "NW" }),
+  8:  Object.freeze({ vx:  0, vy: -1, name: "N" }),
+  9:  Object.freeze({ vx:  1, vy: -1, name: "NE" }),
+  10: Object.freeze({ vx:  0, vy:  0, name: "direct hit" }),
+});
+
+/**
+ * The drift a missed throw or a missed pattern takes, in METRES, from the two d10 faces. PURE.
+ *
+ * The diagonal faces are normalised to unit length before the distance is applied, so a 3 travels the
+ * rolled number of metres south-east rather than that many metres on each axis — the table gives one
+ * distance, not two. A no-drift face reports `distanceM: 0` however the distance die fell, which is
+ * what lets a caller print "landed on the aimed point" without re-deriving the rose.
+ *
+ * @param {number} dirFace  the 1d10 direction face
+ * @param {number} distFace the 1d10 distance face, in metres
+ * @returns {{dxM:number, dyM:number, distanceM:number, face:number, name:string}}
+ */
+export function scatterDriftM(dirFace, distFace) {
+  const face = Math.min(10, Math.max(1, Math.round(Number(dirFace) || 1)));
+  const { vx, vy, name } = SCATTER_ROSE[face];
+  const mag = Math.hypot(vx, vy) || 1;
+  const drift = (vx || vy) ? Math.max(0, Number(distFace) || 0) : 0;
+  return { dxM: (vx / mag) * drift, dyM: (vy / mag) * drift, distanceM: drift, face, name };
+}
+
 /** Scatter a missed grenade: Grenade Table (CP2020 p.108) — 1d10 direction + 1d10 metres. */
 async function _scatterExplosion(templateId) {
   if (!canvas?.scene || !templateId) return;
@@ -2174,15 +2234,12 @@ async function _scatterExplosion(templateId) {
 
   const dirRoll  = await new Roll("1d10").evaluate();
   const distRoll = await new Roll("1d10").evaluate();
-  // Numpad layout around the target (5/10 = on-target). Screen coords: +y is down.
-  const DIRS    = { 1: [-1, 1], 2: [0, 1], 3: [1, 1], 4: [-1, 0], 5: [0, 0], 6: [1, 0], 7: [-1, -1], 8: [0, -1], 9: [1, -1], 10: [0, 0] };
-  const DIRNAME = { 1: "SW", 2: "S", 3: "SE", 4: "W", 5: "on-target", 6: "E", 7: "NW", 8: "N", 9: "NE", 10: "direct hit" };
-  const [vx, vy] = DIRS[dirRoll.total] ?? [0, 0];
-  const distM  = distRoll.total;
-  const distPx = (distM / gridDist) * gridSize;
-  const mag = Math.hypot(vx, vy) || 1;
-  const dx = (vx / mag) * distPx;
-  const dy = (vy / mag) * distPx;
+  // The rose and the arithmetic both come from the shared site above, so a missed throw and a missed
+  // pattern travel the same way for the same face.
+  const drift = scatterDriftM(dirRoll.total, distRoll.total);
+  const distM = drift.distanceM;
+  const dx = (drift.dxM / gridDist) * gridSize;
+  const dy = (drift.dyM / gridDist) * gridSize;
 
   // Move via the shim (MeasuredTemplate.update on v13; shifts Region shape vertices on v14).
   await moveArea(handle, dx, dy);
@@ -2197,7 +2254,9 @@ async function _scatterExplosion(templateId) {
   } catch { /* non-fatal */ }
 
   await postSavePromptCard({
-    body: localizeParam("ScatterBody", { dir: DIRNAME[dirRoll.total], drift: (vx || vy) ? localizeParam("ScatterDrift", { dist: distM }) : localize("ScatterNoDrift") }),
+    // The rose's name goes through tryLocalize at the render edge (the value-is-key convention), so a
+    // world with no compass keys prints exactly the compass point it printed before.
+    body: localizeParam("ScatterBody", { dir: tryLocalize(drift.name), drift: distM ? localizeParam("ScatterDrift", { dist: distM }) : localize("ScatterNoDrift") }),
   });
 }
 
@@ -2251,6 +2310,115 @@ export function declaredSpreadAim(payload) {
 }
 
 /**
+ * DID THE SHOT ACTUALLY HIT WHAT IT WAS POINTED AT — as the BASE SYSTEM already ruled it, or null when
+ * the payload does not say.
+ *
+ * ⛔ NOTHING IS ROLLED HERE, AND THAT IS THE WHOLE DESIGN. The base system rolls exactly one attack per
+ * fire card (`attackRoll` — REF + the attack skill + every modifier the window folded in + the weapon's
+ * accuracy) and compares it against the DC its own range table gives the declared band (`rangeDCs`,
+ * the base's lookups.js). Both numbers ride the payload from the render (seam-shim.js). A second roll
+ * here would be a second answer to a question that has already been answered, sitting in the same chat
+ * log as the base's own card saying otherwise.
+ *
+ * Null — a payload that carries neither number — means "nobody asked whether this hit", and the flow
+ * that reads it plants where it was aimed, which is what every pattern did before this existed. A shot
+ * driven straight through `_placeSpreadZone` (a macro, the keeper's own placement legs) lands there.
+ *
+ * @param {object} payload a weaponFired payload
+ * @returns {null|{hit:boolean, total:number, dc:number}}
+ */
+export function spreadAttackOutcome(payload) {
+  const rawTotal = payload?.attackTotal, rawDc = payload?.toHitDC;
+  // ⚠ THE NULL CHECK IS LOAD-BEARING, not defensive tidiness. `Number(null)` is 0 — a finite number —
+  // so a payload that reached here over the socket with its fields nulled (JSON has no NaN) would
+  // otherwise rule the shot a HIT against a DC of zero on every relayed player shot. Absent means
+  // absent; only a real number is an answer.
+  if (rawTotal === null || rawTotal === undefined || rawDc === null || rawDc === undefined) return null;
+  const total = Number(rawTotal), dc = Number(rawDc);
+  if (!Number.isFinite(total) || !Number.isFinite(dc)) return null;
+  return { hit: total >= dc, total, dc };
+}
+
+/**
+ * WHERE A MISSED PATTERN ACTUALLY WENT — the declared corridor re-derived about a scattered centre. PURE.
+ *
+ * CP2020 p.108 hands a missed pattern to the grenade rules: *"If the target is missed, the true center
+ * of the attack must be determined"* — 1d10 for a direction off the Grenade Table, 1d10 for the metres.
+ * So the thing that moves is the corridor's TRUE CENTRE, meaning the point the shooter aimed at; the
+ * MUZZLE does not move, because the shell still left the same barrel. Everything else falls out of the
+ * new geometry rather than being carried over from the aim:
+ *   - the heading is re-read from the muzzle to the scattered point,
+ *   - the reach is the new distance, so the range BAND re-derives, and with it the book's width and
+ *     the banded damage — a pattern that scatters long really does spread wider and hit softer.
+ * That is the same one derivation the aim preview and the plant already share (`spreadBandSpec`), so a
+ * scattered corridor cannot be a different shape of the same rule from an aimed one.
+ *
+ * ⭐ THE HOUSE WIDTH OVERRIDE SURVIVES THE SCATTER, and it is reconstructed rather than carried: the aim
+ * record stores the FINAL width, so the table's ±1 m per notch is recovered by subtracting the width the
+ * DECLARED reach's band earned and re-applying it on top of the width the NEW band earns. A table that
+ * tightened a corridor to a metre keeps a tight corridor wherever the shell lands. Floored at the same
+ * metre the gesture floors it at, for the same reason (a zero-width corridor is a line nobody can stand in).
+ *
+ * ⭐ THE BAND LADDER NEEDS NO CAP, and this is worth saying out loud because it looks like a missing
+ * guard: `spreadBandSpec` SATURATES — anything past 25 m is "Long" — so a shell that scatters past its
+ * own reach earns the outermost band's width and the outermost band's damage and nothing further. The
+ * pellets gain no reach they did not have; the corridor is simply the longest, widest, weakest one the
+ * book describes. Nothing to clamp.
+ *
+ * `sceneRect` clamps the centre onto the map when the drift would carry it off the edge — a corridor
+ * pointed at nothing outside the scene is a corridor nobody can read. Walls are NOT consulted: a wall
+ * does not stop a point from being a point, and whether a wall shields the figures standing near it is
+ * the cover exemption's job (`_spreadPatternOccupants`), which runs on the corridor this returns.
+ *
+ * @param {object} args
+ * @param {number} args.originX      the muzzle, in pixels — unchanged by the scatter
+ * @param {number} args.originY
+ * @param {object} args.declared     the corridor the shooter confirmed (declaredSpreadAim's shape)
+ * @param {object} [args.widths]     the load's own per-band widths, for the re-derivation
+ * @param {number} args.pixelsPerMeter
+ * @param {{x:number,y:number,width:number,height:number}} [args.sceneRect]
+ * @param {number} args.dirFace      the 1d10 direction face
+ * @param {number} args.distFace     the 1d10 distance face, in metres
+ * @param {number} [args.overshootM] how far past the new centre the corridor runs (see the plant)
+ * @returns {{angleDeg:number, reachM:number, lengthM:number, widthM:number, band:string,
+ *           aimX:number, aimY:number, driftM:number, dirName:string, dirFace:number, clamped:boolean}}
+ */
+export function scatteredSpreadCorridor({
+  originX = 0, originY = 0, declared, widths = {}, pixelsPerMeter = 1,
+  sceneRect = null, dirFace = 1, distFace = 0, overshootM = 0,
+} = {}) {
+  const ppm = Number(pixelsPerMeter) > 0 ? Number(pixelsPerMeter) : 1;
+  const rad = (Number(declared.angleDeg) * Math.PI) / 180;
+  // The centre as declared: where the shooter clicked, which is `reachM` along the confirmed heading.
+  const aimedX = originX + Math.cos(rad) * declared.reachM * ppm;
+  const aimedY = originY + Math.sin(rad) * declared.reachM * ppm;
+
+  const drift = scatterDriftM(dirFace, distFace);
+  let aimX = aimedX + drift.dxM * ppm;
+  let aimY = aimedY + drift.dyM * ppm;
+  let clamped = false;
+  if (sceneRect && Number.isFinite(sceneRect.x) && Number.isFinite(sceneRect.width)) {
+    const cx = Math.min(Math.max(aimX, sceneRect.x), sceneRect.x + sceneRect.width);
+    const cy = Math.min(Math.max(aimY, sceneRect.y), sceneRect.y + sceneRect.height);
+    clamped = cx !== aimX || cy !== aimY;
+    aimX = cx; aimY = cy;
+  }
+
+  const reachM = Math.max(SPREAD_MIN_LENGTH_M, Math.hypot(aimX - originX, aimY - originY) / ppm);
+  const angleDeg = (Math.atan2(aimY - originY, aimX - originX) * 180) / Math.PI;
+  // The table's own override, recovered from the declared corridor and re-applied to the new band.
+  const widthBiasM = declared.widthM - spreadBandSpec(declared.reachM, widths).widthM;
+  const spec = spreadBandSpec(reachM, widths);
+  return {
+    angleDeg, reachM,
+    lengthM: Math.max(SPREAD_MIN_LENGTH_M, reachM + (Number(overshootM) || 0)),
+    widthM: Math.max(SPREAD_MIN_WIDTH_M, spec.widthM + widthBiasM),
+    band: spec.band,
+    aimX, aimY, driftM: drift.distanceM, dirName: drift.name, dirFace: drift.face, clamped,
+  };
+}
+
+/**
  * Shotgun / flechette spread (CP2020 p.108). A shell throws a widening pattern: a ray from the attacker
  * toward the target, width by range band (Close/Med/Long), with range-banded damage (ammo override,
  * else Core 4d6/3d6/2d6). Everyone in the straight path is hit (no evasion). The GM aims and confirms,
@@ -2278,6 +2446,30 @@ function _hookSpread() {
   });
 }
 
+/**
+ * Half the width, in metres, of whatever figure is standing on a point — 0 when the point is bare ground.
+ *
+ * ⭐ THE OVERSHOOT RULE, third reader. A corridor that ends exactly on a figure's centre puts that
+ * centre ON the polygon's end edge, so whether it is inside its own pattern comes down to a
+ * floating-point comparison — reproduced on the rig, where a three-shell burst resolved against a
+ * bystander and missed the figure that was aimed at. Half the figure's own width is the smallest
+ * overshoot that settles it and it costs no other square, because the extra reach lies inside the
+ * square that figure already occupies. The aim gesture applies it at the confirm
+ * (combat/spread-placement.js `_tokenAtPoint`) and the undeclared fallback applies it to the aimed-at
+ * token; a SCATTERED centre needs it too, and for exactly the same reason.
+ */
+function _halfTokenWidthAtM(scene, x, y, gridSize) {
+  for (const t of canvas?.tokens?.placeables ?? []) {
+    const b = t.bounds ?? null;
+    const left = b ? b.x : t.x, top = b ? b.y : t.y;
+    const w = b ? b.width : (t.w ?? 0), h = b ? b.height : (t.h ?? 0);
+    if (x >= left && x <= left + w && y >= top && y <= top + h) {
+      return pixelsToMeters(scene, gridSize) * ((Number(t.document?.width ?? t.width) || 1) / 2);
+    }
+  }
+  return 0;
+}
+
 /** Place the shotgun/flechette spread pattern + post its Confirm card. Runs on the active GM.
  *  Exported for the keeper, which drives placement and confirmation as the two halves they are. */
 export async function _placeSpreadZone(payload) {
@@ -2303,12 +2495,53 @@ export async function _placeSpreadZone(payload) {
     // the rounds the rail draws and the cover ray all leave the same point even if the figure was
     // nudged between the aim and the roll. Everything else is the shooter's.
     const declared = declaredSpreadAim(payload);
+    const widths = {
+      short: payload.spreadWidthShort, medium: payload.spreadWidthMedium, long: payload.spreadWidthLong,
+    };
     let band, lengthM, widthM, angleDeg;
+    // What the roll said, and — when it said MISS — where the shell actually went. Both stay null on
+    // an undeclared corridor and on a payload that carries no roll, and the card prints neither.
+    let outcome = null, scatter = null;
     if (declared) {
       angleDeg = declared.angleDeg;
       lengthM = declared.lengthM;
       widthM = declared.widthM;
       band = declared.band;
+
+      // ⭐ A DECLARED CORRIDOR IS STILL A SHOT THAT CAN MISS (2026-08-13, user ruling; CP2020 p.108:
+      // *"Attacks are made as with other ranged weapons… If the target is missed, the true center of
+      // the attack must be determined"*). Until now the aim WAS the outcome — the corridor resolved
+      // exactly where it was pointed and the attack roll the base system had already made was thrown
+      // away. Now the base's own verdict decides (spreadAttackOutcome: nothing is rolled here, the
+      // roll and its DC ride the payload), and a miss sends the pattern to the grenade table.
+      //
+      // The MUZZLE does not move — the shell left the same barrel — so only the far end is re-aimed
+      // and the corridor is rebuilt from the shooter as they stand to wherever the shell landed.
+      outcome = spreadAttackOutcome(payload);
+      if (outcome && !outcome.hit) {
+        const dirRoll  = await new Roll("1d10").evaluate();
+        const distRoll = await new Roll("1d10").evaluate();
+        const ppm = metersToPixels(scene, 1) || 1;
+        // The scattered centre earns its own overshoot from whatever is standing there NOW, by the same
+        // rule the aim gesture and the undeclared fallback both apply (see _tokenAtPoint's note): a
+        // corridor that ends exactly on a figure's centre leaves that figure balanced on the polygon's
+        // end edge. The aim's own overshoot is not carried over — it belonged to the figure that WAS
+        // aimed at, and after a scatter that is usually not who is standing there.
+        // The geometry answers first (it is pure and needs no canvas), then the overshoot is measured
+        // against the point it landed on and folded into the reach — which is why the reach is the
+        // thing this file adjusts and the corridor's own numbers are left exactly as derived.
+        const landed = scatteredSpreadCorridor({
+          originX: ox, originY: oy, declared, widths, pixelsPerMeter: ppm,
+          sceneRect: canvas?.dimensions?.sceneRect ?? null,
+          dirFace: dirRoll.total, distFace: distRoll.total,
+        });
+        const overshootM = _halfTokenWidthAtM(scene, landed.aimX, landed.aimY, gridSize);
+        scatter = { ...landed, lengthM: Math.max(SPREAD_MIN_LENGTH_M, landed.reachM + overshootM) };
+        angleDeg = scatter.angleDeg;
+        lengthM = scatter.lengthM;
+        widthM = scatter.widthM;
+        band = scatter.band;
+      }
     } else {
       // ⏪ THE UNDECLARED FALLBACK — what every shot did before the gesture existed, kept because a
       // shell can still be fired by something that never armed it (a macro, a keeper driving the roll
@@ -2338,9 +2571,7 @@ export async function _placeSpreadZone(payload) {
       // The band ladder and the per-load widths come from the ONE shared derivation the aim preview
       // reads, so a declared corridor and a guessed one cannot be two different shapes of the same rule.
       // With no target there is no distance to measure, and `null` is what resolves to the Medium band.
-      const spec = spreadBandSpec(distM === null ? 10 : distM, {
-        short: payload.spreadWidthShort, medium: payload.spreadWidthMedium, long: payload.spreadWidthLong,
-      });
+      const spec = spreadBandSpec(distM === null ? 10 : distM, widths);
       band = spec.band;
       widthM = spec.widthM;
     }
@@ -2413,6 +2644,14 @@ export async function _placeSpreadZone(payload) {
         // below), and it is recorded rather than re-derived because the payload does not outlive the
         // plant and a reader of the region has no other way to tell the two apart.
         declaredAim: !!declared,
+        // WHETHER THIS CORRIDOR IS WHERE IT WAS AIMED. Recorded for the same reason `declaredAim` is —
+        // the payload does not outlive the plant, and a reader of the region (or a keeper reading it
+        // back) has no other way to tell a corridor the shooter placed from one the grenade table did.
+        // Presentation and diagnosis only; no damage path branches on it, because a scattered pattern
+        // hurts whoever is standing in it exactly as an aimed one does.
+        scattered: !!scatter,
+        scatterDirFace: scatter ? scatter.dirFace : 0,
+        scatterDriftM: scatter ? scatter.driftM : 0,
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Spread area creation failed"); return; }
@@ -2443,7 +2682,7 @@ export async function _placeSpreadZone(payload) {
       // being asked about a corridor they can see. Its two expiry clocks still own an IGNORED pattern
       // (round advance in combat, the wall clock outside one), which is what stops an unpressed card
       // from leaving a corridor on the table forever.
-      await _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker });
+      await _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker, outcome, scatter });
       return;
     }
 
@@ -2500,7 +2739,7 @@ function _spreadRowName(tok) {
  * the button is pressed, so a figure who walks in or out between the two is resolved as it stands then.
  * That is deliberate — the region is on the table for exactly that reason.
  */
-async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker }) {
+async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker, outcome = null, scatter = null }) {
   const { exposed, covered } = _spreadPatternOccupants(handle);
   // Status is assembled in JS and passed as a localized param (the GasCloudPenaltyClause pattern), so the
   // template stays one declarative row shape rather than branching per figure.
@@ -2508,9 +2747,29 @@ async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmg
     ...exposed.map(t => ({ name: _spreadRowName(t), status: localize("SpreadRowInPattern") })),
     ...covered.map(t => ({ name: _spreadRowName(t), status: localize("SpreadRowCovered") })),
   ];
+  // ⭐ THE ROLL LINE, and the scatter under it when there is one. Assembled here as PRE-LOCALIZED
+  // strings rather than as branches in the template (the GasCloudPenaltyClause pattern), so the card
+  // stays two declarative optional lines and the verdict's own colour lives inside its i18n value —
+  // the IndirectOnTarget idiom this module already uses for HIT/MISS wording.
+  //
+  // Both are absent — and the card is byte-identical to the one that shipped before — whenever the
+  // payload carried no roll: a macro, a keeper's own placement leg, or any entry point that never went
+  // through the base system's fire methods.
+  const rollLine = outcome
+    ? localizeParam("SpreadRollLine", {
+        total: outcome.total, dc: outcome.dc,
+        verdict: localize(outcome.hit ? "SpreadRollHit" : "SpreadRollMiss"),
+      })
+    : "";
+  const scatterLine = scatter
+    ? (scatter.driftM > 0
+        ? localizeParam("SpreadScatterLine", { dir: tryLocalize(scatter.dirName), dist: scatter.driftM })
+        : localize("SpreadScatterNoDrift"))
+    : "";
   const content = await renderChatCard("spread-resolution.hbs", {
     weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1,
     templateId: handle.doc.id, rows, anyRows: rows.length > 0,
+    rollLine, scatterLine,
   });
   await ChatMessage.create({ content, speaker });
 }
