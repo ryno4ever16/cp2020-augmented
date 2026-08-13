@@ -150,7 +150,14 @@ export async function armSuppressivePreview(opts = {}) {
     redraw();
   };
 
+  // The aim listeners are window-level captures, so each one first checks the event actually landed on
+  // the game canvas (`#board`) — without that, a click on ANY open UI (an actor sheet being dragged out
+  // of the way, the sidebar) would confirm the lane, and a wheel over a sheet would resize it instead of
+  // scrolling (user-hit 2026-08-12, in the spread twin). Events on UI elements are left entirely alone.
+  const isCanvasEvent = (ev) => ev.target === canvas?.app?.view || ev.target?.id === "board";
+
   const onWheel = (ev) => {
+    if (!isCanvasEvent(ev)) return;
     ev.preventDefault();
     ev.stopPropagation();
     // Scroll up widens the lane (easier save), scroll down narrows it toward the 2m floor (harder save).
@@ -159,6 +166,7 @@ export async function armSuppressivePreview(opts = {}) {
   };
 
   const onDown = (ev) => {
+    if (!isCanvasEvent(ev)) return;          // clicks on open UI move/close windows, never the aim
     if (ev.button === 2) { ev.preventDefault(); ev.stopPropagation(); cancel(); return; }  // right-click cancels
     if (ev.button !== 0) return;                                                            // only left confirms
     ev.preventDefault();
@@ -166,7 +174,8 @@ export async function armSuppressivePreview(opts = {}) {
     confirm();
   };
 
-  const onContext = (ev) => { ev.preventDefault(); ev.stopPropagation(); };  // suppress the browser menu on cancel
+  // Suppress the browser menu only over the canvas (the right-click cancel); UI menus stay usable.
+  const onContext = (ev) => { if (isCanvasEvent(ev)) { ev.preventDefault(); ev.stopPropagation(); } };
 
   const onKey = (ev) => { if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); cancel(); } };
 
