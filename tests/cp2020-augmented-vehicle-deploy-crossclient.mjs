@@ -314,9 +314,11 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   await settle(cTok.id);
   out.boardedFlag = scene.tokens.get(cTok.id).flags?.[SCOPE]?.boardedVehicle === vehicleActor.id;
 
-  // seated: first seat = the footprint's first square, drawn at 60%, sorted above the hull
+  // seated: the DRIVER'S seat, drawn at 60%, sorted above the hull. On this 4-wide handle the
+  // footprint derives an eastward heading, so the engine is the right-hand column and the driver
+  // sits in the cell behind it on the top row — two squares right of the hull's own origin.
   const seated = scene.tokens.get(cTok.id);
-  out.seat = { x: seated.x, y: seated.y, vx: vTok.x, vy: vTok.y,
+  out.seat = { x: seated.x, y: seated.y, vx: vTok.x, vy: vTok.y, vw: vTok.width, vh: vTok.height,
                scale: seated._source.texture.scaleX, sort: seated.sort, hullSort: vTok.sort };
 
   // crew-follow: move the vehicle, crew translates by the same delta (seat offset preserved)
@@ -326,7 +328,7 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   await settle(cTok.id);
   const c1 = { x: scene.tokens.get(cTok.id).x, y: scene.tokens.get(cTok.id).y };
   out.crewFollowed = c1.x === c0.x + 3 * grid && c1.y === c0.y + grid;
-  out.stillSeated = c1.x === vTok.x && c1.y === vTok.y;
+  out.stillSeated = c1.x === vTok.x + 2 * grid && c1.y === vTok.y;
 
   // HUD now offers Disembark; click it; flag clears; the rider lands BESIDE the hull
   hud.clear(); hud.bind(placeable);
@@ -357,8 +359,9 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
 }, { SCOPE, sceneId: setup.sceneId, activeBefore: setup.activeBefore });
 check("embark button renders on crew token near vehicle", boardRes.embarkBtn === true, boardRes.error ?? "");
 check("embark sets boardedVehicle flag", boardRes.boardedFlag === true);
-check("embark seats the rider in the footprint's first square (exact)",
-  Number.isFinite(boardRes.seat?.x) && boardRes.seat.x === boardRes.seat.vx && boardRes.seat.y === boardRes.seat.vy,
+check("embark seats the rider in the driver's seat, behind the engine rank (exact)",
+  Number.isFinite(boardRes.seat?.x) && boardRes.seat.vw === 4
+  && boardRes.seat.x === boardRes.seat.vx + 2 * setup.grid && boardRes.seat.y === boardRes.seat.vy,
   JSON.stringify(boardRes.seat));
 check("seated rider is drawn at 60% of its own art scale", boardRes.seat?.scale === 0.6, String(boardRes.seat?.scale));
 check("seated rider sorts above the hull",
