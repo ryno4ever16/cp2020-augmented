@@ -21,11 +21,16 @@
  *     spreadMode flag as the pattern decision any more
  *  §9 the load's per-hit riders travel with the pattern — the shock modifier and the over-time arming
  *     are recorded at placement and applied per landed shell at confirm, as the single-target flow does
- * §10 AIM, THEN DECLARE, THEN BANG — the placement-forward gesture driven as a real gesture: the fire
- *     control arms a corridor preview instead of a window, Esc cancels a shot that never happened
- *     (magazine by value), a confirm opens the modifiers window, the roll carries the corridor, the
- *     region is planted on the DECLARED axis rather than the target axis, no confirm card is posted,
- *     and the pattern resolves itself only after the shot's presentation is over
+ * §10 AIM, THEN DECLARE, THEN BANG, THEN APPLY — the placement-forward gesture driven as a real gesture:
+ *     the fire control arms a corridor preview instead of a window, Esc cancels a shot that never
+ *     happened (magazine by value), a confirm opens the modifiers window, the roll carries the corridor,
+ *     the region is planted on the DECLARED axis rather than the target axis, and the shot ends in a
+ *     RESOLUTION CARD — posted once the presentation is over, listing who the corridor caught, with the
+ *     region still on the table and nothing applied until somebody presses its one Apply control
+ * §11 the aim preview's REACH WHEEL — a step out and a step back, read through the readout the rule
+ *     derives and through the confirmed corridor's own reachM, plus the board gate and the plant's floor
+ * §12 a pattern nobody applied is still collected by its own clock (the card does not make it immortal)
+ * §13 the save cadences — one death prompt per application batch, a stun prompt per damage event
  *
  * ⛔ The three cover regions, the showcase combat and the four review targets on this rig belong to the
  * user's morning review; every fixture here is named __PWK__SPREAD and is deleted on the way out, and
@@ -89,7 +94,7 @@ const res = await page.evaluate(async () => {
     }
   };
   const wipeCards = async () => {
-    for (const m of [...game.messages].filter(m => /cp-confirm-spread-zone|cp-spread-result-list/.test(m.content ?? ""))) await m.delete().catch(() => {});
+    for (const m of [...game.messages].filter(m => /cp-confirm-spread-zone|cp-spread-resolve-list|cp-spread-result-list/.test(m.content ?? ""))) await m.delete().catch(() => {});
   };
   await wipeZones();
   await wipeCards();
@@ -117,7 +122,15 @@ const res = await page.evaluate(async () => {
     lookup.modifiersForCaliber("00").some(([id]) => id === "slug") && !lookup.modifiersForCaliber("5.56").some(([id]) => id === "slug"));
 
   /* ── §2  the seam carries the cartridge ──────────────────────────────────────────────────── */
+  // ⚠ SWEEP THE TOKENS BEFORE THE ACTORS, AND SWEEP THEM AT ALL. This opening used to clear stale
+  // ACTORS only, which is not the same set: a run that never reaches its own cleanup (an aborted
+  // process, a thrown leg) leaves its figures standing on the scene, and deleting the actor does not
+  // take an unlinked token with it. The next run then plants its corridor across a previous run's
+  // leftovers and reads three figures where its fixtures put one — which is a spec contaminating
+  // itself, not a mechanism failing. Tokens first, by NAME, exactly as the cleanup at the bottom does.
+  for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__SPREAD"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
   for (const a of [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREAD"))) await a.delete().catch(() => {});
+  await sleep(250);
   const shooter = await Actor.create({ name: "__PWK__SPREAD Shooter", type: "character" });
   const [buckAmmo] = await shooter.createEmbeddedDocuments("Item", [{
     name: "__PWK__SPREAD 00 Buck", type: "ammo",
@@ -163,14 +176,22 @@ const res = await page.evaluate(async () => {
   // Does the single-target flow claim this payload? The claim it sets on the object IS the answer, and
   // it is the same object the pattern hook reads — so this asks the question without opening a window.
   const dialogsBefore = Object.values(ui.windows ?? {}).filter(w => w?.constructor?.name === "DamageDialog").length;
+  // ⚠ SCOPED TO THIS EMISSION, NOT TO THE WORLD'S SCROLLBACK. This leg used to ask "does ANY card in
+  // this world carry an apply payload whose cartridge is 00?" — a question about every shot ever fired
+  // on the rig, not about the payload just raised. A SLUG shell is a 00 cartridge that is SUPPOSED to
+  // carry one (it is the single-target flow's shot), so three legitimate slug cards on the review bench
+  // turned this red and kept it red, with nothing wrong in the code. The contract is per-emission:
+  // between this raise and the settle, the shell must flag NO card at all.
+  const flaggedIdsBefore = new Set([...game.messages].filter(m => m.getFlag(SCOPE, "damagePayload")).map(m => m.id));
   const buckP = basePayload();
   Hooks.callAll("cyberpunk2020.weaponFired", buckP);
   await sleep(900);
   ok("§3 a shell payload is NOT claimed by the single-target flow", buckP.handled !== true, `handled=${buckP.handled}`);
   const dialogsAfterBuck = Object.values(ui.windows ?? {}).filter(w => w?.constructor?.name === "DamageDialog").length;
   ok("§3 no DamageDialog opened for the shell", dialogsAfterBuck === dialogsBefore, `${dialogsBefore}→${dialogsAfterBuck}`);
-  const buckCards = [...game.messages].filter(m => m.getFlag(SCOPE, "damagePayload"));
-  ok("§3 no apply-button payload flagged onto any card", buckCards.every(m => m.getFlag(SCOPE, "damagePayload")?.caliber !== "00"));
+  const newlyFlagged = [...game.messages].filter(m => m.getFlag(SCOPE, "damagePayload") && !flaggedIdsBefore.has(m.id));
+  ok("§3 the shell flagged no apply-button payload onto any card", newlyFlagged.length === 0,
+    newlyFlagged.map(m => String(m.getFlag(SCOPE, "damagePayload")?.weaponName ?? "?")).join(" | "));
   ok("§3 the shell placed exactly ONE pattern", myZones().length === 1, String(myZones().length));
 
   await wipeZones();
@@ -697,34 +718,91 @@ const res = await page.evaluate(async () => {
   ok("§10 the drawn corridor runs down the declared line, not toward the target",
     Math.max(...dYs) > shooterC.y + aimReachPx - 20 && Math.max(...dXs) < shooterC.x + 120,
     `origin=(${shooterC.x},${shooterC.y}) xs=[${Math.min(...dXs).toFixed(0)}…${Math.max(...dXs).toFixed(0)}] ys=[${Math.min(...dYs).toFixed(0)}…${Math.max(...dYs).toFixed(0)}]`);
-  ok("§10 NO confirm card is posted for a corridor the shooter already confirmed (negative)",
-    [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).length === 0);
   ok("§10 and the damage has NOT landed yet — the pattern is still on the table mid-shot",
     myZones().length === 1 && [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length === 0,
     `zones=${myZones().length}`);
 
-  /* §10g — the pattern resolves itself, once the shot is over */
+  /* §10g — THE APPLY MOMENT: the shot ends in a card, and the card is what resolves it.
+   *
+   * ⭐ THE CONTRACT THIS SECTION USED TO HOLD IS THE ONE THAT CHANGED (user ruling). A declared corridor
+   * used to apply its own damage the instant the presentation settled, with nobody left to press
+   * anything; now the settle posts a RESOLUTION CARD listing who the corridor caught, the region stays
+   * on the table underneath it, and one Apply control does the resolving. So the legs below read the
+   * three states in order — card arrives and NOTHING has landed, the press lands it, the region goes. */
   const fxOn = game.settings.get(SCOPE, "combatFxEnabled");
-  let resolvedAt = 0;
-  for (let i = 0; i < 40 && !resolvedAt; i++) {
+  const resolveCards = () => [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-resolve-list"));
+  let cardAt = 0;
+  for (let i = 0; i < 40 && !cardAt; i++) {
     await sleep(250);
-    if ([...game.messages].some(m => (m.content ?? "").includes("cp-spread-result-list"))) resolvedAt = Date.now();
+    if (resolveCards().length) cardAt = Date.now();
   }
-  ok("§10 the pattern resolves itself with nobody pressing anything", resolvedAt > 0, `waited ${Date.now() - rollAt}ms`);
-  ok("§10 the region is gone once it has resolved", myZones().length === 0, String(myZones().length));
+  ok("§10 the shot ends in ONE resolution card, posted with nobody pressing anything", resolveCards().length === 1,
+    `${resolveCards().length} after ${Date.now() - rollAt}ms`);
+  // The wait is the rail's own, so it is asserted against the rail's own floor rather than a figure
+  // typed here. With the presentation switched off there is nothing to wait for and the leg says so.
+  const floorMs = fxOn ? fx.payloadPresentationMs(firedPayload) : 0;
+  ok("§10 the card waited out the shot's presentation, not the trigger pull",
+    !fxOn || (cardAt - rollAt) >= Math.min(floorMs, 400),
+    `waited ${cardAt - rollAt}ms against a floor of ${floorMs}ms (presentation ${fxOn ? "on" : "off"})`);
+
+  // NOTHING HAS BEEN APPLIED, and that is the whole of the restored moment: region still there, no
+  // result card, the figure's own damage total still zero. Read as VALUES, so a card that quietly
+  // applied anyway cannot pass this.
+  const dmgBeforeApply = Number(downrange.actor?.system?.damage ?? 0);
+  ok("§10 the pattern is STILL on the table while the card waits", myZones().length === 1, String(myZones().length));
+  ok("§10 and nothing has landed yet — no result card, no damage on the figure, by value (negative)",
+    [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length === 0 && dmgBeforeApply === 0,
+    `damage=${dmgBeforeApply}`);
+
+  const resolveCard = resolveCards()[0];
+  const resolveText = (resolveCard?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  ok("§10 the card lists the figure the corridor caught, and says it is in the pattern",
+    /__PWK__SPREAD Downrange/.test(resolveText)
+    && resolveText.includes(game.i18n.localize("CYBERPUNK.SpreadRowInPattern")),
+    resolveText.slice(0, 220));
+  ok("§10 and does NOT list the figure the corridor missed (negative)",
+    !/__PWK__SPREAD Target/.test(resolveText), resolveText.slice(0, 220));
+  ok("§10 the card quotes the corridor's own band and formula, by value",
+    resolveText.includes(expectSpec.band) && resolveText.includes(expectDmg),
+    `expected band ${expectSpec.band} dmg ${expectDmg} | ${resolveText.slice(0, 160)}`);
+  ok("§10 the card states the p.108 basis rather than leaving the reader to know it",
+    resolveText.includes(game.i18n.localize("CYBERPUNK.SpreadResolveBasis")),
+    resolveText.slice(0, 240));
+  ok("§10 no raw i18n key leaked onto the card (negative)", !/CYBERPUNK\./.test(resolveCard?.content ?? ""));
+  // Counted in the CARD, not in the live DOM: core renders one message in more than one place (the log
+  // and the notification strip), so a DOM count answers "how many times is this card on screen" rather
+  // than "how many controls does this card carry", which is the contract.
+  ok("§10 the card carries exactly ONE apply control, and it is the shared one",
+    ((resolveCard?.content ?? "").match(/cp-confirm-spread-zone/g) ?? []).length === 1,
+    String(((resolveCard?.content ?? "").match(/cp-confirm-spread-zone/g) ?? []).length));
+  const applyBtn = document.querySelector(`[data-message-id="${resolveCard.id}"] .cp-confirm-spread-zone`);
+  ok("§10 the control is on the rendered card and names the pattern it will resolve",
+    applyBtn?.dataset?.templateId === declaredZone.id, `${applyBtn?.dataset?.templateId} / ${declaredZone.id}`);
+
+  /* §10g(ii) — the press, and only the press, resolves it */
+  applyBtn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  let appliedAt = 0;
+  for (let i = 0; i < 20 && !appliedAt; i++) {
+    await sleep(250);
+    if ([...game.messages].some(m => (m.content ?? "").includes("cp-spread-result-list"))) appliedAt = Date.now();
+  }
   const declaredResults = [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list"));
-  ok("§10 exactly ONE result card for the shot", declaredResults.length === 1, String(declaredResults.length));
+  ok("§10 the apply resolves the shot — exactly ONE result card", declaredResults.length === 1, String(declaredResults.length));
   const declaredText = (declaredResults[0]?.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
   ok("§10 the figure standing in the DECLARED corridor is the one resolved against",
     /__PWK__SPREAD Downrange/.test(declaredText) && !/__PWK__SPREAD Target/.test(declaredText), declaredText.slice(0, 200));
   ok("§10 and the damage landed on it, by value",
     Number(downrange.actor?.system?.damage ?? 0) > 0, String(downrange.actor?.system?.damage));
-  // The wait is the rail's own, so it is asserted against the rail's own floor rather than a figure
-  // typed here. With the presentation switched off there is nothing to wait for and the leg says so.
-  const floorMs = fxOn ? fx.payloadPresentationMs(firedPayload) : 0;
-  ok("§10 the resolution waited out the shot's presentation, not the trigger pull",
-    !fxOn || (resolvedAt - rollAt) >= Math.min(floorMs, 400),
-    `waited ${resolvedAt - rollAt}ms against a floor of ${floorMs}ms (presentation ${fxOn ? "on" : "off"})`);
+  // The delete is the LAST thing the resolution does — after the result card — so the region is polled
+  // for rather than read on the same beat the card appeared. A poll that never clears fails the leg.
+  for (let i = 0; i < 20 && myZones().length; i++) await sleep(200);
+  ok("§10 the region is gone once the apply has resolved it", myZones().length === 0, String(myZones().length));
+  // The one-shot: a second press must not roll the burst a second time (card-lock + the confirm claim).
+  applyBtn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  await sleep(1500);
+  ok("§10 a second press resolves nothing — still one result card (negative)",
+    [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length === 1,
+    String([...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length));
   await wipeZones(); await wipeCards();
   Hooks.off("cyberpunk2020.weaponFired", spreadHookId);
   await closeModifiers();
@@ -762,6 +840,159 @@ const res = await page.evaluate(async () => {
   ok("§10 the aim preview writes no document of its own (it is a client-local ghost)",
     !/createEmbeddedDocuments|\.update\(|setFlag/.test(placeSrc));
 
+  /* ── §11  the aim preview's REACH WHEEL ──────────────────────────────────────────────────── */
+  // The one gesture in the preview with no coverage at all. The wheel does NOT set the corridor's width
+  // (that is the book's spread, a pure function of the band); it pushes the corridor's END past or short
+  // of the cursor, and the band, the width and the banded formula re-derive from the new reach. So every
+  // leg here reads the DERIVED consequence — the readout's text, then the confirmed corridor's own
+  // reachM — rather than poking at the private state that produces it.
+  //
+  // The preview is armed DIRECTLY rather than through the fire control, because this file spends nothing
+  // and confirms into a plain object: no window opens, no roll is made, no round leaves the magazine, so
+  // the section can confirm a corridor and read it back without disturbing anything.
+  const shooterPlaceable = canvas.tokens.placeables.find(t => (t.document?.id ?? t.id) === shooterTok.id);
+  const wheelMagBefore = magazine();
+  // The off-board negative below reaches core's own zoom, so the board's position is noted and put back
+  // at the end of the section — the user's review scene must not be left framed somewhere else.
+  const viewBefore = { x: canvas.stage.pivot.x, y: canvas.stage.pivot.y, scale: canvas.stage.scale.x };
+  // Dispatched ON THE BOARD: the wheel listener gates on ev.target being the game canvas
+  // (spread-placement.js _isCanvasEvent), so a wheel over a sheet or the sidebar scrolls it as normal.
+  const wheelOnBoard = async (deltaY, times = 1) => {
+    for (let i = 0; i < times; i++) {
+      canvas.app.view.dispatchEvent(new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }));
+    }
+    await sleep(120);
+  };
+  const readout = () => document.querySelector(".cp-spread-preview-readout")?.textContent ?? "";
+  // What the readout must SAY for a given corridor reach — derived from the same shared ladder the
+  // preview reads, so this is a re-derivation of the rule rather than a copy of the sentence.
+  const readoutFor = (reachM) => {
+    const spec = lookup.spreadBandSpec(reachM);
+    return `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${spec.widthM}m wide, ${lookup.spreadBandDamage(spec.band)}`;
+  };
+
+  /* §11a — a wheel up reaches further, and the readout re-derives */
+  let wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  await sleep(300);
+  await aimAt(aimWorld.x, aimWorld.y);           // cursor reach = 15m on this scene's grid → Medium band
+  const baseReadout = readout();
+  ok("§11 the wheel section starts on the cursor's own reach, by value", baseReadout === readoutFor(expectM),
+    `${baseReadout} | expected ${readoutFor(expectM)}`);
+
+  // ⚠ THE NEGATIVE IS READ AFTER A RE-AIM, ON PURPOSE. A wheel the preview declines still reaches CORE,
+  // which zooms the board with it — and a zoom moves the world point the (unmoved) cursor is over, so the
+  // corridor's cursor-derived reach changes even though the preview added nothing. Re-aiming at the same
+  // WORLD point cancels the zoom's contribution and leaves only the thing under test: whether an
+  // off-board wheel added a step of its own. Three of them, so a single leaked step would show.
+  for (let i = 0; i < 3; i++) document.body.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true }));
+  await sleep(200);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 a wheel that did not land on the board adds no reach of its own (negative)",
+    readout() === baseReadout, `${baseReadout} → ${readout()}`);
+
+  await wheelOnBoard(-100, 3);                   // three steps further out, on the board this time
+  ok("§11 three steps out stay inside the same band, so the width and formula do not move (negative)",
+    readout() === readoutFor(expectM + 3), `${readout()} | expected ${readoutFor(expectM + 3)}`);
+  // Confirm and read the corridor back: reachM is the cursor's reach plus exactly the steps taken.
+  let wheelClick = await aimAt(aimWorld.x, aimWorld.y);
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
+  let wheelAim = await wheelGesture;
+  ok("§11 the confirmed corridor's reach carries the wheel's steps, by value",
+    Math.abs(Number(wheelAim?.reachM) - (expectM + 3)) < 0.01, `${expectM} + 3 → ${wheelAim?.reachM}`);
+  ok("§11 and the band/width the reach derives travel with it",
+    wheelAim?.band === lookup.spreadBandSpec(expectM + 3).band
+    && wheelAim?.widthM === lookup.spreadBandSpec(expectM + 3).widthM,
+    JSON.stringify({ band: wheelAim?.band, widthM: wheelAim?.widthM }));
+
+  /* §11b — enough steps cross a band boundary, and the whole corridor changes with it */
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  await sleep(300);
+  await aimAt(aimWorld.x, aimWorld.y);
+  await wheelOnBoard(-100, 11);                  // 15m + 11 → 26m, past the Medium/Long boundary at 25m
+  ok("§11 crossing the band boundary re-derives the band, the width AND the formula, by value",
+    readout() === readoutFor(expectM + 11) && lookup.spreadBandSpec(expectM + 11).band === "Long",
+    `${readout()} | expected ${readoutFor(expectM + 11)}`);
+
+  /* §11c — a wheel down pulls back, and stops at the plantable floor */
+  await wheelOnBoard(100, 40);                   // far more steps down than there is corridor to give
+  ok("§11 pulling back stops at the shortest corridor the plant accepts, by value",
+    readout() === readoutFor(placement.SPREAD_MIN_LENGTH_M), `${readout()} | expected ${readoutFor(placement.SPREAD_MIN_LENGTH_M)}`);
+  wheelClick = await aimAt(aimWorld.x, aimWorld.y);
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
+  wheelAim = await wheelGesture;
+  ok("§11 and the floored corridor confirms at that floor rather than at the cursor, by value",
+    Math.abs(Number(wheelAim?.reachM) - placement.SPREAD_MIN_LENGTH_M) < 0.01, String(wheelAim?.reachM));
+  ok("§11 the whole section spent nothing — the magazine is untouched, by value",
+    magazine() === wheelMagBefore, `${wheelMagBefore} → ${magazine()}`);
+  ok("§11 and planted no pattern (the preview writes no documents) (negative)", myZones().length === 0, String(myZones().length));
+  await canvas.animatePan({ ...viewBefore, duration: 0 }).catch(() => {});
+  await sleep(200);
+
+  /* ── §12  an ignored resolution card still loses its pattern to the clocks ────────────────── */
+  // The region now outlives the card that asks about it, so the two expiry rules are what stop an
+  // unpressed card from leaving a corridor on the table forever. Driven on the wall clock, which is the
+  // rule that owns a pattern thrown outside an encounter.
+  await wipeZones(); await wipeCards();
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 1 }));
+  await sleep(400);
+  const ignored = myZones()[0];
+  await ignored.setFlag(SCOPE, "combatId", "");
+  await ignored.setFlag(SCOPE, "createdAt", Date.now() - hooks.SPREAD_ZONE_TTL_MS - 1000);
+  const sweptIgnored = await hooks._sweepStaleSpreadZones();
+  await sleep(400);
+  ok("§12 a pattern nobody applied is collected by its own clock, card or no card",
+    sweptIgnored === 1 && myZones().length === 0, `swept=${sweptIgnored} left=${myZones().length}`);
+  await wipeZones(); await wipeCards();
+
+  /* ── §13  the death save's cadence — ONE per application batch, not one per shell ──────────── */
+  // CP2020 p.104 gives the two saves two different clocks and this flow used to run both on one:
+  //   stun  — "every time a character takes damage" → per damage event, kept
+  //   death — "a new save required every turn that the character remains untreated" → per TURN
+  // A three-shell burst on a Mortal figure therefore owes ONE death prompt, not three. The legs count
+  // the prompt CARDS the burst produced, which is the thing the table actually has to resolve.
+  const deathCards = (since) => [...game.messages].filter(m => !since.has(m.id) && (m.content ?? "").includes("death-save-prompt"));
+  const stunCards  = (since) => [...game.messages].filter(m => !since.has(m.id) && (m.content ?? "").includes("cp-stun-save-roll"));
+  const wipeSaveCards = async () => {
+    for (const m of [...game.messages].filter(m => /death-save-prompt|cp-stun-save-roll/.test(m.content ?? ""))) await m.delete().catch(() => {});
+  };
+  const victim13 = target.actor;
+  await victim13.update({ "system.damage": 0 });
+
+  /* §13a — a THREE-shell burst on a figure already at Mortal owes exactly one death prompt */
+  await victim13.update({ "system.damage": 14 });            // ceil(14/4) = 4 → Mortal 0
+  ok("§13 the fixture stands at Mortal before the burst, by value", (victim13.woundState?.() ?? 0) >= 4,
+    `woundState=${victim13.woundState?.()}`);
+  await wipeSaveCards();
+  let sinceIds = new Set(game.messages.map(m => m.id));
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 3, spreadDamageShort: "5", spreadDamageMedium: "5", spreadDamageLong: "5" }));
+  await sleep(500);
+  await hooks._confirmSpreadZone(myZones()[0].id);
+  await sleep(3500);
+  ok("§13 three shells on one Mortal figure post ONE death prompt, not one per shell",
+    deathCards(sinceIds).length === 1, String(deathCards(sinceIds).length));
+  ok("§13 and the burst really did land three times (so the count above is a cadence, not a miss)",
+    Number(victim13.system?.damage ?? 0) > 14, String(victim13.system?.damage));
+  await wipeZones(); await wipeCards(); await wipeSaveCards();
+
+  /* §13b — below Mortal the stun prompt keeps its per-damage-event cadence (negative control) */
+  await victim13.update({ "system.damage": 0 });
+  sinceIds = new Set(game.messages.map(m => m.id));
+  await hooks._placeSpreadZone(basePayload({ shotsFired: 2, spreadDamageShort: "5", spreadDamageMedium: "5", spreadDamageLong: "5" }));
+  await sleep(500);
+  await hooks._confirmSpreadZone(myZones()[0].id);
+  await sleep(3500);
+  ok("§13 a wounded-but-not-Mortal figure is still asked once per damage event, by value",
+    stunCards(sinceIds).length === 2 && deathCards(sinceIds).length === 0,
+    `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length} damage=${victim13.system?.damage}`);
+  await wipeZones(); await wipeCards(); await wipeSaveCards();
+  await victim13.update({ "system.damage": 0 });
+
+  /* §13c — the per-TURN cadence the book actually describes is already built, and it is gated */
+  const savesSrc = await (await fetch(`/modules/${SCOPE}/module/combat/save-rolls.js`, { cache: "no-store" })).text();
+  ok("§13 a round advance is where the recurring death prompt lives, and it respects stabilization",
+    /autoDeathSavePerTurn/.test(savesSrc) && /stabilized/.test(savesSrc)
+    && typeof game.settings.get(SCOPE, "autoDeathSavePerTurn") === "boolean");
+
   /* ── cleanup ────────────────────────────────────────────────────────────────────────────── */
   await wipeZones();
   await wipeCards();
@@ -773,7 +1004,7 @@ const res = await page.evaluate(async () => {
   for (const a of [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREAD"))) await a.delete().catch(() => {});
   out.leftovers = {
     zones: myZones().length,
-    cards: [...game.messages].filter(m => /cp-confirm-spread-zone|cp-spread-result-list/.test(m.content ?? "")).length,
+    cards: [...game.messages].filter(m => /cp-confirm-spread-zone|cp-spread-resolve-list|cp-spread-result-list/.test(m.content ?? "")).length,
     tokens: [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__")).length,
     actors: game.actors.filter(a => a.name?.startsWith("__PWK__SPREAD")).length,
   };

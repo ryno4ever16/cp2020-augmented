@@ -77,10 +77,9 @@ const setup = await page.evaluate(async (SCOPE) => {
     landed: Object.values(p.areaDamages ?? {}).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0),
   }); });
   Hooks.on("createChatMessage", (m) => g.cards.push(m.id));
-  // ⭐ THE PATTERN'S FACTS ARE TAKEN AT CREATION (2026-08-11). A declared corridor resolves itself when
-  // the shot's presentation ends and DELETES the region on the way out, so by the time a leg looks the
-  // document is gone — reading it later measured nothing but the run's own wait. Recorded here, where it
-  // is certainly alive.
+  // ⭐ THE PATTERN'S FACTS ARE TAKEN AT CREATION (2026-08-11). The resolution DELETES the region on its
+  // way out, so by the time a leg that has pressed Apply looks, the document is gone — reading it later
+  // measured nothing but the run's own wait. Recorded here, where it is certainly alive.
   Hooks.on("createRegion", (r) => {
     g.regions.push(r.id);
     if (r.getFlag(SCOPE, "isSpreadZone")) g.patterns.push({
@@ -254,12 +253,13 @@ ok("D: the hit mark is the CLASS's own, and the withdrawn burning ring stays wit
 const liveFires = await page.evaluate(() => (globalThis.Sequencer?.EffectManager?.effects ?? []).length);
 ok("D: the fires are really alive on the canvas afterwards", liveFires > 0, `${liveFires} live effect(s)`);
 
-/* ══ E. 10 shell Buckshot — AIM FIRST, then the pattern that resolves itself ══════════════════ */
-// ⏪ THIS SECTION USED TO CLICK A CONFIRM CARD. The 2026-08-11 ruling moved the aiming half of that
-// click to the FRONT of the gesture (the `fire()` helper above now performs it), so the click that is
-// left — "resolve now" — is one the roll has already committed to, and the pattern resolves itself when
-// the shot's presentation ends. What a reviewer is checking here is therefore the ORDER: aimed, planted
-// on the aimed line, resolved as the rounds arrive, gone afterwards, and nobody asked to press anything.
+/* ══ E. 10 shell Buckshot — AIM FIRST, THEN APPLY ════════════════════════════════════════════ */
+// The card in this section has moved twice and both moves are the ruling, not a build choice. The
+// 2026-08-11 ruling took the AIMING half of the old confirm click to the front of the gesture (the
+// `fire()` helper above performs it); the 2026-08-13 ruling kept the APPLY half as a press, arriving on
+// a resolution card once the shot has finished being presented. So what a reviewer checks here is the
+// whole ORDER: aimed, planted on the aimed line, drawn, then a card that lists who is in the corridor —
+// with nothing applied and the pattern still on the canvas — and only then, on the press, the damage.
 console.log(`
 ── E · 10 Arasaka RAS-12 Buckshot → Review · Target (flesh) ──`);
 r = await fire("10", "Review · Target");   // NOT retried: a pattern is thrown hit or miss, and two would be two
@@ -275,15 +275,39 @@ ok("E: banded from the real aimed distance, one pattern for the whole burst",
 ok("E: the single-target flow did NOT claim this payload — the pattern owns it (negative)",
   r.handled.every(h => h === null), JSON.stringify(r.handled));
 ok("E: and no apply window opened for it", r.dialogs.length === 0, r.dialogs.join(", "));
-const afterConfirm = await page.evaluate((SCOPE) => ({
+const awaitingApply = await page.evaluate((SCOPE) => ({
   zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
-  confirmCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).length,
+  // The GUESSED-corridor card, told apart from the resolution card by the row list only the latter has
+  // (both carry the same apply control on purpose).
+  guessCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone") && !(m.content ?? "").includes("cp-spread-resolve-list")).length,
+  resolveCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-resolve-list")).length,
   resultCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
 }), SCOPE);
-ok("E: NO confirm card is posted — the shooter already confirmed the corridor (negative)",
-  afterConfirm.confirmCards === 0, `${afterConfirm.confirmCards} card(s)`);
-ok("E: the pattern resolved ITSELF and posted its result", afterConfirm.resultCards > 0, `${afterConfirm.resultCards} result card(s)`);
-ok("E: and nothing is left hovering on the canvas", afterConfirm.zones === 0, `${afterConfirm.zones} left`);
+ok("E: NO 'look at this guessed corridor' card — the shooter already aimed it (negative)",
+  awaitingApply.guessCards === 0, `${awaitingApply.guessCards} card(s)`);
+ok("E: the shot ends in ONE resolution card the reviewer is asked to apply",
+  awaitingApply.resolveCards === 1, `${awaitingApply.resolveCards} card(s)`);
+ok("E: nothing has been applied yet, and the pattern is still on the canvas underneath it (negative)",
+  awaitingApply.resultCards === 0 && awaitingApply.zones === 1,
+  `${awaitingApply.resultCards} result card(s), ${awaitingApply.zones} zone(s)`);
+
+const afterApply = await page.evaluate(async (SCOPE) => {
+  // ⚠ THE NEWEST ONE. A resolution card is SPENT rather than deleted, so an earlier section's card is
+  // still in the log and a first-match lookup presses a button whose pattern is already gone — which
+  // reads exactly like the press having done nothing.
+  const card = [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-resolve-list")).at(-1);
+  const btn = card ? document.querySelector(`[data-message-id="${card.id}"] .cp-confirm-spread-zone`) : null;
+  btn?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  await new Promise(r => setTimeout(r, 5000));
+  return {
+    pressed: !!btn,
+    zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+    resultCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
+  };
+}, SCOPE);
+ok("E: the apply control is on the rendered card and the press lands the shot",
+  afterApply.pressed && afterApply.resultCards === 1, `pressed=${afterApply.pressed}, ${afterApply.resultCards} result card(s)`);
+ok("E: and nothing is left hovering on the canvas afterwards", afterApply.zones === 0, `${afterApply.zones} left`);
 
 /* ══ F. 11 shell SLUG — the single-target contrast: no pattern, an apply route ════════════════ */
 console.log(`\n── F · 11 Arasaka RAS-12 Slug → Review · Target (flesh) ──`);
@@ -304,11 +328,10 @@ ok("F: and an apply route reaches the reviewer for this shot",
   slug.dialogs.length > 0 || slug.flagged > 0 || setup.autoApply === true,
   `${slug.dialogs.join(",") || "no window"} / ${slug.flagged} flagged card(s) / autoApply=${setup.autoApply}`);
 
-/* ══ G. 12 shell API — the pattern's OWN fires, laid down when the shot lands ═════════════════ */
-// ⏪ THIS SECTION USED TO CLICK A CONFIRM CARD TOO. With the corridor declared up front the resolution
-// rides the shot's own presentation, so the fires the load leaves go down inside the same gesture —
-// still placed by the PATTERN and not by the fan-out, which is the distinction that matters and is
-// asserted below on the region's own recorded load.
+/* ══ G. 12 shell API — the pattern's OWN fires, laid down when the shot is APPLIED ════════════ */
+// The fires an incendiary shell leaves are scattered by the RESOLUTION, not by the fan-out — that is
+// the distinction this section exists for, and it is why the fires arrive on the press rather than as
+// the rounds land. Asserted below on the region's own recorded load, and on the file the press draws.
 console.log(`
 ── G · 12 Arasaka RAS-12 API → Review · Target (flesh) ──`);
 await page.evaluate(async () => {
@@ -319,14 +342,25 @@ await page.evaluate(async () => {
 });
 r = await fire("12", "Review · Target");   // same reason as E
 ok("G: the pattern records the load it was thrown with", r.patterns[0]?.ammoKey === "api", `ammoKey=${r.patterns[0]?.ammoKey}`);
-ok("G: an incendiary shell's fires reach the canvas as the shot resolves",
-  drew(r.files, setup.keys.groundFire), r.files.join(", ").slice(0, 220));
-const afterG = await page.evaluate((SCOPE) => ({
-  zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
-  confirmCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).length,
-}), SCOPE);
-ok("G: that pattern is deleted too, with no card left behind", afterG.zones === 0 && afterG.confirmCards === 0,
-  `${afterG.zones} zone(s), ${afterG.confirmCards} card(s)`);
+ok("G: the fires have NOT been laid while the card is still waiting — they belong to the resolution (negative)",
+  !drew(r.files, setup.keys.groundFire), r.files.join(", ").slice(0, 220));
+// The press, then a fresh read of what the rail drew AFTER it — the capture hook keeps collecting, and
+// `fire()` only clears it at the start of the next shot.
+const afterG = await page.evaluate(async (SCOPE) => {
+  // The NEWEST resolution card — this section's — for the reason section E states.
+  const card = [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-resolve-list")).at(-1);
+  const btn = card ? document.querySelector(`[data-message-id="${card.id}"] .cp-confirm-spread-zone`) : null;
+  btn?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  await new Promise(r => setTimeout(r, 6000));
+  return {
+    pressed: !!btn,
+    files: [...new Set(globalThis.__smoke.files)],
+    zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+  };
+}, SCOPE);
+ok("G: an incendiary shell's fires reach the canvas when the shot is applied",
+  afterG.pressed && drew(afterG.files, setup.keys.groundFire), afterG.files.join(", ").slice(0, 220));
+ok("G: that pattern is deleted too once it has been applied", afterG.zones === 0, `${afterG.zones} zone(s)`);
 
 /* ══ RESTORE ══════════════════════════════════════════════════════════════════════════════════ */
 console.log(`\n── restore ──`);
