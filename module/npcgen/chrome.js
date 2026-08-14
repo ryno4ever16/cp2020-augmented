@@ -394,8 +394,8 @@ export function planChrome({
           squadLimit: Number.isFinite(limit) && limit > 0 ? limit : null,
           carrier: Number.isFinite(limit) && limit > 0 ? (goonName || null) : null,
           messageKey: Number.isFinite(limit) && limit > 0
-            ? "CYBERPUNK.GoonFactory.Honesty.BonusItemSquad"
-            : "CYBERPUNK.GoonFactory.Honesty.BonusItem",
+            ? "GoonFactory.Honesty.BonusItemSquad"
+            : "GoonFactory.Honesty.BonusItem",
         });
       }
     }

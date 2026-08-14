@@ -767,7 +767,7 @@ export function rollFormulaField(expr, rng, { rerollOver = null, fallback = "1d6
   if (!terms) {
     used = fallback;
     terms = parseDiceExpression(fallback);
-    noteKey = "CYBERPUNK.GoonFactory.Note.InvalidFormula";
+    noteKey = "GoonFactory.Note.InvalidFormula";
     if (!terms) return { value: 0, valid: false, used: fallback, noteKey };
   }
   let value = rollTerms(terms, rng);
@@ -1095,13 +1095,13 @@ export function goonBlueprint({
 
     const honesty = [
       // §1's preview list: this line is unconditional, because it explains a thing every goon has.
-      { code: "luckRepRolled", messageKey: "CYBERPUNK.GoonFactory.Honesty.LuckRepRolled" },
+      { code: "luckRepRolled", messageKey: "GoonFactory.Honesty.LuckRepRolled" },
     ];
     if (luck.noteKey) honesty.push({ code: "invalidLuckFormula", messageKey: luck.noteKey, used: luck.used });
     if (rep.noteKey) honesty.push({ code: "invalidRepFormula", messageKey: rep.noteKey, used: rep.used });
-    if (statRoll.unspent > 0) honesty.push({ code: "statPoolUnspent", points: statRoll.unspent, messageKey: "CYBERPUNK.GoonFactory.Honesty.StatPoolUnspent" });
-    if (config.statPoolBreakdown?.clamped) honesty.push({ code: "statPoolClamped", messageKey: "CYBERPUNK.GoonFactory.Honesty.StatPoolClamped" });
-    if (config.skillBreakdown?.clamped) honesty.push({ code: "skillPointsClamped", messageKey: "CYBERPUNK.GoonFactory.Honesty.SkillPointsClamped" });
+    if (statRoll.unspent > 0) honesty.push({ code: "statPoolUnspent", points: statRoll.unspent, messageKey: "GoonFactory.Honesty.StatPoolUnspent" });
+    if (config.statPoolBreakdown?.clamped) honesty.push({ code: "statPoolClamped", messageKey: "GoonFactory.Honesty.StatPoolClamped" });
+    if (config.skillBreakdown?.clamped) honesty.push({ code: "skillPointsClamped", messageKey: "GoonFactory.Honesty.SkillPointsClamped" });
 
     out.push({
       name: goonName(prefix, gradeKey, startNumber + i),

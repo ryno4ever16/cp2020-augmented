@@ -1,138 +1,241 @@
-{{!-- NPC generator window (ApplicationV2). Markup only: text from lang/*.json, styling from
-      css/cp2020-augmented.css (.cp-npcgen-app). Two modes share one form — QUICK shows archetype /
-      tier / count, FULL adds the four dials, the seed, and the preview stage. Every control the JS
-      reads back is selected by its cp-npcgen-* class (_readForm), so renaming one breaks the read. --}}
-<div class="cp-npcgen">
+{{!-- GOON FACTORY — the rebuilt generator window (GOON-FACTORY-SPEC.md §1).
 
-  <div class="cp-npcgen-modes">
-    <button type="button" class="cp-npcgen-mode{{#if isQuick}} cp-active{{/if}}" data-action="npcGenMode" data-mode="quick">
-      {{localize "CYBERPUNK.NpcGen.ModeQuick"}}
-    </button>
-    <button type="button" class="cp-npcgen-mode{{#if isFull}} cp-active{{/if}}" data-action="npcGenMode" data-mode="full">
-      {{localize "CYBERPUNK.NpcGen.ModeFull"}}
-    </button>
-  </div>
+      Markup only: every string comes from lang/en.json, every rule from css/cp2020-augmented.css
+      (.cp-goon-*). The QUICK/FULL split is GONE — there is ONE form whose quick path is
+      "Outfit-or-(Role+Grade) → Generate", and every dial below the line is Advanced-gated.
+
+      Each control the JS reads back is selected by its cp-goon-* class (_readForm), so renaming one
+      breaks the read. Controls below the line carry `disabled` until Advanced is ticked — §1's
+      "locked, visible" state, which is a DISABLED control showing its derived value, never a
+      hidden one. --}}
+<div class="cp-goon">
 
   {{#if catalogLoading}}
-  {{!-- The catalog index is still building. Awaiting it in _prepareContext would hold the window shut
-        on first open, so this panel stands in and the window re-renders itself when the build lands. --}}
-  <p class="cp-npcgen-pending">{{localize "CYBERPUNK.NpcGen.CatalogLoading"}}</p>
+  {{!-- Awaiting the catalog index in _prepareContext is what would hold the window shut on first
+        open, so this panel stands in and the window re-renders when the build lands. --}}
+  <p class="cp-goon-pending">{{localize "CYBERPUNK.GoonFactory.CatalogLoading"}}</p>
   {{else}}
 
-  <div class="cp-npcgen-row">
-    <label class="cp-npcgen-label" for="cp-npcgen-archetype">{{localize "CYBERPUNK.NpcGen.ArchetypeLabel"}}</label>
-    <select id="cp-npcgen-archetype" class="cp-npcgen-archetype">
-      {{#each archetypes as |a|}}
-      <option value="{{a.key}}" {{#if a.selected}}selected{{/if}}>{{a.label}}</option>
+  {{!-- ── TOP: the optional Outfit prefill ─────────────────────────────────────────────────── --}}
+  <div class="cp-goon-row cp-goon-outfit-row">
+    <label class="cp-goon-label" for="cp-goon-outfit">{{localize "CYBERPUNK.GoonFactory.OutfitLabel"}}</label>
+    <select id="cp-goon-outfit" class="cp-goon-outfit">
+      <option value="">{{localize "CYBERPUNK.GoonFactory.OutfitNone"}}</option>
+      {{#each outfits as |o|}}
+      <option value="{{o.id}}" {{#if o.selected}}selected{{/if}}>{{o.label}}{{#if o.seed}} {{localize "CYBERPUNK.GoonFactory.SeedSuffix"}}{{/if}}</option>
       {{/each}}
     </select>
   </div>
+  {{#if outfitId}}
+  <p class="cp-goon-basedon">{{basedOnLabel}}</p>
+  {{/if}}
+  <p class="cp-goon-hint cp-goon-seednote">{{localize "CYBERPUNK.GoonFactory.SeedOutfitsNote"}}</p>
 
-  {{#if archetypePlaceholder}}
-  <p class="cp-npcgen-warn">{{localize "CYBERPUNK.NpcGen.PlaceholderArchetype"}}</p>
+  {{!-- ── HEADER BAND: role · threat level · count · Advanced ──────────────────────────────── --}}
+  <div class="cp-goon-band">
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-role">{{localize "CYBERPUNK.GoonFactory.RoleLabel"}}</label>
+      <select id="cp-goon-role" class="cp-goon-role">
+        {{#each roles as |r|}}
+        <option value="{{r.key}}" {{#if r.selected}}selected{{/if}}>{{r.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-grade">{{localize "CYBERPUNK.GoonFactory.GradeLabel"}}</label>
+      <select id="cp-goon-grade" class="cp-goon-grade">
+        {{!-- §1: the threat level initializes to DASHES — an unpicked grade is a real state, not a
+              silent default to E. --}}
+        <option value="" {{#unless grade}}selected{{/unless}}>{{localize "CYBERPUNK.GoonFactory.GradeUnset"}}</option>
+        {{#each grades as |g|}}
+        <option value="{{g.key}}" {{#if g.selected}}selected{{/if}} title="{{g.hint}}">{{g.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-count">{{localize "CYBERPUNK.GoonFactory.CountLabel"}}</label>
+      <input id="cp-goon-count" class="cp-goon-count" type="number" min="1" max="{{maxCount}}" value="{{count}}" />
+      {{#if countClamped}}<span class="cp-goon-clamp">{{CPLocal "GoonFactory.CountClamped" max=maxCount}}</span>{{/if}}
+    </div>
+
+    <div class="cp-goon-row cp-goon-advanced-row">
+      <label class="cp-goon-check" for="cp-goon-advanced" title="{{localize 'CYBERPUNK.GoonFactory.AdvancedHint'}}">
+        <input id="cp-goon-advanced" class="cp-goon-advanced" type="checkbox"
+               data-action="goonAdvanced" {{#if advanced}}checked{{/if}} {{#unless advancedAvailable}}disabled{{/unless}} />
+        {{localize "CYBERPUNK.GoonFactory.Advanced"}}
+      </label>
+      {{#unless advancedAvailable}}
+      <span class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.AdvancedNeedsGrade"}}</span>
+      {{/unless}}
+    </div>
+  </div>
+
+  {{#if grade}}
+  {{!-- ── BELOW THE LINE: every control takes its grade-derived default, locked and VISIBLE ── --}}
+  <div class="cp-goon-dials{{#unless advanced}} cp-goon-locked{{/unless}}">
+    <p class="cp-goon-section">{{localize "CYBERPUNK.GoonFactory.DialsSection"}}</p>
+    {{#unless advanced}}<p class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.DialsLockedHint"}}</p>{{/unless}}
+
+    {{!-- REF --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-ref" title="{{localize 'CYBERPUNK.GoonFactory.RefHint'}}">{{localize "CYBERPUNK.GoonFactory.RefLabel"}}</label>
+      <input id="cp-goon-ref" class="cp-goon-ref" type="range" min="{{refRange.min}}" max="{{refRange.max}}"
+             value="{{ref}}" {{#unless advanced}}disabled{{/unless}} />
+      <output class="cp-goon-out">{{ref}}</output>
+    </div>
+
+    {{!-- BT: constant 7 at every grade, with the always-visible stakes line §1 demands --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-bt">{{localize "CYBERPUNK.GoonFactory.BtLabel"}}</label>
+      <input id="cp-goon-bt" class="cp-goon-bt" type="range" min="{{btRange.min}}" max="{{btRange.max}}"
+             list="cp-goon-bt-ticks" value="{{bt}}" {{#unless advanced}}disabled{{/unless}} />
+      <output class="cp-goon-out">{{bt}}</output>
+      <datalist id="cp-goon-bt-ticks">
+        {{#each btTicks as |t|}}<option value="{{t.value}}" label="{{t.hint}}"></option>{{/each}}
+      </datalist>
+    </div>
+    <p class="cp-goon-stakes">{{localize "CYBERPUNK.GoonFactory.BtStakes"}}</p>
+
+    {{!-- Skill points: a segmented track whose reserved zone is the grade's guarantee --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-skillpoints">{{localize "CYBERPUNK.GoonFactory.SkillPointsLabel"}}</label>
+      <input id="cp-goon-skillpoints" class="cp-goon-skillpoints" type="range"
+             min="{{skill.floor}}" max="80" value="{{skill.total}}" {{#unless advanced}}disabled{{/unless}} />
+      <output class="cp-goon-out">{{skill.total}}</output>
+    </div>
+    <p class="cp-goon-breakdown" title="{{localize 'CYBERPUNK.GoonFactory.SkillReservedHint'}}">{{skillBreakdownLine}}</p>
+
+    {{!-- Stat pool: reservations are REF+BT only; ticks name the book tiers --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-statpool">{{localize "CYBERPUNK.GoonFactory.StatPoolLabel"}}</label>
+      <input id="cp-goon-statpool" class="cp-goon-statpool" type="range" list="cp-goon-pool-ticks"
+             min="{{pool.floor}}" max="{{pool.ceiling}}" value="{{pool.pool}}" {{#unless advanced}}disabled{{/unless}} />
+      <output class="cp-goon-out">{{pool.pool}}</output>
+      <datalist id="cp-goon-pool-ticks">
+        {{#each poolTicks as |t|}}<option value="{{t.value}}" label="{{t.hint}}"></option>{{/each}}
+      </datalist>
+    </div>
+    <p class="cp-goon-breakdown">{{poolBreakdownLine}}</p>
+
+    {{!-- Stat shape --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-shape">{{localize "CYBERPUNK.GoonFactory.ShapeLabel"}}</label>
+      <select id="cp-goon-shape" class="cp-goon-shape" {{#unless advanced}}disabled{{/unless}}>
+        {{#each shapes as |s|}}
+        <option value="{{s.key}}" {{#if s.selected}}selected{{/if}}>{{s.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    {{!-- Luck / Rep formula fields --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-luck">{{localize "CYBERPUNK.GoonFactory.LuckLabel"}}</label>
+      <input id="cp-goon-luck" class="cp-goon-luck" type="text" value="{{luckFormula}}" {{#unless advanced}}disabled{{/unless}} />
+    </div>
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-rep">{{localize "CYBERPUNK.GoonFactory.RepLabel"}}</label>
+      <input id="cp-goon-rep" class="cp-goon-rep" type="text" value="{{repFormula}}" {{#unless advanced}}disabled{{/unless}} />
+    </div>
+    <p class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.LuckRepHint"}}</p>
+    {{#if formulaNote}}<p class="cp-goon-warn">{{formulaNote}}</p>{{/if}}
+
+    {{!-- Chromed --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-check" for="cp-goon-chrome-on">
+        <input id="cp-goon-chrome-on" class="cp-goon-chrome-on" type="checkbox" {{#if chromeOn}}checked{{/if}} {{#unless advanced}}disabled{{/unless}} />
+        {{localize "CYBERPUNK.GoonFactory.ChromedLabel"}}
+      </label>
+      <input id="cp-goon-chrome-count" class="cp-goon-chrome-count" type="number" min="0" max="20"
+             value="{{chromeCount}}" title="{{chromeDerivationLine}}" {{#unless advanced}}disabled{{/unless}} />
+      <span class="cp-goon-hint">{{chromeDerivationLine}}</span>
+    </div>
+
+    {{!-- Garnish --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-check" for="cp-goon-garnish">
+        <input id="cp-goon-garnish" class="cp-goon-garnish" type="checkbox" {{#if garnish}}checked{{/if}} {{#unless advanced}}disabled{{/unless}} />
+        {{localize "CYBERPUNK.GoonFactory.GarnishLabel"}}
+      </label>
+      <span class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.GarnishHint"}}</span>
+    </div>
+
+    {{!-- Armor filters --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-armor-weight">{{localize "CYBERPUNK.GoonFactory.ArmorWeightLabel"}}</label>
+      <select id="cp-goon-armor-weight" class="cp-goon-armor-weight" {{#unless advanced}}disabled{{/unless}}>
+        {{#each armorWeights as |w|}}<option value="{{w.key}}" {{#if w.selected}}selected{{/if}}>{{w.label}}</option>{{/each}}
+      </select>
+      <select id="cp-goon-armor-hardness" class="cp-goon-armor-hardness" {{#unless advanced}}disabled{{/unless}}>
+        {{#each armorHardnesses as |h|}}<option value="{{h.key}}" {{#if h.selected}}selected{{/if}}>{{h.label}}</option>{{/each}}
+      </select>
+      <select id="cp-goon-armament" class="cp-goon-armament" {{#unless advanced}}disabled{{/unless}}>
+        {{#each armaments as |a|}}<option value="{{a.key}}" {{#if a.selected}}selected{{/if}}>{{a.label}}</option>{{/each}}
+      </select>
+    </div>
+    {{#if armorClampLine}}<p class="cp-goon-warn">{{armorClampLine}}</p>{{/if}}
+
+    {{!-- Loot: OFF by default (GM consent) --}}
+    <div class="cp-goon-row">
+      <label class="cp-goon-label" for="cp-goon-loot">{{localize "CYBERPUNK.GoonFactory.LootLabel"}}</label>
+      <select id="cp-goon-loot" class="cp-goon-loot" {{#unless advanced}}disabled{{/unless}}>
+        {{#each lootDial as |l|}}<option value="{{l.key}}" {{#if l.selected}}selected{{/if}}>{{l.label}}</option>{{/each}}
+      </select>
+      <span class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.LootHint"}}</span>
+    </div>
+  </div>
   {{/if}}
 
-  <div class="cp-npcgen-row">
-    <label class="cp-npcgen-label" for="cp-npcgen-tier">{{localize "CYBERPUNK.NpcGen.TierLabel"}}</label>
-    <select id="cp-npcgen-tier" class="cp-npcgen-tier">
-      {{#each tiers as |t|}}
-      <option value="{{t.key}}" {{#if t.selected}}selected{{/if}}>{{t.label}} — {{t.benchmark}}</option>
-      {{/each}}
-    </select>
-  </div>
-
-  <div class="cp-npcgen-row">
-    <label class="cp-npcgen-label" for="cp-npcgen-count">{{CPLocal "NpcGen.Count" max=maxCount}}</label>
-    <input id="cp-npcgen-count" class="cp-npcgen-count" type="number" min="1" max="{{maxCount}}" value="{{count}}" />
-  </div>
-
-  {{#if isFull}}
-  <div class="cp-npcgen-dials">
-    <p class="cp-npcgen-section">{{localize "CYBERPUNK.NpcGen.Dials"}}</p>
-    <p class="cp-npcgen-hint">{{localize "CYBERPUNK.NpcGen.DialsHint"}}</p>
-
-    <div class="cp-npcgen-row">
-      <label class="cp-npcgen-label" for="cp-npcgen-dial-skill">{{localize "CYBERPUNK.NpcGen.DialSkill"}}</label>
-      <select id="cp-npcgen-dial-skill" class="cp-npcgen-dial-skill">
-        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
-        {{#each skillDial as |d|}}
-        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
-        {{/each}}
-      </select>
-    </div>
-
-    <div class="cp-npcgen-row">
-      <label class="cp-npcgen-label" for="cp-npcgen-dial-weapons">{{localize "CYBERPUNK.NpcGen.DialWeapons"}}</label>
-      <select id="cp-npcgen-dial-weapons" class="cp-npcgen-dial-weapons">
-        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
-        {{#each weaponsDial as |d|}}
-        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
-        {{/each}}
-      </select>
-    </div>
-
-    <div class="cp-npcgen-row">
-      <label class="cp-npcgen-label" for="cp-npcgen-dial-armor">{{localize "CYBERPUNK.NpcGen.DialArmor"}}</label>
-      <select id="cp-npcgen-dial-armor" class="cp-npcgen-dial-armor">
-        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
-        {{#each armorDial as |d|}}
-        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
-        {{/each}}
-      </select>
-    </div>
-
-    <div class="cp-npcgen-row">
-      <label class="cp-npcgen-label" for="cp-npcgen-dial-toughness">{{localize "CYBERPUNK.NpcGen.DialToughness"}}</label>
-      <select id="cp-npcgen-dial-toughness" class="cp-npcgen-dial-toughness">
-        <option value="">{{localize "CYBERPUNK.NpcGen.DialFollowTier"}}</option>
-        {{#each toughnessDial as |d|}}
-        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
-        {{/each}}
-      </select>
-    </div>
-
-    <div class="cp-npcgen-row">
-      <label class="cp-npcgen-label" for="cp-npcgen-seed">{{localize "CYBERPUNK.NpcGen.Seed"}}</label>
-      <input id="cp-npcgen-seed" class="cp-npcgen-seed" type="text" value="{{seed}}" />
-    </div>
-    <p class="cp-npcgen-hint">{{localize "CYBERPUNK.NpcGen.SeedHint"}}</p>
-  </div>
-  {{/if}}
-
+  {{!-- ── PREVIEW: the Generate confirmation step ──────────────────────────────────────────── --}}
   {{#if hasPreview}}
-  <div class="cp-npcgen-preview">
-    <p class="cp-npcgen-section">{{localize "CYBERPUNK.NpcGen.Preview"}}</p>
-    {{#each preview as |n|}}
-    <div class="cp-npcgen-preview-npc">
-      <p class="cp-npcgen-preview-name">{{n.name}}</p>
-      <p class="cp-npcgen-preview-stats">{{n.statLine}}</p>
-      <p class="cp-npcgen-preview-skills">{{n.skills}}</p>
-      {{#if n.gear.length}}
-      <p class="cp-npcgen-preview-gear">{{localize "CYBERPUNK.NpcGen.PreviewGear"}} {{#each n.gear as |g|}}{{g}}{{#unless @last}}, {{/unless}}{{/each}}</p>
-      {{/if}}
-      {{#if n.hasChrome}}
-      <p class="cp-npcgen-preview-chrome">{{localize "CYBERPUNK.NpcGen.PreviewChrome"}} {{#each n.chrome as |c|}}{{c}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+  <div class="cp-goon-preview">
+    <p class="cp-goon-section">{{localize "CYBERPUNK.GoonFactory.PreviewSection"}}</p>
+    {{#each preview as |g|}}
+    <div class="cp-goon-card" data-index="{{g.index}}">
+      <div class="cp-goon-card-head">
+        <span class="cp-goon-card-name">{{g.name}}</span>
+        <span class="cp-goon-card-actions">
+          <a class="cp-goon-icon" data-action="goonRerollOne" data-index="{{g.index}}"
+             title="{{localize 'CYBERPUNK.GoonFactory.RerollOne'}}"><i class="fas fa-dice"></i></a>
+          <a class="cp-goon-icon" data-action="goonDeleteOne" data-index="{{g.index}}"
+             title="{{localize 'CYBERPUNK.GoonFactory.DeleteOne'}}"><i class="fas fa-trash"></i></a>
+        </span>
+      </div>
+      <p class="cp-goon-card-stats">{{g.statLine}}</p>
+      {{#if g.gearLine}}<p class="cp-goon-card-gear">{{g.gearLine}}</p>{{/if}}
+      {{#if g.armorLine}}<p class="cp-goon-card-armor">{{g.armorLine}}</p>{{/if}}
+      {{#if g.chromeLine}}<p class="cp-goon-card-chrome">{{g.chromeLine}}</p>{{/if}}
+      {{#if g.honesty.length}}
+      <ul class="cp-goon-honesty">
+        {{#each g.honesty as |h|}}<li class="cp-goon-honesty-{{h.tone}}">{{h.text}}</li>{{/each}}
+      </ul>
       {{/if}}
     </div>
     {{/each}}
   </div>
   {{/if}}
 
-  <div class="cp-npcgen-buttons">
-    <button type="button" class="cp-npcgen-btn" data-action="npcGenPreview">
-      <i class="fas fa-eye"></i> {{localize "CYBERPUNK.NpcGen.DoPreview"}}
+  {{!-- ── THE FUSED GENERATE BUTTON ────────────────────────────────────────────────────────── --}}
+  <div class="cp-goon-generate">
+    <button type="button" class="cp-goon-btn cp-goon-go" data-action="{{generateAction}}">
+      <i class="fas fa-users-gear"></i> {{generateLabel}}
     </button>
+    <select id="cp-goon-dest" class="cp-goon-dest" title="{{localize 'CYBERPUNK.GoonFactory.DestHint'}}">
+      {{#each destinations as |d|}}
+      <option value="{{d.value}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
+      {{/each}}
+    </select>
     {{#if hasPreview}}
-    <button type="button" class="cp-npcgen-btn" data-action="npcGenReroll">
-      <i class="fas fa-dice"></i> {{localize "CYBERPUNK.NpcGen.Reroll"}}
+    <button type="button" class="cp-goon-btn" data-action="goonDiscard">
+      <i class="fas fa-rotate-left"></i> {{localize "CYBERPUNK.GoonFactory.Discard"}}
     </button>
     {{/if}}
-    <button type="button" class="cp-npcgen-btn cp-npcgen-create" data-action="npcGenCreate">
-      <i class="fas fa-user-plus"></i> {{localize "CYBERPUNK.NpcGen.Generate"}}
-    </button>
   </div>
 
-  <p class="cp-npcgen-note">{{localize "CYBERPUNK.NpcGen.PlaceholderNames"}}</p>
+  {{#unless grade}}
+  <p class="cp-goon-empty">{{localize "CYBERPUNK.GoonFactory.EmptyState"}}</p>
+  {{/unless}}
 
   {{/if}}
 </div>

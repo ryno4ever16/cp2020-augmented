@@ -308,7 +308,7 @@ export async function applySkillLevels(actor, bp, nameByKey) {
  *  dot, so the split is from the LAST one). Missing pack or missing document degrades to null and
  *  warns by name — the `mech/pa-skills.js` discipline, so a world with a trimmed pack set produces a
  *  thinner NPC instead of a thrown generator. */
-async function loadCatalogDoc(key) {
+export async function loadCatalogDoc(key) {
   const i = String(key ?? "").lastIndexOf(".");
   if (i < 0) return null;
   const packId = key.slice(0, i);

@@ -872,6 +872,70 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-npcgen-card .cp-npcgen-card-tier { opacity: 0.75; font-size: 0.9em; }
 .cp-npcgen-card .cp-npcgen-card-note { margin: 6px 0 0; font-size: 0.8em; font-style: italic; }
 
+/* ===== GOON FACTORY — the rebuilt generator window (GOON-FACTORY-SPEC.md §1).
+ * Shares the .cp-npcgen palette above so the two read as one window family. The QUICK/FULL mode
+ * strip is gone; what replaces it is ONE form with a locked/unlocked region below the header band.
+ *
+ * ⭐ THE LOCKED STATE IS DIMMED, NOT HIDDEN. §1 wants every derived control "locked, visible" — a GM
+ * has to be able to SEE what the threat level chose before deciding to override it. So .cp-goon-locked
+ * lowers contrast and the inputs carry the real `disabled` attribute (which is also what makes them
+ * genuinely inert to the form read, not merely un-clickable). ===== */
+.cp-goon { padding: 8px 4px; font-size: 0.9em; line-height: 1.5; }
+.cp-goon .cp-goon-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.cp-goon .cp-goon-label { flex: 0 0 30%; font-weight: bold; }
+.cp-goon .cp-goon-row select,
+.cp-goon .cp-goon-row input[type="text"],
+.cp-goon .cp-goon-row input[type="number"],
+.cp-goon .cp-goon-row input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.cp-goon .cp-goon-row input[type="number"] { flex: 0 0 5em; }
+.cp-goon .cp-goon-out { flex: 0 0 2.5em; text-align: right; font-variant-numeric: tabular-nums; font-weight: bold; }
+.cp-goon .cp-goon-check { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-weight: bold; }
+.cp-goon .cp-goon-check input { flex: 0 0 auto; }
+
+.cp-goon .cp-goon-band { padding: 6px 0; border-top: 1px solid rgba(255, 255, 255, 0.12); border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+.cp-goon .cp-goon-outfit-row { margin-bottom: 2px; }
+.cp-goon .cp-goon-basedon { margin: 0 0 4px; font-size: 0.82em; opacity: 0.8; }
+.cp-goon .cp-goon-seednote { margin-bottom: 8px; }
+
+.cp-goon .cp-goon-section { font-weight: bold; margin: 12px 0 4px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.cp-goon .cp-goon-hint { margin: 0 0 6px; font-size: 0.8em; opacity: 0.7; font-style: italic; }
+.cp-goon .cp-goon-stakes { margin: 0 0 8px; font-size: 0.82em; opacity: 0.9; }
+.cp-goon .cp-goon-breakdown { margin: 0 0 8px; font-size: 0.82em; opacity: 0.85; font-variant-numeric: tabular-nums; }
+.cp-goon .cp-goon-warn { margin: 0 0 8px; font-size: 0.82em; color: #c0791a; }
+.cp-goon .cp-goon-clamp { flex: 0 0 auto; font-size: 0.8em; color: #c0791a; }
+.cp-goon .cp-goon-pending { margin: 16px 4px; opacity: 0.75; font-style: italic; }
+.cp-goon .cp-goon-empty { margin: 10px 2px 0; font-size: 0.85em; opacity: 0.75; font-style: italic; }
+
+.cp-goon .cp-goon-locked { opacity: 0.62; }
+.cp-goon .cp-goon-locked .cp-goon-section { opacity: 1; }
+
+.cp-goon .cp-goon-preview { max-height: 340px; overflow-y: auto; }
+.cp-goon .cp-goon-card {
+  margin-bottom: 6px; padding: 4px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 3px;
+}
+.cp-goon .cp-goon-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-goon .cp-goon-card-name { font-weight: bold; }
+.cp-goon .cp-goon-card-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+.cp-goon .cp-goon-icon { cursor: pointer; opacity: 0.75; }
+.cp-goon .cp-goon-icon:hover { opacity: 1; }
+.cp-goon .cp-goon-card p { margin: 0 0 2px; font-size: 0.85em; }
+.cp-goon .cp-goon-card-stats { font-variant-numeric: tabular-nums; opacity: 0.9; }
+
+/* The honesty list. §1: "Every shortfall is disclosed in preview; nothing gates silently." Warnings
+ * are amber and informational lines stay quiet, so a card full of ordinary disclosure does not read
+ * as a card full of problems. */
+.cp-goon .cp-goon-honesty { margin: 4px 0 0; padding-left: 16px; font-size: 0.8em; }
+.cp-goon .cp-goon-honesty li { margin: 0 0 1px; }
+.cp-goon .cp-goon-honesty-info { opacity: 0.72; }
+.cp-goon .cp-goon-honesty-warn { color: #c0791a; opacity: 0.95; }
+
+/* The fused Generate control: one button carrying its destination, per §1. */
+.cp-goon .cp-goon-generate { display: flex; gap: 6px; align-items: center; margin-top: 12px; }
+.cp-goon .cp-goon-btn { flex: 1 1 auto; width: auto; }
+.cp-goon .cp-goon-go { font-weight: bold; flex: 2 1 auto; }
+.cp-goon .cp-goon-dest { flex: 1 1 40%; min-width: 0; }
+
 /* ===================================================================================
  * Augmented actor-sheet styling — vendored DELTA over the base cyberpunk2020 system CSS.
  * Auto-extracted (rule-level): every fork css/cyberpunk2020.css rule whose selector+body

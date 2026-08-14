@@ -137,7 +137,7 @@ export function hardnessOf(candidate) {
 export const ARMOR_BANDS = {
   E: {
     key: "E", pull: false, itemsExist: false, spMin: 0, spMax: 3, pool: [],
-    honestyKey: "CYBERPUNK.GoonFactory.Armor.BandE",
+    honestyKey: "GoonFactory.Armor.BandE",
   },
   D: {
     key: "D", pull: true, itemsExist: true, spMin: 4, spMax: 10,
@@ -158,7 +158,7 @@ export const ARMOR_BANDS = {
   A: {
     key: "A", pull: true, itemsExist: true, spMin: 26, spMax: 30,
     pool: ["Pit Viper suit", "Assault Armor"],
-    honestyKey: "CYBERPUNK.GoonFactory.Armor.BandA",
+    honestyKey: "GoonFactory.Armor.BandA",
   },
   AA: {
     // ⭐ No single item above SP 30 exists anywhere, BY BOOK DESIGN — the band is reached by
@@ -166,7 +166,7 @@ export const ARMOR_BANDS = {
     // honesty line says exactly that rather than pretending to shop for a mythical SP-35 coat.
     key: "AA", pull: true, itemsExist: false, spMin: 31, spMax: null,
     pool: ["Metal Gear", "Doorgunner's Vest", "Pit Viper suit", "Assault Armor", "Police Patrol Helmet"],
-    honestyKey: "CYBERPUNK.GoonFactory.Armor.BandAA",
+    honestyKey: "GoonFactory.Armor.BandAA",
   },
 };
 
@@ -266,11 +266,11 @@ export function composeArmorStack({ gradeKey = "E", candidates = [], chromeLayer
   const countedFromChrome = LAYER_LAW.subdermalCounts ? countedChrome.length : 0;
 
   if (!band.pull) {
-    honesty.push({ code: "bandNoPull", band: band.key, messageKey: band.honestyKey ?? "CYBERPUNK.GoonFactory.Armor.BandE" });
+    honesty.push({ code: "bandNoPull", band: band.key, messageKey: band.honestyKey ?? "GoonFactory.Armor.BandE" });
     return finish([], skinweave, countedChrome, honesty, band);
   }
   if (band.itemsExist === false) {
-    honesty.push({ code: "bandLayeredOnly", band: band.key, messageKey: band.honestyKey ?? "CYBERPUNK.GoonFactory.Armor.BandAA" });
+    honesty.push({ code: "bandLayeredOnly", band: band.key, messageKey: band.honestyKey ?? "GoonFactory.Armor.BandAA" });
   }
 
   // Filters. Each rejection that empties the field is reported, so "why is my heavy goon in a
@@ -280,24 +280,24 @@ export function composeArmorStack({ gradeKey = "E", candidates = [], chromeLayer
   let pool = candidates.filter((c) => (Number(c.sp) || 0) > 0);
   if (wantHard !== "any") {
     const kept = pool.filter((c) => hardnessOf(c) === wantHard);
-    if (!kept.length && pool.length) honesty.push({ code: "hardnessFilterEmpty", want: wantHard });
+    if (!kept.length && pool.length) honesty.push({ code: "hardnessFilterEmpty", want: wantHard, messageKey: "GoonFactory.Honesty.HardnessFilterEmpty" });
     pool = kept;
   }
   if (wantWeight !== "any") {
     const kept = pool.filter((c) => weightClassOf(c) === wantWeight);
-    if (!kept.length && pool.length) honesty.push({ code: "weightFilterEmpty", want: wantWeight });
+    if (!kept.length && pool.length) honesty.push({ code: "weightFilterEmpty", want: wantWeight, messageKey: "GoonFactory.Honesty.WeightFilterEmpty" });
     else pool = kept;
   }
   const clamp = armorWeightClamp(gradeKey, wantWeight);
-  if (clamp.clamped) honesty.push({ code: clamp.code, band: clamp.band, ceiling: clamp.ceiling });
+  if (clamp.clamped) honesty.push({ code: clamp.code, band: clamp.band, ceiling: clamp.ceiling, messageKey: "GoonFactory.Honesty.ArmorWeightClamp" });
 
   if (!pool.length) {
-    honesty.push({ code: "noArmorAvailable", band: band.key });
+    honesty.push({ code: "noArmorAvailable", band: band.key, messageKey: "GoonFactory.Honesty.NoArmorAvailable" });
     return finish([], skinweave, countedChrome, honesty, band);
   }
 
   const budget = Math.max(0, LAYER_LAW.maxLayers - countedFromChrome);
-  if (budget === 0) honesty.push({ code: "layerBudgetSpentOnChrome", chromeLayers: countedFromChrome });
+  if (budget === 0) honesty.push({ code: "layerBudgetSpentOnChrome", chromeLayers: countedFromChrome, messageKey: "GoonFactory.Honesty.LayerBudgetSpentOnChrome" });
 
   const shortlist = [...pool].sort((a, b) => (Number(b.sp) || 0) - (Number(a.sp) || 0)).slice(0, 12);
   let best = { worn: [], sp: 0, ev: Infinity };

@@ -158,7 +158,7 @@ export const NOTHING_WEIGHT = 1;
 export const CHROME_SLOTS = [
   {
     id: "skillChips",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.SkillChips",
+    labelKey: "GoonFactory.Slot.SkillChips",
     gradeGate: "D",
     weight: 3,
     // Book p.82 verbatim: two installations, EITHER interface serves. `anyOf` is what makes the
@@ -195,7 +195,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "combatOptics",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.CombatOptics",
+    labelKey: "GoonFactory.Slot.CombatOptics",
     gradeGate: "C",
     weight: 4,
     prerequisites: [],
@@ -215,7 +215,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "combatAudio",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.CombatAudio",
+    labelKey: "GoonFactory.Slot.CombatAudio",
     gradeGate: "C",
     weight: 3,
     prerequisites: [],
@@ -235,7 +235,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "reflexBoost",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.ReflexBoost",
+    labelKey: "GoonFactory.Slot.ReflexBoost",
     gradeGate: "B",
     weight: 2,
     prerequisites: [{ name: "Neuralware Processor" }],
@@ -255,7 +255,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "smartgunLink",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.SmartgunLink",
+    labelKey: "GoonFactory.Slot.SmartgunLink",
     gradeGate: "B",
     weight: 2,
     prerequisites: [{ name: "Interface Plugs" }],
@@ -274,7 +274,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "handWeapons",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.HandWeapons",
+    labelKey: "GoonFactory.Slot.HandWeapons",
     gradeGate: "D",
     weight: 5,                       // FADE-derived: hand weapons are the heavy share
     prerequisites: [],
@@ -294,7 +294,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "armGun",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.ArmGun",
+    labelKey: "GoonFactory.Slot.ArmGun",
     gradeGate: "C",
     weight: 3,
     prerequisites: [],
@@ -309,7 +309,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "heavyBuiltIns",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.HeavyBuiltIns",
+    labelKey: "GoonFactory.Slot.HeavyBuiltIns",
     gradeGate: "AA",
     weight: 2,
     prerequisites: [],
@@ -325,7 +325,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "dermalArmor",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.DermalArmor",
+    labelKey: "GoonFactory.Slot.DermalArmor",
     gradeGate: "B",
     weight: 3,
     prerequisites: [],
@@ -356,7 +356,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "cyberlimbs",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.Cyberlimbs",
+    labelKey: "GoonFactory.Slot.Cyberlimbs",
     gradeGate: "A",
     weight: 2,
     prerequisites: [],
@@ -379,7 +379,7 @@ export const CHROME_SLOTS = [
 
   {
     id: "garnish",
-    labelKey: "CYBERPUNK.GoonFactory.Slot.Garnish",
+    labelKey: "GoonFactory.Slot.Garnish",
     gradeGate: "E",
     weight: 0,                       // never drawn against the chrome count — see `nonCounting`
     // §1: *"one random cosmetic item (never counts against combat gear)"*.

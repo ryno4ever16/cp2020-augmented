@@ -66,7 +66,7 @@ export const OUTFIT_SEEDS = [
   {
     // OUTFIT-CATALOGUE-PREP §A entry 1.
     id: "cityPolicePatrol",
-    labelKey: "CYBERPUNK.GoonFactory.Outfit.CityPolicePatrol",
+    labelKey: "GoonFactory.Outfit.CityPolicePatrol",
     seed: true,
     grade: "C",
     roleDefault: "cop",
@@ -86,17 +86,17 @@ export const OUTFIT_SEEDS = [
     skillBias: { AwarenessNotice: 2, Handgun: 2 },
     // prep §B.2: the elite-squad pattern is expressed as PAIRED ENTRIES until composition lands;
     // until the tactical entry ships this note is the only place the ladder is visible.
-    gradeSpanNoteKey: "CYBERPUNK.GoonFactory.Outfit.CityPolicePatrolSpan",
+    gradeSpanNoteKey: "GoonFactory.Outfit.CityPolicePatrolSpan",
     flavor: {
-      jurisdictionKey: "CYBERPUNK.GoonFactory.Outfit.CityPolicePatrolJurisdiction",
-      reinforcementKey: "CYBERPUNK.GoonFactory.Outfit.CityPolicePatrolReinforcement",
+      jurisdictionKey: "GoonFactory.Outfit.CityPolicePatrolJurisdiction",
+      reinforcementKey: "GoonFactory.Outfit.CityPolicePatrolReinforcement",
     },
   },
 
   {
     // OUTFIT-CATALOGUE-PREP §A entry 4.
     id: "premiumCorpSecurity",
-    labelKey: "CYBERPUNK.GoonFactory.Outfit.PremiumCorpSecurity",
+    labelKey: "GoonFactory.Outfit.PremiumCorpSecurity",
     seed: true,
     grade: "B",
     roleDefault: "solo",
@@ -118,15 +118,15 @@ export const OUTFIT_SEEDS = [
     skillBias: { Handgun: 2, AwarenessNotice: 2 },
     gradeSpanNoteKey: null,
     flavor: {
-      jurisdictionKey: "CYBERPUNK.GoonFactory.Outfit.PremiumCorpSecurityJurisdiction",
-      reinforcementKey: "CYBERPUNK.GoonFactory.Outfit.PremiumCorpSecurityReinforcement",
+      jurisdictionKey: "GoonFactory.Outfit.PremiumCorpSecurityJurisdiction",
+      reinforcementKey: "GoonFactory.Outfit.PremiumCorpSecurityReinforcement",
     },
   },
 
   {
     // OUTFIT-CATALOGUE-PREP §A entry 9.
     id: "boosterGang",
-    labelKey: "CYBERPUNK.GoonFactory.Outfit.BoosterGang",
+    labelKey: "GoonFactory.Outfit.BoosterGang",
     seed: true,
     grade: "D",
     roleDefault: "solo",
@@ -148,8 +148,8 @@ export const OUTFIT_SEEDS = [
     skillBias: { Brawling: 2, Melee: 2 },
     gradeSpanNoteKey: null,
     flavor: {
-      jurisdictionKey: "CYBERPUNK.GoonFactory.Outfit.BoosterGangJurisdiction",
-      reinforcementKey: "CYBERPUNK.GoonFactory.Outfit.BoosterGangReinforcement",
+      jurisdictionKey: "GoonFactory.Outfit.BoosterGangJurisdiction",
+      reinforcementKey: "GoonFactory.Outfit.BoosterGangReinforcement",
     },
   },
 ];

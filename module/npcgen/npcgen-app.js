@@ -1,230 +1,412 @@
 /**
- * NPC GENERATOR — THE WINDOW. ApplicationV2 + Handlebars, mirroring `dialog/preset-picker.js`'s shape
- * (static DEFAULT_OPTIONS with an `actions` table, static PARTS, `_prepareContext`) so a maintainer who
- * has read one of this module's V2 windows has read this one.
+ * GOON FACTORY — THE WINDOW (GOON-FACTORY-SPEC.md §1).
  *
- * TWO MODES, both ruled in (design §RULINGS Q0): **QUICK** is the panic case — archetype, tier, how
- * many, Generate, done. **FULL** is the prep case — the four dials individually, a seed you can see and
- * retype, and a preview you fine-tune before anything is written. They are the same machinery with a
- * different amount of it on screen; nothing is quick-only or full-only in the engine.
+ * ApplicationV2 + Handlebars, mirroring `dialog/preset-picker.js`'s shape (static DEFAULT_OPTIONS
+ * with an `actions` table, static PARTS, `_prepareContext`) so a maintainer who has read one of this
+ * module's V2 windows has read this one.
  *
- * The window itself computes NOTHING about an NPC. It reads the form, calls the pure `npcBlueprint`,
- * and hands the result to `materialize.js`. That is the pure/impure boundary this feature is built on,
- * and it is why the preview and the created actor cannot disagree: they are the same plan object.
+ * ⛔⛔ THE QUICK/FULL SPLIT IS GONE. It was two renderings of one machine, and §0's simplicity
+ * invariant replaced it with something stronger: ONE form whose quick path is
+ * **Outfit-or-(Role+Grade) → Generate**, with every dial Advanced-gated behind a checkbox that is
+ * itself disabled until a grade is picked. There is no mode state on this class and there must not
+ * be one again.
+ *
+ * ⭐ THE WINDOW COMPUTES NOTHING ABOUT A GOON. It reads the form, calls the pure `resolveGoonConfig`
+ * / `goonBlueprint`, and hands the plan to `goon-factory.js`. That is the pure/impure boundary this
+ * feature is built on, and it is why the preview and the created actor cannot disagree: they are the
+ * same plan object. Every honesty line rendered below was produced by the PLAN — this file only
+ * localizes it.
  */
 
-import { npcBlueprint } from "./blueprint.js";
-import { ARCHETYPES, TIERS, SKILL_DIAL, WEAPONS_DIAL, ARMOR_DIAL, TOUGHNESS_DIAL } from "./tables.js";
-import { materializeNpcSquad, planNpcGear, npcGenCatalogRows, NPCGEN_MAX_COUNT } from "./materialize.js";
+import { resolveGoonConfig } from "./blueprint.js";
+import {
+  ARMAMENT_POSTURES, ARMOR_HARDNESS_FILTERS, ARMOR_WEIGHT_FILTERS, BT_TICKS, BT_RANGE, COUNT,
+  GENERATOR_ROLES, GRADE_KEYS, GRADES, LOOT_DIAL, LOOT_LABEL_KEYS, REF_RANGE, STAT_POOL,
+  STAT_SHAPES, STAT_SHAPE_LABEL_KEYS, clampCount,
+} from "./grades.js";
+import { OUTFIT_SEEDS } from "./outfits.js";
+import {
+  GOON_MAX_COUNT, findGoonLocker, goonLockerName, materializeGoonSquad, planGoonSquad,
+} from "./goon-factory.js";
 import { catalogIndexReady, getCatalogIndex } from "../shop/catalog.js";
-import { localize, tryLocalize } from "../utils.js";
+import { localize, localizeParam, tryLocalize } from "../utils.js";
 import { npcGenEnabled } from "../settings.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
-/** A fresh seed for a window that has just opened. A STRING, because `seedFrom` folds strings and a
- *  GM who wants to keep a squad writes this down — a 32-bit integer is a worse thing to copy by hand. */
-function freshSeed() {
-  return Math.random().toString(36).slice(2, 8);
-}
+/** A fresh root seed. §1 retired the visible-seed UI; the seed is INTERNAL and per-goon now. */
+function freshSeed() { return Math.random().toString(36).slice(2, 10); }
+
+/** Honesty codes that read as a WARNING rather than as information. Drives the row's CSS tone only. */
+const WARN_CODES = new Set([
+  "cyberpsycho", "invalidLuckFormula", "invalidRepFormula", "lightCannotReachBand", "noWeapon",
+  "noWeaponAvailable", "postureLoadMissing", "slotEmpty", "slotExhausted", "housingFull",
+  "statPoolClamped", "skillPointsClamped", "statPoolUnspent", "launcherNeedsAmmo",
+  "noArmorAvailable", "prerequisiteMissing", "housingMissing", "hardnessFilterEmpty",
+]);
 
 export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(options = {}) {
     super(options);
-    this.mode = "quick";                 // quick | full
-    this.archetype = Object.keys(ARCHETYPES)[0] ?? "goon";
-    this.tier = TIERS[0]?.key ?? "mook";
-    this.count = 1;
+    this.outfitId = "";
+    this.role = GENERATOR_ROLES[0];
+    this.grade = null;              // ⛔ null is a REAL state — §1's threat level starts as dashes
+    this.count = COUNT.default;
+    this.advanced = false;
+    this.overrides = {};            // only what the GM has actually moved; empty = pure derivation
     this.seed = freshSeed();
-    this.dials = { skill: null, weapons: null, armor: null, toughness: null };   // null = follow the tier
-    this.preview = null;                 // [{bp, gear}] — set by Preview, cleared by any dial change
-    this._indexWait = null;              // the one pending "re-render when the index lands" (design R5)
+    this.preview = null;            // [planRow] — set by Generate, cleared by any control change
+    this.destination = { mode: "locker" };
+    this._countClamped = false;
+    this._indexWait = null;
   }
 
   static DEFAULT_OPTIONS = {
     id: "cp-npcgen",
-    classes: ["cyberpunk", "cp-npcgen-app"],
-    window: { title: "CYBERPUNK.NpcGen.Title", icon: "fa-solid fa-users-gear", resizable: true },
-    position: { width: 720, height: "auto" },
+    classes: ["cyberpunk", "cp-npcgen-app", "cp-goon-app"],
+    window: { title: "CYBERPUNK.GoonFactory.Title", icon: "fa-solid fa-users-gear", resizable: true },
+    position: { width: 760, height: "auto" },
     actions: {
-      npcGenMode: NpcGeneratorApp._onMode,
-      npcGenPreview: NpcGeneratorApp._onPreview,
-      npcGenReroll: NpcGeneratorApp._onReroll,
-      npcGenCreate: NpcGeneratorApp._onCreate,
+      goonAdvanced: NpcGeneratorApp._onAdvanced,
+      goonGenerate: NpcGeneratorApp._onGenerate,
+      goonConfirm: NpcGeneratorApp._onConfirm,
+      goonDiscard: NpcGeneratorApp._onDiscard,
+      goonRerollOne: NpcGeneratorApp._onRerollOne,
+      goonDeleteOne: NpcGeneratorApp._onDeleteOne,
+      goonPickDestination: NpcGeneratorApp._onGenerate,
     },
   };
 
-  static PARTS = {
-    main: { template: "modules/cp2020-augmented/templates/npcgen/generator.hbs" },
-  };
+  static PARTS = { main: { template: "modules/cp2020-augmented/templates/npcgen/generator.hbs" } };
 
-  /**
-   * ⚠ THE CATALOG INDEX IS NOT AWAITED HERE, and that is design §R5 rather than an oversight. The
-   * shop's own comment on `catalogIndexReady` says it plainly: awaiting the index *"is what would hold
-   * the whole window closed on the first open."* So a not-yet-built index renders a pending panel and
-   * `_awaitCatalogIndex` re-renders into the real thing the moment the build lands — the same two-state
-   * treatment the shop window uses, for the same measured reason.
-   */
+  // ===============================================================================================
+  // RENDER
+  // ===============================================================================================
+
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
     const ready = catalogIndexReady();
     if (!ready) this._awaitCatalogIndex();
 
-    const dialRows = (rows, keyOf, labelOf, chosen) => rows.map((r) => ({
-      key: keyOf(r), label: labelOf(r), selected: String(keyOf(r)) === String(chosen),
+    const cfg = resolveGoonConfig({
+      outfitId: this.outfitId || null, role: this.role, grade: this.grade, overrides: this.overrides,
+    });
+    const grade = cfg.grade ? GRADES[cfg.grade] : null;
+
+    // §1: any manual edit after an outfit → "Custom (based on X)"; re-picking re-derives clean.
+    const outfitLabel = this.outfitId
+      ? tryLocalize(OUTFIT_SEEDS.find((o) => o.id === this.outfitId)?.labelKey, this.outfitId)
+      : "";
+    const basedOnLabel = cfg.custom && this.outfitId
+      ? localizeParam("GoonFactory.CustomBasedOn", { outfit: outfitLabel })
+      : localizeParam("GoonFactory.BasedOn", { outfit: outfitLabel });
+
+    const sel = (arr, cur, labelOf) => arr.map((k) => ({
+      key: k, label: labelOf(k), selected: String(k) === String(cur),
     }));
 
     return {
       ...context,
       catalogLoading: !ready,
-      isQuick: this.mode === "quick",
-      isFull: this.mode === "full",
-      seed: this.seed,
+      // top
+      outfits: OUTFIT_SEEDS.map((o) => ({
+        id: o.id, label: tryLocalize(o.labelKey, o.id), seed: !!o.seed, selected: o.id === this.outfitId,
+      })),
+      outfitId: this.outfitId,
+      basedOnLabel,
+      // header band
+      roles: GENERATOR_ROLES.map((r) => ({
+        key: r, label: tryLocalize(`GoonFactory.Role.${r}`, r), selected: r === cfg.role,
+      })),
+      grades: GRADE_KEYS.map((k) => ({
+        key: k, label: tryLocalize(GRADES[k].labelKey, k),
+        hint: tryLocalize(GRADES[k].hintKey, ""), selected: k === cfg.grade,
+      })),
+      grade: cfg.grade,
       count: this.count,
-      maxCount: NPCGEN_MAX_COUNT,
-      archetypes: Object.values(ARCHETYPES).map((a) => ({
-        key: a.key, label: tryLocalize(a.labelKey, a.key),
-        selected: a.key === this.archetype, placeholder: !!a.placeholder,
-      })),
-      // ⛔ The one shipped archetype is scaffolding and the window says so out loud. The real starter
-      // set is the user's to supply (design §RULINGS Q2) and a GM should not mistake "Goon" for a
-      // curated character type.
-      archetypePlaceholder: !!ARCHETYPES[this.archetype]?.placeholder,
-      tiers: TIERS.map((t) => ({
-        key: t.key, label: tryLocalize(t.labelKey, t.key),
-        selected: t.key === this.tier,
-        benchmark: `ATK ${t.benchmark.atk} · ${t.benchmark.damage} · SP ${t.benchmark.sp} · BT ${t.benchmark.bt}`,
-      })),
-      skillDial: dialRows(SKILL_DIAL, (r) => r.key, (r) => tryLocalize(r.labelKey, r.key), this.dials.skill ?? ""),
-      weaponsDial: dialRows(WEAPONS_DIAL, (r) => r.rung, (r) => r.prose, this.dials.weapons ?? ""),
-      // The armor rung's label is localized from its own key, falling back to the book prose the table
-      // carries — the value-is-key pattern, so the shipped table stays i18n-free and unit-testable.
-      armorDial: dialRows(ARMOR_DIAL, (r) => r.key, (r) => tryLocalize(r.labelKey, r.prose), this.dials.armor ?? ""),
-      toughnessDial: dialRows(TOUGHNESS_DIAL, (r) => r.key, (r) => tryLocalize(r.labelKey, r.key), this.dials.toughness ?? ""),
-      preview: this.preview?.map(({ bp, gear }) => ({
-        name: bp.name,
-        statLine: `INT ${bp.stats.int} · REF ${bp.stats.ref} · TECH ${bp.stats.tech} · CL ${bp.stats.cool} · ATT ${bp.stats.attr} · LK ${bp.stats.luck} · MA ${bp.stats.ma} · BT ${bp.stats.bt} · EMP ${bp.stats.emp}`,
-        skills: bp.skillLevels.map((s) => `${s.skillKey} ${s.level}`).join(", "),
-        gear: (gear?.slots ?? []).map((s) => s.name),
-        chrome: (gear?.chrome ?? []).map((c) => c.name),
-        hasChrome: (gear?.chrome ?? []).length > 0,
-        seed: bp.seed,
-      })) ?? null,
+      maxCount: GOON_MAX_COUNT,
+      countClamped: this._countClamped,
+      advanced: this.advanced,
+      advancedAvailable: cfg.advancedAvailable,
+      // below the line
+      ref: cfg.ref, bt: cfg.bt, refRange: REF_RANGE, btRange: BT_RANGE,
+      btTicks: BT_TICKS.map((t) => ({ value: t.value, hint: tryLocalize(t.hintKey, "") })),
+      skill: cfg.skillBreakdown ?? { total: 0, reserved: 0, floor: 0 },
+      skillBreakdownLine: grade ? localizeParam("GoonFactory.SkillBreakdown", {
+        total: cfg.skillBreakdown.total, reserved: cfg.skillBreakdown.reserved,
+        grade: cfg.grade, rest: cfg.skillBreakdown.toPackage,
+      }) : "",
+      pool: cfg.statPoolBreakdown ?? { pool: 0, floor: 0, ceiling: STAT_POOL.ceiling },
+      poolTicks: STAT_POOL.ticks.map((t) => ({ value: t.value, hint: tryLocalize(t.hintKey, "") })),
+      poolBreakdownLine: grade ? localizeParam("GoonFactory.PoolBreakdown", {
+        pool: cfg.statPoolBreakdown.pool, reserved: cfg.statPoolBreakdown.reserved,
+        free: cfg.statPoolBreakdown.free,
+      }) : "",
+      shapes: sel(STAT_SHAPES, cfg.statShape, (k) => tryLocalize(STAT_SHAPE_LABEL_KEYS[k], k)),
+      luckFormula: cfg.luckFormula, repFormula: cfg.repFormula,
+      chromeOn: cfg.chromeOn, chromeCount: cfg.chromeCount,
+      chromeDerivationLine: cfg.chromeDerivation ? localizeParam("GoonFactory.ChromeDerivation", {
+        base: cfg.chromeDerivation.base, grade: cfg.grade,
+        solo: cfg.chromeDerivation.soloBonus, outfit: cfg.chromeDerivation.outfitMod,
+      }) : "",
+      garnish: cfg.garnish,
+      armorWeights: sel(ARMOR_WEIGHT_FILTERS, cfg.armorWeight, (k) => tryLocalize(`GoonFactory.Weight.${k}`, k)),
+      armorHardnesses: sel(ARMOR_HARDNESS_FILTERS, cfg.armorHardness, (k) => tryLocalize(`GoonFactory.Hardness.${k}`, k)),
+      armaments: sel(ARMAMENT_POSTURES, cfg.armament, (k) => tryLocalize(`GoonFactory.Armament.${k}`, k)),
+      lootDial: sel(LOOT_DIAL, cfg.loot, (k) => tryLocalize(LOOT_LABEL_KEYS[k], k)),
+      // preview
       hasPreview: !!this.preview?.length,
+      preview: this.preview?.map((row, i) => this._previewCard(row, i)) ?? null,
+      // the fused generate button
+      ...this._generateButton(),
+      destinations: this._destinationOptions(),
     };
   }
 
-  /** Start (or join) the index build behind the pending panel and re-render once it resolves. Both
-   *  guards are the shop's: ONE pending re-render per window however many renders happen while the
-   *  build runs, and a `rendered` check so a window closed mid-build re-renders nothing. */
+  /** One preview card. Everything here is DISPLAY of a plan row — nothing is decided at this level. */
+  _previewCard(row, index) {
+    const s = row.stats;
+    const chromeNames = [...(row.chrome?.items ?? []), ...(row.chrome?.bonusItems ?? [])].map((c) => c.name);
+    return {
+      index,
+      name: row.bp.name,
+      statLine: `INT ${s.int} · REF ${s.ref} · TECH ${s.tech} · CL ${s.cool} · ATT ${s.attr} · LK ${s.luck} · MA ${s.ma} · BT ${s.bt} · EMP ${s.emp}`,
+      gearLine: row.weapon ? localizeParam("GoonFactory.PreviewGear", { weapon: row.weapon.name }) : "",
+      armorLine: (row.armor?.layers ?? []).length
+        ? localizeParam("GoonFactory.PreviewArmor", {
+          names: row.armor.layers.map((l) => l.name).join(", "),
+          sp: row.armor.effectiveSP, ev: row.armor.effectiveEV,
+        })
+        : "",
+      chromeLine: chromeNames.length ? localizeParam("GoonFactory.PreviewChrome", { names: chromeNames.join(", ") }) : "",
+      honesty: (row.honesty ?? []).map((h) => ({
+        tone: WARN_CODES.has(h.code) ? "warn" : "info",
+        text: this._honestyText(h),
+      })),
+    };
+  }
+
+  /**
+   * Localize one honesty row. The PLAN supplies a code, a message key and the numbers; this turns
+   * that into a sentence. A code whose key is missing degrades to the code itself rather than to an
+   * empty line — a silent blank in the honesty list would defeat the whole point of the list.
+   */
+  _honestyText(h) {
+    // Data-layer keys are stored BARE (no "CYBERPUNK." prefix), matching tables.js's own convention;
+    // `localizeParam` adds it. A missing key degrades to the code rather than to an empty line — a
+    // silent blank in the honesty list would defeat the entire point of the list.
+    if (!h.messageKey) return h.code ?? "";
+    const full = `CYBERPUNK.${h.messageKey}`;
+    if (!game.i18n.has(full)) return h.code ?? "";
+    return localizeParam(h.messageKey, { ...h });
+  }
+
+  /**
+   * §1's FUSED destination button, and its empty-state rule.
+   *
+   * ⛔ *"If destination is ever empty the button label becomes the instruction … no mysterious
+   * gray-out, ever."* So this never returns a disabled button: it returns a different LABEL and a
+   * different action. A GM always has something to click and always knows what it will do.
+   */
+  _generateButton() {
+    const destOk = this.destination.mode !== "existing" || !!game.folders?.get(this.destination.folderId);
+    if (!destOk) {
+      return { generateLabel: localize("GoonFactory.PickDestination"), generateAction: "goonPickDestination" };
+    }
+    const folderName = this.destination.mode === "existing"
+      ? (game.folders?.get(this.destination.folderId)?.name ?? goonLockerName())
+      : this.destination.mode === "root" ? localize("GoonFactory.DestRoot") : goonLockerName();
+    if (this.preview?.length) {
+      return {
+        generateLabel: localizeParam("GoonFactory.Confirm", { n: this.preview.length, folder: folderName }),
+        generateAction: "goonConfirm",
+      };
+    }
+    return {
+      generateLabel: localizeParam("GoonFactory.Generate", { n: this.count, folder: folderName }),
+      generateAction: "goonGenerate",
+    };
+  }
+
+  /** Existing folders / the Goon Locker / the root / a new auto-named subfolder. */
+  _destinationOptions() {
+    const cur = this.destination;
+    const opts = [
+      { value: "locker", label: goonLockerName(), selected: cur.mode === "locker" },
+      { value: "root", label: localize("GoonFactory.DestRoot"), selected: cur.mode === "root" },
+      { value: "new", label: localize("GoonFactory.DestNew"), selected: cur.mode === "new" },
+    ];
+    const locker = findGoonLocker();
+    for (const f of game.folders?.filter?.((x) => x.type === "Actor" && x.id !== locker?.id) ?? []) {
+      opts.push({ value: `f:${f.id}`, label: f.name, selected: cur.mode === "existing" && cur.folderId === f.id });
+    }
+    return opts;
+  }
+
   _awaitCatalogIndex() {
     if (this._indexWait) return;
     this._indexWait = getCatalogIndex().then(
       () => { this._indexWait = null; if (this.rendered) this.render(); },
-      (err) => { this._indexWait = null; console.error("cp2020-augmented | npcgen: catalog index build failed", err); },
+      (err) => { this._indexWait = null; console.error(`cp2020-augmented | goon factory: catalog index build failed`, err); },
     );
   }
 
-  /** Read every control back off the form. Called before each Preview/Generate so the window never acts
-   *  on a stale copy of what the GM is looking at — the fields are plain inputs, not bound state. */
+  // ===============================================================================================
+  // FORM READ
+  // ===============================================================================================
+
+  /**
+   * Read every control back off the form.
+   *
+   * ⭐ ONLY WHAT THE GM ACTUALLY MOVED BECOMES AN OVERRIDE, and that is what makes §1's derivation
+   * rules work. A control sitting at its grade-derived value is NOT recorded, so a grade re-pick
+   * re-derives it cleanly; the moment a value differs from the derivation it is recorded and the
+   * config flips to "Custom (based on X)".
+   *
+   * ⛔ A LOCKED CONTROL IS TRULY INERT. When Advanced is off, the below-the-line inputs are rendered
+   * `disabled` and this function does not read them at all — so a stale DOM value (or a browser that
+   * restored one) can never leak into the plan. That is §4's "locked controls truly inert" leg.
+   */
   _readForm() {
     const root = this.element;
     if (!root) return;
     const val = (sel) => root.querySelector(sel)?.value ?? "";
-    this.archetype = val(".cp-npcgen-archetype") || this.archetype;
-    this.tier = val(".cp-npcgen-tier") || this.tier;
-    const n = parseInt(val(".cp-npcgen-count"), 10);
-    this.count = Math.max(1, Math.min(Number.isFinite(n) ? n : 1, NPCGEN_MAX_COUNT));
-    const seed = val(".cp-npcgen-seed").trim();
-    if (seed) this.seed = seed;
-    if (this.mode === "full") {
-      const dial = (sel) => { const v = val(sel).trim(); return v === "" ? null : v; };
-      this.dials = {
-        skill: dial(".cp-npcgen-dial-skill"),
-        weapons: dial(".cp-npcgen-dial-weapons") === null ? null : Number(val(".cp-npcgen-dial-weapons")),
-        armor: dial(".cp-npcgen-dial-armor"),
-        toughness: dial(".cp-npcgen-dial-toughness"),
-      };
-    }
+    const checked = (sel) => !!root.querySelector(sel)?.checked;
+
+    const prevOutfit = this.outfitId;
+    this.outfitId = val(".cp-goon-outfit");
+    // §1: re-picking the outfit RE-DERIVES CLEAN — the overrides go, they are not remembered.
+    if (this.outfitId !== prevOutfit) this.overrides = {};
+
+    this.role = val(".cp-goon-role") || this.role;
+    const g = val(".cp-goon-grade");
+    this.grade = g || null;
+
+    const raw = parseInt(val(".cp-goon-count"), 10);
+    const clamped = clampCount(raw);
+    this.count = clamped.value;
+    this._countClamped = clamped.clamped;
+
+    const destRaw = val(".cp-goon-dest");
+    if (destRaw?.startsWith("f:")) this.destination = { mode: "existing", folderId: destRaw.slice(2) };
+    else if (destRaw) this.destination = { mode: destRaw };
+
+    if (!this.advanced || !this.grade) return;      // locked ⇒ nothing below the line is read
+
+    // The derivation as it stands WITHOUT the current overrides, so "did the GM move this?" is a
+    // comparison against the derived value rather than against the last thing we happened to store.
+    const derived = resolveGoonConfig({ outfitId: this.outfitId || null, role: this.role, grade: this.grade });
+    const ov = {};
+    const put = (key, value, derivedValue) => {
+      if (value === null || value === undefined || value === "") return;
+      if (String(value) === String(derivedValue)) return;                 // untouched ⇒ not an override
+      ov[key] = value;
+    };
+    put("ref", parseInt(val(".cp-goon-ref"), 10), derived.ref);
+    put("bt", parseInt(val(".cp-goon-bt"), 10), derived.bt);
+    put("skillPoints", parseInt(val(".cp-goon-skillpoints"), 10), derived.skillPoints);
+    put("statPool", parseInt(val(".cp-goon-statpool"), 10), derived.statPool);
+    put("statShape", val(".cp-goon-shape"), derived.statShape);
+    put("luckFormula", val(".cp-goon-luck"), derived.luckFormula);
+    put("repFormula", val(".cp-goon-rep"), derived.repFormula);
+    put("chromeCount", parseInt(val(".cp-goon-chrome-count"), 10), derived.chromeCount);
+    put("armorWeight", val(".cp-goon-armor-weight"), derived.armorWeight);
+    put("armorHardness", val(".cp-goon-armor-hardness"), derived.armorHardness);
+    put("armament", val(".cp-goon-armament"), derived.armament);
+    put("loot", val(".cp-goon-loot"), derived.loot);
+    const chromeOn = checked(".cp-goon-chrome-on");
+    if (chromeOn !== derived.chromeOn) ov.chromeOn = chromeOn;
+    const garnish = checked(".cp-goon-garnish");
+    if (garnish !== derived.garnish) ov.garnish = garnish;
+    this.overrides = ov;
   }
 
-  /** The dial argument `npcBlueprint` expects: the tier, plus only those dials the GM actually moved.
-   *  An untouched dial is ABSENT rather than null, so the tier's own value stands — the dials stay free
-   *  (design §B.2) without the window having to know what each tier's defaults are. */
-  _dialSpec() {
-    const spec = { tier: this.tier };
-    if (this.mode !== "full") return spec;
-    for (const k of ["skill", "weapons", "armor", "toughness"]) {
-      if (this.dials[k] !== null && this.dials[k] !== undefined && this.dials[k] !== "") spec[k] = this.dials[k];
-    }
-    return spec;
+  /** The argument set both the plan and the blueprint take. One place, so they cannot drift. */
+  _planOpts() {
+    return {
+      outfitId: this.outfitId || null, role: this.role, grade: this.grade,
+      overrides: this.overrides, count: this.count, seed: this.seed,
+    };
   }
 
-  /** Build the plan for the current form state. Deterministic: the same seed and dials produce the same
-   *  squad, which is what makes the preview honest and a rig assertion possible (design Q14). */
-  async _buildPlan() {
-    const bps = npcBlueprint({
-      archetype: this.archetype, dials: this._dialSpec(), count: this.count, seed: this.seed,
-    });
-    const rows = await npcGenCatalogRows();
-    return bps.map((bp) => ({ bp, gear: planNpcGear(bp, rows) }));
-  }
+  // ===============================================================================================
+  // ACTIONS
+  // ===============================================================================================
 
-  static async _onMode(event, target) {
+  static async _onAdvanced() {
     this._readForm();
-    this.mode = target?.dataset?.mode === "full" ? "full" : "quick";
-    this.preview = null;                             // a mode switch changes what is on screen, not what was planned
+    this.advanced = !this.advanced;
     this.render();
   }
 
-  static async _onPreview() {
+  /** Build the plan and show the preview. ⛔ Writes NOTHING — this is the confirmation step. */
+  static async _onGenerate() {
     this._readForm();
-    this.preview = await this._buildPlan();
+    if (!this.grade) { ui.notifications?.warn(localize("GoonFactory.NeedGrade")); return; }
+    const dest = this.destination.mode === "existing" ? game.folders?.get(this.destination.folderId) : null;
+    this.preview = await planGoonSquad({ ...this._planOpts(), destinationFolder: dest ?? findGoonLocker() });
     this.render();
   }
 
-  /** Reroll = a NEW seed and a new preview. ⛔ It writes NOTHING — the whole point of the preview stage
-   *  is that a GM can spin it as often as they like before any document exists. */
-  static async _onReroll() {
-    this._readForm();
+  /** Confirm creates. The preview IS the plan, reused verbatim — what was approved is what is written. */
+  static async _onConfirm() {
+    if (!game.user?.isGM) return;
+    if (!this.preview?.length) return;
+    const made = await materializeGoonSquad(this.preview, this.destination);
+    if (made.length) {
+      ui.notifications?.info(localizeParam("GoonFactory.Created", { n: made.length }));
+      this.preview = null;
+      // A fresh root seed so a second Generate does not silently rebuild the same squad on top of
+      // itself. Numbering continues from the folder scan, so the two batches do not collide.
+      this.seed = freshSeed();
+      this.render();
+    }
+  }
+
+  static async _onDiscard() {
+    this.preview = null;
     this.seed = freshSeed();
-    this.preview = await this._buildPlan();
     this.render();
   }
 
   /**
-   * Create the squad. In QUICK mode there may be no preview yet — the panic case is one click, so the
-   * plan is built here rather than demanded first. In FULL mode the preview already IS the plan and is
-   * reused verbatim, so what the GM approved is what gets written.
+   * Reroll ONE goon in the preview (§1: per-goon REROLL and DELETE icons).
+   *
+   * The goon is re-planned alone, on a fresh sub-seed, and dropped back into its slot — so rerolling
+   * the third goon leaves the other five exactly as they were. Re-planning the whole squad would
+   * have been one line shorter and would have silently rerolled everybody.
    */
-  static async _onCreate() {
-    if (!game.user?.isGM) return;
-    this._readForm();
-    const plan = this.preview ?? await this._buildPlan();
-    const made = await materializeNpcSquad(plan.map((p) => p.bp));
-    if (made.length) {
-      ui.notifications?.info(game.i18n.format("CYBERPUNK.NpcGen.Created", { n: made.length }));
-      this.preview = null;
-      // The seed advances so a second Generate does not silently rebuild the same squad on top of
-      // itself. The GM can always type the old one back — that is what the field is for.
-      this.seed = freshSeed();
-      this.render();
+  static async _onRerollOne(event, target) {
+    const i = Number(target?.dataset?.index);
+    if (!Number.isFinite(i) || !this.preview?.[i]) return;
+    const dest = this.destination.mode === "existing" ? game.folders?.get(this.destination.folderId) : null;
+    const one = await planGoonSquad({
+      ...this._planOpts(), count: 1, seed: `${this.seed}:${i}:${Math.random().toString(36).slice(2, 6)}`,
+      destinationFolder: dest ?? findGoonLocker(),
+    });
+    if (one?.[0]) {
+      // Keep the slot's NAME so the squad's numbering stays contiguous after a reroll.
+      one[0].bp.name = this.preview[i].bp.name;
+      this.preview[i] = one[0];
     }
+    this.render();
+  }
+
+  static async _onDeleteOne(event, target) {
+    const i = Number(target?.dataset?.index);
+    if (!Number.isFinite(i) || !this.preview?.[i]) return;
+    this.preview.splice(i, 1);
+    if (!this.preview.length) this.preview = null;
+    this.render();
   }
 }
 
 /**
  * The entry point: a GM-only button in the Actors directory header, beside the IP Tracker's.
  *
- * Mirrors that button exactly (`cp2020-augmented.js`'s `renderActorDirectory` hook) — the same GM
- * guard, the same idempotent class check so a re-render cannot stack two of them, the same
- * `header.prepend`, and the same whole-body try/catch so a DOM change in a future core costs the
- * button and not the directory. `reference-tilt-way-patterns.md` §"Tracker / non-chat DOM UI" blesses
- * building this one element in JS, provided it carries a CSS class rather than inline styling and its
- * label is localized — both of which it does.
- *
- * Registered through the ready-time `wire()` isolation in cp2020-augmented.js, so a throw here costs
- * this feature and not the nineteen registrations after it.
+ * Mirrors that button exactly — the same GM guard, the same idempotent class check so a re-render
+ * cannot stack two of them, the same `header.prepend`, and the same whole-body try/catch so a DOM
+ * change in a future core costs the button and not the directory.
  */
 export function registerNpcGenHooks() {
   Hooks.on("renderActorDirectory", (app, html) => {
@@ -235,7 +417,7 @@ export function registerNpcGenHooks() {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "cp2020ae-npcgen-btn";
-      btn.innerHTML = `<i class="fas fa-users-gear"></i> ${game.i18n.localize("CYBERPUNK.NpcGen.Button")}`;
+      btn.innerHTML = `<i class="fas fa-users-gear"></i> ${game.i18n.localize("CYBERPUNK.GoonFactory.Button")}`;
       btn.addEventListener("click", () => openNpcGenerator());
       const header = root.querySelector(".directory-header") ?? root.querySelector(".header-actions") ?? root.firstElementChild ?? root;
       header.prepend(btn);
@@ -243,11 +425,11 @@ export function registerNpcGenHooks() {
   });
 }
 
-/** Open (or focus) the single generator window. GM-only and setting-gated, checked here as well as at
- *  the button, so a macro or a console call meets the same two gates the button does. */
+/** Open (or focus) the single generator window. GM-only and setting-gated, checked here as well as
+ *  at the button, so a macro or a console call meets the same two gates the button does. */
 export function openNpcGenerator() {
-  if (!game.user?.isGM) { ui.notifications?.warn(localize("NpcGen.GmOnly")); return null; }
-  if (!npcGenEnabled()) { ui.notifications?.warn(localize("NpcGen.Disabled")); return null; }
+  if (!game.user?.isGM) { ui.notifications?.warn(localize("GoonFactory.GmOnly")); return null; }
+  if (!npcGenEnabled()) { ui.notifications?.warn(localize("GoonFactory.Disabled")); return null; }
   const existing = [...foundry.applications.instances.values()].find((w) => w instanceof NpcGeneratorApp);
   if (existing) { existing.render({ force: true }); try { existing.bringToFront?.(); } catch { /* not ready */ } return existing; }
   const app = new NpcGeneratorApp();

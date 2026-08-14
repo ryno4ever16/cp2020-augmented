@@ -42,10 +42,10 @@ export const BT_RANGE = { min: 2, max: 10 };
 
 /** §1 BT slider: ticks at 3/5/8/10, each with a band hover the render edge localizes. */
 export const BT_TICKS = [
-  { value: 3, hintKey: "CYBERPUNK.GoonFactory.BtBand.3" },
-  { value: 5, hintKey: "CYBERPUNK.GoonFactory.BtBand.5" },
-  { value: 8, hintKey: "CYBERPUNK.GoonFactory.BtBand.8" },
-  { value: 10, hintKey: "CYBERPUNK.GoonFactory.BtBand.10" },
+  { value: 3, hintKey: "GoonFactory.BtBand.3" },
+  { value: 5, hintKey: "GoonFactory.BtBand.5" },
+  { value: 8, hintKey: "GoonFactory.BtBand.8" },
+  { value: 10, hintKey: "GoonFactory.BtBand.10" },
 ];
 
 /**
@@ -70,12 +70,12 @@ export const BT_TICKS = [
  *     not a mythical item above the top of the printed ladder).
  */
 export const GRADES = {
-  E:  { key: "E",  skillPts: 2,  weaponsRung: 5, armorBand: "E",  refDefault: 8,  btDefault: 7, chromeBase: 0, whiffAllowed: true,  labelKey: "CYBERPUNK.GoonFactory.Grade.E",  hintKey: "CYBERPUNK.GoonFactory.GradeHint.E" },
-  D:  { key: "D",  skillPts: 4,  weaponsRung: 4, armorBand: "D",  refDefault: 8,  btDefault: 7, chromeBase: 1, whiffAllowed: true,  labelKey: "CYBERPUNK.GoonFactory.Grade.D",  hintKey: "CYBERPUNK.GoonFactory.GradeHint.D" },
-  C:  { key: "C",  skillPts: 6,  weaponsRung: 3, armorBand: "C",  refDefault: 8,  btDefault: 7, chromeBase: 2, whiffAllowed: true,  labelKey: "CYBERPUNK.GoonFactory.Grade.C",  hintKey: "CYBERPUNK.GoonFactory.GradeHint.C" },
-  B:  { key: "B",  skillPts: 8,  weaponsRung: 2, armorBand: "B",  refDefault: 8,  btDefault: 7, chromeBase: 3, whiffAllowed: false, labelKey: "CYBERPUNK.GoonFactory.Grade.B",  hintKey: "CYBERPUNK.GoonFactory.GradeHint.B" },
-  A:  { key: "A",  skillPts: 10, weaponsRung: 1, armorBand: "A",  refDefault: 8,  btDefault: 7, chromeBase: 4, whiffAllowed: false, labelKey: "CYBERPUNK.GoonFactory.Grade.A",  hintKey: "CYBERPUNK.GoonFactory.GradeHint.A" },
-  AA: { key: "AA", skillPts: 10, weaponsRung: 1, armorBand: "AA", refDefault: 10, btDefault: 7, chromeBase: 6, whiffAllowed: false, labelKey: "CYBERPUNK.GoonFactory.Grade.AA", hintKey: "CYBERPUNK.GoonFactory.GradeHint.AA" },
+  E:  { key: "E",  skillPts: 2,  weaponsRung: 5, armorBand: "E",  refDefault: 8,  btDefault: 7, chromeBase: 0, whiffAllowed: true,  labelKey: "GoonFactory.Grade.E",  hintKey: "GoonFactory.GradeHint.E" },
+  D:  { key: "D",  skillPts: 4,  weaponsRung: 4, armorBand: "D",  refDefault: 8,  btDefault: 7, chromeBase: 1, whiffAllowed: true,  labelKey: "GoonFactory.Grade.D",  hintKey: "GoonFactory.GradeHint.D" },
+  C:  { key: "C",  skillPts: 6,  weaponsRung: 3, armorBand: "C",  refDefault: 8,  btDefault: 7, chromeBase: 2, whiffAllowed: true,  labelKey: "GoonFactory.Grade.C",  hintKey: "GoonFactory.GradeHint.C" },
+  B:  { key: "B",  skillPts: 8,  weaponsRung: 2, armorBand: "B",  refDefault: 8,  btDefault: 7, chromeBase: 3, whiffAllowed: false, labelKey: "GoonFactory.Grade.B",  hintKey: "GoonFactory.GradeHint.B" },
+  A:  { key: "A",  skillPts: 10, weaponsRung: 1, armorBand: "A",  refDefault: 8,  btDefault: 7, chromeBase: 4, whiffAllowed: false, labelKey: "GoonFactory.Grade.A",  hintKey: "GoonFactory.GradeHint.A" },
+  AA: { key: "AA", skillPts: 10, weaponsRung: 1, armorBand: "AA", refDefault: 10, btDefault: 7, chromeBase: 6, whiffAllowed: false, labelKey: "GoonFactory.Grade.AA", hintKey: "GoonFactory.GradeHint.AA" },
 };
 
 /** A grade row by key, or null. `null` is the legitimate "no grade picked yet" state (§1). */
@@ -187,11 +187,11 @@ export const STAT_POOL = {
   default: 60,
   ceiling: 90,
   ticks: [
-    { value: 50, hintKey: "CYBERPUNK.GoonFactory.PoolTick.50" },
-    { value: 60, hintKey: "CYBERPUNK.GoonFactory.PoolTick.60" },
-    { value: 70, hintKey: "CYBERPUNK.GoonFactory.PoolTick.70" },
-    { value: 75, hintKey: "CYBERPUNK.GoonFactory.PoolTick.75" },
-    { value: 80, hintKey: "CYBERPUNK.GoonFactory.PoolTick.80" },
+    { value: 50, hintKey: "GoonFactory.PoolTick.50" },
+    { value: 60, hintKey: "GoonFactory.PoolTick.60" },
+    { value: 70, hintKey: "GoonFactory.PoolTick.70" },
+    { value: 75, hintKey: "GoonFactory.PoolTick.75" },
+    { value: 80, hintKey: "GoonFactory.PoolTick.80" },
   ],
 };
 
@@ -282,9 +282,9 @@ export function chromeCountFor(gradeKey, role, outfitMod = 0) {
 export const STAT_SHAPES = ["roleShaped", "loose", "pureRandom"];
 export const STAT_SHAPE_DEFAULT = "roleShaped";
 export const STAT_SHAPE_LABEL_KEYS = {
-  roleShaped: "CYBERPUNK.GoonFactory.Shape.RoleShaped",
-  loose: "CYBERPUNK.GoonFactory.Shape.Loose",
-  pureRandom: "CYBERPUNK.GoonFactory.Shape.PureRandom",
+  roleShaped: "GoonFactory.Shape.RoleShaped",
+  loose: "GoonFactory.Shape.Loose",
+  pureRandom: "GoonFactory.Shape.PureRandom",
 };
 
 /**
@@ -320,8 +320,8 @@ export function looseWeightAt(i) {
 export const LOOT_DIAL = ["off", "scarce", "standard", "generous"];
 export const LOOT_DEFAULT = "off";
 export const LOOT_LABEL_KEYS = {
-  off: "CYBERPUNK.GoonFactory.Loot.Off", scarce: "CYBERPUNK.GoonFactory.Loot.Scarce",
-  standard: "CYBERPUNK.GoonFactory.Loot.Standard", generous: "CYBERPUNK.GoonFactory.Loot.Generous",
+  off: "GoonFactory.Loot.Off", scarce: "GoonFactory.Loot.Scarce",
+  standard: "GoonFactory.Loot.Standard", generous: "GoonFactory.Loot.Generous",
 };
 
 /** ⚑ mine, pending curation — the per-grade pocket money a goon is carrying, before the dial. */
