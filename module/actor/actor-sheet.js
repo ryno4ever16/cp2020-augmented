@@ -394,8 +394,25 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
     // Q6 container: the ⏏ on a nested (installed) row detaches it to loose inventory; the ⊗ on a
     // group anchor removes the whole group at once. Mousedown swallowed first so neither starts a drag.
+    // The ⚡ activated-implant switch rides the same swallow: its row is draggable, so without this a
+    // press-and-release on the switch can start a drag instead of a click.
     root.addEventListener("mousedown", (event) => {
-      if (event.target?.closest?.(".cp-container-uninstall, .cp-group-remove")) { event.preventDefault(); event.stopPropagation(); }
+      if (event.target?.closest?.(".cp-container-uninstall, .cp-group-remove, .cp-cyber-switch")) { event.preventDefault(); event.stopPropagation(); }
+    });
+
+    // ⚡ Switch an activated implant on or off from the body map (see cpCyberSwitch). Writes the base
+    // system's OWN field, so everything downstream follows with no further wiring: the base drops or
+    // restores the implant's payload through `cwIsEnabled`, P7's timer starts and posts its card
+    // (mech/consumable.js), and book-legality names the rule if an earlier boost already holds the
+    // slot. stopPropagation keeps the row's own item-edit click from opening the item sheet underneath.
+    root.addEventListener("click", async (event) => {
+      const btn = event.target?.closest?.(".cp-cyber-switch");
+      if (!btn || !root.contains(btn)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const item = this.actor.items.get(btn.dataset.itemId);
+      if (!item) return;
+      await item.update({ "system.EffectActive": !item.system?.EffectActive });
     });
     root.addEventListener("click", async (event) => {
       const btn = event.target?.closest?.(".cp-container-uninstall");
@@ -2184,6 +2201,21 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const cwt = it.system?.CyberWorkType ?? {};
       return Array.isArray(cwt?.Types) ? cwt.Types.includes("Chip") : cwt?.Type === "Chip";
     };
+
+    // ⚡ THE ACTIVATED-IMPLANT SWITCH. An implant whose base `EffectMode` is "Activatable" (the
+    // Sandevistan and anything built like it) has a real in-fight action to take, and until now its
+    // ONLY control was a checkbox on the item sheet's Settings tab — three clicks and a tab change to
+    // do the thing the implant exists to do. This puts the switch on the body map, next to the implant
+    // it belongs to, where a player already looks. Chips are excluded: `ChipActive` is their own
+    // switch and a chip row must not grow a second one.
+    sheetData.cpCyberSwitch = Object.fromEntries(placedCyber
+      .filter(it => it.system?.EffectMode === "Activatable" && !isChip(it))
+      .map(it => {
+        const active = !!it.system?.EffectActive;
+        // The id rides INSIDE the value so the template can read it from a {{#with}} block without
+        // reaching back up the context stack.
+        return [it.id, { id: it.id, active, title: localize(active ? "CyberSwitchOffTip" : "CyberSwitchOnTip") }];
+      }));
 
     const AREAS = ["head", "body", "nervous", "l-arm", "r-arm", "l-leg", "r-leg"];
 

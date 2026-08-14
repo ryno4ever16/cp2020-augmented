@@ -10,6 +10,9 @@
     {{#if node.isContainer}}<span class="cp-capacity-badge" title="{{CPLocal 'CyberHostCapacityTip'}}">{{node.used}}/{{node.capacity}}</span>{{/if}}
     {{#with node.item.system}}<span class="cp-hl">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>{{/with}}
     <span class="flex-pad"></span>
+    {{!-- ⚡ Activated-implant switch (cpCyberSwitch): present only on implants whose EffectMode is
+          "Activatable", so an ordinary permanent implant's row is unchanged. --}}
+    {{#with (lookup @root.cpCyberSwitch node.item.id)}}<span class="cp-cyber-switch{{#if active}} is-on{{/if}}" data-item-id="{{id}}" draggable="false" title="{{title}}">&#9889;</span>{{/with}}
     <span class="item-unequip cp-uninstall" data-item-id="{{node.item.id}}" draggable="false" title="{{CPLocal 'CyberUninstall'}}">&#9167;</span>
 </div>
 {{#if node.children.length}}

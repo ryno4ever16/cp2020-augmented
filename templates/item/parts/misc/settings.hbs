@@ -132,7 +132,12 @@
          ACTIVATION, so the Use button renders only for non-activatable items. --}}
     {{> (template "fields/boolean") label="MechConsumable" edit="system.mechConsumable.enabled"}}
     {{#if system.mechConsumable.enabled}}
+    <div title="{{CPLocal "MechConsumableUnlimitedHint"}}">
+        {{> (template "fields/boolean") label="MechConsumableUnlimited" edit="system.mechConsumable.unlimited"}}
+    </div>
+    {{#unless system.mechConsumable.unlimited}}
     {{> (template "fields/number") label="MechConsumableDoses" edit="system.mechConsumable.doses"}}
+    {{/unless}}
     <div class="field" title="{{CPLocal "MechConsumableDurationHint"}}">
         <label for="system.mechConsumable.durationTurns">{{CPLocal "MechConsumableDuration"}}</label>
         <span class="flex-pad"></span>

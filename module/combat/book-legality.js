@@ -22,7 +22,10 @@
  *      folded into the derived encumbrance figure the base already subtracts from REF, so every
  *      effective-REF and skill path inherits it through the path that already exists.
  *   3. THE BOOST — one boosterware per character (Core p.81, "you may only select ONE type of
- *      boosterware"); a later one contributes nothing to the initiative implant figure.
+ *      boosterware"); a later one contributes nothing to the initiative implant figure. The slot is
+ *      claimed by INSTALLATION ORDER and an ACTIVATED boost claims it switched off as well as on (see
+ *      isBoosterware) — activation decides only whether the slot-holder's payload is live, which is
+ *      the base system's own gate and not this file's. Composed with mech/speedware.js's clock.
  *
  * ORDERING NOTE (deliberate, mirrors the sibling wraps). The base subtracts encumbrance BEFORE its
  * wound divisor, and this post-step necessarily runs after the whole base pass — so on a wounded
@@ -90,17 +93,34 @@ export function actorLayerEv(actor) {
 // =================================================================================================
 
 /**
- * Is this an equipped, active boosterware?
+ * Is this an INSTALLED boosterware — the thing the book lets you have one of?
  *
  * Identified by MECHANISM, not by name: boosterware is the cyberware that buys initiative through the
  * base system's Characteristic check payload (`CyberWorkType.Checks.Initiative`), which is exactly
  * what `_getCharacteristicChecksMods` sums into `system.initiativeImplantMod`. Across every shipped
  * pack that payload is carried by the three boosterware entries and nothing else, and a homebrew
- * entry that buys initiative the same way is the same kind of thing. Pure.
+ * entry that buys initiative the same way is the same kind of thing.
+ *
+ * ⭐ SWITCHED OFF STILL COUNTS AS INSTALLED (2026-08-14, with the activated-boost clock). The book's
+ * limit is on SELECTION — "you may only select ONE type of boosterware" — which is a fact about what
+ * is in the character's body, not about what is running this second. An activated boost (the
+ * Sandevistan; see mech/speedware.js) is therefore holding the one slot whether or not it is
+ * currently on, and this predicate deliberately does NOT ask `cwIsEnabled`.
+ *
+ * WHY THAT READING AND NOT "WHICHEVER IS ON WINS": the slot would otherwise change hands on a button
+ * press, and a character carrying a Kerenzikov AND a Sandevistan would collect the Kerenzikov's
+ * passive +1 whenever the Sandevistan was off and +3 whenever it was on — strictly better than either
+ * implant alone, which is the exact stacking the rule exists to forbid. Holding the slot by
+ * installation order keeps `boosterwareLayers` deterministic (document order, the same answer on
+ * every client, stable across a click) and leaves no order in which owning two beats owning one.
+ *
+ * The CONTRIBUTION gate stays where it always was — the base system drops an inactive Activatable
+ * implant's payload itself, and applyBoostExclusivity below only ever subtracts what actually landed.
+ * Pure.
  */
 export function isBoosterware(item) {
   if (item?.type !== "cyberware") return false;
-  if (!item.system?.equipped || !cwIsEnabled(item)) return false;
+  if (!item.system?.equipped) return false;
   if (!cwHasType(item, "Characteristic")) return false;
   return (Number(item.system?.CyberWorkType?.Checks?.Initiative) || 0) > 0;
 }
@@ -151,11 +171,21 @@ export function applyLayerLegality(actor) {
   ref.total = (Number(ref.total) || 0) - ev;
 }
 
-/** Drop the contribution of every boosterware after the first. Mutates prepared data only. */
+/**
+ * Drop the contribution of every boosterware after the first. Mutates prepared data only.
+ *
+ * ⚠ ONLY WHAT ACTUALLY LANDED IS SUBTRACTED. Since a switched-off activated boost still holds the slot
+ * (isBoosterware above), the surplus list can contain an implant whose payload the BASE never summed —
+ * `_getCharacteristicChecksMods` skips anything `cwIsEnabled` rejects, which is exactly an Activatable
+ * implant that is off. Subtracting its +3 anyway would push `initiativeImplantMod` NEGATIVE and quietly
+ * tax the legal boost for the presence of a dormant one. So the filter is the same gate the base used.
+ */
 export function applyBoostExclusivity(actor) {
   const { surplus } = boosterwareLayers(actor);
   if (!surplus.length) return;
-  const dropped = surplus.reduce((s, i) => s + (Number(i.system?.CyberWorkType?.Checks?.Initiative) || 0), 0);
+  const dropped = surplus
+    .filter(i => cwIsEnabled(i))
+    .reduce((s, i) => s + (Number(i.system?.CyberWorkType?.Checks?.Initiative) || 0), 0);
   if (!dropped) return;
   actor.system.initiativeImplantMod = (Number(actor.system.initiativeImplantMod) || 0) - dropped;
 }
@@ -238,6 +268,11 @@ function equippedOn(changes) {
   return foundry.utils.getProperty(changes ?? {}, "system.equipped") === true;
 }
 
+/** Did this update ACTIVATE the item's payload (an Activatable implant's switch)? Pure. */
+function activatedOn(changes) {
+  return foundry.utils.getProperty(changes ?? {}, "system.EffectActive") === true;
+}
+
 let _wrapped = false;
 /**
  * Wrap prepareData so the legality post-step runs after the base's full pass, and wire the equip-time
@@ -262,8 +297,14 @@ export function registerBookLegality() {
   // The notice fires on the equip that CREATES the violation — never on a re-prepare, so a character
   // sheet does not nag on every render. Shown to the person who did it and to any GM watching; a
   // player switching gear on their own sheet still gets told why it did nothing.
+  //
+  // ACTIVATION counts as such a moment too (2026-08-14). A surplus activated boost is the one case
+  // where a deliberate, visible action produces no effect at all: the player clicks the Sandevistan,
+  // gets its card and its clock, and gains nothing because an earlier-installed boost holds the one
+  // slot. Firing the same violation pass on the switch-on is what turns that silence into the rule's
+  // own sentence, at the moment the table is looking at it.
   Hooks.on("updateItem", (item, changes, options, userId) => {
-    if (!equippedOn(changes)) return;
+    if (!equippedOn(changes) && !activatedOn(changes)) return;
     const actor = item?.actor;
     if (!actor || (actor.type !== "character" && actor.type !== "npc")) return;
     if (userId !== game.user?.id && game.user?.isGM !== true) return;

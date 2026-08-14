@@ -94,6 +94,12 @@ export const MECH_ROLL_MODS_DEFAULTS = {
  *                   activation consumes one; at 0 the action warns / the activation is blocked.
  *                   Refills are the GM's call (e.g. the Adrenal Booster's "3x per day" — day
  *                   tracking is theirs, the counter is ours).
+ *   unlimited     — the item's use is NOT rationed: `doses` stops being read, no dose is spent, and
+ *                   the activation is never blocked. For implants the books give a duration but no
+ *                   use limit (the Sandevistan's "5 turns" carries no per-day cap, unlike the
+ *                   Adrenal Booster's printed "3x per day"). Without this flag such an implant had
+ *                   to be given an invented ration to get a timer at all — the flag exists so the
+ *                   timer half of P7 can be used on its own, which is what those items print.
  *   durationTurns — "" = instant/untimed. Otherwise a number or roll formula ("1d6+2"), rolled at
  *                   use time; the module/mech/consumable.js round tick (DOT-pattern: the current
  *                   combatant's timers tick when their turn comes up) counts it down and posts a
@@ -105,7 +111,7 @@ export const MECH_ROLL_MODS_DEFAULTS = {
  * captured — proposal §3b); this block only ever carries printed values.
  */
 export const MECH_CONSUMABLE_DEFAULTS = {
-  enabled: false, doses: 1, durationTurns: "", note: ""
+  enabled: false, doses: 1, unlimited: false, durationTurns: "", note: ""
 };
 
 /**
@@ -249,6 +255,7 @@ function mechConsumableField() {
   return new f.SchemaField({
     enabled:       new f.BooleanField({ initial: MECH_CONSUMABLE_DEFAULTS.enabled }),
     doses:         new f.NumberField({ initial: MECH_CONSUMABLE_DEFAULTS.doses }),
+    unlimited:     new f.BooleanField({ initial: MECH_CONSUMABLE_DEFAULTS.unlimited }),
     durationTurns: new f.StringField({ initial: MECH_CONSUMABLE_DEFAULTS.durationTurns }),
     note:          new f.StringField({ initial: MECH_CONSUMABLE_DEFAULTS.note })
   });

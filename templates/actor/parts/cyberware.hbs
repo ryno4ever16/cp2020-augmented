@@ -127,6 +127,10 @@
             {{#with (lookup @root.cpActiveBadges cyber.id)}}<span class="cp-active-badge" title="{{this}}"></span>{{/with}}
             {{#with cyber.system}}<span class="cp-hl">{{CPLocal "HumanityLossAbbrev"}}: {{humanityLoss}}</span>{{/with}}
             <span class="flex-pad"></span>
+            {{!-- ⚡ Activated-implant switch — the same control the body-map rows carry. A zoneless
+                  implant (the Sandevistan has no MountZone) renders HERE, so without this the one
+                  implant the switch was built for would be the one row without it. --}}
+            {{#with (lookup @root.cpCyberSwitch cyber.id)}}<span class="cp-cyber-switch{{#if active}} is-on{{/if}}" data-item-id="{{id}}" draggable="false" title="{{title}}">&#9889;</span>{{/with}}
             <span class="item-unequip cp-uninstall" data-item-id="{{cyber.id}}" draggable="false" title="{{CPLocal 'CyberUninstall'}}">&#9167;</span>
         </div>
     {{/each}}

@@ -2770,6 +2770,26 @@ body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
   flex: 0 0 auto;
 }
 
+/* Activated-implant switch (⚡) on a cyberware row — the one-click for an implant whose base
+   EffectMode is "Activatable". Dim while off, gold while running: the same "this is contributing"
+   colour the active badge above uses, so one glance down the body map reads the same way. */
+.cp-cyber-switch {
+  flex: 0 0 auto;
+  margin-right: 4px;
+  cursor: pointer;
+  opacity: 0.45;
+  filter: grayscale(1);
+  line-height: 1;
+}
+.cp-cyber-switch:hover {
+  opacity: 0.9;
+}
+.cp-cyber-switch.is-on {
+  opacity: 1;
+  filter: none;
+  text-shadow: 0 0 4px #ffcc00;
+}
+
 /* Q5 vision picker (status strip): compact select inside a pill. */
 .cp-status-pill select.cp-vision-pick {
   font-size: 0.75rem;

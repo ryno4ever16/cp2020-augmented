@@ -39,6 +39,19 @@ export function dosesLeft(item) {
   return Math.max(0, Number(consumableOf(item)?.doses) || 0);
 }
 
+/**
+ * Is this item's use un-rationed — no dose spent, no empty gate, no count on the card?
+ *
+ * The books print a DURATION for some implants and no use limit at all (the Sandevistan runs 5 turns
+ * and may be switched on again whenever its user likes; the Adrenal Booster prints "3x per day" and is
+ * the reason the counter exists). P7 owns time AND uses, and this flag says an item bought only the
+ * time half — so the timer, the cards, the icon and the expiry off-flip all still run, and the dose
+ * arithmetic is skipped rather than faked with an invented ration. Pure.
+ */
+export function isUnlimitedUse(item) {
+  return !!consumableOf(item)?.unlimited;
+}
+
 /** One tick over a marker array: { surviving, expired }. Pure. */
 export function tickMarkers(markers) {
   const surviving = [];
@@ -136,15 +149,18 @@ async function pruneTimerIcons(actor, survivingItemIds) {
   }
 }
 
-/** The used/activated chat card (JS-assembled clauses, GasCloudTurnBody pattern). */
+/** The used/activated chat card (JS-assembled clauses, GasCloudTurnBody pattern). An un-rationed
+ *  item has no count to report, so it uses the body WITHOUT the doses-left sentence rather than
+ *  printing a number that means nothing. */
 async function postUseCard(item, { turns, dosesAfter }) {
   const mc = consumableOf(item) ?? {};
   const noteClause = mc.note ? localizeParam("ConsumableNoteClause", { note: mc.note }) : "";
   const durationClause = turns > 0 ? localizeParam("ConsumableDurationClause", { turns }) : "";
+  const body = isUnlimitedUse(item)
+    ? localizeParam("ConsumableUsedBodyUnlimited", { name: item.name, noteClause, durationClause })
+    : localizeParam("ConsumableUsedBody", { name: item.name, noteClause, durationClause, doses: dosesAfter });
   await postSavePromptCard({
-    body: localizeParam("ConsumableUsedBody", {
-      name: item.name, noteClause, durationClause, doses: dosesAfter
-    }),
+    body,
     speaker: item.actor ? ChatMessage.getSpeaker({ actor: item.actor }) : undefined
   });
 }
@@ -157,13 +173,16 @@ async function postUseCard(item, { turns, dosesAfter }) {
 export async function useConsumable(item) {
   const mc = consumableOf(item);
   if (!mc) return false;
+  const unlimited = isUnlimitedUse(item);
   const left = dosesLeft(item);
-  if (left <= 0) {
+  if (!unlimited && left <= 0) {
     ui.notifications?.warn(localizeParam("ConsumableEmpty", { name: item.name }));
     return false;
   }
-  const dosesAfter = left - 1;
-  await item.update({ "system.mechConsumable.doses": dosesAfter });
+  const dosesAfter = unlimited ? left : left - 1;
+  // An un-rationed item spends nothing, so it writes nothing — the counter is not merely ignored on
+  // read, it is left untouched on disk.
+  if (!unlimited) await item.update({ "system.mechConsumable.doses": dosesAfter });
   const turns = await rollDurationTurns(mc.durationTurns);
   if (turns > 0 && item.actor) {
     await addMarker(item.actor, { itemId: item.id, name: item.name, note: mc.note ?? "", turnsLeft: turns });
@@ -235,6 +254,7 @@ export function registerMechConsumable() {
   Hooks.on("preUpdateItem", (item, changes) => {
     if (!activationInChanges(changes)) return;
     if (item.type !== "cyberware" || !consumableOf(item)) return;
+    if (isUnlimitedUse(item)) return;   // un-rationed: nothing to run out of, so nothing to block
     if (dosesLeft(item) > 0) return;
     ui.notifications?.warn(localizeParam("ConsumableEmpty", { name: item.name }));
     return false;
@@ -258,8 +278,11 @@ export function registerMechConsumable() {
       return;
     }
     if (!activationInChanges(changes)) return;
-    const dosesAfter = Math.max(0, dosesLeft(item) - 1);
-    await item.update({ "system.mechConsumable.doses": dosesAfter });
+    // An un-rationed implant spends nothing on activation (see isUnlimitedUse): no decrement, and no
+    // write at all — only the timer, the icon and the card follow the switch-on.
+    const unlimited = isUnlimitedUse(item);
+    const dosesAfter = unlimited ? dosesLeft(item) : Math.max(0, dosesLeft(item) - 1);
+    if (!unlimited) await item.update({ "system.mechConsumable.doses": dosesAfter });
     const turns = await rollDurationTurns(mc.durationTurns);
     if (turns > 0 && item.actor) {
       await addMarker(item.actor, { itemId: item.id, name: item.name, note: mc.note ?? "", turnsLeft: turns });

@@ -56,6 +56,7 @@ import { makeWeaponAugmentedData } from "./data/weapon-item-data.js";
 import { registerMechLight } from "./mech/light.js";
 import { registerMechVision, registerHeatSenseDetectionMode } from "./mech/vision.js";
 import { registerMechConsumable } from "./mech/consumable.js";
+import { registerSpeedware } from "./mech/speedware.js";
 import { registerMechChipGrant } from "./mech/chip-grant.js";
 import { registerMechContainer } from "./mech/container.js";
 import { registerMechStatMods } from "./mech/stat-mods.js";
@@ -240,6 +241,12 @@ Hooks.once("init", function () {
   // INIT (before any actor prepares) so the first world-load prep already reflects them; also
   // wires the combat-context refresh hooks.
   registerMechStatMods();
+  // Speedware activation clock: wrap the ITEM's prepareData so an activated initiative boost reads as
+  // carrying its printed duration, which is what hands it to the P7 timer already wired at ready.
+  // Read-time only — nothing is written to the item or its pack entry. Init-time because the wrap must
+  // be in place before any item prepares, and on the ITEM because the actor's stat pass consumes it
+  // (Foundry prepares embedded items inside the actor's own super.prepareData()).
+  registerSpeedware();
   // D4 combat drugs: wrap prepareData (AFTER the Q7 wrap above, so active-drug boosts overlay last)
   // and wire the round-tick that expires timed drugs. Init-time for the same first-prep reason.
   registerMechDrug();
