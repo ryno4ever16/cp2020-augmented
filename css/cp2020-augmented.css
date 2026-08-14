@@ -1071,25 +1071,174 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   text-shadow: unset;
 }
 
-/* Notes-tab height chain (only the ACTIVE tab, so inactive tabs stay display:none). */
+/* ── Item-sheet Notes tab: the height chain the <prose-mirror> editor needs ────────
+ * Foundry's editor element positions BOTH its menubar and its content area
+ * `position:absolute; inset:0` (foundry2.css `prose-mirror menu` / `prose-mirror
+ * .editor-content`), so it only works inside an element that has a real height. The
+ * chain here is the same one the Life tab already uses on the actor sheet (see the
+ * `.cp-actor-sheet-root` block above and the `cp-notes-*` block further down) —
+ * window-content → part root → sheet-body → active notes tab → editor → canvas →
+ * prose-mirror, every ancestor `min-height:0`, fixed children `flex:0 0 auto`.
+ *
+ * It was missing here because these rules predate the notes view/edit toggle: they
+ * styled `.editor` / `.editor-content`, the markup of the old `{{editor}}` helper, and
+ * never learned about `.cp-notes-canvas`. That canvas stayed `display:block`, which
+ * broke the chain, collapsed the editor to the height of its menubar and left the
+ * absolutely-positioned content area outside its parent's box — un-clickable, so the
+ * notes tab could not be typed in and the Format menu had nowhere to open.
+ * The scroller is deliberately NOT moved onto .sheet-body (the actor sheet does move
+ * it): the item sheet's settings tabs scroll on section.window-content, per the base
+ * system, and this fix does not change that. */
+.application.cyberpunk.sheet.item .window-content { min-height: 0; }
+
+.application.cyberpunk.sheet.item .cp-item-sheet-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.application.cyberpunk.sheet.item .cp-item-sheet-root > header,
+.application.cyberpunk.sheet.item .cp-item-sheet-root > nav.sheet-tabs {
+  flex: 0 0 auto;
+}
+
+.application.cyberpunk.sheet.item .sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Only the ACTIVE tab, so inactive tabs stay display:none. */
 .application.cyberpunk.sheet.item .sheet-body > .tab[data-tab="notes"].active {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
 }
 
-.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor,
-.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor .editor {
+.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 0 8px 0;
 }
 
-.application.cyberpunk.sheet.item .tab[data-tab="notes"] .cp-notes-editor .editor-content {
+.application.cyberpunk.sheet.item .cp-notes-canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  border: 2px solid var(--cp-line, black);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.application.cyberpunk.sheet.item .cp-notes-edit {
+  position: absolute;
+  top: 4px;
+  right: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--cp-ink, black);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-edit i {
+  margin: 0;
+  padding: 0;
+  color: var(--cp-ink, black);
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-edit:hover,
+.application.cyberpunk.sheet.item .cp-notes-edit:focus {
+  opacity: 1;
+  background: transparent;
+  box-shadow: none;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-edit:hover i,
+.application.cyberpunk.sheet.item .cp-notes-edit:focus i {
+  opacity: 1;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
   overflow: auto;
+  box-sizing: border-box;
+  padding: 8px 36px 8px 8px;
+  color: var(--cp-ink, black);
+  background: transparent;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-prosemirror {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  color: var(--cp-ink, black);
+  background: transparent;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-prosemirror .editor-container,
+.application.cyberpunk.sheet.item .cp-notes-prosemirror .editor-content,
+.application.cyberpunk.sheet.item .cp-notes-prosemirror .ProseMirror {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
+  color: var(--cp-ink, black);
+  background: transparent;
+  border: 0 !important;
+  outline: 0;
+  box-shadow: none;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-prosemirror .ProseMirror {
+  overflow: auto;
+  padding: 8px;
+}
+
+/* Pull the menubar back into flow — core leaves it `position:absolute; inset:0`, which
+   would otherwise sit on top of the text the user is trying to click into. */
+.application.cyberpunk.sheet.item .cp-notes-prosemirror menu,
+.application.cyberpunk.sheet.item .cp-notes-prosemirror .editor-menu,
+.application.cyberpunk.sheet.item .cp-notes-prosemirror [role="menubar"] {
+  position: relative;
+  z-index: 2;
+  margin: -1px -1px 0 -1px;
+  border-radius: 0 !important;
+  box-sizing: border-box;
+}
+
+.application.cyberpunk.sheet.item .cp-notes-prosemirror menu *,
+.application.cyberpunk.sheet.item .cp-notes-prosemirror .editor-menu *,
+.application.cyberpunk.sheet.item .cp-notes-prosemirror [role="menubar"] * {
+  border-radius: 0 !important;
 }
 
 /* Tear-off tabs: the floating drag "ghost" (on document.body) + the lifted tab while dragging. */

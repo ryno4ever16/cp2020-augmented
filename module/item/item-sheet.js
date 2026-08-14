@@ -957,19 +957,13 @@ async _prepareCyberware(sheet) {
     this._cpTabs = tabs;
   }
 
-  /** @override */
-  _onPosition(position) {
-    super._onPosition(position);
-
-    const root = getHtmlElement(this.element);
-    const sheetBody = root?.querySelector?.(".sheet-body");
-    if (!sheetBody) return;
-
-    const height = Number(position?.height);
-    if (!Number.isFinite(height)) return;
-
-    sheetBody.style.height = `${Math.max(0, height - 192)}px`;
-  }
+  /* NOTE: this class used to override _onPosition to stamp an inline
+   * `.sheet-body { height: <window height - 192>px }`. That is gone. It only ran when the
+   * window's POSITION changed, so the fresh .sheet-body produced by every re-render (the
+   * Notes "Edit" click is one) carried no height at all and the tab collapsed; and the 192
+   * was a hard-coded stand-in for the header+tab-bar height. The sheet's height chain is
+   * CSS now (`.cp-item-sheet-root` / `.sheet-body` in css/cp2020-augmented.css), which
+   * survives re-renders and measures the real header instead of guessing it. */
 
   _cpActivateBasicItemActions(root) {
     if (!root?.addEventListener) return;
