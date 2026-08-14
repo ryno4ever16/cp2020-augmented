@@ -1884,6 +1884,13 @@
     },
     "Arrow": "Arrow",
     "Basic": "Basic",
+    "BookLegality": {
+      "MaxLayers": "Maximum Armor: 3 layers. {name} is past that on {location}, so it adds no SP there.",
+      "MaxHard": "Armor layering: no more than one hard layer. {name} is a second hard layer on {location}, so it adds no SP there.",
+      "HeadArmor": "One head armor: a helmet or a cowl/faceplate, not both. {name} adds no SP over {other}.",
+      "SecondBoost": "One boosterware per character (p.81). {name} adds nothing while {other} is installed.",
+      "OneCovering": "One covering per limb. {name} adds nothing over {other} on the same limb."
+    },
     "BlockParryHint": "Defensive: block or parry an incoming melee attack outright — no damage if you win the contest. Blades must save or break. -3 to your actions while blocking.",
     "Brass-cased": "Brass-cased",
     "BurstCapable": "3-Round Burst capable",

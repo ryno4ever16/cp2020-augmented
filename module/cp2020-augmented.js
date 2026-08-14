@@ -62,6 +62,7 @@ import { registerMechStatMods } from "./mech/stat-mods.js";
 import { registerMechDrug } from "./mech/drug.js";
 import { registerBorg } from "./mech/borg.js";
 import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
+import { registerBookLegality } from "./combat/book-legality.js";
 import { registerRadiation } from "./radiation/radiation.js";
 import { registerRadiationZones, migrateLegacyRadZones } from "./radiation/radiation-zones.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
@@ -245,6 +246,12 @@ Hooks.once("init", function () {
   // Full-conversion borgs: wrap prepareData to seed the borg body's per-zone SDP into system.sdp
   // (independent of the stat wraps above — touches sdp, not stats). Init-time for the same reason.
   registerBorg();
+  // Book-legality enforcement: wrap prepareData so the armor layer law reaches the numbers (the panel
+  // follows the legal fold, the 2nd/3rd counted layer charge their EV) and the boost family limit
+  // holds, plus the equip-time notices that name the rule. Registered AFTER registerBorg (the chassis
+  // SP is folded in by _deriveLiveSP itself — running earlier would double-count) and BEFORE the typed
+  // display below, which re-derives the same panel from the same source. Never blocks an equip.
+  registerBookLegality();
   // Honest conditional-armor display: wrap prepareData to re-derive the armor panel from the damage
   // system's own type-aware SP (so a fire-only garment stops inflating the panel vs bullets) and build
   // system.conditionalSP for the per-damage-type sub-panel. Registered AFTER registerBorg so it runs
