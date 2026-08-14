@@ -266,6 +266,15 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
    * ⛔ A LOCKED CONTROL IS TRULY INERT. When Advanced is off, the below-the-line inputs are rendered
    * `disabled` and this function does not read them at all — so a stale DOM value (or a browser that
    * restored one) can never leak into the plan. That is §4's "locked controls truly inert" leg.
+   *
+   * ⛔⛔ THE STALE-DOM TRAP ON A RE-PICK, and it is why the outfit/grade change RETURNS EARLY.
+   * §1 requires a re-pick to "re-derive uniformly (visible reset)". Dropping the overrides is only
+   * half of that: the below-the-line inputs still hold the PREVIOUS derivation's values until the
+   * next render repaints them, so reading them in the same pass immediately re-creates every
+   * override that was just dropped. A rig leg caught exactly this — a REF forced to 10 under grade B
+   * survived a re-pick to grade A. So a changed outfit or grade drops the overrides AND stops
+   * reading here; the render that follows repaints the controls at the new derived values, and the
+   * next read sees those.
    */
   _readForm() {
     const root = this.element;
@@ -274,10 +283,8 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const checked = (sel) => !!root.querySelector(sel)?.checked;
 
     const prevOutfit = this.outfitId;
+    const prevGrade = this.grade;
     this.outfitId = val(".cp-goon-outfit");
-    // §1: re-picking the outfit RE-DERIVES CLEAN — the overrides go, they are not remembered.
-    if (this.outfitId !== prevOutfit) this.overrides = {};
-
     this.role = val(".cp-goon-role") || this.role;
     const g = val(".cp-goon-grade");
     this.grade = g || null;
@@ -290,6 +297,13 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const destRaw = val(".cp-goon-dest");
     if (destRaw?.startsWith("f:")) this.destination = { mode: "existing", folderId: destRaw.slice(2) };
     else if (destRaw) this.destination = { mode: destRaw };
+
+    // §1: re-picking either the outfit or the threat level RE-DERIVES CLEAN. See the trap above.
+    if (this.outfitId !== prevOutfit || this.grade !== prevGrade) {
+      this.overrides = {};
+      this.preview = null;                          // a re-derived config invalidates a shown preview
+      return;
+    }
 
     if (!this.advanced || !this.grade) return;      // locked ⇒ nothing below the line is read
 

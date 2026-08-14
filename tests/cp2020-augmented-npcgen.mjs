@@ -58,17 +58,24 @@ const r = await p.evaluate(async () => {
     // ── Preview / Reroll write NOTHING ──
     const actorsBefore = game.actors.size;
     const msgsBefore = game.messages.size;
-    const app = new APP.NpcGeneratorApp();
-    app.mode = "full"; app.tier = "veteran"; app.count = 3; app.seed = SEED;
-    app.preview = await app._buildPlan();
-    check("Preview produced a 3-NPC plan", app.preview?.length === 3, app.preview?.length);
-    await APP.NpcGeneratorApp.prototype._buildPlan.call(app);        // a second preview pass
-    check("Preview created NO actors", game.actors.size === actorsBefore, { before: actorsBefore, now: game.actors.size });
-    check("Preview posted NO chat messages", game.messages.size === msgsBefore, { before: msgsBefore, now: game.messages.size });
-    const seedBeforeReroll = app.seed;
-    app.seed = "keeper-seed-3"; app.preview = await app._buildPlan();   // what Reroll does, minus the DOM
-    check("Reroll changed the plan without writing anything",
-      app.seed !== seedBeforeReroll && game.actors.size === actorsBefore, { actors: game.actors.size });
+    // ⚠ THE WINDOW THIS BLOCK USED TO DRIVE IS GONE. The Goon Factory rebuild retired the
+    // QUICK/FULL split and with it ; the new window has its own keeper
+    // (tests/cp2020-augmented-goon-factory.mjs), which covers gating, the preview and the fused
+    // Generate in far more depth than this block ever did. What is still worth asserting HERE is the
+    // property the retired window relied on and the SURVIVING engine still provides: planning is
+    // read-only. So the plan is built through the engine directly, which is exactly what the window
+    // did on its behalf.
+    const planPreview = BP.npcBlueprint({ archetype: "goon", dials: "veteran", count: 3, seed: SEED })
+      .map(bp => ({ bp, gear: MAT.planNpcGear(bp, rows) }));
+    check("planning produces a 3-NPC plan", planPreview.length === 3, planPreview.length);
+    BP.npcBlueprint({ archetype: "goon", dials: "veteran", count: 3, seed: SEED });   // a second pass
+    check("planning created NO actors", game.actors.size === actorsBefore, { before: actorsBefore, now: game.actors.size });
+    check("planning posted NO chat messages", game.messages.size === msgsBefore, { before: msgsBefore, now: game.messages.size });
+    const planReseeded = BP.npcBlueprint({ archetype: "goon", dials: "veteran", count: 3, seed: "keeper-seed-3" })
+      .map(bp => ({ bp, gear: MAT.planNpcGear(bp, rows) }));
+    check("a re-seeded plan differs and still writes nothing",
+      JSON.stringify(planReseeded) !== JSON.stringify(planPreview) && game.actors.size === actorsBefore,
+      { actors: game.actors.size });
 
     // ── The real create ──
     const folderName = MAT.npcGenFolderName();
