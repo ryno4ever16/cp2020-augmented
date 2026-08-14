@@ -558,3 +558,577 @@ export function npcBlueprint({ archetype = "goon", dials = "mook", count = 1, se
   }
   return out;
 }
+
+// =================================================================================================
+// =================================================================================================
+// THE GOON FACTORY PIPELINE (GOON-FACTORY-SPEC.md §2 — the ORDER below is load-bearing)
+// =================================================================================================
+// =================================================================================================
+//
+// Everything above this line is the pre-rebuild engine, which SURVIVES: the window is what was
+// rebuilt, and slots/outfits/FADE enter as data feeding the same blueprint. Everything below is the
+// Goon Factory's own layer, and it obeys the same rule as the rest of this file — pure, injected
+// rng, no Foundry, no i18n, no document.
+//
+// §2's numbered steps map to the functions below one for one:
+//   1 resolve config  → resolveGoonConfig
+//   2 stats           → rollStatPool  (+ rollFormulaField for Luck/Rep, OUTSIDE the pool)
+//   3 gear            → the impure layer (materialize.js) — it needs the catalog
+//   4 skills          → allocateGoonSkills  (the guarantee follows the PULLED weapon)
+//   5 chrome          → chrome.js planChrome (called by the impure layer with a resolved pool)
+//   6 loot            → grades.js lootProfileFor + the impure layer
+//   7 name            → goonName / nextGoonNumber
+//   8 materialize     → materialize.js
+
+import {
+  COUNT, GRADE_CONSTANT_BT, GRADE_DEFAULT_REF, LOOSE_LADDER, LOOT_DEFAULT, POOL_STAT_KEYS,
+  ROLE_SPECIAL_ABILITY, ROLE_WEIGHTS, SKILL_POINTS, STAT_MAX, STAT_MIN, STAT_POOL,
+  STAT_SHAPE_DEFAULT, ARMAMENT_POSTURE_DEFAULT,
+  chromeCountFor, clampCount, gradeOf, looseWeightAt, skillPointBreakdown, statPoolBreakdown,
+} from "./grades.js";
+import { outfitById } from "./outfits.js";
+
+// -------------------------------------------------------------------------------------------------
+// §2.1 — RESOLVE CONFIG: outfit → grade derivation → manual overrides
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * The controls a grade pick DERIVES, and which of them an override may replace. Keeping the list in
+ * one place is what makes "re-picking re-derives clean" a single line rather than a dozen resets.
+ */
+export const DERIVED_CONTROL_KEYS = [
+  "grade", "role", "ref", "bt", "skillPoints", "statPool", "statShape", "chromeOn", "chromeCount",
+  "garnish", "luckFormula", "repFormula", "armorWeight", "armorHardness", "armament", "loot",
+];
+
+/**
+ * §2.1 + §1. Resolve the whole control set from (optional) outfit, then the grade's own defaults,
+ * then whatever the GM has manually moved.
+ *
+ * ⭐ THE THREE BEHAVIOURS §1 DEMANDS, ALL IN THIS ONE FUNCTION:
+ *  · an outfit PREFILLS everything below it (`basedOn` records which);
+ *  · any manual edit after that flips the label to "Custom (based on X)" — that is `custom: true`
+ *    with `basedOn` still set, which is exactly the information the label needs;
+ *  · re-picking the outfit RE-DERIVES CLEAN — which is why an empty `overrides` object produces an
+ *    un-custom config rather than a remembered one. The window drops its overrides on a re-pick and
+ *    calls this again; nothing here is sticky.
+ *
+ * ⛔ ADVANCED IS DISABLED UNTIL A GRADE IS PICKED (§1, exact label "Advanced"). With no grade there
+ * is nothing to derive FROM, so every control would be unlocking onto a blank — `advancedAvailable`
+ * is false and the threat level initializes to dashes.
+ */
+export function resolveGoonConfig({ outfitId = null, role = null, grade = null, overrides = {} } = {}) {
+  const outfit = outfitById(outfitId);
+  const ov = overrides ?? {};
+  const touched = Object.keys(ov).filter((k) => ov[k] !== undefined && ov[k] !== null && ov[k] !== "");
+
+  const baseGrade = ov.grade ?? outfit?.grade ?? grade ?? null;
+  const g = gradeOf(baseGrade);
+  const baseRole = ov.role ?? outfit?.roleDefault ?? role ?? null;
+
+  // With no grade, NOTHING derives. Returning half-derived values here is how a window ends up
+  // showing a REF slider at 8 before the GM has said what kind of goon this is.
+  if (!g) {
+    return {
+      grade: null, role: baseRole, outfitId: outfit?.id ?? null, basedOn: outfit?.id ?? null,
+      custom: touched.length > 0, advancedAvailable: false,
+      ref: null, bt: null, skillPoints: null, statPool: null, statShape: STAT_SHAPE_DEFAULT,
+      chromeOn: false, chromeCount: 0, chromeDerivation: null, garnish: true,
+      luckFormula: LUCK_FORMULA_DEFAULT, repFormula: REP_FORMULA_DEFAULT,
+      armorWeight: "any", armorHardness: "any", armament: ARMAMENT_POSTURE_DEFAULT,
+      loot: LOOT_DEFAULT, disposition: outfit?.disposition ?? "hostile",
+      skillBias: outfit?.skillBias ?? {}, outfitTags: outfit?.tags ?? [],
+      bonusPools: outfit?.bonusPools ?? [], gearSource: outfit?.gearSource ?? null,
+      empOverride: outfit?.empOverride ?? null, chassis: outfit?.chassis ?? null,
+    };
+  }
+
+  const ref = Number.isFinite(Number(ov.ref)) ? Math.trunc(Number(ov.ref)) : g.refDefault;
+  const bt = Number.isFinite(Number(ov.bt)) ? Math.trunc(Number(ov.bt)) : g.btDefault;
+  const skill = skillPointBreakdown(ov.skillPoints ?? SKILL_POINTS.default, g.key);
+  const pool = statPoolBreakdown(ov.statPool ?? STAT_POOL.default, ref, bt);
+  const chromeMod = Number.isFinite(Number(ov.chromeCountMod)) ? Number(ov.chromeCountMod) : (outfit?.chromeCountMod ?? 0);
+  const chrome = chromeCountFor(g.key, baseRole, chromeMod);
+  const posture = outfit?.armorPosture ?? {};
+
+  return {
+    grade: g.key,
+    role: baseRole,
+    outfitId: outfit?.id ?? null,
+    basedOn: outfit?.id ?? null,
+    // "Custom (based on X)" — true the moment ANY control was moved by hand, whether or not an
+    // outfit is in play. A grade-only config that has been edited is equally custom.
+    custom: touched.length > 0,
+    advancedAvailable: true,
+    ref, bt,
+    skillPoints: skill.total, skillBreakdown: skill,
+    statPool: pool.pool, statPoolBreakdown: pool,
+    statShape: ov.statShape ?? STAT_SHAPE_DEFAULT,
+    chromeOn: ov.chromeOn !== undefined ? !!ov.chromeOn : chrome.count > 0,
+    chromeCount: Number.isFinite(Number(ov.chromeCount)) ? Math.max(0, Math.trunc(Number(ov.chromeCount))) : chrome.count,
+    chromeDerivation: chrome,
+    chromeCountMod: chromeMod,
+    garnish: ov.garnish !== undefined ? !!ov.garnish : true,   // §1: garnish toggle ON
+    luckFormula: ov.luckFormula || LUCK_FORMULA_DEFAULT,
+    repFormula: ov.repFormula || REP_FORMULA_DEFAULT,
+    armorWeight: ov.armorWeight ?? posture.weight ?? "any",
+    armorHardness: ov.armorHardness ?? posture.hardness ?? "any",
+    armament: ov.armament ?? posture.armament ?? ARMAMENT_POSTURE_DEFAULT,
+    loot: ov.loot ?? outfit?.lootProfile ?? LOOT_DEFAULT,
+    disposition: ov.disposition ?? outfit?.disposition ?? "hostile",
+    skillBias: outfit?.skillBias ?? {},
+    outfitTags: outfit?.tags ?? [],
+    bonusPools: outfit?.bonusPools ?? [],
+    gearSource: outfit?.gearSource ?? null,
+    empOverride: outfit?.empOverride ?? null,
+    chassis: outfit?.chassis ?? null,
+    weaponsRung: g.weaponsRung,
+    armorBand: g.armorBand,
+  };
+}
+
+// -------------------------------------------------------------------------------------------------
+// §1 — THE DICE-EXPRESSION FIELDS (Luck and Reputation)
+// -------------------------------------------------------------------------------------------------
+
+/** §1: Luck defaults to `2d6` re-rolled at 11+ — the book's own Fast Character stat roll. */
+export const LUCK_FORMULA_DEFAULT = "2d6";
+export const LUCK_REROLL_OVER = 10;
+/** §1: Reputation defaults to `1d6-1` — 0-5, skewed anonymous, which is what a goon should be. */
+export const REP_FORMULA_DEFAULT = "1d6-1";
+
+/**
+ * Parse a dice expression into terms. A deliberately SMALL grammar — `NdS` and integer constants
+ * joined by + / - — because this layer is pure and Foundry's `Roll` is not available here.
+ *
+ * ⚠ THE WINDOW VALIDATES TWICE, ON PURPOSE, and the two checks are not redundant: the impure edge
+ * additionally runs `Roll.validate` so a GM who types real Foundry syntax we do not parse (a pool
+ * expression, a modifier) is told at the field rather than silently falling back at generate time.
+ * This parser is the floor, not the ceiling.
+ *
+ * Returns null for anything it cannot read — never a partial parse, because a half-read formula is
+ * the worst outcome available (it would roll something the GM did not ask for and look correct).
+ */
+export function parseDiceExpression(expr) {
+  const s = String(expr ?? "").replace(/−|–|—/g, "-").replace(/\s+/g, "").toLowerCase();
+  if (!s) return null;
+  if (!/^[-+]?(\d*d\d+|\d+)([-+](\d*d\d+|\d+))*$/.test(s)) return null;
+  const terms = [];
+  const re = /([-+]?)(\d*)d(\d+)|([-+]?)(\d+)/g;
+  let m;
+  let consumed = 0;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index !== consumed) return null;               // a gap means we misread something
+    consumed = re.lastIndex;
+    if (m[3] !== undefined) {
+      const sign = m[1] === "-" ? -1 : 1;
+      const n = m[2] === "" ? 1 : parseInt(m[2], 10);
+      const faces = parseInt(m[3], 10);
+      if (!Number.isFinite(n) || !Number.isFinite(faces) || faces < 1 || n < 1 || n > 100) return null;
+      terms.push({ kind: "dice", sign, n, faces });
+    } else {
+      const sign = m[4] === "-" ? -1 : 1;
+      terms.push({ kind: "flat", sign, value: parseInt(m[5], 10) });
+    }
+  }
+  if (!terms.length || consumed !== s.length) return null;
+  return terms;
+}
+
+/** Roll a parsed expression with the injected rng. */
+function rollTerms(terms, rng) {
+  let total = 0;
+  for (const t of terms) {
+    if (t.kind === "flat") { total += t.sign * t.value; continue; }
+    for (let i = 0; i < t.n; i++) total += t.sign * rollDie(rng, t.faces);
+  }
+  return total;
+}
+
+/**
+ * §1's Luck / Rep fields: "dice-expression input (Foundry Roll syntax; invalid → default + visible
+ * note)", and §1's explanation line — "Rolled, not derived — nothing about threat level or role
+ * affects it." Nothing in this function reads the grade, the role or the outfit, and that is the
+ * feature.
+ *
+ * An invalid expression falls back to `fallback` AND returns `noteKey`, because §0 says nothing
+ * gates silently: a GM who fat-fingers a formula must see that the default was used, not discover it
+ * from a suspiciously ordinary Luck score.
+ *
+ * `rerollOver` implements the book's own 11+ re-roll for the 2d6 stat draw. It is bounded, because
+ * an injected rng is not guaranteed to be real dice and a pure function that can hang is worse than
+ * a stat one point off.
+ */
+export function rollFormulaField(expr, rng, { rerollOver = null, fallback = "1d6" } = {}) {
+  let used = String(expr ?? "").trim();
+  let terms = parseDiceExpression(used);
+  const valid = !!terms;
+  let noteKey = null;
+  if (!terms) {
+    used = fallback;
+    terms = parseDiceExpression(fallback);
+    noteKey = "CYBERPUNK.GoonFactory.Note.InvalidFormula";
+    if (!terms) return { value: 0, valid: false, used: fallback, noteKey };
+  }
+  let value = rollTerms(terms, rng);
+  // ⚠ THE `null` TRAP, and it bit once: `Number(null)` is 0 and `Number.isFinite(0)` is TRUE, so a
+  // bare `Number.isFinite(Number(rerollOver))` treats "no re-roll rule" as "re-roll anything above
+  // zero" — which clamped every Reputation roll to 0 while a range assertion of 0–5 still passed.
+  // The explicit null/undefined guard is the fix; the keeper now asserts VARIANCE, not just range.
+  if (rerollOver !== null && rerollOver !== undefined && Number.isFinite(Number(rerollOver))) {
+    let tries = 0;
+    while (value > Number(rerollOver) && tries < 64) { value = rollTerms(terms, rng); tries++; }
+    if (value > Number(rerollOver)) value = Number(rerollOver);
+  }
+  return { value, valid, used, noteKey };
+}
+
+// -------------------------------------------------------------------------------------------------
+// §2.2 — STATS: the pool, the role weights, and the three shapes
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * ROLL THE FREE STATS WITHIN THE POOL REMAINDER (§2.2).
+ *
+ * ⭐ THE MECHANISM IS THE SPEC'S OWN, IN ITS OWN ORDER: "roll the seven portions (VALUES always
+ * vary), then assign per the Stat shape control." Rolling and assigning are two steps, not one —
+ * which is exactly why a shape change re-shuffles WHO gets what without changing the spread.
+ *
+ * Portions are built by dealing the remainder ONE POINT AT A TIME to a stat that still has room,
+ * over a floor of `STAT_MIN` each. One-at-a-time rather than a proportional split for the same
+ * reason `allocateSkills` does it: a proportional split has to round, and rounding is where an
+ * allocator silently loses or invents the last point.
+ *
+ * ⚠ REF AND BT ARE NOT ROLLED. They are the sliders' pinned values and they are written straight
+ * through — the pool reserves them and the remainder is what is left.
+ *
+ * ⚠ AN OVER-LARGE POOL CANNOT ALL BE SPENT and that is reported, not hidden: six stats cap at 10
+ * apiece, so a 90-point pool with REF 10 / BT 10 leaves points with nowhere legal to go.
+ * `unspent` carries them out so the preview can say so.
+ */
+export function rollStatPool({ pool, ref, bt, role = "solo", shape = STAT_SHAPE_DEFAULT, rng }) {
+  const breakdown = statPoolBreakdown(pool, ref, bt);
+  const keys = POOL_STAT_KEYS;
+  const portions = keys.map(() => STAT_MIN);
+  let remaining = breakdown.free - STAT_MIN * keys.length;
+
+  let guard = Math.abs(remaining) * 4 + 64;
+  while (remaining > 0 && guard-- > 0) {
+    const open = portions.map((v, i) => (v < STAT_MAX ? i : -1)).filter((i) => i >= 0);
+    if (!open.length) break;                     // every stat at the ceiling — the overflow case
+    const i = open[Math.min(Math.floor((Number(rng()) || 0) * open.length), open.length - 1)];
+    portions[i] += 1;
+    remaining -= 1;
+  }
+  const unspent = Math.max(0, remaining);
+
+  // -- ASSIGNMENT --------------------------------------------------------------------------------
+  // The portions are sorted best-first; the SHAPE decides which stat each one lands on.
+  const sorted = [...portions].sort((a, b) => b - a);
+  const ranked = ROLE_WEIGHTS[role] ?? [];
+  // The role's ranking, then everything it does not rank, in the pool's own stable order.
+  const roleOrder = [...ranked.filter((k) => keys.includes(k)), ...keys.filter((k) => !ranked.includes(k))];
+
+  let order;
+  if (shape === "pureRandom") {
+    // No ranking at all (§2.2: "Full-random mode ignores weights entirely"). Fisher-Yates on the
+    // injected rng, so the shuffle is as deterministic as everything else here.
+    order = [...keys];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.min(Math.floor((Number(rng()) || 0) * (i + 1)), i);
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+  } else if (shape === "loose") {
+    // ⭐ THE ONE STRUCTURAL LADDER (§2.2): the next-largest portion is offered to the remaining rank
+    // positions with odds 4/3/2/1(/1/1...). The role reads as a TENDENCY — the primary leads far
+    // more often than chance, and upsets genuinely happen. Identical for every role by construction:
+    // the ladder never consults the role, only the position.
+    const remainingRanks = [...roleOrder];
+    order = [];
+    while (remainingRanks.length) {
+      const weights = remainingRanks.map((_k, i) => looseWeightAt(i));
+      const total = weights.reduce((s, w) => s + w, 0);
+      let t = (Number(rng()) || 0) * total;
+      let pick = remainingRanks.length - 1;
+      for (let i = 0; i < remainingRanks.length; i++) { t -= weights[i]; if (t < 0) { pick = i; break; } }
+      order.push(remainingRanks.splice(pick, 1)[0]);
+    }
+  } else {
+    // Role-shaped, the default: strict rank assignment, so the shape is GUARANTEED.
+    order = roleOrder;
+  }
+
+  const stats = { ref: Math.trunc(Number(ref) || GRADE_DEFAULT_REF), bt: Math.trunc(Number(bt) || GRADE_CONSTANT_BT) };
+  order.forEach((k, i) => { stats[k] = sorted[i]; });
+
+  return { stats, portions: sorted, order, unspent, breakdown, shape, role, ladder: LOOSE_LADDER };
+}
+
+// -------------------------------------------------------------------------------------------------
+// §2.4 — SKILLS: the package, the guarantee, and the special ability
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * ⚑⚑ THE ONE PLACE THIS BUILD COULD NOT FOLLOW THE SPEC LITERALLY, AND WHY. §2.4 calls for "the
+ * role's Career Skill Package (Core p.44-45; ruled in — generator clause covers it)". Those printed
+ * per-role lists are BOOK CONTENT that is not present anywhere in this repo or in the base system's
+ * data, and no book text layer was available to this lane — so transcribing them would have meant
+ * writing them from memory, which is exactly the unverified assertion this project's own gates
+ * forbid. Inventing nine role kits would have been worse: that is design, and the design is done.
+ *
+ * WHAT SHIPS INSTEAD is the smallest faithful structure that needs NO book content:
+ *  - a COMBAT SPINE common to every goon, drawn from the system's own schema keys (a goon of any
+ *    role is being generated to fight, which is the generator's whole premise), plus
+ *  - the role's SPECIAL ABILITY, which is not a transcription — the base system already ships those
+ *    ten as items in its `role-skills-` pack, and
+ *  - WEIGHTING by the role's own stat vector (§2.2 supplies it) applied through each skill's
+ *    GOVERNING STAT (the actor schema's own `skills.<key>.stat`), which is what makes a Cop's
+ *    package resolve toward COOL/INT skills and a Techie's toward TECH — §2.4's "remainder by role
+ *    weights", literally.
+ * The result is role-differentiated without a printed list. Replacing this constant with the real
+ * packages is a one-table edit and nothing downstream changes. Reported as a spec gap.
+ */
+export const CAREER_SPINE = [
+  { key: "Handgun", stat: "ref", combat: true },
+  { key: "Rifle", stat: "ref", combat: true },
+  { key: "Submachinegun", stat: "ref", combat: true },
+  { key: "HeavyWeapons", stat: "ref", combat: true },
+  { key: "Melee", stat: "ref", combat: true },
+  { key: "Brawling", stat: "ref", combat: true },
+  { key: "DodgeEscape", stat: "ref", combat: true },
+  { key: "AwarenessNotice", stat: "int", combat: true },
+  { key: "Athletics", stat: "ref" },
+  { key: "Stealth", stat: "ref" },
+  { key: "Endurance", stat: "bt" },
+  { key: "Driving", stat: "ref" },
+  { key: "Streetwise", stat: "cool" },
+  { key: "Intimidate", stat: "cool" },
+  { key: "Interrogation", stat: "cool" },
+  { key: "ResistTortureDrugs", stat: "cool" },
+  { key: "BasicTech", stat: "tech" },
+  { key: "Electronics", stat: "tech" },
+  { key: "FirstAid", stat: "tech" },
+  { key: "HumanPerception", stat: "emp" },
+  { key: "PersuasionFastTalk", stat: "emp" },
+  { key: "Leadership", stat: "emp" },
+  { key: "EducationGeneralKnowledge", stat: "int" },
+  { key: "LibrarySearch", stat: "int" },
+  { key: "PersonalGrooming", stat: "attr" },
+  { key: "WardrobeStyle", stat: "attr" },
+];
+
+/** The weapon-TYPE fallback when a weapon's own `attackSkill` cannot be used. */
+const WEAPON_TYPE_SKILL = {
+  pistol: "Handgun", smg: "Submachinegun", rifle: "Rifle", shotgun: "Rifle",
+  heavy: "HeavyWeapons", melee: "Melee", exotic: "Melee",
+};
+
+/**
+ * ⚠ THE CYRILLIC `attackSkill` DEFECT, HANDLED RATHER THAN TRIPPED OVER. CHROME-COMB-77.md DATA
+ * FLAG 14: base `cyberweapons.db` carries Cyrillic attack skills on 12 of 12 entries. It is
+ * base-pack data under the soft-defer rule, so it is READ correctly here rather than patched there.
+ * Two strings, both verified in the pack.
+ */
+const ATTACK_SKILL_ALIASES = { "драка": "Brawling", "ближний бой": "Melee" };
+
+/** Every schema key the spine knows, for validating a weapon's declared attack skill. */
+const SPINE_KEYS = new Set(CAREER_SPINE.map((s) => s.key));
+
+/**
+ * §2.4: "the grade's weapon-skill guarantee attaches to the governing skill of the ACTUALLY-PULLED
+ * primary weapon." This resolves that skill — which is why the guarantee moves when the weapon does,
+ * rather than being pinned to a role's assumed sidearm.
+ *
+ * Resolution order, most trustworthy first: the weapon's own `attackSkill` when it names a schema
+ * key - the known non-Latin aliases - the weapon TYPE - Brawling. The last is not a shrug: a goon
+ * with nothing resolvable is a goon fighting with their hands, and Brawling is the skill for that.
+ */
+export function weaponGoverningSkill(weapon) {
+  const raw = String(weapon?.attackSkill ?? weapon?.system?.attackSkill ?? "").trim();
+  if (raw) {
+    const compact = raw.replace(/[^A-Za-z]/g, "");
+    if (compact) {
+      const direct = [...SPINE_KEYS].find((k) => k.toLowerCase() === compact.toLowerCase());
+      if (direct) return direct;
+    }
+    const alias = ATTACK_SKILL_ALIASES[raw.toLowerCase()];
+    if (alias) return alias;
+  }
+  const type = String(weapon?.weaponType ?? weapon?.system?.weaponType ?? "").trim().toLowerCase();
+  return WEAPON_TYPE_SKILL[type] ?? "Brawling";
+}
+
+/**
+ * ALLOCATE THE GOON'S SKILLS (§2.4).
+ *
+ * Three things happen, in this order, and the order is the book's:
+ *  1. the GUARANTEE — the grade's weapon-skill points floor the pulled weapon's governing skill;
+ *  2. the REMAINDER — spent over the package, weighted by the role's stat vector (and the outfit's
+ *     skill-bias vector, which per the outfit prep re-weights only the remainder and never adds a
+ *     skill outside package + bias);
+ *  3. the SPECIAL ABILITY — auto-levelled at the grade's skill points, with NO control (§1) and
+ *     OUTSIDE the point pool, because the book's rule is that every character HAS one, not that they
+ *     bought it out of the same 40.
+ *
+ * `spent` therefore equals the slider's total exactly; the special ability's level is reported
+ * separately so a preview can show both without double counting.
+ */
+export function allocateGoonSkills({ total, gradeKey, role = "solo", primaryWeapon = null, rng, skillBias = {} }) {
+  const g = gradeOf(gradeKey);
+  const gradePts = g ? g.skillPts : 0;
+  const breakdown = skillPointBreakdown(total, gradeKey);
+  const guaranteeSkill = weaponGoverningSkill(primaryWeapon);
+  const ranked = ROLE_WEIGHTS[role] ?? [];
+
+  // Role weight through the GOVERNING STAT: primary +3, secondary +2, tertiary +1. Combat skills
+  // carry a flat +2 on top, because the generator's whole premise is a fighting NPC.
+  const entries = CAREER_SPINE.map((s) => {
+    const rank = ranked.indexOf(s.stat);
+    return {
+      key: s.key,
+      weight: 1 + (s.combat ? 2 : 0) + (rank >= 0 ? 3 - rank : 0) + (Number(skillBias?.[s.key]) || 0),
+    };
+  });
+  // The guarantee's skill must be IN the package, or the floor has nowhere to land.
+  if (!entries.some((e) => e.key === guaranteeSkill)) entries.push({ key: guaranteeSkill, weight: 3 });
+
+  const alloc = allocateSkills(breakdown.total, entries, rng, { floors: { [guaranteeSkill]: gradePts } });
+
+  const specialKey = ROLE_SPECIAL_ABILITY[role] ?? null;
+  const skillLevels = [...alloc.skillLevels];
+  if (specialKey) skillLevels.push({ skillKey: specialKey, level: gradePts });
+
+  return {
+    skillLevels,
+    spent: alloc.spent,
+    unspent: alloc.unspent,
+    breakdown,
+    guarantee: { skillKey: guaranteeSkill, points: gradePts },
+    specialAbilityKey: specialKey,
+    specialAbilityLevel: specialKey ? gradePts : 0,
+  };
+}
+
+// -------------------------------------------------------------------------------------------------
+// §2.7 — NAMES
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * §2.7: `{Outfit|Role} {Grade}-{n}`. Attribute-derived names are the SHIPPING DEFAULT (ruled
+ * 2026-08-13 — the old placeholder-names blocker is moot); human-written flavour pools become an
+ * optional per-outfit `namePool` later and this function's call site does not change.
+ *
+ * The value is a bare English string BY DESIGN: a created document's name is persisted DATA, not UI
+ * text, and this project's own convention keeps those English.
+ */
+export function goonName(prefix, gradeKey, n) {
+  return `${String(prefix ?? "").trim()} ${String(gradeKey ?? "")}-${Math.trunc(Number(n) || 1)}`;
+}
+
+/** Regex-escape a prefix so an outfit label with punctuation still matches literally. */
+function escapeRe(s) { return String(s ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+/**
+ * §2.7: "numbering CONTINUES per prefix within the destination folder (scan existing)."
+ *
+ * The scan is per PREFIX and per GRADE, because the name carries both — so a second batch of
+ * "Solo B" goons continues past the first while a batch of "Solo AA" starts its own run. A name that
+ * shares the prefix but is not the pattern ("Solo Bravo", a hand-renamed "Solo B-fred") does NOT
+ * bump the counter: the counter follows the scheme, not the neighbourhood.
+ */
+export function nextGoonNumber(existingNames, prefix, gradeKey) {
+  const re = new RegExp(`^${escapeRe(String(prefix ?? "").trim())} ${escapeRe(String(gradeKey ?? ""))}-(\\d+)$`);
+  let max = 0;
+  for (const name of existingNames ?? []) {
+    const m = re.exec(String(name ?? "").trim());
+    if (m) max = Math.max(max, parseInt(m[1], 10) || 0);
+  }
+  return max + 1;
+}
+
+// -------------------------------------------------------------------------------------------------
+// THE BLUEPRINT
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * THE WHOLE PLAN FOR N GOONS, AS PLAIN DATA — the pure half of §2 (steps 1, 2, 4, 7).
+ *
+ * Steps 3 (gear), 5 (chrome) and 6 (loot) need the catalog, so they belong to the impure layer and
+ * are folded in by `materialize.js`; what this returns is everything that can be decided without a
+ * pack. The split is what makes the preview and the create the same object.
+ *
+ * ⭐ THE PER-GOON SEED IS RETAINED (§1: "Internal per-goon seed retained (reproducibility;
+ * visible-seed UI retired)"). It is folded from `(seed, outfit|role, grade, index)` rather than
+ * added, for the reason the pre-rebuild engine already documents: an ADDED seed collides across
+ * generations, so "reroll" would hand back an earlier goon unchanged.
+ */
+export function goonBlueprint({
+  outfitId = null, role = "solo", grade = "E", count = 1, seed = 0, overrides = {},
+  namePrefix = null, startNumber = 1,
+} = {}) {
+  const config = resolveGoonConfig({ outfitId, role, grade, overrides });
+  const n = clampCount(count).value;
+  const gradeKey = config.grade ?? grade;
+  const prefix = namePrefix ?? config.outfitId ?? config.role ?? "Goon";
+
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const goonSeed = seedFrom(seed, config.outfitId ?? config.role ?? "goon", gradeKey, i);
+    const rng = seededRng(goonSeed);
+
+    const statRoll = rollStatPool({
+      pool: config.statPool, ref: config.ref, bt: config.bt,
+      role: config.role, shape: config.statShape, rng,
+    });
+    // §2.2: Luck and Rep are rolled from the formula fields, OUTSIDE the pool.
+    const luck = rollFormulaField(config.luckFormula, rng, { rerollOver: LUCK_REROLL_OVER, fallback: LUCK_FORMULA_DEFAULT });
+    const rep = rollFormulaField(config.repFormula, rng, { fallback: REP_FORMULA_DEFAULT });
+    const stats = { ...statRoll.stats, luck: luck.value };
+
+    // The skills are allocated WITHOUT a weapon here and re-allocated by the impure layer once the
+    // gear pull is known — §2.4's guarantee follows the ACTUALLY-PULLED weapon, and nothing in this
+    // file can know what that is. The provisional allocation exists so a plan is complete on its own.
+    const skills = allocateGoonSkills({
+      total: config.skillPoints, gradeKey, role: config.role,
+      primaryWeapon: null, rng, skillBias: config.skillBias,
+    });
+
+    const honesty = [
+      // §1's preview list: this line is unconditional, because it explains a thing every goon has.
+      { code: "luckRepRolled", messageKey: "CYBERPUNK.GoonFactory.Honesty.LuckRepRolled" },
+    ];
+    if (luck.noteKey) honesty.push({ code: "invalidLuckFormula", messageKey: luck.noteKey, used: luck.used });
+    if (rep.noteKey) honesty.push({ code: "invalidRepFormula", messageKey: rep.noteKey, used: rep.used });
+    if (statRoll.unspent > 0) honesty.push({ code: "statPoolUnspent", points: statRoll.unspent, messageKey: "CYBERPUNK.GoonFactory.Honesty.StatPoolUnspent" });
+    if (config.statPoolBreakdown?.clamped) honesty.push({ code: "statPoolClamped", messageKey: "CYBERPUNK.GoonFactory.Honesty.StatPoolClamped" });
+    if (config.skillBreakdown?.clamped) honesty.push({ code: "skillPointsClamped", messageKey: "CYBERPUNK.GoonFactory.Honesty.SkillPointsClamped" });
+
+    out.push({
+      name: goonName(prefix, gradeKey, startNumber + i),
+      namePrefix: prefix,
+      role: config.role,
+      grade: gradeKey,
+      stats,
+      reputation: rep.value,
+      luckRoll: luck,
+      repRoll: rep,
+      statRoll: { portions: statRoll.portions, order: statRoll.order, shape: statRoll.shape, unspent: statRoll.unspent },
+      skillLevels: skills.skillLevels,
+      skillPlan: skills,
+      config,
+      seed: goonSeed,
+      honesty,
+      plan: {
+        index: i, rootSeed: seed, outfitId: config.outfitId, basedOn: config.basedOn,
+        custom: config.custom, weaponsRung: config.weaponsRung, armorBand: config.armorBand,
+        chromeCount: config.chromeCount, chromeDerivation: config.chromeDerivation,
+        garnish: config.garnish, loot: config.loot, armament: config.armament,
+        armorWeight: config.armorWeight, armorHardness: config.armorHardness,
+      },
+    });
+  }
+  return out;
+}
+
+/** The generator's own cap, re-exported so a window and the materializer read one number. */
+export const GOON_COUNT_CAP = COUNT.cap;
