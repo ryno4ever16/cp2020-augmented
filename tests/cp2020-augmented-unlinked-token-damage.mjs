@@ -110,6 +110,48 @@ const res = await page.evaluate(async () => {
   const stays = await U.rerollGoneLimbAreaDamages(actorA, { rLeg: [{ damage: 5 }] });
   ok("severity (core): a hit on an unrecorded zone is left alone (negative)",
      (stays.rLeg ?? []).length === 1, JSON.stringify(stays));
+
+  // ---- 3c. THE SINGLE READ PATH (accessor seam) ----
+  // Every module reader of the limb-severance record now goes through utils.getLimbStatusMap /
+  // getLimbStatus instead of touching the flag itself, so the future base-system severance record can
+  // be adapted in one place. This leg pins the accessor to the raw record it stands in front of: same
+  // keys, same values, "" for an unrecorded zone, an empty map for an actor carrying no record — and
+  // proves the relocation reader above is genuinely reading through it.
+  const mapFn = U.getLimbStatusMap, oneFn = U.getLimbStatus;
+  ok("read path: both accessors are exported", typeof mapFn === "function" && typeof oneFn === "function",
+     `${typeof mapFn} / ${typeof oneFn}`);
+  const rawRec = actorA.getFlag(NS, "fleshLimbStatus") ?? {};
+  const accRec = typeof mapFn === "function" ? mapFn(actorA) : null;
+  ok("read path: the map accessor returns the recorded values, key for key",
+     !!accRec && JSON.stringify(accRec) === JSON.stringify(rawRec), `${JSON.stringify(accRec)} vs ${JSON.stringify(rawRec)}`);
+  ok("read path: the recorded severed zone reads back by VALUE",
+     typeof oneFn === "function" && oneFn(actorA, "lLeg") === "severed" && accRec?.lLeg === "severed",
+     `${typeof oneFn === "function" ? oneFn(actorA, "lLeg") : "n/a"}`);
+  ok("read path: the other recorded zone reads back by VALUE (whole record, not one key)",
+     typeof oneFn === "function" && oneFn(actorA, "rArm") === "disabled",
+     `${typeof oneFn === "function" ? oneFn(actorA, "rArm") : "n/a"}`);
+  ok("read path: a clean zone reads empty, not undefined (negative)",
+     typeof oneFn === "function" && oneFn(actorA, "rLeg") === "" && !("rLeg" in (accRec ?? {})),
+     `${typeof oneFn === "function" ? JSON.stringify(oneFn(actorA, "rLeg")) : "n/a"}`);
+  // An actor with NO record at all: empty map, empty per-zone answer — never a throw.
+  const noRec = typeof mapFn === "function" ? mapFn(base) : null;
+  ok("read path: an actor carrying no record answers an empty map (negative)",
+     !!noRec && Object.keys(noRec).length === 0 && base.getFlag(NS, "fleshLimbStatus") === undefined,
+     JSON.stringify(noRec));
+  ok("read path: an actor carrying no record answers '' for a zone (negative)",
+     typeof oneFn === "function" && oneFn(base, "lLeg") === "" && oneFn(null, "lLeg") === "",
+     `${typeof oneFn === "function" ? JSON.stringify(oneFn(base, "lLeg")) : "n/a"}`);
+  // The relocation reader consumes the record THROUGH the accessor: record a further zone, and the
+  // same call that left it alone a moment ago must now move the hit off it.
+  const beforeNew = await U.rerollGoneLimbAreaDamages(actorA, { lArm: [{ damage: 4 }] });
+  await actorA.setFlag(NS, "fleshLimbStatus", { ...(actorA.getFlag(NS, "fleshLimbStatus") ?? {}), lArm: "severed" });
+  const afterNew = await U.rerollGoneLimbAreaDamages(actorA, { lArm: [{ damage: 4 }] });
+  ok("read path: the relocation reader follows the record through the accessor",
+     (beforeNew.lArm ?? []).length === 1 && afterNew.lArm === undefined
+     && Object.values(afterNew).reduce((n, h) => n + h.length, 0) === 1
+     && (typeof oneFn === "function" ? oneFn(actorA, "lArm") : "") === "severed",
+     `${JSON.stringify(beforeNew)} -> ${JSON.stringify(afterNew)}`);
+
   if (rerollWas !== null) { try { await game.settings.set(NS, "rerollGoneLimbLocation", rerollWas); } catch (e) {} }
   if (modelWas !== null) { try { await game.settings.set(NS, "limbModel", modelWas); } catch (e) {} }
   for (const m of game.messages.filter(m => !sevMsgsBefore.has(m.id))) { try { await m.delete(); } catch (e) {} }

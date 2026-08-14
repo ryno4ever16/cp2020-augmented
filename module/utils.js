@@ -205,20 +205,53 @@ function _hitLocationLookup(targetActor) {
     return (targetActor?.hitLocLookup) ? targetActor.hitLocLookup : defaultAreaLookup;
 }
 
+/**
+ * ⛔ THE SINGLE READ PATH for the limb-severance record.
+ *
+ * The record itself is the module flag `flags.cp2020-augmented.fleshLimbStatus` — a per-zone map of
+ * the OPTIONAL limb-damage models' threshold outcomes ("crippled"/"destroyed" from Listen Up,
+ * "disabled"/"severed" from W4RST4R, "severed" from Core), written by combat/DamageApplicator.js
+ * `assessWoundSeverity` and by mech/cyberlimb.js (`severFleshUnder` / `clearFleshLimb`).
+ *
+ * CONSTRAINT: every module READ of that record goes through this accessor, and nothing else reads
+ * the flag directly. The base system's upstream dev branch is building its own system-side limb
+ * severance record (the `severanceThreshold` setting family); when it ships, HIS record becomes the
+ * truth and the adapter goes HERE — one function, one file — instead of in each reader. The WRITE
+ * side is deliberately NOT routed through this seam (the writers own their own read-modify-write and
+ * their model vocabulary); adapting the write side is a separate, later decision.
+ *
+ * Returns the raw stored map — exactly what the readers consumed before this seam existed. Callers
+ * MUST NOT mutate it (it is the live flag object); a writer duplicates before writing.
+ * Zone masking under a structural cyberlimb pool is a CYBERLIMB-model concern and stays in
+ * mech/cyberlimb.js `fleshLimbStatusOf` — it is not part of the record. Pure-ish.
+ */
+export function getLimbStatusMap(actor) {
+    const SCOPE = "cp2020-augmented";
+    return actor?.getFlag?.(SCOPE, "fleshLimbStatus") ?? actor?.flags?.[SCOPE]?.fleshLimbStatus ?? {};
+}
+
+/** One zone's recorded limb-severance state, or "" when nothing is recorded. Reads through
+ *  getLimbStatusMap — see the constraint there. Pure-ish. */
+export function getLimbStatus(actor, zone) {
+    return getLimbStatusMap(actor)[zone] ?? "";
+}
+
 // The four limb zones that can be "gone" (arms/legs). Head/Torso — and W4RST4R's Groin — are never
 // limbs, so they never trigger a re-roll and always remain a valid location (which is what keeps the
 // re-roll bounded and non-empty).
 const GONE_LIMB_ZONES = new Set(["rArm", "lArm", "rLeg", "lLeg"]);
 
 /** True when a limb zone has no limb left to meaningfully take a hit: a destroyed CYBERLIMB wreck
- *  (limbStatus destroyed, SDP pool present) OR a severed/destroyed FLESH limb (no SDP pool). Reads the
- *  M18/M19 flags directly (not the mech/cyberlimb.js helpers) to avoid an import cycle — cyberlimb.js
- *  imports this module. A crippled/useless/disabled limb is still THERE and stays hittable. Pure-ish. */
+ *  (limbStatus destroyed, SDP pool present) OR a severed/destroyed FLESH limb (no SDP pool). The
+ *  severance record is read through getLimbStatusMap (the single read path, above); the STRUCTURAL
+ *  `limbStatus` flag is read directly here rather than through mech/cyberlimb.js's helpers to avoid
+ *  an import cycle — cyberlimb.js imports this module. A crippled/useless/disabled limb is still
+ *  THERE and stays hittable. Pure-ish. */
 function _isGoneLimbZone(targetActor, zone) {
     if (!GONE_LIMB_ZONES.has(zone)) return false;
     const SCOPE = "cp2020-augmented";
     const limbStatus = targetActor?.getFlag?.(SCOPE, "limbStatus")      ?? targetActor?.flags?.[SCOPE]?.limbStatus      ?? {};
-    const flesh      = targetActor?.getFlag?.(SCOPE, "fleshLimbStatus") ?? targetActor?.flags?.[SCOPE]?.fleshLimbStatus ?? {};
+    const flesh      = getLimbStatusMap(targetActor);
     const sdpSum     = Number(targetActor?.system?.sdp?.sum?.[zone]) || 0;
     const cyberGone  = sdpSum > 0 && limbStatus[zone] === "destroyed";
     const fleshGone  = sdpSum === 0 && (flesh[zone] === "severed" || flesh[zone] === "destroyed");

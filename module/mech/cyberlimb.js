@@ -17,7 +17,7 @@
  *
  * Pure helpers are exported for the rig spec; the combat routing lives in combat/DamageApplicator.js.
  */
-import { deleteFieldUpdate, localize, localizeParam } from "../utils.js";
+import { deleteFieldUpdate, localize, localizeParam, getLimbStatusMap } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 import { isFullBorg } from "./borg.js";
 import { cyberlimbRepairGmOnly } from "../settings.js";
@@ -38,6 +38,8 @@ export const CYBERLIMB_USELESS_MARGIN = 10;
 // here — "crippled"/"destroyed" (Listen Up) and "disabled"/"severed" (W4RST4R) — under a key SEPARATE
 // from the structural `limbStatus`, so a flesh wound is never misread as cyberlimb structure. Written
 // by combat/DamageApplicator.js for non-structural zones; read here for the sheet badge + arm notice.
+// ⛔ READS go through utils.getLimbStatusMap (the module's single read path — the future base-system
+// severance record adapts THERE); this constant is the WRITE-side key only.
 const FLESH_STATUS_FLAG = "fleshLimbStatus";
 // Flesh wound state → localize key (mechanism words, not fiction). Used by the sheet label + the notice.
 const FLESH_STATUS_LABEL = {
@@ -169,8 +171,10 @@ export function limbStatusOf(actor, zone) {
  */
 export function fleshLimbStatusOf(actor, zone) {
   if (cyberlimbSdp(actor, zone).max > 0) return "";
-  const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
-  return store[zone] ?? "";
+  // The record is read through utils.getLimbStatusMap — the module's single read path (see the
+  // constraint on that accessor). The cyberlimb mask above is this model's own concern, not the
+  // record's, so it stays here.
+  return getLimbStatusMap(actor)[zone] ?? "";
 }
 
 /** Localized label for a zone's flesh-limb wound state, or "" when nothing is recorded. Pure-ish. */
@@ -269,10 +273,10 @@ export async function clearFleshLimb(actor, zone) {
     ui.notifications?.warn(localize("CyberlimbRepairGmOnlyWarn"));
     return false;
   }
-  // Read the RAW store (not fleshLimbStatusOf, which suppresses under a cyberlimb) so a masked-but-
-  // stale entry is also cleared. The sheet control only appears when the badge shows, but the API
-  // should clear whatever is recorded.
-  const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
+  // Read the RAW record through the single read path (not fleshLimbStatusOf, which suppresses under
+  // a cyberlimb) so a masked-but-stale entry is also cleared. The sheet control only appears when the
+  // badge shows, but the API should clear whatever is recorded.
+  const store = getLimbStatusMap(actor);
   if (!(zone in store)) return false;   // nothing recorded for this zone
   // Flag objects MERGE on write, so a deleted key would linger — drop just this zone through
   // deleteFieldUpdate (siblings survive), the same shape repairCyberlimb uses for limbStatus.
@@ -298,8 +302,8 @@ export async function clearFleshLimb(actor, zone) {
  * idempotent when already severed. Forward-only — no migration backfills limbs installed before this. */
 export async function severFleshUnder(actor, zone) {
   if (!LIMB_ZONES.has(zone)) return false;
-  const store = actor?.getFlag?.(SCOPE, FLESH_STATUS_FLAG) ?? actor?.flags?.[SCOPE]?.[FLESH_STATUS_FLAG] ?? {};
-  if (store[zone] === "severed") return false;   // already recorded — nothing to write
+  // Idempotency guard reads the record through the single read path (utils.getLimbStatusMap).
+  if (getLimbStatusMap(actor)[zone] === "severed") return false;   // already recorded — nothing to write
   await actor.update({
     [`flags.${SCOPE}.${FLESH_STATUS_FLAG}.${zone}`]: "severed"
   }, { render: false, fromCyberpunkDamageSystem: true }).catch(() => {});
