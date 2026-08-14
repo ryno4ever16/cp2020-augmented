@@ -1247,7 +1247,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const normalized = String(filter ?? "").trim().toUpperCase();
     for (const row of root.querySelectorAll(".field.skill[data-item-id]")) {
       const skill = this.actor.items.get(row.dataset.itemId);
-      const haystack = String(skill?.name ?? "").toUpperCase();
+      // Match the DISPLAYED name as well as the raw one, the way the base system's own skill filter
+      // does — a martial art rendered as "Martial Arts: Aikido(3)" must be findable by what the
+      // player can actually see in the row.
+      const displayName = this.actor.getSkillDisplayName?.(skill) ?? skill?.name;
+      const haystack = `${String(skill?.name ?? "")} ${String(displayName ?? "")}`.toUpperCase();
       const match = !normalized || haystack.includes(normalized);
       // "Hide; search reveals" (user ruling): an UNTRAINED martial-arts discipline is hidden while the
       // search box is empty, yet still rendered — so a non-empty query reveals it by the ordinary
@@ -1853,9 +1857,19 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // to the template so the search box keeps its value across re-renders.
     sheetData.filteredSkillIDs = this._getSortedSkillIDs(sheetData);
 
+    // Rows carry the RESOLVED display name alongside the raw one, exactly as the base system's own
+    // sheet builds it (its _prepareSkills): a martial-arts skill renders its localized `martials.*`
+    // name with the difficulty suffix ("Martial Arts: Aikido(3)") instead of the stored item name.
+    // The resolution itself is the base actor's `getSkillDisplayName` — ride it, never re-derive.
     sheetData.skillDisplayList = sheetData.filteredSkillIDs
       .map(id => this.actor.items.get(id))
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(skill => ({
+        id: skill.id,
+        name: skill.name,
+        displayName: this.actor.getSkillDisplayName?.(skill) ?? skill.name,
+        system: skill.system
+      }));
 
     // IP tracker (feature [[ip-tracker-design]]): per-skill banked/pending/level-up data + global flags.
     this._prepareIp(sheetData);
