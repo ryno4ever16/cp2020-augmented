@@ -931,8 +931,12 @@ function _defaultHitLocations() {
 }
 
 // W4RST4R's Limb Rules hit-location table (1d10): 1 Head, 2 R.Arm, 3 L.Arm, 4-7 Torso,
-// 8 R.Leg, 9 L.Leg, 0(=10) Groin. Used for rolling + chat display when that model is active.
-// Groin has no stored SP/hitLocation; the damage resolver maps it to Torso armor at runtime.
+// 8 R.Leg, 9 L.Leg, 0(=10) Groin. Groin has no stored SP/hitLocation; the damage resolver maps it to
+// Torso armor at runtime.
+// ⛔ NOT WIRED TO ANY ROLL — kept as the reference definition only. Location rolls resolve on the
+// Core map on both sides (see utils.js _hitLocationLookup): the base engine rolls every regular
+// attack there, so selecting this map for the hits the MODULE rolls put two anatomies in one fight.
+// The model's severity rules are unaffected. Re-wire only alongside a base hit-location seam (1.2).
 export let W4RST4R_AREA_LOOKUP = {
   1: "Head",
   2: "rArm",

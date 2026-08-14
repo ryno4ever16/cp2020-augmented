@@ -1,4 +1,4 @@
-import { defaultAreaLookup, defaultHitLocations, W4RST4R_AREA_LOOKUP } from "./lookups.js"
+import { defaultAreaLookup, defaultHitLocations } from "./lookups.js"
 import { apiHelper } from "./system-api.js";
 
 // Prefer the base system's i18n + dice helpers (game.cyberpunk.api) at call time; fall back to the
@@ -6,10 +6,10 @@ import { apiHelper } from "./system-api.js";
 export const localize      = apiHelper("i18n", "localize", _localize);
 export const tryLocalize   = apiHelper("i18n", "tryLocalize", _tryLocalize);
 export const localizeParam = apiHelper("i18n", "localizeParam", _localizeParam);
-// The local copy is a SUPERSET of the base's rollLocation: it picks the lookup table by setting
-// (Core or the alternate one), re-rolls a hit that lands on a limb the target no longer has and
-// reports rerolledFrom, and answers an aimed area the target's table lacks instead of throwing on
-// it. So it is used until a base DECLARES it carries those rules — see module/system-api.js.
+// The local copy is a SUPERSET of the base's rollLocation: it re-rolls a hit that lands on a limb the
+// target no longer has and reports rerolledFrom, and answers an aimed area the target's table lacks
+// instead of throwing on it. It resolves the number→zone map exactly as the base does (see
+// _hitLocationLookup). Used until a base DECLARES it carries those rules — see module/system-api.js.
 export const rollLocation  = apiHelper("dice", "rollLocation", _rollLocation, { requiresFeature: "hitLocationRules" });
 
 // Utility methods that don't really belong anywhere else
@@ -179,15 +179,29 @@ export function deleteFieldUpdate(path) {
  * @param {*} targetArea If you're aiming at a specific area, this is the NAME of that area - eg "Head"
  * @returns {*} {roll: The rolled diceroll when aiming, areaHit: where actually hit}
  */
-// Which number→location table to roll/display on. The W4RST4R limb model uses its own table (incl.
-// Groin). Otherwise, the "Core hit-location display" setting (default on) forces the canonical
-// Core table; with it off, a per-actor custom hitLocLookup is honored instead. (Scope fixed: these
-// read the cp2020-augmented settings, not the base system's — a copy-from-fork bug.)
+/** Which number→zone map a location ROLL resolves on — ONE truth, shared with the base engine.
+ *
+ *  This mirrors the base system's own resolution (`rollLocation`, systems/cyberpunk2020/module/
+ *  utils.js:69) — same detection, same fallback — so a hit THIS module rolls (suppressive burst,
+ *  area/pattern shell, vehicle-occupant round) lands on the same anatomy as a regular attack the
+ *  base engine rolls in the very same firefight.
+ *
+ *  The W4RST4R limb-damage model deliberately does NOT bring its own map here. Its SEVERITY rules —
+ *  thresholds, death saves, the severed write — are untouched by this; only the anatomy is shared.
+ *  The base engine resolves EVERY regular attack on the Core map, so a second map on this side meant
+ *  one fight ran two different bodies, and only for the hits this module happened to roll. Revisit
+ *  when a base version publishes a hit-location seam (the `hitLocationRules` feature gate above).
+ *
+ *  ⚠ Receipt (rig-verified on the ship target, base 1.1.1 / v14): `targetActor.hitLocLookup` is the
+ *  base's own detection, and on a real Actor DOCUMENT that property does not exist — the derived map
+ *  lives one level down at `system.hitLocLookup`. So the per-actor branch is inert on BOTH sides
+ *  today and every roll, the base's and ours, lands on the Core map. Reading it the "working" way
+ *  here would re-open the same split from the other direction, so the detection stays exactly his.
+ */
 function _hitLocationLookup(targetActor) {
-    const w4 = (() => { try { return game.settings.get("cp2020-augmented", "limbModel") === "w4rst4r"; } catch { return false; } })();
-    if (w4) return W4RST4R_AREA_LOOKUP;
-    const coreDisplay = (() => { try { return game.settings.get("cp2020-augmented", "hitLocationCoreDisplay"); } catch { return true; } })();
-    if (coreDisplay) return defaultAreaLookup;
+    // World override: force the canonical Core map even for an actor that carries its own.
+    const forceCore = (() => { try { return game.settings.get("cp2020-augmented", "hitLocationCoreDisplay"); } catch { return true; } })();
+    if (forceCore) return defaultAreaLookup;
     return (targetActor?.hitLocLookup) ? targetActor.hitLocLookup : defaultAreaLookup;
 }
 
@@ -266,7 +280,7 @@ async function _rollLocation(targetActor, targetArea) {
             areaHit: targetArea
         };
     }
-    // Number to area name lookup (Core table / W4RST4R table per settings).
+    // Number to area name lookup, on the same map the base engine uses (see _hitLocationLookup).
     let hitAreaLookup = _hitLocationLookup(targetActor);
 
     let roll = await new Roll("1d10").evaluate();

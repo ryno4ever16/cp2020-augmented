@@ -87,9 +87,11 @@ export function applyBTM(damageAfterSP, btm, penetrated) {
 export const LIMB_LOCATIONS = new Set(["rArm", "lArm", "rLeg", "lLeg"]);
 
 /**
- * W4RST4R's hit-location table can roll "Groin", which has no stored armor / hit-location entry.
- * The groin is covered by torso armor, so SP lookup and ablation use the Torso location at runtime
- * (no actor-data field is added). Other locations pass through unchanged.
+ * "Groin" (W4RST4R's reference table) has no stored armor / hit-location entry. The groin is covered
+ * by torso armor, so SP lookup and ablation use the Torso location at runtime (no actor-data field is
+ * added). Other locations pass through unchanged. No roll produces "Groin" any more — location rolls
+ * resolve on the Core map (utils.js _hitLocationLookup) — so this now only catches a value that
+ * arrived from stored data or an older chat card. Kept: it costs nothing and stays correct.
  */
 export function spLocationKey(location) {
   return location === "Groin" ? "Torso" : location;
