@@ -16,7 +16,8 @@ import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } fro
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
 import { hasLoadout, deactivateLoadout, loadoutOptionsOf } from "../mech/loadout.js";
-import { getAutoLayerOrder } from "../combat/armor-layers.js";
+import { getAutoLayerOrder, getArmorHardness, LAYER_LAW } from "../combat/armor-layers.js";
+import { layerEvPenalty } from "../combat/book-legality.js";
 import { openShopForPlayer, purchaseByDrop } from "../shop/catalog.js";
 import { classifyService, payService, servicePeriodOf } from "../shop/services.js";
 import { ipDisplayForActor, levelUpSkill, toggleSkillLock } from "../ip/ip.js";
@@ -2285,13 +2286,10 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       rLeg:  localize("ArmorLayers.LocRLeg"),
     };
 
-    // Inline hard-armor check (mirrors getArmorHardness in armor-layers.js)
-    const _isHardArmor = (item) => {
-      if (item.system?.armorType === "hard") return true;
-      if (item.system?.armorType === "soft") return false;
-      const name = (item.name ?? "").toLowerCase();
-      return /metal gear|body armor|full body|plate|rigid|hard armor|bodyplating/.test(name);
-    };
+    // Hardness comes from the ONE resolver the fold and the damage math use (armor-layers.js), which
+    // reads the item's own field, then the book's printed table via the read-time corrections, then
+    // its heuristics — so this panel can never disagree with the numbers it is describing.
+    const _isHardArmor = (item) => getArmorHardness(item) === "hard";
 
     const allEquippedArmor  = (sortedItems.armor    || []).filter(a => a.system.equipped);
     const allEquippedCyber  = (sortedItems.cyberware || []).filter(c =>
@@ -2307,16 +2305,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       // Cyberware armor at this location (always innermost per RAW)
       const cwItems = allEquippedCyber
         .filter(c => (Number(c.system?.CyberWorkType?.Locations?.[key]) || 0) > 0)
-        .map(c => {
-          const nameLower = (c.name ?? "").toLowerCase();
-          return {
-            name:        c.name,
-            sp:          Number(c.system?.CyberWorkType?.Locations?.[key]) || 0,
-            isHard:      /bodyplating|body plating/.test(nameLower),
-            isSkinweave: cwIsSkinweave(c),
-            isCyberware: true,
-          };
-        });
+        .map(c => ({
+          name:        c.name,
+          sp:          Number(c.system?.CyberWorkType?.Locations?.[key]) || 0,
+          isHard:      _isHardArmor(c),
+          isSkinweave: cwIsSkinweave(c),
+          isCyberware: true,
+        }));
 
       const invLayers = invItems.map(item => ({
         name:        item.name,
@@ -2329,15 +2324,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const allLayers = [...cwItems, ...invLayers];
       if (allLayers.length === 0) return null;
 
+      // A skinweave is a layer that takes no penalty, so it spends neither one of the three nor any
+      // EV — the same reading the enforcement engine and the generator both run on (LAYER_LAW).
+      const countedLayers = allLayers.filter(l => !l.isSkinweave).length;
       const layerCount  = allLayers.length;
       const hardCount   = allLayers.filter(l => l.isHard).length;
-      // EV penalties apply to all non-Skinweave layers beyond the first
-      const penaltyCount = allLayers.filter(l => !l.isSkinweave).length;
-      const extraEV     = penaltyCount >= 3 ? 3 : penaltyCount >= 2 ? 1 : 0;
+      const extraEV     = layerEvPenalty(countedLayers);
 
       const violations = [];
-      if (layerCount > 3)  violations.push("MAX_LAYERS");
-      if (hardCount  > 1)  violations.push("MAX_HARD");
+      if (countedLayers > LAYER_LAW.maxLayers)     violations.push("MAX_LAYERS");
+      if (hardCount     > LAYER_LAW.maxHardLayers) violations.push("MAX_HARD");
 
       const n = allLayers.length;
       const layers = allLayers.map((layer, i) => ({
