@@ -33,18 +33,42 @@
  *   system.armorLayers per location: ["itemId1", "itemId2", ...]
  *   Empty array = auto-ordering for that location.
  *   Cyberware armor is never put in these slots.
+ *
+ * BOOK LEGALITY (see `selectLegalLayers`):
+ *   The ordering above decides what sits where; the LAW decides how much of it counts. A stack is
+ *   capped at three counted layers with at most one hard one, and a skinweave is free of both — so
+ *   `getArmorContributors` hands its consumers only the legal subset, and everything downstream
+ *   (the proportional fold, the ablation sweep, the layer readout) inherits the limit for free.
+ *   The actor-level consequences — the EV surcharge, the panel refresh, the equip-time notices —
+ *   live in `combat/book-legality.js`.
  */
+
+// The law itself is DATA, defined once in `npcgen/armor.js` (a pure, Foundry-free file the generator
+// reads to compose legal stacks by construction) and imported here rather than restated, so the
+// number that shapes a generated goon is literally the number that shapes a hand-built one.
+import { LAYER_LAW } from "../npcgen/armor.js";
+import { cwIsSkinweave } from "../utils.js";
+import { correctedArmorType } from "../data-corrections.js";
+
+export { LAYER_LAW };
 
 /**
  * Determine whether an armor item is "hard" (rigid) or "soft" (flexible).
- * Checks armorType field first; falls back to name heuristics, then encumbrance.
+ * Resolution order: the item's own `armorType` → the book's printed table (read-time corrections,
+ * data-corrections.js) → name heuristics → encumbrance.
  *
- * Soft: cloth, leather, Kevlar, t-shirt, flak vest, flak pants, jackets, body suit, nylon
- * Hard: metal gear, body armor, full body armor, plate
+ * Soft: cloth, leather, Kevlar, t-shirt, jackets, body suit
+ * Hard: metal gear, body armor, full body armor, plate — plus the printed table's flak vest/pants,
+ *       steel and ballistic-nylon helmets and Door Gunner's vest, which the name test alone misses.
  */
 export function getArmorHardness(armorItem) {
-  const explicit = armorItem.system?.armorType;
+  // Case-insensitive: the module's own supplement pack stores "Hard"/"Soft" capitalised, and a strict
+  // compare silently discarded the field and fell through to the guesswork below.
+  const explicit = String(armorItem?.system?.armorType ?? "").toLowerCase();
   if (explicit === "hard" || explicit === "soft") return explicit;
+
+  const corrected = correctedArmorType(armorItem);
+  if (corrected) return corrected;
 
   const name = (armorItem.name ?? "").toLowerCase();
   if (/metal gear|body armor|full body|plate|rigid|hard armor|bodyplating/.test(name)) return "hard";
@@ -96,15 +120,67 @@ export function getAutoLayerOrder(armorItems) {
 }
 
 /**
+ * Is this layer one the law lets a wearer have for free — no slot spent, no EV surcharge?
+ *
+ * Skinweave only, and detected by the base system's own stable `cyberwareSubtype` field rather than
+ * by name (names get edited; the subtype is what the packs and the sheet already key on).
+ */
+export function isFreeLayer(item) {
+  return cwIsSkinweave(item);
+}
+
+/**
+ * ⭐ THE LEGAL SUBSET. Walk an inside-out layer list and decide which pieces actually protect.
+ *
+ * THE RULE, stated once so it can be argued with: layers are admitted in the SAME inside-out order
+ * the fold already uses, and the first legal ones win — a piece is admitted while the wearer is
+ * under the three-counted-layer cap and while it is not a second hard layer; anything left over is
+ * SURPLUS and contributes nothing at all. First-N-wins is chosen because it is deterministic and
+ * because it is what the ordering already means (a piece worn under another is the one in contact),
+ * rather than searching for whichever subset happens to score highest — a wearer does not get a
+ * better answer by owning more coats than the law allows.
+ *
+ * Two entries never spend a slot:
+ *   • a SKINWEAVE — the book's own exemption ("a layer, but takes no penalty");
+ *   • an entry with no conventional SP here — a fully-typed garment (a fire coat against a bullet)
+ *     or a borg's zero-coverage typed shielding. Both are already outside every normal-hit fold, so
+ *     spending one of three slots on them would cost the wearer real protection for nothing.
+ *
+ * PURE. `entries` are `{ item, sp }` inside-out; the return keeps that order.
+ * @returns {{legal: object[], surplus: object[], counted: number}}  surplus entries carry `reason`.
+ */
+export function selectLegalLayers(entries) {
+  const legal = [], surplus = [];
+  let counted = 0, hardCount = 0;
+  for (const entry of entries ?? []) {
+    if ((Number(entry?.sp) || 0) <= 0 || isFreeLayer(entry.item)) { legal.push(entry); continue; }
+    if (counted >= LAYER_LAW.maxLayers) { surplus.push({ ...entry, reason: "maxLayers" }); continue; }
+    const hard = getArmorHardness(entry.item) === "hard";
+    if (hard && hardCount >= LAYER_LAW.maxHardLayers) { surplus.push({ ...entry, reason: "maxHard" }); continue; }
+    legal.push(entry);
+    counted += 1;
+    if (hard) hardCount += 1;
+  }
+  return { legal, surplus, counted };
+}
+
+/**
  * Return armor items contributing SP at a location, in layer order.
  * If manual layers are assigned for this location, uses that order.
  * Otherwise uses auto-ordering.
  *
+ * Only the BOOK-LEGAL subset comes back (see `selectLegalLayers`); the pieces the law excludes are
+ * reported separately in `illegalLayers` so a readout or a notice can name them, and are absent from
+ * `orderedLayers`/`cwItems` so no consumer has to remember the rule.
+ *
  * @param {Actor}  actor
  * @param {string} locationKey   e.g. "Head", "Torso", "lArm"
  * @returns {{
- *   orderedLayers: Item[],   inside-out, assigned or auto-ordered
- *   cwItems:       Item[],   innermost contributors: cyberware armor + zero-coverage typed cyberware (typedCw)
+ *   orderedLayers:  Item[],   inside-out, assigned or auto-ordered — LEGAL contributors only
+ *   cwItems:        Item[],   innermost contributors: cyberware armor + zero-coverage typed cyberware (typedCw)
+ *   illegalLayers:  Item[],   pieces the layer law excludes here (they protect nothing)
+ *   surplusLayers:  object[], the same pieces as `{ item, sp, reason }` for the warning edge
+ *   countedLayers:  number,   how many layers this location spends against the cap
  * }}
  */
 export function getArmorContributors(actor, locationKey) {
@@ -157,11 +233,26 @@ export function getArmorContributors(actor, locationKey) {
     orderedLayers = getAutoLayerOrder(coveringArmor);
   }
 
+  // cwItems = the innermost non-layered contributors: conventional cyberware armor + zero-coverage typed
+  // CYBERWARE (typedCw — a borg's printed radiation/typed shielding). Consumers dispatch on item.type.
+  const cwItems = [...cwArmorItems.filter(cwCovers), ...typedCw];
+
+  // The legality walk sees exactly the sequence the fold sees: chrome against the skin, then the worn
+  // pieces inside-out. Its verdict is type-blind (one conventional SP per piece), so a wearer's legal
+  // set is the same set for every damage type — a hit's type changes what a layer is WORTH, never
+  // whether it is being worn.
+  const { surplus, counted } = selectLegalLayers([
+    ...cwItems.map(i => ({ item: i, sp: Number(i.system?.CyberWorkType?.Locations?.[locationKey]) || 0 })),
+    ...orderedLayers.map(i => ({ item: i, sp: Number(i.system?.coverage?.[locationKey]?.stoppingPower) || 0 })),
+  ]);
+  const excluded = new Set(surplus.map(e => e.item.id));
+
   return {
-    orderedLayers,
-    // cwItems = the innermost non-layered contributors: conventional cyberware armor + zero-coverage typed
-    // CYBERWARE (typedCw — a borg's printed radiation/typed shielding). Consumers dispatch on item.type.
-    cwItems: [...cwArmorItems.filter(cwCovers), ...typedCw],
+    orderedLayers: excluded.size ? orderedLayers.filter(i => !excluded.has(i.id)) : orderedLayers,
+    cwItems: excluded.size ? cwItems.filter(i => !excluded.has(i.id)) : cwItems,
+    illegalLayers: surplus.map(e => e.item),
+    surplusLayers: surplus,
+    countedLayers: counted,
     // keep for backward compat with any callers using .unassigned
     get unassigned() { return []; },
   };
