@@ -38,8 +38,16 @@ async function joinGM(p){await p.goto(BASE+"/join",{waitUntil:"domcontentloaded"
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage({ viewport: { width: 1700, height: 1050 } });
 const errors = [];
-p.on("pageerror", e => errors.push("pageerror: " + e.message));
-p.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
+/** Writing core.uiConfig is how a colour scheme is changed, and core's onChange for it calls
+ *  canvas.draw() as well as configureUI. On a rig with an active scene that redraw restarts the
+ *  scene's ambient audio, and a headless browser has no audio output for it to attach to — so
+ *  core's own sound path throws on a null media element. Environmental, reproducible with the
+ *  module absent, and unrelated to anything this keeper measures. Filtered by exact text so every
+ *  other error still reds the run. */
+const ENVIRONMENTAL = [/Cannot set properties of null \(setting 'volume'\)/];
+const note = (s) => { if (!ENVIRONMENTAL.some(re => re.test(s))) errors.push(s); };
+p.on("pageerror", e => note("pageerror: " + e.message));
+p.on("console", m => { if (m.type() === "error") note("console: " + m.text()); });
 await joinGM(p);
 
 const P = [];
@@ -381,6 +389,41 @@ chk("D20 light: no skin signature survives — no bracket glyphs, no prompt care
   S(light.signatures));
 chk("D21 light: chat cards drop the module ground and inherit the log's, as a base install does",
   light.surfaces.chat?.card?.backgroundColor === "rgba(0, 0, 0, 0)", S(light.surfaces.chat?.card));
+
+/* D22 · the module ships a SECOND stylesheet, registered into the base system's cascade layer so
+ * it can out-rank the base's own !important rules (css/cp2020-augmented-system-layer.css). Its
+ * one colour rule cannot be measured through the light-scheme layer above — nothing overrides an
+ * !important from a different layer — so it is asserted at the source: the value it falls back to
+ * when `--cp-line` is undefined (i.e. under the light scheme) must be the value of the base rule
+ * it displaces. Both sides are read out of the live stylesheets. */
+const layerParity = await p.evaluate(async () => {
+  const W = window.__cpTheme;
+  const grab = async (url) => (await (await fetch(url)).text()).replace(/\/\*[\s\S]*?\*\//g, " ");
+  const decl = (css, sel, prop) => {
+    for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const sels = m[1].split(",").map(s => s.trim().replace(/\s+/g, " "));
+      if (!sels.includes(sel)) continue;
+      for (const d of m[2].split(";")) {
+        const i = d.indexOf(":"); if (i < 0) continue;
+        if (d.slice(0, i).trim().toLowerCase() === prop) return d.slice(i + 1).replace(/!important/, "").trim();
+      }
+    }
+    return null;
+  };
+  const ourCss = await grab("/modules/cp2020-augmented/css/cp2020-augmented-system-layer.css");
+  const baseCss = await grab("/systems/cyberpunk2020/css/cyberpunk2020.css");
+  const ours = decl(ourCss, ".application.cyberpunk .active-cyberware .active-cyberware-segment:hover", "border-color");
+  const base = decl(baseCss, ".active-cyberware .active-cyberware-segment:hover", "border-color");
+  const fallback = (ours ?? "").match(/var\(\s*--[a-z0-9-]+\s*,\s*([^)]+)\)/i)?.[1]?.trim() ?? null;
+  // Closed check that this really is the only colour-bearing declaration in that file.
+  const colourDecls = [...ourCss.matchAll(/(^|[;{])\s*(color|background|background-color|border[a-z-]*|outline[a-z-]*|box-shadow|fill|stroke)\s*:/gi)].length;
+  return { ours, base, fallback, lightValue: fallback ? W.normColor(fallback) : null,
+           baseValue: base ? W.normColor(base) : null, colourDecls };
+});
+chk("D22 light: the system-layer stylesheet's one colour rule falls back to the base rule's own value",
+  layerParity.lightValue !== null && layerParity.lightValue === layerParity.baseValue, S(layerParity));
+chk("D23 the system-layer stylesheet still carries exactly the colour rules this check covers",
+  layerParity.colourDecls === 2, S({ colourBearingDeclarations: layerParity.colourDecls }));
 
 // ══ E · readability floor on the light ground ════════════════════════════════════════════
 const readability = await p.evaluate(async () => {
