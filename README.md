@@ -20,10 +20,12 @@ v1.0.0 — first public release: vehicles & ACPA (Maximum Metal), combat automat
 
 ## Credits & licenses
 
-The optional **Carolingian terminal sheet skin** (the per-user `carolingianSkin` setting — a dark
-cyberpunk-terminal look for the character/item sheets) is an adaptation, **scoped to this system's
-`.cyberpunk` sheets**, of two MIT-licensed projects. It is a snapshot of *visual styles only* — not
-the modules themselves, not their palette UI / scripts / window chrome:
+The **terminal sheet skin** — the dark cyberpunk-terminal look the character and item sheets carry
+under Foundry's dark colour scheme — is an adaptation, **scoped to this system's `.cyberpunk`
+sheets**, of two MIT-licensed projects. It is a snapshot of *visual styles only* — not the modules
+themselves, not their palette UI / scripts / window chrome. (There is no separate module toggle:
+the skin follows Foundry's own **Colour Scheme → Applications** setting. Switch that to Light and
+the sheets render in the base system's plain style instead.)
 
 - **Cyberpunk Restyler** — © DARKNEET69, MIT — the sheet styling (dark surface, bracketed `[ ]`
   tabs, `>`-prompt headers + blink cursor, teal glow, statsrow / armor-display / wound-tracker /

@@ -476,9 +476,13 @@
  * "just work". Restyler's broad `.dialog *:not(.item-image)` universal-descendant rule is
  * intentionally NOT vendored (it would overreach the chrome + clobber our coloured spans).
  *
- * GATING: the whole layer is behind `body.cp-carolingian`, toggled by the per-user
- * `carolingianSkin` setting (default ON; module/settings.js). OFF → the class is absent → none
- * of these rules match → the sheets fall back to the system's own theme-aware palette.
+ * GATING: the whole layer is behind `body.cp-carolingian`, which module/settings.js applies
+ * whenever Foundry's APPLICATIONS colour scheme is NOT light (core stamps `theme-light` /
+ * `theme-dark` on <body>; see applyCarolingianSkinClass). So this layer IS the module's dark
+ * look, and under the light scheme the class is absent → not one of these rules matches → the
+ * sheets read as the base system's on Foundry's own light page. The two states are mutually
+ * exclusive by construction, which is what keeps the skin from HALF-applying (light text
+ * winning while its dark surface loses to a closer light ancestor).
  * DEFERENCE: the hardcoded palette tokens apply only when Carolingian is ABSENT
  * (`:not(.crlngn-ui)`); when crlngn-ui is installed, its live preset tokens cascade onto the
  * sheets instead, so the skin tracks the user's chosen palette.
@@ -517,17 +521,12 @@ body.cp-carolingian:not(.crlngn-ui) {
   --color-light-4: #bbbbca;  /* feeds --color-form-label */
 }
 
-/* Same tokens for Foundry's dark theme when the Carolingian skin is OFF (mirrors the fork's
-   system CSS, which the module used to inherit). Guarded :not(.cp-carolingian) so the skin
-   above wins when it's on. Light theme leaves them undefined → var(--cp-ink,black)=black,
-   which is correct on the parchment surface. */
-.theme-dark:not(.cp-carolingian) .application.cyberpunk.sheet.actor, .theme-dark:not(.cp-carolingian) .cyberpunk.sheet.actor,
-.theme-dark:not(.cp-carolingian) .application.cyberpunk.sheet.item,  .theme-dark:not(.cp-carolingian) .cyberpunk.sheet.item,
-.theme-dark:not(.cp-carolingian) .application.cyberpunk.dialog,      .theme-dark:not(.cp-carolingian) .cyberpunk.weapon-modifiers {
-  --cp-ink: #e7d1b1;
-  --cp-line: #6b5d48;
-  --cp-surface: #14110d;
-}
+/* (A `.theme-dark:not(.cp-carolingian)` ink/line/surface block used to sit here, for the case
+   "dark colour scheme, skin switched off". That state no longer exists: the skin class is now
+   applied for every non-light scheme, so `.theme-dark` and `:not(.cp-carolingian)` can never
+   both hold. Under the light scheme the three tokens stay undefined, so every consumer's
+   `var(--cp-ink, black)` / `var(--cp-line, black)` fallback resolves to the base system's own
+   literal — which is how the shared sheet classes reach base parity for free. */
 
 @keyframes cp-carolingian-blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 
@@ -2822,24 +2821,14 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
   flex-direction: column;
 }
 
-/* Restyler-OFF surface = Tilt's light page. His sheet design is black field/stat
-   "chips" with light text meant to sit on a LIGHT page; his CSS sets no window
-   background, so on v13's dark AppV2 default the sheet inverts (invisible borderless
-   skill-search, black-on-dark notes, washed-out armor). Restore his own light colour
-   (#f1eee8) — colour only, NO parchment image / no theme-stomping guards. Gated off
-   when the Carolingian skin is on (it brings its own theme); external restylers layer
-   their own rules on top. */
-body:not(.cp-carolingian) .cyberpunk.sheet .window-content {
-  background-color: #f1eee8;
-  color: black;
-}
-
-/* Tab labels on the light page: v13's .sheet-tabs core gives the items a light text colour, which
-   washes out on #f1eee8. Tilt's non-active tabs carry no colour (they inherit dark on his light page),
-   so force them dark here; the ACTIVE tab keeps Tilt's white-on-black chip (`nav.tabs > .item.active`). */
-body:not(.cp-carolingian) .cyberpunk.sheet nav.tabs > .item:not(.active) {
-  color: black;
-}
+/* (A pair of `body:not(.cp-carolingian)` sheet rules used to sit here: a hardcoded #f1eee8
+   window ground plus a forced-dark inactive tab label. Both existed for the state "skin
+   switched off while the colour scheme is dark", where the base system's black-chip sheet
+   design inverted against Foundry's dark page. The skin now follows the colour scheme, so
+   that state is gone, and `:not(.cp-carolingian)` means exactly "light scheme" — where core
+   already paints the application ground light and colours text for it. Declaring our own
+   ground there would be a module-invented colour the base system does not have, so both
+   rules are dropped and the sheets inherit core's light page, unmodified. */
 
 /* Countermeasures loadout (vehicle + ACPA sheets) reuses the system's .field-list/.field grid (see
    templates/actor/parts/countermeasures.hbs) so it mirrors the surrounding sheet fields exactly — a fixed

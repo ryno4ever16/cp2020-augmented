@@ -626,9 +626,10 @@ Hooks.once("ready", function () {
     }
   }
 
-  // Apply the per-user Carolingian / Restyler terminal sheet skin (toggles the cp-carolingian
-  // <body> class that gates the skin CSS in cp2020-augmented.css). Client-side cosmetic, so it
-  // runs independently of the combat-automation gate below.
+  // Apply the terminal sheet skin's <body> class, following Foundry's applications colour scheme
+  // (dark = the module's own look, light = the base system's), and start the class-list observer
+  // that tracks a live scheme change. Client-side cosmetic, so it runs independently of the
+  // combat-automation gate below.
   wire("terminal skin class", applyCarolingianSkinClass);
 
   // Player-facing exposure scoping for the base system's two bulk-scraped weapon compendiums

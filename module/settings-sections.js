@@ -45,7 +45,7 @@ const SECTIONS = [
   { key: "SectionNpcGen", keys: ["npcGenEnabled", "npcGenTokenArtFolder"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
-  { key: "SectionDisplay", keys: ["carolingianSkin", "combatFxEnabled", "goreEnabled", "faceTargetOnFire"] },
+  { key: "SectionDisplay", keys: ["combatFxEnabled", "goreEnabled", "faceTargetOnFire"] },
 ];
 
 // master toggle → the sub-settings that only matter when it's on (greyed + disabled while it's off).

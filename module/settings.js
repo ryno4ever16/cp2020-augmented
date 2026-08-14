@@ -11,16 +11,38 @@ import { reconcileTokenWrites as reconcileVisionTokenWrites } from "./mech/visio
 
 const SCOPE = "cp2020-augmented";
 
+/** Set once the `<body>` class-list watcher below is installed, so it is only ever attached once. */
+let _colorSchemeWatch = null;
+
 /**
- * Apply (or clear) the `cp-carolingian` <body> class that gates the optional Carolingian /
- * Restyler terminal sheet skin in css/cp2020-augmented.css, per the per-user `carolingianSkin`
- * setting (default on). Called once on `ready` and again whenever the setting is toggled.
+ * Apply (or clear) the `cp-carolingian` <body> class that gates the terminal sheet skin in
+ * css/cp2020-augmented.css, following Foundry's ACTIVE APPLICATIONS COLOUR SCHEME.
+ *
+ * The skin IS the module's dark look, so it is on whenever the applications scheme is dark and
+ * stands down entirely under the light scheme, where the sheets read as the base system's.
+ *
+ * How the scheme is read: core (verified identical in v13.350 and v14.364, `Game#configureUI`)
+ * removes `theme-light`/`theme-dark` from `document.body` and re-adds exactly one of them, from
+ * `game.settings.get("core","uiConfig").colorScheme.applications`, falling back to the browser's
+ * `prefers-color-scheme` when that is unset. Reading the class rather than the setting therefore
+ * covers both the explicit choice and the browser fallback, on both cores, with one expression:
+ * anything that is not explicitly the light scheme keeps the module's own look.
+ *
+ * Live switching: core re-stamps that class whenever the scheme changes (the UI settings menu
+ * writes `core.uiConfig`, whose onChange re-runs `configureUI`; an OS colour-scheme flip does the
+ * same through a `matchMedia` listener). A class-list observer on `<body>` therefore tracks every
+ * one of those paths without a reload and without depending on a core hook name.
  */
 export function applyCarolingianSkinClass() {
   try {
-    const on = game.settings.get(SCOPE, "carolingianSkin") !== false;
-    document.body?.classList.toggle("cp-carolingian", on);
-  } catch (e) { /* settings or DOM not ready yet */ }
+    const body = document.body;
+    if (!body) return;
+    body.classList.toggle("cp-carolingian", !body.classList.contains("theme-light"));
+    if (!_colorSchemeWatch && typeof MutationObserver === "function") {
+      _colorSchemeWatch = new MutationObserver(() => applyCarolingianSkinClass());
+      _colorSchemeWatch.observe(body, { attributes: true, attributeFilter: ["class"] });
+    }
+  } catch (e) { /* DOM not ready yet */ }
 }
 
 /**
@@ -864,20 +886,13 @@ export function registerAugmentedSettings() {
     default: "off",
   });
 
-  // --- Carolingian / Restyler terminal sheet skin (per-user UI) ---
-  // Toggles the `cp-carolingian` <body> class that gates the optional terminal skin in
-  // css/cp2020-augmented.css (an adaptation of DARKNEET's Cyberpunk Restyler + the Carolingian
-  // UI palette, both MIT — see README). Client-scoped, on by default; applyCarolingianSkinClass()
-  // re-applies on ready and on every toggle.
-  game.settings.register(SCOPE, "carolingianSkin", {
-    name: "SETTINGS.CarolingianSkin",
-    hint: "SETTINGS.CarolingianSkinHint",
-    scope: "client",
-    config: true,
-    type: Boolean,
-    default: true,
-    onChange: () => applyCarolingianSkinClass()
-  });
+  // The per-user `carolingianSkin` toggle was RETIRED: the terminal sheet skin is no longer
+  // optional, it is the module's look under Foundry's DARK applications colour scheme, and it
+  // stands down under the LIGHT scheme so the sheets read as the base system's. The choice is
+  // therefore Foundry's own colour-scheme control, not a second module-level switch — see
+  // applyCarolingianSkinClass() at the top of this file. Worlds that carry the old client-scoped
+  // flag keep an orphan value in user data; it is never read, so it is left alone rather than
+  // migrated.
 
   // --- Combat FX (Animation Rail A1) — muzzle flash + shot audio ---
   // One master switch for the whole presentation rail: the native muzzle-flash light, the shot
