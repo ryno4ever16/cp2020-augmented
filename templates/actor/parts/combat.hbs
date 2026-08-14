@@ -121,9 +121,10 @@
             {{/unless}}
         {{/each}}
 
-        {{!-- Cyberweapons (non-martial) --}}
+        {{!-- Cyberweapons (non-martial). Gated on cwIsEnabled like the base system's own combat tab:
+             a cyberweapon whose effect is switched off gets no fire row. --}}
         {{#each gear.cyberware as |cyber|}}
-            {{#if (cwHasType cyber.system.CyberWorkType "Weapon")}}
+            {{#if (and (cwHasType cyber.system.CyberWorkType "Weapon") (cwIsEnabled cyber))}}
                 {{#unless (equals cyber.system.CyberWorkType.Weapon.attackType @root.MARTIAL_ATTACK_TYPE)}}
                 <div class="fire-weapon field action" data-item-id="{{cyber.id}}">
                     <div class="no-action field-image item-edit" style="background-image: url({{cyber.img}})" data-item-id="{{cyber.id}}"></div>
