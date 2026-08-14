@@ -1181,6 +1181,14 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   opacity: 1;
 }
 
+/* The reading/typing face for BOTH rich-text surfaces is the base system's body face at a
+   normal weight — the base's own editor rule is
+   `.cyberpunk section.window-content .editor-content { font-weight: normal }`, i.e. prose is
+   explicitly exempt from the bold sheet copy around it. The actor Life-tab rules below pin
+   exactly that; these item rules did not, so the Notes tab inherited the surrounding bold
+   (and, under the skin, its display face) and the two editors disagreed. Kept in step
+   deliberately: keeper cp2020-augmented-theme-parity.mjs compares the two surfaces
+   property-by-property in both colour schemes. */
 .application.cyberpunk.sheet.item .cp-notes-view {
   flex: 1 1 auto;
   min-height: 0;
@@ -1190,6 +1198,11 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   padding: 8px 36px 8px 8px;
   color: var(--cp-ink, black);
   background: transparent;
+  font-family: "Noto Sans", sans-serif;
+  font-size: 14px;
+  font-weight: normal;
+  font-variant: normal;
+  line-height: 1.35;
 }
 
 .application.cyberpunk.sheet.item .cp-notes-prosemirror {
@@ -1212,6 +1225,11 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   box-sizing: border-box;
   color: var(--cp-ink, black);
   background: transparent;
+  font-family: "Noto Sans", sans-serif;
+  font-size: 14px;
+  font-weight: normal;
+  font-variant: normal;
+  line-height: 1.35;
   border: 0 !important;
   outline: 0;
   box-shadow: none;
@@ -3258,3 +3276,232 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
 /* The apply window's rolled-cover note: a quiet line under the Cover SP field stating what the
    coverage roll decided, so a rider-cover verdict is never silent. */
 .cyberpunk.damage-dialog .cp-cover-note { opacity: 0.85; font-size: 11px; font-style: italic; }
+
+/* â•â• LIGHT-SCHEME PARITY LAYER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+ * Under Foundry's LIGHT applications colour scheme the module must read as the base system
+ * does. Two things get it there:
+ *
+ *   1. The terminal skin stands down completely (module/settings.js only puts
+ *      `body.cp-carolingian` on for a non-light scheme), so not one skin rule matches.
+ *   2. Everything BELOW re-points the module's remaining colour-bearing rules â€” the ones
+ *      written for a dark ground â€” at the base system's own palette. The shared sheet classes
+ *      need nothing: they were already authored as `var(--cp-line, black)` / `var(--cp-ink,
+ *      black)`, and with those tokens undefined under the light scheme every one of them
+ *      resolves to the literal the base stylesheet uses (black rules, black chips with
+ *      whitesmoke labels, rgb(90,90,90) mod boxes).
+ *
+ * GATE: `body.theme-light` â€” the class core itself stamps for the light applications scheme
+ * (identical code in v13.350 and v14.364), so this layer is live from first paint rather than
+ * from our ready hook, and it can never overlap the skin.
+ *
+ * VALUES: the neutral line/fill tokens follow the base stylesheet's own light-page idioms
+ * (rgba(0,0,0,0.08) fills, rgba(0,0,0,0.35) hairlines); the accents keep the module's hues but
+ * are darkened to clear 4.5:1 against core's light application ground (parchment, average
+ * rgb(218,216,205) â€” measured, not estimated). Form controls defer to core's own `--input-*`
+ * theme tokens, which is exactly what a base-only install shows.
+ * âš  Everything below is LIGHT-ONLY: the dark rendering is untouched by construction. */
+body.theme-light {
+  --cp-lt-line: rgba(0, 0, 0, 0.25);          /* hairline divider / panel border */
+  --cp-lt-fill: rgba(0, 0, 0, 0.05);          /* subtle panel or chip fill */
+  --cp-lt-fill-strong: rgba(0, 0, 0, 0.10);   /* hover / pressed fill */
+  --cp-lt-success: #156b20;                   /* was #1f9d2f - 4.67:1 */
+  --cp-lt-fail: #9f3d24;                      /* was #d1502f - 4.65:1 */
+  --cp-lt-warn: #835212;                      /* was #c0791a - 4.62:1 */
+  --cp-lt-brass: #6c5a37;                     /* was #c0a062 - 4.68:1 */
+  --cp-lt-info: #3c636d;                      /* was #6fb7c9 - 4.61:1 */
+  --cp-lt-active: #705a00;                    /* was #ffcc00 - 4.67:1 */
+  --cp-danger: #9f3d24;                       /* the shared token the sheet hover rules read */
+}
+
+/* -- Form controls in module windows: core's theme values, which is what the base shows -- */
+body.theme-light .cp-catalog input,
+body.theme-light .cp-catalog select,
+body.theme-light .cp-catalog textarea,
+body.theme-light .cp-ip-tracker input,
+body.theme-light .cp-ip-tracker select,
+body.theme-light .cyberpunk.sheet.shop input[type="text"],
+body.theme-light .cyberpunk.sheet.shop input[type="number"],
+body.theme-light .cyberpunk.sheet.shop select,
+body.theme-light .cyberpunk.sheet.shop textarea {
+  color: var(--input-text-color) !important;
+  background-color: var(--input-background-color) !important;
+  border: 1px solid var(--input-border-color);
+}
+/* The anatomy picker forced its own dark control; the base system leaves a `.field select`
+   uncoloured behind a rgb(90,90,90) border rule, so match that. */
+body.theme-light .anatomy-container .anatomy-select,
+body.theme-light .anatomy-container .anatomy-select option {
+  color: var(--input-text-color);
+  background-color: var(--input-background-color);
+}
+body.theme-light .anatomy-container .anatomy-select { border-color: rgb(90, 90, 90); }
+
+/* -- Shop catalog / storefront chrome -------------------------------------------------- */
+body.theme-light .cp-catalog-filters { border-right-color: var(--cp-lt-line); }
+body.theme-light .cp-catalog-sources { border-left-color: var(--cp-lt-line); }
+body.theme-light .cp-cat-chip:not(.active),
+body.theme-light .cp-catalog .cp-book-chip:not(.active),
+body.theme-light .cp-catalog .cp-shop-inf:not(.active),
+body.theme-light .cp-add-to-shop-btn:not(:hover),
+body.theme-light .cp-shop-home .cp-home-entry:not(:hover) {
+  background: var(--cp-lt-fill);
+  border-color: var(--cp-lt-line);
+}
+body.theme-light .cp-cat-chip.active,
+body.theme-light .cp-catalog .cp-book-chip.active,
+body.theme-light .cp-catalog .cp-shop-inf.active {
+  background: var(--cp-lt-brass);
+  border-color: var(--cp-lt-brass);
+}
+body.theme-light .cp-add-to-shop-btn:hover,
+body.theme-light .cp-shop-home .cp-home-entry:hover,
+body.theme-light .cp-vendor-tray.cp-drop-hot {
+  background: var(--cp-lt-fill-strong);
+  border-color: var(--cp-lt-brass);
+}
+body.theme-light .cp-src-badge,
+body.theme-light .cp-vendor-tray { border-color: var(--cp-lt-line); }
+body.theme-light .cp-letter-header,
+body.theme-light .cp-shop-config,
+body.theme-light .cp-storefront-head,
+body.theme-light .cp-shop-header,
+body.theme-light .cp-vendor-colhead { border-bottom-color: var(--cp-lt-line); }
+body.theme-light .cp-book-divider { border-top-color: var(--cp-lt-line); }
+body.theme-light .cp-catalog-row:hover,
+body.theme-light .cp-catalog-row.cp-shop-extra { background: var(--cp-lt-fill); }
+body.theme-light .cp-home-title { border-bottom-color: var(--cp-lt-line); color: var(--cp-lt-info); }
+body.theme-light .cp-catalog .cp-catalog-spinner {
+  border-color: var(--cp-lt-line);
+  border-top-color: var(--cp-lt-brass);
+}
+body.theme-light .cp-hidden-divider { border-top-color: var(--cp-lt-line); }
+body.theme-light .cp-hidden-divider,
+body.theme-light .cp-buyer-warn,
+body.theme-light .cp-style-tag,
+body.theme-light .cp-facedown-result:not(.cp-facedown-tie) { color: var(--cp-lt-brass); }
+body.theme-light .cp-style-tag { border-color: var(--cp-lt-brass); }
+body.theme-light .cp-facedown-result { border-top-color: var(--cp-lt-line); }
+body.theme-light .cp-ammo-rounds { border-color: var(--cp-lt-line); }
+body.theme-light .cp-shop-setup-toggle.cp-active,
+body.theme-light .cp-shop-setup-banner {
+  color: var(--cp-lt-warn);
+  border-color: var(--cp-lt-warn);
+  background: rgba(131, 82, 18, 0.12);
+}
+
+/* -- IP tracker ------------------------------------------------------------------------ */
+body.theme-light .cp-ip-tracker .cyber-section-header { border-bottom-color: var(--cp-lt-line); }
+body.theme-light .cp-ip-tracker .cp-ip-pipeline {
+  background: var(--cp-lt-fill);
+  border-color: var(--cp-lt-line);
+}
+body.theme-light .cp-ip-tracker .cp-ip-pipe-step b { color: var(--cp-lt-brass); }
+body.theme-light .cp-ip-tracker .cp-ip-bal-actor { border-top-color: var(--cp-lt-line); }
+body.theme-light .cp-ip-tracker .cp-ip-row-rolls { border-left-color: var(--cp-lt-line); }
+body.theme-light .cp-ip-tracker .cp-ip-row-count,
+body.theme-light .cp-ip-tracker .cp-ip-pend-badge,
+body.theme-light .cp-ip-tracker .cp-ip-row-openable:hover,
+body.theme-light .cp-ip-tracker .cp-ip-bal-toggle:hover { color: var(--cp-lt-active); }
+body.theme-light .cp-ip-tracker .cp-ip-roll-prune:hover { color: var(--cp-lt-fail); }
+
+/* -- Generator / notice / preset panels ------------------------------------------------ */
+body.theme-light .cp-preset-picker .cp-preset-undo-bar,
+body.theme-light .cp-npcgen .cp-npcgen-section,
+body.theme-light .cp-goon .cp-goon-section,
+body.theme-light .cp-automation-notice .notice-nav,
+body.theme-light .combat-tab .radiation-section,
+body.theme-light .combat-tab .reputation-section { border-top-color: var(--cp-lt-line); }
+body.theme-light .cp-npcgen-card .cp-npcgen-card-npc { border-bottom-color: var(--cp-lt-line); }
+body.theme-light .cp-goon .cp-goon-band {
+  border-top-color: var(--cp-lt-line);
+  border-bottom-color: var(--cp-lt-line);
+}
+body.theme-light .cp-goon .cp-goon-card { border-color: var(--cp-lt-line); }
+body.theme-light .cp-automation-notice .feat-box--gold {
+  border-color: var(--cp-lt-brass);
+  background: rgba(108, 90, 55, 0.12);
+}
+
+/* -- Semantic state colours on the light page ------------------------------------------ */
+body.theme-light .cyberpunk .result-success,
+body.theme-light .cyberpunk .cp-shop-request-btn.cp-approve,
+body.theme-light .cp-shop-request-btn.cp-approve,
+body.theme-light .cp-shop-request-status.cp-approved,
+body.theme-light .cp-shop-cyber-choice-btn.cp-approve,
+body.theme-light .cp-shop-cyber-surgery-btn.cp-approve,
+body.theme-light .cp-inshop-mark,
+body.theme-light .cp-shop-discountbadge,
+body.theme-light .cp-books-hint .fa-eye,
+body.theme-light .cp-book-eye.on,
+body.theme-light .cp-acpa-build-valid,
+body.theme-light .cyberpunk .segment-repair.cp-cyberlimb-repair:hover,
+body.theme-light .cyberpunk .segment-repair.cp-flesh-clear:hover { color: var(--cp-lt-success); }
+
+body.theme-light .cyberpunk .result-fail,
+body.theme-light .cyberpunk .result-note.danger,
+body.theme-light .cyberpunk .cp-shop-request-btn.cp-deny,
+body.theme-light .cp-shop-request-btn.cp-deny,
+body.theme-light .cp-shop-request-status.cp-denied,
+body.theme-light .cp-shop-cyber-choice-btn.cp-deny,
+body.theme-light .cp-shop-cyber-surgery-btn.cp-deny,
+body.theme-light .cp-shop-remove:hover,
+body.theme-light .cp-vehicle-destroyed,
+body.theme-light .cp-acpa-system-destroyed,
+body.theme-light .cp-acpa-spaces-over,
+body.theme-light .cp-acpa-build-issues-header,
+body.theme-light .vehicle-fire-dialog .arc-warn.strict,
+body.theme-light .cyberpunk .cp-veh-cell-engine { color: var(--cp-lt-fail); }
+body.theme-light .cp-vendor-clear:hover { color: var(--cp-lt-fail); border-color: var(--cp-lt-fail); }
+body.theme-light .cp-acpa-build-issues { border-color: var(--cp-lt-fail); }
+
+body.theme-light .cyberpunk .result-warn,
+body.theme-light .cyberpunk .vehicle-warn,
+body.theme-light .cyberpunk .taser-warning,
+body.theme-light .cp-npcgen .cp-npcgen-warn,
+body.theme-light .cp-goon .cp-goon-warn,
+body.theme-light .cp-goon .cp-goon-clamp,
+body.theme-light .cp-goon .cp-goon-honesty-warn,
+body.theme-light .cp-veh-unmodeled,
+body.theme-light .cyberpunk .cp-occupancy-count.cp-occupancy-over,
+body.theme-light .vehicle-fire-dialog .arc-warn.soft { color: var(--cp-lt-warn); }
+
+body.theme-light .cyberpunk .cp-veh-cell-seat,
+body.theme-light .cyberpunk .cp-veh-front-btn.cp-active { color: var(--cp-lt-active); }
+body.theme-light .cyberpunk .cp-veh-front-btn.cp-active { border-color: var(--cp-lt-active); }
+body.theme-light .cp-active-badge { background: var(--cp-lt-active); }
+body.theme-light .cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-label,
+body.theme-light .cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-value { color: var(--cp-lt-brass); }
+
+/* -- Panels that assumed a dark ground -------------------------------------------------- */
+/* Both rich-text surfaces (the item Notes tab and the actor Life tab share this markup) drop
+   their dark-ground wash. The base system's own editor rule is
+   `.cyberpunk section.window-content .editor-content { border: 2px solid black }` with NO
+   ground and NO ink of its own — so on the light page the canvas keeps only its 2px black
+   rule (already `var(--cp-line, black)`) and the text inherits, matching his editor exactly
+   rather than inverting our dark panel. */
+body.theme-light .application.cyberpunk.sheet.item .cp-notes-canvas,
+body.theme-light .application.cyberpunk.sheet.actor .cp-notes-canvas,
+body.theme-light .cyberpunk.sheet.actor .cyberpunk-actor-sheet-content .cp-notes-canvas { background: transparent; }
+body.theme-light .cp-target-dialog hr { border-color: var(--cp-lt-line); }
+body.theme-light .cp-target-hint.none { background: var(--cp-lt-fill); color: rgba(0, 0, 0, 0.65); }
+body.theme-light .cp-target-hint.targeted { background: rgba(21, 107, 32, 0.15); }
+/* Our own drag/right-click menu: core's dropdown palette, so it matches every other popup. */
+body.theme-light .cp-context-menu {
+  background: var(--dropdown-background);
+  border-color: var(--dropdown-border);
+  color: var(--color-text-primary);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+body.theme-light .cp-context-menu button { color: var(--color-text-primary); }
+body.theme-light .cp-context-menu button:hover { background: var(--cp-lt-fill-strong); }
+
+/* Chat cards: the base system gives its card classes no ground or ink of their own, so drop
+   ours and let the message inherit the log's, exactly as a base-only install renders it. */
+body.theme-light .chat-message .cyberpunk {
+  background-color: transparent;
+  color: inherit;
+}
+body.theme-light .chat-message .cyberpunk h1,
+body.theme-light .chat-message .cyberpunk h2,
+body.theme-light .chat-message .cyberpunk h3,
+body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
