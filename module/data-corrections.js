@@ -27,6 +27,12 @@
  *
  * A correction may carry `patch: { "<dot.path>": value }` — paths are relative to `system` and are
  * applied last (after name/cost/flavor/notesAppend).
+ *
+ * A correction may also carry `armorType: "hard" | "soft"`. That one is READ-TIME ONLY: it is NOT in
+ * `applyCorrectionToItemData`, so it never touches a created copy's stored data. It is resolved live by
+ * `correctedArmorType()` below, which `combat/armor-layers.js` consults when an entry declares no
+ * hardness of its own. Read-time is what this correction needs to be: an armor piece already sitting on
+ * a character was created long before the entry existed, and the layer law has to type it correctly now.
  */
 
 const CYBERWARE_OLD = "cyberpunk2020.cyberware-old";
@@ -377,6 +383,31 @@ export const DATA_CORRECTIONS = {
     oVGBBUXDnAph5s72: { patch: mechRollMods({ skillName: "Electronic Security", skillMod: 5, auto: false }) },  // Voc Decryptor — "+5 on Check against VocaLock"
     ycLktwLxqVMsxr7K: { patch: mechRollMods({ skillName: "Electronic Security", skillMod: 5, auto: false }) },  // Code Decryptor — "+5 on Check against CardLock"
   },
+
+  /* ── HARDNESS (read-time; see `correctedArmorType`) ───────────────────────────────────────────
+   * The armor chapter prints its OWN hard/soft table, and these base entries carry no `armorType`
+   * of their own, so `combat/armor-layers.js` fell back to a name/encumbrance guess and typed all
+   * of them SOFT. Hardness is load-bearing now that the layer law limits a stack to ONE hard layer,
+   * so the book's printed row is recorded here per entry, by id.
+   *
+   * The book's HARD row: Metal Gear · police riot armor · Door Gunner's vest · steel helmet ·
+   * flak vest/pants · ballistic nylon helmet. (Metal Gear already resolved hard by name and needs
+   * no entry.) Its SOFT row — kevlars, the M-78, heavy leather, SkinTight padding, the armor
+   * jackets — matches what the fallback already returns, so no soft entries are needed either. */
+  "cyberpunk2020.armor": {
+    aiehEkbdjqqYZD9j: { armorType: "hard" },   // Flack Vest — the book's "flak vest" HARD row
+    IBWsFBQDEZveDNJP: { armorType: "hard" },   // Flack Pants — the book's "flak pants" HARD row
+    IU87ySLjve8eHgGf: { armorType: "hard" },   // Nylon Helmet — the book's "ballistic nylon helmet" HARD row
+    jK6hLgReS5Wsf2Hv: { armorType: "hard" },   // Steel Helmet — the book's "steel helmet" HARD row
+    "34GtfgYULaZEe3C7": { armorType: "hard" }, // Doorgunner's Vest — the book's "Door Gunner's vest" HARD row
+  },
+
+  /* Body plating (cyberware chapter, p.92–93): externally anchored rigid plate — "conspicuous by
+   * design". Torso Plate and Faceplate already resolve hard on the /plate/ name test; the Cowl does
+   * not, and it is the same rigid-plate family, so it is recorded here. */
+  "cyberpunk2020.other-cyberware": {
+    nIxqf9f5cA5j7L1E: { armorType: "hard" },   // Cowl — body plating (p.92–93)
+  },
 };
 
 /* ── Pack-scoped normalization RULES ────────────────────────────────────────────────────────────
@@ -436,6 +467,21 @@ export function correctionFor(packId, itemId) {
 export function correctedCost(packId, itemId, rawCost) {
   const c = correctionFor(packId, itemId);
   return c && c.cost !== undefined ? c.cost : rawCost;
+}
+
+/**
+ * The book-corrected hardness for an armor-bearing item, or "" when the registry says nothing.
+ *
+ * READ-TIME: nothing is written anywhere. An owned copy is matched by its `_stats.compendiumSource`
+ * (the same id-based match the create-time corrections use — never by name); a compendium document
+ * read straight out of a pack has no `compendiumSource`, so its own uuid is the fallback, which is
+ * the same "Compendium.<pack>.Item.<id>" shape. An item from any other origin returns "".
+ */
+export function correctedArmorType(item) {
+  const src = parseCompendiumSource(item?._stats?.compendiumSource ?? item?.uuid);
+  if (!src) return "";
+  const t = String(correctionFor(src.packId, src.itemId)?.armorType ?? "").toLowerCase();
+  return (t === "hard" || t === "soft") ? t : "";
 }
 
 /** Parse "Compendium.<pack.id>.Item.<docId>" → {packId, itemId}, else null. */
