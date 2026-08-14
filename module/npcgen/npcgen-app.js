@@ -132,9 +132,13 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       ref: cfg.ref, bt: cfg.bt, refRange: REF_RANGE, btRange: BT_RANGE,
       btTicks: BT_TICKS.map((t) => ({ value: t.value, hint: tryLocalize(t.hintKey, "") })),
       skill: cfg.skillBreakdown ?? { total: 0, reserved: 0, floor: 0 },
+      // ⭐ THE LINE STATES ALL THREE HALVES, and the third is there because of the ruled deviation:
+      // the role's special ability is levelled at the GRADE, not bought out of the slider's points
+      // (see CAREER_PACKAGES in blueprint.js). A GM reading "32 to the role package" would otherwise
+      // have no way to know the special ability was extra.
       skillBreakdownLine: grade ? localizeParam("GoonFactory.SkillBreakdown", {
         total: cfg.skillBreakdown.total, reserved: cfg.skillBreakdown.reserved,
-        grade: cfg.grade, rest: cfg.skillBreakdown.toPackage,
+        grade: cfg.grade, rest: cfg.skillBreakdown.toPackage, special: grade.skillPts,
       }) : "",
       pool: cfg.statPoolBreakdown ?? { pool: 0, floor: 0, ceiling: STAT_POOL.ceiling },
       poolTicks: STAT_POOL.ticks.map((t) => ({ value: t.value, hint: tryLocalize(t.hintKey, "") })),

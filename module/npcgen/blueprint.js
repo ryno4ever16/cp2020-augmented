@@ -869,53 +869,114 @@ export function rollStatPool({ pool, ref, bt, role = "solo", shape = STAT_SHAPE_
 // -------------------------------------------------------------------------------------------------
 
 /**
- * ⚑⚑ THE ONE PLACE THIS BUILD COULD NOT FOLLOW THE SPEC LITERALLY, AND WHY. §2.4 calls for "the
- * role's Career Skill Package (Core p.44-45; ruled in — generator clause covers it)". Those printed
- * per-role lists are BOOK CONTENT that is not present anywhere in this repo or in the base system's
- * data, and no book text layer was available to this lane — so transcribing them would have meant
- * writing them from memory, which is exactly the unverified assertion this project's own gates
- * forbid. Inventing nine role kits would have been worse: that is design, and the design is done.
+ * ⭐ THE BOOK'S CAREER SKILL PACKAGES (Core p.44) — §2.4's *"the role's Career Skill Package"*, which
+ * the window rebuild could not supply and shipped an interim stat-weighted COMBAT SPINE in place of.
+ * That spine's own comment said replacing it was "a one-table edit"; this is that edit.
  *
- * WHAT SHIPS INSTEAD is the smallest faithful structure that needs NO book content:
- *  - a COMBAT SPINE common to every goon, drawn from the system's own schema keys (a goon of any
- *    role is being generated to fight, which is the generator's whole premise), plus
- *  - the role's SPECIAL ABILITY, which is not a transcription — the base system already ships those
- *    ten as items in its `role-skills-` pack, and
- *  - WEIGHTING by the role's own stat vector (§2.2 supplies it) applied through each skill's
- *    GOVERNING STAT (the actor schema's own `skills.<key>.stat`), which is what makes a Cop's
- *    package resolve toward COOL/INT skills and a Techie's toward TECH — §2.4's "remainder by role
- *    weights", literally.
- * The result is role-differentiated without a printed list. Replacing this constant with the real
- * packages is a one-table edit and nothing downstream changes. Reported as a spec gap.
+ * ⛔ TRANSCRIPTION SOURCE, AND THE ONLY ONE: `import-staging/CAREER-PACKAGES-P44.md` §4 PATCH-READY —
+ * a two-channel (PyMuPDF + `pdftotext -layout`) TEXT-LAYER extraction of the printed page, cross-
+ * checked against the base system's `template.json` schema keys and its shipped skill packs (98 rows:
+ * 82 exact, 14 renamed, 0 missing). Nothing here was written from memory and nothing was re-derived
+ * from the PDF by this lane. Re-verifying means re-reading that report, not re-reading the book.
+ *
+ * SHAPE. Every printed package is TEN entries: slot 1 the role's SPECIAL ABILITY, slot 2 always
+ * Awareness/Notice, then eight more. `special` holds slot 1; `skills` holds the other NINE.
+ *
+ * ⭐⭐ THE SPECIAL ABILITY IS NOT IN `skills`, AND THAT IS A DELIBERATE, RULED DEVIATION FROM THE BOOK
+ * (user, 2026-08-14). p.44 says *"Divide 40 points between these ten skills"* and the p.43 worked
+ * example spends 6 of its 40 on Charismatic Leadership — so in the BOOK the special ability is bought
+ * out of the pool. This generator instead auto-levels it at the GRADE's skill points, OUTSIDE the
+ * pool, because a goon's grade is the thing its special ability should read off; the slider's points
+ * spread over the other nine. The skill-points breakdown line states both halves out loud rather than
+ * leaving a GM to discover the split.
+ *
+ * NAMES are `template.json` schema keys, never English display names. Six are the book abbreviating
+ * its own p.45 MASTER SKILL LIST inside p.44's narrow columns, each resolved from that same page:
+ * `Weapons Tech`→`Weaponsmith` (the one interpretive rename — ACCEPTED by the user 2026-08-14, and
+ * the only "Weapons"-ish entry in the 89-key schema), `Drive`→`Driving`,
+ * `Education`→`EducationGeneralKnowledge`, `Persuasion`→`PersuasionFastTalk`,
+ * `Diagnose`→`DiagnoseIllness`, and the page's own print artifact `Credlblllty`→`Credibility`.
+ *
+ * TWO CHOICE CLAUSES the page prints, both resolved:
+ *  - SOLO slot 4 is *"Brawling or Martial Arts"* → **Brawling**, the extraction's own §4
+ *    recommendation: the pack ships no bare "Martial Arts" item, only 20 `Martial Arts: <style>`
+ *    entries, so the martial-arts branch cannot be taken without also picking a style. One key change
+ *    reopens it if the user ever wants the other branch.
+ *  - TECHIE slots 8-10 are *"Any three other Tech Skills (Gyro, Aero, Weapons, Elect. Security)"* →
+ *    the **NARROW** reading, ruled in 2026-08-14: draw 3 of exactly those 4, not 3 of the 17
+ *    TECH-governed schema keys (which would let a goon Techie roll `PaintOrDraw`).
+ *
+ * ⛔ NETRUNNER's package is transcribed for completeness and the ROLE stays out of `GENERATOR_ROLES`
+ * — it arrives with the netrunning pass. Carrying the data costs nothing; re-deriving it later would
+ * cost another extraction.
  */
-export const CAREER_SPINE = [
-  { key: "Handgun", stat: "ref", combat: true },
-  { key: "Rifle", stat: "ref", combat: true },
-  { key: "Submachinegun", stat: "ref", combat: true },
-  { key: "HeavyWeapons", stat: "ref", combat: true },
-  { key: "Melee", stat: "ref", combat: true },
-  { key: "Brawling", stat: "ref", combat: true },
-  { key: "DodgeEscape", stat: "ref", combat: true },
-  { key: "AwarenessNotice", stat: "int", combat: true },
-  { key: "Athletics", stat: "ref" },
-  { key: "Stealth", stat: "ref" },
-  { key: "Endurance", stat: "bt" },
-  { key: "Driving", stat: "ref" },
-  { key: "Streetwise", stat: "cool" },
-  { key: "Intimidate", stat: "cool" },
-  { key: "Interrogation", stat: "cool" },
-  { key: "ResistTortureDrugs", stat: "cool" },
-  { key: "BasicTech", stat: "tech" },
-  { key: "Electronics", stat: "tech" },
-  { key: "FirstAid", stat: "tech" },
-  { key: "HumanPerception", stat: "emp" },
-  { key: "PersuasionFastTalk", stat: "emp" },
-  { key: "Leadership", stat: "emp" },
-  { key: "EducationGeneralKnowledge", stat: "int" },
-  { key: "LibrarySearch", stat: "int" },
-  { key: "PersonalGrooming", stat: "attr" },
-  { key: "WardrobeStyle", stat: "attr" },
-];
+export const CAREER_PACKAGES = {
+  solo:      { special: "CombatSense",           skills: ["AwarenessNotice", "Handgun", "Brawling", "Melee", "Weaponsmith", "Rifle", "Athletics", "Submachinegun", "Stealth"] },
+  cop:       { special: "Authority",             skills: ["AwarenessNotice", "Handgun", "HumanPerception", "Athletics", "EducationGeneralKnowledge", "Brawling", "Melee", "Interrogation", "Streetwise"] },
+  corp:      { special: "Resources",             skills: ["AwarenessNotice", "HumanPerception", "EducationGeneralKnowledge", "LibrarySearch", "Social", "PersuasionFastTalk", "StockMarket", "WardrobeStyle", "PersonalGrooming"] },
+  fixer:     { special: "Streetdeal",            skills: ["AwarenessNotice", "Forgery", "Handgun", "Brawling", "Melee", "PickLock", "PickPocket", "Intimidate", "PersuasionFastTalk"] },
+  nomad:     { special: "Family",                skills: ["AwarenessNotice", "Endurance", "Melee", "Rifle", "Driving", "BasicTech", "WildernessSurvival", "Brawling", "Athletics"] },
+  techie:    { special: "JuryRig",               skills: ["AwarenessNotice", "BasicTech", "Cybertech", "Teaching", "EducationGeneralKnowledge", "Electronics"],
+               choose:  { count: 3, from: ["GyroTech", "AeroTech", "Weaponsmith", "ElectronicSecurity"] } },
+  medtechie: { special: "MedicalTech",           skills: ["AwarenessNotice", "BasicTech", "DiagnoseIllness", "EducationGeneralKnowledge", "CryotankOperation", "LibrarySearch", "Pharmaceuticals", "Zoology", "HumanPerception"] },
+  media:     { special: "Credibility",           skills: ["AwarenessNotice", "Composition", "EducationGeneralKnowledge", "PersuasionFastTalk", "HumanPerception", "Social", "Streetwise", "PhotoFilm", "Interview"] },
+  rocker:    { special: "CharismaticLeadership", skills: ["AwarenessNotice", "Perform", "WardrobeStyle", "Composition", "Brawling", "PlayInstrument", "Streetwise", "PersuasionFastTalk", "Seduction"] },
+  netrunner: { special: "Interface",             skills: ["AwarenessNotice", "BasicTech", "EducationGeneralKnowledge", "SystemKnowledge", "Cybertech", "CyberdeckDesign", "Composition", "Electronics", "Programming"] },
+};
+
+/**
+ * THE GOVERNING STAT OF EVERY KEY THE PACKAGES USE — read out of the base system's `template.json`
+ * (`Actor.templates.skills.skills.<key>.stat`), not assumed. It is here rather than fetched because
+ * this file is PURE: it must run under plain `node` with no Foundry and no world. A key whose stat
+ * changed upstream would show up as a role weight that stopped biting, which the package legs in
+ * tests/npcgen-goonfactory.test.mjs would not catch — so this table is worth re-reading against
+ * `template.json` whenever the base system's skill schema moves.
+ */
+const SKILL_STATS = {
+  AwarenessNotice: "int", Handgun: "ref", Brawling: "ref", Melee: "ref", Weaponsmith: "tech",
+  Rifle: "ref", Athletics: "ref", Submachinegun: "ref", Stealth: "ref", HumanPerception: "emp",
+  EducationGeneralKnowledge: "int", Interrogation: "cool", Streetwise: "cool", LibrarySearch: "int",
+  Social: "emp", PersuasionFastTalk: "emp", StockMarket: "int", WardrobeStyle: "attr",
+  PersonalGrooming: "attr", Forgery: "tech", PickLock: "tech", PickPocket: "tech", Intimidate: "cool",
+  Endurance: "bt", Driving: "ref", BasicTech: "tech", WildernessSurvival: "int", Cybertech: "tech",
+  Teaching: "int", Electronics: "tech", DiagnoseIllness: "int", CryotankOperation: "tech",
+  Pharmaceuticals: "tech", Zoology: "int", Composition: "int", PhotoFilm: "tech", Interview: "emp",
+  Perform: "emp", PlayInstrument: "tech", Seduction: "emp", SystemKnowledge: "int",
+  CyberdeckDesign: "tech", Programming: "int", GyroTech: "tech", AeroTech: "tech",
+  ElectronicSecurity: "tech",
+};
+
+/**
+ * The flat combat bonus survives the package swap unchanged (§2.4's remainder weighting): the
+ * generator's whole premise is a fighting NPC, so a package's weapon skills draw harder than its
+ * Personal Grooming. Only keys that actually appear in a p.44 package are listed — the retired
+ * spine's `HeavyWeapons`/`DodgeEscape` are in no printed package and are gone with it.
+ */
+const COMBAT_SKILL_KEYS = new Set(["Handgun", "Rifle", "Submachinegun", "Melee", "Brawling", "AwarenessNotice"]);
+
+/**
+ * RESOLVE A ROLE'S PACKAGE TO NINE CONCRETE KEYS, drawing any free-choice slots from `rng`.
+ *
+ * Only Techie has a choice clause today, so for every other role this is a copy. The draw is WITHOUT
+ * replacement (the book says "any three OTHER Tech Skills" — three distinct ones), and with no `rng`
+ * it takes the pool's own order, which is what makes the table inspectable from a test or a UI
+ * without inventing a random stream.
+ */
+export function careerPackage(role, rng = null) {
+  const pkg = CAREER_PACKAGES[String(role ?? "")] ?? CAREER_PACKAGES.solo;
+  const skills = [...pkg.skills];
+  const chosen = [];
+  if (pkg.choose) {
+    const pool = [...pkg.choose.from];
+    for (let i = 0; i < pkg.choose.count && pool.length; i++) {
+      const draw = typeof rng === "function" ? (Number(rng()) || 0) : 0;
+      const idx = Math.min(Math.max(Math.floor(draw * pool.length), 0), pool.length - 1);
+      chosen.push(pool.splice(idx, 1)[0]);
+    }
+    skills.push(...chosen);
+  }
+  return { special: pkg.special, skills, chosen };
+}
 
 /** The weapon-TYPE fallback when a weapon's own `attackSkill` cannot be used. */
 const WEAPON_TYPE_SKILL = {
@@ -931,8 +992,21 @@ const WEAPON_TYPE_SKILL = {
  */
 const ATTACK_SKILL_ALIASES = { "драка": "Brawling", "ближний бой": "Melee" };
 
-/** Every schema key the spine knows, for validating a weapon's declared attack skill. */
-const SPINE_KEYS = new Set(CAREER_SPINE.map((s) => s.key));
+/**
+ * The schema keys a weapon's own `attackSkill` may legitimately name. This used to be "every key the
+ * interim spine knew", which stopped being a sensible set the moment the packages became per-role —
+ * a Corporate package has no Handgun, and the weapon a Corp goon draws must still resolve.
+ *
+ * The list is the live data's, not a guess: every `attackSkill` value in the base system's packs and
+ * in this module's own pack sources was enumerated, and the Latin ones are exactly
+ * Handgun · Rifle · Submachinegun · Heavy Weapons · Melee · Brawling · Fencing · Archery (plus the
+ * Cyrillic strings the alias table below handles). `Fencing` and `Archery` are deliberately ABSENT:
+ * the retired spine did not carry them either, so they keep resolving through the weapon TYPE and
+ * this edit moves no weapon's guarantee. Adding them is a separate, deliberate change.
+ */
+const WEAPON_ATTACK_SKILL_KEYS = new Set([
+  "Handgun", "Rifle", "Submachinegun", "HeavyWeapons", "Melee", "Brawling",
+]);
 
 /**
  * §2.4: "the grade's weapon-skill guarantee attaches to the governing skill of the ACTUALLY-PULLED
@@ -948,7 +1022,7 @@ export function weaponGoverningSkill(weapon) {
   if (raw) {
     const compact = raw.replace(/[^A-Za-z]/g, "");
     if (compact) {
-      const direct = [...SPINE_KEYS].find((k) => k.toLowerCase() === compact.toLowerCase());
+      const direct = [...WEAPON_ATTACK_SKILL_KEYS].find((k) => k.toLowerCase() === compact.toLowerCase());
       if (direct) return direct;
     }
     const alias = ATTACK_SKILL_ALIASES[raw.toLowerCase()];
@@ -963,15 +1037,20 @@ export function weaponGoverningSkill(weapon) {
  *
  * Three things happen, in this order, and the order is the book's:
  *  1. the GUARANTEE — the grade's weapon-skill points floor the pulled weapon's governing skill;
- *  2. the REMAINDER — spent over the package, weighted by the role's stat vector (and the outfit's
- *     skill-bias vector, which per the outfit prep re-weights only the remainder and never adds a
- *     skill outside package + bias);
+ *  2. the REMAINDER — spent over the role's p.44 CAREER PACKAGE (`CAREER_PACKAGES`), weighted by the
+ *     role's stat vector (and the outfit's skill-bias vector, which per the outfit prep re-weights
+ *     only the remainder and never adds a skill outside package + bias);
  *  3. the SPECIAL ABILITY — auto-levelled at the grade's skill points, with NO control (§1) and
- *     OUTSIDE the point pool, because the book's rule is that every character HAS one, not that they
- *     bought it out of the same 40.
+ *     OUTSIDE the point pool. This is the ruled deviation written up at `CAREER_PACKAGES`: the book
+ *     buys it out of the same 40, we hand it the grade instead.
  *
  * `spent` therefore equals the slider's total exactly; the special ability's level is reported
  * separately so a preview can show both without double counting.
+ *
+ * ⚠ THE PACKAGES ARE NARROW — nine skills, and most of them carry no weapon skill at all. The
+ * guarantee is what puts a weapon skill on a Corporate or a Media goon, so the "push the guarantee's
+ * skill in if the package lacks it" line below is now the COMMON path, not the edge case it was
+ * under the old 26-key spine. Remove it and half the roles stop being able to shoot.
  */
 export function allocateGoonSkills({ total, gradeKey, role = "solo", primaryWeapon = null, rng, skillBias = {} }) {
   const g = gradeOf(gradeKey);
@@ -979,14 +1058,15 @@ export function allocateGoonSkills({ total, gradeKey, role = "solo", primaryWeap
   const breakdown = skillPointBreakdown(total, gradeKey);
   const guaranteeSkill = weaponGoverningSkill(primaryWeapon);
   const ranked = ROLE_WEIGHTS[role] ?? [];
+  const pkg = careerPackage(role, rng);
 
   // Role weight through the GOVERNING STAT: primary +3, secondary +2, tertiary +1. Combat skills
   // carry a flat +2 on top, because the generator's whole premise is a fighting NPC.
-  const entries = CAREER_SPINE.map((s) => {
-    const rank = ranked.indexOf(s.stat);
+  const entries = pkg.skills.map((key) => {
+    const rank = ranked.indexOf(SKILL_STATS[key]);
     return {
-      key: s.key,
-      weight: 1 + (s.combat ? 2 : 0) + (rank >= 0 ? 3 - rank : 0) + (Number(skillBias?.[s.key]) || 0),
+      key,
+      weight: 1 + (COMBAT_SKILL_KEYS.has(key) ? 2 : 0) + (rank >= 0 ? 3 - rank : 0) + (Number(skillBias?.[key]) || 0),
     };
   });
   // The guarantee's skill must be IN the package, or the floor has nowhere to land.
@@ -994,7 +1074,7 @@ export function allocateGoonSkills({ total, gradeKey, role = "solo", primaryWeap
 
   const alloc = allocateSkills(breakdown.total, entries, rng, { floors: { [guaranteeSkill]: gradePts } });
 
-  const specialKey = ROLE_SPECIAL_ABILITY[role] ?? null;
+  const specialKey = pkg.special ?? ROLE_SPECIAL_ABILITY[role] ?? null;
   const skillLevels = [...alloc.skillLevels];
   if (specialKey) skillLevels.push({ skillKey: specialKey, level: gradePts });
 
@@ -1004,6 +1084,8 @@ export function allocateGoonSkills({ total, gradeKey, role = "solo", primaryWeap
     unspent: alloc.unspent,
     breakdown,
     guarantee: { skillKey: guaranteeSkill, points: gradePts },
+    careerSkills: pkg.skills,
+    freeChoices: pkg.chosen,
     specialAbilityKey: specialKey,
     specialAbilityLevel: specialKey ? gradePts : 0,
   };

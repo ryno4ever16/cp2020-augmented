@@ -934,6 +934,190 @@ section("§2 pipeline", BP, () => {
     assert.equal(plan.spent, 40);
   });
 
+  // ─────────────────────────────────────────────────────────────────────────────────────────────
+  // §2.4 THE BOOK'S CAREER SKILL PACKAGES (Core p.44)
+  //
+  // The expectation is transcribed HERE, independently of the module, from the two-channel
+  // text-layer extraction `import-staging/CAREER-PACKAGES-P44.md` §4 PATCH-READY — so these legs
+  // fail if the shipped table drifts from the page, not merely if it changes shape. They were run
+  // RED against the interim stat-weighted combat spine that shipped with the window rebuild.
+  //
+  // The BOOK prints ten entries per role: slot 1 the special ability, slot 2 Awareness/Notice, then
+  // eight more. What the module stores is the OTHER NINE — the special ability is levelled at the
+  // grade, outside the point pool (the ruled deviation), and the arithmetic leg below pins that.
+  // ─────────────────────────────────────────────────────────────────────────────────────────────
+  const P44 = {
+    solo:      ["AwarenessNotice", "Handgun", "Brawling", "Melee", "Weaponsmith", "Rifle", "Athletics", "Submachinegun", "Stealth"],
+    cop:       ["AwarenessNotice", "Handgun", "HumanPerception", "Athletics", "EducationGeneralKnowledge", "Brawling", "Melee", "Interrogation", "Streetwise"],
+    corp:      ["AwarenessNotice", "HumanPerception", "EducationGeneralKnowledge", "LibrarySearch", "Social", "PersuasionFastTalk", "StockMarket", "WardrobeStyle", "PersonalGrooming"],
+    fixer:     ["AwarenessNotice", "Forgery", "Handgun", "Brawling", "Melee", "PickLock", "PickPocket", "Intimidate", "PersuasionFastTalk"],
+    nomad:     ["AwarenessNotice", "Endurance", "Melee", "Rifle", "Driving", "BasicTech", "WildernessSurvival", "Brawling", "Athletics"],
+    medtechie: ["AwarenessNotice", "BasicTech", "DiagnoseIllness", "EducationGeneralKnowledge", "CryotankOperation", "LibrarySearch", "Pharmaceuticals", "Zoology", "HumanPerception"],
+    media:     ["AwarenessNotice", "Composition", "EducationGeneralKnowledge", "PersuasionFastTalk", "HumanPerception", "Social", "Streetwise", "PhotoFilm", "Interview"],
+    rocker:    ["AwarenessNotice", "Perform", "WardrobeStyle", "Composition", "Brawling", "PlayInstrument", "Streetwise", "PersuasionFastTalk", "Seduction"],
+  };
+  /** Techie is the one package the page does not fully name: six fixed + "any three other Tech Skills". */
+  const TECHIE_FIXED = ["AwarenessNotice", "BasicTech", "Cybertech", "Teaching", "EducationGeneralKnowledge", "Electronics"];
+  /** The NARROW reading, ruled in 2026-08-14: exactly the four the page prints in its parenthetical. */
+  const TECHIE_CHOICES = ["GyroTech", "AeroTech", "Weaponsmith", "ElectronicSecurity"];
+  /** Keys the retired interim spine carried that appear in NO p.44 package — the drift detector. */
+  const RETIRED_SPINE_ONLY = ["HeavyWeapons", "DodgeEscape", "ResistTortureDrugs", "FirstAid", "Leadership"];
+  const PISTOL = { name: "Colt AMT", attackSkill: "Handgun", weaponType: "Pistol" };
+
+  leg("each role's career package is the book's nine, in the book's own order", () => {
+    for (const [role, want] of Object.entries(P44)) {
+      assert.deepEqual(BP.CAREER_PACKAGES[role]?.skills, want, `${role} package drifted`);
+    }
+    assert.deepEqual(BP.CAREER_PACKAGES.techie?.skills, TECHIE_FIXED);
+    assert.deepEqual(BP.CAREER_PACKAGES.techie?.choose?.from, TECHIE_CHOICES);
+    assert.equal(BP.CAREER_PACKAGES.techie?.choose?.count, 3);
+  });
+
+  leg("slot 2 of every package is Awareness/Notice — the p.44 universal", () => {
+    for (const [role, pkg] of Object.entries(BP.CAREER_PACKAGES)) {
+      assert.equal(pkg.skills[0], "AwarenessNotice", `${role} does not open on Awareness/Notice`);
+      assert.equal(pkg.skills.length + (pkg.choose?.count ?? 0), 9, `${role} is not nine skills`);
+    }
+  });
+
+  leg("the package's slot-1 special ability is the role's own — the two tables cannot drift apart", () => {
+    for (const [role, key] of Object.entries(GR.ROLE_SPECIAL_ABILITY)) {
+      assert.equal(BP.CAREER_PACKAGES[role]?.special, key, `${role} special ability drifted`);
+    }
+  });
+
+  leg("netrunner's package is transcribed but the ROLE stays out of the generator", () => {
+    assert.ok(BP.CAREER_PACKAGES.netrunner, "the netrunner package was not transcribed");
+    assert.equal(BP.CAREER_PACKAGES.netrunner.special, "Interface");
+    assert.ok(!GR.GENERATOR_ROLES.includes("netrunner"), "netrunner was enabled as a role");
+  });
+
+  leg("Solo's either/or slot resolves to Brawling, and Martial Arts is not in the package", () => {
+    assert.ok(BP.CAREER_PACKAGES.solo.skills.includes("Brawling"));
+    assert.ok(!BP.CAREER_PACKAGES.solo.skills.includes("MartialArts"));
+  });
+
+  leg("a Solo goon spends ONLY on the Solo package, its pulled weapon's skill and its special ability", () => {
+    const allowed = new Set([...P44.solo, "Handgun", "CombatSense"]);
+    for (let s = 0; s < 40; s++) {
+      const plan = BP.allocateGoonSkills({
+        total: 40, gradeKey: "B", role: "solo", primaryWeapon: PISTOL, rng: BP.seededRng(s),
+      });
+      for (const { skillKey } of plan.skillLevels) {
+        assert.ok(allowed.has(skillKey), `seed ${s}: ${skillKey} is outside the Solo career package`);
+      }
+    }
+  });
+
+  leg("… and the package's own skills really receive points — Weaponsmith, the ruled rename, lands", () => {
+    let seedsWithPoints = 0;
+    let totalPoints = 0;
+    for (let s = 0; s < 40; s++) {
+      const plan = BP.allocateGoonSkills({
+        total: 40, gradeKey: "B", role: "solo", primaryWeapon: PISTOL, rng: BP.seededRng(s),
+      });
+      const w = plan.skillLevels.find((x) => x.skillKey === "Weaponsmith");
+      if (w && w.level > 0) { seedsWithPoints++; totalPoints += w.level; }
+    }
+    assert.ok(seedsWithPoints >= 30, `Weaponsmith took points in only ${seedsWithPoints}/40 seeds`);
+    assert.ok(totalPoints >= 40, `Weaponsmith took only ${totalPoints} points across 40 goons`);
+  });
+
+  leg("the retired interim spine is gone: no role spends on a spine-only skill", () => {
+    for (const role of GR.GENERATOR_ROLES) {
+      for (let s = 0; s < 20; s++) {
+        const plan = BP.allocateGoonSkills({
+          total: 40, gradeKey: "A", role, primaryWeapon: PISTOL, rng: BP.seededRng(s),
+        });
+        for (const { skillKey } of plan.skillLevels) {
+          assert.ok(!RETIRED_SPINE_ONLY.includes(skillKey),
+            `${role} seed ${s}: ${skillKey} is a retired-spine skill, not a p.44 career skill`);
+        }
+      }
+    }
+  });
+
+  leg("every role's spend stays inside its OWN package (a Corp goon never rolls Submachinegun)", () => {
+    for (const [role, want] of Object.entries(P44)) {
+      const allowed = new Set([...want, "Handgun", GR.ROLE_SPECIAL_ABILITY[role]]);
+      for (let s = 0; s < 20; s++) {
+        const plan = BP.allocateGoonSkills({
+          total: 40, gradeKey: "C", role, primaryWeapon: PISTOL, rng: BP.seededRng(s),
+        });
+        for (const { skillKey } of plan.skillLevels) {
+          assert.ok(allowed.has(skillKey), `${role} seed ${s}: ${skillKey} is outside its own package`);
+        }
+      }
+    }
+  });
+
+  leg("Techie's three free slots land ONLY within the four Tech skills the page names", () => {
+    for (let s = 0; s < 60; s++) {
+      const pkg = BP.careerPackage("techie", BP.seededRng(s));
+      assert.equal(pkg.skills.length, 9, `seed ${s}: techie package is ${pkg.skills.length} skills`);
+      assert.deepEqual(pkg.skills.slice(0, 6), TECHIE_FIXED, `seed ${s}: the fixed six moved`);
+      assert.equal(pkg.chosen.length, 3, `seed ${s}: ${pkg.chosen.length} free slots, not 3`);
+      assert.equal(new Set(pkg.chosen).size, 3, `seed ${s}: a free slot repeated: ${pkg.chosen}`);
+      for (const k of pkg.chosen) {
+        assert.ok(TECHIE_CHOICES.includes(k), `seed ${s}: ${k} is outside the four named Tech skills`);
+      }
+    }
+  });
+
+  leg("… the free choice genuinely varies across seeds rather than being pinned", () => {
+    const combos = new Set();
+    for (let s = 0; s < 60; s++) combos.add([...BP.careerPackage("techie", BP.seededRng(s)).chosen].sort().join("+"));
+    assert.ok(combos.size >= 2, `the Techie free choice produced only ${combos.size} combination(s): ${[...combos]}`);
+    assert.ok(combos.size <= 4, `more combinations than 3-of-4 allows: ${[...combos]}`);
+  });
+
+  leg("… and the BROAD tech reading is NOT what ships (no goon Techie paints or does demolitions)", () => {
+    const broadOnly = ["PaintOrDraw", "Demolitions", "Disguise", "AVTech", "PhotoFilm"];
+    let seedsWithANarrowChoice = 0;
+    for (let s = 0; s < 40; s++) {
+      const plan = BP.allocateGoonSkills({
+        total: 40, gradeKey: "B", role: "techie", primaryWeapon: PISTOL, rng: BP.seededRng(s),
+      });
+      const keys = plan.skillLevels.map((x) => x.skillKey);
+      for (const k of keys) assert.ok(!broadOnly.includes(k), `seed ${s}: ${k} came from the broad TECH set`);
+      if (keys.some((k) => TECHIE_CHOICES.includes(k))) seedsWithANarrowChoice++;
+    }
+    // The positive half: the free slots are not merely absent from the broad set, they are PRESENT
+    // from the narrow one — a Techie who never rolls any of the four would pass the negative alone.
+    assert.ok(seedsWithANarrowChoice >= 30,
+      `only ${seedsWithANarrowChoice}/40 Techies took points in any of the four named Tech skills`);
+  });
+
+  leg("the special ability sits OUTSIDE the pool: the nine take the slider total, the SA takes the grade", () => {
+    const plan = BP.allocateGoonSkills({
+      total: 40, gradeKey: "B", role: "media", primaryWeapon: PISTOL, rng: BP.seededRng(11),
+    });
+    const saKey = GR.ROLE_SPECIAL_ABILITY.media;                     // Credibility
+    const sa = plan.skillLevels.find((x) => x.skillKey === saKey);
+    assert.ok(sa, "the Media special ability is absent");
+    assert.equal(sa.level, GR.GRADES.B.skillPts);                    // the grade's own points, 8
+    assert.equal(plan.specialAbilityLevel, GR.GRADES.B.skillPts);
+    // The arithmetic: package + reserved guarantee = the slider total, and the SA is on top of it.
+    const packageSpend = plan.skillLevels.filter((x) => x.skillKey !== saKey).reduce((a, x) => a + x.level, 0);
+    assert.equal(packageSpend, 40, `the nine spent ${packageSpend}, not the slider's 40`);
+    assert.equal(plan.spent, 40);
+    assert.equal(plan.skillLevels.reduce((a, x) => a + x.level, 0), 48,
+      "the SA is being paid for out of the 40 — it must be extra");
+    // The SA appears exactly once: it is never also a package entry taking a second helping.
+    assert.equal(plan.skillLevels.filter((x) => x.skillKey === saKey).length, 1);
+  });
+
+  leg("… and the guarantee still lands even when the role's package carries no weapon skill", () => {
+    const plan = BP.allocateGoonSkills({
+      total: 40, gradeKey: "A", role: "corp", primaryWeapon: PISTOL, rng: BP.seededRng(5),
+    });
+    assert.ok(!P44.corp.includes("Handgun"), "the Corp package should have no weapon skill");
+    assert.equal(plan.guarantee.skillKey, "Handgun");
+    assert.equal(plan.guarantee.points, GR.GRADES.A.skillPts);
+    assert.ok(plan.skillLevels.find((x) => x.skillKey === "Handgun").level >= 10);
+    assert.equal(plan.spent, 40);
+  });
+
   // ── §2.7 naming ──
   leg("the name pattern is {Outfit|Role} {Grade}-{n}", () => {
     assert.equal(BP.goonName("City Police — Patrol", "C", 3), "City Police — Patrol C-3");

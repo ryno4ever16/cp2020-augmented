@@ -111,6 +111,11 @@ const r = await p.evaluate(async () => {
     const bd = root2.querySelector(".cp-goon-breakdown")?.textContent ?? "";
     check("the skill-point breakdown line states BOTH halves for grade B (40 / 8 reserved / 32)",
       /40/.test(bd) && /8/.test(bd) && /32/.test(bd), bd.trim());
+    // ⭐ THE SPLIT IS DISCLOSED. The role's special ability is levelled at the grade OUTSIDE the
+    // slider's points (the ruled deviation from the printed 40-point rule) — a GM who is only told
+    // "32 to the role package" cannot see that. The line has to say it.
+    check("… and it discloses that the special ability sits at the grade, outside the pool",
+      /special ability/i.test(bd) && /outside/i.test(bd), bd.trim());
 
     // ⭐ LOCKED CONTROLS ARE TRULY INERT. Force a value onto a DISABLED input and prove it never
     // reaches the plan — a window that read its disabled inputs would silently honour this.
@@ -216,6 +221,30 @@ const r = await p.evaluate(async () => {
     const sa = skillItems.find(i => norm(i.name) === norm("CombatSense"));
     check("the role's special ability was granted and auto-levelled at the grade's points",
       Number(sa?.system?.level) === GR.GRADES.B.skillPts, { level: sa?.system?.level, need: GR.GRADES.B.skillPts });
+
+    // ⭐ THE BOOK'S CAREER PACKAGE, ON THE REAL ACTOR (Core p.44 via CAREER-PACKAGES-P44.md). The
+    // expectation is transcribed here rather than read back from the module, so a table that drifts
+    // from the page fails on the SHIPPED actor and not merely in the pure suite.
+    const SOLO_P44 = ["AwarenessNotice","Handgun","Brawling","Melee","Weaponsmith","Rifle","Athletics","Submachinegun","Stealth"];
+    const allowedSkillTokens = new Set([...SOLO_P44, wantSkill, "CombatSense"].map(norm));
+    const levelledStrays = skillItems
+      .filter(i => Number(i.system?.level) > 0)
+      .map(i => i.name)
+      .filter(n => !allowedSkillTokens.has(norm(n)));
+    check("every levelled skill on the created goon comes from the book's Solo career package",
+      levelledStrays.length === 0, levelledStrays);
+    out.notes.soloLevelled = skillItems.filter(i => Number(i.system?.level) > 0)
+      .map(i => `${i.name} ${i.system.level}`);
+
+    // The POSITIVE half: a package entry the retired interim spine never carried really takes points.
+    // Weaponsmith is also the one interpretive rename on the page ("Weapons Tech"), so this is the
+    // leg that proves the rename reached a real sheet.
+    const weaponsmithSomewhere = made
+      .map(m => game.actors.get(m.id))
+      .some(a => a.items.some(i => i.type === "skill" && norm(i.name) === norm("Weaponsmith")
+        && Number(i.system?.level) > 0));
+    check("the Solo package's Weaponsmith really receives points on a generated sheet",
+      weaponsmithSomewhere, out.notes.soloLevelled);
 
     // We never DOUBLE skills: the base grants ~103 and the generator updates, never re-creates.
     const dupes = skillItems.map(i => norm(i.name)).filter((v,i,arr) => arr.indexOf(v) !== i);

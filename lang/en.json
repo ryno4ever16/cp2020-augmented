@@ -2344,8 +2344,8 @@
         "10": "10: Very Strong — BTM −4, save threshold 10"
       },
       "SkillPointsLabel": "Skill points",
-      "SkillBreakdown": "{total} — {reserved} reserved for weapon skill (grade {grade}) · {rest} to the role package",
-      "SkillReservedHint": "The reserved zone is the threat level's weapon-skill guarantee. It attaches to whichever weapon the goon actually draws, and the total cannot go below it.",
+      "SkillBreakdown": "{total} — {reserved} reserved for weapon skill (grade {grade}) · {rest} to the role package · special ability at {special}, outside the pool",
+      "SkillReservedHint": "The reserved zone is the threat level's weapon-skill guarantee. It attaches to whichever weapon the goon actually draws, and the total cannot go below it. The role's career package is the book's own nine skills for that role; the special ability is not paid for out of these points — it is set to the threat level's own value.",
       "StatPoolLabel": "Stat pool",
       "PoolBreakdown": "{pool} — {reserved} reserved for REF and BODY · {free} spread across the remaining stats",
       "PoolTick": {
