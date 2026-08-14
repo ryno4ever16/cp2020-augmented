@@ -65,12 +65,54 @@ const res = await page.evaluate(async () => {
   ok("apply: BASE actor untouched", dmg1.base === dmg0.base, `base ${dmg1.base}`);
 
   // ---- 3. wound-severity flags land on the struck token's actor (assessWoundSeverity re-fetch fix) ----
+  // The severity branch that runs is chosen by a WORLD setting (`limbModel`), so this keeper PINS it
+  // for every leg below and restores it at cleanup — the same discipline as the `limbLossEnabled`
+  // pin. Left unpinned, these legs' verdicts tracked whatever model the rig world happened to sit on
+  // rather than the code under test, which is exactly how a green suite went red with no code change.
   try { await game.settings.set(NS, "limbLossEnabled", true); } catch (e) {}
+  const modelWas = (() => { try { return game.settings.get(NS, "limbModel"); } catch { return null; } })();
+  const rerollWas = (() => { try { return game.settings.get(NS, "rerollGoneLimbLocation"); } catch { return null; } })();
+  const sevMsgsBefore = new Set(game.messages.map(m => m.id));
+
+  try { await game.settings.set(NS, "limbModel", "w4rst4r"); } catch (e) {}
   await DA.assessWoundSeverity(actorA, "rArm", 9, { token: canvas.tokens.get(tokA.id) });
   const fsA = actorA.getFlag(NS, "fleshLimbStatus") ?? {};
   const fsBase = base.getFlag(NS, "fleshLimbStatus") ?? {};
-  ok("severity: flag on token A's actor", !!fsA.rArm, JSON.stringify(fsA));
+  ok("severity: record on token A's actor, by VALUE (w4rst4r band, 9 net)", fsA.rArm === "disabled", JSON.stringify(fsA));
   ok("severity: base actor clean", !fsBase.rArm, JSON.stringify(fsBase));
+
+  // ---- 3b. the CORE branch records the struck limb too (>8 net in one wound = the limb is gone) ----
+  // Before this, Core wrote nothing at all, so every model-agnostic reader of `fleshLimbStatus` (the
+  // sheet's limb label, the gone-limb re-roll, the cyberlimb-under check) went blind under the default
+  // model. Assert the recorded VALUE, the sibling key it must not clobber, and the negative band.
+  try { await game.settings.set(NS, "limbModel", "core"); } catch (e) {}
+  await DA.assessWoundSeverity(actorA, "lLeg", 9, { token: canvas.tokens.get(tokA.id) });
+  const fsCore = actorA.getFlag(NS, "fleshLimbStatus") ?? {};
+  ok("severity (core): over-threshold zone recorded severed, by VALUE", fsCore.lLeg === "severed", JSON.stringify(fsCore));
+  ok("severity (core): the previously recorded zone survives the write (whole-object merge)",
+     fsCore.rArm === "disabled", JSON.stringify(fsCore));
+  ok("severity (core): base actor still clean", !(base.getFlag(NS, "fleshLimbStatus") ?? {}).lLeg,
+     JSON.stringify(base.getFlag(NS, "fleshLimbStatus") ?? {}));
+
+  // Negative: 8 net is AT the threshold, not over it — nothing is recorded for that zone.
+  await DA.assessWoundSeverity(actorA, "rLeg", 8, { token: canvas.tokens.get(tokA.id) });
+  const fsCoreNeg = actorA.getFlag(NS, "fleshLimbStatus") ?? {};
+  ok("severity (core): a wound at the threshold records nothing for that zone (negative)",
+     fsCoreNeg.rLeg === undefined, JSON.stringify(fsCoreNeg));
+
+  // The reader the record exists for: with the re-roll toggle on, a hit rolled onto the gone zone is
+  // moved off it under Core — the behavior that silently did nothing while Core recorded nothing.
+  try { await game.settings.set(NS, "rerollGoneLimbLocation", true); } catch (e) {}
+  const moved = await U.rerollGoneLimbAreaDamages(actorA, { lLeg: [{ damage: 5 }], Torso: [{ damage: 3 }] });
+  const movedCount = Object.values(moved).reduce((n, hits) => n + hits.length, 0);
+  ok("severity (core): the gone-zone reader relocates a hit off the recorded zone",
+     moved.lLeg === undefined && movedCount === 2 && (moved.Torso ?? []).length >= 1, JSON.stringify(moved));
+  const stays = await U.rerollGoneLimbAreaDamages(actorA, { rLeg: [{ damage: 5 }] });
+  ok("severity (core): a hit on an unrecorded zone is left alone (negative)",
+     (stays.rLeg ?? []).length === 1, JSON.stringify(stays));
+  if (rerollWas !== null) { try { await game.settings.set(NS, "rerollGoneLimbLocation", rerollWas); } catch (e) {} }
+  if (modelWas !== null) { try { await game.settings.set(NS, "limbModel", modelWas); } catch (e) {} }
+  for (const m of game.messages.filter(m => !sevMsgsBefore.has(m.id))) { try { await m.delete(); } catch (e) {} }
 
   // ---- 4. the GM-side relay resolution shape (what the socket handler now does) ----
   const relayResolved = U.resolveActorRef({

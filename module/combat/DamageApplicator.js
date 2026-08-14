@@ -235,7 +235,14 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   }
 
   // Core: a single hit of > 8 net to a limb severs/crushes it → immediate Death Save at Mortal 0.
+  // The loss is RECORDED, same flag and same whole-object write as the other two models: Core's own
+  // rule says the limb is gone, and the readers of `fleshLimbStatus` are model-agnostic (the sheet's
+  // limb label, the gone-limb re-roll in utils.js, the cyberlimb severed-under check) — leaving Core
+  // chat-only made all three go blind under the default model.
   if (netDamage > 8) {
+    const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
+    cur[location] = "severed";
+    await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
     const content = await renderChatCard("limb-wound.hbs", {
       title:           localizeParam("LimbWoundLossTitle", { name: liveTarget.name }),
       locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
