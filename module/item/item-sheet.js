@@ -784,6 +784,8 @@ async _prepareCyberware(sheet) {
     this._cpActivateCyberwareBasicControls(root);
     this._cpActivateCyberwareMechanicTypeControls(root);
     this._cpActivateCyberwareSkillSearchControls(root);
+    this._cpActivateCyberwareSyncControls(root);
+    this._cpActivateCyberwareSiblingRefresh();
     this._cpActivateSkillItemControls(root);
 
     // Net-new feature controls (not on upstream): ammo system, vehicle-weapon shells,
@@ -1565,6 +1567,245 @@ async _prepareCyberware(sheet) {
     this._cpCyberwareSkillSearchClickHandler = handleSkillRemove;
   }
 
+  _cpRemoveCyberwareSyncListeners() {
+    try {
+      if (this._cpCyberwareSyncRoot && this._cpCyberwareSyncHandler) {
+        this._cpCyberwareSyncRoot.removeEventListener("change", this._cpCyberwareSyncHandler, true);
+      }
+    } catch (_) {}
+
+    this._cpCyberwareSyncRoot = null;
+    this._cpCyberwareSyncHandler = null;
+  }
+
+  /** The "Left" side default the equip path applies to an arm/leg mount that has no side yet.
+   *  Shared by the form submit path (_processFormData) and the equipped-checkbox handler below so
+   *  the two can never drift. Returns null when no default applies. Pure. */
+  _cpCyberwareEquipSideDefault(zone, location) {
+    const z = String(zone ?? "");
+    if (z !== "Arm" && z !== "Leg") return null;
+    return String(location ?? "") ? null : "Left";
+  }
+
+  /**
+   * Cyberware-sheet controls the base system's own item sheet wires and ours had lost, restored
+   * with HIS semantics (base item-sheet.js 984-996, 999-1022, 1024-1048, 1319-1350):
+   *
+   *  - `system.cyberwareType`  → derive `CyberBodyType.Type` from the implant type and clear the
+   *                              side field for any non-limb type.
+   *  - `ChipSkills.<key>`      → after storing the entered level, push it onto the affected SKILL
+   *                              item (his _cp_syncChipLevelsToSkills / _cp_syncActiveFlagsToSkills).
+   *  - `ChipActive`            → the same two-way sync, so ticking the chip's own activation box
+   *                              writes chipLevel/isChipped onto the skills it grants.
+   *  - `system.equipped`       → unequipping a CHIP forces ChipActive off and resyncs.
+   *
+   * These write the document themselves and stop the change from reaching the V2 form's
+   * submit-on-change listener — the sheet's established idiom for controls with derived side
+   * effects (see _cpActivateCyberwareBasicControls) — because a form submit racing our own update
+   * would re-render the form out from under the in-flight write. The equip-side default the submit
+   * path applies is reproduced through the shared helper above, so the persisted result is identical.
+   *
+   * NOTE on the module's chip-grant engine (mech/chip-grant.js): it reacts to the SAME ChipActive /
+   * equipped updates to create or delete GRANTED skill items, and never touches
+   * skill.system.isChipped/chipLevel — so the field sync here and the grant layer act on disjoint
+   * data and compose without fighting. Verified with document automation both on and off.
+   */
+  _cpActivateCyberwareSyncControls(root) {
+    this._cpRemoveCyberwareSyncListeners();
+
+    if (!root?.addEventListener) return;
+    if (this.item.type !== "cyberware") return;
+
+    const editable = this.isEditable ?? this.options?.editable ?? false;
+    if (!editable) return;
+
+    const CHIP_SKILL_PREFIX = "system.CyberWorkType.ChipSkills.";
+
+    const handler = async (event) => {
+      const el = event.target;
+      if (!el?.name || !root.contains(el)) return;
+
+      const isChipSkillLevel = el.name.startsWith(CHIP_SKILL_PREFIX);
+      const known = isChipSkillLevel
+        || el.name === "system.cyberwareType"
+        || el.name === "system.CyberWorkType.ChipActive"
+        || el.name === "system.equipped";
+      if (!known) return;
+
+      // Claim the event synchronously, BEFORE the first await — once the handler yields, dispatch
+      // has already finished and stopping propagation would be a no-op.
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+
+      if (el.name === "system.cyberwareType") {
+        await this._cpHandleCyberwareTypeChange(el);
+        return;
+      }
+
+      if (isChipSkillLevel) {
+        await this._cpHandleChipSkillLevelChange(el, el.name.slice(CHIP_SKILL_PREFIX.length));
+        return;
+      }
+
+      if (el.name === "system.CyberWorkType.ChipActive") {
+        await this._cpHandleChipActiveChange(el);
+        return;
+      }
+
+      await this._cpHandleCyberwareEquippedChange(el);
+    };
+
+    root.addEventListener("change", handler, true);
+
+    this._cpCyberwareSyncRoot = root;
+    this._cpCyberwareSyncHandler = handler;
+  }
+
+  /** Implant type → body zone derivation (his item-sheet.js 984-996). */
+  async _cpHandleCyberwareTypeChange(select) {
+    const value = String(select.value ?? "");
+
+    let bodyType = "";
+    if (value === "CyberArm") bodyType = "Arm";
+    else if (value === "CyberLeg") bodyType = "Leg";
+    else if (value === "CyberTorso") bodyType = "Torso";
+    else if (value === "CyberAudio" || value === "CyberOptic") bodyType = "Head";
+
+    const patch = {
+      "system.cyberwareType": value,
+      "system.CyberBodyType.Type": bodyType
+    };
+
+    if (bodyType !== "Arm" && bodyType !== "Leg") {
+      patch["system.CyberBodyType.Location"] = "";
+    }
+
+    await this._cpUpdateCyberwareDocument(patch);
+  }
+
+  /** A ChipSkills level input: store it, then mirror it onto the skill (his 999-1022). */
+  async _cpHandleChipSkillLevelChange(input, skillKey) {
+    const n = Number(input.value);
+    await this._cpSetCyberwarePath(input.name, Number.isFinite(n) ? n : 0);
+
+    await this._cpSyncCyberwareChipSkills();
+    await this._cpRenderCyberwareSkillKeySheets(skillKey);
+    await this._cpRenderCyberwareDependentSheets();
+  }
+
+  /** The chip's own activation checkbox: write it, then sync every skill it grants (his 1024-1048). */
+  async _cpHandleChipActiveChange(input) {
+    const checked = !!input.checked;
+    const prev = !!this.item.system?.CyberWorkType?.ChipActive;
+    if (prev === checked) {
+      await this.render({ force: true });
+      return;
+    }
+
+    const affectedKeys = Object.keys(this.item.system?.CyberWorkType?.ChipSkills || {});
+
+    await this._cpUpdateCyberwareDocument({ "system.CyberWorkType.ChipActive": checked });
+    await this._cpSyncCyberwareChipSkills();
+
+    for (const key of affectedKeys) {
+      await this._cpRenderCyberwareSkillKeySheets(key);
+    }
+
+    await this._cpRenderCyberwareDependentSheets();
+  }
+
+  /** Equipped checkbox: an unequipped CHIP cannot stay active, so force it off and resync
+   *  (his 1319-1350). Also refreshes the host implant's open sheet so "slots left" stays live. */
+  async _cpHandleCyberwareEquippedChange(input) {
+    const checked = !!input.checked;
+    const isChip = cwHasType(this.item, "Chip");
+
+    const patch = { "system.equipped": checked };
+
+    if (checked) {
+      const side = this._cpCyberwareEquipSideDefault(
+        this.item.system?.MountZone || this.item.system?.CyberBodyType?.Type,
+        this.item.system?.CyberBodyType?.Location
+      );
+      if (side) patch["system.CyberBodyType.Location"] = side;
+    }
+
+    const affectedKeys = Object.keys(this.item.system?.CyberWorkType?.ChipSkills || {});
+    const deactivating = !checked && isChip;
+    if (deactivating) patch["system.CyberWorkType.ChipActive"] = false;
+
+    await this._cpUpdateCyberwareDocument(patch);
+
+    if (deactivating) {
+      await this._cpSyncCyberwareChipSkills();
+      for (const key of affectedKeys) {
+        await this._cpRenderCyberwareSkillKeySheets(key);
+      }
+    }
+
+    const actor = this.item.actor ?? this.actor ?? null;
+    const parentId = this.item.system?.Module?.ParentId || "";
+    const parent = parentId ? actor?.items?.get(parentId) : null;
+    if (parent) await this._cpRenderOpenSheet(parent);
+
+    await this._cpRenderCyberwareDependentSheets(actor);
+  }
+
+  /** Live slot accounting (his item-sheet.js 1270-1316): when a sibling cyberware on the same actor
+   *  changes in a way that moves the module/implant slot maths, re-render this sheet so its
+   *  "slots left" readout stays true without the player closing and reopening it. Bound once per
+   *  sheet instance; released in _preClose. */
+  _cpActivateCyberwareSiblingRefresh() {
+    if (this.item.type !== "cyberware") return;
+    if (this._cpBoundOnSiblingItemUpdate) return;
+
+    const actor = this.item.actor ?? this.actor ?? null;
+    if (!actor) return;
+
+    const actorId = actor.id;
+
+    this._cpBoundOnSiblingItemUpdate = (item, changes) => {
+      if (!this.rendered) return;
+      if (item?.parent?.id !== actorId) return;
+      if (item.type !== "cyberware") return;
+
+      const sys = changes?.system || {};
+      const touched =
+        ("equipped" in sys) ||
+        ("MountZone" in sys) ||
+        ("cyberwareType" in sys) ||
+        ("CyberBodyType" in sys) ||
+        ("Module" in sys) ||
+        (sys.CyberWorkType && ("OptionsAvailable" in sys.CyberWorkType));
+
+      if (!touched) return;
+
+      const isThisModule = !!this.item.system?.Module?.IsModule;
+      const isThisImplant = cwHasType(this.item, "Implant");
+
+      // Module sheet: any sibling change can move the host list / free slots it offers.
+      if (isThisModule) {
+        this.render();
+        return;
+      }
+
+      // Implant sheet: only a module that is mounted in THIS implant moves its slot count.
+      if (isThisImplant) {
+        const mod = item.system?.Module;
+        if (mod?.IsModule && mod?.ParentId === this.item.id) this.render();
+      }
+    };
+
+    Hooks.on("updateItem", this._cpBoundOnSiblingItemUpdate);
+  }
+
+  _cpRemoveCyberwareSiblingRefresh() {
+    if (!this._cpBoundOnSiblingItemUpdate) return;
+    try { Hooks.off("updateItem", this._cpBoundOnSiblingItemUpdate); } catch (_) {}
+    this._cpBoundOnSiblingItemUpdate = null;
+  }
+
   _cpActivateSkillItemControls(root) {
     if (!root?.addEventListener) return;
     if (this.item.type !== "skill") return;
@@ -2299,6 +2540,14 @@ async _prepareCyberware(sheet) {
     } catch (_) {}
 
     try {
+      this._cpRemoveCyberwareSyncListeners();
+    } catch (_) {}
+
+    try {
+      this._cpRemoveCyberwareSiblingRefresh();
+    } catch (_) {}
+
+    try {
       if (this._cpSkillItemControlsRoot && this._cpSkillItemControlsHandler) {
         this._cpSkillItemControlsRoot.removeEventListener("change", this._cpSkillItemControlsHandler, true);
       }
@@ -2374,9 +2623,8 @@ async _prepareCyberware(sheet) {
           this.item.system?.CyberBodyType?.Location ||
           ""
         );
-        if ((zone === "Arm" || zone === "Leg") && !loc) {
-          foundry.utils.setProperty(data, "system.CyberBodyType.Location", "Left");
-        }
+        const side = this._cpCyberwareEquipSideDefault(zone, loc);
+        if (side) foundry.utils.setProperty(data, "system.CyberBodyType.Location", side);
       }
     }
 
