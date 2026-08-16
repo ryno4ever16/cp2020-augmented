@@ -94,7 +94,7 @@ One payload is resolved by **exactly one** of two flows, and they never overlap:
    SINGLE-TARGET FLOW                                          PATTERN FLOW
    damage-hooks.js _hookWeaponFired                            damage-hooks.js _hookSpread
    · one target, resolved by hit location                      · a ray from the shooter, width + damage by range band
-   · DamageDialog, or the card's Apply button                  · EVERYONE in the path, no evasion (CP2020 p.108)
+   · DamageDialog, or the card's Apply button                  · EVERYONE in the path, no evasion (CP2020 p.109)
    · waits on presentationSettled()                            · GM aims a GM-only zone, then ONE Confirm card
                                                                · confirm applies, posts one result card, scatters
                                                                  the burning load's fires down the
@@ -165,15 +165,25 @@ reloaded, would report no cartridge at all and throw no pattern.
 ### 1.2 What runs where
 
 `cyberpunk2020.weaponFired` is a **local** `Hooks.callAll` — it fires only on the client that resolved
-the shot. Each element reaches the other clients differently:
+the shot. ⏪⏪ **REBUILT 2026-08-15 — THE PERFORMANCE SCORE (ruled 2026-08-14, "go on 2"; §6).** The
+firing client emits **one datagram per payload** (`MSG_SCORE`, carrying the payload verbatim plus the
+scene id, sent *after* the face-target turn so a remote show starts when the firing client starts
+drawing), and every client — the firing one from its own local call, the rest from the datagram —
+runs the **identical fan-out locally** (`fxWeaponFired(payload, { remote: true })`, scene-gated on
+the receiving side). Seeded determinism off the payload's own fields is what makes N independent
+performances one picture; each client's drops, pacing and audio ride **its own clock**, so picture
+and sound can no longer skew against each other on any client.
 
-| Element | Transport | Notes |
+| Element | Transport now | Notes |
 |---|---|---|
-| Shot audio | `AudioHelper.play(..., true)` broadcast | interface channel, so each player's own slider governs it |
-| Muzzle **light** | the module's own socket channel, drawn locally by every receiver | no document is written |
-| Sprites (lance, tracer/volley, impact, smoke, ground fire) | Sequencer's own socket | |
-| **Condition overlays** (§2a) | **none — each client draws its own** | the one element that is deliberately NOT transported. Every client reconciles the same public condition state and reaches the same answer, so a push would only stack duplicates. `.locally()` on the draw, `push = false` on the end; ruled 2026-08-13 |
-| Face-target turn | an ordinary token document update | **the only document write on this rail** |
+| Shot audio | **none — each client plays its own** (`AudioHelper.play(..., false)`) | interface channel, so each player's own slider still governs it. ⏪ was broadcast |
+| Muzzle **light** | **none — each client builds and drives its own** from its performance | ⏪ the per-flash datagram (`MSG_FLASH`) and its `holdMs`-rides-the-socket rule are retired; each client computes the identical hold and pulse from the identical payload |
+| Sprites (lance, tracer, impacts, smoke, blood, marks) | **none — `.locally()` on every transient section** (the `_held` helper is the one site) | ⏪ was Sequencer's per-sprite socket |
+| **Burning ground** | **Sequencer's socket — deliberately still shared** | the one per-shot element left on the engine's broadcast: its scene-wide census (`maxLive`, oldest-out through the engine's manager) and late-joiner replay need the engine's shared bookkeeping. `_held(effect, { shared: true })` |
+| Impact audio from the **apply seams** | `AudioHelper.play(..., true)` broadcast — unchanged | an apply runs on ONE client and has no remote performance to deliver it; `fxHitSound`'s `broadcast` option defaults true so an un-updated caller doubles a sound rather than silencing one |
+| **Condition overlays** (§2a) | **none — each client draws its own** | the 2026-08-13 ruling that prefigured the score: every client reconciles the same public state to the same answer. `.locally()` on the draw, `push = false` on the end |
+| Trauma-team arrival (§2b) | Sequencer's socket — unchanged | referee-placed, long-lived, engine-managed |
+| Face-target turn | an ordinary token document update, **firing client only** (`remote` gate) | **the only document write on this rail** — a remote GM performing it too would double-write the rotation |
 
 ### 1.3 Dependency policy
 
@@ -191,7 +201,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | # | Element | Asset / mechanism | Gate | Above lighting? |
 |---|---|---|---|---|
 | 1 | **Face-target turn** | token document `rotation` update, 220 ms sweep | table setting **and** token not `lockRotation` **and** turn ≥ 5° | n/a |
-| 2 | **Muzzle light** | native `PointLightSource`, built and driven per render frame | always (native) | it *is* a light — clips to walls |
+| 2 | **Muzzle light** | native `PointLightSource`, built and driven per render frame. On a burst the source is built **once and held** (`MUZZLE_BURST_LIGHT`, 2026-08-13) — and ⭐ *since 2026-08-14* the held light **pulses**: it rests at `MUZZLE_BURST_PULSE.floor` (0.35) between rounds and pops to full for `popMs` (90 ms) as each round actually arrives, so the strobe read is back at two lighting sweeps per round instead of a build + teardown per round (§6) | always (native) | it *is* a light — clips to walls |
 | 3 | **Muzzle lance** | `jb2a.muzzle_flash.single.01.yellow`, trimmed to 110 ms, dwelt by the row's `muzzleMs` | row names `muzzle` — **every class, including the shell again** | yes |
 | 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
 | 5 | ~~Discharge column~~ | ⏪ **DELETED 2026-08-09.** The whole mechanism — asset, 1.25 sq stretch, 55 ms trim, 220 ms dwell, its own colour field and its own tail term — is gone, not disabled. §6 | — | — |
@@ -200,10 +210,10 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
 | 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit** and the row has `impactSquares` — **delayed by that round's own arrival** (§4.2a), and drawn for a round the pacing rule refused as well as for one it drew | yes |
-| 9b | **Pellet arrival marks** ⭐ *new 2026-08-11* | `jb2a.smoke.puff.ring.01.white` at **0.45 sq**, trimmed to **500 ms**, one at each pellet endpoint | the round **hit**, the class draws a **fan**, and the load does **not** set its own landing points alight (§3.2b) | yes |
+| 9b | **Pellet arrival marks** ⭐ *new 2026-08-11, re-pointed 2026-08-14* | `jb2a.explosion.01.orange` at **0.45 sq**, trimmed to **550 ms**, one at each pellet endpoint — ⏪ the dust ring (`smoke.puff.ring.01.white` / 500 ms) is the recorded revert pair; the fire look was put to the user as a conscious razor override and **ratified** (§3.2b, §6) | the round **hit**, the class draws a **fan**, and the load does **not** set its own landing points alight (§3.2b) | yes |
 | 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, ⏱ **25 s** (was 45 s), one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
-| 13 | **Impact audio** ⭐ *new 2026-08-12* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included | n/a (not drawn) |
+| 13 | **Impact audio** ⭐ *new 2026-08-12, corridor half added 2026-08-14* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included. ⭐ A **declared corridor** has no target token, so its victims are swept once per payload instead (`patternAudioPlanFor`): every figure standing in the corridor's own polygon, wall-occlusion exempt, each sounded at **its own fraction of the crossing** — and the pattern's apply seam is quiet (`fxSilent`) so the confirm click can never sound the same bodies again (§6) | n/a (not drawn) |
 | 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
@@ -319,7 +329,8 @@ routed into a cyberlimb's own SDP sounds as *structure* even on an otherwise fle
 
 `fxSilent` is threaded by the caller and is named for what it DOES rather than for one of the two
 reasons a caller has for setting it: the flow **came off a shot the rail already sounded**
-(`_autoApply`, its GM-side relay, `routeWeaponFiredToVehicle`), or the apply **is not an impact at
+(`routeWeaponFiredToVehicle`, the pattern confirm; the retired `_autoApply` route and its `"auto"`
+relay mode were the other two until 2026-08-14), or the apply **is not an impact at
 all** — a burn or acid tick, accumulated damage becoming permanent, a radiation dose, an ACPA pilot's
 overflow from a hit the suit already voiced. Each call site says which.
 
@@ -491,7 +502,7 @@ noise. It is one field (`suppressedBy`).
 | an unlinked figure's own state changes | `updateToken` | reconcile that figure |
 | a figure arrives already marked | `createToken` | reconcile that figure |
 | a figure is deleted | `deleteToken` | sweep **by name** — the placeable is mid-destruction and is never read |
-| a scene is drawn | `canvasReady` + the catch-up below | reconcile every figure on it |
+| a scene is drawn | ⏪⏪ `sequencerEffectManagerReady` (2026-08-15 — the engine's own after-wipe signal; `canvasReady` demoted to a generation-counted **late fallback**, §6) | reconcile every figure on it, strictly AFTER the engine's per-load persistent-effects wipe |
 | a scene goes | `canvasTearDown` | end everything |
 | an overlay ends by itself | `endedSequencerEffect` | re-issue if the condition is still there |
 
@@ -517,6 +528,27 @@ exists), so the sweep does not bail — it queues work against an engine that is
 silently lost, and the screen looks exactly as it did before the fix. Hanging it on `sequencerReady`
 puts it after both. Caught by the reload leg of the keeper, which failed twice for these two different
 reasons before it passed.
+
+⏪⏪ **AND THE SCENE-SWITCH HALF OF THE SAME LESSON (2026-08-15).** `sequencerReady` fires only on the
+FIRST load — later scene switches were left on the raw `canvasReady` path, and that path raced the
+engine's own per-load setup: `initializePersistentEffects → tearDownPersistentEffects` destroys
+**every** live effect (debounce measured arming as early as canvasReady+241 ms), so a ring drawn at
+`canvasReady` could be destroyed **mid-`activate`**, inside its ~860 ms asset load. Two symptoms, both
+measured (import-staging/AUDIO-PAGEERROR-DIAGNOSIS.md): an uncaught pageerror out of the engine
+(`Cannot set properties of null (setting 'volume')` — the engine resolves its play promise *before*
+rethrowing, so no `.catch` of ours can hold it, and the async stack tag blamed an unrelated module
+line), and the ring **silently lost** until the next reconciling event, because the wipe's destroy is
+not reported through `endedSequencerEffect`. The sweep now rides `sequencerEffectManagerReady` — fired
+at the tail of `initializePersistentEffects` on **every** load — with `canvasReady` kept only as a
+generation-counted late fallback (`CANVAS_SWEEP_FALLBACK_MS` 3000) for a host where that signal never
+comes, where there is also no wipe to race. The residual window is the engine's own and is stated in
+§8: a scene torn down while an effect is still loading can still destroy it mid-activate.
+
+⏪ The `sequencerReady` catch-up this section used to end on is **retired with the same change**: the
+after-wipe signal also fires on the first load (~1 ms later), and with both registered every marked
+figure joined wearing two copies of its ring — the engine's ~140 ms registration lag means the second
+sweep's census still read "missing". Its finding (the +0/+12/+677 ordering above) stands as history
+at the site, with the one-line revert recorded.
 
 ### 2a.5 Budget, and what is deliberately not spent
 
@@ -924,7 +956,7 @@ same entropy rule the burning ground follows and the one the volley failed.
 |---|---|---|---|
 | `slotFraction` | **0.9** | half the pellet's own **slot** in the even ladder | the slots stop being a ladder — at 0.9 a pellet can almost reach its neighbour's place |
 | `reachFraction` | **0.35** | the cone's own **lateral** half-spread at that distance | mixed depths: a near side and a far side, instead of six marks on one arc |
-| `sizeFraction` | **0.25** | the row's `dashSquares` | no two balls in one shot are the same ball |
+| `sizeFraction` | **0.15** ⏪ *(was 0.25, tightened 2026-08-14 with the dash restore)* | the row's `dashSquares` | no two balls in one shot are the same ball — at ±15 % on the restored 1.0 base the six draw between **0.85 and 1.15**, every one above the original fan's own size; at the old ±25 % on a 0.7 base the smallest drew at 0.53, right on the "reads as dirt" floor |
 | `staggerMs` | **45** | — | pellets leave a few milliseconds apart, so they are many objects and not one |
 
 ⛔⛔ **BOTH GEOMETRY KNOBS ARE SCALED BY THE CLASS'S OWN CONE, AND THAT IS LOAD-BEARING.** The first
@@ -937,38 +969,49 @@ to ±`spreadRad`, because a symmetric nudge on an outermost slot would otherwise
 Swept over 400 seeds at 6 squares: worst pellet **45.0 px** from centre (vs a 50 px half-width), nearest
 stop **0.9755** of the shot line. A keeper leg runs that sweep.
 
-**The dash length: `dashSquares` 1 → 0.7.** The number is the sprite's drawn **width** and the asset
-lights roughly a fifth of it, so shortening the frame shortens the *trail* more than it shortens the
-ball — which is the read the ruling asked for. It is deliberately **not** taken further: **0.5 was the
-first value ever tried on this row** and was rejected by eye as "a few pixels, reads as dirt on the
-screen", so 0.7 is the shortest step that stays clear of the value already known to disappear. With the
-±25 % size jitter the six draw between **0.53 and 0.88** squares, all of them above that floor. ⏪ The
-revert value is `dashSquares: 1`. **This is a look call and it wants eyes.**
+**The dash length: `dashSquares` 1 → 0.7 → ⏪⏪ back to 1.0 (2026-08-14).** The eyes the 0.7 step was
+waiting for arrived from the LIVE table and ruled against it: *"the pellets are too small, you can only
+really see them once they've reached a certain distance from the weapon"* — and, of the whole look,
+*"previous shotgun designs were better and more powerful looking"*. So the shrink is re-reverted to the
+original fan's own **1.0**, not to a new guess. The near-muzzle invisibility half of the report is this
+same number: at 0.7 with the chaos floor at 0.53, a pellet's lit streak (~a fifth of the frame) drew
+under the 1.9-square muzzle flash for its first squares of travel; at 1.0 with the tightened ±15 % size
+jitter it clears the flash a full step sooner. ⏪ The revert value is now `dashSquares: 0.7`. The
+superseded record stands for what it still binds: the number is the sprite's drawn **width** and the
+asset lights roughly a fifth of it; **0.5 was the first value ever tried on this row** and was rejected
+by eye as "a few pixels, reads as dirt on the screen" — that floor measurement is why the size jitter
+was tightened alongside the restore rather than left at ±25 %.
 
-#### The arrival marks, and the razor split
+#### The arrival marks — ⏪⏪ dust re-pointed to fire (2026-08-14, ratified), and what survives of the razor split
 
-`PELLET_ARRIVAL` — the dust ring at **0.45 squares**, trimmed to **500 ms**, one at each pellet's own
-endpoint, delayed by that round's arrival plus that pellet's own stagger. Against the class's aim-point
-mark at 1.15 squares that is under 40 %, comfortably inside the "at least half down" the ruling asks
-for, and what keeps six of them from becoming the wall of fire the volley's blooms were being scaled
-back from. Never named for the settle signal: trimmed well under the aim mark, they can never be the
-last thing on screen, so the tail takes no term for them.
+`PELLET_ARRIVAL` — now **`jb2a.explosion.01.orange`** at **0.45 squares**, trimmed to **550 ms**, one at
+each pellet's own endpoint, delayed by that round's arrival plus that pellet's own stagger. The LIVE
+table rejected the dust rings (*"large dust clouds on hit that don't look good"*), and the fire look was
+put to the user **as a question** — small fireballs at the pellet endpoints, a conscious override of the
+razor split below — and **ratified**. This is what the 2026-08-11 veto actually kept (*"the arrival
+fireballs were GREAT"* — scaled down); the dust ring was the stand-in that honoured the old razor
+instead. Size unchanged at 0.45 sq: against the class's aim-point mark at 1.15 squares that is under
+40 %, comfortably inside the "at least half down" the ruling asks for. Never named for the settle
+signal: trimmed well under the aim mark's 833 ms, they can never be the last thing on screen, so the
+tail takes no term for them.
 
-⛔ **STANDARD BUCK GETS DUST; THE INCENDIARY SHELL GETS ITS FIRES.** The ruling reserves fire arrivals
-for the incendiary load — and the incendiary load **already has them**: its landing points are the same
-pellet endpoints, and the burning ground sets a real flame at each one. So the split is not two assets
-chosen by load name; it is one gate, `entry.groundFire`, and a load that lights its landings does not
-also get dust over them. That also honours the standing 2026-08-09 ruling that removed the api row's
-fire impact (*"get rid of the blast circle that lands on the target"*): drawing a fire mark here would
-have re-created exactly the doubling that ruling deleted. **The api shell's red treatment is untouched**,
-which is what the user asked for.
+*The key was chosen by decode, not by name* (cv2 over the installed files, the standard recipe):
+`explosion.01.orange` = 41 frames / 1367 ms, blooming to 98 % peak ink at **400 ms** — an arrival that
+peaks when the round lands. `explosion.05.orange` was rejected on the clock (blooms at 1333 ms, a second
+after its round), `fireball.explosion` on scale (a 4-second spell centrepiece). Radial, so the
+no-rotation property the dust was chosen for is kept. The trim keeps the 400 ms bloom plus a beat of
+decay and drops the smoulder. ⏪ The revert is the **pair** `key: "jb2a.smoke.puff.ring.01.white",
+clipMs: 500` — the dust look, whose selection survey lives at `IMPACT_DUST` (that element is untouched
+by this re-point and still owns the blunt-load arrival at the aim point).
 
-⚠ **The mark shares its asset with `IMPACT_DUST`**, deliberately — that key was chosen out of a closed
-enumeration of the free tier's impacts precisely as the blunt, radial, no-rotation-question arrival, and
-this is the same job at a smaller size. It is declared as its own constant because the two elements
-answer to different rulings. A reader counting sprites should know that a baton shell puts its own dust
-mark on the aim point at 1.15 squares and six of these at 0.45, out of one key: **tell them apart by
-size, not by file.**
+⛔ **What survives of the razor split, whole:** the ruling that reserved fire arrivals for the
+incendiary load is superseded as a *look*, but its **mechanism and its concern stand** — the incendiary
+shell still draws **nothing** here, because the gate is `entry.groundFire` and its landing points
+already get real, lingering flames from the burning ground. So the incendiary signature stays distinct
+(persistent flames vs a 550 ms bloom), **no load gets two arrivals on one square**, and the 2026-08-09
+ruling that removed the api row's fire impact (*"get rid of the blast circle that lands on the
+target"*) is still honoured: the api shell's red treatment is untouched, and its aim point takes no
+extra mark from this element.
 
 #### The burning ground takes the same jitter
 
@@ -1448,15 +1491,21 @@ and the same pure band ladder (`lookups.js spreadBandSpec`) that the planted reg
 and the region are the same shape. It spends nothing: the magazine is decremented inside the base
 system's own fire methods, which are two steps further down, so Esc cancels a shot that never happened.
 
-**Two wheels, and one of them is a house rule** (⏪ 2026-08-13, §6). The **plain** wheel sets the
-corridor's **width**: ±1 m a notch on top of the width the band gives, floored at `SPREAD_MIN_WIDTH_M`
-= **1 m** (the book's own narrowest band — a zero-width corridor is a line nobody can stand in), and the
-readout appends `SpreadWidthHouseMark` so a set width is never mistaken for the source material's.
-**Shift+wheel** is the **reach** fine-tune, ±1 m a notch on top of the cursor's own distance, floored at
-`SPREAD_MIN_LENGTH_M` = 2 m. Both biases live on the aim's own state object, so neither outlives the
-gesture. The band label and the banded damage stay a pure function of the **reach** either way — the
-ruling is about the corridor's shape, not about what a shell does inside it — and the overridden width
-travels through `spreadAim.widthM` into the planted region exactly as the derived one always did.
+**One wheel** (⏪⏪ 2026-08-16, §6 — the width wheel is retired). **Shift+wheel** is the **reach**
+fine-tune, ±1 m a notch on top of the cursor's own distance, floored at `SPREAD_MIN_LENGTH_M` = 2 m; the
+bias lives on the aim's own state object, so it does not outlive the gesture. A **plain** wheel is left
+alone and reaches core's canvas zoom, as it does when nothing is being aimed. Band, width and banded
+damage are all pure functions of the **reach**, which is why the reach is the only thing there is to
+nudge. `SPREAD_MIN_WIDTH_M` = **1 m** survives as the floor on any width this flow draws or plants (the
+book's own narrowest band — a zero-width corridor is a line nobody can stand in), and a load's own
+printed `spreadWidth*` numbers still win over the band's defaults.
+
+⭐ **THE BAND EDGES ARE THE FIRING WEAPON'S, NOT FIXED METRES** (2026-08-16, §6). `spreadBandSpec` now
+takes the weapon's own Long range and measures the aim against fractions of it — Close·PB to
+`max(1 m, range/4)`, Medium to `range/2`, Long to the full range and onward. The range rides the payload
+as `spreadRangeM`, stamped at the seam from the same resolver the aim gesture reads
+(`rangefinding.js getWeaponLongRange`), so the ghost, the plant and this rail's corridor sweep all
+measure one aim point against one ladder.
 
 What reaches this file is one field on the payload — `spreadAim` — carrying an **angle and two reaches**
 rather than a point:
@@ -1467,6 +1516,12 @@ rather than a point:
 | `reachM` | **rail** | where the shooter clicked — what the rounds are drawn to |
 | `lengthM` | **plant** | that plus the overshoot into the aimed-at figure's own square, so containment is unambiguous |
 | `widthM` / `band` | plant + card | the corridor's width and its Core range band |
+
+and one field beside it:
+
+| Field | Read by | Meaning |
+|---|---|---|
+| `spreadRangeM` | rail + plant + preview | the firing weapon's own Long range — what the band edges are fractions of (Core p.99). Absent → the ladder's compat edges (6 m / 25 m), i.e. the corridor this module drew before the edges became per-weapon |
 
 ⭐ **AND THE CORRIDOR CAN MOVE — THE ROUNDS GO WITH IT** (⭐ 2026-08-13, the scatter-on-miss unit;
 ✅ **the seam gap it opened was closed the same day** — see below).
@@ -1552,6 +1607,9 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `MUZZLE_BURST_LIGHT.enabled` ⭐ | **true** — *ruled 2026-08-13* | one light **held** for a whole burst instead of one per round. **False restores the per-round strobe** with no other edit (§6) |
 | `MUZZLE_BURST_LIGHT.minRounds` ⭐ | **2** | below this a discharge keeps the per-round envelope — a single shot is byte-for-byte what it always was |
 | `MUZZLE_BURST_LIGHT.maxHoldMs` ⭐ | **8000** | leak bound on a held light, not a look call. The fan-out's own worst case is 30 rounds × the shell's 180 ms = 5.22 s |
+| `MUZZLE_BURST_PULSE.enabled` ⭐ | **true** — *ruled 2026-08-14* | the strobe on the held light: it rests at the floor between rounds and pops to full as each round arrives (the pop is stamped by the re-point, so it tracks the loop's REAL cadence, not a metronome). **False restores the 2026-08-13 flat held glow** with no other edit (§6) |
+| `MUZZLE_BURST_PULSE.floor` ⭐ | **0.35** | where the held light rests between pops — above zero on purpose, so the dip reads as a strobe rather than the room's lights failing |
+| `MUZZLE_BURST_PULSE.popMs` ⭐ | **90** | how long one pop holds full — one envelope's length, so a pop and a lone shot's flash are the same event to the eye. At the rifle's 80 ms cadence consecutive pops overlap into a near-continuous blaze, which is the fast-cadence behaviour, not a defect |
 | `MUZZLE_SPRITE.endMs` | 110 | lance trim — beyond this the clip's smoke-and-fire plume returns |
 | `MUZZLE_SPRITE.edgeFraction` | 0.5 | how far along the aim the sprite is planted, as a fraction of token width |
 | `FACING_AIM_SQUARES` | 3 | how far the synthesized aim point sits for an untargeted shot |
@@ -1564,10 +1622,10 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `VOLLEY.enabled` | ⏪ **false** — *vetoed 2026-08-11* | the buckshot volley master switch, and the whole of the shelf. **True restores the trial**: the resolver answers a band spec again, the volley replaces the fan and the hit mark is suppressed once more. Nothing else is edited either way |
 | `PELLET_CHAOS.slotFraction` ⭐ | **0.9** | how far a pellet's angle may wander, as a share of **half its own slot** in the even ladder. At 0.9 a pellet almost reaches its neighbour's place; the result is clamped to the class's declared cone, so this can never widen a spread |
 | `PELLET_CHAOS.reachFraction` ⭐ | **0.35** | how much nearer or further a pellet stops, as a share of the cone's own **lateral** half-spread. The depth half of the irregular cluster. ⚠ Raising it past ~0.5 walks a pellet of a HIT off a one-square token — measured, §6 |
-| `PELLET_CHAOS.sizeFraction` ⭐ | **0.25** | per-pellet drawn-width variance about the row's `dashSquares` |
+| `PELLET_CHAOS.sizeFraction` ⭐ | ⏪ **0.15** (was **0.25**, tightened 2026-08-14) | per-pellet drawn-width variance about the row's `dashSquares`. Tightened with the dash restore so the smallest pellet (1.0 × 0.85 = 0.85 sq) stays clear of the 0.5 "reads as dirt" floor the old pairing grazed (0.7 × 0.75 = 0.53). Revert **0.25** |
 | `PELLET_CHAOS.staggerMs` ⭐ | **45** | how late a pellet may leave, per pellet |
-| `FX_CLASSES.shotgun.dashSquares` | ⏪ **0.7** (was **1**) | the drawn width of one pellet. Shortened on the veto so the dashes read as balls; **not** taken to 0.5, which is the value already rejected by eye as "a few pixels, reads as dirt on the screen" |
-| `PELLET_ARRIVAL` ⭐ | dust ring, **0.45 sq**, trimmed to **500 ms** | the small mark at each pellet's landing point — the half of the volley trial the ruling kept, scaled down |
+| `FX_CLASSES.shotgun.dashSquares` | ⏪⏪ **1.0** (was 0.7; re-reverted 2026-08-14) | the drawn width of one pellet — the LIVE table ruled the 0.7 shrink out (*"pellets are too small"*), so the original fan's own 1.0 is restored. Revert **0.7**; 0.5 remains the value rejected by eye as "a few pixels, reads as dirt on the screen" (§3.2b, §6) |
+| `PELLET_ARRIVAL` ⭐ | ⏪⏪ `jb2a.explosion.01.orange`, **0.45 sq**, trimmed to **550 ms** (re-pointed 2026-08-14, ratified) | the small fire bloom at each pellet's landing point — the half of the volley trial the 2026-08-11 ruling kept, finally wearing the look it named. Decoded: blooms at 400 ms of a 1367 ms clip; the trim keeps the bloom and drops the smoulder. Revert is the **pair** `key: "jb2a.smoke.puff.ring.01.white", clipMs: 500` (the dust stand-in). The incendiary shell draws nothing here either way (`entry.groundFire` gate, §3.2b) |
 | `TRACER_ARRIVAL_MS` ⭐ | bullet.01 100/333/467/567/733 · bullet.02 267/200/367/533/700, by band | **decoded off the installed files** — when a PAINTED round arrives. ⚠ not a tuning knob: re-measure if the asset changes |
 | `TRACER_ARRIVAL_BANDS` ⭐ | 90ft ≥ 15 · 60ft ≥ 9 · 30ft ≥ 5 · 15ft ≥ 2 · 05ft ≥ 0 | the mirror of the engine's own band picker for the five-file bullet families — **do not tune, it must match `SequencerFileRangeFind`** |
 | `TRACER_ARRIVAL_FALLBACK_MS` ⭐ | 400 | the arrival for a tracer family this file has not decoded |
@@ -1634,6 +1692,7 @@ is the table, so a sixth condition is a row rather than a change:
 | `STATUS_FX.lifetimeMs` | **600000** | how long one issue of an overlay runs before it is re-issued. Not the condition's lifetime |
 | `STATUS_FX.maxLive` | **60** | how many overlays may be alive on a scene at once; oldest out, through the engine's manager |
 | `STATUS_FX.fadeInMs` / `.fadeOutMs` | 300 / 400 | how a mark arrives and leaves |
+| `CANVAS_SWEEP_FALLBACK_MS` ⭐ | **3000** | how long the demoted `canvasReady` fallback waits for the engine's own `sequencerEffectManagerReady` signal before sweeping anyway (2026-08-15, the wipe race — §2a.4, §6). It only ever fires on a host where that signal never comes, where there is also no wipe to race, so generosity costs nothing |
 | `combatFxEnabled` (world setting) | default `true` | **shared with the shot rail** — the overlays ride the same master switch, read per event, and a switch-off sweeps what is already drawn |
 
 **The shot pattern's knobs**, which are not in `effects.js` because the pattern is not a sprite:
@@ -1643,7 +1702,7 @@ is the table, so a sixth condition is a row rather than a change:
 | `SPREAD_ZONE_LOOK.*` | see §3.2a | the whole ghost treatment | `module/combat/spread-zone-look.js` |
 | `SPREAD_ZONE_TTL_MS` | 60000 | how long an **unconfirmed** pattern lives outside an encounter | `module/combat/damage-hooks.js` |
 | `SPREAD_ZONE_SWEEP_MS` | 15000 | how often the out-of-combat sweep looks | `module/combat/damage-hooks.js` |
-| the band table | 1/2/3 m, 4d6/3d6/2d6 | width and damage by Close / Medium / Long — Core defaults, overridden per ammo item | `_placeSpreadZone` |
+| the band table | 1 m / 2 m / 3 m, 4d6/3d6/2d6 | width and damage by Close·PB / Medium / Long (**Core p.109**), overridden per ammo item. The band EDGES are not metres but fractions of the firing weapon's own Range (p.99): Close·PB out to `max(1 m, range/4)`, Medium to `range/2`, Long to the full range and — an interpretation, since the table prints no Extreme row — onward past it | `lookups.js spreadBandSpec`, planted by `_placeSpreadZone` |
 
 **The arrival sequence's knobs** — all in one frozen block, `TRAUMA_TEAM` in
 `module/fx/trauma-team.js`, except the last row. Every one is a single constant.
@@ -1675,6 +1734,132 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-16 — the pattern's band edges are the WEAPON's; the width wheel is retired; a scatter says so
+out loud.** Three changes, one reading of the book (text-layer verified, memory
+`reference-shotgun-pattern-table`). ① The shotgun table is Core **p.109**, not p.108 — every citation
+that pointed at the table is corrected, and the ones that point at the grenade table or the cover rule
+(genuinely p.108) are left alone. ② The table prints its pattern **against the range bands**, and the
+bands are defined per weapon on p.99 — Close a quarter of the weapon's Long range, Medium a half, Long
+the full range. So `spreadBandSpec` stops hard-coding 6 m / 25 m and takes a range: Close·PB to
+`max(1 m, range/4)`, Medium to `range/2`, Long past the full range. A caller that names no range keeps
+the old fixed edges as a **compat path**, so an in-flight payload or a rangeless weapon degrades to the
+corridor it always drew rather than to nonsense. ③ **The width wheel is retired**: the book gives one
+width per band, so width is a function of where the corridor is pointed and never a free knob. The
+per-load `spreadWidth*` overrides and the 1 m floor stay; the revert sits in one block at the wheel site.
+
+| Ruling | Value | Why |
+|---|---|---|
+| band edges = fractions of the weapon's range | `spreadBandSpec(distanceM, widths, rangeM)` | p.99 defines the bands per weapon; the table prints the pattern per band. Fixed metres were one gun's answer applied to every gun |
+| the range travels as ONE field | `spreadRangeM` on the payload, stamped at the seam | four readers (preview, plant, scatter re-derivation, fx corridor sweep) must measure against one number or the ghost and the region part company |
+| no range named ⇒ the OLD edges | `SPREAD_LEGACY_CLOSE_EDGE_M` 6 / `SPREAD_LEGACY_MEDIUM_EDGE_M` 25 | a compat path, not the rule: absent must not collapse every band onto Close or push every shot to Long |
+| past full range the **Long row continues** | the ladder saturates | ⚠ an **interpretation**: p.99 names an Extreme band, the shotgun table prints no Extreme row, so the pattern out there is unstated. The last printed row continues rather than a fourth width being invented |
+| ⏪ the plain wheel does **nothing** | `widthBiasM` deleted | no book behind it. A plain wheel now reaches core's zoom, as it does outside the gesture |
+| what survives the retirement | `spreadWidth*` per load, `SPREAD_MIN_WIDTH_M` = 1 m | both are the book's: the load's printed widths, and the narrowest band it describes |
+| a missed pattern **announces itself** | `ui.notifications.info` at the seam, one per pattern | user ruling: *"or just some way to let the player know it's behaving as intended"*. A scattered centre is indistinguishable from an ignored aim from the shooter's seat. Raised where the two faces are rolled — the earliest point one client knows both MISS and the drift, and it is the FIRING client. Same `{dir}, {dist}m` idiom as the card's own scatter line |
+
+**2026-08-15 — the condition sweep moves behind the engine's own wipe (the scene-switch race).**
+Found chasing a walkthrough-suite pageerror that blamed an unrelated effects.js line; the measured
+truth (import-staging/AUDIO-PAGEERROR-DIAGNOSIS.md): on EVERY scene load Sequencer's debounced setup
+tears down every live effect, and the overlay sweep riding raw `canvasReady` drew its rings straight
+into that wipe — an overlay caught inside its asset load was destroyed mid-`activate`, throwing an
+uncaught error out of the engine (its `_initialize` resolves the play promise *before* rethrowing, so
+no caller-side `.catch` can hold it) and silently eating the ring until the next reconciling event.
+Latent since the overlays shipped (2026-08-12); real tables MORE exposed than the rig.
+
+| Ruling | Value | Why |
+|---|---|---|
+| the sweep rides the engine's signal | `sequencerEffectManagerReady` | fired at the tail of `initializePersistentEffects` on every load — strictly after the wipe that was killing the redraw |
+| `canvasReady` is a fallback, not the path | generation counter + `CANVAS_SWEEP_FALLBACK_MS` (3000) | only a host where the signal never comes falls back — and such a host runs no wipe to race |
+| ⏪ the `sequencerReady` catch-up is RETIRED | one line out (revert recorded at the site) | the verify pass caught both first-load sweeps drawing ~1 ms apart — the engine registers a drawn effect only after ~140 ms, so the second sweep's census read "missing" and every marked figure joined wearing TWO rings (4/4). `sequencerEffectManagerReady` fires on the first load too, after the wipe, so one drawer serves everything; a host without the signal falls to the generation-counted fallback, which races nothing |
+| the residual window is named, not hidden | §8 | a canvas torn down mid-load can still destroy an effect mid-activate inside the engine; no registration order on our side closes it |
+
+**2026-08-15 — the transport becomes a SCORE: one datagram per payload, every client performs
+locally. Ruled 2026-08-14 ("go on 2"), built 2026-08-15.**
+The recurring live-table desync ("the animation and sound being out of sync, and the effect appearing
+laggy") was structural, not a tuning error: one shot was delivered over THREE unrelated transports —
+core's `playAudio` per sound, our own datagram per flash, Sequencer's socket per sprite — each with
+its own latency, so no two elements of one shot could be promised to agree on a remote client. The
+fix is the model the sync talk proposed: broadcast the *payload* once and let every client perform
+the whole show from it.
+
+| Ruling | Value | Why |
+|---|---|---|
+| one hop, before the show | `MSG_SCORE` emitted from `fxWeaponFired`, after the bails and the turn | skew between clients becomes one constant offset of the whole performance (network latency on one datagram) instead of a per-element scramble; a payload the rail will not draw is never announced |
+| everyone performs | `fxWeaponFired(payload, { remote: true })` on receipt, scene-gated | the same seeds, cadence and draws — determinism off the payload's own fields is the property the whole file already enforced (fxSeedOf) |
+| sprites go local | `.locally()` inside `_held` — the ONE site | a new element cannot silently ship double-drawn (engine-broadcast AND remotely performed) |
+| the burning ground opts out | `_held(effect, { shared: true })` | its `maxLive` census and late-joiner replay live in the engine's manager; per-client copies would give every client its own cap arguing over different flames |
+| audio goes local | `sfx(..., false)`; `fxHitSound({ broadcast: false })` from the rail only | each client's audio rides its own clock, in phase with its own sprites — the skew is dead by construction. Apply seams keep broadcasting (one client, no remote performance) |
+| the flash datagram dies | `MSG_FLASH` emit + handler retired, constant kept | each client computes the identical hold and pulse from the identical payload; the 2026-08-13 holdMs-on-the-socket rule is moot |
+| the turn stays singular | `remote` gates `faceTarget` | the rail's one document write belongs to the firing client; a remote GM would double-write the rotation |
+| drops stay per-client | the §4.1a rule, unchanged, per performance | each performer drops what ITS event loop cannot afford; the score defines nominal timing, each client plays it as well as it can |
+| revert | re-emit MSG_FLASH + flip the audio flags + drop `.locally()` (`git log -S MSG_SCORE`) | recorded at each site; only meaningful as a set |
+
+**2026-08-14 — the shell's look is re-ruled from the LIVE table, and two 2026-08-11 calls flip.**
+The two look calls flagged "wants eyes" got their eyes, in real play, and both went the other way. The
+report: *"the pellets are too small, you can only really see them once they've reached a certain
+distance from the weapon"*, the dust rings *"leave large dust clouds on hit that don't look good"*, and
+of the whole current look, *"previous shotgun designs were better and more powerful looking."*
+
+| Ruling | Value | Why |
+|---|---|---|
+| ⏪⏪ the dash restore | `dashSquares` 0.7 → **1.0** | the original fan's own value, not a new guess; also the near-muzzle half of the report — at 0.7 a pellet's lit streak drew under the 1.9-sq muzzle flash for its first squares |
+| the size jitter tightens with it | `sizeFraction` 0.25 → **0.15** | at ±25 % on 0.7 the smallest pellet (0.53) grazed the 0.5 "reads as dirt" floor; at ±15 % on 1.0 the six draw 0.85–1.15, all above the original size, variety read intact |
+| ⏪⏪ the arrival goes dust → fire | `PELLET_ARRIVAL` = `explosion.01.orange`, 0.45 sq, 550 ms | put to the user as a conscious razor override — small fireballs at the pellet endpoints — and **ratified**. This is what "the arrival fireballs were GREAT, scaled down" always named; the dust ring was the stand-in |
+| the razor's concern survives | the `entry.groundFire` gate is unchanged | the incendiary shell still draws no arrival mark — its persistent flames stay its distinct signature and no load gets two arrivals on one square |
+| the key was decoded, not named | blooms at 400 ms of 1367 ms | `explosion.05` rejected on the clock (bloom at 1333 ms), `fireball.explosion` on scale (4 s spell centrepiece) |
+| reverts | `0.7` · `0.25` · the dust pair | each one field, recorded at the sites |
+
+**2026-08-14 — the held burst light PULSES, on the user's own design. Ruled: *yes*.**
+The 2026-08-13 hold fixed the lighting-rebuild hitch but flattened the read — *"just a light that stays
+on while the burst comes out."* The user's counter-proposal is the shipped mechanism verbatim: *"created
+it and simply turned it on and off as many times as we needed, then deleted it."* One persistent source
+per burst (the perf win stays — no source add/remove), its INTENSITY driven as a square pulse: rest at
+`floor` 0.35, pop to full for `popMs` 90 as each round arrives. The pop is stamped by the re-point
+branch, so it tracks the loop's real cadence rather than a metronome and can never strobe out of phase
+with the lances on a slow client. Cost, stated honestly: two lighting sweeps per arriving round
+(floor→full, full→floor) where the flat hold spent zero — against the retired per-round transport's ~260
+sweeps and 30 source builds per 30-round burst. The applied-equality skip keeps every frame between
+edges a no-write. ⏪ Revert `MUZZLE_BURST_PULSE.enabled: false` restores the flat held glow; the
+2026-08-13 hold ruling is otherwise intact underneath.
+
+**2026-08-14 — a declared corridor sounds its own victims at the rounds' arrival, not at the confirm.**
+User ruling, verbatim: *"for every bullet that successfully hits the target… the flesh hit sound is
+made. Not when apply damage is hit."* A corridor fires at an aim point, so the impact-audio plan's
+target-token gate correctly answers null for it — and until this, corridor victims were sounded by the
+APPLY seam at the confirm click, late by the whole action. `patternAudioPlanFor` now sweeps the
+corridor once per payload at fire time: the geometry is the plant's own answer (the declared record, or
+the same miss re-derivation the plant runs, via the relocated `spread-geometry.js` sites), the footprint
+is the same ray polygon the region is built from, the occupants take the same wall-occlusion exemption
+the confirm applies, and each victim is sounded at **its own fraction of the crossing** — the sound
+rides the round, not the corridor's end. Issued from the fan-out per shell per victim, outside the drop
+branch (audio budget, not tracer budget), capped by `HIT_SOUND_MAX_PER_PAYLOAD`. The pattern's apply
+seam goes quiet in the same stroke (`fxSilent` when `patternFlowOwns && combatFxEnabled`), so the
+confirm can never sound the same bodies twice. What the sweep cannot know at fire time — armour,
+penetration, a figure that walks in before the confirm — it does not guess at: it sounds what the
+rounds crossing the corridor struck, the same information the tracers already draw.
+
+**2026-08-14 — the rail preloads everything it can draw or sound, at ready.**
+From the live table: a just-swapped video asset's first draw pays its fetch+decode ON SCREEN, so the
+audio lands on time while the picture arrives late (clock domain 2 of the sync taxonomy). The manifest
+(`fxPreloadManifest`) is collected from the **live spec objects** — never a hand-list — so a re-pointed
+key is preloaded the moment it is authored; a second copy of "which keys exist" is how a preloader
+silently stops covering the thing that was just changed. Sequencer keys go through
+`Sequencer.Preloader.preloadForClients` (present keys only, `fxDbEntryExists`-filtered); sounds through
+`AudioHelper.preloadSound` with the `game.audio.preload` fallback. Fire-and-forget from
+`registerCombatFx` — a preload that fails must never delay ready or the first shot; the worst case is
+exactly the old behaviour.
+
+**2026-08-14 — the corridor geometry moves to a pure home, and the lesson that cost an hour.**
+`declaredSpreadAim`, `spreadAttackOutcome` and `scatteredSpreadCorridor` relocated verbatim from
+`damage-hooks.js` to the new `module/combat/spread-geometry.js` (with `areaOcclusionTest` landing in
+`area-shapes.js`), because both rails now read them and `effects.js` importing `damage-hooks.js` would
+be a cycle. ⛔ **The binding lesson, permanent:** the first cut replaced the moved functions with
+`export { … } from "./spread-geometry.js"` — which re-exports but creates **no local binding**, so
+every in-file caller threw `ReferenceError` and every pattern placement was dead on the live tree for
+about an hour. The fix is the scatter-table idiom: a real `import` line plus a **bare** `export { … }`
+of the local bindings. The FX keeper now carries a permanent cross-file binding-guard leg so this
+failure names itself instead of surfacing as a mystery `ReferenceError` three suites away.
 
 **2026-08-13 — the muzzle flash's LIGHT is scoped to the burst, not to the round. Ruled: *yes*.**
 The presentation profile named this the most hitch-shaped cost it measured. The flash is a real light
@@ -1736,6 +1921,9 @@ ring behind with two GMs online. Both ends had to move together.
 | proof is two real sessions | keeper §11 | one ring per canvas, its own, zero on both after the delete — counted, not reasoned about |
 
 **2026-08-13 — ⏪ the aim wheel sets WIDTH, and the width is the table's to set.**
+⏪⏪ **SUPERSEDED 2026-08-16 — the width wheel is RETIRED** (see the entry further down). The entry
+below is kept as the record of what was built and why; the plain wheel no longer moves anything, and
+`widthBiasM` no longer exists. Shift+wheel = reach and the `SPREAD_MIN_WIDTH_M` floor both survive.
 The user, watching the gesture: *"shotgun region placement scroll wheel lengthens instead of widening.
 It should go meter by meter."* Two decisions in one sentence. **What the plain wheel does**: the
 corridor's width, ±1 m a notch — which is also what the suppressive lane's wheel has always done
@@ -1762,7 +1950,7 @@ press anything. §8 recorded that as a decision rather than a surprise, with the
 written down. The user ruled for the alternative: **restore the apply moment.** The wait is
 unchanged; what happens after it is a card. `_placeSpreadZone` now posts
 `templates/chat/spread-resolution.hbs` — the corridor's own band, width, banded formula and shell
-count, one row per figure the corridor caught (in pattern / behind cover — exempt), the p.108 basis
+count, one row per figure the corridor caught (in pattern / behind cover — exempt), the p.109 basis
 in one line, and one `.cp-confirm-spread-zone` control. That is the SAME control the guessed-corridor
 card carries, deliberately: one dispatch (`registerDamageHooks`), one relay to the active GM
 (`_claimAreaConfirm`), one card-lock, and no second code path to keep in step. The region stays on
@@ -1912,7 +2100,7 @@ had been wired into the two SDP-decrement sites to prove the trigger seam.
 | Ruling | Value | Why |
 |---|---|---|
 | ⭐ **The impact sounds on the ARRIVAL clock, from the rail — not at damage-apply wall time** | `hitSoundPlanFor` before the loop, `fxHitSound(kind, {delayMs: arriveIn, index})` inside it, beside the mark and the spray | The apply runs after `presentationSettled` by construction: for a burst that is the last round's tail, for a declared corridor it is whenever the GM confirms. An impact sounded there is not late by a frame, it is late by the whole action. The three elements that say a round landed — the mark, the spray and now the noise — hang on the ONE arrival this payload resolved (§4.2a), so nothing on one shot can disagree about when the round got there. |
-| **The apply paths keep a leg, for the shots that never had an arrival** | `fxSilent` on `applyLocationDamage` / `applyVehicleDamageCore` / `applyVehicleDamageMM`, threaded through `applyAreaDamages`; set by `_autoApply`, its GM-side relay and `routeWeaponFiredToVehicle` | A hand-resolved damage dialog, a vehicle-damage dialog and an area shell resolved on confirm have no shot behind them and nothing to be late for, so they play immediately. The flows that DID come off a shot say so and stay quiet — otherwise a five-round burst on a vehicle would sound five more impacts, all of them late. The flag is named for what it does, because its **other** user is the applies that are not impacts at all (burn/acid ticks, permanent-damage conversion, radiation doses, an ACPA pilot's overflow). |
+| **The apply paths keep a leg, for the shots that never had an arrival** | `fxSilent` on `applyLocationDamage` / `applyVehicleDamageCore` / `applyVehicleDamageMM`, threaded through `applyAreaDamages`; set by `routeWeaponFiredToVehicle` and the pattern confirm (it was also set by the `_autoApply` route and its GM-side relay, both retired 2026-08-14 with the auto-apply feature) | A hand-resolved damage dialog, a vehicle-damage dialog and an area shell resolved on confirm have no shot behind them and nothing to be late for, so they play immediately. The flows that DID come off a shot say so and stay quiet — otherwise a five-round burst on a vehicle would sound five more impacts, all of them late. The flag is named for what it does, because its **other** user is the applies that are not impacts at all (burn/acid ticks, permanent-damage conversion, radiation doses, an ACPA pilot's overflow). |
 | ⭐ **The personnel leg goes on `applyLocationDamage`, not on `applyAreaDamages`** | one call site per zone outcome, inside the shared seam | Found by reading the callers rather than by assuming: the hand-applied damage dialog calls `applyLocationDamage` **directly**, row by row, and never passes through `applyAreaDamages`. A leg one level up would have covered the automated flows — which are the ones the rail already sounds — and left the manual one, the whole reason the apply leg exists, silent. |
 | **An un-indexed caller gets a tally from the element** | `HIT_SOUND_BURST_WINDOW_MS` 700 ms, refused past the cap as `skipped: "burst"` | The apply seams walk their rows in one synchronous loop and have no payload to count against, so N plays land in the SAME tick and phase into one smear. Tested on the raw argument, not on `Number(index)` — `Number(null)` is 0, which is finite, and coercing first made every un-indexed caller look like caller zero (measured: nine rows in one tick, all at one level). |
 | ⭐ **The capture seam is consulted before the host's audio state** | `_setHitSoundSink` wins over the `locked` check | §9 I says the seam is applied first, and here that is load-bearing rather than tidy: a sink never reaches an audio device, and a headless keeper page is GENUINELY locked (it never produces a user gesture on the game document — the join click lands on the previous one). With the order reversed every driven leg would have been measuring the page instead of the element. |
@@ -2036,7 +2224,7 @@ each one closed a blind spot in the *keeper* as well as in the product.
 | ⭐ **F3 — the volley seed folds in the ROLLED DAMAGE** | `fxSeedOf(attackerId, weaponId, shots, hits, i, JSON.stringify(areaDamages))` | User, verbatim: *"use a more dynamic seed… damage numbers."* Every term the seed had was identical across two consecutive shots from the same gun at the same target, so the chaos knobs answered "the volley is too neat" for the rounds of one burst and not for repeat trigger pulls: a bench firing the same gun saw at most two pictures. The rolled damage is the term the burning-ground seed already folds, in the same position — so the two seeds now have one shape between them. Clients still agree because the rolls ride the payload. §3.2b |
 | ⭐ **F9a — the volley honours the resolved entry's colour** | `if (entry.tracerColor) shot.filter("ColorMatrix", entry.tracerColor)` on the volley sprite; reported as `out.volleyColor` | A branch that REPLACES the drawn round still owes the load its treatments (standard rule 20). The volley read no overlay field at all, so an incendiary 00 shell drew the plain orange clip, `ap`/`dualPurpose` lost their hardened tint, and the standing *"update one shotgun ammo type's animation, update them all"* ruling was true of the pellet fan and false of the thing that replaced it. Same expression as the fan's, so the declared-vs-painted semantics carry over untouched: the shell row's `tracerColor: null` paints the base volley with nothing. |
 | ⭐ **F9b — a load that draws its own projectile is NOT replaced by the volley** | `ammoRedefinesProjectile(key)`; `AMMO_FX_PROJECTILE_FIELDS` = `pellets` · `dashSquares` · `dashMs` · `tracer` | `volleyOwns` asks the *cartridge*, and a stun-dart or baton 00 shell is buckshot by caliber while being a needle swarm or a blunt slug by picture — so the branch that replaces the round was replacing rounds the table had already described. The rule is written against the overlay table rather than against a list of load names, so a new row that names its own geometry is covered the day it is added. Both the fan-out and `payloadPresentationMs` ask it, so the tail matches the picture actually drawn. §3.2b |
-| ⭐ **F7 — the load's per-hit riders travel with the pattern** | zone flags gain `stunSaveOnHit` · `stunSaveMod` · `dotEnabled` · `dotTurns` · `dotType` · `dotDamageFormula` · `effectTypes`; `_applyAreaHitToToken` makes the single-target flow's own two calls | The pattern carried the ARMOUR half of what a load does and nothing else. That was invisible while only flechette threw a pattern (a load with no riders); the moment RAW buckshot joined the pattern flow, every 00 shell carrying riders lost them — a stun dart's −2 and an incendiary's ignition simply stopped happening, because the pattern outlives the payload and the region recorded neither. The confirm now applies them **per landed shell per token**, mirroring `_autoApply` exactly, including its ordering (the shock-state write before the prompt that reads it). Loads with no riders store the "does nothing" values, and a pattern placed before this change resolves unchanged. |
+| ⭐ **F7 — the load's per-hit riders travel with the pattern** | zone flags gain `stunSaveOnHit` · `stunSaveMod` · `dotEnabled` · `dotTurns` · `dotType` · `dotDamageFormula` · `effectTypes`; `_applyAreaHitToToken` makes the single-target flow's own two calls | The pattern carried the ARMOUR half of what a load does and nothing else. That was invisible while only flechette threw a pattern (a load with no riders); the moment RAW buckshot joined the pattern flow, every 00 shell carrying riders lost them — a stun dart's −2 and an incendiary's ignition simply stopped happening, because the pattern outlives the payload and the region recorded neither. The confirm now applies them **per landed shell per token**, mirroring the single-target apply exactly, including its ordering (the shock-state write before the prompt that reads it). Loads with no riders store the "does nothing" values, and a pattern placed before this change resolves unchanged. |
 | ⭐ **F1 — the canary gains two exception classes** | `skipped: "shooter"` bail; `jb2aActive()` gate | A sheet-fire by an actor with no token, and an install with the engine but no assets, are both ordinary and both made a healthy client say the module was faulty — the second while advising a reload that could not help. §7.5 |
 
 **2026-08-09 — the column deletion, the muzzle restoration, the volleybul trial and the identity pass.**
@@ -2136,7 +2324,7 @@ each one closed a blind spot in the *keeper* as well as in the product.
 | **BATON, 2026-08-09** | The hit mark becomes a **dust puff** (`jb2a.smoke.puff.ring.01.white`) | Enumerated the same way. Every blue impact on the tier (`001`–`004`, `011`, `012`) is a spike starburst; `impact.water.02.blue` reads liquid; `side_impact.part.smoke.*` is crystalline shards at 3067 ms; `smoke.puff.centered.grey` peaks at luminance 87/255 and is too faint to read as an arrival. The one genuinely *blunt* alternative — `side_impact.part.shockwave.blue`, a concentric ring wave — is rejected on **mechanism**, not looks: its arcs face one baked direction and the impact is drawn with no rotation, so it would point the same way whichever way the shot went. The chosen puff is radial, peaks at 217/255, and takes no `impactClipMs`, so the promotion rule trims it to the ordinary mark's 833 ms unchanged. |
 | **BATON, 2026-08-09** | **One matrix** repaints the slug *and* the shell's discharge column | `TRACER_COLOR_BATON` = hue 0, sat −0.85, **brightness 1.30**. The number to read is 1.30 — above 1, where the rejected value was 0.60. It says a different true thing about each element it touches: the slug's art is already greyscale (mean luminance 99/255 measured), so the *brightness* is what lifts it off a black floor; the column is `bullet.02`'s orange bloom, so the *desaturation* is what turns a fire blast into the pale gas flash of a reduced-pressure load. One matrix rather than two is what makes the shell's two elements agree — the standing uniformity ruling. |
 | **BATON, 2026-08-09** | The masked-merge rule is widened from **colour** to **asset** | The baton treatment is the first overlay that swaps a *file*, and a bare overwrite would have made `column` a way to hand a pistol a shotgun's discharge blast — one field away from what `columnColor` is already forbidden to do. `AMMO_FX_REPLACE_FIELDS` puts `tracer` and `column` behind the same key-presence mask. No shipped behaviour changes; the guarantee becomes structural instead of conventional. |
-| **SPREAD, 2026-08-09** | The shotgun is played **RAW**: buckshot throws the p.108 pattern, and which shot does is read from the **cartridge** at fire time | "Then do it RAW." The Core rules list the shotgun on their own Area Effect table — 1 m / 2 m / 3 m wide by Close / Medium / Long, 4d6 / 3d6 / 2d6, everyone in the path, no evasion. Deriving it from the caliber rather than from the stored `spreadMode` is not a style choice: every shotgun ammo item ever seeded carries `spreadMode: "single"`, so reading the flag would have made the book behaviour reachable only by hand-editing every ammo item in every existing world. Derived, an untouched world's buckshot patterns on its next shot with no migration. |
+| **SPREAD, 2026-08-09** | The shotgun is played **RAW**: buckshot throws the p.109 pattern, and which shot does is read from the **cartridge** at fire time | "Then do it RAW." The Core rules list the shotgun on their own Area Effect table — 1 m / 2 m / 3 m wide by Close / Medium / Long, 4d6 / 3d6 / 2d6, everyone in the path, no evasion. Deriving it from the caliber rather than from the stored `spreadMode` is not a style choice: every shotgun ammo item ever seeded carries `spreadMode: "single"`, so reading the flag would have made the book behaviour reachable only by hand-editing every ammo item in every existing world. Derived, an untouched world's buckshot patterns on its next shot with no migration. |
 | **SPREAD, 2026-08-09** | ⛔ **The slug is a LOAD, because the registry has no slug cartridge to be** | The build spec asked for "the slug caliber". There is none: `CALIBERS` models **one** shotgun entry, `"00"`, labelled *"00 Buck / Slug"*, and all six gauge spellings alias onto it — so the cartridge physically cannot say which of the two is chambered. A slug is therefore expressed as a shotgun-family ammo **modifier** (`slug`, `spreadMode: "slug"`), which is also what it is: the same hull, a different projectile. Additive only — one row in a lookup table, one selector option, no schema, no migration, nothing re-seeded. **This is the build lane's call and not a ruling.** |
 | **SPREAD, 2026-08-09** | An autoshotgun's N shells are **N rolls on ONE card** | No special autoshotgun rule exists in the recorded read, so RAW is that each shell throws its own pattern — and N patterns aimed identically *are* one pattern resolved N times. The mechanics stay per shell (N banded rolls per token, each through the armour pipeline, which is a different number from N × one roll the moment SP is in the way); only the aiming and the clicking collapse. Card text states the count; one result card lists the rolls. Captures 60b / 60c. |
 | **SPREAD, 2026-08-09** | The pattern is **ghost orange**, at 0.10 against core's 0.5, with the hatch off | "Ghost orange … the old opacity was horrible to look at and it blocks things including the shots." Values and the reason core forces this to be done on the drawn object are in §3.2a. The hatch is the half that actually occludes, so alpha alone would not have answered the report. Captures 60a and 60a-control are the same region under both treatments. |
@@ -2522,21 +2710,22 @@ presented while the screen stayed empty.
 | **The baton round's final look is not signed off** | ⚠ **The open item of this unit.** The darkening was rejected and the replacement was chosen, built and shipped while the user was away, so what is in the file is the build lane's best call and not a ruling. Three candidates were composed on the rig and photographed on **both** classes the uniformity rule covers — the SMG (rubber 9mm) and the shell (stun-dart 00) — against the rejected look as a control: **59-AB-smg-all-candidates-HELD.png** and **59-AB-shell-all-candidates-HELD.png** are the two grids to open, with per-candidate files 59-control / 59a (slug) / 59b (slug + dust, **shipped**) / 59c (stone) beside them. Every frame is HELD: the crossing time is stretched to 1200 ms for the camera, which is the only value the captures do not show at its shipped setting. A veto is cheap by construction — the whole treatment is `BATON_ROUND` plus one matrix plus one impact key, and the retired matrix is still declared one row field away. |
 | ~~The discharge column's on-screen presence at the new trim~~ | ⏪ **RETIRED 2026-08-09 BY DELETION.** The user replaced the element rather than ruling on it: the column is gone and the shell draws the ordinary muzzle lance at 1.9 squares with the 220 ms dwell that was always ruled for it. There is no longer an on-screen presence to call. §6. |
 | ~~⚠⚠ **THE VOLLEYBUL IS NOT ADOPTED**~~ | ✅ **CLOSED 2026-08-11 — VETOED at the bench.** §6 and §3.2b carry the verdict and what replaced it. The trial's own record follows, struck through: ⏪ Buckshot draws the volley clip on trial, at the user's own instruction to try it live at full range. Three things need eyes in motion and none of them can be measured: **(a) adopt or veto** the whole-clip look with its baked arrival fireballs; **(b) the chaos** — is a random mirror plus ±5° of aim jitter enough, too much, or the wrong kind of variation (`VOLLEY.jitterDeg`, `VOLLEY.mirrorFlip`); **(c) the miss** — a missed volley still lights fireballs in the dirt, because the arrival is baked into the asset and cannot be separated from the crossing. Accepted for the trial; capture **67c** is the frame to look at. Revert is `VOLLEY.enabled = false` and nothing else. Captures 67a / 67b / 67c / 67h. |
-| ~~The volley draws **five** rounds where our fan draws six~~ | ⏪ Moot with the veto — the shell row's `pellets: 6` is what draws. Recorded so it is a decision rather than a gap. The asset's round count is baked in and is not a knob; the shell row's `pellets: 6` is untouched and returns the moment the trial is switched off. Nothing in the rules ties the drawn count to the damage, which is resolved by the p.108 pattern and not by sprites. |
+| ~~The volley draws **five** rounds where our fan draws six~~ | ⏪ Moot with the veto — the shell row's `pellets: 6` is what draws. Recorded so it is a decision rather than a gap. The asset's round count is baked in and is not a knob; the shell row's `pellets: 6` is untouched and returns the moment the trial is switched off. Nothing in the rules ties the drawn count to the damage, which is resolved by the p.109 pattern and not by sprites. |
 | ~~The volley's arrival bloom reaches ~0.7 of a square past the aim point~~ | ⏪ Moot with the veto. Measured off the installed clips (the front edge holds at 0.94–0.99 of frame after arrival). It is the asset's own composition, not a placement error, and it is why the hit mark is suppressed rather than merely moved. |
 | **The dart grey is a build-lane pick** | ⚠ The *rule* is the user's (grey = darts, orange = balls and bullets, under the realism razor). The *numbers* are mine: hue 0, saturate −0.90, brightness 1.15. A veto is one constant (`TRACER_COLOR_DART`) and it reaches both dart loads at once, which is the point of it being one constant. Captures 67f / 67g / 67x and the 67fgh triptych. |
 | ~~Whether the stun-dart load should be allowed on ordinary cartridges~~ | ✅ **CLOSED 2026-08-11 — leave it as it is.** Asked whether to widen `AMMO_MODIFIERS.stundart.families` past the shotgun family so the load could reach a stream-firing weapon, the user ruled the question shut along with the bench row that raised it: the bench is for the loads the product ships, not for arranging a state it cannot otherwise reach. The family lock stands, the registry gate and the ammo sheet keep refusing the pairing, and no data was changed. The revival path, if it is ever wanted, is in §6 under the same date. |
 | **The shell lance at 1.9 squares is a build-lane pick** | ⚠ The *restoration* is the user's ruling; the *width* is mine, chosen against the ladder (rifle 1.6, heavy 2.1) and verified as a drawn 190 px on a 100 px grid. One constant, `FX_CLASSES.shotgun.muzzleSquares`. Capture 67d has the two shells and the rifle in one frame. |
 | ⭐ **A second volley variant exists and has never been drawn** | ⚠ **Found during the 2026-08-11 veto, needs eyes before anything changes.** `jb2a.volley_of_projectiles_Line.bullet.001.002.orangeyellow` decodes as 32 small blobs at mixed depths where the vetoed variant decodes as 7 in two aligned ranks — i.e. it may be the "small balls, irregular grouped spread" the ruling asked for, in one asset. Not adopted: the ruling requires captures first, and at 4867 ms it would need a trim and an engine-wait cap before it could carry a settle tag. §3.2b has the decode. |
-| ~~The pattern now resolves itself, with nobody left to press anything~~ | ✅ **CLOSED 2026-08-13 — the branch was taken.** The item offered two readings of "the resolution opens at the content end" and the user ruled for the second: **restore the apply moment.** `_placeSpreadZone` still awaits the same `presentationSettled(payload)`, and then posts a **resolution card** (`templates/chat/spread-resolution.hbs`) instead of calling `_confirmSpreadZone`. The card states the corridor's band, width, banded formula and shell count, lists **one row per figure the corridor caught** (in pattern / behind cover — exempt), says the p.108 basis in one line (`SpreadResolveBasis`), and carries **one** `.cp-confirm-spread-zone` control — the same class the guessed-corridor card uses, so one dispatch, one GM relay and one card-lock serve both. The region **stays on the scene** until that press resolves it; an unpressed one is still collected by the two expiry clocks it already had (round advance in combat, `SPREAD_ZONE_TTL_MS` outside one). Nothing about the rail moved: the wait, its floor and its cap are unchanged, and the card is posted from the damage rail rather than from the presentation. Pinned by `tests/cp2020-augmented-spread-zone.mjs` §10g (card arrives after the presentation floor, **nothing applied** — no result card and the figure's damage still 0 — then the press lands it, the region goes, and a second press resolves nothing) and §12 (an ignored card does not make the pattern immortal). |
+| ~~The pattern now resolves itself, with nobody left to press anything~~ | ✅ **CLOSED 2026-08-13 — the branch was taken.** The item offered two readings of "the resolution opens at the content end" and the user ruled for the second: **restore the apply moment.** `_placeSpreadZone` still awaits the same `presentationSettled(payload)`, and then posts a **resolution card** (`templates/chat/spread-resolution.hbs`) instead of calling `_confirmSpreadZone`. The card states the corridor's band, width, banded formula and shell count, lists **one row per figure the corridor caught** (in pattern / behind cover — exempt), says the p.109 basis in one line (`SpreadResolveBasis`), and carries **one** `.cp-confirm-spread-zone` control — the same class the guessed-corridor card uses, so one dispatch, one GM relay and one card-lock serve both. The region **stays on the scene** until that press resolves it; an unpressed one is still collected by the two expiry clocks it already had (round advance in combat, `SPREAD_ZONE_TTL_MS` outside one). Nothing about the rail moved: the wait, its floor and its cap are unchanged, and the card is posted from the damage rail rather than from the presentation. Pinned by `tests/cp2020-augmented-spread-zone.mjs` §10g (card arrives after the presentation floor, **nothing applied** — no result card and the figure's damage still 0 — then the press lands it, the region goes, and a second press resolves nothing) and §12 (an ignored card does not make the pattern immortal). |
 | **The aim ghost's alpha and the readout's wording are build-lane calls** | ⚠ The gesture and its order are the user's; the ghost is drawn at **0.18** where the planted pattern sits at 0.10 (it is being dragged, against a dark map, by the person who owns it), and the readout reads `"{band} band — {width}m wide, {dmg}"`. One constant (`SPREAD_PREVIEW_FILL_ALPHA`) and one i18n key (`SpreadPreviewReadout`). |
-| **The buckshot fan's new look is not signed off** | ⚠ **The open item of this unit.** The *veto* and the *direction* are the user's; the numbers are the build lane's, made from the bench report rather than in front of the user. Four constants and a fifth: `PELLET_CHAOS.slotFraction` **0.9** · `.reachFraction` **0.35** · `.sizeFraction` **0.25** · `.staggerMs` **45**, plus `FX_CLASSES.shotgun.dashSquares` **0.7** (revert **1**; not taken to **0.5**, the value already rejected by eye on this row). A veto on any one is a one-number edit. §3.2b. |
-| **The pellet arrival marks are a build-lane call, and so is the razor split** | ⚠ **The open item of this unit.** The ruling says "small arrival marks at pellet endpoints, ≤ 50 % of the volley's fireballs" and "fire arrivals reserved for the incendiary shell". The size (**0.45 sq**, under 40 % of the class's own aim mark) and the trim (**500 ms**) are mine; the *split* is implemented as one gate (`entry.groundFire`) rather than as two assets, so the incendiary shell keeps the fires it already sets and gets no dust over them — which is also what keeps the withdrawn 2026-08-09 blast-ring ruling honoured. If the intent was a fire mark **as well**, that is a different build. §3.2b. |
+| ~~The buckshot fan's new look is not signed off~~ | ✅ **CLOSED 2026-08-14 — the eyes arrived, from the LIVE table, and re-ruled it.** The 0.7 dash was ruled out (*"pellets are too small"*) and re-reverted to **1.0**, with `sizeFraction` tightened 0.25 → **0.15** so the smallest pellet stays clear of the 0.5 "dirt" floor. `slotFraction` 0.9 · `reachFraction` 0.35 · `staggerMs` 45 are untouched and remain build-lane numbers, but the look they serve has now been seen and redirected in play. §3.2b, §6. |
+| ~~The pellet arrival marks are a build-lane call, and so is the razor split~~ | ✅ **CLOSED 2026-08-14 — re-pointed dust → fire on the user's ratification.** The dust rings were rejected from live play and the fire look was put to the user as a conscious razor override and ratified: `PELLET_ARRIVAL` = `explosion.01.orange`, 0.45 sq, 550 ms. The razor's mechanism survives — the `entry.groundFire` gate still keeps the incendiary shell's arrival to its own persistent flames, so no load gets two arrivals on one square and the 2026-08-09 blast-ring withdrawal stays honoured. Revert is the dust pair, recorded at the site. §3.2b, §6. |
 | **Six pellet marks land on the same square as the restored aim-point star** | ⚠ **Raised by the build, needs eyes.** The veto restores the hit-confirmation star (1.15 sq at the aim point) *and* the ruling adds six 0.45 sq marks at the pellet endpoints — and on a hit the pellets converge within 0.28–0.84 squares of that aim point, so the seven marks overlap. The stagger spreads them over a few frames rather than stamping them at once. If it reads busy in motion, dropping **either** is one edit: the star is the class's `impactSquares`, the marks are `PELLET_ARRIVAL`. |
 | **The arrival ladder lengthens the apply window on painted classes** | ⚠ **Stated so it is a decision, not a surprise.** The mark is now drawn at the round's arrival, so the settle floor grows with it — the rifle's tail goes 933 → **1200** ms at the 30ft band and **1533** ms at 90ft, and a long shot therefore holds the damage window a little longer than it did. That is the correct direction (over-stating is safe, under-stating opens the window over a mark still coming) and the engine's own end still ends the wait first in ordinary play, but it is a felt change at the table. |
 | **The two impact clips are not signed off by ear** | ⚠ **The open item of this unit.** The *feature* and the two files are the user's picks (`flesh-01` = *Bullet Blood 3*, `sdp-02` = *HeavyBulletPing*, kept out of a 40-candidate audition). The *levels* are the build lane's: `HIT_SOUND_VOLUME` **0.55** and the structure clip's peak-match `gain` **1.1677**. ⚠ Peak-matching does **not** equalise them by ear — the structure clip carries **5.85 dB** more energy in its loudest 100 ms because it rings and the flesh clip does not, so it will read as the bigger event at a matched peak. That may be correct (a round into a vehicle IS the bigger event) but nobody has ruled it. Two constants revert either half. The audition manifest also records the user's own reservations about both files: `flesh-01` reads to two commenters as a *knife*, and `sdp-02` is honestly-labelled kitchenware foley described as "not loved". |
 | **`sfx()` carries the same locked-context hazard the impact leg now guards** | ⚠ **Found while fixing the impact leg 2026-08-12, deliberately NOT changed.** A shot fired on a client whose audio context has never been unlocked hands back a promise that never settles, and the report then plays whenever the first click happens rather than when the shot did (§6, same date). The impact leg skips outright; `sfx()` still parks, because changing it changes SHOT audio behaviour and that is a different unit's call. One line if it is wanted: the same `game.audio.locked` guard, with a `skipped` report. |
-| Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available on this host (verified against core's audio sources — no `playbackRate`, no `detune`, and the broadcast path discards extra fields). |
+| Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available through this host's audio API (verified against core's audio sources — no `playbackRate`, no `detune`). |
+| ⭐ **The score re-opens the pitch-variation question** | ⚠ **New with the 2026-08-15 transport rebuild, deliberately not taken as a rider.** The old objection to poking `Sound#sourceNode`'s Web Audio rate was that only the FIRING client would hear the variation while the broadcast copies played straight. Under the score every client plays its own copy, so a local rate wobble would now be uniform by construction. Still a design call (it reaches into a node core does not surface), recorded here so it is chosen rather than stumbled into. One site if wanted: `sfx()` / the hit-sound `fire()`. |
 | Real decal persistence (**blood only** now) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. The blood splash is transient by ruling — floor decals were explicitly held out of phase 1. ⏪ This row used to carry the incendiary ground mark alongside it; that element was **removed outright on 2026-08-10**, so the question is the splash's alone. |
 | ~~Animations run in slow motion and trail out after the shooting stops~~ | ✅ **CLOSED 2026-08-09.** Measured, not guessed: a fixed per-round sleep against a starved timer compounded to **2.24×** on every burst size tried. Anchored schedule + drop rule brings a 30-round burst from +6 461 ms of drift to **+89 ms**. §4.1a, and the keeper drives both halves. |
 | ~~The out-of-combat pattern TTL may not be deleting~~ | ✅ **CHECKED LIVE 2026-08-09, and it works.** A real fired pattern was placed out of combat, was still there at 20 s, and was removed by the module's own interval at **70.0 s** (TTL 60 s + one 15 s tick), with nothing called by hand. What had been seen lingering was a different rule — see the row below. |
@@ -2564,12 +2753,15 @@ presented while the screen stayed empty.
 | **The ring opacities are build-lane picks; the scales are measured** | ⚠ Each ring's `scaleToObject` is the decode's ink-fraction compensation (burning 1.18 = 400/339 · acid 1.05 · stunned 1.25 · poison 1.0) — measured, not chosen. The OPACITIES are mine: 0.85 / 0.8 / 0.9 / 0.85, dead 0.55. Every one is a single constant and a veto costs nothing. |
 | **The overlays ride the shot rail's master switch and have none of their own** | ⚠ `combatFxEnabled` governs both, which is what the docket specified. A table that wants gunfire effects but no condition marks (or the reverse) has no way to say so today; a dedicated sub-toggle is one setting plus one reader if it is wanted. |
 | **An evicted overlay is silent about being evicted** | ⚠ Past `maxLive` = 60 the oldest mark is ended to make room, so on a very busy scene a figure can be wearing a condition with nothing drawn until the next event touching it redraws it. The reconciler makes this self-correcting rather than permanent, and 60 is twelve fully-marked figures, but the failure mode is worth knowing before someone reports a missing flame. |
+| **A canvas torn down mid-load can still destroy an effect mid-activate — inside the engine** | ⚠ **The residual window of the 2026-08-15 wipe-race fix, the engine's own and stated honestly.** The sweep now starts strictly after Sequencer's per-load wipe, which closes the reproducible case. What remains: rapid scene flips can tear the canvas down while an overlay is still inside its asset load, and Sequencer destroys it mid-`activate` with the same unheld rethrow. Rare (needs the flip to land inside a ~860 ms load), self-corrects on the next reconciling event, and only Sequencer can close it — its `_initialize` resolves the play promise before rethrowing, so no caller can hold the rejection. Worth an upstream report to the Sequencer project. |
 | ⛔⛔ **THE ARRIVAL'S FIVE FIGURES ARE A CINEMATIC, NOT FIVE FIGURES — AND THAT IS A BUILD-LANE CALL** | ⚠ **THE OPEN ITEM OF THIS UNIT, and the first thing to ask.** The reference shows five people getting out. What ships is five SPRITES: no actor, no token, no document of any kind (asserted both directions by the keeper). The reasoning is that real figures are a *document* feature carrying questions a presentation rail cannot answer — which actors, owned by whom, cleaned up when, and what happens to them when the aircraft leaves — and half-building one is worse than not building it. If what was wanted is five figures a table can move and roll for, that is the non-player-figure generator's job and this sequence becomes its trigger: the seam is `figureSchedule()`, which already returns five stated points and five stated instants, so a document-creating caller has exactly the geometry it needs and nothing else has to move. |
 | **An asset ask: there is no aircraft art** | ⚠ **Recorded rather than solved, and nothing was scraped.** All 2 061 installed keys were enumerated; the free tier has no aircraft, and neither the module nor the base system ships one (module `img/` is five files; the system's is 22, all sheet furniture). So the airframe is an engine-native rounded shape — a dark planform with a lit edge, which is at least what a top-down camera would see. **With a licensed top-down aerodyne image this becomes one `.file()` call and the shape goes**, along with `airframeShape()` and the offset correction under it. That is the single highest-value asset the user could hand this rail. |
 | **A sound ask: there is no station-keeping bed** | ⚠ **Measured, not assumed (§2b.6).** Every candidate in the 46-file library decays to silence and none is a rotor or turbine LOOP, so the longest phase of the sequence — a machine hanging in the air — is silent. The descent gets `fx-scifi-whoosh` (197 Hz, decaying, the lowest thing shipped) because it genuinely fits that one beat. What is wanted is a **loopable low turbine/rotor bed** and, if a second is ever sourced, a spin-up/spin-down pair for the arrival and departure. No audio was sourced for this unit, per the docket. |
 | **A full reload loses a placement that is on station** | ⚠ **Stated so it is a decision, not a surprise.** Nothing is persisted (§G/22), so the record of what is standing lives in each client's memory. A scene change and a canvas rebuild are recovered by the reconciler; a browser reload is not, and the referee places it again. Persisting it would mean a document write from presentation, which this rail does not do — the alternative, if it is ever wanted, is the referee's own client answering a "what is on station?" request from a joining client, which is a socket round trip rather than a write. |
 | **The arrival's heading is fixed** | ⚠ The rectangle is axis-aligned and the aircraft comes in from screen-north (`entryPointFor`). One heading means one rotation basis and nothing computing a second one (§B/6), which is why v1 has it. A referee-chosen heading is a rotation applied to the plate, the four marks, the hull and this one point — not a new mechanism — plus a way to express it in the ghost. |
 | **Twelve numbers in the arrival's ladder are build-lane picks** | ⚠ **The rest of the open items for this unit, and every one is a one-edit veto** (the full list with its ships-as values is in §5). The five facts from the reference are rulings and are built; these are the numbers around them: the 4 × 6 footprint · the hull's 2.4 × 4.6 lozenge at fill alpha **0.72** (it is a heavy dark shape over somebody's map — the most likely thing to be objected to) · the 900 / 2600 ms entry and descent · the **1200 ms** ring spacing · the 0.9 / 1.1 / 0.18 figure spread · the 2200 ms departure · and the descent cue at **0.5**. |
+| **The pulsed burst's decay tail starts one frame above the floor** | ⚠ **Cosmetic, called out by the 2026-08-14 cert rather than fixed.** The decay-entry guard skips decay frames brighter than what is on screen, but its `length − 1` bound always writes the envelope's **last** frame — shipped envelope `[0.6, 1, 1, 0.7, 0.4]` against the pulse floor **0.35**, so a burst ending at the floor steps **up 0.05 for one frame** (a 14 % step) before the light dies. Arguably deliberate: running the skip to the end would cut the light off abruptly from the floor instead of fading. The keeper asserts the guard's real guarantee (bright frames skipped) and prints the last-frame arithmetic every run. If it ever reads as a blink, the fix is one comparison bound. |
+| **The flame-scene-cap keeper leg is flaking, and the reading is environmental** | ⚠ **Pre-dates FX unit #1; wants a RIG RESTART before any reading is trusted.** The leg's alive-count readings slid 3, 4, 4, 2, 1 across one long rig session while the queue half stayed right every time (5 bursts queued 20 flames) — a degrading client, not a cap defect (the cap's own eventually-consistent, errs-low behaviour is documented at the 2026-08-13 trim entry in §6). Re-run the suite on a fresh rig before touching anything. |
 | Exotic weapon palette (bows, beams) | No FX class exists; the arrow ammo loads therefore have no overlay rows. A design unit of its own. |
 | Pistol/SMG automatic fire is smokeless | A consequence of retiring the burst smoke stream — `bullet.01` carries none of its own. One row field (`tracer` → `bullet.02.orange`) if that is ever wanted. |
 | Vision mask vs. self-luminous sprites | The engine offers no route that clears the darkness and keeps the mask. Accepted, documented at the site. |
