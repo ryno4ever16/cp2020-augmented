@@ -113,7 +113,6 @@ const setup = await page.evaluate(async (SCOPE) => {
       // longer exports a constant for it — leg D asserts it is never drawn.
       withdrawnGroundMark: "jb2a.scorched_earth.black",
     },
-    autoApply: (() => { try { return game.settings.get(SCOPE, "damageAutoApply"); } catch (e) { return "?"; } })(),
     baseline: {
       cards: game.messages.size,
       regions: scene.regions.map(r => r.id),

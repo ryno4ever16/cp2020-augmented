@@ -17,6 +17,10 @@
  *  - no document is written: the scene's own effect flags stay empty throughout
  *  - the missing-key degrade, through the rail's existing database seam
  *  - TWO SESSIONS on one figure: one ring each, its own, and the delete clears both canvases
+ *  - THE SCENE-LOAD WIPE RACE (§12): a marked figure survives a canvas round trip with no uncaught
+ *    page error, the mark is still there afterwards, and the redraw is OBSERVED to happen after the
+ *    engine's own after-wipe signal — plus a hand-driven control that puts the sweep back on the old
+ *    canvasReady timing and shows the draw landing inside the wipe window instead
  *  - 0 console errors
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
@@ -35,6 +39,13 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
 // The engine losing a race with itself while an effect is torn down mid-initialisation — already on
 // record as a keeper trap (isolation-proven not ours; see the fx-rail spec's note on the same frame).
+//
+// ⚠ THE FILTER IS NOT A BLANKET PARDON ANY MORE. The module-side half of this frame — our sweep
+// drawing into Sequencer's post-scene-load wipe — was closed on 2026-08-15 (status-fx.js now sweeps on
+// `sequencerEffectManagerReady`), and §12 asserts the RAW count at zero across a scene round trip, this
+// filter deliberately not applied. What stays pardoned here is the engine's residual window that no
+// registration order on our side can close (an effect still loading when the canvas itself tears down),
+// which §12's control section provokes on purpose.
 const ENGINE_TEARDOWN_RACE = /Cannot set properties of null \(setting 'volume'\)/;
 const engineRaces = [];
 page.on("console", m => {
@@ -645,6 +656,180 @@ await page.evaluate(async ({ actorId, userId }) => {
   try { await game.actors.get(actorId)?.delete(); } catch (_e) { /* already gone */ }
   try { await game.users.get(userId)?.delete(); } catch (_e) { /* already gone */ }
 }, { actorId: twoFixture.actorId, userId: gm2.id });
+
+/* ─────────────────── §12 the scene-load wipe race ─────────────────── */
+// ⭐⭐ THE DEFECT THIS SECTION PINS (measured 2026-08-15, import-staging/AUDIO-PAGEERROR-DIAGNOSIS.md).
+// On EVERY scene load Sequencer's own debounced setup runs `initializePersistentEffects →
+// tearDownPersistentEffects`, which destroys every live effect on the client — armed as early as
+// canvasReady+241 ms on this rig. The sweep used to ride `canvasReady` directly, so it drew the rings
+// INTO that window: a ring still inside its ~860 ms asset load when the wipe landed was destroyed
+// mid-`activate`, and the engine rethrew out of its own unheld `_initialize` promise as an uncaught
+// "Cannot set properties of null (setting 'volume')". The console noise was the lesser half — the mark
+// was also SILENTLY EATEN (the destroy is not reported through `endedSequencerEffect`, so nothing
+// re-issued it) and the figure went unmarked for the rest of the session.
+//
+// RED SIDE ON RECORD, not re-created here: the diagnosis reproduced the uncaught error on 4 of 4
+// consecutive walkthrough runs against the unfixed tree, plus twice more from a standalone probe that
+// did nothing but a scene round trip on a world holding one marked figure (its §4 "Minimal
+// reproduction"). §12b below drives the OLD timing by hand — without touching the source — so the
+// ordering difference is proven inside this spec rather than only cited.
+//
+// The three readings this section takes, in the diagnosis's own terms:
+//   (a) not one uncaught page error across the round trip — the raw count, ENGINE_TEARDOWN_RACE
+//       filter deliberately NOT applied
+//   (b) the mark is still on the figure after the return, read back by its stamped name
+//   (c) the ordering BY OBSERVATION: the redraw was issued after the engine's after-wipe signal fired
+//       for that load, not before it — hook timestamps recorded inside the page
+console.log("\n§12 a canvas round trip on a marked figure — the wipe race");
+const errBase = errors.length, raceBase = engineRaces.length;
+
+const wipeSetup = await page.evaluate(async ({ mod }) => {
+  const M = await import(mod);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // Hook-timestamp instrumentation. Recording only — nothing here holds a promise or changes an
+  // ordering, which matters because merely attaching a handler to the engine's detached
+  // `_initialize()` promise is enough to make the race stop presenting (diagnosis §1).
+  const t0 = performance.now();
+  const marks = [];
+  const rec = (label, detail) => marks.push({ t: Math.round(performance.now() - t0), label, detail: detail ?? null });
+  const ids = {
+    canvasReady:  Hooks.on("canvasReady", () => rec("canvasReady", canvas?.scene?.name ?? null)),
+    managerReady: Hooks.on("sequencerEffectManagerReady", () => rec("managerReady")),
+    created:      Hooks.on("createSequencerEffect", (e) => rec("effectIssued", String(e?.data?.name ?? ""))),
+    ended:        Hooks.on("endedSequencerEffect", (e) => rec("effectEnded", String(e?.data?.name ?? ""))),
+  };
+  window.__PW_WIPE = { marks, rec, ids };
+
+  for (const a of game.actors.filter(a => a.name === "__PW__WipeRaceSubject")) await a.delete().catch(() => {});
+  for (const s of game.scenes.filter(s => s.name === "__PW__WipeRaceScene")) await s.delete().catch(() => {});
+  const home = canvas.scene;
+  const actor = await Actor.create({ name: "__PW__WipeRaceSubject", type: "character" });
+  const proto = await actor.getTokenDocument({ x: 1200, y: 1400, actorLink: true });
+  const [tokenDoc] = await home.createEmbeddedDocuments("Token", [proto.toObject()]);
+  // The ground mark, which is the exact row the diagnosis caught being destroyed mid-load.
+  await actor.toggleStatusEffect("dead", { active: true });
+  await sleep(2500);
+  const name = M.statusFxNameFor(tokenDoc.id, "dead");
+  const up = M.liveStatusFx().filter(e => String(e?.data?.name ?? "") === name).length;
+
+  const away = await Scene.create({ name: "__PW__WipeRaceScene", width: 2000, height: 2000, grid: { size: 100 } });
+  return { actorId: actor.id, tokenId: tokenDoc.id, homeId: home.id, homeName: home.name, awayId: away.id, name, up };
+}, { mod: MOD });
+console.log(`  (fixture: figure ${wipeSetup.tokenId} marked on "${wipeSetup.homeName}", scratch canvas __PW__WipeRaceScene)`);
+check("the ground mark is up before the round trip", wipeSetup.up === 1, `${wipeSetup.up} drawn`);
+
+// ── §12a the shipped ordering ──
+// A CLIENT-LOCAL scene switch (`view`), not `activate`: it raises the same
+// canvasTearDown → canvasInit → canvasReady cycle that arms Sequencer's setup — which is the whole
+// mechanism — while leaving the world's active scene where the rig had it.
+const roundTrip = await page.evaluate(async ({ mod, homeId, awayId, name }) => {
+  const M = await import(mod);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const W = window.__PW_WIPE;
+  W.rec("MARK switch away");
+  await game.scenes.get(awayId).view();
+  await sleep(5000);
+  W.rec("MARK switch back");
+  const from = W.marks.length;
+  await game.scenes.get(homeId).view();
+  await sleep(9000);
+  return {
+    from,
+    marks: W.marks.slice(),
+    present: M.liveStatusFx().filter(e => String(e?.data?.name ?? "") === name).length,
+    onHome: canvas.scene.id === homeId,
+  };
+}, { mod: MOD, homeId: wipeSetup.homeId, awayId: wipeSetup.awayId, name: wipeSetup.name });
+await page.waitForTimeout(2000);
+const err12a = errors.length - errBase, race12a = engineRaces.length - raceBase;
+
+// (a) — the raw count, both buckets, because the filtered bucket is exactly the frame under test.
+check("ZERO uncaught page errors across the round trip (raw count, the engine-teardown frame included)",
+  err12a === 0 && race12a === 0, `${err12a} unfiltered + ${race12a} teardown-frame`);
+// (b) — the mark itself, which is the half a console filter would have hidden.
+check("the figure is still wearing its mark after the return, under the stamped name",
+  roundTrip.present === 1 && roundTrip.onHome, `${roundTrip.present} drawn (on home canvas: ${roundTrip.onHome})`);
+
+// (c) — the ordering, read off the recorded hooks for the RETURN load only.
+const seg = roundTrip.marks.slice(roundTrip.from);
+const iCR   = seg.findIndex(m => m.label === "canvasReady");
+const iMR   = seg.findIndex((m, i) => m.label === "managerReady" && i > iCR);
+const iDraw = seg.findIndex((m, i) => m.label === "effectIssued" && m.detail === wipeSetup.name && i > iCR);
+console.log("  (return load, recorded: " + seg.filter(m => m.label !== "effectIssued" || m.detail === wipeSetup.name)
+  .map(m => `${m.t}ms ${m.label}${m.detail && m.label === "canvasReady" ? ` ${m.detail}` : ""}`).join(" → ") + ")");
+check("the return load raised the engine's own after-wipe signal", iCR >= 0 && iMR > iCR,
+  `canvasReady@${iCR} managerReady@${iMR}`);
+check("and the mark's redraw was issued AFTER that signal, not into the wipe window",
+  iDraw > iMR && iMR >= 0, iDraw < 0 ? "no redraw recorded for this mark" : `signal@${seg[iMR]?.t}ms redraw@${seg[iDraw]?.t}ms`);
+// The negative beside it: nothing was issued for this mark in the canvasReady→signal gap, which is
+// precisely where the old registration put it.
+check("NEGATIVE: nothing was issued for this mark between canvas ready and the signal",
+  !seg.some((m, i) => m.label === "effectIssued" && m.detail === wipeSetup.name && i > iCR && i < iMR),
+  seg.filter((m, i) => m.label === "effectIssued" && m.detail === wipeSetup.name && i > iCR && i < iMR)
+     .map(m => `${m.t}ms`).join(",") || "none");
+
+// ── §12b the control: the OLD timing, driven by hand ──
+// No source is reverted. A handler registered for this one return load calls the sweep at canvasReady
+// timing, which is where the retired registration ran it. The deterministic reading is the ORDERING —
+// that draw lands before the engine's signal, i.e. inside the wipe window. Whether the wipe actually
+// catches it on any given run is the race itself, so it is reported rather than asserted; the tell is
+// the reconciler having to re-issue the same mark after the signal, which only happens if the first
+// copy was destroyed without being reported.
+console.log("\n§12b control — the retired canvasReady timing draws into the wipe window");
+const ctlBaseErr = errors.length, ctlBaseRace = engineRaces.length;
+const control = await page.evaluate(async ({ mod, homeId, awayId, name }) => {
+  const M = await import(mod);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const W = window.__PW_WIPE;
+  await game.scenes.get(awayId).view();
+  await sleep(5000);
+  const from = W.marks.length;
+  // Scoped to the return load only, and removed immediately after it.
+  const ctl = Hooks.on("canvasReady", () => {
+    if (canvas?.scene?.id !== homeId) return;
+    W.rec("forcedOldTimingSweep");
+    M.syncSceneStatusFx();
+  });
+  await game.scenes.get(homeId).view();
+  await sleep(9000);
+  Hooks.off("canvasReady", ctl);
+  return {
+    from, marks: W.marks.slice(),
+    present: M.liveStatusFx().filter(e => String(e?.data?.name ?? "") === name).length,
+  };
+}, { mod: MOD, homeId: wipeSetup.homeId, awayId: wipeSetup.awayId, name: wipeSetup.name });
+await page.waitForTimeout(2000);
+const cSeg  = control.marks.slice(control.from);
+const cCR   = cSeg.findIndex(m => m.label === "canvasReady");
+const cMR   = cSeg.findIndex((m, i) => m.label === "managerReady" && i > cCR);
+const cEarly = cSeg.findIndex((m, i) => m.label === "effectIssued" && m.detail === wipeSetup.name && i > cCR && i < cMR);
+const cLate  = cSeg.findIndex((m, i) => m.label === "effectIssued" && m.detail === wipeSetup.name && i > cMR);
+console.log("  (control load, recorded: " + cSeg.filter(m => m.label !== "effectIssued" || m.detail === wipeSetup.name)
+  .map(m => `${m.t}ms ${m.label}`).join(" → ") + ")");
+check("the hand-driven old timing issues the mark BEFORE the engine's after-wipe signal (the retired window)",
+  cCR >= 0 && cMR > cCR && cEarly > cCR && cEarly < cMR,
+  `canvasReady@${cSeg[cCR]?.t}ms draw@${cEarly >= 0 ? cSeg[cEarly]?.t : "—"}ms signal@${cMR >= 0 ? cSeg[cMR]?.t : "—"}ms`);
+console.log(`  (race outcome this run: ${errors.length - ctlBaseErr + (engineRaces.length - ctlBaseRace)} uncaught teardown error(s)`
+  + `; the wipe ${cLate > cMR ? "ATE the early draw — the reconciler re-issued it after the signal" : "did not catch the early draw"})`);
+// Whatever the race did, the reconciler on the engine's signal is what leaves the figure marked.
+check("the figure ends the control load marked anyway — the signal-side sweep is the recovery",
+  control.present === 1, `${control.present} drawn`);
+
+await page.evaluate(async ({ actorId, tokenId, awayId, homeId }) => {
+  const W = window.__PW_WIPE;
+  for (const [hook, id] of [["canvasReady", W.ids.canvasReady], ["sequencerEffectManagerReady", W.ids.managerReady],
+                            ["createSequencerEffect", W.ids.created], ["endedSequencerEffect", W.ids.ended]]) {
+    try { Hooks.off(hook, id); } catch (_e) { /* already off */ }
+  }
+  delete window.__PW_WIPE;
+  const actor = game.actors.get(actorId);
+  try { await actor?.toggleStatusEffect("dead", { active: false }); } catch (_e) { /* already clear */ }
+  await new Promise(r => setTimeout(r, 1200));
+  try { await game.scenes.get(homeId)?.deleteEmbeddedDocuments("Token", [tokenId]); } catch (_e) { /* already gone */ }
+  try { await actor?.delete(); } catch (_e) { /* already gone */ }
+  try { await game.scenes.get(awayId)?.delete(); } catch (_e) { /* already gone */ }
+}, { actorId: wipeSetup.actorId, tokenId: wipeSetup.tokenId, awayId: wipeSetup.awayId, homeId: wipeSetup.homeId });
+await page.waitForTimeout(2500);
 
 /* ─────────────────── cleanup ─────────────────── */
 await page.evaluate(async ({ actorId, tokenId }) => {

@@ -557,6 +557,18 @@ function _onEffectEnded(effect) {
  * a mark is what makes the LOCAL draw correct rather than a compromise: every client reaches the same
  * answer from the same public state, so nobody needs to be told.
  */
+/**
+ * The scene-load sweep's generation bookkeeping (2026-08-15, the wipe race — see the note at the
+ * canvasReady registration). `_canvasSweepGen` counts canvas loads; `_managerSweptGen` records the
+ * last generation the engine's own after-wipe signal (`sequencerEffectManagerReady`) served. The
+ * fallback delay must outlast Sequencer's debounced setup (measured arming at canvasReady+241 ms,
+ * its own scene-switch timer at +450 ms) — it exists only for hosts where the signal never comes,
+ * where there is also no wipe to race, so generosity costs nothing.
+ */
+let _canvasSweepGen = 0;
+let _managerSweptGen = -1;
+const CANVAS_SWEEP_FALLBACK_MS = 3000;
+
 export function registerStatusFx() {
   const syncFromDoc = (doc) => {
     const actor = doc?.parent?.documentName === "Actor" ? doc.parent : (doc?.actor ?? doc);
@@ -592,7 +604,38 @@ export function registerStatusFx() {
   // teardown of an attached effect is not something we can rely on having happened yet.
   Hooks.on("deleteToken", (tokenDoc) => clearTokenStatusFx(tokenDoc?.id));
   // Nothing survives a reload, so the reload path is a redraw from the conditions that are still there.
-  Hooks.on("canvasReady", () => syncSceneStatusFx());
+  //
+  // ⏪⏪ THE SWEEP NO LONGER RIDES `canvasReady` DIRECTLY (2026-08-15, the scene-switch wipe race —
+  // measured, import-staging/AUDIO-PAGEERROR-DIAGNOSIS.md). On every scene load Sequencer's own
+  // debounced setup runs `initializePersistentEffects → tearDownPersistentEffects`, which destroys
+  // EVERY live effect — measured arming as early as canvasReady+241 ms. A sweep taken at
+  // `canvasReady` therefore drew the rings INTO the wipe's window: an overlay still inside its
+  // ~860 ms asset load when the wipe landed was destroyed mid-`activate`, which (a) rethrows out of
+  // the engine's `_initialize` into an unheld promise — the uncaught "Cannot set properties of null
+  // (setting 'volume')" pageerror, misattributed to whatever module line the async tag pointed at —
+  // and (b) SILENTLY EATS the ring: the destroy is not reported via `endedSequencerEffect`, so the
+  // reconciler thinks the mark is worn until something else touches that figure. Real tables are
+  // MORE exposed than the rig (more tokens arm the debounce earlier; colder caches load longer).
+  //
+  // The sweep now rides `sequencerEffectManagerReady` — the engine's own "the wipe is done" signal,
+  // fired at the tail of initializePersistentEffects on EVERY scene load — so the redraw starts
+  // strictly after the teardown that was killing it. `canvasReady` remains only as a LATE FALLBACK
+  // for a host where that signal never comes (no Sequencer, or a version without the hook): a
+  // generation counter says which canvas the engine has already served, and the fallback sweeps
+  // only if its own canvas was never served by the signal. The fallback delay only has to beat the
+  // debounced setup it exists to avoid; with no engine at all the sweep draws nothing anyway.
+  //
+  // ⚠ The residual window is the engine's, stated honestly: an effect still loading when the CANVAS
+  // ITSELF tears down (rapid scene flips) can still be destroyed mid-activate inside Sequencer, and
+  // no registration order on our side can close that.
+  Hooks.on("canvasReady", () => {
+    const gen = ++_canvasSweepGen;
+    setTimeout(() => { if (_managerSweptGen < gen) syncSceneStatusFx(); }, CANVAS_SWEEP_FALLBACK_MS);
+  });
+  Hooks.on("sequencerEffectManagerReady", () => {
+    _managerSweptGen = _canvasSweepGen;
+    syncSceneStatusFx();
+  });
   Hooks.on("canvasTearDown", () => clearStatusFx());
   Hooks.on("endedSequencerEffect", _onEffectEnded);
   // ⭐⭐ REGISTER **AND CATCH UP**, ON THE ENGINE'S OWN SIGNAL — and the second half of that sentence is
@@ -611,8 +654,20 @@ export function registerStatusFx() {
   // is simply lost, which looked exactly like the missing redraw it was meant to fix. Hanging the
   // catch-up on `sequencerReady` puts it after both. Safe to run repeatedly: the sweep is a RECONCILER,
   // so a pass over an already-correct scene draws nothing and ends nothing.
-  Hooks.on("sequencerReady", () => syncSceneStatusFx());
-  // And the case the hook cannot cover: this function called when the engine is ALREADY up (a late
-  // enable, or a spec importing the module mid-session), where `sequencerReady` has long since fired.
+  //
+  // ⏪⏪ AND THAT CATCH-UP IS NOW RETIRED (2026-08-15, the first-load double draw —
+  // import-staging/WIPE-RACE-VERIFY.md). The finding above stands; what changed is that
+  // `sequencerEffectManagerReady` (registered higher up) ALSO fires on the first load, ~1 ms after
+  // `sequencerReady` and strictly after the engine's persistent-effects wipe — and with both
+  // registered, BOTH drew: the engine does not register a drawn effect for ~140 ms, so the second
+  // sweep's census still read "missing" and every marked figure joined wearing TWO copies of its
+  // ring (measured 4/4; one over-bright ring, two scene-cap slots; the shared stamped name kept the
+  // clear path working). One drawer now. If the engine's signal is ever absent (a Sequencer version
+  // without the hook), the generation-counted `canvasReady` fallback above serves the first load
+  // too — three seconds late, and on such a host there is no wipe to race.
+  // ⏪ Revert is the one line: `Hooks.on("sequencerReady", () => syncSceneStatusFx());`
+  //
+  // The case no load signal covers: this function called when the engine is ALREADY up (a late
+  // enable, or a spec importing the module mid-session), where the load signals have long since fired.
   if (canvas?.ready && globalThis.Sequencer?.EffectManager) syncSceneStatusFx();
 }

@@ -7,11 +7,15 @@
  * Dependency policy (design doc §0): Sequencer + JB2A are OPTIONAL. Sprite/tracer verbs silently
  * no-op when they are absent; the muzzle LIGHT and the AUDIO are native and always work.
  *
- * What runs where: `cyberpunk2020.weaponFired` fires only on the client that resolved the shot, so
- * this adapter reaches the other clients the same way the rest of the module does — the audio is
- * emitted with the broadcast flag, the muzzle flash is announced on the module's socket channel and
- * drawn locally by every client that receives it, and Sequencer effects broadcast through
- * Sequencer's own socket.
+ * What runs where (⏪ REBUILT 2026-08-15 — THE PERFORMANCE SCORE, full design at MSG_SCORE):
+ * `cyberpunk2020.weaponFired` fires only on the client that resolved the shot. That client emits ONE
+ * datagram per payload — the score — and every client, itself included, runs the SAME fan-out
+ * locally from it: sprites via `.locally()`, audio played without the broadcast flag, the muzzle
+ * light built and driven per client. Seeded determinism off the payload's own fields is what makes
+ * the independent performances one picture. The retired shape (per-sound broadcast + per-flash
+ * datagram + Sequencer's per-sprite socket) delivered one shot over three unrelated transports,
+ * which is where the cross-client audio/picture skew lived. The burning ground alone stays on the
+ * engine's broadcast — its scene-wide census needs the engine's shared bookkeeping.
  *
  * Numbers are the 60fps frame-study measurements recorded in the design doc §2 (per-shot cadence
  * ~80ms, flash envelope attack 1 frame → hold 2 → decay 2). They are named constants below so the
@@ -33,12 +37,52 @@ import { metersToPixels } from "../vehicle/vehicle-grid.js";
 // Pure, dependency-free by design so BOTH rails can read it — see combat/scatter-table.js's header for
 // why the grenade table does not live in damage-hooks any more.
 import { scatterLandedPoint } from "../combat/scatter-table.js";
+// The pattern's PURE geometry — the same relocation, for the same reason (spread-geometry.js header):
+// the corridor this rail sweeps for victims must be the one the plant plants, and this file cannot
+// import damage-hooks to ask it. The polygon primitives and the occlusion exemption come from the
+// shared homes both flows already read.
+import { declaredSpreadAim, spreadAttackOutcome, scatteredSpreadCorridor } from "../combat/spread-geometry.js";
+import { rayPolygonPoints, pointInPolygon } from "../combat/area-geometry.js";
+import { areaOcclusionTest } from "../combat/area-shapes.js";
 import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
 
-/** Socket message announcing one flash. Same channel + type-dispatch shape as every other relay in
- *  the module (cover chew, IP, missile flight): one `game.socket.on` per feature, filtered by type. */
+/**
+ * ⭐⭐ THE PERFORMANCE SCORE (user ruling 2026-08-14, "go on 2" — the structural fix for cross-client
+ * skew). ONE socket message per payload, carrying the payload itself; every client that receives it
+ * runs the SAME fan-out locally (`fxWeaponFired(payload, { remote: true })`), and every transient
+ * element of the performance is delivered LOCALLY on each client — Sequencer sections via
+ * `.locally()` (the status-fx idiom, ruled 2026-08-13), audio via a local (non-broadcast) play, the
+ * muzzle flash via each client's own build/drive. Seeded determinism (fxSeedOf off payload fields
+ * alone) is what makes N independent performances one picture.
+ *
+ * WHY: the retired shape delivered one shot over THREE unrelated transports — Sequencer's socket per
+ * sprite, core's `playAudio` per sound, our own datagram per flash — each with its own latency, so
+ * the picture and the sound could never be promised to agree on a remote client (the live-table
+ * desync reports, clock domain 3 of the sync taxonomy). A score has ONE transport hop, taken once,
+ * before the performance starts: skew between clients becomes a constant offset of the whole show
+ * (network latency on one datagram) instead of a per-element scramble.
+ *
+ * WHAT IS DELIBERATELY NOT SCORED (each stated at its own site):
+ *  - the BURNING GROUND stays on Sequencer's broadcast — it is long-lived scene dressing whose
+ *    scene-wide census (`maxLive`, oldest-out through the engine's manager) and late-joiner replay
+ *    NEED the engine's shared bookkeeping; a per-client copy would put the eviction rule at war
+ *    with itself. Same reasoning as the trauma-team sequence, which is untouched.
+ *  - the FACE-TARGET turn is a document write and runs ONLY on the firing client; remote clients
+ *    receive the rotation through core's own token broadcast as they always did.
+ *  - the APPLY-SEAM sounds (DamageApplicator, vehicle damage) still broadcast: an apply runs on one
+ *    client and has no remote performance to deliver it.
+ * Same channel + type-dispatch shape as every other relay in the module (cover chew, IP, missile
+ * flight): one `game.socket.on` per feature, filtered by type. No GM gate — nothing is written.
+ */
+const MSG_SCORE = "fxPerformanceScore";
+
+/** ⏪ RETIRED 2026-08-15 by the score (kept so the supersession is greppable): the per-flash datagram.
+ *  Every client now builds its own flash from its own performance of the score, so the flash needs no
+ *  announcement of its own — and the `holdMs`-rides-the-datagram rule (§6 2026-08-13) is moot with it:
+ *  each client computes the identical hold from the identical payload. Revert = re-emit this type in
+ *  fxMuzzleFlash and restore its branch in the socket handler (one commit, `git log -S MSG_FLASH`). */
 const MSG_FLASH = "fxMuzzleFlash";
 
 /** Where the shipped shot sounds live. Not a manifest entry — a plain asset directory. */
@@ -470,6 +514,42 @@ export const MUZZLE_BURST_LIGHT = Object.freeze({
   // worst case is MAX_FX_SHOTS (30) rounds at the slowest shipped cadence (the shell's 180 ms), which
   // is 5.22 s. Comfortably clear of that, and far short of "indefinitely".
   maxHoldMs: 8000,
+});
+
+/**
+ * ⭐⭐ THE PULSE ON THE HELD LIGHT (user ruling 2026-08-14 — the flat hold *"is just a light that
+ * stays on while the burst comes out"*, and the user's own counter-proposal is the design: *"created
+ * it and simply turned it on and off as many times as we needed, then deleted it"*).
+ *
+ * WHAT IT IS. While a burst's light is HELD (the block above), the park level is no longer flat full:
+ * the light rests at `floor` between rounds and POPS to full for `popMs` every time a round of the
+ * burst actually arrives (the re-point branch stamps the pop; the frame driver honours it). "Off" is
+ * an INTENSITY level on the one persistent source — never a collection remove — so the build/teardown
+ * storm the hold removed stays removed; the source set is still built once and torn down once.
+ *
+ * THE COST, STATED HONESTLY: a level change is a lighting sweep, so the pulse spends TWO sweeps per
+ * arriving round (floor→full, full→floor) where the flat hold spent ZERO during its span — against
+ * the retired per-round transport's build + teardown + ~5 envelope frames per round. Thirty rounds:
+ * ~60 sweeps vs the old ~260 with its 30 source builds. The floor is deliberately above zero so the
+ * dip reads as a strobe rather than as the room's lights failing, and the applied-equality skip in
+ * the driver means the frames BETWEEN edges still write nothing.
+ *
+ * WHY THE POP RIDES THE ARRIVING ROUND, not a metronome: the loop's real spacing drifts (see the
+ * self-tuning hold-extension note in muzzleFlashLocal) — a metronome pulse would strobe out of phase
+ * with the lances on any slow client. Stamped per arrival, the room pops exactly when a lance draws,
+ * whatever the real cadence turns out to be. At fast cadences (the 80 ms rifle) consecutive pops
+ * overlap and the light reads near-continuous — which is what a real 12-rounds-a-second discharge
+ * looks like; at the shell's 180 ms the strobe is plainly visible. No rate cap is needed: overlap IS
+ * the fast-cadence behaviour.
+ *
+ * ⏪ REVERT is one field: `enabled: false` restores the flat held glow with no other edit (the
+ * 2026-08-13 behaviour). `floor`/`popMs` are the look dials; popMs defaults to one envelope's length
+ * so a pop and a lone shot's flash are the same event to the eye.
+ */
+export const MUZZLE_BURST_PULSE = Object.freeze({
+  enabled: true,
+  floor: 0.35,
+  popMs: 90,
 });
 
 /**
@@ -1563,15 +1643,18 @@ export function rotateAbout(origin, point, deg) {
  *    count leaves no pellet sitting exactly on the aim line and the group cannot read as "one bolt
  *    plus strays". A burst stays bounded — the fan-out caps at MAX_FX_SHOTS units, so the worst case
  *    is MAX_FX_SHOTS × pellets tracers.
- *  - ⏪ `dashSquares` 1 → **0.7** (user ruling 2026-08-11, with the volley veto: *"buckshot = small
- *    balls"*, so the dashes have to stop reading as dashes). The number is the sprite's drawn WIDTH and
- *    the asset lights roughly a fifth of it, so shortening the frame shortens the trail more than it
- *    shortens the ball — which is the read the ruling asks for. It is NOT taken further than this on
- *    purpose: 0.5 was the FIRST value ever tried on this row and was rejected by eye as "a few pixels,
- *    reads as dirt on the screen" (the note below is that measurement, kept), so 0.7 is the shortest
- *    step that stays clear of the value already known to disappear. The per-pellet size jitter
- *    (PELLET_CHAOS.sizeFraction, ±25%) then spreads the six across 0.53–0.88, all of them above the
- *    rejected floor. ⏪ The revert value is `dashSquares: 1`. This wants eyes — it is a look call.
+ *  - ⏪⏪ `dashSquares` 0.7 → **1.0** (user ruling 2026-08-14, from the LIVE table: *"the pellets are
+ *    too small, you can only really see them once they've reached a certain distance from the
+ *    weapon"* — and, of the whole current look, *"previous shotgun designs were better and more
+ *    powerful looking"*). This RE-REVERTS the 2026-08-11 shrink recorded below: that step was flagged
+ *    "wants eyes — it is a look call" at the site, and the eyes have now ruled against it. 1.0 is the
+ *    original fan's own value, not a new guess. The near-muzzle invisibility half of the report is
+ *    also this number: at 0.7 with the chaos floor at 0.53, a pellet's lit streak (~a fifth of the
+ *    frame) drew under the 1.9-square muzzle flash for its first squares of travel; at 1.0 with the
+ *    tightened floor below it clears the flash a full step sooner. ⏪ The revert value is 0.7.
+ *  - (superseded record, kept whole:) `dashSquares` 1 → 0.7 (user ruling 2026-08-11, with the volley
+ *    veto: *"buckshot = small balls"*). The 0.5 first-try was rejected by eye as "a few pixels, reads
+ *    as dirt on the screen" — that floor measurement still binds the chaos range below.
  *  - the previous note, unchanged, and it is why 0.7 rather than 0.5: the drawn WIDTH of one pellet's
  *    sprite, height following the
  *    asset's own aspect (it is sized in grid units, so it is the same fraction of a square on any
@@ -1660,7 +1743,7 @@ export const FX_CLASSES = Object.freeze({
   pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, motes: 8,  impactSquares: 0.7 },
   smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, motes: 12, impactSquares: 0.75 },
   rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, motes: 13, impactSquares: 0.95 },
-  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 0.7, dashMs: 150, cadenceMs: 180 },
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1.0, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
 });
 
@@ -1749,19 +1832,42 @@ export const IMPACT_DUST = Object.freeze({ key: "jb2a.smoke.puff.ring.01.white",
  * mark is trimmed to, so these can never be the last thing on screen and the tail arithmetic does not
  * take a term for them.
  *
- * ⛔ THE RAZOR SPLIT — STANDARD BUCK GETS DUST, THE INCENDIARY SHELL GETS ITS FIRES. The ruling reserves
- * fire arrivals for the incendiary load, and the incendiary load ALREADY has them: its landing points
- * are the same pellet endpoints, and `fxGroundFire` sets a real flame burning at each one. So the split
- * is not two assets chosen by load name — it is one gate, `entry.groundFire`, and a load that lights
- * its landings does not also get dust over them. That also honours the standing 2026-08-09 ruling that
- * removed the api row's fire impact ("get rid of the blast circle that lands on the target"): drawing a
- * fire mark here would have re-created exactly the doubling that ruling deleted. The api shell's red
- * treatment is therefore untouched, which is what the user asked for.
+ * ⏪⏪ RE-POINTED DUST → FIRE (user ruling 2026-08-14, from the LIVE table: the dust rings *"leave
+ * large dust clouds on hit that don't look good"* — and the conscious override of the razor split
+ * recorded below was put to the user as a question and RATIFIED: small fireballs at the pellet
+ * endpoints). This is what the 2026-08-11 ruling actually asked for — *"the arrival fireballs were
+ * GREAT but scale them DOWN"* — and the dust ring was the stand-in that honoured the old razor
+ * instead. The razor's own concern survives intact: the INCENDIARY load still draws nothing here
+ * (the `entry.groundFire` gate below), so its lingering ground flames remain its distinct signature
+ * and no load gets two arrivals on one square.
+ *
+ * `key` — `jb2a.explosion.01.orange`, chosen out of the free tier's RADIAL fire blooms by decode
+ * rather than by name (2026-08-14, cv2 over the installed files, same recipe as every table here):
+ *     explosion.01.orange ..... 41f @30fps = 1367ms; blooms to 98% peak ink at 400ms; peak
+ *                               coverage 71%, luminance 255; content dies ~1033ms.  ⭐ picked.
+ *     explosion.05.orange ..... 3042ms, blooms at 1333ms — an arrival that peaks a second after
+ *                               its round landed. Rejected on the clock.
+ *     fireball.explosion ...... 4042ms spell centrepiece. Wrong scale for a 0.45-square mark.
+ * Radial, so the no-rotation property the dust was chosen for is kept.
+ *
+ * `clipMs: 550` — a trim, not the asset's life: keeps the 400ms bloom plus a beat of decay, drops
+ * the smoulder. Sits under the aim-point mark's 833ms exactly as the dust's 500 did, so these are
+ * never the last thing on screen and the tail arithmetic still takes no term for them.
+ *
+ * ⏪ The revert is the pair `key: "jb2a.smoke.puff.ring.01.white", clipMs: 500` (the dust look,
+ * whose own selection survey lives at IMPACT_DUST — that element is UNTOUCHED by this re-point and
+ * still owns the blunt-load arrival).
+ *
+ * (superseded razor record, kept whole:) ⛔ THE RAZOR SPLIT — STANDARD BUCK GETS DUST, THE INCENDIARY
+ * SHELL GETS ITS FIRES. The ruling reserved fire arrivals for the incendiary load, which ALREADY has
+ * them: its landing points are the same pellet endpoints, and `fxGroundFire` sets a real flame burning
+ * at each one. The split was one gate, `entry.groundFire`, honouring the 2026-08-09 ruling that
+ * removed the api row's fire impact ("get rid of the blast circle that lands on the target").
  */
 export const PELLET_ARRIVAL = Object.freeze({
-  key: "jb2a.smoke.puff.ring.01.white",
+  key: "jb2a.explosion.01.orange",
   squares: 0.45,
-  clipMs: 500,
+  clipMs: 550,
 });
 
 /**
@@ -2486,28 +2592,34 @@ export function shotSoundSrc(cls, { burst = false } = {}) {
 }
 
 /**
- * Play one shot sound for every client. Native audio, no dependency: the interface channel is used
- * so each player's own interface-volume slider governs it, and the broadcast flag reaches the
- * clients the weaponFired hook never ran on. Returns the Sound (or null when nothing was played).
+ * Play one shot sound on THIS client. Native audio, no dependency: the interface channel is used so
+ * each player's own interface-volume slider governs it. Returns the Sound (or null when nothing was
+ * played).
  *
- * PER-SHOT PITCH VARIATION IS NOT AVAILABLE HERE, and the finding is recorded rather than worked
+ * ⏪ THE BROADCAST FLAG IS RETIRED (2026-08-15, the score — see MSG_SCORE). The flag was what reached
+ * the clients the weaponFired hook never ran on; under the score every client RUNS the fan-out, so a
+ * broadcast here would sound each report once per connected client. The report now rides the same
+ * clock as the sprites it belongs to — this client's own loop — which is the whole point of the
+ * score: audio and picture cannot skew because they no longer take different transports. Revert is
+ * the second argument `true`, and only makes sense together with reverting MSG_SCORE.
+ *
+ * PER-SHOT PITCH VARIATION IS STILL NOT AVAILABLE, and the finding is recorded rather than worked
  * around: varying the playback rate a few percent per round is the ordinary way to keep repeated
  * copies of one clip from phasing into a single tone, but nothing in this host's audio layer carries
  * a rate. Verified against the core sources on this install (Foundry 14, client/audio/): the word
  * `playbackRate` and the word `detune` do not occur anywhere in that directory; a Sound's playback
- * options are exactly {delay, duration, fade, loop, loopStart, loopEnd, offset, onended, volume}; and
- * the broadcast path is narrower still — the receiving client handles `playAudio` by calling
- * `game.audio.play(src, {volume, loop, context})`, so ANY extra field put on the emitted object is
- * discarded on arrival. The underlying buffer node does expose a rate (it is a Web Audio node, and
- * `Sound#sourceNode` is public), but poking it would vary the sound on the FIRING client only while
- * every other client heard the unvaried version — a worse result than no variation at all. Making it
- * uniform would take a bespoke socket channel of our own, which is not worth a de-phasing nicety.
+ * options are exactly {delay, duration, fade, loop, loopStart, loopEnd, offset, onended, volume}.
+ * The underlying buffer node does expose a rate (it is a Web Audio node, and `Sound#sourceNode` is
+ * public) — ⭐ the score has REMOVED the old cross-client objection (every client now plays its own
+ * copy, so a local rate would no longer diverge from a broadcast twin), but poking a private-ish
+ * node stays a separate design call and is deliberately NOT taken as a rider on the score unit.
+ * Recorded in §8.
  */
 export function sfx(cls, { volume = SHOT_VOLUME, burst = false } = {}) {
   const src = shotSoundSrc(cls, { burst });
   if (!src) return null;
   try {
-    return foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, true);
+    return foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, false);
   } catch (err) {
     console.warn(`${SCOPE} | combat fx audio failed`, err);
     return null;
@@ -2647,7 +2759,13 @@ export function hitSoundVolume(kind, index = 0) {
  * Returns what it WILL play, synchronously, so the keeper asserts the values without waiting out the
  * clock — the same reporting shape fxHitMark uses.
  */
-export function fxHitSound(kind, { delayMs = 0, index = null } = {}) {
+export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true } = {}) {
+  // ⭐ `broadcast` SAYS WHICH SEAM IS CALLING (2026-08-15, the score — see MSG_SCORE). The RAIL passes
+  // `false`: every client performs the score, so a rail impact is one local play per client, in phase
+  // with that client's own sprites. The APPLY seams (DamageApplicator, vehicle damage) keep the
+  // default `true`: an apply runs on ONE client and a local-only play there would be a sound the rest
+  // of the table never hears. Default-true is the fail-safe direction — an un-updated caller doubles
+  // a sound rather than silencing one.
   const out = { played: false, kind: kind ?? null, src: null, volume: 0, delayMs: 0, skipped: null };
   if (!combatFxEnabled()) return { ...out, skipped: "disabled" };
   const src = hitSoundSrc(kind);
@@ -2691,12 +2809,12 @@ export function fxHitSound(kind, { delayMs = 0, index = null } = {}) {
   const delay = Number(delayMs) > 0 ? Math.round(Number(delayMs)) : 0;
   out.played = true; out.src = src; out.volume = volume; out.delayMs = delay;
   const fire = () => {
-    if (_hitSoundSink) { _hitSoundSink({ kind, src, volume, delayMs: delay }); return; }
+    if (_hitSoundSink) { _hitSoundSink({ kind, src, volume, delayMs: delay, broadcast }); return; }
     try {
       // ⚠ THE `.catch` IS THE OTHER HALF OF THE GUARD. This returns a promise; a synchronous try/catch
       // around it catches only what throws before the first await, which is nearly nothing. Naming the
       // verb here is the same discipline every fire-and-forget draw on this rail follows.
-      Promise.resolve(foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, true))
+      Promise.resolve(foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, broadcast))
         .catch((err) => console.warn(`${SCOPE} | hit impact audio play failed`, err));
     } catch (err) {
       console.warn(`${SCOPE} | hit impact audio failed`, err);
@@ -2721,6 +2839,71 @@ export function hitSoundPlanFor(targetToken) {
   const src = hitSoundSrc(kind);
   if (!src) return null;
   return { kind, src, queued: 0, cap: HIT_SOUND_MAX_PER_PAYLOAD };
+}
+
+/**
+ * A DECLARED CORRIDOR'S VICTIMS, swept once per payload — the pattern-flow counterpart of the plan
+ * above (user ruling 2026-08-14: *"that sound should play every time a bullet lands on the target…
+ * Not when apply damage is hit"*). A corridor fires at an aim point, so the target-token gate above
+ * correctly answers null for it — and until this existed, its victims' impacts were sounded by the
+ * APPLY seam at the confirm click: late by the whole action, the exact failure the timing argument at
+ * the fan-out's audio block names.
+ *
+ * THE SWEEP IS THE PLANT'S OWN ANSWER, piecewise: the corridor geometry comes from the relocated
+ * one-answer site (spread-geometry.js — the aimed record, or the SAME miss re-derivation the plant
+ * runs when the payload carries the base system's verdict and the scatter faces), the footprint is the
+ * same ray polygon the region is built from, and the occupants take the same wall-occlusion exemption
+ * the confirm applies (`areaOcclusionTest`, the relocated site). What this cannot know at fire time is
+ * the APPLY's own late answers — armour, penetration, a figure that walks in before the confirm — and
+ * it does not guess at them: it sounds what the rounds crossing the corridor struck, which is the same
+ * information the tracers already draw.
+ *
+ * `frac` is the victim's own fraction of the crossing, so a body halfway down the corridor is struck
+ * halfway through the arrival — the sound rides the round, not the corridor's end.
+ *
+ * Null when there is nothing to sound: no corridor declared, the flow does not own the payload, the
+ * rail is off, or nobody stands in the swept footprint.
+ */
+export function patternAudioPlanFor(payload, shooterToken) {
+  if (!combatFxEnabled() || !shooterToken || !payload) return null;
+  if (!patternFlowOwns(payload)) return null;
+  const declared = declaredSpreadAim(payload);
+  if (!declared) return null;
+  const origin = centerOf(shooterToken);
+  if (!origin || !canvas?.ready) return null;
+  const ppm = metersToPixels(canvas.scene, 1);
+  if (!(ppm > 0)) return null;
+  let corridor = declared;
+  const outcome = spreadAttackOutcome(payload);
+  const sc = payload?.spreadScatter;
+  const dirFace = Number(sc?.dirFace), distFace = Number(sc?.distFace);
+  if (outcome && !outcome.hit && Number.isFinite(dirFace) && Number.isFinite(distFace)) {
+    corridor = scatteredSpreadCorridor({
+      originX: origin.x, originY: origin.y, declared,
+      widths: { short: payload.spreadWidthShort, medium: payload.spreadWidthMedium, long: payload.spreadWidthLong },
+      // The firing weapon's own range travels with the widths for the same reason they do: the band the
+      // scattered distance lands in is measured in fractions of it (Core p.99), so a sweep that omitted
+      // it would re-derive the corridor's width off a different ladder than the plant did.
+      rangeM: payload.spreadRangeM,
+      pixelsPerMeter: ppm, sceneRect: canvas?.dimensions?.sceneRect ?? null,
+      dirFace, distFace, overshootM: declared.lengthM - declared.reachM,
+    });
+  }
+  const lengthPx = corridor.lengthM * ppm;
+  const poly = rayPolygonPoints(origin.x, origin.y, corridor.angleDeg, lengthPx, corridor.widthM * ppm);
+  const victims = [];
+  for (const tok of canvas.tokens?.placeables ?? []) {
+    if (!tok?.actor || tok.id === shooterToken.id) continue;
+    const c = tok.center ?? centerOf(tok);
+    if (!c || !pointInPolygon(c.x, c.y, poly)) continue;
+    if (areaOcclusionTest(origin.x, origin.y, tok)) continue;
+    const kind = hitSoundKindFor(tok.actor);
+    if (!hitSoundSrc(kind)) continue;
+    victims.push({ tokenId: tok.id, kind,
+      frac: Math.min(1, Math.max(0, Math.hypot(c.x - origin.x, c.y - origin.y) / (lengthPx || 1))) });
+  }
+  if (!victims.length) return null;
+  return { victims, queued: 0, cap: HIT_SOUND_MAX_PER_PAYLOAD };
 }
 
 /* ══════════════════ Native muzzle flash — a client-local transient light source ══════════════════ */
@@ -2991,6 +3174,10 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
     // The hold's own deadline stands (it was opened for the whole burst), so nothing extends here.
     if (running.holdMs > 0) {
       running.aimRad = aimRad;
+      // ⭐ THE PULSE STAMP (MUZZLE_BURST_PULSE): this arriving round pops the held light to full for
+      // one pop's length; the frame driver reads the stamp and parks at the floor once it lapses.
+      // Stamped here, not on a metronome, so the room pops when a lance actually draws.
+      if (MUZZLE_BURST_PULSE.enabled) running.pulseUntil = performance.now() + MUZZLE_BURST_PULSE.popMs;
       // ⚠ AND EACH ROUND CARRIES THE HOLD PAST WHERE THE NEXT ONE IS DUE, measured rather than assumed.
       //
       // The nominal span is arithmetic — rounds × cadence — and a real loop does not deliver rounds on
@@ -3076,6 +3263,9 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
     holdMs: hold,
     // When the most recent round of this burst arrived — the basis for the spacing measurement above.
     lastRoundAt: null,
+    // The live pop stamp (MUZZLE_BURST_PULSE): while performance.now() is under this, a parked burst
+    // light stands at full; lapsed or null, it rests at the pulse floor. Stamped by the re-point.
+    pulseUntil: null,
     // The last level actually written to the sources. A frame that would write the same number writes
     // nothing and asks for no lighting recomputation — which is what makes a HELD light cost nothing
     // per frame instead of one full sweep per frame.
@@ -3099,6 +3289,40 @@ export function muzzleFlashLocal(tokenRef, aim = null, { sceneId = null, mode = 
     if (state.holdMs > 0 && state.frame > state.holdIndex
         && (performance.now() - state.startedAt) < state.holdMs) {
       state.frame = state.holdIndex;
+      // ⭐ THE PULSE (MUZZLE_BURST_PULSE): a parked burst light rests at the floor and rises to full
+      // only while a round's pop stamp is live. The level moves ONLY at the two edges of each pop —
+      // the applied-equality skip below turns every other parked frame into a no-write — so the cost
+      // is two sweeps per arriving round, and `enabled: false` makes the park flat full again.
+      if (MUZZLE_BURST_PULSE.enabled) {
+        const popped = state.pulseUntil && performance.now() < state.pulseUntil;
+        const parkLevel = popped ? state.levels[state.holdIndex] : MUZZLE_BURST_PULSE.floor;
+        state.frame = state.holdIndex + 1;   // stay parked; the level below is the override
+        if (parkLevel !== state.applied) {
+          state.applied = parkLevel;
+          try {
+            for (let i = 0; i < state.sources.length; i++) {
+              const spec = state.specs[i];
+              state.sources[i].initialize({
+                alpha: Number((spec.alpha * parkLevel).toFixed(4)),
+                luminosity: Number((spec.luminosity * parkLevel).toFixed(4)),
+              });
+            }
+            _sweepLighting();
+          } catch (err) {
+            console.warn(`${SCOPE} | muzzle flash pulse frame failed`, err);
+            _endFlash(id);
+          }
+        }
+        return;
+      }
+    }
+    // Pulse decay-entry guard: a hold that lapses while the light rests at the pulse FLOOR must fall
+    // off from the floor, not flash back up through decay frames brighter than what is on screen —
+    // skip forward to the first decay frame at or below the applied level, so the end of a pulsed
+    // burst is a fade and never an unearned pop.
+    if (MUZZLE_BURST_PULSE.enabled && state.holdMs > 0 && state.frame > state.holdIndex
+        && typeof state.applied === "number") {
+      while (state.frame < state.levels.length - 1 && state.levels[state.frame] > state.applied) state.frame++;
     }
     const level = state.levels[state.frame++];
     if (level === undefined) { _endFlash(id); return; }
@@ -3150,18 +3374,11 @@ export function fxMuzzleFlash(shooterToken, aimPoint = null, { mode = MUZZLE_MOD
   const aim = (aimPoint && Number.isFinite(aimPoint.x) && Number.isFinite(aimPoint.y))
     ? { x: Math.round(aimPoint.x), y: Math.round(aimPoint.y) }
     : null;
-  try {
-    // The ammo colour rides the datagram (FR#24) so every client's own flash agrees with the firing
-    // one's. It is a COLOUR and not an ammo id deliberately: the receiving client then needs no
-    // registry lookup and no agreement about tables, and a client that cannot resolve the id anyway
-    // (an older module version) simply receives a field it ignores.
-    // The burst's own span rides the datagram beside the colour, and for the same reason: every
-    // client must hold its copy of the light for the same length of time the firing one does, or a
-    // burst strobes on the watchers' screens and glows on the shooter's.
-    game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_FLASH, sceneId, tokenId, aim, ammoColor: ammoColor ?? null, holdMs: Number(holdMs) || 0 });
-  } catch (err) {
-    console.warn(`${SCOPE} | muzzle flash announce failed`, err);
-  }
+  // ⏪ THE PER-FLASH DATAGRAM IS GONE (2026-08-15, the score — see MSG_SCORE and the retired
+  // MSG_FLASH constant). Every client now reaches this same call from its own performance of the
+  // score, so the flash needs no announcement: the colour, the hold and every re-point are computed
+  // by each client from the identical payload, in phase with that client's own lances — which is
+  // what the old holdMs-on-the-datagram rule existed to approximate. This verb is now purely local.
   return muzzleFlashLocal(tokenId, aim, { sceneId, mode, ammoColor, holdMs });
 }
 
@@ -3258,7 +3475,13 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
  *    spread": pellets that all stop on one arc read as a painted crescent, and pellets at mixed depths
  *    read as a cluster with a near and a far side.
  *  - `sizeFraction` — each pellet's drawn width varies by this fraction, so no two balls in one shot
- *    are the same ball.
+ *    are the same ball. ⏪ 0.25 → **0.15** (user ruling 2026-08-14, the "pellets are too small" report,
+ *    with the dashSquares re-revert to 1.0 at the shell row): at ±25% on a 0.7 base the smallest pellet
+ *    drew at 0.53 — right on the 0.5 "reads as dirt" floor the row's own record rejects. At ±15% on
+ *    the restored 1.0 base the six spread across 0.85–1.15, every one of them above the ORIGINAL fan's
+ *    own size, which is what "previous designs were better and more powerful looking" asks for. The
+ *    variety read survives at ±15% (measured spread on one shot is still a visibly mixed group). ⏪ The
+ *    revert value is 0.25.
  *  - `staggerMs` — each pellet leaves up to this many milliseconds late. A shot whose pellets all
  *    start on the same frame is one object moving; a few milliseconds apart they are many.
  *
@@ -3281,7 +3504,7 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
 export const PELLET_CHAOS = Object.freeze({
   slotFraction: 0.9,
   reachFraction: 0.35,
-  sizeFraction: 0.25,
+  sizeFraction: 0.15,
   staggerMs: 45,
 });
 
@@ -3410,7 +3633,7 @@ export function groundFirePoints(from, to, {
 }
 
 /**
- * WHERE A SHOT PATTERN'S FIRES BURN — points scattered inside the p.108 pattern a shell throws. Pure,
+ * WHERE A SHOT PATTERN'S FIRES BURN — points scattered inside the p.109 pattern a shell throws. Pure,
  * seeded, bounded.
  *
  * ⭐ BUILT IN THE RAY'S OWN COORDINATES (distance along, offset across) and then rotated out, which is
@@ -3785,9 +4008,17 @@ export function _setSpriteRate(rate) {
  * engine reads the playback rate when it works out a trim point, so arming the rate afterwards leaves
  * a trimmed clip playing past its own trim. That only ever showed up in capture runs (nothing ships
  * with the seam armed), and it showed up as the trimmed-away plume reappearing in the photographs.
+ *
+ * ⭐ AND THE SCORE'S DELIVERY SWITCH (2026-08-15, MSG_SCORE): every transient section is `.locally()`
+ * — each client draws its own copy from its own performance, so Sequencer's per-sprite socket is
+ * retired for the per-shot storm. This is the ONE site that says so, which is what keeps a new
+ * element from silently shipping double-drawn (broadcast by the engine AND performed remotely).
+ * `shared: true` is the stated opt-out for the elements whose cross-client bookkeeping lives in the
+ * engine's manager — the burning ground is the only per-shot caller (see the reasoning at MSG_SCORE).
  */
-function _held(effect) {
+function _held(effect, { shared = false } = {}) {
   if (_spriteRateOverride !== null) effect.playbackRate(_spriteRateOverride);
+  if (!shared) effect.locally();
   return effect;
 }
 
@@ -4134,6 +4365,10 @@ export async function fxSmokePuff(shooterToken, targetToken, { weaponClass, inde
       .startTime(plan.startTimeMs);
     // The capture seam still wins where it is armed, so a capture run holds every puff at one rate.
     puff.playbackRate(_spriteRateOverride ?? plan.playbackRate);
+    // Scored delivery (MSG_SCORE): the puff is transient dressing and each client performs its own.
+    // Stated here rather than through _held because this section owns its playbackRate per instance
+    // — the one thing _held would overwrite — so it takes the `.locally()` switch directly.
+    puff.locally();
     // Deliberately NOT tagged for the completion signal: the smoke is dressing and the apply window
     // does not wait for it (see presentationTailMs). There is no settleTag parameter here at all.
     if (plan.driftTo) puff.moveTowards(plan.driftTo, { ease: "easeOutQuad", rotate: false });
@@ -4316,7 +4551,11 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
     const seq = new globalThis.Sequence();
     if (fxDbEntryExists(GROUND_FIRE.key)) {
       for (const p of list) {
-        const fire = _held(seq.effect().file(GROUND_FIRE.key)).atLocation({ x: p.x, y: p.y })
+        // ⭐ `shared: true` — the ONE per-shot element still on the engine's broadcast (see MSG_SCORE):
+        // the scene-wide census and oldest-out eviction below are queries of the engine's manager, and
+        // a joining client replays what is burning from the same bookkeeping. A local copy per client
+        // would give every client its own cap arguing over a different set of flames.
+        const fire = _held(seq.effect().file(GROUND_FIRE.key), { shared: true }).atLocation({ x: p.x, y: p.y })
           .size({ width: GROUND_FIRE.squares }, { gridUnits: true })
           // Self-luminous → above the lighting, with the vision-mask trade documented at the spec block.
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
@@ -5073,8 +5312,16 @@ export function settlementsInFlight() {
  * Returns a plain result object (counts + the resolved class) rather than nothing, so the rig keeper
  * asserts the fan-out by value instead of by wall-clock observation.
  */
-export async function fxWeaponFired(payload) {
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0 };
+export async function fxWeaponFired(payload, { remote = false } = {}) {
+  // ⭐ `remote` SAYS WHOSE PERFORMANCE THIS IS (2026-08-15, the score — see MSG_SCORE). The firing
+  // client runs with the default and additionally EMITS the score; a client that received the score
+  // runs the identical fan-out with `remote: true`, which changes exactly two things: no score is
+  // re-emitted (a relay of a relay would echo forever), and the face-target turn is skipped (it is a
+  // DOCUMENT write — a remote GM client performing it too would double-write the rotation; remote
+  // clients receive it through core's own token broadcast as they always did). Everything else —
+  // seeds, cadence, draws, sounds, the settle bookkeeping and the canary — is deliberately identical,
+  // because identical is the property the whole design stands on.
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = actorForPayload(payload);
   const weapon = resolveFiredWeapon(payload, actor);
@@ -5211,7 +5458,26 @@ export async function fxWeaponFired(payload) {
   // take their axis from the aim, so a token that is still swinging round when the first round goes
   // would be drawn firing sideways out of its own portrait. The wait is short by spec and it is
   // included in payloadPresentationMs, so the apply window still lands after everything.
-  const turn = shooter ? await faceTarget(shooter, aim) : null;
+  // A REMOTE performance never turns anybody: the turn is the rail's one document write, owned by the
+  // firing client (see the `remote` note at the top).
+  const turn = (shooter && !remote) ? await faceTarget(shooter, aim) : null;
+
+  // ⭐ THE SCORE GOES OUT HERE — after the bails (a payload this rail will not draw is never
+  // announced) and after the turn (so a remote performance, which skips the turn, starts its first
+  // round at the same moment the firing client starts drawing; the network hop then offsets the whole
+  // show by one latency instead of compounding per element). One datagram, carrying the payload
+  // verbatim: every number a performance needs is derived from it, which is what fxSeedOf's
+  // determinism rule has enforced all along. `game.socket.emit` never echoes to its sender, so the
+  // firing client's own performance is the local call already in flight.
+  if (!remote) {
+    try {
+      const sceneId = shooter?.document?.parent?.id ?? canvas?.scene?.id ?? null;
+      game.socket?.emit?.(`module.${SCOPE}`, { type: MSG_SCORE, sceneId, payload });
+      result.scoreEmitted = true;
+    } catch (err) {
+      console.warn(`${SCOPE} | performance score emit failed`, err);
+    }
+  }
 
   // The multi-round-only treatments, queued once for the whole burst before the first round leaves.
   // A single shot never reaches this line, which is the whole gate (see fxBurstAmbience).
@@ -5231,7 +5497,7 @@ export async function fxWeaponFired(payload) {
   //
   // ⭐ A PATTERN PAYLOAD IS NOT DRAWN HERE, and the gate is the same call the damage rail makes
   // (spreadModeForAmmo — damage-hooks.js asks it twice and this is the third site of the identical
-  // question, not a fourth question). A shell that throws the p.108 pattern did not land its shot on
+  // question, not a fourth question). A shell that throws the p.109 pattern did not land its shot on
   // the target: the rules put it across the whole path, so its fires belong to that path and are
   // placed by the flow that owns the geometry, when the GM confirms it (fxPatternGroundFire). Drawing
   // both would set the same shot alight twice.
@@ -5300,7 +5566,11 @@ export async function fxWeaponFired(payload) {
   // mark and the blood spray already draw on, and matching the picture is the point: an impact the eye
   // is shown and the ear is not reads as a bug. The apply-side legs, which DO know, are penetration-
   // gated — the asymmetry is deliberate and documented in docs/FX-RAIL.md §2.
-  const hitAudio = hitSoundPlanFor(target);
+  // ⭐ A CORRIDOR SOUNDS ITS OWN VICTIMS AT ARRIVAL (patternAudioPlanFor — the 2026-08-14 ruling).
+  // When the pattern flow owns the payload the target-token plan stands down: the two plans answer the
+  // same question for the two flows and must never both sound one shot.
+  const patternAudio = patternAudioPlanFor(payload, shooter);
+  const hitAudio = patternAudio ? null : hitSoundPlanFor(target);
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -5372,10 +5642,24 @@ export async function fxWeaponFired(payload) {
       // The queued index rides the variance ladder, so four impacts are four levels rather than four
       // copies of one waveform.
       if (hitAudio && hitAudio.queued < hitAudio.cap) {
-        fxHitSound(hitAudio.kind, { delayMs: arriveIn, index: hitAudio.queued });
+        // `broadcast: false` — a RAIL impact is scored (MSG_SCORE): every client performs this same
+        // loop, so the play is local and in phase with this client's own draws.
+        fxHitSound(hitAudio.kind, { delayMs: arriveIn, index: hitAudio.queued, broadcast: false });
         hitAudio.queued++;
       }
     };
+    // A pattern's shells rake the corridor: each shell sounds each swept victim, at that victim's own
+    // fraction of the crossing (frac × the payload's one resolved arrival, lag subtracted the same way
+    // the mark family subtracts it). Issued OUTSIDE the drop branch for the arrival family's reason —
+    // a dropped shell keeps its arrival — and bounded by the shared per-payload cap with the index
+    // ladder, so eight victims are eight levels rather than eight copies of one waveform.
+    if (patternAudio && patternAudio.queued < patternAudio.cap) {
+      for (const v of patternAudio.victims) {
+        if (patternAudio.queued >= patternAudio.cap) break;
+        fxHitSound(v.kind, { delayMs: Math.max(0, Math.round(arrivalMs * v.frac) - lagMs), index: patternAudio.queued, broadcast: false });
+        patternAudio.queued++;
+      }
+    }
     if (refused) {
       dropped++;
       if (shooter && i < hits) markAndBleed(true);
@@ -5444,7 +5728,7 @@ export async function fxWeaponFired(payload) {
     // WHAT THE IMPACTS SOUNDED LIKE and how many were issued against their own cap — reported for the
     // same reason the mark tally is: "an N-round burst on a vehicle sounds M structure impacts" is the
     // claim, and this is the number that says whether it held.
-    hitAudio,
+    hitAudio, patternAudio,
     // WHERE THIS PAYLOAD WAS POINTED, reported rather than inferred — the point every element above
     // was drawn along, the distance that banded it, and whether the shooter DECLARED that corridor
     // (combat/spread-placement.js) or it was read off the aimed-at token. Reported for the same reason
@@ -5537,7 +5821,83 @@ function _confirmSilentPresentation(result, drawsBefore) {
  * card lock and the PopOut rebinding): the setting is read per event, so a GM toggling combatFxEnabled
  * takes effect immediately with no reload, and the listener is inert while it is off.
  */
+/**
+ * EVERYTHING THE RAIL CAN DRAW OR SOUND, as one manifest — the preload list (user ruling 2026-08-14,
+ * the live-table first-play stall: a video asset's first draw pays its fetch+decode ON SCREEN, so the
+ * audio lands on time while the picture arrives late; the sync design talk names this clock domain 2).
+ *
+ * Collected from the live spec objects rather than a hand-list, so a re-pointed key (tonight's
+ * arrival swap) is preloaded the moment it is authored — a second copy of "which keys exist" is how a
+ * preloader silently stops covering the thing that was just changed. The VOLLEY key rides only while
+ * its trial flag is on; AMMO_FX overlays are scraped generically for any db key they carry.
+ */
+export function fxPreloadManifest() {
+  const keys = new Set();
+  for (const c of [MUZZLE_SPARK, HIT_CONFIRM, GROUND_FIRE, BLOOD_SPLATTER, MUZZLE_MOTES, MUZZLE_SMOKE,
+                   PELLET_ARRIVAL, BATON_ROUND, IMPACT_FIRE, IMPACT_CRACK, IMPACT_DUST]) {
+    if (c?.key) keys.add(c.key);
+  }
+  if (VOLLEY.enabled && VOLLEY.key) keys.add(VOLLEY.key);
+  for (const row of Object.values(FX_CLASSES)) {
+    if (row?.muzzle) keys.add(row.muzzle);
+    if (row?.tracer) keys.add(row.tracer);
+  }
+  for (const entry of Object.values(AMMO_FX)) {
+    for (const v of Object.values(entry ?? {})) {
+      if (typeof v === "string" && v.startsWith("jb2a.")) keys.add(v);
+    }
+  }
+  const sounds = new Set();
+  for (const row of Object.values(FX_CLASSES)) {
+    for (const base of [row?.sound, row?.soundBurst]) {
+      const src = base ? fxSoundSrc(base) : null;
+      if (src) sounds.add(src);
+    }
+  }
+  for (const kind of Object.keys(HIT_SOUND)) {
+    const src = hitSoundSrc(kind);
+    if (src) sounds.add(src);
+  }
+  return { keys: [...keys], sounds: [...sounds] };
+}
+
+/**
+ * Warm the manifest on this client. Fire-and-forget from registration — a preload that fails or that
+ * has no engine to hand its files to must never delay ready or the first real shot; the worst case is
+ * exactly today's behaviour (first-play decode). Sequencer's preloader takes database paths and
+ * resolves them against whichever asset tier is installed, so the manifest stays key-shaped here too.
+ */
+export function fxPreloadAssets() {
+  const out = { keys: 0, sounds: 0, skipped: null };
+  if (!combatFxEnabled()) return { ...out, skipped: "disabled" };
+  const { keys, sounds } = fxPreloadManifest();
+  try {
+    if (sequencerActive() && globalThis.Sequencer?.Preloader?.preloadForClients) {
+      const present = keys.filter((k) => fxDbEntryExists(k));
+      out.keys = present.length;
+      if (present.length) {
+        Promise.resolve(Sequencer.Preloader.preloadForClients(present))
+          .catch((err) => console.warn(`${SCOPE} | fx asset preload failed`, err));
+      }
+    }
+  } catch (err) {
+    console.warn(`${SCOPE} | fx asset preload failed`, err);
+  }
+  for (const src of sounds) {
+    try {
+      const helper = foundry?.audio?.AudioHelper ?? globalThis.AudioHelper;
+      Promise.resolve(helper?.preloadSound?.(src) ?? game?.audio?.preload?.(src))
+        .catch(() => {});   // a sound that cannot warm simply pays its first-play cost, as before
+      out.sounds++;
+    } catch (_e) { /* same: warming is best-effort by design */ }
+  }
+  return out;
+}
+
 export function registerCombatFx() {
+  // Warm every drawable and every sound at registration (ready), so the first trigger pull of a
+  // session pays no fetch+decode on screen. Best-effort; see fxPreloadAssets.
+  fxPreloadAssets();
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
     if (!combatFxEnabled()) return;
     // THE PRESENTATION CANARY. Take the engine's creation count before the fan-out and again after it,
@@ -5558,18 +5918,29 @@ export function registerCombatFx() {
       .then((result) => _reportSilentPresentation(result, drawsBefore))
       .catch((err) => console.warn(`${SCOPE} | combat fx failed`, err));
   });
-  // The flash announcement. Same channel and same type-dispatch shape as the module's other relays;
-  // unlike the write relays there is no GM gate, because every client draws its own copy and nothing
-  // is written. `game.socket.emit` never echoes to its sender, so the firing client's own flash comes
-  // from the local call inside fxMuzzleFlash rather than from here.
+  // ⭐ THE SCORE'S RECEIVING END (MSG_SCORE, 2026-08-15 — the whole design is at the constant): a
+  // client handed a score performs it locally, through the same canary the firing client's own hook
+  // uses, so a remote client that cannot draw says so about ITSELF. Same channel and type-dispatch
+  // shape as the module's other relays; no GM gate, because nothing is written (the one write, the
+  // face-target turn, is gated off inside fxWeaponFired by `remote`).
+  //
+  // THE SCENE GATE is deliberate and errs toward silence: a client viewing a different scene skips
+  // the whole performance rather than half-running it. Without the gate, shooterTokenForPayload would
+  // resolve THIS client's copy of the tokens and the documented cross-scene misdraw (§8, review
+  // finding F2 — a shot drawn from an unviewed scene's coordinates) would be re-created on every
+  // remote client; with it, a client that cannot see the stage does not perform. That also matches
+  // what Sequencer's own broadcast used to deliver: effects on scene A never rendered for a viewer
+  // of scene B.
+  // ⏪ The retired MSG_FLASH branch stood here (per-flash relay; see the constant's retirement note).
   game.socket.on(`module.${SCOPE}`, (data) => {
-    if (data?.type !== MSG_FLASH) return;
+    if (data?.type !== MSG_SCORE) return;
     if (!combatFxEnabled()) return;
-    try {
-      muzzleFlashLocal(data.tokenId, data.aim ?? null, { sceneId: data.sceneId ?? null, ammoColor: data.ammoColor ?? null, holdMs: Number(data.holdMs) || 0 });
-    } catch (err) {
-      console.warn(`${SCOPE} | muzzle flash relay failed`, err);
-    }
+    if (!canvas?.ready || !data?.payload) return;
+    if (data.sceneId && canvas?.scene?.id !== data.sceneId) return;
+    const drawsBefore = _drawsSeen;
+    fxWeaponFired(data.payload, { remote: true })
+      .then((result) => _reportSilentPresentation(result, drawsBefore))
+      .catch((err) => console.warn(`${SCOPE} | scored performance failed`, err));
   });
   // THE ENGINE'S OWN REPORT that a drawn element has appeared and gone. These are what resolve the
   // completion signal: the rail names the last round's terminal elements when it queues them, and the
