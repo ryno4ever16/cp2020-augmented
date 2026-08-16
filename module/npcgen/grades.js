@@ -108,6 +108,37 @@ export function gradeMeets(gradeKey, gateKey) {
 export const GENERATOR_ROLES = ["solo", "cop", "corp", "fixer", "nomad", "techie", "medtechie", "media", "rocker"];
 
 /**
+ * ⭐ "RANDOM" IS A ROLE CONTROL VALUE, NOT A ROLE (ruled 2026-08-15). It is the window's DEFAULT
+ * state, and it means *"each goon in this batch rolls its own role"* — the draw happens per goon in
+ * `blueprint.js` (`rollRoleFor`), never here and never once for a whole squad.
+ *
+ * ⛔ IT MUST NEVER REACH A DOCUMENT. `system.role.value` is a schema ENUM and "random" is not in it,
+ * so `goonBlueprint` resolves the sentinel to a concrete book role before anything downstream sees
+ * it, and `materializeGoon` writes the RESOLVED role rather than the control's value. A goon whose
+ * sheet reads "random" is this rule having been broken.
+ *
+ * The string lives here rather than in blueprint.js because both the pure planner and the window's
+ * option list need it and this file is the one neither of them can import in a cycle.
+ */
+export const ROLE_RANDOM = "random";
+
+/** The Role select's options, Random first — it is the default, and a default reads first. */
+export const ROLE_OPTIONS = [ROLE_RANDOM, ...GENERATOR_ROLES];
+
+/**
+ * ⭐ DISPOSITION IS A BASELINE CONTROL, NOT AN ADVANCED DIAL (ruled 2026-08-15). It sits in the
+ * window's TOP band beside threat level / role / outfit, an outfit PREFILLS it, and the GM flips it
+ * as freely as any other prefilled control.
+ *
+ * ⛔ TWO VALUES, NOT THREE. `goonPrototypeToken` can map `friendly` as well, and that mapping stays
+ * for a direct caller, but the control offers only the two a goon squad is ever built as — the
+ * generator's whole premise is an opposition NPC, and a "friendly" goon is a hand edit on one actor
+ * rather than a batch setting.
+ */
+export const DISPOSITIONS = ["hostile", "neutral"];
+export const DISPOSITION_DEFAULT = "hostile";
+
+/**
  * ⭐ ROLE STAT WEIGHT VECTORS (§2.2, recovered ruling 2026-08-13 + the user's derivation method
  * 2026-08-14). These are RANKS, weakest-last: `[primary, secondary, tertiary]`.
  *
@@ -141,6 +172,31 @@ export const ROLE_SPECIAL_ABILITY = {
   nomad: "Family", techie: "JuryRig", medtechie: "MedicalTech", media: "Credibility",
   rocker: "CharismaticLeadership", netrunner: "Interface",
 };
+
+// =================================================================================================
+// TRACK GEOMETRY — where a number sits on a slider (§0: "totals are sliders with book-named ticks;
+// guarantees are reservations drawn on the track")
+// =================================================================================================
+
+/**
+ * A value's position on a track, as a percentage of the track's own span (0–100).
+ *
+ * ⭐ THIS IS THE ONE NUMBER THAT CROSSES INTO THE STYLESHEET, and it is why it lives in the pure
+ * layer rather than in the window: the tick marks (R6) and the reserved band (R7) are both "where
+ * does this value sit", so both are this function, and a test can assert the rendered position by
+ * VALUE instead of by eye. The window writes the number into a CSS custom property; the stylesheet
+ * owns every colour, the gradient and the mark's shape. No CSS is ever built in JS.
+ *
+ * Rounded to two decimals — finer than a pixel on any real track, and stable enough that a keeper
+ * can compare the DOM's value against this function's rather than against a transcribed literal.
+ */
+export function trackPct(value, min, max) {
+  const lo = Number(min) || 0;
+  const span = Number(max) - lo;
+  if (!Number.isFinite(span) || span <= 0) return 0;
+  const raw = ((Number(value) || 0) - lo) / span * 100;
+  return Math.round(Math.min(100, Math.max(0, raw)) * 100) / 100;
+}
 
 // =================================================================================================
 // THE STAT POOL (§1 "Stat Pool slider" + §2.2)
@@ -182,9 +238,17 @@ export const STAT_MAX = 10;
 /**
  * §1: default 60 · ticks at 50/60/70/75/80 whose hovers name the book tiers · ceiling 90.
  * The tick HOVERS are keys, not text — the shipped table stays i18n-free and unit-testable.
+ *
+ * ⭐ `scaleMin` IS THE TRACK'S ORIGIN, NOT A LEGAL POOL (R7, ruled 2026-08-14). The slider used to
+ * start at the dynamic floor, which is exactly why the reservation was invisible: a track that
+ * begins where the reservation ends has nothing left to draw it on. The scale is fixed 0→ceiling now
+ * and the reservation is a BAND from the origin to the floor, so raising the reservation grows the
+ * band and shrinks the free segment while the track itself stays put. The floor is still a hard
+ * clamp — it moved from the input's `min` attribute to the window's input handler.
  */
 export const STAT_POOL = {
   default: 60,
+  scaleMin: 0,
   ceiling: 90,
   ticks: [
     { value: 50, hintKey: "GoonFactory.PoolTick.50" },
@@ -215,8 +279,12 @@ export function statPoolBreakdown(pool, ref, bt) {
 // THE SKILL-POINT POOL (§1 "Skill-points slider" + §2.4)
 // =================================================================================================
 
-/** §1: default 40 — the book's own career pool, which is also `BOOK_CAREER_POOL` in tables.js. */
-export const SKILL_POINTS = { default: 40 };
+/**
+ * §1: default 40 — the book's own career pool, which is also `BOOK_CAREER_POOL` in tables.js.
+ * `scaleMin`/`scaleMax` are the TRACK's fixed ends, for the same reason `STAT_POOL.scaleMin` exists:
+ * the reserved band is drawn from the origin to the floor, so the origin cannot BE the floor.
+ */
+export const SKILL_POINTS = { default: 40, scaleMin: 0, scaleMax: 80 };
 
 /**
  * THE SKILL-POINT RESERVATION ARITHMETIC (§1, and a named §4 keeper requirement).
@@ -239,8 +307,15 @@ export function skillPointBreakdown(total, gradeKey) {
 // COUNT (§1 header band)
 // =================================================================================================
 
-/** §1: free entry, default 6, **cap 12**, visible clamp. The cap is also the materializer's own. */
-export const COUNT = { default: 6, min: 1, cap: 12 };
+/**
+ * §1: free entry, **cap 12**, visible clamp. The cap is also the materializer's own.
+ *
+ * ⭐ THE DEFAULT IS 1 (ruled 2026-08-14, superseding §1's provisional "6?"): this is only the value a
+ * user who has never typed one sees. From the first entry onward the window remembers what the GM
+ * last asked for (a client-scoped store, see npcgen-app.js), so the default is the floor of the
+ * behaviour rather than a number anybody has to correct on every open.
+ */
+export const COUNT = { default: 1, min: 1, cap: 12 };
 
 /** Clamp a typed count, reporting whether it moved — the window shows the clamp, never hides it. */
 export function clampCount(n) {
@@ -266,6 +341,14 @@ export function clampCount(n) {
  */
 export const SOLO_CHROME_BONUS = 2;
 
+/**
+ * ⛔ `ROLE_RANDOM` DRAWS NO SOLO BONUS, AND THAT IS THE RULING, NOT AN OVERSIGHT (2026-08-15).
+ * `role === "solo"` is simply false for the sentinel, so a Random batch derives the grade's base
+ * count — and because NOTHING re-derives the count per goon (the plan carries `config.chromeCount`
+ * straight through to `planChrome`), the number the window DISPLAYS is the number every goon in the
+ * batch actually gets, including the ones that roll Solo. A per-goon bump here would make the
+ * displayed count a lie for part of the squad, which is the one thing the readout may not be.
+ */
 export function chromeCountFor(gradeKey, role, outfitMod = 0) {
   const grade = gradeOf(gradeKey);
   const base = grade ? grade.chromeBase : 0;
@@ -304,10 +387,24 @@ export function looseWeightAt(i) {
 }
 
 // =================================================================================================
-// LOOT (§1 "Loot dial")
+// CARRIED CASH & CONSUMABLES — the dial formerly displayed as "Loot" (§1 "Loot dial")
 // =================================================================================================
 
 /**
+ * ⛔⛔ THE DIAL NEVER FILTERS GEAR. This is a stated design invariant (ruled 2026-08-14, and written
+ * into GOON-FACTORY-SPEC.md §0): weapons, armor and chrome are generated by the THREAT LEVEL and are
+ * present at every dial setting including `off`. What the dial controls is what a goon is CARRYING
+ * to spend or use — pocket cash on a credchip and spare magazines — which is why its displayed name
+ * is now "carried cash & consumables".
+ *
+ * The reasoning, recorded because it reverses the older reading: everything on a goon is loot the
+ * moment a GM lets the table sell it, so a dial that gated gear would be gating the goon's own
+ * threat level. The honest affordance is DISCLOSURE, not a gate — see `salvageEstimate` below, which
+ * is what the preview prints regardless of the dial.
+ *
+ * ⚑ THE STORED KEY IS UNCHANGED (`loot`, `LOOT_DIAL`, `lootProfileFor`, the config field and the
+ * plan row): this was a display rename, so no world data and no actor flag has to migrate.
+ *
  * §1: **OFF by default (GM consent)** / Scarce / Standard / Generous. When on: spare magazines as
  * REAL ammo items + cash as the CREDCHIP item.
  *
@@ -338,6 +435,40 @@ export function lootProfileFor(dial, gradeKey) {
   const d = LOOT_DIAL_PROFILE[String(dial ?? "")] ?? LOOT_DIAL_PROFILE.off;
   const base = LOOT_BASE_EB_BY_GRADE[String(gradeKey ?? "")] ?? 0;
   return { dial: LOOT_DIAL.includes(dial) ? dial : "off", spareMags: d.spareMags, cashEb: Math.round(base * d.mult) };
+}
+
+/**
+ * THE SALVAGE DISCLOSURE (ruled 2026-08-14, the same sitting as the rename above).
+ *
+ * ⭐ WHAT IT IS FOR. The dial cannot gate gear, so the preview says out loud what the squad is worth
+ * on the street: the summed catalog value of the WEAPONS, ARMOR and CHROME the plan actually pulled.
+ * It is printed at every dial setting, `off` included — a GM who turns carried cash off has not made
+ * the squad unlootable and should not be able to believe they have.
+ *
+ * ⛔ WHAT IT DELIBERATELY LEAVES OUT: the credchip and the spare magazines. Those ARE the dial, and
+ * counting them here would fold the dial's own output back into the line that exists to say the dial
+ * is not the whole story.
+ *
+ * ⚑ THE ROUNDING, stated rather than hidden behind a "~": the sum is rounded to the nearest 10 below
+ * 1,000 eb and to the nearest 100 at or above it, and a non-zero total never rounds down to zero
+ * (a squad carrying 4 eb of kit reads as ~10, never as ~0). `exact` is returned beside `rounded`, so
+ * nothing has to re-derive the unrounded figure to check the rounded one.
+ *
+ * PURE: it reads plain plan rows — `{weaponRow:{cost}, armor:{layers:[{cost}]},
+ * chrome:{items:[{cost}], bonusItems:[{cost}]}}` — and touches no document.
+ */
+export function salvageEstimate(rows) {
+  let exact = 0;
+  for (const row of rows ?? []) {
+    exact += Number(row?.weaponRow?.cost) || 0;
+    for (const layer of row?.armor?.layers ?? []) exact += Number(layer?.cost) || 0;
+    for (const item of row?.chrome?.items ?? []) exact += Number(item?.cost) || 0;
+    for (const item of row?.chrome?.bonusItems ?? []) exact += Number(item?.cost) || 0;
+  }
+  exact = Math.round(exact);
+  const step = exact >= 1000 ? 100 : 10;
+  const rounded = exact === 0 ? 0 : Math.max(step, Math.round(exact / step) * step);
+  return { exact, rounded, step };
 }
 
 // =================================================================================================

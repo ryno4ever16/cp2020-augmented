@@ -46,6 +46,9 @@ const CH  = await load("../module/npcgen/chrome.js");
 const AR  = await load("../module/npcgen/armor.js");
 const OU  = await load("../module/npcgen/outfits.js");
 const BP  = await load("../module/npcgen/blueprint.js");
+const TB  = await load("../module/npcgen/tables.js");
+/** The SCHEMA's own role enum — the random draw's pool is derived from it, so legs read it here. */
+const TB_ROLE_ENUM = TB.ROLE_ENUM ?? [];
 
 console.log("goon factory — pure layer");
 
@@ -95,6 +98,20 @@ section("§3 grades", GR, () => {
     assert.deepEqual(GR.clampCount(6), { value: 6, clamped: false });
     assert.deepEqual(GR.clampCount(0), { value: 1, clamped: true });
     assert.deepEqual(GR.clampCount("nonsense"), { value: GR.COUNT.default, clamped: false });
+  });
+
+  // ⭐ R4 (ruled 2026-08-14): the count a user who has never typed one sees is ONE, not six. The
+  // remembered value is the window's half of the ruling (npcgen-app.js `goonCountLast`); this is the
+  // floor it falls back to, and it is asserted by VALUE because "the default" is exactly what moved.
+  leg("the count default is 1, and an unreadable entry falls back to it rather than to six", () => {
+    assert.equal(GR.COUNT.default, 1);
+    assert.equal(GR.COUNT.min, 1);
+    assert.equal(GR.COUNT.cap, 12);
+    // an emptied field parses to NaN in the window (parseInt("")), which is the fall-back path
+    assert.deepEqual(GR.clampCount(NaN), { value: 1, clamped: false });
+    assert.deepEqual(GR.clampCount(1), { value: 1, clamped: false });
+    // the NEGATIVE case: a real entry is never overwritten by the default
+    assert.deepEqual(GR.clampCount(7), { value: 7, clamped: false });
   });
 
   // ── skill-points reservation arithmetic (§1 + §4) ──
@@ -674,58 +691,230 @@ section("armor bands + layering composer", AR, () => {
 });
 
 // =================================================================================================
-// §3 OUTFITS — the schema seam and the three SEED entries
+// §3 OUTFITS — the RATIFIED catalogue (OUTFIT-CATALOGUE-PREP.md §A, promoted 2026-08-14)
 // =================================================================================================
 
-section("§3 outfits (seed set)", OU, () => {
-  leg("exactly three seeds ship, all flagged as seeds", () => {
-    assert.equal(OU.OUTFIT_SEEDS.length, 3);
-    assert.ok(OU.OUTFIT_SEEDS.every((o) => o.seed === true), "an outfit is not marked as a seed");
+/**
+ * ⛔ THE §A TABLE, TRANSCRIBED AS A CLOSED EXPECTATION SET. This is the ratified content, so the
+ * suite compares the shipped data against the TABLE rather than against itself — a leg that read the
+ * roster and then asserted things about what it read would pass for any roster at all.
+ *
+ * The three rows that shipped earlier as seeds are 1, 4 and 9; their ids are pinned here so a
+ * "reconcile in place" that quietly re-created them under new ids fails.
+ */
+const CATALOGUE_A = [
+  { n: 1,  id: "cityPolicePatrol",     role: "cop",    grade: "C",  mod: 0, hardness: "soft", weight: "any",   armament: "standard", loot: "scarce",   bias: ["AwarenessNotice", "Handgun"],           wasSeed: true },
+  { n: 2,  id: "cityPoliceTactical",   role: "cop",    grade: "B",  mod: 1, hardness: "any",  weight: "any",   armament: "standard", loot: "scarce",   bias: ["Rifle", "Athletics"],                   wasSeed: false },
+  { n: 3,  id: "cyberpsychoResponse",  role: "solo",   grade: "A",  mod: 2, hardness: "hard", weight: "any",   armament: "ap",       loot: "standard", bias: ["Rifle", "AwarenessNotice"],             wasSeed: false },
+  { n: 4,  id: "premiumCorpSecurity",  role: "solo",   grade: "B",  mod: 1, hardness: "soft", weight: "any",   armament: "standard", loot: "standard", bias: ["Handgun", "AwarenessNotice"],           wasSeed: true },
+  { n: 5,  id: "executiveProtection",  role: "solo",   grade: "A",  mod: 1, hardness: "soft", weight: "any",   armament: "standard", loot: "standard", bias: ["Handgun", "Melee"],                     wasSeed: false },
+  { n: 6,  id: "facilitySecurity",     role: "cop",    grade: "C",  mod: 0, hardness: "soft", weight: "any",   armament: "standard", loot: "scarce",   bias: ["AwarenessNotice", "Brawling"],          wasSeed: false },
+  { n: 7,  id: "dockPatrol",           role: "solo",   grade: "C",  mod: 0, hardness: "soft", weight: "any",   armament: "standard", loot: "scarce",   bias: ["Brawling", "Melee", "Intimidate"],      wasSeed: false },
+  { n: 8,  id: "militarizedCorpForce", role: "solo",   grade: "A",  mod: 1, hardness: "hard", weight: "any",   armament: "ap",       loot: "generous", bias: ["Rifle", "HeavyWeapons"],                wasSeed: false },
+  { n: 9,  id: "boosterGang",          role: "solo",   grade: "D",  mod: 2, hardness: "soft", weight: "light", armament: "standard", loot: "scarce",   bias: ["Brawling", "Melee"],                    wasSeed: true },
+  { n: 10, id: "poserGang",            role: "solo",   grade: "D",  mod: 1, hardness: "soft", weight: "light", armament: "standard", loot: "scarce",   bias: ["Brawling", "Streetwise"],               wasSeed: false },
+  { n: 11, id: "chromerGang",          role: "rocker", grade: "E",  mod: 0, hardness: "any",  weight: "any",   armament: "standard", loot: "scarce",   bias: ["Brawling", "Perform"],                  wasSeed: false },
+  { n: 12, id: "corporateStaffers",    role: "corp",   grade: "E",  mod: 0, hardness: "any",  weight: "any",   armament: "standard", loot: "scarce",   bias: ["PersuasionFastTalk", "AwarenessNotice"], wasSeed: false },
+];
+
+section("§3 outfits (ratified catalogue)", OU, () => {
+  leg("the catalogue is the twelve §A rows, in table order, and the seed flag is GONE", () => {
+    assert.equal(OU.OUTFITS.length, 12);
+    assert.deepEqual(OU.OUTFITS.map((o) => o.id), CATALOGUE_A.map((r) => r.id));
+    assert.ok(OU.OUTFITS.every((o) => o.seed === undefined),
+      `an entry still carries a seed flag: ${OU.OUTFITS.filter((o) => o.seed !== undefined).map((o) => o.id)}`);
   });
 
-  leg("the three are the ruled prep entries 1 / 4 / 9, at their ruled grades", () => {
-    const byId = Object.fromEntries(OU.OUTFIT_SEEDS.map((o) => [o.id, o]));
-    assert.equal(byId.cityPolicePatrol.grade, "C");
-    assert.equal(byId.premiumCorpSecurity.grade, "B");
-    assert.equal(byId.boosterGang.grade, "D");
+  leg("the three earlier seeds were RECONCILED IN PLACE — same ids, not re-created", () => {
+    const ids = new Set(OU.OUTFIT_IDS);
+    for (const r of CATALOGUE_A.filter((x) => x.wasSeed)) {
+      assert.ok(ids.has(r.id), `seed id ${r.id} did not survive the promotion`);
+      assert.ok(OU.outfitById(r.id), `outfitById lost ${r.id}`);
+    }
+    // …and nothing was duplicated alongside them.
+    assert.equal(new Set(OU.OUTFIT_IDS).size, 12);
   });
 
-  leg("their ruled role defaults and chrome modifiers are carried verbatim", () => {
-    const byId = Object.fromEntries(OU.OUTFIT_SEEDS.map((o) => [o.id, o]));
-    assert.equal(byId.cityPolicePatrol.roleDefault, "cop");
-    assert.equal(byId.cityPolicePatrol.chromeCountMod, 0);
-    assert.equal(byId.premiumCorpSecurity.roleDefault, "solo");
-    assert.equal(byId.premiumCorpSecurity.chromeCountMod, 1);
-    assert.equal(byId.boosterGang.roleDefault, "solo");
-    assert.equal(byId.boosterGang.chromeCountMod, 2);
+  leg("every entry's role, grade and chrome modifier are the §A row's own", () => {
+    for (const r of CATALOGUE_A) {
+      const o = OU.outfitById(r.id);
+      assert.equal(o.roleDefault, r.role, `row ${r.n} role`);
+      assert.equal(o.grade, r.grade, `row ${r.n} grade`);
+      assert.equal(o.chromeCountMod, r.mod, `row ${r.n} chrome mod`);
+    }
   });
 
-  leg("no outfit carries a chassis (chassis entries are deferred by scope)", () => {
-    assert.ok(OU.OUTFIT_SEEDS.every((o) => !o.chassis));
+  leg("every entry's armor posture and loot profile are the §A row's own", () => {
+    for (const r of CATALOGUE_A) {
+      const o = OU.outfitById(r.id);
+      assert.equal(o.armorPosture.hardness, r.hardness, `row ${r.n} hardness`);
+      assert.equal(o.armorPosture.weight, r.weight, `row ${r.n} weight`);
+      assert.equal(o.armorPosture.armament, r.armament, `row ${r.n} armament`);
+      assert.equal(o.lootProfile, r.loot, `row ${r.n} loot profile`);
+    }
   });
 
-  leg("every outfit carries the full §3 Outfit shape, incl. the FROZEN styleKit seam", () => {
-    for (const o of OU.OUTFIT_SEEDS) {
+  leg("every entry's skill-bias vector is the §A row's key set, at one uniform weight", () => {
+    for (const r of CATALOGUE_A) {
+      const o = OU.outfitById(r.id);
+      assert.deepEqual(Object.keys(o.skillBias).sort(), [...r.bias].sort(), `row ${r.n} bias keys`);
+      assert.ok(Object.values(o.skillBias).every((v) => v === 2),
+        `row ${r.n} bias weights are not uniform: ${JSON.stringify(o.skillBias)}`);
+    }
+  });
+
+  leg("ALL TWELVE ship hostile, entry 12 included (C3 is still open)", () => {
+    for (const o of OU.OUTFITS) assert.equal(o.disposition, "hostile", `${o.id} is not hostile`);
+    assert.equal(OU.outfitById("corporateStaffers").disposition, "hostile");
+  });
+
+  leg("gearSource is null on every entry — §B.5 is DEFERRED, not half-built", () => {
+    for (const o of OU.OUTFITS) assert.equal(o.gearSource, null, `${o.id} declares a gearSource`);
+  });
+
+  leg("no entry carries a chassis — the borg/ACPA pair is deferred, not promoted", () => {
+    assert.ok(OU.OUTFITS.every((o) => !o.chassis));
+    assert.equal(OU.outfitById("fullBorgEnforcer"), null);
+    assert.equal(OU.outfitById("acpaTrooper"), null);
+  });
+
+  leg("every entry carries the full §3 Outfit shape, incl. the FROZEN styleKit seam", () => {
+    for (const o of OU.OUTFITS) {
       for (const k of ["id", "labelKey", "grade", "roleDefault", "chromeCountMod", "lootProfile", "disposition"]) {
         assert.ok(k in o, `${o.id} is missing ${k}`);
       }
       assert.equal(o.styleKit, null, `${o.id} styleKit is not frozen`);
+      assert.equal(o.namePool, null, `${o.id} ships a name pool`);
+      assert.equal(o.composition, null, `${o.id} ships a v2 composition`);
     }
   });
 
-  leg("the BONUS-ITEM CHANNEL seam exists on every outfit and ships EMPTY (wiring pending)", () => {
-    for (const o of OU.OUTFIT_SEEDS) {
+  leg("the BONUS-ITEM CHANNEL seam exists on every entry and ships EMPTY (wiring pending)", () => {
+    for (const o of OU.OUTFITS) {
       assert.ok(Array.isArray(o.bonusPools), `${o.id} has no bonusPools array`);
       assert.equal(o.bonusPools.length, 0, `${o.id} shipped a wired bonus pool: ${JSON.stringify(o.bonusPools)}`);
     }
   });
 
-  leg("no outfit label key names a real-world organization (the p.41 ruling)", () => {
+  leg("no entry names a real-world organization (the p.41 ruling)", () => {
     const banned = /arasaka|militech|petrochem|kang tao|trauma team|ihag|orbital air|biotechnica|network news/i;
-    for (const o of OU.OUTFIT_SEEDS) {
+    for (const o of OU.OUTFITS) {
       assert.ok(!banned.test(o.id), `${o.id} names a real org`);
       assert.ok(!banned.test(o.labelKey), `${o.labelKey} names a real org`);
     }
+  });
+
+  // ── §B.2 — the grade span, as a PAIRED cross-reference and nothing more ──
+  leg("B2 — exactly the paired police entries carry a grade-span note, and each names the other", () => {
+    const withSpan = OU.OUTFITS.filter((o) => o.gradeSpanNoteKey).map((o) => o.id);
+    assert.deepEqual(withSpan, ["cityPolicePatrol", "cityPoliceTactical"]);
+    assert.equal(OU.outfitById("cityPolicePatrol").gradeSpanNoteKey, "GoonFactory.Outfit.CityPolicePatrolSpan");
+    assert.equal(OU.outfitById("cityPoliceTactical").gradeSpanNoteKey, "GoonFactory.Outfit.CityPoliceTacticalSpan");
+    // The pair really is a grade SPAN: same role, one rung apart on the ladder.
+    assert.equal(OU.outfitById("cityPolicePatrol").roleDefault, OU.outfitById("cityPoliceTactical").roleDefault);
+    assert.equal(GR.gradeIndex("B") - GR.gradeIndex("C"), 1);
+  });
+
+  leg("B2 — the span note is DISPLAY ONLY: it is a key, and no other entry has one", () => {
+    for (const o of OU.OUTFITS) {
+      if (!o.gradeSpanNoteKey) { assert.equal(o.gradeSpanNoteKey, null, `${o.id} carries a non-null falsy span`); continue; }
+      assert.ok(o.gradeSpanNoteKey.startsWith("GoonFactory.Outfit."), `${o.id} span is not an i18n key`);
+    }
+  });
+
+  // ── §B.3 — the flavour trio, carried as KEYS for the GM side ──
+  leg("B3 — every entry declares the flavour trio, and every populated slot is an i18n KEY", () => {
+    for (const o of OU.OUTFITS) {
+      assert.ok(o.flavor && typeof o.flavor === "object", `${o.id} has no flavor block`);
+      for (const k of ["jurisdictionKey", "reinforcementKey", "noteKey"]) {
+        assert.ok(k in o.flavor, `${o.id} flavor is missing ${k}`);
+        const v = o.flavor[k];
+        if (v === null) continue;
+        assert.ok(String(v).startsWith("GoonFactory.Outfit."),
+          `${o.id}.${k} is literal text, not a key: ${v}`);
+      }
+    }
+  });
+
+  leg("B3 — the flavour block carries NO mechanical field (it is description only)", () => {
+    const mechanical = ["grade", "chromeCountMod", "disposition", "lootProfile", "skillBias", "armorPosture"];
+    for (const o of OU.OUTFITS) {
+      for (const k of mechanical) assert.ok(!(k in o.flavor), `${o.id} flavor carries the mechanical key ${k}`);
+    }
+  });
+
+  leg("B3 — the four entries whose §A row states jurisdiction/reinforcement are the ones that carry it", () => {
+    const withJurisdiction = OU.OUTFITS.filter((o) => o.flavor.jurisdictionKey).map((o) => o.id);
+    assert.deepEqual(withJurisdiction,
+      ["cityPolicePatrol", "premiumCorpSecurity", "facilitySecurity", "boosterGang"]);
+    const withNote = OU.OUTFITS.filter((o) => o.flavor.noteKey).map((o) => o.id);
+    assert.deepEqual(withNote,
+      ["cyberpsychoResponse", "executiveProtection", "dockPatrol", "corporateStaffers"]);
+  });
+
+  // ── the config seam: what resolveGoonConfig hands the impure layer ──
+  leg("the resolved config carries the flavour keys and the span key through, unlocalized", () => {
+    const c = BP.resolveGoonConfig({ outfitId: "cityPolicePatrol" });
+    assert.equal(c.flavor.jurisdictionKey, "GoonFactory.Outfit.CityPolicePatrolJurisdiction");
+    assert.equal(c.flavor.reinforcementKey, "GoonFactory.Outfit.CityPolicePatrolReinforcement");
+    assert.equal(c.gradeSpanNoteKey, "GoonFactory.Outfit.CityPolicePatrolSpan");
+    // …and the no-outfit case is a clean null rather than an empty object nobody can test against.
+    const bare = BP.resolveGoonConfig({ role: "solo", grade: "C" });
+    assert.equal(bare.flavor, null);
+    assert.equal(bare.gradeSpanNoteKey, null);
+  });
+});
+
+// =================================================================================================
+// §B.1 — SKILL BIAS: a re-weighting overlay, and what it CANNOT do
+// =================================================================================================
+
+section("§B.1 skill bias (re-weighting only)", BP, () => {
+  /** Total level a key ends at, summed over N independent seeds — the observable a weight moves. */
+  function levelSum(key, { role, gradeKey, total, skillBias }) {
+    let sum = 0;
+    for (let i = 0; i < 40; i++) {
+      const rng = BP.seededRng(BP.seedFrom("bias", role, gradeKey, i));
+      const alloc = BP.allocateGoonSkills({ total, gradeKey, role, primaryWeapon: null, rng, skillBias });
+      sum += alloc.skillLevels.find((s) => s.skillKey === key)?.level ?? 0;
+    }
+    return sum;
+  }
+
+  leg("a bias on a key the role's package HAS really re-weights it upward", () => {
+    const opts = { role: "solo", gradeKey: "C", total: 40 };
+    const without = levelSum("Melee", { ...opts, skillBias: {} });
+    const withBias = levelSum("Melee", { ...opts, skillBias: { Melee: 8 } });
+    assert.ok(withBias > without, `bias did not move the allocation: ${without} → ${withBias}`);
+  });
+
+  leg("a bias NEVER adds a skill the package lacks — the C9 case, asserted as a zero", () => {
+    // Intimidate is the Fixer's, not the Solo's (dock patrol's third bias key is exactly this).
+    assert.ok(!BP.CAREER_PACKAGES.solo.skills.includes("Intimidate"));
+    const got = levelSum("Intimidate", { role: "solo", gradeKey: "C", total: 40, skillBias: { Intimidate: 8 } });
+    assert.equal(got, 0, "a bias key outside the package was allocated points");
+  });
+
+  leg("the two other inert keys the catalogue carries are inert for the same reason", () => {
+    assert.ok(!BP.CAREER_PACKAGES.cop.skills.includes("Rifle"));            // row 2
+    const rifleOnCop = levelSum("Rifle", { role: "cop", gradeKey: "B", total: 40, skillBias: { Rifle: 8 } });
+    assert.equal(rifleOnCop, 0);
+    const anyPackageHasHeavy = Object.values(BP.CAREER_PACKAGES).some((p) => p.skills.includes("HeavyWeapons"));
+    assert.equal(anyPackageHasHeavy, false, "HeavyWeapons is in a package after all — row 8's note is stale");
+    const heavyOnSolo = levelSum("HeavyWeapons", { role: "solo", gradeKey: "A", total: 40, skillBias: { HeavyWeapons: 8 } });
+    assert.equal(heavyOnSolo, 0);
+  });
+
+  leg("an inert bias key still leaves the goon able to use the weapon actually drawn", () => {
+    // The grade's guarantee follows the PULLED weapon, so a rifle in a Cop's hands still gets Rifle
+    // — through the guarantee, not through the bias. That is the C9 answer as it stands today.
+    const rng = BP.seededRng(1234);
+    const alloc = BP.allocateGoonSkills({
+      total: 40, gradeKey: "B", role: "cop", rng, skillBias: { Rifle: 2, Athletics: 2 },
+      primaryWeapon: { attackSkill: "Rifle", weaponType: "rifle" },
+    });
+    assert.equal(alloc.guarantee.skillKey, "Rifle");
+    assert.ok((alloc.skillLevels.find((s) => s.skillKey === "Rifle")?.level ?? 0) >= 8);
   });
 });
 
@@ -767,11 +956,19 @@ section("§2 pipeline", BP, () => {
     assert.equal(c.custom, false);
   });
 
-  leg("no grade picked ⇒ nothing derives and Advanced is not available", () => {
+  // ⭐ R2/R3 (ruled 2026-08-14): the flag says whether there is anything to DERIVE FROM — it is what
+  // decides dash-or-number in the window. It no longer gates the Advanced checkbox, and the rename
+  // off `advancedAvailable` is the assertion that says so.
+  leg("no grade picked ⇒ nothing derives, and the config says so by value", () => {
     const c = BP.resolveGoonConfig({ role: "cop" });
     assert.equal(c.grade, null);
-    assert.equal(c.advancedAvailable, false);
-    assert.equal(BP.resolveGoonConfig({ role: "cop", grade: "C" }).advancedAvailable, true);
+    assert.equal(c.gradeDerived, false);
+    assert.equal(c.ref, null);
+    assert.equal(c.bt, null);
+    assert.equal(c.skillPoints, null);
+    assert.equal(c.statPool, null);
+    assert.equal(c.advancedAvailable, undefined);   // the gating field is GONE, not merely unused
+    assert.equal(BP.resolveGoonConfig({ role: "cop", grade: "C" }).gradeDerived, true);
   });
 
   // ── §2.2 stats ──
@@ -1170,6 +1367,426 @@ section("§2 pipeline", BP, () => {
     const bp = BP.goonBlueprint({ role: "solo", grade: "B", count: 1, seed: "honesty" })[0];
     const codes = bp.honesty.map((h) => h.code);
     assert.ok(codes.includes("luckRepRolled"), `no rolled-not-derived line: ${codes}`);
+  });
+});
+
+// =================================================================================================
+// ROLE = RANDOM — the control's DEFAULT, drawn PER GOON (ruled 2026-08-15)
+//
+// Two things are under test and they are separable: the POOL AND THE INDEX MAPPING (a mechanism —
+// asserted against scripted draws, never against a distribution), and the THREADING (does the role
+// each goon rolled actually reach its package, its special ability and its stat order, or does a
+// silent `?? solo` fallback eat the draw). Every leg here is one or the other.
+// =================================================================================================
+
+section("role = random (per-goon draw)", BP, () => {
+  const R = GR.ROLE_RANDOM;
+
+  // ── THE SENTINEL AND THE OPTION LIST ────────────────────────────────────────────────────────
+  leg("the sentinel is the string `random`, and it leads the Role select's options", () => {
+    assert.equal(GR.ROLE_RANDOM, "random");
+    assert.equal(GR.ROLE_OPTIONS[0], R);
+    assert.deepEqual(GR.ROLE_OPTIONS.slice(1), GR.GENERATOR_ROLES);
+    assert.ok(!GR.GENERATOR_ROLES.includes(R), "the sentinel leaked into the real role list");
+  });
+
+  // ── THE POOL ────────────────────────────────────────────────────────────────────────────────
+  leg("the draw pool is ROLE_ENUM's order, intersected with the roles the control offers", () => {
+    assert.deepEqual(BP.RANDOM_ROLE_POOL, TB_ROLE_ENUM.filter((r) => GR.GENERATOR_ROLES.includes(r)));
+    assert.deepEqual(BP.RANDOM_ROLE_POOL,
+      ["solo", "rocker", "media", "nomad", "fixer", "cop", "corp", "techie", "medtechie"]);
+  });
+
+  leg("⛔ the pool omits netrunner — the standing needle holds for a RANDOM draw too", () => {
+    assert.ok(!BP.RANDOM_ROLE_POOL.includes("netrunner"), "a random draw could land on netrunner");
+    assert.equal(BP.RANDOM_ROLE_POOL.length, 9);
+    assert.ok(TB_ROLE_ENUM.includes("netrunner"), "the schema enum lost netrunner — check the filter");
+  });
+
+  leg("every drawable role has a stat vector and a career package, so no draw degrades silently", () => {
+    for (const role of BP.RANDOM_ROLE_POOL) {
+      assert.ok(Array.isArray(GR.ROLE_WEIGHTS[role]) && GR.ROLE_WEIGHTS[role].length > 0, `no vector for ${role}`);
+      assert.ok(BP.CAREER_PACKAGES[role], `no career package for ${role}`);
+    }
+  });
+
+  // ── THE INDEX MAPPING (the MECHANISM, not a distribution) ───────────────────────────────────
+  leg("the draw is floor(r × 9) over the pool — asserted index by index, not statistically", () => {
+    const pool = BP.RANDOM_ROLE_POOL;
+    for (let i = 0; i < pool.length; i++) {
+      const mid = (i + 0.5) / pool.length;
+      assert.equal(BP.rollRoleFor(() => mid), pool[i], `draw ${mid} did not land on index ${i}`);
+    }
+    assert.equal(BP.rollRoleFor(() => 0), pool[0]);
+    assert.equal(BP.rollRoleFor(() => 0.9999999), pool[pool.length - 1]);
+  });
+
+  leg("an rng that returns exactly 1 clamps onto the last entry rather than off the end", () => {
+    assert.equal(BP.rollRoleFor(() => 1), BP.RANDOM_ROLE_POOL[BP.RANDOM_ROLE_POOL.length - 1]);
+    assert.ok(BP.rollRoleFor(() => 1) !== undefined);
+  });
+
+  leg("resolveRole rolls ONLY the sentinel; every other value passes through untouched", () => {
+    assert.equal(BP.resolveRole(R, () => 0), "solo");
+    assert.equal(BP.resolveRole("cop", () => 0), "cop");        // the rng is not even consulted
+    assert.equal(BP.resolveRole(null, () => 0), null);           // a direct caller's null still falls through
+  });
+
+  // ── THE CONTROL'S PREFILL / OVERRIDE MACHINERY ──────────────────────────────────────────────
+  leg("Random is the resolved DEFAULT when nothing names a role", () => {
+    assert.equal(BP.resolveGoonConfig({}).role, R);
+    assert.equal(BP.resolveGoonConfig({ grade: "B" }).role, R);
+    assert.equal(BP.resolveGoonConfig({ grade: "B" }).custom, false, "a bare default is not a custom config");
+  });
+
+  leg("an outfit's roleDefault PREFILLS over the Random default", () => {
+    const c = BP.resolveGoonConfig({ outfitId: "chromerGang", role: R });
+    assert.equal(c.role, "rocker");
+    assert.equal(c.role, OU.outfitById("chromerGang").roleDefault);
+    assert.equal(c.custom, false, "a prefill is not a hand edit");
+  });
+
+  leg("… and an explicit flip BACK to Random beats the outfit and sticks", () => {
+    const c = BP.resolveGoonConfig({ outfitId: "chromerGang", role: R, overrides: { role: R } });
+    assert.equal(c.role, R);
+    assert.equal(c.custom, true, "the flip did not read as a hand edit");
+    assert.equal(c.basedOn, "chromerGang", "the origin was lost");
+  });
+
+  leg("… and the flip behaves like every other control: re-picking the outfit drops it", () => {
+    const c = BP.resolveGoonConfig({ outfitId: "chromerGang", role: R, overrides: {} });
+    assert.equal(c.role, "rocker");
+    assert.equal(c.custom, false);
+  });
+
+  leg("a concrete role override beats the outfit exactly as Random does (the symmetry)", () => {
+    const c = BP.resolveGoonConfig({ outfitId: "chromerGang", role: R, overrides: { role: "cop" } });
+    assert.equal(c.role, "cop");
+    assert.equal(c.custom, true);
+  });
+
+  // ── THE DISPLAYED CHROME COUNT STAYS TRUE ───────────────────────────────────────────────────
+  leg("Random draws NO Solo chrome bonus, so the displayed count is true for every goon", () => {
+    const rnd = BP.resolveGoonConfig({ role: R, grade: "B" });
+    const solo = BP.resolveGoonConfig({ role: "solo", grade: "B" });
+    const cop = BP.resolveGoonConfig({ role: "cop", grade: "B" });
+    assert.equal(rnd.chromeCount, 3);                 // grade B base, no bump
+    assert.equal(cop.chromeCount, 3);                 // a non-Solo role reads the same
+    assert.equal(solo.chromeCount, 5);                // the bump exists, and Random does not take it
+    assert.equal(rnd.chromeDerivation.soloBonus, 0);
+  });
+
+  leg("… and no goon in a Random batch re-derives a different count, whatever it rolled", () => {
+    const bps = BP.goonBlueprint({ role: R, grade: "B", count: 6, seed: "chrome-truth" });
+    assert.ok(bps.some((b) => b.role === "solo"), "seed produced no Solo — the leg proves nothing");
+    for (const b of bps) assert.equal(b.plan.chromeCount, 3, `${b.role} got ${b.plan.chromeCount}`);
+  });
+
+  // ── THE PER-GOON ROLL ───────────────────────────────────────────────────────────────────────
+  leg("each goon rolls its OWN role: a pinned seed yields four different ones", () => {
+    const roles = BP.goonBlueprint({ role: R, grade: "B", count: 4, seed: "sq1" }).map((b) => b.role);
+    assert.deepEqual(roles, ["techie", "corp", "rocker", "fixer"]);
+  });
+
+  leg("… and the draw is independent per goon, not a shuffle: a batch may repeat a role", () => {
+    const roles = BP.goonBlueprint({ role: R, grade: "B", count: 4, seed: "__PW__mix" }).map((b) => b.role);
+    assert.deepEqual(roles, ["corp", "techie", "techie", "solo"]);
+  });
+
+  leg("the same seed re-rolls the same roles, twice over (determinism)", () => {
+    const a = BP.goonBlueprint({ role: R, grade: "B", count: 6, seed: "det-role" }).map((b) => b.role);
+    const b = BP.goonBlueprint({ role: R, grade: "B", count: 6, seed: "det-role" }).map((b) => b.role);
+    assert.deepEqual(a, b);
+    const c = BP.goonBlueprint({ role: R, grade: "B", count: 6, seed: "det-role-other" }).map((b) => b.role);
+    assert.notDeepEqual(a, c, "a different seed produced the same roles");
+  });
+
+  leg("a CONCRETE role is not rolled at all, and says so", () => {
+    for (const bp of BP.goonBlueprint({ role: "cop", grade: "B", count: 3, seed: "sq1" })) {
+      assert.equal(bp.role, "cop");
+      assert.equal(bp.roleRolled, false);
+    }
+    for (const bp of BP.goonBlueprint({ role: R, grade: "B", count: 3, seed: "sq1" })) {
+      assert.equal(bp.roleRolled, true);
+    }
+  });
+
+  leg("⛔ the sentinel never survives into a goon's own role field", () => {
+    for (const bp of BP.goonBlueprint({ role: R, grade: "C", count: 8, seed: "no-sentinel" })) {
+      assert.notEqual(bp.role, R, "a goon is carrying the control value as its role");
+      assert.ok(TB_ROLE_ENUM.includes(bp.role), `${bp.role} is not a schema role`);
+    }
+  });
+
+  leg("the role is drawn on its OWN sub-stream, folded off the goon's seed", () => {
+    // The exact idiom, re-derived rather than trusted: seedFrom(goonSeed, "role"). Getting this
+    // wrong is invisible at the table and fatal to reproducibility, so it is pinned by value.
+    for (const b of BP.goonBlueprint({ role: R, grade: "B", count: 4, seed: "stream" })) {
+      assert.equal(b.role, BP.resolveRole(R, BP.seededRng(BP.seedFrom(b.seed, "role"))), b.name);
+    }
+  });
+
+  leg("… so the roll takes NO draw from the main stream: the stats are still its first consumer", () => {
+    // If the role had been drawn off `rng` the stat portions would be shifted by one draw. Rebuilding
+    // them from a FRESH stream at the goon's own seed is what proves it did not.
+    for (const b of BP.goonBlueprint({ role: R, grade: "B", count: 4, seed: "stream" })) {
+      const again = BP.rollStatPool({
+        pool: b.config.statPool, ref: b.config.ref, bt: b.config.bt,
+        role: b.role, shape: b.config.statShape, rng: BP.seededRng(b.seed),
+      });
+      assert.deepEqual(again.portions, b.statRoll.portions, b.name);
+      assert.deepEqual(again.order, b.statRoll.order, b.name);
+    }
+  });
+
+  // ── THE ROLLED ROLE REALLY DRIVES EVERY CONSUMER ────────────────────────────────────────────
+  leg("the rolled role's CAREER PACKAGE is the one that was spent — asserted per goon by value", () => {
+    const bps = BP.goonBlueprint({ role: R, grade: "B", count: 6, seed: "sq1" });
+    assert.ok(new Set(bps.map((b) => b.role)).size > 1, "a single-role batch proves nothing here");
+    for (const b of bps) {
+      const pkg = BP.CAREER_PACKAGES[b.role];
+      assert.equal(b.skillPlan.specialAbilityKey, pkg.special,
+        `${b.name} rolled ${b.role} but carries ${b.skillPlan.specialAbilityKey}`);
+      // Every allocated key is either in the rolled role's package, one of its free-choice draws, or
+      // the weapon guarantee's own skill — never a key from some other role's list.
+      const allowed = new Set([...b.skillPlan.careerSkills, b.skillPlan.guarantee.skillKey, pkg.special]);
+      for (const s of b.skillLevels) assert.ok(allowed.has(s.skillKey), `${b.role} was levelled in ${s.skillKey}`);
+    }
+  });
+
+  leg("… and the SPECIAL ABILITY sits at the grade's points, on the rolled role's own skill", () => {
+    for (const b of BP.goonBlueprint({ role: R, grade: "A", count: 6, seed: "sq1" })) {
+      const key = BP.CAREER_PACKAGES[b.role].special;
+      const row = b.skillLevels.find((s) => s.skillKey === key);
+      assert.ok(row, `${b.role} has no ${key} row`);
+      assert.equal(row.level, GR.GRADES.A.skillPts);
+    }
+  });
+
+  leg("… and the STAT ORDER is the rolled role's vector, not the control's and not solo's", () => {
+    const bps = BP.goonBlueprint({ role: R, grade: "B", count: 6, seed: "sq1" });
+    for (const b of bps) {
+      const want = GR.ROLE_WEIGHTS[b.role][0];
+      assert.equal(b.statRoll.order[0], want,
+        `${b.name} rolled ${b.role} (primary ${want}) but its order leads with ${b.statRoll.order[0]}`);
+    }
+    // The negative: at least one goon's leading stat is NOT solo's, so the leg could actually fail.
+    assert.ok(bps.some((b) => b.statRoll.order[0] !== GR.ROLE_WEIGHTS.solo[0]),
+      "every goon happened to lead with solo's primary — pick a seed with more spread");
+  });
+
+  // ── NAMING ──────────────────────────────────────────────────────────────────────────────────
+  leg("a Random batch is named `Goon {Grade}-{n}` — the sentinel is never a name prefix", () => {
+    const bps = BP.goonBlueprint({ role: R, grade: "B", count: 3, seed: "names" });
+    assert.deepEqual(bps.map((b) => b.name), ["Goon B-1", "Goon B-2", "Goon B-3"]);
+    assert.ok(bps.every((b) => b.namePrefix === "Goon"), bps.map((b) => b.namePrefix));
+    // The negatives: a picked role and an outfit both still name their own batches.
+    assert.equal(BP.goonBlueprint({ role: "cop", grade: "B", count: 1, seed: "names" })[0].name, "cop B-1");
+    assert.equal(BP.goonBlueprint({ outfitId: "chromerGang", count: 1, seed: "names" })[0].namePrefix, "chromerGang");
+  });
+});
+
+// =================================================================================================
+// DISPOSITION — a BASELINE control, prefilled by an outfit and flipped freely (ruled 2026-08-15)
+// =================================================================================================
+
+section("disposition (baseline control)", BP, () => {
+  leg("the control offers hostile and neutral, hostile by default", () => {
+    assert.deepEqual(GR.DISPOSITIONS, ["hostile", "neutral"]);
+    assert.equal(GR.DISPOSITION_DEFAULT, "hostile");
+    assert.equal(BP.resolveGoonConfig({}).disposition, "hostile");
+    assert.equal(BP.resolveGoonConfig({ role: "solo", grade: "B" }).disposition, "hostile");
+  });
+
+  leg("an outfit PREFILLS it, by the entry's own value", () => {
+    for (const o of OU.OUTFITS) {
+      assert.equal(BP.resolveGoonConfig({ outfitId: o.id }).disposition, o.disposition, o.id);
+    }
+  });
+
+  leg("a hand flip beats the outfit and reads as custom", () => {
+    const c = BP.resolveGoonConfig({ outfitId: "chromerGang", overrides: { disposition: "neutral" } });
+    assert.equal(c.disposition, "neutral");
+    assert.equal(c.custom, true);
+    assert.equal(c.basedOn, "chromerGang");
+  });
+
+  leg("⛔ it resolves in the UNDERIVED state too — a baseline control never waits on a grade", () => {
+    const c = BP.resolveGoonConfig({ overrides: { disposition: "neutral" } });
+    assert.equal(c.gradeDerived, false, "this leg is meant to run in the no-grade branch");
+    assert.equal(c.disposition, "neutral");
+    assert.equal(BP.resolveGoonConfig({}).disposition, "hostile");   // the negative, same branch
+  });
+
+  leg("it is on the list of controls a grade pick derives, so a re-pick clears it", () => {
+    assert.ok(BP.DERIVED_CONTROL_KEYS.includes("disposition"), BP.DERIVED_CONTROL_KEYS);
+    assert.ok(BP.DERIVED_CONTROL_KEYS.includes("role"));
+  });
+});
+
+// =================================================================================================
+// ROUND 2 (ruled 2026-08-14) — R6 tick positions · R7 the reserved segment and its clamp ·
+// R9 the armor-weight split · the carried-cash rescope and its salvage disclosure
+// =================================================================================================
+
+section("round 2 — track geometry, the EV split and the salvage disclosure", GR, () => {
+  // ── R6/R7: ONE FUNCTION ANSWERS BOTH, so both are asserted against IT rather than against a
+  // transcribed pixel. A tick's position and a band's edge are the same question.
+  leg("a value's track position is a percentage of the track's own span", () => {
+    assert.equal(GR.trackPct(2, 2, 10), 0);
+    assert.equal(GR.trackPct(6, 2, 10), 50);
+    assert.equal(GR.trackPct(10, 2, 10), 100);
+  });
+
+  leg("a value outside the track clamps to the track rather than running off it", () => {
+    assert.equal(GR.trackPct(-40, 0, 80), 0);
+    assert.equal(GR.trackPct(400, 0, 80), 100);
+  });
+
+  leg("a track with no span reports 0 rather than dividing by zero", () => {
+    assert.equal(GR.trackPct(5, 10, 10), 0);
+    assert.equal(GR.trackPct(5, 0, NaN), 0);
+  });
+
+  // ── R6: THE BODY TICKS ARE THE BTM BREAKPOINTS, AT THESE EXACT POSITIONS ──────────────────────
+  leg("the BODY slider carries four ticks, at the BTM breakpoints 3/5/8/10", () => {
+    assert.deepEqual(GR.BT_TICKS.map((t) => t.value), [3, 5, 8, 10]);
+  });
+
+  leg("each BODY tick lands at its own position on the 2–10 track", () => {
+    const pcts = GR.BT_TICKS.map((t) => GR.trackPct(t.value, GR.BT_RANGE.min, GR.BT_RANGE.max));
+    assert.deepEqual(pcts, [12.5, 37.5, 75, 100]);
+  });
+
+  leg("every BODY tick names its band, so the mark has something to say on hover", () => {
+    for (const t of GR.BT_TICKS) assert.ok(/^GoonFactory\.BtBand\.\d+$/.test(t.hintKey), t.hintKey);
+  });
+
+  // ── R6: THE STAT-POOL TICKS ARE THE NAMED TIERS ──────────────────────────────────────────────
+  leg("the stat-pool slider carries five ticks, at the named tiers 50/60/70/75/80", () => {
+    assert.deepEqual(GR.STAT_POOL.ticks.map((t) => t.value), [50, 60, 70, 75, 80]);
+  });
+
+  leg("each stat-pool tick lands at its own position on the fixed 0–90 track", () => {
+    const pcts = GR.STAT_POOL.ticks.map((t) => GR.trackPct(t.value, GR.STAT_POOL.scaleMin, GR.STAT_POOL.ceiling));
+    assert.deepEqual(pcts, [55.56, 66.67, 77.78, 83.33, 88.89]);
+  });
+
+  // ── R7: THE TRACK STAYS PUT AND THE BAND GROWS ───────────────────────────────────────────────
+  leg("both tracks run from a FIXED origin — the reservation could not be drawn otherwise", () => {
+    assert.equal(GR.SKILL_POINTS.scaleMin, 0);
+    assert.equal(GR.SKILL_POINTS.scaleMax, 80);
+    assert.equal(GR.STAT_POOL.scaleMin, 0);
+    assert.equal(GR.STAT_POOL.ceiling, 90);
+  });
+
+  leg("the skill band is the grade's own weapon-skill guarantee, and it GROWS with the threat level", () => {
+    const pctFor = (g) => GR.trackPct(GR.skillPointBreakdown(40, g).floor, GR.SKILL_POINTS.scaleMin, GR.SKILL_POINTS.scaleMax);
+    assert.equal(pctFor("E"), 2.5);      // 2 of 80
+    assert.equal(pctFor("B"), 10);       // 8 of 80
+    assert.equal(pctFor("AA"), 12.5);    // 10 of 80
+    assert.ok(pctFor("E") < pctFor("B") && pctFor("B") < pctFor("AA"));
+  });
+
+  leg("… while the track itself does NOT move with the threat level (the negative case)", () => {
+    for (const g of GR.GRADE_KEYS) {
+      const b = GR.skillPointBreakdown(40, g);
+      assert.equal(b.total, 40, `grade ${g} moved the total`);
+      assert.equal(GR.SKILL_POINTS.scaleMax, 80);
+    }
+  });
+
+  leg("the skill band's edge IS the clamp floor — one number, so the thumb stops on the edge", () => {
+    const b = GR.skillPointBreakdown(40, "B");
+    assert.equal(b.floor, b.reserved);
+    assert.equal(b.floor, 8);
+    assert.equal(GR.skillPointBreakdown(4, "B").total, 8, "a total under the guarantee did not clamp up");
+  });
+
+  leg("the stat-pool band is the dynamic floor, and it tracks REF and BODY", () => {
+    const pctFor = (ref, bt) => GR.trackPct(GR.statPoolBreakdown(60, ref, bt).floor, GR.STAT_POOL.scaleMin, GR.STAT_POOL.ceiling);
+    assert.equal(GR.statPoolBreakdown(60, 8, 7).floor, 29);     // 8 + 7 + 7×2
+    assert.equal(pctFor(8, 7), 32.22);
+    assert.equal(GR.statPoolBreakdown(60, 10, 7).floor, 31);    // grade AA's REF exception
+    assert.equal(pctFor(10, 7), 34.44);
+    assert.ok(pctFor(10, 7) > pctFor(8, 7));
+  });
+
+  leg("the stat-pool band's edge is where the pool clamps up to", () => {
+    const b = GR.statPoolBreakdown(10, 8, 7);
+    assert.equal(b.pool, b.floor);
+    assert.equal(b.clamped, true);
+    assert.equal(GR.statPoolBreakdown(60, 8, 7).clamped, false);
+  });
+
+  leg("the breakdown line's own numbers are the band's numbers (floor = reserved + the minimums)", () => {
+    const b = GR.statPoolBreakdown(60, 8, 7);
+    assert.equal(b.reserved, 15);
+    assert.equal(b.floor - b.reserved, GR.FREE_STAT_SLOTS * GR.STAT_MIN);
+  });
+
+  // ── R9: THE ARMOR-WEIGHT SPLIT, DERIVED FROM THE FUNCTION THAT MAKES IT ───────────────────────
+  leg("the weight classes split at EV 1 / EV 2 — derived from weightClassOf, not from a literal", () => {
+    const cls = (ev) => AR.weightClassOf({ ev });
+    const evs = [0, 1, 2, 3, 4, 5, 6];
+    const light = evs.filter((ev) => cls(ev) === "light");
+    const heavy = evs.filter((ev) => cls(ev) === "heavy");
+    assert.deepEqual(light, [0, 1], `light EVs: ${light}`);
+    assert.equal(Math.min(...heavy), 2);
+    assert.equal(cls({}), "light", "an item with no EV at all is not heavy");
+  });
+
+  // ── THE CARRIED-CASH RESCOPE ─────────────────────────────────────────────────────────────────
+  leg("⛔ INVARIANT — the dial never filters gear: nothing but `loot` changes with it", () => {
+    const strip = (cfg) => { const c = { ...cfg }; delete c.loot; return JSON.stringify(c); };
+    const off = BP.resolveGoonConfig({ role: "solo", grade: "B", overrides: { loot: "off" } });
+    const rich = BP.resolveGoonConfig({ role: "solo", grade: "B", overrides: { loot: "generous" } });
+    assert.equal(off.loot, "off");
+    assert.equal(rich.loot, "generous");
+    assert.equal(strip(off), strip(rich));
+  });
+
+  leg("… and the dial's own output is cash and magazines, nothing else", () => {
+    assert.deepEqual(GR.lootProfileFor("off", "B"), { dial: "off", spareMags: 0, cashEb: 0 });
+    const g = GR.lootProfileFor("generous", "B");
+    assert.ok(g.cashEb > 0 && g.spareMags === 3, JSON.stringify(g));
+  });
+
+  const salvageRow = () => ({
+    weaponRow: { cost: 450 },
+    armor: { layers: [{ cost: 100 }, { cost: 250 }] },
+    chrome: { items: [{ cost: 200 }, { cost: 400 }], bonusItems: [{ cost: 50 }] },
+    loot: { cashEb: 5000, spareMags: 3 },
+  });
+
+  leg("the salvage estimate sums the weapon, the armor layers and the chrome", () => {
+    const s = GR.salvageEstimate([salvageRow()]);
+    assert.equal(s.exact, 1450);            // 450 + 350 + 650
+    assert.equal(s.rounded, 1500);          // nearest 100 at or above 1,000 eb
+  });
+
+  leg("… over the whole squad, not one goon", () => {
+    assert.equal(GR.salvageEstimate([salvageRow(), salvageRow()]).exact, 2900);
+  });
+
+  leg("… and it EXCLUDES the carried cash and the spare magazines (they are the dial itself)", () => {
+    const poor = { ...salvageRow(), loot: { cashEb: 0, spareMags: 0 } };
+    assert.equal(GR.salvageEstimate([poor]).exact, GR.salvageEstimate([salvageRow()]).exact);
+  });
+
+  leg("the rounding is nearest 10 below 1,000 eb and nearest 100 at or above", () => {
+    const at = (eb) => GR.salvageEstimate([{ weaponRow: { cost: eb } }]).rounded;
+    assert.equal(at(44), 40);
+    assert.equal(at(45), 50);
+    assert.equal(at(999), 1000);
+    assert.equal(at(1449), 1400);
+    assert.equal(at(1450), 1500);
+  });
+
+  leg("a squad worth something never rounds down to nothing; an empty one really reads 0", () => {
+    assert.equal(GR.salvageEstimate([{ weaponRow: { cost: 4 } }]).rounded, 10);
+    assert.equal(GR.salvageEstimate([]).rounded, 0);
+    assert.equal(GR.salvageEstimate([{}]).rounded, 0);
   });
 });
 

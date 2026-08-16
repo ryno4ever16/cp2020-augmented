@@ -7,7 +7,36 @@
       Each control the JS reads back is selected by its cp-goon-* class (_readForm), so renaming one
       breaks the read. Controls below the line carry `disabled` until Advanced is ticked — §1's
       "locked, visible" state, which is a DISABLED control showing its derived value, never a
-      hidden one. --}}
+      hidden one.
+
+      ⭐ THE FOUR SPEC-DELTA RULINGS OF 2026-08-14, walked on the shipped window, all live here:
+        R1 the picks read TOP-DOWN in hierarchy order — threat level, then role, then outfit (the
+           outfit still prefills everything below it; only its POSITION moved);
+        R2 the Advanced checkbox is ALWAYS live — it was disabled until a grade was picked, which
+           reads as a broken control to anyone who clicks it;
+        R3 the dial section renders from FIRST OPEN, locked and dashed. The grade-conditional wrap
+           that used to hide the whole section contradicted the "locked, visible" rule stated two
+           paragraphs up: an underived control shows a DASH, it does not vanish;
+        R4 the count remembers the GM's last entry (npcgen-app.js holds the store).
+
+      ⭐ THE FIVE ROUND-2 RULINGS OF 2026-08-14, walked on the repaired window:
+        R6 the ticks are MARKS DRAWN ON THE TRACK — BODY at the BTM breakpoints, the stat pool at its
+           named tiers, REF tickless by its own ruling. They were <datalist> marks before, which the
+           two cores' browsers render differently and one not at all, so the ticks the spec asks for
+           were invisible. Each mark carries ONE number, its position; the stylesheet draws it.
+        R7 the reservation is a SHADED BAND on the track, from the left edge to the reservation
+           point, on the skill-points slider AND the stat-pool slider. The track's total no longer
+           moves: the band grows as the threat level rises and the free segment visibly shrinks. The
+           slider's `min` used to BE the floor, which is why nothing was drawable; the floor now
+           rides as `data-cp-floor` and the window's input handler clamps the thumb onto the band's
+           edge. The breakdown line stays and states the same numbers the band draws.
+        R8 Luck and Reputation are grouped under a "per-goon rolled stats" mini-section with one
+           hint line, because "Luck formula" alone does not say who rolls it or when.
+        R9 the armor Weight options name the stat they filter on — armor.js `weightClassOf` splits at
+           EV ≤ 1 / EV ≥ 2, so the labels say EV 0–1 and EV 2+ (i18n only; the mechanism is untouched).
+        LOOT the dial displays as CARRIED CASH & CONSUMABLES (its key is unchanged), and the preview
+           carries a SALVAGE line: the dial cannot gate gear, so the window discloses what the squad
+           is worth instead of pretending the dial decides it. --}}
 <div class="cp-goon">
 
   {{#if catalogLoading}}
@@ -16,33 +45,9 @@
   <p class="cp-goon-pending">{{localize "CYBERPUNK.GoonFactory.CatalogLoading"}}</p>
   {{else}}
 
-  {{!-- ── TOP: the optional Outfit prefill ─────────────────────────────────────────────────── --}}
-  <div class="cp-goon-row cp-goon-outfit-row">
-    <label class="cp-goon-label" for="cp-goon-outfit">{{localize "CYBERPUNK.GoonFactory.OutfitLabel"}}</label>
-    <select id="cp-goon-outfit" class="cp-goon-outfit">
-      <option value="">{{localize "CYBERPUNK.GoonFactory.OutfitNone"}}</option>
-      {{#each outfits as |o|}}
-      <option value="{{o.id}}" {{#if o.selected}}selected{{/if}}>{{o.label}}{{#if o.seed}} {{localize "CYBERPUNK.GoonFactory.SeedSuffix"}}{{/if}}</option>
-      {{/each}}
-    </select>
-  </div>
-  {{#if outfitId}}
-  <p class="cp-goon-basedon">{{basedOnLabel}}</p>
-  {{/if}}
-  <p class="cp-goon-hint cp-goon-seednote">{{localize "CYBERPUNK.GoonFactory.SeedOutfitsNote"}}</p>
-
-  {{!-- ── HEADER BAND: role · threat level · count · Advanced ──────────────────────────────── --}}
+  {{!-- ── HEADER BAND (R1): threat level · role · outfit · count · Advanced ────────────────── --}}
   <div class="cp-goon-band">
-    <div class="cp-goon-row">
-      <label class="cp-goon-label" for="cp-goon-role">{{localize "CYBERPUNK.GoonFactory.RoleLabel"}}</label>
-      <select id="cp-goon-role" class="cp-goon-role">
-        {{#each roles as |r|}}
-        <option value="{{r.key}}" {{#if r.selected}}selected{{/if}}>{{r.label}}</option>
-        {{/each}}
-      </select>
-    </div>
-
-    <div class="cp-goon-row">
+    <div class="cp-goon-row cp-goon-grade-row">
       <label class="cp-goon-label" for="cp-goon-grade">{{localize "CYBERPUNK.GoonFactory.GradeLabel"}}</label>
       <select id="cp-goon-grade" class="cp-goon-grade">
         {{!-- §1: the threat level initializes to DASHES — an unpicked grade is a real state, not a
@@ -54,70 +59,141 @@
       </select>
     </div>
 
-    <div class="cp-goon-row">
+    {{!-- ROLE. The first option is RANDOM and it is the window's default state (ruled 2026-08-15):
+          each goon then rolls its OWN role at generation, so one batch can hold a Cop and a Techie.
+          Picking an outfit prefills the outfit's role over that default; flipping back to Random is
+          an override like any other and sticks. The option list already leads with Random, so there
+          is nothing conditional here. --}}
+    <div class="cp-goon-row cp-goon-role-row">
+      <label class="cp-goon-label" for="cp-goon-role" title="{{localize 'CYBERPUNK.GoonFactory.RoleHint'}}">{{localize "CYBERPUNK.GoonFactory.RoleLabel"}}</label>
+      <select id="cp-goon-role" class="cp-goon-role">
+        {{#each roles as |r|}}
+        <option value="{{r.key}}" {{#if r.selected}}selected{{/if}}>{{r.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    {{!-- The outfit is the LAST pick and still the strongest one: picking it prefills the two
+          controls above and every dial below. Its "based on" line and its grade-span note travel
+          with it.
+
+          The catalogue is RATIFIED (2026-08-14), so the seed suffix and the "three seed outfits
+          ship" note are gone: there is nothing provisional left to disclose. What stands in their
+          place is §B.2's grade-span note, which renders only for an outfit that HAS a paired
+          entry. --}}
+    <div class="cp-goon-row cp-goon-outfit-row">
+      <label class="cp-goon-label" for="cp-goon-outfit">{{localize "CYBERPUNK.GoonFactory.OutfitLabel"}}</label>
+      <select id="cp-goon-outfit" class="cp-goon-outfit">
+        <option value="">{{localize "CYBERPUNK.GoonFactory.OutfitNone"}}</option>
+        {{#each outfits as |o|}}
+        <option value="{{o.id}}" {{#if o.selected}}selected{{/if}}>{{o.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+    {{#if outfitId}}
+    <p class="cp-goon-basedon">{{basedOnLabel}}</p>
+    {{/if}}
+    {{#if gradeSpanNote}}
+    <p class="cp-goon-hint cp-goon-spannote">{{gradeSpanNote}}</p>
+    {{/if}}
+
+    {{!-- DISPOSITION — a BASELINE control (ruled 2026-08-15), which is why it is HERE, inside the
+          header band, and not down in `.cp-goon-dials` behind the Advanced checkbox. It carries no
+          `disabled` state at all: the Advanced lock starts below this band. An outfit prefills it and
+          the GM flips it freely; the value lands on the generated actor's PROTOTYPE TOKEN. --}}
+    <div class="cp-goon-row cp-goon-disposition-row">
+      <label class="cp-goon-label" for="cp-goon-disposition" title="{{localize 'CYBERPUNK.GoonFactory.DispositionHint'}}">{{localize "CYBERPUNK.GoonFactory.DispositionLabel"}}</label>
+      <select id="cp-goon-disposition" class="cp-goon-disposition">
+        {{#each dispositions as |d|}}
+        <option value="{{d.key}}" {{#if d.selected}}selected{{/if}}>{{d.label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="cp-goon-row cp-goon-count-row">
       <label class="cp-goon-label" for="cp-goon-count">{{localize "CYBERPUNK.GoonFactory.CountLabel"}}</label>
       <input id="cp-goon-count" class="cp-goon-count" type="number" min="1" max="{{maxCount}}" value="{{count}}" />
       {{#if countClamped}}<span class="cp-goon-clamp">{{CPLocal "GoonFactory.CountClamped" max=maxCount}}</span>{{/if}}
     </div>
 
+    {{!-- R2: no `disabled` here, under any state. --}}
     <div class="cp-goon-row cp-goon-advanced-row">
       <label class="cp-goon-check" for="cp-goon-advanced" title="{{localize 'CYBERPUNK.GoonFactory.AdvancedHint'}}">
         <input id="cp-goon-advanced" class="cp-goon-advanced" type="checkbox"
-               data-action="goonAdvanced" {{#if advanced}}checked{{/if}} {{#unless advancedAvailable}}disabled{{/unless}} />
+               data-action="goonAdvanced" {{#if advanced}}checked{{/if}} />
         {{localize "CYBERPUNK.GoonFactory.Advanced"}}
       </label>
-      {{#unless advancedAvailable}}
-      <span class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.AdvancedNeedsGrade"}}</span>
-      {{/unless}}
     </div>
   </div>
 
-  {{#if grade}}
-  {{!-- ── BELOW THE LINE: every control takes its grade-derived default, locked and VISIBLE ── --}}
-  <div class="cp-goon-dials{{#unless advanced}} cp-goon-locked{{/unless}}">
+  {{!-- ── BELOW THE LINE (R3): ALWAYS RENDERED. Locked until Advanced; dashed until a grade. ── --}}
+  <div class="cp-goon-dials{{#unless advanced}} cp-goon-locked{{/unless}}{{#unless grade}} cp-goon-unset{{/unless}}">
     <p class="cp-goon-section">{{localize "CYBERPUNK.GoonFactory.DialsSection"}}</p>
+    {{#unless grade}}<p class="cp-goon-hint cp-goon-unset-hint">{{localize "CYBERPUNK.GoonFactory.DialsUnsetHint"}}</p>{{/unless}}
     {{#unless advanced}}<p class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.DialsLockedHint"}}</p>{{/unless}}
 
-    {{!-- REF --}}
+    {{!-- REF. `refValue` parks the thumb at the bottom of the range while nothing is derived; the
+          READOUT is what tells the truth about that state, and it reads a dash.
+
+          Every slider sits in a `.cp-goon-slider-wrap`, ticked or not, so the four rows keep the
+          same height and the tick strip has a box to be positioned in. REF carries no ticks and no
+          band — its ruling leaves it plain. --}}
     <div class="cp-goon-row">
       <label class="cp-goon-label" for="cp-goon-ref" title="{{localize 'CYBERPUNK.GoonFactory.RefHint'}}">{{localize "CYBERPUNK.GoonFactory.RefLabel"}}</label>
-      <input id="cp-goon-ref" class="cp-goon-ref" type="range" min="{{refRange.min}}" max="{{refRange.max}}"
-             value="{{ref}}" {{#unless advanced}}disabled{{/unless}} />
-      <output class="cp-goon-out">{{ref}}</output>
+      <span class="cp-goon-slider-wrap">
+        <input id="cp-goon-ref" class="cp-goon-ref cp-goon-slider" type="range" min="{{refRange.min}}" max="{{refRange.max}}"
+               value="{{refValue}}" {{#unless advanced}}disabled{{/unless}} />
+      </span>
+      <output class="cp-goon-out">{{refOut}}</output>
     </div>
 
-    {{!-- BT: constant 7 at every grade, with the always-visible stakes line §1 demands --}}
+    {{!-- BT: constant 7 at every grade, with the always-visible stakes line §1 demands.
+          R6: the marks are the BTM breakpoints 3/5/8/10. Each carries its position as one number in
+          `--cp-tick`; the stylesheet turns that into a mark and the band hover rides the mark's
+          own title. --}}
     <div class="cp-goon-row">
       <label class="cp-goon-label" for="cp-goon-bt">{{localize "CYBERPUNK.GoonFactory.BtLabel"}}</label>
-      <input id="cp-goon-bt" class="cp-goon-bt" type="range" min="{{btRange.min}}" max="{{btRange.max}}"
-             list="cp-goon-bt-ticks" value="{{bt}}" {{#unless advanced}}disabled{{/unless}} />
-      <output class="cp-goon-out">{{bt}}</output>
-      <datalist id="cp-goon-bt-ticks">
-        {{#each btTicks as |t|}}<option value="{{t.value}}" label="{{t.hint}}"></option>{{/each}}
-      </datalist>
+      <span class="cp-goon-slider-wrap">
+        <input id="cp-goon-bt" class="cp-goon-bt cp-goon-slider" type="range" min="{{btRange.min}}" max="{{btRange.max}}"
+               value="{{btValue}}" {{#unless advanced}}disabled{{/unless}} />
+        <span class="cp-goon-ticks cp-goon-bt-ticks">
+          {{#each btTicks as |t|}}<span class="cp-goon-tick" style="--cp-tick:{{t.pct}}" data-value="{{t.value}}" title="{{t.hint}}"></span>{{/each}}
+        </span>
+      </span>
+      <output class="cp-goon-out">{{btOut}}</output>
     </div>
     <p class="cp-goon-stakes">{{localize "CYBERPUNK.GoonFactory.BtStakes"}}</p>
 
-    {{!-- Skill points: a segmented track whose reserved zone is the grade's guarantee --}}
+    {{!-- Skill points (R7): the track runs the FULL scale and the grade's weapon-skill guarantee is
+          drawn on it as a band from the left edge. `data-cp-floor` is the clamp the band's edge
+          represents — the window's input handler holds the thumb there. --}}
     <div class="cp-goon-row">
       <label class="cp-goon-label" for="cp-goon-skillpoints">{{localize "CYBERPUNK.GoonFactory.SkillPointsLabel"}}</label>
-      <input id="cp-goon-skillpoints" class="cp-goon-skillpoints" type="range"
-             min="{{skill.floor}}" max="80" value="{{skill.total}}" {{#unless advanced}}disabled{{/unless}} />
-      <output class="cp-goon-out">{{skill.total}}</output>
+      <span class="cp-goon-slider-wrap">
+        <input id="cp-goon-skillpoints" class="cp-goon-skillpoints cp-goon-slider" type="range"
+               min="{{skillScale.scaleMin}}" max="{{skillScale.scaleMax}}" data-cp-floor="{{skill.floor}}"
+               value="{{skillValue}}" {{#unless advanced}}disabled{{/unless}} />
+      </span>
+      <output class="cp-goon-out">{{skillOut}}</output>
     </div>
     <p class="cp-goon-breakdown" title="{{localize 'CYBERPUNK.GoonFactory.SkillReservedHint'}}">{{skillBreakdownLine}}</p>
 
-    {{!-- Stat pool: reservations are REF+BT only; ticks name the book tiers --}}
+    {{!-- Stat pool (R6 + R7): named-tier ticks AND a reserved band. The band ends at the dynamic
+          floor — REF + BODY, plus the minimum the remaining stats must keep — which is exactly where
+          the thumb stops, and exactly what the breakdown line below states in words. --}}
     <div class="cp-goon-row">
       <label class="cp-goon-label" for="cp-goon-statpool">{{localize "CYBERPUNK.GoonFactory.StatPoolLabel"}}</label>
-      <input id="cp-goon-statpool" class="cp-goon-statpool" type="range" list="cp-goon-pool-ticks"
-             min="{{pool.floor}}" max="{{pool.ceiling}}" value="{{pool.pool}}" {{#unless advanced}}disabled{{/unless}} />
-      <output class="cp-goon-out">{{pool.pool}}</output>
-      <datalist id="cp-goon-pool-ticks">
-        {{#each poolTicks as |t|}}<option value="{{t.value}}" label="{{t.hint}}"></option>{{/each}}
-      </datalist>
+      <span class="cp-goon-slider-wrap">
+        <input id="cp-goon-statpool" class="cp-goon-statpool cp-goon-slider" type="range"
+               min="{{poolScale.scaleMin}}" max="{{poolScale.ceiling}}" data-cp-floor="{{pool.floor}}"
+               value="{{poolValue}}" {{#unless advanced}}disabled{{/unless}} />
+        <span class="cp-goon-ticks cp-goon-pool-ticks">
+          {{#each poolTicks as |t|}}<span class="cp-goon-tick" style="--cp-tick:{{t.pct}}" data-value="{{t.value}}" title="{{t.hint}}"></span>{{/each}}
+        </span>
+      </span>
+      <output class="cp-goon-out">{{poolOut}}</output>
     </div>
-    <p class="cp-goon-breakdown">{{poolBreakdownLine}}</p>
+    <p class="cp-goon-breakdown" title="{{localize 'CYBERPUNK.GoonFactory.PoolReservedHint'}}">{{poolBreakdownLine}}</p>
 
     {{!-- Stat shape --}}
     <div class="cp-goon-row">
@@ -129,17 +205,24 @@
       </select>
     </div>
 
-    {{!-- Luck / Rep formula fields --}}
-    <div class="cp-goon-row">
-      <label class="cp-goon-label" for="cp-goon-luck">{{localize "CYBERPUNK.GoonFactory.LuckLabel"}}</label>
-      <input id="cp-goon-luck" class="cp-goon-luck" type="text" value="{{luckFormula}}" {{#unless advanced}}disabled{{/unless}} />
+    {{!-- R8 — PER-GOON ROLLED STATS. These two are the only dials on the window that are not a
+          setting at all: they are dice the generator rolls once per goon, so a GM reading "Luck
+          formula" at face value cannot tell whether it is a value, a cap or a roll. The heading and
+          the single hint line answer that; the fields, their defaults and their mechanics are
+          untouched. --}}
+    <div class="cp-goon-rolled">
+      <p class="cp-goon-subhead">{{localize "CYBERPUNK.GoonFactory.RolledSection"}}</p>
+      <p class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.RolledHint"}}</p>
+      <div class="cp-goon-row">
+        <label class="cp-goon-label" for="cp-goon-luck">{{localize "CYBERPUNK.GoonFactory.LuckLabel"}}</label>
+        <input id="cp-goon-luck" class="cp-goon-luck" type="text" value="{{luckFormula}}" {{#unless advanced}}disabled{{/unless}} />
+      </div>
+      <div class="cp-goon-row">
+        <label class="cp-goon-label" for="cp-goon-rep">{{localize "CYBERPUNK.GoonFactory.RepLabel"}}</label>
+        <input id="cp-goon-rep" class="cp-goon-rep" type="text" value="{{repFormula}}" {{#unless advanced}}disabled{{/unless}} />
+      </div>
+      {{#if formulaNote}}<p class="cp-goon-warn">{{formulaNote}}</p>{{/if}}
     </div>
-    <div class="cp-goon-row">
-      <label class="cp-goon-label" for="cp-goon-rep">{{localize "CYBERPUNK.GoonFactory.RepLabel"}}</label>
-      <input id="cp-goon-rep" class="cp-goon-rep" type="text" value="{{repFormula}}" {{#unless advanced}}disabled{{/unless}} />
-    </div>
-    <p class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.LuckRepHint"}}</p>
-    {{#if formulaNote}}<p class="cp-goon-warn">{{formulaNote}}</p>{{/if}}
 
     {{!-- Chromed --}}
     <div class="cp-goon-row">
@@ -147,8 +230,11 @@
         <input id="cp-goon-chrome-on" class="cp-goon-chrome-on" type="checkbox" {{#if chromeOn}}checked{{/if}} {{#unless advanced}}disabled{{/unless}} />
         {{localize "CYBERPUNK.GoonFactory.ChromedLabel"}}
       </label>
+      {{!-- A number input cannot render a dash, so the underived state is an EMPTY field with the
+            dash as its placeholder — the same "nothing picked yet" reading. --}}
       <input id="cp-goon-chrome-count" class="cp-goon-chrome-count" type="number" min="0" max="20"
-             value="{{chromeCount}}" title="{{chromeDerivationLine}}" {{#unless advanced}}disabled{{/unless}} />
+             value="{{chromeCountValue}}" placeholder="{{unsetMark}}" title="{{chromeDerivationLine}}"
+             {{#unless advanced}}disabled{{/unless}} />
       <span class="cp-goon-hint">{{chromeDerivationLine}}</span>
     </div>
 
@@ -185,12 +271,15 @@
       <span class="cp-goon-hint">{{localize "CYBERPUNK.GoonFactory.LootHint"}}</span>
     </div>
   </div>
-  {{/if}}
 
   {{!-- ── PREVIEW: the Generate confirmation step ──────────────────────────────────────────── --}}
   {{#if hasPreview}}
   <div class="cp-goon-preview">
     <p class="cp-goon-section">{{localize "CYBERPUNK.GoonFactory.PreviewSection"}}</p>
+    {{!-- THE SALVAGE DISCLOSURE. Squad-wide, and printed at every setting of the carried-cash dial:
+          gear, armor and chrome are on the goons whatever that dial says, so the window states what
+          they are worth rather than leaving the GM to add it up. --}}
+    {{#if salvageLine}}<p class="cp-goon-salvage">{{salvageLine}}</p>{{/if}}
     {{#each preview as |g|}}
     <div class="cp-goon-card" data-index="{{g.index}}">
       <div class="cp-goon-card-head">
@@ -202,6 +291,9 @@
              title="{{localize 'CYBERPUNK.GoonFactory.DeleteOne'}}"><i class="fas fa-trash"></i></a>
         </span>
       </div>
+      {{!-- The rolled role, named per goon so the GM sees what each one BECAME before confirming.
+            Rendered only for a Random batch — see _previewCard. --}}
+      {{#if g.roleLine}}<p class="cp-goon-card-role">{{g.roleLine}}</p>{{/if}}
       <p class="cp-goon-card-stats">{{g.statLine}}</p>
       {{#if g.gearLine}}<p class="cp-goon-card-gear">{{g.gearLine}}</p>{{/if}}
       {{#if g.armorLine}}<p class="cp-goon-card-armor">{{g.armorLine}}</p>{{/if}}

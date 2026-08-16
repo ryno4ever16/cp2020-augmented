@@ -581,12 +581,60 @@ export function npcBlueprint({ archetype = "goon", dials = "mook", count = 1, se
 //   8 materialize     → materialize.js
 
 import {
-  COUNT, GRADE_CONSTANT_BT, GRADE_DEFAULT_REF, LOOSE_LADDER, LOOT_DEFAULT, POOL_STAT_KEYS,
-  ROLE_SPECIAL_ABILITY, ROLE_WEIGHTS, SKILL_POINTS, STAT_MAX, STAT_MIN, STAT_POOL,
-  STAT_SHAPE_DEFAULT, ARMAMENT_POSTURE_DEFAULT,
+  COUNT, DISPOSITION_DEFAULT, GENERATOR_ROLES, GRADE_CONSTANT_BT, GRADE_DEFAULT_REF, LOOSE_LADDER,
+  LOOT_DEFAULT, POOL_STAT_KEYS, ROLE_RANDOM, ROLE_SPECIAL_ABILITY, ROLE_WEIGHTS, SKILL_POINTS,
+  STAT_MAX, STAT_MIN, STAT_POOL, STAT_SHAPE_DEFAULT, ARMAMENT_POSTURE_DEFAULT,
   chromeCountFor, clampCount, gradeOf, looseWeightAt, skillPointBreakdown, statPoolBreakdown,
 } from "./grades.js";
 import { outfitById } from "./outfits.js";
+
+// -------------------------------------------------------------------------------------------------
+// §2.1a — "RANDOM" AS A ROLE, RESOLVED PER GOON
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * ⭐ THE POOL A RANDOM ROLE DRAWS FROM, AND WHY IT IS NOT SIMPLY `ROLE_ENUM`.
+ *
+ * `ROLE_ENUM` (tables.js) is the SCHEMA's ten legal `system.role.value` strings and it supplies both
+ * the membership test and the ORDER here — the draw is an index over the book's own list, so the
+ * mapping is inspectable rather than dependent on however `GENERATOR_ROLES` happens to be typed.
+ *
+ * ⛔ NETRUNNER IS FILTERED OUT, AND THE FILTER IS THE STANDING RULING, NOT A CONVENIENCE. The role
+ * is deliberately absent from `GENERATOR_ROLES` until the netrunning pass lands (grades.js states
+ * the needle, and a keeper leg asserts it). A Random draw that could land on it would hand the GM a
+ * role the control itself refuses to offer — and it would land badly: `ROLE_WEIGHTS` carries no
+ * netrunner vector, so the goon's stat shaping would silently degrade to the pool's raw key order.
+ * Deriving the pool by INTERSECTION rather than by re-typing the nine keys means the netrunning pass
+ * re-opens the draw by deleting one omission, with nothing here to remember.
+ */
+export const RANDOM_ROLE_POOL = ROLE_ENUM.filter((r) => GENERATOR_ROLES.includes(r));
+
+/**
+ * ONE UNIFORM DRAW OVER `RANDOM_ROLE_POOL`.
+ *
+ * The index mapping is `pickPrimaryWeapon`'s, character for character — `floor(r × length)` clamped
+ * to the last index — so every uniform pick in this feature reads the same way and an rng that
+ * returns exactly 1 lands on the last entry instead of off the end. Uniform is the whole rule: no
+ * weighting, no grade influence, no outfit influence. A GM who wants a leaning picks the role.
+ */
+export function rollRoleFor(rng) {
+  const pool = RANDOM_ROLE_POOL;
+  const draw = typeof rng === "function" ? (Number(rng()) || 0) : 0;
+  return pool[Math.min(Math.max(Math.floor(draw * pool.length), 0), pool.length - 1)];
+}
+
+/**
+ * Resolve a role CONTROL value to a concrete book role: the sentinel rolls, anything else passes
+ * through untouched.
+ *
+ * ⛔ IT DOES NOT REPAIR A BAD ROLE. Passing `null` or an unknown string returns it unchanged, so the
+ * long-standing `?? CAREER_PACKAGES.solo` fallbacks downstream still catch a DIRECT caller exactly
+ * as they always did. What changes is that the WINDOW can no longer reach them: it now always hands
+ * a rolled, concrete role down (see `goonBlueprint`).
+ */
+export function resolveRole(role, rng) {
+  return role === ROLE_RANDOM ? rollRoleFor(rng) : role;
+}
 
 // -------------------------------------------------------------------------------------------------
 // §2.1 — RESOLVE CONFIG: outfit → grade derivation → manual overrides
@@ -597,8 +645,9 @@ import { outfitById } from "./outfits.js";
  * one place is what makes "re-picking re-derives clean" a single line rather than a dozen resets.
  */
 export const DERIVED_CONTROL_KEYS = [
-  "grade", "role", "ref", "bt", "skillPoints", "statPool", "statShape", "chromeOn", "chromeCount",
-  "garnish", "luckFormula", "repFormula", "armorWeight", "armorHardness", "armament", "loot",
+  "grade", "role", "disposition", "ref", "bt", "skillPoints", "statPool", "statShape", "chromeOn",
+  "chromeCount", "garnish", "luckFormula", "repFormula", "armorWeight", "armorHardness", "armament",
+  "loot",
 ];
 
 /**
@@ -613,9 +662,14 @@ export const DERIVED_CONTROL_KEYS = [
  *    un-custom config rather than a remembered one. The window drops its overrides on a re-pick and
  *    calls this again; nothing here is sticky.
  *
- * ⛔ ADVANCED IS DISABLED UNTIL A GRADE IS PICKED (§1, exact label "Advanced"). With no grade there
- * is nothing to derive FROM, so every control would be unlocking onto a blank — `advancedAvailable`
- * is false and the threat level initializes to dashes.
+ * ⛔ `gradeDerived` SAYS WHETHER THERE IS ANYTHING TO DERIVE FROM, AND NOTHING ELSE. With no grade
+ * every below-the-line value is null, so the window reads this flag to decide whether a control
+ * shows a NUMBER or a DASH — the same "unpicked is a real state" idiom the threat level itself uses.
+ *
+ * ⛔ IT DOES NOT GATE THE ADVANCED CHECKBOX (ruled 2026-08-14, R2, walking the shipped window). The
+ * field used to be called `advancedAvailable` and the window disabled the checkbox on it; a checkbox
+ * that does nothing when clicked reads as broken, so the checkbox is now always live and the dials
+ * are always rendered — locked and dashed, never absent.
  */
 export function resolveGoonConfig({ outfitId = null, role = null, grade = null, overrides = {} } = {}) {
   const outfit = outfitById(outfitId);
@@ -624,22 +678,33 @@ export function resolveGoonConfig({ outfitId = null, role = null, grade = null, 
 
   const baseGrade = ov.grade ?? outfit?.grade ?? grade ?? null;
   const g = gradeOf(baseGrade);
-  const baseRole = ov.role ?? outfit?.roleDefault ?? role ?? null;
+  // ⭐ THE ROLE PRECEDENCE, AND WHAT EACH RUNG MEANS (ruled 2026-08-15):
+  //   ov.role            — the GM moved the control BY HAND. Strongest, and "random" is a real value
+  //                        here: flipping an outfit-prefilled role back to Random is an override like
+  //                        any other, so it sticks and it flips the config to "Custom (based on X)".
+  //   outfit.roleDefault — the outfit PREFILLS, so it beats the window's Random default.
+  //   role               — the caller's default. The window's is `ROLE_RANDOM`.
+  //   ROLE_RANDOM        — the floor. There is no "no role" state: an unpicked role means every goon
+  //                        rolls its own, which is a decision, not an absence.
+  const baseRole = ov.role ?? outfit?.roleDefault ?? role ?? ROLE_RANDOM;
 
   // With no grade, NOTHING derives. Returning half-derived values here is how a window ends up
   // showing a REF slider at 8 before the GM has said what kind of goon this is.
   if (!g) {
     return {
       grade: null, role: baseRole, outfitId: outfit?.id ?? null, basedOn: outfit?.id ?? null,
-      custom: touched.length > 0, advancedAvailable: false,
+      custom: touched.length > 0, gradeDerived: false,
       ref: null, bt: null, skillPoints: null, statPool: null, statShape: STAT_SHAPE_DEFAULT,
       chromeOn: false, chromeCount: 0, chromeDerivation: null, garnish: true,
       luckFormula: LUCK_FORMULA_DEFAULT, repFormula: REP_FORMULA_DEFAULT,
       armorWeight: "any", armorHardness: "any", armament: ARMAMENT_POSTURE_DEFAULT,
-      loot: LOOT_DEFAULT, disposition: outfit?.disposition ?? "hostile",
+      // Disposition is a TOP-BAND control, so it resolves in the underived branch too — it has
+      // nothing to derive FROM a grade and must never read as a dash.
+      loot: LOOT_DEFAULT, disposition: ov.disposition ?? outfit?.disposition ?? DISPOSITION_DEFAULT,
       skillBias: outfit?.skillBias ?? {}, outfitTags: outfit?.tags ?? [],
       bonusPools: outfit?.bonusPools ?? [], gearSource: outfit?.gearSource ?? null,
       empOverride: outfit?.empOverride ?? null, chassis: outfit?.chassis ?? null,
+      flavor: outfit?.flavor ?? null, gradeSpanNoteKey: outfit?.gradeSpanNoteKey ?? null,
     };
   }
 
@@ -659,7 +724,7 @@ export function resolveGoonConfig({ outfitId = null, role = null, grade = null, 
     // "Custom (based on X)" — true the moment ANY control was moved by hand, whether or not an
     // outfit is in play. A grade-only config that has been edited is equally custom.
     custom: touched.length > 0,
-    advancedAvailable: true,
+    gradeDerived: true,
     ref, bt,
     skillPoints: skill.total, skillBreakdown: skill,
     statPool: pool.pool, statPoolBreakdown: pool,
@@ -675,13 +740,22 @@ export function resolveGoonConfig({ outfitId = null, role = null, grade = null, 
     armorHardness: ov.armorHardness ?? posture.hardness ?? "any",
     armament: ov.armament ?? posture.armament ?? ARMAMENT_POSTURE_DEFAULT,
     loot: ov.loot ?? outfit?.lootProfile ?? LOOT_DEFAULT,
-    disposition: ov.disposition ?? outfit?.disposition ?? "hostile",
+    // §B.4 + the 2026-08-15 ruling: an outfit prefills it, the GM flips it freely, and the value
+    // reaches the created token — `goon-factory.js` maps it onto the prototype token's disposition.
+    disposition: ov.disposition ?? outfit?.disposition ?? DISPOSITION_DEFAULT,
     skillBias: outfit?.skillBias ?? {},
     outfitTags: outfit?.tags ?? [],
     bonusPools: outfit?.bonusPools ?? [],
     gearSource: outfit?.gearSource ?? null,
     empOverride: outfit?.empOverride ?? null,
     chassis: outfit?.chassis ?? null,
+    // ⛔ DISPLAY-ONLY KEYS, CARRIED AS KEYS. This layer is pure, so it can hold no localized text:
+    // `flavor` is prep §B.3's GM-ONLY jurisdiction/reinforcement/note trio, localized and written to
+    // the actor's GM-side notes by `goon-factory.js`, and `gradeSpanNoteKey` is §B.2's paired-entry
+    // cross-reference, localized by the WINDOW. Neither is read by any mechanic — grep them and the
+    // only consumers are a document field and a template line.
+    flavor: outfit?.flavor ?? null,
+    gradeSpanNoteKey: outfit?.gradeSpanNoteKey ?? null,
     weaponsRung: g.weaponsRung,
     armorBand: g.armorBand,
   };
@@ -1151,16 +1225,29 @@ export function goonBlueprint({
   const config = resolveGoonConfig({ outfitId, role, grade, overrides });
   const n = clampCount(count).value;
   const gradeKey = config.grade ?? grade;
-  const prefix = namePrefix ?? config.outfitId ?? config.role ?? "Goon";
+  // ⛔ THE SENTINEL IS NOT A NAME. `{Outfit|Role} {Grade}-{n}` wants the batch's own identity, and a
+  // Random batch has no single role to name — so it falls back to the scheme's generic prefix rather
+  // than stamping "random B-1" on twelve actors. The prefix stays BATCH-WIDE on purpose: §2.7's
+  // numbering continuation scans one prefix, and a per-goon prefix would restart the count on every
+  // role the batch happened to roll.
+  const prefix = namePrefix ?? config.outfitId
+    ?? (config.role && config.role !== ROLE_RANDOM ? config.role : "Goon");
 
   const out = [];
   for (let i = 0; i < n; i++) {
     const goonSeed = seedFrom(seed, config.outfitId ?? config.role ?? "goon", gradeKey, i);
     const rng = seededRng(goonSeed);
 
+    // ⭐ EACH GOON ROLLS ITS OWN ROLE, ON ITS OWN SUB-STREAM. The stream is folded off THIS goon's
+    // seed — the same `seedFrom(bp.seed, "<phase>")` idiom `goon-factory.js` already uses for gear,
+    // chrome and skills — which buys two things at once: two goons in one batch genuinely differ
+    // (their seeds differ by index), and a batch with a CONCRETE role consumes no draw at all, so
+    // every squad planned before this feature still plans byte-identically.
+    const rolledRole = resolveRole(config.role, seededRng(seedFrom(goonSeed, "role")));
+
     const statRoll = rollStatPool({
       pool: config.statPool, ref: config.ref, bt: config.bt,
-      role: config.role, shape: config.statShape, rng,
+      role: rolledRole, shape: config.statShape, rng,
     });
     // §2.2: Luck and Rep are rolled from the formula fields, OUTSIDE the pool.
     const luck = rollFormulaField(config.luckFormula, rng, { rerollOver: LUCK_REROLL_OVER, fallback: LUCK_FORMULA_DEFAULT });
@@ -1171,7 +1258,7 @@ export function goonBlueprint({
     // gear pull is known — §2.4's guarantee follows the ACTUALLY-PULLED weapon, and nothing in this
     // file can know what that is. The provisional allocation exists so a plan is complete on its own.
     const skills = allocateGoonSkills({
-      total: config.skillPoints, gradeKey, role: config.role,
+      total: config.skillPoints, gradeKey, role: rolledRole,
       primaryWeapon: null, rng, skillBias: config.skillBias,
     });
 
@@ -1188,7 +1275,12 @@ export function goonBlueprint({
     out.push({
       name: goonName(prefix, gradeKey, startNumber + i),
       namePrefix: prefix,
-      role: config.role,
+      // ⭐ `role` IS THE RESOLVED ROLE — the one this goon actually IS. Every consumer downstream
+      // (the skills re-run in goon-factory.js, `system.role.value`, the provenance flag, the preview
+      // card) reads THIS field rather than `config.role`, which may still hold the sentinel.
+      role: rolledRole,
+      // Whether it was rolled or picked, so the preview can name a rolled role without guessing.
+      roleRolled: config.role === ROLE_RANDOM,
       grade: gradeKey,
       stats,
       reputation: rep.value,

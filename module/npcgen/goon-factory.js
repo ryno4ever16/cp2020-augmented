@@ -357,8 +357,11 @@ export async function planGoonSquad(opts = {}) {
     }
 
     // ── 4. SKILLS, RE-RUN WITH THE WEAPON THAT WAS ACTUALLY PULLED ────────────────────────────────
+    // ⛔ `bp.role`, NOT `cfg.role`. Under a Random role the config holds the SENTINEL and the goon
+    // holds the role it rolled; re-running the allocation off the config would hand every goon in
+    // the batch the same silent `?? CAREER_PACKAGES.solo` fallback and quietly undo the draw.
     const skills = allocateGoonSkills({
-      total: cfg.skillPoints, gradeKey, role: cfg.role,
+      total: cfg.skillPoints, gradeKey, role: bp.role,
       primaryWeapon: weapon, rng: seededRng(seedFrom(bp.seed, "skills")), skillBias: cfg.skillBias,
     });
 
@@ -418,7 +421,10 @@ function statsPayload(stats, overrides = {}) {
 const GOON_DEFAULT_IMG = "systems/cyberpunk2020/img/edgerunner.svg";
 
 /**
- * §2.8's prototype token. Disposition is hostile by default and OUTFIT-OVERRIDABLE.
+ * §2.8's prototype token. Disposition is hostile by default, PREFILLED by an outfit, and settable by
+ * the GM from the window's top band (ruled 2026-08-15) — `resolveGoonConfig` resolves those three
+ * rungs into one value and this is where that value becomes a real token field. The `friendly`
+ * mapping stays for a direct caller even though the control offers only hostile/neutral.
  *
  * ⛔ `actorLink` IS DELIBERATELY ABSENT. The base system gives `npc` no actorLink on purpose, which
  * is what makes every goon's tokens take their own hits — exactly what a squad wants. Writing
@@ -496,6 +502,38 @@ export function credchipItemData(valueEb) {
   };
 }
 
+/**
+ * ⭐ THE OUTFIT'S FLAVOUR, GM-SIDE ONLY (OUTFIT-CATALOGUE-PREP.md §B.3, ruled 2026-08-14).
+ *
+ * The outfit carries jurisdiction, reinforcement and a flavour note as KEYS (blueprint.js is pure and
+ * may hold no localized text); this is where they become sentences and where they land.
+ *
+ * ⛔ THEY LAND IN EXACTLY ONE PLACE: `system.notes` — the actor's own biography/notes region, which
+ * is the base system's `htmlField` and the only description surface an actor has. §B.3's condition
+ * is verbatim *"they land in the actor's GM-side description/notes — players never see an unowned
+ * NPC's sheet — and never in token tooltips, chat cards, or any player-visible surface"*, and that
+ * is why this returns HTML for one document field and nothing else:
+ *   · the generated actor is created with NO ownership grant, so its default ownership is NONE and
+ *     no player can open the sheet the text sits on;
+ *   · the prototype token's `displayName` is NONE, so no tooltip carries anything at all — and no
+ *     token field is written from this text in any case;
+ *   · the Goon Factory posts NO chat card (the pre-rebuild engine's summary card is a different
+ *     materializer and reads none of these fields);
+ *   · the preview cards in the window are built from the PLAN's honesty lines, which this is not.
+ * A future surface that wants to show a goon's description must decide its own audience question;
+ * nothing here leaks into one by default.
+ *
+ * Returns "" when the outfit states no flavour, so the field is left completely alone rather than
+ * being stamped with an empty heading.
+ */
+export function goonGmNotes(flavor) {
+  const keys = [flavor?.jurisdictionKey, flavor?.reinforcementKey, flavor?.noteKey].filter(Boolean);
+  const lines = keys.map((k) => tryLocalize(k, "")).filter((s) => String(s).trim().length > 0);
+  if (!lines.length) return "";
+  const heading = localize("GoonFactory.GmNotes");
+  return `<p><strong>${heading}</strong></p>\n${lines.map((l) => `<p>${l}</p>`).join("\n")}`;
+}
+
 /** A magazine for a weapon, built from the shop's OWN ammo engine so it matches a bought box. */
 function ammoItemDataFor(weaponDoc, modifierId) {
   const caliber = String(weaponDoc?.system?.ammoType ?? "").trim();
@@ -530,22 +568,32 @@ export async function materializeGoon(row, { folder, nameByKey }) {
   const { bp, weapon, weaponRow, ammoModifier, armor, chrome, skills, loot } = row;
   const cfg = bp.config;
 
+  // §B.3: the outfit's jurisdiction / reinforcement / flavour note, GM-side only. Empty string when
+  // the outfit states none, and the field is then not written at all.
+  const gmNotes = goonGmNotes(cfg.flavor);
+
   const actor = await Actor.create({
     name: bp.name,
     type: "npc",
     img: GOON_DEFAULT_IMG,
     folder: folder?.id ?? null,
     prototypeToken: goonPrototypeToken(cfg.disposition, GOON_DEFAULT_IMG),
+    // ⛔ THE ROLE WRITTEN HERE IS `bp.role` — the one this goon RESOLVED to. `cfg.role` may hold the
+    // "random" sentinel, which is not in the schema's role enum and must never reach a document.
+    // `roleRolled` records that the batch was set to Random, so a GM reading the flag later can tell
+    // a drawn Cop from a picked one.
     flags: { [SCOPE]: { goonFactory: {
-      grade: bp.grade, role: cfg.role, outfitId: cfg.outfitId, basedOn: cfg.basedOn,
+      grade: bp.grade, role: bp.role, roleRolled: !!bp.roleRolled,
+      outfitId: cfg.outfitId, basedOn: cfg.basedOn,
       custom: !!cfg.custom, seed: bp.seed, rootSeed: bp.plan?.rootSeed ?? null,
       index: bp.plan?.index ?? 0, statShape: cfg.statShape,
       version: game.modules.get(SCOPE)?.version ?? "",
     } } },
     system: {
-      role: { value: cfg.role },
+      role: { value: bp.role },
       stats: statsPayload(bp.stats),
       reputation: bp.reputation,
+      ...(gmNotes ? { notes: gmNotes } : {}),
     },
   });
   if (!actor) return null;
@@ -686,7 +734,7 @@ export async function materializeGoon(row, { folder, nameByKey }) {
   }
 
   return {
-    id: actor.id, name: actor.name, grade: bp.grade, role: cfg.role,
+    id: actor.id, name: actor.name, grade: bp.grade, role: bp.role, roleRolled: !!bp.roleRolled,
     stats: { ...bp.stats, emp: row.emp, attr },
     humanity: row.humanity, emp: row.emp, humanityLoss: row.humanityLoss,
     weapon: weapon?.name ?? null, armor: (armor.layers ?? []).map((l) => l.name),
@@ -696,6 +744,9 @@ export async function materializeGoon(row, { folder, nameByKey }) {
     loot, missing, installNotes,
     skillsUpdated: skillResult.updated, skillsGranted: skillResult.granted,
     visionMode: sight?.mode ?? null,
+    // Reported so a caller can see the GM-side text was written WITHOUT having to read the sheet.
+    // It is a summary field, not a surface: nothing renders this object to a player.
+    gmNotes,
     honesty: row.honesty,
   };
 }
