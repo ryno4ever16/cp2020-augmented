@@ -11,7 +11,10 @@
                 {{~/if~}}
             </div>
             <div class="chip-icon {{#unless isChipped}}inactive{{/unless}}"></div>
-            <input class="chip-toggle-checkbox" type="checkbox" data-skill-id="{{../skill.id}}" {{checked isChipped}} {{#if autoChipped}}title="{{CPLocal 'ControlledByChip'}}"{{/if}} />
+            {{!-- The chip tick is what makes the row roll at its CHIP level instead of its trained level
+                  (realSkillValue), which is also why the level box then edits chipLevel — so the tooltip
+                  says that outright. A chip-driven row keeps the narrower "controlled by chip" title. --}}
+            <input class="chip-toggle-checkbox" type="checkbox" data-skill-id="{{../skill.id}}" {{checked isChipped}} title="{{#if autoChipped}}{{CPLocal 'ControlledByChip'}}{{else}}{{CPLocal 'SkillChipToggleHint'}}{{/if}}" />
         </label>
 
     <span class="item-controls">
@@ -28,13 +31,17 @@
     />
     {{/with}}
 
-    {{!-- IP tracker: banked IP / cost, GM-only pending pip, and the self-service level-up arrow. --}}
+    {{!-- IP tracker: banked IP / cost, the pool's contribution when the bank alone doesn't cover the
+          raise, the GM-only pending pip, and the self-service level-up control.
+          ⚠ {{#with}} RE-POINTS the context to `ipd`, so `skill` is only reachable as `../skill` in
+          here — a bare {{skill.id}} renders EMPTY and leaves the control unable to name its row. --}}
     {{#if @root.ip.enabled}}
     {{#with (lookup @root.ipBySkill skill.id) as |ipd|}}
-    <span class="ip-cluster" title="{{CPLocal 'IpBanked'}} {{ipd.banked}} / cost {{ipd.cost}}">
-        {{#if @root.ip.showPending}}{{#if ipd.pending}}<span class="ip-pending-pip" title="{{CPLocal 'IpPendingPip'}}">+{{ipd.pending}}</span>{{/if}}{{/if}}
-        <span class="ip-banked">{{ipd.banked}}/{{ipd.cost}}</span>
-        {{#if ipd.canLevel}}<i class="fas fa-arrow-up ip-level-up action" data-skill-id="{{skill.id}}" title="{{CPLocal 'IpLevelUp'}} ({{ipd.cost}} IP)"></i>{{/if}}
+    <span class="cp2020ae-ip-cluster" title="{{CPLocal 'IpBanked'}} {{ipd.banked}} / cost {{ipd.cost}}">
+        {{#if @root.ip.showPending}}{{#if ipd.pending}}<span class="cp2020ae-ip-pending-pip" title="{{CPLocal 'IpPendingPip'}}">+{{ipd.pending}}</span>{{/if}}{{/if}}
+        <span class="cp2020ae-ip-banked">{{ipd.banked}}/{{ipd.cost}}</span>
+        {{#if ipd.fromPool}}<span class="cp2020ae-ip-from-pool" title="{{CPLocal 'IpFromPoolHint' pool=ipd.fromPool}}">{{CPLocal 'IpFromPool' pool=ipd.fromPool}}</span>{{/if}}
+        {{#if ipd.canLevel}}<i class="fas fa-arrow-up cp2020ae-ip-level-up action{{#if ipd.fromPool}} cp2020ae-ip-level-up--pooled{{/if}}" data-skill-id="{{../skill.id}}" title="{{#if ipd.fromPool}}{{CPLocal 'IpLevelUpPooled' cost=ipd.cost pool=ipd.fromPool}}{{else}}{{CPLocal 'IpLevelUpBanked' cost=ipd.cost}}{{/if}}"></i>{{/if}}
     </span>
     {{/with}}
     {{/if}}

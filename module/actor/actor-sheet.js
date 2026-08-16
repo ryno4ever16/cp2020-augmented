@@ -1,17 +1,17 @@
 import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
 import { armSpreadPreview } from "../combat/spread-placement.js";
 import { firingTokenIdOf } from "../seam-shim.js";
-import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, properCase } from "../utils.js"
+import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, isUnwornArmor, properCase } from "../utils.js"
 import { makeD10Roll } from "../dice.js"
 import { ModifiersDialog } from "../dialog/modifiers.js"
 import { SortOrders, sortSkills } from "./skill-sort.js";
 import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } from "./reputation.js";
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
-import { resolveAttackRange } from "../combat/rangefinding.js";
+import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
-import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel, severFleshUnder, cyberlimbZoneOf } from "../mech/cyberlimb.js";
+import { cyberlimbSheetStatus, repairCyberlimb, clearFleshLimb, contributingItems, fleshLimbStatusLabel, severFleshUnder, cyberlimbZoneOf, fleshLimbSetZones, openFleshLimbStateDialog } from "../mech/cyberlimb.js";
 import { isFullBorg, borgBodyOf, borgOptionSpaces, cyberAreaOf, isBorgBody } from "../mech/borg.js";
 import { isLivingActor } from "../mech/vision.js";
 import { buildContainerTree, buildZoneTrees, uninstallItem, checkInstall, installedInOf, childrenOf, descendantIds, slotsTakenOf, capacityOf, usedSlots } from "../mech/container.js";
@@ -26,6 +26,14 @@ import { actorExposure, actorHistory, actorRSP, radMarkersFor, actorHasRadiation
 import { openApplyDoseDialog } from "../radiation/radiation-tools.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
+
+/** Field separator for the skill-search haystack (_cpApplySkillFilterToDOM), which joins a skill's raw
+ *  name to its resolved display name so a query can match either field but never ACROSS the two. It
+ *  has to be a character no skill name and no typed query can contain — U+001F UNIT SEPARATOR, written
+ *  as an ESCAPE so the source file itself holds no raw control byte. (It was a literal NUL until
+ *  2026-08-15; a raw control byte makes ripgrep classify this file as binary and stop searching it at
+ *  that offset, so greps over the sheet silently under-reported.) */
+const SKILL_SEARCH_FIELD_SEP = "\u001F";
 
 /**
  * Character / NPC actor sheet — ApplicationV2 port.
@@ -624,10 +632,13 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    *  else the nearest [data-item-id]/[data-skill-id] ancestor. Mirrors upstream's
    *  `_cpGetItemFromTarget`; used by the native item-control dispatch in _cpActivateBasicActorActions. */
   _cpGetItemFromTarget(target) {
+    // `||`, not `??`: a template that renders the attribute but leaves it EMPTY (`data-skill-id=""`)
+    // is exactly the regression the fallback exists for, and "" is not nullish — with `??` the empty
+    // string wins the chain and the row's own id is never consulted.
     const itemId = target?.dataset?.itemId
-      ?? target?.dataset?.skillId
-      ?? target?.closest?.("[data-item-id]")?.dataset?.itemId
-      ?? target?.closest?.("[data-skill-id]")?.dataset?.skillId;
+      || target?.dataset?.skillId
+      || target?.closest?.("[data-item-id]")?.dataset?.itemId
+      || target?.closest?.("[data-skill-id]")?.dataset?.skillId;
     return this.actor.items.get(itemId);
   }
 
@@ -882,6 +893,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       weaponName: item.name,
       widths: { short: ammoSys.spreadWidthShort, medium: ammoSys.spreadWidthMedium, long: ammoSys.spreadWidthLong },
       formulas: { short: ammoSys.spreadDamageShort, medium: ammoSys.spreadDamageMedium, long: ammoSys.spreadDamageLong },
+      // ⭐ THE WEAPON'S OWN RANGE, because the pattern's band edges are fractions of it (Core p.99) and
+      // the shotgun table prints its width and damage per band (p.109) — so the same aim point is a
+      // different pattern out of a holdout than out of a long gun. Read through the shared resolver
+      // (combat/rangefinding.js `getWeaponLongRange`: the item's own range, else its type's book
+      // default), which is the same answer the seam stamps onto the fired payload for the plant.
+      rangeM: getWeaponLongRange(item),
     });
     if (!spreadAim) return null;   // Esc / right click — no shot, no ammunition, no pattern
     return this._cpOpenAttackModifiers(item, { spreadAim });
@@ -1174,6 +1191,18 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         if (zone) clearFleshLimb(this.actor, zone);
         return;
       }
+
+      // Flesh-limb state SET (armor-display status row, GM-only): open the picker that records a
+      // severed/crippled/disabled/destroyed FLESH state by hand — the write half the damage pipeline
+      // used to own alone. `this.actor` is the sheet's own reference, so an unlinked token's sheet
+      // writes to that token's delta and a linked one to the world actor.
+      const setFlesh = target.closest(".cp-flesh-set");
+      if (setFlesh) {
+        event.preventDefault();
+        const zone = setFlesh.dataset.zone;
+        if (zone) openFleshLimbStateDialog(this.actor, zone);
+        return;
+      }
     });
 
     root.addEventListener("keydown", (event) => {
@@ -1244,14 +1273,16 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    *  (Match logic is name-substring for now — see [[feature-idea-skill-search-matching]] for the
    *  planned multi-term "OR" upgrade.) */
   _cpApplySkillFilterToDOM(root, filter) {
-    const normalized = String(filter ?? "").trim().toUpperCase();
+    // The separator is stripped out of the QUERY as well: a pasted control character must not be able
+    // to line up with the one the haystack uses and so match across the name↔display-name boundary.
+    const normalized = String(filter ?? "").split(SKILL_SEARCH_FIELD_SEP).join("").trim().toUpperCase();
     for (const row of root.querySelectorAll(".field.skill[data-item-id]")) {
       const skill = this.actor.items.get(row.dataset.itemId);
       // Match the DISPLAYED name as well as the raw one, the way the base system's own skill filter
       // does — a martial art rendered as "Martial Arts: Aikido(3)" must be findable by what the
       // player can actually see in the row.
       const displayName = this.actor.getSkillDisplayName?.(skill) ?? skill?.name;
-      const haystack = `${String(skill?.name ?? "")} ${String(displayName ?? "")}`.toUpperCase();
+      const haystack = `${String(skill?.name ?? "")}${SKILL_SEARCH_FIELD_SEP}${String(displayName ?? "")}`.toUpperCase();
       const match = !normalized || haystack.includes(normalized);
       // "Hide; search reveals" (user ruling): an UNTRAINED martial-arts discipline is hidden while the
       // search box is empty, yet still rendered — so a non-empty query reveals it by the ordinary
@@ -1760,15 +1791,20 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       }
 
       // IP tracker: self-service level-up + skill-lock toggle.
-      const ipLevel = target.closest(".ip-level-up");
+      const ipLevel = target.closest(".cp2020ae-ip-level-up");
       if (ipLevel) {
         event.preventDefault();
         event.stopPropagation();
-        const skill = this.actor.items.get(ipLevel.dataset.skillId);
+        // Resolve through the shared helper, which falls back to the enclosing [data-item-id] row when
+        // the control's own data-skill-id is missing — a template regression then degrades to a working
+        // control instead of a silently dead one (that exact slip shipped from v1.0.0 to 2026-08-15).
+        const skill = this._cpGetItemFromTarget(ipLevel);
         if (skill) await levelUpSkill(this.actor, skill);
+        // Nothing gates silently: a control that resolves no document says so rather than eating the click.
+        else console.warn("cp2020-augmented | IP level-up control resolved no skill document", { skillId: ipLevel.dataset.skillId, row: ipLevel.closest("[data-item-id]")?.dataset?.itemId });
         return;
       }
-      const ipLock = target.closest(".ip-lock-toggle");
+      const ipLock = target.closest(".cp2020ae-ip-lock-toggle");
       if (ipLock) {
         event.preventDefault();
         await toggleSkillLock(this.actor);
@@ -2083,6 +2119,10 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (label) fleshOut[zone] = { fleshStatusLabel: label };
     }
     sheetData.cpFleshLimb = fleshOut;
+    // Which flesh limb zones offer the GM's direct state-SET control (`{ zone: true }`, keyed the same
+    // way so armor-display.hbs can `lookup` it by `name`). Empty for a non-GM — unlike the recovery
+    // controls above this one is not table-configurable: authoring an injury is GM power.
+    sheetData.cpFleshSet = fleshLimbSetZones(actor);
     // Repair permission scoping (world setting): hide the control from non-GMs when restricted —
     // repairCyberlimb re-checks, so a stale render can't bypass it.
     sheetData.cpCanRepairLimb = !cyberlimbRepairGmOnly() || game.user?.isGM === true;
@@ -2314,6 +2354,22 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     const anatomyDef = ANATOMY_IMAGES[anatomyKey] ?? ANATOMY_IMAGES[DEFAULT_ANATOMY_KEY];
     sheetData.anatomy = { key: anatomyKey, src: anatomyDef.src, svg: anatomyDef.svg };
     sheetData.anatomyOptions = Object.entries(ANATOMY_IMAGES).map(([key, v]) => ({ key, label: tryLocalize(v.label), selected: key === anatomyKey }));
+
+    // ── Owned-but-unworn armor cue ─────────────────────────────────────────
+    // Every armor entry in the module's packs ships `equipped: false`, so armor bought from the shop
+    // lands in inventory switched OFF — and until now the sheet said nothing about it. At a live
+    // table that cost play time: the buyer was a full-conversion borg, whose chassis SP fills all six
+    // locations of the armor grid, so a freshly bought coat sitting unworn looked exactly like a coat
+    // being worn. Two derived reads, one per surface, both from the ONE predicate in utils.js:
+    //   cpArmorUnworn — per-item-id map, so an unworn row can mark itself in the armor list;
+    //   cpUnwornArmor — the panel-wide one-liner, which is the half that survives the borg case
+    //                   (it sits with the numbers, not down in the list).
+    // Wearable-only: an armor item that protects nowhere raises nothing (see isUnwornArmor).
+    const unwornArmor = (sortedItems.armor || []).filter(a => isUnwornArmor(a));
+    sheetData.cpArmorUnworn = Object.fromEntries(unwornArmor.map(a => [a.id, true]));
+    sheetData.cpUnwornArmor = unwornArmor.length
+      ? { count: unwornArmor.length, names: unwornArmor.map(a => a.name).join(", ") }
+      : null;
 
     // ── Armor layer compliance panel ───────────────────────────────────────
     // Vendored onto the base system: "damageLayersEnabled" is a fork-only setting neither the host
@@ -2809,27 +2865,68 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   }
 
   /**
-   * Warn (but do NOT block) when dropping a skill the actor already has, matched by normalized name.
-   * Several CP2020 skills are legitimately taken multiple times for different foci (Play Instrument,
-   * Teaching, Perform, Composition, …) and our compendium ships them under one generic name, so a hard
-   * block would break those — this just flags accidental sheet→sheet / compendium duplicates. The drop
-   * still proceeds. Side-effect-free (resolve + notify only).
-   * @param {object} data  the drop payload
+   * BLOCK a skill drop that would put a second row of the same name on the sheet, and reveal the row
+   * that already exists instead.
+   *
+   * Why block rather than warn: the sheet ships the whole skill list as items and HIDES an untrained
+   * martial-arts discipline until the search reveals it, so a player who can't find one drags a
+   * compendium copy in — and the sheet's martial machinery is NAME-keyed throughout (the fnff2 filter
+   * in _getSortedSkillIDs, the chip ChipSkills map in _cpSetSkillChipActiveFromInput, the base actor's
+   * getSkillVal fallback), so two same-named rows make those reads pick one arbitrarily. Reported from
+   * live play; the guard replaces the former warn-and-add behaviour (2026-08-15 ruling).
+   *
+   * The key is the NAME, normalized by _cpSkillDedupKey. Name is the honest key because it is the key
+   * those reads themselves use, and because a compendium copy always carries a DIFFERENT `_id` from the
+   * sheet's own item, so `_id` matching would miss every real case ([[feedback-reference-by-id-not-name]]).
+   * Limit accepted with the ruling: a differently-named copy passes through — which is also how a skill
+   * that is legitimately taken twice (Play Instrument, Teaching, a second Language) is still added,
+   * by renaming the copy before or after the drop.
+   *
+   * @param {Item|object} data  the dropped item, as core's _onDrop resolved it before calling _onDropItem
+   * @returns {Promise<boolean>} true when the drop was absorbed and must NOT reach the create path
    * @private
    */
-  async _cpWarnDuplicateSkillDrop(data) {
+  async _cpGuardDuplicateSkillDrop(data) {
+    let existing = null;
     try {
       const { itemData, sameActor } = await this._cpResolveDroppedItem(data);
       // Owned-item self-drag (the drop resolves to an item already on this actor — a sheet→sheet drag,
-      // which Foundry treats as a sort, NOT an add): never warn. The `sameActor` flag resolved here
-      // (via the dropped item's parent) is reliable where the cheap _cpIsSameActorItemDrop pre-check on
-      // the bare payload can miss it. The warning is for COMPENDIUM drops that would add a real dup.
-      if (sameActor) return;
-      if (itemData?.type !== "skill") return;
-      const norm = (s) => String(s ?? "").trim().toLowerCase();
-      const has = this.actor.items.some(i => i.type === "skill" && norm(i.name) === norm(itemData.name));
-      if (has) ui.notifications?.warn(localize("DuplicateSkillAdded", { name: itemData.name }));
-    } catch (_) { /* resolution failed → leave it to the normal drop flow */ }
+      // which Foundry treats as a sort, NOT an add): never block and never notify. The `sameActor` flag
+      // resolved here (via the dropped item's parent) is reliable where the cheap _cpIsSameActorItemDrop
+      // pre-check on the bare payload can miss it. The guard is for drops that would ADD a real twin.
+      if (sameActor) return false;
+      if (itemData?.type !== "skill") return false;
+      const key = this._cpSkillDedupKey(itemData.name);
+      if (!key) return false;
+      existing = this.actor.items.find(i => i.type === "skill" && this._cpSkillDedupKey(i.name) === key) ?? null;
+    } catch (_) { return false; }   // resolution failed → leave it to the normal drop flow
+    if (!existing) return false;
+
+    ui.notifications?.warn(localize("SkillAlreadyOnSheet", { name: existing.name }));
+    this._cpRevealSkillRow(existing);
+    return true;
+  }
+
+  /** Normalized dedup key for a skill name: trimmed, inner whitespace collapsed, case-folded — so
+   *  "  MARTIAL ARTS:  Aikido " and "Martial Arts: Aikido" are one skill. Empty for a nameless item,
+   *  which the guard treats as "can't tell" and lets through. */
+  _cpSkillDedupKey(name) {
+    return String(name ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  /** Reveal an existing skill row by driving the SEARCH the player should have used: put the skill's
+   *  name in the search box, re-apply the filter, scroll the row into view. Going through the filter
+   *  rather than un-setting `cp-hidden` directly is what makes this work for an untrained martial
+   *  discipline (the "Hide; search reveals" rule keys off the query being non-empty) AND what makes the
+   *  reveal survive the next re-render, since _onRender re-applies `_cpSkillFilter`. */
+  _cpRevealSkillRow(skill) {
+    const root = getHtmlElement(this.element);
+    if (!root || !skill) return;
+    this._cpSkillFilter = String(skill.name ?? "");
+    const input = root.querySelector("input.skill-search");
+    if (input) input.value = this._cpSkillFilter;
+    this._cpRefreshSkillSearchUI(root);
+    root.querySelector(`.field.skill[data-item-id="${skill.id}"]`)?.scrollIntoView?.({ block: "center" });
   }
 
   /**
@@ -2946,7 +3043,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         }
         return false;
       }
-      await this._cpWarnDuplicateSkillDrop(data);
+      if (await this._cpGuardDuplicateSkillDrop(data)) return false;
       return super._onDropItem(event, data);
     }
 
@@ -3116,7 +3213,7 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     }
 
     if (sameActorDrop) return false;
-    await this._cpWarnDuplicateSkillDrop(data);
+    if (await this._cpGuardDuplicateSkillDrop(data)) return false;
     return super._onDropItem(event, data);
   }
 

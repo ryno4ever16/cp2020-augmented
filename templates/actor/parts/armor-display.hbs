@@ -66,6 +66,13 @@
             {{/if}}
             {{/if}}
           {{/with}}
+          {{!-- GM-only direct state SET for a flesh limb zone: the write half of the record, for a limb
+               the GM rules is gone without the damage pipeline resolving it. cpFleshSet is empty for a
+               non-GM and for any zone carrying cyberlimb structure (whose flesh record is masked). --}}
+          {{#if (lookup ../cpFleshSet name)}}
+          <a class="segment-repair cp-flesh-set action" data-zone="{{name}}"
+             title="{{CPLocal "FleshLimbSetTooltip"}}">&#9998;</a>
+          {{/if}}
         </div>
 
       <label class="segment-name">{{shortCPLocal name}}</label>

@@ -101,6 +101,30 @@ export function foldArmorSP(layers) {
     return current;
 }
 
+/**
+ * Is this armor item OWNED BUT NOT WORN — the state that protects nothing?
+ *
+ * Two halves, and both matter:
+ *   • TYPE — only an `armor` item can answer. Everything else (a weapon, a misc item, cyberware,
+ *     whose `equipped` means "installed" and which has its own Carried-Options area) returns false.
+ *   • WEARABLE — the coverage map must protect SOMEWHERE (one location above 0). An armor entry that
+ *     stops nothing anywhere is not protection the wearer is missing, so it must raise nothing. A
+ *     fully-typed garment (a fire coat, `mechTypedSP {fire, 0}`) DOES protect somewhere — its
+ *     coverage number is real against its own damage type — so it counts, which is precisely the
+ *     case the unworn cue exists for.
+ * `stoppingPower` is stored as a string in the packs, so coerce rather than compare.
+ *
+ * Accepts an Item document OR raw item data: the shop's purchase path holds a plain object.
+ * @param {Item|object} item
+ * @returns {boolean}
+ */
+export function isUnwornArmor(item) {
+    if (!item || item.type !== "armor") return false;
+    if (item.system?.equipped) return false;
+    const coverage = item.system?.coverage ?? {};
+    return Object.values(coverage).some(c => (Number(c?.stoppingPower) || 0) > 0);
+}
+
 /* ------------------------------------------------------------------ *
  *  Singleton popups — one instance of a given dialog at a time.       *
  *  Clicking a "Fire"/"Roll"/etc. button again brings the open dialog  *

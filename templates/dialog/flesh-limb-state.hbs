@@ -1,0 +1,20 @@
+{{!--
+  Flesh-limb state picker (the GM's direct set/clear control on the body map). Read back by
+  openFleshLimbStateDialog() in module/mech/cyberlimb.js via the .cp-flesh-state-pick class on confirm.
+  The option rows are built in JS (fleshLimbStateOptions) so the picker can never offer a state the
+  reader seam does not recognize; the empty row is the CLEAR direction. i18n via CPLocal; the prompt is
+  triple-stashed because it carries <b>. No HTML/CSS built in JS.
+--}}
+<div class="cp-flesh-state-dialog">
+  <p class="cp-flesh-state-target">{{{CPLocal "FleshLimbSetPrompt" name=name limb=limb}}}</p>
+  <div class="form-group">
+    <label>{{CPLocal "FleshLimbSetField"}}</label>
+    <select class="cp-flesh-state-pick">
+      <option value="" {{#if noneSelected}}selected{{/if}}>{{CPLocal "FleshLimbSetNone"}}</option>
+      {{#each options}}
+      <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </div>
+  <p class="cp-flesh-state-hint">{{CPLocal "FleshLimbSetHint"}}</p>
+</div>

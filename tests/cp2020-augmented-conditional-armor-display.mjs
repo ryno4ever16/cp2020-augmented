@@ -6,7 +6,14 @@
  *    • system.conditionalSP is published per typed damage-type for the sub-panel.
  *  Both come from the SAME exported _deriveLiveSP the damage pipeline uses → panel == damage math (the
  *  whole point). Also proves the derived map STICKS to the rendered sheet (section renders, main panel
- *  deflates) — the one thing the build subagent flagged to verify on a rig. Runs on :30004 (1.1.1 + module). */
+ *  deflates) — the one thing the build subagent flagged to verify on a rig.
+ *
+ *  Legs F-K cover the OWNED-BUT-UNWORN cue on the same panel (live-table incident 2026-08-15): armor
+ *  arrives from the shop switched off, and nothing said so. F the wearable/unworn predicate, G the two
+ *  cue surfaces on an ordinary wearer, H the incident itself (a full-borg chassis fills all six SP
+ *  boxes, and the cue still lands), I the all-worn negative, J the not-wearable-armor negative, K the
+ *  purchase receipt's equip line and its non-armor negative.
+ *  Runs on :30004 (1.1.1 + module). */
 import { chromium } from "@playwright/test";
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
@@ -116,7 +123,138 @@ const r = await p.evaluate(async () => {
   };
   await salA.sheet.close().catch(() => {});
 
-  for (const a of [salA, salB, plain]) await a.delete().catch(() => {});
+  // ══ OWNED-BUT-UNWORN CUE ══════════════════════════════════════════════════════════════════
+  // Live-table incident 2026-08-15: armor bought from the shop arrives `equipped: false` and the
+  // panel said nothing about it. On a full-conversion borg the chassis fills all six SP boxes, so an
+  // unworn coat looked exactly like a worn one. Legs F-K cover both cue surfaces and every negative.
+  const U = await import("/modules/cp2020-augmented/module/utils.js");
+  const L = (k) => game.i18n.localize("CYBERPUNK." + k);
+  const unwornSalamander = () => { const it = salamanderItem(); it.system.equipped = false; return it; };
+  const unwornKevlar = (sp) => { const it = kevlarItem(sp); it.system.equipped = false; return it; };
+  // An armor item that protects nowhere: owned, switched off, and (correctly) NOT a missing protection.
+  const emptyArmor = () => ({ name: "__PW__Empty Wrap", type: "armor",
+    system: { equipped: false, armorType: "Soft", coverage: covUniform(0) } });
+
+  /** Render an actor's combat tab and read every unworn-cue surface off the live DOM. */
+  const readArmorPanel = async (a) => {
+    await a.sheet.render(true);
+    // Poll until the armor grid is not just IN the DOM but LAID OUT — the combat tab starts inactive
+    // (display:none), and measuring a hidden tab would call every cue invisible whether or not it is.
+    let root = null, gridAnchor = null;
+    for (let i = 0; i < 40; i++) {
+      root = a.sheet.element instanceof HTMLElement ? a.sheet.element : a.sheet.element?.[0];
+      gridAnchor = root?.querySelector(".armor-display");
+      if (gridAnchor && gridAnchor.getBoundingClientRect().height > 0) break;
+      (root?.querySelector('nav [data-tab="combat"]') ?? root?.querySelector('[data-tab="combat"]'))?.click();
+      await sleep(120);
+    }
+    const notice = root?.querySelector(".cp-unworn-armor-notice");
+    const badges = Array.from(root?.querySelectorAll(".cp-armor-unworn-badge") ?? []);
+    const rows = Array.from(root?.querySelectorAll(".armor-section .field-list.one-col > .field") ?? []);
+    const nameOf = (row) => (row.querySelector("label.name")?.textContent || "").trim();
+    const shown = (el) => { if (!el) return false; const cs = getComputedStyle(el);
+      return cs.display !== "none" && cs.visibility !== "hidden" && Number(cs.opacity) > 0
+             && el.getBoundingClientRect().height > 0; };
+    const res = {
+      gridAnchorPresent: !!gridAnchor,
+      gridLaidOut: !!gridAnchor && gridAnchor.getBoundingClientRect().height > 0,
+      torsoInputValue: root?.querySelector('input[name="system.hitLocations.Torso.stoppingPower"]')?.value,
+      noticePresent: !!notice,
+      noticeVisible: shown(notice),
+      noticeText: (notice?.textContent || "").replace(/\s+/g, " ").trim(),
+      noticeInk: notice ? getComputedStyle(notice).color : null,
+      noticeRule: notice ? getComputedStyle(notice).borderLeftColor : null,
+      badgeCount: badges.length,
+      badgeTexts: badges.map(b => (b.textContent || "").trim()),
+      badgeVisible: shown(badges[0]),
+      badgeInk: badges[0] ? getComputedStyle(badges[0]).color : null,
+      rowNames: rows.map(nameOf),
+      markedRowNames: rows.filter(r => r.classList.contains("cp-armor-row-unworn")).map(nameOf),
+    };
+    await a.sheet.close().catch(() => {});
+    return res;
+  };
+
+  out.strings = {
+    notWorn: L("ArmorNotWorn"),
+    notice1: game.i18n.format("CYBERPUNK.ArmorUnwornNotice", { count: 1, names: "X" }),
+    shopLine: L("ShopArmorUnworn"),
+  };
+
+  // ── (F) predicate — what "wearable but unworn" means, stated in values ──
+  // Absent export ⇒ null, not a throw: a missing predicate must red its OWN legs, not abort the run
+  // and hide the DOM legs behind it.
+  const uw = (x) => (typeof U.isUnwornArmor === "function" ? U.isUnwornArmor(x) : null);
+  out.predicate = {
+    unwornCovering: uw(unwornSalamander()),                 // true
+    wornCovering: uw(salamanderItem()),                     // false — it is on
+    unwornButProtectsNowhere: uw(emptyArmor()),             // false — nothing to miss
+    unwornWeapon: uw({ type: "weapon", system: { equipped: false } }),   // false
+    unwornCyberware: uw({ type: "cyberware", system: { equipped: false,
+      coverage: covUniform(10) } }),                        // false — not armor
+    nullSafe: uw(null),                                     // false
+  };
+
+  // ── (G) an unworn coat on an ORDINARY wearer: row badge + panel notice ──
+  const unwornOnly = await mk("__PW__CondArmor UnwornOnly", [unwornSalamander()]);
+  out.unwornOnly = await readArmorPanel(unwornOnly);
+  out.unwornOnlyNoConditional = unwornOnly.system?.conditionalSP === undefined; // it is off → no typed fold
+
+  // ── (H) THE INCIDENT: full-borg chassis (SP 40 everywhere) masks the grid, cue still lands ──
+  const borg = await mk("__PW__CondArmor BorgMasked", [
+    { name: "__PW__CondArmor Chassis", type: "cyberware",
+      system: { equipped: true, EffectMode: "Permanent" },
+      flags: { "cp2020-augmented": { borgBody: {
+        sp:  { Head: 40, Torso: 40, lArm: 40, rArm: 40, lLeg: 40, rLeg: 40 },
+        sdp: { Head: 40, Torso: 40, lArm: 40, rArm: 40, lLeg: 40, rLeg: 40 } } } } },
+    unwornSalamander(),
+  ]);
+  for (let i = 0; i < 25 && Number(borg.system?.hitLocations?.Torso?.stoppingPower) !== 40; i++) await sleep(200);
+  out.borgMasked = await readArmorPanel(borg);
+
+  // ── (I) NEGATIVE — every piece worn ⇒ no badge, no notice ──
+  const allWorn = await mk("__PW__CondArmor AllWorn", [salamanderItem(), kevlarItem(18)]);
+  out.allWorn = await readArmorPanel(allWorn);
+
+  // ── (J) NEGATIVE — nothing that is not wearable armor raises a cue ──
+  const nonArmor = await mk("__PW__CondArmor NonArmor", [
+    { name: "__PW__Unworn Pistol", type: "weapon", system: { equipped: false } },
+    { name: "__PW__Unworn Kit", type: "misc", system: { equipped: false } },
+    emptyArmor(),
+  ]);
+  out.nonArmor = await readArmorPanel(nonArmor);
+
+  // ── (K) THE SHOP HANDOFF — the receipt says the coat arrived unworn ──
+  const buyer = await mk("__PW__CondArmor Buyer", []);
+  await buyer.update({ "system.eurobucks": 5000 });
+  const P = await import("/modules/cp2020-augmented/module/shop/purchase.js");
+  const src = await fromUuid("Compendium.cp2020-augmented.supplement-armor.Item.6yIgR0Bxa4pdmGfc");
+  const before = new Set(game.messages.map(m => m.id));
+  const boughtOk = src ? await P.buyItem(buyer, src, { qty: 1 }) : null;
+  for (let i = 0; i < 25 && game.messages.filter(m => !before.has(m.id)).length === 0; i++) await sleep(200);
+  const newMsgs = game.messages.filter(m => !before.has(m.id));
+  const boughtItem = buyer.items.find(i => i.type === "armor");
+  out.shop = {
+    sourceResolved: !!src,
+    sourceName: src?.name ?? null,
+    bought: boughtOk,
+    arrivesUnworn: boughtItem ? boughtItem.system?.equipped === false : null,
+    cardCount: newMsgs.length,
+    cardText: newMsgs.map(m => (m.content || "").replace(/\s+/g, " ").trim()).join(" | "),
+  };
+  // A NEGATIVE on the same path: a weapon's receipt carries no equip line.
+  const before2 = new Set(game.messages.map(m => m.id));
+  await P.buyItem(buyer, { name: "__PW__Buy Pistol", type: "weapon", system: { cost: 50, equipped: false } }, { qty: 1 });
+  for (let i = 0; i < 25 && game.messages.filter(m => !before2.has(m.id)).length === 0; i++) await sleep(200);
+  const newMsgs2 = game.messages.filter(m => !before2.has(m.id));
+  out.shopNegative = {
+    cardCount: newMsgs2.length,
+    cardText: newMsgs2.map(m => (m.content || "").replace(/\s+/g, " ").trim()).join(" | "),
+  };
+  for (const m of [...newMsgs, ...newMsgs2]) await m.delete().catch(() => {});
+
+  for (const a of [salA, salB, plain, unwornOnly, borg, allWorn, nonArmor, buyer]) await a.delete().catch(() => {});
+  for (const a of game.actors.filter(a => a.name.startsWith("__PW__CondArmor"))) await a.delete().catch(() => {});
   return out;
 });
 
@@ -149,6 +287,64 @@ const checks = {
   E_mentionsFire: r.render?.mentionsFire === true,
   E_mentions20: r.render?.mentions20 === true,
   E_torsoDeflatedInDom: r.render?.torsoInputValue === "0",
+
+  // ── (F) the predicate that decides what the cue may speak about ──
+  F_unwornCoveringPiece: r.predicate?.unwornCovering === true,
+  F_wornPieceExcluded: r.predicate?.wornCovering === false,
+  F_protectsNowhereExcluded: r.predicate?.unwornButProtectsNowhere === false,
+  F_weaponExcluded: r.predicate?.unwornWeapon === false,
+  F_cyberwareExcluded: r.predicate?.unwornCyberware === false,
+  F_nullSafe: r.predicate?.nullSafe === false,
+  // localized, not raw keys — the cue must never render as an i18n path
+  F_stringsLocalized:
+    r.strings?.notWorn === "Not worn"
+    && /Not worn \(1\)/.test(r.strings?.notice1 || "")
+    && /X/.test(r.strings?.notice1 || "")
+    && /unworn/i.test(r.strings?.shopLine || ""),
+
+  // ── (G) unworn coat, ordinary wearer: both cue surfaces render ──
+  G_gridRendered: r.unwornOnly?.gridAnchorPresent === true && r.unwornOnly?.gridLaidOut === true,
+  G_rowMarked: JSON.stringify(r.unwornOnly?.markedRowNames) === JSON.stringify(["__PW__Salamander Jacket"]),
+  G_badgeCount1: r.unwornOnly?.badgeCount === 1,
+  G_badgeSaysNotWorn: r.unwornOnly?.badgeTexts?.[0] === r.strings?.notWorn,
+  G_badgeVisible: r.unwornOnly?.badgeVisible === true,
+  G_noticeVisible: r.unwornOnly?.noticeVisible === true,
+  G_noticeNamesThePiece: /__PW__Salamander Jacket/.test(r.unwornOnly?.noticeText || ""),
+  G_noticeSaysNotWorn: /Not worn \(1\)/.test(r.unwornOnly?.noticeText || ""),
+  // the cue is COLOURED, not just present: ink differs from the row's default whitesmoke value box
+  G_badgeInkDistinct: !!r.unwornOnly?.badgeInk && r.unwornOnly?.badgeInk !== "rgb(245, 245, 245)",
+  G_noticeHasRule: !!r.unwornOnly?.noticeRule && r.unwornOnly?.noticeRule !== "rgba(0, 0, 0, 0)",
+  // an unworn typed layer publishes no conditional map (it is off) — the masking half of the incident
+  G_noConditionalWhileOff: r.unwornOnlyNoConditional === true,
+
+  // ── (H) THE INCIDENT — the borg chassis fills the grid AND the cue still lands ──
+  H_chassisMasksGrid: r.borgMasked?.torsoInputValue === "40",
+  H_noticeStillVisible: r.borgMasked?.noticeVisible === true,
+  H_noticeNamesThePiece: /__PW__Salamander Jacket/.test(r.borgMasked?.noticeText || ""),
+  H_rowStillMarked: JSON.stringify(r.borgMasked?.markedRowNames) === JSON.stringify(["__PW__Salamander Jacket"]),
+  H_badgeCount1: r.borgMasked?.badgeCount === 1,
+
+  // ── (I) NEGATIVE — everything worn ⇒ silence ──
+  I_bothRowsPresent: (r.allWorn?.rowNames?.length ?? 0) === 2,
+  I_noRowMarked: (r.allWorn?.markedRowNames?.length ?? 0) === 0,
+  I_noBadge: r.allWorn?.badgeCount === 0,
+  I_noNotice: r.allWorn?.noticePresent === false,
+
+  // ── (J) NEGATIVE — a weapon, a misc item and a protects-nowhere wrap raise nothing ──
+  J_noBadge: r.nonArmor?.badgeCount === 0,
+  J_noNotice: r.nonArmor?.noticePresent === false,
+  J_emptyWrapRowStillListed: (r.nonArmor?.rowNames || []).includes("__PW__Empty Wrap"),
+  J_emptyWrapUnmarked: !(r.nonArmor?.markedRowNames || []).includes("__PW__Empty Wrap"),
+
+  // ── (K) THE SHOP HANDOFF — the receipt carries the equip line, and only for armor ──
+  K_sourceResolved: r.shop?.sourceResolved === true,
+  K_purchaseSucceeded: r.shop?.bought === true,
+  K_arrivesUnworn: r.shop?.arrivesUnworn === true,
+  K_oneCard: r.shop?.cardCount === 1,
+  K_cardCarriesEquipLine: /Delivered unworn/.test(r.shop?.cardText || ""),
+  K_weaponCardHasNoEquipLine: r.shopNegative?.cardCount === 1
+    && !/Delivered unworn/.test(r.shopNegative?.cardText || ""),
+
   // hygiene: the wrap never threw (would surface a sealed-model / bad-assign problem), no console errors
   wrapNeverThrew: !warns.some(w => /typed armor display failed/.test(w)),
   noConsoleErrors: errors.length === 0,

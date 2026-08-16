@@ -60,6 +60,17 @@
 
         {{> "modules/cp2020-augmented/templates/actor/parts/armor-display.hbs" hitLocations=system.hitLocations hitLocsName="hitLocations"}}
 
+        {{!-- Owned-but-unworn armor. Shop-bought armor arrives switched off, and the SP grid above
+              cannot show that: on a full-conversion borg the chassis fills every location, so an
+              unworn coat and a worn one look identical there. This line sits WITH the numbers it
+              qualifies, and names the pieces so the fix is one click away in the list below.
+              Built in actor-sheet.js#_prepareCharacterItems (cpUnwornArmor). --}}
+        {{#if cpUnwornArmor}}
+        <div class="cp-unworn-armor-notice" title="{{CPLocal 'ArmorUnwornNoticeHint'}}">
+            {{CPLocal "ArmorUnwornNotice" count=cpUnwornArmor.count names=cpUnwornArmor.names}}
+        </div>
+        {{/if}}
+
         {{!-- Conditional (typed) armor: per-damage-type SP the damage pipeline grants ONLY against that
               type (fire/radiation/heat garments). Present only when a worn typed layer adds protection
               somewhere — system.conditionalSP is built by module/mech/typed-armor-display.js. --}}
@@ -79,10 +90,16 @@
         </div>
         
         <div class="field-list one-col">
+            {{!-- An unworn piece marks its own row: a badge that reads as a state, not a tick box,
+                  plus a dimmed name. Clicking the row already opens the item sheet, where the
+                  Equipped box lives — so the cue lands on the affordance that fixes it. --}}
             {{#each gear.armor}}
-            <div class="field item-edit" data-item-id="{{id}}">
+            <div class="field item-edit{{#if (lookup @root.cpArmorUnworn id)}} cp-armor-row-unworn{{/if}}" data-item-id="{{id}}">
                 <div class="field-image" style="background-image: url({{img}})" data-item-id="{{id}}"></div>
                 <label class="name">{{name}}</label>
+                {{#if (lookup @root.cpArmorUnworn id)}}
+                <span class="cp-armor-unworn-badge" title="{{CPLocal 'ArmorNotWornHint'}}">{{CPLocal "ArmorNotWorn"}}</span>
+                {{/if}}
                 <span class="flex-pad"></span>
                 <span>
                     <label class="inactive">{{armorSummary system.coverage}}</label>

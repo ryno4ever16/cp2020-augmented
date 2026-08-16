@@ -25,7 +25,6 @@ const r = await p.evaluate(async () => {
   const SCOPE = "cp2020-augmented";
   const prior = {
     reroll: game.settings.get(SCOPE,"rerollGoneLimbLocation"),
-    auto:   game.settings.get(SCOPE,"damageAutoApply"),
     limb:   game.settings.get(SCOPE,"limbLossEnabled"),
   };
   await game.settings.set(SCOPE,"rerollGoneLimbLocation",true);
@@ -87,10 +86,9 @@ const r = await p.evaluate(async () => {
   const attacker = await Actor.create({ name:"__PW__RGL_attacker", type:"character" });
   const scene = game.scenes.active;
   const [tokDoc] = await scene.createEmbeddedDocuments("Token", [{ name: target.name, actorId: target.id, x: 1000, y: 1000, disposition: -1 }]);
-  // Auto-apply OFF so the handler opens a DamageDialog — we read its payload directly (auto-apply routes
-  // through a socket that does not echo to the sender in a single headless client). This proves the
-  // handler re-rolled payload.areaDamages BEFORE handing off, which is the whole single-shot integration.
-  await game.settings.set(SCOPE,"damageAutoApply",false);
+  // Every resolution opens a DamageDialog (the world-wide auto-apply route was retired 2026-08-14), so
+  // the payload is read straight off that window. This proves the handler re-rolled payload.areaDamages
+  // BEFORE handing off, which is the whole single-shot integration.
   await sleep(200);
 
   const findDialog = () => {
@@ -115,7 +113,6 @@ const r = await p.evaluate(async () => {
   await tokDoc.delete().catch(()=>{});
   for (const a of [fleshActor, allGone, target, attacker]) await a.delete().catch(()=>{});
   await game.settings.set(SCOPE,"rerollGoneLimbLocation",prior.reroll);
-  await game.settings.set(SCOPE,"damageAutoApply",prior.auto);
   await game.settings.set(SCOPE,"limbLossEnabled",prior.limb);
   return out;
 });

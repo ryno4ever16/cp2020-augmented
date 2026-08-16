@@ -14,6 +14,14 @@
  *  The chip lanes (M2/M3/M4) run TWICE — once with the module's document automation ON (the
  *  chip-grant engine creates/deletes granted skill items) and once OFF — because the field sync
  *  repaired here has to compose with that engine without duplicating or fighting it.
+ *
+ *  The skill-row trio (2026-08-15) rides on the same fixtures, since all three touch the row:
+ *
+ *   S1  an external skill drop whose name is already on the sheet reveals that row instead of
+ *       embedding a twin (two same-named rows make the name-keyed martial reads pick arbitrarily)
+ *   S2  the search haystack's name↔display-name field separator holds — neither a space nor the
+ *       separator character itself lets a query bridge the two fields
+ *   S3  the per-row chip checkbox carries a localized title naming what chipping does to the roll
  */
 import { chromium } from "@playwright/test";
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
@@ -261,6 +269,167 @@ const r = await p.evaluate(async () => {
   await actor.sheet.close().catch(() => {});
   await sleep(200);
 
+  // ── S1 / S2 / S3 · skill-row trio ──────────────────────────────────────────
+  //
+  //  S1  DROP DEDUP GUARD — an external skill drop whose name is already on the sheet must reveal
+  //      the existing row instead of embedding a twin. Two same-named skill rows make the sheet's
+  //      name-keyed martial reads pick arbitrarily, which is the reported live-play failure.
+  //  S2  SEARCH FIELD SEPARATOR — the filter haystack joins the raw name and the resolved display
+  //      name with a text field separator; a query must not be able to bridge the two fields.
+  //  S3  CHIP-TOGGLE TOOLTIP — the per-row chip checkbox carries a localized title naming what the
+  //      chipped state does to the roll; a chip-driven row keeps its existing "controlled" title.
+  const sheet = actor.sheet;
+  const worldItems = [];
+  const warned = [];
+  const warnWas = ui.notifications.warn.bind(ui.notifications);
+  ui.notifications.warn = (msg, ...rest) => { warned.push(String(msg)); return warnWas(msg, ...rest); };
+
+  try {
+    const mkWorld = async (name, type, system = {}) => {
+      const it = await Item.create({ name, type, system });
+      worldItems.push(it);
+      return it;
+    };
+    // Core ActorSheetV2._onDrop resolves the payload to an Item DOCUMENT before calling
+    // _onDropItem(event, item) — so the keeper hands it a document, exactly as production does.
+    const dropEvent = () => ({ preventDefault() {}, target: document.body });
+    const norm = (s) => String(s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+    const countNamed = (name, type = "skill") =>
+      actor.items.filter(i => i.type === type && norm(i.name) === norm(name)).length;
+    const rowsOf = (root) => [...(root?.querySelectorAll(".field.skill[data-item-id]") ?? [])];
+    const rowOf = (id) => rootOf(sheet)?.querySelector(`.field.skill[data-item-id="${id}"]`) ?? null;
+    const rowHiddenOf = (id) => !!rowOf(id)?.classList.contains("cp-hidden");
+    const SKILL_SYS = { level: 3, chipLevel: 0, isChipped: false, ip: 0, diffMod: 1, stat: "ref", isRoleSkill: false };
+
+    const sRoot = await openSheet(actor, 1100);
+    const rowItems = rowsOf(sRoot).map(el => actor.items.get(el.dataset.itemId)).filter(Boolean);
+    // The row that is HIDDEN until the search reveals it — the exact case the user hit: the player
+    // can't see the discipline, so they drag a compendium copy in.
+    const hiddenSkill = rowItems.find(s => sheet._cpIsUntrainedMartial?.(s) === true) ?? null;
+    // A plain, always-visible skill row, used for the case/whitespace normalization leg.
+    const plainSkill = rowItems.find(s => s && !s.name.startsWith("__PW__") && sheet._cpIsUntrainedMartial?.(s) !== true) ?? null;
+
+    out.s1 = {
+      hintKeyExists: game.i18n.has("CYBERPUNK.SkillAlreadyOnSheet"),
+      hiddenSkillFound: !!hiddenSkill,
+      plainSkillFound: !!plainSkill,
+      hiddenSkillName: hiddenSkill?.name ?? null,
+      plainSkillName: plainSkill?.name ?? null
+    };
+
+    // S1a · same-name drop onto a row that is currently hidden
+    if (hiddenSkill) {
+      out.s1.expectedNotice = game.i18n.format("CYBERPUNK.SkillAlreadyOnSheet", { name: hiddenSkill.name });
+      out.s1.hiddenBefore = rowHiddenOf(hiddenSkill.id);
+      out.s1.countBefore = countNamed(hiddenSkill.name);
+      const twin = await mkWorld(hiddenSkill.name, "skill", { ...SKILL_SYS });
+      warned.length = 0;
+      await sheet._onDropItem(dropEvent(), twin);
+      await sleep(1100);
+      out.s1.countAfter = countNamed(hiddenSkill.name);
+      out.s1.notices = warned.slice();
+      out.s1.searchValueAfter = rootOf(sheet)?.querySelector("input.skill-search")?.value ?? null;
+      out.s1.rowPresentAfter = !!rowOf(hiddenSkill.id);
+      out.s1.hiddenAfter = rowHiddenOf(hiddenSkill.id);
+      // clear the reveal so the later legs start from an unfiltered sheet
+      const clearEl = rootOf(sheet)?.querySelector("input.skill-search");
+      if (clearEl) { clearEl.value = ""; fire(clearEl, "input"); }
+      await sleep(250);
+    }
+
+    // S1b · the dedup KEY: trimmed, case-folded, whitespace-collapsed
+    if (plainSkill) {
+      out.s1.varCountBefore = countNamed(plainSkill.name);
+      const varied = await mkWorld(`  ${plainSkill.name.toUpperCase()}  `, "skill", { ...SKILL_SYS });
+      warned.length = 0;
+      await sheet._onDropItem(dropEvent(), varied);
+      await sleep(1100);
+      out.s1.varCountAfter = countNamed(plainSkill.name);
+      out.s1.varNotices = warned.slice();
+      const clearEl = rootOf(sheet)?.querySelector("input.skill-search");
+      if (clearEl) { clearEl.value = ""; fire(clearEl, "input"); }
+      await sleep(250);
+    }
+
+    // S1c · NEGATIVE — a genuinely new skill name still embeds
+    const novel = await mkWorld("__PW__NovelSkill", "skill", { ...SKILL_SYS });
+    out.s1.novelBefore = countNamed("__PW__NovelSkill");
+    warned.length = 0;
+    await sheet._onDropItem(dropEvent(), novel);
+    await sleep(1100);
+    out.s1.novelAfter = countNamed("__PW__NovelSkill");
+    out.s1.novelNotices = warned.slice();
+
+    // S1d · NEGATIVE — a non-skill drop is untouched by the guard
+    const gear = await mkWorld("__PW__NovelGear", "weapon", {});
+    out.s1.gearBefore = countNamed("__PW__NovelGear", "weapon");
+    await sheet._onDropItem(dropEvent(), gear);
+    await sleep(1100);
+    out.s1.gearAfter = countNamed("__PW__NovelGear", "weapon");
+
+    // ── S2 · search field separator ────────────────────────────────────────────
+    await sheet.render(true);
+    await sleep(900);
+    const searchEl2 = rootOf(sheet)?.querySelector("input.skill-search");
+    const setQuery = async (q) => { if (searchEl2) { searchEl2.value = q; fire(searchEl2, "input"); } await sleep(280); };
+    const RAW = "__PW__RawMartial";
+    out.s2 = { searchPresent: !!searchEl2, expectedDisplay, rowPresent: !!rowOf(AIKIDO_ID) };
+    await setQuery(RAW);
+    out.s2.hiddenForRaw = rowHiddenOf(AIKIDO_ID);
+    await setQuery(expectedDisplay ?? "");
+    out.s2.hiddenForDisplay = rowHiddenOf(AIKIDO_ID);
+    // a SPACE cannot bridge the two fields (it did before the fields were separated)
+    await setQuery(`${RAW} ${expectedDisplay ?? ""}`);
+    out.s2.hiddenForSpaceBridge = rowHiddenOf(AIKIDO_ID);
+    // nor can the raw separator character itself, pasted into the query
+    await setQuery(`${RAW}\u001F${expectedDisplay ?? ""}`);
+    out.s2.hiddenForSeparatorBridge = rowHiddenOf(AIKIDO_ID);
+    // and the "hide; search reveals" path still works for a hidden discipline
+    if (hiddenSkill) {
+      const shortQuery = String(hiddenSkill.name).split(":").pop().trim();
+      out.s2.shortQuery = shortQuery;
+      await setQuery("");
+      out.s2.hiddenSkillHiddenWithNoQuery = rowHiddenOf(hiddenSkill.id);
+      await setQuery(shortQuery);
+      out.s2.hiddenSkillRevealedByQuery = !rowHiddenOf(hiddenSkill.id);
+    }
+    await setQuery("");
+
+    // ── S3 · chip-toggle tooltip ───────────────────────────────────────────────
+    const [tipSkill] = await actor.createEmbeddedDocuments("Item", [{
+      name: "__PW__TipSkill", type: "skill",
+      system: { level: 1, chipLevel: 0, isChipped: false, ip: 0, diffMod: 1, stat: "int", isRoleSkill: false }
+    }]);
+    const [tipChipSkill] = await actor.createEmbeddedDocuments("Item", [{
+      name: "__PW__TipChipSkill", type: "skill",
+      system: { level: 1, chipLevel: 0, isChipped: false, ip: 0, diffMod: 1, stat: "int", isRoleSkill: false }
+    }]);
+    await actor.createEmbeddedDocuments("Item", [{
+      name: "__PW__TipChip", type: "cyberware",
+      system: { equipped: true, EffectMode: "Permanent",
+        CyberWorkType: { Types: ["Chip"], ChipActive: true, Stat: {}, Skill: {}, Locations: {}, Penalties: {},
+          ChipSkills: { [tipChipSkill.id]: 6 } } }
+    }]);
+    await sleep(500);
+    await sheet.render(true);
+    await sleep(1000);
+    const boxOf = (id) => rootOf(sheet)?.querySelector(`.field.skill[data-item-id="${id}"] input.chip-toggle-checkbox`) ?? null;
+    out.s3 = {
+      hintKeyExists: game.i18n.has("CYBERPUNK.SkillChipToggleHint"),
+      expectedHint: game.i18n.localize("CYBERPUNK.SkillChipToggleHint"),
+      expectedControlled: game.i18n.localize("CYBERPUNK.ControlledByChip"),
+      boxPresent: !!boxOf(tipSkill.id),
+      plainTitle: boxOf(tipSkill.id)?.getAttribute("title") ?? null,
+      chipDrivenTitle: boxOf(tipChipSkill.id)?.getAttribute("title") ?? null,
+      autoChippedDerived: !!actor.items.get(tipChipSkill.id)?.system?.autoChipped
+    };
+  } finally {
+    ui.notifications.warn = warnWas;
+    for (const it of worldItems) await it.delete().catch(() => {});
+  }
+  await actor.sheet.close().catch(() => {});
+  await sleep(200);
+
   // ── cleanup ────────────────────────────────────────────────────────────────
   await actor.delete().catch(() => {});
   return out;
@@ -333,6 +502,56 @@ chk("enabling the cyberweapon makes its fire row appear", r.n2.disabledRowAfterE
 chk("open implant sheet shows the slot readout", r.n3.slotsBefore === 3, JSON.stringify(r.n3));
 chk("a sibling module slot bump refreshes the open implant sheet's slots left",
   r.n3.slotsAfterBump === 1, JSON.stringify(r.n3));
+
+// ── S1 · skill-drop dedup guard ──────────────────────────────────────────────
+const S1 = r.s1 ?? {};
+const J1 = JSON.stringify(S1);
+chk("dedup guard: the already-present notice key resolves", S1.hintKeyExists === true, J1);
+chk("dedup guard: a hidden-until-searched skill row was located to drop onto", S1.hiddenSkillFound === true, J1);
+chk("dedup guard: that row really is hidden before the drop", S1.hiddenBefore === true, J1);
+chk("dedup guard: exactly one row carried the name before the drop", S1.countBefore === 1, J1);
+chk("dedup guard: a same-name external drop creates NO second item", S1.countAfter === 1, J1);
+chk("dedup guard: the drop posts the already-present notice",
+  Array.isArray(S1.notices) && S1.notices.includes(S1.expectedNotice), J1);
+chk("dedup guard: the existing row is revealed through the search reveal",
+  S1.rowPresentAfter === true && S1.hiddenAfter === false && S1.searchValueAfter === S1.hiddenSkillName, J1);
+chk("dedup guard: a plain skill row was located for the key-normalization leg", S1.plainSkillFound === true, J1);
+chk("dedup guard: exactly one row carried the plain name before the drop", S1.varCountBefore === 1, J1);
+chk("dedup guard: a case- and whitespace-varied same-name drop creates NO second item", S1.varCountAfter === 1, J1);
+chk("dedup guard: NEGATIVE — an unheld skill name still embeds",
+  S1.novelBefore === 0 && S1.novelAfter === 1, J1);
+chk("dedup guard: NEGATIVE — an unheld skill drop posts no already-present notice",
+  Array.isArray(S1.novelNotices) && S1.novelNotices.length === 0, J1);
+chk("dedup guard: NEGATIVE — a non-skill drop is unaffected",
+  S1.gearBefore === 0 && S1.gearAfter === 1, J1);
+
+// ── S2 · search field separator ──────────────────────────────────────────────
+const S2 = r.s2 ?? {};
+const J2 = JSON.stringify(S2);
+chk("search separator: the search box and the probe row both render",
+  S2.searchPresent === true && S2.rowPresent === true, J2);
+chk("search separator: the raw-name field still matches", S2.hiddenForRaw === false, J2);
+chk("search separator: the display-name field still matches", S2.hiddenForDisplay === false, J2);
+chk("search separator: a space cannot bridge the two fields", S2.hiddenForSpaceBridge === true, J2);
+chk("search separator: the separator character pasted into the query cannot bridge them",
+  S2.hiddenForSeparatorBridge === true, J2);
+chk("search separator: a hidden discipline stays hidden with an empty query",
+  S2.hiddenSkillHiddenWithNoQuery === true, J2);
+chk("search separator: its known query reveals it", S2.hiddenSkillRevealedByQuery === true, J2);
+
+// ── S3 · chip-toggle tooltip ─────────────────────────────────────────────────
+const S3 = r.s3 ?? {};
+const J3 = JSON.stringify(S3);
+chk("chip-toggle tooltip: the hint key resolves", S3.hintKeyExists === true, J3);
+chk("chip-toggle tooltip: the row's checkbox renders", S3.boxPresent === true, J3);
+chk("chip-toggle tooltip: the checkbox carries the localized hint as its title",
+  !!S3.expectedHint && S3.plainTitle === S3.expectedHint, J3);
+chk("chip-toggle tooltip: the hint is real text, not an unresolved key",
+  typeof S3.expectedHint === "string" && !S3.expectedHint.startsWith("CYBERPUNK.")
+    && S3.expectedHint.length > 20 && /chip level/i.test(S3.expectedHint), J3);
+chk("chip-toggle tooltip: a chip-driven row is derived as chip-controlled", S3.autoChippedDerived === true, J3);
+chk("chip-toggle tooltip: a chip-driven row keeps its controlled-by-chip title",
+  S3.chipDrivenTitle === S3.expectedControlled, J3);
 
 chk("0 console errors", errors.length === 0, errors.slice(0, 6).join(" | "));
 

@@ -18,7 +18,7 @@
  * Pure helpers are exported for the rig spec; the combat routing lives in combat/DamageApplicator.js.
  */
 import { deleteFieldUpdate, localize, localizeParam, getLimbStatusMap } from "../utils.js";
-import { postSavePromptCard } from "../compat.js";
+import { postSavePromptCard, renderChatCard } from "../compat.js";
 import { isFullBorg } from "./borg.js";
 import { cyberlimbRepairGmOnly } from "../settings.js";
 
@@ -308,6 +308,132 @@ export async function severFleshUnder(actor, zone) {
     [`flags.${SCOPE}.${FLESH_STATUS_FLAG}.${zone}`]: "severed"
   }, { render: false, fromCyberpunkDamageSystem: true }).catch(() => {});
   return true;
+}
+
+/* ═══════════════════ GM direct set of a flesh limb's recorded state (the sheet control) ═══════════════════
+ *
+ * Until now the `fleshLimbStatus` record had exactly two writers — the damage pipeline
+ * (combat/DamageApplicator.js) and the cyberlimb install (severFleshUnder above) — so a GM who simply
+ * RULED that a limb is gone (a surgery, an off-screen event, a called shot resolved by hand) had no
+ * control at all: only a console `setFlag` incantation. This block is that missing control's engine.
+ *
+ * ⛔ THE VALUE DOMAIN IS CLOSED. The offered states are exactly FLESH_STATUS_LABEL's keys — the
+ * vocabulary the reader seam (utils.getLimbStatusMap / fleshLimbStatusOf) and the badge already
+ * understand. No new state string is ever invented here; adding one means adding it to that map (and
+ * to every reader that switches on it) first.
+ *
+ * ⛔ THE WRITE IS THE PIPELINE'S WRITE. Same flag, same per-zone key, same plain string value, so a
+ * GM-set severed limb and a pipeline-set one are indistinguishable to every downstream consumer (the
+ * sheet badge, the arm-use notice, utils' gone-limb re-roll). The dotted-path form is used rather than
+ * a whole-object `setFlag` because flag objects MERGE per key — a dotted write touches only this zone
+ * and cannot resurrect or clobber a sibling limb (the same reason severFleshUnder writes this way, and
+ * the mirror of clearFleshLimb's deleteFieldUpdate on the way out).
+ */
+
+/** The recorded flesh-limb states this module understands, as sheet-ready `{ value, label }` rows in a
+ *  stable order. Built here — not in the template — so the picker can never drift from the badge/reader
+ *  vocabulary (the dynamic-`<select>` idiom: JS builds the option data, the template just iterates). */
+export function fleshLimbStateOptions() {
+  return Object.keys(FLESH_STATUS_LABEL).map(value => ({ value, label: localize(FLESH_STATUS_LABEL[value]) }));
+}
+
+/** True when `state` is one of the recorded flesh-limb states. The closed-domain guard. Pure. */
+export function isFleshLimbState(state) {
+  return Object.prototype.hasOwnProperty.call(FLESH_STATUS_LABEL, state);
+}
+
+/** The states that mean the limb is GONE rather than merely hurt — the destructive direction, which
+ *  gets a confirmation step. Same two the hit-location re-roll treats as gone (utils
+ *  `_isGoneLimbZone`), so "needs confirming" and "stops being a valid target" agree. */
+const LIMB_LOSS_STATES = new Set(["severed", "destroyed"]);
+
+/** The limb zones a GM may directly set a FLESH state on, as a `{ zone: true }` map for the template's
+ *  `lookup`: the four limb zones that carry NO structural SDP pool. A chromed zone is excluded because
+ *  fleshLimbStatusOf MASKS the flesh record there — setting it would write a flag nothing renders.
+ *  GM-ONLY: an empty map for anyone else, so the control never reaches a player's DOM at all
+ *  (setFleshLimbState re-checks, so a stale render cannot bypass it either). Pure-ish. */
+export function fleshLimbSetZones(actor) {
+  if (!game.user?.isGM) return {};
+  const out = {};
+  for (const zone of LIMB_ZONES) {
+    if (cyberlimbSdp(actor, zone).max > 0) continue;
+    out[zone] = true;
+  }
+  return out;
+}
+
+/**
+ * Record a flesh limb's state directly — the GM's own hand on the record, with the damage pipeline out
+ * of the loop. GM-only unconditionally (this is authored injury, not the optional recovery gate that
+ * governs repairCyberlimb/clearFleshLimb). Refuses a non-limb zone and any state outside the closed
+ * domain, and no-ops when the zone already reads that state. Returns true when it wrote.
+ */
+export async function setFleshLimbState(actor, zone, state) {
+  if (!game.user?.isGM) { ui.notifications?.warn(localize("FleshLimbSetGmOnlyWarn")); return false; }
+  if (!LIMB_ZONES.has(zone)) return false;
+  if (!isFleshLimbState(state)) return false;
+  if (getLimbStatusMap(actor)[zone] === state) return false;   // already recorded — nothing to write
+  await actor.update({
+    [`flags.${SCOPE}.${FLESH_STATUS_FLAG}.${zone}`]: state
+  }, { render: false, fromCyberpunkDamageSystem: true });
+  await postSavePromptCard({
+    body: localizeParam("FleshLimbSetBody", { limb: localize(zone), state: localize(FLESH_STATUS_LABEL[state]) }),
+    speaker: ChatMessage.getSpeaker({ actor })
+  });
+  return true;
+}
+
+/**
+ * The sheet gesture behind the body map's state-set control: pick a recorded state for one flesh limb,
+ * confirm the destructive direction, write it. Choosing the empty row routes to clearFleshLimb (the
+ * existing removal path) — clearing needs no confirmation; choosing a LIMB-LOSS state does.
+ * Returns true when the record changed.
+ */
+export async function openFleshLimbStateDialog(actor, zone) {
+  if (!game.user?.isGM) { ui.notifications?.warn(localize("FleshLimbSetGmOnlyWarn")); return false; }
+  if (!LIMB_ZONES.has(zone)) return false;
+  const current = getLimbStatusMap(actor)[zone] ?? "";
+  const render = foundry?.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate;
+  const content = await render(`modules/${SCOPE}/templates/dialog/flesh-limb-state.hbs`, {
+    name: actor?.name ?? "",
+    limb: localize(zone),
+    noneSelected: current === "",
+    options: fleshLimbStateOptions().map(o => ({ ...o, selected: o.value === current })),
+  });
+
+  // `wait` resolves to the clicked button's callback result — the chosen state for "set", the bare
+  // action string for the plain cancel button, and null when the window is dismissed.
+  const picked = await foundry.applications.api.DialogV2.wait({
+    window: { title: localize("FleshLimbSetTitle"), icon: "fa-solid fa-user-injured" },
+    content,
+    rejectClose: false,
+    buttons: [
+      {
+        action: "set", default: true, icon: "fa-solid fa-check", label: localize("FleshLimbSetBtn"),
+        callback: (ev, btn, dialog) => String(dialog?.element?.querySelector?.("select.cp-flesh-state-pick")?.value ?? ""),
+      },
+      { action: "cancel", icon: "fa-solid fa-xmark", label: localize("Cancel") },
+    ],
+  });
+  if (picked === null || picked === undefined || picked === "cancel") return false;
+  if (picked === current) return false;
+  if (picked === "") return clearFleshLimb(actor, zone);
+
+  if (LIMB_LOSS_STATES.has(picked)) {
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: localize("FleshLimbSetConfirmTitle") },
+      rejectClose: false,
+      content: await renderChatCard("confirm-body.hbs", {
+        body: localizeParam("FleshLimbSetConfirmBody", {
+          name: actor?.name ?? "", limb: localize(zone), state: localize(FLESH_STATUS_LABEL[picked]),
+        }),
+      }),
+      yes: { callback: () => true },
+      no: { default: true, callback: () => false },
+    });
+    if (!ok) return false;
+  }
+  return setFleshLimbState(actor, zone, picked);
 }
 
 /**

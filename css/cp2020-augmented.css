@@ -367,8 +367,10 @@
 .cp-context-menu button:hover { background: rgba(138,109,59,0.4); }
 
 /* --- IP (Improvement Points) in-sheet UI: skills-tab header + per-skill cluster.
-   Injected into Tilt's actor sheet by module/ip/ip-sheet.js; de-inlines the system's inline-styled
-   header. All classes cp2020ae-prefixed to stay isolated from the base system's own .ip-* markup. --- */
+   Painted by the module's own templates/actor/parts/skills.hbs + skill.hbs, which emit these
+   cp2020ae-prefixed classes so nothing here can collide with the base system's markup. (Until
+   2026-08-15 the templates emitted the UNPREFIXED forms and not one of these rules applied — hence
+   the inline styles that used to duplicate the header rule; both sides now agree.) --- */
 .cp2020ae-ip-skills-header { display: flex; align-items: center; gap: 8px; padding: 2px 4px; }
 .cp2020ae-ip-skills-header .cp2020ae-ip-spacer { flex: 1; }
 .cp2020ae-ip-skills-header .cp2020ae-ip-pool { white-space: nowrap; opacity: 0.9; }
@@ -376,9 +378,14 @@
 .cp2020ae-ip-skills-header .cp2020ae-ip-lock-toggle { flex: 0 0 auto; width: auto; display: inline-flex; align-items: center; gap: 4px; }
 .cp2020ae-ip-cluster { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; white-space: nowrap; }
 .cp2020ae-ip-banked { font-variant-numeric: tabular-nums; opacity: 0.85; }
+/* The pool's share of a raise the skill's own bank can't cover — printed beside the bank/cost pair so
+   the row accounts for every IP the level-up control is about to spend. */
+.cp2020ae-ip-from-pool { font-variant-numeric: tabular-nums; font-size: 0.85em; opacity: 0.8; color: var(--color-text-hyperlink, #ff7b00); }
 .cp2020ae-ip-pending-pip { font-weight: bold; color: var(--color-text-hyperlink, #ff7b00); }
 .cp2020ae-ip-level-up { cursor: pointer; }
 .cp2020ae-ip-level-up:hover { color: var(--color-text-hyperlink, #ff7b00); }
+/* A raise the pool is paying for reads differently from one the skill's own bank funds. */
+.cp2020ae-ip-level-up--pooled { color: var(--color-text-hyperlink, #ff7b00); opacity: 0.85; }
 
 /* --- Cyberware in-sheet "Install (Surgery)" button (injected on the vanilla system). Size to its
    label instead of being stretched to fill the .field row, mirroring the fork's own .cyber-install. --- */
@@ -878,7 +885,11 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
  * ⭐ THE LOCKED STATE IS DIMMED, NOT HIDDEN. §1 wants every derived control "locked, visible" — a GM
  * has to be able to SEE what the threat level chose before deciding to override it. So .cp-goon-locked
  * lowers contrast and the inputs carry the real `disabled` attribute (which is also what makes them
- * genuinely inert to the form read, not merely un-clickable). ===== */
+ * genuinely inert to the form read, not merely un-clickable).
+ *
+ * ⭐ AND THE UNDERIVED STATE IS DASHED, NOT ABSENT (R3, 2026-08-14). .cp-goon-unset rides the same
+ * section before a threat level exists: the controls are all there, and their readouts carry a dash
+ * in a lighter weight so "nothing derived yet" cannot be misread as a value of zero. ===== */
 .cp-goon { padding: 8px 4px; font-size: 0.9em; line-height: 1.5; }
 .cp-goon .cp-goon-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .cp-goon .cp-goon-label { flex: 0 0 30%; font-weight: bold; }
@@ -907,6 +918,92 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 
 .cp-goon .cp-goon-locked { opacity: 0.62; }
 .cp-goon .cp-goon-locked .cp-goon-section { opacity: 1; }
+
+.cp-goon .cp-goon-unset .cp-goon-out { font-weight: normal; opacity: 0.6; }
+.cp-goon .cp-goon-unset .cp-goon-breakdown { opacity: 0.6; }
+
+/* ===== THE SLIDER TRACKS — book-named tick marks and the reserved segment (R6/R7, 2026-08-14).
+ *
+ * ⭐ ONE NUMBER CROSSES THE LINE FROM JS, AND IT IS DATA, NOT STYLE. The window writes
+ * `--cp-goon-reserved` — a bare 0-100 percentage, no unit, no colour — onto the two sliders that
+ * carry a reservation, and each tick mark carries its own position the same way in `--cp-tick`.
+ * Everything else lives HERE: the colours, the gradient, the mark's shape, both themes. JS never
+ * names a colour and never builds a gradient, which is the house rule this design is shaped around.
+ *
+ * ⭐ WHY THE NATIVE CONTROL IS REPAINTED AT ALL. §1 asks for "book-named ticks" and a guarantee
+ * "drawn on the track". The first build expressed both with <datalist>, and datalist marks are
+ * rendered inconsistently across the browsers the two cores ship and not at all in some — so the
+ * ticks the spec asks for were simply invisible, and a reservation cannot be expressed that way in
+ * any browser. Painting our own track is what makes a mark and a band land where the spec puts them.
+ *
+ * ⚑ THE 6px / 12px ARITHMETIC, stated once because three rules depend on it. A range input's usable
+ * track is inset by half the thumb at each end, so a value at percentage p sits at
+ * `6px + (W - 12px) x p/100` for the 12px thumb below. The band's edge and every tick use that same
+ * expression, which is exactly why a tick lands under the thumb that reads it and why the thumb
+ * stops ON the band's edge rather than near it. Change the thumb's size and all three change. ===== */
+.cp-goon {
+  --cp-goon-track: rgba(255, 255, 255, 0.16);
+  --cp-goon-band: rgba(192, 160, 98, 0.42);
+  --cp-goon-thumb: #c0a062;
+  --cp-goon-tick-ink: rgba(255, 255, 255, 0.45);
+}
+.cp-goon .cp-goon-slider-wrap {
+  position: relative;
+  flex: 1 1 auto; min-width: 0;
+  padding-bottom: 8px;      /* the strip the tick marks live in — present on every slider so the
+                               ticked and unticked rows keep the same height */
+}
+.cp-goon .cp-goon-slider {
+  -webkit-appearance: none; appearance: none;
+  display: block; width: 100%; height: 12px;
+  margin: 0; padding: 0; background: transparent; cursor: pointer;
+}
+.cp-goon .cp-goon-slider:disabled { cursor: default; }
+.cp-goon .cp-goon-slider::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(to right,
+    var(--cp-goon-band) 0,
+    var(--cp-goon-band) calc(6px + (100% - 12px) * var(--cp-goon-reserved, 0) / 100),
+    var(--cp-goon-track) calc(6px + (100% - 12px) * var(--cp-goon-reserved, 0) / 100),
+    var(--cp-goon-track) 100%);
+}
+.cp-goon .cp-goon-slider::-moz-range-track {
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(to right,
+    var(--cp-goon-band) 0,
+    var(--cp-goon-band) calc(6px + (100% - 12px) * var(--cp-goon-reserved, 0) / 100),
+    var(--cp-goon-track) calc(6px + (100% - 12px) * var(--cp-goon-reserved, 0) / 100),
+    var(--cp-goon-track) 100%);
+}
+.cp-goon .cp-goon-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 12px; height: 12px; margin-top: -3px;
+  border: none; border-radius: 50%; background: var(--cp-goon-thumb);
+}
+.cp-goon .cp-goon-slider::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border: none; border-radius: 50%; background: var(--cp-goon-thumb);
+}
+.cp-goon .cp-goon-ticks {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 7px;
+  pointer-events: none;     /* the strip is scenery; only the marks themselves take a hover */
+}
+.cp-goon .cp-goon-tick {
+  position: absolute; top: 0; width: 1px; height: 5px;
+  left: calc(6px + (100% - 12px) * var(--cp-tick, 0) / 100);
+  transform: translateX(-50%);
+  background: var(--cp-goon-tick-ink);
+  pointer-events: auto;     /* each mark carries its band's hover text */
+}
+
+/* The salvage disclosure. Informational, not a warning: a squad being worth money is the ordinary
+ * case, and the line exists to stop the carried-cash dial reading as the whole story. */
+.cp-goon .cp-goon-salvage { margin: 0 0 6px; font-size: 0.82em; opacity: 0.9; font-variant-numeric: tabular-nums; }
+
+/* The per-goon rolled-stats group (R8): a mini-heading inside the dial section, lighter than the
+ * section rules above it so it reads as a grouping rather than as a second section. */
+.cp-goon .cp-goon-rolled { margin-bottom: 4px; }
+.cp-goon .cp-goon-subhead { font-weight: bold; margin: 10px 0 2px; font-size: 0.9em; }
 
 .cp-goon .cp-goon-preview { max-height: 340px; overflow-y: auto; }
 .cp-goon .cp-goon-card {
@@ -1319,6 +1416,47 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 .cp-conditional-armor .cp-conditional-type { font-weight: bold; min-width: 52px; }
 .cp-conditional-armor .cp-conditional-locs { display: flex; flex-wrap: wrap; gap: 1px 6px; justify-content: flex-end; }
 .cp-conditional-armor .cp-conditional-loc { white-space: nowrap; }
+
+/* Owned-but-unworn armor cue. Two surfaces, same idiom as the panel around them (class-driven, no
+ * inline style=): a one-line notice under the SP grid, and a badge on the offending row.
+ *
+ * ⚠ THE TWO SURFACES SIT ON DIFFERENT GROUNDS, so they cannot share one ink. The badge is a direct
+ * child of `.field`, which the BASE stylesheet paints black in every scheme, so a bright amber reads
+ * on it always. The notice is a bare block on the sheet's own ground — near-black under the terminal
+ * skin, but parchment-cream under the light scheme, where the same bright amber measures barely 2:1.
+ * So the notice's default (light) ink is the dark amber, and the skin layer — which is exactly the
+ * dark scheme, see the cp-carolingian gating note above — lifts it back to core's warning colour.
+ * Both carry an explicit fallback: an undefined custom property would render as inherited body text,
+ * i.e. as no cue at all, which is the precise failure this whole thing exists to end. */
+.cyberpunk .cp-unworn-armor-notice {
+  margin: 3px 0 2px;
+  padding: 2px 0 2px 6px;
+  font-size: 0.82em;
+  font-style: italic;
+  line-height: 1.25;
+  color: #8a4b00;
+  border-left: 3px solid #8a4b00;
+}
+body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
+  color: var(--color-level-warning, #ee9b3a);
+  border-left-color: var(--color-level-warning, #ee9b3a);
+}
+
+.cyberpunk .field > .cp-armor-unworn-badge {
+  margin-left: 6px;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--color-level-warning, #ee9b3a);
+  border: 1px solid var(--color-level-warning, #ee9b3a);
+  border-radius: 2px;
+}
+
+/* The name dims so a worn row and an unworn one differ at a glance, before any text is read — and it
+ * must not PAY for the badge: without these two rules the badge's width comes straight out of the
+ * name, which then ellipsises. The row wraps instead, so a long name keeps its own line. */
+.cyberpunk .field.cp-armor-row-unworn { flex-wrap: wrap; }
+.cyberpunk .field.cp-armor-row-unworn > .name { opacity: 0.6; font-style: italic; flex-shrink: 0; }
 
 /**
 * A convenience class to prevent boilerplate
@@ -1978,7 +2116,8 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
    purely by reusing the `.segment-repair` class name. Declaring `display` here is what overrides it —
    the base wins any property we simply don't set, so the opacity rule was dead code until now. */
 .cyberpunk .segment-repair.cp-cyberlimb-repair,
-.cyberpunk .segment-repair.cp-flesh-clear {
+.cyberpunk .segment-repair.cp-flesh-clear,
+.cyberpunk .segment-repair.cp-flesh-set {
   display: inline-block;
   cursor: pointer;
   font-size: 0.85rem;
@@ -1989,6 +2128,14 @@ html.cp-tab-dragging, html.cp-tab-dragging * { cursor: grabbing !important; }
 }
 .cyberpunk .segment-repair.cp-cyberlimb-repair:hover,
 .cyberpunk .segment-repair.cp-flesh-clear:hover { opacity: 1; color: #4a8f3c; }
+/* The GM's state-SET pencil sits beside the recovery controls but points the other way — it AUTHORS an
+   injury rather than clearing one — so it rests fainter (it shows on every uninjured flesh limb a GM
+   looks at, and must not compete with the badge) and hovers to the alert red, not the recovery green. */
+.cyberpunk .segment-repair.cp-flesh-set { opacity: 0.45; }
+.cyberpunk .segment-repair.cp-flesh-set:hover { opacity: 1; color: #d1502f; }
+/* Flesh-limb state picker (openFleshLimbStateDialog): the note under the select saying this records
+   STATE only. Same hint treatment as the vehicle-fire dialog's. */
+.cp-flesh-state-dialog .cp-flesh-state-hint { font-size: 0.78em; opacity: 0.65; }
 
 .chipware-container.is-empty .chipware-dropzone {
   height: 18px;
@@ -3417,6 +3564,16 @@ body.theme-light .cp-goon .cp-goon-band {
   border-bottom-color: var(--cp-lt-line);
 }
 body.theme-light .cp-goon .cp-goon-card { border-color: var(--cp-lt-line); }
+/* The slider palette (R6/R7). Only the four TOKENS move — the gradient, the geometry and the marks
+   are defined once above and are theme-agnostic by construction, which is the point of carrying the
+   position as a number rather than as a style. */
+body.theme-light .cp-goon {
+  --cp-goon-track: rgba(0, 0, 0, 0.16);
+  --cp-goon-band: rgba(108, 90, 55, 0.72);   /* the light ground swallows a soft wash — the band has
+                                                to hold its own against parchment, not against ink */
+  --cp-goon-thumb: var(--cp-lt-brass);
+  --cp-goon-tick-ink: rgba(0, 0, 0, 0.45);
+}
 body.theme-light .cp-automation-notice .feat-box--gold {
   border-color: var(--cp-lt-brass);
   background: rgba(108, 90, 55, 0.12);
@@ -3436,6 +3593,7 @@ body.theme-light .cp-book-eye.on,
 body.theme-light .cp-acpa-build-valid,
 body.theme-light .cyberpunk .segment-repair.cp-cyberlimb-repair:hover,
 body.theme-light .cyberpunk .segment-repair.cp-flesh-clear:hover { color: var(--cp-lt-success); }
+body.theme-light .cyberpunk .segment-repair.cp-flesh-set:hover { color: var(--cp-lt-fail); }
 
 body.theme-light .cyberpunk .result-fail,
 body.theme-light .cyberpunk .result-note.danger,

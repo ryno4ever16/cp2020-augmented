@@ -21,10 +21,10 @@
 
 {{!-- IP tracker header: Simple-mode pool + the skill-lock toggle (when the IP system is on). --}}
 {{#if ip.enabled}}
-<div class="ip-skills-header flexrow" style="gap:8px; align-items:center; padding:2px 4px;">
-    {{#if ip.simple}}<span title="{{CPLocal 'IpPool'}}">{{CPLocal "IpPool"}}: <b>{{ip.pool}}</b></span>{{/if}}
-    <span class="flex-pad" style="flex:1;"></span>
-    <button type="button" class="ip-lock-toggle" title="{{CPLocal 'IpSkillLockToggle'}} ({{ip.lockMode}})">{{#if ip.locked}}🔒{{else}}🔓{{/if}} {{CPLocal "IpSkillLockToggle"}}</button>
+<div class="cp2020ae-ip-skills-header flexrow">
+    {{#if ip.simple}}<span class="cp2020ae-ip-pool" title="{{CPLocal 'IpPool'}}">{{CPLocal "IpPool"}}: <b>{{ip.pool}}</b></span>{{/if}}
+    <span class="cp2020ae-ip-spacer"></span>
+    <button type="button" class="cp2020ae-ip-lock-toggle" title="{{CPLocal 'IpSkillLockToggle'}} ({{ip.lockMode}})">{{#if ip.locked}}🔒{{else}}🔓{{/if}} {{CPLocal "IpSkillLockToggle"}}</button>
 </div>
 {{/if}}
 

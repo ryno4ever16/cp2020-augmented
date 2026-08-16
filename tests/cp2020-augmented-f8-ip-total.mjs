@@ -15,6 +15,14 @@
  *   • a throttled award vanished without a word;
  *   • the tracker's amount field claimed a ceiling the award engine does not have.
  *
+ * PART 3 (2026-08-15, the level-control unit) covers the control itself:
+ *   • it rendered its row id EMPTY (a {{#with}} context-scope slip), so the delegated handler resolved
+ *     no document and the click was silently eaten — never caught, because the old check only asked
+ *     whether the element existed;
+ *   • the row printed the per-skill bank alone while the enable predicate reads bank + fungible pool,
+ *     so a pool-funded raise offered a control on a row still reading "0/10";
+ *   • the skill-item sheet offered an editable system.ip box that no code anywhere spends.
+ *
  * Run from the module's tests/:  FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-f8-ip-total.mjs
  */
 import { chromium } from "@playwright/test";
@@ -135,11 +143,11 @@ try {
       await sheet.render(true);
       await sleep(800);
       const root = sheet.element;
-      const banked = root?.querySelector(`.field.skill[data-item-id="${skill.id}"] .ip-banked`);
+      const banked = root?.querySelector(`.field.skill[data-item-id="${skill.id}"] .cp2020ae-ip-banked`);
       ok("skill row paints the banked/cost pair", banked?.textContent?.trim() === `37/${cost}`, banked?.textContent?.trim());
-      const poolNode = root?.querySelector(".ip-skills-header b");
+      const poolNode = root?.querySelector(".cp2020ae-ip-skills-header b");
       ok("skills header paints the pool figure", poolNode?.textContent?.trim() === "12", poolNode?.textContent?.trim());
-      const arrow = root?.querySelector(`.field.skill[data-item-id="${skill.id}"] .ip-level-up`);
+      const arrow = root?.querySelector(`.field.skill[data-item-id="${skill.id}"] .cp2020ae-ip-level-up`);
       ok("affordable row paints the level-up control", !!arrow, !!arrow);
       await sheet.close();
 
@@ -195,6 +203,173 @@ try {
   if (D.error) { console.error("IN-PAGE ERROR (part 2):", D.error); failures++; }
   console.log("\nIP store readback + throttle notice + amount ceiling\n" + D.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(58)} got=${c.got}`).join("\n"));
   failures += D.checks.filter(c => !c.pass).length;
+
+  // --- Part 3: the level-up control's row identity, its real click chain, and the pool-contribution
+  // display. Covers the two defects the 2026-08-15 diagnosis proved on this rig:
+  //   • the control rendered data-skill-id="" (a Handlebars {{#with}} context-scope slip), so the
+  //     delegated handler resolved no document and the control was inert;
+  //   • the row printed the per-skill bank alone while the enable predicate reads bank + fungible
+  //     pool, so a pool-funded row lit up a control while still reading "0/10".
+  // The click is driven as a real pointer gesture on the rendered sheet, not a handler call. -------
+  const A = { checks: [] };
+  const okA = (name, cond, got) => A.checks.push({ name, pass: !!cond, got });
+  const ARROW = (appId, skillId) =>
+    `[id="${appId}"] .field.skill[data-item-id="${skillId}"] .cp2020ae-ip-level-up`;
+  const clickArrow = async (appId, skillId) => {
+    const res = { clicked: false, confirmed: false };
+    try { await page.locator(ARROW(appId, skillId)).first().click({ timeout: 4000 }); res.clicked = true; }
+    catch { return res; }
+    try { await page.locator('button[data-action="yes"]').first().click({ timeout: 4000 }); res.confirmed = true; }
+    catch { /* no confirmation surfaced — the inert-control red */ }
+    await page.waitForTimeout(900);
+    return res;
+  };
+  try {
+    const S = await page.evaluate(async () => {
+      const SCOPE = "cp2020-augmented";
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const { isMartialArtSkillItem } = await import("/modules/cp2020-augmented/module/lookups.js");
+      const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
+      const prev = {};
+      for (const k of ["ipHideUI", "ipRawTracking"]) prev[k] = game.settings.get(SCOPE, k);
+      await game.settings.set(SCOPE, "ipHideUI", false);
+      await game.settings.set(SCOPE, "ipRawTracking", false);
+
+      for (const x of game.actors.filter(x => x.name === "__PW__ IP Level Chain")) await x.delete().catch(() => {});
+      const actor = await Actor.create({ name: "__PW__ IP Level Chain", type: "character" });
+      // Martial disciplines with an empty bank are hidden by the "hide; search reveals" filter, so the
+      // fixture rows must be ordinary skills or the pointer gesture would land on a hidden element.
+      const pick = actor.items.filter(i => i.type === "skill" && !isMartialArtSkillItem(i)).slice(0, 3);
+      const [sA, sB, sC] = pick;
+      // Bank-covered row (bank alone pays), pool-covered row (bank 0, the fungible pool pays), and a
+      // row beyond bank + pool. Costs are pinned via the difficulty multiplier: max(1,level)×10×mult.
+      await sA.update({ "system.level": 0, "system.diffMod": 1, [`flags.${SCOPE}.ip`]: 10 });
+      await sB.update({ "system.level": 0, "system.diffMod": 1, [`flags.${SCOPE}.ip`]: 0 });
+      await sC.update({ "system.level": 0, "system.diffMod": 3, [`flags.${SCOPE}.ip`]: 0 });
+      await actor.setFlag(SCOPE, "ipPool", 10);
+
+      const sheet = actor.sheet;
+      await sheet.render(true);
+      await sleep(900);
+      const root = sheet.element;
+      const readRow = (id) => {
+        const row = root?.querySelector(`.field.skill[data-item-id="${id}"]`);
+        const arrow = row?.querySelector(".cp2020ae-ip-level-up");
+        const fromPool = row?.querySelector(".cp2020ae-ip-from-pool");
+        return {
+          rowFound: !!row,
+          hidden: !!row?.classList?.contains("cp-hidden"),
+          arrowPresent: !!arrow,
+          arrowSkillId: arrow?.dataset?.skillId ?? null,
+          arrowDisabled: arrow?.hasAttribute?.("disabled") === true || arrow?.classList?.contains("disabled") === true,
+          pooledMark: !!arrow?.classList?.contains("cp2020ae-ip-level-up--pooled"),
+          poolText: fromPool ? (fromPool.textContent || "").trim() : null,
+          bankedText: (row?.querySelector(".cp2020ae-ip-banked")?.textContent || "").trim(),
+        };
+      };
+      return {
+        prev, actorId: actor.id, appId: root?.id ?? null,
+        ids: { a: sA.id, b: sB.id, c: sC.id },
+        costs: { a: IP.ipCost(sA), b: IP.ipCost(sB), c: IP.ipCost(sC) },
+        rows: { a: readRow(sA.id), b: readRow(sB.id), c: readRow(sC.id) },
+        before: { levelA: Number(sA.system.level) || 0, levelB: Number(sB.system.level) || 0, pool: IP.poolForActor(actor), bankA: IP.bankForSkill(sA), bankB: IP.bankForSkill(sB) },
+      };
+    });
+
+    okA("fixture pins a bank-covered, a pool-covered and an out-of-reach row", S.costs.a === 10 && S.costs.b === 10 && S.costs.c === 30, `${S.costs.a}/${S.costs.b}/${S.costs.c}`);
+    okA("all three fixture rows paint and none are filtered out", S.rows.a.rowFound && S.rows.b.rowFound && S.rows.c.rowFound && !S.rows.a.hidden && !S.rows.b.hidden && !S.rows.c.hidden, JSON.stringify([S.rows.a.hidden, S.rows.b.hidden, S.rows.c.hidden]));
+
+    // (a) row identity — the control must carry the row's own item id, not an empty string.
+    okA("bank-covered row's level control carries the row's item id", S.rows.a.arrowSkillId === S.ids.a, `"${S.rows.a.arrowSkillId}"`);
+    okA("pool-covered row's level control carries the row's item id", S.rows.b.arrowSkillId === S.ids.b, `"${S.rows.b.arrowSkillId}"`);
+    okA("no level control renders an empty row id", S.rows.a.arrowSkillId !== "" && S.rows.b.arrowSkillId !== "", `"${S.rows.a.arrowSkillId}"/"${S.rows.b.arrowSkillId}"`);
+
+    // (c) affordability display — the printed figures must account for what the predicate spends.
+    okA("bank-covered row prints no pool contribution", S.rows.a.poolText === null, S.rows.a.poolText);
+    okA("bank-covered row's control carries no pool marker", S.rows.a.pooledMark === false, S.rows.a.pooledMark);
+    okA("pool-covered row prints the pool contribution", typeof S.rows.b.poolText === "string" && /10/.test(S.rows.b.poolText), S.rows.b.poolText);
+    okA("pool-covered row's contribution reads as text, not a raw key", !String(S.rows.b.poolText ?? "").includes("CYBERPUNK."), S.rows.b.poolText);
+    okA("pool-covered row's control carries the pool marker", S.rows.b.pooledMark === true, S.rows.b.pooledMark);
+    okA("row beyond bank plus pool paints no enabled level control", !S.rows.c.arrowPresent || S.rows.c.arrowDisabled, `present=${S.rows.c.arrowPresent} disabled=${S.rows.c.arrowDisabled}`);
+
+    // (b) the real click chain — pointer gesture on the rendered control, then the confirmation.
+    const clickA = await clickArrow(S.appId, S.ids.a);
+    const afterA = await page.evaluate(async ({ actorId, idA }) => {
+      const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
+      const actor = game.actors.get(actorId); const s = actor.items.get(idA);
+      return { level: Number(s.system.level) || 0, bank: IP.bankForSkill(s), pool: IP.poolForActor(actor) };
+    }, { actorId: S.actorId, idA: S.ids.a });
+    okA("pointer gesture reaches the bank-covered control", clickA.clicked === true, clickA.clicked);
+    okA("bank-covered gesture raises the confirmation", clickA.confirmed === true, clickA.confirmed);
+    okA("bank-covered gesture advances the level by one", afterA.level === S.before.levelA + 1, `${S.before.levelA}→${afterA.level}`);
+    okA("bank-covered gesture debits the per-skill bank by the cost", afterA.bank === S.before.bankA - S.costs.a, `${S.before.bankA}→${afterA.bank}`);
+    okA("bank-covered gesture leaves the fungible pool untouched", afterA.pool === S.before.pool, `${S.before.pool}→${afterA.pool}`);
+
+    const clickB = await clickArrow(S.appId, S.ids.b);
+    const afterB = await page.evaluate(async ({ actorId, idB }) => {
+      const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
+      const actor = game.actors.get(actorId); const s = actor.items.get(idB);
+      return { level: Number(s.system.level) || 0, bank: IP.bankForSkill(s), pool: IP.poolForActor(actor) };
+    }, { actorId: S.actorId, idB: S.ids.b });
+    okA("pointer gesture reaches the pool-covered control", clickB.clicked === true, clickB.clicked);
+    okA("pool-covered gesture advances the level by one", afterB.level === S.before.levelB + 1, `${S.before.levelB}→${afterB.level}`);
+    okA("pool-covered gesture debits the fungible pool by the cost", afterB.pool === afterA.pool - S.costs.b, `${afterA.pool}→${afterB.pool}`);
+    okA("pool-covered gesture leaves the empty bank at zero", afterB.bank === 0, afterB.bank);
+
+    // Handler hardening: blank the control's own row id in the DOM — the exact shape of the shipped
+    // regression — and the click must still resolve the document through the row's [data-item-id].
+    const G = await page.evaluate(async ({ actorId, idC }) => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const actor = game.actors.get(actorId); const s = actor.items.get(idC);
+      await s.setFlag("cp2020-augmented", "ip", 30);      // fund the out-of-reach row so a control paints
+      await sleep(900);                                    // let the flag write's re-render settle first
+      const arrow = actor.sheet.element?.querySelector(`.field.skill[data-item-id="${idC}"] .cp2020ae-ip-level-up`);
+      if (arrow) arrow.dataset.skillId = "";
+      return { arrowFound: !!arrow, blanked: arrow?.dataset?.skillId === "", level: Number(s.system.level) || 0 };
+    }, { actorId: S.actorId, idC: S.ids.c });
+    okA("funding the out-of-reach row paints a level control", G.arrowFound === true && G.blanked === true, `${G.arrowFound}/${G.blanked}`);
+    const clickC = await clickArrow(S.appId, S.ids.c);
+    const afterC = await page.evaluate(async ({ actorId, idC }) => {
+      const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
+      const actor = game.actors.get(actorId); const s = actor.items.get(idC);
+      return { level: Number(s.system.level) || 0, bank: IP.bankForSkill(s) };
+    }, { actorId: S.actorId, idC: S.ids.c });
+    okA("a control whose row id is blank still resolves through its row", clickC.clicked && afterC.level === G.level + 1, `${G.level}→${afterC.level}`);
+    okA("the fallback resolution debits the same bank the control names", afterC.bank === 0, afterC.bank);
+
+    // (d) the inert third store is no longer surfaced on the module's skill-item sheet.
+    const F = await page.evaluate(async ({ actorId, idA }) => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const s = game.actors.get(actorId).items.get(idA);
+      await s.sheet.render(true);
+      await sleep(900);
+      const el = s.sheet.element;
+      const out = {
+        ipField: !!el?.querySelector('input[name="system.ip"]'),
+        diffField: !!el?.querySelector('input[name="system.diffMod"]'),
+        levelField: !!el?.querySelector('input[name="system.level"]'),
+      };
+      await s.sheet.close();
+      return out;
+    }, { actorId: S.actorId, idA: S.ids.a });
+    okA("skill-item sheet no longer exposes the unspent improvement-point field", F.ipField === false, F.ipField);
+    okA("skill-item sheet still exposes the difficulty multiplier", F.diffField === true, F.diffField);
+    okA("skill-item sheet still exposes the level field", F.levelField === true, F.levelField);
+
+    await page.evaluate(async ({ actorId, prev }) => {
+      try { await game.actors.get(actorId)?.sheet?.close(); } catch {}
+      try { await game.actors.get(actorId)?.delete(); } catch {}
+      for (const [k, v] of Object.entries(prev)) { try { if (v !== undefined) await game.settings.set("cp2020-augmented", k, v); } catch {} }
+    }, { actorId: S.actorId, prev: S.prev });
+  } catch (e) {
+    console.error("IN-PAGE ERROR (part 3):", e?.stack || e?.message || e);
+    failures++;
+    await page.evaluate(async () => {
+      for (const x of game.actors.filter(x => x.name === "__PW__ IP Level Chain")) { try { await x.sheet?.close(); } catch {} await x.delete().catch(() => {}); }
+    }).catch(() => {});
+  }
+  console.log("\nIP level control: row identity, click chain, pool-contribution display\n" + A.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(58)} got=${c.got}`).join("\n"));
+  failures += A.checks.filter(c => !c.pass).length;
 
   const clean = pageErrors.length === 0;
   console.log(`  [${clean ? "PASS" : "FAIL"}] ${"0 console errors".padEnd(58)} got=${pageErrors.length}`);

@@ -94,7 +94,7 @@ export async function toggleSkillLock(actor) {
 
 /**
  * Build the in-sheet IP display payload for an actor: the global flags (Simple-mode pool, lock state,
- * GM pending visibility) plus a per-skill `{ cost, banked, pending, canLevel }` map. Reads the
+ * GM pending visibility) plus a per-skill `{ cost, banked, pending, canLevel, fromPool }` map. Reads the
  * relocation-boundary flag accessors so the in-sheet injection ([[ip-tracker-design]]) has a single
  * flag-based data source — the module mirror of the system's `_prepareIp`, but flag-stored so it
  * works on the vanilla cyberpunk2020 system.
@@ -111,8 +111,15 @@ export function ipDisplayForActor(actor) {
     const cost = ipCost(s);
     const banked = skillIp(s);
     // Dual-bucket (Model A): available = the skill's own bank + the fungible pool, in every mode.
-    const have = banked + pool;
-    bySkill[s.id] = { cost, banked, pending: skillPending(s), canLevel: have >= cost };
+    // The row must PRINT what the predicate SPENDS, so the payload carries the same breakdown the
+    // spend uses: `fromPool` is what the pool would put toward this raise (0 when the bank covers it,
+    // and 0 on a row nobody can pay for — an unaffordable row must not advertise a pool it can't use).
+    const spend = ipSpendBreakdown(banked, pool, cost);
+    bySkill[s.id] = {
+      cost, banked, pending: skillPending(s),
+      canLevel: spend.affordable,
+      fromPool: spend.affordable ? spend.fromPool : 0,
+    };
   }
   return { enabled: true, simple, locked: lock.locked, lockMode: lock.mode, pool, showPending: isGM && ipShowPending(), bySkill };
 }

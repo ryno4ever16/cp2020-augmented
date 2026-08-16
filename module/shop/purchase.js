@@ -1,5 +1,5 @@
 import { canShop, getShopPriceOverride } from "../settings.js";
-import { localize } from "../utils.js";
+import { isUnwornArmor, localize } from "../utils.js";
 import { isShopSetupMode } from "./setup-mode.js";
 
 const SCOPE = "cp2020-augmented";
@@ -193,11 +193,18 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
 
   // Setup mode posts nothing. A "Bought Kevlar for 0eb" card in the log is a purchase that did not
   // happen, and a GM furnishing twenty NPCs would fill the scrollback with twenty of them.
+  // Every armor entry in the packs ships `equipped: false`, so a coat bought here lands in inventory
+  // switched off. The receipt is the one place the buyer is already looking at the moment it happens,
+  // so it says so — one plain sentence appended to the existing card, no second card, no new surface.
+  const deliveredUnworn = isUnwornArmor(data);
   if (!setup) ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
-    content: game.i18n.format("CYBERPUNK.ShopBought", {
-      qty: n, name, cost: total, label: priceLabel ? ` (${priceLabel})` : ""
-    })
+    content: [
+      game.i18n.format("CYBERPUNK.ShopBought", {
+        qty: n, name, cost: total, label: priceLabel ? ` (${priceLabel})` : ""
+      }),
+      deliveredUnworn ? localize("ShopArmorUnworn") : null
+    ].filter(Boolean).join(" ")
   });
   return true;
   } finally {

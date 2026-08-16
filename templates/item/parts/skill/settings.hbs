@@ -4,8 +4,11 @@
     {{>(template "fields/boolean") label="Chipped" edit="system.isChipped"}}
 </div>
 
+{{!-- The base schema's `system.ip` is NOT surfaced here: the module banks per-skill IP in
+      flags.cp2020-augmented.ip (and the fungible pool on the actor), and no code anywhere spends
+      system.ip — an editable box for it only invited numbers that could never fund a raise. The field
+      itself is left alone in the schema; it is simply no longer offered. --}}
 <div class="field-list">
-    {{>(template "fields/number") label="ImprovementPoints" edit="system.ip"}}
     {{>(template "fields/number") label="DifficultyMod" edit="system.diffMod"}}
 </div>
 <div class="field-list">
