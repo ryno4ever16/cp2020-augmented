@@ -27,14 +27,26 @@
  *     the region is planted on the DECLARED axis rather than the target axis, and the shot ends in a
  *     RESOLUTION CARD — posted once the presentation is over, listing who the corridor caught, with the
  *     region still on the table and nothing applied until somebody presses its one Apply control
- * §11 the aim preview's TWO WHEELS — the plain one is the house WIDTH override (a metre a notch, floored
- *     at a metre, marked in the readout, planted on the region), shift+wheel is the reach fine-tune;
- *     read through the readout the rule derives, the confirmed corridor and the planted region, plus the
- *     board gate, both floors, the per-aim reset, and the plant's own floor
- * §12 a pattern nobody applied is still collected by its own clock (the card does not make it immortal)
+ * §11 the aim preview's ONE WHEEL — shift+wheel is the reach fine-tune (the band, the width and the
+ *     banded damage all follow it), and the retired width gesture moves NOTHING: a plain wheel leaves
+ *     the corridor exactly as it was, the state carries no width bias, and what survives the retirement
+ *     is the load's own printed widths and the one-metre floor
+ * §12 a pattern nobody applied KEEPS its card's pattern (the clocks are an orphan net, not a deadline)
  * §13 the save cadences — at Mortal BOTH saves are asked for, on their two clocks: one death prompt per
  *     application batch, a stun prompt per damage event; plus the stabilized gate this rail now shares
  *     with the single-target one, and the p.105 rule that clears stabilization before either can read it
+ * §14 a declared corridor can still MISS, and a miss goes to the grenade table — the rose, the drift, the
+ *     re-derivation from the muzzle, and the two rails agreeing on where the shell landed
+ * §15 WHICH FIGURE FIRED — the plant takes the corridor's origin from the figure the payload NAMES, not
+ *     from the first figure on the canvas answering the shooter's actor id (two linked figures, an
+ *     unlinked copy whose synthetic actor collides on that id, the unnamed fallback, and the drag-aim
+ *     repro end to end), plus the source guard covering the two sibling placements
+ * §16 THE BAND EDGES ARE THE FIRING WEAPON'S OWN RANGE, not fixed metres — the pure ladder by value at
+ *     every rung out of three different guns, the point-blank metre, the saturation past full range,
+ *     the compat edges a rangeless caller keeps, the load's printed widths, and the same aim point read
+ *     two different ways through the real preview and through the plant
+ * §17 A SCATTERED PATTERN SAYS SO — a forced miss driven through the real fire gesture raises exactly one
+ *     notification naming the rolled direction and distance, and a shot that lands raises none
  *
  * ⛔ The three cover regions, the showcase combat and the four review targets on this rig belong to the
  * user's morning review; every fixture here is named __PWK__SPREAD and is deleted on the way out, and
@@ -97,7 +109,13 @@ const res = await page.evaluate(async () => {
       if (!scene?.regions?.get?.(r.id)) continue;
       await r.delete().catch(() => {});
     }
+    // A deleted pattern whose card is still open flips that card to CLEARED, and that write is an async
+    // hook this loop does not await. Settling here keeps the teardown from deleting the card out from
+    // under the write that is already in flight.
+    await sleep(400);
   };
+  /** The chat card a planted pattern records as its own, or null. */
+  const cardOf = (zone) => game.messages.get(String(zone?.flags?.[SCOPE]?.cardMessageId ?? "")) ?? null;
   const wipeCards = async () => {
     for (const m of [...game.messages].filter(m => /cp-confirm-spread-zone|cp-spread-resolve-list|cp-spread-result-list/.test(m.content ?? ""))) await m.delete().catch(() => {});
   };
@@ -247,9 +265,22 @@ const res = await page.evaluate(async () => {
     JSON.stringify({ band: zf.band, shells: zf.shells, createdRound: zf.createdRound, createdAt: !!zf.createdAt, combatId: zf.combatId }));
   ok("§4 Core's own banded damage default for the band that resolved",
     zf.dmgFormula === { Short: "4d6", Medium: "3d6", Long: "2d6" }[zf.band], `${zf.band} → ${zf.dmgFormula}`);
-  // The lane is 20m at this scene's 5m grid, which is the Medium band — so the geometry above is
-  // pinned to a known band rather than to whatever the fixtures happened to land on.
-  ok("§4 the fixture lane resolves to the Medium band", zf.band === "Medium", zf.band);
+  // ⚠ THE EXPECTED BAND IS MEASURED, NOT TYPED (fixed 2026-08-16 — this leg was the suite's long-standing
+  // "environmental" red). It used to assert "Medium", on the note that *"the lane is 20 m at this
+  // scene's 5 m grid"*: a fact about ONE scene, written into a leg that runs on whatever scene the rig
+  // is on. On a one-metre grid the same fixture lane is four metres, which is the Close row, so the leg
+  // reported a defect that was really a difference of scenes. The INTENT survives — the geometry above
+  // is pinned to a band this leg knows rather than to whatever the fixtures happened to land on — by
+  // measuring the lane and asking the shared ladder, with no weapon range, exactly as the plant did.
+  const laneTok = canvas.tokens.get(target.id) ?? null;
+  const laneShooter = canvas.tokens.get(shooterTok.id) ?? null;
+  const laneM = (laneTok && laneShooter)
+    ? (await import(`/modules/${SCOPE}/module/vehicle/vehicle-grid.js`)).pixelsToMeters(scene,
+        Math.hypot(laneTok.center.x - laneShooter.center.x, laneTok.center.y - laneShooter.center.y))
+    : NaN;
+  ok("§4 the fixture lane resolves to the band its own measured distance earns, by value",
+    zf.band === lookup.spreadBandSpec(laneM).band,
+    `${laneM.toFixed(2)}m → expected ${lookup.spreadBandSpec(laneM).band}, got ${zf.band}`);
   ok("§4 behaviors read as a Collection (.size, never .length)", zone?.behaviors?.size === 0 && zone?.behaviors?.length === undefined,
     `size=${zone?.behaviors?.size} length=${zone?.behaviors?.length}`);
 
@@ -369,17 +400,27 @@ const res = await page.evaluate(async () => {
   swept = await hooks._sweepStaleSpreadZones();
   ok("§6 the sweep leaves a FRESH out-of-combat pattern alone", swept === 0 && myZones().length === 1, `swept=${swept} left=${myZones().length}`);
   await clockZone.setFlag(SCOPE, "createdAt", Date.now() - hooks.SPREAD_ZONE_TTL_MS - 1000);
+  // ⭐ THE SWEEP IS AN ORPHAN NET, NOT A DEADLINE (user ruling 2026-08-14). Past the TTL it still leaves
+  // a pattern whose card is open — that is a decision somebody has not made yet — and collects it only
+  // once there is nobody left to ask. Both halves in one leg, so the count is unchanged.
+  const sweptWhileOpen = await hooks._sweepStaleSpreadZones();
+  await cardOf(clockZone)?.delete()?.catch?.(() => {});
+  await sleep(300);
   swept = await hooks._sweepStaleSpreadZones();
   await sleep(400);
-  ok("§6 the sweep expires one past the TTL", swept === 1 && myZones().length === 0, `swept=${swept} left=${myZones().length}`);
-  // Litter from the build that had no expiry at all carries neither flag, and must not be immortal.
+  ok("§6 past the TTL the sweep keeps a pattern whose card is open and collects it once the card is gone",
+    sweptWhileOpen === 0 && swept === 1 && myZones().length === 0,
+    `whileOpen=${sweptWhileOpen} afterCardGone=${swept} left=${myZones().length}`);
+  // Litter from the build that had no expiry at all carries neither flag, and must not be immortal. It
+  // records no card either, so nobody can be asked about it and the net is the only thing that owns it.
   await hooks._placeSpreadZone(basePayload());
   await sleep(400);
   await myZones()[0].unsetFlag(SCOPE, "createdAt");
   await myZones()[0].setFlag(SCOPE, "combatId", "");
+  await myZones()[0].unsetFlag(SCOPE, "cardMessageId");
   swept = await hooks._sweepStaleSpreadZones();
   await sleep(300);
-  ok("§6 a pre-rule pattern with no timestamp is swept", swept === 1 && myZones().length === 0, `swept=${swept} left=${myZones().length}`);
+  ok("§6 a pre-rule pattern with no timestamp and no card is swept", swept === 1 && myZones().length === 0, `swept=${swept} left=${myZones().length}`);
 
   /* ── §7  untargeted aim + cover occlusion ───────────────────────────────────────────────── */
   // Token rotation 90 → canvas heading 180° → the shot points WEST. Chosen because it is the exact
@@ -619,7 +660,11 @@ const res = await page.evaluate(async () => {
   await sleep(300);
   const aimWorld = { x: shooterC.x, y: shooterC.y + aimReachPx };
   const expectM = grid.pixelsToMeters(scene, aimReachPx);
-  const expectSpec = lookup.spreadBandSpec(expectM, { medium: 2 });
+  // The fixture gun's own Long range, which is what the band edges are fractions of (Core p.99) — the
+  // same number the sheet hands the preview and the seam stamps on the payload. Named here so every
+  // expectation in this section measures the aim against the ladder the gesture actually used.
+  const aimGunRangeM = Number(oneShell.system?.range);
+  const expectSpec = lookup.spreadBandSpec(expectM, { medium: 2 }, aimGunRangeM);
   const expectDmg = lookup.spreadBandDamage(expectSpec.band, {});
   // Half the aimed-at figure's own square, in metres — the overshoot the corridor is planted with.
   const expectOvershootM = grid.pixelsToMeters(scene, Number(canvas.dimensions.size)) / 2;
@@ -716,6 +761,9 @@ const res = await page.evaluate(async () => {
     `reach ${aimOnPayload?.reachM} + overshoot ${expectOvershootM} → planted ${aimOnPayload?.lengthM}`);
   ok("§10 the magazine is spent by the ROLL and by exactly one round, by value",
     magazine() === magBefore - 1, `${magBefore} → ${magazine()}`);
+  ok("§10 the fired payload carries the WEAPON'S OWN RANGE, which the band edges are fractions of, by value",
+    Number(firedPayload?.spreadRangeM) === aimGunRangeM,
+    `${firedPayload?.spreadRangeM} vs the gun's ${aimGunRangeM}`);
   ok("§10 the pre-roll question and the fired payload's own derivation agree",
     lookup.weaponSpreadFlowMode(aimGun) === lookup.spreadFlowModeOf(firedPayload ?? {}),
     `${lookup.weaponSpreadFlowMode(aimGun)} / ${lookup.spreadFlowModeOf(firedPayload ?? {})}`);
@@ -862,13 +910,14 @@ const res = await page.evaluate(async () => {
   ok("§10 the aim preview writes no document of its own (it is a client-local ghost)",
     !/createEmbeddedDocuments|\.update\(|setFlag/.test(placeSrc));
 
-  /* ── §11  the aim preview's TWO WHEELS ───────────────────────────────────────────────────── */
-  // ⭐ THE MAPPING IS THE THING UNDER TEST (user ruling 2026-08-13: the wheel "lengthens instead of
-  // widening… It should go meter by meter"). The PLAIN wheel is the corridor's WIDTH — a house override
-  // added on top of the book's banded width, a metre a notch, floored so a corridor is never narrower
-  // than a metre. SHIFT+wheel is the reach fine-tune the plain wheel used to be. The band and the banded
-  // damage stay a pure function of the REACH either way, so a width override must move neither — which
-  // is what most of the negatives below say.
+  /* ── §11  the aim preview's ONE WHEEL ────────────────────────────────────────────────────── */
+  // ⏪⏪ THE WIDTH WHEEL IS RETIRED (2026-08-16), and its ABSENCE is the thing under test. The shotgun
+  // table (Core p.109) states one width per range band and the band edges are fractions of the firing
+  // weapon's own range (p.99), so a corridor's width is a FUNCTION of where it is pointed and never a
+  // free knob — there was no book behind the ±1 m notch. What survives is everything the book does
+  // state: the load's own printed `spreadWidth*` numbers, and the one-metre floor. SHIFT+wheel is
+  // untouched: it is the reach fine-tune, and the band, the width and the banded damage all follow the
+  // reach because all three are derived from it.
   //
   // Every leg reads the DERIVED consequence — the readout's sentence, then the confirmed corridor's own
   // numbers, then the planted region's own flag — rather than poking at the private state behind them.
@@ -890,75 +939,106 @@ const res = await page.evaluate(async () => {
     await sleep(120);
   };
   const readout = () => document.querySelector(".cp-spread-preview-readout")?.textContent ?? "";
-  // What the readout must SAY for a given reach and width override — re-derived from the same shared
-  // ladder the preview reads plus the house floor, so this is a re-derivation of the rule rather than a
-  // copy of the sentence. A non-zero override carries the house mark; a zero one must not.
-  const widthFor = (reachM, biasM = 0) =>
-    Math.max(placement.SPREAD_MIN_WIDTH_M, lookup.spreadBandSpec(reachM).widthM + biasM);
-  const readoutFor = (reachM, biasM = 0) => {
-    const spec = lookup.spreadBandSpec(reachM);
-    const line = `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${widthFor(reachM, biasM)}m wide, ${lookup.spreadBandDamage(spec.band)}`;
-    return biasM === 0 ? line : `${line} ${game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")}`;
+  // What the readout must SAY for a given reach — re-derived from the same shared ladder the preview
+  // reads plus the floor, so this is a re-derivation of the rule rather than a copy of the sentence.
+  // `widths` mirrors whatever the gesture under test was armed with; the previews below are armed
+  // DIRECTLY and name no weapon range, so the ladder is asked without one here too.
+  const widthFor = (reachM, widths = {}) =>
+    Math.max(placement.SPREAD_MIN_WIDTH_M, lookup.spreadBandSpec(reachM, widths).widthM);
+  const readoutFor = (reachM, widths = {}) => {
+    const spec = lookup.spreadBandSpec(reachM, widths);
+    return `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${widthFor(reachM, widths)}m wide, ${lookup.spreadBandDamage(spec.band)}`;
   };
 
-  /* §11a — the PLAIN wheel widens the corridor, a metre a notch, and moves nothing else */
+  /* §11a — a PLAIN wheel moves NOTHING: the retired gesture is gone, not merely capped */
   let wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);           // cursor reach = 15m on this scene's grid → Medium band
   const baseReadout = readout();
-  ok("§11 the wheel section starts on the book's own banded width, unmarked", baseReadout === readoutFor(expectM),
+  ok("§11 the wheel section starts on the band's own width", baseReadout === readoutFor(expectM),
     `${baseReadout} | expected ${readoutFor(expectM)}`);
 
-  // ⚠ THE NEGATIVE IS READ AFTER A RE-AIM, ON PURPOSE. A wheel the preview declines still reaches CORE,
-  // which zooms the board with it — and a zoom moves the world point the (unmoved) cursor is over, so the
-  // corridor's cursor-derived reach changes even though the preview added nothing. Re-aiming at the same
-  // WORLD point cancels the zoom's contribution and leaves only the thing under test: whether an
-  // off-board wheel added a step of its own. Three of them, so a single leaked step would show.
+  // ⚠ EVERY WHEEL NEGATIVE IS READ AFTER A RE-AIM, ON PURPOSE. A wheel the preview declines still reaches
+  // CORE, which zooms the board with it — and a zoom moves the world point the (unmoved) cursor is over,
+  // so the corridor's cursor-derived reach changes even though the preview added nothing. Re-aiming at
+  // the same WORLD point cancels the zoom's contribution and leaves only the thing under test: whether
+  // the gesture added a step of its own.
   for (let i = 0; i < 3; i++) document.body.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true }));
   await sleep(200);
   await aimAt(aimWorld.x, aimWorld.y);
   ok("§11 a wheel that did not land on the board changes nothing at all (negative)",
     readout() === baseReadout, `${baseReadout} → ${readout()}`);
 
-  await wheelOnBoard(-100, 2);                   // two notches wider, on the board this time
-  ok("§11 two plain notches widen the corridor by two metres and say so, by value",
-    readout() === readoutFor(expectM, 2), `${readout()} | expected ${readoutFor(expectM, 2)}`);
-  ok("§11 the readout carries the house-override mark once the width is the table's, not the book's",
-    readout().includes(game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")) && !baseReadout.includes(game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")),
-    `${baseReadout} → ${readout()}`);
-  ok("§11 and the band and the banded damage are untouched by a width override (negative)",
-    readout().includes(game.i18n.localize(`CYBERPUNK.SpreadBand${expectSpec.band}`)) && readout().includes(expectDmg),
-    `${readout()} | band ${expectSpec.band} dmg ${expectDmg}`);
-  // Confirm and read the corridor back: the width carries the override, the reach is still the cursor's.
+  // THE RETIREMENT, read as behaviour: notches ON the board, no shift held, in both directions — and the
+  // sentence must come back byte-for-byte the band's own.
+  await wheelOnBoard(-100, 4);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 four plain notches UP widen nothing — the corridor is still the band's, by value (negative)",
+    readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
+  await wheelOnBoard(100, 4);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 and four plain notches DOWN narrow nothing either (negative)",
+    readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
+  ok("§11 no width mark is ever appended, because no width is ever the table's any more (negative)",
+    !readout().includes(game.i18n.localize("CYBERPUNK.SpreadWidthHouseMark")), readout());
+  // Confirm and read the corridor back: the width is the band's and the reach is the cursor's.
   let wheelClick = await aimAt(aimWorld.x, aimWorld.y);
   canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
   let wheelAim = await wheelGesture;
-  ok("§11 the confirmed corridor's WIDTH carries the plain wheel's notches, by value",
-    Number(wheelAim?.widthM) === widthFor(expectM, 2), `${lookup.spreadBandSpec(expectM).widthM} + 2 → ${wheelAim?.widthM}`);
-  ok("§11 and its reach is still the cursor's own, unmoved by the plain wheel (negative)",
-    Math.abs(Number(wheelAim?.reachM) - expectM) < 0.01 && wheelAim?.band === expectSpec.band,
+  ok("§11 the confirmed corridor's WIDTH is the band's, with eight plain notches spent on it, by value",
+    Number(wheelAim?.widthM) === widthFor(expectM), `${wheelAim?.widthM} vs the band's ${widthFor(expectM)}`);
+  ok("§11 and its reach and band are the cursor's own (negative)",
+    Math.abs(Number(wheelAim?.reachM) - expectM) < 0.01 && wheelAim?.band === lookup.spreadBandSpec(expectM).band,
     JSON.stringify({ reachM: wheelAim?.reachM, band: wheelAim?.band }));
-  // End to end: the overridden width is what the REGION is planted with, not just what the ghost showed.
+  // End to end: what the region is planted with is the band's width too.
   await wipeZones(); await wipeCards();
   await hooks._placeSpreadZone(basePayload({ shotsFired: 1, spreadAim: wheelAim }));
   await sleep(500);
-  ok("§11 the planted region is the width the table set, by value",
-    Number(myZones()[0]?.flags?.[SCOPE]?.widthM) === widthFor(expectM, 2),
+  ok("§11 the planted region carries the band's width, by value",
+    Number(myZones()[0]?.flags?.[SCOPE]?.widthM) === widthFor(expectM),
     String(myZones()[0]?.flags?.[SCOPE]?.widthM));
   await wipeZones(); await wipeCards();
+  // The state behind the readout carries no width bias at all — the field is GONE, not zeroed. The
+  // house style keeps the removed handler as a commented revert at its old site, so the guard is that
+  // every surviving mention of it is inside a comment rather than that the string is absent.
+  const biasLines = placeSrc.split("\n").filter(l => /widthBiasM/.test(l));
+  ok("§11 the retired width bias survives only as the commented revert, never as live code (negative, source)",
+    biasLines.every(l => /^\s*(\*|\/\/|\/\*)/.test(l)),
+    `${biasLines.length} mention(s): ${biasLines.map(l => l.trim().slice(0, 44)).join(" | ")}`);
+  ok("§11 and the readout no longer marks any width as the table's (negative, source)",
+    !/readout\.textContent\s*=\s*spec\.widthOverridden/.test(placeSrc)
+    && !/widthOverridden:/.test(placeSrc.split("\n").filter(l => !/^\s*(\*|\/\/)/.test(l)).join("\n")),
+    "widthOverridden in live preview code");
 
-  /* §11b — the width floor holds: a corridor is never narrower than a metre */
-  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  /* §11b — WHAT SURVIVED THE RETIREMENT: the load's own printed widths, and the one-metre floor */
+  const loadWidths = { short: 5, medium: 6, long: 7 };
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable, widths: loadWidths });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
-  await wheelOnBoard(100, 40);                   // far more notches down than there is width to give
-  ok("§11 narrowing stops at the house floor, by value",
-    readout() === readoutFor(expectM, placement.SPREAD_MIN_WIDTH_M - lookup.spreadBandSpec(expectM).widthM),
+  // WHICH of the three printed numbers applies is the band's business, and the band is this scene's
+  // metres — so the expectation is re-derived rather than typed, and the leg also pins that the number
+  // taken is NOT the band's own default (which is what makes it a proof the override was read).
+  const loadWidthHere = lookup.spreadBandSpec(expectM, loadWidths).widthM;
+  ok("§11 a load's own printed width for this band is what the corridor is drawn at, by value",
+    readout() === readoutFor(expectM, loadWidths) && readout().includes(`${loadWidthHere}m`)
+    && loadWidthHere !== lookup.spreadBandSpec(expectM).widthM,
+    `${readout()} | expected ${readoutFor(expectM, loadWidths)} (band default ${lookup.spreadBandSpec(expectM).widthM}m)`);
+  wheelClick = await aimAt(aimWorld.x, aimWorld.y);
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
+  wheelAim = await wheelGesture;
+  ok("§11 and it is that printed width the corridor confirms at, by value",
+    Number(wheelAim?.widthM) === loadWidthHere, `${wheelAim?.widthM} vs the load's printed ${loadWidthHere}`);
+
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable, widths: { medium: 0.25 } });
+  await sleep(300);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 a load printing a sliver of a width is floored at the ruled metre, by value",
+    readout() === readoutFor(expectM, { medium: placement.SPREAD_MIN_WIDTH_M }),
     `${readout()} | expected width ${placement.SPREAD_MIN_WIDTH_M}`);
   wheelClick = await aimAt(aimWorld.x, aimWorld.y);
   canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
   wheelAim = await wheelGesture;
-  ok("§11 and the floored corridor confirms at the floor, by value",
+  ok("§11 and confirms at the floor rather than under it, by value",
     Number(wheelAim?.widthM) === placement.SPREAD_MIN_WIDTH_M, String(wheelAim?.widthM));
   ok("§11 the floor is the ruled one metre", placement.SPREAD_MIN_WIDTH_M === 1, String(placement.SPREAD_MIN_WIDTH_M));
 
@@ -967,7 +1047,7 @@ const res = await page.evaluate(async () => {
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
   await wheelOnBoard(-100, 3, true);             // three steps further out
-  ok("§11 three SHIFT steps push the reach out, and the width stays the book's (negative on the mark)",
+  ok("§11 three SHIFT steps push the reach out, and the width is still the band's",
     readout() === readoutFor(expectM + 3), `${readout()} | expected ${readoutFor(expectM + 3)}`);
   wheelClick = await aimAt(aimWorld.x, aimWorld.y);
   canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
@@ -980,16 +1060,22 @@ const res = await page.evaluate(async () => {
     JSON.stringify({ band: wheelAim?.band, widthM: wheelAim?.widthM }));
 
   /* §11d — enough shift steps cross a band boundary, and the whole corridor changes with it */
+  // ⚠ THE STEP COUNT IS DERIVED FROM THE SCENE, not typed. This preview is armed with no weapon range,
+  // so its boundaries are the ladder's compat edges — and how many one-metre notches it takes to reach
+  // the far one depends on how many metres a square is worth on the scene the rig happens to be on. A
+  // hard-coded 11 was written against a 5 m grid and simply never crossed anything on a 1 m one.
+  const stepsToLong = Math.ceil(lookup.SPREAD_LEGACY_MEDIUM_EDGE_M - expectM) + 1;
   wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
-  await wheelOnBoard(-100, 11, true);            // 15m + 11 → 26m, past the Medium/Long boundary at 25m
+  await wheelOnBoard(-100, stepsToLong, true);
   ok("§11 crossing the band boundary re-derives the band, the width AND the formula, by value",
-    readout() === readoutFor(expectM + 11) && lookup.spreadBandSpec(expectM + 11).band === "Long",
-    `${readout()} | expected ${readoutFor(expectM + 11)}`);
+    readout() === readoutFor(expectM + stepsToLong) && lookup.spreadBandSpec(expectM + stepsToLong).band === "Long",
+    `${readout()} | expected ${readoutFor(expectM + stepsToLong)} after ${stepsToLong} notches from ${expectM}m`);
 
   /* §11e — a shift wheel down pulls back, and stops at the plantable floor */
-  await wheelOnBoard(100, 40, true);             // far more steps down than there is corridor to give
+  // Far more steps down than there is corridor to give, counted from wherever §11d left the reach.
+  await wheelOnBoard(100, stepsToLong + 40, true);
   ok("§11 pulling back stops at the shortest corridor the plant accepts, by value",
     readout() === readoutFor(placement.SPREAD_MIN_LENGTH_M), `${readout()} | expected ${readoutFor(placement.SPREAD_MIN_LENGTH_M)}`);
   wheelClick = await aimAt(aimWorld.x, aimWorld.y);
@@ -998,11 +1084,11 @@ const res = await page.evaluate(async () => {
   ok("§11 and the floored corridor confirms at that floor rather than at the cursor, by value",
     Math.abs(Number(wheelAim?.reachM) - placement.SPREAD_MIN_LENGTH_M) < 0.01, String(wheelAim?.reachM));
 
-  /* §11f — the override is per-aim: a fresh gesture starts on the book's width again */
+  /* §11f — the reach bias is per-aim: a fresh gesture starts on the cursor's own distance again */
   wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
-  ok("§11 a NEW aim starts on the book's banded width — the override does not outlive its gesture (negative)",
+  ok("§11 a NEW aim starts on the cursor's own reach — the fine-tune does not outlive its gesture (negative)",
     readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
   placement.cancelSpreadPreview();
   await wheelGesture;
@@ -1011,18 +1097,19 @@ const res = await page.evaluate(async () => {
   ok("§11 the whole section spent nothing — the magazine is untouched, by value",
     magazine() === wheelMagBefore, `${wheelMagBefore} → ${magazine()}`);
   ok("§11 and planted no pattern of its own beyond the one it wiped (negative)", myZones().length === 0, String(myZones().length));
-  // The suppressive lane's own widths are NOT the shooter's to override — the ruling is spread-corridor
-  // only, so its preview must carry no width gesture at all.
+  // The suppressive lane never had the retired bias and must not acquire one on the way out: its own
+  // width is that lane's business (a zone the shooter sizes), not this ladder's.
   const suppSrc = await (await fetch(`/modules/${SCOPE}/module/combat/suppressive-placement.js`, { cache: "no-store" })).text();
-  ok("§11 the suppressive preview took no width override (the ruling is the shot pattern's alone) (negative)",
+  ok("§11 the suppressive preview carries no shot-pattern width bias either (negative)",
     !/widthBiasM/.test(suppSrc));
   await canvas.animatePan({ ...viewBefore, duration: 0 }).catch(() => {});
   await sleep(200);
 
-  /* ── §12  an ignored resolution card still loses its pattern to the clocks ────────────────── */
-  // The region now outlives the card that asks about it, so the two expiry rules are what stop an
-  // unpressed card from leaving a corridor on the table forever. Driven on the wall clock, which is the
-  // rule that owns a pattern thrown outside an encounter.
+  /* ── §12  an ignored resolution card KEEPS its pattern; an orphaned pattern does not ──────── */
+  // ⭐ REVERSED BY THE 2026-08-14 RULING. The clocks used to take the pattern out from under an
+  // unpressed card, which is what left the card's button resolving nothing. A card nobody has answered
+  // is now a decision still owed and the pattern stays; the clock keeps only the patterns nobody can be
+  // asked about. Driven on the wall clock, the rule that owns a pattern thrown outside an encounter.
   await wipeZones(); await wipeCards();
   await hooks._placeSpreadZone(basePayload({ shotsFired: 1 }));
   await sleep(400);
@@ -1031,8 +1118,8 @@ const res = await page.evaluate(async () => {
   await ignored.setFlag(SCOPE, "createdAt", Date.now() - hooks.SPREAD_ZONE_TTL_MS - 1000);
   const sweptIgnored = await hooks._sweepStaleSpreadZones();
   await sleep(400);
-  ok("§12 a pattern nobody applied is collected by its own clock, card or no card",
-    sweptIgnored === 1 && myZones().length === 0, `swept=${sweptIgnored} left=${myZones().length}`);
+  ok("§12 an unanswered card keeps its pattern past the clock (the apply cannot go out of date)",
+    sweptIgnored === 0 && myZones().length === 1, `swept=${sweptIgnored} left=${myZones().length}`);
   await wipeZones(); await wipeCards();
 
   /* ── §13  the two save cadences — BOTH saves at Mortal, on their two different clocks ───────── */
@@ -1213,16 +1300,29 @@ const res = await page.evaluate(async () => {
   ok("§14 a scatter past the band ladder's end lands in the outermost band and no further",
     scLong.band === "Long" && scLong.widthM === 3 && lookup.spreadBandDamage(scLong.band) === "2d6",
     JSON.stringify({ reachM: scLong.reachM, band: scLong.band, widthM: scLong.widthM }));
-  // The table's house width override survives the scatter: it is recovered from the declared corridor
-  // and re-applied on top of whatever width the NEW band earns.
+  // ⏪ THE DECLARED WIDTH IS NOT CARRIED ACROSS THE SCATTER, and that changed with the width wheel's
+  // retirement (2026-08-16). While the wheel existed this function recovered the table's ±1 m notch from
+  // the declared corridor and re-applied it to the new band; now a declared width is always either the
+  // band's own or the load's printed one, and both re-derive correctly from the new band by themselves.
+  // So a corridor handed an off-ladder width lands at the NEW BAND's width, not at that width plus a
+  // recovered difference.
   const scHouse = hooks.scatteredSpreadCorridor({
     originX: 0, originY: 0, declared: { ...scDeclared, widthM: 4 }, pixelsPerMeter: 10, dirFace: 2, distFace: 7,
   });
-  ok("§14 a house width override rides the scatter — +2 m over the book, still +2 m after",
-    scHouse.widthM === lookup.spreadBandSpec(scHouse.reachM).widthM + 2, String(scHouse.widthM));
-  ok("§14 and the override can never take the scattered corridor under the one-metre floor",
+  ok("§14 an off-ladder declared width does not ride the scatter — the new band's width is what lands, by value",
+    scHouse.widthM === lookup.spreadBandSpec(scHouse.reachM).widthM && scHouse.widthM !== 4,
+    `${scHouse.widthM} vs the new band's ${lookup.spreadBandSpec(scHouse.reachM).widthM}`);
+  // What DOES survive is the load's own printed widths, because they are read on the new band directly.
+  const scLoad = hooks.scatteredSpreadCorridor({
+    originX: 0, originY: 0, declared: scDeclared, widths: { short: 5, medium: 6, long: 7 },
+    pixelsPerMeter: 10, dirFace: 2, distFace: 7,
+  });
+  ok("§14 a load's printed width for the band it lands in is what the scattered corridor takes, by value",
+    scLoad.band === "Medium" && scLoad.widthM === 6, JSON.stringify({ band: scLoad.band, widthM: scLoad.widthM }));
+  ok("§14 and no scattered corridor is ever narrower than the one-metre floor",
     hooks.scatteredSpreadCorridor({
-      originX: 0, originY: 0, declared: { ...scDeclared, widthM: 1 }, pixelsPerMeter: 10, dirFace: 3, distFace: 10,
+      originX: 0, originY: 0, declared: { ...scDeclared, widthM: 1 }, widths: { long: 0.2 },
+      pixelsPerMeter: 10, dirFace: 3, distFace: 10,
     }).widthM >= placement.SPREAD_MIN_WIDTH_M);
   // Off the map: the centre is clamped onto the scene rect rather than being left where nobody can read it.
   const rect = { x: 0, y: 0, width: 210, height: 210 };
@@ -1466,6 +1566,524 @@ const res = await page.evaluate(async () => {
         { x: landedPt.x, y: landedPt.y }),
       say(fx.declaredAimPointOf(basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }), shooterPlaceable)));
     await wipeZones(); await wipeCards();
+  }
+
+  /* ── §15  THE ORIGIN IS THE FIGURE THAT FIRED, not the actor's first figure ───────────────── */
+  // The plant rebuilds the corridor as AN ANGLE AND A LENGTH FROM AN ORIGIN, and it used to find that
+  // origin by scanning the canvas for the first figure whose actor id matched the payload's. An actor id
+  // cannot name a figure: two tokens of one actor share it, and an UNLINKED copy's synthetic actor
+  // answers the base actor's id as well. So an actor with two figures on the board had every pattern
+  // planted from whichever one the canvas drew first — same heading, same reach, same width, the whole
+  // polygon translated by the distance between the two figures (reported from the table 2026-08-15,
+  // reproduced end to end). The seam has NAMED the firing figure on the payload since it started
+  // capturing it at the trigger pull; this section pins that the plant reads that name.
+  await wipeZones(); await wipeCards();
+  {
+    const sq = Number(canvas.dimensions.size);
+    const rect15 = canvas.dimensions.sceneRect;
+    const inX = (x) => Math.min(Math.max(x, rect15.x), rect15.x + rect15.width - sq);
+    const inY = (y) => Math.min(Math.max(y, rect15.y), rect15.y + rect15.height - sq);
+    // Two more figures of the ONE shooter, far enough off that a plant from the wrong one cannot be
+    // mistaken for rounding: a LINKED duplicate (the dragged-out second token) and an UNLINKED copy
+    // (the id-collision class — its synthetic actor answers the base actor's id).
+    const [gunnerTwo] = await scene.createEmbeddedDocuments("Token", [{
+      name: "__PWK__SPREAD Gunner Two", actorId: shooter.id, actorLink: true,
+      x: inX(shooterTok.x), y: inY(shooterTok.y + 5 * sq), width: 1, height: 1, rotation: 0,
+    }]);
+    const [gunnerCopy] = await scene.createEmbeddedDocuments("Token", [{
+      name: "__PWK__SPREAD Gunner Copy", actorId: shooter.id, actorLink: false,
+      x: inX(shooterTok.x + 9 * sq), y: inY(shooterTok.y + 5 * sq), width: 1, height: 1, rotation: 0,
+    }]);
+    await sleep(700);
+
+    const twoPl  = canvas.tokens.get(gunnerTwo.id) ?? null;
+    const copyPl = canvas.tokens.get(gunnerCopy.id) ?? null;
+    const onePl  = canvas.tokens.get(shooterTok.id) ?? null;
+    const mineOnBoard = () => (canvas?.tokens?.placeables ?? []).filter(t => t.actor?.id === shooter.id);
+    // WHAT THE OLD SCAN WOULD HAVE ANSWERED, written as the literal expression the plant used to run —
+    // read rather than assumed, because draw order is the canvas's business and the whole point of this
+    // section is that it must stop being the plant's.
+    const scanned = (canvas?.tokens?.placeables ?? []).find(t => t.actor?.id === shooter.id) ?? null;
+    const mOf = (px) => grid.pixelsToMeters(scene, px);
+    const gapM = (a, b) => (a && b) ? mOf(Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)) : NaN;
+    const say15 = (p) => p ? `(${Number(p.x).toFixed(0)}, ${Number(p.y).toFixed(0)})` : "null";
+    const sayOrigin = (r) => r ? `(${Number(r.originX).toFixed(0)}, ${Number(r.originY).toFixed(0)})` : "null";
+
+    ok("§15 three figures of ONE actor stand on the board, apart from each other",
+      mineOnBoard().length === 3 && gapM(onePl, twoPl) > 2 && gapM(twoPl, copyPl) > 2 && gapM(onePl, copyPl) > 2,
+      `count=${mineOnBoard().length} one↔two ${gapM(onePl, twoPl).toFixed(1)}m two↔copy ${gapM(twoPl, copyPl).toFixed(1)}m one↔copy ${gapM(onePl, copyPl).toFixed(1)}m`);
+    ok("§15 the UNLINKED copy's own actor answers the base actor's id — the collision the scan cannot see",
+      copyPl?.actor?.isToken === true && copyPl?.actor?.id === shooter.id,
+      `isToken=${copyPl?.actor?.isToken} id=${copyPl?.actor?.id} base=${shooter.id}`);
+    ok("§15 so an actor-id scan can only answer ONE of the three, whichever the canvas drew first",
+      !!scanned && mineOnBoard().every(t => t.actor?.id === scanned.actor?.id),
+      `scan answers ${scanned?.document?.name ?? scanned?.name}`);
+    // THE PREMISE THE TWO NEGATIVES BELOW REST ON. If draw order ever stops answering the first-placed
+    // figure this leg reds and says so, rather than letting a negative pass because the two answers
+    // happened to coincide.
+    ok("§15 and the one it answers is the figure that was on the board FIRST, not either duplicate",
+      scanned?.id === shooterTok.id, `${scanned?.document?.name ?? scanned?.name} · expected __PWK__SPREAD Gunner`);
+
+    // A corridor declared FROM a given figure, so the aim record and the figure agree and the only
+    // question left for the plant is which figure it takes the origin off.
+    const aimFrom = (pl, reachM = 8) => ({
+      sceneId: scene.id, originX: pl.center.x, originY: pl.center.y,
+      angleDeg: 0, reachM, lengthM: reachM + scOvershootM, widthM: 2, band: "Medium", dmgFormula: "3d6",
+    });
+    const plantFrom = async (over) => {
+      await wipeZones(); await wipeCards();
+      await hooks._placeSpreadZone(basePayload({ shotsFired: 1, attackTotal: 30, toHitDC: 15, ...over }));
+      await sleep(600);
+      return myZones()[0]?.flags?.[SCOPE] ?? {};
+    };
+    const plantedAt = (f) => (f && f.originX !== undefined) ? { x: Number(f.originX), y: Number(f.originY) } : null;
+    const onCentre = (f, pl) => { const p = plantedAt(f); return !!p && !!pl && Math.abs(p.x - pl.center.x) < 0.5 && Math.abs(p.y - pl.center.y) < 0.5; };
+
+    // §15a — the payload NAMES the figure, and the plant takes the origin off that one.
+    const namedTwo = await plantFrom({ attackerTokenId: gunnerTwo.id, spreadAim: aimFrom(twoPl) });
+    ok("§15 a payload naming the SECOND figure plants the corridor from the second figure, by value",
+      onCentre(namedTwo, twoPl),
+      `planted ${say15(plantedAt(namedTwo))} · fired-from ${say15(twoPl?.center)} · first figure ${say15(scanned?.center)}`);
+    ok("§15 and not from the figure the actor-id scan reaches (negative — this is where it used to plant)",
+      !!plantedAt(namedTwo) && Math.hypot(plantedAt(namedTwo).x - (scanned?.center?.x ?? 0), plantedAt(namedTwo).y - (scanned?.center?.y ?? 0)) > sq,
+      `planted ${say15(plantedAt(namedTwo))} · scan's figure ${say15(scanned?.center)}`);
+
+    const namedCopy = await plantFrom({ attackerTokenId: gunnerCopy.id, spreadAim: aimFrom(copyPl) });
+    ok("§15 a payload naming the UNLINKED copy plants from the copy, id collision and all, by value",
+      onCentre(namedCopy, copyPl),
+      `planted ${say15(plantedAt(namedCopy))} · fired-from ${say15(copyPl?.center)}`);
+
+    // §15b — THE FALLBACK IS UNCHANGED. A payload that carries no such field (a direct macro call, a
+    // build older than the seam change) still gets exactly the answer it always got: the actor scan's.
+    const unnamed = await plantFrom({ attackerTokenId: undefined, spreadAim: aimFrom(scanned) });
+    ok("§15 a payload naming NO figure still falls back to the actor scan, by value (negative)",
+      onCentre(unnamed, scanned),
+      `planted ${say15(plantedAt(unnamed))} · scan's figure ${say15(scanned?.center)}`);
+    const namedGhost = await plantFrom({ attackerTokenId: "__PWK__notAFigure", spreadAim: aimFrom(scanned) });
+    ok("§15 and a named figure this canvas is not drawing falls back the same way, rather than refusing",
+      onCentre(namedGhost, scanned),
+      `planted ${say15(plantedAt(namedGhost))} · scan's figure ${say15(scanned?.center)}`);
+    await wipeZones(); await wipeCards();
+
+    // §15c — THE DIAGNOSIS'S OWN REPRO, driven as the real gesture: select the second figure, fire from
+    // the sheet, drag a corridor, confirm it, force the roll to land, and read the region that appears.
+    const refWas15 = shooter.system.stats?.ref?.base;
+    const origRU15 = CONFIG.Dice.randomUniform;
+    let firedTwo = null, hook15 = null;
+    try {
+      await scene.deleteEmbeddedDocuments("Token", [gunnerCopy.id]).catch(() => {});
+      await sleep(500);
+      twoPl?.control({ releaseOthers: true });
+      await sleep(250);
+      ok("§15 the selected figure is the one the seam names as the firer, by value",
+        seam.firingTokenIdOf(shooter) === gunnerTwo.id,
+        `${seam.firingTokenIdOf(shooter)} vs second figure ${gunnerTwo.id}`);
+
+      hook15 = Hooks.on("cyberpunk2020.weaponFired", (p) => { if (!firedTwo) firedTwo = p; });
+      await sheet.render(true);
+      await sleep(800);
+      const gesture15 = sheet._cpOpenWeaponAttackDialog(aimGun);
+      await sleep(500);
+      const aim15 = { x: inX(twoPl.center.x + 4 * sq), y: twoPl.center.y };
+      const click15 = await aimAt(aim15.x, aim15.y);
+      canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: click15.x, clientY: click15.y, button: 0, bubbles: true }));
+      const dlg15 = await gesture15;
+      await sleep(700);
+      ok("§15 the drag-aim from the second figure confirms into the ordinary modifiers window",
+        dlg15?.constructor?.name === "ModifiersDialog" && !!dlg15?.element, dlg15?.constructor?.name ?? String(dlg15));
+
+      // Forced to LAND, for §10's reason: a declared corridor that misses goes to the grenade table, and
+      // this section's subject is the origin, not the scatter. REF 10 + a 9 on the exploding d10.
+      await shooter.update({ "system.stats.ref.base": 10 });
+      CONFIG.Dice.randomUniform = (() => { const Q = [1 - (9 - 0.5) / 10]; return () => (Q.length ? Q.shift() : 0.5); })();
+      const form15 = dlg15?.element?.tagName === "FORM" ? dlg15.element : dlg15?.element?.querySelector("form");
+      if (form15?.requestSubmit) form15.requestSubmit();
+      else form15?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await sleep(2000);
+
+      const gz = myZones()[0]?.flags?.[SCOPE] ?? {};
+      const ghost = firedTwo?.spreadAim ?? null;
+      ok("§15 the shot LANDED, so the corridor below is the declared one and not a scattered one",
+        firedTwo?.attackTotal >= firedTwo?.toHitDC, `${firedTwo?.attackTotal} vs ${firedTwo?.toHitDC}`);
+      ok("§15 the fired payload carries the figure that fired, by value",
+        firedTwo?.attackerTokenId === gunnerTwo.id, `${firedTwo?.attackerTokenId} vs ${gunnerTwo.id}`);
+      ok("§15 the ghost the shooter drew is anchored to that same figure, by value",
+        !!ghost && Math.abs(Number(ghost.originX) - twoPl.center.x) < 0.5 && Math.abs(Number(ghost.originY) - twoPl.center.y) < 0.5,
+        `ghost ${sayOrigin(ghost)} · second figure ${say15(twoPl?.center)}`);
+      ok("§15 the pattern is planted", !!myZones()[0], String(myZones().length));
+      const ghostGapM = (!!ghost && !!plantedAt(gz))
+        ? mOf(Math.hypot(Number(ghost.originX) - plantedAt(gz).x, Number(ghost.originY) - plantedAt(gz).y)) : NaN;
+      const firstGapM = (!!plantedAt(gz) && !!onePl)
+        ? mOf(Math.hypot(plantedAt(gz).x - onePl.center.x, plantedAt(gz).y - onePl.center.y)) : NaN;
+      ok("§15 THE REGION IS PLANTED FROM THE FIGURE THAT FIRED, by value",
+        onCentre(gz, twoPl),
+        `planted ${say15(plantedAt(gz))} · fired-from ${say15(twoPl?.center)} · first figure ${say15(onePl?.center)}`);
+      ok("§15 the ghost and the region share ONE origin — zero gap, by value",
+        ghostGapM < 0.01, `gap ${Number.isFinite(ghostGapM) ? ghostGapM.toFixed(2) : "n/a"} m`);
+      ok("§15 and it is NOT translated onto the first figure (negative — the reported symptom)",
+        firstGapM > 2, `offset from first figure ${Number.isFinite(firstGapM) ? firstGapM.toFixed(1) : "n/a"} m`);
+    } finally {
+      CONFIG.Dice.randomUniform = origRU15;
+      if (hook15 !== null) Hooks.off("cyberpunk2020.weaponFired", hook15);
+      await shooter.update({ "system.stats.ref.base": refWas15 }).catch(() => {});
+      await closeModifiers();
+      for (const t of [gunnerTwo, gunnerCopy]) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
+      canvas?.tokens?.releaseAll?.();
+      await wipeZones(); await wipeCards();
+      await sleep(600);
+    }
+
+    // §15d — THE ONE-FIGURE CONTROL. The duplicates gone, the actor answers one figure again and both
+    // routes — named and unnamed — put the corridor on it. Zero gap, as it was before any of this.
+    ok("§15 the duplicates are off the board again", mineOnBoard().length === 1, String(mineOnBoard().length));
+    const soloPl = mineOnBoard()[0] ?? null;
+    const soloNamed = await plantFrom({ attackerTokenId: soloPl?.id, spreadAim: aimFrom(soloPl) });
+    ok("§15 one figure, payload names it — planted on it, zero gap, by value", onCentre(soloNamed, soloPl),
+      `planted ${say15(plantedAt(soloNamed))} · figure ${say15(soloPl?.center)}`);
+    const soloUnnamed = await plantFrom({ attackerTokenId: undefined, spreadAim: aimFrom(soloPl) });
+    ok("§15 one figure, payload names none — planted on it just the same, by value", onCentre(soloUnnamed, soloPl),
+      `planted ${say15(plantedAt(soloUnnamed))} · figure ${say15(soloPl?.center)}`);
+    await wipeZones(); await wipeCards();
+
+    // §15e — THE SIBLING PLACEMENTS, read off the served source. The gas cloud and the blast centre on
+    // the thrower's own figure when nothing is targeted, and misplaced the same way for the same reason.
+    // They have no suite of their own to plant in, and neither is exported, so the guard is that all
+    // three untargeted placements now ask ONE reader and none of them scans by actor id on its own.
+    ok("§15 all three untargeted placements resolve the firing figure through the one shared reader",
+      (dhSrc.match(/const atk = _firingTokenOf\(payload\);/g) ?? []).length === 3,
+      String((dhSrc.match(/const atk = _firingTokenOf\(payload\);/g) ?? []).length));
+    ok("§15 that reader asks the payload for the figure BEFORE it scans anything",
+      /function _firingTokenOf\(payload\)[\s\S]{0,300}?canvas\?\.tokens\?\.get\(payload\.attackerTokenId\)/.test(dhSrc),
+      "named-first shape in the served source");
+    ok("§15 and the actor-id scan survives in exactly ONE place — the shared fallback (negative)",
+      (dhSrc.match(/placeables\?\.find\(t => t\.actor\?\.id === attackerId\)/g) ?? []).length === 1,
+      String((dhSrc.match(/placeables\?\.find\(t => t\.actor\?\.id === attackerId\)/g) ?? []).length));
+    ok("§15 the stale note claiming the payload carries no attacker token id is gone (negative)",
+      !/carry no attacker token id/i.test(dhSrc));
+  }
+
+  /* ── §16  THE BAND EDGES ARE THE FIRING WEAPON'S OWN RANGE ───────────────────────────────── */
+  // The shotgun table (Core p.109) prints its pattern AGAINST THE RANGE BANDS — Close·PB 1 m 4D6,
+  // Medium 2 m 3D6, Long 3 m 2D6 — and the bands themselves are defined per weapon on p.99: Point Blank
+  // is touching to 1 m, Close is a QUARTER of the weapon's Long range, Medium a HALF, Long the full
+  // range. So the metre at which a pattern stops being Close is a fact about the GUN. This ladder used
+  // to hard-code 6 m / 25 m, which is one particular weapon's answer applied to every weapon.
+  //
+  // The legs read the pure ladder first (no document, no canvas), then the same rule through the real
+  // aim preview and through the plant, so a derivation that is right in isolation and unthreaded at one
+  // of its four call sites cannot pass.
+  await wipeZones(); await wipeCards();
+  {
+    const magBefore16 = magazine();
+    const B = (d, r) => lookup.spreadBandSpec(d, {}, r);
+    const dmgOf = (d, r) => lookup.spreadBandDamage(B(d, r).band);
+    // What the preview's readout must SAY for a reach measured against a given weapon range — the same
+    // re-derivation §11's helper does, with the range threaded through it.
+    const readoutFor16 = (reachM, r) => {
+      const spec = lookup.spreadBandSpec(reachM, {}, r);
+      const widthM = Math.max(placement.SPREAD_MIN_WIDTH_M, spec.widthM);
+      return `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${widthM}m wide, ${lookup.spreadBandDamage(spec.band)}`;
+    };
+
+    /* §16a — the three rungs, by value, out of a 40 m gun (edges: 10 m and 20 m) */
+    ok("§16 inside a quarter of the weapon's range the Close·PB row applies — 1 m, 4d6, by value",
+      B(8, 40).band === "Short" && B(8, 40).widthM === 1 && dmgOf(8, 40) === "4d6",
+      JSON.stringify(B(8, 40)));
+    ok("§16 between a quarter and a half it is the Medium row — 2 m, 3d6, by value",
+      B(15, 40).band === "Medium" && B(15, 40).widthM === 2 && dmgOf(15, 40) === "3d6",
+      JSON.stringify(B(15, 40)));
+    ok("§16 between a half and the full range it is the Long row — 3 m, 2d6, by value",
+      B(22, 40).band === "Long" && B(22, 40).widthM === 3 && dmgOf(22, 40) === "2d6",
+      JSON.stringify(B(22, 40)));
+
+    /* §16b — THE EDGES MOVE WITH THE WEAPON, which is the whole change. One distance, three guns. */
+    ok("§16 eight metres is Close out of a 40 m gun and Medium out of a 20 m one — the edge is the gun's",
+      B(8, 40).band === "Short" && B(8, 20).band === "Medium",
+      `40m→${B(8, 40).band} · 20m→${B(8, 20).band}`);
+    ok("§16 twenty-two metres is Long out of a 40 m gun and Close out of a 100 m one (negative on fixed metres)",
+      B(22, 40).band === "Long" && B(22, 100).band === "Short",
+      `40m→${B(22, 40).band} · 100m→${B(22, 100).band}`);
+    ok("§16 the boundaries land exactly on the quarter and the half, by value",
+      B(10, 40).band === "Short" && B(10.01, 40).band === "Medium"
+      && B(20, 40).band === "Medium" && B(20.01, 40).band === "Long",
+      JSON.stringify([B(10, 40).band, B(10.01, 40).band, B(20, 40).band, B(20.01, 40).band]));
+
+    /* §16c — the point-blank metre the Close·PB row prints survives a gun whose quarter-range is under it */
+    ok("§16 a short-ranged weapon still gives its point-blank metre to the Close·PB row",
+      B(1, 4).band === "Short" && B(0.5, 2).band === "Short" && B(1, 2).band === "Short",
+      JSON.stringify([B(1, 4).band, B(0.5, 2).band, B(1, 2).band]));
+    ok("§16 and past that metre the ladder still climbs rather than collapsing",
+      B(1.5, 4).band === "Medium" && B(3, 4).band === "Long",
+      JSON.stringify([B(1.5, 4).band, B(3, 4).band]));
+
+    /* §16d — PAST THE WEAPON'S FULL RANGE the Long row continues. The table prints no Extreme row, so
+     * this is a stated interpretation rather than a printed rule: the last row continues, and no fourth
+     * width is invented. Also the reason the scatter needs no cap. */
+    ok("§16 past the weapon's full range the Long row continues — no fourth width is invented",
+      B(41, 40).band === "Long" && B(500, 40).band === "Long"
+      && B(500, 40).widthM === 3 && dmgOf(500, 40) === "2d6",
+      JSON.stringify(B(500, 40)));
+
+    /* §16e — the COMPAT PATH: a caller that names no range keeps the edges this module always used */
+    ok("§16 the compat edges are the documented six and twenty-five",
+      lookup.SPREAD_LEGACY_CLOSE_EDGE_M === 6 && lookup.SPREAD_LEGACY_MEDIUM_EDGE_M === 25,
+      `${lookup.SPREAD_LEGACY_CLOSE_EDGE_M} / ${lookup.SPREAD_LEGACY_MEDIUM_EDGE_M}`);
+    ok("§16 no range named → the old fixed edges, by value (the compat path, not the rule)",
+      B(6, null).band === "Short" && B(6.01, null).band === "Medium"
+      && B(25, null).band === "Medium" && B(25.01, null).band === "Long",
+      JSON.stringify([B(6, null).band, B(6.01, null).band, B(25, null).band, B(25.01, null).band]));
+    ok("§16 a range of zero, a blank one and a nonsense one all fall back the same way (negative)",
+      B(8, 0).band === "Medium" && B(8, undefined).band === "Medium"
+      && B(8, "").band === "Medium" && B(8, "x").band === "Medium" && B(8, -50).band === "Medium",
+      JSON.stringify([B(8, 0).band, B(8, undefined).band, B(8, "").band, B(8, "x").band, B(8, -50).band]));
+    ok("§16 and an unmeasurable distance is still the Close·PB row, range or no range (negative)",
+      B(NaN, 40).band === "Short" && B(null, null).band === "Short",
+      JSON.stringify([B(NaN, 40).band, B(null, null).band]));
+
+    /* §16f — the load's own printed widths win at whatever band the weapon's range put the shot in */
+    const LW = { short: 5, medium: 6, long: 7 };
+    ok("§16 a load's printed width is taken from the band the WEAPON's range chose, by value",
+      lookup.spreadBandSpec(8, LW, 40).widthM === 5 && lookup.spreadBandSpec(15, LW, 40).widthM === 6
+      && lookup.spreadBandSpec(22, LW, 40).widthM === 7
+      && lookup.spreadBandSpec(8, LW, 20).widthM === 6,
+      JSON.stringify([lookup.spreadBandSpec(8, LW, 40).widthM, lookup.spreadBandSpec(8, LW, 20).widthM]));
+
+    /* §16g — ONE AIM POINT, THREE GUNS, THROUGH THE REAL PREVIEW.
+     *
+     * ⚠ THE RANGES ARE DERIVED FROM THE AIM, NOT TYPED. This rig's scene is one metre a square, so the
+     * corridor §10 draws is a few metres long and a range typed here as "100 m" would put every reading
+     * in the same band and prove nothing. So the three guns are described relative to the aim itself: a
+     * gun whose range is 2.5× the aim (quarter-range under it, half-range over it → Medium), a gun whose
+     * range IS the aim (half-range under it → Long), and no gun at all (the compat edges → Close, since
+     * the aim is inside the old fixed 6 m). The premise leg pins that those three really are different. */
+    ok("§16 the aim this section reads is inside the compat Close edge and outside the point-blank metre",
+      expectM > 1.5 && expectM <= lookup.SPREAD_LEGACY_CLOSE_EDGE_M, `${expectM} m`);
+    const midRangeM = expectM * 2.5, shortRangeM = expectM;
+    const readAimWith = async (r) => {
+      const g = placement.armSpreadPreview({ shooterToken: shooterPlaceable, ...(r === null ? {} : { rangeM: r }) });
+      await sleep(300);
+      await aimAt(aimWorld.x, aimWorld.y);
+      const line = readout();
+      const click = await aimAt(aimWorld.x, aimWorld.y);
+      canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: click.x, clientY: click.y, button: 0, bubbles: true }));
+      return { line, aim: await g };
+    };
+    const midGun = await readAimWith(midRangeM);
+    ok("§16 the preview bands the aim against the gun it is held in — a mid-range gun reads Medium here",
+      midGun.line === readoutFor16(expectM, midRangeM) && midGun.aim?.band === "Medium" && Number(midGun.aim?.widthM) === 2,
+      `${midGun.line} | corridor ${JSON.stringify({ band: midGun.aim?.band, widthM: midGun.aim?.widthM })}`);
+    const shortGun = await readAimWith(shortRangeM);
+    ok("§16 the SAME aim point out of a gun whose full range it already is reads Long, by value",
+      shortGun.line === readoutFor16(expectM, shortRangeM) && shortGun.aim?.band === "Long" && Number(shortGun.aim?.widthM) === 3,
+      `${shortGun.line} | corridor ${JSON.stringify({ band: shortGun.aim?.band, widthM: shortGun.aim?.widthM })}`);
+    const noGun = await readAimWith(null);
+    ok("§16 and with no range named the same point falls back to the compat edges — Close (negative)",
+      noGun.line === readoutFor16(expectM, null) && noGun.aim?.band === "Short" && Number(noGun.aim?.widthM) === 1,
+      `${noGun.line} | corridor ${JSON.stringify({ band: noGun.aim?.band, widthM: noGun.aim?.widthM })}`);
+    ok("§16 the three readings of that ONE aim point really are three different corridors",
+      new Set([midGun.line, shortGun.line, noGun.line]).size === 3,
+      [midGun.line, shortGun.line, noGun.line].join(" · "));
+
+    /* §16h — and through the PLANT: one undeclared corridor at one distance, two ranges on the payload.
+     * Same derivation of the ranges, and for the same reason. */
+    const tgtPl = canvas.tokens.get(target.id) ?? null;
+    const tgtM = grid.pixelsToMeters(scene,
+      Math.hypot((tgtPl?.center?.x ?? 0) - shooterPlaceable.center.x, (tgtPl?.center?.y ?? 0) - shooterPlaceable.center.y));
+    ok("§16 the fixture target stands inside the compat Close edge, so the two plants below must differ",
+      tgtM > 1.5 && tgtM <= lookup.SPREAD_LEGACY_CLOSE_EDGE_M, `${tgtM} m`);
+    await wipeZones(); await wipeCards();
+    await hooks._placeSpreadZone(basePayload({ shotsFired: 1, spreadRangeM: tgtM }));
+    await sleep(900);
+    const f16long = myZones()[0]?.flags?.[SCOPE] ?? {};
+    ok("§16 the plant bands an undeclared corridor against the payload's own weapon range, by value",
+      f16long.band === "Long" && Number(f16long.widthM) === 3 && f16long.dmgFormula === "2d6",
+      JSON.stringify({ band: f16long.band, widthM: f16long.widthM, dmg: f16long.dmgFormula }));
+    await wipeZones(); await wipeCards();
+    await hooks._placeSpreadZone(basePayload({ shotsFired: 1 }));
+    await sleep(900);
+    const f16none = myZones()[0]?.flags?.[SCOPE] ?? {};
+    ok("§16 and a payload carrying no range plants exactly what it always planted (negative, compat)",
+      f16none.band === "Short" && Number(f16none.widthM) === 1 && f16none.dmgFormula === "4d6",
+      JSON.stringify({ band: f16none.band, widthM: f16none.widthM, dmg: f16none.dmgFormula }));
+    await wipeZones(); await wipeCards();
+
+    /* §16i — the declared-aim reader derives a missing band against the same range */
+    ok("§16 a corridor that names no band derives one against the payload's weapon range, by value",
+      hooks.declaredSpreadAim({ spreadAim: { angleDeg: 0, reachM: 8, lengthM: 8, widthM: 1 }, spreadRangeM: 40 })?.band === "Short"
+      && hooks.declaredSpreadAim({ spreadAim: { angleDeg: 0, reachM: 8, lengthM: 8, widthM: 1 } })?.band === "Medium",
+      JSON.stringify([
+        hooks.declaredSpreadAim({ spreadAim: { angleDeg: 0, reachM: 8, lengthM: 8, widthM: 1 }, spreadRangeM: 40 })?.band,
+        hooks.declaredSpreadAim({ spreadAim: { angleDeg: 0, reachM: 8, lengthM: 8, widthM: 1 } })?.band,
+      ]));
+
+    /* §16j — and the scattered corridor re-derives against it too, so a miss cannot change ladders */
+    const sc16 = hooks.scatteredSpreadCorridor({
+      originX: 0, originY: 0, declared: { angleDeg: 0, reachM: 20, lengthM: 20, widthM: 2, band: "Medium" },
+      rangeM: 100, pixelsPerMeter: 10, dirFace: 2, distFace: 7,
+    });
+    ok("§16 a scattered corridor is banded against the weapon's range, not against the old fixed metres",
+      sc16.band === "Short" && sc16.widthM === 1,
+      JSON.stringify({ reachM: sc16.reachM, band: sc16.band, widthM: sc16.widthM }));
+
+    ok("§16 the section spent nothing — the magazine is untouched, by value",
+      magazine() === magBefore16, `${magBefore16} → ${magazine()}`);
+  }
+
+  /* ── §17  A SCATTERED PATTERN SAYS SO ────────────────────────────────────────────────────── */
+  // ⭐ THE SIGNPOST (user ruling 2026-08-16: *"yes, or just some way to let the player know it's behaving
+  // as intended"*). A missed pattern's true centre goes to the grenade table, so the corridor that
+  // resolves is NOT the corridor the shooter aimed — which from the shooter's seat is indistinguishable
+  // from the aim gesture having been ignored. One notification, on the firing client, naming the rolled
+  // direction and distance in the same idiom the resolution card uses.
+  //
+  // Driven as the REAL gesture and the REAL roll, because the thing under test is WHEN the notification
+  // is raised: at the seam that assembles the payload, on the client that pulled the trigger.
+  await wipeZones(); await wipeCards();
+  {
+    const utils = await import(`/modules/${SCOPE}/module/utils.js`);
+    const notes = [];
+    const origInfo = ui.notifications.info.bind(ui.notifications);
+    ui.notifications.info = (msg, ...rest) => { notes.push(String(msg)); return origInfo(msg, ...rest); };
+    // ⚠ THE SCATTER FACES ARE NOT FORCED, and that is deliberate rather than lazy. The base system rolls
+    // an unknown number of dice per fire card between the attack roll and the seam's two faces (measured
+    // on this rig: a queue of three was exhausted before the faces were reached, so both defaulted), so a
+    // fixed queue pins the wrong rolls. Only the ATTACK die is forced — that one is first, and it is the
+    // die that decides hit or miss. The sentence the notification must carry is then re-derived from the
+    // faces the payload actually reports, through the shared table and the shared i18n edge, which is a
+    // stronger contract than a fixed pair: whatever was rolled, the notice names THAT.
+    const noticeFor = (faces) => {
+      const d = scatterTable.scatterDriftM(faces?.dirFace, faces?.distFace);
+      return d.distanceM
+        ? game.i18n.format("CYBERPUNK.SpreadScatterNotice", { dir: utils.tryLocalize(d.name), dist: d.distanceM })
+        : game.i18n.localize("CYBERPUNK.SpreadScatterNoticeNoDrift");
+    };
+    const anyScatterNote = () => notes.filter(n =>
+      n === game.i18n.localize("CYBERPUNK.SpreadScatterNoticeNoDrift")
+      || /^Shot missed/.test(n));
+
+    const refWas17 = shooter.system.stats?.ref?.base;
+    const origRU17 = CONFIG.Dice.randomUniform;
+    let missPayload = null, hook17 = null;
+    // ⚠ A DECLARED CORRIDOR'S SHOT IS NOT OVER WHEN THE ROLL IS. The plant waits out the presentation
+    // and only then posts the resolution card, so a teardown that runs on a fixed sleep can delete the
+    // region out from under a card that is still being built — which this suite's own wipe note names
+    // as the way to fail a 0-console-errors leg with tidying rather than with the mechanism. Every fire
+    // below waits for its card to actually land before anything is wiped.
+    const waitForResolveCard = async (since) => {
+      for (let i = 0; i < 48; i++) {
+        if (resolveCards().some(m => !since.has(m.id))) { await sleep(400); return true; }
+        await sleep(250);
+      }
+      return false;
+    };
+    try {
+      hook17 = Hooks.on("cyberpunk2020.weaponFired", (p) => { missPayload = p; });
+      await sheet.render(true);
+      await sleep(600);
+
+      /* §17a — a forced MISS: the attack die at 1 against a fumbling REF, then the two grenade faces */
+      await shooter.update({ "system.stats.ref.base": 1 });
+      const gesture17 = sheet._cpOpenWeaponAttackDialog(aimGun);
+      await sleep(500);
+      const click17 = await aimAt(aimWorld.x, aimWorld.y);
+      canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: click17.x, clientY: click17.y, button: 0, bubbles: true }));
+      const dlg17 = await gesture17;
+      await sleep(600);
+      notes.length = 0;                                    // drop the gesture's own "aim armed" notice
+      // The ATTACK die only — forced to 1, which misses and (unlike a forced 10 on the exploding die)
+      // terminates. Every later roll, the scatter faces included, falls as it really falls.
+      const Q17 = [1 - (1 - 0.5) / 10];
+      CONFIG.Dice.randomUniform = () => (Q17.length ? Q17.shift() : origRU17());
+      const since17 = new Set(game.messages.map(m => m.id));
+      const form17 = dlg17?.element?.tagName === "FORM" ? dlg17.element : dlg17?.element?.querySelector("form");
+      if (form17?.requestSubmit) form17.requestSubmit();
+      else form17?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await sleep(1200);
+      CONFIG.Dice.randomUniform = origRU17;
+      const missCarded = await waitForResolveCard(since17);
+
+      ok("§17 the forced shot MISSED, so there is a scatter to signpost (the premise)",
+        Number(missPayload?.attackTotal) < Number(missPayload?.toHitDC),
+        `${missPayload?.attackTotal} vs ${missPayload?.toHitDC}`);
+      const faces17 = missPayload?.spreadScatter ?? null;
+      const wantNotice = noticeFor(faces17);
+      const wantDrift = scatterTable.scatterDriftM(faces17?.dirFace, faces17?.distFace);
+      ok("§17 the payload carries the two grenade-table faces the notification has to name",
+        Number.isFinite(Number(faces17?.dirFace)) && Number.isFinite(Number(faces17?.distFace)),
+        JSON.stringify(faces17));
+      ok("§17 ONE notification is raised on the firing client, and it is the one those faces produce",
+        notes.filter(n => n === wantNotice).length === 1,
+        `${notes.filter(n => n === wantNotice).length} of ${notes.length} — wanted: ${wantNotice}`);
+      ok("§17 it names the rolled direction and distance in plain language, by value",
+        wantDrift.distanceM
+          ? (wantNotice.includes(wantDrift.name) && wantNotice.includes(`${wantDrift.distanceM}m`))
+          : /no-drift/i.test(wantNotice),
+        `faces ${faces17?.dirFace}/${faces17?.distFace} → ${wantNotice}`);
+      ok("§17 no SECOND notice is raised for the one pattern (negative)",
+        anyScatterNote().length === 1, `${anyScatterNote().length} scatter notices`);
+      ok("§17 the missed shot finished its own presentation and posted its card (the shot really ran)",
+        missCarded === true, String(missCarded));
+      ok("§17 and the pattern really did take those faces, so the notification describes what happened",
+        myZones()[0]?.flags?.[SCOPE]?.scattered === true
+        && Number(myZones()[0]?.flags?.[SCOPE]?.scatterDirFace) === Number(faces17?.dirFace)
+        && Number(myZones()[0]?.flags?.[SCOPE]?.scatterDriftM) === wantDrift.distanceM,
+        JSON.stringify({ flags: myZones()[0]?.flags?.[SCOPE]?.scatterDirFace, faces: faces17 }));
+      await wipeZones(); await wipeCards();
+
+      /* §17b — a shot that LANDS says nothing (the negative that makes the positive mean something) */
+      notes.length = 0;
+      missPayload = null;
+      await shooter.update({ "system.stats.ref.base": 10 });
+      const gestureHit = sheet._cpOpenWeaponAttackDialog(aimGun);
+      await sleep(500);
+      const clickHit = await aimAt(aimWorld.x, aimWorld.y);
+      canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: clickHit.x, clientY: clickHit.y, button: 0, bubbles: true }));
+      const dlgHit = await gestureHit;
+      await sleep(600);
+      notes.length = 0;
+      const QHit = [1 - (9 - 0.5) / 10];                   // 9, not 10 — a forced maximum explodes forever
+      CONFIG.Dice.randomUniform = () => (QHit.length ? QHit.shift() : origRU17());
+      const sinceHit = new Set(game.messages.map(m => m.id));
+      const formHit = dlgHit?.element?.tagName === "FORM" ? dlgHit.element : dlgHit?.element?.querySelector("form");
+      if (formHit?.requestSubmit) formHit.requestSubmit();
+      else formHit?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await sleep(1200);
+      CONFIG.Dice.randomUniform = origRU17;
+      await waitForResolveCard(sinceHit);
+
+      ok("§17 the second shot LANDED (the premise of the negative below)",
+        Number(missPayload?.attackTotal) >= Number(missPayload?.toHitDC),
+        `${missPayload?.attackTotal} vs ${missPayload?.toHitDC}`);
+      ok("§17 a shot that lands rolls no faces and raises no scatter notice at all (negative)",
+        !missPayload?.spreadScatter && anyScatterNote().length === 0,
+        `faces=${JSON.stringify(missPayload?.spreadScatter)} notices=${anyScatterNote().length}`);
+    } finally {
+      CONFIG.Dice.randomUniform = origRU17;
+      ui.notifications.info = origInfo;
+      placement.cancelSpreadPreview();               // an aim left armed by a thrown leg must not survive
+      if (hook17 !== null) Hooks.off("cyberpunk2020.weaponFired", hook17);
+      await shooter.update({ "system.stats.ref.base": refWas17 }).catch(() => {});
+      await closeModifiers();
+      // ⚠ SETTLE BEFORE TIDYING, NOT AFTER. Two real shots ran in this section and each ends in an async
+      // chain the spec does not hold a handle on (the card write, the region's own card-clear). Deleting
+      // into one of those is how this suite's teardown logs core's "Region does not exist" and fails its
+      // own 0-console-errors leg with housekeeping rather than with the mechanism under test.
+      await sleep(1500);
+      await wipeZones(); await wipeCards();
+      await sleep(600);
+    }
+
+    // WHERE the notification is raised, read off the served source: beside the roll at the seam that
+    // assembles the payload on the FIRING client — not in the plant, which runs on the active GM and on
+    // a player's shot is a different seat entirely.
+    const seamSrc17 = await (await fetch(`/modules/${SCOPE}/module/seam-shim.js`, { cache: "no-store" })).text();
+    ok("§17 the signpost sits at the seam's own roll site, where the firing client learns both facts",
+      /payloadScattersOnMiss\([\s\S]{0,400}?_signpostSpreadScatter\(/.test(seamSrc17)
+      && /ui\.notifications\?\.info/.test(seamSrc17),
+      "signpost call inside the seam's scatter branch");
+    const dhSrc17 = await (await fetch(`/modules/${SCOPE}/module/combat/damage-hooks.js`, { cache: "no-store" })).text();
+    ok("§17 and the plant raises no scatter notification of its own (negative — it is the wrong client)",
+      !/_signpostSpreadScatter/.test(dhSrc17) && !/SpreadScatterNotice/.test(dhSrc17));
   }
 
   /* ── cleanup ────────────────────────────────────────────────────────────────────────────── */

@@ -453,6 +453,18 @@ async function migrateAugmentedSettings() {
     await dropLegacy("ipSystem");
     console.log(`${SCOPE} | IP setting migrated: ipSystem "${ipOld}" → rawTracking=${ipOld === "raw"}, hideUI=${ipOld === "disabled"}.`);
   }
+
+  // damageAutoApply → RETIRED, nothing to merge into. The feature is gone (user ruling 2026-08-14):
+  // whether a given instance of damage is applied is answered in that instance's confirmation window,
+  // not by a world-wide rule. There is no successor key and no value worth carrying — a world that had
+  // it TRUE simply starts seeing windows again, which is the ruled outcome. All this does is drop the
+  // orphaned world doc so the setting universe carries no key nothing registers. Self-gating (the doc
+  // only exists once), a no-op on a fresh world, and no version bump — the same shape as the merges
+  // above, minus the merge.
+  if (rawSetting("damageAutoApply") !== undefined) {
+    await dropLegacy("damageAutoApply");
+    console.log(`${SCOPE} | retired setting dropped: damageAutoApply (every damage resolution now opens its own confirmation window).`);
+  }
 }
 
 /**

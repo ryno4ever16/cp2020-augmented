@@ -14,9 +14,12 @@
  */
 
 import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
-import { postDeathSavePrompt } from "./save-rolls.js";
-import { renderChatCard, postSavePromptCard } from "../compat.js";
-import { localize, localizeParam, combineArmorSP, foldArmorSP } from "../utils.js";
+import { postSavePromptCard } from "../compat.js";
+import { localize, localizeParam, combineArmorSP, foldArmorSP, getLimbStatus } from "../utils.js";
+// The per-application severity cadence: N damage events on one body produce ONE progression card and
+// ONE mortal prompt at the tier the application finished on (combat/severity-batch.js). Nothing here
+// posts a severity card directly any more — it records, and the ledger emits when the batch closes.
+import { makeSeverityBatch, recordSeverityHit, recordSeverityEvent, closeSeverityBatch, zoneGrade } from "./severity-batch.js";
 import { makeCoverLedger } from "./cover.js";
 import { routesToSdp, absorbCyberlimbHit } from "../mech/cyberlimb.js";
 import { isFullBorg, borgArmorSP, BORG_CORE_ZONES, killBorgCore } from "../mech/borg.js";
@@ -140,12 +143,25 @@ export function computeNetDamage(afterSP, btm, penetrates, location) {
  * FLESH limb state is recorded under the `fleshLimbStatus` flag — deliberately NOT the cyberlimb
  * engine's `limbStatus` (mech/cyberlimb.js, mech/borg.js), whose "destroyed"/"disabled" vocabulary
  * would otherwise be read as structural SDP state and make a fresh cyberlimb soak zero (M18).
+ *
+ * ⭐ IT RECORDS; IT DOES NOT POST. Every card and every mortal prompt this check used to emit per
+ * damage event now goes into the application's severity ledger (combat/severity-batch.js) and is
+ * emitted once when the batch closes — one progression card, one mortal prompt at the final tier. A
+ * caller that hands in no ledger gets a one-event ledger built and closed here, which replays that
+ * event's own card exactly as before, so every single-hit path is unchanged.
+ *
+ * ⭐ THE SAME-ZONE GUARD. The limb branches WRITE `fleshLimbStatus` and, until now, never read it back:
+ * rounds 2..N into a zone that is already gone recorded it gone again, each with a fresh card and a
+ * fresh prompt — including next turn's burst re-losing yesterday's arm. The record is now read first
+ * and an outcome no worse than what is already there is not re-announced. The damage itself is
+ * untouched: it was written before this ever ran.
+ *
  * @param {Actor}  target
  * @param {string} location
  * @param {number} netDamage   Final HP applied (already includes any doubling)
- * @param {{token?: object}} [opts]
+ * @param {{token?: object, severityBatch?: object}} [opts]
  */
-export async function assessWoundSeverity(target, location, netDamage, { token = null } = {}) {
+export async function assessWoundSeverity(target, location, netDamage, { token = null, severityBatch = null } = {}) {
   // Vehicles have no limbs/head/death saves — never run wound severity on them (they use the
   // vehicle resolver). Defense in depth alongside the applyAreaDamages redirect. Vehicle/ACPA actors
   // are the module sub-type "cp2020-augmented.vehicle" (NOT the bare "vehicle", which is an Item type).
@@ -168,15 +184,18 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
     ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === liveTarget.id)
     ?? null;
 
+  // A caller with no ledger of its own gets a one-event ledger, opened and closed around this check.
+  // It does NOT own the wound-track prompt — only the four apply-loop owners do — so a lone call here
+  // still emits exactly what it emitted before: this zone's own card, and the prompt the zone forces.
+  const batch = severityBatch ?? makeSeverityBatch();
+  const ownBatch = !severityBatch;
+
   // Head wound > 8 net = automatic death (Listen Up does not change the head; always Core here).
   if (location === "Head") {
     if (netDamage > 8) {
-      const content = await renderChatCard("head-wound-death.hbs", {
-        actorName: liveTarget.name, netDamage,
-      });
-      await ChatMessage.create({
-        content,
-        speaker: ChatMessage.getSpeaker({ actor: liveTarget }),
+      recordSeverityEvent(batch, {
+        actor: liveTarget, token: liveToken, location, status: "headAutoDeath",
+        card: { template: "head-wound-death.hbs", data: { actorName: liveTarget.name, netDamage } },
       });
       // v13+: TokenDocument#toggleActiveEffect was removed — toggle the status on the Actor.
       const deadActor = liveToken?.actor ?? liveTarget;
@@ -184,6 +203,7 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
         await deadActor.toggleStatusEffect("dead", { active: true });
       }
     }
+    if (ownBatch) await closeSeverityBatch(batch);
     return;
   }
 
@@ -191,24 +211,29 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   if (!LIMB_LOCATIONS.has(location)) return;
   // Location codes (rArm/lArm/rLeg/lLeg) are themselves the i18n keys for the limb names.
   const limbName = localize(location);
+  // What this zone is ALREADY recorded as, read through the one accessor every reader of the record
+  // uses (utils.getLimbStatus). An outcome that is no worse than the record is not news.
+  const recordedGrade = zoneGrade(getLimbStatus(liveTarget, location));
 
   if (model === "ListenUp") {
     // Listen Up crippling bands (measured on the doubled netDamage). No death save.
     if (netDamage >= 6) {
       const destroyed = netDamage >= 13;
       const status = destroyed ? "destroyed" : "crippled";
-      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
-      cur[location] = status;
-      await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
-      const content = await renderChatCard("limb-wound.hbs", {
-        title:  localizeParam(destroyed ? "LimbWoundDestroyedTitle" : "LimbWoundCrippledTitle", { name: liveTarget.name }),
-        detail: localizeParam(destroyed ? "LimbWoundLuDestroyedDetail" : "LimbWoundLuCrippledDetail", { net: netDamage, limb: limbName }),
-      });
-      await ChatMessage.create({
-        content,
-        speaker: ChatMessage.getSpeaker({ actor: liveTarget }),
-      });
+      if (zoneGrade(status) > recordedGrade) {
+        const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
+        cur[location] = status;
+        await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
+        recordSeverityEvent(batch, {
+          actor: liveTarget, token: liveToken, location, status,
+          card: { template: "limb-wound.hbs", data: {
+            title:  localizeParam(destroyed ? "LimbWoundDestroyedTitle" : "LimbWoundCrippledTitle", { name: liveTarget.name }),
+            detail: localizeParam(destroyed ? "LimbWoundLuDestroyedDetail" : "LimbWoundLuCrippledDetail", { net: netDamage, limb: limbName }),
+          } },
+        });
+      }
     }
+    if (ownBatch) await closeSeverityBatch(batch);
     return;
   }
 
@@ -218,21 +243,22 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
     if (netDamage > 8) {
       const severed = netDamage > 12;
       const status = severed ? "severed" : "disabled";
-      const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
-      cur[location] = status;
-      await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
-      const content = await renderChatCard("limb-wound.hbs", {
-        title:           localizeParam(severed ? "LimbWoundSeveredTitle" : "LimbWoundDisabledTitle", { name: liveTarget.name }),
-        locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
-        detail:          localizeParam(severed ? "LimbWoundW4SeveredDetail" : "LimbWoundW4DisabledDetail", { net: netDamage }),
-        deathSaveClause: localize("LimbWoundDeathSaveClause"),
-      });
-      await ChatMessage.create({
-        content,
-        speaker: ChatMessage.getSpeaker({ actor: liveTarget }),
-      });
-      await postDeathSavePrompt(liveTarget, liveToken, 0);
+      if (zoneGrade(status) > recordedGrade) {
+        const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
+        cur[location] = status;
+        await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
+        recordSeverityEvent(batch, {
+          actor: liveTarget, token: liveToken, location, status, forcedMortalLevel: 0,
+          card: { template: "limb-wound.hbs", data: {
+            title:           localizeParam(severed ? "LimbWoundSeveredTitle" : "LimbWoundDisabledTitle", { name: liveTarget.name }),
+            locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
+            detail:          localizeParam(severed ? "LimbWoundW4SeveredDetail" : "LimbWoundW4DisabledDetail", { net: netDamage }),
+            deathSaveClause: localize("LimbWoundDeathSaveClause"),
+          } },
+        });
+      }
     }
+    if (ownBatch) await closeSeverityBatch(batch);
     return;
   }
 
@@ -241,22 +267,21 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
   // rule says the limb is gone, and the readers of `fleshLimbStatus` are model-agnostic (the sheet's
   // limb label, the gone-limb re-roll in utils.js, the cyberlimb severed-under check) — leaving Core
   // chat-only made all three go blind under the default model.
-  if (netDamage > 8) {
+  if (netDamage > 8 && zoneGrade("severed") > recordedGrade) {
     const cur = foundry.utils.duplicate(liveTarget.getFlag("cp2020-augmented", "fleshLimbStatus") ?? {});
     cur[location] = "severed";
     await liveTarget.setFlag("cp2020-augmented", "fleshLimbStatus", cur).catch(() => {});
-    const content = await renderChatCard("limb-wound.hbs", {
-      title:           localizeParam("LimbWoundLossTitle", { name: liveTarget.name }),
-      locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
-      detail:          localizeParam("LimbWoundCoreDetail", { net: netDamage }),
-      deathSaveClause: localize("LimbWoundDeathSaveClause"),
+    recordSeverityEvent(batch, {
+      actor: liveTarget, token: liveToken, location, status: "severed", forcedMortalLevel: 0,
+      card: { template: "limb-wound.hbs", data: {
+        title:           localizeParam("LimbWoundLossTitle", { name: liveTarget.name }),
+        locationLine:    localizeParam("LimbWoundLocationLine", { limb: limbName }),
+        detail:          localizeParam("LimbWoundCoreDetail", { net: netDamage }),
+        deathSaveClause: localize("LimbWoundDeathSaveClause"),
+      } },
     });
-    await ChatMessage.create({
-      content,
-      speaker: ChatMessage.getSpeaker({ actor: liveTarget }),
-    });
-    await postDeathSavePrompt(liveTarget, liveToken, 0);
   }
+  if (ownBatch) await closeSeverityBatch(batch);
 }
 
 /**
@@ -270,7 +295,7 @@ export async function assessWoundSeverity(target, location, netDamage, { token =
  *   penetrates       — armor was beaten (a stopped hit does no structural damage).
  * @returns {Promise<{cyberlimb: boolean, applied: number}>}
  */
-export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null, fxSilent = false }) {
+export async function applyLocationDamage({ target, location, netDamage = 0, structuralDamage, penetrates = true, token = null, fxSilent = false, severityBatch = null }) {
   /**
    * THE IMPACT AUDIO THIS SEAM OWES, and what makes it different from the rail's.
    *
@@ -331,7 +356,15 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
     }
   }
   if (sounds && netDamage > 0) fxHitSound(isFullBorg(target) ? "structure" : "flesh");
-  await assessWoundSeverity(target, location, netDamage, { token });
+  // THE PROGRESSION STEP THIS EVENT CONTRIBUTES. Recorded here, after the write, because this is the
+  // seam every personnel apply passes through and because the wound state read now is the state the
+  // event left behind — which is what makes the ladder on the batch's card the real one. A caller with
+  // no ledger gets a one-event ledger opened and closed around this call, so nothing changes for it.
+  const batch = severityBatch ?? makeSeverityBatch();
+  const ownBatch = !severityBatch;
+  recordSeverityHit(batch, { actor: target, token, netDamage });
+  await assessWoundSeverity(target, location, netDamage, { token, severityBatch: batch });
+  if (ownBatch) await closeSeverityBatch(batch);
   return { cyberlimb: false, applied: netDamage > 0 ? netDamage : 0 };
 }
 
@@ -349,9 +382,14 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  * @param {number}  p.coverSP
  * @param {object}  p.cover        Cover-object row snapshot to wear down round by round (or null)
  * @param {boolean} p.dryRun        If true: runs math only, does not write HP or ablate
+ * @param {object}  p.severityBatch The application's severity ledger (combat/severity-batch.js). Passed
+ *                                  by a caller whose application is WIDER than this call — a corridor's
+ *                                  shells, a blast and its fragments, an apply whose tail prompt the
+ *                                  caller owns. Absent, this loop is the whole application and opens
+ *                                  and closes its own.
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
-export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false, fxSilent = false }) {
+export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false, fxSilent = false, severityBatch = null }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
   // which reduces SDP / sets vehicle status instead of writing the character `damage` field and
@@ -368,6 +406,12 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     return [];
   }
 
+
+  // ⭐ THE LOOP BELOW IS ONE APPLICATION. N landed rounds on one body are one moment of the fight, so
+  // they share one severity ledger and produce one progression card and one mortal prompt between them
+  // (combat/severity-batch.js). A wider caller hands its own ledger in and closes it after its own tail.
+  const severity = (dryRun ? null : (severityBatch ?? makeSeverityBatch()));
+  const ownSeverity = !dryRun && !severityBatch;
 
   const results = [];
   const btm = Number(target.system.stats?.bt?.modifier) || 0;
@@ -443,7 +487,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
       // shot the FX rail already sounded. The sound itself is issued one level down, in
       // applyLocationDamage, because that is the seam EVERY personnel apply passes through — this one,
       // the hand-applied damage dialog, and anything else that lands a hit on a body.
-      await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken, fxSilent });
+      await applyLocationDamage({ target, location, netDamage, structuralDamage: damageAfterSP, penetrates, token: liveToken, fxSilent, severityBatch: severity });
 
       if (ablate && armorMode === ARMOR_MODES.FULL && penetrates && netDamage > 0) {
         await ablateLocationOnce(target, spKey, damageType);
@@ -451,6 +495,10 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
       }
     }
   }
+
+  // Closed after the loop and before the caller's own tail runs, so the progression card and the one
+  // mortal prompt are on screen ahead of whatever the caller posts next (the stun prompt, its notice).
+  if (ownSeverity) await closeSeverityBatch(severity);
 
   if (!dryRun) target.sheet?.render(false);
   return results;

@@ -1,0 +1,15 @@
+{{!--
+  Consolidated severity-progression card — ONE per body per application (combat/severity-batch.js).
+  Replaces the run of per-damage-event cards a multi-hit application used to post: the hit count, the
+  severity ladder the application walked, one line per zone outcome, and the death-save clause when the
+  batch's single mortal prompt follows. Same declarative-shell contract as limb-wound.hbs: every value
+  is localized and assembled in JS and passed in as data (empty string when absent), so the template
+  holds no strings of its own. Values may carry <b> emphasis → triple-stash throughout.
+--}}
+<div class="cyberpunk save-prompt severity-progression">
+  <h3>{{{title}}}</h3>
+  <div>{{{hitsLine}}}</div>
+  {{#if progressionLine}}<div>{{{progressionLine}}}</div>{{/if}}
+  {{#each zoneLines}}<div>{{{this}}}</div>{{/each}}
+  {{#if deathSaveClause}}<div class="result-line">{{{deathSaveClause}}}</div>{{/if}}
+</div>

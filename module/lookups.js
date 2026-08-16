@@ -250,7 +250,7 @@ export const SPREAD_MODE_BUCK = "buck";
 export const SPREAD_MODE_SLUG = "slug";
 
 /**
- * The spread mode a fired round ACTUALLY has (CP2020 p.108). Pure of documents — takes the three
+ * The spread mode a fired round ACTUALLY has (CP2020 p.109). Pure of documents — takes the three
  * fields the weaponFired payload carries and answers "single" | "buck" | "flechette" | …
  *
  * ⭐ WHY THIS IS DERIVED AT FIRE TIME RATHER THAN STORED. The shotgun IS an area weapon in the Core
@@ -322,6 +322,19 @@ export function spreadFlowModeOf(payload) {
 }
 
 /**
+ * ⏪ THE BAND EDGES A CALLER GETS WHEN IT NAMES NO WEAPON RANGE — the fixed metres this ladder used
+ * before the edges became per-weapon, kept as the COMPAT PATH and not as the rule.
+ *
+ * Every live caller now threads the firing weapon's own Range (see `spreadBandSpec` below), so these
+ * two numbers are reached only by a payload assembled before that field existed, by a weapon whose
+ * Range is blank or zero, or by a direct call (a macro, a keeper leg). Those callers keep exactly the
+ * corridor they used to get rather than degrading to nonsense — a missing range must not collapse
+ * every band onto "Close" or push every shot out to "Long".
+ */
+export const SPREAD_LEGACY_CLOSE_EDGE_M = 6;
+export const SPREAD_LEGACY_MEDIUM_EDGE_M = 25;
+
+/**
  * THE PATTERN'S RANGE BAND AND ITS WIDTH, from one distance — the ONE derivation, so the corridor a
  * shooter aims and the corridor the module plants cannot be two different shapes.
  *
@@ -331,16 +344,36 @@ export function spreadFlowModeOf(payload) {
  * a band ladder is how a preview starts promising a width the plant does not honour. Pure: no document,
  * no canvas, no setting.
  *
- * The bands are Core's close / medium / long (CP2020 p.108); the widths default to the Core 1 / 2 / 3
- * metres and are overridden per load by the three `spreadWidth*` fields the ammo carries.
+ * ⭐ THE BAND EDGES ARE FRACTIONS OF THE FIRING WEAPON'S OWN RANGE, NOT FIXED METRES (2026-08-16). The
+ * shotgun table (Core **p.109**) prints its pattern against the range BANDS — Close/PB 1 m 4D6, Medium
+ * 2 m 3D6, Long 3 m 2D6 — and the bands themselves are defined per weapon on p.99: Point Blank is
+ * touching to 1 m, Close is a QUARTER of the weapon's Long range, Medium a HALF, Long the full range.
+ * So the metre at which a pattern stops being Close is a fact about the gun, not a constant: a 50 m
+ * shotgun turns Medium at 12.5 m, a 20 m holdout at 5 m. This ladder hard-coded 6 m / 25 m, which is
+ * one particular weapon's answer applied to every weapon. The Close/PB row is one row in the book, so
+ * the first edge is `max(1 m, range/4)` — a weapon whose quarter-range is under a metre still gives its
+ * point-blank metre to the row that prints it.
+ *
+ * ⭐ PAST THE WEAPON'S FULL RANGE THE LONG ROW CONTINUES, and that is an INTERPRETATION the book leaves
+ * open: p.99 names an Extreme band at 2× the range, but the shotgun table prints no Extreme row, so the
+ * pattern beyond full range is simply unstated. The last printed row is what continues — the ladder
+ * SATURATES at Long — rather than inventing a fourth width nobody printed.
+ *
+ * The widths default to the Core 1 / 2 / 3 metres and are overridden per load by the three
+ * `spreadWidth*` fields the ammo carries.
  *
  * @param {number} distanceM  shooter → aim point, in metres
  * @param {{short?: number|string, medium?: number|string, long?: number|string}} widths per-load overrides
+ * @param {number} [rangeM]   the firing weapon's own Long range in metres; absent → the compat edges
  * @returns {{band: string, widthM: number}}
  */
-export function spreadBandSpec(distanceM, widths = {}) {
+export function spreadBandSpec(distanceM, widths = {}, rangeM = null) {
   const d = Number(distanceM);
-  const band = !Number.isFinite(d) || d <= 6 ? "Short" : (d <= 25 ? "Medium" : "Long");
+  const r = Number(rangeM);
+  const known = Number.isFinite(r) && r > 0;
+  const closeEdgeM = known ? Math.max(1, r / 4) : SPREAD_LEGACY_CLOSE_EDGE_M;
+  const mediumEdgeM = known ? Math.max(closeEdgeM, r / 2) : SPREAD_LEGACY_MEDIUM_EDGE_M;
+  const band = !Number.isFinite(d) || d <= closeEdgeM ? "Short" : (d <= mediumEdgeM ? "Medium" : "Long");
   const declared = band === "Short" ? widths.short : band === "Long" ? widths.long : widths.medium;
   const fallback = band === "Short" ? 1 : band === "Long" ? 3 : 2;
   const widthM = Number(declared);

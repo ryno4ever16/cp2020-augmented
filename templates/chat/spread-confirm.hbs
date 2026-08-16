@@ -1,9 +1,13 @@
 {{!--
-  Shotgun/flechette spread-pattern confirm card (CP2020 p.108). Rendered via renderTemplate
+  Shotgun/flechette spread-pattern confirm card (CP2020 p.109). Rendered via renderTemplate
   with { weaponName, band, widthM, dmgFormula, shells, multiShell, templateId }. ONE card resolves
   every shell of the burst — `shells` is what the confirm will roll per contained token. The
   cp-confirm-spread-zone button + data-template-id are kept verbatim so the existing click handler
   fires. i18n via CPLocal; triple-stash on the summaries because they carry <b>.
+
+  cp-clear-spread-zone beside it VOIDS the shot (delete the pattern, stamp this card cleared) — the
+  same lifecycle the resolution card carries, because this card owns a pattern for the same reason and
+  neither expiry clock will collect a pattern whose card is still unresolved.
 --}}
 <div class="cyberpunk save-prompt">
   <h3>{{CPLocal "SpreadConfirmTitle" weapon=weaponName}}</h3>
@@ -16,5 +20,6 @@
   </div>
   <div class="save-buttons">
     <button class="cp-confirm-spread-zone" data-template-id="{{templateId}}">{{CPLocal "SpreadConfirmBtn"}}</button>
+    <button class="cp-clear-spread-zone" data-template-id="{{templateId}}">{{CPLocal "SpreadClearBtn"}}</button>
   </div>
 </div>

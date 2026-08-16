@@ -40,7 +40,7 @@ function settingScope(key) {
 const MANUAL = {
   // Combat automation — the module's master OFF + every feature off
   combatAutomationEnabled: false,
-  damageAutoApply: false, autoDeathSavePerTurn: false, autoSaveRePrompt: false,
+  autoDeathSavePerTurn: false, autoSaveRePrompt: false,
   activeDodgeParryEnabled: false, aimTrackingEnabled: false, waitForTurnEnabled: false,
   multiActionPenaltyEnabled: false, multiActionAutoTrack: false, limbLossEnabled: false, suppressiveFireSaves: false,
   shotgunSpreadEnabled: false, explosivesEnabled: false, areaEffectOcclusion: false, gasGrenadeCloudEnabled: false,
@@ -62,7 +62,10 @@ const MANUAL = {
 // already on from Manual — they're ignorable subsystems available at every tier.)
 const STANDARD_DELTA = {
   combatAutomationEnabled: true,
-  damageAutoApply: true, autoDeathSavePerTurn: true, autoSaveRePrompt: true,
+  // `damageAutoApply` was in this delta until 2026-08-14 — which is how a table got a preset that
+  // silently stopped asking before it wrote damage. The setting is retired (there is no module-wide
+  // rule any more; each instance of damage is decided at that instance), so no tier references it.
+  autoDeathSavePerTurn: true, autoSaveRePrompt: true,
   activeDodgeParryEnabled: true, aimTrackingEnabled: true, waitForTurnEnabled: true,
   multiActionPenaltyEnabled: true, multiActionAutoTrack: true, limbLossEnabled: true, suppressiveFireSaves: true,
   shotgunSpreadEnabled: true, explosivesEnabled: true, areaEffectOcclusion: true, gasGrenadeCloudEnabled: true,
@@ -96,7 +99,6 @@ export const PRESETS = [
 
 /** Notable ACTIVE features a preset can switch on, named in the confirm dialog (esp. silent ones). */
 const NOTABLE = [
-  { id: "autoApply",    key: "damageAutoApply",            on: (v) => v === true,      nameKey: "PresetFeatureAutoApply" },
   { id: "rawIp",        key: "ipRawTracking",              on: (v) => v === true,      nameKey: "PresetFeatureRawIp" },
   { id: "maximumMetal", key: "mmEnabled",                  on: (v) => v === true,      nameKey: "PresetFeatureMaximumMetal" },
   { id: "limbLoss",     key: "limbLossEnabled",            on: (v) => v === true,      nameKey: "PresetFeatureLimbLoss" },

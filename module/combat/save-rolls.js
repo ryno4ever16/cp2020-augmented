@@ -282,7 +282,12 @@ export function getDeathThreshold(actor) {
   return Math.max(0, bt - mortalLevel);
 }
 
-function getWoundStateLabel(woundState) {
+/**
+ * The wound track's label for a state number. Exported so the per-application severity ledger
+ * (combat/severity-batch.js) writes its progression line off the SAME ladder the stun prompt prints —
+ * a second copy of "which state is called what" is a second thing to keep in step.
+ */
+export function woundStateLabel(woundState) {
   if (woundState <= 0) return localize("Uninjured");
   if (woundState === 1) return localize("Light");
   if (woundState === 2) return localize("Serious");
@@ -312,7 +317,7 @@ export async function postStunSavePrompt(actor, token = null) {
 
   const content = await renderChatCard("stun-save-prompt.hbs", {
     actorName: actor.name,
-    woundLabel: getWoundStateLabel(woundState),
+    woundLabel: woundStateLabel(woundState),
     bt, woundClause, taserClause, taserPenalty, taserCount, threshold,
     actorId: actor.id, tokenId, sceneId,
   });
@@ -400,7 +405,7 @@ export async function executeStunSave({ actorId, tokenId, sceneId }) {
   const roll      = await new Roll("1d10").evaluate();
   const result    = roll.total;
   const success   = result <= threshold;
-  const woundLabel = getWoundStateLabel(actor.woundState?.() ?? 1);
+  const woundLabel = woundStateLabel(actor.woundState?.() ?? 1);
 
   const content = await renderChatCard("stun-save-result.hbs", {
     actorName: actor.name, woundLabel, result, threshold, success,

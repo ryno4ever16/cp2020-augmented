@@ -19,7 +19,7 @@ const SCOPE = "cp2020-augmented";
 // Display order of the sections + the settings in each (registered keys only; absent ones are skipped).
 const SECTIONS = [
   { key: "SectionDamage", keys: [
-    "damageArmorMode", "damageAblation", "damageAutoApply", "headHitDoubling", "limbLossEnabled",
+    "damageArmorMode", "damageAblation", "headHitDoubling", "limbLossEnabled",
     "limbModel", "hitLocationCoreDisplay",
   ] },
   { key: "SectionCombatAutomation", keys: [

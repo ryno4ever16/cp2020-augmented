@@ -42,6 +42,10 @@ const r = await p.evaluate(async () => {
     nylonHelm:   ["cyberpunk2020.armor", "IU87ySLjve8eHgGf"],
     doorgunner:  ["cyberpunk2020.armor", "34GtfgYULaZEe3C7"],
     heavyJacket: ["cyberpunk2020.armor", "X0X3NTrChqfQ4wbO"],
+    lightJacket: ["cyberpunk2020.armor", "x7WjXaNNtzSQJewW"],
+    // A fully-typed garment: coverage 20 at the torso/arms, mechTypedSP { fire, 0 } — so its
+    // CONVENTIONAL value is 0 and its coverage map is what a fire hit meets.
+    salamander:  ["cp2020-augmented.supplement-armor", "6yIgR0Bxa4pdmGfc"],
     skinweave12: ["cyberpunk2020.bioware", "zlBiYh3NIlJ6QRcF"],
     cowl:        ["cyberpunk2020.other-cyberware", "nIxqf9f5cA5j7L1E"],
     kerenzikov1: ["cyberpunk2020.neuralware", "wjnYaHhvxqvRoLs1"],
@@ -165,6 +169,39 @@ const r = await p.evaluate(async () => {
   }
   out.drift = drift;
 
+  // ── F8 · a layer worth 0 conventionally spends no slot, so it evicts nothing ───────────────────
+  // Torso inside-out = Kevlar 10 · Light Armor Jacket 14 · Metal Gear 25 (hard) · Salamander Jacket
+  // (coverage 20, typed fire, conventional value 0). The legality walk must value the entries the way
+  // the fold values them, so the typed piece takes the free-layer branch and the three conventional
+  // pieces stay counted: fold [10,14,25] = 30. Valuing it by RAW coverage instead spends the third
+  // slot on it and ejects Metal Gear, dropping the wearer to fold [10,14] = 19.
+  const f8base = await mk("__PW__Legality TypedBase", ["kevlar", "lightJacket", "metalGear"]);
+  const f8 = await mk("__PW__Legality Typed", ["kevlar", "lightJacket", "metalGear", "salamander"]);
+  out.f8 = {
+    baseLive: live(f8base, "Torso"), baseCounted: countedAt(f8base, "Torso"),
+    baseSurplus: surplusAt(f8base, "Torso"),
+    torsoLive: live(f8, "Torso"), torsoPanel: panel(f8, "Torso"),
+    torsoSurplus: surplusAt(f8, "Torso"), torsoCounted: countedAt(f8, "Torso"),
+    torsoFire: Number(DA._deriveLiveSP(f8, "Torso", "fire")) || 0,
+    refArmorMod: Number(f8.system.stats.ref.armorMod),
+    // The derived conditional map the armor sub-panel renders from.
+    condTypes: Object.keys(f8.system?.conditionalSP ?? {}).sort(),
+    condFireLocs: Object.keys(f8.system?.conditionalSP?.fire ?? {}).sort(),
+    condFireTorso: Number(f8.system?.conditionalSP?.fire?.Torso) || 0,
+  };
+
+  // ── F9 · the same free layer charges no encumbrance ───────────────────────────────────────────
+  // Kevlar (EV 0) + the typed garment (EV 0). One counted layer ⇒ no layer surcharge, so the derived
+  // encumbrance figure and the REF total are exactly the single-layer wearer's.
+  const f9 = await mk("__PW__Legality TypedEv", ["kevlar", "salamander"]);
+  out.f9 = {
+    torsoLive: live(f9, "Torso"), torsoFire: Number(DA._deriveLiveSP(f9, "Torso", "fire")) || 0,
+    torsoCounted: countedAt(f9, "Torso"), torsoSurplus: surplusAt(f9, "Torso"),
+    layerEv: BL.actorLayerEv(f9).ev,
+    refArmorMod: Number(f9.system.stats.ref.armorMod),
+    refTotal: Number(f9.system.stats.ref.total),
+  };
+
   // ── F7 · warnings — the real equip action, recorded once, never refused ───────────────────────
   const origWarn = ui.notifications.warn.bind(ui.notifications);
   let recorded = [];
@@ -277,6 +314,28 @@ eq("control · Kevlar stays soft", r.f6.kevlar, "soft");
 eq("control · Heavy Armor Jacket stays soft", r.f6.heavyJacket, "soft");
 eq("control · Metal Gear already hard", r.f6.metalGear, "hard");
 eq("no hardness drift vs the generator's book table", r.drift, []);
+
+console.log("── F8 · a zero-value layer spends no slot ──");
+eq("control · the three conventional pieces fold", r.f8.baseLive, 30);
+eq("control · three counted, nothing surplus", [r.f8.baseCounted, r.f8.baseSurplus], [3, []]);
+eq("the typed piece evicts nothing", r.f8.torsoSurplus, []);
+eq("counted layers unchanged by the typed piece", r.f8.torsoCounted, 3);
+eq("conventional torso fold unchanged", r.f8.torsoLive, 30);
+eq("torso panel equals the fold", r.f8.torsoPanel, 30);
+eq("the typed piece still folds against its own type", r.f8.torsoFire, 33);
+eq("derived encumbrance figure (EV 2 + three-layer surcharge)", r.f8.refArmorMod, -5);
+eq("conditional map publishes the typed row", r.f8.condTypes, ["fire"]);
+eq("conditional map covers the garment's locations", r.f8.condFireLocs, ["Torso", "lArm", "rArm"]);
+eq("conditional torso value equals the typed fold", r.f8.condFireTorso, 33);
+
+console.log("── F9 · a zero-value layer charges no encumbrance ──");
+eq("conventional fold is the single conventional piece", r.f9.torsoLive, 10);
+eq("typed fold combines both", r.f9.torsoFire, 23);
+eq("counted layers", r.f9.torsoCounted, 1);
+eq("nothing surplus", r.f9.torsoSurplus, []);
+eq("no layer surcharge", r.f9.layerEv, 0);
+eq("derived encumbrance figure untouched", r.f9.refArmorMod, 0);
+eq("REF total untouched", r.f9.refTotal, 8);
 
 console.log("── F7 · equip-time notices ──");
 eq("layer-cap notice fires once", r.warnMaxLayers.count, 1);

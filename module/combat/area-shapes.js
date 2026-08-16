@@ -191,6 +191,18 @@ export function areaPreUpdateHook() {
   return usesRegions() ? "preUpdateRegion" : "preUpdateMeasuredTemplate";
 }
 
+/**
+ * Hook name for "area document was deleted", per core — the counterpart of areaPreUpdateHook.
+ *
+ * Derived through the same feature detect as everything else here, so a listener registered on it
+ * follows whichever backend createArea actually used. Callers that need to react to an area vanishing
+ * (a hand-deleted pattern, an expiry sweep's own delete) register on this rather than naming a core's
+ * hook, which is what keeps one listener working on both cores.
+ */
+export function areaDeleteHook() {
+  return usesRegions() ? "deleteRegion" : "deleteMeasuredTemplate";
+}
+
 /** Wrap an existing area document (looked up by id on its scene) into a handle, or null. */
 export function areaById(scene, id) {
   if (!scene || !id) return null;
@@ -222,4 +234,24 @@ export async function moveArea(handle, dx, dy) {
       await handle.doc.update({ x: (handle.doc.x ?? 0) + dx, y: (handle.doc.y ?? 0) + dy });
     }
   } catch (e) { console.warn("Cyberpunk2020 | moveArea failed", e); }
+}
+
+/**
+ * Is `tok` shielded from an area effect originating at (ox,oy) by a wall? (CP2020 p.108 — cover
+ * between the source and a target exempts it.) Gated by areaEffectOcclusion. Graceful: if the
+ * collision backend is unavailable, nothing is treated as occluded.
+ *
+ * ⏩ Moved here from damage-hooks.js (2026-08-14, with the spread-geometry relocation): the
+ * presentation rail asks this same question of a corridor's occupants at its rounds' arrival, and it
+ * cannot import damage-hooks (cycle). This file is the shared area toolbox both already import.
+ */
+export function areaOcclusionTest(ox, oy, tok) {
+  try { if (!game.settings.get("cp2020-augmented", "areaEffectOcclusion")) return false; } catch (e) { /* default on */ }
+  try {
+    const origin = { x: ox, y: oy };
+    const dest   = { x: tok.center?.x ?? tok.x, y: tok.center?.y ?? tok.y };
+    const backend = CONFIG?.Canvas?.polygonBackends?.move;
+    if (backend?.testCollision) return !!backend.testCollision(origin, dest, { type: "move", mode: "any" });
+  } catch (e) { /* no collision support → not occluded */ }
+  return false;
 }

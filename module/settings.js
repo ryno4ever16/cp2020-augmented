@@ -251,15 +251,12 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
-  // --- damageAutoApply ---
-  game.settings.register(SCOPE, "damageAutoApply", {
-    name: "SETTINGS.DamageAutoApply",
-    hint: "SETTINGS.DamageAutoApplyHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
+  // The world `damageAutoApply` toggle was RETIRED (user ruling, 2026-08-14): "auto apply should be
+  // removed as a feature and the option of whether to apply it can be handled at each instance of
+  // damage instead of a module-wide rule that can be mysteriously turned on or off". Every resolution
+  // now opens the confirmation window (one per application batch), so the decision is taken where the
+  // damage is, by whoever is looking at it. A world that had it ON simply sees windows again — nothing
+  // migrates anywhere, and the orphaned world doc is dropped in migrateAugmentedSettings.
 
   // --- headHitDoubling ---
   game.settings.register(SCOPE, "headHitDoubling", {

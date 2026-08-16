@@ -1,5 +1,5 @@
 {{!--
-  Shot-pattern RESOLUTION card (CP2020 p.108) — posted for a corridor the shooter already aimed, once
+  Shot-pattern RESOLUTION card (CP2020 p.109) — posted for a corridor the shooter already aimed, once
   the shot has finished being presented, in place of resolving it unattended. Rendered via
   renderChatCard with
   { weaponName, band, widthM, dmgFormula, shells, multiShell, templateId,
@@ -16,6 +16,12 @@
   The cp-confirm-spread-zone button + data-template-id are verbatim from spread-confirm.hbs — one
   dispatch (damage-hooks.js registerDamageHooks) resolves either card, relays to the active GM, and
   locks the card against a second press. i18n via CPLocal; triple-stash where the string carries <b>.
+
+  cp-clear-spread-zone beside it VOIDS the shot instead of applying it: the pattern is deleted and this
+  card is stamped resolved+cleared, after which the render pass in damage-hooks.js swaps this whole
+  button row for the cleared line. It is the reason the card can never "go out of date" — the pattern
+  is not collected by either expiry clock while this card is still unresolved, so the only two ways a
+  pattern ends are the two buttons below.
 --}}
 <div class="cyberpunk save-prompt">
   <h3>{{CPLocal "SpreadConfirmTitle" weapon=weaponName}}</h3>
@@ -39,5 +45,6 @@
   </div>
   <div class="save-buttons">
     <button class="cp-confirm-spread-zone" data-template-id="{{templateId}}">{{CPLocal "SpreadResolveBtn"}}</button>
+    <button class="cp-clear-spread-zone" data-template-id="{{templateId}}">{{CPLocal "SpreadClearBtn"}}</button>
   </div>
 </div>

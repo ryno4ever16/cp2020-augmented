@@ -6,7 +6,7 @@
  *   (a) FIXTURES (GM): active scene; an NPC target the player does NOT own, with a known SP (equipped
  *       armor) + BTM (BODY) state; a player-owned attacker; both tokens on the scene. A chat card
  *       carrying the module's `damagePayload` flag (Torso volley) is posted — exactly the card a real
- *       shot produces. Settings captured/restored (damageAutoApply OFF → the card opens the dialog, not
+ *       shot produces. Settings captured/restored (armor mode + ablation; the card always opens the dialog, not
  *       auto-apply; damageArmorMode FULL + damageAblation OFF for a deterministic preview).
  *   (b) PLAYER opens the REAL DamageDialog by clicking the card's Apply-Damage button (the same entry a
  *       player uses in play — renderChatMessageHTML injects `.cp2020-apply-damage-btn` because the player
@@ -111,8 +111,9 @@ try {
 
     // Deterministic settings (capture → restore at cleanup).
     const capture = (k) => { try { return game.settings.get("cp2020-augmented", k); } catch { return undefined; } };
-    const prev = { autoApply: capture("damageAutoApply"), armorMode: capture("damageArmorMode"), ablation: capture("damageAblation") };
-    await game.settings.set("cp2020-augmented", "damageAutoApply", false);       // card opens the DIALOG, not auto-apply
+    // The card always opens the DIALOG now — the world-wide auto-apply route was retired 2026-08-14,
+    // so there is no setting left to pin for it and the relay under test is the only apply path.
+    const prev = { armorMode: capture("damageArmorMode"), ablation: capture("damageAblation") };
     await game.settings.set("cp2020-augmented", "damageArmorMode", "full");
     await game.settings.set("cp2020-augmented", "damageAblation", false);
 
@@ -186,9 +187,9 @@ try {
     ownsAttacker: game.actors.get(d.attackerId)?.isOwner === true,
     ownsNpc: game.actors.get(d.npcId)?.isOwner === true,
     npcTokSeen: !!canvas?.tokens?.get(d.npcTokenId),
-    autoApplyOff: (() => { try { return game.settings.get("cp2020-augmented", "damageAutoApply") === false; } catch { return false; } })(),
+    autoApplyRetired: game.settings.settings.has("cp2020-augmented.damageAutoApply") === false,
   }), S);
-  log.push(`player: isGM=${who.isGM} ownsAttacker=${who.ownsAttacker} ownsNpc=${who.ownsNpc} npcTokSeen=${who.npcTokSeen} autoApplyOff=${who.autoApplyOff}`);
+  log.push(`player: isGM=${who.isGM} ownsAttacker=${who.ownsAttacker} ownsNpc=${who.ownsNpc} npcTokSeen=${who.npcTokSeen} autoApplyRetired=${who.autoApplyRetired}`);
   check("player session is a non-GM who owns the attacker but NOT the NPC target", !who.isGM && who.ownsAttacker && !who.ownsNpc, JSON.stringify(who));
   if (who.isGM || who.ownsNpc) throw new Error("player context wrong (isGM or owns the NPC — the relay wouldn't be exercised)");
 
@@ -295,7 +296,6 @@ try {
     if (d.createdPlayer) { const u = game.users.get(d.playerId); if (u) await u.delete().catch(() => {}); }
     try {
       const r = d.prev ?? {};
-      if (r.autoApply !== undefined) await game.settings.set("cp2020-augmented", "damageAutoApply", r.autoApply);
       if (r.armorMode !== undefined) await game.settings.set("cp2020-augmented", "damageArmorMode", r.armorMode);
       if (r.ablation !== undefined) await game.settings.set("cp2020-augmented", "damageAblation", r.ablation);
     } catch (e) {}

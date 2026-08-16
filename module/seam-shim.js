@@ -17,8 +17,9 @@
  * When the upstream PRs are accepted, this whole file can be deleted.
  */
 
-import { localize } from "./utils.js";
-import { payloadScattersOnMiss } from "./combat/scatter-table.js";
+import { localize, localizeParam, tryLocalize } from "./utils.js";
+import { payloadScattersOnMiss, scatterDriftM } from "./combat/scatter-table.js";
+import { getWeaponLongRange } from "./combat/rangefinding.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -285,6 +286,14 @@ function installWeaponFiredShim(ItemProto) {
         // the roll directly), in which case the plant falls back to computing an axis from the target
         // exactly as it did before this existed.
         spreadAim: attackMods?.cpSpreadAim ?? null,
+        // ⭐ THE WEAPON'S OWN LONG RANGE, in metres — a WEAPON fact, which is why it is captured here
+        // beside the weapon's name and not in `ammoEffectFields` with the load's own numbers. The shot
+        // pattern's range bands are FRACTIONS OF IT (Core p.99: Close ¼, Medium ½, Long the full range)
+        // and the shotgun table prints the pattern's width and damage per band (p.109), so every reader
+        // of the corridor — the aim preview, the plant, the presentation sweep — has to measure against
+        // the same number. Read through the shared resolver (combat/rangefinding.js), the same call the
+        // aim gesture makes, so the ghost the shooter drew and the region the GM plants cannot disagree.
+        spreadRangeM: getWeaponLongRange(this),
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       return orig.call(this, attackMods, ...rest);
@@ -303,6 +312,38 @@ function installWeaponFiredShim(ItemProto) {
   // natively we never get here, so renderTemplate is left untouched (no chance of a double-emit).
   if (patchedAny) installRenderEmit();
   return patchedAny;
+}
+
+/**
+ * SAY OUT LOUD THAT THE PATTERN MOVED — one notification, on the client that pulled the trigger, at the
+ * moment its two faces are known (user ruling 2026-08-16: *"or just some way to let the player know it's
+ * behaving as intended"*).
+ *
+ * ⭐ WHY A SIGNPOST IS OWED AT ALL. A missed pattern's true centre goes to the grenade table, so the
+ * corridor the shooter carefully aimed is NOT the corridor that resolves — the rounds fly somewhere else
+ * and the region is planted somewhere else. From the shooter's seat that is indistinguishable from the
+ * aim gesture having been ignored, which is what a table reported it as. Naming the direction and the
+ * distance turns a suspected bug into a visible rule.
+ *
+ * ⭐ WHY HERE. This is the earliest point at which ONE client knows both facts — that the base system
+ * ruled the shot a miss, and which way the centre went — and it is the FIRING client, the one seat that
+ * is certainly a person watching this shot. The plant runs on the active GM, which on a player's shot is
+ * somebody else entirely. It fires once per pattern because the roll it sits beside does: the render
+ * wrapper raises one payload per fire card (`_emittedFor`), and one card is one pattern however many
+ * shells ride it.
+ *
+ * The direction NAME goes through `tryLocalize` and the sentence through the same two keys shape the
+ * resolution card's own scatter line uses (damage-hooks.js `SpreadScatterLine`), so the notification and
+ * the card cannot describe one drift two ways. Never throws: a client with no notifications banner still
+ * fires the shot.
+ */
+function _signpostSpreadScatter(faces) {
+  try {
+    const drift = scatterDriftM(faces?.dirFace, faces?.distFace);
+    ui.notifications?.info?.(drift.distanceM
+      ? localizeParam("SpreadScatterNotice", { dir: tryLocalize(drift.name), dist: drift.distanceM })
+      : localize("SpreadScatterNoticeNoDrift"));
+  } catch (_e) { /* no UI on this client — the pattern still scatters */ }
 }
 
 /** Wrap the global renderTemplate ONCE so each fire-card render emits its hook, combining the captured
@@ -352,6 +393,7 @@ function installRenderEmit() {
             dirFace: (await new Roll("1d10").evaluate()).total,
             distFace: (await new Roll("1d10").evaluate()).total,
           };
+          _signpostSpreadScatter(spreadScatter);
         }
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
@@ -392,6 +434,10 @@ function installRenderEmit() {
           // consumer treats a null as "nobody declared an aim" and computes one, which is the behaviour
           // that shipped before the placement gesture existed.
           spreadAim: _fireCtx.spreadAim ?? null,
+          // WHAT THE PATTERN'S BAND EDGES ARE FRACTIONS OF — the firing weapon's own Long range, captured
+          // at the trigger pull (see the note where it is read). Every reader of the corridor measures
+          // its aim point against this one number; absent, they fall back to the ladder's compat edges.
+          spreadRangeM: _fireCtx.spreadRangeM ?? null,
           // WHERE THE MISSED CENTRE WENT — the two grenade-table faces, rolled once above. Null on every
           // shot that hit and on every shot that declared no corridor.
           spreadScatter,

@@ -5,8 +5,9 @@
  *
  * PATH A — Targeted full-auto:
  *   item.js emits "cyberpunk2020.weaponFired" with a targetTokenId.
- *   Auto-applies if that setting is on; otherwise opens DamageDialog once the shot has finished
- *   being presented on the canvas, so the window does not cover the action it reports on.
+ *   Opens DamageDialog once the shot has finished being presented on the canvas, so the window does
+ *   not cover the action it reports on. There is no unattended route: whether a given instance of
+ *   damage is applied is answered at that instance, in that window (user ruling 2026-08-14).
  *   The card is deliberately NOT flagged here — one path, not both — but the shot's card IS noted as
  *   it is created, so a window closed without applying can fall back to PATH B's button on that same
  *   card rather than leaving the shot with no way to apply it at all.
@@ -26,17 +27,26 @@ import { DamageDialog, DAMAGE_DIALOG_DISMISSED_HOOK }         from "./DamageDial
 import { AutomationNotice }                                   from "../dialog/automation-notice.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
-import { markCardResolved } from "../card-lock.js";
+// The one-shot card stamp is ALSO the pattern lifecycle's "has this shot been dealt with?" reader:
+// a pattern whose card is still unresolved is a decision somebody has not made yet, and no expiry
+// clock may take that decision away from them (see _spreadZoneCardPending).
+import { markCardResolved, isCardResolved } from "../card-lock.js";
 import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLocationDamage, ARMOR_MODES } from "./DamageApplicator.js";
+// The per-application severity cadence — one progression card and one mortal prompt per body per
+// application, whatever the application is made of (a burst's rounds, a corridor's shells, a blast and
+// the fragments it throws). See combat/severity-batch.js for who owns the wound-track prompt.
+import { makeSeverityBatch, closeSeverityBatch, severityBatchOwnsMortal, severityBatchHandledMortal, isSeverityBatch } from "./severity-batch.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
-import { mechRoundTickEnabled } from "../settings.js";
+// combatFxEnabled is read (with the presentation rail's patternFlowOwns) at the pattern's apply, so one
+// round is not sounded twice — once on arrival by the rail and again when the corridor is confirmed.
+import { mechRoundTickEnabled, combatFxEnabled } from "../settings.js";
 import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, localizeParam, tryLocalize } from "../utils.js";
-import { renderChatCard }                                     from "../compat.js";
+import { renderChatCard, getHtmlElement }                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
-import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, usesRegions, moveArea } from "./area-shapes.js";
+import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea, areaOcclusionTest } from "./area-shapes.js";
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
@@ -48,11 +58,15 @@ import { SPREAD_ZONE_LOOK } from "./spread-zone-look.js";
 // their definition says so. Nothing else in the aim module is touched (it is a client-side preview),
 // and it reaches for no canvas at import time.
 import { SPREAD_MIN_LENGTH_M, SPREAD_MIN_WIDTH_M } from "./spread-placement.js";
+// ⚠ IMPORTED for this file's OWN plant calls AND re-exported below (the scatter-table idiom at the
+// rose/drift re-export): a `export {...} from` alone wires importers but binds NOTHING here — the
+// certification lane caught _placeSpreadZone throwing ReferenceError on exactly that.
+import { declaredSpreadAim, spreadAttackOutcome, scatteredSpreadCorridor } from "./spread-geometry.js";
 import { pixelsToMeters, metersToPixels } from "../vehicle/vehicle-grid.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
-import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf } from "../fx/effects.js";
+import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns } from "../fx/effects.js";
 
 // Payload waiting to be attached to the next chat message created, and WHEN it started waiting.
 //
@@ -215,6 +229,7 @@ export function registerDamageHooks() {
   _hookWeaponFired();
   _hookCreateChatMessage();
   _hookRenderChatMessage();
+  _hookClearedPatternCard();
   _hookDamageDialogDismissed();
   _hookSuppressiveFire();
   _hookSuppressiveZoneEntered();
@@ -240,6 +255,7 @@ export function registerDamageHooks() {
     const unlockBtn     = ev.target.closest(".cp-suppressive-unlock");
     const blastBtn      = ev.target.closest(".cp-confirm-explosion");
     const spreadBtn     = ev.target.closest(".cp-confirm-spread-zone");
+    const clearSpreadBtn = ev.target.closest(".cp-clear-spread-zone");
     const takeAimBtn    = ev.target.closest(".cp-take-aim-btn");
     const waitBtn       = ev.target.closest(".cp-wait-for-turn-btn");
     const actNowBtn     = ev.target.closest(".cp-wait-act-btn");
@@ -269,6 +285,18 @@ export function registerDamageHooks() {
       spreadBtn.disabled = true;
       await _confirmSpreadZone(spreadBtn.dataset.templateId);
       await markCardResolved(spreadBtn.closest("[data-message-id]")?.dataset?.messageId, "spreadConfirm");
+    }
+
+    // Clear = the apply's opposite exit, on the same card: void the shot, remove the pattern, and say
+    // so where the button was. The message id travels with the call because the pattern is deleted by
+    // it — after that there is nothing left to read a recorded card id off.
+    if (clearSpreadBtn && !clearSpreadBtn.disabled) {
+      ev.preventDefault();
+      clearSpreadBtn.disabled = true;
+      await _clearSpreadZone(
+        clearSpreadBtn.dataset.templateId,
+        clearSpreadBtn.closest("[data-message-id]")?.dataset?.messageId ?? "",
+      );
     }
 
     if (evasionBtn && !evasionBtn.disabled) {
@@ -559,28 +587,30 @@ function _hookWeaponFired() {
       // true when handled; a normal personnel-vs-person hit falls through to the dialog below.
       if (await dispatchAttack(payload, target)) return;
 
-      if (game.settings.get("cp2020-augmented", "damageAutoApply")) {
-        await _autoApply(payload, target);
-      } else {
-        // Let the shot finish before putting a window over the canvas. The dialog used to open the
-        // instant the shot resolved, which is while the rail is still fanning the rounds out — so the
-        // window covered the action it was reporting on, centre-screen, for the whole burst. It opens
-        // now when the action is OVER: the last round's impact/tracer ending, which is where the user
-        // drew that line (burst smoke and ember motes are dressing and are deliberately not waited on).
-        // Only THIS branch waits: auto-apply opens no window, so damage landing mid-burst is fine,
-        // and the chat-button path (PATH B) is opened by the reader when the reader chooses.
-        // The claim above is already set synchronously, so a second layer still stands down at once,
-        // and two payloads in flight each settle on their own signal without any queue between them.
-        // WAIT FOR THE RAIL TO SAY IT IS DONE, rather than for a sum reproduced here. The rail queues
-        // every duration, so it is the only honest source for "the action has finished"; the arithmetic
-        // this used to sleep on had to be re-derived whenever a cadence, a hold or a clip was tuned and
-        // drifted silently when it was not — the travelled class was the visible case, where the sum
-        // read 150ms against a real 983ms and the window landed on top of the pellets still in flight.
-        // presentationSettled owns all three routes (the signal, the arithmetic when no fan-out ran,
-        // and the hard cap that stops anything parking the window), so this reads as one await.
-        await presentationSettled(payload);
-        new DamageDialog(payload, target).render(true);
-      }
+      // ⭐ EVERY RESOLUTION OPENS THE WINDOW (user ruling, 2026-08-14): "auto apply should be removed as
+      // a feature and the option of whether to apply it can be handled at each instance of damage
+      // instead of a module-wide rule that can be mysteriously turned on or off". A world setting used
+      // to branch here and skip the window for the whole table; it is gone, and so is the route it
+      // selected. The per-instance decision IS this window — one per application, since the batch
+      // cadence made a burst one application rather than N.
+      //
+      // Let the shot finish before putting the window over the canvas. It used to open the instant the
+      // shot resolved, which is while the rail is still fanning the rounds out — so the window covered
+      // the action it was reporting on, centre-screen, for the whole burst. It opens now when the
+      // action is OVER: the last round's impact/tracer ending, which is where the user drew that line
+      // (burst smoke and ember motes are dressing and are deliberately not waited on). PATH B does not
+      // wait, because its window is opened by the reader, when the reader chooses.
+      // The claim above is already set synchronously, so a second layer still stands down at once,
+      // and two payloads in flight each settle on their own signal without any queue between them.
+      // WAIT FOR THE RAIL TO SAY IT IS DONE, rather than for a sum reproduced here. The rail queues
+      // every duration, so it is the only honest source for "the action has finished"; the arithmetic
+      // this used to sleep on had to be re-derived whenever a cadence, a hold or a clip was tuned and
+      // drifted silently when it was not — the travelled class was the visible case, where the sum
+      // read 150ms against a real 983ms and the window landed on top of the pellets still in flight.
+      // presentationSettled owns all three routes (the signal, the arithmetic when no fan-out ran,
+      // and the hard cap that stops anything parking the window), so this reads as one await.
+      await presentationSettled(payload);
+      new DamageDialog(payload, target).render(true);
       return;
     }
 
@@ -705,15 +735,49 @@ function _injectApplyDamageControl(message, html) {
     // by the unified resolver; a normal personnel-vs-person hit falls through to the dialog.
     if (await dispatchAttack(payload, target)) return;
 
-    if (game.settings.get("cp2020-augmented", "damageAutoApply")) {
-      await _autoApply(payload, target);
-    } else {
-      new DamageDialog(payload, target).render(true);
-    }
+    // The reader pressed the button on the card, so the window opens now — no wait for a presentation
+    // that finished long ago, and no world setting deciding on their behalf whether they get one.
+    new DamageDialog(payload, target).render(true);
   });
 
   const container = html.querySelector(".cyberpunk-card") ?? html;
   container.appendChild(btn);
+}
+
+/**
+ * Render pass: a CLEARED pattern card shows a line where its buttons were.
+ *
+ * The user's ruling in one behaviour — "it should go away on application and should otherwise be able
+ * to be cleared". Applied, the card is locked by the shared card lock and keeps its (disabled) button
+ * as the record of what happened; CLEARED, the buttons are removed outright and replaced by a sentence
+ * saying the shot was voided, because there is no longer a pattern for any of them to act on.
+ *
+ * Driven off the message flag rather than off rewritten message content, so it survives a reload,
+ * reaches every client, and needs no stored copy of the card's original render context. Keyed on
+ * `spreadCleared` and NOT on the resolved lock, deliberately: the GM's ↺ re-arm control lifts the lock,
+ * and a re-armed cleared card must still not offer to apply a pattern that is gone.
+ *
+ * Idempotent (the contract every pass here has): it returns as soon as its own line is present.
+ */
+function _renderClearedPatternCard(message, html) {
+  if (!message?.getFlag?.("cp2020-augmented", "spreadCleared")) return;
+  const root = getHtmlElement(html);
+  const buttons = root?.querySelector?.(".save-buttons");
+  if (!buttons || buttons.querySelector(".cp-spread-cleared")) return;
+  buttons.replaceChildren();
+  const line = document.createElement("span");
+  // save-note is the card's own quiet-text class (the hint line these templates already carry), so the
+  // cleared line needs no styling of its own.
+  line.classList.add("save-note", "cp-spread-cleared");
+  line.textContent = localize("SpreadClearedLine");
+  buttons.appendChild(line);
+}
+
+function _hookClearedPatternCard() {
+  // Registered through onChatCardRender for the same reason the apply control and the card lock are:
+  // the log's first scrollback batch renders before `ready`, so a plain Hooks.on would leave every
+  // cleared card in the log still showing live buttons after a reload.
+  onChatCardRender(_renderClearedPatternCard);
 }
 
 function _hookRenderChatMessage() {
@@ -1579,6 +1643,35 @@ function _hookGasCloud() {
   });
 }
 
+/**
+ * WHICH FIGURE FIRED THIS — the point the three untargeted placements below are drawn out of.
+ *
+ * ⭐ THE PAYLOAD'S OWN ANSWER COMES FIRST. An actor id cannot name a figure: two tokens of one actor
+ * share it, and an UNLINKED copy's synthetic actor answers the base actor's id as well (the id-collision
+ * class recorded in combat-data-hazards), so a scan by actor id can only ever report "whichever figure
+ * the canvas drew first". That is how a pattern aimed from the second figure was planted from the first
+ * — same heading, same reach, same width, the whole corridor translated by the distance between the two
+ * (reproduced on the rig 2026-08-15). The seam captures the firing figure at the trigger pull
+ * (seam-shim.js firingTokenIdOf) and carries it as `attackerTokenId` for exactly this question.
+ *
+ * Same preference the presentation rail (fx/effects.js shooterTokenForPayload), the suppressive lane
+ * (suppressive-placement.js _resolveShooterToken), the damage window (DamageDialog.js _attackerTokenDoc)
+ * and the vehicle facing (vehicle-targeting.js resolveFacing) already apply — this is the one family of
+ * placement sites that never got it.
+ *
+ * The actor scan stays as the fallback it was always meant to be: a payload that carries no such field
+ * (a direct macro call, a keeper, a build older than the seam change). Deliberately NOT delegated to
+ * `shooterTokenForPayload`, whose own fallback reaches past the canvas to `tokensOf` — a TokenDocument
+ * has no `.center`, and one from another scene would put a region at that scene's coordinates on this
+ * one. These three sites want a placeable on the viewed canvas or nothing at all.
+ */
+function _firingTokenOf(payload) {
+  const named = payload?.attackerTokenId ? (canvas?.tokens?.get(payload.attackerTokenId) ?? null) : null;
+  if (named) return named;
+  const attackerId = payload?.attackerId ?? payload?.attackerActorId ?? payload?.actorId ?? null;
+  return attackerId ? (canvas?.tokens?.placeables?.find(t => t.actor?.id === attackerId) ?? null) : null;
+}
+
 /** Place the gas cloud + post its notice card. Runs on the active GM (directly or via socket relay). */
 async function _placeGasCloud(payload) {
     const scene = canvas?.scene;
@@ -1594,11 +1687,11 @@ async function _placeGasCloud(payload) {
       if (tok) { cloudX = tok.center?.x ?? tok.x; cloudY = tok.center?.y ?? tok.y; }
     }
     if (cloudX === null) {
-      // No target token — fall back to the attacker's token, resolved by actor id.
-      // weaponFired payloads carry no attacker token id, so we look it up on the canvas.
-      const atk = attackerId
-        ? canvas?.tokens?.placeables?.find(t => t.actor?.id === attackerId)
-        : null;
+      // No target token — the cloud forms on the thrower's own figure. The payload NAMES that figure
+      // (`attackerTokenId`, carried since the seam change); the actor-id scan inside _firingTokenOf is
+      // only what is left for a payload that predates the field or was raised without going through the
+      // seam at all, and it cannot tell two figures of one actor apart.
+      const atk = _firingTokenOf(payload);
       if (atk) { cloudX = atk.center?.x ?? atk.x; cloudY = atk.center?.y ?? atk.y; }
     }
     if (cloudX === null) return; // can't place without a position
@@ -1891,6 +1984,13 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
   const ws = actor?.woundState?.() ?? 0;
   if (ws <= 0) return;
   if (ws < 4) { await postStunSavePrompt(actor, tok); return; }
+  // ⭐ WHEN THE APPLICATION'S SEVERITY LEDGER OWNS THE MORTAL PROMPT, this rail posts only the stun
+  // half. The ledger closes AFTER the last event of the application and offers the death save once, at
+  // the tier the application FINISHED on (combat/severity-batch.js) — which is the whole point of the
+  // batch cadence: the first shell of a corridor no longer fixes the tier the whole burst is judged at.
+  // A caller that hands in the plain Set this rail used to take keeps the old once-per-body rule below,
+  // so nothing that predates the ledger changes.
+  if (severityBatchOwnsMortal(batch)) { await postStunSavePrompt(actor, tok); return; }
   // ⭐ AT MORTAL, BOTH — and that is a correction, not a new rule (user ruling: "both"). The single-
   // target rail has always posted the pair here (save-rolls.js `postSavePrompts`, on p.99's reading:
   // the stun save governs whether the body stays on its feet, the death save whether it survives at
@@ -1910,9 +2010,10 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
   // Consciousness is a separate question with a separate answer, so the stun prompt goes out either way.
   const body = tok?.document?.id ?? tok?.id ?? actor.id;
   const isStabilized = actor.getFlag?.("cp2020-augmented", "stabilized");
-  const deathOwed = !isStabilized && (!batch || !batch.has(body));
+  const legacySet = (batch instanceof Set) ? batch : null;
+  const deathOwed = !isStabilized && (!legacySet || !legacySet.has(body));
   if (deathOwed) {
-    batch?.add(body);
+    legacySet?.add(body);
     await postDeathSavePrompt(actor, tok);
   }
   await postStunSavePrompt(actor, tok);
@@ -1930,11 +2031,19 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
  * explosion path through this helper is unchanged by their arrival.
  * Once per landed shell per token, which is what the pattern flow already does with everything else it
  * applies (N shells = N banded rolls = N trips through the armour pipeline). */
-async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
-                                                stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula },
-                                    deathPrompted = null) {
+async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null) {
+  const { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
+          stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula } = payload;
   if (!tok?.actor || dmg <= 0) return 0;
   const loc = (await rollLocation(tok.actor, null)).areaHit;
+  // ⭐ THE IMPACT AUDIO, ONCE PER ROUND — NOT ONCE ON ARRIVAL AND AGAIN ON CONFIRM. When the pattern
+  // flow owns this payload, the presentation rail sounds the figures the corridor caught at the moment
+  // the shot ARRIVES; the apply that follows the GM's confirm would otherwise sound each of them a
+  // second time, seconds later. The predicate pair is the rail's own, asked of the same payload
+  // (fx/effects.js `patternFlowOwns` + the world FX switch), so the two halves cannot answer
+  // differently: rail draws ⇒ apply is quiet, rail off ⇒ apply keeps the sound it has always made.
+  // A blast's shells are NOT a pattern payload, so they are unaffected and still sound here.
+  const railSounded = patternFlowOwns(payload) && combatFxEnabled();
   const hits = await applyAreaDamages({
     target:        tok.actor,
     areaDamages:   { [loc]: [{ damage: dmg }] },
@@ -1947,6 +2056,10 @@ async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, 
     armorMode:     game.settings.get("cp2020-augmented", "damageArmorMode"),
     ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
     dryRun:        false,
+    fxSilent:      railSounded,
+    // The application is WIDER than this shell — every shell of the burst, against every figure in the
+    // corridor, shares the caller's ledger and the caller closes it.
+    severityBatch: isSeverityBatch(severityBatch) ? severityBatch : null,
   });
   // The rider payload, in the shape both helpers read (save-rolls.js). Built from this call's own
   // arguments so nothing here has to know which flow handed them over.
@@ -1966,32 +2079,23 @@ async function _applyAreaHitToToken(tok, dmg, { ap, edged, mono, armorMultSoft, 
   const total = hits.reduce((s, h) => s + h.netDamage, 0);
   // The shell's own stun prompt is per damage event, as the book has it; the death prompt is offered
   // once per application batch when the caller named one (a burst of shells is one moment of the fight).
-  if (total > 0) await _postWoundSavePrompts(tok.actor, tok, deathPrompted);
+  if (total > 0) await _postWoundSavePrompts(tok.actor, tok, severityBatch);
   return total;
 }
 
 /**
- * Is `tok` shielded from an area effect originating at (ox,oy) by a wall? (CP2020 p.108 — cover
- * between the source and a target exempts it.) Gated by areaEffectOcclusion. Graceful: if the
- * collision backend is unavailable, nothing is treated as occluded.
+ * ⏩ The wall-occlusion exemption now lives in `combat/area-shapes.js` (`areaOcclusionTest`) — moved
+ * 2026-08-14 with the spread-geometry relocation so the presentation rail can ask the identical
+ * question of a corridor's occupants without importing this file. Local alias keeps every call site.
  */
-function _isOccluded(ox, oy, tok) {
-  try { if (!game.settings.get("cp2020-augmented", "areaEffectOcclusion")) return false; } catch (e) { /* default on */ }
-  try {
-    const origin = { x: ox, y: oy };
-    const dest   = { x: tok.center?.x ?? tok.x, y: tok.center?.y ?? tok.y };
-    const backend = CONFIG?.Canvas?.polygonBackends?.move;
-    if (backend?.testCollision) return !!backend.testCollision(origin, dest, { type: "move", mode: "any" });
-  } catch (e) { /* no collision support → not occluded */ }
-  return false;
-}
+const _isOccluded = areaOcclusionTest;
 
 /**
  * HEP concussion (Listen Up p.105): SP ignored, BTM applies, half of what gets through is
  * permanent HP and half is stun (a Stun Save is always prompted). Soft armor at the torso loses
  * 2 SP. Used by the explosion blast when Detailed Explosives is enabled.
  */
-async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize("WpnExplosion") } = {}, deathPrompted = null) {
+async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize("WpnExplosion") } = {}, severityBatch = null) {
   if (!tok?.actor || falloffDmg <= 0) return 0;
   const actor = tok.actor;
   const btm = Number(actor.system.stats?.bt?.modifier) || 0;
@@ -2004,7 +2108,8 @@ async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize(
   // applies BTM even to machinery, Listen Up p.105), so pass the same permanent value as structural.
   // No impact sound, for the same reason the over-time tick above is silent: this is accumulated
   // damage becoming permanent, not a round arriving.
-  const outcome = await applyLocationDamage({ target: actor, location: "Torso", netDamage: permanent, structuralDamage: permanent, penetrates: true, token: tok, fxSilent: true });
+  const outcome = await applyLocationDamage({ target: actor, location: "Torso", netDamage: permanent, structuralDamage: permanent, penetrates: true, token: tok, fxSilent: true,
+                                              severityBatch: isSeverityBatch(severityBatch) ? severityBatch : null });
   await ablateLocationByAmount(actor, "Torso", 2).catch(() => {}); // concussion wears soft armor −2 SP
   await postSavePromptCard({
     body: localizeParam("ConcussionBody", { name: actor.name, weapon: weaponName, permanent, gotThrough }),
@@ -2012,7 +2117,7 @@ async function _applyConcussionToToken(tok, falloffDmg, { weaponName = localize(
   });
   // Half the blow is stun/blunt → a consciousness check, but only for flesh: a cyberlimb/borg zone
   // that soaked the hit into SDP takes no stun (a destroyed core already ran its own death via the seam).
-  if (!outcome.cyberlimb) await _postWoundSavePrompts(actor, tok, deathPrompted);
+  if (!outcome.cyberlimb) await _postWoundSavePrompts(actor, tok, severityBatch);
   return permanent;
 }
 
@@ -2049,8 +2154,9 @@ async function _placeExplosion(payload) {
       const tok = canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId);
       if (tok) { cx = tok.center?.x ?? tok.x; cy = tok.center?.y ?? tok.y; }
     }
-    if (cx === null && attackerId) {
-      const atk = canvas?.tokens?.placeables?.find(t => t.actor?.id === attackerId);
+    if (cx === null) {
+      // Nothing targeted — the blast is centred on the thrower's own figure, the one the payload names.
+      const atk = _firingTokenOf(payload);
       if (atk) { cx = atk.center?.x ?? atk.x; cy = atk.center?.y ?? atk.y; }
     }
     if (cx === null) return;
@@ -2131,8 +2237,10 @@ async function _confirmExplosion(templateId) {
 
   // One detonation is ONE application batch, which matters most on the detailed branch: the blow and the
   // fragments it throws are two applications on the same body at the same instant, and each used to post
-  // its own death prompt. The set names the bodies already offered one (_postWoundSavePrompts).
-  const deathPrompted = new Set();
+  // its own card and its own death prompt. The ledger collects both and emits once per body
+  // (combat/severity-batch.js), and it owns the wound-track prompt because this loop is the whole
+  // application — nothing after it posts a tail of its own.
+  const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
 
   for (const td of tokens) {
     // Get pixel position from either a TokenDocument or a placeable.
@@ -2152,18 +2260,22 @@ async function _confirmExplosion(templateId) {
 
     if (detailed) {
       // HEP concussion (SP ignored, ½ permanent + ½ stun, soft armor −2). Optional shrapnel on top.
-      await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, deathPrompted);
+      await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
       if (f.blastShrapnel) {
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
           { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) },
-          deathPrompted);
+          severity);
       }
     } else {
       // Core blast: range-banded damage through normal armor.
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, deathPrompted);
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
     }
   }
+
+  // Every body the detonation touched, reported once: the progression card, then the one mortal prompt
+  // at the tier the detonation finished on.
+  await closeSeverityBatch(severity);
 }
 
 /**
@@ -2245,137 +2357,20 @@ function _spreadModeOf(payload) {
   return spreadFlowModeOf(payload);
 }
 
-/**
- * THE CORRIDOR THE SHOOTER DECLARED, or null when nobody declared one.
- *
- * Exported and pure so both the plant and the keeper read the same answer: a payload either carries a
- * usable corridor — a finite angle, a positive reach, a positive width — or it does not, and there is
- * no half-declared state in between. A record that fails any of these is treated as absent rather than
- * repaired, so a malformed aim degrades to the computed axis instead of planting a corridor of NaN.
- *
- * @param {object} payload a weaponFired payload
- * @returns {null|{angleDeg:number, reachM:number, lengthM:number, widthM:number, band:string}}
+/*
+ * ⏩ THE PATTERN'S PURE GEOMETRY NOW LIVES IN `combat/spread-geometry.js` — declaredSpreadAim,
+ * spreadAttackOutcome and scatteredSpreadCorridor moved 2026-08-14 (same idiom as the rose and the
+ * drift above): the presentation rail must read the SAME corridor answers this flow plants by, and
+ * it cannot import this file (this file imports the rail — the reverse edge is a cycle). Re-exported
+ * from here so every existing runtime reader keeps working.
  */
-export function declaredSpreadAim(payload) {
-  const a = payload?.spreadAim;
-  if (!a) return null;
-  const angleDeg = Number(a.angleDeg), reachM = Number(a.reachM);
-  const lengthM = Number(a.lengthM), widthM = Number(a.widthM);
-  if (!Number.isFinite(angleDeg) || !(reachM > 0) || !(lengthM > 0) || !(widthM > 0)) return null;
-  const band = ["Short", "Medium", "Long"].includes(a.band) ? a.band : spreadBandSpec(reachM).band;
-  return { angleDeg, reachM, lengthM, widthM, band };
-}
+export { declaredSpreadAim, spreadAttackOutcome, scatteredSpreadCorridor };
 
 /**
- * DID THE SHOT ACTUALLY HIT WHAT IT WAS POINTED AT — as the BASE SYSTEM already ruled it, or null when
- * the payload does not say.
- *
- * ⛔ NOTHING IS ROLLED HERE, AND THAT IS THE WHOLE DESIGN. The base system rolls exactly one attack per
- * fire card (`attackRoll` — REF + the attack skill + every modifier the window folded in + the weapon's
- * accuracy) and compares it against the DC its own range table gives the declared band (`rangeDCs`,
- * the base's lookups.js). Both numbers ride the payload from the render (seam-shim.js). A second roll
- * here would be a second answer to a question that has already been answered, sitting in the same chat
- * log as the base's own card saying otherwise.
- *
- * Null — a payload that carries neither number — means "nobody asked whether this hit", and the flow
- * that reads it plants where it was aimed, which is what every pattern did before this existed. A shot
- * driven straight through `_placeSpreadZone` (a macro, the keeper's own placement legs) lands there.
- *
- * @param {object} payload a weaponFired payload
- * @returns {null|{hit:boolean, total:number, dc:number}}
- */
-export function spreadAttackOutcome(payload) {
-  const rawTotal = payload?.attackTotal, rawDc = payload?.toHitDC;
-  // ⚠ THE NULL CHECK IS LOAD-BEARING, not defensive tidiness. `Number(null)` is 0 — a finite number —
-  // so a payload that reached here over the socket with its fields nulled (JSON has no NaN) would
-  // otherwise rule the shot a HIT against a DC of zero on every relayed player shot. Absent means
-  // absent; only a real number is an answer.
-  if (rawTotal === null || rawTotal === undefined || rawDc === null || rawDc === undefined) return null;
-  const total = Number(rawTotal), dc = Number(rawDc);
-  if (!Number.isFinite(total) || !Number.isFinite(dc)) return null;
-  return { hit: total >= dc, total, dc };
-}
-
-/**
- * WHERE A MISSED PATTERN ACTUALLY WENT — the declared corridor re-derived about a scattered centre. PURE.
- *
- * CP2020 p.108 hands a missed pattern to the grenade rules: *"If the target is missed, the true center
- * of the attack must be determined"* — 1d10 for a direction off the Grenade Table, 1d10 for the metres.
- * So the thing that moves is the corridor's TRUE CENTRE, meaning the point the shooter aimed at; the
- * MUZZLE does not move, because the shell still left the same barrel. Everything else falls out of the
- * new geometry rather than being carried over from the aim:
- *   - the heading is re-read from the muzzle to the scattered point,
- *   - the reach is the new distance, so the range BAND re-derives, and with it the book's width and
- *     the banded damage — a pattern that scatters long really does spread wider and hit softer.
- * That is the same one derivation the aim preview and the plant already share (`spreadBandSpec`), so a
- * scattered corridor cannot be a different shape of the same rule from an aimed one.
- *
- * ⭐ THE HOUSE WIDTH OVERRIDE SURVIVES THE SCATTER, and it is reconstructed rather than carried: the aim
- * record stores the FINAL width, so the table's ±1 m per notch is recovered by subtracting the width the
- * DECLARED reach's band earned and re-applying it on top of the width the NEW band earns. A table that
- * tightened a corridor to a metre keeps a tight corridor wherever the shell lands. Floored at the same
- * metre the gesture floors it at, for the same reason (a zero-width corridor is a line nobody can stand in).
- *
- * ⭐ THE BAND LADDER NEEDS NO CAP, and this is worth saying out loud because it looks like a missing
- * guard: `spreadBandSpec` SATURATES — anything past 25 m is "Long" — so a shell that scatters past its
- * own reach earns the outermost band's width and the outermost band's damage and nothing further. The
- * pellets gain no reach they did not have; the corridor is simply the longest, widest, weakest one the
- * book describes. Nothing to clamp.
- *
- * `sceneRect` clamps the centre onto the map when the drift would carry it off the edge — a corridor
- * pointed at nothing outside the scene is a corridor nobody can read. Walls are NOT consulted: a wall
- * does not stop a point from being a point, and whether a wall shields the figures standing near it is
- * the cover exemption's job (`_spreadPatternOccupants`), which runs on the corridor this returns.
- *
- * @param {object} args
- * @param {number} args.originX      the muzzle, in pixels — unchanged by the scatter
- * @param {number} args.originY
- * @param {object} args.declared     the corridor the shooter confirmed (declaredSpreadAim's shape)
- * @param {object} [args.widths]     the load's own per-band widths, for the re-derivation
- * @param {number} args.pixelsPerMeter
- * @param {{x:number,y:number,width:number,height:number}} [args.sceneRect]
- * @param {number} args.dirFace      the 1d10 direction face
- * @param {number} args.distFace     the 1d10 distance face, in metres
- * @param {number} [args.overshootM] how far past the new centre the corridor runs (see the plant)
- * @returns {{angleDeg:number, reachM:number, lengthM:number, widthM:number, band:string,
- *           aimX:number, aimY:number, driftM:number, dirName:string, dirFace:number, clamped:boolean}}
- */
-export function scatteredSpreadCorridor({
-  originX = 0, originY = 0, declared, widths = {}, pixelsPerMeter = 1,
-  sceneRect = null, dirFace = 1, distFace = 0, overshootM = 0,
-} = {}) {
-  const ppm = Number(pixelsPerMeter) > 0 ? Number(pixelsPerMeter) : 1;
-  const rad = (Number(declared.angleDeg) * Math.PI) / 180;
-  // The centre as declared: where the shooter clicked, which is `reachM` along the confirmed heading.
-  const aimedX = originX + Math.cos(rad) * declared.reachM * ppm;
-  const aimedY = originY + Math.sin(rad) * declared.reachM * ppm;
-
-  // The landed centre comes from the SHARED site (combat/scatter-table.js), because the presentation
-  // rail asks the same question of the same two faces and derives the point the rounds fly to. Two
-  // derivations — even from identical dice — part company at the clamp.
-  const { x: aimX, y: aimY, driftM, dirName, dirFace: face, clamped } = scatterLandedPoint({
-    aimedX, aimedY, pixelsPerMeter: ppm, dirFace, distFace, sceneRect,
-  });
-
-  const reachM = Math.max(SPREAD_MIN_LENGTH_M, Math.hypot(aimX - originX, aimY - originY) / ppm);
-  const angleDeg = (Math.atan2(aimY - originY, aimX - originX) * 180) / Math.PI;
-  // The table's own override, recovered from the declared corridor and re-applied to the new band.
-  const widthBiasM = declared.widthM - spreadBandSpec(declared.reachM, widths).widthM;
-  const spec = spreadBandSpec(reachM, widths);
-  return {
-    angleDeg, reachM,
-    lengthM: Math.max(SPREAD_MIN_LENGTH_M, reachM + (Number(overshootM) || 0)),
-    widthM: Math.max(SPREAD_MIN_WIDTH_M, spec.widthM + widthBiasM),
-    band: spec.band,
-    aimX, aimY, driftM, dirName, dirFace: face, clamped,
-  };
-}
-
-/**
- * Shotgun / flechette spread (CP2020 p.108). A shell throws a widening pattern: a ray from the attacker
- * toward the target, width by range band (Close/Med/Long), with range-banded damage (ammo override,
- * else Core 4d6/3d6/2d6). Everyone in the straight path is hit (no evasion). The GM aims and confirms,
- * mirroring suppressive fire.
+ * Shotgun / flechette spread (CP2020 p.109). A shell throws a widening pattern: a ray from the attacker
+ * toward the target, width by range band (Close/Med/Long — and the band edges are fractions of the
+ * FIRING WEAPON'S OWN range, p.99), with range-banded damage (ammo override, else Core 4d6/3d6/2d6).
+ * Everyone in the straight path is hit (no evasion). The GM aims and confirms, mirroring suppressive fire.
  *
  * ⭐ WHAT MAKES A SHOT A PATTERN IS THE CARTRIDGE, NOT A FLAG (spreadModeForAmmo, lookups.js). The
  * shotgun is an area weapon in the Core rules, so buckshot patterns because of what it is; the ONE
@@ -2430,7 +2425,11 @@ export async function _placeSpreadZone(payload) {
     if (!scene) return;
 
     const attackerId = payload.attackerId ?? payload.attackerActorId ?? payload.actorId ?? null;
-    const atk = attackerId ? canvas?.tokens?.placeables?.find(t => t.actor?.id === attackerId) : null;
+    // The corridor's ORIGIN, and it must be the figure that actually fired — the corridor is rebuilt
+    // here as an angle and a length from this point, so a wrong origin translates the whole polygon
+    // away from the ghost the shooter drew. _firingTokenOf reads the id the aim itself used
+    // (actor-sheet.js firingTokenIdOf → payload.attackerTokenId) before falling back to an actor scan.
+    const atk = _firingTokenOf(payload);
     if (!atk) {
       ui.notifications.warn(localize("SpreadFireNoToken"));
       return;
@@ -2451,6 +2450,13 @@ export async function _placeSpreadZone(payload) {
     const widths = {
       short: payload.spreadWidthShort, medium: payload.spreadWidthMedium, long: payload.spreadWidthLong,
     };
+    // ⭐ THE FIRING WEAPON'S OWN RANGE, because the band edges are FRACTIONS OF IT (Core p.99: Close is a
+    // quarter of the weapon's Long range, Medium a half, Long the full range) and the shotgun table
+    // (p.109) prints its pattern against those bands. Carried on the payload from the seam, beside the
+    // load's own widths, so the aim preview, this plant and the presentation rail all measure the same
+    // aim point against the same ladder. Absent on a payload assembled before the field existed, or on
+    // a weapon with no range recorded — the ladder falls back to its compat edges (lookups.js).
+    const rangeM = payload.spreadRangeM;
     let band, lengthM, widthM, angleDeg;
     // What the roll said, and — when it said MISS — where the shell actually went. Both stay null on
     // an undeclared corridor and on a payload that carries no roll, and the card prints neither.
@@ -2501,7 +2507,7 @@ export async function _placeSpreadZone(payload) {
         // against the point it landed on and folded into the reach — which is why the reach is the
         // thing this file adjusts and the corridor's own numbers are left exactly as derived.
         const landed = scatteredSpreadCorridor({
-          originX: ox, originY: oy, declared, widths, pixelsPerMeter: ppm,
+          originX: ox, originY: oy, declared, widths, rangeM, pixelsPerMeter: ppm,
           sceneRect: canvas?.dimensions?.sceneRect ?? null,
           dirFace: dirTotal, distFace: distTotal,
         });
@@ -2541,7 +2547,7 @@ export async function _placeSpreadZone(payload) {
       // The band ladder and the per-load widths come from the ONE shared derivation the aim preview
       // reads, so a declared corridor and a guessed one cannot be two different shapes of the same rule.
       // With no target there is no distance to measure, and `null` is what resolves to the Medium band.
-      const spec = spreadBandSpec(distM === null ? 10 : distM, widths);
+      const spec = spreadBandSpec(distM === null ? 10 : distM, widths, rangeM);
       band = spec.band;
       widthM = spec.widthM;
     }
@@ -2577,6 +2583,13 @@ export async function _placeSpreadZone(payload) {
         // written where every other fact about this pattern is already written. Presentation only — no
         // damage path reads any of them.
         dirDeg: angleDeg, lengthM, widthM, ammoKey: ammoFxKeyOf(payload),
+        // ⭐ WHICH FLOW OWNS THIS CORRIDOR, recorded for the same reason the geometry is: the pattern
+        // OUTLIVES the payload, and at confirm time the apply has to ask the rail's own question —
+        // "did the presentation already sound these figures at arrival?" — of something. The stored
+        // answer is the one shared derivation (lookups.js spreadFlowModeOf), so the confirm cannot
+        // answer differently from the placement that put the corridor there. A corridor placed before
+        // this field existed simply answers "single" and its apply sounds as it always did.
+        spreadMode: _spreadModeOf(payload),
         ap: Boolean(payload.ap), edged: Boolean(payload.edged), mono: Boolean(payload.mono),
         armorMultSoft: Number(payload.armorMultSoft ?? 1), armorMultHard: Number(payload.armorMultHard ?? 1),
         penDamageMult: Number(payload.penDamageMult ?? 1), weaponName, createdRound: game.combat?.round ?? 0,
@@ -2648,17 +2661,38 @@ export async function _placeSpreadZone(payload) {
     const speaker = ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined });
     if (declared) {
       await presentationSettled(payload);
-      // The region is still on the scene and stays there until the apply resolves it — the reader is
-      // being asked about a corridor they can see. Its two expiry clocks still own an IGNORED pattern
-      // (round advance in combat, the wall clock outside one), which is what stops an unpressed card
-      // from leaving a corridor on the table forever.
+      // The region is still on the scene and stays there until the card is resolved — the reader is
+      // being asked about a corridor they can see, and NEITHER expiry clock will take it away from
+      // them while the card is unresolved (_spreadZoneCardPending). A pattern nobody has dealt with is
+      // a decision still owed, not litter; the two ways it ends are the card's two buttons.
       await _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker, outcome, scatter });
       return;
     }
 
     const spreadCard = await renderChatCard("spread-confirm.hbs",
       { weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1, templateId: handle.doc.id });
-    await ChatMessage.create({ content: spreadCard, speaker });
+    const message = await ChatMessage.create({ content: spreadCard, speaker });
+    await _stampPatternCardId(handle, message);
+}
+
+/**
+ * TIE THE PATTERN TO ITS CARD — the one write that turns the two documents into one shot.
+ *
+ * Recorded on the REGION rather than derived later because nothing else relates them: the card names
+ * the pattern (data-template-id) but the pattern had no way back, so every reader of a pattern — the
+ * two expiry clocks, the delete hook — had to guess whether somebody was still looking at a card about
+ * it. With the id written here they can simply ask. Written after the card is created because that is
+ * when the id exists; the window between the two is one round trip in which the clocks would answer
+ * "no card" and behave exactly as they did before this existed, which is the safe answer.
+ *
+ * Never throws: a failed stamp costs the pattern its lifecycle protection (it falls back to the old
+ * clock behaviour), not the shot.
+ */
+async function _stampPatternCardId(handle, message) {
+  const id = message?.id;
+  if (!handle?.doc || !id) return;
+  try { await handle.doc.setFlag("cp2020-augmented", "cardMessageId", id); }
+  catch (err) { console.warn("CP2020 | could not record the pattern's card id on the pattern", err); }
 }
 
 /**
@@ -2701,7 +2735,7 @@ function _spreadRowName(tok) {
  * Posted for a DECLARED corridor once the shot has finished being presented. It states the corridor's
  * own terms (band, width, the banded formula, how many shells ride it), then one row per figure the
  * corridor contains — each row saying whether that figure is IN the pattern or exempted by cover — and
- * the p.108 basis the rows rest on: everyone in the pattern takes the banded damage and nobody is rolled
+ * the p.109 basis the rows rest on: everyone in the pattern takes the banded damage and nobody is rolled
  * against individually. The button is the same `.cp-confirm-spread-zone` the guessed-corridor card
  * carries, so it runs the same resolution through the same dispatch and the same GM relay.
  *
@@ -2741,7 +2775,8 @@ async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmg
     templateId: handle.doc.id, rows, anyRows: rows.length > 0,
     rollLine, scatterLine,
   });
-  await ChatMessage.create({ content, speaker });
+  const message = await ChatMessage.create({ content, speaker });
+  await _stampPatternCardId(handle, message);
 }
 
 /**
@@ -2756,10 +2791,25 @@ export async function _confirmSpreadZone(templateId) {
   const scene = canvas.scene;
 
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
+  //
+  // ⚠ THIS WARN IS A LAST-RESORT GUARD, not a path normal play reaches any more. It used to be the
+  // dead end an expiry clock produced: the pattern was collected out from under an unresolved card and
+  // the button then had nothing to resolve. Both clocks now skip a pattern whose card is unresolved,
+  // and a pattern deleted by hand flips its card to cleared before the button can be pressed, so the
+  // only ways to arrive here are a lost delete hook or a card resurrected by the GM re-arm control.
   const handle = areaById(scene, templateId);
   if (!handle) { ui.notifications.warn(localize("SpreadTemplateNotFound")); return; }
   const f = handle.doc.flags?.["cp2020-augmented"];
   if (!f?.isSpreadZone) return;
+
+  // THE SHOT IS DEALT WITH FROM HERE ON — stamped before any of the work below, for two readers. The
+  // delete at the end of this function fires the same delete hook a HAND deletion does, and that hook
+  // must be able to tell "the GM removed an unresolved pattern" (flip its card to cleared) from "the
+  // apply removed the pattern it just resolved" (leave it alone). And a resolution runs several awaits
+  // long, during which the clocks would otherwise still see an unresolved card.
+  // Idempotent: the click dispatch stamps the same flag from the clicking client, and this stamp also
+  // covers the RELAYED press, where that client's stamp is the only other one.
+  await _markPatternCardResolved(f.cardMessageId, "spreadApply");
 
   const shells = Math.max(1, Math.floor(Number(f.shells) || 1));
 
@@ -2770,9 +2820,10 @@ export async function _confirmSpreadZone(templateId) {
 
   const weaponName = localizeParam("WpnVariantSpread", { name: f.weaponName ?? localize("WpnShotgun") });
   // ONE APPLICATION BATCH: every shell of this burst, against every figure in the corridor, is one
-  // moment of the fight. The set names the bodies already offered a death save by it — see
-  // _postWoundSavePrompts for why a burst owes at most one.
-  const deathPrompted = new Set();
+  // moment of the fight. The ledger collects each figure's severity steps and zone outcomes and emits
+  // once per figure — one progression card, one mortal prompt at the tier the burst finished on (see
+  // combat/severity-batch.js, and _postWoundSavePrompts for why a burst owes at most one).
+  const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
   const rows = [];
   for (const tok of tokens) {
     // ⭐ N ROLLS, NOT ONE ROLL APPLIED N TIMES. Each shell is its own discharge of shot, so each gets
@@ -2783,10 +2834,14 @@ export async function _confirmSpreadZone(templateId) {
       const dmgRoll = await new Roll(f.dmgFormula || "3d6").evaluate();
       const dmg = Math.max(0, Math.floor(dmgRoll.total));
       shots.push(dmg);
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, deathPrompted);
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, severity);
     }
     rows.push({ name: _spreadRowName(tok), rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0) });
   }
+
+  // Closed before the resolution card so the per-figure progression cards sit next to the numbers that
+  // produced them rather than after the burst's own summary.
+  await closeSeverityBatch(severity);
 
   // ONE resolution card for the whole burst, so N shells are readable as N numbers rather than as N
   // separate cards. Posted before the delete so a reader still has the pattern on screen as it lands.
@@ -2826,6 +2881,87 @@ export async function _confirmSpreadZone(templateId) {
 }
 
 /**
+ * VOID the shot: remove the pattern without applying anything, and say so on its card.
+ *
+ * The other half of the user's lifecycle ruling — "the apply button should never go out of date; it
+ * should go away on application and should otherwise be able to be cleared". Apply and Clear are the
+ * only two ways a pattern ends, and both leave the card stating which happened, so a pattern on the
+ * table is always a decision somebody still owes rather than something a timer will quietly take away.
+ *
+ * Claimed through the SAME registry the apply uses, so a pattern cannot be applied and cleared at once
+ * and a non-active-GM's press relays instead of failing on a document it may not write.
+ *
+ * @param {string} templateId  the pattern's area document id (the card's data-template-id)
+ * @param {string} [messageId] the card that was pressed; falls back to the id the pattern itself carries
+ */
+export async function _clearSpreadZone(templateId, messageId = "") {
+  if (!templateId) return;
+  if (!_claimAreaConfirm("clearSpreadZone", { templateId, messageId }, templateId)) return;
+
+  const scene = canvas?.scene;
+  const handle = scene ? areaById(scene, templateId) : null;
+  const f = handle?.doc?.flags?.["cp2020-augmented"] ?? {};
+  // The pressed card wins over the recorded one: they are the same document in every ordinary case, and
+  // when they are not it is the card in front of the reader that should end up saying "cleared".
+  const cardId = String(messageId || f.cardMessageId || "").trim();
+
+  // Stamped BEFORE the delete for the same reason the apply stamps first — the delete hook below reads
+  // this flag to decide whether a vanished pattern orphaned a live card, and the answer here is no.
+  await _markPatternCardCleared(cardId);
+  if (handle && f.isSpreadZone) await deleteArea(handle);
+}
+
+/**
+ * Stamp a pattern's card as dealt with, through the module's one card lock (card-lock.js). Returns
+ * true when a card was found and stamped. A pattern with no recorded card (placed by a build before the
+ * id was recorded, or by a keeper's direct placement) simply answers false — nothing to stamp.
+ */
+async function _markPatternCardResolved(messageId, note) {
+  const id = String(messageId ?? "").trim();
+  const message = id ? game.messages?.get(id) : null;
+  if (!message) return false;
+  await markCardResolved(message, note);
+  return true;
+}
+
+/**
+ * Stamp a pattern's card CLEARED: the resolved stamp (so every clock and the lock treat it as dealt
+ * with) plus the flag the render pass reads to swap the card's buttons for the cleared line.
+ *
+ * The two are separate flags deliberately. `cardResolved` is the shared one-shot lock and the GM's ↺
+ * re-arm control can lift it; `spreadCleared` is a statement about this shot that stays true whatever
+ * the lock says, so a re-armed card cannot offer an Apply button for a pattern that no longer exists.
+ */
+async function _markPatternCardCleared(messageId) {
+  const id = String(messageId ?? "").trim();
+  const message = id ? game.messages?.get(id) : null;
+  if (!message) return false;
+  try { await message.setFlag("cp2020-augmented", "spreadCleared", true); }
+  catch (err) { console.warn("CP2020 | could not mark the pattern card cleared", err); }
+  await markCardResolved(message, "spreadCleared");
+  return true;
+}
+
+/**
+ * ⭐ THE CLOCK-SKIP PREDICATE. "Is somebody still being asked about this pattern?"
+ *
+ * True only when the pattern names a card, that card still exists, and it has not been resolved. Every
+ * collection clock consults this before deleting: the round-advance rule in combat and the wall-clock
+ * sweep outside one. Both survive, but only as an ORPHAN NET — a pattern whose card was hand-deleted,
+ * or one placed before this field existed, has nobody to ask and stays collectible exactly as before.
+ *
+ * Not folded into spreadZoneRoundExpired / spreadZoneClockExpired, which are pure value rules asserted
+ * as such: this one reads the message collection, so it is its own question asked next to them.
+ */
+export function _spreadZoneCardPending(flags) {
+  const id = String(flags?.cardMessageId ?? "").trim();
+  if (!id) return false;
+  const message = game.messages?.get(id);
+  if (!message) return false;
+  return !isCardResolved(message);
+}
+
+/**
  * Pattern lifecycle, the half that runs when nobody clicks Confirm. Two consumers because there are two
  * clocks and only one of them ever ticks at a given table:
  *
@@ -2836,6 +2972,12 @@ export async function _confirmSpreadZone(templateId) {
  * The sweep also cleans up patterns left by a PREVIOUS session (it reads a stored timestamp, not a live
  * timer), which is what makes an already-littered world tidy itself on the next load rather than needing
  * a migration. Both run on the active GM only — two GMs would race the same delete.
+ *
+ * ⭐ BOTH CLOCKS ARE NOW AN ORPHAN NET, not a deadline. Neither collects a pattern whose card is still
+ * unresolved (_spreadZoneCardPending) — that is a decision the reader has not made yet, and taking the
+ * pattern away is what used to leave the card's button resolving nothing. What they still collect is a
+ * pattern nobody can be asked about: one whose card was hand-deleted, and one from a build that
+ * recorded no card at all.
  */
 function _hookSpreadZoneExpiry() {
   Hooks.on("updateCombat", async (combat, updateData) => {
@@ -2844,8 +2986,23 @@ function _hookSpreadZoneExpiry() {
     const scene = canvas?.scene;
     if (!scene) return;
     for (const handle of areasByFlag(scene, "isSpreadZone")) {
-      if (spreadZoneRoundExpired(handle.doc.flags?.["cp2020-augmented"] ?? {}, combat)) await deleteArea(handle);
+      const flags = handle.doc.flags?.["cp2020-augmented"] ?? {};
+      if (_spreadZoneCardPending(flags)) continue;            // its card is still open — not this clock's
+      if (spreadZoneRoundExpired(flags, combat)) await deleteArea(handle);
     }
+  });
+
+  // A pattern that vanishes with its card still open flips that card to CLEARED, so the button on it can
+  // never be pressed against a pattern that is not there. The ordinary source of this is the GM deleting
+  // the region by hand off the canvas; the apply and the clear both stamp their card BEFORE they delete,
+  // so neither is mistaken for one. Registered on the shim's per-core hook name so one listener covers
+  // Regions (v14) and MeasuredTemplates (v13).
+  Hooks.on(areaDeleteHook(), async (doc) => {
+    if (!_ownsSpreadSweep()) return;
+    const flags = doc?.flags?.["cp2020-augmented"] ?? {};
+    if (!flags.isSpreadZone) return;
+    if (!_spreadZoneCardPending(flags)) return;               // already applied, already cleared, or no card
+    await _markPatternCardCleared(flags.cardMessageId);
   });
 
   // The out-of-combat clock. This function is itself called from the ready pass, so the interval starts
@@ -2905,6 +3062,9 @@ export async function _sweepStaleSpreadZones() {
   let deleted = 0;
   for (const handle of areasByFlag(scene, "isSpreadZone")) {
     const flags = handle.doc.flags?.["cp2020-augmented"] ?? {};
+    // An unresolved card outranks the wall clock: the shot is still somebody's decision to make, and
+    // this sweep exists to collect patterns nobody CAN decide about (see _spreadZoneCardPending).
+    if (_spreadZoneCardPending(flags)) continue;
     const own = String(flags.combatId ?? "").trim();
     const encounterRunning = !!own && !!game.combats?.get?.(own)?.started;
     if (spreadZoneClockExpired(flags, { encounterRunning, now })) { await deleteArea(handle); deleted++; }
@@ -3052,12 +3212,12 @@ function _hookAutomationMigrationNotice() {
  * socket message; the GM's handler applies the damage with GM permissions,
  * then emits a result notification back to the requesting player.
  *
- * Two modes:
- *   "auto"     — player sends the raw payload; GM re-runs the full damage
- *                pipeline (applyAreaDamages + side effects).
+ * ONE mode:
  *   "resolved" — player pre-computed per-hit values in the damage dialog
  *                (armorMode override, cover SP, manual afterSP edits); GM
  *                applies the pre-resolved values directly.
+ * A second mode, "auto" (player sends the raw payload, GM re-runs the whole
+ * pipeline unattended), went with the auto-apply route it served.
  */
 /**
  * Live sheet refresh across all clients.
@@ -3098,6 +3258,9 @@ function _hookSocketRelay() {
   const AREA_CONFIRMERS = {
     confirmExplosion:  (d) => _confirmExplosion(d.templateId),
     confirmSpreadZone: (d) => _confirmSpreadZone(d.templateId),
+    // Clear is a resolution too — it deletes an area document and writes a message flag, both of which
+    // want GM permissions and exactly one performer, so it rides the same relay as its Apply twin.
+    clearSpreadZone:   (d) => _clearSpreadZone(d.templateId, d.messageId ?? ""),
   };
 
   game.socket.on("module.cp2020-augmented", async (data) => {
@@ -3182,54 +3345,20 @@ function _hookSocketRelay() {
     let totalApplied = 0;
 
     try {
-      if (data.mode === "auto") {
-        const hits = await applyAreaDamages({
-          target,
-          areaDamages:   data.areaDamages,
-          ap:            Boolean(data.ap),
-          edged:         Boolean(data.edged),
-          mono:          Boolean(data.mono),
-          armorMultSoft: Number(data.armorMultSoft ?? 1.0),
-          armorMultHard: Number(data.armorMultHard ?? 1.0),
-          penDamageMult: Number(data.penDamageMult ?? 1.0),
-          armorMode:     game.settings.get("cp2020-augmented", "damageArmorMode"),
-          ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
-          targetTokenId: data.targetTokenId ?? null,
-          dryRun:        false,
-          // Came off a SHOT: the FX rail sounded each landing round at its arrival on the client that
-          // fired (and broadcast it to this one), so the apply stays silent — see applyAreaDamages.
-          fxSilent:      true,
-        });
-        // Cyberlimb hits are soaked into limb SDP, not the wound track — they don't count toward the
-        // post-hit stun/death prompt or the taser cumulative-save state (RAW: no shock/stun).
-        totalApplied = hits.reduce((s, h) => s + (h.cyberlimb ? 0 : h.netDamage), 0);
-
-        const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-        if (taserEnabled && data.stunSaveOnHit && hits.some(h => h.penetrates && !h.cyberlimb)) {
-          await updateTaserState(target, data);
-        }
-
-        // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js.
-        await applyDotFromPayload(target, hits[0]?.location ?? null, data, hits.some(h => h.penetrates));
-
-        if (totalApplied > 0) {
-          // `target` is a live document (token-first resolved) — re-fetching by id here would
-          // retarget an unlinked token's hit back to the shared world actor.
-          const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
-                          : (canvas?.tokens?.placeables?.find(t => t.actor === target) ?? null);
-          const woundState = target.woundState?.() ?? 0;
-          if (woundState >= 4) await postDeathSavePrompt(target, liveToken);
-          else if (woundState > 0) await postStunSavePrompt(target, liveToken);
-        }
-
-      } else if (data.mode === "resolved") {
+      // ONE MODE. The relay used to carry a second one, "auto", for the route that applied a player's
+      // shot with no window anywhere; that route was removed with the world setting that selected it
+      // (user ruling 2026-08-14), and nothing emits "auto" any more. What reaches here is a window's
+      // own resolved rows, relayed because the player who filled the window may not write the target.
+      if (data.mode === "resolved") {
         // Apply pre-computed per-hit values from the player's damage dialog through the shared seam
         // (cyberlimb zones absorb into their SDP; totalApplied counts only flesh HP so the post-hit
         // stun/death prompt stays honest).
         const liveToken = data.targetTokenId ? (canvas?.tokens?.get(data.targetTokenId) ?? null)
                         : (canvas?.tokens?.placeables?.find(t => t.actor === target) ?? null);
+        // The relayed window's rows are ONE application, exactly as the window's own Apply loop is.
+        const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
         for (const hit of data.resolvedHits) {
-          const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken });
+          const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken, severityBatch: severity });
           totalApplied += outcome.applied;
 
           // Ablation gates on the bullet penetrating, not on the doubled HP value.
@@ -3237,6 +3366,7 @@ function _hookSocketRelay() {
             await ablateLocationOnce(target, hit.location, data.damageType);
           }
         }
+        await closeSeverityBatch(severity);
 
         await target.sheet?.render(false);
 
@@ -3251,10 +3381,13 @@ function _hookSocketRelay() {
         if (totalApplied > 0) {
           // Reuse liveToken (resolved above from data.targetTokenId) — re-deriving by actor id would drop
           // the threaded token and land the prompt/status on the wrong token for a multi-token actor.
-          // `target` stays as resolved (token-first) — no id re-fetch, see the auto branch.
+          // `target` stays as resolved (token-first) — re-fetching by id here would retarget an
+          // unlinked token's hit back to the shared world actor ([[combat-data-hazards]]).
           const woundState = target.woundState?.() ?? 0;
-          if (woundState >= 4) await postDeathSavePrompt(target, liveToken);
-          else if (woundState > 0) await postStunSavePrompt(target, liveToken);
+          // Mortal half deferred to the ledger, as at every other apply-loop tail.
+          if (woundState >= 4) {
+            if (!severityBatchHandledMortal(severity, target, liveToken)) await postDeathSavePrompt(target, liveToken);
+          } else if (woundState > 0) await postStunSavePrompt(target, liveToken);
         }
       }
 
@@ -3275,86 +3408,4 @@ function _hookSocketRelay() {
       totalApplied,
     });
   });
-}
-
-async function _autoApply(payload, target) {
-  if (!game.user.isGM) {
-    // Route through GM socket relay — player cannot write to unowned actor documents
-    game.socket.emit("module.cp2020-augmented", {
-      type:             "applyDamage",
-      mode:             "auto",
-      requesterId:      game.user.id,
-      targetActorId:    target.id,
-      // Unambiguous refs for the GM-side resolve: a synthetic (unlinked-token) actor's id collides
-      // with its world actor's, so the uuid + scene-qualified token are what keep the hit on the
-      // token that was shot. sceneId comes from the token itself (the GM may view another scene).
-      targetActorUuid:  target.uuid ?? null,
-      targetTokenId:    payload.targetTokenId ?? null,
-      targetSceneId:    (payload.targetTokenId ? canvas?.tokens?.get(payload.targetTokenId)?.document?.parent?.id : null) ?? canvas?.scene?.id ?? null,
-      areaDamages:      payload.areaDamages,
-      ap:               Boolean(payload.ap),
-      edged:            Boolean(payload.edged),
-      mono:             Boolean(payload.mono),
-      armorMultSoft:    Number(payload.armorMultSoft   ?? 1.0),
-      armorMultHard:    Number(payload.armorMultHard   ?? 1.0),
-      penDamageMult:    Number(payload.penDamageMult   ?? 1.0),
-      stunSaveOnHit:    Boolean(payload.stunSaveOnHit),
-      stunSaveMod:      Number(payload.stunSaveMod     ?? 0),
-      dotEnabled:       Boolean(payload.dotEnabled),
-      dotTurns:         Number(payload.dotTurns        ?? 0),
-      dotDamageFormula: String(payload.dotDamageFormula || "1d6"),
-      dotType:          String(payload.dotType         || "acid"),
-      weaponName:       String(payload.weaponName      || ""),
-    });
-    ui.notifications.info(localize("DamageSentWaiting"));
-    return;
-  }
-
-  const armorMode = game.settings.get("cp2020-augmented", "damageArmorMode");
-  const ablate    = game.settings.get("cp2020-augmented", "damageAblation");
-
-  const hits = await applyAreaDamages({
-    target,
-    areaDamages: payload.areaDamages,
-    ap:            Boolean(payload.ap),
-    edged:         Boolean(payload.edged),
-    mono:          Boolean(payload.mono),
-    armorMultSoft: Number(payload.armorMultSoft ?? 1.0),
-    armorMultHard: Number(payload.armorMultHard ?? 1.0),
-    penDamageMult: Number(payload.penDamageMult ?? 1.0),
-    armorMode,
-    ablate,
-    targetTokenId: payload.targetTokenId ?? null,
-    dryRun: false,
-    // Same reason as the relay branch: this flow is the rail's own shot, already sounded at arrival.
-    fxSilent: true,
-  });
-
-  // Cyberlimb hits soak into limb SDP, not the wound track — they don't count toward the
-  // notification, the taser cumulative-save state, or the post-hit stun/death prompt (RAW: no
-  // shock/stun). Mirrors the relay-compute branch in _hookSocketRelay's "auto" mode.
-  const total = hits.reduce((s, h) => s + (h.cyberlimb ? 0 : h.netDamage), 0);
-  ui.notifications.info(localizeParam("DamageApplied", { amount: total, name: target.name }));
-
-  // Taser flag must be set BEFORE the save prompt — threshold reads it
-  if (payload.stunSaveOnHit && hits.some(h => h.penetrates && !h.cyberlimb)) {
-    const taserEnabled = (() => { try { return game.settings.get("cp2020-augmented", "taserCumPenaltyEnabled"); } catch { return true; } })();
-    if (taserEnabled) await updateTaserState(target, payload);
-  }
-
-  // DOT routes by dotType (fire -> HP burn, acid -> armor degradation); see save-rolls.js.
-  await applyDotFromPayload(target, hits[0]?.location ?? null, payload, hits.some(h => h.penetrates));
-
-  if (total > 0) {
-    // Honor the shot's target token (also threaded into applyAreaDamages above) so the post-hit prompt
-    // lands on the token that was hit, not an arbitrary same-actor token.
-    const token = payload.targetTokenId ? (canvas?.tokens?.get(payload.targetTokenId) ?? null)
-                : (canvas?.tokens?.placeables?.find(t => t.actor?.id === target.id) ?? null);
-    const woundState = target.woundState?.() ?? 0;
-    if (woundState >= 4) {
-      await postDeathSavePrompt(target, token);
-    } else if (woundState > 0) {
-      await postStunSavePrompt(target, token);
-    }
-  }
 }

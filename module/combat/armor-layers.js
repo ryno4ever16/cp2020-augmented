@@ -49,6 +49,10 @@
 import { LAYER_LAW } from "../npcgen/armor.js";
 import { cwIsSkinweave } from "../utils.js";
 import { correctedArmorType } from "../data-corrections.js";
+// The one function that says what a layer is WORTH against a given damage type. Imported rather than
+// re-derived so the legality walk values an entry with the same arithmetic the fold uses; that file
+// imports nothing, so there is no cycle.
+import { typedLayerSP } from "../data/mech-item-data.js";
 
 export { LAYER_LAW };
 
@@ -241,9 +245,17 @@ export function getArmorContributors(actor, locationKey) {
   // pieces inside-out. Its verdict is type-blind (one conventional SP per piece), so a wearer's legal
   // set is the same set for every damage type — a hit's type changes what a layer is WORTH, never
   // whether it is being worn.
+  //
+  // Each entry is valued CONVENTIONALLY — `typedLayerSP(item, raw, "")`, the value a normal hit meets —
+  // and not by the raw coverage number, because that is the value `selectLegalLayers` tests against
+  // when it hands out the free-layer branch its comment promises. A fully-typed garment (a fire coat:
+  // coverage 20, mechTypedSP { fire, 0 }) values at 0, so it spends no slot, ejects nothing, and adds
+  // no layer surcharge. A dual-value layer (sp > 0) still reports its conventional SP and still spends
+  // a slot, which is correct — it does stop ordinary hits.
+  const conventionalSP = (item, raw) => Number(typedLayerSP(item, raw, "")) || 0;
   const { surplus, counted } = selectLegalLayers([
-    ...cwItems.map(i => ({ item: i, sp: Number(i.system?.CyberWorkType?.Locations?.[locationKey]) || 0 })),
-    ...orderedLayers.map(i => ({ item: i, sp: Number(i.system?.coverage?.[locationKey]?.stoppingPower) || 0 })),
+    ...cwItems.map(i => ({ item: i, sp: conventionalSP(i, Number(i.system?.CyberWorkType?.Locations?.[locationKey]) || 0) })),
+    ...orderedLayers.map(i => ({ item: i, sp: conventionalSP(i, Number(i.system?.coverage?.[locationKey]?.stoppingPower) || 0) })),
   ]);
   const excluded = new Set(surplus.map(e => e.item.id));
 

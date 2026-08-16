@@ -14,6 +14,9 @@
  */
 
 import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
+// One apply = one application: the rows share a severity ledger, which emits one progression card and
+// one mortal prompt at the final tier (combat/severity-batch.js).
+import { makeSeverityBatch, closeSeverityBatch, severityBatchHandledMortal } from "./severity-batch.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 import { requestCoverChew, coverBetween, coverChewSummary } from "./cover.js";
@@ -395,7 +398,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Pre-compute all per-hit final values (shared between socket relay and direct paths).
     // computeNetDamage centralizes head doubling (p.103) + the optional Listen Up limb model,
-    // so the player-side resolved values match the GM/auto-apply paths exactly.
+    // so the player-side resolved values match the GM-side and area paths exactly.
     const resolvedHits = rawHits.map((hit, i) => {
       const afterSP   = this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP;
       const btmResult = applyBTM(afterSP, btm, hit.penetrates);
@@ -411,7 +414,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         mode:             "resolved",
         requesterId:      game.user.id,
         targetActorId:    this.target.id,
-        // Unambiguous refs (see _autoApply's emit): a synthetic actor's id collides with its world
+        // Unambiguous refs (the module's standard relay shape): a synthetic actor's id collides with its world
         // actor's — the uuid + scene-qualified token keep the GM-side write on the token that was hit.
         targetActorUuid:  this.target.uuid ?? null,
         targetTokenId:    this.payload?.targetTokenId ?? null,
@@ -444,8 +447,13 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const token = this.payload?.targetTokenId ? (canvas?.tokens?.get(this.payload.targetTokenId) ?? null)
                 : (canvas?.tokens?.placeables?.find(t => t.actor === this.target) ?? null);
     let applied = 0;
+    // ⭐ THE WINDOW'S ROWS ARE ONE APPLICATION. Every row this Apply writes is one moment of the fight,
+    // so they share a severity ledger and produce ONE progression card and ONE mortal prompt between
+    // them, at the tier the whole apply finished on (combat/severity-batch.js). It owns the wound-track
+    // prompt because the tail at the end of this method is this window's own.
+    const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
     for (const hit of resolvedHits) {
-      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token });
+      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token, severityBatch: severity });
       applied += outcome.applied;
 
       // Ablation gates on the bullet penetrating, not on the doubled HP value.
@@ -453,6 +461,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         await ablateLocationOnce(this.target, hit.location, this._damageType);
       }
     }
+    await closeSeverityBatch(severity);
 
     await this.target.sheet?.render(false);
     this._chewCoverForBurst(rawHits);
@@ -472,7 +481,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // Gate the stun/death prompt on FLESH HP actually written — a hit fully soaked by a cyberlimb's
     // SDP raises no consciousness check (H7: was `totalApplied`, which counted cyberlimb-soaked damage).
     if (applied > 0) {
-      await _postSavePrompts(this.target, token);
+      await _postSavePrompts(this.target, token, severity);
     }
 
     this._damageApplied = true;   // an applied close — see the flag's note in the constructor
@@ -510,12 +519,14 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
   static async _formHandler(event, form, formData) {}
 }
 
-async function _postSavePrompts(actor, token = null) {
+async function _postSavePrompts(actor, token = null, severityBatch = null) {
   const woundState = actor.woundState?.() ?? 0;
   if (woundState === 0) return;
   const tok = token ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id) ?? null;
   if (woundState >= 4) {
-    await postDeathSavePrompt(actor, tok);
+    // The mortal half is the application's ledger's when there is one — offered once, at the tier the
+    // apply finished on. Without a ledger this is exactly what it always was.
+    if (!severityBatchHandledMortal(severityBatch, actor, tok)) await postDeathSavePrompt(actor, tok);
   } else {
     await postStunSavePrompt(actor, tok);
   }
