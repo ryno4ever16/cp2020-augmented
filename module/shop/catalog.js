@@ -45,9 +45,10 @@ const SHOP_SUB_LABEL_KEYS = {
   Security: "CYBERPUNK.ShopSubSecurity", Surveillance: "CYBERPUNK.ShopSubSurveillance",
   Tools: "CYBERPUNK.ShopSubTools", "Rentals & Services": "CYBERPUNK.ShopSubRentalsServices",
   Cars: "CYBERPUNK.ShopSubCars", Cycles: "CYBERPUNK.ShopSubCycles", Trucks: "CYBERPUNK.ShopSubTrucks",
-  AVs: "CYBERPUNK.ShopSubAVs", Aircraft: "CYBERPUNK.ShopSubAircraft", Hover: "CYBERPUNK.ShopSubHover",
+  AVs: "CYBERPUNK.ShopSubAVs", Aircraft: "CYBERPUNK.ShopSubAircraft",
   Watercraft: "CYBERPUNK.ShopSubWatercraft", Spacecraft: "CYBERPUNK.ShopSubSpacecraft",
-  Military: "CYBERPUNK.ShopSubMilitary", Drones: "CYBERPUNK.ShopSubDrones", ACPA: "CYBERPUNK.ShopSubACPA",
+  Military: "CYBERPUNK.ShopSubMilitary", ACPA: "CYBERPUNK.ShopSubACPA",
+  Unclassified: "CYBERPUNK.ShopSubUnclassified",
 };
 const SHOP_STYLE_LABEL_KEYS = {
   generic: "CYBERPUNK.ShopStyleGeneric", leisure: "CYBERPUNK.ShopStyleLeisure",

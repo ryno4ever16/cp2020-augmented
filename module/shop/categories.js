@@ -83,8 +83,18 @@ const PACK_MAP = {
   "vehicles": ["Vehicles", ""]
 };
 
-/** Vehicles sub-filters (display order: ground → air → water → space → military → unmanned). */
-const VEHICLE_SUBS = ["Cars", "Cycles", "Trucks", "AVs", "Aircraft", "Hover", "Watercraft", "Spacecraft", "Military", "Drones", "ACPA", "Other"];
+/**
+ * Vehicles sub-filters (display order: ground → air → water → space → military → the two catch-alls).
+ *
+ * Hovercraft and drones had a shelf each and five vehicles each to put on it, which is a shelf that
+ * costs a reader more than it saves them — both fold into Other. Watercraft and Spacecraft stay:
+ * they are small too, but they are the only way to find a boat or a shuttle at all.
+ *
+ * "Unclassified" is NOT Other. Other means "we know its class and have no shelf for it"; Unclassified
+ * means the item records no class at all, which is a data gap the GM may want to go and look at — and
+ * without a shelf of its own, those vehicles are unreachable by any filter.
+ */
+const VEHICLE_SUBS = ["Cars", "Cycles", "Trucks", "AVs", "Aircraft", "Watercraft", "Spacecraft", "Military", "ACPA", "Other", "Unclassified"];
 
 /** The filter taxonomy shown in the shop UI (top category → ordered sub-types). */
 export const CATEGORIES = [
@@ -102,13 +112,17 @@ export const CATEGORIES = [
 /**
  * system.vehicleType (a SOFT enum — free text with datalist suggestions) → Vehicles sub-filter.
  * Keyword rules over the books' own class vocabulary; FIRST match wins, so locomotion outranks
- * role ("Hover Tank" is a hovercraft — MM panzers — not Military). Blank stays "" (unclassified:
- * no data is not a class), a non-empty class no rule knows lands in "Other".
+ * role. Blank is "Unclassified" (no data is not a class), a non-empty class no rule knows lands
+ * in "Other".
+ *
+ * The hovercraft and drone rules still run, and still run EARLY — they only deliver to Other now.
+ * Keeping the rule where it was is what stops "Hover Tank" (an MM panzer, not a tank) from falling
+ * through to the Military rule the moment its own shelf was folded away.
  */
 const VEHICLE_SUB_RULES = [
   ["ACPA",       /acpa|powered? armou?r/],
-  ["Drones",     /rpv|drone|remote/],
-  ["Hover",      /hover|panzer|\bgev\b|plenum|ground.effect/],
+  ["Other",      /rpv|drone|remote/],
+  ["Other",      /hover|panzer|\bgev\b|plenum|ground.effect/],
   ["Military",   /\btank\b|\bapc\b|\bifv\b|\bafv\b|\bmbt\b|acav|artillery/],
   ["AVs",        /aerodyne|\bavs?\b|aircar/],
   ["Aircraft",   /helicopter|gunship|chopper|tilt.?rotor|tilt.?wing|osprey|dirigible|airship|blimp|zeppelin|ultralight|microlight|autogyro|fixed.?wing|plane\b|\bjet\b|fighter|bomber|aircraft|vtol/],
@@ -121,7 +135,7 @@ const VEHICLE_SUB_RULES = [
 ];
 export function vehicleSubOf(vehicleType) {
   const t = String(vehicleType ?? "").trim().toLowerCase();
-  if (!t) return "";
+  if (!t) return "Unclassified";
   for (const [sub, re] of VEHICLE_SUB_RULES) if (re.test(t)) return sub;
   return "Other";
 }
