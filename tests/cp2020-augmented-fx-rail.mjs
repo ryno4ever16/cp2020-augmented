@@ -1473,11 +1473,14 @@ const res = await page.evaluate(async () => {
     && ambienceSeqs.length === 1
     && smokeSeqs.length === 0 && aimedBurst.smokePuffs === 0,
     `${seqPlays.length} sequences = ${shotSeqPlays.length} units + ${ambienceSeqs.length} ambience + ${markSeqs.length} lone mark(s) + ${bloodSeqs.length} splash(es) + ${smokeSeqs.length} puff(s)`);
-  // ⭐ AND THE REFUSED ROUNDS' MARKS ARE EXACTLY THE ONES THE FAN-OUT SAYS IT ISSUED — the ruling that
-  // an arrival is not on the tracer's budget, read on the wire rather than off the report.
-  ok("aimed burst: every round the pacing rule refused still put its own arrival mark on the canvas",
-    markSeqs.length === (aimedBurst.impacts?.refused ?? 0)
-    && aimedBurst.impacts?.queued === Math.min(aimedBurst.hits, fx.HIT_MARK_MAX_PER_PAYLOAD),
+  // ⏪ RE-PINNED 2026-08-17 (the phase measurement): the arrival family is STANDALONE for every
+  // landing round now, not just the refused ones — embedded in the shot's shared sequence the mark
+  // reached the engine ~600ms after its own audio. So the lone-mark sequences on the wire equal the
+  // arrivals the fan-out says it issued, refused rounds included, and the refused count is a subset.
+  ok("aimed burst: every landing round's arrival mark is its own standalone sequence, refused included",
+    markSeqs.length === (aimedBurst.impacts?.queued ?? 0)
+    && aimedBurst.impacts?.queued === Math.min(aimedBurst.hits, fx.HIT_MARK_MAX_PER_PAYLOAD)
+    && (aimedBurst.impacts?.refused ?? 0) <= (aimedBurst.impacts?.queued ?? 0),
     `${aimedBurst.dropped} refused, ${markSeqs.length} lone mark(s), ${aimedBurst.impacts?.queued} arrivals for ${aimedBurst.hits} hits`);
   const syncGaps = shotSeqPlays.map((t, i) => t - (plays[i]?.t ?? t));
   ok("sync: every sprite starts within 100ms of its own round's audio",
@@ -1938,11 +1941,15 @@ const res = await page.evaluate(async () => {
   const shellImpact = playedEntries.flat().find(e => e.file === fx.HIT_CONFIRM.key);
   const paintedImpact = elevEntries.find(e => e.file === fx.HIT_CONFIRM.key);
   const paintedSquares = fx.payloadAimSquares(tokenDoc, targetDoc, gridPx);
-  ok("impact: BOTH tracer shapes hold their confirmation back until the round gets there",
-    shellImpact?.delay === fx.FX_CLASSES.shotgun.dashMs
-    && paintedImpact?.delay === fx.arrivalSpecFor("rifle", null, paintedSquares).ms
-    && paintedImpact?.delay > 0,
-    `shell ${shellImpact?.delay}ms (its own crossing) vs painted ${paintedImpact?.delay}ms (the ${fx.tracerBandFor(paintedSquares)} band)`);
+  // ⏪ RE-PINNED 2026-08-17: the queued delay is the crossing LESS the engine's measured start-up
+  // floor (SEQ_PRESTART_COMP_MS), floored at zero — a crossing shorter than the floor queues with no
+  // delay call at all, which the recorder reads as undefined. The NOMINAL still governs the tail.
+  const lessFloor = (n) => Math.max(0, n - fx.SEQ_PRESTART_COMP_MS);
+  ok("impact: BOTH tracer shapes hold their confirmation back until the round gets there, less the engine floor",
+    !!shellImpact && (shellImpact.delay ?? 0) === lessFloor(fx.FX_CLASSES.shotgun.dashMs)
+    && (paintedImpact?.delay ?? 0) === lessFloor(fx.arrivalSpecFor("rifle", null, paintedSquares).ms)
+    && fx.arrivalSpecFor("rifle", null, paintedSquares).ms > 0,
+    `shell ${shellImpact?.delay ?? 0}ms (crossing ${fx.FX_CLASSES.shotgun.dashMs} less the floor) vs painted ${paintedImpact?.delay ?? 0}ms (the ${fx.tracerBandFor(paintedSquares)} band less the floor)`);
   played.length = 0; playedEntries.length = 0;
 
   ok("aim: no sprite the adapter queued is left without a rotation input",
@@ -7103,9 +7110,12 @@ try {
       const one = await fx.fxShot(shooterPl, targetPl, { weaponClass: "rifle", hit: true, light: false, ammoKey: "standard" });
       await sleep(150);
       const mark = playedEntries.flat().find(x => x.file === fx.HIT_CONFIRM.key);
-      ok("arrival driven: a painted round's hit mark is DELAYED by its own banded crossing, not by zero",
-        one.arrivalMs === expectMs && one.impactDelayMs === expectMs && mark?.delay === expectMs && expectMs > 0,
-        JSON.stringify({ band: fx.tracerBandFor(squares), reported: one.impactDelayMs, queued: mark?.delay ?? null }));
+      // ⏪ RE-PINNED 2026-08-17: the REPORTED delay stays the nominal band crossing (the tail reasons
+      // in it); the QUEUED delay is that nominal less the engine's measured start-up floor.
+      ok("arrival driven: a painted round's hit mark is DELAYED by its banded crossing less the engine floor",
+        one.arrivalMs === expectMs && one.impactDelayMs === expectMs
+        && (mark?.delay ?? 0) === Math.max(0, expectMs - fx.SEQ_PRESTART_COMP_MS) && expectMs > 0,
+        JSON.stringify({ band: fx.tracerBandFor(squares), reported: one.impactDelayMs, queued: mark?.delay ?? null, floor: fx.SEQ_PRESTART_COMP_MS }));
       // ⏪ THE REVERTED SHAPE, computed rather than driven: the old expression gave a painted class zero.
       ok("arrival driven: the old expression would have queued it at zero — the defect, by value (negative)",
         (fx.FX_CLASSES.rifle.dashSquares > 0 ? fx.FX_CLASSES.rifle.dashMs : 0) === 0 && mark?.delay > 0,
@@ -7168,8 +7178,11 @@ try {
       const lone = await fx.fxHitMark(shooterPl, targetPl, { weaponClass: "rifle", ammoKey: "ap", delayMs: 250 });
       await sleep(150);
       const loneQueued = playedEntries.flat().find(x => x.file === fx.IMPACT_CRACK.key);
-      ok("budget: the refused round's verb queues that mark, delayed, and NEVER names a settle tag",
-        lone.drawn === true && lone.delayMs === 250 && loneQueued?.delay === 250
+      // ⏪ RE-PINNED 2026-08-17: the verb reports and queues the delay LESS the engine's measured
+      // start-up floor — its report is what it actually asked the engine for.
+      ok("budget: the refused round's verb queues that mark, delayed less the floor, and NEVER names a settle tag",
+        lone.drawn === true && lone.delayMs === 250 - fx.SEQ_PRESTART_COMP_MS
+        && loneQueued?.delay === 250 - fx.SEQ_PRESTART_COMP_MS
         && loneQueued?.name === undefined && loneQueued?.size?.width === fx.FX_CLASSES.rifle.impactSquares,
         JSON.stringify({ key: lone.key, delay: lone.delayMs, named: loneQueued?.name ?? null }));
     } finally {

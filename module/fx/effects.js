@@ -4278,26 +4278,31 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       // field; what changed is the number it gates, not the gate.
       const mark = hitMarkFor(weaponClass, ammoKey);
       if (!volleyOk && hit && to && mark && fxDbEntryExists(mark.key)) {
-        const impact = _held(seq.effect().file(mark.key)).atLocation(to)
-          .size({ width: mark.squares }, { gridUnits: true })
-          .timeRange(0, mark.clipMs)
-          .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
-        // TERMINAL ELEMENT — on a landing round this is normally the last thing to leave the screen.
-        if (settleTag) { impact.name(settleTag); out.tagged++; }
         // The capture seam's dash override still wins where one is armed, for the same reason it wins
         // over the sprite rate: a test that shortens the crossing must shorten what waits on it.
         const travel = HIT_CONFIRM.delayFollowsTracer
           ? (entry.dashSquares > 0 ? (_dashMsOverride ?? arrival) : arrival) : 0;
-        if (travel > 0) impact.delay(travel);
-        out.impact = true;
-        // Reported so a caller (and the keeper) can assert WHICH mark was drawn and how wide, by
-        // value, rather than by looking at the canvas — the promotion is otherwise invisible to a test.
-        out.impactKey = mark.key;
-        out.impactSquares = mark.squares;
-        out.impactClipMs = mark.clipMs;
-        out.impactDelayMs = travel;
+        // ⭐ ISSUED STANDALONE, NOT AS A SECTION OF THIS SEQUENCE (2026-08-17, the phase measurement).
+        // Embedded here, the mark reached the engine ~600ms after its own audio — the engine walks a
+        // multi-section sequence serially, and the impact inherited every earlier section's walk time —
+        // while the refused-round path through fxHitMark paid only the engine's start-up floor. One
+        // draw shape for both paths now; fxHitMark carries the settle name for the terminal round and
+        // compensates the floor (SEQ_PRESTART_COMP_MS).
+        const issued = await fxHitMark(shooterToken, targetToken, { weaponClass, ammoKey, delayMs: travel, aimPoint: to, settleTag });
+        if (issued.drawn) {
+          out.impact = true;
+          if (issued.tagged) out.tagged++;
+          // Reported so a caller (and the keeper) can assert WHICH mark was drawn and how wide, by
+          // value, rather than by looking at the canvas — the promotion is otherwise invisible to a
+          // test. `impactDelayMs` stays the NOMINAL arrival (what the tail arithmetic reasons in);
+          // the compensated start is fxHitMark's own report.
+          out.impactKey = issued.key;
+          out.impactSquares = issued.squares;
+          out.impactClipMs = issued.clipMs;
+          out.impactDelayMs = travel;
+        }
       }
-      if (out.muzzle || out.tracer || out.impact || out.volley) await seq.play();
+      if (out.muzzle || out.tracer || out.volley) await seq.play();
     } catch (err) {
       console.warn(`${SCOPE} | sequencer shot effect failed`, err);
     }
@@ -4724,7 +4729,9 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
   const out = { drawn: false, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
     clipMs: BLOOD_SPLATTER.clipMs, exitPoint: null };
   if (!targetToken || !sequencerActive() || !fxDbEntryExists(BLOOD_SPLATTER.key)) return out;
-  const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
+  // The engine's start-up floor comes off the arrival, exactly as the hit mark subtracts it — the
+  // spray and the mark answer the same audio instant. See SEQ_PRESTART_COMP_MS for the measurement.
+  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - SEQ_PRESTART_COMP_MS);
   try {
     const seq = new globalThis.Sequence();
     const splash = _held(seq.effect().file(BLOOD_SPLATTER.key)).atLocation(targetToken)
@@ -4763,8 +4770,29 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
 }
 
 /**
- * THE MARK A REFUSED ROUND STILL OWES — the hit confirmation on its own, with no muzzle, no report and
- * no tracer.
+ * WHAT THE ENGINE CHARGES TO START A DELAYED EFFECT, compensated so the picture lands ON the audio.
+ *
+ * Measured 2026-08-17 (tests/_probe-fx-phase.mjs, :30004, five reps of a bare one-effect Sequence with
+ * .delay(500)): the engine's pre-timer pipeline costs a tight 171–181ms between play() and the effect's
+ * own start, idle. The impact AUDIO is a bare setTimeout and pays none of it — so before this constant,
+ * every arrival element trailed its own audio by at least the floor. Subtracted from the arrival delay
+ * at the two standalone arrival-element sites (fxHitMark, fxBloodSplatter), floored at zero: a
+ * zero-travel round cannot start earlier than the engine allows and keeps the floor as its residue.
+ * REVERT: 0 (elements return to trailing their audio by the engine floor).
+ */
+export const SEQ_PRESTART_COMP_MS = 175;
+
+/**
+ * THE HIT CONFIRMATION, standalone — one impact, its own Sequence, no muzzle, no report, no tracer.
+ *
+ * ⭐ NOW THE ONE DRAW SHAPE FOR EVERY ROUND (2026-08-17, the phase measurement). The drawn round's mark
+ * used to ride as a section INSIDE fxShot's shared sequence, and the instrument caught what that
+ * costs: the engine walks a multi-section sequence's sections through its own serial chain, so the
+ * embedded mark reached the engine ~600ms after its paired audio (median, idle; ~950ms under load,
+ * with rounds 2–4 of a burst clustering on one instant instead of their own schedules) while THIS
+ * standalone shape — already carrying the refused rounds — paid only the engine's ~175ms floor. The
+ * audio was the faithful clock all along; the picture was late. So fxShot now issues its mark through
+ * here too, and both paths pay one known floor, compensated by SEQ_PRESTART_COMP_MS.
  *
  * ⭐ WHY THIS VERB EXISTS (user ruling 2026-08-11): *"hits late in a long burst get NO blood at all"*.
  * The pacing rule (roundDropped) takes a late round WHOLE — audio with picture — and that rule is right
@@ -4779,27 +4807,31 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
  * and the IMPACT budget is the payload's hit count (bounded by HIT_MARK_MAX_PER_PAYLOAD). A round that
  * hit gets its impact family whether or not its tracer was drawn.
  *
- * `delayMs` is what is LEFT of this round's arrival at the moment the drop is decided — the fan-out
- * subtracts the lateness that caused the drop, so a mark for a round that is already 200ms behind its
- * slot lands 200ms sooner than one issued on time and the two arrive together on the canvas.
+ * `delayMs` is what is LEFT of this round's arrival at the moment it is issued — the fan-out subtracts
+ * the lateness that caused a drop, so a mark for a round that is already 200ms behind its slot lands
+ * 200ms sooner than one issued on time and the two arrive together on the canvas.
  *
- * ⛔ NEVER TAGGED. The last round is never dropped (the pacing rule guarantees it), so the settle name
- * always rides an ordinary fxShot; a mark from here can never be the element the damage window waits on.
+ * `settleTag`: the LAST round's mark is the terminal element the damage window waits on. The drawn
+ * path threads the payload's settle name through here now that it draws here; the refused path never
+ * carries one (the last round is never dropped, the pacing rule guarantees it).
  */
-export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKey = null, delayMs = 0, aimPoint = null } = {}) {
-  const out = { drawn: false, key: null, squares: 0, clipMs: 0, delayMs: 0 };
+export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKey = null, delayMs = 0, aimPoint = null, settleTag = null } = {}) {
+  const out = { drawn: false, key: null, squares: 0, clipMs: 0, delayMs: 0, tagged: false };
   const mark = hitMarkFor(weaponClass, ammoKey);
   if (!mark || !sequencerActive() || !fxDbEntryExists(mark.key)) return out;
   const gridPx = Number(canvas?.dimensions?.size) || 100;
   const to = aimPoint ?? (shooterToken ? aimPointOf(shooterToken, targetToken, gridPx) : (targetToken ? centerOf(targetToken) : null));
   if (!to) return out;
-  const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
+  // The engine's own start-up floor comes OFF the arrival so the sprite lands on the audio instant —
+  // the constant carries the measurement; a zero-travel round keeps the floor as its residue.
+  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - SEQ_PRESTART_COMP_MS);
   try {
     const seq = new globalThis.Sequence();
     const impact = _held(seq.effect().file(mark.key)).atLocation(to)
       .size({ width: mark.squares }, { gridUnits: true })
       .timeRange(0, mark.clipMs)
       .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
+    if (settleTag) { impact.name(settleTag); out.tagged = true; }
     if (delay > 0) impact.delay(delay);
     out.drawn = true;
     out.key = mark.key;

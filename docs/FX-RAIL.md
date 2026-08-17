@@ -1595,6 +1595,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 
 | Knob | Ships as | Changes |
 |---|---|---|
+| `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the two standalone arrival sites (hit mark, blood) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
 | `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
 | `FX_DROP_LAG_FRACTION` | **0.5** | how late a round may be before it is dropped, as a share of its own slot (§4.1a). 0 drops nothing — anchoring alone, which measurably bunches. ⏪ the earlier flat figure was **150 ms**, which does not hold the separation guarantee at any cadence we ship |
@@ -1734,6 +1735,30 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-17 — the arrival family leaves the shot's shared sequence; the engine's start-up floor is
+measured and compensated.** The reported desync ("sound, then late visuals") was instrumented before
+it was touched (`tests/_probe-fx-phase.mjs`: sink-inside-timer audio stamps vs `createSequencerEffect`
+vs first-frame, idle and under a 65 % main-thread load injector). Three findings, in the order they
+overturned the working theory: ① the engine consumes a section's `.delay()` through `setTimeout` too,
+so the earlier "engine clock vs timer clock" framing was wrong — both media sit on the host timer;
+② the impact AUDIO was the faithful clock all along (fires on its band-table nominals within tens of
+ms in both regimes), while the drawn round's MARK — then a section inside fxShot's multi-section
+sequence — reached the engine a median **+657 ms idle / +781 ms load** after its own audio, with
+rounds 2–4 of a burst clustering on one instant; ③ a bare one-effect control sequence overshoots its
+nominal by a tight **~175 ms** — the engine's pre-timer floor — so the embedded path was paying the
+floor **plus ~450 ms of the engine's serial section walk**. Two changes follow. The hit confirmation
+is issued **standalone through `fxHitMark` for every round** (the refused-round path was already this
+shape and already fast; fxShot threads the settle name and the resolved travel through it, and
+`impactDelayMs` keeps reporting the NOMINAL arrival the tail arithmetic reasons in). And the measured
+floor is subtracted from the arrival delay at both standalone arrival sites (`SEQ_PRESTART_COMP_MS`
+175, revert 0 — mark and blood), floored at zero. Re-measured on the same instrument: first-frame
+minus audio-fire **median +10 ms / p95 +14 ms idle; median +82 ms / p95 +238 ms under the injector**,
+with the residual excursions picture-early — the forgiving direction. ⏪ The candidate designs this
+measurement killed: co-scheduled `.sound()` sections (a sound section is just its own timer plus an
+audio start — same asymmetry) and slave-audio-to-picture (it would slave the good clock to the bad
+one). Pellet arrival marks still ride the shared sequence; whether they need the same treatment is a
+shotgun-leg question for the re-measure, parked in §8.
 
 **2026-08-16 — the pattern's band edges are the WEAPON's; the width wheel is retired; a scatter says so
 out loud.** Three changes, one reading of the book (text-layer verified, memory
@@ -2703,6 +2728,7 @@ presented while the screen stayed empty.
 
 | Item | State |
 |---|---|
+| **Do the pellet arrival marks need the standalone treatment the hit mark got?** | ⚠ **Open, 2026-08-17.** The phase measurement (§6) moved the hit confirmation and the blood spray out of the shot's shared sequence and compensated the engine's start-up floor; the shot-pattern classes' per-pellet arrival marks still ride the shared sequence with their per-pellet delays, so they plausibly carry the same lateness class against the corridor's arrival-timed audio. Measure a shell class on the phase instrument (`tests/_probe-fx-phase.mjs`, swap the fixture to a spread weapon) before touching anything — the rifle's numbers do not transfer, and the instrument exists so nobody guesses twice. |
 | ~~The ammo's `modifier` id is ruled onto the payload but is not on it~~ | ✅ **CLOSED 2026-08-09.** `AMMO_EFFECT_FIELDS` had had `modifier` **replaced** by `caliber` rather than joined by it, so `payload.modifier` was `undefined` on every real shot and every load resolved through `ammoFxKeyOf`'s fingerprint branch — collapsing `dualPurpose` onto `ap`, the one case the id exists to settle. Both fields now sit in the list, with the comment block saying why one may never displace the other. The guard is the point: `tests/cp2020-augmented-b1-seam-payload.mjs` now fires bench guns **07** (`api`, 5.56) and **16** (`dualPurpose`, 20/9mm) through the real UI path and asserts `payload.modifier`, `payload.caliber` and the resolved key off the payload the hook actually carried — plus, on that same object, that stripping the id makes it answer `ap`. Reverting the one string turns four of its legs red. See §6. |
 | **The burning ground's size, density and lifetime are not signed off** | ⚠ **Still open, and the budget half moved 2026-08-13.** The asset was chosen by measurement and the placement was ruled, but the numbers are look calls the build lane made: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**. The **lifetime** and the **scene cap** were trimmed on the user's ruling to ⏱ **25 s** and ⏱ **12** (⏪ 45 s / 24) against a profiled ~0.36 % of a frame per live flame — but those two numbers are the build lane's proposal too, and re-tuning either by eye is one field: `GROUND_FIRE.lifetimeMs`, `.maxLive`, `.squares`, `.maxPerPayload` / `.maxPerPattern`. Captures 61a–61d. |
 | ~~A scattered shot pattern and the rounds drawn for it point at two different places~~ | ✅ **CLOSED 2026-08-13**, the same day it was raised. It was raised because the scatter was rolled inside the plant, on the **active GM's** client, after the **firing** client's fan-out had already resolved its axis toward the aimed point — two clients, two rolls, two answers, and on every miss the rounds crossed one line while the pattern was planted on another. The dice now roll **once**, at the seam where the payload is assembled (`seam-shim.js`, firing client), guarded by `payloadScattersOnMiss`, and ride the payload as `spreadScatter: {dirFace, distFace}`; both rails turn those two faces into a landed point through the one pure site they share (`combat/scatter-table.js` `scatterLandedPoint`, clamp included), and the plant **never re-rolls** when the faces are carried. Results travel, not a seed — the payload is relayed as JSON and there is no cross-client generator to re-run. A roll is kept in the plant for payloads that carry no faces (an older client mid-update, a macro or keeper calling the plant directly, and the fork, where the shim is dormant). Pinned by `tests/cp2020-augmented-spread-zone.mjs` §14g: one forced-miss payload drives both rails and the drawn endpoint and the planted centre are asserted to be the **same coordinates**, with the hit case asserted at the aim. See §4.4. |

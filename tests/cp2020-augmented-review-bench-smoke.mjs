@@ -78,6 +78,11 @@ const setup = await page.evaluate(async (SCOPE) => {
     // state that precondition instead of assuming it (see E).
     attackTotal: p.attackTotal ?? null, toHitDC: p.toHitDC ?? null,
     scattered: !!p.spreadScatter,
+    // The band inputs, carried so E can re-derive its expectation through the printed rule: the
+    // weapon's own range the seam stamps, and the AIMED reach the module actually bands on (the
+    // corridor's drawn length can run past the aim point and is the wrong distance to band).
+    spreadRangeM: p.spreadRangeM ?? null,
+    spreadReachM: p.spreadAim?.reachM ?? p.spreadAim?.lengthM ?? null,
     landed: Object.values(p.areaDamages ?? {}).reduce((n, l) => n + (Array.isArray(l) ? l.length : 0), 0),
   }); });
   Hooks.on("createChatMessage", (m) => g.cards.push(m.id));
@@ -311,9 +316,17 @@ const pat = { zones: r.patterns };
 ok("E: a shot PATTERN was placed on the canvas", pat.zones.length === 1, JSON.stringify(pat.zones));
 ok("E: planted on the corridor the SHOOTER declared, not on a guessed axis",
   pat.zones[0]?.declaredAim === true, `declaredAim=${pat.zones[0]?.declaredAim}`);
-ok("E: banded from the real aimed distance, one pattern for the whole burst",
-  pat.zones[0]?.band === "Medium" && Number(pat.zones[0]?.shells) >= 1,
-  `band=${pat.zones[0]?.band} shells=${pat.zones[0]?.shells} dmg=${pat.zones[0]?.dmg}`);
+// ⏪ RE-PINNED 2026-08-17: the band edges follow the WEAPON's own range now (Core p.109 pattern
+// against the p.99 bands, commit 0021ed6) — the retired fixed 6m/25m edges banded this bench reach
+// "Medium". The expectation is re-derived from the two numbers the module itself carries (the
+// payload's stamped range, the zone's own length) through the printed rule, so the leg follows the
+// book rather than a retired constant.
+const zRange = Number(r.payloads[0]?.spreadRangeM);
+const zReach = Number(r.payloads[0]?.spreadReachM);
+const zBand = zReach <= Math.max(1, zRange / 4) ? "Short" : zReach <= zRange / 2 ? "Medium" : "Long";
+ok("E: banded from the real aimed distance against the weapon's own range, one pattern for the whole burst",
+  zRange > 0 && zReach > 0 && pat.zones[0]?.band === zBand && Number(pat.zones[0]?.shells) >= 1,
+  `band=${pat.zones[0]?.band} expected=${zBand} (reach ${zReach}m of range ${zRange}m) shells=${pat.zones[0]?.shells} dmg=${pat.zones[0]?.dmg}`);
 ok("E: the single-target flow did NOT claim this payload — the pattern owns it (negative)",
   r.handled.every(h => h === null), JSON.stringify(r.handled));
 ok("E: and no apply window opened for it", r.dialogs.length === 0, r.dialogs.join(", "));
