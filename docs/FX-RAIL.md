@@ -182,7 +182,7 @@ and sound can no longer skew against each other on any client.
 | **Burning ground** | **Sequencer's socket — deliberately still shared** | the one per-shot element left on the engine's broadcast: its scene-wide census (`maxLive`, oldest-out through the engine's manager) and late-joiner replay need the engine's shared bookkeeping. `_held(effect, { shared: true })` |
 | Impact audio from the **apply seams** | `AudioHelper.play(..., true)` broadcast — unchanged | an apply runs on ONE client and has no remote performance to deliver it; `fxHitSound`'s `broadcast` option defaults true so an un-updated caller doubles a sound rather than silencing one |
 | **Condition overlays** (§2a) | **none — each client draws its own** | the 2026-08-13 ruling that prefigured the score: every client reconciles the same public state to the same answer. `.locally()` on the draw, `push = false` on the end |
-| Trauma-team arrival (§2b) | Sequencer's socket — unchanged | referee-placed, long-lived, engine-managed |
+| Trauma-team arrival (§2b) | ⏪⏪ **none — each client draws its own from the MSG_LAND relay** (`.locally()` in `section()`, end push off; fixed 2026-08-16) | this file always relayed its own placements, so Sequencer's default push made every element draw once PER CONNECTED CLIENT on top — the once-per-client class's third instance, caught by the zero-red battery on a rig with a standing second GM. Effects are never persisted, so late joiners are unchanged (the referee re-places after a reload, as §8 documents) |
 | Face-target turn | an ordinary token document update, **firing client only** (`remote` gate) | **the only document write on this rail** — a remote GM performing it too would double-write the rotation |
 
 ### 1.3 Dependency policy

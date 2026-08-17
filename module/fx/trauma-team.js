@@ -378,7 +378,10 @@ function endTraumaFx(name) {
   }
   _intentionalEnds.add(name);
   try {
-    globalThis.Sequencer?.EffectManager?.endEffects?.({ name })
+    // `false` = do not push the end (2026-08-16, the pair of section()'s `.locally()`): every client
+    // ends its OWN copy on the MSG_END relay, and a pushed end would reach across and cancel a copy
+    // another client owns — the exact half the status-fx ruling records as easy to miss.
+    globalThis.Sequencer?.EffectManager?.endEffects?.({ name }, false)
       ?.catch?.((err) => console.warn(`${SCOPE} | arrival sequence end failed`, err));
   } catch (err) {
     console.warn(`${SCOPE} | arrival sequence end failed`, err);
@@ -425,10 +428,22 @@ function at(record, ms, verb, fn) {
   return t;
 }
 
-/** A named engine section with the common contract already applied. */
+/** A named engine section with the common contract already applied.
+ *
+ * ⏪⏪ `.locally()` (2026-08-16 — the once-per-client class, THIRD instance on this rail; found by
+ * the zero-red battery on a rig with a second standing GM client). This file has ALWAYS relayed its
+ * own placements (MSG_LAND → every client draws its own copy), but the sections also went out over
+ * Sequencer's default per-sprite push — so with N clients connected, every element was drawn N
+ * times per canvas (own draw + N−1 broadcast copies). Same mechanism, same fix, as the condition
+ * overlays (status-fx.js, ruled 2026-08-13) and the score's transient sections (_held, 2026-08-15):
+ * when a module relay already makes every client a drawer, the engine must not also transport the
+ * drawings. No late-joiner regression: these effects are deliberately never persisted (§2b/G22), so
+ * a joining client never replayed broadcast copies either — the referee re-places after a reload,
+ * exactly as documented. The end half goes local in endTraumaFx for the same reason.
+ * ⏪ Revert = remove this one call (and the `false` at endTraumaFx) — only ever as a pair. */
 function section(seq, name) {
   _pending++;
-  const fx = seq.effect().name(name);
+  const fx = seq.effect().name(name).locally();
   return fx;
 }
 
