@@ -1121,6 +1121,36 @@ export function tracerBandFor(distSquares) {
   return (TRACER_ARRIVAL_BANDS.find((b) => d >= b.minSquares) ?? TRACER_ARRIVAL_BANDS[TRACER_ARRIVAL_BANDS.length - 1]).band;
 }
 
+/**
+ * THE NEAR-BAND FLOOR for the DRAWN tracer file (user ruling 2026-08-17: the close shot's backward
+ * tail goes).
+ *
+ * Decoded on the installed tier (leftmost lit column per frame vs the ranged template's 200px start
+ * anchor): the 05ft cut of BOTH mapped bullet families bakes a point-blank muzzle event whose
+ * backwash extends BEHIND the anchor — bullet.01 by 114px, bullet.02 by 136px, two-thirds of a grid
+ * square — while every 15ft-and-up cut is clean to within 4px (bullet.01's other bands carry 39px,
+ * inside the token's own footprint). Anchored at the shooter, that backwash renders out of the
+ * actor's back: the reported "backwards tail", appearing exactly when the aim distance lands in the
+ * nearest band. The floor pins the DRAWN file at the 15ft cut for nearer shots — the engine
+ * stretches a ranged cut down without complaint — while the ARRIVAL clock stays keyed to the true
+ * distance (the timing is physics; the file choice is a look call). Covers both span shapes: the
+ * painted streak visibly, the travelled dash by consistency (its fixed grid-unit size makes the cut
+ * choice cosmetic there).
+ * REVERT: null (the engine's own five-band pick returns, backwash included).
+ */
+export const TRACER_NEAR_BAND_FLOOR = "15ft";
+
+/** The database key a SPAN draw hands the engine for this family at this distance — band-addressed
+ *  up to the floor when the engine would otherwise serve the backwashed 05ft cut, the plain family
+ *  key everywhere else, and the plain key again when the installed tier lacks the floored
+ *  sub-entry (the silent-degrade rule, pointing at a drawable key instead of nothing). */
+export function tracerSpanKey(tracerKey, distSquares) {
+  if (!TRACER_NEAR_BAND_FLOOR || !tracerKey) return tracerKey;
+  if (tracerBandFor(distSquares) !== "05ft") return tracerKey;
+  const floored = `${tracerKey}.${TRACER_NEAR_BAND_FLOOR}`;
+  return fxDbEntryExists(floored) ? floored : tracerKey;
+}
+
 /** How long a painted round of this tracer family takes to cross a shot of this length, in ms. Pure. */
 export function tracerArrivalMs(tracerKey, distSquares) {
   const table = TRACER_ARRIVAL_MS[tracerKey];
@@ -4212,7 +4242,9 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         for (let p = 0; p < ends.length; p++) {
           const end = ends[p];
           const chaos = jitter[p] ?? null;
-          const shot = _held(seq.effect().file(entry.tracer)).atLocation(shooterToken)
+          // The file is band-addressed through the near floor — see TRACER_NEAR_BAND_FLOOR for the
+          // decoded backwash measurement this answers.
+          const shot = _held(seq.effect().file(tracerSpanKey(entry.tracer, aimSquares))).atLocation(shooterToken)
             .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
           // TERMINAL ELEMENT — named so the engine's own end can be observed (see _watchSettleTag).
           if (settleTag) { shot.name(settleTag); out.tagged++; }

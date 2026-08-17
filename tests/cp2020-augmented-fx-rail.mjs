@@ -2009,6 +2009,32 @@ const res = await page.evaluate(async () => {
     && (paintedImpact?.delay ?? 0) === lessFloor(fx.arrivalSpecFor("rifle", null, paintedSquares).ms)
     && fx.arrivalSpecFor("rifle", null, paintedSquares).ms > 0,
     `shell ${shellImpact?.delay ?? 0}ms (crossing ${fx.FX_CLASSES.shotgun.dashMs} less the floor) vs painted ${paintedImpact?.delay ?? 0}ms (the ${fx.tracerBandFor(paintedSquares)} band less the floor)`);
+
+  // ⭐ THE NEAR-BAND FLOOR (2026-08-17 ruling): the nearest band's 05ft cut bakes a muzzle backwash
+  // that renders BEHIND the shooter (decoded: 114/136px past the 200px start anchor), so within that
+  // band the DRAWN file is the clean 15ft cut. Pure gate by band, tier fallback, then the queue read.
+  fx._setDbProbe(() => true);
+  ok("span file: the nearest band draws the floored cut, every other band the family key (pure)",
+    fx.tracerSpanKey("jb2a.bullet.02.orange", 1) === "jb2a.bullet.02.orange.15ft"
+    && fx.tracerSpanKey("jb2a.bullet.01.orange", 1) === "jb2a.bullet.01.orange.15ft"
+    && fx.tracerSpanKey("jb2a.bullet.02.orange", 8) === "jb2a.bullet.02.orange",
+    `near=${fx.tracerSpanKey("jb2a.bullet.02.orange", 1)} far=${fx.tracerSpanKey("jb2a.bullet.02.orange", 8)}`);
+  fx._setDbProbe((k) => !/15ft/.test(k));
+  ok("span file: a tier lacking the floored sub-entry falls back to the family key (negative)",
+    fx.tracerSpanKey("jb2a.bullet.02.orange", 1) === "jb2a.bullet.02.orange",
+    fx.tracerSpanKey("jb2a.bullet.02.orange", 1));
+  fx._setDbProbe(null);
+  played.length = 0; playedEntries.length = 0;
+  {
+    const shooterTok = canvas.tokens.get(tokenDoc.id);
+    const nearTo = { x: shooterTok.center.x + gridPx, y: shooterTok.center.y };
+    await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "rifle", hit: true, light: false, aimPoint: nearTo });
+    await sleep(150);
+    ok("span file: a one-square shot QUEUES the floored cut, so no ink can render behind the shooter",
+      playedEntries.flat().some(e => e.file === "jb2a.bullet.02.orange.15ft")
+      && !playedEntries.flat().some(e => e.file === "jb2a.bullet.02.orange"),
+      playedEntries.flat().map(e => e.file).filter(f => /bullet/.test(f)).join(",") || "(no span queued)");
+  }
   played.length = 0; playedEntries.length = 0;
 
   ok("aim: no sprite the adapter queued is left without a rotation input",

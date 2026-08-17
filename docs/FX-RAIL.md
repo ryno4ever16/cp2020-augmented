@@ -1595,6 +1595,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 
 | Knob | Ships as | Changes |
 |---|---|---|
+| `TRACER_NEAR_BAND_FLOOR` | **"15ft"** | the nearest distance band's DRAWN tracer file — the 05ft cut carries a decoded 114/136 px muzzle backwash behind its start anchor (the reported backward tail); the floor serves the clean 15ft cut there instead, arrival timing untouched. **Revert null** = the engine's own band pick, backwash included |
 | `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the two standalone arrival sites (hit mark, blood) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
 | `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
@@ -1735,6 +1736,21 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-17 — the near band's tracer cut is floored at 15ft; the point-blank backwash goes (user
+ruling: "I don't want this tail").** The field report: close shots occasionally drew a backward tail
+out of the shooter's back, and asked what it represented. Decoded rather than guessed (leftmost lit
+column per frame vs the ranged template's 200 px start anchor, all ten installed band files): the
+**05ft cut** of BOTH mapped bullet families bakes the artist's whole point-blank muzzle event, whose
+backwash extends **114 px (bullet.01) / 136 px (bullet.02) BEHIND the anchor** — two-thirds of a grid
+square rendered out of the actor's back, since span draws anchor at the shooter. Every 15ft-and-up
+cut is clean to within 4 px. So the tail "represented" nothing the module asked for — it is baked
+art, served only when the aim distance lands in the nearest band, which is why it was occasional.
+The fix is one resolver (`tracerSpanKey`): within the nearest band the DRAWN file is the
+band-addressed 15ft cut (the engine stretches a ranged cut down without complaint), with the plain
+family key as the tier-fallback; the ARRIVAL clock stays keyed to the true distance — timing is
+physics, the file choice is a look call. `TRACER_NEAR_BAND_FLOOR` = "15ft", **revert null** (the
+engine's own five-band pick returns, backwash included).
 
 **2026-08-17 — the arrival family leaves the shot's shared sequence; the engine's start-up floor is
 measured and compensated.** The reported desync ("sound, then late visuals") was instrumented before
