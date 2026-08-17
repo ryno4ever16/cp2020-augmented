@@ -186,7 +186,12 @@ const readAll = (spec) => p.evaluate(async (spec) => {
 
   try {
     const cat = await import("/modules/cp2020-augmented/module/shop/catalog.js");
-    cat.openCatalogBrowser(actor); await W.sleep(3500);
+    cat.openCatalogBrowser(actor); await W.sleep(2500);
+    // The catalog opens on its category tiles; the elements sampled below (rows, letter headers,
+    // the filter chips and the two rails) live in the item list one step in.
+    document.querySelector('.application.cp-catalog .cp-cat-tile[data-cat=""]')
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await W.sleep(3000);
     const r = document.querySelector(".application.cp-catalog");
     out.surfaces.catalog = r ? W.collect(r, spec.catalog) : null;
     for (const app of foundry.applications.instances.values()) if (app.options?.classes?.includes?.("cp-catalog")) await app.close();

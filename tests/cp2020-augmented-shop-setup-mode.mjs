@@ -34,6 +34,13 @@ const r1 = await p.evaluate(async () => {
   const check = (n, ok, got) => { out.checks.push(`${ok?"  PASS":"  FAIL"}  ${n}${ok?"":"  got="+JSON.stringify(got)}`); if(!ok) out.fails.push(n); };
   const SCOPE = "cp2020-augmented";
 
+  // The catalog OPENS on its category tiles now; the item list is one step in. This steps through
+  // the all-items tile (which carries the generated ammo rows too) and waits for the real list.
+  const intoList = async (win, marker) => {
+    await waitFor(() => win.rendered && win.element?.querySelector('.cp-cat-tile[data-cat=""], ' + marker), 40000);
+    win.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await waitFor(() => win.element?.querySelector(marker), 30000);
+  };
   const CAT = await import("/modules/cp2020-augmented/module/shop/catalog.js");
   const SETUP = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
   const PURCH = await import("/modules/cp2020-augmented/module/shop/purchase.js");
@@ -66,7 +73,7 @@ const r1 = await p.evaluate(async () => {
 
     // ── (a) Per-row dropdown persistence ──────────────────────────────────────────────────────────
     let win = CAT.openShopWindow(buyer, { view: "catalog" });
-    await waitFor(() => win.rendered && win.element?.querySelector(".cp-catalog-row[data-ammo-caliber]"), 40000);
+    await intoList(win, ".cp-catalog-row[data-ammo-caliber]");
     const ammoRow = () => win.element.querySelector(".cp-catalog-row[data-ammo-caliber]");
     check("catalog rendered with generated ammo rows", !!ammoRow(), null);
 
@@ -110,7 +117,7 @@ const r1 = await p.evaluate(async () => {
     await win.close();
     await sleep(300);
     win = CAT.openShopWindow(buyer, { view: "catalog" });
-    await waitFor(() => win.rendered && win.element?.querySelector(`.cp-catalog-row[data-ammo-caliber="${caliber}"]`), 30000);
+    await intoList(win, `.cp-catalog-row[data-ammo-caliber="${caliber}"]`);
     const reopened = win.element.querySelector(`.cp-catalog-row[data-ammo-caliber="${caliber}"] .cp-catalog-ammo-load`);
     check("closing and reopening the window RESETS the row to its default load",
       reopened?.value === defaultLoad, { want: defaultLoad, got: reopened?.value });

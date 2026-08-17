@@ -98,15 +98,22 @@ const r = await p.evaluate(async () => {
     const cat = new catMod.CatalogBrowser(null, { view: "catalog" });
     await cat.render(true);
     await sleep(900);
+    // The catalog opens on its category tiles; the filter drawer holding these chips is one step in.
     let croot = rootOf(cat);
+    croot?.querySelector('.cp-cat-tile[data-cat="Vehicles"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await sleep(1600);
+    croot = rootOf(cat);
+    croot?.querySelector('.cp-cat-chip[data-cat="Vehicles"].active')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await sleep(1600);
+    croot = rootOf(cat);
     const chips = [...(croot?.querySelectorAll('.cp-cat-chip[data-cat^="Vehicles/"]') ?? [])];
     out.ui = {
       chipCount: chips.length,
-      avChipLabel: croot?.querySelector('.cp-cat-chip[data-cat="Vehicles/AVs"]')?.textContent.trim() ?? "",
-      chipLabelLeak: /CYBERPUNK\./.test(chips.map(c => c.textContent).join(""))
+      avChipLabel: croot?.querySelector('.cp-cat-chip[data-cat="Vehicles/AVs"] .cp-cat-name')?.textContent.trim() ?? "",
+      chipLabelLeak: /CYBERPUNK\./.test(chips.map(c => c.querySelector(".cp-cat-name")?.textContent ?? "").join(""))
     };
-    croot?.querySelector('.cp-cat-chip[data-cat="Vehicles/AVs"]')?.click();
-    await sleep(900);
+    croot?.querySelector('.cp-cat-chip[data-cat="Vehicles/AVs"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await sleep(1600);
     croot = rootOf(cat);
     const vis = [...(croot?.querySelectorAll(".cp-catalog-list .cp-catalog-row") ?? [])].filter(x => x.style.display !== "none");
     out.filtered = {
@@ -136,8 +143,8 @@ console.log("  filtered:", JSON.stringify(r.filtered), "reverted:", r.reverted);
 
 const checks = [
   ["pure vehicleSubOf AV→AVs", r.pure.av === "AVs"],
-  ["pure panzer→Hover", r.pure.panzer === "Hover"],
-  ["pure blank→''", r.pure.blank === ""],
+  ["pure panzer→Other (the hover shelf folded away)", r.pure.panzer === "Other"],
+  ["pure blank→Unclassified (its own findable shelf)", r.pure.blank === "Unclassified"],
   ["pure unknown→Other", r.pure.unknown === "Other"],
   ["pure categoryOfItem vehicle/Car", r.pure.item?.category === "Vehicles" && r.pure.item?.sub === "Cars"],
   ["maneuver label = Maneuver", r.sheetEditable.maneuverLabel === "Maneuver"],
@@ -153,7 +160,7 @@ const checks = [
   ["locked sheet keeps SDP", r.sheetLocked.sdpStillThere === true],
   ["index: classed vehicle sub = AVs", r.index.targetSub === "AVs"],
   ["index: category Vehicles", r.index.targetCat === "Vehicles"],
-  ["ui: 12 vehicle sub chips", r.ui.chipCount === 12],
+  ["ui: 11 vehicle sub chips (Hover + Drones folded away, Unclassified added)", r.ui.chipCount === 11],
   ["ui: AVs chip label localized", r.ui.avChipLabel === "AVs"],
   ["ui: no chip label leak", r.ui.chipLabelLeak === false],
   ["filter: shows exactly the AV-classed vehicles incl. the target", r.filtered.count === r.index.avClassCount && r.filtered.count > 0 && r.filtered.hasTarget === true],

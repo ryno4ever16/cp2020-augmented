@@ -25,13 +25,13 @@
  *
  * Screenshots (pending + resolved) are written to CPA_SHOT_DIR, default the module's import-staging.
  *
- * Run: FVTT_URL=http://localhost:30003 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-shop-loading.mjs
+ * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-shop-loading.mjs
  */
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-const BASE = process.env.FVTT_URL || "http://localhost:30003";
+const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const GM_PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
 const CAT_SRC = "/modules/cp2020-augmented/module/shop/catalog.js";
 const SET_SRC = "/modules/cp2020-augmented/module/settings.js";
@@ -175,9 +175,15 @@ try {
     const all = await CAT.getCatalogIndex();
     window.__cpaIndexDelayMs = 0;
 
-    // Wait for the re-render the resolve triggers (rows in the DOM), not for a fixed sleep.
+    // Wait for the re-render the resolve triggers, not for a fixed sleep. What that re-render paints
+    // is the catalog's LANDING (its category tiles); the rows this leg is about are one step in.
     const deadline = performance.now() + 20000;
     let rows = 0;
+    while (performance.now() < deadline) {
+      if (app?.element?.querySelector('.cp-cat-tile[data-cat=""]')) break;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    app?.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     while (performance.now() < deadline) {
       rows = app?.element?.querySelectorAll(".cp-catalog-row").length ?? 0;
       if (rows > 0) break;
@@ -224,6 +230,8 @@ try {
     const app2 = CAT.openShopWindow(null, { view: "catalog" });
     let rows2 = 0;
     const d2 = performance.now() + 20000;
+    while (performance.now() < d2) { if (app2?.element?.querySelector('.cp-cat-tile[data-cat=""]')) break; await sleep(25); }
+    app2?.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     while (performance.now() < d2) {
       rows2 = app2?.element?.querySelectorAll(".cp-catalog-row").length ?? 0;
       if (rows2 > 0) break;

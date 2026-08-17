@@ -127,6 +127,9 @@ try {
 
       canvas.tokens.releaseAll();
       w = C.openShopWindow(null, { view: "catalog" });
+      // The catalog opens on its category tiles; the row list this section measures is one step in.
+      for (let i = 0; i < 200 && !w.element?.querySelector('.cp-cat-tile[data-cat=""], .cp-catalog-row'); i++) await sleep(50);
+      w.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       for (let i = 0; i < 200 && !(w.element?.querySelectorAll(".cp-catalog-row").length); i++) await sleep(50);
       const rowCount = w.element.querySelectorAll(".cp-catalog-row").length;
       chk("catalog painted its rows", rowCount > 100, rowCount);
