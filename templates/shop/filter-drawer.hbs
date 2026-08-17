@@ -1,0 +1,98 @@
+{{!-- THE FILTER DRAWER — one component, rendered by BOTH the catalog and the shop builder.
+
+      The two views used to carry a permanent rail on each side of the list: categories on the left,
+      books on the right, an ✕ at the top of each that read as "close me" and in fact cleared that
+      rail's filters. Both are folded in here, with the source-tag switch that used to sit in the
+      header, behind ONE collapse control.
+
+      Every filter button carries its own live count — the number of items THIS VIEWER would see if
+      it were the only thing selected — so an empty shelf reads as empty before it is clicked, and a
+      player never sees a count that includes a book the GM has hidden from them.
+
+      The per-book EYES are a different kind of control from the chips beside them: a chip changes
+      what you see, an eye changes what your PLAYERS see. They are deliberately styled apart, they
+      are GM-only, and (unlike the chips) they are not paintable by dragging. --}}
+<aside class="cp-filter-drawer" data-open="{{#if drawer.open}}1{{else}}0{{/if}}">
+    <div class="cp-drawer-head flexrow">
+        <button type="button" class="cp-drawer-toggle" aria-expanded="{{#if drawer.open}}true{{else}}false{{/if}}"
+                title="{{#if drawer.open}}{{localize "CYBERPUNK.CatalogDrawerHide"}}{{else}}{{localize "CYBERPUNK.CatalogDrawerShow"}}{{/if}}">
+            <i class="fa-solid {{#if drawer.open}}fa-angles-left{{else}}fa-angles-right{{/if}}"></i>
+        </button>
+        <h3 class="cp-drawer-title">{{localize "CYBERPUNK.CatalogFilters"}}</h3>
+        {{#if drawer.anyActive}}
+        <button type="button" class="cp-drawer-clear" title="{{localize "CYBERPUNK.CatalogClearFilters"}}">{{localize "CYBERPUNK.CatalogClear"}}</button>
+        {{/if}}
+    </div>
+
+    <div class="cp-catalog-filters flexcol">
+        <div class="cp-drawer-section cp-drawer-cats">
+            <h4 class="cp-drawer-subtitle">{{localize "CYBERPUNK.CatalogCategories"}}</h4>
+            {{#each drawer.cats as |c|}}
+            <div class="cp-cat-group{{#if c.expanded}} cp-expanded{{/if}}" data-cat="{{c.key}}">
+                <div class="cp-cat-grouphead">
+                    {{#if c.hasSubs}}
+                    <button type="button" class="cp-cat-expand" data-cat="{{c.key}}"
+                            title="{{#if c.expanded}}{{localize "CYBERPUNK.CatalogGroupCollapse"}}{{else}}{{localize "CYBERPUNK.CatalogGroupExpand"}}{{/if}}">
+                        <i class="fa-solid {{#if c.expanded}}fa-caret-down{{else}}fa-caret-right{{/if}}"></i>
+                    </button>
+                    {{else}}<span class="cp-cat-expand-pad"></span>{{/if}}
+                    <button type="button" class="cp-cat-chip cp-cat-top{{#if c.active}} active{{/if}}" data-cat="{{c.key}}" data-count="{{c.count}}">
+                        <span class="cp-cat-name">{{c.label}}</span><span class="cp-cat-count">{{c.count}}</span>
+                    </button>
+                </div>
+                {{#if c.hasSubs}}
+                <div class="cp-cat-subs">
+                    {{#each c.subs as |s|}}
+                    <button type="button" class="cp-cat-chip cp-cat-sub{{#if s.active}} active{{/if}}" data-cat="{{s.key}}" data-count="{{s.count}}">
+                        <span class="cp-cat-name">{{s.label}}</span><span class="cp-cat-count">{{s.count}}</span>
+                    </button>
+                    {{/each}}
+                </div>
+                {{/if}}
+            </div>
+            {{/each}}
+        </div>
+
+        {{#if drawer.books.show}}
+        <div class="cp-drawer-section cp-catalog-sources cp-catalog-books">
+            <h4 class="cp-drawer-subtitle">{{localize "CYBERPUNK.CatalogBooks"}}</h4>
+            {{#if drawer.books.canCurate}}<p class="cp-books-hint"><i class="fa-solid fa-eye"></i> {{localize "CYBERPUNK.CatalogBooksEyeHint"}}</p>{{/if}}
+            <div class="cp-src-scroll">
+                {{#if drawer.books.core.length}}
+                <div class="cp-book-list cp-book-pinned">
+                    {{#each drawer.books.core as |b|}}
+                    <div class="cp-book-row"><button type="button" class="cp-book-chip{{#if b.active}} active{{/if}}" data-book="{{b.key}}" data-count="{{b.count}}" title="{{b.name}}"><span class="cp-book-name">{{b.short}}</span><span class="cp-book-count">{{b.count}}</span></button></div>
+                    {{/each}}
+                </div>
+                <div class="cp-book-divider"></div>
+                {{/if}}
+                <div class="cp-book-list">
+                    {{#each drawer.books.official as |b|}}
+                    <div class="cp-book-row">
+                        <button type="button" class="cp-book-chip{{#if b.active}} active{{/if}}" data-book="{{b.key}}" data-count="{{b.count}}" title="{{b.name}}"><span class="cp-book-name">{{b.short}}</span><span class="cp-book-count">{{b.count}}</span></button>
+                        {{#if b.curate}}<label class="cp-book-eye{{#if b.enabled}} on{{/if}}" title="{{localize "CYBERPUNK.CatalogBookVisibleHint"}}"><input type="checkbox" class="cp-src-toggle" data-source="{{b.name}}" {{#if b.enabled}}checked{{/if}}/><i class="fa-solid {{#if b.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></label>{{/if}}
+                    </div>
+                    {{/each}}
+                </div>
+                {{#if drawer.books.allowHomebrew}}{{#if drawer.books.homebrew.length}}
+                <div class="cp-src-group-label">{{localize "CYBERPUNK.CatalogHomebrew"}}</div>
+                <div class="cp-book-list">
+                    {{#each drawer.books.homebrew as |b|}}
+                    <div class="cp-book-row">
+                        <button type="button" class="cp-book-chip{{#if b.active}} active{{/if}}" data-book="{{b.key}}" data-count="{{b.count}}" title="{{b.name}}"><span class="cp-book-name">{{b.short}}</span><span class="cp-book-count">{{b.count}}</span></button>
+                        {{#if b.curate}}<label class="cp-book-eye{{#if b.enabled}} on{{/if}}" title="{{localize "CYBERPUNK.CatalogBookVisibleHint"}}"><input type="checkbox" class="cp-src-toggle" data-source="{{b.name}}" {{#if b.enabled}}checked{{/if}}/><i class="fa-solid {{#if b.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></label>{{/if}}
+                    </div>
+                    {{/each}}
+                </div>
+                {{/if}}{{/if}}
+            </div>
+        </div>
+        {{/if}}
+
+        <div class="cp-drawer-section cp-drawer-opts">
+            <label class="cp-catalog-srctoggle" title="{{localize "SETTINGS.ShopShowSourceHint"}}">
+                <input type="checkbox" class="cp-catalog-showsource" {{#if showSource}}checked{{/if}}/> {{localize "CYBERPUNK.CatalogShowSource"}}
+            </label>
+        </div>
+    </div>
+</aside>

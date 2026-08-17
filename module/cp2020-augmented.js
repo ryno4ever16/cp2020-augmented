@@ -156,6 +156,8 @@ const AUGMENTED_TEMPLATES = [
   // Shop buyer strip — included by the catalog template and re-rendered on its own when the buyer
   // changes, which is why it is a partial at all (module/shop/catalog.js _cpSyncBuyer).
   "modules/cp2020-augmented/templates/shop/buyer-bar.hbs",
+  // Shop filter drawer — mounted as a partial by three catalog views (catalog/build/storefront).
+  "modules/cp2020-augmented/templates/shop/filter-drawer.hbs",
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",

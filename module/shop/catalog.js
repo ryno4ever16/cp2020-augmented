@@ -84,6 +84,36 @@ const SCOPE = "cp2020-augmented";
 /** "Add all shown" asks for confirmation above this many NEW items (guards against dumping the whole catalog). */
 const BULK_ADD_CONFIRM_OVER = 20;
 
+/** Above this many rows a list is long enough that the A–Z strip earns its line (Chipware is 205). */
+const JUMP_ROWS_OVER = 60;
+
+/**
+ * The filter drawer's own state — open/collapsed, and which category groups are expanded.
+ *
+ * BROWSER-LOCAL, deliberately, and not a game setting. It is a per-person view preference about a
+ * window, in the same class as a scroll position: it belongs to the seat someone is sitting in, not
+ * to the world, and pushing it through the settings layer would both replicate it to every client
+ * and add a world-write to a control that is pressed dozens of times an evening.
+ */
+const DRAWER_STORE = "cp2020-augmented.shopDrawer";
+function readDrawerState() {
+  try {
+    const o = JSON.parse(localStorage.getItem(DRAWER_STORE) || "null");
+    return { open: o?.open !== false, groups: (o && typeof o.groups === "object" && o.groups) ? { ...o.groups } : {} };
+  } catch { return { open: true, groups: {} }; }
+}
+function writeDrawerState(state) {
+  try { localStorage.setItem(DRAWER_STORE, JSON.stringify({ open: !!state.open, groups: state.groups ?? {} })); }
+  catch { /* storage disabled — the drawer just stops remembering */ }
+}
+
+/** Landing-tile glyph per top category. Icons only; the label and the count carry the meaning. */
+const CATEGORY_ICONS = {
+  Weapons: "fa-gun", Armor: "fa-shield-halved", Ammo: "fa-box", Cyberware: "fa-microchip",
+  FBC: "fa-robot", Gear: "fa-bag-shopping", Netrunning: "fa-network-wired",
+  Programs: "fa-code", Vehicles: "fa-car",
+};
+
 /** Split a "packId.itemId" sourceKey (packId itself contains a dot). */
 function splitSourceKey(sk) {
   const i = String(sk ?? "").lastIndexOf(".");
@@ -168,6 +198,11 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._search = "";
     this._cats = new Set();
     this._books = new Set();
+    /** The catalog's front page is its CATEGORIES, not its rows: "landing" paints the tiles,
+     *  "list" paints the item list. An internal pane, not a view — the four API view names
+     *  (home/catalog/build/storefront) are unchanged. */
+    this._pane = "landing";
+    this._drawer = readDrawerState();
     this._catalogIndexWait = null;   // the one pending "re-render when the index lands" (see _awaitCatalogIndex)
     /**
      * Per-row dropdown choices the GM/player has made — the ammo LOAD and the clothing STYLE — keyed by
@@ -197,7 +232,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     // (replaces the old V1 _render scroll-capture override). All three panels carry their own
     // `overflow-y:auto` (css §.cp-catalog-list/.cp-catalog-filters/.cp-src-scroll), so each needs listing —
     // otherwise clicking a category/book chip while the filter compartment is scrolled snaps it back to top.
-    main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-catalog-list", ".cp-catalog-filters", ".cp-src-scroll"] },
+    main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-catalog-list", ".cp-drawer-cats", ".cp-src-scroll", ".cp-catalog-landing"] },
   };
 
   get title() {
@@ -229,6 +264,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._search = "";
     this._cats = new Set();
     this._books = new Set();
+    this._pane = "landing";
     // Plain render (NOT force): in-window navigation (Catalog, a custom shop, Back, …) just swaps the
     // view — it must not "reopen" the window, which would trip the global shimmer-on-reopen wrap. The
     // genuine external reopen (openShopWindow) keeps its own explicit shimmer.
@@ -266,26 +302,98 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const band = (n) => { const s = n.toLowerCase(); return s === search ? 0 : s.startsWith(search) ? 1 : 2; };
     rows.sort((a, b) => band(a.name) - band(b.name) || a.name.localeCompare(b.name));
   }
-  _catTree() {
-    return CATEGORIES.map(c => ({
-      key: c.key, label: shopCatLabel(c.key), active: this._cats.has(c.key),
-      subs: c.subs.map(s => ({ key: `${c.key}/${s}`, label: shopSubLabel(s), active: this._cats.has(`${c.key}/${s}`) }))
-    }));
+  /**
+   * The live counts painted on every filter button and every landing tile.
+   *
+   * ⛔ PER VIEWER, and that is the point. The pool is what THIS viewer is allowed to see — a player
+   * whose GM has hidden three books gets counts that never mention their contents, and a category
+   * whose whole content is hidden counts zero and is not offered at all. Handing a player a "Weapons
+   * 1,079" tile that opens onto 103 rows is worse than not offering the tile.
+   *
+   * Faceted, in the ordinary way: a category's count is taken with the BOOK filters applied and its
+   * own dimension ignored, and a book's count the other way round. So the numbers answer "how many
+   * would I get if I picked this next", which is the question a filter list is asked.
+   */
+  _facetCounts(all, { isGM, cfg }) {
+    const pool = all.filter(it => isVisibleTo(it.supplement, it.canon, cfg, isGM));
+    const booksActive = this._books.size > 0;
+    const catsActive = this._cats.size > 0;
+    const matchesBook = (it) => !booksActive || (it.canon === "core" && this._books.has("__core__")) || this._books.has(it.supplement);
+    const matchesCat = (it) => !catsActive || this._cats.has(it.category) || this._cats.has(`${it.category}/${it.sub}`);
+    const cat = new Map(), sub = new Map(), book = new Map();
+    let core = 0;
+    for (const it of pool) {
+      if (matchesBook(it)) {
+        cat.set(it.category, (cat.get(it.category) ?? 0) + 1);
+        const k = `${it.category}/${it.sub}`;
+        sub.set(k, (sub.get(k) ?? 0) + 1);
+      }
+      if (matchesCat(it)) {
+        book.set(it.supplement, (book.get(it.supplement) ?? 0) + 1);
+        if (it.canon === "core") core++;
+      }
+    }
+    book.set("__core__", core);
+    return { cat, sub, book, total: pool.length };
+  }
+
+  /** The category half of the drawer: two levels, live counts, and no shelf this viewer would find
+   *  empty (an ACTIVE shelf is always kept, so a filter can never become unreachable mid-session). */
+  _catTree(counts) {
+    return CATEGORIES.map(c => {
+      const subs = c.subs
+        .map(s => ({ key: `${c.key}/${s}`, label: shopSubLabel(s), active: this._cats.has(`${c.key}/${s}`), count: counts.sub.get(`${c.key}/${s}`) ?? 0 }))
+        .filter(s => s.count > 0 || s.active);
+      const count = counts.cat.get(c.key) ?? 0;
+      return {
+        key: c.key, label: shopCatLabel(c.key), active: this._cats.has(c.key), count,
+        subs, hasSubs: subs.length > 0, expanded: this._drawer.groups[c.key] !== false,
+      };
+    }).filter(c => c.count > 0 || c.active || c.subs.some(s => s.active));
+  }
+
+  /** The whole drawer's render context — the one component both the catalog and the builder mount. */
+  _drawerContext(all, { isGM, cfg, canCurate }) {
+    const counts = this._facetCounts(all, { isGM, cfg });
+    return {
+      counts,
+      drawer: {
+        open: this._drawer.open !== false,
+        anyActive: this._cats.size > 0 || this._books.size > 0,
+        cats: this._catTree(counts),
+        books: this._booksPanel(all, { isGM, cfg, canCurate, counts }),
+      },
+    };
+  }
+
+  /** The landing tiles: one per top category this viewer has anything in, plus the whole catalog. */
+  _landingTiles(counts) {
+    const tiles = CATEGORIES
+      .filter(c => (counts.cat.get(c.key) ?? 0) > 0)
+      .map(c => ({
+        key: c.key, label: shopCatLabel(c.key), count: counts.cat.get(c.key) ?? 0,
+        icon: CATEGORY_ICONS[c.key] ?? "fa-box", hint: game.i18n.format("CYBERPUNK.CatalogTileHint", { name: shopCatLabel(c.key) }),
+      }));
+    tiles.push({
+      key: "", label: game.i18n.localize("CYBERPUNK.CatalogAllItems"), count: counts.total,
+      icon: "fa-list", hint: game.i18n.localize("CYBERPUNK.CatalogAllItemsHint"),
+    });
+    return tiles;
   }
   /** The "Books" filter panel: one chip per source book that has items (Core pinned at the top, then
    *  official, then homebrew). Each chip is a display filter; on the GM's catalog/build view each official
    *  /homebrew chip also carries an eye toggle for player visibility (the old per-source curation). */
-  _booksPanel(all, { isGM, cfg, canCurate }) {
+  _booksPanel(all, { isGM, cfg, canCurate, counts }) {
     const present = new Set(all.map(i => i.supplement + " " + i.canon));
     const enabled = cfg.enabledSources ?? {};
     const seen = (name, canon) => present.has(name + " " + canon) && (isGM || isVisibleTo(name, canon, cfg, false));
     const mk = (names, canon) => names.filter(n => seen(n, canon)).map(n => ({
-      key: n, name: n, short: shortSupplement(n),
+      key: n, name: n, short: shortSupplement(n), count: counts?.book.get(n) ?? 0,
       active: this._books.has(n), curate: canCurate, enabled: enabled[n] === true
     }));
     const coreLabel = game.i18n.localize("CYBERPUNK.CatalogCore");
     const core = all.some(i => i.canon === "core")
-      ? [{ key: "__core__", name: coreLabel, short: coreLabel, active: this._books.has("__core__"), curate: false }]
+      ? [{ key: "__core__", name: coreLabel, short: coreLabel, count: counts?.book.get("__core__") ?? 0, active: this._books.has("__core__"), curate: false }]
       : [];
     const official = mk(knownOfficialSupplements(), "official");
     const homebrew = shopAllowHomebrew() ? mk(knownNoncanonSources(), "noncanon") : [];
@@ -415,15 +523,23 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     return { shops, canCreate: isGM, hasShops: shops.length > 0 };
   }
 
+  /** The A–Z strip earns its line in two places: the whole catalog, and any shelf long enough that
+   *  scrolling it is a chore. A 22-row shotgun shelf gets a strip of two letters and no benefit. */
+  _showJump(rows) { return this._cats.size === 0 || rows.length > JUMP_ROWS_OVER; }
+
   _dataCatalog(all, { isGM, cfg, search }) {
+    const { counts, drawer } = this._drawerContext(all, { isGM, cfg, canCurate: isGM });
+    // The front page. A text search skips it — someone who has typed has already said what they want.
+    if (this._pane === "landing" && !this._search.trim()) {
+      return { landing: true, tiles: this._landingTiles(counts), showSearch: true, showFilters: false, showJump: false, rowCount: 0 };
+    }
     const rows = this._filterRows(all, { isGM, cfg, search });
     const letters = [];
     if (search) this._greedySort(rows, search);
     else this._assignLetters(rows, true, letters);
     return {
-      showFilters: true, showJump: true, showSearch: true,
-      rows, rowCount: rows.length, letters, cats: this._catTree(),
-      booksPanel: this._booksPanel(all, { isGM, cfg, canCurate: isGM })
+      showFilters: true, showJump: this._showJump(rows), showSearch: true, showUplevel: true,
+      rows, rowCount: rows.length, letters, drawer,
     };
   }
 
@@ -437,11 +553,11 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     if (search) this._greedySort(rows, search);
     else this._assignLetters(rows, true, letters);
     return {
-      showFilters: true, showJump: true, showSearch: true,
+      showFilters: true, showJump: this._showJump(rows), showSearch: true,
       shop: { id: def.id, name: def.name, open: def.open, fullSearch: def.fullSearch, discountPct: def.discountPct, notes: def.notes },
       vendor, vendorCount: vendor.length,
-      rows, rowCount: rows.length, letters, cats: this._catTree(),
-      booksPanel: this._booksPanel(all, { isGM, cfg, canCurate: isGM })
+      rows, rowCount: rows.length, letters,
+      ...this._drawerContext(all, { isGM, cfg, canCurate: isGM }),
     };
   }
 
@@ -473,10 +589,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     if (featured.length) featured[0]._featuredDivider = true;
     if (rest.length && featured.length) rest[0]._restDivider = true;
     return {
-      showSearch: true, showFilters: true, showJump: true,
+      showSearch: true, showFilters: true, showJump: this._showJump(rest),
       shop: { id: def.id, name: def.name, open: def.open, discountPct: def.discountPct },
-      rows: [...featured, ...rest], rowCount: featured.length + rest.length, letters, cats: this._catTree(),
-      booksPanel: this._booksPanel(all, { isGM, cfg, canCurate: false }),
+      rows: [...featured, ...rest], rowCount: featured.length + rest.length, letters,
+      ...this._drawerContext(all, { isGM, cfg, canCurate: false }),
       manageBack: isGM, fullSearch: true
     };
   }
@@ -612,6 +728,15 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const titleEl = this.element?.querySelector?.(".window-title");
     if (titleEl) titleEl.textContent = this.title;
     if (this.element) this.activateListeners(this.element);
+    // Typing the first character on the landing page swaps the whole pane, which takes the focus off
+    // the box the person is typing into. Put it back, with the caret at the end, so the second
+    // character lands where the first one did.
+    if (this._search) {
+      const box = this.element?.querySelector?.(".cp-catalog-search");
+      if (box && this.element.ownerDocument?.activeElement !== box) {
+        try { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } catch { /* not focusable yet */ }
+      }
+    }
   }
 
   // ── Listeners ────────────────────────────────────────────────────────────────
@@ -647,19 +772,51 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     // Buyer picker (shop AS a chosen owned character).
     this._activateBuyerPick(root);
 
-    // Search + source toggle. Search filters in place (no re-render) so the box stays responsive even when
-    // popped out into a second window; see _applySearch.
-    root.querySelector(".cp-catalog-search")?.addEventListener("input", (ev) => { this._search = ev.currentTarget.value; this._applySearch(root); });
+    // Search. It filters in place (no re-render) so the box stays responsive even when popped out into
+    // a second window — EXCEPT from the landing, which has no rows to filter: the first keystroke there
+    // opens the list and the render's own _applySearch pass narrows it. See _applySearch.
+    root.querySelector(".cp-catalog-search")?.addEventListener("input", (ev) => {
+      this._search = ev.currentTarget.value;
+      if (this._pane === "landing" && this._search.trim()) { this._pane = "list"; this.render(); return; }
+      this._applySearch(root);
+    });
     root.querySelector(".cp-catalog-showsource")?.addEventListener("change", async (ev) => { try { await game.settings.set(SCOPE, "shopShowSource", ev.currentTarget.checked); } catch {} this.render(); });
 
-    // Category filters + clear + jump.
-    root.querySelectorAll(".cp-cat-chip").forEach(el => el.addEventListener("click", (ev) => { ev.preventDefault(); const k = ev.currentTarget.dataset.cat; this._cats.has(k) ? this._cats.delete(k) : this._cats.add(k); this.render(); }));
-    root.querySelector(".cp-cat-clear")?.addEventListener("click", (ev) => { ev.preventDefault(); this._cats.clear(); this.render(); });
+    // Landing tiles → the list, filtered to that category (the empty key = the whole catalog).
+    root.querySelectorAll(".cp-cat-tile").forEach(el => el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const k = ev.currentTarget.dataset.cat;
+      this._cats = new Set(k ? [k] : []);
+      this._pane = "list";
+      this.render();
+    }));
+    root.querySelector(".cp-catalog-uplevel")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      this._pane = "landing"; this._search = ""; this._cats = new Set();
+      this.render();
+    });
+
+    // Filter buttons: categories and books toggle the same way, and both are PAINTABLE (see
+    // _activateFilterPaint — a stroke across several is one gesture, not five clicks).
+    this._activateFilterPaint(root, ".cp-cat-chip", "cat", this._cats);
+    this._activateFilterPaint(root, ".cp-book-chip", "book", this._books);
+    root.querySelector(".cp-drawer-clear")?.addEventListener("click", (ev) => { ev.preventDefault(); this._cats.clear(); this._books.clear(); this.render(); });
     root.querySelectorAll(".cp-jump").forEach(el => el.addEventListener("click", (ev) => { ev.preventDefault(); root.querySelector(`.cp-catalog-row[data-letter="${ev.currentTarget.dataset.letter}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }); }));
 
-    // Book (supplement) filters + clear — same additive behavior as categories.
-    root.querySelectorAll(".cp-book-chip").forEach(el => el.addEventListener("click", (ev) => { ev.preventDefault(); const k = ev.currentTarget.dataset.book; this._books.has(k) ? this._books.delete(k) : this._books.add(k); this.render(); }));
-    root.querySelector(".cp-book-clear")?.addEventListener("click", (ev) => { ev.preventDefault(); this._books.clear(); this.render(); });
+    // Drawer: the one collapse affordance, and the per-group expanders. Both are browser-local state.
+    root.querySelector(".cp-drawer-toggle")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      this._drawer.open = !this._drawer.open;
+      writeDrawerState(this._drawer);
+      this.render();
+    });
+    root.querySelectorAll(".cp-cat-expand").forEach(el => el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const k = ev.currentTarget.dataset.cat;
+      this._drawer.groups[k] = this._drawer.groups[k] === false;
+      writeDrawerState(this._drawer);
+      this.render();
+    }));
 
     // GM per-book player-visibility (eye) toggles.
     root.querySelectorAll(".cp-src-toggle").forEach(el => el.addEventListener("change", async (ev) => {
@@ -710,6 +867,87 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // A render rebuilt the rows — re-apply any active text search so it composes with filter changes.
     this._applySearch(root);
+  }
+
+  /**
+   * PAINT-DRAG MULTI-TOGGLE for a column of filter buttons.
+   *
+   * Setting up a filter means pressing several buttons in a row, and pressing several buttons in a
+   * row is one intention, not five. Pressing one and dragging down the column applies the SAME
+   * direction — the direction the first button flipped in — to every button crossed. Starting on an
+   * off button turns the whole run on; starting on an on button turns the whole run off. Mixed
+   * states resolve to the stroke's direction rather than each inverting, which is what makes a
+   * stroke predictable: you can see where it will end before you make it.
+   *
+   * ⛔ NOT the per-book visibility EYES. A chip changes what the person dragging sees; an eye changes
+   * what their players see, and that wants a deliberate click on a specific book. They are excluded
+   * by selector, not by accident.
+   *
+   * ⚠ MOUSE AND PEN ONLY. The drawer is a vertical scrolling column, and on a touch screen a
+   * vertical drag down a column of buttons is how you scroll it. Engaging there would take the
+   * scroll away; touch keeps plain taps, which still work through the click path below.
+   *
+   * One render, at the end. Re-rendering per crossed button would replace the very nodes the stroke
+   * is being drawn over — so the set and the `active` class are updated live, and the list is
+   * rebuilt once on release.
+   */
+  _activateFilterPaint(root, selector, datasetKey, set) {
+    const buttons = [...root.querySelectorAll(selector)];
+    if (!buttons.length) return;
+    let stroke = null;   // { on: boolean, touched: Set<string> } while a stroke is live
+
+    const apply = (btn) => {
+      const k = btn.dataset[datasetKey];
+      if (!k || stroke.touched.has(k)) return;
+      stroke.touched.add(k);
+      if (stroke.on) set.add(k); else set.delete(k);
+      btn.classList.toggle("active", stroke.on);
+    };
+    const end = () => {
+      if (!stroke) return;
+      const touched = stroke.touched.size;
+      stroke = null;
+      root.removeEventListener("pointermove", onMove, true);
+      if (touched) { this._paintConsumed = true; this.render(); }
+    };
+    // Hit-testing the point rather than trusting pointerover: a captured pointer sends its moves to
+    // the capturing element, so the buttons underneath never hear from it directly.
+    const onMove = (ev) => {
+      if (!stroke) return;
+      const el = ev.currentTarget?.ownerDocument?.elementFromPoint(ev.clientX, ev.clientY);
+      const btn = el?.closest?.(selector);
+      // Leaving the column ends the stroke — the pointer has gone somewhere that is not this filter
+      // list, and a stroke that survived that would keep painting when it came back.
+      if (!btn || !root.contains(btn)) { end(); return; }
+      apply(btn);
+    };
+
+    for (const btn of buttons) {
+      btn.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0 || (ev.pointerType !== "mouse" && ev.pointerType !== "pen")) return;
+        ev.preventDefault();
+        this._paintConsumed = false;   // a stroke whose click never arrived must not swallow the next one
+        const k = btn.dataset[datasetKey];
+        stroke = { on: !set.has(k), touched: new Set() };
+        apply(btn);
+        try { root.setPointerCapture?.(ev.pointerId); } catch { /* capture unsupported — moves still hit-test */ }
+        root.addEventListener("pointermove", onMove, true);
+      });
+      btn.addEventListener("pointerup", end);
+      btn.addEventListener("pointercancel", end);
+      // The click that follows a stroke has already been handled by the stroke. A click with NO
+      // preceding pointerdown — the keyboard's Enter, an assistive click — falls through and toggles
+      // the one button, so the control never stops working without a pointer.
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        if (this._paintConsumed) { this._paintConsumed = false; return; }
+        const k = ev.currentTarget.dataset[datasetKey];
+        set.has(k) ? set.delete(k) : set.add(k);
+        this.render();
+      });
+    }
+    root.addEventListener("pointerup", end);
+    root.addEventListener("pointercancel", end);
   }
 
   /** Catalog + storefront rows are draggable onto a character sheet to BUY (purchaseByDrop). Curated

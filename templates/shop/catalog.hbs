@@ -28,6 +28,9 @@
     {{!-- ───────────────────── shared header (catalog/build/storefront) ───────────────────── --}}
     <div class="cp-shop-header flexrow">
         <button type="button" class="cp-shop-back" title="{{localize "CYBERPUNK.ShopBackHome"}}">‹ {{localize "CYBERPUNK.ShopTitle"}}</button>
+        {{#if showUplevel}}
+        <button type="button" class="cp-catalog-uplevel" title="{{localize "CYBERPUNK.CatalogBackToCategoriesHint"}}">‹ {{localize "CYBERPUNK.CatalogCategories"}}</button>
+        {{/if}}
         {{#if isBuild}}
             <input type="text" class="cp-shop-name" value="{{shop.name}}" title="{{localize "CYBERPUNK.ShopName"}}"/>
             <label title="{{localize "CYBERPUNK.ShopOpenHint"}}"><input type="checkbox" class="cp-shop-open" {{#if shop.open}}checked{{/if}}/> {{localize "CYBERPUNK.ShopStatusOpen"}}</label>
@@ -72,13 +75,11 @@
 
     {{#unless catalogLoading}}{{#unless missing}}{{#unless closed}}
 
-    {{!-- Toolbar (search + source badge) --}}
+    {{!-- Toolbar: the search box is GLOBAL and always present, on the landing as well as in a list —
+          typing from the landing jumps straight to the results. --}}
     {{#if showSearch}}
     <div class="cp-catalog-toolbar flexrow">
         <input type="text" class="cp-catalog-search" placeholder="{{localize "CYBERPUNK.CatalogSearch"}}" value="{{search}}"/>
-        {{#if showFilters}}
-        <label class="cp-catalog-srctoggle" title="{{localize "SETTINGS.ShopShowSourceHint"}}"><input type="checkbox" class="cp-catalog-showsource" {{#if showSource}}checked{{/if}}/> {{localize "CYBERPUNK.CatalogShowSource"}}</label>
-        {{/if}}
         <span class="flex-pad"></span>
     </div>
     {{/if}}
@@ -132,24 +133,25 @@
     </div>
     {{/if}}
 
+    {{!-- ───────────── LANDING: the catalog's front page is its categories, not 2,500 rows ───────────── --}}
+    {{#if landing}}
+    <div class="cp-catalog-landing">
+        {{#each tiles as |t|}}
+        <button type="button" class="cp-cat-tile{{#unless t.key}} cp-cat-tile-all{{/unless}}" data-cat="{{t.key}}" data-count="{{t.count}}" title="{{t.hint}}">
+            <span class="cp-tile-icon"><i class="fa-solid {{t.icon}}"></i></span>
+            <span class="cp-tile-name">{{t.label}}</span>
+            <span class="cp-tile-count">{{t.count}}</span>
+        </button>
+        {{/each}}
+    </div>
+    {{else}}
+
     <div class="cp-catalog-body">
-        {{#if showFilters}}
-        <div class="cp-catalog-filters flexcol">
-            <div class="cp-cat-head flexrow">
-                <h3 class="cp-cat-title">{{localize "CYBERPUNK.CatalogCategories"}}</h3>
-                <button type="button" class="cp-cat-clear" title="{{localize "CYBERPUNK.CatalogClearFilters"}}">✕</button>
-            </div>
-            {{#each cats as |c|}}
-            <div class="cp-cat-group">
-                <button type="button" class="cp-cat-chip cp-cat-top {{#if c.active}}active{{/if}}" data-cat="{{c.key}}">{{c.label}}</button>
-                {{#if c.subs.length}}<div class="cp-cat-subs">{{#each c.subs as |s|}}<button type="button" class="cp-cat-chip cp-cat-sub {{#if s.active}}active{{/if}}" data-cat="{{s.key}}">{{s.label}}</button>{{/each}}</div>{{/if}}
-            </div>
-            {{/each}}
-        </div>
-        {{/if}}
+        {{#if showFilters}}{{> "modules/cp2020-augmented/templates/shop/filter-drawer.hbs"}}{{/if}}
 
         <div class="cp-catalog-center flexcol">
-            {{!-- Always render the jump bar; the .cp-searching class (set by _applySearch) hides it live. --}}
+            {{!-- Always render the jump bar when it is earned; the .cp-searching class (set by
+                  _applySearch) hides it live while a text search is narrowing the list. --}}
             {{#if showJump}}{{#if letters.length}}
             <div class="cp-catalog-jump">{{#each letters as |L|}}<button type="button" class="cp-jump" data-letter="{{L}}">{{L}}</button>{{/each}}</div>
             {{/if}}{{/if}}
@@ -191,46 +193,8 @@
                 <p class="cp-catalog-nomatch" style="display:none;">{{localize "CYBERPUNK.CatalogNoMatch"}}</p>
             </div>
         </div>
-
-        {{#if booksPanel.show}}
-        <div class="cp-catalog-sources cp-catalog-books">
-            <div class="cp-book-head flexrow">
-                <h3 class="cp-src-title">{{localize "CYBERPUNK.CatalogBooks"}}</h3>
-                <button type="button" class="cp-book-clear" title="{{localize "CYBERPUNK.CatalogClearFilters"}}">✕</button>
-            </div>
-            {{#if booksPanel.canCurate}}<p class="cp-books-hint"><i class="fa-solid fa-eye"></i> {{localize "CYBERPUNK.CatalogBooksEyeHint"}}</p>{{/if}}
-            <div class="cp-src-scroll">
-                {{#if booksPanel.core.length}}
-                <div class="cp-book-list cp-book-pinned">
-                    {{#each booksPanel.core as |b|}}
-                    <div class="cp-book-row"><button type="button" class="cp-book-chip{{#if b.active}} active{{/if}}" data-book="{{b.key}}" title="{{b.name}}">{{b.short}}</button></div>
-                    {{/each}}
-                </div>
-                <div class="cp-book-divider"></div>
-                {{/if}}
-                <div class="cp-book-list">
-                    {{#each booksPanel.official as |b|}}
-                    <div class="cp-book-row">
-                        <button type="button" class="cp-book-chip{{#if b.active}} active{{/if}}" data-book="{{b.key}}" title="{{b.name}}">{{b.short}}</button>
-                        {{#if b.curate}}<label class="cp-book-eye{{#if b.enabled}} on{{/if}}" title="{{localize "CYBERPUNK.CatalogBookVisibleHint"}}"><input type="checkbox" class="cp-src-toggle" data-source="{{b.name}}" {{#if b.enabled}}checked{{/if}}/><i class="fa-solid {{#if b.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></label>{{/if}}
-                    </div>
-                    {{/each}}
-                </div>
-                {{#if booksPanel.allowHomebrew}}{{#if booksPanel.homebrew.length}}
-                <div class="cp-src-group-label">{{localize "CYBERPUNK.CatalogHomebrew"}}</div>
-                <div class="cp-book-list">
-                    {{#each booksPanel.homebrew as |b|}}
-                    <div class="cp-book-row">
-                        <button type="button" class="cp-book-chip{{#if b.active}} active{{/if}}" data-book="{{b.key}}" title="{{b.name}}">{{b.short}}</button>
-                        {{#if b.curate}}<label class="cp-book-eye{{#if b.enabled}} on{{/if}}" title="{{localize "CYBERPUNK.CatalogBookVisibleHint"}}"><input type="checkbox" class="cp-src-toggle" data-source="{{b.name}}" {{#if b.enabled}}checked{{/if}}/><i class="fa-solid {{#if b.enabled}}fa-eye{{else}}fa-eye-slash{{/if}}"></i></label>{{/if}}
-                    </div>
-                    {{/each}}
-                </div>
-                {{/if}}{{/if}}
-            </div>
-        </div>
-        {{/if}}
     </div>
+    {{/if}}
 
     {{#if isBuild}}
     <div class="cp-shop-notes-row"><textarea class="cp-shop-notes" rows="1" placeholder="{{localize "CYBERPUNK.ShopNotes"}}">{{shop.notes}}</textarea></div>
