@@ -162,7 +162,13 @@ const setup = await p.evaluate(async (SCOPE) => {
   // `.view()` is client-local (the vehicle-seating idiom), so the world's active scene is untouched
   // and no other suite in the battery is disturbed. The canvas must be drawn because the legs below
   // select and target through `canvas.tokens`.
-  const benchScene = game.scenes.find(sc => sc.tokens.some(t => t.actorId === shooter?.id))
+  // ⏪ 2026-08-17 (ruled fix): "a scene carrying the shooter" is not unique — the rig also carries
+  // "Review · Cover System", which stands the same figure up for a different lane. This section could
+  // therefore run on one scene while the restore block below pins "Review · Dark Range" by name, so a
+  // run could damage the bench on one canvas and tidy another. The bench scene is named here too, with
+  // the carries-the-shooter search kept only as the fallback.
+  const benchScene = game.scenes.getName("Review · Dark Range")
+    ?? game.scenes.find(sc => sc.tokens.some(t => t.actorId === shooter?.id))
     ?? game.scenes.active;
   if (benchScene && canvas?.scene?.id !== benchScene.id) {
     try { await benchScene.view(); } catch (e) { /* client-only */ }

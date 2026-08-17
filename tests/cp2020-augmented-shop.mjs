@@ -213,9 +213,199 @@ try {
   });
   for (const c of r2.checks || []) log.push(`  ${c.ok ? "PASS" : "FAIL"}  ${c.label}  ${c.ok ? "" : "-> got " + c.got}`);
 
+  // ── The style-multiplied price a buyer is actually charged for clothing ─────────────────────────
+  //   SOURCE for every multiplier below: CP2020 core Gear List, book p.66 — "Fashion = base x style:
+  //   Generic Chic x1, Leisurewear x2, Urban Flash x2, Businesswear x3, High Fashion x4"
+  //   (memory core-read-fulldetail.md BATCH 5 / core-rules-reference.md #1). The `cyberpunk2020.fashion`
+  //   pack prints all four tiers of the same eight garments, so the ladder is cross-checked against
+  //   the book's own printed prices rather than against the table under test.
+  const r3 = await gm.evaluate(async () => {
+    const P  = await import("/modules/cp2020-augmented/module/shop/purchase.js");
+    const C  = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+    const SH = await import("/modules/cp2020-augmented/module/shop/shops.js");
+    const DC = await import("/modules/cp2020-augmented/module/data-corrections.js");
+    const SM = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
+    const checks = []; const chk = (label, cond, got) => checks.push({ label, ok: !!cond, got });
+    let buyer = null, setupWas = null;
+    try {
+      setupWas = SM.isShopSetupMode();
+      if (setupWas) await SM.setShopSetupMode(false);
+      chk("fixture posture: the free-grant setup mode is off, so prices are actually charged",
+        SM.isShopSetupMode() === false, SM.isShopSetupMode());
+
+      // ── the style table, by value, against the book ───────────────────────────────────────────
+      const byKey = Object.fromEntries(P.FASHION_STYLES.map(s => [s.key, s]));
+      chk("style table: five tiers, keyed generic/leisure/urbanflash/business/highfashion",
+        P.FASHION_STYLES.length === 5 && ["generic","leisure","urbanflash","business","highfashion"].every(k => byKey[k]),
+        P.FASHION_STYLES.map(s => s.key).join(","));
+      chk("style table: the multipliers are x1 / x2 / x2 / x3 / x4 (book p.66)",
+        byKey.generic.mult === 1 && byKey.leisure.mult === 2 && byKey.urbanflash.mult === 2
+        && byKey.business.mult === 3 && byKey.highfashion.mult === 4,
+        P.FASHION_STYLES.map(s => `${s.key}x${s.mult}`).join(" "));
+      chk("styleMultOf returns each tier's multiplier by key",
+        P.styleMultOf("generic") === 1 && P.styleMultOf("leisure") === 2 && P.styleMultOf("urbanflash") === 2
+        && P.styleMultOf("business") === 3 && P.styleMultOf("highfashion") === 4,
+        ["generic","leisure","urbanflash","business","highfashion"].map(k => P.styleMultOf(k)).join("/"));
+      chk("NEGATIVE: an unknown, empty or missing style key charges the plain price",
+        P.styleMultOf("couture") === 1 && P.styleMultOf("") === 1 && P.styleMultOf(null) === 1 && P.styleMultOf(undefined) === 1,
+        [P.styleMultOf("couture"), P.styleMultOf(""), P.styleMultOf(null), P.styleMultOf(undefined)].join("/"));
+      chk("styleLabelOf returns each tier's display label by key",
+        P.styleLabelOf("generic") === "Generic" && P.styleLabelOf("leisure") === "Leisure"
+        && P.styleLabelOf("urbanflash") === "Urban Flash" && P.styleLabelOf("business") === "Businesswear"
+        && P.styleLabelOf("highfashion") === "High Fashion",
+        ["generic","leisure","urbanflash","business","highfashion"].map(k => P.styleLabelOf(k)).join("/"));
+      chk("NEGATIVE: an unknown style key has no label rather than an invented one",
+        P.styleLabelOf("couture") === "" && P.styleLabelOf("") === "" && P.styleLabelOf(null) === "",
+        JSON.stringify([P.styleLabelOf("couture"), P.styleLabelOf(""), P.styleLabelOf(null)]));
+
+      // ── priceFor: the multiplied unit price, by value ─────────────────────────────────────────
+      const item = (cost) => ({ system: { cost } });
+      chk("priceFor multiplies the catalog cost by the style multiplier",
+        P.priceFor(item(35), { styleMult: 1 }) === 35 && P.priceFor(item(35), { styleMult: 2 }) === 70
+        && P.priceFor(item(35), { styleMult: 3 }) === 105 && P.priceFor(item(35), { styleMult: 4 }) === 140,
+        [1,2,3,4].map(m => P.priceFor(item(35), { styleMult: m })).join("/"));
+      chk("priceFor rounds a fractional product to whole eurobucks",
+        P.priceFor(item(12.5), { styleMult: 3 }) === 38 && P.priceFor(item(0.4), { styleMult: 1 }) === 0,
+        `12.5x3 -> ${P.priceFor(item(12.5), { styleMult: 3 })}; 0.4x1 -> ${P.priceFor(item(0.4), { styleMult: 1 })}`);
+      chk("NEGATIVE: no cost, no options, a zero/absent multiplier and a negative cost never charge below zero",
+        P.priceFor(item(35)) === 35 && P.priceFor({}) === 0 && P.priceFor(null) === 0
+        && P.priceFor(item(35), { styleMult: 0 }) === 35 && P.priceFor(item(35), { styleMult: NaN }) === 35
+        && P.priceFor(item(-99), { styleMult: 4 }) === 0,
+        [P.priceFor(item(35)), P.priceFor({}), P.priceFor(null), P.priceFor(item(35), { styleMult: 0 }), P.priceFor(item(-99), { styleMult: 4 })].join("/"));
+
+      // ── the ladder against the pack's own printed tier prices (closed enumeration) ────────────
+      const pack = game.packs.get("cyberpunk2020.fashion");
+      const idx = await pack.getIndex({ fields: ["system.cost", "type"] });
+      const TIER = { "Generic Chic": "generic", "Leisurewear/Urban Flash": "leisure", "Businesswear": "business", "High Fashion": "highfashion" };
+      const garments = {};
+      const unparsed = [];
+      for (const e of idx) {
+        const m = String(e.name).split(/\s+[–-]\s+/);
+        const tier = TIER[m[1]];
+        if (m.length !== 2 || !tier) { unparsed.push(e.name); continue; }
+        (garments[m[0]] ??= {})[tier] = { id: e._id, cost: Number(e.system?.cost) };
+      }
+      const names = Object.keys(garments);
+      chk("every row of the clothing pack is accounted for by the four printed tiers",
+        unparsed.length === 0 && idx.size === 32 && names.length === 8 && names.every(n => Object.keys(garments[n]).length === 4),
+        `${idx.size} rows, ${names.length} garments, unparsed: ${unparsed.join(",") || "none"}`);
+      const ladder = [];
+      for (const n of names) for (const tier of ["leisure", "business", "highfashion"]) {
+        const want = garments[n].generic.cost * P.styleMultOf(tier);
+        const printed = garments[n][tier].cost;
+        ladder.push({ n, tier, want, printed, ok: want === printed });
+      }
+      chk("the multiplier ladder reproduces every printed tier price in the clothing pack",
+        ladder.every(l => l.ok), `${ladder.filter(l => l.ok).length}/${ladder.length} — misses: ${ladder.filter(l => !l.ok).map(l => `${l.n}/${l.tier} want ${l.want} printed ${l.printed}`).join("; ") || "none"}`);
+
+      // ── END TO END: a real catalog row bought at a style, through the path the catalog calls ──
+      const JACKET = "BaucUWn5RJZe1GOO";                        // "Jacket – Generic Chic", printed 35eb
+      const doc = await pack.getDocument(JACKET);
+      const printedCost = Number(doc.system?.cost);
+      chk("the fixture row is the pack's plain-tier jacket at its printed price",
+        doc.name === "Jacket – Generic Chic" && printedCost === 35, `${doc.name} @ ${printedCost}`);
+      chk("the corrections layer leaves this row's price alone, so the printed price IS the base",
+        Number(DC.correctedCost("cyberpunk2020.fashion", JACKET, doc.system?.cost)) === printedCost,
+        `corrected ${DC.correctedCost("cyberpunk2020.fashion", JACKET, doc.system?.cost)} vs printed ${printedCost}`);
+
+      for (const x of game.actors.filter(x => /^__PW__StyleBuyer/.test(x.name))) await x.delete().catch(() => {});
+      buyer = await Actor.create({ name: "__PW__StyleBuyer", type: "character", system: { eurobucks: 1000 } });
+      const before = Number(buyer.system.eurobucks);
+      await C.purchaseCatalogItem(buyer, "cyberpunk2020.fashion", JACKET, { qty: 1, styleMult: P.styleMultOf("business"), styleLabel: P.styleLabelOf("business") });
+      const afterBuy = Number(buyer.system.eurobucks);
+      const charged = before - afterBuy;
+      chk("BUY PATH: a plain-tier row bought at the business tier charges the printed price x3",
+        charged === printedCost * 3 && charged === 105,
+        `charged ${charged}eb (${printedCost} x ${P.styleMultOf("business")}), funds ${before} -> ${afterBuy}`);
+      chk("BUY PATH: the goods arrive with the charge",
+        buyer.items.filter(i => i.name === doc.name).length === 1,
+        buyer.items.filter(i => i.name === doc.name).length);
+      chk("BUY PATH: the charged figure is the same number the unit-price helper computes",
+        charged === P.priceFor(doc, { styleMult: P.styleMultOf("business") }),
+        `charged ${charged} vs priceFor ${P.priceFor(doc, { styleMult: P.styleMultOf("business") })}`);
+      const afterPlain = await (async () => {
+        const f0 = Number(buyer.system.eurobucks);
+        await C.purchaseCatalogItem(buyer, "cyberpunk2020.fashion", JACKET, { qty: 1, styleMult: P.styleMultOf("generic"), styleLabel: P.styleLabelOf("generic") });
+        return f0 - Number(buyer.system.eurobucks);
+      })();
+      chk("NEGATIVE BUY PATH: the same row at the plain tier charges the printed price and nothing more",
+        afterPlain === printedCost, `charged ${afterPlain}eb`);
+
+      // ── a curated shop's price: catalog cost x style x the shop's discount ────────────────────
+      const def = { id: "__pw_style_shop", discountPct: 0, items: { "cyberpunk2020.fashion.BaucUWn5RJZe1GOO": { style: "highfashion", qty: 1 } } };
+      const key = "cyberpunk2020.fashion.BaucUWn5RJZe1GOO";
+      chk("SHOP PATH: a shop row at the top tier asks the printed price x4",
+        SH.effectivePrice(def, key, printedCost, P.styleMultOf("highfashion")) === printedCost * 4,
+        `${SH.effectivePrice(def, key, printedCost, P.styleMultOf("highfashion"))}eb for a ${printedCost}eb garment`);
+      chk("SHOP PATH: a shop discount applies on top of the style multiplier",
+        SH.effectivePrice({ ...def, discountPct: 50 }, key, printedCost, P.styleMultOf("highfashion")) === printedCost * 4 / 2,
+        `${SH.effectivePrice({ ...def, discountPct: 50 }, key, printedCost, P.styleMultOf("highfashion"))}eb at -50%`);
+      chk("NEGATIVE SHOP PATH: a non-clothing row carries no style multiplier at all",
+        SH.effectivePrice(def, key, printedCost, 1) === printedCost,
+        `${SH.effectivePrice(def, key, printedCost, 1)}eb`);
+
+      // ── Armor arrives SWITCHED OFF through the buy path (not merely in the pack data) ─────────
+      const armorPack = game.packs.get("cyberpunk2020.armor");
+      const armorIdx = await armorPack.getIndex({ fields: ["system.cost", "type"] });
+      const armorRow = [...armorIdx].find(e => e.type === "armor" && Number(e.system?.cost) > 0 && Number(e.system?.cost) <= 500)
+                    ?? [...armorIdx].find(e => e.type === "armor");
+      const armorDoc = await armorPack.getDocument(armorRow._id);
+      await buyer.update({ "system.eurobucks": 5000 });
+      const msgsBefore = new Set(game.messages.contents.map(m => m.id));
+      await C.purchaseCatalogItem(buyer, "cyberpunk2020.armor", armorRow._id, { qty: 1 });
+      await new Promise(r => setTimeout(r, 600));
+      const worn = buyer.items.filter(i => i.name === armorDoc.name);
+      const unwornLine = game.i18n.localize("CYBERPUNK.ShopArmorUnworn");
+      const receipts = game.messages.contents.filter(m => !msgsBefore.has(m.id));
+      chk("BUY PATH: the armor row was actually delivered to the buyer",
+        worn.length === 1 && worn[0].type === "armor", `${worn.length} copies of "${armorDoc.name}"`);
+      // The buy path is a PASS-THROUGH on the worn flag: it copies the source row and never sets it.
+      // (What the source rows themselves carry is a data question, reported separately — the
+      // INFORMATIONAL line below counts them.)
+      chk("BUY PATH: the delivered copy carries the source row's own worn flag, untouched by the purchase",
+        worn[0]?.system?.equipped === armorDoc.system?.equipped,
+        `pack row ${JSON.stringify(armorDoc.system?.equipped)} -> delivered ${JSON.stringify(worn[0]?.system?.equipped)}`);
+      chk("BUY PATH: the receipt carries the delivered-unworn notice exactly when the delivered copy is unworn",
+        receipts.length === 1 && receipts[0].content.includes(unwornLine) === (worn[0]?.system?.equipped === false),
+        `${receipts.length} card(s); worn flag ${JSON.stringify(worn[0]?.system?.equipped)}; notice present: ${receipts.some(m => m.content.includes(unwornLine))}`);
+      // The same purchase from a source that IS unworn: the goods stay switched off and the buyer is told.
+      const msgsBefore1b = new Set(game.messages.contents.map(m => m.id));
+      const unwornSrc = { ...armorDoc.toObject(), name: "__PW__UnwornVest" };
+      unwornSrc.system = { ...unwornSrc.system, equipped: false };
+      await P.buyItem(buyer, unwornSrc, { qty: 1, unitPrice: 10 });
+      await new Promise(r => setTimeout(r, 600));
+      const unwornCopy = buyer.items.find(i => i.name === "__PW__UnwornVest");
+      const unwornReceipts = game.messages.contents.filter(m => !msgsBefore1b.has(m.id));
+      chk("BUY PATH: an unworn armor source is delivered still switched off",
+        unwornCopy?.system?.equipped === false, JSON.stringify(unwornCopy?.system?.equipped));
+      chk("BUY PATH: and its receipt tells the buyer to put it on",
+        unwornReceipts.length === 1 && unwornReceipts[0].content.includes(unwornLine),
+        `${unwornReceipts.length} card(s); notice: ${unwornReceipts.some(m => m.content.includes(unwornLine))}`);
+      const armorEquippedTrue = [...armorIdx].filter(e => e.type === "armor" && e.system?.equipped === true).length;
+      console.info(`INFORMATIONAL — armor rows in cyberpunk2020.armor shipping equipped:true: ${armorEquippedTrue}/${[...armorIdx].filter(e => e.type === "armor").length}`);
+      const msgsBefore2 = new Set(game.messages.contents.map(m => m.id));
+      await C.purchaseCatalogItem(buyer, "cyberpunk2020.fashion", JACKET, { qty: 1 });
+      await new Promise(r => setTimeout(r, 600));
+      const plainReceipts = game.messages.contents.filter(m => !msgsBefore2.has(m.id));
+      chk("NEGATIVE: a non-armor purchase gets no unworn notice",
+        plainReceipts.length === 1 && !plainReceipts[0].content.includes(unwornLine),
+        `${plainReceipts.length} card(s)`);
+      for (const m of [...receipts, ...unwornReceipts, ...plainReceipts]) await m.delete().catch(() => {});
+
+      return { ok: checks.every(c => c.ok), checks };
+    } catch (e) {
+      checks.push({ label: "money-path leg ran to completion", ok: false, got: e?.message || String(e) });
+      return { ok: false, checks };
+    } finally {
+      try { if (buyer) await buyer.delete(); } catch {}
+      try { if (setupWas !== null && setupWas !== SM.isShopSetupMode()) await SM.setShopSetupMode(setupWas); } catch {}
+    }
+  });
+  for (const c of r3.checks || []) log.push(`  ${c.ok ? "PASS" : "FAIL"}  ${c.label}  ${c.ok ? "" : "-> got " + c.got}`);
+
   const noConsoleErr = errors.length === 0;
   log.push(`  ${noConsoleErr ? "PASS" : "FAIL"}  0 console errors  ${noConsoleErr ? "" : "-> " + errors.join(" | ")}`);
-  pass = r.ok && r2.ok && noConsoleErr && !log.some(l => l.startsWith("PAGEERR"));
+  pass = r.ok && r2.ok && r3.ok && noConsoleErr && !log.some(l => l.startsWith("PAGEERR"));
 } catch (e) { log.push("ERROR " + (e?.message || e)); }
 finally { await b.close(); }
 

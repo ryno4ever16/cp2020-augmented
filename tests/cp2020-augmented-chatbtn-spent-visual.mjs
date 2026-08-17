@@ -115,6 +115,11 @@ try {
     return out;
   }, FAMILIES);
 
+  // The enumeration is CLOSED: a family that never rendered must red here rather than silently
+  // dropping its five legs out of the count.
+  const missing = FAMILIES.map(f => f.key).filter(k => !results.some(r => r.key === k));
+  if (missing.length) failures++;
+  rows.push(`  [${missing.length ? "FAIL" : "PASS"}] ${"(all families)".padEnd(18)} ${"every chat-button family produced a row".padEnd(38)} = ${results.length}/${FAMILIES.length}${missing.length ? ` missing: ${missing.join(",")}` : ""}`);
   for (const r of results) {
     const checks = [];
     if (r.error) { checks.push(["rendered", false, r.error]); }
@@ -123,7 +128,10 @@ try {
       checks.push(["user-select:none (disabled)", r.disabledUserSelect === "none", r.disabledUserSelect]);
       checks.push(["spent opacity <1 (disabled)", parseFloat(r.disabledOpacity) < 1, r.disabledOpacity]);
       checks.push(["cursor default (disabled)", r.disabledCursor === "default", r.disabledCursor]);
-      checks.push(["button chrome kept (bg not transparent)", r.bgEnabled !== "rgba(0, 0, 0, 0)" && r.bgEnabled !== "transparent", r.bgEnabled]);
+      // ⏪ 2026-08-17 (traceability repair): this used to be one unnamed two-term conjunction, so a
+      // red could not say WHICH transparent value the background had resolved to.
+      checks.push(["button chrome kept: background is not the fully transparent black", r.bgEnabled !== "rgba(0, 0, 0, 0)", r.bgEnabled]);
+      checks.push(["button chrome kept: background is not the transparent keyword", r.bgEnabled !== "transparent", r.bgEnabled]);
     }
     for (const [name, ok, val] of checks) {
       if (!ok) failures++;

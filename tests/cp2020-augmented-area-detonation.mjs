@@ -14,7 +14,7 @@ const GM_PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
 async function joinAs(page, match, pws){await page.goto(BASE+"/join",{waitUntil:"domcontentloaded"});const s=page.locator('select[name="userid"]');await s.waitFor({state:"visible",timeout:30000});const us=await s.locator("option").evaluateAll(o=>o.map(x=>({v:x.value,l:(x.textContent||"").trim()})).filter(x=>x.v));const u=us.find(x=>match.test(x.l));for(const pw of pws){await s.selectOption(u.v);await page.locator('input[name="password"]').fill(pw);await Promise.all([page.waitForNavigation({url:/\/game/,timeout:15000}).catch(()=>{}),page.locator('button[name="join"]').click()]);try{await page.waitForFunction(()=>window.game?.ready===true,undefined,{timeout:15000});return u.l;}catch{await page.goto(BASE+"/join",{waitUntil:"domcontentloaded"}).catch(()=>{});await s.waitFor({state:"visible"}).catch(()=>{});}}throw new Error("join "+u.l);}
 
 const b = await chromium.launch({ headless: true });
-let pass=false, log=[];
+let pass=false, log=[]; const legs=[];
 try {
   const gm = await (await b.newContext({viewport:{width:1600,height:900}})).newPage();
   await joinAs(gm, /gamemaster/i, [GM_PW]);
@@ -66,11 +66,19 @@ try {
   // concussion-halving neutralized → net = max(1, 18−BTM).
   const expected = S.dmg0 + Math.max(1, 18 - S.btm);
   log.push(`target damage after Confirm: ${after} (before ${S.dmg0}, expected ${expected}, BTM ${S.btm})`);
-  pass = after === expected;
+  // ⏪ 2026-08-17 (traceability repair): the verdict used to be one unnamed boolean, so a red could not
+  // say whether the placement, the confirm gesture or the applied figure was the half that failed.
+  legs.push(["the blast was PLACED and its confirm control reached the referee", clicked === true, String(clicked)]);
+  legs.push(["the target took damage at all (the confirm reader found the flag namespace)", after > S.dmg0, `${S.dmg0} → ${after}`]);
+  legs.push([`the applied figure is exact — no double-apply (18 at centre less BTM ${S.btm})`, after === expected, `${after} vs ${expected}`]);
 
   await gm.evaluate(async (d)=>{ const s=game.scenes.active??canvas.scene; const F=(x)=>x.flags?.["cp2020-augmented"]??{}; for(const t of s.tokens.filter(t=>t.name?.startsWith("__PW__"))) await t.delete().catch(()=>{}); for(const coll of [s.templates,s.regions]) if(coll) for(const x of [...coll]) if(F(x).isExplosion||F(x).isGasCloud||F(x).isSpreadZone) await x.delete().catch(()=>{}); for(const a of game.actors.filter(a=>a.name?.startsWith("__PW__"))) await a.delete().catch(()=>{}); try{ if(d.prevHead!==undefined) await game.settings.set("cp2020-augmented","headHitDoubling",d.prevHead);}catch(e){} try{ if(d.prevLimb!==undefined) await game.settings.set("cp2020-augmented","limbModel",d.prevLimb);}catch(e){} try{ if(d.prevDetailed!==undefined) await game.settings.set("cp2020-augmented","explosivesDetailed",d.prevDetailed);}catch(e){} }, S).catch(()=>{});
-} catch(e){ log.push("ERROR: "+e.message); } finally { await b.close(); }
+} catch(e){ log.push("ERROR: "+e.message); legs.push(["the run reached the verdict without throwing", false, e.message]); } finally { await b.close(); }
 console.log("\n===== BLAST DETONATION (area-flag namespace fix) =====");
 log.forEach(l=>console.log("  • "+l));
-console.log("\n  RESULT: " + (pass ? "PASS ✅ — placed blast detonates and applies damage on Confirm" : "FAIL ❌"));
+console.log("");
+for (const [n, p2, d] of legs) console.log(`  [${p2 ? "PASS" : "FAIL"}] ${n}${d ? `  = ${d}` : ""}`);
+pass = legs.length > 0 && legs.every(([, p2]) => p2);
+console.log("\n  RESULT: " + (pass ? "PASS ✅ — placed blast detonates and applies damage on Confirm"
+  : `FAIL ❌ — ${legs.filter(([, p2]) => !p2).map(([n]) => n).join(" · ") || "the run never reached its legs"}`));
 process.exit(pass?0:1);

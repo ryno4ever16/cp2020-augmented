@@ -586,6 +586,70 @@ try {
   }
   failures += report("4 — A second GM's window drives coalesced rows through the relay", S4.checks);
 
+  /* ------------------------------------------------------------------ */
+  /*  Section 5 — the pile-up prompt actually loads and opens            */
+  /*  It is reached only by a LAZY import from ip.js (the ip.js↔tracker.js */
+  /*  cycle), so nothing in the battery had ever executed the file. This   */
+  /*  drives it through that same specifier: render, read the off-ramps    */
+  /*  it exists to offer, and dismiss without taking any of them.          */
+  /* ------------------------------------------------------------------ */
+  const S5 = await page.evaluate(async () => {
+    const checks = [];
+    const push = (name, pass, got) => checks.push({ name, pass, got });
+    const SCOPE = "cp2020-augmented";
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const prev = {};
+    for (const k of ["ipRawTracking", "ipNeglectMuted"]) prev[k] = game.settings.get(SCOPE, k);
+    try {
+      // The specifier ip.js itself uses (module/ip/ip.js: `await import("../dialog/ip-neglect.js")`).
+      const N = await import("/modules/cp2020-augmented/module/dialog/ip-neglect.js");
+      push("the prompt module loads through the same lazy path its caller uses",
+        typeof N.showIpNeglectNudge === "function", typeof N.showIpNeglectNudge);
+
+      // It blocks on the dialog, so it is started and then read — never awaited before the dismiss.
+      const opened = N.showIpNeglectNudge(7);
+      let dlg = null;
+      for (let i = 0; i < 60 && !dlg; i++) {
+        await sleep(100);
+        dlg = Object.values(ui.windows ?? {}).find(w => w?.element?.querySelector?.(".cp-ip-neglect-mute"))
+           ?? [...(foundry.applications.instances?.values?.() ?? [])].find(w => w?.element?.querySelector?.(".cp-ip-neglect-mute"));
+      }
+      push("driving it once renders the prompt", !!dlg, !!dlg);
+      const root = dlg?.element ?? null;
+      const text = root?.textContent ?? "";
+      push("the prompt names the size of the backlog it is nudging about", /\b7\b/.test(text), text.slice(0, 90));
+      // The window FRAME contributes its own controls (close, toggleControls) — the off-ramps under
+      // test are the dialog's own footer buttons, so the header is excluded.
+      const actions = [...(root?.querySelectorAll("button[data-action]") ?? [])]
+        .filter(b => !b.closest(".window-header")).map(b => b.dataset.action).sort();
+      push("all three off-ramps are on the prompt itself",
+        JSON.stringify(actions) === JSON.stringify(["clear", "off", "open"]), JSON.stringify(actions));
+      push("no raw localization key leaked into the prompt", !/CYBERPUNK\./.test(text), /CYBERPUNK\./.test(text));
+      push("it opens modal, so it cannot be left sitting behind the tracker", dlg?.options?.modal === true, dlg?.options?.modal);
+      const muteBox = root?.querySelector(".cp-ip-neglect-mute");
+      push("the do-not-ask control is present and starts unticked",
+        !!muteBox && muteBox.checked === false, `${!!muteBox}/${muteBox?.checked}`);
+
+      // Dismissed, not answered: closing takes none of the three off-ramps, so no setting moves.
+      await dlg.close();
+      await opened;
+      await sleep(300);
+      push("dismissing resolves the call rather than leaving it hanging", true, "resolved");
+      push("NEGATIVE: a dismissal takes none of the off-ramps — raw tracking and the mute are unmoved",
+        game.settings.get(SCOPE, "ipRawTracking") === prev.ipRawTracking
+        && game.settings.get(SCOPE, "ipNeglectMuted") === prev.ipNeglectMuted,
+        `${game.settings.get(SCOPE, "ipRawTracking")}/${game.settings.get(SCOPE, "ipNeglectMuted")}`);
+      push("NEGATIVE: and nothing was left on screen",
+        !document.querySelector(".cp-ip-neglect-mute"), !!document.querySelector(".cp-ip-neglect-mute"));
+    } catch (e) {
+      push("section 5 ran to completion", false, String(e?.message ?? e));
+    } finally {
+      for (const [k, v] of Object.entries(prev)) { try { await game.settings.set(SCOPE, k, v); } catch {} }
+    }
+    return { checks };
+  });
+  failures += report("5 — The IP pile-up prompt loads through its lazy path and opens", S5.checks);
+
   const clean = pageErrors.length === 0;
   console.log(`\n  [${clean ? "PASS" : "FAIL"}] ${"0 console errors".padEnd(62)} got=${pageErrors.length}`);
   if (!clean) { console.log("    " + pageErrors.slice(0, 8).join("\n    ")); failures++; }

@@ -101,6 +101,52 @@ check("NEGATIVE: refused without the referee flag", surface.addedAsPlayer === fa
 eq("NEGATIVE: and nothing was written into the group", surface.playerToolKeys, []);
 eq("NEGATIVE: the handler refuses at the action layer too", surface.handlerRefused, { skipped: "permission" });
 
+/* ── §1b the tool is actually WIRED: the real control-collection hook, fired for real ──
+ * The legs above prove the gate logic on a hand-built control group. This one proves the
+ * registration behind it — that `registerTraumaTeamTool` put the module on Foundry's own
+ * `getSceneControlButtons` hook, so the tool reaches a real referee's toolbar. Without it a dropped
+ * registration would leave every leg above green and the button gone. */
+const wiring = await page.evaluate(async () => {
+  const out = {};
+  // The live toolbar, as the running client actually built it.
+  out.liveTools = Object.keys(ui.controls?.controls?.tokens?.tools ?? {});
+  out.liveHasTool = out.liveTools.includes("cp-tt-land");
+
+  // Fire the REAL hook over a control collection shaped like the one core passes.
+  const shape = () => ({ tokens: { name: "tokens", tools: { select: { name: "select", order: 0 } } } });
+  const asGm = shape();
+  Hooks.callAll("getSceneControlButtons", asGm);
+  const landed = asGm.tokens.tools["cp-tt-land"] ?? null;
+  // Read the shape INSIDE the page: a function does not survive the return trip.
+  out.gmTool = landed ? { name: landed.name, title: landed.title, button: landed.button,
+                          hasAction: typeof landed.onChange === "function" } : null;
+  out.gmToolTitleLocalized = typeof landed?.title === "string" && !landed.title.includes("CYBERPUNK.");
+  out.gmSelectSurvived = !!asGm.tokens.tools.select;
+
+  const realIsGM = Object.getOwnPropertyDescriptor(game.user, "isGM");
+  Object.defineProperty(game.user, "isGM", { value: false, configurable: true });
+  const asPlayer = shape();
+  try { Hooks.callAll("getSceneControlButtons", asPlayer); }
+  finally {
+    if (realIsGM) Object.defineProperty(game.user, "isGM", realIsGM);
+    else Object.defineProperty(game.user, "isGM", { value: true, configurable: true });
+  }
+  out.playerToolKeys = Object.keys(asPlayer.tokens.tools);
+  out.playerGotOurTool = Object.prototype.hasOwnProperty.call(asPlayer.tokens.tools, "cp-tt-land");
+  out.gmFlagRestored = game.user.isGM === true;
+  return out;
+});
+check("the module is registered on the real control-collection hook: firing it lands the tool",
+  !!wiring.gmTool && wiring.gmTool.name === "cp-tt-land", JSON.stringify(wiring.gmTool?.name ?? null));
+check("the landed tool is a momentary button with a localized title and an action of its own",
+  wiring.gmTool?.button === true && wiring.gmToolTitleLocalized === true && wiring.gmTool?.hasAction === true,
+  `button=${wiring.gmTool?.button} title="${wiring.gmTool?.title}" action=${wiring.gmTool?.hasAction}`);
+check("the real hook leaves the group's existing entries alone", wiring.gmSelectSurvived === true);
+check("NEGATIVE: firing the same real hook without the referee flag lands no arrival tool",
+  wiring.playerGotOurTool === false, `group holds: ${wiring.playerToolKeys.join(", ")}`);
+check("the referee flag was handed back", wiring.gmFlagRestored === true);
+console.log(`  (live toolbar carries the tool: ${wiring.liveHasTool} — tools: ${wiring.liveTools.join(", ")})`);
+
 /* ─────────────────── §2 the pure ladder and geometry ─────────────────── */
 console.log("\n§2 pure geometry + schedule");
 const pure = await page.evaluate(async (mod) => {

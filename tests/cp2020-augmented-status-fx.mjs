@@ -831,6 +831,136 @@ await page.evaluate(async ({ actorId, tokenId, awayId, homeId }) => {
 }, { actorId: wipeSetup.actorId, tokenId: wipeSetup.tokenId, awayId: wipeSetup.awayId, homeId: wipeSetup.homeId });
 await page.waitForTimeout(2500);
 
+/* ─────────── §13 WHICH SIGNAL DRIVES THE CATCH-UP SWEEP, and the fallback behind it ───────────
+ * §12 proves the ORDERING that the choice buys. This section pins the CHOICE itself, which is the
+ * unit's own headline finding and had no named guard: the sweep rides the engine's after-wipe signal
+ * `sequencerEffectManagerReady`; `canvasReady` remains only as a generation-counted LATE fallback for
+ * a host where that signal never comes; and the retired `sequencerReady` catch-up is not back.
+ * Each leg drives the real hook and reads the figure's mark, so a re-wire fails here by outcome. */
+console.log("\n§13 the catch-up signal choice");
+// Its OWN figure: the shared fixture's token is deleted by §9, so anything after that section which
+// needs a marked figure has to build one (§11 and §12 do the same).
+const sigFix = await page.evaluate(async () => {
+  const actor = await Actor.create({ name: "__PW__SignalSubject", type: "character" });
+  const proto = await actor.getTokenDocument({ x: 1400, y: 1400, actorLink: true });
+  const [tokenDoc] = await canvas.scene.createEmbeddedDocuments("Token", [proto.toObject()]);
+  await new Promise(r => setTimeout(r, 800));
+  return { actorId: actor.id, tokenId: tokenDoc.id, onCanvas: !!canvas.tokens.get(tokenDoc.id) };
+});
+check("the section's own figure is placed and drawn on the canvas", sigFix.onCanvas === true, sigFix.tokenId);
+const sig = await page.evaluate(async ({ mod, actorId, TID }) => {
+  const M = await import(mod);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const own = () => M.liveStatusFx().filter(e => (e?.data?.creatorUserId ?? game.user.id) === game.user.id
+                                             && String(e?.data?.name ?? "").includes(TID));
+  const drop = async () => {
+    for (const e of own()) { try { Sequencer.EffectManager.endEffects({ name: e.data.name }); } catch (_e) { /* gone */ } }
+    await sleep(700);
+    return own().length;
+  };
+  const out = {};
+  const actor = game.actors.get(actorId);
+
+  // ⚠ SCAFFOLD, NAMED AND RESTORED. A mark that ends while its condition is still raised is put
+  // straight back by the rail's own end-reconciler (`_onEffectEnded`), so "the mark is missing" is a
+  // state this section cannot otherwise reach. The end listener is parked for the length of the
+  // section and put back at the bottom, and both halves are asserted.
+  const endHooks = () => (Hooks.events?.["endedSequencerEffect"] ?? []).filter(x => /STATUS_FX_NAME|statusfx/.test(String(x.fn ?? "")));
+  const endBefore = endHooks().length;
+  const endEntry = endHooks()[0];
+  out.endHookFound = !!endEntry;
+  if (endEntry) Hooks.off("endedSequencerEffect", endEntry.id);
+  out.endHookCounts = { before: endBefore, parked: endHooks().length };
+
+  // The registered listener set, read off the live hook table (a re-wire changes these).
+  const srcOf = (h) => (Hooks.events?.[h] ?? []).map(x => String(x.fn ?? x));
+  out.onManagerSignal = srcOf("sequencerEffectManagerReady").filter(s => /syncSceneStatusFx/.test(s)).length;
+  out.onCanvasReady   = srcOf("canvasReady").filter(s => /syncSceneStatusFx/.test(s)).length;
+  out.onSequencerReady = srcOf("sequencerReady").filter(s => /syncSceneStatusFx/.test(s)).length;
+  out.canvasArmIsDeferred = srcOf("canvasReady").some(s => /syncSceneStatusFx/.test(s) && /setTimeout/.test(s) && /Gen/.test(s));
+
+  await actor.toggleStatusEffect("burning", { active: true });
+  await sleep(2000);
+  out.marked = own().length;
+
+  // (a) the engine's own after-wipe signal is what puts a missing mark back.
+  out.droppedA = await drop();
+  Hooks.callAll("sequencerEffectManagerReady");
+  await sleep(1800);
+  out.afterSignal = own().length;
+
+  // (b) the canvasReady fallback is LATE, not immediate — it exists to outlast the engine's setup.
+  out.droppedB = await drop();
+  Hooks.callAll("canvasReady", canvas);
+  await sleep(900);
+  out.shortlyAfterCanvasReady = own().length;
+  await sleep(3400);
+  out.afterFallbackWindow = own().length;
+
+  // (c) the generation counter: a canvas the SIGNAL already served is not swept again by the fallback.
+  out.droppedC = await drop();
+  Hooks.callAll("canvasReady", canvas);            // opens a fallback window for this generation
+  Hooks.callAll("sequencerEffectManagerReady");    // ...which the signal serves first
+  await sleep(1800);
+  out.servedBySignal = own().length;
+  await drop();                                    // take it down again INSIDE the same window
+  await sleep(3400);
+  out.fallbackDeclined = own().length;
+
+  // (d) NEGATIVE: no referee gate — the overlay is a local read of public state, so it draws for a
+  //     client whose referee flag reads false.
+  const realIsGM = Object.getOwnPropertyDescriptor(game.user, "isGM");
+  Object.defineProperty(game.user, "isGM", { value: false, configurable: true });
+  let drawnWithoutGm = null;
+  try {
+    Hooks.callAll("sequencerEffectManagerReady");
+    await sleep(1800);
+    drawnWithoutGm = own().length;
+  } finally {
+    if (realIsGM) Object.defineProperty(game.user, "isGM", realIsGM);
+    else Object.defineProperty(game.user, "isGM", { value: true, configurable: true });
+  }
+  out.drawnWithoutGm = drawnWithoutGm;
+  out.gmFlagRestored = game.user.isGM === true;
+
+  if (endEntry) Hooks.on("endedSequencerEffect", endEntry.fn);
+  out.endHookCounts.restored = endHooks().length;
+
+  await actor.toggleStatusEffect("burning", { active: false });
+  await sleep(1500);
+  out.cleared = own().length;
+  return out;
+}, { mod: MOD, actorId: sigFix.actorId, TID: sigFix.tokenId });
+check("the fixture figure is wearing its mark before the signal legs run", sig.marked === 1, `${sig.marked} drawn`);
+check("the catch-up sweep is registered on the engine's own after-wipe signal",
+  sig.onManagerSignal === 1, `${sig.onManagerSignal} listener(s) carrying the sweep`);
+check("that signal redraws a mark the engine no longer holds",
+  sig.droppedA === 0 && sig.afterSignal === 1, `dropped to ${sig.droppedA}, back to ${sig.afterSignal}`);
+check("canvas load carries only a DEFERRED, generation-counted fallback sweep",
+  sig.onCanvasReady === 1 && sig.canvasArmIsDeferred === true,
+  `${sig.onCanvasReady} listener(s), deferred+generation-counted: ${sig.canvasArmIsDeferred}`);
+check("the fallback does not draw straight away, and does draw once its window elapses",
+  sig.droppedB === 0 && sig.shortlyAfterCanvasReady === 0 && sig.afterFallbackWindow === 1,
+  `at ~0.9s: ${sig.shortlyAfterCanvasReady}; after the window: ${sig.afterFallbackWindow}`);
+check("NEGATIVE: a canvas the signal already served is NOT swept again by the fallback",
+  sig.droppedC === 0 && sig.servedBySignal === 1 && sig.fallbackDeclined === 0,
+  `signal served ${sig.servedBySignal}; after the window, with the mark taken down inside it: ${sig.fallbackDeclined}`);
+check("NEGATIVE: the retired ready-time catch-up is not registered any more",
+  sig.onSequencerReady === 0, `${sig.onSequencerReady} listener(s) on sequencerReady`);
+check("NEGATIVE: condition overlays carry no referee gate — the mark draws with that flag standing down",
+  sig.drawnWithoutGm === 1 && sig.gmFlagRestored === true,
+  `drawn with the flag false: ${sig.drawnWithoutGm}; flag restored: ${sig.gmFlagRestored}`);
+check("the end-reconciler scaffold was parked for the section and put back afterwards",
+  sig.endHookFound === true && sig.endHookCounts?.before === 1
+  && sig.endHookCounts?.parked === 0 && sig.endHookCounts?.restored === 1,
+  `listeners carrying the condition-overlay end reconciler: ${sig.endHookCounts?.before} -> ${sig.endHookCounts?.parked} -> ${sig.endHookCounts?.restored}`);
+check("the section left the figure clean", sig.cleared === 0, `${sig.cleared} left`);
+await page.evaluate(async ({ actorId, tokenId }) => {
+  try { await canvas.scene.deleteEmbeddedDocuments("Token", [tokenId]); } catch (_e) { /* already gone */ }
+  try { await game.actors.get(actorId)?.delete(); } catch (_e) { /* already gone */ }
+}, { actorId: sigFix.actorId, tokenId: sigFix.tokenId });
+await page.waitForTimeout(1200);
+
 /* ─────────────────── cleanup ─────────────────── */
 await page.evaluate(async ({ actorId, tokenId }) => {
   try { await canvas.scene.deleteEmbeddedDocuments("Token", [tokenId]); } catch (_e) { /* already gone */ }

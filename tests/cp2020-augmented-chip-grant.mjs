@@ -166,6 +166,59 @@ const r = await p.evaluate(async () => {
     flagCleared: langAfterReset?.getFlag("cp2020-augmented", "chipChooseOriginal") === undefined
   };
 
+  // ── (3) The chip's LEVEL on an EXISTING skill is CLEARED when the chip stops running ──────
+  // Distinct from the grant/prune lifecycle above: that removes a skill ITEM the chip created; this
+  // is the number a chip writes onto a skill the actor already had (`system.chipLevel`), which must
+  // go back to nothing when the chip is switched off and, separately, when it comes off the body.
+  {
+    const host = actor.items.find(i => i.type === "skill" && !i.getFlag("cp2020-augmented", "chipGranted"));
+    await host.update({ "system.level": 2 });                       // a bought level of its own
+    const [lvlChip] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__LevelChip", type: "cyberware",
+      system: { equipped: true, EffectMode: "Permanent", EffectActive: false,
+        CyberWorkType: { Types: ["Chip"], ChipActive: false, ChipSkills: { [host.name]: 5 }, Stat: {}, Skill: {} } } }]);
+
+    const sheet = actor.sheet;
+    sheet.render(true);
+    await waitUntil(() => !!sheet.element?.querySelector(`.chip-toggle input[data-skill-id="${host.id}"]`), 15000);
+    const box = sheet.element?.querySelector(`.chip-toggle input[data-skill-id="${host.id}"]`);
+    const chipLevelNow = () => Number(actor.items.get(host.id)?.system?.chipLevel) || 0;
+    const ownLevelNow = () => Number(actor.items.get(host.id)?.system?.level) || 0;
+    out.chipLevel = { toggleFound: !!box, hostName: host.name, before: chipLevelNow(), ownBefore: ownLevelNow() };
+
+    if (box) {
+      box.checked = true;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitUntil(() => chipLevelNow() === 5, 8000);
+      out.chipLevel.onValue = chipLevelNow();
+      out.chipLevel.onOwnLevel = ownLevelNow();
+
+      // THE REPAIR: untick the same control and the chip's number leaves with it.
+      const box2 = sheet.element?.querySelector(`.chip-toggle input[data-skill-id="${host.id}"]`);
+      box2.checked = false;
+      box2.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitUntil(() => chipLevelNow() === 0, 8000);
+      out.chipLevel.offValue = chipLevelNow();
+      out.chipLevel.offOwnLevel = ownLevelNow();
+      out.chipLevel.chipFlagOff = actor.items.get(lvlChip.id)?.system?.CyberWorkType?.ChipActive === false;
+
+      // Second act: switch it back on, then take the chip OFF THE BODY through the production
+      // uninstall path (the one the row control and the drag-off gesture both call).
+      const box3 = sheet.element?.querySelector(`.chip-toggle input[data-skill-id="${host.id}"]`);
+      box3.checked = true;
+      box3.dispatchEvent(new Event("change", { bubbles: true }));
+      await waitUntil(() => chipLevelNow() === 5, 8000);
+      out.chipLevel.reOnValue = chipLevelNow();
+
+      await sheet._cpUninstallCyber(lvlChip.id);
+      await waitUntil(() => chipLevelNow() === 0, 8000);
+      out.chipLevel.unequippedValue = chipLevelNow();
+      out.chipLevel.unequippedOwnLevel = ownLevelNow();
+      out.chipLevel.chipUnequipped = actor.items.get(lvlChip.id)?.system?.equipped === false;
+    }
+    await sheet.close().catch(() => {});
+    await actor.items.get(lvlChip.id)?.delete().catch(() => {});
+  }
+
   await actor.delete().catch(() => {});
   return out;
 });
@@ -192,6 +245,11 @@ const checks = [
   ["choose: activation shows the pick-a-skill dialog", r.choosePromptShown === true],
   ["choose: the pick rewrites ChipSkills + grants the skill at chip level", r.chooseResolved.chipSkillsRewritten === true && r.chooseResolved.skillGranted === true && r.chooseResolved.skillEffective === 2 && r.chooseResolved.originalStashed === true],
   ["reset: restores the (choose) marker + clears the stash", r.reset.markerRestored === true && r.reset.resolvedGone === true && r.reset.flagCleared === true],
+  ["chip level: the sheet offers the chip control for the host skill, which starts with no chip level", r.chipLevel.toggleFound === true && r.chipLevel.before === 0],
+  ["chip level: ticking the control writes the chip's number onto the existing skill", r.chipLevel.onValue === 5],
+  ["chip level: UNTICKING the control clears the chip's number from the skill", r.chipLevel.offValue === 0 && r.chipLevel.chipFlagOff === true],
+  ["chip level: taking the chip off the body clears the number too (second act, after a re-tick)", r.chipLevel.reOnValue === 5 && r.chipLevel.unequippedValue === 0 && r.chipLevel.chipUnequipped === true],
+  ["chip level: NEGATIVE — the skill's own bought level is never touched by any of it", r.chipLevel.ownBefore === 2 && r.chipLevel.onOwnLevel === 2 && r.chipLevel.offOwnLevel === 2 && r.chipLevel.unequippedOwnLevel === 2],
   ["0 console errors", errors.length === 0]
 ];
 let fail = 0;

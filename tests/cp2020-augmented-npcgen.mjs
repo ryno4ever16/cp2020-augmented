@@ -37,6 +37,7 @@ const r = await p.evaluate(async () => {
   const madeActorIds = [];
   let folderCreatedByThisRun = false;
   let settingRestored = null;
+  let artRestored = null;
 
   try {
     // ── The plan layer: determinism, which is what makes "the preview is what you get" true ──
@@ -189,6 +190,32 @@ const r = await p.evaluate(async () => {
     // Inherited, not forced: the base system gives an npc no actorLink, and we never write one.
     check("prototype token is UNLINKED by inheritance (we never set actorLink)", proto.actorLink === false, proto.actorLink);
 
+    // ── The optional wildcard-art setting: registration, default, and what it actually does ──
+    // The one setting of the generator's pair that nothing else in the battery touches. Blank is the
+    // default and means "use the base system's own face"; a folder turns on Foundry-native wildcard art.
+    const artCfg = game.settings.settings.get(`${SCOPE}.npcGenTokenArtFolder`);
+    check("the wildcard-art folder setting is registered as a world-scoped, configurable string",
+      !!artCfg && artCfg.scope === "world" && artCfg.config === true && artCfg.type === String,
+      { scope: artCfg?.scope, config: artCfg?.config, type: artCfg?.type?.name });
+    check("its default is blank — the feature ships off and adds no art of its own",
+      artCfg?.default === "", JSON.stringify(artCfg?.default));
+    artRestored = game.settings.get(SCOPE, "npcGenTokenArtFolder");
+    check("the reader hands back the stored value; blank while unset",
+      typeof MAT.npcGenTokenArtFolder === "function" ? MAT.npcGenTokenArtFolder() === artRestored : true, artRestored);
+    check("NEGATIVE: with the folder blank the generated face is a fixed image, not a wildcard",
+      proto.randomImg !== true && typeof proto.texture?.src === "string" && !proto.texture.src.endsWith("/*"),
+      { randomImg: proto.randomImg, src: proto.texture?.src });
+    await game.settings.set(SCOPE, "npcGenTokenArtFolder", "worlds/__pw__/art/goons/");
+    const [artSummary] = await MAT.materializeNpcSquad(
+      BP.npcBlueprint({ archetype: "goon", dials: "veteran", count: 1, seed: "keeper-seed-art" }));
+    madeActorIds.push(artSummary.id);
+    const artProto = game.actors.get(artSummary.id).prototypeToken;
+    check("a folder set ⇒ the generated token rolls its face out of that folder (trailing slash trimmed)",
+      artProto.randomImg === true && artProto.texture?.src === "worlds/__pw__/art/goons/*",
+      { randomImg: artProto.randomImg, src: artProto.texture?.src });
+    await game.settings.set(SCOPE, "npcGenTokenArtFolder", artRestored);
+    artRestored = null;
+
     // ── Provenance flag the summary/preview and a later cleanup both rely on ──
     const stamp = a0.getFlag(SCOPE, "npcGen");
     check("actor carries the npcGen provenance flag (seed + tier + archetype)",
@@ -241,6 +268,7 @@ const r = await p.evaluate(async () => {
     check("keeper body ran without throwing", false, String(e?.stack ?? e));
   } finally {
     try { if (settingRestored !== null) await game.settings.set(SCOPE, "npcGenEnabled", settingRestored); } catch {}
+    try { if (artRestored !== null) await game.settings.set(SCOPE, "npcGenTokenArtFolder", artRestored); } catch {}
     for (const id of madeActorIds) { try { await game.actors.get(id)?.delete(); } catch {} }
     if (folderCreatedByThisRun) {
       try { await game.folders.find(f => f.type === "Actor" && f.name === MAT.npcGenFolderName())?.delete(); } catch {}

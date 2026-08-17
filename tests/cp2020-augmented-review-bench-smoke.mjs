@@ -496,6 +496,68 @@ ok("restore: only the three cover regions remain", restored.regions.length === s
 ok("restore: the chat log is back to where this run found it",
   restored.cards === setup.baseline.cards, `${restored.cards} vs ${setup.baseline.cards}`);
 ok("restore: no dialog left open", restored.dialogs === 0, `${restored.dialogs}`);
+/* ═════════════ BENCH PARITY — the set is CLOSED, not sampled ═════════════
+ * The sections above walk a chosen handful. This one closes the enumeration the whole bench exists
+ * to satisfy: every element the module SHIPS on the presentation rail must be reachable from this
+ * bench, so a new element added without a bench route reddens here instead of quietly never being
+ * looked at. The shipped list is read out of the module itself (the class table, the load-overlay
+ * table, the condition-row table, the arrival tool) — never restated here — so adding a row to any
+ * of those tables is what makes this leg speak. */
+const parity = await page.evaluate(async ({ SCOPE, shooterName }) => {
+  const FX = await import("/modules/cp2020-augmented/module/fx/effects.js");
+  const SFX = await import("/modules/cp2020-augmented/module/fx/status-fx.js");
+  const TT = await import("/modules/cp2020-augmented/module/fx/trauma-team-tool.js");
+  const actor = game.actors.getName(shooterName);
+  const out = { shooterFound: !!actor };
+  if (!actor) return out;
+
+  const bench = actor.items.filter(i => i.getFlag(SCOPE, "reviewBench"));
+  const benchWeapons = bench.filter(i => i.type === "weapon");
+  out.benchWeapons = benchWeapons.length;
+
+  // 1 — every weapon-class row has a gun on the rack that resolves to it.
+  const classes = Object.keys(FX.FX_CLASSES);
+  const routedClasses = new Set(benchWeapons.map(w => FX.weaponFxClass(w)));
+  out.classes = classes.map(c => ({ c, routed: routedClasses.has(c) }));
+
+  // 2 — every load-overlay row has a numbered bench row carrying that load.
+  const loads = Object.keys(FX.AMMO_FX);
+  const benchLoads = new Set(bench.map(i => i.getFlag(SCOPE, "reviewBench")?.load).filter(Boolean));
+  out.loads = loads.map(k => ({ k, routed: benchLoads.has(k) }));
+  out.benchLoads = [...benchLoads].sort();
+
+  // 3 — every condition row can be raised on a bench figure: either a load on the rack writes the
+  //     module flag it watches, or every core id it watches is a registered condition a referee can
+  //     set from the figure's own controls.
+  const registered = new Set((CONFIG.statusEffects ?? []).map(e => e.id));
+  const flagWriters = { fireDotState: benchLoads.has("api"), dotState: benchLoads.has("acid") };
+  out.rows = SFX.STATUS_FX_ROWS.map(r => ({
+    id: r.id,
+    viaLoad: (r.flags ?? []).some(f => flagWriters[f] === true),
+    viaControls: (r.statuses ?? []).length > 0 && r.statuses.every(s => registered.has(s)),
+  }));
+
+  // 4 — the arrival tool reaches the toolbar of the scene the bench sits on.
+  const probe = { tokens: { name: "tokens", tools: {} } };
+  out.traumaRouted = TT.addTraumaTeamTool(probe) === true && !!probe.tokens.tools["cp-tt-land"];
+  out.traumaOnLiveBar = Object.keys(ui.controls?.controls?.tokens?.tools ?? {}).includes("cp-tt-land");
+  return out;
+}, { SCOPE, shooterName: "Review · Shooter" });
+
+ok("parity: the numbered rack is on the bench figure", parity.shooterFound && parity.benchWeapons >= 5, `${parity.benchWeapons} numbered guns`);
+ok("parity: every shipped weapon-class row has a gun on the rack that resolves to it",
+  (parity.classes ?? []).every(c => c.routed),
+  (parity.classes ?? []).map(c => `${c.c}${c.routed ? "" : " ✗"}`).join(" "));
+ok("parity: every shipped load-overlay row has a numbered row carrying that load",
+  (parity.loads ?? []).every(l => l.routed),
+  (parity.loads ?? []).map(l => `${l.k}${l.routed ? "" : " ✗"}`).join(" ") + ` | rack loads: ${(parity.benchLoads ?? []).join(",")}`);
+ok("parity: every shipped condition row is raisable on a bench figure (by a load or by the figure's own controls)",
+  (parity.rows ?? []).every(r => r.viaLoad || r.viaControls),
+  (parity.rows ?? []).map(r => `${r.id}:${r.viaLoad ? "load" : r.viaControls ? "controls" : "✗"}`).join(" "));
+ok("parity: the arrival tool is reachable from the bench's own toolbar",
+  parity.traumaRouted === true && parity.traumaOnLiveBar === true,
+  `hook: ${parity.traumaRouted} · live bar: ${parity.traumaOnLiveBar}`);
+
 ok("no console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 
 const passed = checks.filter(c => c.p).length;

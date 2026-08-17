@@ -120,15 +120,18 @@ for (const d of r.discovery.list) console.log(`    • "${d.name}"  [${d.source}
 
 const fmtFinite = (f) => Object.entries(f).map(([k, o]) => `${k}=${o.v}${o.finite ? "" : "✗NOT-FINITE"}`).join("  ");
 
-if (r.discovery.total === 0) {
-  console.log("\n  NO SEEDED ACPAs found in the world or any Actor compendium.");
-  console.log("  → This rig check is MOOT (nothing real to load); the synthetic keepers");
-  console.log("    cp2020-augmented-acpa-fnff.mjs + -acpa-toggle-gesture.mjs already cover the derivations.");
+// ⏪ 2026-08-17 (vacuous-leg audit F5): an EMPTY discovery used to exit 0 with every per-suit
+// assertion skipped — the shape that lets a whole check-set retire silently. A minimum expected
+// count is now the first leg, so a world that has lost its suits reds here instead of greening.
+const MIN_EXPECTED_SUITS = Number(process.env.ACPA_MIN_SUITS ?? 1);
+if (r.discovery.total < MIN_EXPECTED_SUITS) {
+  console.log(`
+  [FAIL] at least ${MIN_EXPECTED_SUITS} seeded ACPA suit is discoverable  = ${r.discovery.total} found`);
+  console.log("  → the world has no powered-armour actor to load; re-provision the rig (or set ACPA_MIN_SUITS).");
   console.log("  page errors:", errors.length ? errors.slice(0, 6) : "none");
-  const pass = errors.length === 0;
-  console.log("\n  RESULT: " + (pass ? "PASS ✅ — no seeded ACPAs (moot, not a failure)" : "FAIL ❌ — page errors during discovery"));
+  console.log("\n  RESULT: FAIL ❌ — discovery found nothing to assert against");
   await b.close();
-  process.exit(pass ? 0 : 1);
+  process.exit(1);
 }
 
 console.log("\n  --- per-suit assertions ---");
@@ -144,11 +147,31 @@ for (const res of r.results) {
   console.log(`       ${dstate}  ·  ${mstate}  ·  ${sstate}`);
 }
 
-const failed = r.results.filter(x => !x.pass);
-const pass = failed.length === 0 && errors.length === 0;
-console.log("\n  page errors:", errors.length ? errors.slice(0, 6) : "none");
+// ⏪ 2026-08-17 (traceability repair): the verdict was one unnamed conjunction over the whole
+// result set. Same conditions, now one named leg per suit plus the two set-level guards.
+const legs = [
+  [`discovery finds at least ${MIN_EXPECTED_SUITS} seeded suit`, r.discovery.total >= MIN_EXPECTED_SUITS, `${r.discovery.total} found`],
+  ["at least one discovered suit is undamaged, so the pristine-flag fix is actually exercised",
+    r.results.some(x => x.pristine === true), `${r.results.filter(x => x.pristine === true).length} pristine of ${r.results.length}`],
+];
+for (const res of r.results) {
+  const label = `"${res.name}" [${res.source}]`;
+  legs.push([`${label}: reading its derived block does not throw`, res.threw !== true, res.error ?? "ok"]);
+  legs.push([`${label}: every derived figure is finite`, res.allFinite === true, fmtFinite(res.fields ?? {})]);
+  legs.push([`${label}: the destroyed flag is a real boolean`, res.destroyedIsBool === true, String(res.destroyed)]);
+  legs.push([`${label}: an undamaged suit does not read as destroyed`, res.destroyedOkForPristine === true, `pristine=${res.pristine} destroyed=${res.destroyed}`]);
+  legs.push([`${label}: the combat-model field is a string`, res.combatModelIsString === true, JSON.stringify(res.acpaCombatModel)]);
+  if (res.kind === "world") {
+    legs.push([`${label}: its sheet renders`, res.sheetRoot === true && !res.sheetError, res.sheetError ?? String(res.sheetRoot)]);
+    legs.push([`${label}: no raw localization key leaked into the sheet`, res.rawKeyLeak === false, res.leakSnippet ?? "none"]);
+  }
+}
+legs.push(["0 page errors", errors.length === 0, errors.slice(0, 4).join(" | ") || "none"]);
+console.log("");
+for (const [n, p2, d] of legs) console.log(`  [${p2 ? "PASS" : "FAIL"}] ${n}${d ? `  = ${d}` : ""}`);
+const pass = legs.every(([, p2]) => p2);
 console.log("\n  RESULT: " + (pass
   ? `PASS ✅ — ${r.results.length}/${r.results.length} seeded ACPA suit(s) load, derive & render clean`
-  : `FAIL ❌ — failed: ${failed.map(f => `"${f.name}"`).join(", ") || "(none)"}${errors.length ? ` · page errors: ${errors.length}` : ""}`));
+  : `FAIL ❌ — ${legs.filter(([, p2]) => !p2).map(([n]) => n).join(" · ")}`));
 await b.close();
 process.exit(pass ? 0 : 1);

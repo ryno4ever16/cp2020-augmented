@@ -82,24 +82,37 @@ console.log("  compendium old doc:", JSON.stringify(r.packDoc));
 console.log("  sheet:", JSON.stringify(r.sheet));
 console.log("  page errors:", errors.length ? errors.slice(0, 4) : "none");
 
-const ok =
-  r.persist.vehicleType === "AV (Aerodyne)" && r.persist.crew === 2 && r.persist.body === 5 &&
-  r.persist.cargo === "500kg" && r.persist.mass === "4tons" && r.persist.decel === 50 &&
-  r.persist.fuelUnit === "liters" &&
-  r.oldFloor.vehicleType === "" && r.oldFloor.crew === 0 && r.oldFloor.decel === 0 &&
-  r.oldFloor.fuelUnit === "gal" && r.oldFloor.cargoUnit === "kg" && r.oldFloor.massUnit === "tons" &&
-  r.oldFloor.keptMax === 120 &&
-  // The pack docs are BACKFILLED now (the D4 vehicle-backfill re-seed): the compiled doc must
-  // retain its data under the current schema — the old floats-on-defaults expectation is history
-  // (the in-world old-shape leg above still proves the additive-migration property).
+// ⏪ 2026-08-17 (traceability repair): this suite used to end on ONE unnamed boolean conjunction, so a
+// red could not say WHICH half failed. Same conditions, now reported individually.
+const legs = [
+  ["persist: the vehicle type round-trips", r.persist.vehicleType === "AV (Aerodyne)", r.persist.vehicleType],
+  ["persist: crew and body round-trip", r.persist.crew === 2 && r.persist.body === 5, `${r.persist.crew}/${r.persist.body}`],
+  ["persist: the free-text cargo and mass figures round-trip", r.persist.cargo === "500kg" && r.persist.mass === "4tons", `${r.persist.cargo}/${r.persist.mass}`],
+  ["persist: deceleration round-trips", r.persist.decel === 50, r.persist.decel],
+  ["persist: the fuel unit round-trips", r.persist.fuelUnit === "liters", r.persist.fuelUnit],
+  ["old docs: an old-shape doc floats on the type default", r.oldFloor.vehicleType === "", JSON.stringify(r.oldFloor.vehicleType)],
+  ["old docs: crew and deceleration float on zero", r.oldFloor.crew === 0 && r.oldFloor.decel === 0, `${r.oldFloor.crew}/${r.oldFloor.decel}`],
+  ["old docs: the three unit fields float on their defaults",
+    r.oldFloor.fuelUnit === "gal" && r.oldFloor.cargoUnit === "kg" && r.oldFloor.massUnit === "tons",
+    `${r.oldFloor.fuelUnit}/${r.oldFloor.cargoUnit}/${r.oldFloor.massUnit}`],
+  ["old docs: an existing stored maximum is kept, not reset", r.oldFloor.keptMax === 120, r.oldFloor.keptMax],
   // ⏪ 2026-08-16 (vacuous-leg audit): the `!r.packDoc ||` head handed the leg a free pass exactly when
-  // the module's own supplement pack failed to resolve — which is the thing worth catching. The pack
-  // ships with the module, so its absence is a failure, not an excuse.
-  (!!r.packDoc && Number(r.packDoc.decel) > 0 && r.packDoc.vehicleType !== "") &&
-  r.sheet.typeInput && r.sheet.datalistOpts >= 10 && r.sheet.crew && r.sheet.body && r.sheet.decel &&
-  r.sheet.fuelUnitSel && r.sheet.massSel && r.sheet.cargoSel && r.sheet.fuelEffSuffix &&
-  !r.sheet.rawKeyLeak && errors.length === 0;
+  // the module's own supplement pack failed to resolve — which is the thing worth catching.
+  ["pack: the module's own supplement doc resolves", !!r.packDoc, String(!!r.packDoc)],
+  ["pack: the backfilled doc keeps its data under the current schema",
+    !!r.packDoc && Number(r.packDoc.decel) > 0 && r.packDoc.vehicleType !== "",
+    `decel=${r.packDoc?.decel} type=${JSON.stringify(r.packDoc?.vehicleType)}`],
+  ["sheet: the type input and its suggestion list render", r.sheet.typeInput && r.sheet.datalistOpts >= 10, `input=${r.sheet.typeInput} opts=${r.sheet.datalistOpts}`],
+  ["sheet: the crew, body and deceleration fields render", r.sheet.crew && r.sheet.body && r.sheet.decel, `${r.sheet.crew}/${r.sheet.body}/${r.sheet.decel}`],
+  ["sheet: the three unit selectors render", r.sheet.fuelUnitSel && r.sheet.massSel && r.sheet.cargoSel, `${r.sheet.fuelUnitSel}/${r.sheet.massSel}/${r.sheet.cargoSel}`],
+  ["sheet: the fuel-efficiency suffix renders", !!r.sheet.fuelEffSuffix, String(r.sheet.fuelEffSuffix)],
+  ["sheet: no raw localization key leaked", !r.sheet.rawKeyLeak, String(r.sheet.rawKeyLeak)],
+  ["0 console errors", errors.length === 0, errors.slice(0, 3).join(" | ")],
+];
+console.log("");
+for (const [n, p2, d] of legs) console.log(`  [${p2 ? "PASS" : "FAIL"}] ${n}${d !== undefined && d !== "" ? `  = ${d}` : ""}`);
+const ok = legs.every(([, p2]) => p2);
 
-console.log("\n  RESULT: " + (ok ? "PASS ✅ — schema persists, old docs float, sheet renders clean" : "FAIL ❌"));
+console.log("\n  RESULT: " + (ok ? "PASS ✅ — schema persists, old docs float, sheet renders clean" : `FAIL ❌ — ${legs.filter(([, p2]) => !p2).map(([n]) => n).join(" · ")}`));
 await b.close();
 process.exit(ok ? 0 : 1);

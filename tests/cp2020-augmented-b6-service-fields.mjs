@@ -37,9 +37,22 @@ console.log("\n===== B6: service fields persist in flags =====");
 console.log("  after flag write:", JSON.stringify(r.persisted));
 console.log("  system.serviceMode stripped by DataModel:", r.systemStripped, "| accessor still reads flag:", r.modeStillFromFlag);
 console.log("  item-sheet context vars:", JSON.stringify(r.ctx));
-const ok = r.persisted.mode==="recurring" && r.persisted.period==="week" && r.persisted.classified==="recurring"
-  && r.systemStripped && r.modeStillFromFlag==="recurring"
-  && r.ctx.serviceMode==="recurring" && r.ctx.servicePeriod==="week";
-console.log("\n  RESULT: " + (ok ? "PASS ✅ — service mode/period persist in flags, read by accessors + sheet context" : "FAIL ❌"));
+// ⏪ 2026-08-17 (traceability repair): this verdict was ONE unnamed conjunction of seven
+// conditions, so a red could not say which of the three mechanisms (flag write, DataModel strip,
+// sheet context) had failed. Same conditions, individually reported.
+const legs = [
+  ["the service mode persists to the module flag", r.persisted.mode === "recurring", r.persisted.mode],
+  ["the service period persists beside it", r.persisted.period === "week", r.persisted.period],
+  ["the classifier reads the stored pair back as a recurring service", r.persisted.classified === "recurring", r.persisted.classified],
+  ["the DataModel strips the same field from system, as it must", r.systemStripped, String(r.systemStripped)],
+  ["and the accessor still answers from the flag afterwards", r.modeStillFromFlag === "recurring", r.modeStillFromFlag],
+  ["the item sheet's context carries the mode for its settings partial", r.ctx.serviceMode === "recurring", r.ctx.serviceMode],
+  ["and the period with it", r.ctx.servicePeriod === "week", r.ctx.servicePeriod],
+];
+console.log("");
+for (const [n, p2, d] of legs) console.log(`  [${p2 ? "PASS" : "FAIL"}] ${n}${d !== undefined ? `  = ${d}` : ""}`);
+const ok = legs.every(([, p2]) => p2);
+console.log("\n  RESULT: " + (ok ? "PASS ✅ — service mode/period persist in flags, read by accessors + sheet context"
+  : `FAIL ❌ — ${legs.filter(([, p2]) => !p2).map(([n]) => n).join(" · ")}`));
 await b.close();
 process.exit(ok?0:1);
