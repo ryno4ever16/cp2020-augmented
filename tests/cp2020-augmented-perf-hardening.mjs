@@ -57,10 +57,29 @@ const r = await p.evaluate(async () => {
   // A scene with ONE unlinked token, whose `actor` read is counted (and can be made to fail). The
   // migration's second leg reads exactly this property once per unlinked token, so the counter says
   // whether the sweep ran at all, and the failure mode is a real throw from inside the sweep.
+  //
+  // ⭐ THE TOKEN'S OWN DELTA MUST CARRY THE LEGACY KEY, and that is a contract change this fixture
+  // missed. Since the delta-peek fast path landed (`3d3b78e`, cp2020-augmented.js:536:
+  // `if (!token.delta?._source?.flags?.[SCOPE]?.limbStatus) continue;`) the sweep only materializes
+  // `token.actor` for unlinked tokens whose OWN delta carries the old key — precisely so it stops
+  // building thousands of synthetic actors that have nothing to migrate. This fixture put the flag on
+  // the WORLD actor and gave the token an empty delta, so the loop skipped it and the probe getter
+  // was never called: `reads` stayed 0, "the sweep ran" and "reported loudly" could not be true, and
+  // the one time they went green it was an incidental fan-out read from `actor.update()`.
   const fleshScene = await Scene.create({ name: "__PW__PerfFleshScene", width: 1000, height: 1000 });
-  const [fleshTok] = await fleshScene.createEmbeddedDocuments("Token", [{
+  // ⚠ createEmbeddedDocuments' return order is NOT the input order (harness gotcha) — resolve by name.
+  const madeToks = await fleshScene.createEmbeddedDocuments("Token", [{
     name: "__PW__PerfFleshTok", actorId: fleshActor.id, actorLink: false, x: 100, y: 100,
+    delta: { flags: { [SCOPE]: { limbStatus: { rArm: "crippled" } } } },
+  }, {
+    // The NEGATIVE the fast path exists for: an unlinked token with nothing in its delta must cost
+    // the sweep zero synthetic-actor construction. Its `actor` read is counted separately below.
+    name: "__PW__PerfFleshTokEmpty", actorId: fleshActor.id, actorLink: false, x: 300, y: 100,
   }]);
+  const fleshTok      = madeToks.find(t => t.name === "__PW__PerfFleshTok");
+  const fleshTokEmpty = madeToks.find(t => t.name === "__PW__PerfFleshTokEmpty");
+  out.fleshTokenDeltaSeeded = !!fleshTok?.delta?._source?.flags?.[SCOPE]?.limbStatus?.rArm;
+  out.fleshTokenEmptyDelta  = !fleshTokEmpty?.delta?._source?.flags?.[SCOPE]?.limbStatus;
   const findDesc = (obj, key) => { let o = obj; while (o) { const d = Object.getOwnPropertyDescriptor(o, key); if (d) return d; o = Object.getPrototypeOf(o); } return null; };
   const fleshDesc = findDesc(fleshTok, "actor");
   const probe = { reads: 0, fail: false };
@@ -71,6 +90,13 @@ const r = await p.evaluate(async () => {
       if (probe.fail) throw new Error("__PW__ probe: token actor unavailable");
       return fleshDesc?.get?.call(this) ?? null;
     },
+  });
+  // The same probe on the EMPTY-delta token, counted separately: the fast path must never read it.
+  const emptyDesc = findDesc(fleshTokEmpty, "actor");
+  const emptyProbe = { reads: 0 };
+  Object.defineProperty(fleshTokEmpty, "actor", {
+    configurable: true,
+    get() { emptyProbe.reads++; return emptyDesc?.get?.call(this) ?? null; },
   });
 
   const fleshFlag = () => game.settings.get(SCOPE, "fleshLimbStatusMigrated");
@@ -92,16 +118,28 @@ const r = await p.evaluate(async () => {
   await setFleshFlag(false);
   probe.fail = false;
   const readsBeforeClean = probe.reads;
+  const emptyReadsBeforeClean = emptyProbe.reads;
   await api().migrations.fleshLimbStatus({ force: false });
   const fresh = game.actors.get(fleshActor.id);
+  const freshTok = fleshScene.tokens.get(fleshTok.id);
   out.s7Clean = {
     flagAfter: fleshFlag(),
     reads: probe.reads - readsBeforeClean,
+    emptyDeltaReads: emptyProbe.reads - emptyReadsBeforeClean,   // the fast path: must stay 0
     limbStatus: foundry.utils.deepClone(fresh.flags?.[SCOPE]?.limbStatus ?? {}),
     fleshLimbStatus: foundry.utils.deepClone(fresh.flags?.[SCOPE]?.fleshLimbStatus ?? {}),
+    // The token-side half, read off the EFFECTIVE synthetic actor rather than the delta's `_source`.
+    // An ActorDelta stores only what DIFFERS from its base actor, so once the world-actor sweep has
+    // moved the same entry the token's now-identical copy is pruned out of `_source` — an empty
+    // `_source` here is the correct end state, not a missed migration. What proves the TOKEN path ran
+    // is `reads` (the sweep materialized this token's synthetic actor) next to `emptyDeltaReads` 0.
+    tokenLimbStatus: foundry.utils.deepClone(freshTok?.actor?.flags?.[SCOPE]?.limbStatus ?? {}),
+    tokenFleshLimbStatus: foundry.utils.deepClone(freshTok?.actor?.flags?.[SCOPE]?.fleshLimbStatus ?? {}),
+    tokenDeltaSource: foundry.utils.deepClone(freshTok?.delta?._source?.flags?.[SCOPE] ?? {}),
   };
 
   delete fleshTok.actor;
+  delete fleshTokEmpty.actor;
   await fleshScene.delete().catch(() => {});
   await fleshActor.delete().catch(() => {});
 
@@ -305,10 +343,14 @@ const checks = [
   ["api: module.api and game.cpAugmented are the same surface", r.apiShape.sameOnGlobal === true],
 
   ["S7 fixture: the zone carries no structural pool (so the entry must move)", r.fleshBefore.structuralPool === 0 && r.fleshBefore.limbStatus?.rArm === "crippled"],
+  ["S7 fixture: the unlinked token's OWN delta carries the legacy key (what the sweep now looks at)", r.fleshTokenDeltaSeeded === true],
+  ["S7 fixture: the control token's delta is empty", r.fleshTokenEmptyDelta === true],
   ["S7 stopped run: the sweep ran and the completion stamp is set anyway", r.s7Failed.swept === true && r.s7Failed.flagAfter === true],
   ["S7 stopped run: reported loudly, naming the re-run entry point", reRunNamed(/flesh-limb-status/)],
   ["S7 boot path after the stamp: no token read at all", r.s7Gated.reads === 0 && r.s7Gated.flagAfter === true],
   ["S7 clean run: sweeps, moves rArm to the flesh key, stamps done", r.s7Clean.reads > 0 && r.s7Clean.flagAfter === true && r.s7Clean.fleshLimbStatus?.rArm === "crippled" && r.s7Clean.limbStatus?.rArm === undefined],
+  ["S7 clean run: the unlinked token reads the moved entry too (delta pruned to the base)", r.s7Clean.tokenFleshLimbStatus?.rArm === "crippled" && r.s7Clean.tokenLimbStatus?.rArm === undefined],
+  ["S7 delta fast path: a token with an empty delta costs 0 synthetic-actor construction", r.s7Clean.emptyDeltaReads === 0],
 
   ["R9 behavior type is registered on this core", r.behaviorRegistered === true],
   ["R9 fixture: region starts tagged, with no behavior", r.r9Before.hasBehavior === false && r.r9Before.legacyTag === true],

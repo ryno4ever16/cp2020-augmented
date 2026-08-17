@@ -28,7 +28,7 @@
 import { chromium } from "@playwright/test";
 
 const URL = process.env.FVTT_URL ?? "http://localhost:30004";
-const PW = process.env.FVTT_RIG_PASSWORD ?? "";
+const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";   // the battery-wide inline rig default; an empty fallback silently hangs the join
 const SHOOTER = process.env.FX_AMMO_ACTOR ?? "Review · Shooter";
 const STOCK = 60;
 

@@ -153,6 +153,9 @@ const res = await page.evaluate(async () => {
   // itself, not a mechanism failing. Tokens first, by NAME, exactly as the cleanup at the bottom does.
   for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__SPREAD"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
   for (const a of [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREAD"))) await a.delete().catch(() => {});
+  // …and the encounter §6 builds for itself, for the same reason: an aborted run leaves it started and
+  // the next run's out-of-combat sections would then read a world that is in combat.
+  for (const c of [...game.combats].filter(c => c.name?.startsWith("__PWK__SPREAD"))) await c.delete().catch(() => {});
   await sleep(250);
   const shooter = await Actor.create({ name: "__PWK__SPREAD Shooter", type: "character" });
   const [buckAmmo] = await shooter.createEmbeddedDocuments("Item", [{
@@ -339,11 +342,28 @@ const res = await page.evaluate(async () => {
   /* ── §6  lifecycle ──────────────────────────────────────────────────────────────────────── */
   ok("§6 confirm DELETES the pattern (count back to baseline)", myZones().length === 0, String(myZones().length));
 
-  // ⛔ THE SHOWCASE ENCOUNTER ON THIS RIG IS THE USER'S AND IS NOT TOUCHED. Both expiry rules are
-  // therefore asserted the way they are actually decided — as two pure predicates, by value — and then
-  // driven live: the round rule through the same `updateCombat` hook core raises (with the encounter's
-  // OWN current round, so nothing about it moves), the clock rule through the real sweep.
-  const showcase = game.combats.active;
+  // ⛔ THE USER'S OWN ENCOUNTER IS NEVER TOUCHED — so this section BUILDS ITS OWN and starts it, rather
+  // than borrowing whatever happens to be running. ⏪ REWRITTEN 2026-08-16 (vacuous-leg audit): the
+  // previous version read `game.combats.active` and fell through to two free passes when nothing was
+  // running. Nothing IS running on the certification rig (proved: `game.combats.active === null`, no
+  // started encounter at all), so the live round-expiry legs had never once executed — a leg shaped
+  // like coverage that tested nothing. An encounter this spec owns makes the live path unconditional.
+  const priorCombat = game.combats.active ?? null;
+  const encounter = await Combat.create({ name: "__PWK__SPREAD Encounter", scene: scene.id });
+  await encounter.createEmbeddedDocuments("Combatant", [{ tokenId: shooterTok.id, sceneId: scene.id }]);
+  // ⚠ ACTIVATE, not just start. The stamp the round rule reads is written from `game.combats.active`
+  // (damage-hooks.js), which is the ACTIVE encounter — a started-but-not-activated one leaves the
+  // pattern stamped with an empty combat id and the whole round rule out of reach. Cost this lane one
+  // red on the first run of the rewritten section.
+  await encounter.activate();
+  await encounter.startCombat();
+  await encounter.update({ round: 3 });
+  await sleep(300);
+  const showcase = game.combats.get(encounter.id);
+  ok("§6 fixture: this section runs against an encounter it owns, started and on a known round " +
+    "(guard against the free pass the skip branch used to hand out)",
+    showcase?.started === true && showcase?.round === 3 && game.combats.active?.id === encounter.id,
+    JSON.stringify({ started: showcase?.started, round: showcase?.round, isActive: game.combats.active?.id === encounter.id }));
   const RE = hooks.spreadZoneRoundExpired, CE = hooks.spreadZoneClockExpired;
   const asCombat = (id, round) => ({ id, round });
   ok("§6 round rule: the pattern's own encounter, a later round → expired",
@@ -371,20 +391,25 @@ const res = await page.evaluate(async () => {
     roundZone?.flags?.[SCOPE]?.combatId === (showcase?.started ? showcase.id : "")
     && roundZone?.flags?.[SCOPE]?.createdRound === (game.combat?.round ?? 0),
     JSON.stringify({ combatId: roundZone?.flags?.[SCOPE]?.combatId, createdRound: roundZone?.flags?.[SCOPE]?.createdRound }));
-  if (showcase?.started) {
-    // Backdate the pattern by one round, then raise the round-advance hook with the encounter EXACTLY
-    // as it stands. Nothing about the user's combat is written; only the pattern moved.
-    await roundZone.setFlag(SCOPE, "createdRound", (showcase.round ?? 1) - 1);
-    Hooks.callAll("updateCombat", showcase, { round: showcase.round }, {}, game.user.id);
-    await sleep(1200);
-    ok("§6 an ignored pattern expires when its own encounter's round advances", myZones().length === 0, String(myZones().length));
-    ok("§6 the showcase encounter is untouched by that (still started, same round)",
-      showcase.started === true && showcase.round === (game.combats.get(showcase.id)?.round), `round=${showcase.round}`);
-  } else {
-    await wipeZones();
-    ok("§6 (round-expiry live leg skipped: no running encounter on this rig)", true);
-    ok("§6 (showcase-untouched leg skipped with it)", true);
-  }
+  // Backdate the pattern by one round, then raise the round-advance hook with the encounter EXACTLY as
+  // it stands. Nothing about the encounter is written; only the pattern moved. UNCONDITIONAL now.
+  await roundZone.setFlag(SCOPE, "createdRound", (showcase.round ?? 1) - 1);
+  // ⭐ THE ROUND RULE IS AN ORPHAN NET TOO (user ruling 2026-08-14), and this leg pair is where that
+  // shows. ⏪ REALIGNED 2026-08-16: the round leg used to advance the round with the pattern's confirm
+  // card STILL OPEN and expect a collection — the semantics from BEFORE the ruling. It read green for
+  // months only because it never ran (no encounter on the rig ⇒ the skip branch's free pass). Both
+  // halves are asserted now, in order: the open card holds the pattern back, and losing it lets go.
+  Hooks.callAll("updateCombat", showcase, { round: showcase.round }, {}, game.user.id);
+  await sleep(1200);
+  ok("§6 a round advance does NOT collect a pattern whose card is still open — somebody has yet to answer it",
+    myZones().length === 1, String(myZones().length));
+  await cardOf(roundZone)?.delete()?.catch?.(() => {});
+  await sleep(300);
+  Hooks.callAll("updateCombat", showcase, { round: showcase.round }, {}, game.user.id);
+  await sleep(1200);
+  ok("§6 an ignored pattern expires when its own encounter's round advances", myZones().length === 0, String(myZones().length));
+  ok("§6 the encounter is untouched by that (still started, same round)",
+    showcase.started === true && showcase.round === (game.combats.get(showcase.id)?.round), `round=${showcase.round}`);
   await wipeZones();
 
   // LIVE clock expiry. A pattern thrown while the showcase encounter runs belongs to it, so the sweep
@@ -394,8 +419,10 @@ const res = await page.evaluate(async () => {
   await sleep(400);
   const clockZone = myZones()[0];
   let swept = await hooks._sweepStaleSpreadZones();
+  // ⏪ The `!showcase?.started ||` short-circuit that used to head this predicate is gone with the skip
+  // branch: with an encounter this section owns, the real half is the only half.
   ok("§6 the sweep leaves a pattern owned by a running encounter alone",
-    !showcase?.started || (swept === 0 && myZones().length === 1), `swept=${swept} left=${myZones().length}`);
+    swept === 0 && myZones().length === 1, `swept=${swept} left=${myZones().length}`);
   await clockZone.setFlag(SCOPE, "combatId", "");
   swept = await hooks._sweepStaleSpreadZones();
   ok("§6 the sweep leaves a FRESH out-of-combat pattern alone", swept === 0 && myZones().length === 1, `swept=${swept} left=${myZones().length}`);
@@ -421,6 +448,15 @@ const res = await page.evaluate(async () => {
   swept = await hooks._sweepStaleSpreadZones();
   await sleep(300);
   ok("§6 a pre-rule pattern with no timestamp and no card is swept", swept === 1 && myZones().length === 0, `swept=${swept} left=${myZones().length}`);
+
+  // §6's own encounter is this section's fixture and dies with it; whatever was active before is put
+  // back. Deleted here rather than at the bottom so the later sections run out of combat as they did.
+  await encounter.delete().catch(() => {});
+  if (priorCombat && game.combats.get(priorCombat.id)) await priorCombat.activate().catch(() => {});
+  await sleep(300);
+  ok("§6 teardown: the section's own encounter is gone and the world is back out of combat",
+    !game.combats.get(encounter.id) && (game.combats.active?.id ?? null) === (priorCombat?.id ?? null),
+    JSON.stringify({ stillThere: !!game.combats.get(encounter.id), active: game.combats.active?.id ?? null }));
 
   /* ── §7  untargeted aim + cover occlusion ───────────────────────────────────────────────── */
   // Token rotation 90 → canvas heading 180° → the shot points WEST. Chosen because it is the exact
@@ -455,8 +491,13 @@ const res = await page.evaluate(async () => {
   const occZone = myZones()[0];
   await hooks._confirmSpreadZone(occZone.id);
   await sleep(1500);
+  // ⏪ 2026-08-16 (vacuous-leg audit): the predicate used to open `!occlusionOn ||`, which handed the leg
+  // a free pass on any world with the switch off. The switch's posture is now its own leg (it ships on,
+  // and the rig runs it on), so the occlusion claim itself is unconditional.
+  ok("§7 fixture: the occlusion switch is on, so the exemption below is the rule actually under test",
+    occlusionOn === true, String(occlusionOn));
   ok("§7 a token behind a wall is exempted (no result card)",
-    !occlusionOn || [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length === 0,
+    [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length === 0,
     `occlusion=${occlusionOn}`);
   ok("§7 the pattern still vanishes when nobody was hit", myZones().length === 0, String(myZones().length));
   await scene.deleteEmbeddedDocuments("Wall", [wall.id]);
@@ -811,8 +852,12 @@ const res = await page.evaluate(async () => {
   // The wait is the rail's own, so it is asserted against the rail's own floor rather than a figure
   // typed here. With the presentation switched off there is nothing to wait for and the leg says so.
   const floorMs = fxOn ? fx.payloadPresentationMs(firedPayload) : 0;
+  // ⏪ 2026-08-16 (vacuous-leg audit): `!fxOn ||` used to head this predicate, so on a world with the
+  // presentation switched off the wait leg passed without measuring anything. The switch ships on; its
+  // posture is a leg of its own and the measurement is unconditional.
+  ok("§10 fixture: the presentation switch is on, so there is a wait to measure at all", fxOn === true, String(fxOn));
   ok("§10 the card waited out the shot's presentation, not the trigger pull",
-    !fxOn || (cardAt - rollAt) >= Math.min(floorMs, 400),
+    (cardAt - rollAt) >= Math.min(floorMs, 400),
     `waited ${cardAt - rollAt}ms against a floor of ${floorMs}ms (presentation ${fxOn ? "on" : "off"})`);
 
   // NOTHING HAS BEEN APPLIED, and that is the whole of the restored moment: region still there, no

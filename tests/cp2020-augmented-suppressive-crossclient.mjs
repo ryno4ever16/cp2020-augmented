@@ -167,6 +167,23 @@ try {
   await joinAs(pl, new RegExp("^" + S.playerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i"), ["", GM_PW]);
   await pl.waitForFunction(() => window.canvas?.ready === true, undefined, { timeout: 30_000 }).catch(() => {});
   attachErrorGates(pl, plErrors);   // gate AFTER join (skip benign /join password-retry 401 noise)
+  // ⛔ CLEAR THE BOARD OF WINDOWS BEFORE ANY REAL MOUSE GESTURE. Core auto-opens `UserConfig` for a
+  // player whose profile is unconfigured, CENTRED over the canvas — and this suite's confirm is a real
+  // `page.mouse` click at a world point that maps to roughly the middle of the viewport. The click was
+  // landing inside that window (hit-test read `P.hint` inside
+  // `FORM#UserConfig-…​.application.sheet.user-config`), so the placement handler's canvas-event gate
+  // (`suppressive-placement.js:157`) correctly refused it and the lane was never confirmed. Points
+  // clear of the window hit `CANVAS#board` normally, so the gate and the handler are both sound — the
+  // harness simply had a window in the way. Close every open application on this page, once.
+  await pl.evaluate(async () => {
+    for (const app of [...foundry.applications.instances.values()]) {
+      if (/UserConfig|Dialog|DocumentSheet|ApplicationV2$/.test(app?.constructor?.name ?? "")) {
+        try { await app.close({ force: true }); } catch (e) { /* already closing */ }
+      }
+    }
+    for (const w of Object.values(ui.windows ?? {})) { try { await w.close(); } catch (e) { /* v1 */ } }
+  });
+  await sleep(400);
   // Make sure the player is viewing the active scene, then pan to the shooter.
   await pl.evaluate(async (d) => {
     const sc = game.scenes.get(d.sceneId);
@@ -222,6 +239,21 @@ try {
   }, S);
   await pl.mouse.move(aim.x, aim.y, { steps: 4 });   // sets the aim angle (onMove)
   await sleep(120);
+  // ⭐ THE WIRING LEG for the canvas-event gate. `onDown` is guarded by
+  // `isCanvasEvent = (ev) => ev.target === canvas?.app?.view || ev.target?.id === "board"`
+  // (suppressive-placement.js:157, added 2026-08-12). This is the ONLY real-click probe of that gate
+  // in the whole battery — every other suite dispatches straight at the board element, which
+  // satisfies the guard by construction and so can never see a hit-test problem. Record what the
+  // click actually lands on BEFORE clicking, so a red here says whether the gesture missed the board
+  // (a shipped defect: the confirm would be dead for real users) or the harness aimed wrong.
+  const hit = await pl.evaluate((a) => {
+    const el = document.elementFromPoint(a.x, a.y);
+    return { id: el?.id ?? "", tag: el?.tagName ?? "", cls: String(el?.className ?? "").slice(0, 80),
+             isView: el === canvas.app.view, viewId: canvas.app.view?.id ?? "" };
+  }, aim);
+  log.push(`player click hit-test at (${Math.round(aim.x)},${Math.round(aim.y)}): ${JSON.stringify(hit)}`);
+  check("(c) PLAYER page: the aim point hit-tests to the board canvas (the canvas-event gate's premise)",
+    hit.isView === true || hit.id === "board", JSON.stringify(hit));
   await pl.mouse.down();                              // onDown(button 0) → confirm() → relay to GM
   await pl.mouse.up();
 
@@ -369,6 +401,11 @@ try {
   }, S).catch(() => {});
 } catch (e) {
   log.push("ERROR: " + (e?.stack ?? e?.message ?? e));
+  // Dump BOTH error bags on the throw path. The (g) legs that normally report them sit after the
+  // point this throws from, so a client-side exception on the confirm path used to leave no trace at
+  // all in the log — which is why the last diagnosis of this suite needed coverage archaeology.
+  log.push(`GM console/page errors at the throw: ${gmErrors.length} ${JSON.stringify(gmErrors.slice(0, 6))}`);
+  log.push(`PLAYER console/page errors at the throw: ${plErrors.length} ${JSON.stringify(plErrors.slice(0, 6))}`);
   check("no fatal exception during the round trip", false, String(e?.message ?? e));
 } finally {
   await browser.close();

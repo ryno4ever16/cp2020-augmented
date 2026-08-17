@@ -292,15 +292,16 @@ const res = await page.evaluate(async () => {
 
   // Deploy helper honors the prototype's link choice instead of hardcoding linked.
   const VC = await import("/modules/cp2020-augmented/module/vehicle/vehicle-canvas.js");
-  if (VC.deployVehicleToScene) {
-    const dep = await VC.deployVehicleToScene(suit, { scene, x: 1300, y: 500 });
-    const depDoc = scene.tokens.get(dep?.tokenId);
-    ok("deploy helper: token honors the unlinked prototype", depDoc && depDoc.actorLink === false,
-       `actorLink=${depDoc?.actorLink} existing=${dep?.existing}`);
-    if (depDoc) await scene.deleteEmbeddedDocuments("Token", [depDoc.id]);
-  } else {
-    ok("deploy helper: token honors the unlinked prototype", true, "helper not exported — drag path covered by prototype");
-  }
+  // ⏪ 2026-08-16 (vacuous-leg audit): the `if (VC.deployVehicleToScene)` fallback used to hand the leg a
+  // free pass when the export was missing — so renaming or dropping the helper would have retired this
+  // coverage silently, green. The export's presence is its own leg now, and the drive is unconditional.
+  ok("deploy helper: the module still exports the deploy entry point this leg drives",
+     typeof VC.deployVehicleToScene === "function", typeof VC.deployVehicleToScene);
+  const dep = await VC.deployVehicleToScene(suit, { scene, x: 1300, y: 500 });
+  const depDoc = scene.tokens.get(dep?.tokenId);
+  ok("deploy helper: token honors the unlinked prototype", depDoc && depDoc.actorLink === false,
+     `actorLink=${depDoc?.actorLink} existing=${dep?.existing}`);
+  if (depDoc) await scene.deleteEmbeddedDocuments("Token", [depDoc.id]);
 
   // ---- cleanup (filter: some fixtures already removed above) ----
   try { await game.settings.set(NS, "limbLossEnabled", false); } catch (e) {}

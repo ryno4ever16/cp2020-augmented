@@ -71,3 +71,7 @@ console.log("console/page errors:", errors.length ? errors.slice(0,8) : "none");
 console.log(`RESULT: ${allPass && errors.length === 0 ? "PASS" : "FAIL"} (${Object.values(r.checks).filter(v=>v===true).length}/${Object.keys(r.checks).length} checks)`);
 console.log("NOTE: pilot-link → compendium-backfill integration PARKED for Unit F (needs supplement-skills recompile + rig restart).");
 await b.close();
+// ⏪ ADDED 2026-08-16 (vacuous-leg audit): THIS SPEC HAD NO EXIT GATE AT ALL. It computed its verdict,
+// printed it, and fell off the end — so node exited 0 whatever it found, and the battery counted it
+// green no matter what. Every leg above was decorative until this line existed.
+process.exit(allPass && errors.length === 0 ? 0 : 1);

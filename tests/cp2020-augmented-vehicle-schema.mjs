@@ -92,7 +92,10 @@ const ok =
   // The pack docs are BACKFILLED now (the D4 vehicle-backfill re-seed): the compiled doc must
   // retain its data under the current schema — the old floats-on-defaults expectation is history
   // (the in-world old-shape leg above still proves the additive-migration property).
-  (!r.packDoc || (Number(r.packDoc.decel) > 0 && r.packDoc.vehicleType !== "")) &&
+  // ⏪ 2026-08-16 (vacuous-leg audit): the `!r.packDoc ||` head handed the leg a free pass exactly when
+  // the module's own supplement pack failed to resolve — which is the thing worth catching. The pack
+  // ships with the module, so its absence is a failure, not an excuse.
+  (!!r.packDoc && Number(r.packDoc.decel) > 0 && r.packDoc.vehicleType !== "") &&
   r.sheet.typeInput && r.sheet.datalistOpts >= 10 && r.sheet.crew && r.sheet.body && r.sheet.decel &&
   r.sheet.fuelUnitSel && r.sheet.massSel && r.sheet.cargoSel && r.sheet.fuelEffSuffix &&
   !r.sheet.rawKeyLeak && errors.length === 0;

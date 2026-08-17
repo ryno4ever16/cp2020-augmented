@@ -162,7 +162,12 @@ const r = await p.evaluate(async () => {
       check("cyberware is CARRIED, not installed (equipped false on every piece)",
         chrome.every(c => c.system?.equipped === false), chrome.map(c => ({ n: c.name, e: c.system?.equipped })));
     } else {
-      check("cyberware plan produced no pieces this seed (recorded, not a failure)", true, 0);
+      // ⏪ 2026-08-16 (vacuous-leg audit): this used to be a hardcoded `true`, so a materializer that
+      // silently DROPPED every planned piece read the same as a plan that asked for none. The blueprint
+      // is the authority on which of those happened, so ask it.
+      const planned = Number(bp0.cyberwareCountPlan?.count);
+      check("no chrome on the sheet because the BLUEPRINT planned none (not because the stocking dropped it)",
+        planned === 0, { plannedByBlueprint: bp0.cyberwareCountPlan?.count, onSheet: 0 });
     }
 
     // ── Humanity is consistent with the chrome ACTUALLY stocked ──

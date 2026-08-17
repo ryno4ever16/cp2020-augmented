@@ -17,7 +17,7 @@
 import { chromium } from "@playwright/test";
 
 const URL = process.env.FVTT_URL ?? "http://localhost:30004";
-const PW = process.env.FVTT_RIG_PASSWORD ?? "";
+const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";   // the battery-wide inline rig default; an empty fallback silently hangs the join
 const SCOPE = "cp2020-augmented";
 
 const checks = [];
@@ -317,14 +317,22 @@ ok("E: banded from the real aimed distance, one pattern for the whole burst",
 ok("E: the single-target flow did NOT claim this payload — the pattern owns it (negative)",
   r.handled.every(h => h === null), JSON.stringify(r.handled));
 ok("E: and no apply window opened for it", r.dialogs.length === 0, r.dialogs.join(", "));
-const awaitingApply = await page.evaluate((SCOPE) => ({
-  zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
-  // The GUESSED-corridor card, told apart from the resolution card by the row list only the latter has
-  // (both carry the same apply control on purpose).
-  guessCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone") && !(m.content ?? "").includes("cp-spread-resolve-list")).length,
-  resolveCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-resolve-list")).length,
-  resultCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
-}), SCOPE);
+// ⛔ COUNT ONLY THIS RUN'S CARDS. These three counters used to read the WHOLE chat log, so a card of
+// the same class left in the log by any other suite (2client-relays' A4c spread confirm is one, and
+// it sorts before this suite) made "NO guessed-corridor card" fail on somebody else's message. The
+// suite already records `setup.baseline.cards` for exactly this reason and the restore block already
+// slices by it — these legs simply had not been given the same treatment.
+const awaitingApply = await page.evaluate(({ SCOPE, baselineCards }) => {
+  const mine = [...game.messages].slice(baselineCards);
+  return {
+    zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
+    // The GUESSED-corridor card, told apart from the resolution card by the row list only the latter
+    // has (both carry the same apply control on purpose).
+    guessCards: mine.filter(m => (m.content ?? "").includes("cp-confirm-spread-zone") && !(m.content ?? "").includes("cp-spread-resolve-list")).length,
+    resolveCards: mine.filter(m => (m.content ?? "").includes("cp-spread-resolve-list")).length,
+    resultCards: mine.filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
+  };
+}, { SCOPE, baselineCards: setup.baseline.cards });
 ok("E: NO 'look at this guessed corridor' card — the shooter already aimed it (negative)",
   awaitingApply.guessCards === 0, `${awaitingApply.guessCards} card(s)`);
 ok("E: the shot ends in ONE resolution card the reviewer is asked to apply",
@@ -333,7 +341,7 @@ ok("E: nothing has been applied yet, and the pattern is still on the canvas unde
   awaitingApply.resultCards === 0 && awaitingApply.zones === 1,
   `${awaitingApply.resultCards} result card(s), ${awaitingApply.zones} zone(s)`);
 
-const afterApply = await page.evaluate(async (SCOPE) => {
+const afterApply = await page.evaluate(async ({ SCOPE, baselineCards }) => {
   // ⚠ THE NEWEST ONE. A resolution card is SPENT rather than deleted, so an earlier section's card is
   // still in the log and a first-match lookup presses a button whose pattern is already gone — which
   // reads exactly like the press having done nothing.
@@ -344,9 +352,9 @@ const afterApply = await page.evaluate(async (SCOPE) => {
   return {
     pressed: !!btn,
     zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
-    resultCards: [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
+    resultCards: [...game.messages].slice(baselineCards).filter(m => (m.content ?? "").includes("cp-spread-result-list")).length,
   };
-}, SCOPE);
+}, { SCOPE, baselineCards: setup.baseline.cards });
 ok("E: the apply control is on the rendered card and the press lands the shot",
   afterApply.pressed && afterApply.resultCards === 1, `pressed=${afterApply.pressed}, ${afterApply.resultCards} result card(s)`);
 ok("E: and nothing is left hovering on the canvas afterwards", afterApply.zones === 0, `${afterApply.zones} left`);

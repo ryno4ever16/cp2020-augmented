@@ -115,7 +115,7 @@ ok("§2 and no identity is invented for a weapon that has no load (negative)",
 /* ══ §3. REAL fired payloads off the review bench ════════════════════════════════════════════════ */
 console.log("\n===== §3: real fired payloads — 07 api rifle · 16 dualPurpose heavy =====");
 
-const setup = await p.evaluate((SCOPE) => {
+const setup = await p.evaluate(async (SCOPE) => {
   const g = globalThis.__b1 = { payloads: [] };
   Hooks.on("cyberpunk2020.weaponFired", (pl) => g.payloads.push(foundry.utils.deepClone({
     weaponName: pl.weaponName, modifier: pl.modifier ?? null, caliber: pl.caliber ?? null,
@@ -131,10 +131,29 @@ const setup = await p.evaluate((SCOPE) => {
     attackerTokenId: pl.attackerTokenId ?? null,
   })));
   const shooter = game.actors.getName("Review · Shooter");
-  const scene = game.scenes.active;
+  // ⭐ THE BENCH HAS ITS OWN SCENE, and this leg assumed the world's active one. The standing review
+  // bench is laid out on "Review · Dark Range" (provision-review-bench.mjs:222-235 arranges the four
+  // figures there), while the rig's active scene is the default map. Reading `game.scenes.active`
+  // therefore found no bench figure at all — `shooterTokenIds` came back `[]` and the two
+  // "which figure did this shot come from" legs could only report `attackerTokenId=null`, even though
+  // the seam was working. Resolve the scene from where the shooter actually STANDS, and VIEW it —
+  // `.view()` is client-local (the vehicle-seating idiom), so the world's active scene is untouched
+  // and no other suite in the battery is disturbed. The canvas must be drawn because the legs below
+  // select and target through `canvas.tokens`.
+  const benchScene = game.scenes.find(sc => sc.tokens.some(t => t.actorId === shooter?.id))
+    ?? game.scenes.active;
+  if (benchScene && canvas?.scene?.id !== benchScene.id) {
+    try { await benchScene.view(); } catch (e) { /* client-only */ }
+    for (let i = 0; i < 60 && !(canvas?.ready && canvas.scene?.id === benchScene.id); i++) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+  const scene = benchScene;
   return {
     found: !!shooter,
     actorId: shooter?.id ?? null,
+    benchSceneName: scene?.name ?? null,
+    benchSceneDrawn: canvas?.ready === true && canvas.scene?.id === scene?.id,
     shooterTokenIds: (scene?.tokens ?? []).filter(t => t.actorId === shooter?.id).map(t => t.id),
     guns: Object.fromEntries((shooter?.itemTypes.weapon ?? [])
       .filter(w => w.getFlag(SCOPE, "reviewBench"))
@@ -146,6 +165,9 @@ const setup = await p.evaluate((SCOPE) => {
 
 ok("§3 the review bench is provisioned on this rig (16 numbered guns)",
   setup.found && Object.keys(setup.guns).length === 16, `${Object.keys(setup.guns).length} gun(s)`);
+ok("§3 the bench's own scene is drawn, with the firing figure on it",
+  setup.benchSceneDrawn === true && setup.shooterTokenIds.length > 0,
+  `scene=${JSON.stringify(setup.benchSceneName)} drawn=${setup.benchSceneDrawn} figures=${JSON.stringify(setup.shooterTokenIds)}`);
 
 /** One shot through the REAL UI path: the sheet's fire button → the modifiers dialog → its submit.
  *  Drains any apply window the PREVIOUS shot deferred (up to PRESENTATION_CAP_MS, 8 s) first, so a
@@ -254,7 +276,16 @@ const restored = await p.evaluate(async ({ SCOPE, baselineCards }) => {
     await new Promise(r => setTimeout(r, 1200));
   }
   try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none */ }
-  const scene = game.scenes.active;
+  // ⭐ THE RESTORE HAS TO SWEEP THE SCENE THE BENCH IS ON, not the world's active one. The three
+  // named targets stand on "Review · Dark Range" (the same scene §setup resolves from the shooter's
+  // own figure); the rig's active scene is the default map and carries none of them. Reading
+  // `game.scenes.active` here meant the loop below found ZERO tokens, so nothing was ever restored —
+  // and because `[].every()` is true, the leg that exists to prove the restore happened passed on an
+  // empty sweep for as long as it has existed (VACUOUS-LEG-AUDIT F4). The leg now also counts, so an
+  // empty sweep can never read as a clean one again.
+  const scene = game.scenes.getName("Review · Dark Range")
+    ?? game.scenes.find(sc => sc.tokens.some(t => t.name === "Review · Target (Vehicle)"))
+    ?? game.scenes.active;
   for (const m of [...game.messages].slice(baselineCards)) { try { await m.delete(); } catch (e) { /* gone */ } }
   const actor = game.actors.getName("Review · Shooter");
   await actor.updateEmbeddedDocuments("Item", actor.itemTypes.weapon
@@ -264,9 +295,11 @@ const restored = await p.evaluate(async ({ SCOPE, baselineCards }) => {
     .filter(a => a.getFlag(SCOPE, "reviewBench"))
     .map(a => ({ _id: a.id, "system.quantity": 60 })));
   const zeroed = [];
+  const covered = [];
   for (const name of ["Review · Target", "Review · Target (Cyberlimb)", "Review · Target (Vehicle)"]) {
     const t = scene.tokens.find(x => x.name === name);
     if (!t) continue;
+    covered.push(name);
     for (const a of new Set([t.actor, game.actors.get(t.actorId)].filter(Boolean))) {
       const sys = a.system ?? {};
       const upd = {};
@@ -286,7 +319,7 @@ const restored = await p.evaluate(async ({ SCOPE, baselineCards }) => {
   try { await actor.sheet.close(); } catch (e) { /* closed */ }
   await new Promise(r => setTimeout(r, 800));
   return {
-    zeroed,
+    zeroed, covered, restoreScene: scene?.name ?? null,
     magazines: actor.itemTypes.weapon.filter(w => w.getFlag(SCOPE, "reviewBench"))
       .every(w => Number(w.system.shotsLeft) === Number(w.system.shots)),
     ammoFull: actor.itemTypes.ammo.filter(a => a.getFlag(SCOPE, "reviewBench"))
@@ -305,7 +338,15 @@ const restored = await p.evaluate(async ({ SCOPE, baselineCards }) => {
 
 ok("restore: every bench magazine is full again", restored.magazines);
 ok("restore: every bench ammo box is back at stock", restored.ammoFull);
-ok("restore: the targets are undamaged", restored.zeroed.every(z => /=0$|=60$|=30$/.test(z)), restored.zeroed.join(" · "));
+// ⛔ THE COUNT IS HALF THE LEG. `[].every()` is true, so without a count an empty sweep — the state
+// this leg was actually in for months — reads exactly like a clean one. All three bench figures have
+// to have been REACHED, and each figure the sweep touched has to read back at rest. (Two of the three
+// are unlinked, so each contributes BOTH its token actor and the world actor behind it; the entry
+// count is therefore five, not three, and the names are what the claim is made about.)
+ok("restore: all three bench targets were reached and are back to undamaged",
+  restored.covered.length === 3 && restored.zeroed.length >= 3
+  && restored.zeroed.every(z => /=0$|=60$|=30$/.test(z)),
+  `scene=${restored.restoreScene} covered=[${restored.covered.join(", ")}] ${restored.zeroed.join(" · ")}`);
 ok("restore: the synthesized fixture actor is gone", restored.strayActors === 0, `${restored.strayActors}`);
 ok("restore: the canvas holds no live effect", restored.liveEffects === 0, `${restored.liveEffects}`);
 ok("restore: the chat log is back where this run found it",

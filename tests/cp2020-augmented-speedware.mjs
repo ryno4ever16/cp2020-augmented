@@ -164,6 +164,12 @@ const r = await p.evaluate(async () => {
 const g = await p.evaluate(async () => {
   const out = { cleanup: [], scenes: [] };
   const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+  // ⛔ SCENE HYGIENE. This part ACTIVATES a probe scene (the combat clock needs a real drawn canvas)
+  // and then deletes it. Deleting the active scene without restoring the previous one leaves
+  // `game.scenes.active === null` for every suite that runs after this one — spread-zone, stat-mods
+  // and status-fx follow this suite alphabetically and are exactly the suites that were dying on a
+  // null canvas. Captured here; restored in the teardown BEFORE the probe scene is removed.
+  const prevActiveSceneId = game.scenes.active?.id ?? null;
 
   const doc = await game.packs.get("cyberpunk2020.neuralware").getDocument("LOCvUXXqo5uFmMn5");
   const data = game.items.fromCompendium(doc);
@@ -274,10 +280,18 @@ const g = await p.evaluate(async () => {
     return !v || v === full || v === k;
   });
 
-  // Teardown.
+  // Teardown. Restore the world's active scene FIRST, then remove the probe scene — in that order.
   await combat.delete().catch(() => {});
   for (const id of out.cleanup) await game.actors.get(id)?.delete().catch(() => {});
+  const prev = prevActiveSceneId ? game.scenes.get(prevActiveSceneId) : null;
+  if (prev && !out.scenes.includes(prev.id)) {
+    await prev.activate().catch(() => {});
+    for (let i = 0; i < 60 && !(canvas?.ready && canvas.scene?.id === prev.id); i++) await sleep(150);
+  }
   for (const id of out.scenes) await game.scenes.get(id)?.delete().catch(() => {});
+  // ⏪ 2026-08-16 (vacuous-leg audit): was `prevActiveSceneId ? … : true` — a free pass in exactly the
+  // state the battery runs in (no active scene). Compared as VALUES so activating one also reds.
+  out.activeSceneRestored = (game.scenes.active?.id ?? null) === (prevActiveSceneId ?? null);
   return out;
 });
 
@@ -358,6 +372,9 @@ eq("expiry posted its card", g.atFive.expiryCards, 1);
 
 console.log("── G3 · strings ──");
 eq("every added key resolves", g.i18nUnresolved, []);
+
+console.log("── rig hygiene ──");
+eq("the world's active scene is restored before the probe scene is removed", g.activeSceneRestored, true);
 
 eq("0 console errors", errors, []);
 await b.close();

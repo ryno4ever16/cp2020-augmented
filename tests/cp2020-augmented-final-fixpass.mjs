@@ -3,6 +3,13 @@
  *  Each leg is mechanism-named (never game-fiction). Legs run in isolated page.evaluate calls so one
  *  throw can't sink the others; forced-dice overrides are installed + restored per-leg.
  *
+ *  ⛔ SCENE HYGIENE (repaired 2026-08-16). Legs a, d and g stand up a throwaway probe scene, and d and
+ *  g ACTIVATE theirs. Every one of them now captures the previously active scene, restores it in the
+ *  `finally` (activate → wait for canvas.ready), and only then removes the throwaway. Before this
+ *  repair the throwaway was deleted while still active, leaving `game.scenes.active === null` for the
+ *  remainder of the battery — which silently reddened five downstream suites and cost fx-rail two
+ *  canvas.ready legs. Restore-in-finally, never on the happy path.
+ *
  *   a  stun-save recovery: fail-check installs unconscious + preStunMovement flag; pass-check clears the
  *      status, restores the stored value, unsets the flag; a pass on a never-affected actor is a no-op.
  *   b  apply-path parity: a 3-hit same-location mono burst gives identical per-hit SP from
@@ -10,7 +17,7 @@
  *   c  install re-click guard: first install debits funds + equips; a re-click returns false, warns, and
  *      leaves the values untouched; the sheet shows the installed indicator, not the button.
  *   d  manual round-tick control: with the round-tick master OFF the tracker control exists; the real DOM
- *      gesture decrements a timed consumable marker AND advances a placed rad zone by one round.
+ *      gesture decrements a timed consumable marker AND doses a figure standing in a rad-zone region.
  *   e  chassis-stat refold floor: chassis REF 14 + a wound-state halving + a +2 recorded delta = 9, not 14.
  *   f  FBC set-stat gate: an SDP-only body leaves a REF boost intact (no advisory); a full-stat body drops
  *      the boost (chassis value stands) and rides the advisory on the took-card.
@@ -45,9 +52,14 @@ const legA = await p.evaluate(async () => {
   let Q = [];
   CONFIG.Dice.randomUniform = () => Q.length ? Q.shift() : 0.05;
   const D = (k) => 1 - (k - 0.5) / 10;   // v14 inverted mapping: force a d10 = k
+  // Scene + fixture handles are hoisted so the finally can remove them even when a leg throws
+  // part-way. A probe scene left behind (worse, left ACTIVE) is the documented cause of the
+  // downstream suites going red for no code reason — see the leg-d comment.
+  let sc = null;
+  const made = [];
   try {
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__FPa"))) await a.delete().catch(() => {});
-    let sc = game.scenes.find(s => s.name === "__PW__FPaScene");
+    sc = game.scenes.find(s => s.name === "__PW__FPaScene");
     if (!sc) sc = await Scene.create({ name: "__PW__FPaScene", width: 1000, height: 1000, grid: { size: 100 } });
 
     // self-check the die override before trusting the queue
@@ -55,6 +67,7 @@ const legA = await p.evaluate(async () => {
 
     // ── real actor (no injected movement): the status-clear half of F1 ──
     const actor = await Actor.create({ name: "__PW__FPa Real", type: "character" });
+    made.push(actor);
     const [tok] = await sc.createEmbeddedDocuments("Token", [{ name: "__PW__FPaT", x: 100, y: 100, actorId: actor.id, actorLink: true, width: 1, height: 1 }]);
     const threshold = SR.getStunThreshold(actor);   // 6 for a default bt5 character
     out.nums.threshold = threshold;
@@ -74,6 +87,7 @@ const legA = await p.evaluate(async () => {
 
     // NEGATIVE: a passing check on a never-affected actor touches nothing.
     const clean = await Actor.create({ name: "__PW__FPa Clean", type: "character" });
+    made.push(clean);
     const [ctok] = await sc.createEmbeddedDocuments("Token", [{ name: "__PW__FPaCT", x: 300, y: 300, actorId: clean.id, actorLink: true, width: 1, height: 1 }]);
     Q = [D(1)];
     await SR.executeStunSave({ actorId: clean.id, tokenId: ctok.id, sceneId: sc.id }); await sleep(300);
@@ -85,6 +99,7 @@ const legA = await p.evaluate(async () => {
     // (The apply side's own capture is inert on this schema — currentSpeed above is null — so the seed
     // exercises _releaseStunMovementOverride's flag-restore/unset logic directly, the authoritative half.)
     const rel = await Actor.create({ name: "__PW__FPa Rel", type: "character" });
+    made.push(rel);
     const [rtok] = await sc.createEmbeddedDocuments("Token", [{ name: "__PW__FPaRT", x: 500, y: 500, actorId: rel.id, actorLink: true, width: 1, height: 1 }]);
     const STORED = 42;
     await rel.setFlag(SCOPE, "preStunMovement", STORED);
@@ -96,10 +111,12 @@ const legA = await p.evaluate(async () => {
     out.ok.releaseUnsetsFlag = (rel.getFlag(SCOPE, "preStunMovement") ?? null) === null;
     out.ok.releaseClearsStatus = rel.statuses?.has("unconscious") === false;
 
-    for (const a of [actor, clean, rel]) await a.delete().catch(() => {});
-    await sc.delete().catch(() => {});
   } catch (e) { out.THROWN = String(e?.stack || e); }
-  finally { CONFIG.Dice.randomUniform = origRU; Math.random = origMR; }
+  finally {
+    CONFIG.Dice.randomUniform = origRU; Math.random = origMR;
+    for (const a of made) await a.delete().catch(() => {});
+    await sc?.delete().catch(() => {});
+  }
   return out;
 });
 
@@ -208,15 +225,23 @@ const legC = await p.evaluate(async () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
-// LEG d — manual round-tick control: real DOM gesture decrements a timed marker + advances a rad zone.
+// LEG d — manual round-tick control: real DOM gesture decrements a timed marker AND doses a token
+//         standing in a radiation zone.
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 const legD = await p.evaluate(async () => {
   const out = { ok: {}, nums: {}, notes: {} };
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const CONS = await import("/modules/cp2020-augmented/module/mech/consumable.js");
-  const ZONE = await import("/modules/cp2020-augmented/module/radiation/radiation-zones.js");
+  const RAD  = await import("/modules/cp2020-augmented/module/radiation/radiation.js");
+  const ZB   = await import("/modules/cp2020-augmented/module/radiation/radiation-zone-behavior.js");
   const SCOPE = "cp2020-augmented";
+  // ⛔ SCENE HYGIENE. This leg activates a throwaway scene. Deleting it without first re-activating
+  // whatever was active leaves game.scenes.active === null for the REST OF THE BATTERY, and every
+  // scene-dependent suite after this one dies on a null canvas. Both the restore and the throwaway's
+  // deletion therefore live in the finally, in that order — never on the happy path.
+  const prevActiveSceneId = game.scenes.active?.id ?? null;
   let restoreAuto = null;
+  let sc = null, actor = null, combat = null;
   try {
     const prevAuto = (() => { try { return game.settings.get(SCOPE, "mechRoundTickAutomation"); } catch { return true; } })();
     restoreAuto = prevAuto;
@@ -225,12 +250,12 @@ const legD = await p.evaluate(async () => {
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__FPd"))) await a.delete().catch(() => {});
     for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__FPd"))) await c.delete().catch(() => {});
 
-    let sc = game.scenes.find(s => s.name === "__PW__FPdScene");
+    sc = game.scenes.find(s => s.name === "__PW__FPdScene");
     if (!sc) sc = await Scene.create({ name: "__PW__FPdScene", width: 2000, height: 2000, grid: { size: 100 } });
     await sc.activate();
     for (let i = 0; i < 40 && !(canvas?.ready && canvas.scene?.id === sc.id); i++) await sleep(150);
 
-    const actor = await Actor.create({ name: "__PW__FPd Combatant", type: "character" });
+    actor = await Actor.create({ name: "__PW__FPd Combatant", type: "character" });
     const [tok] = await sc.createEmbeddedDocuments("Token", [{ name: "__PW__FPd Tok", x: 500, y: 500, actorId: actor.id, actorLink: true, width: 1, height: 1 }]);
     await sleep(300);
 
@@ -243,13 +268,30 @@ const legD = await p.evaluate(async () => {
     const markerTurns = (a) => { const raw = a.getFlag(SCOPE, "consumableState"); const l = Array.isArray(raw) ? raw : (raw ? [raw] : []); return l.find(m => m.itemId === cItem.id)?.turnsLeft ?? null; };
     out.nums.markerBefore = markerTurns(actor);   // 3
 
-    // a FINITE radiation zone (turnsLeft 3 → expect 2 after one manual pass)
-    const handle = await ZONE.placeRadZone({ x: 500 + 40, y: 500 + 40, radiusM: 5, radsFormula: "1", sourceLabel: "__PW__FPd Field", turnsLeft: 3 });
-    const zoneTurns = () => Number(game.scenes.get(sc.id)?.regions?.get(handle?.doc?.id)?.flags?.[SCOPE]?.turnsLeft ?? handle?.doc?.flags?.[SCOPE]?.turnsLeft);
-    out.nums.zoneBefore = zoneTurns();   // 3
+    // A radiation zone the token is standing in. ⭐ REALIGNED to the shipped model: a zone is a native
+    // Foundry Region carrying the module's Radiation Zone BEHAVIOR (radiation-zone-behavior.js), drawn
+    // by the GM with core's own region tools. The old dialog-placement export this leg used to call
+    // (`placeRadZone`) does not exist any more, and the finite turnsLeft countdown it asserted survives
+    // only on the legacy flag path (radiation-zones.js:144-167). What a manual pass does to a CURRENT
+    // zone is DOSE the tokens inside it (radiation-zones.js:135-142 → _doseZoneTokens), so that is what
+    // this leg now reads back, by value: a flat "8" formula on a suit-less actor is exactly 8 rads.
+    // Region first, behavior second — the real GM gesture, the recipe the radiation keeper also uses.
+    const [region] = await sc.createEmbeddedDocuments("Region", [{
+      name: "__PW__FPd Field",
+      shapes: [{ type: "rectangle", x: 300, y: 300, width: 600, height: 600, hole: false, rotation: 0 }],
+    }]);
+    await region.createEmbeddedDocuments("RegionBehavior", [{
+      name: "Radiation Zone", type: ZB.RAD_ZONE_BEHAVIOR,
+      system: { radsFormula: "8", sourceLabel: "__PW__FPd Field" },
+    }]);
+    out.ok.zoneBehaviorAttached = !!region.behaviors?.some(x => x.type === ZB.RAD_ZONE_BEHAVIOR && !x.disabled);
+    for (let i = 0; i < 25 && !(region.tokens?.size); i++) await sleep(150);
+    out.nums.zoneTokensInside = region.tokens?.size ?? 0;
+    const exposure = () => RAD.actorExposure(game.actors.get(actor.id) ?? actor);
+    out.nums.exposureBefore = exposure();
 
     // a Combat with this token as the (started) current combatant, so combat.combatant.actor resolves
-    const combat = await Combat.create({ scene: sc.id });
+    combat = await Combat.create({ scene: sc.id });
     await combat.createEmbeddedDocuments("Combatant", [{ tokenId: tok.id, sceneId: sc.id, actorId: actor.id, name: "__PW__FPd Combatant" }]);
     await combat.activate();
     await combat.startCombat();
@@ -265,23 +307,34 @@ const legD = await p.evaluate(async () => {
     // drive the REAL gesture (hover-hidden control → dispatchEvent bubbles to the document listener)
     if (btn) {
       btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-      for (let i = 0; i < 50; i++) { await sleep(150); if (markerTurns(actor) === 2 && zoneTurns() === 2) break; }
+      for (let i = 0; i < 50; i++) { await sleep(150); if (markerTurns(actor) === 2 && exposure() > out.nums.exposureBefore) break; }
     }
     out.nums.markerAfter = markerTurns(actor);   // 2
-    out.nums.zoneAfter = zoneTurns();            // 2
+    out.nums.exposureAfter = exposure();         // before + 8
     out.ok.markerDecremented = out.nums.markerBefore === 3 && out.nums.markerAfter === 2;
-    out.ok.zoneAdvanced = out.nums.zoneBefore === 3 && out.nums.zoneAfter === 2;
+    out.ok.zoneDosedByGesture = out.nums.exposureAfter - out.nums.exposureBefore === 8;
 
     // NEGATIVE: with the master ON the control is not injected
     await game.settings.set(SCOPE, "mechRoundTickAutomation", true);
     ui.combat?.render(true); await sleep(600);
     out.ok.controlAbsentMasterOn = !document.querySelector(".cp-manual-tick-btn");
-
-    await combat.delete().catch(() => {});
-    await actor.delete().catch(() => {});
-    await sc.delete().catch(() => {});
   } catch (e) { out.THROWN = String(e?.stack || e); }
-  finally { if (restoreAuto !== null) { try { await game.settings.set(SCOPE, "mechRoundTickAutomation", restoreAuto); } catch {} } }
+  finally {
+    if (restoreAuto !== null) { try { await game.settings.set(SCOPE, "mechRoundTickAutomation", restoreAuto); } catch {} }
+    await combat?.delete().catch(() => {});
+    await actor?.delete().catch(() => {});
+    // ⛔ RESTORE THE ACTIVE SCENE FIRST, THEN remove the throwaway — in this order. Deleting the
+    // active scene is what left the rest of the battery with no canvas.
+    const prev = prevActiveSceneId ? game.scenes.get(prevActiveSceneId) : null;
+    if (prev && prev.id !== sc?.id) {
+      await prev.activate().catch(() => {});
+      for (let i = 0; i < 60 && !(canvas?.ready && canvas.scene?.id === prev.id); i++) await sleep(150);
+    }
+    await sc?.delete().catch(() => {});
+    // ⏪ 2026-08-16 (vacuous-leg audit): was `prevActiveSceneId ? … : true` — a free pass in exactly the
+    // state the battery runs in (no active scene). Compared as VALUES so activating one also reds.
+    out.ok.activeSceneRestored = (game.scenes.active?.id ?? null) === (prevActiveSceneId ?? null);
+  }
   return out;
 });
 
@@ -375,6 +428,10 @@ const legG = await p.evaluate(async () => {
   const origRU = CONFIG.Dice.randomUniform, origMR = Math.random;
   const D = (k) => 1 - (k - 0.5) / 10;
   const created = [];
+  // ⛔ SCENE HYGIENE — same shape as leg d: this leg activates a throwaway scene, so the previously
+  // active scene is captured here and re-activated in the finally BEFORE the throwaway is deleted.
+  const prevActiveSceneId = game.scenes.active?.id ?? null;
+  let sc = null;
   try {
     // ── (1) PURE roll-path: the RAW catalog forms don't parse; the NORMALIZED forms roll in-range ──
     const rollable = async (f) => { try { const r = await new Roll(f).evaluate(); return { ok: true, total: r.total }; } catch { return { ok: false, total: null }; } };
@@ -400,7 +457,7 @@ const legG = await p.evaluate(async () => {
     try { await game.settings.set("cp2020-augmented", "vehicleDamageEnabled", true); } catch {}
     try { await game.settings.set("cp2020-augmented", "mmEnabled", true); } catch {}
     try { await game.settings.set("cp2020-augmented", "vehicleRuleSystem", "MaximumMetal"); } catch {}
-    let sc = game.scenes.find(s => s.name === "__PW__FPgScene");
+    sc = game.scenes.find(s => s.name === "__PW__FPgScene");
     if (!sc) sc = await Scene.create({ name: "__PW__FPgScene", width: 2000, height: 2000, grid: { size: 100 } });
     await sc.activate();
     for (let i = 0; i < 40 && !(canvas?.ready && canvas.scene?.id === sc.id); i++) await sleep(150);
@@ -441,13 +498,22 @@ const legG = await p.evaluate(async () => {
     } else {
       out.notes.gestureParked = "could not set exactly one target on the headless canvas";
     }
-    await sc.delete().catch(() => {});
   } catch (e) { out.THROWN = String(e?.stack || e); }
   finally {
     CONFIG.Dice.randomUniform = origRU; Math.random = origMR;
     for (const a of created) await a.delete().catch(() => {});
     try { if (out.notes.restoreMM !== undefined) await game.settings.set("cp2020-augmented", "mmEnabled", out.notes.restoreMM); } catch {}
     try { if (out.notes.restoreRule !== undefined) await game.settings.set("cp2020-augmented", "vehicleRuleSystem", out.notes.restoreRule); } catch {}
+    // Restore the previously active scene BEFORE removing the throwaway (see leg d).
+    const prev = prevActiveSceneId ? game.scenes.get(prevActiveSceneId) : null;
+    if (prev && prev.id !== sc?.id) {
+      await prev.activate().catch(() => {});
+      for (let i = 0; i < 60 && !(canvas?.ready && canvas.scene?.id === prev.id); i++) await sleep(150);
+    }
+    await sc?.delete().catch(() => {});
+    // ⏪ 2026-08-16 (vacuous-leg audit): was `prevActiveSceneId ? … : true` — a free pass in exactly the
+    // state the battery runs in (no active scene). Compared as VALUES so activating one also reds.
+    out.ok.activeSceneRestored = (game.scenes.active?.id ?? null) === (prevActiveSceneId ?? null);
   }
   return out;
 });
@@ -558,8 +624,11 @@ add("c", "c: installed indicator shown post-install", legC.ok?.installedIndicato
 add("d", "d: combatant resolves on started combat", legD.ok?.combatantResolves);
 add("d", "d: manual-tick control exists (master OFF)", legD.ok?.controlExistsMasterOff);
 add("d", "d: gesture decrements the timed marker (3→2)", legD.ok?.markerDecremented);
-add("d", "d: gesture advances the rad zone (3→2)", legD.ok?.zoneAdvanced);
+add("d", "d: rad-zone behavior attached to the drawn region", legD.ok?.zoneBehaviorAttached);
+add("d", "d: the figure stands inside the region", legD.nums?.zoneTokensInside === 1);
+add("d", "d: gesture doses the figure in the rad zone (+8)", legD.ok?.zoneDosedByGesture);
 add("d", "d: control absent when master ON", legD.ok?.controlAbsentMasterOn);
+add("d", "d: previously active scene restored before the throwaway is removed", legD.ok?.activeSceneRestored);
 
 // e
 add("e", "e: refold floors at wound-reduced + delta = 9 (not 14)", legE.ok?.refoldFloor9);
@@ -580,6 +649,7 @@ add("g", "g: normalized forms roll", legG.ok?.normFormsRoll);
 add("g", "g: normalized forms roll in-range", legG.ok?.normRanges);
 // the real-gesture sub-leg is parked when the headless canvas can't target — report, don't fail
 if (legG.notes?.gestureRan) add("g", "g: fire gesture yields real rolled damage (60, not Pen×10)", legG.ok?.gestureRealDamage);
+add("g", "g: previously active scene restored before the throwaway is removed", legG.ok?.activeSceneRestored);
 
 // h
 add("h", "h: paint base to-hit (17 vs 15 → hit)", legH.ok?.baseHit);

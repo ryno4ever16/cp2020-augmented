@@ -4174,8 +4174,12 @@ try {
   if (A && B) {
     const wa = await A.p.evaluate(() => ({ meIsActiveGM: game.users.activeGM?.id === game.user.id, activeGM: game.users.activeGM?.name ?? null }));
     const FIRE = wa.meIsActiveGM ? B : A, OTHER = wa.meIsActiveGM ? A : B;
-    gok("two GMs: one of them does NOT hold the active-GM seat — the reported situation",
-      true, `active GM is "${wa.activeGM}"; firing from the other`);
+    // ⏪ 2026-08-16 (vacuous-leg audit): a hardcoded `true`. The premise this whole section rests on —
+    // that the client it fires from is NOT the seat-holder — was never checked, so a run where the seat
+    // had moved elsewhere would still have read as "the reported situation" while testing another one.
+    const fireIsSeat = await FIRE.p.evaluate(() => game.users.activeGM?.id === game.user.id);
+    gok("two GMs: the client this section fires from does NOT hold the active-GM seat — the reported situation",
+      fireIsSeat === false && !!wa.activeGM, `active GM is "${wa.activeGM}"; firing client holds the seat: ${fireIsSeat}`);
     const armTap = (s) => s.p.evaluate(() => {
       globalThis.__g = { payloads: [], cards: [] };
       globalThis.__gh = [];

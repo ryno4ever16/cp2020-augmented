@@ -234,7 +234,11 @@ const r = await p.evaluate(async () => {
       out.nums.hud_ap_returned = apRet === undefined || apRet === null;
       out.nums.hud_ap_warned = apWarned;
       out.nums.hud_ap_gate_pure = apSuit.system.isACPA && !HUDf(apSuit.system.realityInterface);
-      ok("hud_aperture_blocked", (apRet === undefined || apRet === null) && apWarned && !apDialog);
+      out.nums.hud_ap_threw = apThrew;
+      // ⏪ `!apThrew` ADDED 2026-08-16 (vacuous-leg audit): the entry point was allowed to THROW and the
+      // leg still passed, because a throw satisfies both halves it was reading — nothing came back and
+      // no window opened. Standing down and falling over are different outcomes; only the first is this.
+      ok("hud_aperture_blocked", !apThrew && (apRet === undefined || apRet === null) && apWarned && !apDialog);
 
       // Full-HUD — must be PERMITTED (no HUD warn; a dialog opens or the gate simply passes).
       const hudSuit = await mkMissileSuit("__PW__HUD Full", "FULL_HUD_WIDEBAND");
@@ -252,7 +256,10 @@ const r = await p.evaluate(async () => {
       out.nums.hud_full_gate_pure = hudSuit.system.isACPA && !HUDf(hudSuit.system.realityInterface);
       // Gate PASSED for the HUD suit: no "no HUD/VR" warn was raised (dialog may open or fail on headless
       // canvas downstream — either way the indirect-fire gate did not block it).
-      ok("hud_full_permitted", !hudWarned && (hudSuit.system.isACPA && HUDf(hudSuit.system.realityInterface)));
+      // ⏪ `!hudThrew` ADDED 2026-08-16 (vacuous-leg audit), mirroring the aperture twin: `!hudWarned`
+      // is also satisfied by an entry point that fell over before it could warn, so a crash read as a
+      // permitted shot. `hudThrew` was already being captured and simply never asked.
+      ok("hud_full_permitted", !hudThrew && !hudWarned && (hudSuit.system.isACPA && HUDf(hudSuit.system.realityInterface)));
       out.notes.hud_path = hudDialog ? "real dialog opened for HUD suit" : (hudThrew ? "HUD dialog build threw downstream (gate still passed)" : "gate passed, no dialog handle found");
       if (hudDialog) await hudDialog.close?.().catch(() => {});
 

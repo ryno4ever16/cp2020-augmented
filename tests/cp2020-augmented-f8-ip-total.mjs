@@ -129,7 +129,11 @@ try {
       await skill.setFlag(SCOPE, "ip", 37);
       await actor.setFlag(SCOPE, "ipPool", 12);
       const cost = IP.ipCost(skill);
-      ok("cost helper returns a positive figure", cost > 0, cost);
+      // ⏪ 2026-08-16 (vacuous-leg audit): `cost > 0` cannot fail — the helper is max(1,level)×10×mult,
+      // so it is ≥10 by construction. Asserted by VALUE against the same arithmetic the ladder states.
+      ok("cost helper returns the ladder figure for this skill by value",
+        cost === Math.max(1, Number(skill.system?.level) || 0) * 10 * (Number(skill.system?.ipMultiplier) || 1),
+        { cost, level: skill.system?.level, mult: skill.system?.ipMultiplier });
 
       // 1. Prepared context — through the real sheet chain, not a hand-built payload.
       const sheet = actor.sheet;

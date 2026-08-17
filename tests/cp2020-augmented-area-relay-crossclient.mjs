@@ -250,7 +250,11 @@ try {
     check("(d) PLAYER page: the region doc exists for the player and its visibility VALUE is GAMEMASTER (player does not see the fill)",
       plRegion?.seen && plRegion.visibility === plRegion.gm, JSON.stringify(plRegion));
   } else {
-    check("(d) v13: (region-visibility check is v14-only — template clouds have no visibility mode) [n/a-pass]", true, "v13 template backend");
+    // ⏪ 2026-08-16 (vacuous-leg audit): this was a hardcoded `true` counted as a PASS. The certification
+    // rigs run a Region backend (proved: core 14.364, scene regions present), so this arm is dead here —
+    // it can only be reached on a template backend, and on that backend it certifies nothing. Recorded
+    // as INFORMATIONAL rather than a pass, so the suite's green total never includes it.
+    console.log("  INFORMATIONAL (d): template backend in play — the region-visibility leg is v14-only and did not run");
   }
 
   // ───────────────────────── (e) EXPLOSION cheap add — same AREA_PLACERS relay ─────────────────────────

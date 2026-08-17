@@ -45,7 +45,6 @@ const r = await p.evaluate(async () => {
   try {
     const scene = canvas?.scene;
     if (!scene) { check("active scene present", false, null); return out; }
-    check("active scene present", !!scene, null);
 
     // ── Registration (proves the two-part manifest+CONFIG registration + server restart) ──
     check("behavior TYPE registered in CONFIG.RegionBehavior.dataModels", typeof CONFIG.RegionBehavior?.dataModels?.[T] === "function", typeof CONFIG.RegionBehavior?.dataModels?.[T]);

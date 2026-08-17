@@ -260,8 +260,12 @@ await gm.page.click('.cp-vehicle-deploy-approve button[data-action="decline"]');
 await pl.page.waitForFunction(() => window.__pwNotes.some(n => n.kind === "warn" && /declined/i.test(n.msg)), null, { timeout: 10000 });
 const declined = await pl.page.evaluate(() => ({
   actor: !!game.actors.find(a => a.name === "Declined Ride"),
+  // ⏪ 2026-08-16 (vacuous-leg audit): the warn leg below was a hardcoded `true`. The wait above proves
+  // SOME warn arrived; what it says is the part a reader of the notice actually receives, so read it.
+  warn: window.__pwNotes.filter(n => n.kind === "warn" && /declined/i.test(n.msg)).map(n => n.msg),
 }));
-check("decline: player warned", true);
+check("decline: the player is warned exactly once, and the notice says the request was declined",
+  declined.warn.length === 1 && /declin/i.test(declined.warn[0]), JSON.stringify(declined.warn));
 check("decline: no actor created", !declined.actor);
 
 // D. embark/disembark gesture + seating presentation + crew-follow (GM client).
@@ -410,11 +414,21 @@ const cleaned = await gm.page.evaluate(async ({ sceneId, activeBefore }) => {
   const folder = game.folders.find(f => f.type === "Actor" && f.name === "Vehicles");
   if (folder && folder.contents.length === 0) await folder.delete();
   return {
-    scenesLeft: game.scenes.filter(s => s.name.startsWith("__PW__")).length,
+    // ⭐ COUNT WHAT THIS SUITE OWNS. This used to count every `__PW__`-prefixed scene in the world,
+    // so any OTHER suite that died before its own scene delete (a crash leaves e.g.
+    // __PW__WipeRaceScene or __PW__SpeedwareScene behind) reddened this leg permanently — the delete
+    // on the line above is by id, is awaited, and always succeeded. The leg's claim is "MY probe
+    // scene is gone", so that is what it now measures; foreign debris is reported below instead of
+    // being charged to this suite.
+    scenesLeft: game.scenes.get(sceneId) ? 1 : 0,
+    foreignFixtureScenes: game.scenes.filter(s => s.name.startsWith("__PW__")).map(s => s.name),
     actorsLeft: game.actors.filter(a => a.name.startsWith("__PW__")).length,
     activeUnchanged: (game.scenes.active?.id ?? null) === activeBefore,
   };
 }, { sceneId: setup.sceneId, activeBefore: setup.activeBefore });
+if (cleaned.foreignFixtureScenes?.length) {
+  console.log(`  info: ${cleaned.foreignFixtureScenes.length} fixture scene(s) left by OTHER suites still in the world — ${cleaned.foreignFixtureScenes.join(", ")}`);
+}
 check("probe scene and fixtures removed",
   cleaned.scenesLeft === 0 && cleaned.actorsLeft === 0, `scenes=${cleaned.scenesLeft} actors=${cleaned.actorsLeft}`);
 check("world active scene untouched by the run", cleaned.activeUnchanged === true);

@@ -61,7 +61,6 @@ const r = await p.evaluate(async () => {
     for (let i = 0; i < 30 && !canvas?.ready; i++) await sleep(200);
     scene = canvas?.scene ?? scene;
     if (!scene) { check("active scene present", false, null); return out; }
-    check("active scene present", !!scene, null);
 
     // Pre-clean stray suppressive fixtures from any crashed prior run.
     for (const d of (scene.regions ?? []).filter(d => d.behaviors?.some(bb => bb.type === T))) await scene.deleteEmbeddedDocuments("Region", [d.id]).catch(() => {});
@@ -185,14 +184,34 @@ const r = await p.evaluate(async () => {
     let readout = document.querySelector(".cp-supp-preview-readout");
     const seedTxt = readout?.textContent ?? "";
     check("PREVIEW seed: opening width = declared zoneWidth (6m, DC 2) before any wheel; localized (no raw key)", !!readout && !/CYBERPUNK\.|SuppPreviewReadout/.test(seedTxt) && /6m/i.test(seedTxt) && /save 2\b/i.test(seedTxt), seedTxt);
-    window.dispatchEvent(new PointerEvent("pointermove", { clientX: 900, clientY: 500, bubbles: true }));
+    // ⭐ THE GESTURE MUST TARGET THE BOARD, and that is a contract change this leg missed. The preview
+    // handlers gained a canvas-event gate on 2026-08-12 (`ab84e14`) —
+    // `isCanvasEvent = (ev) => ev.target === canvas?.app?.view || ev.target?.id === "board"`
+    // (suppressive-placement.js:157) — so that a scroll or click on open UI no longer re-sizes the
+    // lane. `onWheel` (:160) and `onDown` (:169) are guarded; `onMove` (:145) and `onKey` (:180) are
+    // not, which is exactly why the pointermove and ESC legs stayed green while only this one reddened.
+    // Dispatched on `window`, `ev.target` IS window, so the handler was entered and bailed at the guard
+    // — the coverage dump shows onWheel entered once with every post-guard range at count 0, and the
+    // readout still reading the SEED (6m/save 2), not a step in the wrong direction (that would read
+    // 7m). The follow-up sweep `3f4a58e` realigned the spread twin and three other keepers and missed
+    // this one. The board element is the target; the window-capture listener still fires, because the
+    // capture phase traverses window → target regardless.
+    const board = canvas.app.view;
+    board.dispatchEvent(new PointerEvent("pointermove", { clientX: 900, clientY: 500, bubbles: true }));
     await sleep(120);
     // Wheel down narrows 6m→5m → DC ceil(12/5)=3 (proves the wheel still re-sizes after the seed).
-    window.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+    board.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
     await sleep(120);
     readout = document.querySelector(".cp-supp-preview-readout");
     const wheelTxt = readout?.textContent ?? "";
     check("PREVIEW: a wheel step re-sizes the lane and recomputes the DC (5m → save 3)", /5m/i.test(wheelTxt) && /save 3\b/i.test(wheelTxt), wheelTxt);
+    // NEGATIVE, and the leg that would have caught the drift: the SAME wheel step aimed at open UI is
+    // ignored — the readout does not move. This is the gate's whole purpose, asserted rather than assumed.
+    const offBoard = document.querySelector("#sidebar") ?? document.body;
+    offBoard.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+    await sleep(120);
+    const offTxt = document.querySelector(".cp-supp-preview-readout")?.textContent ?? "";
+    check("PREVIEW: a wheel step on open UI is ignored — the lane keeps its size (canvas-event gate)", /5m/i.test(offTxt) && /save 3\b/i.test(offTxt), offTxt);
     // ESC tears everything down.
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await sleep(150);

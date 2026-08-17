@@ -141,7 +141,14 @@ const r = await p.evaluate(async () => {
     out.f2acpa = { stillPresent: acpaHas };
     await acpaSheet.sheet.close().catch(() => {});
 
-    const plainSheet = await Actor.create({ name: "__PW__ACPAF2 Tank", type: "cp2020-augmented.vehicle", system: {} });
+    // ⭐ THE COMPARISON VEHICLE MUST BE MM-DESIGNATED. F2's claim is "these four fields are dead on an
+    // ACPA suit but alive on an ordinary COMBAT vehicle", so the comparison sheet has to be the combat
+    // layout. Since the unified/civilian split, a bare vehicle actor routes to the CIVILIAN layout —
+    // `useCivilianSheet = !system.isACPA && !(system.isMMVehicle && mmOn)`
+    // (module/actor/vehicle-sheet.js:210) — which carries none of the four, so the leg was reading a
+    // sheet it was never about. mmEnabled is already on for this suite (set at the top); the missing
+    // half was the actor's own MM designation.
+    const plainSheet = await Actor.create({ name: "__PW__ACPAF2 Tank", type: "cp2020-augmented.vehicle", system: { isMMVehicle: true } });
     created.push(plainSheet);
     await plainSheet.sheet.render(true);
     await sleep(800);
@@ -150,6 +157,19 @@ const r = await p.evaluate(async () => {
     ok("f2_plain_four_present", plainHas.length === 4);
     out.f2plain = { present: plainHas };
     await plainSheet.sheet.close().catch(() => {});
+
+    // NEGATIVE on the routing itself: an UNdesignated vehicle takes the civilian layout under the same
+    // setting and shows none of the four. Without this, "4 present" and "0 present" cannot be told
+    // apart from "the sheet changed" — which is exactly how the leg above went stale unnoticed.
+    const civSheet = await Actor.create({ name: "__PW__ACPAF2 Runabout", type: "cp2020-augmented.vehicle", system: {} });
+    created.push(civSheet);
+    await civSheet.sheet.render(true);
+    await sleep(800);
+    const cRoot = civSheet.sheet.element instanceof HTMLElement ? civSheet.sheet.element : civSheet.sheet.element?.[0];
+    const civHas = DEAD.filter(n => cRoot?.querySelector(`[name="${n}"]`));
+    ok("f2_civilian_four_absent", civHas.length === 0);
+    out.f2civ = { present: civHas };
+    await civSheet.sheet.close().catch(() => {});
   } catch (e) { out.f2err = String(e?.message || e); }
 
   for (const a of created) await a.delete().catch(() => {});
@@ -165,13 +185,25 @@ console.log("  F3 mod:   ", JSON.stringify(r.f3mod));
 console.log("  F3 acpa:  ", JSON.stringify(r.f3acpa));
 console.log("  F3 plain: ", JSON.stringify(r.f3plain), r.f3err ? ("ERR: " + r.f3err) : "");
 console.log("  F2 acpa:  ", JSON.stringify(r.f2acpa));
+console.log("  F2 civ:   ", JSON.stringify(r.f2civ));
 console.log("  F2 plain: ", JSON.stringify(r.f2plain), r.f2err ? ("ERR: " + r.f2err) : "");
 for (const [k, v] of Object.entries(r.checks)) console.log(`  ${v ? "PASS" : "FAIL"} ${k}`);
 console.log("  page errors:", errors.length ? errors.slice(0, 5) : "none");
 
+// ⏪ THE THREE SECTIONS' OWN THROWS ARE NOW GATED (vacuous-leg audit 2026-08-16). Each of F1/F2/F3 runs
+// in its own try/catch that used to swallow the throw into a PRINTED-ONLY string. The verdict below is
+// taken by iterating the checks the sections managed to RECORD — so a section that died before setting
+// any of its checks contributed nothing to iterate, and the run stayed green on the strength of the two
+// sections that survived. A stopped section is now a failure, and the recorded-check COUNT is pinned so
+// a section that dies half-way (recording some checks, not the rest) cannot slip past either.
+const EXPECTED_CHECKS = 17;   // the count of ok() keys in the page block; raise it when a leg is added
+const stopped = [["F1", r.f1err], ["F2", r.f2err], ["F3", r.f3err]].filter(([, e]) => e);
 const failed = Object.entries(r.checks).filter(([, v]) => !v).map(([k]) => k);
-const pass = failed.length === 0 && errors.length === 0;
-console.log("\n  RESULT: " + (pass ? `PASS — ${Object.keys(r.checks).length}/${Object.keys(r.checks).length} checks`
-  : `FAIL — failed: ${failed.join(", ") || "(none)"}${errors.length ? " · page errors: " + errors.length : ""}`));
+const short = Object.keys(r.checks).length !== EXPECTED_CHECKS;
+for (const [sec, err] of stopped) console.log(`  FAIL section ${sec} STOPPED before finishing: ${err}`);
+if (short) console.log(`  FAIL check-count guard: ${Object.keys(r.checks).length} recorded, ${EXPECTED_CHECKS} expected`);
+const pass = failed.length === 0 && errors.length === 0 && stopped.length === 0 && !short;
+console.log("\n  RESULT: " + (pass ? `PASS — ${Object.keys(r.checks).length}/${EXPECTED_CHECKS} checks`
+  : `FAIL — failed: ${failed.join(", ") || "(none)"}${stopped.length ? " · stopped sections: " + stopped.map(([s]) => s).join(", ") : ""}${short ? ` · only ${Object.keys(r.checks).length}/${EXPECTED_CHECKS} legs recorded` : ""}${errors.length ? " · page errors: " + errors.length : ""}`));
 await b.close();
 process.exit(pass ? 0 : 1);

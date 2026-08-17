@@ -25,6 +25,26 @@
  * ⚠ AMMO TRACKING IS FORCED ON for the magazine leg and restored afterwards: the bench shooter carries
  * Free Fire (`ammoTracking:false`), under which no magazine moves and the leg would pass vacuously.
  *
+ * ⛔ THE FUMBLE TABLE IS STOOD DOWN FOR THE COUNTING SECTIONS, AND SECTION G IS WHY (2026-08-16).
+ * The burst length is not the only thing that decides how many rounds leave the gun. A ranged FUMBLE
+ * — an initial d10 of 1, `systems/cyberpunk2020/module/utils.js:282-284`, live whenever the world's
+ * `cyberpunk2020.fumbleTableEnabled` is on, and it IS on by default on the ship-target rig — cuts the
+ * burst to a single round at `systems/cyberpunk2020/module/item/item.js:489-491`:
+ *
+ *     if (rangedFumble) { roundsFired = Math.min(shotsLeft, 1); }
+ *
+ * That produces EXACTLY the signature that was read for weeks as a form-serialisation race: the round
+ * field reads 30/30 at the moment of submit, the card reports 1 round, and the magazine agrees with
+ * the card. Sections A and B each fire one full-auto burst, so roughly one run in five hit it — a
+ * one-in-ten dice event dressed as a wiring defect, and the reason this spec looked "reproducibly red
+ * then not". Rig proof: with the fumble trigger forced, the real dialog produced
+ * `Autofire … Attack: 20 … 0 hit of 1 fired … Fumble Table` while the field still read 30.
+ *
+ * So the counting sections measure counting: the table is switched OFF at setup and restored at the
+ * end. Turning it off is not hiding the case — SECTION G turns it back on and pins the collapse by
+ * value, driving the real window with the trigger (`_maybeApplyRangedFumble`) stubbed rather than the
+ * dice pinned, so the base's own collapse arithmetic is what runs and the leg cannot flake.
+ *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-autofire-rounds.mjs
  */
 import { chromium } from "@playwright/test";
@@ -38,6 +58,8 @@ const TARGET = "Review · Target";
 
 const out = [];
 let fails = 0;
+/** Read out of the world at setup so the finally block can put the ruleset back after any death. */
+let wasFumbleTableAtStart = null;
 const ok = (label, cond, got) => {
   out.push(`${cond ? "PASS" : "FAIL"}  ${label}${cond ? "" : `\n        got: ${got}`}`);
   if (!cond) fails++;
@@ -85,6 +107,9 @@ try {
     const ff = await import(`/modules/${SCOPE}/module/mech/free-fire.js`);
     const wasTracking = ff.ammoTrackingOn(actor);
     if (!wasTracking) await ff.setAmmoTracking(actor, true);
+    // The fumble stand-down (see the header). Recorded so the restore puts the world back exactly.
+    const wasFumbleTable = game.settings.get("cyberpunk2020", "fumbleTableEnabled");
+    if (wasFumbleTable) await game.settings.set("cyberpunk2020", "fumbleTableEnabled", false);
     globalThis.__afTap = [];
     Hooks.on("cyberpunk2020.weaponFired", (p) => globalThis.__afTap.push({
       weaponName: p.weaponName, shotsFired: p.shotsFired, shotsHit: p.shotsHit,
@@ -93,15 +118,22 @@ try {
     for (const t of scene.tokens) tokens[t.name] = t.id;
     const sys = gun._getWeaponSystem ? gun._getWeaponSystem() : gun.system;
     return {
-      actorId: actor.id, gunId: gun.id, gunName: gun.name, tokens, wasTracking,
+      actorId: actor.id, gunId: gun.id, gunName: gun.name, tokens, wasTracking, wasFumbleTable,
+      fumbleTableNow: game.settings.get("cyberpunk2020", "fumbleTableEnabled"),
       rof: Number(sys.rof), shots: Number(sys.shots), shotsLeft: Number(sys.shotsLeft),
       baselineCards: game.messages.size,
       maxRounds: Math.min(Number(sys.rof), Number(sys.shotsLeft)),
     };
   }, { SCOPE, SCENE, GUN });
+  wasFumbleTableAtStart = setup.wasFumbleTable;
 
   ok(`P0 probe: the bench rifle is a ROF-${setup.rof} automatic with a full magazine`,
     setup.rof === 30 && setup.shotsLeft === setup.shots, `rof ${setup.rof}, ${setup.shotsLeft}/${setup.shots}`);
+  // The stand-down is a leg, not a silent side effect: a reader has to be able to see that the
+  // counting sections below measure the burst length and not the dice, and section G has to be able
+  // to say it turned something back on.
+  ok("P1 posture: the fumble collapse is stood down for the counting sections (section G restores and pins it)",
+    setup.fumbleTableNow === false, `fumbleTableEnabled reads ${setup.fumbleTableNow} (was ${setup.wasFumbleTable})`);
 
   /* ── the firing gesture, split so the round field can be written between arm and submit ──── */
   async function arm(mode = "FullAuto") {
@@ -143,6 +175,29 @@ try {
       }, mode);
       if (seen === mode && attempt >= 1) break;   // seen twice running, not once
     }
+    // ⛔ AND WAIT FOR THE ROUND FIELD'S NODE TO STOP BEING REPLACED (2026-08-16, zero-red battery).
+    // The fixed 600 ms settle below was the weak link. Declaring the fire mode triggers another
+    // render pass, and that pass REBUILDS the round row — a fresh node whose value is the row's
+    // default, not the ROF. Under battery load the pass could land AFTER the settle but BEFORE the
+    // submit, so `setRounds(null)` read 30 off the live node, the row was then rebuilt, and the form
+    // submitted the default: `B2 card says 1`, `B3 35 → 34 = 1 spent`, with B1 green on the reading
+    // taken moments earlier. Exactly the "spent one round instead of thirty" shape the comment above
+    // records — the pin closed it for the mode field but left the round field on a fixed timer.
+    //
+    // Stamp the node and require the stamp to survive a poll interval: a rebuild drops the attribute
+    // with the node, so this only returns once no render has replaced the row for ~700 ms.
+    await page.evaluate(() => {
+      const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+      for (const n of dlg?.element?.querySelectorAll("[data-pw-stable]") ?? []) n.removeAttribute("data-pw-stable");
+    });
+    await page.waitForFunction(() => {
+      const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
+      const el = dlg?.element?.querySelector('input[name="fullAutoRoundsFired"], input[name="fields.fullAutoRoundsFired"]');
+      if (!el) return false;                       // row hidden in this mode — nothing to stabilise
+      if (el.dataset.pwStable === "1") return true; // the same node survived the interval
+      el.dataset.pwStable = "1";
+      return false;
+    }, null, { timeout: 20000, polling: 700 }).catch(() => { /* row absent in non-auto modes */ });
     await page.waitForTimeout(600);
   }
 
@@ -168,6 +223,14 @@ try {
   const submitAndSettle = (maxMs = 12000) => page.evaluate(async ({ maxMs }) => {
     const dlg = [...foundry.applications.instances.values()].find((a) => /ModifiersDialog/.test(a?.constructor?.name ?? ""));
     const mode = dlg.element.querySelector('select[name="fireMode"], select[name="fields.fireMode"]')?.value ?? null;
+    // ⭐ READ THE ROUND FIELD AT THE MOMENT OF SUBMIT, not only when it was written. If a render pass
+    // rebuilt the row between the write and the press, this is the number that actually goes to the
+    // fire path — and reporting it beside the card's count is what turns "the card says 1" from a
+    // mystery into a statement about which side moved. `stable` is false if the node lost the stamp
+    // arm() put on it, i.e. the row WAS rebuilt after the settle.
+    const roundEl = dlg.element.querySelector('input[name="fullAutoRoundsFired"], input[name="fields.fullAutoRoundsFired"]');
+    const atSubmit = { value: roundEl?.value ?? null, max: roundEl?.dataset?.max ?? null,
+                       stable: roundEl ? roundEl.dataset.pwStable === "1" : null };
     const btn = dlg.element.querySelector("button.fire, button[type=\"submit\"]");
     if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     else dlg.element.requestSubmit();
@@ -177,7 +240,18 @@ try {
       if (globalThis.__afTap.length) break;
     }
     await new Promise((r) => setTimeout(r, 2500));   // let the fan-out and the magazine write land
-    return { payloads: globalThis.__afTap.slice(), mode };
+    // ⭐ WHAT THE DICE DID, captured beside what the form said. The burst-length contract is not the
+    // only thing that decides how many rounds leave the gun: a ranged FUMBLE cuts the burst to a
+    // single round by design (see the section header). Without this readout the two causes of a
+    // "card says 1" are indistinguishable, and the leg reports a wiring mystery when the answer is on
+    // the card. Read from the newest posted card: the fumble block the base renders, and the initial
+    // d10 that produced it.
+    const card = [...game.messages].slice(-4).reverse()
+      .find((m) => /multi-hit|fumble-block|autofire/i.test(String(m.content ?? "")) || m.rolls?.length);
+    const dice = card?.rolls?.[0]?.dice?.[0]?.results?.[0]?.result ?? null;
+    const fumbleShown = /fumble-block/i.test(String(card?.content ?? ""));
+    return { payloads: globalThis.__afTap.slice(), mode, atSubmit,
+      dice: { initialD10: dice, fumbleBlockOnCard: fumbleShown } };
   }, { maxMs });
 
   const shotsLeftNow = () => page.evaluate(({ actorId, gunId }) => {
@@ -210,7 +284,7 @@ try {
   const card10 = fired10.payloads[0]?.shotsFired ?? null;
   ok("A0 the shot under test really was a full-auto burst", fired10.mode === "FullAuto", `fire mode ${fired10.mode}`);
   ok("A3 the card reports the rounds the shooter chose, not the weapon's ROF", card10 === 10,
-    `card says ${card10} of a ROF-${setup.rof} weapon`);
+    `card says ${card10} of a ROF-${setup.rof} weapon; dice ${JSON.stringify(fired10.dice)}`);
   const after10 = await shotsLeftNow();
   ok("A4 the magazine loses exactly the rounds that were fired", before10 - after10 === 10,
     `${before10} → ${after10} = ${before10 - after10} spent`);
@@ -241,7 +315,12 @@ try {
   ok("B0 the shot under test really was a full-auto burst", firedFull.mode === "FullAuto", `fire mode ${firedFull.mode}`);
   ok("B2 an untouched field still fires the whole ROF (the shipped behaviour is unchanged)",
     (firedFull.payloads[0]?.shotsFired ?? null) === setup.maxRounds,
-    `card says ${firedFull.payloads[0]?.shotsFired}`);
+    `card says ${firedFull.payloads[0]?.shotsFired}; the field read ${JSON.stringify(firedFull.atSubmit)} at the moment of submit; dice ${JSON.stringify(firedFull.dice)}`);
+  // The wiring leg for the race the settle above closes: if the row was rebuilt after arm() stamped
+  // it, the number the fire path was handed is NOT the number B1 read, and this says so directly.
+  ok("B2b the round row was not rebuilt between arming and submitting",
+    firedFull.atSubmit?.stable === true && firedFull.atSubmit?.value === String(setup.maxRounds),
+    JSON.stringify(firedFull.atSubmit));
   const afterFull = await shotsLeftNow();
   ok("B3 and the magazine agrees with it", beforeFull - afterFull === setup.maxRounds,
     `${beforeFull} → ${afterFull} = ${beforeFull - afterFull} spent`);
@@ -499,8 +578,61 @@ try {
     }
   });
 
+  /* ══ 7. THE OTHER THING THAT DECIDES THE ROUND COUNT — the fumble collapse ════════════════ */
+  // ⭐ WHY THIS SECTION EXISTS. Everything above measures the burst length reaching the fire path. But
+  // the fire path has a SECOND authority over the same number, and it outranks the shooter: on a
+  // fumbled attack roll the base cuts the burst to one round (item.js:489-491). Until this was
+  // written down, a fumble in section A or B read as the round field failing to reach the form — the
+  // field said 30, the card said 1 — and the spec reddened about once every five runs on a mechanism
+  // nobody had named. Naming it costs one section and removes the flake entirely.
+  //
+  // ⚠ THE TRIGGER IS STUBBED, NOT THE DICE. Pinning `CONFIG.Dice.randomUniform` to force an initial 1
+  // is order-fragile (the exploding d10 recurses if every face is pinned, and pinning only the first
+  // call lands on whichever die the fire path happens to roll first — measured both failures).
+  // Replacing `_maybeApplyRangedFumble` with a canned verdict pins the ONE input the collapse reads
+  // and leaves the collapse arithmetic, the card render and the magazine write entirely real.
+  const fumbleRun = await (async () => {
+    await refill();
+    await page.evaluate(async ({ actorId, gunId }) => {
+      await game.settings.set("cyberpunk2020", "fumbleTableEnabled", true);
+      const proto = game.actors.get(actorId).items.get(gunId).constructor.prototype;
+      globalThis.__realFumble = proto._maybeApplyRangedFumble;
+      proto._maybeApplyRangedFumble = async () => ({
+        fumble: { title: "__PW__ forced fumble", html: "" },
+        forceMiss: true,
+        outcome: { discharge: false, jam: false, jamRounds: 0 },
+      });
+    }, { actorId: setup.actorId, gunId: setup.gunId });
+    await arm();
+    const dom = await setRounds(null);          // the full burst, untouched — the same shot as B
+    const before = await shotsLeftNow();
+    const fired = await submitAndSettle();
+    const after = await shotsLeftNow();
+    await page.evaluate(async ({ actorId, gunId, restore }) => {
+      const proto = game.actors.get(actorId).items.get(gunId).constructor.prototype;
+      if (globalThis.__realFumble) proto._maybeApplyRangedFumble = globalThis.__realFumble;
+      delete globalThis.__realFumble;
+      await game.settings.set("cyberpunk2020", "fumbleTableEnabled", restore);
+    }, { actorId: setup.actorId, gunId: setup.gunId, restore: setup.wasFumbleTable });
+    return { dom, fired, before, after };
+  })();
+  ok("G1 the shooter still declared the whole ROF (the field is not what changes on a fumble)",
+    fumbleRun.dom.value === String(setup.maxRounds) && fumbleRun.fired.atSubmit?.value === String(setup.maxRounds),
+    `field ${fumbleRun.dom.value}, at submit ${JSON.stringify(fumbleRun.fired.atSubmit)}`);
+  ok("G2 a fumbled burst leaves the gun as ONE round, whatever the shooter declared",
+    (fumbleRun.fired.payloads[0]?.shotsFired ?? null) === 1,
+    `card says ${fumbleRun.fired.payloads[0]?.shotsFired} against a declared ${setup.maxRounds}`);
+  ok("G3 and the magazine loses that one round, not the declared burst",
+    fumbleRun.before - fumbleRun.after === 1,
+    `${fumbleRun.before} → ${fumbleRun.after} = ${fumbleRun.before - fumbleRun.after} spent`);
+  ok("G4 the card says WHY it was one round (the fumble block is on it, so a reader is not left guessing)",
+    fumbleRun.fired.dice?.fumbleBlockOnCard === true, JSON.stringify(fumbleRun.fired.dice));
+  ok("G5 nothing landed: a fumbled burst is a forced miss",
+    (fumbleRun.fired.payloads[0]?.shotsHit ?? null) === 0, `${fumbleRun.fired.payloads[0]?.shotsHit} hit(s)`);
+  await endEffects();
+
   /* ══ RESTORE ═══════════════════════════════════════════════════════════════════════════════ */
-  const restored = await page.evaluate(async ({ SCOPE, actorId, gunId, baselineCards, wasTracking }) => {
+  const restored = await page.evaluate(async ({ SCOPE, actorId, gunId, baselineCards, wasTracking, wasFumbleTable }) => {
     for (const a of [...foundry.applications.instances.values()]) {
       if (/Damage|Modifiers/i.test(a?.constructor?.name ?? "")) { try { await a.close(); } catch (e) { /* closed */ } }
     }
@@ -522,25 +654,48 @@ try {
     await actor.updateEmbeddedDocuments("Item", [{ _id: gun.id, "system.shotsLeft": Number(gun.system.shots) }]);
     const ff = await import(`/modules/${SCOPE}/module/mech/free-fire.js`);
     if (!wasTracking) await ff.setAmmoTracking(actor, false);
+    // The fumble stand-down goes back the way this run found it. Section G already puts it back, so
+    // this is the second line of defence for a run that died between the stand-down and section G —
+    // a world left with the fumble table off is a silently changed ruleset for every suite behind it.
+    if (game.settings.get("cyberpunk2020", "fumbleTableEnabled") !== wasFumbleTable) {
+      await game.settings.set("cyberpunk2020", "fumbleTableEnabled", wasFumbleTable);
+    }
     [...game.user.targets].forEach((x) => x.setTarget(false, { releaseOthers: false }));
     try { await actor.sheet.close(); } catch (e) { /* closed */ }
     await new Promise((r) => setTimeout(r, 900));
     const sys = gun._getWeaponSystem ? gun._getWeaponSystem() : gun.system;
     return { shotsLeft: Number(sys.shotsLeft), shots: Number(sys.shots), cards: game.messages.size,
       tracking: ff.ammoTrackingOn(actor),
+      fumbleTable: game.settings.get("cyberpunk2020", "fumbleTableEnabled"),
       liveFx: (globalThis.Sequencer?.EffectManager?.effects ?? [])
         .filter((e) => !String(e?.data?.name ?? "").startsWith(`${SCOPE}.statusfx.`)).length };
-  }, { SCOPE, actorId: setup.actorId, gunId: setup.gunId, baselineCards: setup.baselineCards, wasTracking: setup.wasTracking });
+  }, { SCOPE, actorId: setup.actorId, gunId: setup.gunId, baselineCards: setup.baselineCards,
+       wasTracking: setup.wasTracking, wasFumbleTable: setup.wasFumbleTable });
 
   ok("restore: the magazine is full again", restored.shotsLeft === restored.shots,
     `${restored.shotsLeft}/${restored.shots}`);
   ok("restore: ammo tracking is back where this run found it", restored.tracking === setup.wasTracking,
     `${restored.tracking} vs ${setup.wasTracking}`);
+  ok("restore: the fumble table is back where this run found it", restored.fumbleTable === setup.wasFumbleTable,
+    `${restored.fumbleTable} vs ${setup.wasFumbleTable}`);
   ok("restore: the chat log is back to where this run found it", restored.cards === setup.baselineCards,
     `${restored.cards} vs ${setup.baselineCards}`);
   ok("restore: no shot transient is left on the canvas", restored.liveFx === 0, restored.liveFx);
   ok("0 page errors", pageErrors.length === 0, pageErrors.slice(0, 4).join(" | "));
 } finally {
+  // ⚠ SETTINGS GO BACK IN THE FINALLY, NOT ON THE HAPPY PATH (the world-state-debris rule). A run
+  // that dies mid-section otherwise leaves the ruleset changed under every suite behind it — the
+  // shape that took four unrelated suites red once already.
+  try {
+    await page.evaluate(async (want) => {
+      const proto = game.actors.getName("Review · Shooter")?.itemTypes?.weapon?.[0]?.constructor?.prototype;
+      if (proto && globalThis.__realFumble) { proto._maybeApplyRangedFumble = globalThis.__realFumble; delete globalThis.__realFumble; }
+      if (want !== undefined && want !== null
+          && game.settings.get("cyberpunk2020", "fumbleTableEnabled") !== want) {
+        await game.settings.set("cyberpunk2020", "fumbleTableEnabled", want);
+      }
+    }, wasFumbleTableAtStart);
+  } catch (e) { /* the page may already be gone */ }
   console.log(out.join("\n"));
   console.log(`\n${out.length - fails}/${out.length} checks passed`);
   await browser.close();

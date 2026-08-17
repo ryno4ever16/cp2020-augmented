@@ -173,6 +173,39 @@ const avail = await page.evaluate(async (mod) => {
 }, MOD);
 for (const [part, ok] of Object.entries(avail)) check(`the ${part} key resolves on the installed tier`, ok === true);
 
+/* ─────────────────── §3b what else is connected, and why it matters here ───────────────────
+ * ⛔ THIS SUITE COUNTS SPRITES, so it can only be read on a world with ONE connected client.
+ *
+ * The placement fans itself out: `landTraumaTeam` emits its own relay and EVERY client redraws the
+ * placement locally (module/fx/trauma-team.js:819, :917-926 — "the airframe holds station because
+ * each client is drawing it"). But the file builds its Sequencer sections WITHOUT `.locally()`
+ * (`section()` at :429-433, `playSection()` at :436-440 — zero `.locally()` calls in the file), so
+ * the engine ALSO broadcasts each section to every other client. With N clients connected, each one
+ * therefore ends up holding N copies of every part: its own, plus one per peer.
+ *
+ * That is a MODULE defect, not a fixture problem — the rail's own standard requires the local
+ * delivery (module/fx/effects.js:13, :52-58, implemented at :4021 `if (!shared) effect.locally();`,
+ * and followed by status-fx.js:373-388). It is reported as a finding; nothing in tests/ can repair
+ * it, and no pre-clean can hide it, because a peer's copy carries THIS run's placement id and is
+ * byte-identical in name to the local one.
+ *
+ * So: sweep any genuinely stale sprite first (hygiene), then state the precondition out loud, so a
+ * doubled census reports its own cause instead of arriving as unexplained arithmetic. */
+console.log("\n§3b preconditions for a sprite census");
+const conn = await page.evaluate(async () => {
+  // Hygiene sweep — the module's own filter shape; the engine honours a TRAILING wildcard only.
+  try { await globalThis.Sequencer.EffectManager.endEffects({ name: "cp2020-augmented.traumateam.*" }); } catch (e) { /* none up */ }
+  await new Promise(r => setTimeout(r, 400));
+  return {
+    stillUp: (globalThis.Sequencer?.EffectManager?.getEffects({ name: "cp2020-augmented.traumateam.*" }) ?? []).length,
+    activeUsers: game.users.filter(u => u.active).map(u => u.name),
+  };
+});
+check("the canvas carries no leftover placement sprites from an earlier run",
+  conn.stillUp === 0, `${conn.stillUp} still up`);
+check("exactly one client is connected — a second one doubles every count below, because the placement's sections are not delivered locally (module finding: trauma-team.js:429-433 has no .locally())",
+  conn.activeUsers.length === 1, `${conn.activeUsers.length} connected: ${conn.activeUsers.join(", ")}`);
+
 /* ─────────────────── §4 the live placement ─────────────────── */
 console.log("\n§4 live placement — what the engine was actually given");
 const live = await page.evaluate(async (mod) => {

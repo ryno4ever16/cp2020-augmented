@@ -2,7 +2,7 @@
  * KEEPER (two-session, GM + player): the `hideScrapedPacks` compendium-ownership scoping, plus the
  * supplement-shotguns `attackType` source values.
  *
- * PART A (node file reads, no rig): the 11 `src/packs/supplement-shotguns/*.json` sources carry the
+ * PART A (node file reads, no rig): the 19 `src/packs/supplement-shotguns/*.json` sources carry the
  * ratified attackType values and the Enfield source citation. Read from SOURCE on purpose — the
  * COMPILED pack in `packs/` predates these edits and stays stale until the release re-seed, so a
  * compiled-value assertion would be asserting the old data.
@@ -46,11 +46,23 @@ const EXPECTED = {
   "Luigi Franchi King Buck": "Shotgun",
 };
 
+/** The source set is closed at this count. It grew 11 → 19 when the supplement imports catalogued in
+ *  import-staging/SCRAPED-PACK-STRATEGY.md landed (Pacific Rim, Corporate Report, Eurosource, Neo
+ *  Tribes, Solo of Fortune 2, Protect & Serve additions). The EXPECTED map above stays the RULED
+ *  eleven — those are the values the King Buck ruling settled — and the eight later arrivals are held
+ *  to the weaker but still real contract below: a legal attackType and a resolvable gauge. */
+const EXPECTED_SOURCE_COUNT = 19;
+const LEGAL_ATTACK_TYPES = ["Shotgun", "Autoshotgun"];
+
 console.log("PART A — supplement-shotguns source values");
 {
   const files = fs.readdirSync(SRC).filter((f) => f.endsWith(".json"));
-  check(`enumeration closes: ${files.length} source JSONs in supplement-shotguns`,
-    files.length === 11, `found ${files.length}`);
+  // ⛔ The count is a CONSTANT in the label, never the measured value. This check used to read
+  //    `enumeration closes: ${files.length} source JSONs — found ${files.length}`
+  // which interpolates the ACTUAL count on both sides, so a failure printed "19 … found 19" and read
+  // like a pass. A closed enumeration whose label reports whatever it found closes nothing.
+  check(`enumeration closes: exactly ${EXPECTED_SOURCE_COUNT} source JSONs in supplement-shotguns`,
+    files.length === EXPECTED_SOURCE_COUNT, `found ${files.length}`);
 
   const byName = {};
   let parseFailures = 0, encodingFailures = [];
@@ -84,9 +96,22 @@ console.log("PART A — supplement-shotguns source values");
   // Nothing outside attackType/source moved: every item still names a shotgun gauge the ratified
   // caliber-alias tier resolves, so the conformance lint's ammo leg is unaffected by this change.
   const gauges = Object.values(byName).map((d) => d.system?.ammoType).filter((a) => a !== "");
-  const knownGauges = ["12ga", "10ga", "4ga"];
+  // The list mirrors the shipped alias tier in module/lookups.js:616-626, which resolves every one of
+  // these to the registry's single shotgun entry. `20ga` and `28ga` arrived with the Solo of Fortune 2
+  // and Protect & Serve additions and are ratified there — this list had simply not been re-read.
+  const knownGauges = ["12ga", "10ga", "4ga", ".410ga", "20ga", "28ga"];
+  const strayGauges = [...new Set(gauges.filter((g) => !knownGauges.includes(g)))];
   check("ammoType untouched: every non-blank gauge is a ratified alias spelling",
-    gauges.every((g) => knownGauges.includes(g)), [...new Set(gauges)].join(", "));
+    strayGauges.length === 0, strayGauges.length ? `unratified: ${strayGauges.join(", ")}` : [...new Set(gauges)].join(", "));
+
+  // The eight later arrivals are not covered by the ruled EXPECTED map, so they get their own floor:
+  // an attackType that is one of the two legal values (a blank or a firearm value would hand a shotgun
+  // the wrong fire modes), asserted by NAME so the failure says which file is wrong.
+  const illegalType = Object.entries(byName)
+    .filter(([, d]) => !LEGAL_ATTACK_TYPES.includes(d.system?.attackType))
+    .map(([n, d]) => `${n}: ${JSON.stringify(d.system?.attackType)}`);
+  check(`every source names a legal attackType (${LEGAL_ATTACK_TYPES.join(" / ")}) — the 8 post-ruling additions included`,
+    illegalType.length === 0, illegalType.join(" · "));
 }
 
 /* ── PART B — rig ──────────────────────────────────────────────────────────────────────────── */

@@ -3,9 +3,11 @@
  *
  * Covers the whole "non-GM can't use automation" group — each is masked by single-GM play because the GM
  * applies locally and never emits; only a PLAYER acting on a GM-owned target/scene hits the relay:
- *   A2  player fires a normal weapon at a GM-owned NPC        → GM applies damage
+ *   A2  player fires a normal weapon at a GM-owned NPC        → GM opens the confirmation window,
+ *                                                               and ITS apply writes the damage
  *   A4a player fires an Explosive round                       → GM places the blast area (isExplosion)
- *   A4b player fires a Gas round                              → GM places the cloud   (isGasCloud)
+ *   A4b player fires a Gas round                              → GM places the cloud (a Region carrying
+ *                                                               the Gas Cloud behavior on v14)
  *   A4c player fires a Spread (shotgun) round                 → GM places the pattern (isSpreadZone)
  *   A5  player launches a guided missile                      → GM spawns the missile token
  *
@@ -49,6 +51,44 @@ const COUNT_AREAS = (flag) => {
   return n;
 };
 
+// In-page: count GAS CLOUDS, in the two shapes the production code actually spawns.
+//
+// ⭐ THE CONTRACT THIS TRACKS. On a core with Regions (`usesRegions()` — true on v14) a cloud is a
+// native Region carrying the module's Gas Cloud BEHAVIOR, attached inline so the spawn stays atomic,
+// and damage-hooks.js:1704-1725 DELIBERATELY writes no `isGasCloud` flag: the behavior owns the
+// countdown, the penalty and the weapon name, and the GM manages the cloud with core's own region
+// tools. The flag set is the v13 MeasuredTemplate branch only. Counting the flag alone therefore
+// measured a v13-only path and read 0 forever on the v14 ship target. The same two-shape split the
+// production code makes is made here — v14 behavior first, v13 flag as back-compat — and a legacy
+// flagged REGION that also carries the behavior is counted once, not twice.
+const COUNT_GAS_CLOUDS = () => {
+  const scene = game.scenes.active ?? canvas.scene;
+  const T = "cp2020-augmented.gasCloud";
+  let n = 0;
+  for (const r of scene.regions ?? []) {
+    const native = !!r.behaviors?.some((b) => b.type === T);
+    if (native || r.flags?.["cp2020-augmented"]?.isGasCloud) n++;
+  }
+  for (const d of scene.templates ?? []) if (d.flags?.["cp2020-augmented"]?.isGasCloud) n++;
+  return n;
+};
+
+// The transient combat areas this suite creates, in BOTH shapes, so the pre-sweep and the teardown
+// remove a behavior-carrying region as readily as a flagged one. (Cover and radiation zones are
+// GM-placed and persistent — deliberately not swept here.)
+const SWEEP_AREAS = async () => {
+  const scene = game.scenes.active ?? canvas.scene;
+  const TYPES = ["cp2020-augmented.gasCloud", "cp2020-augmented.suppressiveFire"];
+  const F = (d) => d.flags?.["cp2020-augmented"] ?? {};
+  const transient = (d) =>
+    F(d).isExplosion || F(d).isGasCloud || F(d).isSpreadZone || F(d).isSuppressiveZone ||
+    !!d.behaviors?.some((b) => TYPES.includes(b.type));
+  for (const coll of [scene.templates, scene.regions]) {
+    if (!coll) continue;
+    for (const d of [...coll]) if (transient(d)) await d.delete().catch(() => {});
+  }
+};
+
 const browser = await chromium.launch({ headless: true });
 const results = {};
 const log = [];
@@ -68,20 +108,29 @@ try {
   log.push(`served damage-hooks.js: oldChannelEmits=${src.oldEmits} newChannelEmits=${src.newEmits}`);
   if (src.oldEmits > 0 || src.newEmits === 0) throw new Error("rig not serving edited code");
 
-  const S = await gm.evaluate(async (COUNT_AREAS_STR) => {
+  const S = await gm.evaluate(async ({ COUNT_AREAS_STR, COUNT_GAS_STR, SWEEP_STR }) => {
     const COUNT_AREAS = eval("(" + COUNT_AREAS_STR + ")");
+    const COUNT_GAS_CLOUDS = eval("(" + COUNT_GAS_STR + ")");
+    const SWEEP_AREAS = eval("(" + SWEEP_STR + ")");
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__") || a.name === "Missile")) await a.delete().catch(()=>{});
     const scene = game.scenes.active ?? canvas.scene;
     for (const t of scene.tokens.filter(t => t.name?.startsWith("__PW__") || t.flags?.["cp2020-augmented"]?.missile)) await t.delete().catch(()=>{});
-    const F0 = (d)=> d.flags?.["cp2020-augmented"] ?? {};
-    for (const coll of [scene.templates, scene.regions]) if (coll) for (const d of [...coll]) if (F0(d).isExplosion||F0(d).isGasCloud||F0(d).isSpreadZone||F0(d).isSuppressiveZone) await d.delete().catch(()=>{});
+    await SWEEP_AREAS();
     let mmPrev; try { mmPrev = game.settings.get("cp2020-augmented", "mmEnabled"); await game.settings.set("cp2020-augmented", "mmEnabled", true); } catch(e){}
 
     const player = game.users.find(u => u.role === 1);
     const npc = await Actor.create({ name: "__PW__NPC", type: "character" });
     const pc  = await Actor.create({ name: "__PW__PC",  type: "character" });
     await pc.update({ [`ownership.${player.id}`]: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER });
-    const mk = (a, x) => ({ name: a.name, actorId: a.id, x, y: 1000, width: 1, height: 1, disposition: 0 });
+    // ⚠ actorLink: TRUE, and it is load-bearing here. `TokenDocument.create` defaults it FALSE (the
+    // documented harness gotcha), which gives the token its own synthetic delta actor. The relayed
+    // apply is deliberately TOKEN-FIRST since the unlinked-token fix (damage-hooks.js:3335-3339: "a
+    // hit on an unlinked token must write that token's synthetic actor"), so on an unlinked fixture
+    // the damage lands on the delta and the world actor this leg reads never moves — the write was
+    // happening correctly and the leg was looking at the wrong document. Unlinked deltas have their
+    // own dedicated suite (cp2020-augmented-unlinked-token-damage); what THIS suite is about is the
+    // player→GM relay, so its figures are linked and the world actor is the honest readback.
+    const mk = (a, x) => ({ name: a.name, actorId: a.id, actorLink: true, x, y: 1000, width: 1, height: 1, disposition: 0 });
     const [pcTok]  = await scene.createEmbeddedDocuments("Token", [mk(pc, 1000)]);
     const [npcTok] = await scene.createEmbeddedDocuments("Token", [mk(npc, 1400)]);
     return {
@@ -90,12 +139,12 @@ try {
       npcBtm: Number(npc.system.stats?.bt?.modifier) || 0,   // exact-delta derivation (Torso net = max(1, dmg−BTM))
       baseline: {
         npcDamage: Number(npc.system.damage) || 0,
-        isExplosion: COUNT_AREAS("isExplosion"), isGasCloud: COUNT_AREAS("isGasCloud"),
+        isExplosion: COUNT_AREAS("isExplosion"), isGasCloud: COUNT_GAS_CLOUDS(),
         isSpreadZone: COUNT_AREAS("isSpreadZone"),
         missileTokens: scene.tokens.filter(t => t.flags?.["cp2020-augmented"]?.missile).length,
       },
     };
-  }, COUNT_AREAS.toString());
+  }, { COUNT_AREAS_STR: COUNT_AREAS.toString(), COUNT_GAS_STR: COUNT_GAS_CLOUDS.toString(), SWEEP_STR: SWEEP_AREAS.toString() });
   log.push(`setup: player=${S.playerName} pc=${S.pcId} npc=${S.npcId}`);
   log.push(`baseline: ${JSON.stringify(S.baseline)}`);
 
@@ -117,13 +166,71 @@ try {
   }, { fnStr, arg, target });
 
   // ===== A2: damage relay =====
+  // ⭐ REALIGNED to the retirement of the world-wide auto-apply route (user ruling 2026-08-14;
+  // cp2020-augmented.js:457-466, settings.js:254; certified in its own right by
+  // cp2020-augmented-autoapply-retired). What crosses the socket is no longer "apply this damage" —
+  // the relay's only surviving mode is `"resolved"` (damage-hooks.js:3350-3352: the `"auto"` mode
+  // went with the setting that selected it). The shape now is:
+  //
+  //   the FIRING client opens the confirmation window (damage-hooks.js:613, on the local
+  //   `weaponFired` hook, after `presentationSettled`) → the player fills it and presses Apply →
+  //   the RESOLVED rows relay to the ACTIVE GM, which is the only client that writes the target
+  //   (damage-hooks.js:3333 active-GM gate, :3357-3365 the apply loop).
+  //
+  // So the window is on the PLAYER page, not the GM's, and the old leg polled the GM's actor for a
+  // value that nothing was going to write unattended. Both halves are now driven and asserted: the
+  // player's window opens and writes nothing by itself, and the GM ends up holding the exact value.
   await fireWeapon({ attackerId: S.pcId, targetActorId: S.npcId, targetTokenId: S.npcTokenId,
                      areaDamages: { Torso: [{ damage: 20 }] }, weaponName: "PW Rifle" });
   {
-    const r = await pollGM(`(id)=>Number(game.actors.get(id).system.damage)||0`, S.npcId, S.baseline.npcDamage);
-    // Exact delta (a double-apply must fail): Torso hit 20, bare NPC (SP 0) → net = max(1, 20 − BTM), no doubling.
+    const damageOnGM = () => gm.evaluate((id) => Number(game.actors.get(id)?.system?.damage) || 0, S.npcId);
+    // Diagnostics that make a red here name its own cause instead of reading as "the relay is broken":
+    // the relayed write is performed by the ACTIVE GM only (damage-hooks.js:3333), so which client
+    // holds that role, and whether the player's window actually emitted, are the two facts needed.
+    await pl.evaluate(() => {
+      const g = globalThis.__relaySpy = { emits: [] };
+      const orig = game.socket.emit.bind(game.socket);
+      game.socket.emit = (ch, data, ...rest) => { try { g.emits.push({ ch, type: data?.type, mode: data?.mode, total: data?.totalApplied }); } catch (e) { /* opaque */ } return orig(ch, data, ...rest); };
+    });
+    // The window waits on the FX rail's settle signal, so give it real room (the rail's own cap is 8 s).
+    const w = await pl.evaluate(async () => {
+      const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+      const wins = () => [...foundry.applications.instances.values()]
+        .filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""));
+      let ms = 0;
+      for (let i = 0; i < 200 && wins().length === 0; i++) { await sleep(100); ms += 100; }
+      return { opened: wins().length > 0, ms };
+    });
+    const atWindow = await damageOnGM();   // the negative: nothing is written before the window is answered
+    const applied = await pl.evaluate(async () => {
+      const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+      const wins = () => [...foundry.applications.instances.values()]
+        .filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""));
+      const win = wins()[0] ?? null;
+      const ctl = win?.element?.querySelector('[data-action="applyDamage"]') ?? null;
+      if (!ctl) { for (const x of wins()) { try { await x.close(); } catch (e) { /* closed */ } } return false; }
+      ctl.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      for (let i = 0; i < 80 && wins().length > 0; i++) await sleep(100);
+      return true;
+    });
+    let v = await damageOnGM();
+    for (let i = 0; i < 40 && v === S.baseline.npcDamage; i++) { await new Promise(r => setTimeout(r, 250)); v = await damageOnGM(); }
+    const spy = await pl.evaluate(() => (globalThis.__relaySpy?.emits ?? []).filter(e => e.type === "applyDamage"));
+    const gmRole = await gm.evaluate(() => ({
+      activeGM: game.users.activeGM?.name ?? null, me: game.user.name,
+      iAmActive: game.users.activeGM?.id === game.user.id,
+      activeUsers: game.users.filter(u => u.active).map(u => u.name),
+    }));
+    log.push(`A2 relay: player emitted ${JSON.stringify(spy)}`);
+    log.push(`A2 apply role: ${JSON.stringify(gmRole)}`);
+    // Exact delta (a double-apply must fail): Torso hit 20, bare NPC (SP 0) → net = max(1, 20 − BTM).
     const expected = S.baseline.npcDamage + Math.max(1, 20 - S.npcBtm);
-    results.A2_damage = { pass: r.v === expected, detail: `npc damage ${S.baseline.npcDamage}→${r.v} (expected ${expected}, BTM ${S.npcBtm}) in ${r.ms}ms` };
+    results.A2_window     = { pass: w.opened === true && applied === true,
+      detail: `the firing client opened its confirmation window in ${w.ms}ms and its Apply control was driven (opened=${w.opened}, applied=${applied})` };
+    results.A2_noPreWrite = { pass: atWindow === S.baseline.npcDamage,
+      detail: `nothing written before the window was answered — GM-side damage still ${atWindow} (baseline ${S.baseline.npcDamage})` };
+    results.A2_damage     = { pass: v === expected,
+      detail: `the relayed resolution wrote npc damage ${S.baseline.npcDamage}→${v} (expected ${expected}, BTM ${S.npcBtm})` };
   }
 
   // ===== A4a: explosion =====
@@ -138,8 +245,8 @@ try {
   await fireWeapon({ attackerId: S.pcId, targetTokenId: S.npcTokenId, effectTypes: ["Gas"],
                      blastRadius: 4, dotTurns: 3, stunSaveMod: -2, weaponName: "PW Gas" });
   {
-    const r = await pollGM(COUNT_AREAS.toString(), "isGasCloud", S.baseline.isGasCloud);
-    results.A4b_gas = { pass: r.v === S.baseline.isGasCloud + 1, detail: `isGasCloud areas ${S.baseline.isGasCloud}→${r.v} (expected +1) in ${r.ms}ms` };
+    const r = await pollGM(COUNT_GAS_CLOUDS.toString(), null, S.baseline.isGasCloud);
+    results.A4b_gas = { pass: r.v === S.baseline.isGasCloud + 1, detail: `gas clouds (v14 behavior-carrying regions + v13 flagged templates) ${S.baseline.isGasCloud}→${r.v} (expected +1) in ${r.ms}ms` };
   }
 
   // ===== A4c: shotgun spread =====
@@ -167,15 +274,15 @@ try {
   }
 
   // ---- cleanup ----
-  await gm.evaluate(async (mmPrev) => {
+  await gm.evaluate(async ({ mmPrev, SWEEP_STR }) => {
+    const SWEEP_AREAS = eval("(" + SWEEP_STR + ")");
     const scene = game.scenes.active ?? canvas.scene;
     for (const t of scene.tokens.filter(t => t.name?.startsWith("__PW__") || t.flags?.["cp2020-augmented"]?.missile)) await t.delete().catch(()=>{});
-    const F = (d)=> d.flags?.["cp2020-augmented"] ?? {};
-    for (const coll of [scene.templates, scene.regions]) if (coll) for (const d of [...coll]) if (F(d).isExplosion||F(d).isGasCloud||F(d).isSpreadZone||F(d).isSuppressiveZone) await d.delete().catch(()=>{});
+    await SWEEP_AREAS();   // behavior-carrying regions included — a flag-only sweep leaves the v14 cloud behind
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__") || a.name === "Missile")) await a.delete().catch(()=>{});
     // Restore the captured mmEnabled setting (don't leave the world flag flipped for the next keeper).
     try { if (mmPrev !== undefined) await game.settings.set("cp2020-augmented", "mmEnabled", mmPrev); } catch (e) {}
-  }, S.mmPrev).catch(() => {});
+  }, { mmPrev: S.mmPrev, SWEEP_STR: SWEEP_AREAS.toString() }).catch(() => {});
 } catch (e) {
   log.push("ERROR: " + e.message);
 } finally {

@@ -180,6 +180,9 @@ const checks = [
   ["outcome: [lands] applies the status via the single-home path", r.offer.landsApplies === true],
   ["outcome: [evaded] posts the notice and writes nothing", r.offer.evadedNoWrite === true && r.offer.evadedNotice === true],
   ["outcome: [apply] skips the contest (one-click old behavior)", r.offer.applySkipsContest === true],
+  // ⏪ GATED 2026-08-16 (vacuous-leg audit): the whole offer section sits in one try/catch whose throw
+  // went into `offer.err`, read by nothing. Named so a stopped section is legible in the log.
+  ["offer section ran to the end (did not stop on a throw)", !r.offer.err, r.offer.err],
   ["0 console errors", errors.length === 0],
 ];
 let fail = 0;

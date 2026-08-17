@@ -39,6 +39,9 @@ const r = await p.evaluate(async () => {
   try {
   await borg.sheet.render(true); await sleep(1200);
   const root = borg.sheet.element;
+  // ⏪ 2026-08-16 (vacuous-leg audit): recorded so the "a sheet opened" leg has something real to
+  // read. It used to read `noActor`, a field nothing ever wrote.
+  out.sheetRootFound = !!root;
 
   // Activate the cyberware tab (tallest content).
   const cyberTab = [...root.querySelectorAll('[data-tab="cyberware"]')].find(el => el.tagName === "A" || el.classList.contains("item"));
@@ -70,7 +73,10 @@ const r = await p.evaluate(async () => {
 
 console.log(JSON.stringify(r, null, 1));
 const checks = [
-  ["an actor sheet opened", !r.noActor],
+  // ⏪ 2026-08-16 (vacuous-leg audit): this read `!r.noActor`, and NOTHING in the page block ever
+  // assigns `noActor` — the predicate was `!undefined`, true on every run including one where no sheet
+  // rendered at all. The rendered root is what the leg is about, so read that.
+  ["an actor sheet opened", r.sheetRootFound === true],
   [".sheet-body is present (the registered scroller)", r.sheetBodyFound === true],
   ["the cyber tab actually overflows .sheet-body (so scroll is meaningful)", (r.scrollable || 0) > 20],
   ["scroll was set before the re-render", (r.beforeRender || 0) > 20],

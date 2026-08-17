@@ -370,6 +370,14 @@ const checks = [
   ["timing: concurrent double wear-off posts exactly ONE card with ONE Roll button", r.doubleWearOff.cards === 1 && r.doubleWearOff.rollButtons === 1 && r.doubleWearOff.oneRemovedOneNoop === true && r.doubleWearOff.markerGone === true],
   ["dotted name: real name visible, flat single byDrug key, no nested Dr/Stim split", r.dotName.realName === true && r.dotName.total === 1 && r.dotName.flatKeyCount === 1 && r.dotName.noNestedDr === true],
   ["dotted name: per-drug clear by the real name drops the flag", r.dotClear.flagGone === true],
+  // ⏪ GATED 2026-08-16 (vacuous-leg audit): four sections here run in their own try/catch and recorded a
+  // throw into an error field nothing read — and each catch also seeds an EMPTY result object, so the
+  // legs above would read `undefined` from it rather than say the section never ran. Named per section
+  // so the log points at which one stopped.
+  ["section ran: per-drug strip clear did not stop on a throw", !r.stripError, r.stripError],
+  ["section ran: concurrent double-take did not stop on a throw", !r.doubleTakeError, r.doubleTakeError],
+  ["section ran: concurrent double wear-off did not stop on a throw", !r.doubleWearOffError, r.doubleWearOffError],
+  ["section ran: dotted-name handling did not stop on a throw", !r.dotError, r.dotError],
   ["0 console errors", errors.length === 0]
 ];
 let fail = 0;

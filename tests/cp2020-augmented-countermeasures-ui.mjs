@@ -50,7 +50,7 @@ try {
     const out = { checks: [] };
     const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
     const waitFor = async (fn, ms = 3000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (fn()) return true; } catch {} await new Promise(r => setTimeout(r, 50)); } return false; };
-    let actor = null, prevMM;
+    let actor = null, civ = null, prevMM;
     try {
       // ---- source-shape ----
       const MIS = await import(`${M}/vehicle/vehicle-missiles.js`);
@@ -69,8 +69,15 @@ try {
       // ---- behavioural ----
       prevMM = game.settings.get(SCOPE, "mmEnabled");
       await game.settings.set(SCOPE, "mmEnabled", true);
-      for (const x of game.actors.filter(x => x.name === "RIG CM Tank")) await x.delete().catch(() => {});   // pre-sweep prior run
-      actor = await Actor.create({ name: "RIG CM Tank", type: "cp2020-augmented.vehicle" });
+      for (const x of game.actors.filter(x => x.name === "RIG CM Tank" || x.name === "RIG CM Runabout")) await x.delete().catch(() => {});   // pre-sweep prior run
+      // ⭐ THE FIXTURE MUST BE AN MM COMBAT VEHICLE, and that is a contract change this suite missed.
+      // The unified/civilian sheet split made the CIVILIAN layout the default for a freshly created
+      // vehicle actor: `useCivilianSheet = !system.isACPA && !(system.isMMVehicle && mmOn)`
+      // (module/actor/vehicle-sheet.js:210). The countermeasures partial is included only by
+      // vehicle-sheet.hbs / acpa-sheet.hbs, so a bare vehicle renders ZERO checkboxes and every
+      // behavioural check below reads a control that was never on the page. Setting mmEnabled (done
+      // above) is only half the gate — the actor has to be DESIGNATED an MM vehicle too.
+      actor = await Actor.create({ name: "RIG CM Tank", type: "cp2020-augmented.vehicle", system: { isMMVehicle: true } });
       await actor.sheet.render(true);
       await waitFor(() => actor.sheet?.element?.querySelector("input.cp-cm-box"));
       const boxes = () => [...(actor.sheet?.element?.querySelectorAll("input.cp-cm-box") ?? [])];
@@ -121,11 +128,24 @@ try {
       await actor.update({ "system.countermeasures": ["stealth"] });
       ok("reader: stealth defeats radar (+15)", MIS.countermeasureModifier(["stealth"], "radar") === 15, MIS.countermeasureModifier(["stealth"], "radar"));
       ok("reader: chaff does NOT defeat laser (+0)", MIS.countermeasureModifier(["chaff"], "laser") === 0, MIS.countermeasureModifier(["chaff"], "laser"));
+
+      // ── NEGATIVE: the routing itself, asserted rather than assumed. A vehicle NOT designated MM
+      // takes the civilian layout under the same mmEnabled setting, and the countermeasures loadout
+      // is deliberately absent there. This is the leg that would have caught the fixture drift above:
+      // without it, "0 checkboxes" is indistinguishable from "the feature broke".
+      civ = await Actor.create({ name: "RIG CM Runabout", type: "cp2020-augmented.vehicle" });
+      await civ.sheet.render(true);
+      await waitFor(() => civ.sheet?.element?.querySelector(".window-content"));
+      await new Promise(r => setTimeout(r, 300));
+      const civBoxes = [...(civ.sheet?.element?.querySelectorAll("input.cp-cm-box") ?? [])].length;
+      ok("civilian-routed vehicle renders NO countermeasure checkboxes", civBoxes === 0, civBoxes);
     } catch (e) {
       out.error = e?.stack || e?.message || String(e);
     } finally {
       try { await actor?.sheet?.close(); } catch {}
+      try { await civ?.sheet?.close(); } catch {}
       try { if (actor) await actor.delete(); } catch {}
+      try { if (civ) await civ.delete(); } catch {}
       try { if (prevMM !== undefined) await game.settings.set(SCOPE, "mmEnabled", prevMM); } catch {}
     }
     return out;

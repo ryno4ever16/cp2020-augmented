@@ -48,7 +48,7 @@
 import { chromium } from "@playwright/test";
 
 const URL = process.env.FVTT_URL ?? "http://localhost:30004";
-const PW = process.env.FVTT_RIG_PASSWORD ?? "";
+const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";   // the battery-wide inline rig default; an empty fallback silently hangs the join
 const SHOOTER = process.env.BENCH_ACTOR ?? "Review · Shooter";
 const STOCK = 60;
 
@@ -219,7 +219,6 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
    * the CLOSE band of every gun on the bench (the pistol's is the tightest at 50/4 = 12.5 m) and
    * outside the shot pattern's Short band (≤ 6 m), so buckshot throws its Medium 2 m / 3d6 pattern.
    */
-  const scene = game.scenes.active;
   // The flesh target sits dead ahead — it is the one most shots want, and putting the SHORTEST name on
   // the shooter's own row is what keeps the two nameplates from running into each other at this spacing.
   const LAYOUT = {
@@ -228,6 +227,22 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
     "Review · Target (Vehicle)":    { x: 1400, y: 1100 },
     "Review · Shooter":             { x: 1200, y: 1000 },
   };
+  // ⭐ THE BENCH HAS ITS OWN SCENE, and this block assumed the world's active one. The four figures
+  // stand on "Review · Dark Range"; the rig's active scene is the default map. Reading
+  // `game.scenes.active` therefore found NO token at all, so the layout below moved nothing and the
+  // damage zeroing under it — the half the standing reset-test-actors rule depends on — silently did
+  // nothing, while the report printed "NO TOKEN" ×4 and an empty "damage zeroed on:" line. Same
+  // mechanism as the one recorded for the b1-seam-payload restore (VACUOUS-LEG-AUDIT F4).
+  //
+  // Resolving by "the scene the shooter stands on" is NOT enough here: the shooter also has a figure
+  // on "Review · Cover System", which carries only two of the four names, and `find` would take
+  // whichever scene comes first in the collection. Score every scene by how many of the four LAYOUT
+  // figures it actually holds and take the best — that is the bench by definition, whatever it is
+  // called and whatever order the collection is in.
+  const benchRanking = game.scenes.contents
+    .map(sc => ({ sc, n: Object.keys(LAYOUT).filter(nm => sc.tokens.some(t => t.name === nm)).length }))
+    .sort((a, b) => b.n - a.n);
+  const scene = (benchRanking[0]?.n > 0 ? benchRanking[0].sc : null) ?? game.scenes.active;
   const ALWAYS = CONST.TOKEN_DISPLAY_MODES.ALWAYS;
   const tokenUpdates = [], rangeReport = [];
   for (const [name, pos] of Object.entries(LAYOUT)) {

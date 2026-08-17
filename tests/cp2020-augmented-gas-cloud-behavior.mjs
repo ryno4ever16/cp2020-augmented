@@ -50,7 +50,6 @@ const r = await p.evaluate(async () => {
     for (let i = 0; i < 30 && !canvas?.ready; i++) await sleep(200);
     scene = canvas?.scene ?? scene;
     if (!scene) { check("active scene present", false, null); return out; }
-    check("active scene present", !!scene, null);
 
     // Pre-clean leftover gas fixtures from any crashed prior run so the tick only ever sees THIS run's
     // clouds (a stray isGasCloud region would be double-counted and inflate the tick, racing the poll).

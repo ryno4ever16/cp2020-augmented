@@ -65,6 +65,10 @@ const r = await p.evaluate(async () => {
 
   // (3) Dialog integration: picker Martial option gated by reflex; skill level auto-pulls the pilot value.
   // openAcpaMeleeDialog needs a single target — set up a scene + a target token.
+  // ⛔ SCENE HYGIENE: this probe scene is ACTIVATED and then removed. Capture what was active first,
+  // restore it before the removal (below), or the whole battery behind this suite runs with
+  // `game.scenes.active === null` and every canvas-dependent suite reds for no code reason.
+  const prevActiveSceneId = game.scenes.active?.id ?? null;
   let sc = game.scenes.find(s => s.name === "__PW__MeleeCapScene");
   if (!sc) sc = await Scene.create({ name: "__PW__MeleeCapScene", width: 1000, height: 1000, grid: { size: 100 } });
   await sc.activate(); for (let i = 0; i < 30 && !(canvas?.ready && canvas.scene?.id === sc.id); i++) await sleep(150);
@@ -103,10 +107,19 @@ const r = await p.evaluate(async () => {
   ok("martial_autopull", !!lb && lb.martialPull === 8);
   ok("cap_note_shown", !!lb && lb.capShown === true);   // MA 8 > PACS 4 → the "8 → 4" cap note is visible
 
-  // cleanup
+  // cleanup — active scene restored BEFORE the probe scene is deleted (see the capture above)
   await lowBoost.delete().catch(() => {}); await advanced.delete().catch(() => {});
   await pilot.delete().catch(() => {}); await dummy.delete().catch(() => {});
+  const prev = prevActiveSceneId ? game.scenes.get(prevActiveSceneId) : null;
+  if (prev && prev.id !== sc.id) {
+    await prev.activate().catch(() => {});
+    for (let i = 0; i < 60 && !(canvas?.ready && canvas.scene?.id === prev.id); i++) await sleep(150);
+  }
   await sc.delete().catch(() => {});
+  // ⏪ 2026-08-16 (vacuous-leg audit): this read `prevActiveSceneId ? … : true`, a literal free pass on
+  // the state the battery actually runs in (nothing active). Compared as VALUES in both directions, so
+  // a spec that ACTIVATES a scene where none was active now reds too.
+  out.checks.active_scene_restored = (game.scenes.active?.id ?? null) === (prevActiveSceneId ?? null);
   return out;
 });
 

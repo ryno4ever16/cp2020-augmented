@@ -112,7 +112,9 @@ try {
       const dt = borg.items.find(i => i.name === "Death Trance");
       chk("Death Trance chip typed Chip + active", dt && dt.system?.CyberWorkType?.Type === "Chip" && dt.system?.CyberWorkType?.ChipActive === true, dt ? dt.system?.CyberWorkType?.Type : "missing");
       const carried = opts().filter(o => o.system?.equipped !== true);
-      chk("a few options left CARRIED (unequipped) to show the Carried Options area", carried.length >= 3, carried.length);
+      // ⏪ 2026-08-16 (vacuous-leg audit): `>= 3` against a provisioner that unequips a fixed FOUR — the
+      // threshold sat below the only value the fixture can produce. Pinned to the figure it provisions.
+      chk("exactly the four options the provisioner unequips are left CARRIED", carried.length === 4, carried.length);
       chk("a spare chassis is present, uninstalled (to try the one-FBC block)", borg.items.some(i => /spare chassis/.test(i.name) && i.system?.equipped !== true));
     }
     return { ok: checks.every(c => c.ok), checks };

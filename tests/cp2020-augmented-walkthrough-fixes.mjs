@@ -59,17 +59,22 @@ const legA = await p.evaluate(async () => {
     const [weapon] = await actor.createEmbeddedDocuments("Item", [{
       name: "__PW__WFa Pistol", type: "weapon",
       system: { equipped: true, weaponType: "Pistol", damage: "2d6+1", rof: 2, range: 50 } }]);
+    // ⏪ REWRITTEN 2026-08-16 (vacuous-leg audit). This used to return a bare `null` for BOTH "the row
+    // reads empty" and "the dialog never rendered / threw", and the negative leg below then accepted
+    // `null` as proof of no fold-in — so a dialog that failed to open passed the leg that exists to
+    // read its value. The reader now reports whether it FOUND the row, separately from what the row said.
     const readExtraMod = async () => {
-      let val = null;
+      const res = { val: null, found: false, err: null };
       try {
         const dlg = new ModifiersDialog(actor, { weapon: actor.items.get(weapon.id), modifierGroups: [], targetTokens: [], onConfirm() {} });
         await dlg.render(true); await sleep(500);
         const root = dlg.element;
         const inp = root?.querySelector?.("input[name='extraMod']");
-        val = inp ? String(inp.value ?? "") : null;
+        res.found = !!inp;
+        res.val = inp ? String(inp.value ?? "") : null;
         await dlg.close().catch(() => {});
-      } catch (e) { out.notes.dialogErr = String(e?.message ?? e); }
-      return val;
+      } catch (e) { res.err = String(e?.message ?? e); out.notes.dialogErr = res.err; }
+      return res;
     };
 
     // ── OUT of combat: N emits leave the flag ABSENT; the dialog folds no penalty ──
@@ -79,7 +84,9 @@ const legA = await p.evaluate(async () => {
     out.ok.outOfCombatNoCount = (cnt(actor) ?? null) === null;               // flag never written
     const emOut = await readExtraMod();
     out.notes.extraModOut = emOut;
-    out.ok.outOfCombatNoDialogMod = emOut === "" || emOut === "0" || emOut === null;  // no fold-in
+    // The row must have been FOUND and must read as no fold-in. A dialog that never rendered is now a
+    // failure of this leg rather than its evidence.
+    out.ok.outOfCombatNoDialogMod = emOut.found === true && !emOut.err && (emOut.val === "" || emOut.val === "0");
 
     // ── IN a started combat the actor is a combatant in: counts accrue ──
     let sc = game.scenes.find(s => s.name === "__PW__WFaScene");
@@ -99,7 +106,7 @@ const legA = await p.evaluate(async () => {
     out.ok.accruesInCombat = (cnt(actor) ?? 0) === 1;
     const emIn = await readExtraMod();   // declaring the 2nd action → −3
     out.notes.extraModIn = emIn;
-    out.ok.inCombatDialogMod = emIn === "-3";
+    out.ok.inCombatDialogMod = emIn.found === true && !emIn.err && emIn.val === "-3";
 
     emitFire(actor);
     for (let i = 0; i < 40 && (cnt(actor) ?? 0) !== 2; i++) await sleep(120);
@@ -365,6 +372,11 @@ const legE = await p.evaluate(async () => {
   const CL = await import("/modules/cp2020-augmented/module/card-lock.js");
   const origRU = CONFIG.Dice.randomUniform;
   CONFIG.Dice.randomUniform = () => 0.999;   // force a low stun roll (passes) so the resolver stays quiet
+  // Hoisted so the FINALLY can restore-and-remove even when a check above it throws. The restore used
+  // to sit on the happy path, which meant any throw left the fixture scene ACTIVE and then the null
+  // canvas class reappeared downstream — the very failure the comment below describes.
+  let sc = null;
+  let restoreSceneId = null;
   try {
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__WFe"))) await a.delete().catch(() => {});
     for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__WFe"))) await c.delete().catch(() => {});
@@ -374,8 +386,9 @@ const legE = await p.evaluate(async () => {
     // then deleting it leaves game.scenes.active null for every later spec in a battery (bit the
     // battery re-run: the null-tokens class downstream of this keeper).
     const prevActiveSceneId = game.scenes.active?.id ?? null;
+    restoreSceneId = prevActiveSceneId;
     out.notes.prevActiveScene = prevActiveSceneId;
-    let sc = game.scenes.find(s => s.name === "__PW__WFeScene");
+    sc = game.scenes.find(s => s.name === "__PW__WFeScene");
     if (!sc) sc = await Scene.create({ name: "__PW__WFeScene", width: 1000, height: 1000, grid: { size: 100 } });
     await sc.activate();
     for (let i = 0; i < 40 && !(canvas?.ready && canvas.scene?.id === sc.id); i++) await sleep(150);
@@ -470,12 +483,20 @@ const legE = await p.evaluate(async () => {
 
     await combat.delete().catch(() => {});
     await actor.delete().catch(() => {});
-    // Restore the world's active scene BEFORE deleting the fixture scene (leave the rig as found).
-    const prev = prevActiveSceneId ? game.scenes.get(prevActiveSceneId) : null;
-    if (prev) await prev.activate().catch(() => {});
-    await sc.delete().catch(() => {});
   } catch (e) { out.THROWN = String(e?.stack || e); }
-  finally { CONFIG.Dice.randomUniform = origRU; }
+  finally {
+    CONFIG.Dice.randomUniform = origRU;
+    // Restore the world's active scene BEFORE deleting the fixture scene (leave the rig as found).
+    const prev = restoreSceneId ? game.scenes.get(restoreSceneId) : null;
+    if (prev && prev.id !== sc?.id) {
+      await prev.activate().catch(() => {});
+      for (let i = 0; i < 60 && !(canvas?.ready && canvas.scene?.id === prev.id); i++) await sleep(150);
+    }
+    await sc?.delete().catch(() => {});
+    // ⏪ 2026-08-16 (vacuous-leg audit): was `restoreSceneId ? … : true` — a free pass in exactly the
+    // state the battery runs in (no active scene). Compared as VALUES so activating one also reds.
+    out.ok.activeSceneRestored = (game.scenes.active?.id ?? null) === (restoreSceneId ?? null);
+  }
   return out;
 });
 
@@ -878,6 +899,7 @@ if (legE.notes?.aimBtnFound) {
   add("e", "e: Take-Aim toggle cycles up (→1)", legE.ok?.aimCyclesUp);
   add("e", "e: Take-Aim toggle wraps back (→0)", legE.ok?.aimCyclesBack);
 }
+add("e", "e: the world's active scene is restored before the fixture scene is removed", legE.ok?.activeSceneRestored);
 
 // f
 add("f", "f: ACPA default size 600×780", legF.ok?.defaultSize600x780);

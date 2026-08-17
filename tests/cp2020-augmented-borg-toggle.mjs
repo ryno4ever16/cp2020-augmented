@@ -112,6 +112,9 @@ const checks = [
   ["plain character (no cyber-SDP) does NOT show the toggle", r.plainHidden === true],
   ["sheet SDP edit persists the edited zone (Torso → 25)", r.sdpEdit.hasInput === true && r.sdpEdit.torsoAfter === 25],
   ["sheet SDP edit does NOT heal sibling zones (Head stays 12, not full)", r.sdpEdit.headAfter === 12],
+  // ⏪ GATED 2026-08-16 (vacuous-leg audit): the SDP-edit section runs in its own try/catch and used to
+  // record a throw into `sdpEdit.err`, which nothing read. A section that stops half-way now says so.
+  ["sheet SDP edit section ran to the end (did not stop on a throw)", !r.sdpEdit.err, r.sdpEdit.err],
   ["0 console errors", errors.length === 0],
 ];
 let fail = 0;
