@@ -16,7 +16,16 @@
  *
  * §1 the served helper + the shim engaged · §2 the mechanics and BOTH identity fields off a synthesized
  * weapon · §3 two REAL fired payloads off the review bench (07 api rifle · 16 dualPurpose heavy),
- * through the real UI path, read off the hook.
+ * through the real UI path, read off the hook · §4 the GOLDEN-FIXTURE CONTRACT.
+ *
+ * ⭐ WHAT §4 IS FOR. `tests/golden-weaponfired-payloads.json` stores a real emission per fire mode so
+ * the fx-rail keeper can hydrate from the shape the rail actually receives instead of hand-building a
+ * four-field literal (VACUOUS-LEG-AUDIT F1). A stored shape drifts silently the moment the producer
+ * changes, which would make the fixture a hand-built shape on a slower clock — so §4 re-captures a
+ * LIVE emission at run time, off the SAME bench gun and load the fixture entry was captured from, and
+ * diffs its field NAMES and TYPES against the stored entry in both directions. A field the producer
+ * adds, drops or re-types reds here and names itself. The re-capture costs no extra trigger pull: it
+ * rides §3's gun-16 shot through a second, full-fidelity recorder on the same hook.
  *
  * It restores what it disturbs: magazines refilled, target damage zeroed, its own cards deleted,
  * dialogs closed, canvas effects ended, targets released. It touches no setting.
@@ -24,6 +33,7 @@
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=<pw> node cp2020-augmented-b1-seam-payload.mjs
  */
 import { chromium } from "@playwright/test";
+import { GOLDEN, GOLDEN_MISSING, GOLDEN_PATH } from "./golden-payload.mjs";
 
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
@@ -116,7 +126,19 @@ ok("§2 and no identity is invented for a weapon that has no load (negative)",
 console.log("\n===== §3: real fired payloads — 07 api rifle · 16 dualPurpose heavy =====");
 
 const setup = await p.evaluate(async (SCOPE) => {
-  const g = globalThis.__b1 = { payloads: [] };
+  const g = globalThis.__b1 = { payloads: [], whole: [] };
+  // ⭐ THE SECOND RECORDER, AND WHY IT IS SEPARATE. The one below keeps a NAMED SUBSET, because the legs
+  // in §3 are about specific fields and a named subset is what makes them readable. §4's contract is the
+  // opposite question — "is the field set still the field set" — and a named subset cannot answer it: a
+  // recorder that lists the fields it keeps can never notice a field the producer added. So this one
+  // keeps the payload WHOLE, with its key names and their types, and names nothing.
+  const typeOf = (v) => v === undefined ? "undefined" : v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+  g.snapshot = (pl) => {
+    const keys = Object.keys(pl).sort();
+    const types = {}; for (const k of keys) types[k] = typeOf(pl[k]);
+    return { keys, types };
+  };
+  Hooks.on("cyberpunk2020.weaponFired", (pl) => { try { g.whole.push(g.snapshot(pl)); } catch (e) { g.whole.push({ err: String(e) }); } });
   Hooks.on("cyberpunk2020.weaponFired", (pl) => g.payloads.push(foundry.utils.deepClone({
     weaponName: pl.weaponName, modifier: pl.modifier ?? null, caliber: pl.caliber ?? null,
     spreadMode: pl.spreadMode ?? null, armorMultSoft: pl.armorMultSoft ?? null,
@@ -186,6 +208,7 @@ async function fire(num, targetName, { select = false } = {}) {
       await new Promise(r => setTimeout(r, 1200));
     }
     globalThis.__b1.payloads.length = 0;
+    globalThis.__b1.whole.length = 0;
     canvas.tokens.get(tokenId)?.setTarget(true, { releaseOthers: true });
     if (select) canvas.tokens.get(shooterTokenId)?.control({ releaseOthers: true });
     else canvas.tokens.releaseAll();
@@ -265,6 +288,52 @@ const owns = await p.evaluate(({ tokenId, actorId }) => {
 }, { tokenId: p16?.attackerTokenId ?? null, actorId: setup.actorId });
 ok("§3 the named figure is one this client is drawing AND belongs to the firing actor",
   owns.drawn && owns.matches, JSON.stringify(owns));
+
+/* ══ §4. THE GOLDEN-FIXTURE CONTRACT — the stored shape vs the one just emitted ═══════════════════
+ *
+ * ⛔ WHY THIS IS NOT OPTIONAL. `tests/golden-weaponfired-payloads.json` is what ~68 fx-rail call sites
+ * now hydrate from. A stored shape has no way of noticing that its producer moved, so without this leg
+ * the fixture becomes exactly the thing it was built to retire: a hand-built payload, drifting from
+ * reality, on a slower clock. The diff is run BOTH WAYS and by TYPE, because the three ways a producer
+ * can move are the three ways this can fail — a field added, a field dropped, a field re-typed.
+ *
+ * ⭐ WHY IT IS COMPARED AGAINST THE `areaWarhead` ENTRY SPECIFICALLY. The producer's field set is not
+ * one fixed list: `ammoEffectFields` (seam-shim.js) copies only the fields the LOADED AMMO actually
+ * defines, so a standard round and a dual-purpose round legitimately emit different key sets. Comparing
+ * a live gun-16 shot against an entry captured from gun 16 with the same load holds that variable
+ * still, and leaves the diff measuring the only thing it should measure: the producer. The gun and load
+ * the entry claims are asserted first, so the comparison can never be made against the wrong entry. */
+console.log("\n===== §4: the golden fixture contract =====");
+
+const liveWhole = await p.evaluate(() => globalThis.__b1.whole[0] ?? null);
+const stored = GOLDEN?.modes?.areaWarhead ?? null;
+
+ok("§4 contract: the stored golden fixture is on disk and names the producer it was captured from",
+  !GOLDEN_MISSING && stored != null && GOLDEN.producer === "module/seam-shim.js",
+  GOLDEN_MISSING ? `missing at ${GOLDEN_PATH} — run cp2020-augmented-golden-payload-capture.mjs`
+                 : `producer=${JSON.stringify(GOLDEN.producer)} captured=${GOLDEN.capturedAt} modes=[${Object.keys(GOLDEN.modes).join(", ")}]`);
+ok("§4 contract: that entry was captured from the SAME bench gun and load this run just fired",
+  stored?.gun === "16" && stored?.load === "dualPurpose" && stored?.hook === "cyberpunk2020.weaponFired",
+  `entry gun=${JSON.stringify(stored?.gun)} load=${JSON.stringify(stored?.load)} hook=${JSON.stringify(stored?.hook)}`);
+
+const liveKeys = liveWhole?.keys ?? [];
+const storedKeys = stored?.keys ?? [];
+const added = liveKeys.filter(k => !storedKeys.includes(k));
+const dropped = storedKeys.filter(k => !liveKeys.includes(k));
+const retyped = liveKeys.filter(k => storedKeys.includes(k) && liveWhole.types[k] !== stored.types[k])
+  .map(k => `${k}: fixture ${stored.types[k]} → live ${liveWhole.types[k]}`);
+
+ok("§4 contract: the live emission carries no field the stored fixture has never seen",
+  !!liveWhole && !liveWhole.err && added.length === 0,
+  added.length ? `ADDED BY THE PRODUCER: ${added.join(", ")} — re-run cp2020-augmented-golden-payload-capture.mjs`
+               : `${liveKeys.length} field(s), none new`);
+ok("§4 contract: the live emission drops no field the stored fixture carries",
+  !!liveWhole && !liveWhole.err && dropped.length === 0,
+  dropped.length ? `DROPPED BY THE PRODUCER: ${dropped.join(", ")} — every fx-rail leg hydrating that field is now testing a value nothing produces`
+                 : `${storedKeys.length} stored field(s), all still emitted`);
+ok("§4 contract: every shared field still carries the type the stored fixture recorded",
+  !!liveWhole && !liveWhole.err && retyped.length === 0,
+  retyped.length ? `RE-TYPED BY THE PRODUCER: ${retyped.join(" · ")}` : `${liveKeys.length} field(s) type-identical`);
 
 /* ══ RESTORE ═════════════════════════════════════════════════════════════════════════════════════ */
 console.log("\n===== restore =====");

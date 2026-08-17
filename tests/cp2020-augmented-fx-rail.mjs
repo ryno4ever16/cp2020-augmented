@@ -27,6 +27,7 @@
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
  */
 import { chromium } from "@playwright/test";
+import { installGoldenHydrator, REQUIRED_MODES, GOLDEN } from "./golden-payload.mjs";
 
 const URL = process.env.FVTT_URL ?? "http://localhost:30004";
 const PW = process.env.FVTT_RIG_PASSWORD ?? "cp2020-v14-rig";
@@ -98,6 +99,24 @@ await page.evaluate(async (name) => {
   globalThis.__FX_SCENE_ID = scene?.id ?? null;
 }, FX_SCENE_NAME);
 await page.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 60000 });
+
+// ⭐ THE GOLDEN PAYLOAD, PUT ON THE PAGE ONCE (VACUOUS-LEG-AUDIT F1).
+//
+// Every payload factory below used to hand-build the `cyberpunk2020.weaponFired` object as a four-field
+// literal, while the live producer (module/seam-shim.js) sets roughly forty — so this spec drove the
+// presentation rail against a shape the rail never receives, which is the most plausible mechanism
+// behind "the FX keeps coming out messed up". The factories now HYDRATE from a real emission recorded
+// off the live seam by `cp2020-augmented-golden-payload-capture.mjs`, and override only the one or two
+// fields the leg is actually about. `__goldenPayload(mode, ids, over)` re-fills the world-local
+// identifiers; see tests/golden-payload.mjs.
+//
+// ⛔ The stored shape is kept honest by the contract leg in `cp2020-augmented-b1-seam-payload.mjs` §4,
+// which re-captures a live emission and diffs its field names and types against this fixture's. If that
+// leg is red, re-run the capture spec before trusting anything below.
+const goldenOnPage = await installGoldenHydrator(page);
+check("golden payload: the captured seam emission is loaded on the page, one entry per fire mode",
+  REQUIRED_MODES.every(m => goldenOnPage.modes.includes(m)),
+  `captured ${GOLDEN.capturedAt} · modes=[${goldenOnPage.modes.join(", ")}] · fields=${JSON.stringify(goldenOnPage.fields)}`);
 
 const res = await page.evaluate(async () => {
   const SCOPE = "cp2020-augmented";
@@ -1173,7 +1192,14 @@ const res = await page.evaluate(async () => {
   // module's own type-dispatch shape, carrying the scene and the payload itself — the payload IS the
   // performance, which is the whole design (every number a performer needs derives from it).
   emitted = [];
-  const scorePayload = { attackerId: actor.id, weaponId: madeIds.rifle, weaponName: "__PW__FX rifle", areaDamages: {} };
+  // HYDRATED from the recorded full-auto emission (see the note at installGoldenHydrator): the score
+  // carries the payload VERBATIM across the wire, so the thing being announced here has to be the real
+  // forty-field object rather than a four-field stand-in — a datagram legs that assert "the payload
+  // verbatim" cannot honestly make against a shape the producer never emits.
+  const goldenIds = { attackerId: actor.id, weaponId: madeIds.rifle, attackerTokenId: tokenDoc.id,
+    targetTokenId: null, targetActorId: null };
+  const scorePayload = __goldenPayload("fullAuto", goldenIds,
+    { weaponName: "__PW__FX rifle", areaDamages: {} });
   const scoreLocal = await fx.fxWeaponFired({ ...scorePayload });
   const scoreMsgs = emitted.filter(e => e.data?.type === "fxPerformanceScore");
   ok("score: one payload = one score datagram, on the module's own channel",
@@ -1223,7 +1249,18 @@ const res = await page.evaluate(async () => {
 
   /* ── 6. payload fan-out + cadence ──────────────────────────────────────── */
   fx._setSoundManifest(["shot-rifle.ogg", "shot-pistol.ogg", "shot-heavy.ogg", "shot-smg.ogg", "shot-shotgun.ogg"]);
-  const payload = (over = {}) => ({ attackerId: actor.id, weaponId: madeIds.rifle, weaponName: "__PW__FX rifle", areaDamages: {}, ...over });
+  // ⭐ THE MAIN BLOCK'S PAYLOAD FACTORY, HYDRATED (VACUOUS-LEG-AUDIT F1). The base is the recorded
+  // `fullAuto` emission — bench gun 06, Militech Ronin Light Assault, standard 5.56 — so every leg from
+  // here to §11 runs against all forty-four fields the seam really sets. Only this spec's own fixtures
+  // are re-pointed, and only three defaults are overridden:
+  //   weaponName / areaDamages — the fan-out's whole arithmetic is read off areaDamages and every leg
+  //     below states its own, so an inherited hit list would silently set every count.
+  //   targetTokenId / fxTargetTokenId → null (through the id map) — the recorded emission is a full-auto
+  //     card, which is the ONE fire mode that resolves a target itself; the single-shot, burst and melee
+  //     cards carry neither field, and the sections below are written about that unaimed shape. Legs
+  //     that want an aim name it, which is the point of hydrating: the odd field is the one stated.
+  const payload = (over = {}) => __goldenPayload("fullAuto", goldenIds,
+    { weaponName: "__PW__FX rifle", areaDamages: {}, ...over });
 
   ok("cadence: the DEFAULT constant is the measured value", fx.SHOT_CADENCE_MS === 80, String(fx.SHOT_CADENCE_MS));
   // Cadence is now PER CLASS: the default is what a class inherits, not what every class runs at. The
@@ -1362,7 +1399,22 @@ const res = await page.evaluate(async () => {
   // carried both fields and the fan-out is class-agnostic, so what was actually missing was the axis:
   // the treatments were skipped whenever nothing was named, which is how the class was test-fired.
   // Pinned at the real call site for BOTH cases, by the class's own mapped counts.
-  const shellAmbPayload = (over = {}) => payload({ weaponId: madeIds.shotgun, weaponName: "__PW__FX shotgun", ...over });
+  // ⭐ HYDRATED FROM THE SHELL EMISSION, not from the rifle one — bench gun 10, Arasaka Rapid Assault
+  // Shot 12, buckshot, captured through the real corridor gesture. That is what puts the CARTRIDGE on
+  // the payload (`caliber: "00"`), which is the field the module derives "does this throw a pattern"
+  // from, so these legs now run against a shell the module recognises as a shell.
+  //
+  // ⛔ THE DECLARED CORRIDOR IS TAKEN BACK OFF, deliberately and by name. `payloadAimPoint` prefers a
+  // declared corridor over the aimed-at token, so carrying the recorded one here would give the AIMED
+  // and UNAIMED shells below the identical axis — and the pair of legs that compares them exists
+  // precisely to show the two cases agree. Inheriting the corridor would make that agreement true by
+  // construction: a vacuous leg, which is the class of defect this whole change is undoing. A shell
+  // fired with no corridor is an ordinary shape in its own right (the seam writes `spreadAim: null` on
+  // every shot not aimed through the sheet's own gesture — a macro, a keeper driving the roll). The
+  // corridor has its own sections, §23 and §26, where it is the subject rather than an inheritance.
+  const shellAmbPayload = (over = {}) => __goldenPayload("shotgunSpread",
+    { ...goldenIds, weaponId: madeIds.shotgun },
+    { weaponName: "__PW__FX shotgun", areaDamages: {}, spreadAim: null, ...over });
   await drain();
   const shellAimed = await fx.fxWeaponFired(shellAmbPayload({
     shotsFired: 6, targetTokenId: targetDoc.id, areaDamages: { Torso: [{ damage: 2 }, { damage: 2 }] },
@@ -1492,7 +1544,8 @@ const res = await page.evaluate(async () => {
   // The selection legs above act on the resolver; these act on the path the table actually takes when
   // a payload arrives, recorded at the core audio entry point.
   fx._setSoundManifest(["shot-shotgun.ogg", "shot-shotgun-burst.ogg", "shot-rifle.ogg"]);
-  const shellPayload = (over = {}) => payload({ weaponId: madeIds.shotgun, weaponName: "__PW__FX shotgun", ...over });
+  // The same shell base as §6a-iii (and the same reason for holding the corridor out of it).
+  const shellPayload = (over = {}) => shellAmbPayload(over);
 
   plays = [];
   await fx.fxWeaponFired(shellPayload({ shotsFired: 1, areaDamages: { Torso: [{ damage: 5 }] } }));
@@ -1619,14 +1672,20 @@ const res = await page.evaluate(async () => {
   fx._setSoundManifest(["shot-rifle.ogg", "shot-pistol.ogg", "shot-heavy.ogg", "shot-smg.ogg", "shot-shotgun.ogg"]);
 
   plays = [];
-  const noCount = await fx.fxWeaponFired(payload({ areaDamages: { Torso: [{ damage: 1 }], Head: [{ damage: 2 }, { damage: 3 }] } }));
+  // ⛔ THE ABSENT COUNT IS STATED, not inherited. These two legs exist for the fallback the fan-out
+  // takes when a payload carries NO round count — an emitter that predates the field — so the hydrated
+  // base's real `shotsFired` has to be taken back off explicitly. This is the shape of the whole
+  // hydration change: a leg that wants an odd field says so, instead of a four-field literal silently
+  // omitting forty others and nobody being able to tell which omissions were the subject.
+  const noCount = await fx.fxWeaponFired(payload({ shotsFired: undefined,
+    areaDamages: { Torso: [{ damage: 1 }], Head: [{ damage: 2 }, { damage: 3 }] } }));
   ok("fallback: count derived from landed rounds when absent", noCount.shots === 3 && noCount.hits === 3, JSON.stringify(noCount));
   ok("fallback: one audio call per DRAWN derived unit",
     plays.length === noCount.shots - noCount.dropped, `${plays.length} of ${noCount.shots} − ${noCount.dropped}`);
   await sleep(900);
 
   plays = [];
-  const missOnly = await fx.fxWeaponFired(payload({ areaDamages: {} }));
+  const missOnly = await fx.fxWeaponFired(payload({ shotsFired: undefined, areaDamages: {} }));
   ok("fallback: nothing landed still resolves one unit", missOnly.shots === 1 && missOnly.hits === 0, JSON.stringify(missOnly));
   ok("fallback: one audio call for the single unit", plays.length === 1, String(plays.length));
   await sleep(500);
@@ -2847,7 +2906,10 @@ const res = await page.evaluate(async () => {
     `${fx.presentationMs(9999, "shotgun")}ms at the ${fx.MAX_FX_SHOTS}-round cap`);
   // The payload-facing entry point: the class is resolved the way the fan-out resolves it, and the
   // zero cases are exactly two — nothing mapped, or the rail switched off.
-  const mkPayload = (over = {}) => ({ attackerId: actor.id, weaponId: madeIds.rifle, weaponName: "__PW__FX rifle", areaDamages: {}, ...over });
+  // Hydrated from the same recorded full-auto emission as §6's factory — the presentation-window
+  // arithmetic is a pure read of the payload, so it has to be handed the payload the producer emits.
+  const mkPayload = (over = {}) => __goldenPayload("fullAuto", goldenIds,
+    { weaponName: "__PW__FX rifle", areaDamages: {}, ...over });
   // ⏪ ASSERTED AS THE ARITHMETIC'S OWN SHAPE (2026-08-11) rather than against a bare presentationMs
   // call. The entry point resolves an ARRIVAL off the shot's length now, and a pure call given no
   // arrival cannot know it — so the claim "the payload entry point resolves the class and defers to
@@ -5216,10 +5278,14 @@ try {
     // per payload, producing N flames" — the bound it protects is unchanged and is what these legs
     // pin: the fan-out caps at thirty rounds, so a per-ROUND lingering element would be thirty fires
     // on one square for one trigger pull, and `maxPerPayload` holds the placement itself down.
-    const payload = (over = {}) => ({
-      attackerId: shooterActor.id, weaponId: rifleItem.id, weaponName: "__PW__AMMO rifle",
-      targetTokenId: targetDoc.id, areaDamages: {}, ...over,
-    });
+    // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1). The load id is the subject
+    // of this whole section, so every leg below states its own `modifier` — which is exactly the shape
+    // the change is for: the field under test is named, and the other forty ride in from a real shot
+    // instead of being silently absent.
+    const payload = (over = {}) => __goldenPayload("fullAuto",
+      { attackerId: shooterActor.id, weaponId: rifleItem.id, attackerTokenId: shooterDoc.id,
+        targetTokenId: targetDoc.id, targetActorId: null },
+      { weaponName: "__PW__AMMO rifle", areaDamages: {}, ...over });
     // ⚠ The engine reports the DATABASE KEY on `data.file`, not the resolved file path (verified on
     // this rig: an effect comes back as "jb2a.flames.orange.03.1x1"). Matching the asset's filename
     // instead silently matched nothing and read as "the gate never fired".
@@ -5631,11 +5697,14 @@ try {
     const isBlood = (s) => /liquid\.splash_side02\.red|LiquidSplashSide02/i.test(s.file);
     const bloods = () => spawned.filter(isBlood);
 
-    const payload = (over = {}) => ({
-      attackerId: shooterActor.id, weaponId: rifleItem.id, weaponName: "__PW__GORE rifle",
-      targetTokenId: fleshDoc.id, shotsFired: 10, shotsHit: 4,
-      areaDamages: { Torso: [{ damage: 3 }, { damage: 3 }, { damage: 2 }, { damage: 2 }] }, ...over,
-    });
+    // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1). The counts and the hit list
+    // stay stated here rather than inherited: this section's whole subject is "one spray per LANDING
+    // round", so the ten-fired/four-landed shape IS the fixture and every leg reads its arithmetic off it.
+    const payload = (over = {}) => __goldenPayload("fullAuto",
+      { attackerId: shooterActor.id, weaponId: rifleItem.id, attackerTokenId: shooterDoc?.id ?? null,
+        targetTokenId: fleshDoc.id, targetActorId: null },
+      { weaponName: "__PW__GORE rifle", shotsFired: 10, shotsHit: 4,
+        areaDamages: { Torso: [{ damage: 3 }, { damage: 3 }, { damage: 2 }, { damage: 2 }] }, ...over });
     const HIT_WAIT = 1500;
 
     // ⚠ THE DROP THRESHOLD IS HELD OUT OF REACH FOR THIS WHOLE SECTION. A dropped round draws no
@@ -5871,9 +5940,16 @@ try {
     const targetTok = toks.find(t => t !== shooterTok && t.actor && !fx.bearsStructuralSdp(t.actor));
     const shell = worldActor?.items?.find(i => i.type === "weapon" && fx.weaponFxClass(i) === "shotgun");
     if (!shell) { ok("pacing live fixtures present", false, "no shell weapon on the bench"); return out; }
-    const mk = (shots) => ({ attackerId: worldActor.id, weaponId: shell.id, weaponName: shell.name,
-      modifier: "flechette", targetTokenId: targetTok?.id ?? null, fxTargetTokenId: targetTok?.id ?? null,
-      shotsFired: shots, fumbleRuled: false, areaDamages: { Torso: [{ damage: 2 }] } });
+    // HYDRATED from the recorded shell emission — this section fires a real bench shell gun, so the
+    // shape it is paced against should be the one that gun really produces. The load id is stated
+    // (`flechette` is what makes the fan wide enough to be the synthetic load this section needs) and
+    // the corridor is held out for the same reason it is in §6a-iii: this is a PACING measurement, and
+    // a declared corridor would re-point the axis every gap is measured along.
+    const mk = (shots) => __goldenPayload("shotgunSpread",
+      { attackerId: worldActor.id, weaponId: shell.id, attackerTokenId: shooterTok?.id ?? null,
+        targetTokenId: targetTok?.id ?? null, targetActorId: null },
+      { weaponName: shell.name, modifier: "flechette", spreadAim: null,
+        shotsFired: shots, fumbleRuled: false, areaDamages: { Torso: [{ damage: 2 }] } });
 
     fx._setDropLagMs(600000);                       // out of reach: nothing can be late enough
     const calm = await fx.fxWeaponFired(mk(10));
@@ -6068,12 +6144,16 @@ try {
       }
       globalThis.Sequence = RecSequence;
 
-      const basePayload = (over = {}) => ({
-        attackerId: actor.id, weaponId: gun.id, weaponName: "__PW__RVW shell gun",
-        caliber: "00", modifier: "standard", shotsFired: 1,
-        targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id,
-        areaDamages: { Torso: [{ damage: 7 }] }, ...over,
-      });
+      // HYDRATED from the recorded shell emission (VACUOUS-LEG-AUDIT F1) — the cartridge and the load
+      // this factory used to hand-write are now the ones bench gun 10 actually emits, with the other
+      // forty-one fields alongside them. The corridor is held out for the reason given at §6a-iii: this
+      // section measures the PELLET FAN's per-pull entropy against an aimed-at figure, and a declared
+      // corridor outranks that figure as the axis.
+      const basePayload = (over = {}) => __goldenPayload("shotgunSpread",
+        { attackerId: actor.id, weaponId: gun.id, attackerTokenId: shooterTok.id,
+          targetTokenId: targetTok.id, targetActorId: null },
+        { weaponName: "__PW__RVW shell gun", shotsFired: 1, spreadAim: null,
+          areaDamages: { Torso: [{ damage: 7 }] }, ...over });
       // One trigger pull, reported as what the engine was handed: the PELLET FAN (2026-08-11 — it used
       // to read the volley sprite, and the volley is vetoed), plus the whole file list either way so
       // "it drew something else instead" stays readable.
@@ -6474,9 +6554,18 @@ try {
       }
       async play() { played.push(this.entries); }
     }
-    const payload = (over = {}) => ({ attackerId: actor.id, weaponId: gun.id, weaponName: "__PW__TWIN rifle",
-      shotsFired: 1, shotsHit: 1, targetTokenId: dummyTok.id, fxTargetTokenId: dummyTok.id,
-      areaDamages: { Torso: [{ damage: 5 }] }, ...over });
+    // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1), with ONE field deliberately
+    // emptied: `attackerTokenId`. This section's subject IS that field — which of two figures of one
+    // actor the shot is drawn from — and half its legs are the FALLBACKS taken when the payload names
+    // no figure. Inheriting the recorded figure would have handed every one of those legs an answer and
+    // retired the negative silently, so the default is "the seam could not establish it", which is a
+    // shape the producer genuinely emits (firingTokenIdOf returns null with no canvas and no speaker),
+    // and the legs that want a figure name one.
+    const payload = (over = {}) => __goldenPayload("fullAuto",
+      { attackerId: actor.id, weaponId: gun.id, attackerTokenId: null,
+        targetTokenId: dummyTok.id, targetActorId: null },
+      { weaponName: "__PW__TWIN rifle", shotsFired: 1, shotsHit: 1,
+        areaDamages: { Torso: [{ damage: 5 }] }, ...over });
     // One trigger pull, reported as where the drawing was anchored: the figure the rounds were hung on
     // and the point the muzzle work was placed at.
     const pull = async (p) => {
@@ -6751,10 +6840,14 @@ try {
     const shooterTok = canvas.tokens.get(shooterDoc.id);
     const targetTok = canvas.tokens.get(targetDoc.id);
     const ROUNDS = 20;
-    const payload = (over = {}) => ({ attackerId: shooterActor.id, weaponId: gun.id, weaponName: "__PW__SF rifle",
-      modifier: "flechette", targetTokenId: targetDoc.id, fxTargetTokenId: targetDoc.id,
-      shotsFired: ROUNDS, fumbleRuled: false,
-      areaDamages: { Torso: Array.from({ length: ROUNDS }, () => ({ damage: 2 })) }, ...over });
+    // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1). The load id stays stated —
+    // the dart round is this section's subject — and so does the round count, which is what the
+    // one-mark-per-round census is counted against.
+    const payload = (over = {}) => __goldenPayload("fullAuto",
+      { attackerId: shooterActor.id, weaponId: gun.id, attackerTokenId: shooterDoc.id,
+        targetTokenId: targetDoc.id, targetActorId: null },
+      { weaponName: "__PW__SF rifle", modifier: "flechette", shotsFired: ROUNDS, fumbleRuled: false,
+        areaDamages: { Torso: Array.from({ length: ROUNDS }, () => ({ damage: 2 })) }, ...over });
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
     const goreWas = game.settings.get(SCOPE, "goreEnabled");
@@ -7138,10 +7231,13 @@ try {
       /* ── e. THE IMPACT BUDGET IS NOT THE TRACER'S ───────────────────────────────────────────── */
       // A burst long enough that the pacing rule refuses rounds, with every round a HIT. The ruling is
       // that the impact count equals the hit count whatever the drop count is.
-      const burst = (n) => ({ attackerId: actor.id, weaponId: rifle.id, weaponName: "__PW__ARV rifle",
-        caliber: "5.56", modifier: "standard", shotsFired: n, targetTokenId: targetTok.id,
-        fxTargetTokenId: targetTok.id,
-        areaDamages: { Torso: Array.from({ length: n }, () => ({ damage: 5 })) } });
+      // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1) — the same cartridge and
+      // load this factory used to hand-write, now arriving with the other forty-one fields beside them.
+      const burst = (n) => __goldenPayload("fullAuto",
+        { attackerId: actor.id, weaponId: rifle.id, attackerTokenId: shooterTok.id,
+          targetTokenId: targetTok.id, targetActorId: null },
+        { weaponName: "__PW__ARV rifle", shotsFired: n, shotsHit: n,
+          areaDamages: { Torso: Array.from({ length: n }, () => ({ damage: 5 })) } });
       playedEntries.length = 0;
       const long = await fx.fxWeaponFired(burst(20));
       await sleep(400);
@@ -7413,9 +7509,12 @@ try {
       }
       globalThis.__HIT_ENTRIES = [];
       globalThis.Sequence = RecSequence;
-      const burstAt = (tokId, n) => ({ attackerId: actor.id, weaponId: rifle.id, weaponName: "__PW__HIT rifle",
-        caliber: "5.56", modifier: "standard", shotsFired: n, targetTokenId: tokId, fxTargetTokenId: tokId,
-        areaDamages: { Torso: Array.from({ length: n }, () => ({ damage: 5 })) } });
+      // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1).
+      const burstAt = (tokId, n) => __goldenPayload("fullAuto",
+        { attackerId: actor.id, weaponId: rifle.id, attackerTokenId: shooterTok.id,
+          targetTokenId: tokId, targetActorId: null },
+        { weaponName: "__PW__HIT rifle", shotsFired: n, shotsHit: n,
+          areaDamages: { Torso: Array.from({ length: n }, () => ({ damage: 5 })) } });
 
       played.length = 0; globalThis.__HIT_ENTRIES.length = 0;
       const onMeat = await fx.fxWeaponFired(burstAt(meatTok.id, 12));
@@ -7551,14 +7650,20 @@ try {
     // A corridor pointing straight DOWN, two squares long, while the target sits six squares EAST.
     const reachSquares = 2;
     const reachM = grid.pixelsToMeters(scene, reachSquares * gpx);
-    const aimPayload = (over = {}) => ({
-      attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: shell.id, weaponName: "__PW__COR shell gun",
-      caliber: "00", modifier: "standard", shotsFired: 1, shotsHit: 1,
-      targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id,
-      areaDamages: { Torso: [{ damage: 6 }] },
-      spreadAim: { angleDeg: 90, reachM, lengthM: reachM, widthM: 2, band: "Short" },
-      ...over,
-    });
+    // HYDRATED from the recorded shell emission (VACUOUS-LEG-AUDIT F1), with the CORRIDOR stated rather
+    // than inherited — and it is the clearest case in the file for why hydration is shaped this way.
+    // These legs assert a point rebuilt from a specific angle and a specific reach (a corridor pointing
+    // straight down while the figure being aimed at sits six squares east), so the corridor is what the
+    // leg is about and has to be written here; everything else — the cartridge, the load, the band
+    // widths, the weapon's own long range, the counts the card computed — now comes from a real shell
+    // shot instead of being absent and unnoticed.
+    const aimPayload = (over = {}) => __goldenPayload("shotgunSpread",
+      { attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: shell.id,
+        targetTokenId: targetTok.id, targetActorId: null },
+      { weaponName: "__PW__COR shell gun", shotsFired: 1, shotsHit: 1,
+        areaDamages: { Torso: [{ damage: 6 }] },
+        spreadAim: { angleDeg: 90, reachM, lengthM: reachM, widthM: 2, band: "Short" },
+        ...over });
 
     /* ── a. the reader, by value ─────────────────────────────────────────────────────────────── */
     const pt = fx.declaredAimPointOf(aimPayload(), shooterPl);
@@ -8102,13 +8207,20 @@ try {
       flags: { [SCOPE]: { __pwPat: true } } }]);
     await sleep(500);
 
-    const payload = (over = {}) => ({
-      attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: shell.id, weaponName: "__PW__PAT shell gun",
-      caliber: "00", spreadMode: "buck", modifier: "standard", shotsFired: 1, shotsHit: 1,
-      areaDamages: { Torso: [{ damage: 6 }] },
-      spreadAim: { angleDeg: 0, reachM, lengthM: reachM, widthM, band: "Short" },
-      ...over,
-    });
+    // HYDRATED from the recorded shell emission (VACUOUS-LEG-AUDIT F1). Three fields stay stated because
+    // they are what the legs below are about: the corridor (its geometry is the subject), and the
+    // cartridge/mode pair, which one leg deliberately flips to `single`/`9mm` to show the flow gate
+    // answering the other way. `spreadMode: "buck"` is written explicitly rather than left to the
+    // recorded value: the real ammo item records `single` there and the buck answer is DERIVED from the
+    // cartridge (lookups.js spreadModeForAmmo), so stating it keeps the negative's opposite honest.
+    const payload = (over = {}) => __goldenPayload("shotgunSpread",
+      { attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: shell.id,
+        targetTokenId: null, targetActorId: null },
+      { weaponName: "__PW__PAT shell gun", caliber: "00", spreadMode: "buck", modifier: "standard",
+        shotsFired: 1, shotsHit: 1,
+        areaDamages: { Torso: [{ damage: 6 }] },
+        spreadAim: { angleDeg: 0, reachM, lengthM: reachM, widthM, band: "Short" },
+        ...over });
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
     const occWas = game.settings.get(SCOPE, "areaEffectOcclusion");
