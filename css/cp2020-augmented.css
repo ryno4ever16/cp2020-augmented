@@ -275,8 +275,17 @@
 .cp-tile-name { font-weight: bold; line-height: 1.15; overflow-wrap: anywhere; }
 .cp-tile-count { font-size: 0.8em; opacity: 0.6; font-variant-numeric: tabular-nums; }
 
+/* ── A SHOP THAT IS GONE — a panel with a way out ────────────────────────────────────────────── */
+.cp-catalog .cp-shop-missing { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; flex: 1 1 auto; padding: 24px; text-align: center; }
+.cp-shop-missing-icon { font-size: 2.2em; opacity: 0.35; }
+.cp-shop-missing-msg { margin: 0; opacity: 0.8; }
+.cp-catalog .cp-shop-missing-back { width: auto; padding: 3px 14px; }
+
 .cp-catalog-srctoggle { font-size: 0.8em; opacity: 0.85; white-space: nowrap; }
-.cp-catalog-buyer { font-size: 0.85em; opacity: 0.9; display: inline-flex; align-items: center; gap: 4px; }
+.cp-catalog-buyer { font-size: 0.85em; opacity: 0.9; display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+/* The buyer's name is the ACTOR's own, verbatim, and long ones would otherwise stretch the header
+   off the edge of the window. Clip it; the tooltip carries the whole string. */
+.cp-buyer-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cp-buyer-pick { width: auto; max-width: 150px; }
 .cp-buyer-funds { opacity: 0.85; white-space: nowrap; }
 .cp-buyer-warn { color: #c0a062; display: inline-flex; align-items: center; gap: 4px; }

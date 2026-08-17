@@ -63,6 +63,9 @@ const shopSubLabel = (sub) => SHOP_SUB_LABEL_KEYS[sub] ? game.i18n.localize(SHOP
 const shopStyleLabel = (styleKey) => SHOP_STYLE_LABEL_KEYS[styleKey] ? game.i18n.localize(SHOP_STYLE_LABEL_KEYS[styleKey]) : "";
 /** Fashion styles with localized labels for the render context: [{key,label,mult}]. */
 const shopFashionStyleOptions = () => FASHION_STYLES.map(s => ({ key: s.key, label: shopStyleLabel(s.key), mult: s.mult }));
+/** "1 item" / "4 items". Foundry's i18n layer has no plural rule, so the choice is made here and the
+ *  two forms are separate strings — which is also what a translator needs. */
+const itemCountLabel = (n) => game.i18n.format(n === 1 ? "CYBERPUNK.ShopItemCountOne" : "CYBERPUNK.ShopItemCountMany", { n });
 
 /**
  * The Shop window ([[shopping-design]] round-7). ONE standalone window (a singleton) that navigates
@@ -235,7 +238,13 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-catalog-list", ".cp-drawer-cats", ".cp-src-scroll", ".cp-catalog-landing"] },
   };
 
+  /** True when this view is ABOUT a shop and that shop is gone (deleted from under the window). */
+  _shopMissing() { return (this.view === "build" || this.view === "storefront") && !this._shop(); }
+
   get title() {
+    // A window pointed at a deleted shop is neither a builder nor a storefront nor the catalog —
+    // titling it "Shopping Catalog" was the last thing left claiming it still had content.
+    if (this._shopMissing())        return game.i18n.localize("CYBERPUNK.ShopGoneTitle");
     if (this.view === "build")      return game.i18n.format("CYBERPUNK.ShopBuilderTitle", { name: this._shop()?.name ?? "" });
     if (this.view === "storefront") return this._shop()?.name ?? game.i18n.localize("CYBERPUNK.ShopTitle");
     if (this.view === "catalog")    return game.i18n.localize("CYBERPUNK.CatalogTitle");
@@ -419,6 +428,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         img: idx?.img ?? "icons/svg/item-bag.svg",
         category: idx?.category ?? "", sub: idx?.sub ?? "", supplement: idx?.supplement ?? "",
         catalogCost, override: e.price, unlimited: e.unlimited, qty: e.qty,
+        // "(4)" beside a price reads as a footnote or a second price. Say what the number counts.
+        stockLabel: game.i18n.format("CYBERPUNK.ShopStockCount", { n: e.qty }),
         isClothing, style: e.style,
         styleLabel: (isClothing && e.style && e.style !== "generic") ? shopStyleLabel(e.style) : "",
         styleOptions: isClothing ? FASHION_STYLES.map(s => ({ key: s.key, label: shopStyleLabel(s.key), mult: s.mult, selected: s.key === (e.style ?? "generic") })) : null,
@@ -473,9 +484,12 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       searching: !!this._search.trim(),
       // GM setup mode is CLIENT state (module/shop/setup-mode.js), so it is read fresh into every
       // render rather than stored on the app — two shop windows on one client agree by construction.
-      setupMode: isShopSetupMode()
+      setupMode: isShopSetupMode(),
     };
     if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
+    // A view that is ABOUT a shop, whose shop has been deleted, is a dead end — it gets its own
+    // panel with a route out rather than a sentence under a header full of inert controls.
+    if (this._shopMissing()) return { ...common, missing: true, showSearch: false };
 
     // Every other view lists compendium rows, which come from the catalog index — built on first demand
     // (one field-projected getIndex per pack). The cost depends on the core version: measured ~931ms over
@@ -519,7 +533,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   }
 
   _dataHome(isGM) {
-    const shops = shopsVisibleTo().map(s => ({ id: s.id, name: s.name, open: s.open, fullSearch: s.fullSearch, count: Object.keys(s.items).length }));
+    const shops = shopsVisibleTo().map(s => {
+      const count = Object.keys(s.items).length;
+      return { id: s.id, name: s.name, open: s.open, fullSearch: s.fullSearch, count, countLabel: itemCountLabel(count) };
+    });
     return { shops, canCreate: isGM, hasShops: shops.length > 0 };
   }
 
@@ -771,6 +788,9 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
     // Buyer picker (shop AS a chosen owned character).
     this._activateBuyerPick(root);
+
+    // The dead-end panel's way out.
+    root.querySelector(".cp-shop-missing-back")?.addEventListener("click", (e) => { e.preventDefault(); this.navigate("home"); });
 
     // Search. It filters in place (no re-render) so the box stays responsive even when popped out into
     // a second window — EXCEPT from the landing, which has no rows to filter: the first keystroke there

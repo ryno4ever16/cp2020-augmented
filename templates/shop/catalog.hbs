@@ -13,7 +13,7 @@
             {{#each shops as |s|}}
             <button type="button" class="cp-home-entry cp-home-shop" data-shop-id="{{s.id}}" title="{{localize "CYBERPUNK.ShopCtxHint"}}">
                 <span class="cp-home-icon"><i class="fa-solid fa-store{{#unless s.open}} cp-home-closed{{/unless}}"></i></span>
-                <span class="cp-home-text"><span class="cp-home-name">{{s.name}}</span><span class="cp-home-sub">{{#if s.open}}{{localize "CYBERPUNK.ShopStatusOpen"}}{{else}}{{localize "CYBERPUNK.ShopStatusClosed"}}{{/if}} · {{s.count}} {{localize "CYBERPUNK.ShopItemsLabel"}}{{#if s.fullSearch}} · {{localize "CYBERPUNK.ShopFullSearch"}}{{/if}}</span></span>
+                <span class="cp-home-text"><span class="cp-home-name">{{s.name}}</span><span class="cp-home-sub">{{#if s.open}}{{localize "CYBERPUNK.ShopStatusOpen"}}{{else}}{{localize "CYBERPUNK.ShopStatusClosed"}}{{/if}} · {{s.countLabel}}{{#if s.fullSearch}} · {{localize "CYBERPUNK.ShopFullSearch"}}{{/if}}</span></span>
                 <i class="fa-solid fa-chevron-right cp-home-go"></i>
             </button>
             {{/each}}
@@ -22,6 +22,14 @@
             {{/if}}
         </div>
         {{#unless hasShops}}{{#unless canCreate}}<p class="cp-src-none">{{localize "CYBERPUNK.ShopNonePublished"}}</p>{{/unless}}{{/unless}}
+    </div>
+
+    {{!-- ──────── A SHOP THAT IS GONE: a panel with a way out, not a bare sentence ──────── --}}
+    {{else if missing}}
+    <div class="cp-shop-missing">
+        <i class="fa-solid fa-store-slash cp-shop-missing-icon"></i>
+        <p class="cp-shop-missing-msg">{{localize "CYBERPUNK.ShopGone"}}</p>
+        <button type="button" class="cp-shop-missing-back" title="{{localize "CYBERPUNK.ShopBackHome"}}">‹ {{localize "CYBERPUNK.ShopTitle"}}</button>
     </div>
     {{else}}
 
@@ -61,7 +69,6 @@
     <p class="cp-shop-setup-banner">{{localize "CYBERPUNK.ShopSetupModeBanner"}}</p>
     {{/if}}
 
-    {{#if missing}}<p class="cp-src-none">{{localize "CYBERPUNK.ShopGone"}}</p>{{/if}}
     {{#if closed}}<p class="cp-src-none">⚫ {{localize "CYBERPUNK.ShopClosed"}}</p>{{/if}}
 
     {{!-- The rows come from the compendium catalog index, which builds on the first open. Until it lands
@@ -73,7 +80,7 @@
     </div>
     {{/if}}
 
-    {{#unless catalogLoading}}{{#unless missing}}{{#unless closed}}
+    {{#unless catalogLoading}}{{#unless closed}}
 
     {{!-- Toolbar: the search box is GLOBAL and always present, on the landing as well as in a list —
           typing from the landing jumps straight to the results. --}}
@@ -177,10 +184,12 @@
                     {{else}}
                         {{#if @root.isCatalog}}{{#if r.ammo}}<select class="cp-catalog-ammo-load" title="{{localize "CYBERPUNK.AmmoModifier"}}">{{#each r.loads}}<option value="{{this.id}}">{{this.label}}</option>{{/each}}</select>{{else if r.fashion}}<select class="cp-catalog-style" title="{{localize "CYBERPUNK.ShopStyle"}}">{{#each @root.fashionStyles}}<option value="{{this.key}}">{{this.label}} ×{{this.mult}}</option>{{/each}}</select>{{/if}}{{/if}}
                         {{#if r.styleLabel}}<span class="cp-style-tag" title="{{localize "CYBERPUNK.ShopStyle"}}">{{r.styleLabel}}</span>{{/if}}
+                        {{!-- The GM's add-to-shop picker. It wore a shopping cart, which is the icon this
+                              window uses for BUYING — this control stocks a vendor, it never buys. --}}
                         {{#if @root.isCatalog}}{{#if @root.isGM}}{{#unless r.ammo}}
-                        <button type="button" class="cp-add-to-shop-btn" title="{{localize "CYBERPUNK.ShopAddTo"}}"><i class="fa-solid fa-cart-plus"></i></button>
+                        <button type="button" class="cp-add-to-shop-btn" title="{{localize "CYBERPUNK.ShopAddTo"}}"><i class="fa-solid fa-square-plus"></i></button>
                         {{/unless}}{{/if}}{{/if}}
-                        {{#if r.curated}}{{#unless r.unlimited}}<span class="cp-shop-stockcount">({{r.qty}})</span>{{/unless}}{{/if}}
+                        {{#if r.curated}}{{#unless r.unlimited}}<span class="cp-shop-stockcount">{{r.stockLabel}}</span>{{/unless}}{{/if}}
                         <input type="number" class="cp-catalog-qty" value="1" min="1" title="{{#if r.ammo}}{{localize "CYBERPUNK.AmmoBuyBoxes"}}{{else}}{{localize "CYBERPUNK.ShopQty"}}{{/if}}"/>
                         <button type="button" class="cp-catalog-buy{{#unless @root.hasBuyer}} cp-buy-nobuyer{{/unless}}" {{#if r.soldOut}}disabled{{/if}} title="{{#unless @root.hasBuyer}}{{localize "CYBERPUNK.ShopBuyerNeeded"}}{{else}}{{localize "CYBERPUNK.ShopBuy"}}{{/unless}}">{{localize "CYBERPUNK.ShopBuy"}}</button>
                     {{/if}}
@@ -202,6 +211,6 @@
 
     <p class="cp-catalog-footer">{{#if isBuild}}{{localize "CYBERPUNK.ShopBuildFooter"}}{{else}}{{localize "CYBERPUNK.CatalogFooter"}}{{/if}}</p>
 
-    {{/unless}}{{/unless}}{{/unless}}
+    {{/unless}}{{/unless}}
     {{/if}}
 </div>
