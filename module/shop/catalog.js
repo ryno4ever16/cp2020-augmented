@@ -3,7 +3,7 @@ import { correctionFor, correctedCost } from "../data-corrections.js";
 import { buyAndInstallCyberware, offerCyberwareChoice, resolveCyberChoice, resolveCyberSurgery } from "../cyberware/install.js";
 import { classifyService, payOneOffService } from "./services.js";
 import { classifySupplement, shortSupplement, isVisibleTo, knownOfficialSupplements, knownNoncanonSources } from "./supplements.js";
-import { categoryOfPack, categoryOfItem, isMappedPack, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
+import { categoryOfPack, resolveCategory, CATEGORIES, EXCLUDED_TYPES, catalogPacks } from "./categories.js";
 import { shoppingEnabled, shopBuySource, shopSourceConfig, shopShowSource, shopAllowHomebrew, getShopPriceOverrides, setShopPriceOverride } from "../settings.js";
 import { shimmerWindow } from "../shimmer.js";
 import { isShopSetupMode, toggleShopSetupMode } from "./setup-mode.js";
@@ -98,8 +98,6 @@ async function buildCatalogIndex() {
   const overrides = getShopPriceOverrides();
   const results = await Promise.all(catalogPacks().map(async (pack) => {
     const packName = pack.metadata.name;
-    const mapped = isMappedPack(packName);          // legacy packs: one cat/sub for the whole pack
-    const packCat = categoryOfPack(packName);
     let idx;
     try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
     catch (e) { return []; }
@@ -107,10 +105,8 @@ async function buildCatalogIndex() {
     for (const e of idx) {
       const type = e.type ?? "misc";
       if (EXCLUDED_TYPES.has(type)) continue;
-      // Type-grouped supplement packs (and any other unmapped pack) categorize per-item from item data.
-      // Vehicles ALWAYS categorize per-item: their class sub-filter reads system.vehicleType (the soft
-      // enum), which a mapped pack's one-cat/sub-per-pack identity can't carry.
-      const { category, sub } = (mapped && type !== "vehicle") ? packCat : categoryOfItem(type, e.system, e.flags);
+      // Pack identity, then item data — the precedence lives in categories.js (resolveCategory).
+      const { category, sub } = resolveCategory(packName, type, e.system, e.flags);
       const { supplement, canon } = classifySupplement(e.system?.source);
       // Book-verified corrections to base-pack data (name/cost/priceRange) — data-corrections.js.
       const corr = correctionFor(pack.collection, e._id);

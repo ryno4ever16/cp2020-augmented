@@ -16,7 +16,28 @@ export const EXCLUDED_PACKS = new Set([
 /** Belt-and-suspenders: item types never sold in the shop. */
 export const EXCLUDED_TYPES = new Set(["skill", "ammo"]);
 
-/** pack name → { category, sub }. Unmapped buyable packs fall back to { Gear, Other }. */
+/**
+ * The imported supplement compendia are named `supplement-<thing>` after the same `<thing>` the base
+ * system's own packs are named for — `supplement-pistols` beside `pistols`, `supplement-chipware`
+ * beside the chipware shelf. Stripping the prefix before the lookup is therefore the whole mapping:
+ * one table serves both halves of the installation, and a pack added on either side is picked up by
+ * name rather than by a second, drifting copy of the table.
+ */
+const SUPPLEMENT_PREFIX = "supplement-";
+export function normalizePackName(packName) {
+  const n = String(packName ?? "");
+  return n.startsWith(SUPPLEMENT_PREFIX) ? n.slice(SUPPLEMENT_PREFIX.length) : n;
+}
+
+/**
+ * pack name → { category, sub }. Unmapped buyable packs fall back to { Gear, Other }.
+ *
+ * A "" sub means the pack names a CATEGORY but not a shelf within it: those packs are resolved
+ * per item (see resolveCategory), so a vehicle's class and a chip's cyberware type still decide
+ * where the item lands. A named sub is authoritative for the whole pack — that is what makes
+ * `supplement-exotics` file as Exotic even for the handful of rows whose own `weaponType` says
+ * Pistol, which is the pack's editorial judgement and the one the shelf should follow.
+ */
 const PACK_MAP = {
   // Weapons
   "pistols": ["Weapons", "Pistols"],
@@ -39,6 +60,10 @@ const PACK_MAP = {
   "fashonware": ["Cyberware", "Fashionware"],
   "cyberweapons": ["Cyberware", "Cyberweapons"],
   "cyberware-old": ["Cyberware", "Other"], "other-cyberware": ["Cyberware", "Other"], "cyberware-noncanon": ["Cyberware", "Other"],
+  // The supplement chrome packs: one is all skill chips, the other is mixed chrome whose shelf is
+  // still decided per item (the "" sub), so a borg body and the chips filed among it keep their own.
+  "chipware": ["Cyberware", "Chipware"],
+  "cyberware": ["Cyberware", ""],
   // Gear (the 2020 Gear-List sub-categories)
   "communication": ["Gear", "Communication"],
   "electronics": ["Gear", "Electronics"],
@@ -50,6 +75,8 @@ const PACK_MAP = {
   "surveillance": ["Gear", "Surveillance"],
   "tools": ["Gear", "Tools"],
   "rentalandservices": ["Gear", "Rentals & Services"],
+  // The supplement gear pack is one undifferentiated shelf in the books it came from, so it stays one.
+  "gear": ["Gear", "Other"],
   // Standalone categories
   "netrunningEquipment": ["Netrunning", ""],
   "programs": ["Programs", ""],
@@ -101,14 +128,14 @@ export function vehicleSubOf(vehicleType) {
 
 /** Resolve a pack name to { category, sub }. Unmapped buyable packs → Gear / Other. */
 export function categoryOfPack(packName) {
-  const hit = PACK_MAP[packName];
+  const hit = PACK_MAP[normalizePackName(packName)];
   if (hit) return { category: hit[0], sub: hit[1] };
   return { category: "Gear", sub: "Other" };
 }
 
 /** True when the pack is explicitly mapped (legacy packs categorize by pack identity, one cat/sub each). */
 export function isMappedPack(packName) {
-  return Object.prototype.hasOwnProperty.call(PACK_MAP, packName);
+  return Object.prototype.hasOwnProperty.call(PACK_MAP, normalizePackName(packName));
 }
 
 /** Weapon system.weaponType → Weapons sub-filter (for type-grouped packs). */
@@ -137,6 +164,32 @@ export function categoryOfItem(type, system = {}, flags = {}) {
     case "cyberware": return { category: "Cyberware", sub: String(system?.cyberwareType ?? "").toUpperCase() === "CHIPWARE" ? "Chipware" : "Other" };
     default:          return { category: "Gear", sub: "Other" };
   }
+}
+
+/**
+ * THE ONE PLACE a catalog row's cell is decided, in the order the three sources of truth outrank
+ * each other. Split out of the index build so the precedence is stated once, is pure, and can be
+ * asserted directly.
+ *
+ *   1. A full-conversion borg body is FBC wherever it is filed — the flag beats every pack.
+ *   2. A pack whose identity names a SHELF is authoritative for everything in it. The pack was
+ *      curated by hand; an item's own `weaponType` is data that was scraped, and where the two
+ *      disagree the curation is the better answer (a pistol filed in the Exotic pack is filed
+ *      there on purpose).
+ *   3. Otherwise the item's own data decides — the vehicle class, the chipware flag, the weapon
+ *      type. When the pack named a CATEGORY but no shelf, the pack keeps the category and the item
+ *      supplies only the shelf, so a stray misc row in a chrome pack cannot escape into Gear.
+ *
+ * @param {string} packName  the pack's short name (with or without the supplement- prefix)
+ * @returns {{category: string, sub: string}}
+ */
+export function resolveCategory(packName, type, system = {}, flags = {}) {
+  if (flags?.["cp2020-augmented"]?.borgBody?.sdp) return { category: "FBC", sub: "" };
+  const mapped = PACK_MAP[normalizePackName(packName)];
+  if (mapped && mapped[1]) return { category: mapped[0], sub: mapped[1] };
+  const byItem = categoryOfItem(type, system, flags);
+  if (mapped) return { category: mapped[0], sub: byItem.category === mapped[0] ? byItem.sub : "" };
+  return byItem;
 }
 
 /** Item compendia eligible for the catalog (excludes ammo/skills/sell/MM-vehicle packs). */
