@@ -41,11 +41,13 @@
         {{/if}}
         {{#if isBuild}}
             <input type="text" class="cp-shop-name" value="{{shop.name}}" title="{{localize "CYBERPUNK.ShopName"}}"/>
+            {{!-- ONE open/closed control. The announce action beside it posts a link and nothing else:
+                  the two used to be welded together, so "tell the players" silently reopened a shop. --}}
             <label title="{{localize "CYBERPUNK.ShopOpenHint"}}"><input type="checkbox" class="cp-shop-open" {{#if shop.open}}checked{{/if}}/> {{localize "CYBERPUNK.ShopStatusOpen"}}</label>
             <label title="{{localize "CYBERPUNK.ShopFullSearchHint"}}"><input type="checkbox" class="cp-shop-fullsearch" {{#if shop.fullSearch}}checked{{/if}}/> {{localize "CYBERPUNK.ShopFullSearch"}}</label>
             <label title="{{localize "CYBERPUNK.ShopDiscountHint"}}">{{localize "CYBERPUNK.ShopDiscount"}} <input type="number" class="cp-shop-discount" value="{{shop.discountPct}}" min="0" max="100"/>%</label>
             <button type="button" class="cp-shop-preview" title="{{localize "CYBERPUNK.ShopPreviewHint"}}"><i class="fa-solid fa-eye"></i></button>
-            <button type="button" class="cp-shop-publish" title="{{localize "CYBERPUNK.ShopShowToPlayersHint"}}"><i class="fa-solid fa-bullhorn"></i> {{localize "CYBERPUNK.ShopShowToPlayers"}}</button>
+            <button type="button" class="cp-shop-announce" title="{{localize "CYBERPUNK.ShopAnnounceHint"}}"><i class="fa-solid fa-bullhorn"></i> {{localize "CYBERPUNK.ShopAnnounce"}}</button>
             <button type="button" class="cp-shop-delete" title="{{localize "CYBERPUNK.ShopCtxDelete"}}"><i class="fa-solid fa-trash"></i></button>
         {{else if isStorefront}}
             <h2>{{shop.name}}{{#if shop.discountPct}} <span class="cp-shop-discountbadge">−{{shop.discountPct}}%</span>{{/if}}</h2>
@@ -54,8 +56,9 @@
             <h2>{{localize "CYBERPUNK.CatalogTitle"}}</h2>
         {{/if}}
         {{!-- GM setup mode: free, silent acquisitions on THIS client only. Lit state is a class, so the
-              colour lives in the stylesheet. Players never see the control and never see the effect. --}}
-        {{#if isGM}}
+              colour lives in the stylesheet. It belongs to the two GM workbenches (catalog + builder);
+              the storefront is the player-facing view and carries no GM machinery but Manage. --}}
+        {{#if showSetupToggle}}
         <button type="button" class="cp-shop-setup-toggle{{#if setupMode}} cp-active{{/if}}"
                 title="{{localize "CYBERPUNK.ShopSetupModeHint"}}">
             <i class="fa-solid fa-screwdriver-wrench"></i> {{localize "CYBERPUNK.ShopSetupMode"}}

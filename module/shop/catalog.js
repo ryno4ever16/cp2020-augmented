@@ -484,7 +484,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       searching: !!this._search.trim(),
       // GM setup mode is CLIENT state (module/shop/setup-mode.js), so it is read fresh into every
       // render rather than stored on the app — two shop windows on one client agree by construction.
+      // Its badge belongs to the two GM workbenches; the storefront is the player-facing view, and a
+      // GM standing in it is looking at what a player sees, not furnishing.
       setupMode: isShopSetupMode(),
+      showSetupToggle: isGM && (this.view === "catalog" || this.view === "build"),
     };
     if (this.view === "home") return { ...common, ...this._dataHome(isGM) };
     // A view that is ABOUT a shop, whose shop has been deleted, is a dead end — it gets its own
@@ -1172,7 +1175,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     root.querySelector(".cp-shop-fullsearch")?.addEventListener("change", async (ev) => { await updateShop(id, { fullSearch: ev.currentTarget.checked }); });
     root.querySelector(".cp-shop-discount")?.addEventListener("change", async (ev) => { await updateShop(id, { discountPct: Math.min(100, Math.max(0, parseInt(ev.currentTarget.value, 10) || 0)) }); this.render(); });
     root.querySelector(".cp-shop-notes")?.addEventListener("change", async (ev) => { await updateShop(id, { notes: ev.currentTarget.value }); });
-    root.querySelector(".cp-shop-publish")?.addEventListener("click", async (ev) => { ev.preventDefault(); await publishShop(id); this.render(); });
+    // ANNOUNCE, not publish. The old button opened the shop AND posted the link, next to a checkbox
+    // that also opened it — so "tell the players about this" reopened a shop the GM had just shut.
+    // This posts the link and touches nothing; the checkbox above owns open/closed on its own.
+    root.querySelector(".cp-shop-announce")?.addEventListener("click", async (ev) => { ev.preventDefault(); await announceShop(id); this.render(); });
     root.querySelector(".cp-shop-preview")?.addEventListener("click", (ev) => { ev.preventDefault(); this.navigate("storefront", id); });
     root.querySelector(".cp-shop-delete")?.addEventListener("click", async (ev) => { ev.preventDefault(); if (await this._confirm(getShop(id)?.name ?? "", game.i18n.localize("CYBERPUNK.ShopDeleteConfirm"))) { await deleteShop(id); this.navigate("home"); } });
     // NOTE: the storefront "Manage" button is bound in activateListeners (this method early-returns outside build view).
@@ -1196,7 +1202,8 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._openContextMenu(ev, [
       { action: "edit", label: game.i18n.localize("CYBERPUNK.ShopCtxEdit"), handler: () => this.navigate("build", shopId) },
       { action: "preview", label: game.i18n.localize("CYBERPUNK.ShopCtxPreview"), handler: () => this.navigate("storefront", shopId) },
-      { action: "toggle", label: def.open ? game.i18n.localize("CYBERPUNK.ShopClose") : game.i18n.localize("CYBERPUNK.ShopShowToPlayers"), handler: async () => { await updateShop(shopId, { open: !def.open }); this.render(); } },
+      { action: "toggle", label: def.open ? game.i18n.localize("CYBERPUNK.ShopClose") : game.i18n.localize("CYBERPUNK.ShopStatusOpen"), handler: async () => { await updateShop(shopId, { open: !def.open }); this.render(); } },
+      { action: "announce", label: game.i18n.localize("CYBERPUNK.ShopAnnounce"), handler: async () => { await announceShop(shopId); this.render(); } },
       { action: "duplicate", label: game.i18n.localize("CYBERPUNK.ShopCtxDuplicate"), handler: async () => { await duplicateShop(shopId); this.render(); } },
       { action: "rename", label: game.i18n.localize("CYBERPUNK.ShopCtxRename"), handler: async () => { const name = await promptText(game.i18n.localize("CYBERPUNK.ShopName"), def.name); if (name) { await updateShop(shopId, { name }); this.render(); } } },
       { action: "delete", label: game.i18n.localize("CYBERPUNK.ShopCtxDelete"), handler: async () => { if (await this._confirm(def.name, game.i18n.localize("CYBERPUNK.ShopDeleteConfirm"))) { await deleteShop(shopId); this.render(); } } },
@@ -1524,12 +1531,27 @@ function injectSidebarShopButton(html) {
   } catch (e) { console.warn("cp2020-augmented | shop sidebar button failed", e); }
 }
 
-/** GM "Show to Players": open the shop + post a clickable chat link. */
+/**
+ * Post a clickable chat link to a shop, and change nothing else.
+ *
+ * The announce half of the old "Show to Players", split out: whether a shop is open is one decision
+ * with one control, and telling the table where it is is a separate act a GM may want to repeat (or
+ * do for a shop that is deliberately shut, to show a closed sign). A closed shop still gets its
+ * link, with a notice so the GM knows the players will find the door locked.
+ */
+export async function announceShop(shopId) {
+  const def = getShop(shopId); if (!def) return;
+  const content = await renderChatCard("shop-published.hbs", { shopName: foundry.utils.escapeHTML(def.name), shopId });
+  await ChatMessage.create({ content });
+  if (def.open === false) ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopAnnouncedClosed"));
+}
+
+/** Open the shop AND announce it, in one call. Kept as the API/back-compat entry point (chat macros,
+ *  the module API) — the builder's own controls are the two halves above, separately. */
 export async function publishShop(shopId) {
   const def = getShop(shopId); if (!def) return;
   await updateShop(shopId, { open: true });
-  const content = await renderChatCard("shop-published.hbs", { shopName: foundry.utils.escapeHTML(def.name), shopId });
-  ChatMessage.create({ content });
+  await announceShop(shopId);
 }
 
 /**
