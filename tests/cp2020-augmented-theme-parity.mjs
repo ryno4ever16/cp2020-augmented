@@ -303,8 +303,12 @@ if (CAPTURE) {
   chk(`C1 dark rendering identical to the recorded baseline (${compared} computed values)`,
     drift.length === 0, drift.slice(0, 12).join(" | "));
 }
+// ⏱ RE-PINNED 2026-08-17 (perf ruling): the prompt caret STAYS as a signature; its infinite blink
+// animation is retired (17 permanently-animating composited layers measured on an idle page). The
+// signature is now the static "> " caret — an animation reappearing here would be a regression.
 chk("C2 the skin's signature rules ARE live in dark (positive case)",
-  /\[/.test(String(dark.signatures.tabBracket)) && dark.signatures.promptAnimation !== "none"
+  /\[/.test(String(dark.signatures.tabBracket)) && /> /.test(String(dark.signatures.promptCaret))
+  && dark.signatures.promptAnimation === "none"
   && /Work Sans/.test(dark.signatures.bodyFont),
   S(dark.signatures));
 

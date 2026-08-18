@@ -770,7 +770,7 @@
  "signatures": {
   "tabBracket": "\"[ \"",
   "promptCaret": "\"> \"",
-  "promptAnimation": "cp-carolingian-blink",
+  "promptAnimation": "none",
   "bodyFont": "\"Work Sans\", Arial, sans-serif"
  }
 }

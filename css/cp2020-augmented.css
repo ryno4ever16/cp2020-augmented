@@ -666,7 +666,10 @@ body.cp-carolingian .cyberpunk h2::before {
   position: absolute;
   left: 0;
   color: var(--color-highlights);
-  animation: cp-carolingian-blink 2s infinite;
+  /* ⏱ PERF (2026-08-17): the blink ran INFINITE on every H2 of every skinned surface — measured 17
+     permanently-animating composited layers on an idle page (document.getAnimations census), each
+     alive at frame rate for as long as the world is open, more inside each window. The prompt
+     stays; the animation goes. REVERT: `animation: cp-carolingian-blink 2s infinite;` */
 }
 body.cp-carolingian .cyberpunk h1.title > input {
   background-color: transparent;
