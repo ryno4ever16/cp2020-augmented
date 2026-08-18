@@ -132,13 +132,27 @@ try {
       w.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       for (let i = 0; i < 200 && !(w.element?.querySelectorAll(".cp-catalog-row").length); i++) await sleep(50);
       const rowCount = w.element.querySelectorAll(".cp-catalog-row").length;
-      chk("catalog painted its rows", rowCount > 100, rowCount);
+      // The list is WINDOWED: the DOM holds about a screenful and `data-total` on the container is
+      // the census truth for the whole set. (Before the window unit this leg counted the DOM itself.)
+      const listEl = w.element.querySelector(".cp-catalog-list");
+      const total = Number(listEl?.dataset.total);
+      chk("the list container reports the full row census", total > 100, total);
+      chk("catalog painted a window of that census, not all of it", rowCount > 0 && rowCount < total, `${rowCount} painted of ${total}`);
 
-      // Row paint diet: the two properties that keep a list this size cheap.
+      // Row paint diet: the mechanism is the window plus its two spacers — the spacers carry the
+      // height of everything scrolled out, so the scrollbar still measures the whole list.
+      // (content-visibility/contain-intrinsic-size were retired with this unit — nothing to skip
+      // when the off-screen rows are not in the DOM at all.)
       const firstRow = w.element.querySelector(".cp-catalog-row");
       const firstImg = w.element.querySelector(".cp-catalog-row img");
-      chk("rows are skipped while off-screen", getComputedStyle(firstRow).contentVisibility === "auto", getComputedStyle(firstRow).contentVisibility);
-      chk("rows reserve a measured height", /36px/.test(getComputedStyle(firstRow).containIntrinsicSize), getComputedStyle(firstRow).containIntrinsicSize);
+      const padTop = listEl?.querySelector(".cp-list-pad-top");
+      const padBottom = listEl?.querySelector(".cp-list-pad-bottom");
+      const padH = (el) => (el ? parseFloat(getComputedStyle(el).height) || 0 : -1);
+      chk("both list spacers are rendered", !!padTop && !!padBottom, `${!!padTop}/${!!padBottom}`);
+      chk("at the top of the list only the bottom spacer carries height",
+        padH(padTop) === 0 && padH(padBottom) > 0, `top=${padH(padTop)}px bottom=${padH(padBottom)}px`);
+      chk("no row is left with a paint-skipping rule on it",
+        getComputedStyle(firstRow).contentVisibility === "visible", getComputedStyle(firstRow).contentVisibility);
       const nonLazy = [...w.element.querySelectorAll(".cp-catalog-row img")].filter(i => i.getAttribute("loading") !== "lazy").length;
       chk("no row thumb loads eagerly", nonLazy === 0, nonLazy);
       chk("row thumbs keep their intrinsic box", firstImg?.getAttribute("width") === "26" && firstImg?.getAttribute("height") === "26", `${firstImg?.getAttribute("width")}x${firstImg?.getAttribute("height")}`);

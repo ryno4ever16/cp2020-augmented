@@ -287,12 +287,20 @@ try {
     // Filter SEMANTICS unchanged: a sub-shelf click narrows to exactly that shelf.
     await W.fire(r.querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1500);
     r = W.root();
+    // The list is WINDOWED above 150 items, so the census lives on `.cp-catalog-list[data-total]`
+    // and the DOM holds a window of it. Both are read: the total is the filter's answer, the
+    // painted count proves rows actually reached the screen.
+    const census = () => Number(W.root().querySelector(".cp-catalog-list")?.dataset.total);
+    const painted = () => W.root().querySelectorAll(".cp-catalog-list .cp-catalog-row").length;
     const rows = [...r.querySelectorAll(".cp-catalog-list .cp-catalog-row")];
-    chk("semantics: the Pistols shelf shows exactly its own rows", rows.length === wantPistols, `${rows.length} vs ${wantPistols}`);
+    chk("semantics: the Pistols shelf counts exactly its own rows", census() === wantPistols, `${census()} vs ${wantPistols}`);
+    chk("semantics: and it paints rows from that set, never more than it holds",
+      painted() > 0 && painted() <= census(), `${painted()} painted of ${census()}`);
+    void rows;
     await W.fire(r.querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1500);
     r = W.root();
     chk("semantics: clicking the same shelf again clears it (second act)",
-      r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length > wantPistols, r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length);
+      census() > wantPistols && painted() > 0, `${census()} total / ${painted()} painted vs ${wantPistols}`);
 
     // CLEAR — one control, both dimensions, and it only exists while something is on to clear.
     await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1400);
@@ -388,8 +396,14 @@ try {
     r = W.root();
     const jumpVisible = () => { const j = W.root().querySelector(".cp-catalog-jump"); return !!j && j.getBoundingClientRect().height > 0; };
     chk("letters: the A–Z strip is painted in all-items mode", jumpVisible(), jumpVisible());
-    chk("letters: all-items shows the whole visible catalog", r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length > 1000,
-      r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length);
+    // The all-items list is far over the window threshold: its census attribute carries the whole
+    // visible catalog while the DOM holds a window of it.
+    const allList = r.querySelector(".cp-catalog-list");
+    const allTotal = Number(allList?.dataset.total);
+    const allPainted = r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length;
+    chk("letters: all-items counts the whole visible catalog", allTotal > 1000, allTotal);
+    chk("letters: and paints a window of it, not the whole thing",
+      allPainted > 0 && allPainted < allTotal, `${allPainted} painted of ${allTotal}`);
 
     // A small shelf gets no letter strip; a long one (Chipware, 205) does.
     await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Shotguns"]'), "click", {}, 1500);
@@ -407,10 +421,17 @@ try {
     box.value = "militech";
     await W.fire(box, "input", {}, 1800);
     r = W.root();
-    const hits = [...r.querySelectorAll(".cp-catalog-list .cp-catalog-row")].filter(x => x.style.display !== "none");
+    // Text narrowing is DATA-driven now: the strip is repainted from the narrowed set rather than
+    // having non-matching rows hidden in place, and the letter headers leave the DOM with them.
+    const hits = [...r.querySelectorAll(".cp-catalog-list .cp-catalog-row")];
+    const hiddenInPlace = hits.filter(x => x.style.display === "none").length;
     chk("search: searching from the landing jumps straight to the results",
       !r.querySelector(".cp-catalog-landing") && hits.length > 0 && hits.every(x => /militech/i.test(x.dataset.name ?? "")),
       `${!r.querySelector(".cp-catalog-landing")} hits=${hits.length}`);
+    chk("search: the narrowed set is repainted, with nothing left hidden in place", hiddenInPlace === 0, hiddenInPlace);
+    chk("search: letter headers leave the DOM while a term is live",
+      r.querySelectorAll(".cp-catalog-list .cp-letter-header").length === 0,
+      r.querySelectorAll(".cp-catalog-list .cp-letter-header").length);
     await W.close();
     return checks;
   }));
@@ -672,6 +693,242 @@ try {
   }, shopId));
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
+  //  S8 · THE LIST WINDOW
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  //  A list over 150 items keeps only about a screenful of items in the DOM; two spacers carry the
+  //  height of everything scrolled out, and `.cp-catalog-list[data-total]` carries the census the
+  //  DOM no longer shows. Every leg below reads BOTH channels, so neither can go vacuous:
+  //    a  a windowed shelf paints a strict subset of its census, with the pads set accordingly
+  //    b  scrolled to the end, the last item of the set is painted and the bottom spacer is spent
+  //    c  a letter jump lands that letter's header at the top of the viewport
+  //    d  a text term repaints the strip from the narrowed data — headers gone, nomatch honest
+  //    e  a typed quantity survives a scroll-out/scroll-back AND two full renders
+  //    f  a row painted by a SCROLL repaint (not the render) still buys
+  //    g  NEGATIVE: an under-threshold shelf is not windowed at all
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  await section("8 · the list window", () => gm.evaluate(async () => {
+    const W = window.__cpShop;
+    const checks = []; const chk = (label, ok, got) => checks.push({ label, ok: !!ok, got });
+    const CAT = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+    const SUP = await import("/modules/cp2020-augmented/module/shop/supplements.js");
+    const ST = await import("/modules/cp2020-augmented/module/settings.js");
+    const SETUP = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
+    const all = await CAT.getCatalogIndex();
+    const visible = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, ST.shopSourceConfig(), game.user.isGM));
+
+    // Prices must actually be charged for leg (f); restored at the end of the section.
+    const setupWas = SETUP.isShopSetupMode();
+    if (setupWas) await SETUP.setShopSetupMode(false);
+    let buyer = null;
+
+    const list = () => W.root()?.querySelector(".cp-catalog-list");
+    const strip = () => list()?.querySelector(".cp-list-items");
+    const census = () => Number(list()?.dataset.total);
+    const items = () => [...(strip()?.children ?? [])];
+    const rowsOf = () => [...(strip()?.querySelectorAll(".cp-catalog-row") ?? [])];
+    const padH = (which) => { const p = list()?.querySelector(`.cp-list-pad-${which}`); return p ? (parseFloat(getComputedStyle(p).height) || 0) : -1; };
+    /** Drive a real scroll and let the rAF-throttled repaint land. */
+    const scrollTo = async (y, settle = 900) => {
+      const L = list(); if (!L) return;
+      L.scrollTop = y;
+      L.dispatchEvent(new Event("scroll", { bubbles: false }));
+      await W.sleep(settle);
+    };
+
+    try {
+      // ── (a) A WINDOWED SHELF ───────────────────────────────────────────────────────────────
+      let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
+      // A window reopened onto the list rather than the tiles is walked back up first, so the
+      // section always enters the shelf by the same gesture.
+      if (!r.querySelector('.cp-cat-tile[data-cat="Weapons"]')) { await W.fire(r.querySelector(".cp-catalog-uplevel"), "click", {}, 1400); r = W.root(); }
+      await W.fire(r.querySelector('.cp-cat-tile[data-cat="Weapons"]'), "click", {}, 1800);
+      r = W.root();
+
+      const wantWeapons = visible.filter(i => i.category === "Weapons").length;
+      const total = census();
+      chk("window: the shelf's census matches the visible index for that category",
+        total === wantWeapons, `data-total=${total} vs index=${wantWeapons}`);
+      chk("window: that census is the pre-window row count for this shelf (424 at the time of writing)",
+        total > 300, `${total} rows${total === 424 ? " (424, unchanged)" : " (NOTE: no longer 424)"}`);
+      const paintedA = rowsOf().length;
+      chk("window: only a window of those rows exists in the DOM",
+        paintedA > 0 && paintedA < total, `${paintedA} painted of ${total}`);
+      chk("window: both spacers are rendered",
+        !!list()?.querySelector(".cp-list-pad-top") && !!list()?.querySelector(".cp-list-pad-bottom"),
+        `${!!list()?.querySelector(".cp-list-pad-top")}/${!!list()?.querySelector(".cp-list-pad-bottom")}`);
+      chk("window: at the top, the top spacer is spent and the bottom one carries the rest",
+        padH("top") === 0 && padH("bottom") > 0, `top=${padH("top")}px bottom=${padH("bottom")}px`);
+      chk("window: the scrollbar measures the whole set, not the painted part",
+        list().scrollHeight > list().clientHeight * 3, `scrollHeight=${list().scrollHeight} clientHeight=${list().clientHeight}`);
+      // Wiring rule: every painted row carries the identity its handlers read.
+      const keyless = rowsOf().filter(x => !x.dataset.sourceKey && !x.dataset.itemId && !x.dataset.ammoCaliber).length;
+      chk("window: every painted row carries a non-empty identity for its handlers", keyless === 0, `${keyless} keyless of ${paintedA}`);
+
+      // ── (b) THE FAR END ────────────────────────────────────────────────────────────────────
+      // The expected tail is computed from the INDEX, not from the window's own item list, so the
+      // leg checks the window against an independent answer.
+      const lastName = visible.filter(i => i.category === "Weapons")
+        .map(i => i.name).sort((x, y) => x.localeCompare(y)).pop() ?? null;
+      await scrollTo(list().scrollHeight, 1200);
+      const namesAtEnd = rowsOf().map(x => x.dataset.name);
+      chk("far end: the alphabetically last row of the set is painted at the bottom",
+        !!lastName && namesAtEnd.includes(lastName), `last="${lastName}" painted=${namesAtEnd.length} tail="${namesAtEnd[namesAtEnd.length - 1]}"`);
+      chk("far end: the bottom spacer is spent and the top one now carries the scrolled-out height",
+        padH("bottom") === 0 && padH("top") > 0, `top=${padH("top")}px bottom=${padH("bottom")}px`);
+      chk("far end: the DOM still holds only a window", rowsOf().length < census(), `${rowsOf().length} of ${census()}`);
+
+      // ── (c) THE LETTER JUMP ────────────────────────────────────────────────────────────────
+      const JUMP = "S";
+      const jumpBtn = W.root().querySelector(`.cp-jump[data-letter="${JUMP}"]`);
+      chk(`jump: the strip offers a late letter to jump to (${JUMP})`, !!jumpBtn, !!jumpBtn);
+      if (jumpBtn) {
+        await W.fire(jumpBtn, "click", {}, 1200);
+        const L = list();
+        const lTop = L.getBoundingClientRect().top;
+        const stride = W.win()._itemStrides?.row ?? 36;
+        const headers = [...L.querySelectorAll(".cp-letter-header")];
+        const target = headers.find(h => W.txt(h) === JUMP);
+        const dy = target ? target.getBoundingClientRect().top - lTop : null;
+        chk(`jump: the ${JUMP} header is painted after the jump`, !!target, headers.map(h => W.txt(h)).join(""));
+        chk(`jump: it sits within one item height of the viewport top`,
+          dy !== null && Math.abs(dy) <= stride + 2, `offset=${dy === null ? "n/a" : Math.round(dy)}px stride=${Math.round(stride)}px`);
+        const firstBelow = headers.map(h => ({ t: W.txt(h), y: h.getBoundingClientRect().top - lTop })).find(h => h.y >= -1);
+        chk(`jump: it is the first header at or below the viewport top`, firstBelow?.t === JUMP, firstBelow?.t);
+        const firstRowUnder = rowsOf().map(x => ({ n: x.dataset.name, y: x.getBoundingClientRect().top - lTop })).find(x => x.y > (dy ?? 0));
+        chk(`jump: the row under that header starts with the letter`,
+          (firstRowUnder?.n ?? "").toUpperCase().startsWith(JUMP), firstRowUnder?.n);
+      }
+
+      // ── (d) TEXT NARROWING ─────────────────────────────────────────────────────────────────
+      await scrollTo(0, 700);
+      const box = W.root().querySelector(".cp-catalog-search");
+      const weaponNames = visible.filter(i => i.category === "Weapons").map(i => i.name.toLowerCase());
+      const countFor = (t) => weaponNames.filter(n => n.includes(t)).length;
+      // A term that narrows to FEW rows. "kend" is the intended probe; if this rig's data does not
+      // carry it, the leg falls back to another narrow term rather than certifying nothing.
+      const term = ["kend", "militech", "arasaka", "heavy"].find(t => countFor(t) > 0 && countFor(t) <= 60) ?? "a";
+      const wantHits = countFor(term);
+      box.value = term;
+      await W.fire(box, "input", {}, 1400);
+      const hitRows = rowsOf();
+      chk(`search "${term}": the census narrows to exactly the matching rows`,
+        census() === wantHits, `data-total=${census()} vs index=${wantHits}`);
+      chk(`search "${term}": every painted row carries the term`,
+        hitRows.length > 0 && hitRows.every(x => (x.dataset.name ?? "").toLowerCase().includes(term)),
+        `${hitRows.length} painted, offenders: ${hitRows.filter(x => !(x.dataset.name ?? "").toLowerCase().includes(term)).map(x => x.dataset.name).slice(0, 3).join(",") || "none"}`);
+      chk(`search "${term}": nothing is merely hidden in place`,
+        hitRows.filter(x => x.style.display === "none").length === 0, hitRows.filter(x => x.style.display === "none").length);
+      chk(`search "${term}": the letter headers leave the DOM`,
+        list().querySelectorAll(".cp-letter-header").length === 0, list().querySelectorAll(".cp-letter-header").length);
+      chk(`search "${term}": the exact/prefix band leads the order`,
+        (hitRows[0]?.dataset.name ?? "").toLowerCase().indexOf(term) <= (hitRows[hitRows.length - 1]?.dataset.name ?? "").toLowerCase().indexOf(term),
+        `first="${hitRows[0]?.dataset.name}" last="${hitRows[hitRows.length - 1]?.dataset.name}"`);
+
+      // A term nothing matches: the no-match panel is the honest answer, not an empty list.
+      box.value = "zzqqxx";
+      await W.fire(box, "input", {}, 1200);
+      const nomatch = list().querySelector(".cp-catalog-nomatch");
+      chk("search: a term with no matches empties the strip and shows the no-match panel",
+        rowsOf().length === 0 && census() === 0 && !!nomatch && getComputedStyle(nomatch).display !== "none",
+        `rows=${rowsOf().length} total=${census()} panel=${nomatch ? getComputedStyle(nomatch).display : "absent"}`);
+
+      // Clearing restores the shelf whole — headers back, census back (second act).
+      box.value = "";
+      await W.fire(box, "input", {}, 1400);
+      chk("search: clearing the term restores the shelf's full census",
+        census() === wantWeapons, `${census()} vs ${wantWeapons}`);
+      chk("search: and the letter headers come back with it",
+        list().querySelectorAll(".cp-letter-header").length > 0, list().querySelectorAll(".cp-letter-header").length);
+      chk("search: the no-match panel is put away again",
+        !!nomatch && getComputedStyle(nomatch).display === "none", nomatch ? getComputedStyle(nomatch).display : "absent");
+
+      // ── (e) A TYPED QUANTITY SURVIVES THE WINDOW ───────────────────────────────────────────
+      await scrollTo(0, 700);
+      const qRow = rowsOf()[0];
+      const qKey = qRow?.dataset.sourceKey || qRow?.dataset.itemId;
+      const qName = qRow?.dataset.name;
+      const qInput = qRow?.querySelector(".cp-catalog-qty");
+      chk("qty: a painted row offers a quantity field to type into", !!qInput && !!qKey, `${!!qInput}/${qKey}`);
+      if (qInput) {
+        qInput.value = "3";
+        await W.fire(qInput, "input", {}, 400);
+        const findQ = () => rowsOf().find(x => (x.dataset.sourceKey || x.dataset.itemId) === qKey)?.querySelector(".cp-catalog-qty");
+        chk("qty: the typed value is on the field before the scroll", findQ()?.value === "3", findQ()?.value);
+
+        // Two-plus windows away: the row must genuinely leave the DOM, or the leg proves nothing.
+        await scrollTo(4000, 1100);
+        chk("qty: scrolling two windows on takes that row out of the DOM entirely", !findQ(), findQ()?.value ?? "gone");
+        await scrollTo(0, 1100);
+        chk("qty: scrolling back repaints the row with the typed quantity intact (second act)",
+          findQ()?.value === "3", `${findQ()?.value} on "${qName}"`);
+
+        // A category chip is a FULL re-render — off, then back on, and the register still holds.
+        await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons"]'), "click", {}, 1600);
+        await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons"]'), "click", {}, 1800);
+        await scrollTo(0, 700);
+        chk("qty: it survives two full re-renders driven by the category chip",
+          findQ()?.value === "3", `${findQ()?.value} on "${qName}"`);
+      }
+
+      // ── (f) A ROW PAINTED BY A SCROLL REPAINT STILL BUYS ───────────────────────────────────
+      for (const a of game.actors.filter(a => /^__PW__WINBUYER/.test(a.name))) await a.delete().catch(() => {});
+      buyer = await Actor.create({ name: "__PW__WINBUYER", type: "character", system: { eurobucks: 100000 } });
+      await W.win()._cpSyncBuyer(buyer);
+      await W.sleep(700);
+      await scrollTo(4000, 1200);
+      const deep = rowsOf().find(x => {
+        const p = Number(x.querySelector(".cp-cat-price b")?.textContent);
+        return x.dataset.sourceKey && !x.classList.contains("cp-shop-soldout") && p > 0;
+      });
+      chk("buy: a priced row is painted this far down the window", !!deep, deep?.dataset.name ?? "none found");
+      if (deep) {
+        const buyName = deep.dataset.name;
+        const sk = deep.dataset.sourceKey;
+        const packDoc = await (async () => {
+          const i = sk.lastIndexOf(".");
+          try { return await game.packs.get(sk.slice(0, i))?.getDocument(sk.slice(i + 1)); } catch { return null; }
+        })();
+        const price = Number(deep.querySelector(".cp-cat-price b").textContent);
+        deep.querySelector(".cp-catalog-qty").value = "1";
+        const fundsBefore = Number(buyer.system.eurobucks);
+        const heldBefore = new Set(buyer.items.map(i => i.id));
+        deep.querySelector(".cp-catalog-buy").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        for (let i = 0; i < 40 && buyer.items.size === heldBefore.size; i++) await W.sleep(250);
+        await W.sleep(600);
+        const delivered = buyer.items.filter(i => !heldBefore.has(i.id));
+        chk("buy: a row painted by a scroll repaint delivers exactly one item to the buyer",
+          delivered.length === 1, `${delivered.length} delivered from "${buyName}"`);
+        // The row's label carries the corrections layer's name; the pack document carries the raw
+        // one. Either is a correct delivery — a THIRD name would mean the wrong row was bought.
+        chk("buy: the delivered item is the row that was clicked",
+          delivered.length === 1 && (delivered[0].name === buyName || delivered[0].name === packDoc?.name),
+          `delivered="${delivered[0]?.name}" row="${buyName}" pack="${packDoc?.name}"`);
+        chk("buy: and the buyer is charged the price the row showed",
+          Number(buyer.system.eurobucks) === fundsBefore - price,
+          `${fundsBefore} - ${price} → want ${fundsBefore - price}, got ${Number(buyer.system.eurobucks)}`);
+      }
+
+      // ── (g) NEGATIVE: AN UNDER-THRESHOLD SHELF IS NOT WINDOWED ─────────────────────────────
+      await W.close();
+      r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
+      await W.fire(r.querySelector('.cp-cat-tile[data-cat="Ammo"]'), "click", {}, 1800);
+      const aTotal = census();
+      const aRows = rowsOf().length;
+      const aItems = items().length;
+      chk("bypass: the ammo shelf is small enough to be exempt from windowing", aItems <= 150, `${aItems} items`);
+      chk("bypass: every one of its rows is in the DOM", aRows === aTotal && aTotal > 0, `${aRows} painted of ${aTotal}`);
+      chk("bypass: its letter headers are painted alongside the rows", aItems > aRows, `${aItems} items vs ${aRows} rows`);
+      chk("bypass: neither spacer carries any height", padH("top") === 0 && padH("bottom") === 0, `top=${padH("top")}px bottom=${padH("bottom")}px`);
+      await W.close();
+    } finally {
+      try { if (setupWas) await SETUP.setShopSetupMode(true); } catch {}
+      try { if (buyer) await buyer.delete(); } catch {}
+      try { await W.close(); } catch {}
+    }
+    return checks;
+  }));
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
   //  S3b · PER-VIEWER COUNTS — a second client, joined as a player
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   {
@@ -731,9 +988,14 @@ try {
         // is the player's visible index PLUS those rows — never more.
         const LK = await import("/modules/cp2020-augmented/module/lookups.js");
         const ceiling = mine.length + Object.keys(LK.getCalibers()).length;
+        // The DOM holds a window, so the count the leg is about lives on the container's census
+        // attribute; the painted count is checked separately so neither channel can go vacuous.
+        const pTotal = Number(r.querySelector(".cp-catalog-list")?.dataset.total);
+        const pPainted = r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length;
         chk("per-viewer: the rows the player is shown never exceed the player's own set",
-          r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length <= ceiling,
-          `${r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length} vs ${ceiling}`);
+          pTotal > 0 && pTotal <= ceiling, `${pTotal} vs ${ceiling}`);
+        chk("per-viewer: and what is painted is a subset of that count",
+          pPainted > 0 && pPainted <= pTotal, `${pPainted} painted of ${pTotal}`);
         await W.close();
         return checks;
       }, gmCounts.weapons));

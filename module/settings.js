@@ -822,6 +822,17 @@ export function registerAugmentedSettings() {
     default: true
   });
 
+  // Per-user: the one-time "this window is being stalled from outside" notice (catalog.js
+  // armShopStallSignpost — measurement-triggered, fires at most once a session). Off = never notify.
+  game.settings.register(SCOPE, "shopStallNotice", {
+    name: "SETTINGS.ShopStallNotice",
+    hint: "SETTINGS.ShopStallNoticeHint",
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
   // GM custom shops as world DATA (shops are not Actors). Map { [id]: ShopDef }; GM-written, all clients
   // read it. See module/shop/shops.js for the ShopDef shape + CRUD.
   game.settings.register(SCOPE, "shops", { scope: "world", config: false, type: Object, default: {} });

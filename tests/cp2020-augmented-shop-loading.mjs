@@ -195,14 +195,22 @@ try {
       root?.querySelector(".cp-catalog-loading") ? "still present" : "gone");
     chk("L2 resolved: real catalog rows are rendered", rows > 0, rows);
 
-    // Tie a rendered row back to a real compendium document: pick a core row out of the built index
-    // and find that exact source key in the list, with the same name.
-    const sample = all.find(r => r.canon === "core" && r.packId && r.name) ?? all[0];
-    const rowEl = sample ? root?.querySelector(`.cp-catalog-row[data-source-key="${CSS.escape(sample.key)}"]`) : null;
-    const nameEl = rowEl?.querySelector(".cp-cat-itemname");
-    chk("L2 resolved: a known pack item is present by name",
-      !!rowEl && (nameEl?.textContent ?? "").trim() === sample.name,
-      sample ? `${sample.key} → "${(nameEl?.textContent ?? "MISSING").trim()}" (want "${sample.name}")` : "no index rows");
+    // Tie a rendered row back to a real compendium document. The list is WINDOWED — only about a
+    // screenful of rows exists in the DOM — so the tie-back starts from a row the window actually
+    // painted and resolves THAT key in the built index, instead of assuming a chosen index row is
+    // on screen. (The row's own label carries a ★ when the row is featured; the name is the rest.)
+    const byKey = new Map(all.map(x => [x.key, x]));
+    const paintedPackRow = [...(root?.querySelectorAll(".cp-catalog-row[data-source-key]") ?? [])]
+      .find(el => byKey.has(el.dataset.sourceKey)) ?? null;
+    const sample = paintedPackRow ? byKey.get(paintedPackRow.dataset.sourceKey) : null;
+    const nameEl = paintedPackRow?.querySelector(".cp-cat-itemname");
+    const painted = (nameEl?.textContent ?? "").trim().replace(/\s*★$/, "");
+    chk("L2 resolved: a painted row resolves to its pack item by name",
+      !!sample && painted === sample.name,
+      sample ? `${sample.key} → "${painted || "MISSING"}" (want "${sample.name}")` : "no painted pack row");
+    chk("L2 resolved: the census attribute reports far more rows than the window paints",
+      Number(root?.querySelector(".cp-catalog-list")?.dataset.total) > rows,
+      `${root?.querySelector(".cp-catalog-list")?.dataset.total} total vs ${rows} painted`);
     window.__cpaRows = rows;
   });
 

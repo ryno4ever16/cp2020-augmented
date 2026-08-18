@@ -91,6 +91,31 @@ const BULK_ADD_CONFIRM_OVER = 20;
 const JUMP_ROWS_OVER = 60;
 
 /**
+ * THE LIST WINDOW — only ~a screenful of items exists in the DOM at once; two spacer divs stand in
+ * for everything scrolled out. The point is MUTATION MASS: a 2,500-row paint hands ~25,000 nodes to
+ * every DOM observer on the page in one batch, and the 2026-08-18 lag investigation measured a
+ * password manager's page scanner spending 5-6 s per such batch (import-staging/
+ * SHOP-LAG-INVESTIGATION.md — the module's own render was 410 ms and is now ~a tenth of that).
+ * Windowing caps every batch, initial paint and scroll alike, at ~window size.
+ *
+ * Geometry is MEASURED, never assumed: item strides are read off the first painted window
+ * (per kind — letter headers and rows differ), and a prefix-offset table maps scrollTop⇄index, so
+ * the CSS keeps styling rows however it likes and the look does not change.
+ */
+const LIST_WINDOW = Object.freeze({
+  // A list at or under this many ITEMS renders whole — windowing overhead is pure loss at shelf
+  // scale, and every pre-window behavior (scrollIntoView jumps, DOM-complete lists) holds there.
+  bypassAt: 150,
+  // Items painted beyond each edge of the viewport, so a scroll has settled rows waiting instead
+  // of blank spacer. A repaint triggers only when the window's edge enters the overscan.
+  overscan: 14,
+  // The initial paint's item count (before the first measure knows the real viewport/stride).
+  initialCount: 60,
+  // Stride fallbacks (px) for a window too empty to measure — one render later they self-correct.
+  fallbackRowH: 30, fallbackHeaderH: 24,
+});
+
+/**
  * The filter drawer's own state — open/collapsed, and which category groups are expanded.
  *
  * BROWSER-LOCAL, deliberately, and not a game setting. It is a per-person view preference about a
@@ -116,6 +141,49 @@ const CATEGORY_ICONS = {
   FBC: "fa-robot", Gear: "fa-bag-shopping", Netrunning: "fa-network-wired",
   Programs: "fa-code", Vehicles: "fa-car",
 };
+
+// ── The stall signpost ──────────────────────────────────────────────────────
+/**
+ * A ONE-TIME, MEASUREMENT-TRIGGERED notice for the person whose browser is stalling around this
+ * window. The 2026-08-18 investigation traced exactly this experience to a password-manager
+ * extension's page scanner (import-staging/SHOP-LAG-INVESTIGATION.md) — nothing a module can detect
+ * by name or fix from inside the page. What it CAN do honestly is measure: a main-thread stall this
+ * long while a shop window is open is the symptom, whoever owns it, and the person seeing it gets
+ * the pointer everyone in that investigation needed. The observer lives only while a shop window
+ * does; the notice fires at most once a session; a client setting mutes it for good.
+ */
+const STALL_SIGNPOST = Object.freeze({
+  // The module's own worst measured main-thread task with the window open was 91 ms (extensionless
+  // profile, 2026-08-18); the scanner's passes ran 3,000-6,000 ms. 1,500 sits an order of magnitude
+  // above the first and cannot miss the second.
+  taskMs: 1500,
+});
+let _stallObserver = null;
+let _stallNoticed = false;
+function armShopStallSignpost() {
+  if (_stallObserver || _stallNoticed) return;
+  try { if (game.settings.get(SCOPE, "shopStallNotice") === false) return; } catch { /* unregistered — arm anyway */ }
+  try {
+    _stallObserver = new PerformanceObserver((entries) => {
+      for (const e of entries.getEntries()) {
+        if (e.duration < STALL_SIGNPOST.taskMs || _stallNoticed) continue;
+        _stallNoticed = true;
+        disarmShopStallSignpost();
+        ui.notifications?.warn(game.i18n.format("CYBERPUNK.ShopStallNotice", { seconds: (e.duration / 1000).toFixed(1) }), { permanent: true });
+        console.info(`${SCOPE} | a main-thread task of ${Math.round(e.duration)} ms ran with a shop window open. `
+          + `The module's own render work measures well under 100 ms — a browser extension scanning the page `
+          + `(password managers and ad blockers commonly do) is the usual owner. Limiting that extension's `
+          + `site access for this address removes the stall.`);
+        return;
+      }
+    });
+    _stallObserver.observe({ entryTypes: ["longtask"] });
+  } catch { _stallObserver = null; /* longtask unsupported on this browser */ }
+}
+function disarmShopStallSignpost() {
+  try { _stallObserver?.disconnect(); } catch { /* already gone */ }
+  _stallObserver = null;
+}
 
 /** Split a "packId.itemId" sourceKey (packId itself contains a dot). */
 function splitSourceKey(sk) {
@@ -516,10 +584,58 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       // Ammo isn't a compendium pack (caliber × load matrix, box pricing) — fold it into the master
       // catalog as generated rows. Only the catalog view shows ammo; custom shops curate compendium docs.
       const merged = [...all, ...this._ammoCatalogRows()].sort((a, b) => a.name.localeCompare(b.name));
-      return { ...common, ...this._dataCatalog(merged, { isGM, cfg, search }) };
+      return this._windowListContext({ ...common, ...this._dataCatalog(merged, { isGM, cfg, search }) });
     }
-    if (this.view === "build")      return { ...common, ...this._dataBuild(all, { isGM, cfg, search }) };
-    return { ...common, ...this._dataStorefront(all, { isGM, cfg, search }) };
+    if (this.view === "build")      return this._windowListContext({ ...common, ...this._dataBuild(all, { isGM, cfg, search }) });
+    return this._windowListContext({ ...common, ...this._dataStorefront(all, { isGM, cfg, search }) });
+  }
+
+  /**
+   * The window's data half, run once per render on whichever view carries a row list: flatten the
+   * rows into the item strip (headers interleaved, exactly as the template used to), remember the
+   * base set + the flags the row partial reads, and hand the context only the initial window. The
+   * template's spacers + `_activateListWindow` take it from there.
+   */
+  _windowListContext(ctx) {
+    this._itemStrides = null;   // stale the geometry — the coming render may restyle anything
+    this._itemOffsets = null;
+    this._winRange = null;
+    this._searchDirty = false;  // the fresh render paints the unsearched strip
+    if (!Array.isArray(ctx.rows)) { this._baseRows = null; this._listItems = []; return ctx; }
+    this._baseRows = ctx.rows;
+    this._listFlags = {
+      isBuild: ctx.isBuild, isCatalog: ctx.isCatalog, isGM: ctx.isGM,
+      showSource: ctx.showSource, fashionStyles: ctx.fashionStyles, hasBuyer: ctx.hasBuyer,
+    };
+    this._listItems = this._flattenListItems(ctx.rows, { searching: false });
+    const n = this._listItems.length;
+    ctx.windowItems = n <= LIST_WINDOW.bypassAt ? this._listItems : this._listItems.slice(0, LIST_WINDOW.initialCount);
+    return ctx;
+  }
+
+  /** Rows → the item strip the partial paints: divider/letter headers become their own entries
+   *  (dropped while a text search narrows — headers are meaningless mid-search, exactly the rule
+   *  the old `.cp-searching` CSS applied), and a row a buyer has typed a quantity into gets it
+   *  back through the same `_rowChoices` register the load/style dropdowns already use. */
+  _flattenListItems(rows, { searching = false } = {}) {
+    const items = [];
+    for (const r of rows) {
+      if (!searching) {
+        if (r._featuredDivider) items.push({ header: `★ ${game.i18n.localize("CYBERPUNK.ShopFeatured")}` });
+        if (r._restDivider) items.push({ header: game.i18n.localize("CYBERPUNK.ShopMoreCatalog") });
+        if (r._first) items.push({ header: r._letter, headerLetter: r._letter });
+      }
+      const key = this._rowDataKey(r);
+      const qty = key ? this._rowChoices.get(key)?.qty : null;
+      items.push({ r: qty ? { ...r, qty } : r });
+    }
+    return items;
+  }
+
+  /** The data-side twin of `_rowChoiceKey` (which reads the rendered row's dataset). */
+  _rowDataKey(r) {
+    if (r.ammo && r.caliber) return `ammo:${r.caliber}`;
+    return r.key || r.sourceKey || r.itemId || r.id || "";
   }
 
   /** Start (or join) the index build behind the pending panel and re-render once it resolves.
@@ -661,6 +777,18 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       if (!key) continue;
       const saved = this._rowChoices.get(key);
 
+      // The typed quantity survives window repaints and full renders through the same register —
+      // restored here for the DOM the flatten didn't see (typing after the paint), and at flatten
+      // time for the DOM it did.
+      const qty = row.querySelector(".cp-catalog-qty");
+      if (qty) {
+        if (saved?.qty) qty.value = saved.qty;
+        qty.addEventListener("input", () => {
+          const v = Math.max(1, parseInt(qty.value, 10) || 1);
+          this._rowChoices.set(key, { ...(this._rowChoices.get(key) ?? {}), qty: v });
+        });
+      }
+
       const load = row.querySelector(".cp-catalog-ammo-load");
       if (load) {
         // Only restore a value the row still offers: the per-caliber load list is filtered by family,
@@ -745,6 +873,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    *  and keep the window header title in sync with the dynamic, view-based `get title()`. */
   _onRender(context, options) {
     super._onRender?.(context, options);
+    armShopStallSignpost();
     const titleEl = this.element?.querySelector?.(".window-title");
     if (titleEl) titleEl.textContent = this.title;
     if (this.element) this.activateListeners(this.element);
@@ -757,6 +886,13 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         try { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } catch { /* not focusable yet */ }
       }
     }
+  }
+
+  /** The signpost listens only while a shop window exists — the last one closing stands it down. */
+  async _preClose(options) {
+    await super._preClose?.(options);
+    const others = [...foundry.applications.instances.values()].some(w => w !== this && w instanceof CatalogBrowser);
+    if (!others) disarmShopStallSignpost();
   }
 
   // ── Listeners ────────────────────────────────────────────────────────────────
@@ -824,7 +960,21 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._activateFilterPaint(root, ".cp-cat-chip", "cat", this._cats);
     this._activateFilterPaint(root, ".cp-book-chip", "book", this._books);
     root.querySelector(".cp-drawer-clear")?.addEventListener("click", (ev) => { ev.preventDefault(); this._cats.clear(); this._books.clear(); this.render(); });
-    root.querySelectorAll(".cp-jump").forEach(el => el.addEventListener("click", (ev) => { ev.preventDefault(); root.querySelector(`.cp-catalog-row[data-letter="${ev.currentTarget.dataset.letter}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }); }));
+    // A–Z jump. A windowed list can't scrollIntoView a row that isn't painted — the jump computes the
+    // target's OFFSET from the item strip instead and lets the scroll event paint it. A bypass-sized
+    // list keeps the smooth scrollIntoView (every row exists there).
+    root.querySelectorAll(".cp-jump").forEach(el => el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const L = ev.currentTarget.dataset.letter;
+      const items = this._listItems ?? [];
+      const list = root.querySelector(".cp-catalog-list");
+      if (items.length <= LIST_WINDOW.bypassAt || !list) {
+        root.querySelector(`.cp-catalog-row[data-letter="${L}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+        return;
+      }
+      const idx = items.findIndex(it => it.headerLetter === L || it.r?._letter === L);
+      if (idx >= 0) list.scrollTop = this._listOffsets(list)[idx];
+    }));
 
     // Drawer: the one collapse affordance, and the per-group expanders. Both are browser-local state.
     root.querySelector(".cp-drawer-toggle")?.addEventListener("click", (ev) => {
@@ -849,6 +999,24 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       try { await game.settings.set(SCOPE, "shopEnabledSources", map); } catch (e) { console.warn(e); }
       this.render();
     }));
+
+    this._activateRowControls(root);
+    this._activateBuildControls(root, isGM);
+    this._activateSetupMode(root, isGM);
+    this._activateListWindow(root);
+
+    // A render rebuilt the rows — re-apply any active text search so it composes with filter changes.
+    this._applySearch(root);
+  }
+
+  /**
+   * Everything bound INSIDE the windowed item strip, in one place — because a window repaint
+   * (`_repaintListWindow`) replaces those nodes wholesale, and their listeners die with them. A full
+   * render reaches here through `activateListeners`; a scroll repaint calls it directly. Binding is
+   * naturally once-per-node either way: every call sees only freshly-created rows.
+   */
+  _activateRowControls(root) {
+    const isGM = game.user.isGM;
 
     // Click name/thumb → compendium sheet.
     root.querySelectorAll(".cp-cat-itemname, .cp-cat-thumb").forEach(el => el.addEventListener("click", async (ev) => {
@@ -882,14 +1050,16 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       }
     }));
 
-    this._activateBuildControls(root, isGM);
+    // Build view: the per-row add-to-vendor button lives in the strip (its tray siblings do not —
+    // they stay wired by _activateBuildControls, which a repaint never disturbs).
+    if (this.view === "build" && isGM && this.shopId) {
+      const id = this.shopId;
+      root.querySelectorAll(".cp-list-items .cp-shop-add").forEach(btn => btn.addEventListener("click", async (ev) => { ev.preventDefault(); const rowEl = ev.currentTarget.closest("[data-source-key]"); if (rowEl) { await addShopItem(id, rowEl.dataset.sourceKey); this.render(); } }));
+    }
+
     this._activateCatalogShopAdd(root, isGM);
     this._activatePurchaseDrag(root);
     this._activateRowChoices(root);
-    this._activateSetupMode(root, isGM);
-
-    // A render rebuilt the rows — re-apply any active text search so it composes with filter changes.
-    this._applySearch(root);
   }
 
   /**
@@ -1004,27 +1174,145 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     });
   }
 
-  /** Client-side text search: show/hide already-rendered rows by name with NO re-render (typing stays
-   *  instant — a per-keystroke re-render lags + drops input badly when the window is popped out). The
-   *  `cp-searching` class hides the A–Z jump bar and letter headers (they're meaningless while filtering). */
-  _applySearch(root) {
+  // ── The list window's engine ────────────────────────────────────────────────
+
+  /** Wire the scroll → repaint loop for an over-bypass list; set the spacers either way. The list
+   *  container is recreated by every full render, so the listener binds once per container by
+   *  construction (no guard flag needed — the old container died with its listener). */
+  _activateListWindow(root) {
+    const list = root.querySelector(".cp-catalog-list");
+    if (!list) return;
+    this._setListPads(root);
+    if ((this._listItems?.length ?? 0) <= LIST_WINDOW.bypassAt) return;
+    let ticking = false;
+    list.addEventListener("scroll", () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        this._repaintListWindow(root).catch(err => console.warn(`${SCOPE} | list window repaint failed`, err));
+      });
+    }, { passive: true });
+  }
+
+  /** Per-kind item strides (margin-box px), measured off the painted strip — never assumed from CSS.
+   *  Staled by `_windowListContext` so a restyle corrects itself at the next render. */
+  _measureStrides(list) {
+    if (this._itemStrides) return this._itemStrides;
+    let rowH = 0, headerH = 0;
+    for (const el of list.querySelectorAll(".cp-list-items > *")) {
+      const isHeader = el.classList.contains("cp-letter-header");
+      if (isHeader ? headerH : rowH) { if (rowH && headerH) break; continue; }
+      const cs = getComputedStyle(el);
+      const h = el.getBoundingClientRect().height + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+      if (isHeader) headerH = h; else rowH = h;
+    }
+    return (this._itemStrides = {
+      row: rowH || LIST_WINDOW.fallbackRowH,
+      header: headerH || LIST_WINDOW.fallbackHeaderH,
+    });
+  }
+
+  /** offsets[i] = the strip-relative top of item i; offsets[n] = the whole strip's height. */
+  _listOffsets(list) {
+    const items = this._listItems ?? [];
+    if (this._itemOffsets?.length === items.length + 1) return this._itemOffsets;
+    const { row, header } = this._measureStrides(list);
+    const out = new Array(items.length + 1);
+    let y = 0;
+    for (let i = 0; i < items.length; i++) { out[i] = y; y += items[i].header ? header : row; }
+    out[items.length] = y;
+    return (this._itemOffsets = out);
+  }
+
+  /** Repaint the strip to the window the scroll position asks for. The overscan means most scroll
+   *  events change nothing (`_winRange` short-circuit); a paint that IS due replaces ~a screenful of
+   *  nodes and rewires just them. `_winPaintSeq` drops a stale async render that lost the race. */
+  async _repaintListWindow(root, { force = false } = {}) {
+    const list = root.querySelector(".cp-catalog-list");
+    const itemsEl = list?.querySelector(".cp-list-items");
+    if (!list || !itemsEl) return;
+    const items = this._listItems ?? [];
+    const offsets = this._listOffsets(list);
+    const top = list.scrollTop;
+    let lo = 0, hi = items.length;                       // smallest i with offsets[i+1] > top
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (offsets[mid + 1] > top) hi = mid; else lo = mid + 1; }
+    const first = Math.max(0, lo - LIST_WINDOW.overscan);
+    let last = lo;
+    const bottomEdge = top + list.clientHeight;
+    while (last < items.length && offsets[last] < bottomEdge) last++;
+    last = Math.min(items.length, last + LIST_WINDOW.overscan);
+    const range = `${first}:${last}:${items.length}`;
+    if (!force && this._winRange === range) return;
+    this._winRange = range;
+    const seq = (this._winPaintSeq = (this._winPaintSeq ?? 0) + 1);
+    const html = await this._renderRowsPartial(items.slice(first, last));
+    if (seq !== this._winPaintSeq) return;
+    itemsEl.innerHTML = html;
+    const padTop = list.querySelector(".cp-list-pad-top");
+    const padBottom = list.querySelector(".cp-list-pad-bottom");
+    if (padTop) padTop.style.height = `${offsets[first]}px`;
+    if (padBottom) padBottom.style.height = `${Math.max(0, offsets[items.length] - offsets[last])}px`;
+    this._activateRowControls(root);
+  }
+
+  /** One template for both paints: the include in catalog.hbs and every repaint render THIS. */
+  async _renderRowsPartial(items) {
+    const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
+    return render("modules/cp2020-augmented/templates/shop/catalog-rows.hbs", { items, ...(this._listFlags ?? {}) });
+  }
+
+  /** Post-render pad state: the strip holds items [0, painted); the bottom spacer stands in for the
+   *  rest. `data-total` carries the full row count the DOM no longer shows (keepers read it). */
+  _setListPads(root) {
+    const list = root.querySelector(".cp-catalog-list");
+    if (!list) return;
+    const items = this._listItems ?? [];
+    list.dataset.total = String(items.reduce((n, it) => n + (it.r ? 1 : 0), 0));
+    const padTop = list.querySelector(".cp-list-pad-top");
+    const padBottom = list.querySelector(".cp-list-pad-bottom");
+    if (!padTop || !padBottom) return;
+    padTop.style.height = "0px";
+    const painted = list.querySelectorAll(".cp-list-items > *").length;
+    if (painted >= items.length) { padBottom.style.height = "0px"; return; }
+    const offsets = this._listOffsets(list);
+    padBottom.style.height = `${Math.max(0, offsets[items.length] - offsets[painted])}px`;
+  }
+
+  /** Client-side text search, DATA-DRIVEN: the term narrows the item strip and the strip repaints —
+   *  never a full window re-render (typing stays instant, popped-out included), and never more DOM
+   *  than a screenful. Match ordering keeps the old rule: exact → prefix → substring (`_greedySort`),
+   *  alphabetical inside a band; headers drop while a term is live, exactly as `.cp-searching` used
+   *  to hide them. The `cp-searching` class still hides the A–Z strip. */
+  async _applySearch(root) {
     const term = (this._search || "").trim().toLowerCase();
     root.querySelector(".cp-catalog-center")?.classList.toggle("cp-searching", !!term);
     const list = root.querySelector(".cp-catalog-list");
-    if (!list) return;
-    let anyVisible = false;
-    for (const row of list.querySelectorAll(".cp-catalog-row")) {
-      const name = (row.dataset.name || row.querySelector(".cp-cat-itemname")?.textContent || "").toLowerCase();
-      const show = !term || name.includes(term);
-      row.style.display = show ? "" : "none";
-      // Best-match-first among the visible rows (exact → prefix → substring) via flex `order`, so the
-      // natural alphabetical DOM order is restored untouched the moment the search clears. Equal-band rows
-      // keep source (alphabetical) order — flexbox is stable for matching `order` values.
-      row.style.order = !term ? "" : (name === term ? "0" : name.startsWith(term) ? "1" : "2");
-      if (show) anyVisible = true;
+    if (!list || !Array.isArray(this._baseRows)) return;
+    // A fresh render already painted the unsearched strip — nothing to redo until a term has
+    // actually narrowed it once.
+    if (!term && !this._searchDirty) return;
+    this._searchDirty = !!term;
+    let rows = this._baseRows;
+    if (term) {
+      rows = rows.filter(r => r.name.toLowerCase().includes(term));
+      this._greedySort(rows, term);
     }
+    this._listItems = this._flattenListItems(rows, { searching: !!term });
+    this._itemOffsets = null;
+    this._winRange = null;
+    list.scrollTop = 0;
+    const n = this._listItems.length;
+    const count = n <= LIST_WINDOW.bypassAt ? n : LIST_WINDOW.initialCount;
+    const html = await this._renderRowsPartial(this._listItems.slice(0, count));
+    const itemsEl = list.querySelector(".cp-list-items");
+    if (itemsEl) {
+      itemsEl.innerHTML = html;
+      this._activateRowControls(root);
+    }
+    this._setListPads(root);
     const nomatch = list.querySelector(".cp-catalog-nomatch");
-    if (nomatch) nomatch.style.display = (term && !anyVisible) ? "" : "none";
+    if (nomatch) nomatch.style.display = (term && n === 0) ? "" : "none";
   }
 
   /**
@@ -1117,17 +1405,19 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const id = this.shopId;
     const skOf = (el) => el?.closest?.("[data-source-key]")?.dataset?.sourceKey;
 
-    root.querySelectorAll(".cp-shop-add").forEach(btn => btn.addEventListener("click", async (ev) => { ev.preventDefault(); const rowEl = ev.currentTarget.closest("[data-source-key]"); if (rowEl) { await addShopItem(id, rowEl.dataset.sourceKey); this.render(); } }));
+    // (.cp-shop-add — the STRIP-side add button — is wired by _activateRowControls, which windowed
+    // repaints re-run; everything below lives outside the strip and binds once per full render.)
     root.querySelectorAll(".cp-shop-remove").forEach(btn => btn.addEventListener("click", async (ev) => { ev.preventDefault(); const sk = skOf(ev.currentTarget); if (sk) { await removeShopItem(id, sk); this.render(); } }));
     root.querySelector(".cp-bulk-add")?.addEventListener("click", async (ev) => {
       ev.preventDefault();
       const def = getShop(id);
       // Only the items NOT already stocked will be added — confirm before a large bulk add (e.g. the
       // whole catalog when no search/filter is applied) so you can't accidentally dump 900+ items.
-      // Skip rows the live text search has hidden (display:none) so "Add all shown" means exactly that.
-      const newKeys = [...root.querySelectorAll(".cp-catalog-list .cp-catalog-row[data-source-key]")]
-        .filter(r => r.style.display !== "none")
-        .map(r => r.dataset.sourceKey).filter(sk => sk && !def?.items?.[sk]);
+      // "All shown" reads the ITEM STRIP DATA, not the DOM: the windowed list only paints a
+      // screenful, and any active text search has already narrowed `_listItems` (_applySearch).
+      const newKeys = (this._listItems ?? [])
+        .map(it => it.r ? (it.r.key || it.r.sourceKey || "") : "")
+        .filter(sk => sk && !def?.items?.[sk]);
       if (!newKeys.length) { ui.notifications?.info(game.i18n.localize("CYBERPUNK.ShopBulkNone")); return; }
       if (newKeys.length > BULK_ADD_CONFIRM_OVER &&
           !(await this._confirm(def?.name ?? "", game.i18n.format("CYBERPUNK.ShopBulkAddConfirm", { n: newKeys.length })))) return;

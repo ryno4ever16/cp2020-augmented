@@ -115,9 +115,13 @@ const r = await p.evaluate(async () => {
     croot?.querySelector('.cp-cat-chip[data-cat="Vehicles/AVs"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await sleep(1600);
     croot = rootOf(cat);
-    const vis = [...(croot?.querySelectorAll(".cp-catalog-list .cp-catalog-row") ?? [])].filter(x => x.style.display !== "none");
+    // The list windows itself only above 150 items; an AV shelf is far under that, so it renders
+    // whole and the painted count IS the census. Both are read so the leg cannot go vacuous if the
+    // shelf ever grows past the threshold.
+    const vis = [...(croot?.querySelectorAll(".cp-catalog-list .cp-catalog-row") ?? [])];
     out.filtered = {
       count: vis.length,
+      census: Number(croot?.querySelector(".cp-catalog-list")?.dataset.total),
       hasTarget: vis.some(x => x.dataset.itemId === target._id || x.textContent.includes(tdoc.name)),
       chipActive: !!croot?.querySelector('.cp-cat-chip[data-cat="Vehicles/AVs"].active')
     };
@@ -164,6 +168,7 @@ const checks = [
   ["ui: AVs chip label localized", r.ui.avChipLabel === "AVs"],
   ["ui: no chip label leak", r.ui.chipLabelLeak === false],
   ["filter: shows exactly the AV-classed vehicles incl. the target", r.filtered.count === r.index.avClassCount && r.filtered.count > 0 && r.filtered.hasTarget === true],
+  ["filter: the list's own census agrees with the AV-classed count", r.filtered.census === r.index.avClassCount],
   ["filter: chip toggles active", r.filtered.chipActive === true],
   ["pack mutation reverted", r.reverted === true],
   ["0 console errors", errors.length === 0]

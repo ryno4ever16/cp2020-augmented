@@ -158,6 +158,9 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/shop/buyer-bar.hbs",
   // Shop filter drawer — mounted as a partial by three catalog views (catalog/build/storefront).
   "modules/cp2020-augmented/templates/shop/filter-drawer.hbs",
+  // Shop list item strip — the windowed list's row markup, painted by the catalog template's include
+  // AND by every scroll repaint (module/shop/catalog.js _renderRowsPartial), one template both ways.
+  "modules/cp2020-augmented/templates/shop/catalog-rows.hbs",
   "modules/cp2020-augmented/templates/dialog/ip-neglect.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-picker.hbs",
   "modules/cp2020-augmented/templates/dialog/preset-confirm.hbs",
