@@ -961,6 +961,71 @@ await page.evaluate(async ({ actorId, tokenId }) => {
 }, { actorId: sigFix.actorId, tokenId: sigFix.tokenId });
 await page.waitForTimeout(1200);
 
+console.log("\n§14 the re-issue guard");
+// A mark that ends moments after drawing did not age out — the end-reconciler tolerates two rapid
+// ends (each redraws), pauses on the third, and the pause gates ONLY the ended-hook: a real
+// condition mutation still redraws through the sync path.
+const grdFix = await page.evaluate(async () => {
+  const actor = await Actor.create({ name: "__PW__GuardSubject", type: "character" });
+  const proto = await actor.getTokenDocument({ x: 1700, y: 1400, actorLink: true });
+  const [tokenDoc] = await canvas.scene.createEmbeddedDocuments("Token", [proto.toObject()]);
+  await new Promise(r => setTimeout(r, 800));
+  return { actorId: actor.id, tokenId: tokenDoc.id, onCanvas: !!canvas.tokens.get(tokenDoc.id) };
+});
+check("the guard section's figure is placed and drawn on the canvas", grdFix.onCanvas === true, grdFix.tokenId);
+const grd = await page.evaluate(async ({ mod, actorId, TID }) => {
+  const M = await import(mod);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const own = () => M.liveStatusFx().filter(e => String(e?.data?.name ?? "").includes(TID));
+  const endRaw = async () => {   // an end the module did NOT intend — the reconciler's redraw case
+    for (const e of own()) { try { Sequencer.EffectManager.endEffects({ name: e.data.name }); } catch (_e) { /* gone */ } }
+    await sleep(1000);
+    return own().length;
+  };
+  const out = {};
+  const warns = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => { warns.push(a.map(String).join(" ")); realWarn(...a); };
+  try {
+    const actor = game.actors.get(actorId);
+    await actor.toggleStatusEffect("burning", { active: true });
+    await sleep(2000);
+    out.marked = own().length;
+    out.afterEnd1 = await endRaw();     // strike 1 → redrawn
+    out.afterEnd2 = await endRaw();     // strike 2 → redrawn
+    out.afterEnd3 = await endRaw();     // strike 3 → paused, stays down
+    await sleep(1500);
+    out.stillDown = own().length;
+    out.pauseWarns = warns.filter(w => w.includes("re-issue paused")).length;
+    // The sync path ignores the pause: a real mutation redraws the mark.
+    await actor.toggleStatusEffect("burning", { active: false });
+    await sleep(800);
+    await actor.toggleStatusEffect("burning", { active: true });
+    await sleep(2000);
+    out.syncRedraws = own().length;
+    await actor.toggleStatusEffect("burning", { active: false });
+    await sleep(1500);
+    out.cleared = own().length;
+  } finally {
+    console.warn = realWarn;
+  }
+  return out;
+}, { mod: MOD, actorId: grdFix.actorId, TID: grdFix.tokenId });
+check("the guard figure wears its mark before the ends run", grd.marked === 1, `${grd.marked} drawn`);
+check("two rapid unintended ends are each answered with a redraw",
+  grd.afterEnd1 === 1 && grd.afterEnd2 === 1, `after end 1: ${grd.afterEnd1}; after end 2: ${grd.afterEnd2}`);
+check("the third rapid end trips the pause — the mark stays down",
+  grd.afterEnd3 === 0 && grd.stillDown === 0, `after end 3: ${grd.afterEnd3}; later: ${grd.stillDown}`);
+check("the trip warns exactly once, naming the pause", grd.pauseWarns === 1, `${grd.pauseWarns} warn(s)`);
+check("NEGATIVE for the pause's scope: a real condition mutation still redraws through the sync path",
+  grd.syncRedraws === 1, `${grd.syncRedraws} drawn under pause`);
+check("the guard section left the figure clean", grd.cleared === 0, `${grd.cleared} left`);
+await page.evaluate(async ({ actorId, tokenId }) => {
+  try { await canvas.scene.deleteEmbeddedDocuments("Token", [tokenId]); } catch (_e) { /* already gone */ }
+  try { await game.actors.get(actorId)?.delete(); } catch (_e) { /* already gone */ }
+}, { actorId: grdFix.actorId, tokenId: grdFix.tokenId });
+await page.waitForTimeout(1200);
+
 /* ─────────────────── cleanup ─────────────────── */
 await page.evaluate(async ({ actorId, tokenId }) => {
   try { await canvas.scene.deleteEmbeddedDocuments("Token", [tokenId]); } catch (_e) { /* already gone */ }

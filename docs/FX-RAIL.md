@@ -1696,6 +1696,9 @@ is the table, so a sixth condition is a row rather than a change:
 | `STATUS_FX.fadeInMs` / `.fadeOutMs` | 300 / 400 | how a mark arrives and leaves |
 | `CANVAS_SWEEP_FALLBACK_MS` ⭐ | **3000** | how long the demoted `canvasReady` fallback waits for the engine's own `sequencerEffectManagerReady` signal before sweeping anyway (2026-08-15, the wipe race — §2a.4, §6). It only ever fires on a host where that signal never comes, where there is also no wipe to race, so generosity costs nothing |
 | `combatFxEnabled` (world setting) | default `true` | **shared with the shot rail** — the overlays ride the same master switch, read per event, and a switch-off sweeps what is already drawn |
+| `STATUS_FX_REISSUE.rapidWindowMs` ⭐ *new 2026-08-18* | **15000** (revert n/a — the window only classifies) | how young an unintended end must be to count as RAPID rather than aged-out. 40× under the 600 s lifetime; generously above the engine's ~140 ms registration blindness and the 3 s canvas-fallback race |
+| `STATUS_FX_REISSUE.rapidLimit` ⭐ | **3** (revert `Infinity` = pre-guard behavior) | how many rapid ends of one name the end-reconciler answers with a redraw before pausing. Two tolerates a documented double-draw race pair; the third is mechanical failure |
+| `STATUS_FX_REISSUE.cooldownMs` ⭐ | **300000** (revert `0` = no pause) | how long the ended-hook's redraw stays paused for a tripped name. Gates ONLY the ended-hook echo — condition mutations and sweeps still redraw through the sync path, so a recovered engine heals at the next real event |
 
 **The shot pattern's knobs**, which are not in `effects.js` because the pattern is not a sprite:
 
@@ -1736,6 +1739,20 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-18 — the condition overlays' end-reconciler gains a rapid-end guard.** The re-issue was
+built for one legitimate case — an overlay aging out at its 600 s lifetime — but answered EVERY
+unintended end with a redraw, including one the engine failed to hold at all (the rail's canary case:
+a long-lived tab that has exhausted media-element creation fails sprite creation inside the engine).
+That failure cycled draw→instant end→redraw for the rest of the session, unbounded — found during the
+2026-08-17/18 client-lag investigation (`import-staging/SHOP-LAG-INVESTIGATION.md`) as the module's
+one unbounded event loop. The guard classifies an end younger than `rapidWindowMs` (15 s — nothing
+legitimate ends that young without registering intent) as a strike; at `rapidLimit` (3) the
+ended-hook's redraw pauses for `cooldownMs` (5 min), warning once per trip. **The pause gates only
+the ended-hook echo** — mutations and sweeps redraw through the sync path, so a healthy engine heals
+at the next real event and a broken one costs one draw per event instead of a continuous cycle.
+Knobs + reverts in §5; keeper §14 pins tolerance (two rapid ends redraw), the trip (third stays
+down, one warn), and the pause's scope (a real mutation still redraws).
 
 **2026-08-17 — the near band's tracer cut is floored at 15ft; the point-blank backwash goes (user
 ruling: "I don't want this tail").** The field report: close shots occasionally drew a backward tail

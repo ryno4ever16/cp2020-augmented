@@ -295,6 +295,41 @@ export function pendingStatusFx() { return _pending; }
 const _intentionalEnds = new Set();
 
 /**
+ * THE RE-ISSUE GUARD. The ended-hook's redraw is built for ONE legitimate case: an overlay aging out
+ * at `lifetimeMs` (600 s). An overlay that ends moments after it was drawn did not age out — the
+ * engine failed to hold the element (the rail's canary records the real case: a long-lived tab that
+ * has exhausted media-element creation fails sprite creation inside the engine). Without a guard that
+ * failure cycles draw→instant end→redraw for the rest of the session. The guard counts rapid ends per
+ * name and pauses the ended-hook's redraw — and ONLY the ended-hook's: a real condition mutation or a
+ * scene sweep still redraws through the sync path, so a recovered engine heals at the next event.
+ * State is bounded oldest-out like the intent register above.
+ */
+const STATUS_FX_REISSUE = Object.freeze({
+  // 40× under the 600 s lifetime; generously above the engine's ~140 ms registration blindness and
+  // the 3 s canvas-fallback race. Nothing legitimate ends this young without registering intent.
+  rapidWindowMs: 15000,
+  // A documented double-draw race can cost one rapid pair; the third rapid end of one name is
+  // mechanical failure. Revert: Infinity (guard never trips — the pre-guard behavior).
+  rapidLimit: 3,
+  // Half a lifetime. Gates only the ended-hook echo, so recovery needs no timer of its own.
+  // Revert: 0 (no pause).
+  cooldownMs: 300000,
+});
+const REISSUE_REGISTER_MAX = 512;
+const _reissueGuard = new Map();   // name → { issuedAt, strikes, coolUntil }
+function _reissueRecordOf(name) {
+  let rec = _reissueGuard.get(name);
+  if (!rec) {
+    if (_reissueGuard.size >= REISSUE_REGISTER_MAX) {
+      _reissueGuard.delete(_reissueGuard.keys().next().value);   // oldest out; Maps keep insertion order
+    }
+    rec = { issuedAt: 0, strikes: 0, coolUntil: 0 };
+    _reissueGuard.set(name, rec);
+  }
+  return rec;
+}
+
+/**
  * EVERY OVERLAY ALIVE ON THIS CLIENT RIGHT NOW, oldest first — the cap's only reader, and a query of
  * the engine rather than a ledger of our own, for the reason the burning ground's census gives: a
  * tally we kept would drift the instant an effect ended for a reason we did not cause.
@@ -399,6 +434,7 @@ function drawStatusFx(token, row) {
   else if (row.aboveLighting) fx.aboveLighting(true);
   if (row.colour) fx.filter("ColorMatrix", row.colour);
   _pending++;
+  _reissueRecordOf(name).issuedAt = Date.now();
   seq.play()
     .catch((err) => console.warn(`${SCOPE} | condition overlay play failed`, err))
     .finally(() => { _pending = Math.max(0, _pending - 1); });
@@ -536,6 +572,25 @@ function _onEffectEnded(effect) {
   const name = String(effect?.data?.name ?? "");
   if (!name.startsWith(`${STATUS_FX_NAME}.`)) return;
   if (_intentionalEnds.delete(name)) return;
+  // The re-issue guard (spec above): an end this soon after the draw is engine failure, not aging —
+  // strike it, and past the limit pause THIS path only. The warn fires once per name per trip.
+  const rec = _reissueRecordOf(name);
+  const now = Date.now();
+  if (rec.coolUntil > now) return;
+  if (rec.issuedAt && (now - rec.issuedAt) < STATUS_FX_REISSUE.rapidWindowMs) {
+    rec.strikes += 1;
+    if (rec.strikes >= STATUS_FX_REISSUE.rapidLimit) {
+      rec.coolUntil = now + STATUS_FX_REISSUE.cooldownMs;
+      if (rec.strikes === STATUS_FX_REISSUE.rapidLimit) {
+        console.warn(`${SCOPE} | condition overlay ${name} ended ${rec.strikes}× within ` +
+          `${STATUS_FX_REISSUE.rapidWindowMs} ms of drawing — the engine is not holding the element; ` +
+          `re-issue paused ${Math.round(STATUS_FX_REISSUE.cooldownMs / 60000)} min (sync paths unaffected)`);
+      }
+      return;
+    }
+  } else {
+    rec.strikes = 0;
+  }
   const tokenId = name.slice(`${STATUS_FX_NAME}.`.length).split(".")[0];
   const token = canvas?.tokens?.placeables?.find((t) => tokenIsLive(t) && t.document.id === tokenId);
   if (token) syncTokenStatusFx(token);
