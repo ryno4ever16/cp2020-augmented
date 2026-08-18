@@ -85,18 +85,32 @@
          data-ready). Rows come from _prepareContext (JS owns the hazard list + labels). --}}
     {{> (template "fields/boolean") label="MechProtection" edit="system.mechProtection.enabled"}}
     {{#if system.mechProtection.enabled}}
+    {{!-- Each label+input travels in its own `.cp-mech-protection-pair` span: the inner `.flexrow`
+         gives every DIRECT child a zero flex-basis, which collapsed the bare sub-labels to their
+         padding and let their text paint across the next input. Pairing also makes the wrap unit a
+         whole label+input, so a narrow cell breaks BETWEEN pairs instead of splitting one. A hazard
+         carries four fields, so its row takes the field-list's full width (the system's own
+         `span-two-cells`) rather than one half-width grid cell. --}}
     {{#each @root.mechProtectionRows}}
-    <div class="field">
+    <div class="field cp-mech-protection-row span-two-cells">
         <label>{{label}}</label>
         <span class="flexrow flex-pad">
-            <label class="nogrow">{{immuneLabel}}</label>
-            <input type="checkbox" name="system.mechProtection.{{key}}.immune" data-dtype="Boolean" {{#if immune}}checked{{/if}}>
-            <label class="nogrow">{{modLabel}}</label>
-            <input type="number" name="system.mechProtection.{{key}}.mod" value="{{mod}}">
-            <label class="nogrow" title="{{CPLocal "MechProtectionPercentHint"}}">{{percentLabel}}</label>
-            <input type="number" name="system.mechProtection.{{key}}.percent" value="{{percent}}">
-            <label class="nogrow" title="{{CPLocal "MechProtectionDamageMultHint"}}">{{damageMultLabel}}</label>
-            <input type="number" step="0.05" name="system.mechProtection.{{key}}.damageMult" value="{{damageMult}}">
+            <span class="cp-mech-protection-pair">
+                <label class="nogrow">{{immuneLabel}}</label>
+                <input type="checkbox" name="system.mechProtection.{{key}}.immune" data-dtype="Boolean" {{#if immune}}checked{{/if}}>
+            </span>
+            <span class="cp-mech-protection-pair">
+                <label class="nogrow">{{modLabel}}</label>
+                <input type="number" name="system.mechProtection.{{key}}.mod" value="{{mod}}">
+            </span>
+            <span class="cp-mech-protection-pair">
+                <label class="nogrow" title="{{CPLocal "MechProtectionPercentHint"}}">{{percentLabel}}</label>
+                <input type="number" name="system.mechProtection.{{key}}.percent" value="{{percent}}">
+            </span>
+            <span class="cp-mech-protection-pair">
+                <label class="nogrow" title="{{CPLocal "MechProtectionDamageMultHint"}}">{{damageMultLabel}}</label>
+                <input type="number" step="0.05" name="system.mechProtection.{{key}}.damageMult" value="{{damageMult}}">
+            </span>
         </span>
     </div>
     {{/each}}

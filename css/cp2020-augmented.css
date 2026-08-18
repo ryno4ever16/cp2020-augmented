@@ -489,6 +489,56 @@
 .cyberpunk.sheet.item .field:has(> select) > .flex-pad,
 .cyberpunk.sheet.vehicle .field:has(> select) > .flex-pad { flex-grow: 0; min-width: 0; }
 
+/* --- P6 protection hazard rows (item sheet: cyberware / misc gear) ---------------------------
+   Each hazard is ONE `.field` grid cell packing four label+input pairs into an inner `.flexrow`
+   span, and three rules combined to shred it:
+     • core foundry2.css `.flexrow > *` (layer blocks.base) gives EVERY child `flex: 1 1 0%`;
+     • the system's `.cyberpunk .nogrow` clears only flex-GROW, not that zero flex-BASIS;
+     • `.cyberpunk.sheet.item .field-list .field label` sets `min-width: 0`.
+   So each sub-label collapsed to its 8px of padding with a zero-width content box — measured 8px
+   wide for a 31px word — and, with `overflow: visible`, painted its text straight across the next
+   input while wrapping at every space onto a second line (17.5px line-height, 35px tall boxes).
+   The inputs kept `flex-grow: 1` and swallowed all leftover width — 45px each on a 520px sheet,
+   114px on an 1100px one — so a WIDER window pushed each label further from its own input rather
+   than relieving the crowding.
+   The fix: labels sized by their content and never wrapped, number inputs pinned to the same 3.6em
+   the sheet's other number fields already use, and each label+input kept inside one nowrap pair so
+   a narrow cell breaks BETWEEN pairs instead of through one. The pair span is a new element, so it
+   — not its children — is now what `.cyberpunk .field > span > *` paints; the children hand their
+   ground and ink back to it (same idiom as the armor-layers/conditional-armor spacers above). --- */
+.cyberpunk .field.cp-mech-protection-row > label { flex: 0 0 auto; white-space: nowrap; }
+.cyberpunk .field.cp-mech-protection-row > span.flex-pad {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px 0;
+}
+.cyberpunk .field.cp-mech-protection-row .cp-mech-protection-pair {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.cyberpunk .field.cp-mech-protection-row .cp-mech-protection-pair > * {
+  background-color: transparent;
+  color: inherit;
+}
+.cyberpunk .field.cp-mech-protection-row .cp-mech-protection-pair > label { flex: 0 0 auto; }
+.cyberpunk .field.cp-mech-protection-row .cp-mech-protection-pair > input[type="number"] {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: 3.6em;
+  min-width: 3.6em;
+  padding: 0 4px;
+  text-align: center;
+}
+.cyberpunk .field.cp-mech-protection-row .cp-mech-protection-pair > input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 /* --- In-sheet Recurring Services panel (injected into the gear tab body; NOT a nav tab). --- */
 .cp2020ae-services-panel { margin-top: 8px; border-top: 1px solid rgba(184,145,106,0.4); padding-top: 6px; }
 .cp2020ae-services-header .larger { font-weight: bold; }
