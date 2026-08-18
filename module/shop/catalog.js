@@ -915,6 +915,16 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    * rebuilt once on release.
    */
   _activateFilterPaint(root, selector, datasetKey, set) {
+    // The release backstop at the bottom listens on the window ROOT, which is the persistent frame —
+    // unlike the buttons, it is not replaced by a re-render. Each render must retire the previous
+    // render's pair first, or every render stacks another (dead, but accumulating) pair on the frame.
+    this._paintRootEnd ??= {};
+    const prev = this._paintRootEnd[datasetKey];
+    if (prev) {
+      root.removeEventListener("pointerup", prev);
+      root.removeEventListener("pointercancel", prev);
+      delete this._paintRootEnd[datasetKey];
+    }
     const buttons = [...root.querySelectorAll(selector)];
     if (!buttons.length) return;
     let stroke = null;   // { on: boolean, touched: Set<string> } while a stroke is live
@@ -969,6 +979,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         this.render();
       });
     }
+    this._paintRootEnd[datasetKey] = end;
     root.addEventListener("pointerup", end);
     root.addEventListener("pointercancel", end);
   }

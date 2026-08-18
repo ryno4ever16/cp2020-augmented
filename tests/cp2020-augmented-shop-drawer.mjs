@@ -484,6 +484,41 @@ try {
   }));
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
+  //  S5b · PAINT ROOT-LISTENER STEADINESS — the release backstop registers on the PERSISTENT frame,
+  //  so each render must retire the previous render's pair; a stacking pair is the regression.
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  await section("5b · paint root listeners", () => gm.evaluate(async () => {
+    const W = window.__cpShop;
+    const checks = []; const chk = (label, ok, got) => checks.push({ label, ok: !!ok, got });
+    await W.close();
+    let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
+    if (r.querySelector('.cp-cat-tile[data-cat=""]')) { await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1600); r = W.root(); }
+    // The paint wiring only registers when its chip columns are on screen — make sure the drawer is open.
+    if (!W.root().querySelector(".cp-cat-chip")) { await W.fire(W.root().querySelector(".cp-drawer-toggle"), "click", {}, 1200); }
+    chk("root-listener leg precondition: chip column present", !!W.root().querySelector(".cp-cat-chip"), "");
+    const app = W.win();
+    const el = app.element;
+    // Tally root "pointerup" registrations across re-renders by shadowing this one element's
+    // add/removeEventListener (delegating to the real prototype). Steady state = every render's adds
+    // are matched by removes of the previous render's pair.
+    let adds = 0, removes = 0;
+    el.addEventListener = function (type, fn, opts) { if (type === "pointerup") adds++; return EventTarget.prototype.addEventListener.call(this, type, fn, opts); };
+    el.removeEventListener = function (type, fn, opts) { if (type === "pointerup") removes++; return EventTarget.prototype.removeEventListener.call(this, type, fn, opts); };
+    for (let i = 0; i < 4; i++) { await app.render(); await W.sleep(600); }
+    delete el.addEventListener; delete el.removeEventListener;
+    chk("paint root backstop: re-renders retire the previous pair (adds == removes over 4 renders)",
+      adds > 0 && adds === removes, `adds=${adds} removes=${removes}`);
+    // And the surviving generation is the live one: a plain chip click still toggles.
+    const on = () => !!W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Rifles"]')?.classList.contains("active");
+    const wasOn = on();
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Rifles"]'), "click", {}, 1400);
+    chk("paint root backstop: the live generation's chip click still toggles after the renders", on() !== wasOn, `${wasOn} → ${on()}`);
+    if (on() !== wasOn) await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Rifles"]'), "click", {}, 1200);
+    await W.close();
+    return checks;
+  }));
+
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
   //  S6 · SMALL-FIX BATCH
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   await section("6 · small fixes", () => gm.evaluate(async (shopId) => {
