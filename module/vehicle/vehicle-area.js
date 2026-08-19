@@ -4,11 +4,12 @@
  * Class B (HE/HEAT shells, GLs, direct rockets) place a circular burst template; Class F
  * (scatter-packs) place a true angular cone (MM p.72-73). Every token in the area is resolved by
  * the unified 5c dispatcher (vehicle → Pen vs Armor; person → MM p.8), with facing detected per
- * token from the firer. The token-in-area test uses PURE geometry (unit-testable); the
- * MeasuredTemplate is placed only for the visual.
+ * token from the firer. The token-in-area test uses PURE geometry (unit-testable); the area
+ * document is placed only for the visual, through the core-agnostic shim.
  */
 
-import { pxPerMeter, metersToUnits } from "./vehicle-grid.js";
+import { pxPerMeter } from "./vehicle-grid.js";
+import { createArea, deleteArea } from "../combat/area-shapes.js";
 
 const DEG = Math.PI / 180;
 
@@ -35,33 +36,39 @@ export function pointInCone(px, py, ox, oy, dirDeg, halfDeg, range) {
   return d <= halfDeg;
 }
 
-/* ------------------------------ Canvas template placement ------------------------------ */
+/* ------------------------------ Canvas area placement ------------------------------ */
 
-async function placeBurstTemplate(scene, x, y, radiusM) {
-  const td = {
-    t: "circle", x, y, distance: Math.max(0.5, metersToUnits(scene, radiusM)),   // template distance is in grid units
-    fillColor: "#ff6600", borderColor: "#ff6600",
-    flags: { "cp2020-augmented": { vehicleArea: true } }
-  };
-  const [doc] = await scene.createEmbeddedDocuments("MeasuredTemplate", [td]);
-  return doc;
+/**
+ * Place the burst's visual through the core-agnostic `createArea` shim (combat/area-shapes.js).
+ *
+ * This used to write a MeasuredTemplate by name. v14 merged that document type into Region and keeps
+ * only a deprecated translation of the call (its own warning announces removal in v16), so the visual
+ * rode a back-compat path with a deadline instead of the shim every other area in the module already
+ * uses — the same correction vehicle-ordnance.js records for its gas cloud. The shim emits a template
+ * on v13 and a Region on v14; the handle it returns is what `deleteArea` cleans up. Never throws:
+ * `createArea` swallows a backend failure and returns null.
+ */
+function placeBurstArea(scene, x, y, radiusM) {
+  return createArea(scene, { kind: "circle", x, y, radiusM, color: "#ff6600", flags: { vehicleArea: true } });
 }
 
-async function placeConeTemplate(scene, x, y, dirDeg, angleDeg, rangeM) {
-  const td = {
-    t: "cone", x, y, direction: dirDeg, angle: Math.max(5, Number(angleDeg) || 60),
-    distance: Math.max(0.5, metersToUnits(scene, rangeM)),
-    fillColor: "#ff6600", borderColor: "#ff6600",
-    flags: { "cp2020-augmented": { vehicleArea: true } }
-  };
-  const [doc] = await scene.createEmbeddedDocuments("MeasuredTemplate", [td]);
-  return doc;
+/**
+ * Place the cone's visual through the same shim. Regions have no native cone shape, so on v14 the shim
+ * draws it as a polygon (apex plus arc points at the cone's range and half-angle — area-geometry.js);
+ * on v13 it stays a t:"cone" template. Either way this is the VISUAL only — the damage geometry is
+ * `pointInCone` above and does not care how the area is drawn.
+ */
+function placeConeArea(scene, x, y, dirDeg, angleDeg, rangeM) {
+  return createArea(scene, {
+    kind: "cone", x, y, dirDeg, angleDeg: Math.max(5, Number(angleDeg) || 60), rangeM,
+    color: "#ff6600", flags: { vehicleArea: true },
+  });
 }
 
 const _center = (t) => ({ x: t.center?.x ?? t.x, y: t.center?.y ?? t.y });
 
 /**
- * Resolve an area shot: place the template, find every token inside via pure geometry, and dispatch
+ * Resolve an area shot: place the visual, find every token inside via pure geometry, and dispatch
  * each through the 5c dispatcher (per-token facing from the firer; the firer is skipped). Returns
  * the list of struck actors. `shape` = {type:"circle", radiusM} | {type:"cone", angleDeg, rangeM, dirDeg}.
  */
@@ -81,19 +88,29 @@ export async function resolveAreaShot({ firerToken, origin, shape, payload = {},
     document: { rotation: td.rotation, elevation: td.elevation },
   }));
 
-  let template = null, inside = [];
+  // Containment is computed FIRST and outside the placement's try. It is pure geometry and cannot
+  // fail, but it used to share one try block with the visual placement under a log-only catch — so a
+  // throwing placement left this list empty and the shot resolved against nobody while reporting a
+  // clean miss. The visual is best-effort by design; the resolution is not, so they no longer share
+  // a failure path.
+  let inside = [];
+  if (shape.type === "cone") {
+    const rangePx = (Number(shape.rangeM) || 0) * ppm, half = (Number(shape.angleDeg) || 60) / 2;
+    inside = toks.filter(t => pointInCone(_center(t).x, _center(t).y, origin.x, origin.y, shape.dirDeg, half, rangePx));
+  } else {
+    const rPx = (Number(shape.radiusM) || 0) * ppm;
+    inside = toks.filter(t => pointInCircle(_center(t).x, _center(t).y, origin.x, origin.y, rPx));
+  }
+
+  // The visual keeps its own try with the log-only catch: `createArea` already returns null rather
+  // than throwing on a backend failure, so this covers only something unexpected on the way in.
+  let area = null;
   try {
-    if (shape.type === "cone") {
-      const rangePx = (Number(shape.rangeM) || 0) * ppm, half = (Number(shape.angleDeg) || 60) / 2;
-      template = await placeConeTemplate(scene, origin.x, origin.y, shape.dirDeg, shape.angleDeg, shape.rangeM);
-      inside = toks.filter(t => pointInCone(_center(t).x, _center(t).y, origin.x, origin.y, shape.dirDeg, half, rangePx));
-    } else {
-      const rPx = (Number(shape.radiusM) || 0) * ppm;
-      template = await placeBurstTemplate(scene, origin.x, origin.y, shape.radiusM);
-      inside = toks.filter(t => pointInCircle(_center(t).x, _center(t).y, origin.x, origin.y, rPx));
-    }
+    area = (shape.type === "cone")
+      ? await placeConeArea(scene, origin.x, origin.y, shape.dirDeg, shape.angleDeg, shape.rangeM)
+      : await placeBurstArea(scene, origin.x, origin.y, shape.radiusM);
   } catch (err) {
-    console.warn("Cyberpunk2020 | area template placement failed", err);
+    console.warn("Cyberpunk2020 | area visual placement failed", err);
   }
 
   // Tokens actually affected (firer excluded). `skipDispatch` returns them without applying Pen —
@@ -118,7 +135,8 @@ export async function resolveAreaShot({ firerToken, origin, shape, payload = {},
       struck.push(tok.actor);
     }
   }
-  // Remove the visual template after a moment (keeps the scene clean).
-  if (template) setTimeout(() => template.delete?.().catch(() => {}), 4000);
+  // Remove the visual after a moment (keeps the scene clean). Deleted through the shim so it removes
+  // whichever document type this core placed.
+  if (area) setTimeout(() => deleteArea(area).catch(() => {}), 4000);
   return { struck, tokens: struck.length, inside: affected };
 }
