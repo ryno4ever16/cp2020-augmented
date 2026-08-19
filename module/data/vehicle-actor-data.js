@@ -100,6 +100,13 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       mass:  new f.SchemaField({ value: new f.NumberField({ initial: 0 }), unit: new f.StringField({ initial: "tons" }) }),
       cargo: new f.SchemaField({ value: new f.NumberField({ initial: 0 }), unit: new f.StringField({ initial: "kg" }) }),
       bodyRating: numberField(0),        // the PRINTED Body rating (bodyValue stays derived SDP/20)
+      // A flesh-wound total this model never uses: the base system's turn-start save math reads
+      // `system.damage` off EVERY combatant (1.2: actor.js woundState → stunThreshold), and a
+      // vehicle/ACPA actor in the turn order without the field feeds it NaN — a spurious Mortal
+      // verdict, then a throw. Declaring the field at 0 keeps their arithmetic finite and their
+      // gates closed. Nothing of ours reads or writes it on vehicles (vehicle damage = sdp; crew
+      // damage routes to the pilot's own actor by design).
+      damage: numberField(0),
       flavor: stringField(""),
       vehicleTypeText: stringField(""),  // the book's verbatim class string ("Hovercraft", "spacecraft", …)
       // Per-vehicle combat-sheet designation: with the world MM gate on, true renders the Maximum
