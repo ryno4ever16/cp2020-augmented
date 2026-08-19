@@ -36,9 +36,6 @@
     {{!-- ───────────────────── shared header (catalog/build/storefront) ───────────────────── --}}
     <div class="cp-shop-header flexrow">
         <button type="button" class="cp-shop-back" title="{{localize "CYBERPUNK.ShopBackHome"}}">‹ {{localize "CYBERPUNK.ShopTitle"}}</button>
-        {{#if showUplevel}}
-        <button type="button" class="cp-catalog-uplevel" title="{{localize "CYBERPUNK.CatalogBackToCategoriesHint"}}">‹ {{localize "CYBERPUNK.CatalogCategories"}}</button>
-        {{/if}}
         {{#if isBuild}}
             <input type="text" class="cp-shop-name" value="{{shop.name}}" title="{{localize "CYBERPUNK.ShopName"}}"/>
             {{!-- ONE open/closed control. The announce action beside it posts a link and nothing else:
@@ -143,19 +140,7 @@
     </div>
     {{/if}}
 
-    {{!-- ───────────── LANDING: the catalog's front page is its categories, not 2,500 rows ───────────── --}}
-    {{#if landing}}
-    <div class="cp-catalog-landing">
-        {{#each tiles as |t|}}
-        <button type="button" class="cp-cat-tile{{#unless t.key}} cp-cat-tile-all{{/unless}}" data-cat="{{t.key}}" data-count="{{t.count}}" title="{{t.hint}}">
-            <span class="cp-tile-icon"><i class="fa-solid {{t.icon}}"></i></span>
-            <span class="cp-tile-name">{{t.label}}</span>
-            <span class="cp-tile-count">{{t.count}}</span>
-        </button>
-        {{/each}}
-    </div>
-    {{else}}
-
+    {{!-- ───────────── THE LIST: what the window opens onto, drawer and all ───────────── --}}
     <div class="cp-catalog-body">
         {{#if showFilters}}{{> "modules/cp2020-augmented/templates/shop/filter-drawer.hbs"}}{{/if}}
 
@@ -183,7 +168,6 @@
             </div>
         </div>
     </div>
-    {{/if}}
 
     {{#if isBuild}}
     <div class="cp-shop-notes-row"><textarea class="cp-shop-notes" rows="1" placeholder="{{localize "CYBERPUNK.ShopNotes"}}">{{shop.notes}}</textarea></div>

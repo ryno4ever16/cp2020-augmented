@@ -135,12 +135,22 @@ function writeDrawerState(state) {
   catch { /* storage disabled — the drawer just stops remembering */ }
 }
 
-/** Landing-tile glyph per top category. Icons only; the label and the count carry the meaning. */
-const CATEGORY_ICONS = {
-  Weapons: "fa-gun", Armor: "fa-shield-halved", Ammo: "fa-box", Cyberware: "fa-microchip",
-  FBC: "fa-robot", Gear: "fa-bag-shopping", Netrunning: "fa-network-wired",
-  Programs: "fa-code", Vehicles: "fa-car",
-};
+/** The one category a fresh catalog leaves out of its opening set. Ammunition is not a shelf of
+ *  goods but a generated caliber × load matrix, and two dozen rows of it sitting at the head of the
+ *  alphabet is not what the window is opened for. It is one chip away for anyone who wants it. */
+const AMMO_CATEGORY = "Ammo";
+
+/**
+ * The category set a fresh catalog carries: every top category the taxonomy names, except Ammo.
+ *
+ * Derived from CATEGORIES rather than written out, so a category added to the taxonomy is part of
+ * the opening set the day it is added and there is no second list to keep in step. A NEW Set per
+ * call — the set is mutated in place by every filter click, so one shared instance would leak one
+ * window's filters into the next.
+ */
+function defaultCatalogCats() {
+  return new Set(CATEGORIES.map(c => c.key).filter(k => k !== AMMO_CATEGORY));
+}
 
 // ── The stall signpost ──────────────────────────────────────────────────────
 /**
@@ -267,12 +277,13 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this.view = options.view ?? "home";   // home | catalog | build | storefront
     this.shopId = options.shopId ?? null;
     this._search = "";
-    this._cats = new Set();
+    /** Opening state, not an empty state: the window opens on its item list already filtered to
+     *  the default set (see defaultCatalogCats). An empty set still means "no category filter",
+     *  which is what the drawer's Clear returns it to. */
+    this._cats = defaultCatalogCats();
+    /** @see _takeCatsOffDefault — true only while `_cats` is still the set the window built. */
+    this._catsPristine = true;
     this._books = new Set();
-    /** The catalog's front page is its CATEGORIES, not its rows: "landing" paints the tiles,
-     *  "list" paints the item list. An internal pane, not a view — the four API view names
-     *  (home/catalog/build/storefront) are unchanged. */
-    this._pane = "landing";
     this._drawer = readDrawerState();
     this._catalogIndexWait = null;   // the one pending "re-render when the index lands" (see _awaitCatalogIndex)
     /**
@@ -293,7 +304,10 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
   static DEFAULT_OPTIONS = {
     classes: ["cyberpunk", "cp-catalog"],
-    position: { width: 880, height: 720 },
+    // 820 tall: the filter drawer stacks categories over the books column, and at 720 the books
+    // list showed ~5 of 33 rows (field report 2026-08-19). Still comfortably inside a 1080p screen
+    // at 175% OS scaling (~1097 CSS px). Resizable as ever; this is only the first impression.
+    position: { width: 880, height: 820 },
     window: { title: "CYBERPUNK.ShopTitle", resizable: true },
   };
 
@@ -303,7 +317,12 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     // (replaces the old V1 _render scroll-capture override). All three panels carry their own
     // `overflow-y:auto` (css §.cp-catalog-list/.cp-catalog-filters/.cp-src-scroll), so each needs listing —
     // otherwise clicking a category/book chip while the filter compartment is scrolled snaps it back to top.
-    main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-catalog-list", ".cp-drawer-cats", ".cp-src-scroll", ".cp-catalog-landing"] },
+    // ⛔ `.cp-catalog-list` is NOT core-scrollable. Core restores scroll positions BEFORE _onRender
+    // inflates the windowing pads, so a mid-scroll re-render clamps scrollTop against the bare
+    // ~60-row strip (field-measured 2026-08-19: 3000 → 1623 on a drawer toggle, = strip height
+    // minus viewport). The window restores its own position in `_activateListWindow`, after the
+    // pads exist. The drawer/book columns stay core-managed — they have no pads to wait for.
+    main: { template: "modules/cp2020-augmented/templates/shop/catalog.hbs", scrollable: [".cp-drawer-cats", ".cp-src-scroll"] },
   };
 
   /** True when this view is ABOUT a shop and that shop is gone (deleted from under the window). */
@@ -339,9 +358,9 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this.view = view;
     this.shopId = shopId;
     this._search = "";
-    this._cats = new Set();
+    this._cats = defaultCatalogCats();
+    this._catsPristine = true;
     this._books = new Set();
-    this._pane = "landing";
     // Plain render (NOT force): in-window navigation (Catalog, a custom shop, Back, …) just swaps the
     // view — it must not "reopen" the window, which would trip the global shimmer-on-reopen wrap. The
     // genuine external reopen (openShopWindow) keeps its own explicit shimmer.
@@ -417,16 +436,29 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   /** The category half of the drawer: two levels, live counts, and no shelf this viewer would find
    *  empty (an ACTIVE shelf is always kept, so a filter can never become unreachable mid-session). */
   _catTree(counts) {
+    // An UNTOUCHED default set shows NO highlights (user ruling 2026-08-19): the opening wall of
+    // lit chips read as "several filters already applied" when it was just the default view. The
+    // highlight now marks a DELIBERATE choice — the first click/stroke consumes the pristine flag
+    // and lights normally from there. Membership (`has`) still drives shelf reachability and the
+    // filter itself; only the lit look is suppressed while pristine. Books are untouched — their
+    // always-on active marks are the visibility signal the user wants kept.
+    const lit = !this._catsPristine;
     return CATEGORIES.map(c => {
       const subs = c.subs
-        .map(s => ({ key: `${c.key}/${s}`, label: shopSubLabel(s), active: this._cats.has(`${c.key}/${s}`), count: counts.sub.get(`${c.key}/${s}`) ?? 0 }))
-        .filter(s => s.count > 0 || s.active);
+        .map(s => {
+          const has = this._cats.has(`${c.key}/${s}`);
+          return { key: `${c.key}/${s}`, label: shopSubLabel(s), active: has && lit, has, count: counts.sub.get(`${c.key}/${s}`) ?? 0 };
+        })
+        .filter(s => s.count > 0 || s.has);
       const count = counts.cat.get(c.key) ?? 0;
       return {
-        key: c.key, label: shopCatLabel(c.key), active: this._cats.has(c.key), count,
-        subs, hasSubs: subs.length > 0, expanded: this._drawer.groups[c.key] !== false,
+        key: c.key, label: shopCatLabel(c.key), active: this._cats.has(c.key) && lit, count,
+        // Groups start CLOSED (user ruling 2026-08-19): the top row is the overview, the caret +
+        // indent say "more under here", and the books column gets the space. Only an explicit
+        // expand is remembered (browser-local), so anyone who prefers open pays one click once.
+        subs, hasSubs: subs.length > 0, expanded: this._drawer.groups[c.key] === true,
       };
-    }).filter(c => c.count > 0 || c.active || c.subs.some(s => s.active));
+    }).filter(c => c.count > 0 || this._cats.has(c.key) || c.subs.some(s => s.has));
   }
 
   /** The whole drawer's render context — the one component both the catalog and the builder mount. */
@@ -443,20 +475,6 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     };
   }
 
-  /** The landing tiles: one per top category this viewer has anything in, plus the whole catalog. */
-  _landingTiles(counts) {
-    const tiles = CATEGORIES
-      .filter(c => (counts.cat.get(c.key) ?? 0) > 0)
-      .map(c => ({
-        key: c.key, label: shopCatLabel(c.key), count: counts.cat.get(c.key) ?? 0,
-        icon: CATEGORY_ICONS[c.key] ?? "fa-box", hint: game.i18n.format("CYBERPUNK.CatalogTileHint", { name: shopCatLabel(c.key) }),
-      }));
-    tiles.push({
-      key: "", label: game.i18n.localize("CYBERPUNK.CatalogAllItems"), count: counts.total,
-      icon: "fa-list", hint: game.i18n.localize("CYBERPUNK.CatalogAllItemsHint"),
-    });
-    return tiles;
-  }
   /** The "Books" filter panel: one chip per source book that has items (Core pinned at the top, then
    *  official, then homebrew). Each chip is a display filter; on the GM's catalog/build view each official
    *  /homebrew chip also carries an eye toggle for player visibility (the old per-source curation). */
@@ -659,22 +677,48 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     return { shops, canCreate: isGM, hasShops: shops.length > 0 };
   }
 
-  /** The A–Z strip earns its line in two places: the whole catalog, and any shelf long enough that
-   *  scrolling it is a chore. A 22-row shotgun shelf gets a strip of two letters and no benefit. */
-  _showJump(rows) { return this._cats.size === 0 || rows.length > JUMP_ROWS_OVER; }
+  /**
+   * THE FIRST TOUCH of the category set replaces it; every touch after that adds to it.
+   *
+   * ⛔ WHY. The window opens with every top category lit, which is an honest picture of what is on
+   * screen but a poor thing to filter FROM: the set is additive, so pressing Pistols on a set that
+   * already holds Weapons widens it and the list does not move. The obvious control appeared to do
+   * nothing. So the FIRST press against an untouched default set means "I want this one" — it wipes
+   * the eight defaults and keeps the one pressed. From then on the column behaves exactly as it
+   * always has, and Clear still empties the set outright.
+   *
+   * ⛔ TRACKED BY FLAG, NOT BY COMPARING CONTENTS. A person who empties the set and then hand-rebuilds
+   * the same eight categories has said something deliberate, and the next click must add to their
+   * work rather than throw it away. Only a set this window BUILT is pristine; a set that merely looks
+   * like one is not. The flag is raised at the two places the default is built (the constructor and
+   * `navigate`) and lowered by the first mutation from any route.
+   *
+   * @param {string} [key] the chip being pressed; it becomes the whole set
+   * @returns {boolean} true if this call consumed the pristine state (the caller's own toggle is then
+   *                    already done and must not run)
+   */
+  _takeCatsOffDefault(key) {
+    if (!this._catsPristine) return false;
+    this._catsPristine = false;
+    this._cats.clear();
+    if (key) this._cats.add(key);
+    return true;
+  }
+
+  /** The A–Z strip earns its line on any list long enough that scrolling it is a chore — which the
+   *  opening list, filtered to the default set, comfortably is. A 22-row shotgun shelf gets a strip
+   *  of two letters and no benefit, so the row count is the whole of the question: the set of active
+   *  filters says nothing about how far the list runs. */
+  _showJump(rows) { return rows.length > JUMP_ROWS_OVER; }
 
   _dataCatalog(all, { isGM, cfg, search }) {
-    const { counts, drawer } = this._drawerContext(all, { isGM, cfg, canCurate: isGM });
-    // The front page. A text search skips it — someone who has typed has already said what they want.
-    if (this._pane === "landing" && !this._search.trim()) {
-      return { landing: true, tiles: this._landingTiles(counts), showSearch: true, showFilters: false, showJump: false, rowCount: 0 };
-    }
+    const { drawer } = this._drawerContext(all, { isGM, cfg, canCurate: isGM });
     const rows = this._filterRows(all, { isGM, cfg, search });
     const letters = [];
     if (search) this._greedySort(rows, search);
     else this._assignLetters(rows, true, letters);
     return {
-      showFilters: true, showJump: this._showJump(rows), showSearch: true, showUplevel: true,
+      showFilters: true, showJump: this._showJump(rows), showSearch: true,
       rows, rowCount: rows.length, letters, drawer,
     };
   }
@@ -931,35 +975,28 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     // The dead-end panel's way out.
     root.querySelector(".cp-shop-missing-back")?.addEventListener("click", (e) => { e.preventDefault(); this.navigate("home"); });
 
-    // Search. It filters in place (no re-render) so the box stays responsive even when popped out into
-    // a second window — EXCEPT from the landing, which has no rows to filter: the first keystroke there
-    // opens the list and the render's own _applySearch pass narrows it. See _applySearch.
+    // Search. It narrows the item strip from data (never a full window re-render), so the box stays
+    // responsive even when the window is popped out into a second one. See _applySearch.
     root.querySelector(".cp-catalog-search")?.addEventListener("input", (ev) => {
       this._search = ev.currentTarget.value;
-      if (this._pane === "landing" && this._search.trim()) { this._pane = "list"; this.render(); return; }
-      this._applySearch(root);
+      this._applySearch(root).catch(err => console.warn(`${SCOPE} | search repaint failed`, err));
     });
     root.querySelector(".cp-catalog-showsource")?.addEventListener("change", async (ev) => { try { await game.settings.set(SCOPE, "shopShowSource", ev.currentTarget.checked); } catch {} this.render(); });
 
-    // Landing tiles → the list, filtered to that category (the empty key = the whole catalog).
-    root.querySelectorAll(".cp-cat-tile").forEach(el => el.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      const k = ev.currentTarget.dataset.cat;
-      this._cats = new Set(k ? [k] : []);
-      this._pane = "list";
-      this.render();
-    }));
-    root.querySelector(".cp-catalog-uplevel")?.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      this._pane = "landing"; this._search = ""; this._cats = new Set();
-      this.render();
-    });
-
     // Filter buttons: categories and books toggle the same way, and both are PAINTABLE (see
     // _activateFilterPaint — a stroke across several is one gesture, not five clicks).
-    this._activateFilterPaint(root, ".cp-cat-chip", "cat", this._cats);
+    // The category column carries the first-touch-replaces rule (_takeCatsOffDefault); the book
+    // column has no default set of its own and so has nothing to take off.
+    this._activateFilterPaint(root, ".cp-cat-chip", "cat", this._cats, (k) => this._takeCatsOffDefault(k));
     this._activateFilterPaint(root, ".cp-book-chip", "book", this._books);
-    root.querySelector(".cp-drawer-clear")?.addEventListener("click", (ev) => { ev.preventDefault(); this._cats.clear(); this._books.clear(); this.render(); });
+    // Clear is a mutation like any other, so it spends the pristine state too — the clicks after a
+    // Clear add up from empty instead of the next one wiping the set the person just started.
+    root.querySelector(".cp-drawer-clear")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      this._catsPristine = false;
+      this._cats.clear(); this._books.clear();
+      this.render();
+    });
     // A–Z jump. A windowed list can't scrollIntoView a row that isn't painted — the jump computes the
     // target's OFFSET from the item strip instead and lets the scroll event paint it. A bypass-sized
     // list keeps the smooth scrollIntoView (every row exists there).
@@ -976,22 +1013,43 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
       if (idx >= 0) list.scrollTop = this._listOffsets(list)[idx];
     }));
 
-    // Drawer: the one collapse affordance, and the per-group expanders. Both are browser-local state.
+    // Drawer: the one collapse affordance, and the per-group expanders. Both are browser-local
+    // PRESENTATION state, so neither re-renders the window — the collapse is the aside's
+    // `data-open` attribute and a group's expansion is its `.cp-expanded` class (the css owns
+    // both looks). A full render here cost a scroll-position clamp mid-list (field report
+    // 2026-08-19) and threw away the painted strip for nothing.
     root.querySelector(".cp-drawer-toggle")?.addEventListener("click", (ev) => {
       ev.preventDefault();
       this._drawer.open = !this._drawer.open;
       writeDrawerState(this._drawer);
-      this.render();
+      const aside = root.querySelector(".cp-filter-drawer");
+      if (aside) aside.dataset.open = this._drawer.open ? "1" : "0";
+      ev.currentTarget.setAttribute("aria-expanded", this._drawer.open ? "true" : "false");
     });
     root.querySelectorAll(".cp-cat-expand").forEach(el => el.addEventListener("click", (ev) => {
       ev.preventDefault();
       const k = ev.currentTarget.dataset.cat;
-      this._drawer.groups[k] = this._drawer.groups[k] === false;
+      const open = this._drawer.groups[k] !== true;       // groups default CLOSED — absent means collapsed
+      this._drawer.groups[k] = open;
       writeDrawerState(this._drawer);
-      this.render();
+      const group = root.querySelector(`.cp-cat-group[data-cat="${k}"]`);
+      group?.classList.toggle("cp-expanded", open);
+      const caret = ev.currentTarget.querySelector("i");
+      caret?.classList.toggle("fa-caret-down", open);
+      caret?.classList.toggle("fa-caret-right", !open);
+      ev.currentTarget.title = game.i18n.localize(open ? "CYBERPUNK.CatalogGroupCollapse" : "CYBERPUNK.CatalogGroupExpand");
     }));
 
-    // GM per-book player-visibility (eye) toggles.
+    // PAINT-DRAG for the eye column (user ruling 2026-08-19 — the eyes get the same stroke
+    // treatment as the filter buttons; this retires the old "eyes are deliberately not paintable"
+    // rule). Same grammar as _activateFilterPaint: the first eye pressed decides the direction,
+    // every eye crossed follows it, painting pauses off-eye and resumes, and the stroke ends ONLY
+    // on release — where the WORLD SETTING commits ONCE and one render follows. Visual state
+    // (checkbox, eye/eye-slash glyph, .on) is flipped by hand mid-stroke because no render happens
+    // until release. The keyboard/assistive path is untouched: a click with no pointer behind it
+    // falls through to the change handler below, which commits per-toggle exactly as before.
+    this._activateEyePaint(root);
+    // GM per-book player-visibility (eye) toggles — the keyboard/assistive commit path.
     root.querySelectorAll(".cp-src-toggle").forEach(el => el.addEventListener("change", async (ev) => {
       const name = ev.currentTarget.dataset.source;
       const map = { ...(() => { try { return game.settings.get(SCOPE, "shopEnabledSources") || {}; } catch { return {}; } })() };
@@ -1083,8 +1141,16 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
    * One render, at the end. Re-rendering per crossed button would replace the very nodes the stroke
    * is being drawn over — so the set and the `active` class are updated live, and the list is
    * rebuilt once on release.
+   *
+   * `onFirstTouch` is the category column's first-touch-replaces rule (_takeCatsOffDefault). It is
+   * consulted at the START of a gesture, click or stroke alike: when it reports that it consumed the
+   * pristine state, the set has already been replaced with the pressed button alone, so a stroke
+   * REPLACES and then PAINTS ON from there — the rest of the run adds, which is the same rule a
+   * single click follows, extended over a gesture. A column without the rule passes nothing.
+   *
+   * @param {(key:string)=>boolean} [onFirstTouch]
    */
-  _activateFilterPaint(root, selector, datasetKey, set) {
+  _activateFilterPaint(root, selector, datasetKey, set, onFirstTouch = null) {
     // The release backstop at the bottom listens on the window ROOT, which is the persistent frame —
     // unlike the buttons, it is not replaced by a re-render. Each render must retire the previous
     // render's pair first, or every render stacks another (dead, but accumulating) pair on the frame.
@@ -1115,14 +1181,18 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     };
     // Hit-testing the point rather than trusting pointerover: a captured pointer sends its moves to
     // the capturing element, so the buttons underneath never hear from it directly.
+    // ⏪ A STROKE ENDS ONLY ON RELEASE (field report 2026-08-19). This used to end the stroke the
+    // moment the point under the pointer was not a button — which is every GAP between buttons, so
+    // a slow drag died between chips (fast drags sampled over the gaps and lived), and the early
+    // end's release-render then REFLOWED the column under a still-held pointer, which read as "the
+    // reflow dropped my drag". Now the gaps and the rest of the column are simply dead air: painting
+    // pauses off-button and resumes on the next button crossed, and nothing re-renders until the
+    // pointer is actually released.
     const onMove = (ev) => {
       if (!stroke) return;
       const el = ev.currentTarget?.ownerDocument?.elementFromPoint(ev.clientX, ev.clientY);
       const btn = el?.closest?.(selector);
-      // Leaving the column ends the stroke — the pointer has gone somewhere that is not this filter
-      // list, and a stroke that survived that would keep painting when it came back.
-      if (!btn || !root.contains(btn)) { end(); return; }
-      apply(btn);
+      if (btn && root.contains(btn)) apply(btn);
     };
 
     for (const btn of buttons) {
@@ -1131,8 +1201,17 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         ev.preventDefault();
         this._paintConsumed = false;   // a stroke whose click never arrived must not swallow the next one
         const k = btn.dataset[datasetKey];
-        stroke = { on: !set.has(k), touched: new Set() };
-        apply(btn);
+        // A stroke begun on an untouched default set replaces first: the pressed button becomes the
+        // whole set, and the run paints ON from there. The `active` classes are repainted here by
+        // hand because no render happens until release, and the buttons the default had lit would
+        // otherwise stay lit over a set that no longer holds them.
+        if (onFirstTouch?.(k)) {
+          stroke = { on: true, touched: new Set([k]) };
+          for (const other of buttons) other.classList.toggle("active", other.dataset[datasetKey] === k);
+        } else {
+          stroke = { on: !set.has(k), touched: new Set() };
+          apply(btn);
+        }
         try { root.setPointerCapture?.(ev.pointerId); } catch { /* capture unsupported — moves still hit-test */ }
         root.addEventListener("pointermove", onMove, true);
       });
@@ -1145,11 +1224,87 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
         ev.preventDefault();
         if (this._paintConsumed) { this._paintConsumed = false; return; }
         const k = ev.currentTarget.dataset[datasetKey];
-        set.has(k) ? set.delete(k) : set.add(k);
+        // A click with no pointer behind it still gets the first-touch rule; when it fires, the set
+        // is already the pressed button alone and there is nothing left to toggle.
+        if (!onFirstTouch?.(k)) set.has(k) ? set.delete(k) : set.add(k);
         this.render();
       });
     }
     this._paintRootEnd[datasetKey] = end;
+    root.addEventListener("pointerup", end);
+    root.addEventListener("pointercancel", end);
+  }
+
+  /**
+   * PAINT-DRAG for the per-book visibility EYES — the chips' stroke grammar applied to the eye
+   * column (user ruling 2026-08-19, retiring the old eyes-are-not-paintable rule). Two deliberate
+   * differences from _activateFilterPaint: the eyes commit to a WORLD SETTING, so the stroke
+   * batches every flip and writes the merged map ONCE on release (per-eye writes mid-stroke would
+   * re-render the column out from under the held pointer); and the mid-stroke visual is flipped by
+   * hand in three parts (checkbox, eye/eye-slash glyph, `.on`) because nothing renders until
+   * release. Mouse and pen only, exactly like the chips — touch keeps plain taps. A click with no
+   * pointer behind it (keyboard, assistive) falls through to the per-toggle change handler.
+   */
+  _activateEyePaint(root) {
+    if (this._eyeRootEnd) {
+      root.removeEventListener("pointerup", this._eyeRootEnd);
+      root.removeEventListener("pointercancel", this._eyeRootEnd);
+      this._eyeRootEnd = null;
+    }
+    const eyes = [...root.querySelectorAll(".cp-book-eye")];
+    if (!eyes.length) return;
+    let stroke = null;   // { on: boolean, touched: Set<sourceName> } while a stroke is live
+
+    const paint = (label) => {
+      const box = label.querySelector(".cp-src-toggle");
+      const name = box?.dataset.source;
+      if (!name || stroke.touched.has(name)) return;
+      stroke.touched.add(name);
+      box.checked = stroke.on;
+      label.classList.toggle("on", stroke.on);
+      const glyph = label.querySelector("i");
+      glyph?.classList.toggle("fa-eye", stroke.on);
+      glyph?.classList.toggle("fa-eye-slash", !stroke.on);
+    };
+    const end = () => {
+      if (!stroke) return;
+      const { on, touched } = stroke;
+      stroke = null;
+      root.removeEventListener("pointermove", onMove, true);
+      if (!touched.size) return;
+      this._eyePaintConsumed = true;
+      const map = { ...(() => { try { return game.settings.get(SCOPE, "shopEnabledSources") || {}; } catch { return {}; } })() };
+      for (const name of touched) { if (on) map[name] = true; else delete map[name]; }
+      Promise.resolve(game.settings.set(SCOPE, "shopEnabledSources", map))
+        .then(() => this.render())
+        .catch(err => console.warn(`${SCOPE} | eye stroke commit failed`, err));
+    };
+    const onMove = (ev) => {
+      if (!stroke) return;
+      const el = ev.currentTarget?.ownerDocument?.elementFromPoint(ev.clientX, ev.clientY);
+      const label = el?.closest?.(".cp-book-eye");
+      if (label && root.contains(label)) paint(label);
+    };
+    for (const label of eyes) {
+      label.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0 || (ev.pointerType !== "mouse" && ev.pointerType !== "pen")) return;
+        ev.preventDefault();
+        this._eyePaintConsumed = false;
+        const box = label.querySelector(".cp-src-toggle");
+        stroke = { on: !box?.checked, touched: new Set() };
+        paint(label);
+        try { root.setPointerCapture?.(ev.pointerId); } catch { /* capture unsupported — moves still hit-test */ }
+        root.addEventListener("pointermove", onMove, true);
+      });
+      label.addEventListener("pointerup", end);
+      label.addEventListener("pointercancel", end);
+      // The click that trails a pointer stroke must NOT run the label's native checkbox toggle —
+      // the change handler would land a second, contradictory per-eye commit on top of the batch.
+      label.addEventListener("click", (ev) => {
+        if (this._eyePaintConsumed) { ev.preventDefault(); ev.stopPropagation(); this._eyePaintConsumed = false; }
+      }, true);
+    }
+    this._eyeRootEnd = end;
     root.addEventListener("pointerup", end);
     root.addEventListener("pointercancel", end);
   }
@@ -1183,9 +1338,20 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     const list = root.querySelector(".cp-catalog-list");
     if (!list) return;
     this._setListPads(root);
+    // Restore OUR scroll position — after the pads above gave the list its full height, which is
+    // the whole reason core's scrollable-part restore was retired for this element (it ran before
+    // the pads existed and clamped; see DEFAULT_OPTIONS). Keyed by view+shop so navigating to a
+    // different row list starts at the top instead of a stale depth.
+    const scrollKey = `${this.view}|${this.shopId ?? ""}`;
+    if (this._listScrollKey === scrollKey && (this._listScroll ?? 0) > 0) {
+      list.scrollTop = this._listScroll;
+      this._repaintListWindow(root, { force: true }).catch(err => console.warn(`${SCOPE} | list window repaint failed`, err));
+    }
+    this._listScrollKey = scrollKey;
     if ((this._listItems?.length ?? 0) <= LIST_WINDOW.bypassAt) return;
     let ticking = false;
     list.addEventListener("scroll", () => {
+      this._listScroll = list.scrollTop;
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
@@ -1302,6 +1468,7 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     this._itemOffsets = null;
     this._winRange = null;
     list.scrollTop = 0;
+    this._listScroll = 0;      // the search reset IS a deliberate scroll — keep the restore memory honest
     const n = this._listItems.length;
     const count = n <= LIST_WINDOW.bypassAt ? n : LIST_WINDOW.initialCount;
     const html = await this._renderRowsPartial(this._listItems.slice(0, count));
