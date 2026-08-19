@@ -663,14 +663,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         return;
       }
 
-      const initiative = target.closest(".roll-initiative");
+      const initiative = target.closest(".roll-initiative .action");
       if (initiative) {
         const input = root.querySelector(".roll-initiative-modificator");
         this.actor.addToCombatAndRollInitiative(input?.value);
         return;
       }
 
-      const stunDeath = target.closest(".stun-death-save");
+      const stunDeath = target.closest(".stun-death-save .action");
       if (stunDeath) {
         const input = root.querySelector(".roll-stun-death-modificator");
         this.actor.rollStunDeath(input?.value);
