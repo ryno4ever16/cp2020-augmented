@@ -5,9 +5,13 @@
   "description": "Build tooling for the Cyberpunk 2020: Augmented Edition module (compendium pack compile/extract).",
   "scripts": {
     "unpack": "node tools/unpack.mjs",
-    "pack": "node tools/pack.mjs"
+    "pack": "node tools/pack.mjs",
+    "lint": "eslint module/ tools/",
+    "lint:all": "eslint module/ tools/ tests/"
   },
   "devDependencies": {
-    "@foundryvtt/foundryvtt-cli": "^1.0.4"
+    "@foundryvtt/foundryvtt-cli": "^1.0.4",
+    "eslint": "^10.8.1",
+    "globals": "^17.11.0"
   }
 }
