@@ -49,8 +49,13 @@ export const ARMOR_MODES = {
  * @param {number}  p.penDamageMult  Multiplier on penetrating damage (AP ×0.5, Hollow-Point ×1.5).
  *                                   Applied to the post-armor remainder, before BTM (CP2020/Chromebook).
  * @returns {{ spFull, spUsed, damageAfterSP, penetrates }}
+ *
+ * Exported so the armour maths can be driven DIRECTLY rather than reached through
+ * `resolveAreaDamagesSync`, which is the only route a caller outside this file had: the wrapper adds
+ * a roll, a location and its own fields on top, so a reading taken through it cannot isolate what
+ * this function alone computed. The golden-master capture consumes the direct export.
  */
-function resolveHitMath({ currentSP, rawDamage, ap, armorMode, coverSP = 0, penDamageMult = 1 }) {
+export function resolveHitMath({ currentSP, rawDamage, ap, armorMode, coverSP = 0, penDamageMult = 1 }) {
   let effectiveSP = currentSP;
   if (coverSP > 0 && armorMode !== ARMOR_MODES.NONE) {
     // Cover is the outermost layer — combined last (inside-out rule, p.99)

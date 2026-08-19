@@ -68,6 +68,26 @@ import { pixelsToMeters, metersToPixels } from "../vehicle/vehicle-grid.js";
 // duplicated here — a copy that would drift the moment any of them is tuned.
 import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns } from "../fx/effects.js";
 
+/**
+ * The effect list, however a caller spelled it.
+ *
+ * `?? []` was not enough, and the gap had two halves. A value that is PRESENT but not an array — an
+ * object from a re-typing producer, a number, a boolean — sails past the nullish default and then
+ * throws on `.includes`, out of an async listener, i.e. as an unhandled rejection Foundry never
+ * reports. A BARE STRING is worse because it does NOT throw: it has `.includes`, so it is read with
+ * SUBSTRING semantics, and "Non-Explosive".includes("Explosive") is true — a shot the module should
+ * route to the single-target path gets routed into the explosion path on a text match.
+ *
+ * Coercing rather than merely strict, because it mirrors the normalization item-sheet.js already
+ * applies to the stored field, and it keeps a bare-string caller working as they plainly intended.
+ * For every payload this module's own producers emit the field is already an array, so this computes
+ * exactly what the raw reads computed.
+ */
+const _effectTypesOf = (payload) => {
+  const t = payload?.effectTypes;
+  return Array.isArray(t) ? t : (typeof t === "string" && t ? [t] : []);
+};
+
 // Payload waiting to be attached to the next chat message created, and WHEN it started waiting.
 //
 // The pairing is the point. The payload is queued from inside the render of the very card it belongs
@@ -490,7 +510,7 @@ function _hookWeaponFired() {
     // Area-effect ammo is owned by the dedicated explosion/spread hooks. Skip the single-target
     // apply path here so the primary target isn't damaged twice. The per-token blast/pattern
     // re-emits plain weaponFired payloads (no effectTypes/spreadMode), which fall through normally.
-    if ((payload.effectTypes ?? []).includes("Explosive")) return;
+    if (_effectTypesOf(payload).includes("Explosive")) return;
     // ⚠ THE SAME DERIVATION THE PATTERN HOOK USES, and it must stay the same call: this line and
     // _hookSpread are the two halves of one either/or. If they ever disagreed, a shell would either be
     // damaged twice (dialog AND pattern) or not at all. Reading the stored spreadMode flag here while
@@ -533,16 +553,25 @@ function _hookWeaponFired() {
     const firedHere = payload.firedByUserId != null && payload.firedByUserId === game.user.id;
     if (!firedHere && !isMyShot && !gmHandles) return;
 
+    // This client + layer is committing to apply this shot — claim it (synchronously, before any
+    // await) so a co-resident layer's later weaponFired listener stands down (see the top guard).
+    //
+    // ⚠ THE STAMP MUST PRECEDE THE MONO-BREAK AWAIT, and it did not: awaiting first suspended the
+    // listener, so the write landed a microtask AFTER `Hooks.callAll` returned and any layer reading
+    // `payload.handled` synchronously saw an unclaimed shot — the exact opposite of what the comment
+    // promised. The mono break neither returns a value this branch consumes nor touches `areaDamages`
+    // (it reads mono/fumble/weaponId and writes the weapon + a chat note), so the commit decision can
+    // be made before it runs. The areaDamages verdict is taken here and acted on after, which keeps
+    // the break running even for a damage-less fumble card.
+    const hasAreaDamages = !!payload.areaDamages && Object.keys(payload.areaDamages).length > 0;
+    if (hasAreaDamages) payload.handled = "cp2020-augmented";
+
     // Mono-edge break-on-fumble (CP2020 p.112): this is the shot's single authoritative client, so mark
     // the weapon broken + post the note here (exactly once). Runs BEFORE the areaDamages guard so a
     // damage-less fumble card still breaks the blade; a no-op unless the weapon is mono and it fumbled.
     await _maybeBreakMonoWeapon(payload, attackerActor);
 
-    if (!payload.areaDamages || Object.keys(payload.areaDamages).length === 0) return;
-
-    // This client + layer is committing to apply this shot — claim it (synchronously, before any
-    // await) so a co-resident layer's later weaponFired listener stands down (see the top guard).
-    payload.handled = "cp2020-augmented";
+    if (!hasAreaDamages) return;
 
     // PATH A: we know what this shot was aimed at — auto-apply, or open the (deferred) dialog.
     //
@@ -1633,7 +1662,7 @@ function _hookGasCloud() {
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!gasEnabled()) return;
-    const types = payload.effectTypes ?? [];
+    const types = _effectTypesOf(payload);
     if (!types.includes("Gas")) return;
     // weaponFired fires only on the firing client; placing the cloud needs the GM. The active GM
     // places it directly; anyone else (a player, or a non-active GM) relays to it. Without this a
@@ -2132,7 +2161,7 @@ function _hookExplosion() {
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!enabled()) return;
-    if (!(payload.effectTypes ?? []).includes("Explosive")) return;
+    if (!_effectTypesOf(payload).includes("Explosive")) return;
     // weaponFired fires only on the firing client; placing the blast needs the GM. The active GM
     // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
     // _hookSuppressiveFire. Without this a player's grenade produced no blast.
@@ -3056,21 +3085,33 @@ export function spreadZoneClockExpired(flags, { encounterRunning = false, now = 
  */
 export async function _sweepStaleSpreadZones() {
   if (!_ownsSpreadSweep()) return 0;
+  // One sweep at a time. The interval tick, the canvasReady tidy, and a keeper-driven call are all
+  // the same function on the same client; two of them interleaving would enumerate the same expired
+  // zone and both reach for the delete — the loser makes core log a does-not-exist error.
+  if (_spreadSweepBusy) return 0;
   const scene = canvas?.scene;
   if (!scene) return 0;
-  const now = Date.now();
-  let deleted = 0;
-  for (const handle of areasByFlag(scene, "isSpreadZone")) {
-    const flags = handle.doc.flags?.["cp2020-augmented"] ?? {};
-    // An unresolved card outranks the wall clock: the shot is still somebody's decision to make, and
-    // this sweep exists to collect patterns nobody CAN decide about (see _spreadZoneCardPending).
-    if (_spreadZoneCardPending(flags)) continue;
-    const own = String(flags.combatId ?? "").trim();
-    const encounterRunning = !!own && !!game.combats?.get?.(own)?.started;
-    if (spreadZoneClockExpired(flags, { encounterRunning, now })) { await deleteArea(handle); deleted++; }
+  _spreadSweepBusy = true;
+  try {
+    const now = Date.now();
+    let deleted = 0;
+    for (const handle of areasByFlag(scene, "isSpreadZone")) {
+      const flags = handle.doc.flags?.["cp2020-augmented"] ?? {};
+      // An unresolved card outranks the wall clock: the shot is still somebody's decision to make, and
+      // this sweep exists to collect patterns nobody CAN decide about (see _spreadZoneCardPending).
+      if (_spreadZoneCardPending(flags)) continue;
+      const own = String(flags.combatId ?? "").trim();
+      const encounterRunning = !!own && !!game.combats?.get?.(own)?.started;
+      if (spreadZoneClockExpired(flags, { encounterRunning, now })) { await deleteArea(handle); deleted++; }
+    }
+    return deleted;
+  } finally {
+    _spreadSweepBusy = false;
   }
-  return deleted;
 }
+
+/** True while a sweep pass is enumerating and deleting — the re-entrancy latch for the three callers. */
+let _spreadSweepBusy = false;
 
 /**
  * Multi-action penalty tracker (CP2020 p.105 — −3 per additional action).

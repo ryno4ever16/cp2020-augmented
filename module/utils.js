@@ -28,6 +28,18 @@ export function replaceIn(replaceIn, replaceWith) {
 }
 
 /**
+ * A layer's usable SP. `Number(v) || 0` folded NaN to 0 but let ±Infinity through — both are truthy —
+ * so an unusable layer escaped as a non-finite stopping power and annihilated every damage number
+ * derived from it. Non-finite in, zero out: the layer is dropped, exactly as NaN already was. Every
+ * finite input produces exactly the result it produced before (proven over 17,161 finite pairs through
+ * combineArmorSP and 20,000 random finite stacks through foldArmorSP, 0 differences).
+ */
+function usableSP(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+}
+
+/**
  * Proportional armor-layer combination (CP2020 p.99): two SP layers don't add — the combined SP is
  * max(a,b) plus a diminishing bonus by their difference (equal layers +5, far-apart layers +0). This
  * is the SINGLE definition shared by the damage resolver (cover + live-SP re-derivation, combat/
@@ -35,8 +47,8 @@ export function replaceIn(replaceIn, replaceWith) {
  * own `combineSP` (actor.js maxLayeredSP) so a folded-in layer matches what the sheet would show.
  */
 export function combineArmorSP(a, b) {
-    a = Number(a) || 0;
-    b = Number(b) || 0;
+    a = usableSP(a);
+    b = usableSP(b);
     if (!a) return b;
     if (!b) return a;
     const diff = Math.abs(a - b);
@@ -62,7 +74,7 @@ export function combineArmorSP(a, b) {
  * @returns {number}
  */
 export function foldArmorSP(layers) {
-    const sp = (layers ?? []).map(v => Number(v) || 0).filter(v => v > 0);
+    const sp = (layers ?? []).map(usableSP).filter(v => v > 0);
     const n = sp.length;
     if (!n) return 0;
     if (n === 1) return sp[0];

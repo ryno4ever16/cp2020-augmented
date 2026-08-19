@@ -183,7 +183,18 @@ export function areasByFlag(scene, flagKey) {
 
 /** Delete the area behind a handle. Never throws. */
 export async function deleteArea(handle) {
-  try { await handle?.doc?.delete?.(); } catch { /* already gone */ }
+  const doc = handle?.doc;
+  if (!doc) return;
+  // Concurrent collectors can reach the same area (the expiry sweep's interval tick, a canvasReady
+  // sweep, a round advance). Deleting an embedded document that is already gone makes core LOG an
+  // error before the rejection the catch below swallows, so absence is checked at the last moment
+  // instead of tolerated after the fact. TOCTOU remains for the server round-trip itself; the catch
+  // still owns that sliver.
+  try {
+    const coll = doc.parent?.getEmbeddedCollection?.(doc.documentName) ?? doc.collection;
+    if (doc.id && coll && !coll.has(doc.id)) return;
+  } catch { /* no collection to ask — fall through to the delete */ }
+  try { await doc.delete?.(); } catch { /* lost the race to another collector */ }
 }
 
 /** Hook name for "area document about to update", per core. */
