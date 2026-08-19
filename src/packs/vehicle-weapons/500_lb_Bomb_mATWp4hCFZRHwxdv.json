@@ -5,7 +5,7 @@
   "system": {
     "flavor": "",
     "notes": "",
-    "cost": 1000,
+    "cost": 500,
     "weight": 0,
     "equipped": true,
     "source": "Maximum Metal",
@@ -20,17 +20,17 @@
     "shots": 1,
     "range": 0,
     "reliability": "VR",
-    "space": 3,
+    "space": 2,
     "shellVariants": [
       {
         "name": "500-lb Cluster",
-        "pen": 4,
-        "burst": 48,
+        "pen": 5,
+        "burst": 96,
         "warhead": "cluster"
       },
       {
         "name": "500-lb Anti-Tank",
-        "pen": 8,
+        "pen": 16,
         "burst": 4,
         "warhead": "heat",
         "heat": true,
@@ -39,7 +39,7 @@
       {
         "name": "500-lb Incendiary",
         "pen": 0,
-        "burst": 48,
+        "burst": 96,
         "warhead": "wp"
       }
     ],

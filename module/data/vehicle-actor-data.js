@@ -296,7 +296,7 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       this.mountedSystemsCost = mountedSystemsCost;
       this.totalWeight = cs.weight + this.armorWeight + trooper + ri.weight + mountedSystemsWeight + sysW + cmdW;
       this.sib = acpaSib({ chassisCapacity: cs.lift, totalWeight: this.totalWeight, interfaceSib: ri.sib });
-      // External load & the p.57 overload penalty (MM p.57, L5725-5734): a suit carries external / hand-held
+      // External load & the p.57 overload penalty (MM p.57): a suit carries external / hand-held
       // gear up to ½ its chassis Carry rating freely; "If the amount carried is between 1/2 and the full
       // rating, subtract 2 from the suit's initiative bonus (SIB)." Sum embedded acpaSystem Items flagged
       // mount:"external" (their weight) + the GM-entered carriedGearKg. (cp2020-augmented.vehicleWeapon Items

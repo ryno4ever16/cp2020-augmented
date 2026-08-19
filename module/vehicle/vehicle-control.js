@@ -84,10 +84,30 @@ export function defaultControlMod(vehicleType, ruleSystem = "Core") {
     car: 0, sportscar: 2, limo: -3, "av-4": -2, "av-6": 2, "av-7": 1,
     cycle: 1, motorcycle: 1, truck: -4, rotor: 0, osprey: 0, boat: -1,
   };
+  // MM p.11 REVISED CONTROL MODIFIERS, completed to the printed table (reprinted p.104). It prints
+  // FIFTEEN rows plus a footnote, and the map carried eleven of them: the four fixed-wing rows were
+  // absent entirely, and `rotor: -2` FLATTENED two distinct printed rows — the book gives Lt. Heli −0
+  // and Med/Hvy Heli −2, which is a two-point difference on every control roll a light helicopter makes.
   const mm = {
     car: 0, sportscar: 0, limo: -3, pickup: -3, cycle: 1, motorcycle: 1, truck: -4,
     apc: 2, ifv: 2, mbt: 2, tank: 2, hover: -2, boat: -1,
-    "av-4": 0, "av-6": 0, "av-7": 0, av: 0, osprey: 0, rotor: -2, airship: 5,
+    "av-4": 0, "av-6": 0, "av-7": 0, av: 0, osprey: 0, airship: 5,
+    // The two helicopter rows the single `rotor` key used to conflate. `rotor` is kept as the generic
+    // fallback for a sheet that says only "rotor" and takes the heavier of the two readings.
+    "light helicopter": 0, "lt heli": 0, "lheli": 0,
+    "medium helicopter": -2, "heavy helicopter": -2, "med heli": -2, "hvy heli": -2, rotor: -2,
+    // The printed fixed-wing rows, none of which the module carried.
+    "light plane": 0, "lightplane": 0,
+    "medium plane": -3, "heavy plane": -3, "med plane": -3, "hvy plane": -3, plane: -3,
+    "small jet": 1, "large jet": -4, jet: 1,
+    // The p.11 footnote: "*Wheeled APCs and IFVs handle at -2; treads are a great benefit to handling."
+    // A wheeled hull is a different row from its tracked namesake, not a variant of it.
+    "wheeled apc": -2, "wheeled ifv": -2,
+    // ⚠ NOT IN THE BOOK. p.11's table has no boat row and no sportscar row; these two are the module's
+    // own, inherited from the Core table above (Core gives boat −1, and sportscar +2 which MM-mode
+    // flattens to 0). They are kept so an MM-mode sheet for either type still prefills something rather
+    // than silently falling through to 0, but they carry no MM authority — retire or re-source them if
+    // a printed counterpart ever turns up. (boat: -1 and sportscar: 0 are declared above.)
   };
   const table = ruleSystem === "MaximumMetal" ? mm : core;
   return Object.prototype.hasOwnProperty.call(table, t) ? table[t] : 0;

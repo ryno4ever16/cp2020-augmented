@@ -66,9 +66,17 @@ export async function openAcpaMeleeDialog(actor) {
     bestMA = Math.max(bestMA, readSkill("MartialArts"));   // also honor a literal generic "Martial Arts" skill
   }
   const skillByKind = { brawling: readSkill("Brawling"), melee: readSkill("Melee"), martial: bestMA };
-  // The Martial-Arts cap (MM p.60) is the pilot's MANEUVER rating — PA Combat Sense OR PA Pilot, whichever
-  // is higher (pilotPAManeuver). PA Pilot grants this maneuver cap but no initiative (see vehicle-actor-data.js).
-  const pacs = Math.max(0, Number(actor.system?.pilotPAManeuver ?? actor.system?.pilotPACS) || 0);
+  // The Martial-Arts cap is PA COMBAT SENSE ALONE, and both printings say so in the same words: p.60
+  // "not at a skill level higher than their PA Combat Sense ability", p.65 "to a maximum level equal to
+  // his PA Combat ability". Neither names PA Pilot.
+  //
+  // ⚠ This used to read `pilotPAManeuver`, i.e. max(PACS, PA Pilot), on the argument that p.53 makes PA
+  // Pilot grant "the maneuver bonuses of PA Combat Sense" and a martial-arts cap is a maneuver matter.
+  // That is a reading, and it is a reading that RAISES a printed ceiling: a pilot with PA Pilot 8 and PA
+  // Combat Sense 2 was allowed to swing at 8 where the book allows 2. `pilotPACS` is what the two
+  // printings actually name. PA Pilot keeps every maneuver bonus it grants elsewhere; it simply does not
+  // lift this cap.
+  const pacs = Math.max(0, Number(actor.system?.pilotPACS) || 0);
   const maAllowed = MA_REFLEX_CONTROLS.has(String(actor.system?.reflexControl || ""));
 
   const content = await renderChatCard("vehicle/acpa-melee-dialog.hbs", {

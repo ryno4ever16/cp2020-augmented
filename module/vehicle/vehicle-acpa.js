@@ -182,8 +182,16 @@ export function acpaTickStatus(sys) {
 /* ------------------------------- Hand-to-hand (MM p.58) ------------------------------- */
 
 /**
- * ACPA melee damage in d10s (MM p.58). PURE.
+ * ACPA melee damage in d10s (MM p.57 — the formulas print there; reprinted p.104). PURE.
  *   X = round(STR / 9);  Punch = X d10 · Crush = (X+1) d10 · Kick = round(1.5·X) d10.
+ *
+ * ⚠ THE BOOK CONTRADICTS ITSELF ON KICKS AND THIS FOLLOWS THE PRINTED FORMULA. p.57 prints
+ * "Kicks: [X+(X/2)] D10" and then works an example that does not obey it: a 2000 kg-capacity suit is
+ * STR 40 on the p.62 Chassis Inventory Table, round(40/9) = 4, so the formula gives [4+(4/2)] = 6D10 —
+ * but the book's own example says "Kicks at 7D10 (Ouch!)". 7 is only reachable by rounding AFTER the
+ * multiply (1.5 × 40/9 = 6.67 → 7), i.e. by not using X at all. The formula is the rule and the
+ * example is the illustration, so the formula wins here; a GM who prefers the worked example will see
+ * one more die on large suits.
  * @returns {{x:number, dice:number, formula:string}}
  */
 export function acpaMeleeDamage(str, kind = "punch") {

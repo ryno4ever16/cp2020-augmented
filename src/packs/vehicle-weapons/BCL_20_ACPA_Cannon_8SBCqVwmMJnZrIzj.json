@@ -14,7 +14,7 @@
     "arc": "front",
     "wa": 1,
     "penetration": 4,
-    "damage": "9D10",
+    "damage": "8D10",
     "rof": 2,
     "shots": 20,
     "range": 550,

@@ -9,7 +9,7 @@
  */
 
 import { mmEnabled } from "../settings.js";
-import { missileSpeed, turnsToImpact, resolveMissileToHit, resolvePaintToHit, resolvePaintHit, countermeasureModifier, interceptResult, electronicDetect, visualDetectDV } from "./vehicle-missiles.js";
+import { missileSpeed, turnsToImpact, resolveMissileToHit, resolvePaintToHit, resolvePaintHit, countermeasureModifier, aerosolBlocksLaser, interceptResult, electronicDetect, visualDetectDV } from "./vehicle-missiles.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { pixelsToMeters } from "./vehicle-grid.js";
 import { localize, localizeParam } from "../utils.js";
@@ -165,6 +165,23 @@ async function _resolveMissileImpact(f, targetDoc, scene, gs) {
     return;
   }
   const dm = Number(f.difficultyMods) || 0;   // accumulated countermeasure / evade +Difficulty
+
+  // Anti-laser aerosol (MM p.24) blocks ANY laser-based system 90% of the time — a screen the guidance
+  // either sees through or does not, rolled once here rather than folded into the to-hit as a modifier.
+  // It reaches both laser-homing missiles and the painting laser that guides a paint missile, which is
+  // what p.24's "laser rangefinders, painting lasers, weapon lasers, etc." enumerates.
+  const laserGuided = f.guidance === "paint" || f.homingMethod === "laser";
+  const screened = laserGuided && !!(target?.system?.countermeasures ?? []).includes("antiLaserAerosol");
+  if (screened && aerosolBlocksLaser((await new Roll("1d10").evaluate()).total)) {
+    await postSavePromptCard({
+      title: localizeParam("Vehicle.MissileMissTitle", { weapon: f.weaponName }),
+      body: localizeParam("Vehicle.MissileAerosolBlocked", {
+        target: targetDoc.name ?? localize("Vehicle.Target"),
+      }),
+    });
+    return;
+  }
+
   let hit, paint = null;
   if (f.guidance === "paint") {
     // MM p.9-10: the missile flew FIRST; the painting laser/radar now makes a real to-hit and the
@@ -234,18 +251,29 @@ async function _tryDetect(mt, scene) {
   return true;
 }
 
-/** The best +Difficulty an available countermeasure imposes on the missile's homing method. */
-function _bestCountermeasure(cms = [], method = "radar") {
-  let cm = null, mod = 0;
-  for (const c of (cms ?? [])) { const m = countermeasureModifier([c], method); if (m > mod) { mod = m; cm = c; } }
-  return { cm, mod };
+/**
+ * The total +Difficulty the target's countermeasures impose on this missile's homing method, and which
+ * ones contributed.
+ *
+ * ⭐ COUNTERMEASURES SUM — RULED. This used to take the single BEST modifier and discard the rest, which
+ * put the module in contradiction with itself: `countermeasureModifier` (vehicle-missiles.js), the other
+ * half of the same feature, has always summed. MM p.10 lists each countermeasure independently and never
+ * says whether two stack, so the book settles neither reading — but every entry in that table is framed
+ * as an ADDITIVE to-hit modifier ("Chaff ADDS +10 Difficulty…", "Jamming ADDS +15…"), and additive
+ * modifiers are summed everywhere else in this system. Summing is therefore the reading that matches the
+ * book's own framing, and it makes a defender who fitted three screens measurably harder to hit than one
+ * who fitted the best single screen — which best-only made pointless.
+ */
+function _countermeasureTotal(cms = [], method = "radar") {
+  const contributing = (cms ?? []).filter(c => countermeasureModifier([c], method) > 0);
+  return { cm: contributing.join(", "), cms: contributing, mod: countermeasureModifier(contributing, method) };
 }
 
 /** Consolidated "Incoming Missile" card — the defender's deliberate reactions (whispered to owner+GM). */
 async function _postIncomingCard(mt, f, targetDoc, how = "") {
   const target = targetDoc?.actor;
   const sceneId = targetDoc?.parent?.id ?? canvas?.scene?.id ?? "";
-  const best = _bestCountermeasure(target?.system?.countermeasures ?? [], f.homingMethod);
+  const best = _countermeasureTotal(target?.system?.countermeasures ?? [], f.homingMethod);
   const hasAM = !!target?.system?.antiMissile;
   const whisper = target ? game.users.filter(u => u.isGM || target.testUserPermission(u, "OWNER")).map(u => u.id) : undefined;
   const content = await renderChatCard("vehicle/incoming-missile.hbs", {
@@ -280,7 +308,19 @@ async function _applyMissileReaction(tokenId, kind, sceneArg = null) {
   const target = scene.tokens.get(f.targetTokenId)?.actor;
 
   if (kind === "intercept") {
-    const res = interceptResult((await new Roll("1d10").evaluate()).total, 0);
+    // ⚠ THE SALVO PENALTY WAS DEAD CODE: `interceptResult` has always taken the number of missiles the
+    // anti-missile system is splitting fire across, and this — its only caller — passed a hard 0, so
+    // p.24's "Roll 1D10 for each missile detected, -1 for each missile" never once fired. A six-missile
+    // salvo was intercepted on exactly the odds of a single missile. The count is taken here, from the
+    // scene, at the moment of the intercept: every OTHER missile currently inbound on this same target
+    // and already detected — undetected missiles are not ones the system is engaging, which is why the
+    // book counts the detected ones. The missile being intercepted is itself the "first", so the extras
+    // are the others (see interceptResult's "beyond the first" reading of the printed rule).
+    const salvoExtras = scene.tokens.filter(t => {
+      const g = t.flags?.[SCOPE]?.missile;
+      return g && t.id !== mt.id && g.targetTokenId === f.targetTokenId && g.detected;
+    }).length;
+    const res = interceptResult((await new Roll("1d10").evaluate()).total, salvoExtras);
     if (res.outcome === "destroyed") {
       await postSavePromptCard({ title: localizeParam("Vehicle.AntiMissileDestroyedTitle", { weapon: f.weaponName }) });
       await mt.delete().catch(() => {});
@@ -302,7 +342,7 @@ async function _applyMissileReaction(tokenId, kind, sceneArg = null) {
   let add = 0, label = "";
   if (kind === "evade") { add = 2; label = localize("Vehicle.EvasiveManeuver"); }
   else {
-    const best = _bestCountermeasure(target?.system?.countermeasures ?? [], f.homingMethod);
+    const best = _countermeasureTotal(target?.system?.countermeasures ?? [], f.homingMethod);
     if (!best.cm) { ui.notifications?.warn?.(localize("Vehicle.NoCmDefeats")); return; }
     add = best.mod; label = localizeParam("Vehicle.CmLabel", { cm: best.cm, mod: best.mod });
   }

@@ -31,7 +31,7 @@
       {
         "name": "200mm Chemical",
         "pen": 0,
-        "burst": 24,
+        "burst": 8,
         "warhead": "chemical"
       }
     ],

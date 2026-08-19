@@ -5,7 +5,7 @@
   "system": {
     "flavor": "",
     "notes": "",
-    "cost": 2000,
+    "cost": 700,
     "weight": 0,
     "equipped": true,
     "source": "Maximum Metal",
@@ -20,18 +20,18 @@
     "shots": 1,
     "range": 0,
     "reliability": "VR",
-    "space": 5,
+    "space": 4,
     "shellVariants": [
       {
         "name": "1000-lb Cluster",
-        "pen": 4,
-        "burst": 72,
+        "pen": 7,
+        "burst": 144,
         "warhead": "cluster"
       },
       {
         "name": "1000-lb FAE",
         "pen": 10,
-        "burst": 144,
+        "burst": 216,
         "hiEx": true
       }
     ],

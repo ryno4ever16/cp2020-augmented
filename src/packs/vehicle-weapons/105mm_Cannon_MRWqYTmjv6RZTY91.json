@@ -18,7 +18,7 @@
     "rof": 1,
     "shots": 1,
     "range": 1000,
-    "reliability": "ST",
+    "reliability": "VR",
     "space": 10,
     "shellVariants": [
       {

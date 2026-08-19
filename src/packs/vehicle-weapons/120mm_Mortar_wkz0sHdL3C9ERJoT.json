@@ -27,13 +27,13 @@
       {
         "name": "120mm Cluster",
         "pen": 4,
-        "burst": 18,
+        "burst": 6,
         "warhead": "cluster"
       },
       {
         "name": "120mm Chemical",
         "pen": 0,
-        "burst": 18,
+        "burst": 6,
         "warhead": "chemical"
       }
     ],

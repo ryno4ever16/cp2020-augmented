@@ -82,12 +82,14 @@ async function _placeGasCloud(scene, origin, radiusM, weaponName) {
  * @param {number}   p.pen           base Penetration
  * @param {number}   p.burstM        base burst radius (metres)
  * @param {object}   [p.payload]     extra dispatch fields (range, goodShotSteps, ap, weaponName, …)
+ * @param {boolean}  [p.applyFillerRules=true]  false when the shell row already carries its own
+ *                   table's final Pen/burst (the p.22 bomb options) — see warheadProfile.
  * @returns {Promise<{struck:Actor[], tokens:number, profile:object}>}
  */
-export async function resolveWarheadBurst({ firerToken = null, origin, warhead = "", pen = 0, burstM = 0, payload = {}, scene: sceneArg = null } = {}) {
+export async function resolveWarheadBurst({ firerToken = null, origin, warhead = "", pen = 0, burstM = 0, applyFillerRules = true, payload = {}, scene: sceneArg = null } = {}) {
   const scene = sceneArg ?? canvas?.scene;
   if (!scene || !origin) return { struck: [], tokens: 0, profile: null };
-  const profile = warheadProfile(warhead, { pen, burstM });
+  const profile = warheadProfile(warhead, { pen, burstM, applyFillerRules });
   const shape = { type: "circle", radiusM: profile.burstM };
 
   // Penetration warheads (HE / HEAT / cluster): blast everyone through the dispatcher.
@@ -273,7 +275,10 @@ export async function openBombDialog(actor, mount = {}) {
           const land = bombLanding({ aim: _center(targetTok), heightM, toHitTotal: total, toHitNumber: tn, d10dir: dir, ppm: _ppm(scene) });
           // A direct hit multiplies the warhead's Penetration ×5 (MM p.9). The burst carries that.
           const pen = land.hit ? bombDirectPen(shell.pen) : shell.pen;
-          await resolveWarheadBurst({ firerToken: firerTok, origin: land.point, warhead: shell.warhead, pen, burstM: shell.burst, payload: { weaponName: shell.name, ap: shell.ap, range: "normal" }, scene });
+          // applyFillerRules:false — these shells are the p.22 BOMB OPTIONS, whose modifiers are
+          // already in the catalog row. The artillery-ammunition arithmetic (p.21) is a different
+          // table and would multiply the burst a second time and cap the ×5 direct hit at Pen 4.
+          await resolveWarheadBurst({ firerToken: firerTok, origin: land.point, warhead: shell.warhead, pen, burstM: shell.burst, applyFillerRules: false, payload: { weaponName: shell.name, ap: shell.ap, range: "normal" }, scene });
           const fall = bombFallTurns(heightM, { diveSpeed: diveTurns > 0 ? diveSpeed : 0 });
           const fallExtra = (diveTurns > 0 && diveSpeed > 175 ? localize("Vehicle.BombFallDive") : "")
                           + (aim ? localizeParam("Vehicle.BombFallAim", { aim }) : "");

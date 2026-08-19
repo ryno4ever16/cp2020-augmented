@@ -24,7 +24,7 @@
     "shellVariants": [
       {
         "name": "100-lb Anti-Tank",
-        "pen": 5,
+        "pen": 10,
         "burst": 4,
         "warhead": "heat",
         "heat": true,
@@ -33,7 +33,7 @@
       {
         "name": "100-lb Incendiary",
         "pen": 0,
-        "burst": 10,
+        "burst": 20,
         "warhead": "wp"
       }
     ],

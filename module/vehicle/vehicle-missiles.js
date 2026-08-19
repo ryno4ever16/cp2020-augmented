@@ -17,7 +17,11 @@ export function missileSpeed(guidance = "semiActive", override = 0) {
   if (o > 0) return o;
   switch (guidance) {
     case "active": return 1500;     // active radar/IR (AAMRAM Mach 2, AAM ~1400mph)
-    case "paint":  return 3000;     // laser-guided, resolves quickly once painted
+    // Laser Paint is a SEMI-ACTIVE guidance variety on p.9, and its printed effect is "Doubles the
+    // speed of the missile" — 750 × 2 = 1500. The shipped 3000 was double the ACTIVE speed instead,
+    // i.e. it doubled off the wrong base and made every painted missile arrive in half the turns the
+    // book gives the defender to react in.
+    case "paint":  return 1500;
     default:       return 750;      // semi-active
   }
 }
@@ -77,7 +81,9 @@ export function interceptResult(d10, extraMissiles = 0) {
 
 /** +Difficulty a countermeasure imposes on a missile by its homing method (MM p.9-10). */
 const CM_EFFECT = {
-  chaff:            { radar: 10 },               // anti-radar only (chaff does not defeat laser homing)
+  // p.10 prints chaff against "radar OR LASER-GUIDED systems" — both, at +10. The shipped entry
+  // defended radar alone, so a laser-guided missile flew through a chaff cloud untouched.
+  chaff:            { radar: 10, laser: 10 },
   flares:           { thermal: 10 },
   irBaffling:       { thermal: 5 },
   irSmoke:          { thermal: 15, optical: 15 },
@@ -85,8 +91,23 @@ const CM_EFFECT = {
   ecm:              { radar: 15 },
   smoke:            { optical: 15 },
   stealth:          { radar: 15 },
-  antiLaserAerosol: { laser: 15 },               // MM: anti-laser aerosol blocks laser homing (~90%)
+  // ⚠ ANTI-LASER AEROSOL IS NOT A DIFFICULTY MODIFIER. It carried `{ laser: 15 }`, a number that
+  // appears nowhere in the book — p.24 gives it an entirely different mechanic: it "will block any
+  // laser-based system (laser rangefinders, painting lasers, weapon lasers, etc.) 90% of the time".
+  // A +15 is a hard shot; a 90% block is a near-certain one that occasionally lets a shot through, and
+  // the two are not interchangeable. The block lives in `aerosolBlocksLaser` below and is rolled by the
+  // paint path; the empty entry here keeps the countermeasure in COUNTERMEASURES (and so on the sheet's
+  // loadout) while stating that it adds no Difficulty.
+  antiLaserAerosol: {},
 };
+
+/**
+ * Does an anti-laser aerosol screen block a laser this turn? PURE — pass the rolled d10.
+ * MM p.24: the aerosol blocks any laser-based system 90% of the time, so only a 1 gets through.
+ */
+export function aerosolBlocksLaser(d10) {
+  return (Number(d10) || 0) >= 2;
+}
 
 /**
  * The countermeasures a vehicle/ACPA can carry, in display order — the single source of truth shared by

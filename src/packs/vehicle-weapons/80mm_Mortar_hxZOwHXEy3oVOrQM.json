@@ -27,13 +27,13 @@
       {
         "name": "80mm WP",
         "pen": 0,
-        "burst": 18,
+        "burst": 6,
         "warhead": "wp"
       },
       {
         "name": "80mm Cluster",
         "pen": 4,
-        "burst": 18,
+        "burst": 6,
         "warhead": "cluster"
       }
     ],

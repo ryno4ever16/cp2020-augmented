@@ -27,13 +27,13 @@
       {
         "name": "60mm WP",
         "pen": 0,
-        "burst": 15,
+        "burst": 5,
         "warhead": "wp"
       },
       {
         "name": "60mm Chemical",
         "pen": 0,
-        "burst": 15,
+        "burst": 5,
         "warhead": "chemical"
       }
     ],

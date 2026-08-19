@@ -33,7 +33,23 @@ export function indirectToHitNumber({ alreadyRangedIn = false } = {}) {
 
 /**
  * Spotter-corrected indirect To-Hit bonus (MM p.8): (SpotterHW + SpotterINT)/2 + FirerHW/2 + mods.
- * `mods` folds the visibility / situation table (spotter-doing-something-else −10 per errata, etc.). PURE.
+ * `mods` folds the visibility / situation table. PURE.
+ *
+ * ⚠ TWO HOUSE READINGS LIVE IN THIS LINE, both deliberate and neither printed:
+ *
+ * 1. THE ROUNDING IS OURS. p.8 prints the two halves as "Spotter's (Heavy Weapons + INT)/2" and
+ *    "Firer's Heavy Weapons/2" and states NO rounding rule for either. Flooring both is the module's
+ *    choice — it is the conservative one (it never hands the firer a bonus the book did not clearly
+ *    grant) and it is applied consistently to both terms. A GM who reads the halves as rounding to
+ *    nearest will be one point kinder on odd skill totals.
+ *
+ * 2. THE −10 "SPOTTER DOING SOMETHING ELSE" IS A CROSS-APPLICATION. The p.105 erratum that supplies
+ *    it corrects "PAGE 10, Sample Awareness/Notice Modifiers" — it governs the p.10 NOTICE/AWARENESS
+ *    table, not this p.8 artillery modifier list, which prints its own four entries and does not
+ *    include it. It is carried here because a spotter who is not spotting plainly should not correct
+ *    fire as well as one who is, but it is borrowed, not printed. Same for the dialog's −3 darkness.
+ *
+ * Printed and NOT implemented: "+3 per turn (max four turns) of spotted fire at the same target area".
  */
 export function indirectToHitBonus({ spotterHW = 0, spotterINT = 0, firerHW = 0, mods = 0 } = {}) {
   return Math.floor(((Number(spotterHW) || 0) + (Number(spotterINT) || 0)) / 2)
@@ -134,26 +150,62 @@ export function bombLanding({ aim = { x: 0, y: 0 }, heightM = 0, toHitTotal = 0,
 /* ------------------------------ Warheads (MM p.20-22) ------------------------------ */
 
 /**
+ * How many combat turns White Phosphorus keeps burning.
+ *
+ * MM p.21 prints no turn count — it prints a DURATION: anyone hit with WP takes 3D6 to that location
+ * "per turn for at least a half-hour, or until the WP fragments are removed". The shipped 10 turns was
+ * 30 seconds of a half-hour rule, i.e. it expired sixty times too early and quietly turned a wound that
+ * has to be surgically dealt with into one that stops on its own inside a single firefight.
+ *
+ * A half-hour of three-second combat turns is 600, and that is the number used here rather than an
+ * open-ended burn: the book's "at least" makes 600 a FLOOR, but a DOT with no ceiling would outlive
+ * every encounter it was lit in and hand the table an effect nothing ever clears. 600 turns is far
+ * longer than any combat runs, so within an encounter it behaves exactly as the book's "at least a
+ * half-hour" does, while still terminating. Removal of the fragments — the book's other stopping
+ * condition — is a fiction call and remains the GM's.
+ */
+export const WP_BURN_TURNS = 600;
+
+/**
  * Resolve a warhead's effect profile from its base {pen, burstM}. PURE.
+ *
+ * The arithmetic here is the ARTILLERY AMMUNITION table (MM p.21), which governs the fillers a
+ * howitzer or mortar shell can be loaded with:
  *   heat     — shaped charge; the resolver halves Pen vs Composite Armor (heat:true). 4 m default burst.
  *   wp       — White Phosphorus: no Penetration, a burn DOT (3D6/turn) on everything in the burst.
  *   cluster  — bomblets spread ×3 the burst radius but Penetration is capped at 4.
  *   chemical — gas/smoke: ×3 burst, no Penetration, leaves a lingering cloud (gas:true).
  *   (default) plain HE — unchanged.
+ *
+ * ⚠ BOMBS ARE GOVERNED BY A DIFFERENT TABLE and must not be run through this arithmetic. The BOMB
+ * OPTIONS table (MM p.22, reprinted cell-identically on p.99) prints its own modifiers — Cluster is
+ * Pen −3 and burst ×2, not Pen→4 and burst ×3; Anti-Tank doubles Pen; Incendiary doubles burst — so
+ * applying the p.21 filler rules over a bomb row multiplies a second time and caps a Penetration the
+ * bomb table never caps. `applyFillerRules: false` is how a caller says "this row already carries its
+ * table's final numbers": the warhead's SIDE EFFECTS still attach (the shaped-charge flag, the burn
+ * DOT, the lingering cloud) while pen and burst pass through untouched. It is what lets p.22's own
+ * direct-hit rule work — "subtract 3 from the bomb's normal Penetration, then multiply the result by
+ * 5" — which the ×5 at the bombing call site could never reach while the cap was flattening it to 4.
+ *
+ * @param {boolean} [p.applyFillerRules=true]  false for rows whose modifiers are already applied.
  * @returns {{pen:number, burstM:number, heat?:boolean, dot?:object, gas?:boolean, cluster?:boolean}}
  */
-export function warheadProfile(warhead, { pen = 0, burstM = 0 } = {}) {
+export function warheadProfile(warhead, { pen = 0, burstM = 0, applyFillerRules = true } = {}) {
   const P = Math.max(0, Number(pen) || 0);
   const B = Math.max(0, Number(burstM) || 0);
   switch (String(warhead || "").toLowerCase()) {
     case "heat":     return { pen: P, burstM: B || 4, heat: true };
     case "wp":
     case "phosphorus":
-    case "whitephosphorus": return { pen: 0, burstM: B || 4, dot: { formula: "3d6", turns: 10 } };
-    case "cluster":  return { pen: Math.min(P, 4), burstM: (B || 1) * 3, cluster: true };
+    case "whitephosphorus": return { pen: 0, burstM: B || 4, dot: { formula: "3d6", turns: WP_BURN_TURNS } };
+    case "cluster":  return applyFillerRules
+      ? { pen: Math.min(P, 4), burstM: (B || 1) * 3, cluster: true }
+      : { pen: P, burstM: B, cluster: true };
     case "chemical":
     case "smoke":
-    case "gas":      return { pen: 0, burstM: (B || 1) * 3, gas: true };
+    case "gas":      return applyFillerRules
+      ? { pen: 0, burstM: (B || 1) * 3, gas: true }
+      : { pen: 0, burstM: B, gas: true };
     default:         return { pen: P, burstM: B };
   }
 }

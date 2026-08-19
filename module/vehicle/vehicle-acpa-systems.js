@@ -20,7 +20,9 @@ export const ACPA_SYSTEM_CATEGORIES = ["utility", "sensor", "movement", "defensi
 
 /** Core ACPA systems (Maximum Metal charts, Appendix A). Verified stats; expand freely. */
 export const ACPA_SYSTEMS = {
-  // ── Sensors (Audio-Visual / Special Sensors, p.67/93) ──
+  // ── Sensors (Audio-Visual / Special Sensors, p.67-68) ──
+  //    The section opens on p.67 (which carries the three radios' own stats in prose); the SENSOR TABLE
+  //    every other stat below came from prints on p.68. (p.93 is the Appendix A chart, not the source.)
   RADAR:              { key: "RADAR",              label: "Radar",                 category: "sensor",   weight: 5, spaces: 0.5,  sp: 0,  sdp: 15, cost: 1000, mount: "internal" },
   INFRARED:           { key: "INFRARED",           label: "Infra-Red Sensors",     category: "sensor",   weight: 0, spaces: 0.25, sp: 0,  sdp: 5,  cost: 400,  mount: "internal" },
   THERMAL_TARGETING:  { key: "THERMAL_TARGETING",  label: "Thermal Targeting",     category: "sensor",   weight: 0, spaces: 0.25, sp: 0,  sdp: 5,  cost: 500,  mount: "internal" },
@@ -48,19 +50,23 @@ export const ACPA_SYSTEMS = {
   LASER_DETECTOR:     { key: "LASER_DETECTOR",     label: "Laser Detector",        category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 1000, mount: "internal" },
   MICROWAVE_DETECTOR: { key: "MICROWAVE_DETECTOR", label: "Microwave Detector",    category: "sensor",   weight: 0,  spaces: 0.25, sp: 0,  sdp: 5,  cost: 5000, mount: "internal" },
 
-  // ── Utility (General + Auto-Doctors, p.64) ──
+  // ── Utility (General + Auto-Doctors) ──
+  //    Two tables, two pages: the AUTO-DOCTORS table is p.66, the GENERAL SYSTEMS table is p.70. The old
+  //    single "p.64" header named neither (p.64 is the Reality Interfaces table).
   FIRE_EXTINGUISHER:  { key: "FIRE_EXTINGUISHER",  label: "Fire Extinguisher",     category: "utility",  weight: 10, spaces: 1,   sp: 20, sdp: 20, cost: 500,  mount: "either" },   // corrected to MM p.70
   HEAVY_TOOL_SUITE:   { key: "HEAVY_TOOL_SUITE",   label: "Heavy Tool Suite",      category: "utility",  weight: 50, spaces: 2,   sp: 15, sdp: 40, cost: 400,  mount: "either" },   // corrected to MM p.70
   LIGHT_TOOL_SUITE:   { key: "LIGHT_TOOL_SUITE",   label: "Light Tool Suite",      category: "utility",  weight: 8,  spaces: 1,   sp: 0,  sdp: 15, cost: 560,  mount: "internal" }, // electronic/light-mech repair (p.70)
   SEARCHLIGHT:        { key: "SEARCHLIGHT",        label: "Searchlight",           category: "utility",  weight: 5,  spaces: 0,   sp: 10, sdp: 5,  cost: 300,  mount: "external" }, // white/IR/UV; can blind (+4 WA, 200m); +200eb armors to 10SP/10SDP
   WINCH_GRAPPLE:      { key: "WINCH_GRAPPLE",      label: "Winch & Grapple",       category: "utility",  weight: 20, spaces: 1,   sp: 0,  sdp: 40, cost: 500,  mount: "internal" }, // 100m cable, 1200kg winch (p.70)
-  KWIKFIX_AUTODOC:    { key: "KWIKFIX_AUTODOC",    label: "RussianArms Kwikfix",   category: "utility",  weight: 1,  spaces: 0.5, sp: 0,  sdp: 15, cost: 200,  mount: "internal" },
-  BODYWEIGHT_MEDIC:   { key: "BODYWEIGHT_MEDIC",   label: "Bodyweight Medic",      category: "utility",  weight: 3,  spaces: 1,   sp: 0,  sdp: 15, cost: 2000, mount: "internal" },
+  KWIKFIX_AUTODOC:    { key: "KWIKFIX_AUTODOC",    label: "RussianArms Kwikfix",   category: "utility",  weight: 1,  spaces: 0.5, sp: 0,  sdp: 15, cost: 200,  mount: "internal" },  // 3 medicines; auto-injects if its monitor sees the Trooper go unconscious. No broadcast, no beacon (p.66)
+  BODYWEIGHT_MEDIC:   { key: "BODYWEIGHT_MEDIC",   label: "Bodyweight Medic",      category: "utility",  weight: 3,  spaces: 1,   sp: 0,  sdp: 15, cost: 2000, mount: "internal" },  // 5 medications; +2 Cool for morale rolls; may re-roll a failed stun/death roll, with NO bonus (p.66)
   ARASAKA_MONITOR:    { key: "ARASAKA_MONITOR",    label: "Arasaka Monitor",       category: "utility",  weight: 1,  spaces: 1,   sp: 0,  sdp: 15, cost: 800,  mount: "internal" },  // 4 injections + KO/death broadcast + 1d6h beacon
   MILITECH_REPEATER:  { key: "MILITECH_REPEATER",  label: "Militech Repeater",     category: "utility",  weight: 3,  spaces: 2,   sp: 0,  sdp: 25, cost: 4000, mount: "internal" },  // 7 meds; +2 on every stun/death re-roll
   ORBITAL_AIR_PRIME:  { key: "ORBITAL_AIR_PRIME",  label: "Orbital Air Prime",     category: "utility",  weight: 2,  spaces: 1,   sp: 0,  sdp: 20, cost: 8000, mount: "internal" },  // = Repeater, smaller
 
-  // ── Movement (p.68) ──
+  // ── Movement (p.68-69) ──
+  //    The section opens on p.68 (Climbers are described there); the MOVEMENT SYSTEMS table the stats
+  //    below were read from prints on p.69.
   CLIMBERS:           { key: "CLIMBERS",           label: "Climbers",              category: "movement", weight: 1,  spaces: 0.5, sp: 30, sdp: 15, cost: 1000, mount: "either",  perLimb: true },
   SWIMMER:            { key: "SWIMMER",            label: "Swimmer Unit",          category: "movement", weight: 50, spaces: 2,   sp: 25, sdp: 60, cost: 6000, mount: "external" },
   JUMP_JETS:          { key: "JUMP_JETS",          label: "Jump Jets",             category: "movement", weight: 0,  spaces: 1,   sp: 20, sdp: 30, cost: 10000, mount: "retract" },
@@ -69,7 +75,9 @@ export const ACPA_SYSTEMS = {
   SKATES_POWERED:     { key: "SKATES_POWERED",     label: "Skates (Powered)",      category: "movement", weight: 14, spaces: 2,   sp: 20, sdp: 20, cost: 4000,  mount: "retract" },   // ~117 km/h; 1 space/leg
   SKATES_UNPOWERED:   { key: "SKATES_UNPOWERED",   label: "Skates (Unpowered)",    category: "movement", weight: 5,  spaces: 1,   sp: 20, sdp: 20, cost: 500,   mount: "external" },  // double MA; 1/2 space/leg
 
-  // ── Safety (Trooper Safety, p.64) ──
+  // ── Safety (Trooper Safety) ──
+  //    The SAFETY SYSTEMS table is p.66 (below the auto-doctor table); the prose descriptions of these
+  //    five are p.67. The old "p.64" header named neither.
   ESCAPE_HATCH:       { key: "ESCAPE_HATCH",       label: "Escape Hatch",          category: "safety",   weight: 1,  spaces: 0.5, sp: 0,  sdp: 30, cost: 500,  mount: "internal" },
   LIFE_SUPPORT:       { key: "LIFE_SUPPORT",       label: "Extended Life Support", category: "safety",   weight: 10, spaces: 1,   sp: 30, sdp: 20, cost: 500,  mount: "either" },   // per 10kg/4hr unit; corrected to MM p.67
   SELF_SEAL:          { key: "SELF_SEAL",          label: "Self-Seal Compression", category: "safety",   weight: 5,  spaces: 4,   sp: 0,  sdp: 50, cost: 6000, mount: "internal" },
@@ -98,7 +106,8 @@ export function acpaSystemDef(key) {
 
 /**
  * A system's structural points (SDP). The charts list SDP directly; a system given an SP but no SDP
- * has SDP = 3 × SP (MM p.62). PURE — accepts a catalog def or any {sdp, sp}.
+ * has SDP = 3 × SP (MM p.58, printed twice on that page — body column and boxed sidebar. p.62 carries
+ * the Chassis Inventory Table and does not state this rule). PURE — accepts a catalog def or any {sdp, sp}.
  */
 export function acpaSystemSdp(def) {
   const sdp = Number(def?.sdp) || 0;
@@ -107,7 +116,7 @@ export function acpaSystemSdp(def) {
   return sp > 0 ? sp * 3 : 0;
 }
 
-/* ------------------------------- Per-area spaces (MM p.61) ------------------------------- */
+/* ---------------------- Per-area spaces (MM p.61 rule, p.62 table) ---------------------- */
 
 /**
  * Internal + external spaces available in each body area, by chassis STR (MM p.61). External spaces =

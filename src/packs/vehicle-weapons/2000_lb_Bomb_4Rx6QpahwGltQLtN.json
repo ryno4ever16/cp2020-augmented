@@ -5,7 +5,7 @@
   "system": {
     "flavor": "",
     "notes": "",
-    "cost": 3000,
+    "cost": 1000,
     "weight": 0,
     "equipped": true,
     "source": "Maximum Metal",
@@ -20,7 +20,7 @@
     "shots": 1,
     "range": 0,
     "reliability": "VR",
-    "space": 6,
+    "space": 5,
     "lastOwnerId": "",
     "damage": "",
     "ap": false,

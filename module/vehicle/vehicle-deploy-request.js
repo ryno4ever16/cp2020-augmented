@@ -20,7 +20,7 @@
  */
 
 import { localizeParam, tryLocalize } from "../utils.js";
-import { deployVehicleToScene } from "./vehicle-canvas.js";
+import { deployVehicleToScene, DEFAULT_FOOTPRINT } from "./vehicle-canvas.js";
 import { placeBeside } from "./vehicle-seating.js";
 
 const SCOPE = "cp2020-augmented";
@@ -53,7 +53,25 @@ const VEHICLE_TYPE_MAP = [
   [/\bboat\b|\bship\b|watercraft|jet.?ski/i, "boat", true],
   [/acpa|powered? armou?r/i, "acpa", true],
   [/\bcar\b|sedan|coupe|compact/i, "car", true],
-  [/submarine|\bsub\b|space|satellite|orbit|shuttle|\brpv\b|drone|remote|hover|dirigible|airship|ultralight|\bjet\b|plane|glider/i, "car", false],
+
+  // ⚠ SIX FAMILIES WERE MARKED "NOT COVERED" THAT THE BOOK COVERS. MM p.11's REVISED CONTROL MODIFIERS
+  // prints a handling value for Hover (−2), Airship (+5), Light Plane (−0), Med/Hvy Plane (−3), Small
+  // Jet (+1) and Large Jet (−4) — and vehicle-control.js has always carried the hover and airship rows,
+  // so the module was contradicting itself: one file knew the number while another told the sheet the
+  // rules did not exist. The order matters — the specific rows must precede the generic `plane`/`jet`
+  // ones, because "light plane" also matches /plane/.
+  [/hover/i, "hover", true],
+  [/dirigible|airship|blimp|zeppelin/i, "airship", true],
+  [/light\s*plane|ultralight\s*plane/i, "light plane", true],
+  [/small\s*jet/i, "small jet", true],
+  [/large\s*jet|heavy\s*jet/i, "large jet", true],
+  [/\bjet\b/i, "jet", true],
+  [/plane|airplane|aeroplane/i, "plane", true],
+
+  // Still genuinely uncovered: neither Core p.112 nor MM prints handling for these. p.8 discusses RPVs
+  // but sends their stats to Chromebook 2 / Protect and Serve, which are not ingested here, so an RPV
+  // stays honest rather than borrowing a car's numbers under a "modeled" label.
+  [/submarine|\bsub\b|space|satellite|orbit|shuttle|\brpv\b|drone|remote|ultralight|glider/i, "car", false],
 ];
 export function normalizeVehicleType(text) {
   const t = String(text ?? "").trim();
@@ -201,9 +219,11 @@ export async function placeDeployedVehicle(actor, anchor) {
     if (!scene || !anchorToken) return { placed: false, sceneName: null };
 
     const grid = scene.grid?.size ?? 100;
+    // No explicit footprint on the prototype ⇒ the canvas layer's own default, imported rather than
+    // repeated here, so the two can never drift into two different shipped shapes.
     const size = {
-      w: Number(actor.prototypeToken?.width) || 4,
-      h: Number(actor.prototypeToken?.height) || 2,
+      w: Number(actor.prototypeToken?.width) || DEFAULT_FOOTPRINT.w,
+      h: Number(actor.prototypeToken?.height) || DEFAULT_FOOTPRINT.h,
     };
     const anchorRect = {
       x: anchorToken.x, y: anchorToken.y,

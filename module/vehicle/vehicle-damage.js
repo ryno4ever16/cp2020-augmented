@@ -88,9 +88,16 @@ export function coreCrashDamage({ speed = 0, weightClass = "light", rolled = nul
  *   - Good Shot: +½ base Pen per full 10 the to-hit cleared the target number (per step).
  *   - Multiple rounds: +¼ base Pen per extra round hitting the same area (round off).
  *   - Range: −25% at Long, −50% at Extreme (applied last), unless HE penetrators.
- *   - High-density AP (errata p.110): a dense kinetic penetrator does "full damage through armor like
- *     HEAT" → its Penetration is range-immune too (full Pen at every band). Unlike HEAT it is kinetic,
- *     so Composite/Reactive armor (handled by the caller) do not reduce it.
+ *   - High-density AP (errata p.106): a dense kinetic penetrator does "full damage through armor like
+ *     HEAT". Unlike HEAT it is kinetic, so Composite/Reactive armor (handled by the caller) do not
+ *     reduce it.
+ *
+ *     ⚠ THE RANGE IMMUNITY IS AN INTERPRETATION, NOT A PRINTED RULE, and it is the module's standing
+ *     one. p.106 grants high-density AP exactly one thing — full damage THROUGH ARMOR — and says
+ *     nothing whatever about range; p.6 step 2D exempts only "high-explosive penetrators" from falloff.
+ *     Treating it as range-immune reads "like HEAT rounds" as importing HEAT's whole profile rather
+ *     than the one property the sentence names. That is a defensible reading of a terse erratum and it
+ *     is the one shipped, but it grants a real mechanical benefit the book never wrote down.
  */
 export function mmEffectivePenetration({ basePen = 0, goodShotSteps = 0, extraRounds = 0, range = "normal", hefPenetrator = false, highDensityAP = false } = {}) {
   const base = Math.max(0, Number(basePen) || 0);
@@ -162,7 +169,8 @@ export function mmSurfaceDamage(d10, basePen = 0) {
   return { itemDamaged: true, destroyed: (Number(basePen) || 0) >= 3 };
 }
 
-/** Vehicle Hit Location (MM p.6). PURE: 1d10 with facing shift (+2 top, −1 side, −2 back/bottom). */
+/** Vehicle Hit Location (MM p.7 — the table prints there, not on p.6; reprinted p.103).
+ *  PURE: 1d10 with facing shift (+2 top, −1 side, −2 back/bottom). */
 export function mmHitLocation(d10, facing = "front") {
   let r = Number(d10) || 0;
   if (facing === "top") r += 2;
@@ -174,7 +182,9 @@ export function mmHitLocation(d10, facing = "front") {
   return "Turret";
 }
 
-/** Hull/Turret sub-location (MM p.6). PURE: 1d10 with facing shift (+1 front, −1 back). */
+/** Hull/Turret sub-location (MM p.7 — the Location Subtables print with the main table, not on p.6).
+ *  PURE: 1d10 with facing shift (+1 front, −1 back). The book sets the two subtables side by side in one
+ *  row block, so its "3-4 Engine, Crew" row is Hull 3-4 Engine and Turret 3-4 Crew. */
 export function mmSubLocation(d10, table = "Hull", facing = "front") {
   let r = Number(d10) || 0;
   if (facing === "front") r += 1;
@@ -661,10 +671,20 @@ async function _resolveAcpaQuickKill(actor, sys, { pen, rawDamage, str, basePen,
 
   // Crew damage on a torso/head hit lands on the pilot (MM p.6). The shared post-block routes it through the
   // pilot's BTM/wound/save pipeline; _ACPA_AREA_TO_CHAR_LOC has no "Torso/Head" key, so it falls back to Torso.
+  //
+  // ⚠ THE HIT IS GATED, and it was not: p.6's ACPA hit-location table prints "7-12 Torso/Head — Roll 1D6,
+  // hits the crew on 1-3", so the pilot is reached by HALF of the torso/head hits, not all of them. The
+  // ungated version put every torso hit straight through the pilot's wound track — the trooper inside a
+  // suit that was still standing took roughly twice the damage the book gives them.
   if (areaName === "Torso/Head") {
-    const crew = (await roll(crit.crewDice)).total;
-    pilotDamage = crew;
-    lines += `<br>Crew (pilot) takes <b>${crit.crewDice}</b> = ${crew} to the torso.`;
+    const crewGate = (await roll("1d6")).total;
+    if (crewGate <= 3) {
+      const crew = (await roll(crit.crewDice)).total;
+      pilotDamage = crew;
+      lines += `<br>Crew (pilot) takes <b>${crit.crewDice}</b> = ${crew} to the torso (1d6 crew check: ${crewGate} ≤ 3).`;
+    } else {
+      lines += `<br>The hit spares the pilot (1d6 crew check: ${crewGate} > 3).`;
+    }
   }
 
   // TODO(acpa-quickkill): ammo gang-fire on weapon-location hits (MM p.6) not modelled yet.
@@ -741,6 +761,12 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
   // Reactive Armor (MM p.23): explosive tiles that may halve a shaped-charge attack on a 1d10 (2-10),
   // degraded −1 per two prior shaped/HE hits and consumed per hit (the counter persists until "Replace").
   // Stacks with Composite — each is an independent layer, so both firing → ¼ Pen. Vehicles only (!isACPA).
+  //
+  // ⚠ THE STACK IS OURS. p.23 describes Composite ("halves the penetration of shaped-charge weapons")
+  // and Reactive ("On a 2-10 the armor explodes outward, halving the penetration") each on its own and
+  // never addresses what happens when a vehicle carries both. Applying them in sequence to ¼ is the
+  // module's reading — it follows from treating them as two independent layers, which is how the book
+  // describes them, but the ¼ figure appears nowhere in it.
   const heHit = !isACPA && !!hefPenetrator && !heat;          // high-explosive (non-shaped): wears tiles only
   const reactiveOn = !isACPA && !!sys.reactiveArmor;
   let reactiveNote = "";

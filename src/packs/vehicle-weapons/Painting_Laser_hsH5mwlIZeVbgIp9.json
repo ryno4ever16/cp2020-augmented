@@ -19,7 +19,7 @@
     "shots": 1,
     "range": 1000,
     "reliability": "VR",
-    "space": 1,
+    "space": 0.5,
     "lastOwnerId": "",
     "ap": false,
     "heat": false,

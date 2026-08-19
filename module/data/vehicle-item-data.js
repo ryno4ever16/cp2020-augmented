@@ -97,8 +97,8 @@ export class CyberpunkVehicleWeaponData extends CyberpunkBaseItemData {
       ap:          booleanField(false),
       heat:        booleanField(false),          // shaped-charge: range-immune; Composite Armor halves Pen
       hiEx:        booleanField(false),          // high-explosive: range-immune
-      highDensityAP: booleanField(false),        // errata p.105: full damage through armor like HEAT
-      railgun:     booleanField(false),          // errata "Armor Damage via Penetration": SP-erosion factor 0.20, not 0.60 generic AP
+      highDensityAP: booleanField(false),        // errata p.106: full damage through armor like HEAT
+      railgun:     booleanField(false),          // errata p.108 "Armor Damage via Penetration": SP-erosion factor 0.20, not 0.60 generic AP
       burst:       numberField(0),               // burst radius in meters (0 = none)
       // Rate / ammo.
       rof:         numberField(1),

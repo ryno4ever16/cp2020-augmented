@@ -74,6 +74,14 @@ export function weaponToPenetration(weaponItem, { apOverride = null } = {}) {
  * Total the Maximum Metal vehicle to-hit modifiers for one shot (MM p.4). PURE.
  * A vehicle target is Large (+4); ACPA takes no size modifier. Target movement subtracts −1 per
  * full 20 mph (per full 40 mph if moving directly toward the firer).
+ *
+ * The p.4 table closes with a note that grants ACPA THREE exemptions, not one:
+ *   "ACPA have no target size modifier and take no penalty for turning to face the target in the same
+ *    action. They are considered to have Vehicle Link/Cyber-controls."
+ * Only the first was implemented. `isACPAFirer` carries the other two — a suit turning to bring its
+ * weapon round pays nothing for it, and it is treated as Vehicle Link-equipped whether or not the actor
+ * carries the flag. (`isACPATarget` stays a separate question: the size exemption belongs to the thing
+ * being SHOT at, these two belong to the thing SHOOTING.)
  */
 export function vehicleToHitModifier({
   targetLarge = true, targetSmall = false, isACPATarget = false,
@@ -81,6 +89,7 @@ export function vehicleToHitModifier({
   turret = false, targetingComputer = 0,
   firerMoving = false, turningToFace = false, vehicleLink = false,
   darkObscured = false, heatSeekerVsAV = false, rocketSalvo = false,
+  isACPAFirer = false,
   dfb = 0,
 } = {}) {
   let mod = 0;
@@ -94,8 +103,8 @@ export function vehicleToHitModifier({
   if (turret) mod += 2;
   mod += Number(targetingComputer) || 0;
   if (firerMoving) mod -= 3;        // non-stabilized weapon
-  if (turningToFace) mod -= 2;
-  if (vehicleLink) mod += 2;
+  if (turningToFace && !isACPAFirer) mod -= 2;
+  if (vehicleLink || isACPAFirer) mod += 2;
   if (darkObscured) mod -= 3;
   if (heatSeekerVsAV) mod += 4;
   if (rocketSalvo) mod -= 2;
@@ -253,8 +262,8 @@ export async function openVehicleFireDialog(actor, mount = {}) {
   const rofAlt = Number(w.rofAlt) || 0;           // variable-ROF weapons ("30 OR 5"): offer a high/low fire-rate pick (MM p.5)
   const arc = w.arc ?? mount.arc ?? "turret";
   const ap = !!w.ap, heat = !!w.heat, hiEx = !!w.hiEx;
-  const highDensityAP = !!w.highDensityAP;        // errata p.110: kinetic, range-immune like HEAT (weapon-level, all shells)
-  const railgun = !!w.railgun;                    // errata "Armor Damage via Penetration": SP-erosion factor 0.20, not 0.60 generic AP
+  const highDensityAP = !!w.highDensityAP;        // errata p.106: full damage through armor like HEAT (weapon-level, all shells)
+  const railgun = !!w.railgun;                    // errata p.108 "Armor Damage via Penetration": SP-erosion factor 0.20, not 0.60 generic AP
   const hefPenetrator = heat || hiEx;             // HEAT / Hi-Ex → Penetration not reduced by range
   const weaponRange = Number(w.range) || 0;
   const minRange = Number(w.minRange) || 0;       // missiles: fired at a target inside this → the warhead won't arm (MM p.9)
@@ -372,13 +381,18 @@ export async function openVehicleFireDialog(actor, mount = {}) {
     ] : [],
     facingOptions: FACINGS.map(f => ({ value: f, label: localize("Vehicle.Facing_" + f), selected: f === detFacing })),
     rangeOptions: ["normal", "long", "extreme"].map(r => ({ value: r, label: localize("Vehicle.Range" + cap(r)), selected: r === detRange })),
-    // ACPA to-hit purity (MM p.61-70): Cyberlinked controls (+2) and Fire-Control computers are
-    // VEHICLE-chapter options absent from PA construction; the suit's own targeting assistance is the
-    // Reality-Interface Direct-Fire Bonus (DFB, "replaces any normal smartgun bonus", MM L6185-6187).
-    // So an ACPA firer gets NEITHER the vehicleLink +2 NOR the fireControl bonus — gate at this single
-    // payload-gather site so every downstream consumer (dialog prefill, modifier math, chat breakdown)
-    // stays consistent. Plain vehicles are unchanged.
-    isTurret, vehicleLink: isAcpaFirer ? false : !!actor.system?.vehicleLink,
+    // ACPA to-hit purity: Fire-Control computers are a VEHICLE-chapter option (MM p.25 computer sights)
+    // absent from PA construction, and the suit's own targeting assistance is the Reality-Interface
+    // Direct-Fire Bonus (DFB, "replaces any normal smartgun bonus", MM p.60 / p.65). So an ACPA firer
+    // gets no fireControl bonus — gated at this single payload-gather site so every downstream consumer
+    // (dialog prefill, modifier math, chat breakdown) stays consistent.
+    //
+    // ⚠ VEHICLE LINK IS NOT ONE OF THE EXEMPTIONS, and treating it as one was backwards. p.4's note ends
+    // "They are considered to have Vehicle Link/Cyber-controls" — the book GRANTS ACPA the +2 rather
+    // than withholding it, and p.60/p.65 exempt only the SMARTGUN bonus, which is a different modifier.
+    // The suit gets it inherently, so there is no checkbox to prefill: `vehicleToHitModifier` adds it
+    // from `isACPAFirer`, and the dialog shows it as a fixed line rather than an editable control.
+    isTurret, vehicleLink: !isAcpaFirer && !!actor.system?.vehicleLink,
     fireControl: isAcpaFirer ? 0 : (Number(actor.system?.fireControl) || 0),
     isAcpaFirer, acpaDfb,
   });
@@ -440,6 +454,9 @@ export async function openVehicleFireDialog(actor, mount = {}) {
               turret: chk("#cp-vf-turret"), vehicleLink: chk("#cp-vf-link"),
               firerMoving: chk("#cp-vf-moving"), darkObscured: chk("#cp-vf-dark"),
               targetingComputer: num("#cp-vf-other"), dfb: num("#cp-vf-dfb"),
+              // Carries p.4's two firer-side ACPA exemptions (inherent Vehicle Link, no turn-to-face
+              // penalty). The suit has no link CHECKBOX to read — the modifier function grants it.
+              isACPAFirer: isAcpaFirer,
             }),
             mountName: shellSel.name ? `${wName} (${shellSel.name})` : wName,
           });

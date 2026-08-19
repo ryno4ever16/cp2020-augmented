@@ -29,7 +29,9 @@ export const SEED_VEHICLE_WEAPONS = [
     name: "105mm Cannon", img: ICON,
     system: {
       weaponClass: "directFire", mountType: "turret", arc: "turret",
-      wa: 1, penetration: 10, damage: "", rof: 1, shots: 1, range: 1000, reliability: "ST",
+      // Reliability VR per p.18 and its cell-identical p.101 reprint. The shipped ST was the only
+      // unexplained reliability divergence on the whole direct-fire table.
+      wa: 1, penetration: 10, damage: "", rof: 1, shots: 1, range: 1000, reliability: "VR",
       space: 10, cost: 250000, source: SOURCE,
       shellVariants: [
         { name: "Hi-Ex (105mm)", pen: 6, burst: 6, hiEx: true },
@@ -76,17 +78,25 @@ export const SEED_VEHICLE_WEAPONS = [
     }
   },
   // D — Bomb (direct hit ×5 Pen). 250-lb GP bomb (MM p.22: WA −3, Pen 6, 16m burst).
+  //
+  // ⚠ THE OPTIONS BELOW ARE THE p.22 BOMB OPTIONS, NOT THE p.21 ARTILLERY AMMUNITION, and that was the
+  // defect: two different tables govern two different weapon families, and the bombs were built with
+  // the artillery filler rules. p.22 prints, per option, PEN / BURST / COST — Anti-Tank ×2 Pen and a
+  // flat 4m burst; Cluster Pen −3 and ×2 burst; Incendiary Pen unchanged and ×2 burst; FAE ×3 burst
+  // over the prose's flat Pen 10. The p.99 charts reprint of the same table is cell-identical, so the
+  // reading is corroborated on two printings.
   {
     name: "250-lb Bomb", img: ICON,
     system: {
       weaponClass: "bomb", mountType: "pod", arc: "front",
       wa: -3, penetration: 6, hiEx: true, burst: 16,
       rof: 1, shots: 1, range: 0, reliability: "VR",
-      space: 3, cost: 600, source: SOURCE,
+      // cost 450 per the p.22 BOMBS row (corroborated by the p.99 reprint's COST column); was 600.
+      space: 3, cost: 450, source: SOURCE,
       shellVariants: [
-        { name: "250-lb Cluster", pen: 4, burst: 16, warhead: "cluster" },   // ×3 burst, Pen 4
-        { name: "250-lb Anti-Tank", pen: 6, burst: 4, warhead: "heat", heat: true, ap: true },
-        { name: "250-lb Incendiary", pen: 0, burst: 16, warhead: "wp" }      // fire (reuses WP ignition)
+        { name: "250-lb Cluster", pen: 3, burst: 32, warhead: "cluster" },    // p.22: Pen −3, burst ×2
+        { name: "250-lb Anti-Tank", pen: 12, burst: 4, warhead: "heat", heat: true, ap: true },  // p.22: Pen ×2, burst 4m
+        { name: "250-lb Incendiary", pen: 0, burst: 32, warhead: "wp" }       // p.22: burst ×2 (fire, no Pen)
       ]
     }
   },
@@ -139,16 +149,22 @@ export const SEED_VEHICLE_WEAPONS = [
   { name: "14.5mm Heavy MG", img: ICON, system: {
       weaponClass: "directFire", mountType: "articulated", arc: "front", wa: 0,
       penetration: 4, damage: "7D10", rof: 5, rofAlt: 3, shots: 100, range: 550, reliability: "VR",
-      space: 3, cost: 4000, sp: 20, sdp: 15, area: "rArm", source: SOURCE } },
-  { name: "4mm Railgun", img: ICON, system: {
-      weaponClass: "directFire", mountType: "articulated", arc: "front", wa: 3,
-      penetration: 7, damage: "5D10+10AP", ap: true, rof: 1, shots: 5, range: 1500, reliability: "ST",
-      space: 2, cost: 12000, sp: 15, sdp: 10, area: "rArm", source: SOURCE } },
+      // cost 2500 per the p.71 ACPA Heavy Weapons row (was 4000, which no printing carries).
+      space: 3, cost: 2500, sp: 20, sdp: 15, area: "rArm", source: SOURCE } },
+  // The "4mm Railgun" that stood here was a SECOND record of the weapon below it. p.71 prints ONE row
+  // (+3, 5D10+10AP (7), 5 shots, 1500M, 11,370EB, [20]/15) and p.72's prose names the gun "EMG-85 4mm
+  // Railgun" — so the two entries were one weapon catalogued twice, and the duplicate disagreed with
+  // the book on cost (12000), SP (15) and SDP (10) where `EMG-85 Railgun` agrees on all three. Removed
+  // rather than corrected: repairing it would have left the book's single row shipping as two buyable
+  // guns. (MM p.71 / p.72.)
 
   // ACPA cannon (p.96).
   { name: "BCL-20 ACPA Cannon", img: ICON, system: {
       weaponClass: "directFire", mountType: "articulated", arc: "front", wa: 1,
-      penetration: 4, damage: "9D10", rof: 2, shots: 20, range: 550, reliability: "VR",
+      // 8D10, not 9D10: p.75 prints "8D10 (4)" and the book's own Penetration cell settles it — 8D10
+      // averages 44 and 44/10 = the printed Pen 4, where 9D10 would average 49.5 → Pen 5. The same page
+      // prints 9D10 cleanly in the two rows that DO carry Pen 5, so this is not an 8/9 misread.
+      penetration: 4, damage: "8D10", rof: 2, shots: 20, range: 550, reliability: "VR",
       space: 2, cost: 2700, sp: 25, sdp: 35, area: "rArm", source: SOURCE } },
   { name: "27-30mm Autocannon", img: ICON, system: {
       weaponClass: "directFire", mountType: "articulated", arc: "front", wa: 0,
@@ -202,8 +218,11 @@ export const SEED_VEHICLE_WEAPONS = [
   // together per the book's table, 10D6=4 … 2D6=0). Pen set to 4 (book max) — was the flagged 6.
   { name: "\"Photon\" Assault Cannon", img: ICON, system: { weight: 40, magWeight: 0, notes: "Pre-existing. Meta-Armson dual-element combat laser. Power-adjustable from the fire dialog's shell dropdown: Full 10D6/Pen4 down to 2D6/Pen0 (MM p.72). 30 shots off a backpack battery; UR reliability.",
       weaponClass: "special", mountType: "articulated", arc: "front", wa: 2,
-      penetration: 4, damage: "10D6AP", ap: true, rof: 2, shots: 30, range: 300, reliability: "ST",
-      space: 3, cost: 80000, sp: 15, sdp: 10, area: "rArm", source: SOURCE,
+      // SP [25] and reliability UR are both printed: the p.72 table gives the shell as [25], and the
+      // same page's prose closes with "Reliability is UR (-1 if damaged)". The shipped 15/ST matched
+      // neither cell.
+      penetration: 4, damage: "10D6AP", ap: true, rof: 2, shots: 30, range: 300, reliability: "UR",
+      space: 3, cost: 80000, sp: 25, sdp: 10, area: "rArm", source: SOURCE,
       shellVariants: [
         { name: "9D6", damage: "9D6AP", pen: 3, ap: true },
         { name: "7D6", damage: "7D6AP", pen: 2, ap: true },
@@ -242,12 +261,39 @@ export const SEED_VEHICLE_WEAPONS = [
       penetration: 2, damage: "3D6AP", ap: true, addFist: true, rof: 1, shots: 1, range: 5, reliability: "VR",
       space: 1, cost: 225, sp: 20, sdp: 15, area: "rArm", source: SOURCE } },
 
-  // ═════════════════ NON-ACPA VEHICLE WEAPON TABLES (Maximum Metal p.16-23, verified) ═════════════════
+  // ═════════════════ NON-ACPA VEHICLE WEAPON TABLES (Maximum Metal p.16-23) ═════════════════
+  // The word "verified" used to sit in this banner and it predated any check — it asserted a state of
+  // the whole block that nobody had established. What IS established: 46 of these weapons are confirmed
+  // against the book's own text layer, cell by cell, and the rest are not yet. The weapon RANGES are a
+  // known open column — see the provenance note further down.
   // Decoded from the MM weapon charts + their descriptions. DAMAGE dice drive the PC↔vehicle bridge and the
   // ACPA SDP flow; the (Pen) is the book's pre-derived Vehicle Penetration. HEAT/Hi-Ex Penetration ignores
   // range (hefPenetrator) and HEAT is halved by Composite Armor; cannons carry Hi-Ex/HEAT shell variants.
   // (Weapons already covered by the ACPA roster above — 20mm/27-30mm autocannon, 75mm recoilless, EMG-83,
   // 12.7/14.5mm heavy MG, 40mm Auto-GL, 2.75" rocket, Light ATGM, Spectre ATGM, 105mm Howitzer — are not repeated.)
+  //
+  // ⚠⚠ RANGE IS THE ONE COLUMN THAT DID NOT COME FROM THIS BOOK — SOURCE UNTRACED.
+  //
+  // Fourteen of the ranges below match NO Maximum Metal printing. They were checked against p.18, its
+  // cell-identical p.101 reprint, and every ACPA table (p.71 / p.75 / p.76 / p.77 / p.78); two printings
+  // of the same table agree with each other and disagree with us, so this is not an extraction artefact:
+  //
+  //   5.56 MG 500 (book 450) · 7.62 Minigun 600 (500) · 12.7mm Minigun/Gatling 600 (500) ·
+  //   12.7mm MG 800 (600) · 20-25mm autocannon 800 (500) · 30mm Gatling 750 (600) ·
+  //   75mm cannon 1500 (750) · 90mm cannon 500 (750) · 105mm recoilless 1000 (800) ·
+  //   120mm cannon 1000 (1250) · 140mm cannon 1000 (1500) · 1cm rail cannon 1500 (1000) ·
+  //   2cm rail cannon 2000 (1500) · 3cm rail cannon 3000 (1500)
+  //
+  // The pattern is not drift: nine are longer than the book and five shorter, and where the book prints
+  // a round figure we often print the next round figure up. That reads as a DIFFERENT SOURCE TABLE, and
+  // the catalog demonstrably had the ACPA tables in hand when it was built (it correctly preferred the
+  // ACPA printing for six other columns). These values are KEPT — they are internally consistent, they
+  // are what the module has always played with, and replacing them with p.18's would change the feel of
+  // every gun for a sourcing question nobody has answered — but they carry NO Maximum Metal authority
+  // and must not be cited as book values. Tracing them is an open post-release task.
+  //
+  // Two of the sixteen originally flagged DID resolve and are book-correct as shipped: the 40mm GL's
+  // 500m is the p.21 artillery printing, and the EMG-83's 1000m is the p.75 ACPA printing.
 
   // ── Machine guns, miniguns & gatlings (p.17). Small-arms D6 weapons; the book Pen already halves the factor. ──
   { name: "5.56mm Minigun", img: ICON, system: { weaponClass:"directFire", mountType:"pintle", arc:"turret",
@@ -264,7 +310,8 @@ export const SEED_VEHICLE_WEAPONS = [
       wa:0, penetration:3, damage:"6D10", rof:10, shots:100, range:800, reliability:"VR", space:1, cost:2000, source:SOURCE } },
   { name: "20mm Gatling", img: ICON, system: { weaponClass:"directFire", mountType:"turret", arc:"turret",
       wa:0, penetration:4, damage:"8D10", rof:100, shots:1000, range:500, reliability:"VR", space:2, cost:6000, source:SOURCE } },
-  // 30mm Gatling fires depleted-uranium slugs — high-density AP (full damage through armor, errata p.107/110).
+  // 30mm Gatling fires depleted-uranium slugs — high-density AP (full damage through armor, errata p.106,
+  // which names this exact weapon: "the 30mm Gatling do only 6D10 damage" ... "do full damage through armor").
   { name: "30mm Gatling", img: ICON, system: { weaponClass:"directFire", mountType:"turret", arc:"turret",
       wa:0, penetration:6, damage:"6D10AP", ap:true, highDensityAP:true, rof:30, shots:1200, range:750, reliability:"VR", space:4, cost:25000, source:SOURCE } },
 
@@ -304,8 +351,15 @@ export const SEED_VEHICLE_WEAPONS = [
   { name: "EMG-85 Railgun", img: ICON, system: { weaponClass:"directFire", mountType:"articulated", arc:"front",
       wa:3, penetration:7, damage:"5D10+10AP", ap:true, railgun:true, rof:1, shots:5, range:1500, reliability:"ST", space:1, cost:11370, source:SOURCE } },
   // E-Harpoon: effective Pen 20 IGNORING armor (composite/Body still apply); damage is temporary (backup circuits).
+  // Cost 10,000 per the p.107 errata, which answers the price directly: "How much does the E-Harpoon
+  // cost? It costs 10,000 eb, 2 sp for weapons and 2 sp for batteries." The shipped 20000 was double.
+  // The same erratum splits the mounting into TWO 2-space claims — 2 for the weapon, 2 more for its
+  // batteries. `space` carries the weapon's own 2; the battery pair is recorded here rather than folded
+  // into the number, because the schema has one space field and silently charging 4 would misreport
+  // which of them a hull is paying for. A mounting that cannot also find 2 spaces of battery is not a
+  // legal E-Harpoon fit.
   { name: "E-Harpoon", img: ICON, system: { weaponClass:"special", mountType:"pod", arc:"front",
-      wa:1, penetration:20, damage:"", ap:true, rof:1, shots:1, range:500, reliability:"ST", space:2, cost:20000, source:SOURCE } },
+      wa:1, penetration:20, damage:"", ap:true, rof:1, shots:1, range:500, reliability:"ST", space:2, cost:10000, source:SOURCE } },
 
   // ── Unguided rockets (p.19). High-explosive: Penetration is range-immune (hefPenetrator), scatter on a miss. ──
   { name: "2\" Rocket", img: ICON, system: { weaponClass:"rocket", mountType:"pod", arc:"front",
@@ -332,6 +386,9 @@ export const SEED_VEHICLE_WEAPONS = [
   //    are +10/+20 vs ground. The (Pen) is the book's PRE-DERIVED Vehicle Penetration, NOT the d10 count. ──
   { name: "Heavy ATGM", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"semiActive", homingMethod:"wire",
       wa:2, penetration:18, damage:"18D10AP", ap:true, heat:true, burst:4, rof:1, shots:1, range:3000, minRange:300, reliability:"VR", space:5, cost:10000, source:SOURCE } },
+  // ⚠ Scorpion range: the book prints it twice and disagrees with itself — p.20's missile table gives
+  //    1000m, p.76's ACPA table gives 2000M. 1000 (p.20) is used, matching the rest of this block, which
+  //    is built from the p.20 printing. No errata resolves the pair.
   { name: "SAM (Scorpion)", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"semiActive", homingMethod:"radar",
       wa:-1, penetration:4, damage:"7D10", heat:true, burst:6, rof:1, shots:1, range:1000, minRange:100, reliability:"VR", space:1, cost:1000, source:SOURCE } },
   { name: "VSAM", img: ICON, system: { weaponClass:"missile", mountType:"pod", arc:"front", guidance:"active", homingMethod:"radar", guidanceSkill:15,
@@ -343,42 +400,56 @@ export const SEED_VEHICLE_WEAPONS = [
 
   // ── Artillery / indirect (p.20). Mortars 400 m/turn, howitzers/rockets 600 m/turn; spotter-corrected To-Hit.
   //    Mortars have a minimum range of 1/100 their max. Shell variants cover the artillery ammunition (p.21). ──
+  //
+  // ⚠ SHELL BURSTS HERE ARE THE SHELL'S BASE BURST — the p.21 filler multiplier is NOT baked in.
+  // It used to be, on some rows and not others: 60mm/80mm/120mm/150mm/200mm carried burst × 3 while the
+  // whole 105mm family carried the base, and `warheadProfile` then multiplied AGAIN at resolution, so a
+  // 200mm chemical shell opened a 72m cloud where the book prints 24. Cluster and Chemical get their ×3
+  // in exactly one place now (vehicle-indirect.js `warheadProfile`), and White Phosphorus gets no burst
+  // multiplier at all — p.21 grants one to Cluster and Chemical only, never to WP, so the ×3 that was
+  // baked into the WP rows was never a printed rule in the first place.
   { name: "60mm Mortar", img: ICON, system: { weaponClass:"artillery", indirectKind:"mortar", mountType:"fixed", arc:"front",
       wa:0, penetration:4, hiEx:true, burst:5, rof:2, shots:1, range:2000, minRange:20, reliability:"VR", space:1, cost:750, source:SOURCE,
-      shellVariants:[{ name:"60mm WP", pen:0, burst:15, warhead:"wp" }, { name:"60mm Chemical", pen:0, burst:15, warhead:"chemical" }] } },
+      shellVariants:[{ name:"60mm WP", pen:0, burst:5, warhead:"wp" }, { name:"60mm Chemical", pen:0, burst:5, warhead:"chemical" }] } },
   { name: "80mm Mortar", img: ICON, system: { weaponClass:"artillery", indirectKind:"mortar", mountType:"fixed", arc:"front",
       wa:0, penetration:5, hiEx:true, burst:6, rof:1, shots:1, range:3500, minRange:35, reliability:"VR", space:1, cost:1500, source:SOURCE,
-      shellVariants:[{ name:"80mm WP", pen:0, burst:18, warhead:"wp" }, { name:"80mm Cluster", pen:4, burst:18, warhead:"cluster" }] } },
+      shellVariants:[{ name:"80mm WP", pen:0, burst:6, warhead:"wp" }, { name:"80mm Cluster", pen:4, burst:6, warhead:"cluster" }] } },
   { name: "120mm Mortar", img: ICON, system: { weaponClass:"artillery", indirectKind:"mortar", mountType:"fixed", arc:"front",
       wa:0, penetration:7, hiEx:true, burst:6, rof:1, shots:1, range:6000, minRange:60, reliability:"VR", space:3, cost:5000, source:SOURCE,
-      shellVariants:[{ name:"120mm Cluster", pen:4, burst:18, warhead:"cluster" }, { name:"120mm Chemical", pen:0, burst:18, warhead:"chemical" }] } },
+      shellVariants:[{ name:"120mm Cluster", pen:4, burst:6, warhead:"cluster" }, { name:"120mm Chemical", pen:0, burst:6, warhead:"chemical" }] } },
   // Howitzer AP doubles Pen / triples on 150-200mm and drops the burst to 0 (howitzers only).
   { name: "150mm Howitzer", img: ICON, system: { weaponClass:"artillery", mountType:"fixed", arc:"front",
       wa:1, penetration:7, hiEx:true, burst:6, rof:1, shots:1, range:24000, reliability:"VR", space:20, cost:150000, source:SOURCE,
-      shellVariants:[{ name:"150mm AP", pen:21, burst:0, ap:true }, { name:"150mm WP", pen:0, burst:18, warhead:"wp" }, { name:"150mm Cluster", pen:4, burst:18, warhead:"cluster" }] } },
+      shellVariants:[{ name:"150mm AP", pen:21, burst:0, ap:true }, { name:"150mm WP", pen:0, burst:6, warhead:"wp" }, { name:"150mm Cluster", pen:4, burst:6, warhead:"cluster" }] } },
   { name: "200mm Howitzer", img: ICON, system: { weaponClass:"artillery", mountType:"fixed", arc:"front",
       wa:0, penetration:15, hiEx:true, burst:8, rof:1, shots:1, range:20000, reliability:"VR", space:30, cost:250000, source:SOURCE,
-      shellVariants:[{ name:"200mm AP", pen:45, burst:0, ap:true }, { name:"200mm Chemical", pen:0, burst:24, warhead:"chemical" }] } },
+      shellVariants:[{ name:"200mm AP", pen:45, burst:0, ap:true }, { name:"200mm Chemical", pen:0, burst:8, warhead:"chemical" }] } },
   // 230mm Rocket — a 12-rocket pod with multiple-bomblet (cluster) warheads; covers a huge area.
   { name: "230mm Rocket", img: ICON, system: { weaponClass:"artillery", mountType:"pod", arc:"front",
       wa:0, penetration:4, heat:true, burst:45, rof:3, shots:12, range:28000, reliability:"VR", space:30, cost:175000, source:SOURCE } },
 
-  // ── Bombs (p.22). Direct hit ×5 Pen (range-immune); a miss deviates with altitude. Options p.22. ──
+  // ── Bombs (p.22). Direct hit ×5 Pen (range-immune); a miss deviates with altitude. ──
+  //    Options are the p.22 BOMB OPTIONS table (Anti-Tank ×2 Pen / 4m · Cluster Pen −3 / ×2 burst ·
+  //    Incendiary Pen unchanged / ×2 burst · FAE flat Pen 10 / ×3 burst), NOT p.21's artillery
+  //    ammunition — see the note on the 250-lb bomb above. Costs and spaces are the p.22 BOMBS row,
+  //    read off the cell-identical p.99 charts reprint, whose COST/SPACES column is the one printing
+  //    of it that renders.
   { name: "100-lb Bomb", img: ICON, system: { weaponClass:"bomb", mountType:"pod", arc:"front",
       wa:-3, penetration:5, hiEx:true, burst:10, rof:1, shots:1, range:0, reliability:"VR", space:1, cost:250, source:SOURCE,
-      shellVariants:[{ name:"100-lb Anti-Tank", pen:5, burst:4, warhead:"heat", heat:true, ap:true }, { name:"100-lb Incendiary", pen:0, burst:10, warhead:"wp" }] } },
+      shellVariants:[{ name:"100-lb Anti-Tank", pen:10, burst:4, warhead:"heat", heat:true, ap:true }, { name:"100-lb Incendiary", pen:0, burst:20, warhead:"wp" }] } },
   { name: "500-lb Bomb", img: ICON, system: { weaponClass:"bomb", mountType:"pod", arc:"front",
-      wa:-3, penetration:8, hiEx:true, burst:48, rof:1, shots:1, range:0, reliability:"VR", space:3, cost:1000, source:SOURCE,
-      shellVariants:[{ name:"500-lb Cluster", pen:4, burst:48, warhead:"cluster" }, { name:"500-lb Anti-Tank", pen:8, burst:4, warhead:"heat", heat:true, ap:true }, { name:"500-lb Incendiary", pen:0, burst:48, warhead:"wp" }] } },
+      wa:-3, penetration:8, hiEx:true, burst:48, rof:1, shots:1, range:0, reliability:"VR", space:2, cost:500, source:SOURCE,
+      shellVariants:[{ name:"500-lb Cluster", pen:5, burst:96, warhead:"cluster" }, { name:"500-lb Anti-Tank", pen:16, burst:4, warhead:"heat", heat:true, ap:true }, { name:"500-lb Incendiary", pen:0, burst:96, warhead:"wp" }] } },
   { name: "1000-lb Bomb", img: ICON, system: { weaponClass:"bomb", mountType:"pod", arc:"front",
-      wa:-3, penetration:10, hiEx:true, burst:72, rof:1, shots:1, range:0, reliability:"VR", space:5, cost:2000, source:SOURCE,
-      shellVariants:[{ name:"1000-lb Cluster", pen:4, burst:72, warhead:"cluster" }, { name:"1000-lb FAE", pen:10, burst:144, hiEx:true }] } },
+      wa:-3, penetration:10, hiEx:true, burst:72, rof:1, shots:1, range:0, reliability:"VR", space:4, cost:700, source:SOURCE,
+      shellVariants:[{ name:"1000-lb Cluster", pen:7, burst:144, warhead:"cluster" }, { name:"1000-lb FAE", pen:10, burst:216, hiEx:true }] } },
   { name: "2000-lb Bomb", img: ICON, system: { weaponClass:"bomb", mountType:"pod", arc:"front",
-      wa:-3, penetration:11, hiEx:true, burst:96, rof:1, shots:1, range:0, reliability:"VR", space:6, cost:3000, source:SOURCE } },
+      wa:-3, penetration:11, hiEx:true, burst:96, rof:1, shots:1, range:0, reliability:"VR", space:5, cost:1000, source:SOURCE } },
 
   // ── Lasers (p.22). The only viable battlefield laser is the painting laser — no damage; it guides paint missiles. ──
   { name: "Painting Laser", img: ICON, system: { weight: 3, magWeight: 0, notes: "Pre-existing. Target designator for laser-guided weapons; no damage, but 90% chance to permanently blind unshielded biological eyes; blocked by smoke/anti-laser aerosol.", weaponClass:"special", mountType:"turret", arc:"turret",
-      wa:3, penetration:0, damage:"", rof:1, shots:1, range:1000, reliability:"VR", space:1, cost:1000, source:SOURCE } },
+      // space 0.5 — the p.72 row prints the SPACE cell as "1/2", not 1.
+      wa:3, penetration:0, damage:"", rof:1, shots:1, range:1000, reliability:"VR", space:0.5, cost:1000, source:SOURCE } },
 
   // ───── Additional ACPA weapons (MM p.75-77, anchor-validated vs the ones we have). DAMAGE dice OCR-cleaned — verify; (Pen) book-given. ─────
   // ACPA cannon/rifle (p.75)

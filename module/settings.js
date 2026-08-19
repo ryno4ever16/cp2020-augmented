@@ -592,7 +592,7 @@ export function registerAugmentedSettings() {
     default: "Core",
   });
 
-  // --- Maximum Metal optional rule: Armor Damage via Penetration (errata p.107) ---
+  // --- Maximum Metal optional rule: Armor Damage via Penetration (errata p.108) ---
   game.settings.register(SCOPE, "vehicleArmorDamageEnabled", {
     name: "SETTINGS.VehicleArmorDamageEnabled",
     hint: "SETTINGS.VehicleArmorDamageEnabledHint",
