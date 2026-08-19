@@ -51,16 +51,27 @@ const r = await p.evaluate(async () => {
   ok("martial_best", bestMA === 8);
 
   // (2) Derived PACS on the suit + the reflex gate + the min-cap (the rule).
-  const MA_REFLEX = new Set(["LOW_BOOST", "HIGH_BOOST"]);
-  const lowBoost = await Actor.create({ name: "__PW__MeleeCap LowBoost", type: "cp2020-augmented.vehicle",
-    system: { isACPA: true, str: 30, reflexControl: "LOW_BOOST" } });
-  await lowBoost.update({ "system.pilotId": pilot.id }); lowBoost.reset();
-  const advanced = await Actor.create({ name: "__PW__MeleeCap Advanced", type: "cp2020-augmented.vehicle",
-    system: { isACPA: true, str: 30, reflexControl: "ADVANCED" } });
-  await advanced.update({ "system.pilotId": pilot.id }); advanced.reset();
+  // ⏪ 2026-08-18 (weak-oracle repair): `reflex_gate` used to test a Set declared IN THIS FILE, which
+  // is a copy of the rule, not the rule — it could never fail no matter what the module did. The
+  // module's own gate lives in vehicle-acpa-combat.js as a MODULE-PRIVATE `MA_REFLEX_CONTROLS`
+  // (FINDING: not exported, so it cannot be imported and compared directly — recorded, not exported
+  // from here). What IS reachable is the exported Reflex/Control ENUM plus the module's real
+  // behaviour, so the gate is now driven through the whole enum in section (3) below.
+  const ACPA = await import("/modules/cp2020-augmented/module/vehicle/vehicle-acpa.js");
+  const reflexKeys = Object.keys(ACPA.REFLEX_CONTROLS ?? {});
+  out.reflexKeys = reflexKeys;
+  ok("reflex_enum_is_the_modules_own", reflexKeys.length === 4
+    && ["BASIC", "ADVANCED", "LOW_BOOST", "HIGH_BOOST"].every(k => reflexKeys.includes(k)));
+  const suits = {};
+  for (const key of reflexKeys) {
+    const a = await Actor.create({ name: `__PW__MeleeCap ${key}`, type: "cp2020-augmented.vehicle",
+      system: { isACPA: true, str: 30, reflexControl: key } });
+    await a.update({ "system.pilotId": pilot.id }); a.reset();
+    suits[key] = a;
+  }
+  const lowBoost = suits.LOW_BOOST, advanced = suits.ADVANCED;
   const lbPACS = Number(game.actors.get(lowBoost.id).system.pilotPACS) || 0;
   ok("pilotPACS_derived", lbPACS === 4);
-  ok("reflex_gate", MA_REFLEX.has("LOW_BOOST") === true && MA_REFLEX.has("ADVANCED") === false);
   ok("pacs_cap_math", Math.min(bestMA, lbPACS) === 4);   // Martial Arts 8 → capped at PA Combat Sense 4
 
   // (3) Dialog integration: picker Martial option gated by reflex; skill level auto-pulls the pilot value.
@@ -98,6 +109,17 @@ const r = await p.evaluate(async () => {
     await closeMelee();
     return { kinds, skillVal0, martialPull, capShown };
   };
+  // Drive the MODULE'S OWN gate across the WHOLE Reflex/Control enum: the martial option is the
+  // module's only observable of its private MA_REFLEX_CONTROLS set, so read it once per row.
+  const gateByReflex = {};
+  for (const key of reflexKeys) {
+    const res = await renderPicker(suits[key]);
+    gateByReflex[key] = res ? res.kinds.includes("martial") : null;
+  }
+  out.gateByReflex = gateByReflex;
+  ok("reflex_gate_is_the_modules_own", gateByReflex.LOW_BOOST === true && gateByReflex.HIGH_BOOST === true
+    && gateByReflex.ADVANCED === false && gateByReflex.BASIC === false);
+
   const lb = await renderPicker(lowBoost);
   const adv = await renderPicker(advanced);
   out.lb = lb; out.adv = adv;
@@ -108,7 +130,7 @@ const r = await p.evaluate(async () => {
   ok("cap_note_shown", !!lb && lb.capShown === true);   // MA 8 > PACS 4 → the "8 → 4" cap note is visible
 
   // cleanup — active scene restored BEFORE the probe scene is deleted (see the capture above)
-  await lowBoost.delete().catch(() => {}); await advanced.delete().catch(() => {});
+  for (const a of Object.values(suits)) await a.delete().catch(() => {});
   await pilot.delete().catch(() => {}); await dummy.delete().catch(() => {});
   const prev = prevActiveSceneId ? game.scenes.get(prevActiveSceneId) : null;
   if (prev && prev.id !== sc.id) {
@@ -125,6 +147,10 @@ const r = await p.evaluate(async () => {
 
 console.log("\n===== ACPA B3 — melee PACS cap + reflex gate =====");
 console.log("  trainedMartials:", JSON.stringify(r.trainedMartials), "| lb:", JSON.stringify(r.lb), "| adv:", JSON.stringify(r.adv));
+console.log("  reflex enum:", JSON.stringify(r.reflexKeys), "| martial option offered per row:", JSON.stringify(r.gateByReflex));
+console.log("  FINDING: the module's martial gate (MA_REFLEX_CONTROLS, vehicle-acpa-combat.js:24) is module-private —");
+console.log("           it cannot be imported and compared directly, so the gate is asserted through the module's own");
+console.log("           rendered picker across the whole exported Reflex/Control enum instead.");
 for (const [k, v] of Object.entries(r.checks)) console.log(`  ${v ? "✅" : "❌"} ${k}`);
 console.log("  page errors:", errors.length ? errors.slice(0, 5) : "none");
 const failed = Object.entries(r.checks).filter(([, v]) => !v).map(([k]) => k);

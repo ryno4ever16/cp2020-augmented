@@ -5,6 +5,11 @@
  *                             · indirectDeviationM · bombDeviationM · deviationVector
  *   §2 vehicle-control.js   — resolveControlRoll · coreControlLoss · coreSpeedPenalty · mmSpeedDV
  *                             · isAircraft (BOTH rule systems) + composeControlOutcome's dice wiring
+ *   §2b                     — defaultControlMod: BOTH prefill tables row by row, and the SELECTION
+ *                             between them (which table a rule system reads)
+ *   §2c                     — the speed guards read AT their boundaries (zero speed, a safe/top
+ *                             speed of one, exactly half top speed)
+ *   §2d                     — the loss tables' defaulted dice + the Core crash gate's four quadrants
  *   §3 vehicle-targeting.js — computeFacing · detectFacingFromTokens (real tokens on the live
  *                             scene) · rangeBand
  *   §4 save-rolls.js        — getDeathThreshold, against real actors across the whole wound ladder,
@@ -21,6 +26,33 @@
  * Where a number exists ONLY in the implementation (rounding direction, band cutoffs, the
  * d10→heading mapping, defaults) the leg asserts a PROPERTY instead of pinning the value, and
  * says so in its name. Those gaps are listed in import-staging/COVERAGE-ROUND-BUILD.md.
+ *
+ * ── §2b/§2c/§2d were added 2026-08-18 to close mutation-survivor blind spots in
+ *    module/vehicle/vehicle-control.js (import-staging/assurance/merged-results.jsonl). This suite
+ *    is the oracle the mutant subset runs for that file (import-staging/assurance/suites-control.txt).
+ *
+ * ── ACCEPTED EQUIVALENTS in vehicle-control.js — surviving mutants that NO assertion can kill,
+ *    because the mutated code produces identical output on every input. Each was proved by sweeping
+ *    the mutated variant against the original across the whole argument domain, not by inspection:
+ *      m090 coreSpeedPenalty `s <= 0` → `s < 0` — the only input the two guards disagree on is
+ *           s === 0, and a speed of zero falls through the ladder to a ratio of 0, which returns 0
+ *           anyway. The guard is a short-circuit, not a decision.
+ *      m103 mmSpeedDV `s <= 0` → `s < 0` — same shape: s === 0 falls through to `s <= halfTop`,
+ *           which is true for every positive top speed, so it returns 0 either way.
+ *      m105 mmSpeedDV `s <= halfTop` → `s < halfTop` — at s === halfTop exactly the else-branch
+ *           computes floor((halfTop - halfTop) / (top x 0.10)) = floor(0) = 0, the same answer.
+ *           §2c asserts the boundary anyway: it pins the ANSWER, which a later change to the step
+ *           formula could move even though this operator cannot.
+ *      m132 coreControlLoss `Number(d6) || 0` → `|| 1` — the fallback picks 0 or 1 and the first
+ *           band is `r <= 2`, so both land on the identical "1-2" row object.
+ *      m141 mmFailureTable `Number(tableRoll) || 0` → `|| 1` — same, against the `r <= 4` band.
+ *      m159 composeControlOutcome `tableD6 >= 5 && !aircraft` → `>= 5 || !aircraft` — a real
+ *           FINDING, not just an equivalence: the crash total this gate computes is passed to
+ *           coreControlLoss as `crashDamage`, and coreControlLoss reads that field ONLY on the
+ *           ground 5-6 branch — exactly the case the gate admits. The gate is therefore a redundant
+ *           pre-filter over a condition the callee already enforces, and widening it to `||`
+ *           changes nothing a caller can see. §2d asserts all four quadrants regardless, so the
+ *           day either side of that duplication moves, one of them goes red.
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
  */
@@ -259,23 +291,113 @@ const pure = await page.evaluate(async () => {
       paramD10Ignored: CTL.composeControlOutcome({ ruleSystem: "Core", difficulty: "simple", ref: 8, skill: 4, d10: 9 }, { tableD6: 1, slideD10: 1 }).result.total,
     };
 
+    /* --- §2b the per-type handling prefill, both tables, and the SELECTION between them --- */
+    const DCM = (t, sys) => CTL.defaultControlMod(t, sys);
+    const mapOf = (keys, sys) => Object.fromEntries(keys.map(k => [k, DCM(k, sys)]));
+    o.controlMod = {
+      // Core-mode prefill: the module's own list, kept for sheets left on the Core rule system.
+      core: mapOf(["car", "sportscar", "limo", "av-4", "av-6", "av-7", "cycle", "motorcycle",
+                   "truck", "rotor", "osprey", "boat"], "Core"),
+      // Maximum Metal mode: the p.11 REVISED CONTROL MODIFIERS table, every printed row plus the
+      // footnote row plus the aliases and the two house rows.
+      mm: mapOf(["car", "limo", "pickup", "cycle", "motorcycle", "truck",
+                 "apc", "ifv", "mbt", "tank", "hover",
+                 "av", "av-4", "av-6", "av-7", "osprey", "airship",
+                 "light helicopter", "lt heli", "lheli",
+                 "medium helicopter", "heavy helicopter", "med heli", "hvy heli", "rotor",
+                 "light plane", "lightplane",
+                 "medium plane", "heavy plane", "med plane", "hvy plane", "plane",
+                 "small jet", "large jet", "jet",
+                 "wheeled apc", "wheeled ifv",
+                 "boat", "sportscar"], "MaximumMetal"),
+      // the SELECTION itself: types whose two tables disagree, read under each system in turn
+      selection: {
+        sportscar: [DCM("sportscar", "Core"), DCM("sportscar", "MaximumMetal")],
+        av4:       [DCM("av-4", "Core"), DCM("av-4", "MaximumMetal")],
+        av6:       [DCM("av-6", "Core"), DCM("av-6", "MaximumMetal")],
+        av7:       [DCM("av-7", "Core"), DCM("av-7", "MaximumMetal")],
+        rotor:     [DCM("rotor", "Core"), DCM("rotor", "MaximumMetal")],
+        airship:   [DCM("airship", "Core"), DCM("airship", "MaximumMetal")],
+        pickup:    [DCM("pickup", "Core"), DCM("pickup", "MaximumMetal")],
+        largeJet:  [DCM("large jet", "Core"), DCM("large jet", "MaximumMetal")],
+        omittedSystem: DCM("sportscar"),
+        unknownSystem: DCM("sportscar", "not-a-rule-system"),
+        emptySystem:   DCM("sportscar", ""),
+      },
+      lookup: {
+        upperCase:  DCM("TRUCK", "MaximumMetal"),
+        mixedCase:  DCM("Large Jet", "MaximumMetal"),
+        unlisted:   DCM("hovercycle", "MaximumMetal"),
+        empty:      DCM("", "MaximumMetal"),
+        nullish:    DCM(null, "MaximumMetal"),
+        undef:      DCM(undefined, "MaximumMetal"),
+        numeric:    DCM(4, "MaximumMetal"),
+      },
+    };
+
+    /* --- §2c the speed-ladder guards, read AT their boundaries --- */
+    o.speedEdges = {
+      coreStopped:      CTL.coreSpeedPenalty(0, 0.5),
+      coreOneUnit:      CTL.coreSpeedPenalty(1, 0.5),
+      coreSafeOne:      CTL.coreSpeedPenalty(4, 1),
+      coreExactlySafe:  CTL.coreSpeedPenalty(50, 50),
+      coreNegative:     CTL.coreSpeedPenalty(-10, 50),
+      mmStopped:        CTL.mmSpeedDV(0, 1),
+      mmTopOne:         CTL.mmSpeedDV(1, 1),
+      mmExactlyHalf:    CTL.mmSpeedDV(50, 100),
+      mmExactlyHalfOdd: CTL.mmSpeedDV(35, 70),
+      mmOnePastHalf:    CTL.mmSpeedDV(51, 100),
+      mmFirstFullStep:  CTL.mmSpeedDV(60, 100),
+      mmNegative:       CTL.mmSpeedDV(-10, 100),
+    };
+
+    /* --- §2d the loss tables' own defaulted dice, and the Core crash gate's four quadrants --- */
+    o.lossDefaults = {
+      coreSkidNoSlide:  CTL.coreControlLoss(3),
+      coreAirNoSlide:   CTL.coreControlLoss(3, { aircraft: true }),
+      coreRollNoCrash:  CTL.coreControlLoss(5, { slideDie: 2 }),
+      mmLoseNoSkid:     CTL.mmFailureTable(5),
+      mmCatNoSkid:      CTL.mmFailureTable(7),
+    };
+    const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj ?? {}, k);
+    const compose = (type, dice) => {
+      const c = CTL.composeControlOutcome(
+        { ruleSystem: "Core", difficulty: "veryDifficult", vehicleType: type, ref: 0, skill: 0 }, dice);
+      return { aircraft: c.aircraft, success: c.result.success, band: c.outcome?.band,
+               severity: c.outcome?.severity, tableTotal: c.outcome?.tableTotal,
+               damage: c.outcome?.damage, hasDamage: has(c.outcome, "damage"), text: c.outcome?.text };
+    };
+    o.crashGate = {
+      groundFive: compose("car",  { d10: 1, tableD6: 5, slideD10: 3, crashD6Total: 18 }),
+      groundFour: compose("car",  { d10: 1, tableD6: 4, slideD10: 3, crashD6Total: 18 }),
+      airFive:    compose("av-4", { d10: 1, tableD6: 5, slideD10: 3, crashD6Total: 18 }),
+      airFour:    compose("av-4", { d10: 1, tableD6: 4, slideD10: 3, crashD6Total: 18 }),
+      noTableDie: compose("car",  { d10: 1 }),
+      noSlideDie: compose("car",  { d10: 1, tableD6: 3 }),
+      slideSeven: compose("car",  { d10: 1, tableD6: 3, slideD10: 7 }),
+      groundFiveNoCrashDie: compose("car", { d10: 1, tableD6: 5, slideD10: 3 }),
+    };
+
     /* ---------------- §3 facing + range band (pure half) ---------------- */
     const F = (dx, dy, dz = 0, rotationDeg = 0) => TGT.computeFacing({ dx, dy, dz, rotationDeg });
     o.facing = {
-      // rotation 0 = the target faces "up"/north; dx,dy point from TARGET to ATTACKER
-      northOfTarget: F(0, -100),
-      southOfTarget: F(0, 100),
+      // dx,dy point from TARGET to ATTACKER. Rotation 0 = the target faces SOUTH — the core's own
+      // token convention, which the module reads through vehicle-layout's headingVector — so "dead
+      // ahead of an unrotated target" is due south of it and astern is due north.
+      aheadOfTarget:  F(0, 100),
+      asternOfTarget: F(0, -100),
       eastOfTarget:  F(100, 0),
       westOfTarget:  F(-100, 0),
-      frontCorner:   F(100, -100),      // exactly 45 degrees off the nose
-      rearCorner:    F(100, 100),       // exactly 135 degrees off the nose
-      justInsideSide: F(100, -99),
-      rotatedEast:   [F(100, 0, 0, 90), F(0, -100, 0, 90), F(-100, 0, 0, 90), F(0, 100, 0, 90)],
-      rotatedAbout:  [F(0, 100, 0, 180), F(0, -100, 0, 180)],
-      steepAbove:    F(0, 100, 200),
-      steepBelow:    F(0, 100, -200),
-      shallowAbove:  F(0, 100, 50),
-      equalElevation: F(0, 100, 100),   // |dz| == horizontal — the strict-greater boundary
+      frontCorner:   F(100, 100),       // exactly 45 degrees off the nose
+      rearCorner:    F(100, -100),      // exactly 135 degrees off the nose
+      justInsideSide: F(100, 99),
+      // rotation -90 = facing east (what the core writes for a token driven east)
+      rotatedEast:   [F(100, 0, 0, -90), F(0, 100, 0, -90), F(-100, 0, 0, -90), F(0, -100, 0, -90)],
+      rotatedAbout:  [F(0, -100, 0, 180), F(0, 100, 0, 180)],
+      steepAbove:    F(0, -100, 200),
+      steepBelow:    F(0, -100, -200),
+      shallowAbove:  F(0, -100, 50),
+      equalElevation: F(0, -100, 100),  // |dz| == horizontal — the strict-greater boundary
       overhead:      F(0, 0, 25),
       degenerate:    F(0, 0, 0),
       closedSet: (() => {
@@ -541,11 +663,160 @@ check("the dice argument is the single source of the rolled face; a d10 among th
   P.compose.paramD10Ignored === 12,
   `REF 8 + skill 4 + dice-less d10 -> ${P.compose.paramD10Ignored} (the params' 9 is not read)`);
 
+console.log("\n§2b — the per-type handling prefill, row by row, and the table SELECTION");
+const CM = P.controlMod ?? {};
+const mm = CM.mm ?? {}, cr = CM.core ?? {};
+// MM p.11 REVISED CONTROL MODIFIERS, verbatim (reprinted p.104), fifteen rows plus one footnote:
+//   Standard Car -0 · AV -0 · Limousine, Pickup -3 · Osprey -0 · Cycle +1 · Light Plane -0 ·
+//   Truck -4 · Med/Hvy Plane -3 · APC/IFV/MBT* +2 · Small Jet +1 · Hover -2 · Large Jet -4 ·
+//   Lt. Heli -0 · Airship +5 · Med/Hvy Heli -2
+//   *Wheeled APCs and IFVs handle at -2; treads are a great benefit to handling.
+check("MM: the four ground rows the book prints as zero, minus three, minus four and plus one",
+  mm.car === 0 && mm.limo === -3 && mm.pickup === -3 && mm.truck === -4 && mm.cycle === 1,
+  `car ${mm.car} / limo ${mm.limo} / pickup ${mm.pickup} / truck ${mm.truck} / cycle ${mm.cycle}`
+  + ` [MM p.11: "Standard Car -0 · Limousine, Pickup -3 · Truck -4 · Cycle +1"]`);
+check("MM: tracked armour handles at plus two",
+  mm.apc === 2 && mm.ifv === 2 && mm.mbt === 2 && mm.tank === 2,
+  `apc ${mm.apc} / ifv ${mm.ifv} / mbt ${mm.mbt} / tank ${mm.tank} [MM p.11: "APC/IFV/MBT* +2"; "tank" is the module's alias for the MBT row]`);
+check("MM: the printed footnote is its own row — a WHEELED APC or IFV handles at minus two, not plus two",
+  mm["wheeled apc"] === -2 && mm["wheeled ifv"] === -2,
+  `wheeled apc ${mm["wheeled apc"]} / wheeled ifv ${mm["wheeled ifv"]}`
+  + ` [MM p.11 footnote: "*Wheeled APCs and IFVs handle at -2; treads are a great benefit to handling." — a four-point swing from the tracked row above]`);
+check("MM: hovercraft minus two and airship plus five",
+  mm.hover === -2 && mm.airship === 5,
+  `hover ${mm.hover} / airship ${mm.airship} [MM p.11: "Hover -2 · Airship +5"]`);
+check("MM: every aerodyne row and the Osprey are flat zero",
+  mm.av === 0 && mm["av-4"] === 0 && mm["av-6"] === 0 && mm["av-7"] === 0 && mm.osprey === 0,
+  `av ${mm.av} / av-4 ${mm["av-4"]} / av-6 ${mm["av-6"]} / av-7 ${mm["av-7"]} / osprey ${mm.osprey} [MM p.11: "AV -0 · Osprey -0"]`);
+check("MM: the LIGHT helicopter row is zero and the medium/heavy row is minus two — two printed rows, not one",
+  mm["light helicopter"] === 0 && mm["lt heli"] === 0 && mm.lheli === 0
+  && mm["medium helicopter"] === -2 && mm["heavy helicopter"] === -2
+  && mm["med heli"] === -2 && mm["hvy heli"] === -2,
+  `lt heli ${mm["lt heli"]} vs med/hvy heli ${mm["med heli"]}/${mm["hvy heli"]}`
+  + ` [MM p.11: "Lt. Heli -0" and "Med/Hvy Heli -2" — a two-point difference on every control roll a light helicopter makes]`);
+check("MM: the generic rotor key takes the HEAVIER of the two helicopter readings",
+  mm.rotor === -2,
+  `rotor ${mm.rotor} [module reading: a sheet that says only "rotor" cannot be told apart, so it is read as the medium/heavy row]`);
+check("MM: the light plane row is zero and the medium/heavy plane row is minus three",
+  mm["light plane"] === 0 && mm.lightplane === 0
+  && mm["medium plane"] === -3 && mm["heavy plane"] === -3 && mm["med plane"] === -3
+  && mm["hvy plane"] === -3 && mm.plane === -3,
+  `light plane ${mm["light plane"]} / med plane ${mm["med plane"]} / hvy plane ${mm["hvy plane"]} / bare "plane" ${mm.plane}`
+  + ` [MM p.11: "Light Plane -0 · Med/Hvy Plane -3"; the bare key takes the heavier reading]`);
+check("MM: a small jet is plus one and a large jet minus four — five points apart",
+  mm["small jet"] === 1 && mm["large jet"] === -4 && mm.jet === 1,
+  `small jet ${mm["small jet"]} / large jet ${mm["large jet"]} / bare "jet" ${mm.jet}`
+  + ` [MM p.11: "Small Jet +1 · Large Jet -4"; the bare key takes the small-jet reading]`);
+check("MM: the two rows with NO printed counterpart are the boat and the sportscar, and they hold the module's declared house values",
+  mm.boat === -1 && mm.sportscar === 0,
+  `boat ${mm.boat} / sportscar ${mm.sportscar}`
+  + ` [⚠ NOT IN THE BOOK: p.11's table prints no boat row and no sportscar row. Both are inherited from the module's Core list`
+  + ` (boat -1 carried over, sportscar +2 flattened to 0) so an MM-mode sheet still prefills something. Retire or re-source if a printed counterpart turns up]`);
+check("Core mode keeps its OWN list, including the sportscar and aerodyne values Maximum Metal does not share",
+  cr.car === 0 && cr.sportscar === 2 && cr.limo === -3 && cr["av-4"] === -2 && cr["av-6"] === 2
+  && cr["av-7"] === 1 && cr.cycle === 1 && cr.motorcycle === 1 && cr.truck === -4
+  && cr.rotor === 0 && cr.osprey === 0 && cr.boat === -1,
+  `${JSON.stringify(cr)}`
+  + ` [module contract: no printed CP2020 p.112 counterpart table is in the citation set (import-staging/mm-citation), so this leg pins the SHIPPED Core-mode prefill, not a book row]`);
+check("the rule system chooses the TABLE: four types read a different modifier under each system",
+  JSON.stringify(CM.selection?.sportscar) === JSON.stringify([2, 0])
+  && JSON.stringify(CM.selection?.av4) === JSON.stringify([-2, 0])
+  && JSON.stringify(CM.selection?.av6) === JSON.stringify([2, 0])
+  && JSON.stringify(CM.selection?.av7) === JSON.stringify([1, 0]),
+  `[Core, MaximumMetal] — sportscar ${JSON.stringify(CM.selection?.sportscar)}, av-4 ${JSON.stringify(CM.selection?.av4)},`
+  + ` av-6 ${JSON.stringify(CM.selection?.av6)}, av-7 ${JSON.stringify(CM.selection?.av7)}`
+  + ` [the two tables genuinely disagree on these rows, so reading the wrong one is visible in the prefilled number]`);
+check("NEGATIVE: rows that exist under only ONE system read zero under the other",
+  JSON.stringify(CM.selection?.pickup) === JSON.stringify([0, -3])
+  && JSON.stringify(CM.selection?.airship) === JSON.stringify([0, 5])
+  && JSON.stringify(CM.selection?.largeJet) === JSON.stringify([0, -4])
+  && JSON.stringify(CM.selection?.rotor) === JSON.stringify([0, -2]),
+  `pickup ${JSON.stringify(CM.selection?.pickup)}, airship ${JSON.stringify(CM.selection?.airship)},`
+  + ` large jet ${JSON.stringify(CM.selection?.largeJet)}, rotor ${JSON.stringify(CM.selection?.rotor)} — Core carries none of these four`);
+check("only the exact string MaximumMetal selects the MM table; anything else, including nothing, is Core",
+  CM.selection?.omittedSystem === 2 && CM.selection?.unknownSystem === 2 && CM.selection?.emptySystem === 2,
+  `sportscar with no system named -> ${CM.selection?.omittedSystem}, with a junk system -> ${CM.selection?.unknownSystem},`
+  + ` with an empty system -> ${CM.selection?.emptySystem} (all three are the CORE value 2, not the MM value 0)`);
+check("the type lookup is case-insensitive and an unlisted or absent type prefills zero",
+  CM.lookup?.upperCase === -4 && CM.lookup?.mixedCase === -4 && CM.lookup?.unlisted === 0
+  && CM.lookup?.empty === 0 && CM.lookup?.nullish === 0 && CM.lookup?.undef === 0 && CM.lookup?.numeric === 0,
+  `"TRUCK" -> ${CM.lookup?.upperCase}, "Large Jet" -> ${CM.lookup?.mixedCase}, unlisted -> ${CM.lookup?.unlisted},`
+  + ` empty/null/undefined/number -> ${CM.lookup?.empty}/${CM.lookup?.nullish}/${CM.lookup?.undef}/${CM.lookup?.numeric}`);
+
+console.log("\n§2c — the speed guards, read AT their boundaries");
+const SE = P.speedEdges ?? {};
+check("Core: a stopped vehicle is never over its safe speed, however low that safe speed is",
+  SE.coreStopped === 0 && SE.coreNegative === 0,
+  `speed 0 against a safe speed of 0.5 -> ${SE.coreStopped}; a negative speed -> ${SE.coreNegative}`
+  + ` (the safe speed is deliberately small enough that a single unit of speed would already be the 2x row, so a zero that leaked in as a one would show)`);
+check("Core: one unit of speed IS a speed — at twice a safe speed of a half it is the two-times row",
+  SE.coreOneUnit === -2,
+  `speed 1 against safe 0.5 -> ${SE.coreOneUnit} [Core p.112: -2 at 2x safe speed; the guard is at zero, not at one]`);
+check("Core: a safe speed of one is a KNOWN safe speed, not an unknown one",
+  SE.coreSafeOne === -6,
+  `speed 4 against safe 1 -> ${SE.coreSafeOne} [Core p.112: -6 at 4x safe speed; the "no safe speed on file" guard is at zero]`);
+check("Core: exactly at safe speed there is no penalty",
+  SE.coreExactlySafe === 0, `speed 50 against safe 50 -> ${SE.coreExactlySafe} [Core p.112: the ladder starts at 2x]`);
+check("MM: a stopped vehicle adds no difficulty even against a top speed of one",
+  SE.mmStopped === 0 && SE.mmNegative === 0,
+  `speed 0 against top 1 -> ${SE.mmStopped}; a negative speed -> ${SE.mmNegative}`
+  + ` (top speed 1 puts the half mark at 0.5, so a zero that leaked in as a one would score five)`);
+check("MM: a top speed of one is a KNOWN top speed — running at it is a hundred percent, five full steps over the half mark",
+  SE.mmTopOne === 5,
+  `speed 1 against top 1 -> ${SE.mmTopOne} [MM p.11: "+1 Every 10% of a vehicle's speed over 50% of top speed"; the unknown-top guard is at zero, not at one]`);
+check("MM: exactly at half top speed the difficulty is unraised, on an even and an odd top speed alike",
+  SE.mmExactlyHalf === 0 && SE.mmExactlyHalfOdd === 0 && SE.mmOnePastHalf === 0,
+  `50 of 100 -> ${SE.mmExactlyHalf}; 35 of 70 -> ${SE.mmExactlyHalfOdd}; 51 of 100 (one past the mark, not a full step) -> ${SE.mmOnePastHalf}`
+  + ` [MM p.11: the rule counts speed OVER 50%, in FULL tenths]`);
+check("MM: the first full step over the half mark scores one",
+  SE.mmFirstFullStep === 1, `60 of 100 -> ${SE.mmFirstFullStep} [MM p.11]`);
+
+console.log("\n§2d — the loss tables' defaulted dice, and the Core crash gate's four quadrants");
+const LD = P.lossDefaults ?? {}, CG = P.crashGate ?? {};
+check("a Core skid with no slide die rolled slides nothing, and says so",
+  LD.coreSkidNoSlide?.band === "3-4" && LD.coreSkidNoSlide?.text.includes("slide 0 ft (0")
+  && LD.coreAirNoSlide?.text.includes("loses 0 ft"),
+  `d6 3, no slideDie -> "${LD.coreSkidNoSlide?.text}"; the aircraft branch -> "${LD.coreAirNoSlide?.text}" (contract pin)`);
+check("a Core roll with no crash total rolled does no crash damage",
+  LD.coreRollNoCrash?.band === "5-6" && LD.coreRollNoCrash?.damage === 0,
+  `d6 5, slideDie 2, no crashDamage -> damage ${LD.coreRollNoCrash?.damage} (contract pin)`);
+check("a Maximum Metal loss with no skid die rolled skids nothing",
+  LD.mmLoseNoSkid?.band === "5-6" && LD.mmLoseNoSkid?.text.includes("skids 0 m (0")
+  && LD.mmCatNoSkid?.band === "7+" && LD.mmCatNoSkid?.text.includes("rolls 0 m (0"),
+  `table 5, no skidDie -> "${LD.mmLoseNoSkid?.text}"; table 7 -> "${LD.mmCatNoSkid?.text}" (contract pin)`);
+// The crash gate reads `tableD6 >= 5 && !aircraft`. All four quadrants are asserted so the gate's
+// INTENT is pinned; see the accepted-equivalents note in this file's header for why the `&&` cannot
+// be caught by an output assertion.
+check("GROUND, table five: the crash total is spent and the vehicle takes it",
+  CG.groundFive?.aircraft === false && CG.groundFive?.band === "5-6" && CG.groundFive?.hasDamage === true
+  && CG.groundFive?.damage === 18,
+  `car, d6 5, 5d6 total 18 -> damage ${CG.groundFive?.damage} [Core p.112: the 5-6 ground row is the only one that takes 5d6]`);
+check("GROUND, table four: one row lower there is no crash damage at all, not a zero one",
+  CG.groundFour?.band === "3-4" && CG.groundFour?.hasDamage === false && CG.groundFour?.severity === "major",
+  `car, d6 4 -> band ${CG.groundFour?.band}, a damage field present: ${CG.groundFour?.hasDamage} [Core p.112: 3-4 is a skid, no damage]`);
+check("AIRCRAFT, table five: the same roll spins the aircraft and takes no crash damage",
+  CG.airFive?.aircraft === true && CG.airFive?.band === "5-6" && CG.airFive?.hasDamage === false
+  && CG.airFive?.text.includes("300 ft"),
+  `AV-4, d6 5, slide 3 -> "${CG.airFive?.text}" [Core p.112: the aircraft 5-6 row is a spin of 1d10x100 ft, not a 5d6 impact]`);
+check("AIRCRAFT, table four: a stall, and again no crash damage",
+  CG.airFour?.aircraft === true && CG.airFour?.band === "3-4" && CG.airFour?.hasDamage === false
+  && CG.airFour?.text.includes("150 ft"),
+  `AV-4, d6 4, slide 3 -> "${CG.airFour?.text}" [Core p.112: 3-4 aircraft = stall, 1d10x50 ft]`);
+check("with no table die rolled the composed outcome reports a table total of ZERO, not of one",
+  CG.noTableDie?.success === false && CG.noTableDie?.tableTotal === 0 && CG.noTableDie?.band === "1-2",
+  `a failed Core roll with dice {d10 1} only -> tableTotal ${CG.noTableDie?.tableTotal}, band ${CG.noTableDie?.band}`);
+check("with no slide die rolled the composed skid slides nothing; with a seven it slides seventy feet",
+  CG.noSlideDie?.text.includes("slide 0 ft (0") && CG.slideSeven?.text.includes("slide 70 ft (7"),
+  `no slideD10 -> "${CG.noSlideDie?.text}"; slideD10 7 -> "${CG.slideSeven?.text}" [Core p.112: 1d10 x 10 ft]`);
+check("with no crash total rolled the ground 5-6 row still reports a damage field, worth zero",
+  CG.groundFiveNoCrashDie?.hasDamage === true && CG.groundFiveNoCrashDie?.damage === 0,
+  `car, d6 5, no crashD6Total -> damage ${CG.groundFiveNoCrashDie?.damage}`);
+
 console.log("\n§3 — which armour side a shot strikes (vehicle-targeting.js)");
 check("a shot from dead ahead of the target's facing strikes the front",
-  P.facing.northOfTarget === "front", `[MM p.6 flank rules; design decision 3: front cone +/-45 degrees]`);
+  P.facing.aheadOfTarget === "front", `[MM p.6 flank rules; design decision 3: front cone +/-45 degrees]`);
 check("a shot from dead astern strikes the rear",
-  P.facing.southOfTarget === "rear", `[MM p.6: back = 50% armour]`);
+  P.facing.asternOfTarget === "rear", `[MM p.6: back = 50% armour]`);
 check("shots from either beam strike the side",
   P.facing.eastOfTarget === "side" && P.facing.westOfTarget === "side", `[MM p.6: side = 75% armour]`);
 check("the front and rear cones are boundary-inclusive at exactly 45 and 135 degrees",
@@ -554,7 +825,7 @@ check("the front and rear cones are boundary-inclusive at exactly 45 and 135 deg
 check("the target's own rotation selects the arcs, not the screen axes",
   JSON.stringify(P.facing.rotatedEast) === JSON.stringify(["front","side","rear","side"])
   && JSON.stringify(P.facing.rotatedAbout) === JSON.stringify(["front","rear"]),
-  `target turned 90 deg: E/N/W/S -> ${P.facing.rotatedEast.join("/")}`);
+  `target turned to face east: E/S/W/N -> ${P.facing.rotatedEast.join("/")}`);
 check("PROPERTY: turning the target and the shot together never changes the struck side", P.facing.rotationInvariance, "[geometry]");
 check("the front arc spans 90 degrees, the rear 90, leaving 180 of side",
   P.facing.arcWidths.front === 91 && P.facing.arcWidths.rear === 91 && P.facing.arcWidths.side === 178,
@@ -616,7 +887,7 @@ const tok = await page.evaluate(async () => {
     const [mDoc] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__FacingMark", actorId: mark.id,
       actorLink: true, x: X0, y: Y0, width: 1, height: 1, rotation: 0, elevation: 0 }]);
     const [sDoc] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__FacingShooter", actorId: shooter.id,
-      actorLink: true, x: X0, y: Y0 - 4 * gridSize, width: 1, height: 1, rotation: 0, elevation: 0 }]);
+      actorLink: true, x: X0, y: Y0 + 4 * gridSize, width: 1, height: 1, rotation: 0, elevation: 0 }]);
     out.tokenIds = { mark: mDoc.id, shooter: sDoc.id };
     await sleep(400);
 
@@ -644,7 +915,9 @@ const tok = await page.evaluate(async () => {
     };
     out.moveSettles = [];
 
-    out.northOfMark = read();                                     // shooter due north, mark faces north
+    // The shooter sits due SOUTH of the mark, which is dead ahead of it: a token at rotation 0
+    // faces south by the core's own convention.
+    out.aheadOfMark = read();
     await move(mDoc, { rotation: 180 });
     out.markTurnedAbout = read();
     await move(mDoc, { rotation: 90 });
@@ -654,9 +927,9 @@ const tok = await page.evaluate(async () => {
     out.moveSettles.push({ want: [X0 + 4 * gridSize, Y0], got: [shootTok.center.x - shootTok.w / 2, shootTok.center.y - shootTok.h / 2] });
     out.shooterOnTheBeam = read();
 
-    // Elevation: back to due north at four grid squares out, then climb.
-    await move(sDoc, { x: X0, y: Y0 - 4 * gridSize });
-    out.moveSettles.push({ want: [X0, Y0 - 4 * gridSize], got: [shootTok.center.x - shootTok.w / 2, shootTok.center.y - shootTok.h / 2] });
+    // Elevation: back to dead ahead at four grid squares out, then climb.
+    await move(sDoc, { x: X0, y: Y0 + 4 * gridSize });
+    out.moveSettles.push({ want: [X0, Y0 + 4 * gridSize], got: [shootTok.center.x - shootTok.w / 2, shootTok.center.y - shootTok.h / 2] });
     const horizUnits = 4 * gridDist;                              // four squares, in grid-distance units
     await move(sDoc, { elevation: horizUnits * 2 });
     out.elevReadBack = Number(shootTok.document.elevation);
@@ -690,7 +963,7 @@ check("one unit of elevation converts to the same pixels as one unit of ground d
   near(tok.pxPerUnit, tok.pxPerUnitExpected, 1e-9),
   `${tok.pxPerUnit} px/unit vs grid size/distance ${tok.pxPerUnitExpected} [geometry: the two axes must share a scale for the 45-degree rule to mean anything]`);
 check("a real shooter due ahead of a real mark reads as the front side",
-  tok.northOfMark === "front", `got ${tok.northOfMark}`);
+  tok.aheadOfMark === "front", `got ${tok.aheadOfMark}`);
 check("turning the mark about turns the struck side to the rear",
   tok.markTurnedAbout === "rear", `got ${tok.markTurnedAbout}`);
 check("turning the mark across the shot puts the hit on its side",

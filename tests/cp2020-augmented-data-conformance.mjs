@@ -59,7 +59,13 @@ const OPEN_AMMO = {
     "6.5 ET", "6.5mm Hybrid", "6.5mm", ".454 C", ".454 ET", "5.45SV", ".50S", "4.5 mm LP", ".41AE", ".41",
     ".41 ET", ".300M", "15mm Kurz", "15mm BMG", "15mm", "30mm", "30mm EHI", "30mm caseless", ".666",
     ".666 Magnum", "18mm G", "18mm HEAT", ".338", "5.2 mm", "7.5LP", "8.5mm Ramjet", "13mm", "14.5mm",
-    "25mm Cockerill",
+  ],
+  /* Calibers on the 44 book-mined weapons added 2026-08 (commit 7f7eed8), after this allowlist's
+   * snapshot — 9 strings / 9 items, faithful book spellings with no registry entry yet. CLOSES
+   * WHEN: the caliber-registry proposal ruling lands (same path as noRegistryEntry above); these
+   * nine join that decision, they are not a new class. */
+  bookMined2026_08: [
+    ".41 C", ".50 Short", ".357 ET", "5.2mm ET", "3.5mm FF", "5.45mm", "4.5mm", "5.5mm", "7.5mm",
   ],
   /* Undecodable after a 78-PDF book sweep — 12 strings / 17 items. CLOSES WHEN: the user's eyes
    * settle the suffix or the bore (proposal §7c). */
@@ -94,23 +100,22 @@ const OPEN_DAMAGE = {
    * CLOSES WHEN: a data model for non-dice damage is decided (a `damageNote` field or an effect
    * tag). Editing the 68 strings is not the fix. */
   descriptive: [
-    "1-2 + drugs (sleep)", "10D10 special", "10d10 special", "1D10 (HE)", "1D6+3 (3m)", "1d6 + special",
-    "1d6+1*", "2D6+3 (15m)", "2D6/4D6 (mono)", "2d6+3 + Mace", "2d6+3 + Stun (-2)", "2d6+3*",
+    "1-2 + drugs (sleep)", "10d10 special", "1D6+3 (3m)", "1d6 + special",
+    "1d6+1*", "2d6+3 + Mace", "2d6+3 + Stun (-2)", "2d6+3*",
     "3d6 + special", "3d6*", "4D6 (00)", "4D6 (micromissile)", "4d6+3 (.454)", "5D10AP HEAT + 3D6 frag (5m)",
     "Blind", "Chemical", "Chemical (odor)", "Deaf", "Drugs", "EMP (electronics)", "EMP Effect", "Entangle",
-    "Gas", "Net", "Special", "Special (1D6 splatballs)", "Special (4m)", "Special (5m)",
-    "Special (restraint)", "Stun", "Stun (.45 LVD)", "Stun (beanbag)", "Stun -3", "Tangle (15mm)", "Varies",
+    "Gas", "Net", "Special", "Special (1D6 splatballs)",
+    "Stun", "Stun (.45 LVD)", "Stun (beanbag)", "Stun -3", "Tangle (15mm)", "Varies",
     "Varies (12mm)", "Varies (13mm)", "Varies (25mm)", "Varies (25mm/10ga)", "Varies (30mm)",
-    "Varies (40mm)", "Varies (rifle grenade)", "d6/2+2x1d6/3",
+    "Varies (40mm)", "d6/2+2x1d6/3",
   ],
-  /* ⚠ UNFIXED ROT, not a design decision — 3 strings / 3 items. A bare " AP" marker glued onto an
-   * otherwise valid formula, with `system.ap` still false, so the marker is lost AND the roll is
-   * broken. Ten items of this shape were fixed via data-corrections entries; these three sit in
-   * MODULE-OWNED packs (supplement-heavy / supplement-exotics), which the corrections layer does not
-   * serve — they are fixed at pack SOURCE. Two of them additionally need a ruling on whether "AP"
-   * there means the boolean or a damage value ("5D10+10 AP" Cockerill, "Entangle, 40 AP").
-   * CLOSES WHEN: the source packs are edited and re-seeded. */
-  apSuffixLeftovers: ["5D10+10 AP", "5D6 AP", "Entangle, 40 AP (all locations)"],
+  /* Damage strings on the 44 book-mined weapons added 2026-08 (commit 7f7eed8), after this
+   * allowlist's snapshot — 3 strings / 3 items, the books' own annotated forms (a load label on a
+   * shotgun formula, a mode-dependent "Varies"), same class as `descriptive` above. CLOSES WHEN:
+   * the non-dice damage model is decided (same decision as descriptive). */
+  bookMined2026_08: [
+    "Varies (2D6+1 riot / 4D6 urban / 6D6 full combat)", "4D6+2 (00 Buckshot)", "6D6 (#00)",
+  ],
   /* ⚠ NEW ROT found by this lint's module-doctype coverage, NOT in the original sweep (which did
    * not run class E over vehicleWeapon) — 1 string / 4 items, all in cp2020-augmented.vehicle-weapons:
    * EMG-83/84/85 and 4mm Railgun store "5D10+10AP". `system.ap` is ALREADY true on all four, so the
@@ -120,7 +125,7 @@ const OPEN_DAMAGE = {
   moduleDoctypeApSuffix: ["5D10+10AP"],
 };
 
-/* ── Enum values outside the legal set — 4 values / 45 field-instances ──────────────────────────
+/* ── Enum values outside the legal set — 3 values / 42 field-instances ──────────────────────────
  * Each is legal-looking data that the sheet's select cannot round-trip. CLOSES WHEN: the value is
  * normalized (by a pack rule for base packs, at source for module packs). */
 const OPEN_ENUM = {
@@ -129,8 +134,6 @@ const OPEN_ENUM = {
   "availability|common": 21,
   /* `DEFAULT_WEAPON.concealability` leaking the same way. base:cyberweapons ×12, base:cyberlimbs ×6. */
   "concealability|P": 18,
-  /* Capital-C typo in three MODULE-owned supplement packs — fixable at source. */
-  "concealability|ConcealLongCoat": 3,
   /* base:smgs-add ×3. Cosmetic only: "standard" IS recognised by reliabilityThreshold (→5), so no
    * dice change; it is the sheet select that cannot round-trip it. The pack normalization RULE
    * covers pistols-add/rifles-add only, and smgs-add is deliberately outside it. */

@@ -1,11 +1,13 @@
 /** Boot-cost hardening (PERF-LOAD-STATIC-AUDIT S7 / R9 / S3 / chip-grant):
- *   S7  the flesh-limb flag migration stamps completion BEFORE it sweeps, reports a stopped run
- *       loudly, and is re-runnable from the module api.
- *   R9  the legacy rad-zone upgrade has a completion stamp at all, with the same shape.
+ *   S7  the flesh-limb flag migration stamps its ATTEMPT before it sweeps and its COMPLETION after,
+ *       reports a stopped run loudly, RECOVERS a stopped run on the next boot path, and is
+ *       re-runnable from the module api.
+ *   R9  the legacy rad-zone upgrade carries the same stamp pair, with the same shape.
  *   S3  the canvasReady light/vision sweeps leave a non-applier client before they read a token.
  *   MAP the chip-grant skill-index map is built once and shared, and the grant/prune pass still
  *       produces the same values on a two-actor fixture.
- *  The two migrations are left COMPLETE on this world, which is their correct post-migration state. */
+ *  The two migrations are left COMPLETE (both stamps set) on this world, which is their correct
+ *  post-migration state — and the state in which neither re-runs at the next boot. */
 import { chromium } from "@playwright/test";
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
@@ -34,6 +36,18 @@ const r = await p.evaluate(async () => {
   // Leftovers from an interrupted run.
   for (const a of game.actors.filter(a => a.name.startsWith("__PW__Perf"))) await a.delete().catch(() => {});
   for (const s of game.scenes.filter(s => s.name.startsWith("__PW__Perf"))) await s.delete().catch(() => {});
+
+  // ⭐ QUIESCE THE TWO MIGRATIONS BEFORE ANY FIXTURE EXISTS. Both passes now recover themselves: a
+  // world carrying the attempt stamp with no completion stamp sweeps once more at `ready`. The FIRST
+  // load of this rig world on a build that has the completion stamps is exactly that world, so a
+  // boot-time recovery sweep may still be in flight while this spec starts. Stamping both pairs
+  // complete here (and letting the in-flight one drain against a world that has nothing to move)
+  // means every read counted below is attributable to a leg of this spec, not to that sweep.
+  for (const key of ["fleshLimbStatusMigrated", "fleshLimbStatusMigratedCompleted",
+                     "radZonesMigrated", "radZonesMigratedCompleted"]) {
+    await game.settings.set(SCOPE, key, true);
+  }
+  await sleep(600);
 
   // ── The api re-run surface ────────────────────────────────────────────────────────────────────
   out.apiShape = {
@@ -101,21 +115,86 @@ const r = await p.evaluate(async () => {
 
   const fleshFlag = () => game.settings.get(SCOPE, "fleshLimbStatusMigrated");
   const setFleshFlag = (v) => game.settings.set(SCOPE, "fleshLimbStatusMigrated", v);
+  const fleshDone = () => game.settings.get(SCOPE, "fleshLimbStatusMigratedCompleted");
+  const setFleshDone = (v) => game.settings.set(SCOPE, "fleshLimbStatusMigratedCompleted", v);
 
-  // (S7-a) A run that STOPS PART-WAY still leaves the completion stamp set.
+  // A recovery announces itself with a console.WARN (a self-heal is not a failure), so it is counted
+  // here, page-side and scoped to the single call under test, rather than through the node-side error
+  // listener — that listener cannot tell one leg's warn from another's, and the boot path may have
+  // emitted one of its own before this spec started.
+  const warnsDuring = async (rx, fn) => {
+    const seen = [];
+    const orig = console.warn;
+    console.warn = (...a) => {
+      const t = a.map(x => (typeof x === "string" ? x : "")).join(" ");
+      if (rx.test(t)) seen.push(t);
+      return orig.apply(console, a);
+    };
+    try { await fn(); } finally { console.warn = orig; }
+    return seen;
+  };
+  const RECOVERY_WARN = /recovering the flesh-limb-status migration/;
+  const plantUnmigrated = (name) => Actor.create({
+    name, type: "character", flags: { [SCOPE]: { limbStatus: { rArm: "crippled" } } },
+  });
+  const flagsOf = (a) => {
+    const live = game.actors.get(a.id);
+    return {
+      limbStatus: foundry.utils.deepClone(live?.flags?.[SCOPE]?.limbStatus ?? {}),
+      fleshLimbStatus: foundry.utils.deepClone(live?.flags?.[SCOPE]?.fleshLimbStatus ?? {}),
+    };
+  };
+
+  // (S7-a) A run that STOPS PART-WAY still leaves the ATTEMPT stamp set — and leaves the COMPLETION
+  // stamp unset, which is the record that the sweep still owes this world a run.
   await setFleshFlag(false);
+  await setFleshDone(false);
   probe.fail = true;
   const readsBeforeFail = probe.reads;
   await api().migrations.fleshLimbStatus();
-  out.s7Failed = { flagAfter: fleshFlag(), swept: probe.reads > readsBeforeFail };
+  out.s7Failed = { flagAfter: fleshFlag(), completedAfter: fleshDone(), swept: probe.reads > readsBeforeFail };
 
-  // (S7-b) The boot path then does NOT sweep again — the stamp is what stops it.
+  // (S7-b) RECOVERY — the defect this pair exists for. The world is now in exactly the state a client
+  // that died mid-sweep leaves behind (attempted, never completed), and the BOOT path must sweep again
+  // rather than treat it as done. A freshly planted un-migrated actor is what proves the sweep really
+  // ran over the world rather than just re-stamping.
+  probe.fail = false;
+  const recoverActor = await plantUnmigrated("__PW__PerfFleshRecover");
+  out.s7RecoverBefore = flagsOf(recoverActor);
+  const readsBeforeRecover = probe.reads;
+  const recoveryWarns = await warnsDuring(RECOVERY_WARN, () => api().migrations.fleshLimbStatus({ force: false }));
+  out.s7Recovered = {
+    warns: recoveryWarns.length,
+    flagAfter: fleshFlag(),
+    completedAfter: fleshDone(),
+    reads: probe.reads - readsBeforeRecover,
+    ...flagsOf(recoverActor),
+  };
+  await recoverActor.delete().catch(() => {});
+
+  // (S7-c) With BOTH stamps set the boot path does nothing at all — no token read, and an actor
+  // planted after the migration keeps its pre-split flags untouched.
+  const gatedActor = await plantUnmigrated("__PW__PerfFleshGated");
   const readsBeforeGated = probe.reads;
-  await api().migrations.fleshLimbStatus({ force: false });
-  out.s7Gated = { flagAfter: fleshFlag(), reads: probe.reads - readsBeforeGated };
+  const gatedWarns = await warnsDuring(RECOVERY_WARN, () => api().migrations.fleshLimbStatus({ force: false }));
+  out.s7Gated = {
+    warns: gatedWarns.length,
+    flagAfter: fleshFlag(),
+    completedAfter: fleshDone(),
+    reads: probe.reads - readsBeforeGated,
+    ...flagsOf(gatedActor),
+  };
+  await gatedActor.delete().catch(() => {});
 
-  // (S7-c) Clean run: stamp cleared → the sweep runs and moves the value → stamp set.
+  // (S7-d) Clean run: both stamps cleared → the sweep runs and moves the value → both stamps set.
+  // ⚠ RE-SEED THE TOKEN DELTA FIRST. The recovery leg above swept the token as well, and once a
+  // delta's entry matches its base actor's, Foundry prunes it out of `_source` — which is precisely
+  // what the sweep's delta peek looks at, so without this the token leg would be skipped and `reads`
+  // would read 0 for the right reason at the wrong time.
+  await fleshTok.delta.update({ [`flags.${SCOPE}.limbStatus`]: { rArm: "crippled" } }).catch(() => {});
+  out.s7CleanDeltaReseeded = !!fleshTok.delta?._source?.flags?.[SCOPE]?.limbStatus?.rArm;
   await setFleshFlag(false);
+  await setFleshDone(false);
   probe.fail = false;
   const readsBeforeClean = probe.reads;
   const emptyReadsBeforeClean = emptyProbe.reads;
@@ -124,6 +203,7 @@ const r = await p.evaluate(async () => {
   const freshTok = fleshScene.tokens.get(fleshTok.id);
   out.s7Clean = {
     flagAfter: fleshFlag(),
+    completedAfter: fleshDone(),
     reads: probe.reads - readsBeforeClean,
     emptyDeltaReads: emptyProbe.reads - emptyReadsBeforeClean,   // the fast path: must stay 0
     limbStatus: foundry.utils.deepClone(fresh.flags?.[SCOPE]?.limbStatus ?? {}),
@@ -148,6 +228,8 @@ const r = await p.evaluate(async () => {
   const BEHAVIOR = RZ.RAD_ZONE_BEHAVIOR;
   const radFlag = () => game.settings.get(SCOPE, "radZonesMigrated");
   const setRadFlag = (v) => game.settings.set(SCOPE, "radZonesMigrated", v);
+  const radDone = () => game.settings.get(SCOPE, "radZonesMigratedCompleted");
+  const setRadDone = (v) => game.settings.set(SCOPE, "radZonesMigratedCompleted", v);
   const radScene = await Scene.create({ name: "__PW__PerfRadScene", width: 1000, height: 1000 });
   const legacyRegion = async (name, formula) => {
     const [reg] = await radScene.createEmbeddedDocuments("Region", [{
@@ -171,27 +253,30 @@ const r = await p.evaluate(async () => {
   // (R9-a) Clean run: stamp cleared → the tagged region gains the behavior and loses the tag.
   const regA = await legacyRegion("__PW__PerfRadA", "2d6");
   await setRadFlag(false);
+  await setRadDone(false);
   out.r9Before = regionState(regA.id);
   await api().migrations.legacyRadZones({ force: false });
-  out.r9Clean = { flagAfter: radFlag(), region: regionState(regA.id) };
+  out.r9Clean = { flagAfter: radFlag(), completedAfter: radDone(), region: regionState(regA.id) };
 
-  // (R9-b) A tagged region that arrives AFTER the stamp is not swept by the boot path — and the
-  // manual re-run is what picks it up. (Its dosing is unaffected either way: the tick's legacy path
-  // still reads the tag.)
+  // (R9-b) A tagged region that arrives AFTER the stamps are BOTH set is not swept by the boot path —
+  // and the manual re-run is what picks it up. (Its dosing is unaffected either way: the tick's legacy
+  // path still reads the tag.)
   const regB = await legacyRegion("__PW__PerfRadB", "1d10");
   await api().migrations.legacyRadZones({ force: false });
   out.r9Gated = regionState(regB.id);
   await api().migrations.legacyRadZones();
   out.r9Rerun = regionState(regB.id);
 
-  // (R9-c) A run that stops part-way still leaves the stamp set. The per-region inner catch already
+  // (R9-c) A run that stops part-way still leaves the ATTEMPT stamp set, and leaves COMPLETION unset
+  // so the next load retries it. The per-region inner catch already
   // contains a failed upgrade, so the probe fails the step OUTSIDE it: the behaviors read the sweep
   // makes on every tagged region before deciding to upgrade it.
   const regC = await legacyRegion("__PW__PerfRadC", "3d6");
   regC.behaviors.some = () => { throw new Error("__PW__ probe: region behaviors unavailable"); };
   await setRadFlag(false);
+  await setRadDone(false);
   await api().migrations.legacyRadZones();
-  out.r9Failed = { flagAfter: radFlag(), stillTagged: regionState(regC.id).legacyTag === true };
+  out.r9Failed = { flagAfter: radFlag(), completedAfter: radDone(), stillTagged: regionState(regC.id).legacyTag === true };
   delete regC.behaviors.some;
   out.r9RestoredCollection = typeof regC.behaviors.some === "function" && regC.behaviors.some(() => false) === false;
   await radScene.delete().catch(() => {});
@@ -322,10 +407,16 @@ const r = await p.evaluate(async () => {
   out.indexMapAfter = (await CG.skillIndexNamesById()) === mapA;
   for (const a of chipActors) await a.delete().catch(() => {});
 
-  // Both migrations belong COMPLETE on this world.
+  // Both migrations belong COMPLETE on this world — BOTH stamps of each pair, or the next load of
+  // this world reads "attempted, never finished" and sweeps again.
   await setFleshFlag(true);
+  await setFleshDone(true);
   await setRadFlag(true);
-  out.finalFlags = { flesh: game.settings.get(SCOPE, "fleshLimbStatusMigrated"), rad: game.settings.get(SCOPE, "radZonesMigrated") };
+  await setRadDone(true);
+  out.finalFlags = {
+    flesh: fleshFlag(), fleshCompleted: fleshDone(),
+    rad: radFlag(), radCompleted: radDone(),
+  };
   out.leftovers = {
     actors: game.actors.filter(a => a.name.startsWith("__PW__Perf")).length,
     scenes: game.scenes.filter(s => s.name.startsWith("__PW__Perf")).length,
@@ -345,19 +436,32 @@ const checks = [
   ["S7 fixture: the zone carries no structural pool (so the entry must move)", r.fleshBefore.structuralPool === 0 && r.fleshBefore.limbStatus?.rArm === "crippled"],
   ["S7 fixture: the unlinked token's OWN delta carries the legacy key (what the sweep now looks at)", r.fleshTokenDeltaSeeded === true],
   ["S7 fixture: the control token's delta is empty", r.fleshTokenEmptyDelta === true],
-  ["S7 stopped run: the sweep ran and the completion stamp is set anyway", r.s7Failed.swept === true && r.s7Failed.flagAfter === true],
+  ["S7 stopped run: the sweep ran and the attempt stamp is set anyway", r.s7Failed.swept === true && r.s7Failed.flagAfter === true],
+  ["S7 stopped run: completion is NOT stamped, so the world still owes a sweep", r.s7Failed.completedAfter === false],
   ["S7 stopped run: reported loudly, naming the re-run entry point", reRunNamed(/flesh-limb-status/)],
-  ["S7 boot path after the stamp: no token read at all", r.s7Gated.reads === 0 && r.s7Gated.flagAfter === true],
-  ["S7 clean run: sweeps, moves rArm to the flesh key, stamps done", r.s7Clean.reads > 0 && r.s7Clean.flagAfter === true && r.s7Clean.fleshLimbStatus?.rArm === "crippled" && r.s7Clean.limbStatus?.rArm === undefined],
+
+  ["S7 recovery fixture: planted actor starts un-migrated on the shared key", r.s7RecoverBefore.limbStatus?.rArm === "crippled" && r.s7RecoverBefore.fleshLimbStatus?.rArm === undefined],
+  ["S7 recovery: attempted-but-not-completed makes the boot path sweep again", r.s7Recovered.reads > 0],
+  ["S7 recovery: the planted actor's entry is moved to the flesh key", r.s7Recovered.fleshLimbStatus?.rArm === "crippled" && r.s7Recovered.limbStatus?.rArm === undefined],
+  ["S7 recovery: completion is stamped once the sweep returns", r.s7Recovered.completedAfter === true && r.s7Recovered.flagAfter === true],
+  ["S7 recovery: announced exactly once, as a warning not an error", r.s7Recovered.warns === 1],
+
+  ["S7 boot path with BOTH stamps: no token read at all", r.s7Gated.reads === 0 && r.s7Gated.flagAfter === true && r.s7Gated.completedAfter === true],
+  ["S7 boot path with BOTH stamps: an actor planted afterwards is left untouched", r.s7Gated.limbStatus?.rArm === "crippled" && r.s7Gated.fleshLimbStatus?.rArm === undefined],
+  ["S7 boot path with BOTH stamps: nothing announced", r.s7Gated.warns === 0],
+
+  ["S7 clean-run fixture: the token delta carries the legacy key again", r.s7CleanDeltaReseeded === true],
+  ["S7 clean run: sweeps, moves rArm to the flesh key, stamps both", r.s7Clean.reads > 0 && r.s7Clean.flagAfter === true && r.s7Clean.completedAfter === true && r.s7Clean.fleshLimbStatus?.rArm === "crippled" && r.s7Clean.limbStatus?.rArm === undefined],
   ["S7 clean run: the unlinked token reads the moved entry too (delta pruned to the base)", r.s7Clean.tokenFleshLimbStatus?.rArm === "crippled" && r.s7Clean.tokenLimbStatus?.rArm === undefined],
   ["S7 delta fast path: a token with an empty delta costs 0 synthetic-actor construction", r.s7Clean.emptyDeltaReads === 0],
 
   ["R9 behavior type is registered on this core", r.behaviorRegistered === true],
   ["R9 fixture: region starts tagged, with no behavior", r.r9Before.hasBehavior === false && r.r9Before.legacyTag === true],
-  ["R9 clean run: behavior added with the tagged values, tag dropped, stamp set", r.r9Clean.flagAfter === true && r.r9Clean.region.hasBehavior === true && r.r9Clean.region.formula === "2d6" && r.r9Clean.region.source === "__PW__ reactor" && !r.r9Clean.region.legacyTag],
-  ["R9 stamp gates the sweep: a later-tagged region is left alone", r.r9Gated.hasBehavior === false && r.r9Gated.legacyTag === true],
+  ["R9 clean run: behavior added with the tagged values, tag dropped, both stamps set", r.r9Clean.flagAfter === true && r.r9Clean.completedAfter === true && r.r9Clean.region.hasBehavior === true && r.r9Clean.region.formula === "2d6" && r.r9Clean.region.source === "__PW__ reactor" && !r.r9Clean.region.legacyTag],
+  ["R9 both stamps gate the sweep: a later-tagged region is left alone", r.r9Gated.hasBehavior === false && r.r9Gated.legacyTag === true],
   ["R9 manual re-run picks that region up (1d10 carried over)", r.r9Rerun.hasBehavior === true && r.r9Rerun.formula === "1d10"],
-  ["R9 stopped run: the completion stamp is set anyway, region left as it was", r.r9Failed.flagAfter === true && r.r9Failed.stillTagged === true],
+  ["R9 stopped run: the attempt stamp is set anyway, region left as it was", r.r9Failed.flagAfter === true && r.r9Failed.stillTagged === true],
+  ["R9 stopped run: completion is NOT stamped, so the next load retries it", r.r9Failed.completedAfter === false],
   ["R9 probe removed from the fixture collection", r.r9RestoredCollection === true],
   ["R9 stopped run: reported loudly, naming the re-run entry point", reRunNamed(/rad-zone/)],
 
@@ -377,7 +481,7 @@ const checks = [
     r.chipPass[1].grantedExists === true && r.chipPass[1].grantedLevel === 0 && r.chipPass[1].grantedFlag === true
     && r.chipPass[1].orphanPruned === true && r.chipPass[1].trainedKept === true && r.chipPass[1].trainedUnflagged === true],
 
-  ["both migration stamps left complete on this world", r.finalFlags.flesh === true && r.finalFlags.rad === true],
+  ["both migrations left complete on this world — attempt AND completion stamps", r.finalFlags.flesh === true && r.finalFlags.fleshCompleted === true && r.finalFlags.rad === true && r.finalFlags.radCompleted === true],
   ["fixtures cleaned up", r.leftovers.actors === 0 && r.leftovers.scenes === 0 && r.leftovers.tokens === 0],
   ["exactly the two provoked reports, no others", announced.length === 2],
   ["0 console errors", errors.length === 0],

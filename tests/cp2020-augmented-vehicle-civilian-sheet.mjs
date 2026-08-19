@@ -51,23 +51,63 @@ const res = await page.evaluate(async () => {
   ok("norm: Helicopter→rotor", m.normalizeVehicleType("Helicopter").type === "rotor");
   ok("norm: submarine unmodeled", m.normalizeVehicleType("submarine (working-class)").modeled === false);
   ok("norm: spacecraft unmodeled", m.normalizeVehicleType("spacecraft").modeled === false);
-  ok("norm: Hovercraft unmodeled", m.normalizeVehicleType("Hovercraft").modeled === false);
+  // ⏪ 2026-08-19: was `modeled === false` — stale after the approved MM batch made hovercraft a
+  // modeled class (MM p.11 prints its handling row). The leg now pins the batch's answer.
+  ok("norm: Hovercraft→hover modeled", JSON.stringify(m.normalizeVehicleType("Hovercraft")) === '{"type":"hover","modeled":true}', JSON.stringify(m.normalizeVehicleType("Hovercraft")));
   ok("norm: ACPA→acpa", m.normalizeVehicleType("ACPA (Powered Armor)").type === "acpa");
 
-  // seed a civilian from a real pack item with rich data
+  // Seed a civilian from a real pack item whose stat block has been STAMPED with a known set of
+  // numbers. ⏪ 2026-08-18 (weak-oracle repair): these legs used to recompute the expected value
+  // with the seeder's OWN expression (`Number(ss.speed?.value) || s.topSpeed`, `Number(ss.body) || 0`
+  // …), so any change to the seeder moved the oracle with it and the legs could not fail. The
+  // fixture now STATES its numbers and each leg pins the literal that follows from them.
   const pack = game.packs.get("cyberpunk2020.vehicles");
   const idx = await pack.getIndex({ fields: ["type", "system.sdp"] });
-  const src = await pack.getDocument(idx.find(e => e.type === "vehicle" && Number(e.system?.sdp?.max) > 0)._id);
+  const packSrc = await pack.getDocument(idx.find(e => e.type === "vehicle" && Number(e.system?.sdp?.max) > 0)._id);
+  // The stated stat block. Every literal asserted below is read off THIS object, not off the seeder.
+  const stated = packSrc.toObject();
+  stated.name = "__PWC__StatedSrc";
+  Object.assign(stated.system, {
+    vehicleType: "Truck", sp: 12, sdp: { value: 0, max: 48 },
+    speed: { ...(stated.system.speed ?? {}), value: 55, max: 120, unit: "mph", maneuver: 40, acceleration: 25, deceleration: 40 },
+    maneuverability: { ...(stated.system.maneuverability ?? {}), value: -4 },
+    crew: 2, passengers: 3, range: 300, rangeUnit: "mi",
+    fuel: { ...(stated.system.fuel ?? {}), value: 10, max: 20, unit: "gal", type: "CHOOH2", efficiency: 15 },
+    mass: { value: 3, unit: "tons" }, cargo: { value: 500, unit: "kg" }, body: 4,
+  });
+  const src = new Item.implementation(stated);
   const actor = await m.createVehicleActorFromItem(src, { name: "__PWC__Civ" });
-  const s = actor.system, ss = src.system;
-  ok("seed: typeText verbatim", s.vehicleTypeText === String(ss.vehicleType ?? ""), `${s.vehicleTypeText}|${ss.vehicleType}`);
+  const s = actor.system;
+  ok("seed: class string travels verbatim ('Truck')", s.vehicleTypeText === "Truck", s.vehicleTypeText);
+  ok("seed: normalized class is the modeled truck row", s.vehicleType === "truck", s.vehicleType);
   ok("seed: isMMVehicle false", s.isMMVehicle === false);
-  ok("seed: speedValue = current||top", s.speedValue === (Number(ss.speed?.value) || s.topSpeed), `${s.speedValue}`);
-  ok("seed: speedUnit", s.speedUnit === (ss.speed?.unit === "kph" ? "kph" : "mph"), s.speedUnit);
-  ok("seed: range+unit", s.range === (Number(ss.range) || 0) && ["mi", "km"].includes(s.rangeUnit), `${s.range} ${s.rangeUnit}`);
-  ok("seed: fuel block", s.fuel.max === (Number(ss.fuel?.max) || 0) && typeof s.fuel.type === "string");
-  ok("seed: mass/cargo", s.mass.value === (Number(ss.mass?.value) || 0) && s.cargo.value === (Number(ss.cargo?.value) || 0));
-  ok("seed: bodyRating", s.bodyRating === (Number(ss.body) || 0), `${s.bodyRating}`);
+  ok("seed: top speed is the item's MAX (120), not its current 55", s.topSpeed === 120, `${s.topSpeed}`);
+  ok("seed: current speed is the item's own 55", s.speedValue === 55, `${s.speedValue}`);
+  ok("seed: speedUnit mph", s.speedUnit === "mph", s.speedUnit);
+  ok("seed: safe speed 40 / acc 25 / dec 40 / control mod -4",
+    s.safeSpeed === 40 && s.acc === 25 && s.dec === 40 && s.controlMod === -4,
+    `${s.safeSpeed}/${s.acc}/${s.dec}/${s.controlMod}`);
+  ok("seed: single SP 12 fans out to all five facings",
+    s.sp.front === 12 && s.sp.side === 12 && s.sp.rear === 12 && s.sp.top === 12 && s.sp.bottom === 12,
+    JSON.stringify(s.sp));
+  ok("seed: a blank current SDP fills from max (48/48)", s.sdp.value === 48 && s.sdp.max === 48, JSON.stringify(s.sdp));
+  ok("seed: crew 2 + passengers 3", s.crewSlots === 2 && s.passengerSlots === 3, `${s.crewSlots}/${s.passengerSlots}`);
+  ok("seed: range 300 mi", s.range === 300 && s.rangeUnit === "mi", `${s.range} ${s.rangeUnit}`);
+  ok("seed: fuel 10/20 gal of CHOOH2 at 15",
+    s.fuel.value === 10 && s.fuel.max === 20 && s.fuel.unit === "gal" && s.fuel.type === "CHOOH2" && s.fuel.efficiency === 15,
+    JSON.stringify(s.fuel));
+  ok("seed: mass 3 tons / cargo 500 kg",
+    s.mass.value === 3 && s.mass.unit === "tons" && s.cargo.value === 500 && s.cargo.unit === "kg",
+    `${JSON.stringify(s.mass)} ${JSON.stringify(s.cargo)}`);
+  ok("seed: bodyRating 4", s.bodyRating === 4, `${s.bodyRating}`);
+  // NEGATIVE: with no printed max, top speed falls back to the printed current — 55 in BOTH slots.
+  const noMax = JSON.parse(JSON.stringify(stated));
+  noMax.name = "__PWC__NoMaxSrc";
+  noMax.system.speed.max = 0;
+  const noMaxActor = await m.createVehicleActorFromItem(new Item.implementation(noMax), { name: "__PWC__NoMax" });
+  ok("seed NEGATIVE: no printed max -> top speed falls back to the printed current 55",
+    noMaxActor.system.topSpeed === 55 && noMaxActor.system.speedValue === 55,
+    `${noMaxActor.system.topSpeed}/${noMaxActor.system.speedValue}`);
 
   // template matrix — render helper
   const layoutOf = async (a) => {
@@ -145,7 +185,7 @@ const res = await page.evaluate(async () => {
   ok("migration stamps legacy actor", legacy.system.isMMVehicle === true);
 
   await game.settings.set(SCOPE, "mmEnabled", mmWas);
-  out.cleanupIds = [actor.id, sub.id, legacy.id];
+  out.cleanupIds = [actor.id, sub.id, legacy.id, noMaxActor.id];
   return out;
 });
 

@@ -13,10 +13,11 @@
 import { chromium } from "@playwright/test";
 const BASE = process.env.FVTT_URL || "http://localhost:30004";
 const PW = process.env.FVTT_RIG_PASSWORD || "cp2020-v14-rig";
-/** Join as `who`. The rig's GM accounts carry the rig password; the player fixture account has none,
- *  so `pw` is passed empty for it — filling a password a user does not have is refused at the form and
- *  the page simply never reaches `game.ready` (which is how this first failed). */
-async function join(p, who, pw = PW){await p.goto(BASE+"/join",{waitUntil:"domcontentloaded"});const s=p.locator('select[name="userid"]');await s.waitFor({state:"visible",timeout:30000});const us=await s.locator("option").evaluateAll(o=>o.map(x=>({v:x.value,l:(x.textContent||"").trim()})).filter(x=>x.v));const g=us.find(u=>new RegExp(who,"i").test(u.l))||us[0];await s.selectOption(g.v);await p.locator('input[name="password"]').fill(pw);await Promise.all([p.waitForNavigation({url:/\/game/,timeout:45000}).catch(()=>{}),p.locator('button[name="join"]').click()]);await p.waitForFunction(()=>window.game?.ready===true,undefined,{timeout:60000});}
+/** Join as `who`, trying each password in turn. The :30004 player fixture account has no password;
+ *  on other rigs (:30003 was the proof) the same account carries the rig password — and a User.update
+ *  with password:"" does NOT clear it, core ignores a blank. A wrong password is refused at the form
+ *  and the page never reaches `game.ready`, so each candidate gets its own bounded wait. */
+async function join(p, who, pw = PW){const pws = pw === "" ? ["", PW] : [pw];for (const cand of pws) {await p.goto(BASE+"/join",{waitUntil:"domcontentloaded"});const s=p.locator('select[name="userid"]');await s.waitFor({state:"visible",timeout:30000});const us=await s.locator("option").evaluateAll(o=>o.map(x=>({v:x.value,l:(x.textContent||"").trim()})).filter(x=>x.v));const g=us.find(u=>new RegExp(who,"i").test(u.l))||us[0];await s.selectOption(g.v);await p.locator('input[name="password"]').fill(cand);await Promise.all([p.waitForNavigation({url:/\/game/,timeout:45000}).catch(()=>{}),p.locator('button[name="join"]').click()]);try {await p.waitForFunction(()=>window.game?.ready===true,undefined,{timeout:cand===pws[pws.length-1]?60000:20000});return;} catch (e) {if (cand === pws[pws.length-1]) throw e;}}}
 
 const b = await chromium.launch({ headless: true });
 const gmCtx = await b.newContext({ viewport: { width: 1600, height: 1100 } });
@@ -34,11 +35,16 @@ const r1 = await p.evaluate(async () => {
   const check = (n, ok, got) => { out.checks.push(`${ok?"  PASS":"  FAIL"}  ${n}${ok?"":"  got="+JSON.stringify(got)}`); if(!ok) out.fails.push(n); };
   const SCOPE = "cp2020-augmented";
 
-  // The catalog OPENS on its category tiles now; the item list is one step in. This steps through
-  // the all-items tile (which carries the generated ammo rows too) and waits for the real list.
-  const intoList = async (win, marker) => {
-    await waitFor(() => win.rendered && win.element?.querySelector('.cp-cat-tile[data-cat=""], ' + marker), 40000);
-    win.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  // The catalog opens straight onto its item list — no front page — so the first wait is just for
+  // the rows, which still earns its keep because a first open sits behind the catalog-index build.
+  // The generated caliber rows this section is about are the ONE thing the opening category set
+  // leaves out, so the Ammo chip is switched on: that chip is the shipped route to them. Pressed
+  // against the window's untouched default set it REPLACES that set, so what this lands on is the
+  // caliber rows alone — which is exactly this section's subject. Done per window, because every
+  // reopen builds the default set fresh.
+  const intoAmmoRows = async (win, marker) => {
+    await waitFor(() => win.rendered && win.element?.querySelector(".cp-catalog-row"), 40000);
+    win.element?.querySelector('.cp-cat-chip[data-cat="Ammo"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await waitFor(() => win.element?.querySelector(marker), 30000);
   };
   const CAT = await import("/modules/cp2020-augmented/module/shop/catalog.js");
@@ -73,7 +79,7 @@ const r1 = await p.evaluate(async () => {
 
     // ── (a) Per-row dropdown persistence ──────────────────────────────────────────────────────────
     let win = CAT.openShopWindow(buyer, { view: "catalog" });
-    await intoList(win, ".cp-catalog-row[data-ammo-caliber]");
+    await intoAmmoRows(win, ".cp-catalog-row[data-ammo-caliber]");
     const ammoRow = () => win.element.querySelector(".cp-catalog-row[data-ammo-caliber]");
     check("catalog rendered with generated ammo rows", !!ammoRow(), null);
 
@@ -117,7 +123,7 @@ const r1 = await p.evaluate(async () => {
     await win.close();
     await sleep(300);
     win = CAT.openShopWindow(buyer, { view: "catalog" });
-    await intoList(win, `.cp-catalog-row[data-ammo-caliber="${caliber}"]`);
+    await intoAmmoRows(win, `.cp-catalog-row[data-ammo-caliber="${caliber}"]`);
     const reopened = win.element.querySelector(`.cp-catalog-row[data-ammo-caliber="${caliber}"] .cp-catalog-ammo-load`);
     check("closing and reopening the window RESETS the row to its default load",
       reopened?.value === defaultLoad, { want: defaultLoad, got: reopened?.value });
@@ -208,10 +214,12 @@ const r1 = await p.evaluate(async () => {
 // ── Phase 2: a player client, while the GM's setup mode is ON ─────────────────────────────────────
 const playerCtx = await b.newContext({ viewport: { width: 1400, height: 900 } });
 const pp = await playerCtx.newPage();
+// Join as exactly the user phase 1 gave the probe actor to. Error listeners attach AFTER the join:
+// the helper probes candidate passwords, and a refused candidate logs a 401 + "Invalid password"
+// console error that is the harness's own doing, not the module behavior this suite counts.
+await join(pp, r1.playerUserName ?? "test user 1", "");
 pp.on("pageerror", e => errors.push("player pageerror: " + e.message));
 pp.on("console", m => { if (m.type() === "error") errors.push("player console: " + m.text()); });
-// Join as exactly the user phase 1 gave the probe actor to (its password is empty — see `join`).
-await join(pp, r1.playerUserName ?? "test user 1", "");
 
 const r2 = await pp.evaluate(async ({ playerActorId }) => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));

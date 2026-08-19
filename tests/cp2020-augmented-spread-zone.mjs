@@ -94,6 +94,15 @@ const res = await page.evaluate(async () => {
   const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
   const scatterTable = await import(`/modules/${SCOPE}/module/combat/scatter-table.js`);
 
+  // SCOPE STATEMENT: this suite asserts the REGIONS shape — zone documents in scene.regions and the
+  // Region-mesh look (§4 reads placeable meshes and shader uniforms that only exist on that backend).
+  // On a core where the module's own detect picks MeasuredTemplates (the must-keep v13 platform),
+  // this suite refuses loudly here instead of dying mid-eval on a placeable deref; that path is
+  // covered by its own keeper (cp2020-augmented-spread-zone-v13.mjs).
+  if (!areas.usesRegions()) {
+    throw new Error("spread-zone suite asserts the Regions backend; this core uses MeasuredTemplates — run the -v13 keeper instead");
+  }
+
   const mine = (r) => r?.flags?.[SCOPE]?.isSpreadZone === true;
   const myZones = () => [...(scene?.regions ?? [])].filter(mine);
   // ⚠ RE-READ THE COLLECTION IMMEDIATELY BEFORE EACH DELETE. This spec's own cleanup used to race the
@@ -430,14 +439,22 @@ const res = await page.evaluate(async () => {
   // ⭐ THE SWEEP IS AN ORPHAN NET, NOT A DEADLINE (user ruling 2026-08-14). Past the TTL it still leaves
   // a pattern whose card is open — that is a decision somebody has not made yet — and collects it only
   // once there is nobody left to ask. Both halves in one leg, so the count is unchanged.
+  // ⏪ REALIGNED 2026-08-18: the collected half no longer demands OUR call be the one that counts the
+  // delete. The module runs the same net on its own 15 s interval (SPREAD_ZONE_SWEEP_MS), and a tick
+  // landing between the card delete and our manual sweep collects the orphan first — the manual call
+  // then honestly reports 0 (twice-reproduced: whileOpen=0 afterCardGone=0 left=0). For a pattern with
+  // no encounter and no card the net is the ONLY deleter, so "held while open + gone after" pins the
+  // mechanism; whose tick counted it is scheduling, not behavior. The held half is now asserted on the
+  // zone itself, not just the sweep's count.
   const sweptWhileOpen = await hooks._sweepStaleSpreadZones();
+  const heldWhileOpen = myZones().length === 1;
   await cardOf(clockZone)?.delete()?.catch?.(() => {});
   await sleep(300);
   swept = await hooks._sweepStaleSpreadZones();
   await sleep(400);
   ok("§6 past the TTL the sweep keeps a pattern whose card is open and collects it once the card is gone",
-    sweptWhileOpen === 0 && swept === 1 && myZones().length === 0,
-    `whileOpen=${sweptWhileOpen} afterCardGone=${swept} left=${myZones().length}`);
+    sweptWhileOpen === 0 && heldWhileOpen && myZones().length === 0,
+    `whileOpen=${sweptWhileOpen} heldWhileOpen=${heldWhileOpen} manualSwept=${swept} left=${myZones().length}`);
   // Litter from the build that had no expiry at all carries neither flag, and must not be immortal. It
   // records no card either, so nobody can be asked about it and the net is the only thing that owns it.
   await hooks._placeSpreadZone(basePayload());

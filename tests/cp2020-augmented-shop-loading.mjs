@@ -175,15 +175,10 @@ try {
     const all = await CAT.getCatalogIndex();
     window.__cpaIndexDelayMs = 0;
 
-    // Wait for the re-render the resolve triggers, not for a fixed sleep. What that re-render paints
-    // is the catalog's LANDING (its category tiles); the rows this leg is about are one step in.
+    // Wait for the re-render the resolve triggers, not for a fixed sleep. That re-render paints the
+    // item list directly — the catalog has no front page between the window and its rows.
     const deadline = performance.now() + 20000;
     let rows = 0;
-    while (performance.now() < deadline) {
-      if (app?.element?.querySelector('.cp-cat-tile[data-cat=""]')) break;
-      await new Promise(r => setTimeout(r, 50));
-    }
-    app?.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     while (performance.now() < deadline) {
       rows = app?.element?.querySelectorAll(".cp-catalog-row").length ?? 0;
       if (rows > 0) break;
@@ -238,8 +233,6 @@ try {
     const app2 = CAT.openShopWindow(null, { view: "catalog" });
     let rows2 = 0;
     const d2 = performance.now() + 20000;
-    while (performance.now() < d2) { if (app2?.element?.querySelector('.cp-cat-tile[data-cat=""]')) break; await sleep(25); }
-    app2?.element?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     while (performance.now() < d2) {
       rows2 = app2?.element?.querySelectorAll(".cp-catalog-row").length ?? 0;
       if (rows2 > 0) break;

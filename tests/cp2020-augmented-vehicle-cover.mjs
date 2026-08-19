@@ -72,11 +72,14 @@ const res = await page.evaluate(async (SCOPE) => {
   ok("the spec's own scene starts with no cover on it", cov.coverChoicesFor(null).length === 0,
     String(cov.coverChoicesFor(null).length));
 
-  /* The car: 4 wide x 2 deep at (10G,10G). Its footprint derives an EASTWARD heading, so the engine
-     block is the right-hand column (x 13G..14G) and everything left of it is bodywork. */
+  /* The car: 4 wide x 2 deep at (10G,10G), heading EXPLICITLY east, so the engine block is the
+     right-hand column (x 13G..14G) and everything left of it is bodywork. The heading is picked
+     rather than derived on purpose: this block is measuring the cover RAY against a known layout,
+     and the ray must answer for whatever heading the vehicle carries, not only the default one.
+     (The default heading's own geometry is measured in the ride-coupling keeper.) */
   const car = await Actor.create({
     name: "__PWV__Sedan", type: `${SCOPE}.vehicle`,
-    system: { vehicleType: "car", sdp: { value: 40, max: 40 } },
+    system: { vehicleType: "car", sdp: { value: 40, max: 40 }, layout: { front: "e" } },
     prototypeToken: { actorLink: true, width: 4, height: 2 },
   });
   const [carTok] = await scene.createEmbeddedDocuments("Token", [{
@@ -115,7 +118,7 @@ const res = await page.evaluate(async (SCOPE) => {
   const turnedEng = cov.coverBetween(aEng, tEng);
   ok("with the nose north both lines cross the engine rank", turnedBody[0]?.sp === 35 && turnedEng[0]?.sp === 35,
     `${turnedBody[0]?.sp} / ${turnedEng[0]?.sp}`);
-  await car.update({ "system.layout.front": "" });
+  await car.update({ "system.layout.front": "e" });
 
   /* A PAINTED engine replaces the derived one: put the engine block in the column the bodywork
      line crosses, and the two answers swap over. */

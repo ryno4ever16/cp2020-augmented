@@ -128,7 +128,13 @@ const SPEC = {
     fieldSelect: ".field select", flavor: "textarea.flavor",
   },
   catalog: {
-    windowContent: ".window-content", chip: ".cp-cat-chip", row: ".cp-catalog-row",
+    // The catalog now opens with every top-level category chip LIT, and the skin gives a lit chip a
+    // glow and an outline the unlit one does not carry. The baseline was recorded over an UNLIT top
+    // chip, so the selector names that state outright rather than leaving it to whichever chip
+    // happens to come first — the alternative would be comparing a lit chip to an unlit record.
+    // `cp-cat-top` is load-bearing: `.cp-cat-sub` carries its own smaller type, so a bare
+    // `:not(.active)` would land on a sub-shelf chip and move a different set of values.
+    windowContent: ".window-content", chip: ".cp-cat-chip.cp-cat-top:not(.active)", row: ".cp-catalog-row",
     letterHeader: ".cp-letter-header", filters: ".cp-catalog-filters",
     sources: ".cp-catalog-sources", input: "input[type=text]",
     addBtn: ".cp-add-to-shop-btn", srcBadge: ".cp-src-badge",
@@ -187,10 +193,8 @@ const readAll = (spec) => p.evaluate(async (spec) => {
   try {
     const cat = await import("/modules/cp2020-augmented/module/shop/catalog.js");
     cat.openCatalogBrowser(actor); await W.sleep(2500);
-    // The catalog opens on its category tiles; the elements sampled below (rows, letter headers,
-    // the filter chips and the two rails) live in the item list one step in.
-    document.querySelector('.application.cp-catalog .cp-cat-tile[data-cat=""]')
-      ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    // The catalog opens straight onto the item list, so everything sampled below (rows, letter
+    // headers, the filter chips and the two rails) is on screen from the first render.
     await W.sleep(3000);
     const r = document.querySelector(".application.cp-catalog");
     out.surfaces.catalog = r ? W.collect(r, spec.catalog) : null;

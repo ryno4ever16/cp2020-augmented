@@ -90,16 +90,27 @@ const setup = await gm.page.evaluate(async SCOPE => {
   const pack = game.packs.get("cyberpunk2020.vehicles");
   const idx = await pack.getIndex({ fields: ["type", "system.sdp"] });
   const src = await pack.getDocument(idx.find(e => e.type === "vehicle" && Number(e.system?.sdp?.max) > 0)._id);
-  const [itemA, itemB] = await driver.createEmbeddedDocuments("Item", [src.toObject(), src.toObject()]);
+  // ⏪ 2026-08-18 (weak-oracle repair): the seeding legs below used to compare against an `expected`
+  // block recomputed with the SEEDER'S OWN expression (`speed?.max || speed?.value || 0`), so the
+  // oracle moved with the code and the legs could not fail. The two carried items now carry a STATED
+  // stat block, and the legs pin the literals that follow from it (see the `expected` comments).
+  const stated = src.toObject();
+  Object.assign(stated.system, {
+    sp: 12, sdp: { value: 0, max: 48 },
+    speed: { ...(stated.system.speed ?? {}), value: 55, max: 120, unit: "mph" },
+  });
+  const [itemA, itemB] = await driver.createEmbeddedDocuments("Item", [stated, foundry.utils.deepClone(stated)]);
   return {
     playerId: player.id, playerName: player.name, driverId: driver.id,
     activeBefore, sceneId: scene.id, grid: scene.grid.size,
     anchorTokenId: anchorTok.id, anchor: { x: anchorTok.x, y: anchorTok.y },
     itemAUuid: itemA.uuid, itemBUuid: itemB.uuid, srcName: src.name,
-    expected: {
-      topSpeed: Number(src.system.speed?.max) || Number(src.system.speed?.value) || 0,
-      sdpMax: Number(src.system.sdp?.max) || 0,
-      sp: Number(src.system.sp) || 0,
+    // LITERALS restating the stated block above — never recomputed from the item at read time.
+    expected: { topSpeed: 120, currentSpeed: 55, sdpMax: 48, sp: 12 },
+    // What the item actually carries, so a fixture that failed to stamp is visible instead of silent.
+    stamped: {
+      topSpeed: Number(itemA.system.speed?.max), currentSpeed: Number(itemA.system.speed?.value),
+      sdpMax: Number(itemA.system.sdp?.max), sp: Number(itemA.system.sp),
     },
   };
 }, SCOPE);
@@ -160,8 +171,10 @@ const created = await pl.page.waitForFunction(({ playerId, itemAUuid }) => {
     src: a.flags?.["cp2020-augmented"]?.sourceItemUuid,
     createdBy: a.flags?.["cp2020-augmented"]?.createdBy,
     own: a.ownership?.[playerId],
-    topSpeed: a.system.topSpeed, sdpMax: a.system.sdp?.max, sdpVal: a.system.sdp?.value,
+    topSpeed: a.system.topSpeed, speedValue: a.system.speedValue,
+    sdpMax: a.system.sdp?.max, sdpVal: a.system.sdp?.value,
     spFront: a.system.sp?.front, spRear: a.system.sp?.rear,
+    spSide: a.system.sp?.side, spTop: a.system.sp?.top, spBottom: a.system.sp?.bottom,
     folderName: a.folder?.name ?? null,
   };
 }, setup, { timeout: 10000 }).then(h => h.jsonValue());
@@ -169,9 +182,17 @@ check("actor type = module vehicle", created.type === "cp2020-augmented.vehicle"
 check("flags link = item uuid", created.src === setup.itemAUuid);
 check("flags createdBy = player", created.createdBy === setup.playerId);
 check("requester is OWNER", created.own === 3);
-check("topSpeed seeded from item", created.topSpeed === setup.expected.topSpeed, `${created.topSpeed}`);
-check("sdp max+value seeded full", created.sdpMax === setup.expected.sdpMax && created.sdpVal === setup.expected.sdpMax, `${created.sdpVal}/${created.sdpMax}`);
-check("sp seeds all facings", created.spFront === setup.expected.sp && created.spRear === setup.expected.sp);
+check("the carried item really carries the stated stat block (fixture guard)",
+  setup.stamped?.topSpeed === 120 && setup.stamped?.currentSpeed === 55
+  && setup.stamped?.sdpMax === 48 && setup.stamped?.sp === 12, JSON.stringify(setup.stamped));
+check("top speed seeded as the item's stated max of 120, not its current 55",
+  created.topSpeed === 120 && created.speedValue === 55, `${created.topSpeed}/${created.speedValue}`);
+check("structure seeded full at the stated 48 in both slots",
+  created.sdpMax === 48 && created.sdpVal === 48, `${created.sdpVal}/${created.sdpMax}`);
+check("the stated single SP of 12 fans out to all five facings",
+  created.spFront === 12 && created.spRear === 12 && created.spSide === 12
+  && created.spTop === 12 && created.spBottom === 12,
+  `${created.spFront}/${created.spSide}/${created.spRear}/${created.spTop}/${created.spBottom}`);
 check("filed in Vehicles folder", created.folderName === "Vehicles", String(created.folderName));
 
 // …and the vehicle is ON THE CANVAS beside the requester's token (the ruling: deploy means it
@@ -292,9 +313,19 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   const api = game.cpAugmented.vehicles;
   // deploy is idempotent per (actor, scene) — the approved deploy already parked this vehicle
   // here, so this returns THAT handle. Put the crew token beside wherever it actually is.
+  // ⏪ 2026-08-18 (weak-oracle repair, VC113): `dep.existing` was captured here and never asserted —
+  // the idempotency claim read as covered while nothing could fail. Record what the SECOND deploy did
+  // to the scene as well as what it reported, so both halves are pinned in Node below.
+  const handlesBefore = scene.tokens.filter(t => t.actorId === vehicleActor.id).map(t => t.id);
   const dep = await api.deploy(vehicleActor, { scene, x: 10 * grid, y: 10 * grid, gw: 2, gh: 1 });
+  const handlesAfter = scene.tokens.filter(t => t.actorId === vehicleActor.id).map(t => t.id);
   const vTok = scene.tokens.get(dep.tokenId);
-  out.reusedExistingHandle = dep.existing === true;
+  out.redeploy = {
+    existing: dep.existing,
+    countBefore: handlesBefore.length, countAfter: handlesAfter.length,
+    returnedIsPreexisting: handlesBefore.includes(dep.tokenId),
+    requestedX: 10 * grid, requestedY: 10 * grid, actualX: vTok?.x, actualY: vTok?.y,
+  };
   const driver = game.actors.getName("__PW__Driver");
   const [cTok] = await scene.createEmbeddedDocuments("Token", [{
     name: driver.name, actorId: driver.id, actorLink: true,
@@ -318,9 +349,9 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   await settle(cTok.id);
   out.boardedFlag = scene.tokens.get(cTok.id).flags?.[SCOPE]?.boardedVehicle === vehicleActor.id;
 
-  // seated: the DRIVER'S seat, drawn at 60%, sorted above the hull. On this 4-wide handle the
-  // footprint derives an eastward heading, so the engine is the right-hand column and the driver
-  // sits in the cell behind it on the top row — two squares right of the hull's own origin.
+  // seated: the DRIVER'S seat, drawn at 60%, sorted above the hull. The handle takes the
+  // rotation-zero convention — nose SOUTH — so the engine is the bottom rank and the driver sits in
+  // the rank behind it, at the driver's left, which facing south is the east (right-hand) file.
   const seated = scene.tokens.get(cTok.id);
   out.seat = { x: seated.x, y: seated.y, vx: vTok.x, vy: vTok.y, vw: vTok.width, vh: vTok.height,
                scale: seated._source.texture.scaleX, sort: seated.sort, hullSort: vTok.sort };
@@ -332,7 +363,7 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   await settle(cTok.id);
   const c1 = { x: scene.tokens.get(cTok.id).x, y: scene.tokens.get(cTok.id).y };
   out.crewFollowed = c1.x === c0.x + 3 * grid && c1.y === c0.y + grid;
-  out.stillSeated = c1.x === vTok.x + 2 * grid && c1.y === vTok.y;
+  out.stillSeated = c1.x === vTok.x + (vTok.width - 1) * grid && c1.y === vTok.y + (vTok.height - 2) * grid;
 
   // HUD now offers Disembark; click it; flag clears; the rider lands BESIDE the hull
   hud.clear(); hud.bind(placeable);
@@ -361,11 +392,22 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   out.activeUnchanged = (game.scenes.active?.id ?? null) === activeBefore;
   return out;
 }, { SCOPE, sceneId: setup.sceneId, activeBefore: setup.activeBefore });
+check("a second Deploy of an already-deployed vehicle reports the EXISTING handle",
+  boardRes.redeploy?.existing === true, JSON.stringify(boardRes.redeploy));
+check("that second Deploy creates no duplicate handle and hands back the one already on the scene",
+  boardRes.redeploy?.countBefore === 1 && boardRes.redeploy?.countAfter === 1
+  && boardRes.redeploy?.returnedIsPreexisting === true,
+  `${boardRes.redeploy?.countBefore} handle(s) before -> ${boardRes.redeploy?.countAfter} after; returned id was already on the scene: ${boardRes.redeploy?.returnedIsPreexisting}`);
+check("the reused handle keeps the position it was approved into rather than jumping to the new request",
+  Number.isFinite(boardRes.redeploy?.actualX)
+  && !(boardRes.redeploy.actualX === boardRes.redeploy.requestedX && boardRes.redeploy.actualY === boardRes.redeploy.requestedY),
+  `requested (${boardRes.redeploy?.requestedX},${boardRes.redeploy?.requestedY}) -> stayed at (${boardRes.redeploy?.actualX},${boardRes.redeploy?.actualY})`);
 check("embark button renders on crew token near vehicle", boardRes.embarkBtn === true, boardRes.error ?? "");
 check("embark sets boardedVehicle flag", boardRes.boardedFlag === true);
 check("embark seats the rider in the driver's seat, behind the engine rank (exact)",
-  Number.isFinite(boardRes.seat?.x) && boardRes.seat.vw === 4
-  && boardRes.seat.x === boardRes.seat.vx + 2 * setup.grid && boardRes.seat.y === boardRes.seat.vy,
+  Number.isFinite(boardRes.seat?.x) && boardRes.seat.vh > boardRes.seat.vw
+  && boardRes.seat.x === boardRes.seat.vx + (boardRes.seat.vw - 1) * setup.grid
+  && boardRes.seat.y === boardRes.seat.vy + (boardRes.seat.vh - 2) * setup.grid,
   JSON.stringify(boardRes.seat));
 check("seated rider is drawn at 60% of its own art scale", boardRes.seat?.scale === 0.6, String(boardRes.seat?.scale));
 check("seated rider sorts above the hull",

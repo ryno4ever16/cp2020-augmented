@@ -63,8 +63,22 @@ const setup = await p.evaluate(async (SCOPE) => {
   // this fixture exists to stop anybody writing by hand. `undefined` is preserved as its own marker so
   // the hydrator can restore it: the producer sets several fields to `undefined` rather than null, and
   // a consumer doing `Number.isFinite(Number(v))` reads null as a finite ZERO and undefined as NaN.
+  //
+  // ⚠ ONE FIELD IS EXCLUDED, AND IT IS NOT A PRODUCER FIELD. `handled` is the commitment stamp a
+  // CONSUMER writes onto the shared payload object — this module's own weaponFired listener sets it to
+  // claim the shot, synchronously, while `Hooks.callAll` is still walking the listener list. This
+  // recorder is just another listener on that list, so once the stamp moved above the mono-break await
+  // (as it had to, for a co-resident layer to be able to read it at all) the recorder started seeing a
+  // field the SEAM never emitted. Capturing it would be actively harmful, not merely untidy: replaying
+  // a fixture that already carries the claim makes the module's own top guard — `if (payload.handled)
+  // return;` — stand down on the golden control, so the apply window never opens and every downstream
+  // verdict goes vacuous. That is exactly what happened on the first re-capture. The exclusion is a
+  // named single field, not a field list; everything the producer actually writes is still kept whole.
+  const CONSUMER_WRITTEN = new Set(["handled"]);
   const typeOf = (v) => v === undefined ? "undefined" : v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
-  const snapshot = (pl) => {
+  const snapshot = (plRaw) => {
+    const pl = {};
+    for (const k of Object.keys(plRaw)) if (!CONSUMER_WRITTEN.has(k)) pl[k] = plRaw[k];
     const keys = Object.keys(pl).sort();
     const types = {}; const undef = [];
     for (const k of keys) { types[k] = typeOf(pl[k]); if (pl[k] === undefined) undef.push(k); }

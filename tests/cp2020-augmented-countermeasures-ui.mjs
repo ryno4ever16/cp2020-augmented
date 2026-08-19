@@ -127,7 +127,25 @@ try {
       // reader consumes the SAME field the UI writes
       await actor.update({ "system.countermeasures": ["stealth"] });
       ok("reader: stealth defeats radar (+15)", MIS.countermeasureModifier(["stealth"], "radar") === 15, MIS.countermeasureModifier(["stealth"], "radar"));
-      ok("reader: chaff does NOT defeat laser (+0)", MIS.countermeasureModifier(["chaff"], "laser") === 0, MIS.countermeasureModifier(["chaff"], "laser"));
+      // ⚠ REALIGNED to the book. This leg used to assert chaff does NOT defeat laser (+0), pinning the
+      // shipped `{ radar: 10 }`. MM p.10 prints "Chaff adds +10 Difficulty to hit with radar OR
+      // LASER-GUIDED systems" — both, at the same +10 — so the old leg was pinning the defect.
+      ok("reader: chaff defeats laser as well as radar (+10 each)",
+        MIS.countermeasureModifier(["chaff"], "laser") === 10 && MIS.countermeasureModifier(["chaff"], "radar") === 10,
+        `laser ${MIS.countermeasureModifier(["chaff"], "laser")} / radar ${MIS.countermeasureModifier(["chaff"], "radar")} [MM p.10]`);
+      // NEGATIVE beside it: chaff is still not a universal screen — it does nothing to thermal homing.
+      ok("reader: chaff does NOT defeat thermal (+0)",
+        MIS.countermeasureModifier(["chaff"], "thermal") === 0, MIS.countermeasureModifier(["chaff"], "thermal"));
+      // Anti-laser aerosol imposes NO Difficulty — p.24 gives it a 90% block instead, a different
+      // mechanic, and the `{ laser: 15 }` it used to carry appears nowhere in the book.
+      ok("reader: anti-laser aerosol adds no Difficulty — it blocks 90% of the time instead",
+        MIS.countermeasureModifier(["antiLaserAerosol"], "laser") === 0
+        && MIS.aerosolBlocksLaser(2) === true && MIS.aerosolBlocksLaser(1) === false,
+        `mod ${MIS.countermeasureModifier(["antiLaserAerosol"], "laser")}; blocks on 2-10, through on a 1 [MM p.24]`);
+      // Countermeasures SUM (ruled 2026-08-19): two screens against the same homing method add.
+      ok("reader: two countermeasures against the same homing method SUM",
+        MIS.countermeasureModifier(["chaff", "jamming"], "radar") === 25,
+        `chaff 10 + jamming 15 -> ${MIS.countermeasureModifier(["chaff", "jamming"], "radar")}`);
 
       // ── NEGATIVE: the routing itself, asserted rather than assumed. A vehicle NOT designated MM
       // takes the civilian layout under the same mmEnabled setting, and the countermeasures loadout

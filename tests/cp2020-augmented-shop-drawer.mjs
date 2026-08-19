@@ -11,8 +11,10 @@
  *   S3  FILTER DRAWER      one collapsible drawer serving BOTH the catalog and the builder, holding
  *                          categories (live per-viewer counts), books (+ GM eyes) and the source tag
  *                          toggle; state survives a reopen; a player's counts exclude hidden books.
- *   S4  LANDING VIEW       the catalog opens on tiles, the ammo tile counts CALIBERS and routes to the
- *                          generated rows, the letter strip appears only where it earns its place.
+ *   S4  OPENING VIEW       the catalog opens straight onto the item list with the drawer beside it —
+ *                          no front page — under a default category set of everything but Ammo, the
+ *                          first chip pressed against that untouched set REPLACES it, and the letter
+ *                          strip appears only where it earns its place.
  *   S5  PAINT DRAG         a real pointer stroke over mixed-state filter buttons drives every crossed
  *                          button to the stroke's direction; the visibility eyes are NOT paintable.
  *   S6  SMALL FIXES        heading clipping, singular/plural, buyer-chip overflow, stock wording,
@@ -250,10 +252,9 @@ try {
     const all = await CAT.getCatalogIndex();
 
     try { localStorage.removeItem("cp2020-augmented.shopDrawer"); } catch {}
-    let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-    // Reach the item list, where both rails used to live.
-    await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1400);
-    r = W.root();
+    // The catalog opens straight onto the item list, drawer and all — there is no front page to
+    // step through to reach the rails this section is about.
+    let r = await W.open("catalog", null, ".cp-catalog-row");
 
     chk("drawer: exactly one filter drawer on the catalog", r.querySelectorAll(".cp-filter-drawer").length === 1, r.querySelectorAll(".cp-filter-drawer").length);
     chk("drawer: the books rail lives INSIDE the drawer, not beside the list",
@@ -284,7 +285,9 @@ try {
     const bookChip = r.querySelector('.cp-book-chip[data-book="__core__"]');
     chk("counts: a book chip carries a count too", Number(bookChip?.dataset.count) > 0, bookChip?.dataset.count);
 
-    // Filter SEMANTICS unchanged: a sub-shelf click narrows to exactly that shelf.
+    // Filter SEMANTICS: a sub-shelf click narrows to exactly that shelf. It is the FIRST press
+    // against this window's untouched default set, so it REPLACES that set rather than widening it
+    // — the rule itself is pinned by value in S4; what is measured here is the shelf it lands on.
     await W.fire(r.querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1500);
     r = W.root();
     // The list is WINDOWED above 150 items, so the census lives on `.cp-catalog-list[data-total]`
@@ -313,15 +316,19 @@ try {
       `${r.querySelectorAll(".cp-cat-chip.active").length}/${r.querySelectorAll(".cp-book-chip.active").length}`);
     chk("clear: with nothing on, the control is not offered", !r.querySelector(".cp-drawer-clear"), !!r.querySelector(".cp-drawer-clear"));
 
-    // GROUP EXPANSION — collapse a group, and it stays collapsed through a re-render.
+    // GROUP EXPANSION — ⏪ REALIGNED 2026-08-19 (user ruling): groups start CLOSED (the top row is
+    // the overview; only an explicit expand is remembered). Expand one, and it stays expanded
+    // through a re-render — the persistence now runs the interesting direction.
     const grp = () => W.root().querySelector('.cp-cat-group[data-cat="Weapons"]');
     const subsVisible = () => { const g = grp(); const s = g?.querySelector(".cp-cat-subs"); return !!s && s.getBoundingClientRect().height > 0; };
-    chk("groups: the Weapons group starts expanded", subsVisible(), subsVisible());
+    chk("groups: the Weapons group starts collapsed", !subsVisible(), subsVisible());
     await W.fire(grp().querySelector(".cp-cat-expand"), "click", {}, 900);
-    chk("groups: clicking the expander collapses the group", !subsVisible(), subsVisible());
+    chk("groups: clicking the expander opens the group", subsVisible(), subsVisible());
     await W.win().render();
     await W.sleep(1200);
-    chk("groups: the collapsed group survives a re-render", !subsVisible(), subsVisible());
+    chk("groups: the expanded group survives a re-render", subsVisible(), subsVisible());
+    await W.fire(grp().querySelector(".cp-cat-expand"), "click", {}, 900);
+    chk("groups: a second click closes it again", !subsVisible(), subsVisible());
 
     // COLLAPSE — the drawer state is browser-local and survives a close/reopen.
     const drawer = () => W.root().querySelector(".cp-filter-drawer");
@@ -332,8 +339,7 @@ try {
     let stored = null; try { stored = JSON.parse(localStorage.getItem("cp2020-augmented.shopDrawer") || "null"); } catch {}
     chk("collapse: the state is written to browser storage, not to a game setting", stored?.open === false, JSON.stringify(stored));
     await W.close();
-    r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-    await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1600);
+    r = await W.open("catalog", null, ".cp-catalog-row");
     chk("collapse: a reopened window is still collapsed (second act)", W.root().querySelector(".cp-filter-drawer")?.dataset.open === "0",
       W.root().querySelector(".cp-filter-drawer")?.dataset.open);
     await W.fire(W.root().querySelector(".cp-drawer-toggle"), "click", {}, 900);
@@ -355,83 +361,218 @@ try {
   }, shopId));
 
   // ═══════════════════════════════════════════════════════════════════════════════════════════
-  //  S4 · LANDING VIEW
+  //  S4 · OPENING VIEW — the catalog opens ON THE LIST, under a default category set
   // ═══════════════════════════════════════════════════════════════════════════════════════════
-  await section("4 · landing view", () => gm.evaluate(async () => {
+  //  The front page retired. A fresh window paints its item list immediately, with the filter
+  //  drawer beside it, and the set it paints under is every top category the taxonomy names EXCEPT
+  //  Ammo — marked untouched, so the FIRST category chip pressed against it REPLACES the set rather
+  //  than widening it. Clear still empties both dimensions outright, and clicks after a Clear add
+  //  up from empty. All three halves are pinned here, by value.
+  //
+  //  The list is WINDOWED above 150 items, so every count is read off `.cp-catalog-list[data-total]`
+  //  (the census for the whole set) with the painted row count checked alongside it, and "is there
+  //  any ammunition in this set" is asked of the DATA by searching a caliber label — a question the
+  //  painted window cannot answer on its own.
+  // ═══════════════════════════════════════════════════════════════════════════════════════════
+  await section("4 · opening view", () => gm.evaluate(async () => {
     const W = window.__cpShop;
     const checks = []; const chk = (label, ok, got) => checks.push({ label, ok: !!ok, got });
     const CAT = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+    const CATS = await import("/modules/cp2020-augmented/module/shop/categories.js");
     const LK = await import("/modules/cp2020-augmented/module/lookups.js");
-    const all = await CAT.getCatalogIndex();
-
-    let r = await W.open("catalog", null, ".cp-catalog-landing");
-    chk("landing: the catalog opens on the category tiles", !!r.querySelector(".cp-catalog-landing"), !!r.querySelector(".cp-catalog-landing"));
-    chk("landing: no item rows are painted on the landing", r.querySelectorAll(".cp-catalog-row").length === 0, r.querySelectorAll(".cp-catalog-row").length);
-    chk("landing: the API view name is still 'catalog'", W.win().view === "catalog", W.win().view);
-
     const SUP = await import("/modules/cp2020-augmented/module/shop/supplements.js");
     const ST = await import("/modules/cp2020-augmented/module/settings.js");
+    const all = await CAT.getCatalogIndex();
     const visible = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, ST.shopSourceConfig(), game.user.isGM));
-    const tile = (k) => r.querySelector(`.cp-cat-tile[data-cat="${k}"]`);
-    const wantCyber = visible.filter(i => i.category === "Cyberware").length;
-    chk("landing: a tile carries its live count", Number(tile("Cyberware")?.dataset.count) === wantCyber, `${tile("Cyberware")?.dataset.count} vs ${wantCyber}`);
-    chk("landing: the tile paints its name and its count",
-      /Cyberware/i.test(W.txt(tile("Cyberware"))) && W.txt(tile("Cyberware")).includes(String(wantCyber)), W.txt(tile("Cyberware")));
-    chk("landing: an all-items tile is offered", !!r.querySelector('.cp-cat-tile[data-cat=""]'), !!r.querySelector('.cp-cat-tile[data-cat=""]'));
 
-    // THE AMMO TILE IS SPECIAL: its count is the caliber count, and it routes to the generated rows.
-    const calibers = Object.keys(LK.getCalibers()).length;
-    chk("landing: the ammo tile counts CALIBERS, not pack items", Number(tile("Ammo")?.dataset.count) === calibers, `${tile("Ammo")?.dataset.count} vs ${calibers}`);
-    await W.fire(tile("Ammo"), "click", {}, 1600);
-    r = W.root();
-    const ammoRows = [...r.querySelectorAll(".cp-catalog-list .cp-catalog-row")];
-    chk("landing: the ammo tile routes to the generated caliber rows",
-      ammoRows.length === calibers && ammoRows.every(x => !!x.dataset.ammoCaliber), `${ammoRows.length}/${calibers}`);
-
-    // Back up a level, then into All items.
-    await W.fire(r.querySelector(".cp-catalog-uplevel"), "click", {}, 1200);
-    r = W.root();
-    chk("landing: the up-level control returns to the tiles", !!r.querySelector(".cp-catalog-landing"), !!r.querySelector(".cp-catalog-landing"));
-    await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 2000);
-    r = W.root();
+    const census = () => Number(W.root()?.querySelector(".cp-catalog-list")?.dataset.total);
+    const painted = () => W.root()?.querySelectorAll(".cp-catalog-list .cp-catalog-row").length ?? 0;
+    const catSet = () => [...W.win()._cats].sort().join(",");
+    const on = (k) => !!W.root()?.querySelector(`.cp-cat-chip[data-cat="${k}"]`)?.classList.contains("active");
     const jumpVisible = () => { const j = W.root().querySelector(".cp-catalog-jump"); return !!j && j.getBoundingClientRect().height > 0; };
-    chk("letters: the A–Z strip is painted in all-items mode", jumpVisible(), jumpVisible());
-    // The all-items list is far over the window threshold: its census attribute carries the whole
-    // visible catalog while the DOM holds a window of it.
-    const allList = r.querySelector(".cp-catalog-list");
-    const allTotal = Number(allList?.dataset.total);
-    const allPainted = r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length;
-    chk("letters: all-items counts the whole visible catalog", allTotal > 1000, allTotal);
-    chk("letters: and paints a window of it, not the whole thing",
-      allPainted > 0 && allPainted < allTotal, `${allPainted} painted of ${allTotal}`);
+    const searchFor = async (term, settle = 1700) => {
+      const box = W.root().querySelector(".cp-catalog-search");
+      box.value = term;
+      await W.fire(box, "input", {}, settle);
+      return box;
+    };
 
-    // A small shelf gets no letter strip; a long one (Chipware, 205) does.
-    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Shotguns"]'), "click", {}, 1500);
-    chk("letters: a short list is not given a letter strip", !jumpVisible(), `${jumpVisible()} rows=${W.root().querySelectorAll(".cp-catalog-row").length}`);
-    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Shotguns"]'), "click", {}, 1200);
-    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Cyberware/Chipware"]'), "click", {}, 1800);
-    chk("letters: a list over the threshold is given one", jumpVisible(), `${jumpVisible()} rows=${W.root().querySelectorAll(".cp-catalog-row").length}`);
-    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Cyberware/Chipware"]'), "click", {}, 1500);
+    // A fresh window with a default drawer, so the opening state is the OPENING state and not
+    // something a prior section left behind.
+    await W.close();
+    try { localStorage.removeItem("cp2020-augmented.shopDrawer"); } catch {}
+    let r = await W.open("catalog", null, ".cp-catalog-row");
 
-    // Search is global and always visible, and searching from the landing jumps to the results.
-    await W.fire(W.root().querySelector(".cp-catalog-uplevel"), "click", {}, 1200);
+    // ── the front page is gone: the list and the drawer are what a fresh open paints ──────────
+    chk("opening: the catalog opens straight onto the item list", painted() > 0, painted());
+    chk("opening: the filter drawer is mounted beside it", r.querySelectorAll(".cp-filter-drawer").length === 1, r.querySelectorAll(".cp-filter-drawer").length);
+    chk("retired: no tile grid is rendered", !r.querySelector(".cp-catalog-landing"), !!r.querySelector(".cp-catalog-landing"));
+    chk("retired: no category tile is rendered", r.querySelectorAll(".cp-cat-tile").length === 0, r.querySelectorAll(".cp-cat-tile").length);
+    chk("retired: the up-level control is gone from the header", !r.querySelector(".cp-catalog-uplevel"), !!r.querySelector(".cp-catalog-uplevel"));
+    chk("opening: the API view name is still 'catalog'", W.win().view === "catalog", W.win().view);
+
+    // ── THE DEFAULT SET, BY VALUE against the taxonomy — every top category but Ammo ──────────
+    const wantSet = CATS.CATEGORIES.map(c => c.key).filter(k => k !== "Ammo").sort();
+    chk("default set: a fresh catalog carries every top category the taxonomy names except Ammo",
+      catSet() === wantSet.join(","), `${catSet()} vs ${wantSet.join(",")}`);
+    chk("default set: and it is marked untouched, so the first chip pressed will replace it",
+      W.win()._catsPristine === true, W.win()._catsPristine);
+
+    // ⏪ REALIGNED 2026-08-19 (user ruling): an UNTOUCHED default paints NO lit chips — on open the
+    // wall of highlights read as "several filters already applied" when it was just the default
+    // view. The highlight now marks a DELIBERATE choice: membership is unchanged (the rows still
+    // census to taxonomy-minus-Ammo, asserted above and below), the lit look waits for first touch.
+    const topChips = [...r.querySelectorAll(".cp-cat-chip")].filter(el => !String(el.dataset.cat).includes("/"));
+    const litNow = topChips.filter(el => el.classList.contains("active")).map(el => el.dataset.cat);
+    chk("default set: the pristine drawer paints NO lit chips (highlight = a deliberate choice)",
+      topChips.length >= 2 && litNow.length === 0 && r.querySelectorAll(".cp-cat-chip.active").length === 0,
+      `lit: ${litNow.join(",") || "none"}`);
+    chk("default set: the Ammo chip is offered, unlit, so the rows are one click away",
+      !!r.querySelector('.cp-cat-chip[data-cat="Ammo"]') && !on("Ammo"), r.querySelector('.cp-cat-chip[data-cat="Ammo"]')?.className);
+
+    // ── and the CENSUS agrees with it: the visible compendium set, and no ammunition ──────────
+    const inDefault = new Set(wantSet);
+    const wantOpen = visible.filter(i => inDefault.has(i.category)).length;
+    const calibers = Object.keys(LK.getCalibers()).length;
+    chk("default set: the opening census is the visible catalog under exactly that set",
+      census() === wantOpen, `data-total=${census()} vs index=${wantOpen}`);
+    chk("default set: which is a list far past the window threshold", census() > 1000, census());
+    chk("default set: so the DOM holds a window of it, never the whole thing",
+      painted() > 0 && painted() < census(), `${painted()} painted of ${census()}`);
+    chk("default set: no generated caliber row is painted at open",
+      W.root().querySelectorAll(".cp-catalog-list .cp-catalog-row[data-ammo-caliber]").length === 0,
+      W.root().querySelectorAll(".cp-catalog-list .cp-catalog-row[data-ammo-caliber]").length);
+
+    // The painted window is a screenful; the DATA is the claim. Search a caliber label no compendium
+    // row's name carries, so a hit can only be a generated ammunition row — and there are none.
+    const probe = Object.entries(LK.getCalibers())
+      .map(([id, c]) => String((c && c.label) ? c.label : id))
+      .find(L => L && !visible.some(i => i.name.toLowerCase().includes(L.toLowerCase()))) ?? null;
+    chk("default set: a caliber label was found that no compendium row's name carries", !!probe, probe);
+    if (probe) {
+      await searchFor(probe);
+      chk(`default set: searching "${probe}" finds nothing — the ammunition is not in the set at all`,
+        census() === 0 && painted() === 0, `data-total=${census()} painted=${painted()}`);
+      await searchFor("");
+    }
+
+    // ── CLEAR empties the set outright, which is what lets the ammunition through ─────────────
+    chk("clear: with the default set on, the clear control is offered", !!W.root().querySelector(".cp-drawer-clear"), !!W.root().querySelector(".cp-drawer-clear"));
+    await W.fire(W.root().querySelector(".cp-drawer-clear"), "click", {}, 2200);
     r = W.root();
-    const box = r.querySelector(".cp-catalog-search");
-    chk("search: the box is present on the landing", !!box && box.getBoundingClientRect().width > 0, box?.getBoundingClientRect().width);
-    box.value = "militech";
-    await W.fire(box, "input", {}, 1800);
-    r = W.root();
-    // Text narrowing is DATA-driven now: the strip is repainted from the narrowed set rather than
-    // having non-matching rows hidden in place, and the letter headers leave the DOM with them.
-    const hits = [...r.querySelectorAll(".cp-catalog-list .cp-catalog-row")];
-    const hiddenInPlace = hits.filter(x => x.style.display === "none").length;
-    chk("search: searching from the landing jumps straight to the results",
-      !r.querySelector(".cp-catalog-landing") && hits.length > 0 && hits.every(x => /militech/i.test(x.dataset.name ?? "")),
-      `${!r.querySelector(".cp-catalog-landing")} hits=${hits.length}`);
-    chk("search: the narrowed set is repainted, with nothing left hidden in place", hiddenInPlace === 0, hiddenInPlace);
+    chk("clear: it empties the category set", W.win()._cats.size === 0, W.win()._cats.size);
+    chk("clear: and the census grows by exactly the generated caliber rows",
+      census() === visible.length + calibers, `${census()} vs ${visible.length + calibers}`);
+    if (probe) {
+      await searchFor(probe);
+      const hit = [...W.root().querySelectorAll(".cp-catalog-list .cp-catalog-row")];
+      chk(`clear: the same "${probe}" search now finds the generated caliber rows (second act)`,
+        census() > 0 && hit.length > 0 && hit.every(x => !!x.dataset.ammoCaliber), `${census()} total, ${hit.length} painted`);
+      await searchFor("");
+    }
+
+    // ── THE LETTER STRIP: earned by row count, in the cleared state and on a shelf ────────────
+    chk("letters: the cleared, everything-shown list is given a strip", jumpVisible(), jumpVisible());
+    // With the default spent by the Clear, a single chip really does narrow to that one shelf.
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Shotguns"]'), "click", {}, 1600);
+    chk("letters: a short list is not given a letter strip", !jumpVisible(), `${jumpVisible()} rows=${census()}`);
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Shotguns"]'), "click", {}, 1300);
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Cyberware/Chipware"]'), "click", {}, 1900);
+    chk("letters: a list over the threshold is given one", jumpVisible(), `${jumpVisible()} rows=${census()}`);
+
+    // ── SECOND ACT + THE FIRST-TOUCH RULE, on a window rebuilt from scratch ───────────────────
+    await W.close();
+    r = await W.open("catalog", null, ".cp-catalog-row");
+    chk("second act: a reopened catalog is back on the default set", catSet() === wantSet.join(","), catSet());
+    chk("second act: rebuilding the default restores the untouched mark with it",
+      W.win()._catsPristine === true, W.win()._catsPristine);
+    chk("second act: the opening list earns its letter strip", jumpVisible(), jumpVisible());
+
+    const wantPistols = visible.filter(i => i.category === "Weapons" && i.sub === "Pistols").length;
+    const wantSMGs = visible.filter(i => i.category === "Weapons" && i.sub === "SMGs").length;
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1600);
+    chk("first touch: the chip pressed becomes the WHOLE set, by value", catSet() === "Weapons/Pistols", catSet());
+    chk("first touch: so the census narrows to exactly that shelf", census() === wantPistols, `${census()} vs ${wantPistols}`);
+    chk("first touch: and rows from it actually reach the screen", painted() > 0 && painted() <= census(), `${painted()} painted of ${census()}`);
+    chk("first touch: the default categories are gone rather than joined",
+      !on("Weapons") && !on("Gear"), `Weapons=${on("Weapons")} Gear=${on("Gear")}`);
+    chk("first touch: and the untouched mark is spent", W.win()._catsPristine === false, W.win()._catsPristine);
+
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/SMGs"]'), "click", {}, 1600);
+    chk("additive: the SECOND press adds to the set instead of replacing it",
+      catSet() === "Weapons/Pistols,Weapons/SMGs", catSet());
+    chk("additive: and the census is the two shelves together",
+      census() === wantPistols + wantSMGs, `${census()} vs ${wantPistols + wantSMGs}`);
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/SMGs"]'), "click", {}, 1600);
+    chk("additive: pressing a lit shelf again removes just that one (second act)",
+      catSet() === "Weapons/Pistols" && census() === wantPistols, `${catSet()} / ${census()}`);
+
+    // ── AFTER A CLEAR THE SET IS EMPTY *AND* SPENT: the next press adds from empty ────────────
+    await W.fire(W.root().querySelector(".cp-drawer-clear"), "click", {}, 2200);
+    chk("clear: it leaves the set empty and no longer untouched",
+      W.win()._cats.size === 0 && W.win()._catsPristine === false, `${W.win()._cats.size}/${W.win()._catsPristine}`);
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1600);
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/SMGs"]'), "click", {}, 1600);
+    chk("clear: clicks after a Clear add up from empty, they do not replace",
+      catSet() === "Weapons/Pistols,Weapons/SMGs", catSet());
+
+    // ── PRISTINE IS A FLAG, NOT A RESEMBLANCE ─────────────────────────────────────────────────
+    // Empty the set and rebuild the default by hand: someone who has done that work has expressed
+    // intent, and the next press must ADD to it rather than throw it away. Only a set this window
+    // built is untouched; a set that merely looks like one is not.
+    await W.fire(W.root().querySelector(".cp-drawer-clear"), "click", {}, 2000);
+    for (const k of wantSet) await W.fire(W.root().querySelector(`.cp-cat-chip[data-cat="${k}"]`), "click", {}, 800);
+    chk("hand-rebuilt: the set now holds exactly what the default holds", catSet() === wantSet.join(","), catSet());
+    chk("hand-rebuilt: but the untouched mark stays spent — it tracks the flag, not the contents",
+      W.win()._catsPristine === false, W.win()._catsPristine);
+    await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Ammo"]'), "click", {}, 2000);
+    chk("hand-rebuilt: so the next press ADDS to that work instead of replacing it",
+      catSet() === [...wantSet, "Ammo"].sort().join(","), catSet());
+    chk("hand-rebuilt: and the ammunition joins the list rather than becoming it",
+      census() === visible.length + calibers, `${census()} vs ${visible.length + calibers}`);
+
+    // ── SEARCH narrows the strip FROM DATA — no pane swap, nothing hidden in place ────────────
+    const box = W.root().querySelector(".cp-catalog-search");
+    chk("search: the box is present on the opening list", !!box && box.getBoundingClientRect().width > 0, box?.getBoundingClientRect().width);
+    const beforeTotal = census();
+    await searchFor("militech", 1800);
+    const hits = [...W.root().querySelectorAll(".cp-catalog-list .cp-catalog-row")];
+    chk("search: the census narrows to the matching set", census() > 0 && census() < beforeTotal, `${census()} of ${beforeTotal}`);
+    chk("search: every painted row carries what was typed",
+      hits.length > 0 && hits.every(x => /militech/i.test(x.dataset.name ?? "")), `hits=${hits.length}`);
+    chk("search: the narrowed set is repainted, with nothing left hidden in place",
+      hits.filter(x => x.style.display === "none").length === 0, hits.filter(x => x.style.display === "none").length);
     chk("search: letter headers leave the DOM while a term is live",
-      r.querySelectorAll(".cp-catalog-list .cp-letter-header").length === 0,
-      r.querySelectorAll(".cp-catalog-list .cp-letter-header").length);
+      W.root().querySelectorAll(".cp-catalog-list .cp-letter-header").length === 0,
+      W.root().querySelectorAll(".cp-catalog-list .cp-letter-header").length);
+    chk("search: no front page is ever swapped in", !W.root().querySelector(".cp-catalog-landing"), !!W.root().querySelector(".cp-catalog-landing"));
+
+    // ── A STROKE BEGUN ON THE UNTOUCHED DEFAULT SET: replace first, then paint the run on ─────
+    //
+    // Last in the section, on a window of its own, because a stroke ends by marking its click as
+    // already-handled — anything clicked immediately afterwards would be swallowed by that guard.
+    await W.close();
+    r = await W.open("catalog", null, ".cp-catalog-row");
+    chk("pristine stroke: the fresh window arrives with its default set untouched",
+      W.win()._catsPristine === true, W.win()._catsPristine);
+    // groups default CLOSED — the sub-shelf run below needs the Weapons shelf on screen (a stroke
+    // can only cross visible buttons); the caret is a DOM flip, so pristine stays unspent.
+    {
+      const wg = W.root().querySelector('.cp-cat-group[data-cat="Weapons"]');
+      if (wg && !wg.classList.contains("cp-expanded")) {
+        W.root().querySelector('.cp-cat-expand[data-cat="Weapons"]')?.click();
+        await W.sleep(300);
+      }
+    }
+    const runKeys = ["Weapons/Pistols", "Weapons/SMGs", "Weapons/Rifles"];
+    const trace = await W.stroke(runKeys.map(k => W.root().querySelector(`.cp-cat-chip[data-cat="${k}"]`)));
+    chk("pristine stroke: it replaces with the chip it began on, then paints the rest of the run on",
+      catSet() === runKeys.slice().sort().join(","), `${catSet()} | ${trace.join(" ")}`);
+    chk("pristine stroke: the default categories are gone rather than joined by the run",
+      !on("Weapons") && !on("Gear") && !on("Cyberware"),
+      ["Weapons", "Gear", "Cyberware"].map(k => `${k}=${on(k)}`).join(" "));
+    chk("pristine stroke: and the mark is spent, so the next gesture is additive",
+      W.win()._catsPristine === false, W.win()._catsPristine);
     await W.close();
     return checks;
   }));
@@ -443,19 +584,30 @@ try {
     const W = window.__cpShop;
     const checks = []; const chk = (label, ok, got) => checks.push({ label, ok: !!ok, got });
     // A stroke can only cross buttons that are on screen, so start from the drawer's default state
-    // (open, every group expanded) rather than whatever the previous section left persisted.
+    // rather than whatever the previous section left persisted — and since groups now default
+    // CLOSED (2026-08-19 ruling), open the Weapons shelf by its caret (a DOM flip, no render)
+    // before arming the strokes below.
     await W.close();
     try { localStorage.removeItem("cp2020-augmented.shopDrawer"); } catch {}
-    let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-    if (r.querySelector('.cp-cat-tile[data-cat=""]')) { await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1600); r = W.root(); }
+    const r = await W.open("catalog", null, ".cp-catalog-row");
+    {
+      const grp = W.root().querySelector('.cp-cat-group[data-cat="Weapons"]');
+      if (grp && !grp.classList.contains("cp-expanded")) {
+        W.root().querySelector('.cp-cat-expand[data-cat="Weapons"]')?.click();
+        await W.sleep(300);
+      }
+    }
 
     const chips = (keys) => keys.map(k => W.root().querySelector(`.cp-cat-chip[data-cat="${k}"]`));
     const on = (k) => !!W.root().querySelector(`.cp-cat-chip[data-cat="${k}"]`)?.classList.contains("active");
     const KEYS = ["Weapons/Pistols", "Weapons/SMGs", "Weapons/Rifles", "Weapons/Shotguns"];
+    void r;
 
-    // Mixed start state: pre-arm one of the four with a plain click.
+    // Mixed start state: the first click spends the window's untouched default set and leaves that
+    // one chip on (the first-touch-replaces rule, pinned by value in S4) — which is exactly the
+    // mixed row the strokes below want, so it doubles as the pre-arm.
     await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Rifles"]'), "click", {}, 1400);
-    chk("paint: a plain click still toggles exactly one button", on("Weapons/Rifles") && !on("Weapons/Pistols"), KEYS.map(k => `${k}=${on(k)}`).join(" "));
+    chk("paint: a plain click leaves exactly one button on", on("Weapons/Rifles") && !on("Weapons/Pistols"), KEYS.map(k => `${k}=${on(k)}`).join(" "));
 
     // Stroke ON: press an OFF button and drag across the mixed row — everything ends ON.
     let trace = await W.stroke(chips(KEYS));
@@ -483,8 +635,12 @@ try {
     await W.sleep(60);
     later.dispatchEvent(new PointerEvent("pointerup", { ...base, buttons: 0, ...at(later) }));
     await W.sleep(900);
-    chk("paint: leaving the column ends the stroke — the far chip is untouched", !on("Weapons/Melee"), on("Weapons/Melee"));
-    if (on("Weapons/Pistols")) await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons/Pistols"]'), "click", {}, 1200);
+    // ⏪ REALIGNED 2026-08-19: a stroke now ends ONLY on release. The old leave-ends rule killed
+    // slow drags in the inter-chip GAPS (every gap is a non-button point) and its early
+    // release-render reflowed the column under a still-held pointer — both field-reported. Off-
+    // column travel now pauses painting, and crossing a chip again resumes the same stroke.
+    chk("paint: wandering off the column pauses the stroke and a later chip resumes it", on("Weapons/Melee"), on("Weapons/Melee"));
+    for (const k of ["Weapons/Pistols", "Weapons/Melee"]) if (on(k)) await W.fire(W.root().querySelector(`.cp-cat-chip[data-cat="${k}"]`), "click", {}, 1200);
 
     // Book chips paint too.
     const bkeys = [...W.root().querySelectorAll(".cp-book-chip")].slice(0, 3).map(el => el.dataset.book);
@@ -494,12 +650,37 @@ try {
     await W.stroke(bkeys.map(k => W.root().querySelector(`.cp-book-chip[data-book="${k}"]`)));
     chk("paint: and paints back off", bkeys.every(k => !bon(k)), bkeys.map(k => `${k}=${bon(k)}`).join(" "));
 
-    // The visibility EYES are deliberately not paintable.
+    // ⏪ REALIGNED 2026-08-19 (user ruling): the visibility EYES are now paintable with the same
+    // stroke grammar — first eye pressed sets the direction, the run follows, and the WORLD SETTING
+    // commits ONCE on release. A CHIP stroke still never flips an eye and an EYE stroke never
+    // paints a chip (disjoint hit-test selectors) — those negatives replace the old exclusion leg.
+    const mapNow = () => ({ ...(game.settings.get("cp2020-augmented", "shopEnabledSources") || {}) });
+    const mapBefore = mapNow();
     const eyes = [...W.root().querySelectorAll(".cp-book-eye")].slice(0, 3);
+    const eyeNames = eyes.map(e => e.querySelector("input")?.dataset.source);
     const eyeState = () => eyes.map(e => !!e.querySelector("input")?.checked).join(",");
-    const before = eyeState();
+    const chipsBefore = [...W.root().querySelectorAll(".cp-book-chip.active")].length;
+    const dir = !eyes[0]?.querySelector("input")?.checked;         // the first eye decides
     await W.stroke(eyes);
-    chk("paint: dragging across the visibility eyes changes none of them", eyeState() === before, `${before} → ${eyeState()}`);
+    await W.sleep(900);                                            // the single commit + render
+    const committed = mapNow();
+    chk("paint: an eye stroke drives the whole run to the first eye's direction",
+      eyeNames.length === 3 && eyeNames.every(n => !!committed[n] === dir),
+      `dir=${dir} map=${eyeNames.map(n => `${n}=${!!committed[n]}`).join(" ")}`);
+    chk("paint: the eye stroke painted no book chips",
+      [...W.root().querySelectorAll(".cp-book-chip.active")].length === chipsBefore,
+      `${chipsBefore} → ${[...W.root().querySelectorAll(".cp-book-chip.active")].length}`);
+    // chips still never flip eyes: stroke the chip column and read the eye states across it
+    const eyesAfterStroke = eyeState();
+    await W.stroke(bkeys.map(k => W.root().querySelector(`.cp-book-chip[data-book="${k}"]`)));
+    chk("paint: a chip stroke still flips no eyes",
+      eyeState() === eyesAfterStroke, `${eyesAfterStroke} → ${eyeState()}`);
+    await W.stroke(bkeys.map(k => W.root().querySelector(`.cp-book-chip[data-book="${k}"]`)));
+    // restore the world's source map exactly as found — the eye stroke wrote a real setting
+    await game.settings.set("cp2020-augmented", "shopEnabledSources", mapBefore);
+    await W.sleep(400);
+    chk("paint: the source map is restored to its as-found value",
+      JSON.stringify(mapNow()) === JSON.stringify(mapBefore), "map drifted");
     await W.close();
     return checks;
   }));
@@ -512,8 +693,7 @@ try {
     const W = window.__cpShop;
     const checks = []; const chk = (label, ok, got) => checks.push({ label, ok: !!ok, got });
     await W.close();
-    let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-    if (r.querySelector('.cp-cat-tile[data-cat=""]')) { await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1600); r = W.root(); }
+    await W.open("catalog", null, ".cp-catalog-row");
     // The paint wiring only registers when its chip columns are on screen — make sure the drawer is open.
     if (!W.root().querySelector(".cp-cat-chip")) { await W.fire(W.root().querySelector(".cp-drawer-toggle"), "click", {}, 1200); }
     chk("root-listener leg precondition: chip column present", !!W.root().querySelector(".cp-cat-chip"), "");
@@ -565,8 +745,7 @@ try {
 
     // ── the drawer heading is not clipped at the window's default width ───────────────────
     await W.close();
-    r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-    if (r.querySelector('.cp-cat-tile[data-cat=""]')) { await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1600); r = W.root(); }
+    r = await W.open("catalog", null, ".cp-catalog-row");
     const heads = [...r.querySelectorAll(".cp-drawer-title, .cp-drawer-subtitle")];
     const clipped = heads.filter(h => h.scrollWidth > h.clientWidth + 1).map(h => `${W.txt(h)} ${h.scrollWidth}/${h.clientWidth}`);
     chk("clipping: every drawer heading (Filters, Categories, Books) fits its box at the default width",
@@ -595,8 +774,7 @@ try {
     chk("tooltips: no icon-only control in the shop builder is left untitled", bareBuild.length === 0, bareBuild.join(" | "));
     chk("tooltips: the builder's icon-only set is non-trivial (trash, ∞, preview, remove…)", iconOnly(br).length >= 4, iconOnly(br).length);
     await W.close();
-    r = catalogRoot && await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-    if (r.querySelector('.cp-cat-tile[data-cat=""]')) { await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1600); r = W.root(); }
+    r = catalogRoot && await W.open("catalog", null, ".cp-catalog-row");
 
     // ── the buyer chip clips with an ellipsis and keeps the full text in its tooltip ──────
     let longActor = null;
@@ -681,7 +859,7 @@ try {
     // Setup mode: catalog + builder yes, the player-facing storefront no.
     chk("setup mode: the builder keeps its setup-mode control", !!W.root().querySelector(".cp-shop-setup-toggle"), true);
     await W.close();
-    r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
+    r = await W.open("catalog", null, ".cp-catalog-row");
     chk("setup mode: the catalog keeps it too", !!r.querySelector(".cp-shop-setup-toggle"), !!r.querySelector(".cp-shop-setup-toggle"));
     await W.close();
     await SH.updateShop(shopId, { open: true });
@@ -737,11 +915,12 @@ try {
 
     try {
       // ── (a) A WINDOWED SHELF ───────────────────────────────────────────────────────────────
-      let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-      // A window reopened onto the list rather than the tiles is walked back up first, so the
-      // section always enters the shelf by the same gesture.
-      if (!r.querySelector('.cp-cat-tile[data-cat="Weapons"]')) { await W.fire(r.querySelector(".cp-catalog-uplevel"), "click", {}, 1400); r = W.root(); }
-      await W.fire(r.querySelector('.cp-cat-tile[data-cat="Weapons"]'), "click", {}, 1800);
+      let r = await W.open("catalog", null, ".cp-catalog-row");
+      // The catalog opens directly onto its list under the default category set. The Weapons chip
+      // pressed against that untouched set REPLACES it (S4 pins the rule), which lands this section
+      // on exactly the one shelf it measures. The chips live in the drawer, so it must be open.
+      if (!r.querySelector(".cp-cat-chip")) { await W.fire(r.querySelector(".cp-drawer-toggle"), "click", {}, 1200); r = W.root(); }
+      await W.fire(r.querySelector('.cp-cat-chip[data-cat="Weapons"]'), "click", {}, 1800);
       r = W.root();
 
       const wantWeapons = visible.filter(i => i.category === "Weapons").length;
@@ -910,8 +1089,13 @@ try {
 
       // ── (g) NEGATIVE: AN UNDER-THRESHOLD SHELF IS NOT WINDOWED ─────────────────────────────
       await W.close();
-      r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-      await W.fire(r.querySelector('.cp-cat-tile[data-cat="Ammo"]'), "click", {}, 1800);
+      r = await W.open("catalog", null, ".cp-catalog-row");
+      // Ammo is the one category the opening set leaves out, and its chip is the shipped route to
+      // the generated caliber rows: pressed against the fresh window's untouched set it REPLACES
+      // it, so what this lands on is the caliber shelf alone — the under-threshold list this leg
+      // is about.
+      if (!r.querySelector(".cp-cat-chip")) { await W.fire(r.querySelector(".cp-drawer-toggle"), "click", {}, 1200); r = W.root(); }
+      await W.fire(r.querySelector('.cp-cat-chip[data-cat="Ammo"]'), "click", {}, 1800);
       const aTotal = census();
       const aRows = rowsOf().length;
       const aItems = items().length;
@@ -933,10 +1117,13 @@ try {
   // ═══════════════════════════════════════════════════════════════════════════════════════════
   {
     const pl = await (await b.newContext({ viewport: { width: 1500, height: 950 } })).newPage();
+    let joined = true;
+    // Error listeners attach AFTER the join: joinAs probes candidate passwords, and a refused
+    // candidate logs a 401 + "Invalid password" console error that is the harness's own doing
+    // (on :30003 the player account carries the rig password, so the "" probe always misses).
+    try { await joinAs(pl, /^Test User 1$/i, ["", GM_PW]); } catch { joined = false; }
     pl.on("pageerror", e => errors.push("player pageerror: " + e.message));
     pl.on("console", m => { if (m.type() === "error") errors.push("player console: " + m.text()); });
-    let joined = true;
-    try { await joinAs(pl, /^Test User 1$/i, ["", GM_PW]); } catch { joined = false; }
     chk("two-client: a player client joined the rig", joined, joined ? "" : "no Test User 1 on this rig");
     if (joined) {
       await pl.evaluate(TOOLKIT);
@@ -961,21 +1148,26 @@ try {
         const mine = all.filter(i => SUP.isVisibleTo(i.supplement, i.canon, cfg, false));
         const wantWeapons = mine.filter(i => i.category === "Weapons").length;
 
-        let r = await W.open("catalog", null, ".cp-catalog-landing, .cp-catalog-row");
-        chk("per-viewer: the player's catalog also opens on the tiles", !!r.querySelector(".cp-catalog-landing"), !!r.querySelector(".cp-catalog-landing"));
-        const tileCount = Number(r.querySelector('.cp-cat-tile[data-cat="Weapons"]')?.dataset.count);
-        chk("per-viewer: the player's Weapons tile counts only what the player may see",
-          tileCount === wantWeapons && tileCount < gmWeapons, `player=${tileCount} want=${wantWeapons} gm=${gmWeapons}`);
+        const r = await W.open("catalog", null, ".cp-catalog-row");
+        chk("per-viewer: the player's catalog also opens straight onto the item list",
+          r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length > 0,
+          r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length);
+        const chipCount = Number(r.querySelector('.cp-cat-chip[data-cat="Weapons"]')?.dataset.count);
+        chk("per-viewer: the player's Weapons chip counts only what the player may see",
+          chipCount === wantWeapons && chipCount < gmWeapons, `player=${chipCount} want=${wantWeapons} gm=${gmWeapons}`);
 
-        // A category with nothing visible to this player renders no tile at all.
+        // A category with nothing visible to this player carries a zero, never a borrowed count.
+        // (The chip itself is kept: a lit shelf is never allowed to vanish mid-session, or the
+        // filter it holds would become unreachable.)
         const emptyCats = ["Weapons", "Armor", "Ammo", "Cyberware", "FBC", "Gear", "Netrunning", "Programs", "Vehicles"]
           .filter(k => k !== "Ammo" && mine.filter(i => i.category === k).length === 0);
-        const stillPainted = emptyCats.filter(k => !!r.querySelector(`.cp-cat-tile[data-cat="${k}"]`));
-        chk("per-viewer: a category the player can see nothing in paints no tile",
-          stillPainted.length === 0, `empty=${emptyCats.join(",")} painted=${stillPainted.join(",")}`);
+        const borrowed = emptyCats.filter(k => {
+          const c = r.querySelector(`.cp-cat-chip[data-cat="${k}"]`);
+          return c && Number(c.dataset.count) !== 0;
+        });
+        chk("per-viewer: a category the player can see nothing in carries a zero count",
+          borrowed.length === 0, `empty=${emptyCats.join(",") || "none"} borrowed=${borrowed.join(",") || "none"}`);
 
-        await W.fire(r.querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 1800);
-        r = W.root();
         chk("per-viewer: the player's drawer chip count matches the player's own set",
           Number(r.querySelector('.cp-cat-chip[data-cat="Weapons"]')?.dataset.count) === wantWeapons,
           r.querySelector('.cp-cat-chip[data-cat="Weapons"]')?.dataset.count);
@@ -984,18 +1176,24 @@ try {
         chk("per-viewer: and none of the GM's visibility eyes",
           r.querySelectorAll(".cp-src-toggle").length === 0 && r.querySelectorAll(".cp-book-eye").length === 0,
           `${r.querySelectorAll(".cp-src-toggle").length}/${r.querySelectorAll(".cp-book-eye").length}`);
-        // The catalog folds the generated caliber rows in beside the compendium rows, so the ceiling
-        // is the player's visible index PLUS those rows — never more.
+        // The opening set holds every category but Ammo, so what the player is offered is exactly
+        // the player's own visible index — the generated caliber rows are filtered out until asked
+        // for. The DOM holds a window, so the count this leg is about lives on the container's
+        // census attribute; the painted count is checked separately so neither channel can go
+        // vacuous.
         const LK = await import("/modules/cp2020-augmented/module/lookups.js");
-        const ceiling = mine.length + Object.keys(LK.getCalibers()).length;
-        // The DOM holds a window, so the count the leg is about lives on the container's census
-        // attribute; the painted count is checked separately so neither channel can go vacuous.
+        const CATS = await import("/modules/cp2020-augmented/module/shop/categories.js");
+        const inDefault = new Set(CATS.CATEGORIES.map(c => c.key).filter(k => k !== "Ammo"));
+        const wantOpen = mine.filter(i => inDefault.has(i.category)).length;
         const pTotal = Number(r.querySelector(".cp-catalog-list")?.dataset.total);
         const pPainted = r.querySelectorAll(".cp-catalog-list .cp-catalog-row").length;
-        chk("per-viewer: the rows the player is shown never exceed the player's own set",
-          pTotal > 0 && pTotal <= ceiling, `${pTotal} vs ${ceiling}`);
+        chk("per-viewer: the rows the player is offered are exactly the player's own set",
+          pTotal === wantOpen, `${pTotal} vs ${wantOpen}`);
         chk("per-viewer: and what is painted is a subset of that count",
           pPainted > 0 && pPainted <= pTotal, `${pPainted} painted of ${pTotal}`);
+        chk("per-viewer: with none of the caliber rows, which the default set leaves out",
+          r.querySelectorAll(".cp-catalog-list .cp-catalog-row[data-ammo-caliber]").length === 0,
+          `${r.querySelectorAll(".cp-catalog-list .cp-catalog-row[data-ammo-caliber]").length}/${Object.keys(LK.getCalibers()).length}`);
         await W.close();
         return checks;
       }, gmCounts.weapons));
@@ -1014,22 +1212,236 @@ try {
       const el = await gm.$(".application.cp-catalog");
       if (el) await el.screenshot({ path: `${SHOTS}/${name}.png` });
     };
-    await shot("landing", async () => { const W = window.__cpShop; await W.close(); await W.open("catalog", null, ".cp-catalog-landing"); });
+    // What a fresh open looks like, then the drawer's two states, then the cleared everything-set.
+    await shot("opening", async () => {
+      const W = window.__cpShop;
+      await W.close();
+      try { localStorage.removeItem("cp2020-augmented.shopDrawer"); } catch {}
+      await W.open("catalog", null, ".cp-catalog-row");
+    });
     await shot("drawer-open", async () => {
-      const W = window.__cpShop; const r = W.root();
-      await W.fire(r.querySelector('.cp-cat-tile[data-cat="Weapons"]'), "click", {}, 1600);
+      const W = window.__cpShop;
       if (W.root().querySelector('.cp-filter-drawer[data-open="0"]')) await W.fire(W.root().querySelector(".cp-drawer-toggle"), "click", {}, 800);
+      await W.fire(W.root().querySelector('.cp-cat-chip[data-cat="Weapons"]'), "click", {}, 1600);
     });
     await shot("drawer-collapsed", async () => { const W = window.__cpShop; await W.fire(W.root().querySelector(".cp-drawer-toggle"), "click", {}, 900); });
     await shot("all-items", async () => {
       const W = window.__cpShop;
       await W.fire(W.root().querySelector(".cp-drawer-toggle"), "click", {}, 800);
-      await W.fire(W.root().querySelector(".cp-catalog-uplevel"), "click", {}, 1200);
-      await W.fire(W.root().querySelector('.cp-cat-tile[data-cat=""]'), "click", {}, 2000);
+      await W.fire(W.root().querySelector(".cp-drawer-clear"), "click", {}, 2200);
     });
     await shot("storefront", async (id) => { const W = window.__cpShop; await W.close(); await W.open("storefront", id, ".cp-catalog-row, .cp-catalog-empty"); });
     await shot("builder", async (id) => { const W = window.__cpShop; await W.close(); await W.open("build", id, ".cp-vendor-tray"); });
     log.push(`  captures written to ${SHOTS}`);
+  }
+
+  // ── S9 · FRACTIONAL-DPR SCROLL + DRAWER GEOMETRY (field reports 2026-08-19) ──────────────
+  // The runaway: every windowed repaint replaces rows and resizes both pads; browser scroll
+  // anchoring "compensates" by nudging scrollTop, which fires another repaint. At integer DPR the
+  // nudges cancel; under Windows display scaling (1.75 = the reporting client) they compound and
+  // the list scrolls BY ITSELF to either end. overflow-anchor:none on the list is the fix; these
+  // legs hold it at the DPR that exposed it — a DPR-1 pass is blind to the whole class. The
+  // geometry legs pin the same report's header clip + chip misalignment + uneven gaps.
+  {
+    // The main GM context holds the gamemaster seat, and a taken seat's /join option is DISABLED —
+    // so this section rides its own second GM (the e1 keeper's create-if-absent pattern).
+    await gm.evaluate(async () => {
+      if (!game.users.getName("__PW__GM2")) await User.create({ name: "__PW__GM2", role: CONST.USER_ROLES.GAMEMASTER });
+    });
+    const hidpi = await b.newContext({ viewport: { width: 1700, height: 1000 }, deviceScaleFactor: 1.75 });
+    const hp = await hidpi.newPage();
+    await joinAs(hp, /^__PW__GM2$/i, ["", GM_PW]);
+    const listBox = await hp.evaluate(async () => {
+      const C = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+      C.openShopWindow(null, { view: "catalog" });
+      // the catalog build can take >10 s on a busy rig — poll, don't sleep (probe-proven)
+      const winOf = () => [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+      let list = null;
+      for (let i = 0; i < 50 && !list; i++) { await new Promise(r => setTimeout(r, 300)); list = winOf()?.element?.querySelector(".cp-catalog-list"); }
+      if (!list) return null;
+      await new Promise(r => setTimeout(r, 600));
+      const r = list.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2, anchor: getComputedStyle(list).overflowAnchor };
+    });
+    chk("S9 the windowed list opens on the hi-dpi client", !!listBox, "no list");
+    chk("S9 scroll anchoring is OFF on the windowed scroller", listBox?.anchor === "none", String(listBox?.anchor));
+    if (!listBox) { await hidpi.close(); throw new Error("S9: catalog never rendered on the hi-dpi client"); }
+    const s9sample = () => hp.evaluate(() =>
+      [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser")?.element?.querySelector(".cp-catalog-list")?.scrollTop ?? -1);
+    // Settle-to-STABILITY before baselining: a trailing smooth-scroll animation can land a final
+    // wheel tick late under load (one clean +120 then flat — seen in-suite), which is not the
+    // runaway. The runaway's signature is that scrollTop NEVER goes stable; so the baseline is
+    // "unchanged for 600 ms" (bounded), and only movement AFTER that is a failure.
+    const s9stable = async () => {
+      let last = Math.round(await s9sample());
+      for (let i = 0; i < 12; i++) {
+        await hp.waitForTimeout(600);
+        const now = Math.round(await s9sample());
+        if (now === last) return now;
+        last = now;
+      }
+      return NaN;      // never stabilized in ~7s — that IS the runaway
+    };
+    // One bounded retry: a LATE smooth-scroll tick can move once after a stable read and then go
+    // quiet — the runaway never quiets (it re-fails the second watch too). Distinguish, don't flake.
+    const s9quiet = async () => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const base = await s9stable();
+        if (!Number.isFinite(base)) return { ok: false, base, later: NaN };
+        await hp.waitForTimeout(1200);
+        const later = Math.round(await s9sample());
+        if (later === base) return { ok: true, base, later };
+      }
+      return { ok: false, base: -1, later: -2 };
+    };
+    await hp.mouse.move(listBox.x, listBox.y);
+    for (let i = 0; i < 5; i++) { await hp.mouse.wheel(0, 120); await hp.waitForTimeout(60); }
+    const s9down = await s9quiet();
+    chk("S9 a real wheel burst settles — hands-off scrollTop stays put at fractional DPR",
+      s9down.ok && s9down.base > 0, JSON.stringify(s9down));
+    await hp.mouse.wheel(0, -120);
+    const s9upQ = await s9quiet();
+    chk("S9 the reverse direction settles too", s9upQ.ok, JSON.stringify(s9upQ));
+    // The second field report: a drawer toggle used to full-render, and core's scroll restore ran
+    // before the pads existed — clamping a mid-list position to the bare strip (3000 → 1623). The
+    // toggle is now a DOM flip and the window restores its own scroll after the pads inflate.
+    const s9toggle = await hp.evaluate(async () => {
+      const w = [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+      const root = w?.element;
+      const list = root?.querySelector(".cp-catalog-list");
+      if (!list) return { err: "no list" };
+      list.scrollTop = 3000;
+      await new Promise(r => setTimeout(r, 500));
+      const at = Math.round(list.scrollTop);
+      const states = [];
+      for (let i = 0; i < 2; i++) {
+        root.querySelector(".cp-drawer-toggle")?.click();
+        await new Promise(r => setTimeout(r, 700));
+        states.push({ open: root.querySelector(".cp-filter-drawer")?.dataset.open, scrollTop: Math.round(root.querySelector(".cp-catalog-list")?.scrollTop ?? -1) });
+      }
+      return { at, states };
+    });
+    chk("S9 a mid-list scroll survives the drawer toggling closed and open",
+      !s9toggle.err && s9toggle.states.every(s => s.scrollTop === s9toggle.at),
+      JSON.stringify(s9toggle));
+    chk("S9 the toggle actually flips the drawer state both ways",
+      s9toggle.states?.[0]?.open !== s9toggle.states?.[1]?.open,
+      JSON.stringify(s9toggle.states?.map(s => s.open)));
+    // Third field report: a SLOW drag died in the gap between chips (the old leave-rule ended the
+    // stroke on any non-button point) and the early release-render reflowed the column mid-hold.
+    // This leg drags a REAL pointer through the inter-chip gap in small steps — the stroke must
+    // paint both endpoints, and the column must not re-render until release.
+    const s9chips = await hp.evaluate(async () => {
+      const w = [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+      const root = w?.element;
+      if (root?.querySelector('.cp-filter-drawer[data-open="0"]')) { root.querySelector(".cp-drawer-toggle")?.click(); await new Promise(r => setTimeout(r, 500)); }
+      const books = [...root.querySelectorAll(".cp-book-list .cp-book-chip")].slice(0, 2);
+      if (books.length < 2) return { err: `books=${books.length}` };
+      window.__s9NodeMark = books[0];   // reflow canary: same node must survive the whole stroke
+      const r = (el) => { const x = el.getBoundingClientRect(); return { x: x.x + x.width / 2, y: x.y + x.height / 2 }; };
+      return { a: r(books[0]), b: r(books[1]), names: books.map(x => x.dataset.book ?? x.textContent.trim().slice(0, 20)) };
+    });
+    chk("S9 stroke fixture: two book chips located", !s9chips.err, s9chips.err ?? "");
+    if (!s9chips.err) {
+      await hp.mouse.move(s9chips.a.x, s9chips.a.y);
+      await hp.mouse.down();
+      await hp.waitForTimeout(150);
+      await hp.mouse.move(s9chips.b.x, s9chips.b.y, { steps: 14 });   // slow: samples land IN the gap
+      await hp.waitForTimeout(150);
+      const midStroke = await hp.evaluate(() => {
+        const w = [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+        const chips = [...(w?.element?.querySelectorAll(".cp-book-list .cp-book-chip") ?? [])].slice(0, 2);
+        return { bothActive: chips.length === 2 && chips.every(c => c.classList.contains("active")),
+          sameNode: chips[0] === window.__s9NodeMark };
+      });
+      await hp.mouse.up();
+      await hp.waitForTimeout(900);
+      chk("S9 a slow stroke through the inter-chip gap paints both chips", midStroke.bothActive, JSON.stringify(midStroke));
+      chk("S9 the column does not re-render mid-hold (reflow canary held)", midStroke.sameNode, "node replaced during stroke");
+      await hp.evaluate(() => { delete window.__s9NodeMark; });
+    }
+    // Books render as a TWO-COLUMN grid (user-approved density fix) and the drawer's width must not
+    // breathe while the windowed list scrolls through rows of different intrinsic widths (the
+    // basis-0 center split). Then the resize floor: a window collapsed below the minimum stops
+    // shrinking instead of overlapping its fields.
+    const s9layout = await hp.evaluate(async () => {
+      const w = [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+      const root = w?.element;
+      const chips = [...(root?.querySelectorAll(".cp-book-list:not(.cp-book-pinned) .cp-book-chip") ?? [])].slice(0, 8);
+      const rowsAt = new Set(chips.map(c => Math.round(c.getBoundingClientRect().y / 4)));
+      const perRow = chips.length && rowsAt.size ? chips.length / rowsAt.size : 0;
+      const drawer = root?.querySelector(".cp-filter-drawer");
+      const list = root?.querySelector(".cp-catalog-list");
+      const widths = [];
+      for (const t of [0, 2000, 5000, 9000, 400]) {
+        list.scrollTop = t;
+        await new Promise(r => setTimeout(r, 350));
+        widths.push(+drawer.getBoundingClientRect().width.toFixed(1));
+      }
+      const spread = +(Math.max(...widths) - Math.min(...widths)).toFixed(1);
+      await w.setPosition({ width: 300, height: 200 });
+      await new Promise(r => setTimeout(r, 400));
+      const r = root.getBoundingClientRect();
+      const clamped = { w: Math.round(r.width), h: Math.round(r.height) };
+      // At the floor, row INK must stay in its box: names ellipsize (no scrollWidth escape) and
+      // never intersect their source badge (the protection-fix lesson: assert ink, not just rects).
+      let inkEscapes = 0, badgeHits = 0, rowsChecked = 0;
+      for (const row of [...root.querySelectorAll(".cp-catalog-row")].slice(0, 15)) {
+        const name = row.querySelector(".cp-cat-itemname");
+        if (!name) continue;
+        rowsChecked++;
+        if (name.scrollWidth > name.clientWidth + 1 && getComputedStyle(name).overflow !== "hidden") inkEscapes++;
+        const badge = row.querySelector(".cp-src-badge");
+        if (badge) {
+          const nr = name.getBoundingClientRect(), br = badge.getBoundingClientRect();
+          if (nr.right > br.left + 1) badgeHits++;
+        }
+      }
+      const rowInk = { rowsChecked, inkEscapes, badgeHits };
+      await w.setPosition({ width: 880, height: 820 });
+      await new Promise(r2 => setTimeout(r2, 400));
+      return { perRow: +perRow.toFixed(1), widths, spread, clamped, rowInk };
+    });
+    chk("S9 the books column lays out two chips per row", s9layout.perRow >= 1.9, JSON.stringify(s9layout));
+    chk("S9 the drawer's width holds still across a scroll through varied rows", s9layout.spread <= 1, `widths=${JSON.stringify(s9layout.widths)}`);
+    chk("S9 the window refuses to collapse below its floor (fields clip, never overlap)",
+      s9layout.clamped.w >= 620 && s9layout.clamped.h >= 420, JSON.stringify(s9layout.clamped));
+    chk("S9 at the floor, row names ellipsize and never run into their source badge",
+      s9layout.rowInk.rowsChecked > 0 && s9layout.rowInk.inkEscapes === 0 && s9layout.rowInk.badgeHits === 0,
+      JSON.stringify(s9layout.rowInk));
+    const geo = await hp.evaluate(() => {
+      const w = [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+      const root = w?.element;
+      if (root?.querySelector('.cp-filter-drawer[data-open="0"]')) root.querySelector(".cp-drawer-toggle")?.click();
+      // groups default CLOSED now — the sub-gap measurement below needs one shelf visible
+      const firstExpandable = root?.querySelector(".cp-cat-group:not(.cp-expanded) .cp-cat-expand");
+      firstExpandable?.click();
+      return new Promise(res => setTimeout(() => {
+        const h4 = [...root.querySelectorAll(".cp-drawer-subtitle")].find(e => /categor/i.test(e.textContent));
+        const cs = h4 ? getComputedStyle(h4) : null;
+        const heads = [...root.querySelectorAll(".cp-cat-grouphead")];
+        const heights = [...new Set(heads.map(g => +g.getBoundingClientRect().height.toFixed(1)))];
+        const spread = Math.max(0, ...heads.map(g => {
+          const centers = [...g.children].filter(k => k.getBoundingClientRect().height > 0)
+            .map(k => { const r = k.getBoundingClientRect(); return r.y + r.height / 2; });
+          return centers.length > 1 ? Math.max(...centers) - Math.min(...centers) : 0;
+        }));
+        const subs = root.querySelector(".cp-cat-subs");
+        const gaps = new Set();
+        if (subs) {
+          const chips = [...subs.children].map(k => k.getBoundingClientRect()).filter(c => c.height > 0)
+            .sort((a, b2) => (a.y - b2.y) || (a.x - b2.x));
+          for (let i = 1; i < chips.length; i++) if (Math.abs(chips[i].y - chips[i - 1].y) < 4) gaps.add(+(chips[i].x - (chips[i - 1].x + chips[i - 1].w)).toFixed(0));
+        }
+        w.close();
+        res({ line: cs ? parseFloat(cs.lineHeight) : 0, font: cs ? parseFloat(cs.fontSize) : 1, heights, spread: +spread.toFixed(1), gaps: [...gaps] });
+      }, 800));
+    });
+    chk("S9 the drawer subtitle's line box holds its ascenders (no top clip)", geo.line >= geo.font * 1.2, `line ${geo.line} vs font ${geo.font}`);
+    chk("S9 every category row is ONE height", geo.heights.length === 1, JSON.stringify(geo.heights));
+    chk("S9 row children share a vertical center (≤1px)", geo.spread <= 1, String(geo.spread));
+    chk("S9 sub-chip gaps are one value", geo.gaps.length === 1, JSON.stringify(geo.gaps));
+    await hidpi.close();
   }
 
   // ── teardown ────────────────────────────────────────────────────────────────────────────

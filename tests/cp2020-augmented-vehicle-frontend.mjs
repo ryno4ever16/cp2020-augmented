@@ -98,13 +98,15 @@ const r = await p.evaluate(async () => {
     const cat = new catMod.CatalogBrowser(null, { view: "catalog" });
     await cat.render(true);
     await sleep(900);
-    // The catalog opens on its category tiles; the filter drawer holding these chips is one step in.
+    // The catalog opens straight onto its list with the drawer beside it, under a default category
+    // set that already holds Vehicles. Emptying that set with Clear is what lets the single
+    // sub-shelf click below narrow to exactly the AV-classed rows instead of widening a set that
+    // already holds the whole Vehicles category. Clear is polled for, because the drawer only
+    // exists once the catalog-index build lands.
     let croot = rootOf(cat);
-    croot?.querySelector('.cp-cat-tile[data-cat="Vehicles"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await sleep(1600);
-    croot = rootOf(cat);
-    croot?.querySelector('.cp-cat-chip[data-cat="Vehicles"].active')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await sleep(1600);
+    for (let i = 0; i < 120 && !croot?.querySelector(".cp-drawer-clear"); i++) { await sleep(100); croot = rootOf(cat); }
+    croot?.querySelector(".cp-drawer-clear")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await sleep(1800);
     croot = rootOf(cat);
     const chips = [...(croot?.querySelectorAll('.cp-cat-chip[data-cat^="Vehicles/"]') ?? [])];
     out.ui = {

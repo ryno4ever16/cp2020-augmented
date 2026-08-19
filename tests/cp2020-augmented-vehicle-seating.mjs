@@ -140,7 +140,8 @@ if (placed) {
   check("placed token is adjacent (gap = 0 squares)", gapSquares === 0, String(gapSquares));
   check("placed token carries the vehicle-handle flag", placed.handleFlag === true);
   check("placed token sorts below crew (sort = -100)", placed.sort === -100, String(placed.sort));
-  check("placed token uses the vehicle footprint (4x2)", placed.w === 4 && placed.h === 2, `${placed.w}x${placed.h}`);
+  check("placed token uses the vehicle footprint, deep rather than wide (2x4)",
+    placed.w === 2 && placed.h === 4, `${placed.w}x${placed.h}`);
 }
 
 /* ------------------------------------------------------------------ B. blocked side falls to the next candidate */
@@ -258,16 +259,22 @@ const seating = await page.evaluate(async ({ sceneId, riderId, driverId, grid })
   };
 }, setup);
 
-// Seats are no longer the footprint's reading order: the 4x2 handle derives an eastward heading,
-// which puts the engine in the right-hand column and the driver in the cell behind it, top row
-// (facing east, the driver's left is the top of the screen). Seat 1 sits beside them, one row down.
+// Seats are not the footprint's reading order. The handle takes the rotation-zero convention —
+// nose SOUTH — so the engine occupies the bottom rank, the driver sits in the rank behind it, and
+// facing south the driver's LEFT is the east (right-hand) file. Seat 1 is beside them, one file
+// west. Expectations are derived here from the handle's own footprint rather than copied off the
+// module, so a change to the layout code cannot quietly re-bless itself.
 const g = setup.grid;
+const vw = seating.vehicle.w, vh = seating.vehicle.h;
+const driverSeat = { x: seating.vehicle.x + (vw - 1) * g, y: seating.vehicle.y + (vh - 2) * g };
+const mateSeat = { x: seating.vehicle.x + (vw - 2) * g, y: seating.vehicle.y + (vh - 2) * g };
+check("the handle is deep rather than wide (the long axis is the travel axis)", vh > vw, `${vw}x${vh}`);
 check("first rider takes the driver's seat, behind the engine rank (exact)",
-  seating.seat1.idx === 0 && seating.seat1.x === seating.vehicle.x + 2 * g && seating.seat1.y === seating.vehicle.y,
-  `idx=${seating.seat1.idx} x=${seating.seat1.x} y=${seating.seat1.y}`);
-check("second rider takes seat 1 = the next cell in that rank (exact)",
-  seating.seat2.idx === 1 && seating.seat2.x === seating.vehicle.x + 2 * g && seating.seat2.y === seating.vehicle.y + g,
-  `idx=${seating.seat2.idx} x=${seating.seat2.x} y=${seating.seat2.y}`);
+  seating.seat1.idx === 0 && seating.seat1.x === driverSeat.x && seating.seat1.y === driverSeat.y,
+  `idx=${seating.seat1.idx} at ${seating.seat1.x},${seating.seat1.y}; want ${driverSeat.x},${driverSeat.y}`);
+check("second rider takes seat 1 = the next file in that rank (exact)",
+  seating.seat2.idx === 1 && seating.seat2.x === mateSeat.x && seating.seat2.y === mateSeat.y,
+  `idx=${seating.seat2.idx} at ${seating.seat2.x},${seating.seat2.y}; want ${mateSeat.x},${mateSeat.y}`);
 check("riders sit inside the vehicle footprint", seating.inFootprint === true);
 check("riders occupy separate squares (never point-stacked)", seating.distinct === true);
 check("art scale multiplies the rider's own scale by 0.6 (1.2 → 0.72)",
@@ -289,15 +296,18 @@ async function clickWorld(x, y) {
   await page.waitForTimeout(350);
   return page.evaluate(() => canvas.tokens.controlled.map(t => t.document.name));
 }
-await page.evaluate(({ vehicle }) => {
+await page.evaluate(({ vehicle, grid }) => {
   canvas.tokens.releaseAll();
-  canvas.animatePan({ x: vehicle.x + 200, y: vehicle.y + 100, scale: 1, duration: 1 });
-}, seating);
+  // Centre on the handle's own middle, whatever its footprint — a hard-coded offset centred a
+  // 4x2 and left the deeper default's far rank near the edge of the viewport.
+  canvas.animatePan({ x: vehicle.x + (vehicle.w * grid) / 2, y: vehicle.y + (vehicle.h * grid) / 2, scale: 1, duration: 1 });
+}, { ...seating, grid: setup.grid });
 await page.waitForTimeout(600);
 const seatClick = await clickWorld(seating.seat1.x + g / 2, seating.seat1.y + g / 2);
 check("clicking a seat square selects the person", seatClick.includes("__PW__Rider"), seatClick.join(","));
 await page.evaluate(() => canvas.tokens.releaseAll());
-const hullClick = await clickWorld(seating.vehicle.x + 3.5 * g, seating.vehicle.y + 1.5 * g);
+// The engine rank is the bottom one and never holds a seat, so it is empty hull by construction.
+const hullClick = await clickWorld(seating.vehicle.x + 0.5 * g, seating.vehicle.y + (vh - 0.5) * g);
 check("clicking empty hull selects the vehicle", hullClick.includes("__PW__Ride"), hullClick.join(","));
 await page.evaluate(() => canvas.tokens.releaseAll());
 
@@ -468,7 +478,8 @@ const reseat = await page.evaluate(async ({ sceneId }) => {
   return { idx: t.flags["cp2020-augmented"].seatIndex, x: t.x, y: t.y, vx: vTok.x, vy: vTok.y };
 }, setup);
 check("a freed seat is re-used by the next rider (lowest free index)",
-  reseat.idx === 0 && reseat.x === reseat.vx + 2 * setup.grid && reseat.y === reseat.vy, `idx=${reseat.idx} x=${reseat.x}`);
+  reseat.idx === 0 && reseat.x === reseat.vx + (vw - 1) * g && reseat.y === reseat.vy + (vh - 2) * g,
+  `idx=${reseat.idx} at ${reseat.x},${reseat.y}; want ${reseat.vx + (vw - 1) * g},${reseat.vy + (vh - 2) * g}`);
 
 /* ------------------------------------------------------------------ M. Layer-1 layout defaults */
 
@@ -491,11 +502,20 @@ const layoutPure = await page.evaluate(async () => {
   ok("an east-facing engine is the right-hand column", j(L.derivedEngineCells(2, 4, "e")) === "[1,3,5,7]", j(L.derivedEngineCells(2, 4, "e")));
   ok("an east-facing driver sits top-left of the remaining cells", L.derivedSeatOrder(2, 4, "e")[0] === 0, j(L.derivedSeatOrder(2, 4, "e")));
 
-  // Unset heading: derived from the footprint's shape.
-  ok("a wide footprint derives an eastward heading", L.defaultFrontFor(4, 2) === "e", L.defaultFrontFor(4, 2));
-  ok("a tall footprint derives a southward heading", L.defaultFrontFor(2, 4) === "s", L.defaultFrontFor(2, 4));
-  ok("an unset heading resolves to the derived one", L.resolveFront("", 4, 2) === "e" && L.resolveFront(null, 2, 4) === "s");
-  ok("negative case: a nonsense heading falls back to derived", L.resolveFront("up", 4, 2) === "e", L.resolveFront("up", 4, 2));
+  // Unset heading: the core's own rotation-zero convention, not a guess from the footprint's shape.
+  ok("the rotation-zero convention is south", L.ROTATION_ZERO_FRONT === "s", L.ROTATION_ZERO_FRONT);
+  ok("an unset heading takes the convention whatever the footprint's shape",
+    L.defaultFrontFor(4, 2) === "s" && L.defaultFrontFor(2, 4) === "s",
+    `${L.defaultFrontFor(4, 2)} / ${L.defaultFrontFor(2, 4)}`);
+  ok("an unset heading resolves to it", L.resolveFront("") === "s" && L.resolveFront(null) === "s");
+  ok("negative case: a nonsense heading falls back to the convention", L.resolveFront("up") === "s", L.resolveFront("up"));
+  // The heading vector the facing math reads: south at 0, clockwise on screen, matching the core's
+  // own auto-rotate formula (east is written as -90).
+  const hv = (d) => { const v = L.headingVector(d); return `${Math.round(v.x)},${Math.round(v.y)}`; };
+  ok("rotation 0 points south", hv(0) === "0,1", hv(0));
+  ok("rotation -90 points east", hv(-90) === "1,0", hv(-90));
+  ok("rotation 90 points west", hv(90) === "-1,0", hv(90));
+  ok("rotation 180 points north", hv(180) === "0,-1", hv(180));
 
   // A footprint only one rank deep has no room for an engine region.
   ok("single-rank footprint declares no engine region", j(L.derivedEngineCells(4, 1, "n")) === "[]", j(L.derivedEngineCells(4, 1, "n")));
@@ -785,7 +805,9 @@ const spin = await page.evaluate(async ({ sceneId }) => {
 
   // A 4-wide, 2-deep car at a known place, so every expectation below is a concrete coordinate.
   const rect = { x: 1000, y: 1000, w: 400, h: 200 };
-  const order = L.layoutFor(4, 2, "", "").seats;          // derived east: [2,6,1,5,0,4]
+  // An EXPLICITLY east-facing car, so this block measures free rotation of a known layout rather
+  // than whatever heading an unpicked vehicle happens to derive.
+  const order = L.layoutFor(4, 2, "e", "").seats;         // east: [2,6,1,5,0,4]
   const seat = (i, deg) => S.seatSlotPosition(rect, 100, i, { w: 1, h: 1 }, order, deg);
   const j = (v) => JSON.stringify(v);
 

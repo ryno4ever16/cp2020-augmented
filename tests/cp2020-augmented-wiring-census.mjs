@@ -232,8 +232,6 @@ const MANIFEST = [
   ["module/shop/catalog.js:815", "activateListeners", "shop-catalog", "click", ".cp-shop-missing-back", "", "the dead-end panel renders only for a view whose shop has been deleted under it — driven end to end by the shop-drawer suite", null],
   ["module/shop/catalog.js:818", "activateListeners", "shop-catalog", "input", ".cp-catalog-search", "", null, null],
   ["module/shop/catalog.js:827", "activateListeners", "shop-catalog", "change", ".cp-catalog-showsource", "", null, null],
-  ["module/shop/catalog.js:831", "activateListeners", "shop-landing", "click", ".cp-cat-tile", "cat", null, null],
-  ["module/shop/catalog.js:837", "activateListeners", "shop-catalog", "click", ".cp-catalog-uplevel", "", null, null],
   ["module/shop/catalog.js:847", "activateListeners", "shop-catalog", "click", ".cp-drawer-clear", "", "the clear control renders only while a filter is active — driven end to end by the shop-drawer suite", null],
   ["module/shop/catalog.js:849", "activateListeners", "shop-catalog", "click", ".cp-jump", "letter", null, null],
   ["module/shop/catalog.js:849", "activateListeners", "shop-catalog", "click", ".cp-drawer-toggle", "", null, null],
@@ -494,9 +492,6 @@ function surfaceOf(rel, fn, sel = "") {
   if (rel === "module/shop/catalog.js" && fn === "activateListeners") {
     if (/\.cp-home-/.test(sel)) return "shop-home";
     if (/\.cp-shop-manage/.test(sel)) return "shop-storefront";
-    // The catalog's front page (its category tiles) is a fifth distinct render of the same window:
-    // the tiles exist only there, and the rows and the filter drawer only once you are past them.
-    if (/\.cp-cat-tile/.test(sel)) return "shop-landing";
   }
   switch (rel) {
     case "module/actor/actor-sheet.js": return "character-sheet";
@@ -763,7 +758,7 @@ function inMarkup(sel) {
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 const RENDERED = [
   "character-sheet", "vehicle-sheet", "goon-factory", "ip-tracker",
-  "shop-home", "shop-landing", "shop-catalog", "shop-build", "shop-storefront",
+  "shop-home", "shop-catalog", "shop-build", "shop-storefront",
   "item-sheet:any", "item-sheet:skill", "item-sheet:cyberware", "item-sheet:ammo",
   "item-sheet:vehicleweapon", "item-sheet:consumable", "item-sheet:vehicle",
 ];
@@ -1012,12 +1007,18 @@ try {
         } catch (e) { out.notes.push("shop stocking: " + e.message); }
       }
       await open("shop-home", async () => { CAT.openShopWindow(pc, { view: "home" }); return shopRoot(".cp-home-shop, .cp-home-create"); }, 400);
-      // The catalog OPENS on its category tiles and its rows live one step in, so both are measured:
-      // the landing first, then the item list reached through the all-items tile.
-      await open("shop-landing", async () => { CAT.openCatalogBrowser(pc); return shopRoot(".cp-cat-tile"); }, 500);
+      // The catalog opens straight onto its item list, drawer and all — there is no front page in
+      // between, so there is no second shop surface to measure. Clear is pressed once before the
+      // measurement, and for a reason: the opening category set leaves Ammo out, the per-row load
+      // dropdown rides those generated caliber rows, and an empty set is the state that offers
+      // EVERYTHING at once. Pressing the Ammo chip instead would narrow to the caliber rows alone
+      // (the first press against an untouched default set replaces it), trading one blind spot for
+      // a larger one.
       await open("shop-catalog", async () => {
-        rootOf(shopWin())?.querySelector('.cp-cat-tile[data-cat=""]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        return shopRoot(".cp-catalog-buy, .cp-catalog-row");
+        CAT.openCatalogBrowser(pc);
+        await shopRoot(".cp-catalog-buy, .cp-catalog-row");
+        rootOf(shopWin())?.querySelector(".cp-drawer-clear")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        return shopRoot(".cp-catalog-row[data-ammo-caliber]");
       }, 800);
       await open("shop-build", async () => {
         CAT.openShopWindow(pc, { view: "build", shopId: shopDef?.id ?? null });

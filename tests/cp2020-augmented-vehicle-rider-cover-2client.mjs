@@ -114,8 +114,12 @@ const setup = await gm.page.evaluate(async (SCOPE) => {
   };
 }, SCOPE);
 check("the rider is aboard the car", setup.boardedFlag === setup.carId, String(setup.boardedFlag));
-check("the rider sits inside the footprint, clear of the engine column",
-  setup.seatX >= 10 * setup.grid && setup.seatX < 13 * setup.grid, `x=${setup.seatX}`);
+// The car takes the rotation-zero convention (nose south), so its engine is the BOTTOM rank and
+// every seat is on the rank above it.
+check("the rider sits inside the footprint, clear of the engine rank",
+  setup.seatX >= 10 * setup.grid && setup.seatX < 14 * setup.grid
+  && setup.seatY >= 10 * setup.grid && setup.seatY < 11 * setup.grid,
+  `x=${setup.seatX} y=${setup.seatY}`);
 
 /* ── the sheet's own control ── */
 const sheet = await gm.page.evaluate(async ({ carId }) => {

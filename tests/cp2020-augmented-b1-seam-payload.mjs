@@ -132,9 +132,18 @@ const setup = await p.evaluate(async (SCOPE) => {
   // opposite question — "is the field set still the field set" — and a named subset cannot answer it: a
   // recorder that lists the fields it keeps can never notice a field the producer added. So this one
   // keeps the payload WHOLE, with its key names and their types, and names nothing.
+  //
+  // ⚠ ONE EXCLUSION, for a field the PRODUCER does not write. `handled` is the commitment stamp this
+  // module's own weaponFired listener sets to claim a shot, synchronously, while `Hooks.callAll` is
+  // still walking the listener list — so a recorder registered after it sees a field the seam never
+  // emitted, and §4 would report a producer drift that never happened. It is excluded here for the same
+  // reason and by the same name as in cp2020-augmented-golden-payload-capture.mjs, so the live reading
+  // and the stored fixture are taken over the same field set. Nothing else is named: a whole-payload
+  // recorder that started listing what it keeps could no longer notice a field the producer added.
+  const CONSUMER_WRITTEN = new Set(["handled"]);
   const typeOf = (v) => v === undefined ? "undefined" : v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
   g.snapshot = (pl) => {
-    const keys = Object.keys(pl).sort();
+    const keys = Object.keys(pl).filter(k => !CONSUMER_WRITTEN.has(k)).sort();
     const types = {}; for (const k of keys) types[k] = typeOf(pl[k]);
     return { keys, types };
   };
