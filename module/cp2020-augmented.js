@@ -34,6 +34,7 @@ import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFr
 import { registerVehicleBoardingHud } from "./vehicle/vehicle-boarding-hud.js";
 import { registerVehicleOccupancyHooks } from "./vehicle/vehicle-occupancy.js";
 import { registerVehicleOutlineHooks } from "./vehicle/vehicle-outline.js";
+import { registerVehicleRideHooks } from "./vehicle/vehicle-ride.js";
 import { registerVehicleAboardBanner } from "./vehicle/vehicle-aboard-banner.js";
 import { openControlRollDialog } from "./vehicle/vehicle-control.js";
 import { openVehicleDamageDialog } from "./vehicle/vehicle-damage.js";
@@ -79,6 +80,12 @@ import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js
 import { registerIconNormalizationShim } from "./icon-normalization-shim.js";
 import { hostProvides } from "./system-api.js";
 import { deleteFieldUpdate, localize, localizeParam } from "./utils.js";
+
+// Diagnostics (module/dev/*) — two per-user checks, both default off, both costing nothing until a
+// GM switches one on: the unusable-number tripwire on prepared documents, and the fault collector
+// whose journal export turns a field report into a stack.
+import { registerDevFieldAssertions } from "./dev/field-assertions.js";
+import { registerDevErrorJournal, exportErrorJournal } from "./dev/error-journal.js";
 
 // Shop / economy ([[shopping-design]]) — the sidebar cart opens a standalone catalog/shop window;
 // the browse/buy engine + custom-shop curation live in module/shop/.
@@ -189,6 +196,11 @@ Hooks.once("init", function () {
     type: PresetPicker,
     restricted: true,
   });
+  // Fault collector (module/dev/error-journal.js): registered here, near the top of init, because
+  // the value of the thing is what it catches — the earlier its listeners are attached on a client
+  // that already had the setting on, the more of a load-time fault it can hold. Default off, so on
+  // every other client this is one setting registration and nothing else.
+  registerDevErrorJournal();
   // Vendor the {{CPLocal}}/{{CPLocalParam}} localization helpers the module's templates use, so
   // they resolve without depending on the base system registering them (vanilla self-sufficiency).
   registerAugmentedHandlebarsHelpers();
@@ -319,6 +331,12 @@ Hooks.once("init", function () {
   // Free Fire (the ammo-tracking opt-out) on vanilla: the Modifiers-window row + the keep-topped
   // magazine hook that bypasses the base's hardcoded consumption from outside.
   registerFreeFire();
+  // Field assertions (module/dev/field-assertions.js): the LAST prepareData wrap registered at init,
+  // deliberately. Each wrap calls the one registered before it and then runs its own post-step, so
+  // the one registered last is outermost and reads the numbers every other post-step has finished
+  // writing — which is the state a sheet renders. Default off; when off the wrapper reads one cached
+  // boolean and returns.
+  registerDevFieldAssertions();
 
   // Register the vehicle/ACPA actor sheet for the module sub-type. v15-readiness: use the
   // namespaced collection, falling back to the bare global on cores that lack it (v13).
@@ -379,6 +397,9 @@ Hooks.once("init", function () {
   // rider's own character sheet. Both are presentation only — no document writes.
   registerVehicleOccupancyHooks();
   registerVehicleOutlineHooks();
+  // Riders are DRAWN at their seat on every frame the vehicle is drawn, so a moving car never
+  // appears to shake its crew loose. Presentation only, per client, no writes.
+  registerVehicleRideHooks();
   registerVehicleAboardBanner();
   // One-time stamp: pre-civilian-split vehicle actors keep the MM combat sheet.
   registerCivilianSheetMigration();
@@ -404,11 +425,15 @@ Hooks.once("init", function () {
     },
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
-    // Manual re-run entry points for the one-time world migrations. Each of those passes stamps its
-    // completion flag BEFORE it sweeps, so a run that dies part-way is never retried automatically —
-    // these are how a GM asks for that retry (and how a GM upgrades content imported after the world
-    // was first migrated). Both default to running regardless of the stamp; pass `{ force: false }`
-    // for the boot behaviour (run only if the stamp is unset).
+    // Diagnostics: write the fault collector's ring into a journal entry a GM can read and keep.
+    // The setting's hint names this call, so a GM who switched the collector on already has it.
+    exportErrorJournal,
+    // Manual re-run entry points for the one-time world migrations. Each of those passes carries two
+    // stamps — one written before the sweep to bound the first attempt's cost, one written after it
+    // finishes — so a run that dies part-way IS retried on its own at the next load. These calls are
+    // how a GM asks for that retry immediately, and how a GM upgrades content imported after the
+    // world was first migrated. Both default to running regardless of the stamps; pass
+    // `{ force: false }` for the boot behaviour (run only if the pair says the sweep still owes one).
     migrations: {
       fleshLimbStatus: (opts) => migrateFleshLimbStatus({ force: true, ...(opts ?? {}) }),
       legacyRadZones: (opts) => migrateLegacyRadZones({ force: true, ...(opts ?? {}) }),
@@ -482,17 +507,25 @@ async function migrateAugmentedSettings() {
  * satisfy, not the vintage of the data being migrated); zones that DO carry a structural pool (a
  * real cyberlimb / borg chassis) keep their
  * `limbStatus` untouched. World actors AND unlinked scene-token actor deltas are both swept. Guarded
- * by a world flag so it runs exactly once. Safe to fail — a missed actor just keeps its old flags.
+ * by a PAIR of world stamps (see the block above the first write below) so it runs to completion
+ * exactly once. Safe to fail — a missed actor just keeps its old flags.
  *
- * `force` re-runs the sweep with the completion flag already set — the manual re-run path exposed as
+ * `force` re-runs the sweep with both stamps already set — the manual re-run path exposed as
  * `game.modules.get("cp2020-augmented").api.migrations.fleshLimbStatus()`.
  */
 async function migrateFleshLimbStatus({ force = false } = {}) {
   const DONE = "fleshLimbStatusMigrated";
-  if (!game.settings.settings.has(`${SCOPE}.${DONE}`)) {
-    game.settings.register(SCOPE, DONE, { scope: "world", config: false, type: Boolean, default: false });
+  const COMPLETED = `${DONE}Completed`;
+  for (const key of [DONE, COMPLETED]) {
+    if (!game.settings.settings.has(`${SCOPE}.${key}`)) {
+      game.settings.register(SCOPE, key, { scope: "world", config: false, type: Boolean, default: false });
+    }
   }
-  if (!force && game.settings.get(SCOPE, DONE)) return;
+  const attempted = game.settings.get(SCOPE, DONE);
+  const completed = game.settings.get(SCOPE, COMPLETED);
+  if (!force && attempted && completed) return;
+  /** Boot found an attempt that never recorded finishing — this run is the retry. */
+  const recovering = !force && attempted && !completed;
 
   // "Has a structural pool" reuses cyberlimb.js's own SDP helper, so the decision matches the damage
   // routing exactly (borg Head/Torso count too — their status is structural and must NOT move).
@@ -514,17 +547,37 @@ async function migrateFleshLimbStatus({ force = false } = {}) {
       .catch((e) => console.warn(`${SCOPE} | flesh-status migration failed for actor ${actor.id}`, e));
   };
 
-  // ⭐ THE COMPLETION FLAG IS WRITTEN BEFORE THE SWEEP, DELIBERATELY.
-  // Reading `token.actor` on an unlinked token materializes that token's synthetic actor, so this
-  // sweep used to build one for every unlinked token on every scene in the world — the largest
-  // single burst this module produced at load (the delta peek in the loop below now skips tokens
-  // with nothing to migrate, which is nearly all of them). Written AFTER the sweep (as it was), any
-  // throw — or a browser that died under the burst before finishing — left the flag unset, so the
-  // whole burst repeated on every boot of that world forever. Writing it first bounds the cost at
-  // one attempt per world.
-  // THE TRADE: a sweep that stops part-way is no longer retried on its own — the actors it never
-  // reached keep their pre-split flags. That is why the failure below is a console.error that names
-  // the re-run entry point, not a quiet warn.
+  // ⭐ TWO STAMPS: ONE BOUNDS THE ATTEMPT, THE OTHER RECORDS THE FINISH.
+  //
+  // `fleshLimbStatusMigrated` is still written BEFORE the sweep, for its original reason. Reading
+  // `token.actor` on an unlinked token materializes that token's synthetic actor, so this sweep used
+  // to build one for every unlinked token on every scene in the world — the largest single burst
+  // this module produced at load. Stamped only on success, any throw — or a browser that died under
+  // the burst before finishing — left it unset, so the whole burst repeated on every boot of that
+  // world forever. Stamped first, the full-cost first attempt happens once.
+  //
+  // `fleshLimbStatusMigratedCompleted` is written AFTER the sweep returns without throwing, and it
+  // is what makes the pass SELF-HEALING. The migration rehearsal (2026-08-19) reproduced the hazard
+  // the single-stamp shape carried: a client that dies between the `ready` hook and the end of the
+  // sweep — Foundry's first authenticated join after a server boot does exactly that on the rigs —
+  // left the stamp set with the sweep never run. That world was then permanently unmigrated, and the
+  // only evidence was a console.error in a session that no longer existed. So a boot that finds the
+  // first stamp set and this one unset runs the sweep AGAIN and stamps this one on success.
+  // What makes the retry affordable is the delta peek in the token loop below: the expensive thing
+  // was building synthetic actors for tokens with nothing to move, and the peek no longer builds
+  // them, so a repeat over a world with nothing left to migrate is ~1 ms (rehearsal-measured). The
+  // old cost argument for never retrying is obsolete.
+  //
+  // CONSEQUENCE FOR WORLDS AN EARLIER BUILD ALREADY MIGRATED: they carry the first stamp set and no
+  // second stamp, so the first boot on this build runs exactly one recovery sweep. It is
+  // delta-peeked, it MOVES NOTHING on a world whose entries are already split, and it stamps
+  // completion — from the next boot on they are gated exactly as before. No data is rewritten.
+  if (recovering) {
+    console.warn(
+      `${SCOPE} | recovering the flesh-limb-status migration: it is marked as attempted but never `
+      + `recorded finishing, so it is running once more now. It is idempotent — on a world that was `
+      + `already migrated it moves nothing.`);
+  }
   await game.settings.set(SCOPE, DONE, true);
   try {
     for (const actor of game.actors ?? []) await migrateActor(actor);
@@ -542,12 +595,14 @@ async function migrateFleshLimbStatus({ force = false } = {}) {
         await migrateActor(token.actor);    // the unlinked token's synthetic delta actor
       }
     }
+    await game.settings.set(SCOPE, COMPLETED, true);
     console.log(`${SCOPE} | flesh-limb-status migration complete.`);
   } catch (e) {
     console.error(
       `${SCOPE} | the flesh-limb-status migration stopped part-way. Actors it had not reached yet keep `
-      + `their pre-split limb flags. It is marked done and will NOT run itself again. A GM can re-run it `
-      + `from a script macro: game.modules.get("${SCOPE}").api.migrations.fleshLimbStatus()`, e);
+      + `their pre-split limb flags. Completion was not recorded, so the next load of this world runs it `
+      + `once more on its own. A GM can also re-run it immediately from a script macro: `
+      + `game.modules.get("${SCOPE}").api.migrations.fleshLimbStatus()`, e);
   }
 }
 

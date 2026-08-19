@@ -46,6 +46,8 @@ const SECTIONS = [
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
   { key: "SectionDisplay", keys: ["combatFxEnabled", "goreEnabled", "faceTargetOnFire"] },
+  // Per-user diagnostics (module/dev/*), last because they are for chasing a report, not for play.
+  { key: "SectionDiagnostics", keys: ["devFieldAssertions", "devErrorJournal"] },
 ];
 
 // master toggle → the sub-settings that only matter when it's on (greyed + disabled while it's off).

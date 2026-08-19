@@ -49,9 +49,11 @@ import { RAD_ZONE_BEHAVIOR, radiationZoneBehaviorClass } from "./radiation-zone-
 
 const SCOPE = "cp2020-augmented";
 
-/** World completion stamp for the one-time legacy-zone upgrade below. Hidden store, not a user
- *  setting (config:false → no i18n keys), mirroring `civilianSheetMigrated`. */
+/** World stamps for the one-time legacy-zone upgrade below: the first records that the sweep was
+ *  ATTEMPTED (written before it runs), the second that it FINISHED (written after). Hidden stores,
+ *  not user settings (config:false → no i18n keys), mirroring `civilianSheetMigrated`. */
 const RAD_ZONES_MIGRATED = "radZonesMigrated";
+const RAD_ZONES_COMPLETED = `${RAD_ZONES_MIGRATED}Completed`;
 
 /**
  * Roll a rads dice string ("1d10", "2d6+1") → a non-negative integer (0 floor). Impure (dice). The
@@ -175,29 +177,51 @@ export async function runRadZoneTick(combat) {
  * keep working through the tick's legacy path. Runs once at ready, on the single active GM. Idempotent: a
  * region that already carries the behavior is skipped.
  *
- * ⭐ COMPLETION FLAG (`radZonesMigrated`), AND WHAT IT COSTS.
- * Without a flag this walked every scene's region collection on EVERY GM boot forever — reading
+ * ⭐ THE STAMP PAIR (`radZonesMigrated` / `radZonesMigratedCompleted`), AND WHAT IT COSTS.
+ * Without any stamp this walked every scene's region collection on EVERY GM boot forever — reading
  * `scene.regions` forces each scene's embedded collection resident, on every scene in the world, to find
- * a tag that only pre-behavior worlds ever carried. The flag makes it what it says it is: a one-time
- * upgrade. What the un-flagged version also did, and this no longer does by itself: upgrade a legacy
+ * a tag that only pre-behavior worlds ever carried. The stamps make it what it says it is: a one-time
+ * upgrade. What the un-stamped version also did, and this no longer does by itself: upgrade a legacy
  * flag-tagged region that arrives LATER (a scene imported from an older world, an adventure restored
- * from a backup). That zone is NOT broken by the flag — `runRadZoneTick`'s legacy path still doses it
+ * from a backup). That zone is NOT broken by that — `runRadZoneTick`'s legacy path still doses it
  * exactly as before, it just stays on that path instead of gaining the native behavior. A GM who wants
  * such an import upgraded re-runs the pass from a script macro:
  * `game.modules.get("cp2020-augmented").api.migrations.legacyRadZones()`.
  *
- * `force` runs the sweep with the completion flag already set — that same manual re-run path.
+ * `force` runs the sweep with both stamps already set — that same manual re-run path.
  */
 export async function migrateLegacyRadZones({ force = false } = {}) {
   if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
   if (!radiationZoneBehaviorClass()) return;   // pre-region core → nothing to migrate onto
-  if (!force && game.settings.get(SCOPE, RAD_ZONES_MIGRATED)) return;
+  const attempted = game.settings.get(SCOPE, RAD_ZONES_MIGRATED);
+  const completed = game.settings.get(SCOPE, RAD_ZONES_COMPLETED);
+  if (!force && attempted && completed) return;
+  /** Boot found an attempt that never recorded finishing — this run is the retry. */
+  const recovering = !force && attempted && !completed;
 
-  // Flag first, sweep second — same reasoning as the flesh-limb migration in cp2020-augmented.js: a
-  // sweep whose completion stamp lands only on success repeats its whole cost on every boot once
-  // anything in it throws. The trade is the same too: a run that stops part-way is not retried on its
-  // own, so the failure is a console.error naming the re-run path rather than a quiet warn. (Per-region
-  // failures are already contained by the inner catch and do not stop the sweep.)
+  // TWO STAMPS: ONE BOUNDS THE ATTEMPT, THE OTHER RECORDS THE FINISH — the same shape as the
+  // flesh-limb migration in cp2020-augmented.js, which carries the long version of this reasoning.
+  // Attempted-first, because a sweep whose only stamp lands on success repeats its whole cost on
+  // every boot once anything in it throws. Completed-after, because attempted-first ALONE meant a
+  // client that died between the `ready` hook and the end of the sweep (the migration rehearsal,
+  // 2026-08-19, reproduced this: Foundry's first authenticated join after a server boot dies
+  // server-side on the rigs) left the world permanently un-upgraded, with a console.error in a dead
+  // session as the only evidence. So the pass is now attempt-bounded AND self-healing: attempted
+  // without completed means the next load runs it once more. The retry is cheap — the sweep reads a
+  // plain flag off each region and skips it, and a region that already carries the behavior is
+  // skipped too, so a repeat on an upgraded world writes nothing.
+  //
+  // CONSEQUENCE FOR WORLDS AN EARLIER BUILD ALREADY UPGRADED: they carry the attempted stamp and no
+  // completed stamp, so the first boot on this build runs exactly one recovery sweep, which finds
+  // every region already upgraded (or never tagged), changes nothing, and stamps completion. From
+  // the next boot on they are gated exactly as before. No data is rewritten.
+  // (Per-region failures are already contained by the inner catch and do not stop the sweep.)
+  if (recovering) {
+    console.warn(
+      `${SCOPE} | recovering the legacy rad-zone migration: it is marked as attempted but never `
+      + `recorded finishing, so it is running once more now. It is idempotent — a region that already `
+      + `carries the behavior is skipped.`);
+  }
   await game.settings.set(SCOPE, RAD_ZONES_MIGRATED, true);
   try {
     for (const scene of game.scenes ?? []) {
@@ -229,11 +253,13 @@ export async function migrateLegacyRadZones({ force = false } = {}) {
         }
       }
     }
+    await game.settings.set(SCOPE, RAD_ZONES_COMPLETED, true);
   } catch (e) {
     console.error(
       `${SCOPE} | the legacy rad-zone migration stopped part-way. Regions it had not reached yet keep `
-      + `their legacy tag and keep dosing through the tick's legacy path. It is marked done and will NOT `
-      + `run itself again. A GM can re-run it from a script macro: `
+      + `their legacy tag and keep dosing through the tick's legacy path. Completion was not recorded, `
+      + `so the next load of this world runs it once more on its own. A GM can also re-run it `
+      + `immediately from a script macro: `
       + `game.modules.get("${SCOPE}").api.migrations.legacyRadZones()`, e);
   }
 }
@@ -265,9 +291,11 @@ function _hookRadZonePerTurn() {
  *  upgrades legacy flag-tagged regions to the native behavior. Called once at init from cp2020-augmented.js.
  *  (The behavior TYPE itself is registered separately, at init, by registerRadiationZoneBehavior.) */
 export function registerRadiationZones() {
-  game.settings.register(SCOPE, RAD_ZONES_MIGRATED, {
-    scope: "world", config: false, type: Boolean, default: false,
-  });
+  for (const key of [RAD_ZONES_MIGRATED, RAD_ZONES_COMPLETED]) {
+    game.settings.register(SCOPE, key, {
+      scope: "world", config: false, type: Boolean, default: false,
+    });
+  }
   _hookRadZonePerTurn();
   Hooks.once("ready", () => {
     migrateLegacyRadZones().catch((e) => console.warn(`${SCOPE} | rad-zone migration error`, e));
