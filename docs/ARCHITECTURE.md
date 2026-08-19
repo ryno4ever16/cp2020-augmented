@@ -132,10 +132,26 @@ IS the opt-in (user principle, 2026-08-11; do not add toggles to placement-gated
 
 `module/vehicle/`: deploy request flow (player ask → GM approval → actor in Vehicles folder →
 `deployVehicleToScene()` places the handle token beside the requester), seat-slot boarding
-(`seatIndex` flag; footprint cells in reading order; crew sorts ABOVE hull; boarded scale via
-`texture.scaleX/Y` so the hit-square survives; `{teleport:true}` on board/step-out — v14 streams
-fractional positions during move animation), occupancy surfaces, ordnance (v14 cloud via
-`createArea`). Pilot damage routes to the world actor BY DESIGN (unlinked pilots share the base).
+(`seatIndex` flag; crew sorts ABOVE hull; boarded scale via `texture.scaleX/Y` so the hit-square
+survives; displace waypoints on board/step-out — v14 streams fractional positions during move
+animation), occupancy surfaces, ordnance (v14 cloud via `createArea`). Pilot damage routes to the
+world actor BY DESIGN (unlinked pilots share the base).
+
+**ONE rotation-zero convention** (`vehicle-layout.js`: `ROTATION_ZERO_FRONT = "s"`,
+`headingVector()`): a token at rotation 0 faces SOUTH, which is the core's own statement and what
+its drag auto-rotate acts on. Every consumer reads it — the shipped footprint (`DEFAULT_FOOTPRINT`
+2 across × 4 deep, so the long axis is the travel axis and a short face leads), the seat/engine
+layout, the cover ray's engine cells, the footprint outline's nose spur, and `computeFacing()`'s
+front/side/rear arcs. Three of those used to answer differently (east / north / north), which is how
+a driven vehicle came to lead with its longest face.
+
+**Rider coupling is presentation, bookkeeping is one write.** `vehicle-ride.js` draws every aboard
+rider at its seat on each `refreshToken` frame of the vehicle (PIXI transforms only, per client,
+never a document write, and never a token a hand is holding). `vehicle-canvas.js` commits the
+rider documents once per pose change, from the vehicle's `_source` pose, with displace waypoints.
+Both ask the same `riderSeatAt()`, so the last drawn frame and the committed position are the same
+pixel. Seat position is derived from the seat INDEX, never carried as a delta — a dragged rider's
+new square is adopted as an index (`adoptDraggedSeat`) so it survives resizes and heading changes.
 
 ## 8. Shop (stub)
 

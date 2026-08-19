@@ -28,8 +28,14 @@ const VEHICLE_SORT = -100;            // render below crew tokens
 const BOARDED_SCALE = 0.6;
 /** How far above the vehicle handle a rider is lifted when its sort would leave it underneath. */
 const CREW_SORT_LIFT = 10;
-/** token.id → {dx,dy} captured in preUpdateToken, consumed in updateToken (same client). */
-const _moveDeltas = new Map();
+/**
+ * The footprint a vehicle gets before anyone sizes it: TWO squares across, FOUR deep. Deep and not
+ * wide, because a vehicle's long axis is the axis it travels along and a token at rotation 0 travels
+ * SOUTH (vehicle-layout's ROTATION_ZERO_FRONT — the core's own convention, which its drag
+ * auto-rotate then acts on). Shipping this the other way round is what made a driven vehicle
+ * present its longest face to the direction of travel.
+ */
+export const DEFAULT_FOOTPRINT = Object.freeze({ w: 2, h: 4 });
 /**
  * How long the heading has to hold still before riders are re-seated to it. Core's rotation
  * gestures stream one update per scroll notch, so this is what turns "a dozen updates" into "one
@@ -66,8 +72,8 @@ export async function deployVehicleToScene(actor, opts = {}) {
   }
 
   const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
-  const gw = Math.max(1, Number(opts.gw) || Number(actor.prototypeToken?.width) || 4);
-  const gh = Math.max(1, Number(opts.gh) || Number(actor.prototypeToken?.height) || 2);
+  const gw = Math.max(1, Number(opts.gw) || Number(actor.prototypeToken?.width) || DEFAULT_FOOTPRINT.w);
+  const gh = Math.max(1, Number(opts.gh) || Number(actor.prototypeToken?.height) || DEFAULT_FOOTPRINT.h);
   const wpx = gw * gridSize, hpx = gh * gridSize;
   const px = opts.x ?? Math.round(((scene.width ?? 2000) - wpx) / 2);
   const py = opts.y ?? Math.round(((scene.height ?? 2000) - hpx) / 2);
@@ -113,34 +119,159 @@ export function tokenHeadingOf(doc) {
 export function seatOrderFor(vehicleActor, vehicleTokenDoc) {
   const w = Number(vehicleTokenDoc?.width) || Number(vehicleActor?.prototypeToken?.width) || 1;
   const h = Number(vehicleTokenDoc?.height) || Number(vehicleActor?.prototypeToken?.height) || 1;
+  return seatOrderAt(vehicleActor, { w, h });
+}
+
+/** The seat order for a vehicle at a given footprint — the layout layer's answer, in one place. */
+export function seatOrderAt(vehicleActor, pose) {
   const layout = vehicleActor?.system?.layout ?? {};
-  return layoutFor(w, h, layout.front, layout.cells).seats;
+  return layoutFor(pose?.w, pose?.h, layout.front, layout.cells).seats;
 }
 
 /**
- * Move every rider of `actor` to the seat its stored index now points at. Shared by every edit that
- * can move seats — a footprint resize, a Front change, a repaint, a turn of the wheel — so all four
- * put people in the same places. `rect` is the handle's pixel footprint and gw/gh its grid size;
- * both are passed in rather than read back off the document, because the caller that just resized
- * it knows the new figures before the document does.
+ * The pose a vehicle handle is STORED at — the one every client's documents agree on, and the one a
+ * rider's committed seat has to be measured from.
+ *
+ * ⚠ `_source` throughout, and the reason is not academic. The core animates a moving token by
+ * merging each frame's values onto the PREPARED document, so anything that reads `doc.x` while a
+ * move is playing gets a frame of the way there rather than the destination. A dragged vehicle was
+ * measured leaving its crew 6.6 squares behind for exactly this reason: the follow arithmetic read
+ * a position the core was still sweeping.
  */
-async function reseatRiders(scene, actor, handle, rect, gw, gh) {
-  const grid = scene.grid?.size ?? 100;
-  const order = layoutFor(gw, gh, actor.system?.layout?.front, actor.system?.layout?.cells).seats;
-  const rotation = tokenHeadingOf(handle);
-  const updates = [];
-  const movement = {};
-  for (const t of scene.tokens) {
-    if (t.flags?.[SCOPE]?.boardedVehicle !== actor.id) continue;
-    const idx = Number(t.flags?.[SCOPE]?.seatIndex);
-    if (!Number.isInteger(idx) || idx < 0) continue;
-    const seat = seatSlotPosition(rect, grid, idx, { w: t.width, h: t.height }, order, rotation);
-    if (seat.x === t.x && seat.y === t.y) continue;
-    updates.push({ _id: t.id, x: seat.x, y: seat.y });
-    movement[t.id] = displaceWaypointFor(t, seat);
+export function storedPoseOf(handleDoc) {
+  const src = handleDoc?._source ?? handleDoc ?? {};
+  return {
+    x: Number(src.x) || 0,
+    y: Number(src.y) || 0,
+    w: Math.max(1, Number(src.width ?? handleDoc?.width) || 1),
+    h: Math.max(1, Number(src.height ?? handleDoc?.height) || 1),
+    rotation: tokenHeadingOf(handleDoc),
+  };
+}
+
+/** The pose a vehicle handle is DRAWN at this frame — the prepared values, which the core animates. */
+export function drawnPoseOf(handleDoc) {
+  return {
+    x: Number(handleDoc?.x) || 0,
+    y: Number(handleDoc?.y) || 0,
+    w: Math.max(1, Number(handleDoc?.width) || 1),
+    h: Math.max(1, Number(handleDoc?.height) || 1),
+    rotation: Number(handleDoc?.rotation) || 0,
+  };
+}
+
+/**
+ * Where rider #seatIndex sits when the vehicle is at `pose`. THE one answer to that question: the
+ * document commit below asks it for the stored pose, and the per-frame coupling in vehicle-ride.js
+ * asks it for the pose the vehicle is drawn at this frame. Because both ask the same arithmetic,
+ * the last frame the coupling draws and the position the document was committed to are the same
+ * pixel, and the hand-off at the end of a move is invisible.
+ */
+export function riderSeatAt(pose, grid, seatIndex, riderSize, order) {
+  const g = Math.max(1, Number(grid) || 100);
+  const rect = { x: pose.x, y: pose.y, w: pose.w * g, h: pose.h * g };
+  return seatSlotPosition(rect, g, seatIndex, riderSize, order, pose.rotation);
+}
+
+/**
+ * Everyone aboard `vehicleActorId` on a scene, each with the seat index they claim. The occupancy
+ * flag is the only membership test anywhere in the module, so the coupling, the badge and the
+ * re-seat can never disagree about who is in the car.
+ */
+export function ridersOf(scene, vehicleActorId) {
+  const out = [];
+  for (const doc of scene?.tokens ?? []) {
+    if (doc.flags?.[SCOPE]?.boardedVehicle !== vehicleActorId) continue;
+    const seatIndex = Number(doc.flags?.[SCOPE]?.seatIndex);
+    if (!Number.isInteger(seatIndex) || seatIndex < 0) continue;
+    out.push({ doc, seatIndex });
   }
-  if (updates.length) {
-    await scene.updateEmbeddedDocuments("Token", updates, { movement, cp2020VehicleSync: true });
+  return out;
+}
+
+/**
+ * The updates that would put every rider of `actor` in the seat its stored index points at for the
+ * vehicle's `pose` — built, not written, so the caller can decide who writes which of them.
+ *
+ * The pose is passed in rather than read back off the handle because the caller that just resized
+ * or drove it knows the new figures before the document animation has finished agreeing with them.
+ * Riders already sitting on their seat are left out entirely, which is what keeps a move that
+ * changes nothing from writing anything.
+ */
+function seatUpdatesFor(scene, actor, pose) {
+  const grid = scene?.grid?.size ?? 100;
+  const order = seatOrderAt(actor, pose);
+  const updates = [];
+  for (const { doc, seatIndex } of ridersOf(scene, actor.id)) {
+    const seat = riderSeatAt(pose, grid, seatIndex, { w: doc.width, h: doc.height }, order);
+    const src = doc._source ?? doc;
+    if (seat.x === src.x && seat.y === src.y) continue;
+    updates.push({ _id: doc.id, x: seat.x, y: seat.y });
+  }
+  return updates;
+}
+
+/**
+ * Write a batch of seat updates as ONE document operation, instantly. Instantly because the crew's
+ * ride is already being drawn frame by frame by the presentation coupling — letting the core also
+ * animate each rider from its old spot to its new one would put a second, slower copy of the same
+ * journey on screen, which is the picture the walk report described.
+ */
+async function commitSeats(scene, updates) {
+  if (!updates?.length) return 0;
+  const movement = {};
+  for (const u of updates) {
+    const instruction = displaceWaypointFor(scene.tokens.get(u._id), u);
+    if (instruction) movement[u._id] = instruction;
+  }
+  await scene.updateEmbeddedDocuments("Token", updates, { movement, cp2020VehicleSync: true });
+  return updates.length;
+}
+
+/**
+ * Move every rider of `actor` to its seat for `pose`. Shared by every edit that can move seats — a
+ * drive, a footprint resize, a Front change, a repaint, a turn of the wheel — so all of them put
+ * people in the same places.
+ */
+async function reseatRiders(scene, actor, pose) {
+  return commitSeats(scene, seatUpdatesFor(scene, actor, pose));
+}
+
+/**
+ * The crew-follow commit: recompute every rider's seat from the vehicle's STORED pose and write it
+ * once.
+ *
+ * ⭐ THERE IS NO DELTA ARITHMETIC LEFT. The old version captured the vehicle's x/y change in
+ * `preUpdateToken` and translated each rider by it, which broke twice over: the "before" position
+ * it subtracted was the PREPARED one (mid-animation on a dragged move — measured 143 px of a 900 px
+ * drive, stranding the crew), and a translation carries nobody around a turn. Asking the seat where
+ * it is for the pose the vehicle actually holds answers both at once, and it is the same question
+ * the re-seat and the per-frame coupling ask.
+ */
+async function commitCrewFollow(handle) {
+  const scene = handle?.parent;
+  const actor = handle?.actor;
+  if (!scene || !actor) return 0;
+  const updates = seatUpdatesFor(scene, actor, storedPoseOf(handle));
+  if (!updates.length) return 0;
+
+  // A non-GM driver can move the vehicle but cannot write token documents they do not own (an
+  // un-owned passenger) — those updates fail silently and that rider stays behind. Split by
+  // writability: apply the ones this user can modify, relay the rest to the active GM (the same
+  // socket shape the missile and vehicle-damage relays use).
+  const mine = [], relay = [];
+  for (const u of updates) {
+    (scene.tokens.get(u._id)?.canUserModify(game.user, "update") ? mine : relay).push(u);
+  }
+  if (mine.length) await commitSeats(scene, mine);
+  if (relay.length) {
+    if (game.users?.activeGM) {
+      game.socket.emit("module.cp2020-augmented", {
+        type: "vehicleCrewFollow", sceneId: scene.id, updates: relay, requesterId: game.user.id,
+      });
+    } else {
+      ui.notifications?.warn?.(localizeParam("Vehicle.NoGMForCrewFollow", { name: handle.name ?? "" }));
+    }
   }
   return updates.length;
 }
@@ -205,9 +336,9 @@ export async function boardVehicle(crewTokenDoc, vehicleActor, vehicleTokenDoc =
   if (vehicleDoc) {
     const src = crewTokenDoc._source ?? crewTokenDoc;
     const seatIndex = nextFreeSeatIndex(scene, vehicleActor.id, crewTokenDoc.id);
-    const seat = seatSlotPosition(tokenRect(vehicleDoc, grid), grid, seatIndex,
-      { w: crewTokenDoc.width, h: crewTokenDoc.height }, seatOrderFor(vehicleActor, vehicleDoc),
-      tokenHeadingOf(vehicleDoc));
+    const pose = storedPoseOf(vehicleDoc);
+    const seat = riderSeatAt(pose, grid, seatIndex,
+      { w: crewTokenDoc.width, h: crewTokenDoc.height }, seatOrderAt(vehicleActor, pose));
     // Only record the restore point on the FIRST boarding — re-seating an already-aboard token
     // must not overwrite the original size/position with the boarded presentation.
     if (!crewTokenDoc.flags?.[SCOPE]?.boardedRestore) {
@@ -276,47 +407,100 @@ export async function disembark(crewTokenDoc) {
 }
 
 /**
- * Register the crew-follow coupling: when a vehicle handle token moves, boarded crew translate by
- * the same delta. Gated to the client that made the move (so preUpdate and update share state and
- * only one client applies it). No tiles, no reverse coupling — nothing to loop on.
+ * A rider dragged onto another square of the footprint has CHOSEN that seat, so the drag is
+ * recorded as a seat INDEX rather than left as a position.
+ *
+ * ⭐ WHY IT HAS TO BE THE INDEX. The index is the only thing about a rider that survives a footprint
+ * resize, a change of heading or a repaint of the grid — every one of those recomputes positions
+ * from it. A drag left as a bare position therefore held only until the next thing that moved the
+ * seats, and then put the rider back where their flag still said they sat, which is exactly what
+ * the drag was trying to change.
+ *
+ * A drop that is not on a seat (the engine rank, outside the footprint) or is on a seat somebody
+ * else holds changes nothing — the rider simply goes back to their own seat, which reads as the
+ * drag not taking rather than as two people in one square.
+ */
+async function adoptDraggedSeat(riderDoc) {
+  const scene = riderDoc?.parent;
+  const vehicleActorId = riderDoc?.flags?.[SCOPE]?.boardedVehicle;
+  if (!scene || !vehicleActorId) return;
+  const handle = vehicleTokenFor(scene, vehicleActorId);
+  const actor = handle?.actor;
+  if (!handle || !actor) return;
+
+  const grid = scene.grid?.size ?? 100;
+  const pose = storedPoseOf(handle);
+  const order = seatOrderAt(actor, pose);
+  const size = { w: riderDoc.width, h: riderDoc.height };
+  const src = riderDoc._source ?? riderDoc;
+  const current = Number(riderDoc.flags?.[SCOPE]?.seatIndex);
+
+  // Which seat is the drop closest to? Half a square is the tolerance a hand-drag needs; beyond
+  // that the rider was not aiming at a seat at all.
+  let best = -1, bestDistance = Infinity;
+  for (let i = 0; i < order.length; i++) {
+    const seat = riderSeatAt(pose, grid, i, size, order);
+    const d = Math.hypot(seat.x - src.x, seat.y - src.y);
+    if (d < bestDistance) { bestDistance = d; best = i; }
+  }
+  const landed = (bestDistance <= grid / 2) ? best : -1;
+  const taken = landed >= 0 && ridersOf(scene, vehicleActorId)
+    .some(r => r.doc.id !== riderDoc.id && r.seatIndex === landed);
+  const target = (landed >= 0 && !taken) ? landed : current;
+  if (!Number.isInteger(target) || target < 0) return;
+
+  const seat = riderSeatAt(pose, grid, target, size, order);
+  const update = { [`flags.${SCOPE}.seatIndex`]: target, x: seat.x, y: seat.y };
+  if (target === current && seat.x === src.x && seat.y === src.y) return;   // already exactly there
+  await scene.updateEmbeddedDocuments("Token", [{ _id: riderDoc.id, ...update }],
+    { movement: { [riderDoc.id]: displaceWaypointFor(riderDoc, seat) }, cp2020VehicleSync: true });
+}
+
+/**
+ * Hold the crew's documents off until a turning gesture stops, then commit their seats. The timer
+ * is per handle, and each further notch pushes it out again, so one turn of the wheel is one write.
+ */
+function settleRotation(handle) {
+  const prior = _rotationSettles.get(handle.id);
+  if (prior) clearTimeout(prior);
+  _rotationSettles.set(handle.id, setTimeout(async () => {
+    _rotationSettles.delete(handle.id);
+    try { await commitCrewFollow(handle); }
+    catch (e) { console.warn(`${SCOPE} | rotation re-seat failed`, e); }
+  }, ROTATION_SETTLE_MS));
+}
+
+/**
+ * Register the crew-follow coupling: when a vehicle handle token changes pose, its riders' seats are
+ * recomputed and written once. Gated to the client that made the change, so exactly one client
+ * writes. What the eye sees WHILE the vehicle is moving is not here at all — that is the per-frame
+ * presentation coupling in vehicle-ride.js, which draws and never writes. No reverse coupling and
+ * no tiles, so there is nothing to loop on.
  */
 export function registerVehicleCanvasHooks() {
-  Hooks.on("preUpdateToken", (doc, change, options) => {
-    if (options?.cp2020VehicleSync) return;
-    if (!_isVehicleToken(doc)) return;
-    const dx = (change.x ?? doc.x) - doc.x;
-    const dy = (change.y ?? doc.y) - doc.y;
-    if (dx || dy) _moveDeltas.set(doc.id, { dx, dy });
-  });
-
+  // ONE handler for every way a vehicle can change pose. A move (or a resize) commits at once,
+  // because the vehicle already knows where it is going. A turn on its own SETTLES first: the
+  // core's rotation gestures fire one update per scroll notch, and writing the crew's documents a
+  // dozen times for one turn of the wheel is noise — the crew are already following the turn frame
+  // by frame on screen, so the write can afford to wait for the gesture to finish.
   Hooks.on("updateToken", async (doc, change, options, userId) => {
-    const delta = _moveDeltas.get(doc.id);
-    if (delta) _moveDeltas.delete(doc.id);
     if (options?.cp2020VehicleSync) return;
-    if (userId !== game.user.id) return;             // only the client that performed the move
-    if (!_isVehicleToken(doc) || !delta || (!delta.dx && !delta.dy)) return;
-
-    const scene = doc.parent;
-    const crew = scene.tokens.filter(t => t.flags?.[SCOPE]?.boardedVehicle === doc.actorId);
-    // A non-GM driver can move the vehicle but cannot write token docs they don't own (un-owned
-    // passengers) — those updates fail silently and the crew stays behind. Split by writability:
-    // apply the ones this user can modify directly, and relay the rest to the active GM (mirrors the
-    // missile/vehicle-damage socket relay — same scope + active-GM handler applies).
-    const mine = [], relay = [];
-    for (const t of crew) {
-      const u = { _id: t.id, x: t.x + delta.dx, y: t.y + delta.dy };
-      (t.canUserModify(game.user, "update") ? mine : relay).push(u);
-    }
-    if (mine.length) await scene.updateEmbeddedDocuments("Token", mine, { cp2020VehicleSync: true });
-    if (relay.length) {
-      if (game.users?.activeGM) {
-        game.socket.emit("module.cp2020-augmented", {
-          type: "vehicleCrewFollow", sceneId: scene.id, updates: relay, requesterId: game.user.id,
-        });
-      } else {
-        ui.notifications?.warn?.(localizeParam("Vehicle.NoGMForCrewFollow", { name: doc.name ?? "the vehicle" }));
+    if (userId !== game.user.id) return;             // one writer: the client that made the change
+    if (!_isVehicleToken(doc)) {
+      // A RIDER that moved on its own was dragged by hand: record which seat it landed in.
+      if ((change.x !== undefined || change.y !== undefined) && doc.flags?.[SCOPE]?.boardedVehicle) {
+        await adoptDraggedSeat(doc);
       }
+      return;
     }
+    const moved = change.x !== undefined || change.y !== undefined
+      || change.width !== undefined || change.height !== undefined;
+    const turned = change.rotation !== undefined;
+    if (!moved && !turned) return;
+    if (!moved) { settleRotation(doc); return; }
+    const pending = _rotationSettles.get(doc.id);
+    if (pending) { clearTimeout(pending); _rotationSettles.delete(doc.id); }
+    await commitCrewFollow(doc);
   });
 
   // GM-side relay: a non-GM driver emits the un-owned crew moves; only the active GM (who can write
@@ -326,7 +510,7 @@ export function registerVehicleCanvasHooks() {
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
     const scene = data.sceneId ? game.scenes?.get(data.sceneId) : canvas?.scene;
     if (scene && Array.isArray(data.updates) && data.updates.length) {
-      await scene.updateEmbeddedDocuments("Token", data.updates, { cp2020VehicleSync: true });
+      await commitSeats(scene, data.updates);
     }
   });
 
@@ -351,52 +535,31 @@ export function registerVehicleCanvasHooks() {
       const handle = vehicleTokenFor(scene, actor.id);
       if (!handle) continue;
       if (handle.width !== gw || handle.height !== gh) await handle.update({ width: gw, height: gh });
-      const grid = scene.grid?.size ?? 100;
-      const rect = { x: handle.x, y: handle.y, w: gw * grid, h: gh * grid };
-      // The order is derived from gw/gh — the SAME figures the rect is built from — and never from
-      // the handle document. Reading the token back after its resize looked equivalent and was not:
-      // rig-measured, the doc still answered with its old footprint on the pass that had just
-      // resized it, so the rect was the new shape while the seat order was still the old one and
-      // riders landed in cells that belonged to neither.
-      await reseatRiders(scene, actor, handle, rect, gw, gh);
+      // The footprint comes from gw/gh — the actor's own new figures — and never from the handle
+      // document. Reading the token back after its resize looked equivalent and was not: rig-measured,
+      // the doc still answered with its old footprint on the pass that had just resized it, so the
+      // seat order was the old shape's while the rect was the new one, and riders landed in cells
+      // that belonged to neither.
+      const pose = { ...storedPoseOf(handle), w: gw, h: gh };
+      await reseatRiders(scene, actor, pose);
     }
   });
 
-  // Rotation SETTLES rather than streaming: core's own gestures (Shift+scroll 45°, Ctrl+scroll 15°,
-  // an exact number in the config) fire an update per notch, and re-seating on each one would drag
-  // the crew round the car a dozen times for one turn of the wheel. So the re-seat waits out a
-  // quiet interval after the last rotation update — the same "act on the settled value" shape the
-  // placement tools use. Active-GM only: one writer, and the GM can move any rider.
-  Hooks.on("updateToken", (doc, change) => {
-    if (change?.rotation === undefined) return;
-    if (!_isVehicleToken(doc)) return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
-    const prior = _rotationSettles.get(doc.id);
-    if (prior) clearTimeout(prior);
-    _rotationSettles.set(doc.id, setTimeout(async () => {
-      _rotationSettles.delete(doc.id);
-      try {
-        const scene = doc.parent;
-        const actor = doc.actor;
-        if (!scene || !actor) return;
-        const grid = scene.grid?.size ?? 100;
-        const gw = Math.max(1, Number(doc.width) || 1);
-        const gh = Math.max(1, Number(doc.height) || 1);
-        await reseatRiders(scene, actor, doc, { x: doc.x, y: doc.y, w: gw * grid, h: gh * grid }, gw, gh);
-      } catch (e) { console.warn(`${SCOPE} | rotation re-seat failed`, e); }
-    }, ROTATION_SETTLE_MS));
-  });
-
   // Prototype-token defaults so DRAGGING a vehicle actor onto the canvas behaves exactly like the
-  // old Deploy button: linked, 4x2 (resizable), rendered below crew, art scaled to fit, and flagged
-  // as a vehicle handle so the crew-follow coupling recognizes it. This is why the Deploy button
-  // was removed — a plain drag now produces an identical, fully-functional vehicle token.
+  // old Deploy button: linked, the default footprint (resizable), rendered below crew, art scaled to
+  // fit, and flagged as a vehicle handle so the crew-follow coupling recognizes it. This is why the
+  // Deploy button was removed — a plain drag now produces an identical, fully-functional token.
   Hooks.on("preCreateActor", (actor, data) => {
     if (data?.type !== "cp2020-augmented.vehicle") return;
     try {
       const base = actor.prototypeToken?.toObject?.() ?? {};
+      // A footprint the caller ASKED for is left alone; the default only fills in for a prototype
+      // that never stated one (the core's own 1x1). The old line overwrote the request outright, so
+      // an actor created with a deliberate footprint silently came out at the module's shape.
+      const stated = (Number(base.width) || 1) > 1 || (Number(base.height) || 1) > 1;
+      const footprint = stated ? {} : { width: DEFAULT_FOOTPRINT.w, height: DEFAULT_FOOTPRINT.h };
       actor.updateSource({ prototypeToken: foundry.utils.mergeObject(base, {
-        actorLink: true, width: 4, height: 2, sort: VEHICLE_SORT,
+        actorLink: true, ...footprint, sort: VEHICLE_SORT,
         texture: { src: data.img ?? base.texture?.src, fit: "contain" },
         flags: { [SCOPE]: { vehicleHandle: true } },
       }, { inplace: false }) });

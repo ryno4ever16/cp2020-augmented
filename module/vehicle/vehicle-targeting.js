@@ -18,6 +18,7 @@ import { onGlobalClick } from "../popout-compat.js";
 import { markCardResolved } from "../card-lock.js";
 import { effectiveVehicleRuleSystem } from "../settings.js";
 import { pxPerMeter, metersPerUnit } from "./vehicle-grid.js";
+import { headingVector } from "./vehicle-layout.js";
 import { renderChatCard } from "../compat.js";
 
 const SCOPE = "cp2020-augmented";
@@ -30,7 +31,15 @@ const DEG = 180 / Math.PI;
  * Which facing of the target is struck, from the geometry of the shot. PURE.
  *   dx,dy = vector from the TARGET to the ATTACKER (screen coords; +y is down, as on the canvas).
  *   dz    = attacker elevation − target elevation.
- *   rotationDeg = the target token's rotation (Foundry convention: 0° faces "up"/north, clockwise).
+ *   rotationDeg = the target token's rotation, read through the module's one heading convention
+ *                 (vehicle-layout `headingVector`: rotation 0 faces SOUTH, clockwise on screen).
+ *
+ * ⛔ THIS USED TO ANSWER FOR THE OPPOSITE END OF THE TARGET. The old line took rotation 0 to face
+ * north, which is 180° from what the core says a token at rotation 0 is doing ("A value of 0
+ * represents a southward-facing Token") and from what the core's own drag auto-rotate writes. Front
+ * and rear were therefore swapped on every unrotated target, and the front armour faced away from
+ * the end the engine region sits at. The vector now comes from the single convention every other
+ * consumer reads.
  *
  * Elevation is checked first: a steep shot (|dz| greater than the horizontal distance, i.e. coming
  * from more than 45° above/below) hits the top or bottom. Otherwise the horizontal arc decides:
@@ -41,9 +50,7 @@ export function computeFacing({ dx = 0, dy = 0, dz = 0, rotationDeg = 0 } = {}) 
   const horiz = Math.hypot(dx, dy);
   if (Math.abs(dz) > horiz && Math.abs(dz) > 0) return dz > 0 ? "top" : "bottom";
   if (horiz === 0) return "front";
-  // Target's facing unit vector (rotation 0 = up = (0,-1), clockwise).
-  const r = rotationDeg / DEG;
-  const fx = Math.sin(r), fy = -Math.cos(r);
+  const { x: fx, y: fy } = headingVector(rotationDeg);
   // Angle between the facing vector and the direction to the attacker.
   const dot = (fx * dx + fy * dy) / horiz;             // |facing| = 1
   const angle = Math.acos(Math.max(-1, Math.min(1, dot))) * DEG;
@@ -93,6 +100,16 @@ export function resolveFacing(payload, targetActor) {
 /**
  * Range band for Penetration falloff (MM p.6: −25% at Long, −50% at Extreme; HE/HEAT immune). PURE.
  * Normal ≤ ½ the weapon's range, Long ≤ full range, Extreme beyond.
+ *
+ * ⚠ THE FALLOFF IS PRINTED; THE BAND CUTOFFS ARE NOT. p.6 step 2D states the percentages verbatim
+ * ("Penetration decreases by 25% at Long Range and by 50% at Extreme Range"), and the HE/HEAT immunity
+ * is printed in the p.18/p.20/p.21 table footnotes — but MM never says where Normal ends and Long
+ * begins. It uses FNFF's range bands without restating them, so the ½-range cutoff here is the
+ * module's own concretisation, not a book value.
+ *
+ * This is the same defect SHAPE that was caught in the shotgun pattern table, where invented band
+ * cutoffs sat under a printed rule and were taken for book values for a long time. Flagged, not
+ * silently kept: if the FNFF bands are ever pinned properly this is the line that moves.
  */
 export function rangeBand(distanceM, weaponRangeM) {
   const r = Number(weaponRangeM) || 0;
@@ -335,7 +352,7 @@ export async function dispatchAttack(payload, target) {
           range: payload.range || "normal",
           hefPenetrator: !!payload.hefPenetrator,  // HEAT/Hi-Ex → Penetration not reduced by range
           heat: !!payload.heat,                    // HEAT (shaped-charge) → halved by Composite Armor
-          highDensityAP: !!payload.highDensityAP,  // kinetic, range-immune; NOT halved by Composite/Reactive (errata p.110)
+          highDensityAP: !!payload.highDensityAP,  // kinetic, range-immune; NOT halved by Composite/Reactive (errata p.106)
           ap: !!payload.ap,                        // armor-piercing — sets the SP-erosion factor
           railgun: !!payload.railgun,              // railgun round — SP-erosion factor 0.20, not the 0.60 generic AP
           // Real rolled weapon damage when the firer supplies it (ACPA SDP uses it; vehicles ignore it).

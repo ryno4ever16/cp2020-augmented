@@ -45,8 +45,13 @@ expands to a full math breakdown naming every SP source (armor layers, cover, AP
   deployed vehicle stay linked both ways.
 - **Board:** stand within a square of the vehicle, right-click YOUR token, click the van icon.
   You take a seat inside the vehicle's footprint — shrunk to ride, still fully clickable and
-  targetable (drive-by firefights with real tokens are the point). Drag between squares of the
-  footprint to change seats. The walking-figure icon steps you out beside the car.
+  targetable (drive-by firefights with real tokens are the point). Drag onto another square of the
+  footprint to change seats; the new seat is yours from then on, through resizes and turns. The
+  walking-figure icon steps you out beside the car.
+- **Riding:** the crew stay glued to the vehicle while it drives and turns — no throwing anyone
+  off on a hard stop. A vehicle is drawn deeper than it is wide because its long axis is the way
+  it travels, so it leads with a short face; Foundry turns it to face where you drag it, and the
+  seats, the engine block and the armour facings all turn with it.
 - **Occupancy:** the vehicle shows an aboard count; its sheet lists riders with per-person
   step-out buttons; your own sheet shows an "Aboard" strip while riding. A control on the
   vehicle's HUD fades occupants (only on your screen) when you want to admire the car.

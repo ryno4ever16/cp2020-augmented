@@ -66,8 +66,12 @@ function _syncOutline(placeable) {
   outline.moveTo(corners[0].x, corners[0].y);
   for (let i = 1; i < corners.length; i++) outline.lineTo(corners[i].x, corners[i].y);
   outline.lineTo(corners[0].x, corners[0].y);
-  // A short spur from the middle of the leading edge: at a glance, which way the thing is pointing.
-  const nose = { x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2 };
+  // A short spur from the middle of the LEADING edge: at a glance, which way the thing is pointing.
+  // Corners run top-left, top-right, bottom-right, bottom-left, so the leading edge is the pair at
+  // the BOTTOM — a token at rotation 0 faces south (vehicle-layout ROTATION_ZERO_FRONT, the core's
+  // own convention). The spur used to be drawn off the top pair, which pointed it at the vehicle's
+  // tail and disagreed with both the engine region and the front armour facing.
+  const nose = { x: (corners[2].x + corners[3].x) / 2, y: (corners[2].y + corners[3].y) / 2 };
   const centre = { x: w / 2, y: h / 2 };
   outline.moveTo(nose.x, nose.y);
   outline.lineTo(nose.x + (nose.x - centre.x) * 0.18, nose.y + (nose.y - centre.y) * 0.18);

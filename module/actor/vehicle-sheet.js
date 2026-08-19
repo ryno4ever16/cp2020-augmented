@@ -271,7 +271,7 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
   _cpLayoutContext(system) {
     const w = Number(this.actor.prototypeToken?.width) || 1;
     const h = Number(this.actor.prototypeToken?.height) || 1;
-    const front = resolveFront(system?.layout?.front, w, h);
+    const front = resolveFront(system?.layout?.front);
     const ICONS = { n: "fa-solid fa-arrow-up", e: "fa-solid fa-arrow-right", s: "fa-solid fa-arrow-down", w: "fa-solid fa-arrow-left" };
     const KEYS = { n: "Vehicle.FrontNorth", e: "Vehicle.FrontEast", s: "Vehicle.FrontSouth", w: "Vehicle.FrontWest" };
     // Cover SP: the numbers in play (type prefill unless overridden) drive the PLACEHOLDERS, while

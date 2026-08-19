@@ -10,6 +10,12 @@
  * driver on the hood. One fact fixes it: **Front**, the compass direction the nose points on the
  * map. Everything else here derives from Front plus the footprint's width × height.
  *
+ * THE FOOTPRINT RULE (walk ruling 2026-08-18): a vehicle's LONG axis is the axis it travels
+ * along, so a footprint is DEEP rather than wide and a SHORT face leads. At rotation 0 a token
+ * faces south (ROTATION_ZERO_FRONT below, which is the core's own convention), so the shipped
+ * footprint runs nose-to-tail down the screen and the core's drag auto-rotate then keeps the long
+ * axis pointing wherever the vehicle is driven.
+ *
  * THE LOCAL FRAME (the whole file is written in it):
  *   A footprint is addressed as RANK × FILE instead of row × column.
  *     · rank 0 = the front-most line of cells (the nose); rank grows toward the tail.
@@ -31,21 +37,54 @@
 /** The four headings. Stored lowercase on the actor; "" means "derive from the footprint". */
 export const FRONTS = ["n", "e", "s", "w"];
 
+/* ────────────────── which way a token points when its rotation is zero ────────────────── */
+
 /**
- * The heading a footprint gets before anyone picks one: a WIDE vehicle is drawn facing across the
- * screen (nose east), a TALL one facing down it (nose south). Square footprints take south — the
- * neutral "parked facing the reader" pose most vehicle art is drawn in.
+ * SOUTH — and this is not ours to choose. The core states it in its own token schema ("A value of
+ * 0 represents a southward-facing Token", foundry `common/documents/_types.mjs`) and then acts on
+ * it: drag a token and the core turns it to face where it went, by
+ * `rotation = degrees(atan2(dy, dx)) − 90`. Drive east and it writes −90; drive south and it
+ * writes 0. The setting behind that (`core.tokenAutoRotate`) is on out of the box, so every
+ * hand-dragged vehicle is turned by the core whether or not the module agrees with it.
+ *
+ * ⛔ WHAT WENT WRONG WITHOUT THIS CONSTANT (walk report: "it drives with its longest face
+ * leading"). The module carried THREE different answers to the same question. The shipped
+ * footprint said EAST — four squares wide by two deep, nose along the width. The facing math said
+ * NORTH. The footprint outline drew its nose spur NORTH. So a vehicle dragged east was turned 90°
+ * by the core, its long side swung broadside across the direction of travel, and the crew, the
+ * engine block and the front armour each answered for a different end of the same car. There is
+ * one answer now and every consumer reads it from here.
  */
-export function defaultFrontFor(w, h) {
-  const gw = Math.max(1, Math.round(Number(w) || 1));
-  const gh = Math.max(1, Math.round(Number(h) || 1));
-  return gw > gh ? "e" : "s";
+export const ROTATION_ZERO_FRONT = "s";
+
+/**
+ * The unit vector a token at `deg` points along, in screen pixels — +y is DOWN, as everywhere else
+ * on the canvas. Rotation 0 is south = (0, 1) and the angle runs clockwise on screen, which is the
+ * same thing the core's own −90-for-east formula says.
+ */
+export function headingVector(deg) {
+  const r = ((Number(deg) || 0) * Math.PI) / 180;
+  return { x: -Math.sin(r), y: Math.cos(r) };
 }
 
-/** The stored heading if it is one of the four, else the footprint's default. */
-export function resolveFront(front, w, h) {
+/**
+ * The heading a vehicle gets before anyone picks one: the core's, because an unrotated token is
+ * drawn exactly as its art was drawn and the core has already declared which way that is.
+ *
+ * ⛔ It used to guess from the footprint's SHAPE (wide ⇒ nose east, tall ⇒ nose south). That guess
+ * is what let a four-wide vehicle claim an eastward nose while the core turned it as though it
+ * faced south — two headings 90° apart, on the same car, in the same moment. A shape cannot say
+ * which end of a picture is the front; the sheet's Front picker is how a GM says so for art that
+ * disagrees with the core's convention.
+ */
+export function defaultFrontFor() {
+  return ROTATION_ZERO_FRONT;
+}
+
+/** The stored heading if it is one of the four, else the convention's. */
+export function resolveFront(front) {
   const f = String(front ?? "").trim().toLowerCase();
-  return FRONTS.includes(f) ? f : defaultFrontFor(w, h);
+  return FRONTS.includes(f) ? f : defaultFrontFor();
 }
 
 /**
@@ -57,7 +96,7 @@ export function resolveFront(front, w, h) {
 export function layoutFrame(w, h, front) {
   const gw = Math.max(1, Math.round(Number(w) || 1));
   const gh = Math.max(1, Math.round(Number(h) || 1));
-  const f = resolveFront(front, gw, gh);
+  const f = resolveFront(front);
   const sideways = (f === "e" || f === "w");
   return { front: f, ranks: sideways ? gw : gh, files: sideways ? gh : gw, w: gw, h: gh };
 }
@@ -219,7 +258,7 @@ export function paintedSeatOrder(painted, w, h, front) {
 export function layoutFor(w, h, front, cells) {
   const gw = Math.max(1, Math.round(Number(w) || 1));
   const gh = Math.max(1, Math.round(Number(h) || 1));
-  const f = resolveFront(front, gw, gh);
+  const f = resolveFront(front);
   const painted = parseCells(cells, gw, gh);
   if (!painted) {
     return {
