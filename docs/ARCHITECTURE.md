@@ -139,11 +139,59 @@ world actor BY DESIGN (unlinked pilots share the base).
 
 **ONE rotation-zero convention** (`vehicle-layout.js`: `ROTATION_ZERO_FRONT = "s"`,
 `headingVector()`): a token at rotation 0 faces SOUTH, which is the core's own statement and what
-its drag auto-rotate acts on. Every consumer reads it — the shipped footprint (`DEFAULT_FOOTPRINT`
+its drag auto-rotate acts on. Every consumer reads it — the shipped hull (`DEFAULT_HULL`
 2 across × 4 deep, so the long axis is the travel axis and a short face leads), the seat/engine
-layout, the cover ray's engine cells, the footprint outline's nose spur, and `computeFacing()`'s
+layout, the cover ray's engine cells, the outline's nose spur, and `computeFacing()`'s
 front/side/rear arcs. Three of those used to answer differently (east / north / north), which is how
 a driven vehicle came to lead with its longest face.
+
+**THE HULL / FRAME SPLIT.** On a square grid the core never turns a token's occupied rectangle, so a
+2×4 vehicle at 37° drew its art leaning inside an upright 2×4 box and every interaction the core
+scopes to that box answered for a rectangle the vehicle was no longer in. The two facts are now
+separate:
+
+- **The hull** is the vehicle's real shape — `system.layout.hullW/hullH` on the ACTOR, additive and
+  nullable. It turns with the vehicle and it is what every mechanic measures.
+- **The frame** is the token document's `width`/`height`, and it is a SQUARE — `frameSquareFor(hull)`
+  = `max(w, h)`, so 4 × 4 carries a 2 × 4 hull at any angle. A square is the one rectangle a rotation
+  cannot change the outline of.
+
+The hull sits CENTRED in that square (`hullRectIn`), because rotation is about the token's centre.
+`hullDimsOf(system, fallbackW, fallbackH)` is the single reader, and its **fallback is load-bearing**:
+a vehicle that has recorded no hull answers with the frame it is in, which for pre-split vehicles is
+still the old rectangle — so nothing changes for them until the migration runs. ⛔ Test "has it
+recorded one?" with `hasRecordedHull()`, never `Number.isFinite(Number(hullW))` — the un-recorded
+value is `null` and `Number(null)` is `0`, which is finite.
+
+Consumers, all re-verified: `layoutFor`/seat order/engine cells (`seatOrderAt` reads `pose.hull`),
+`riderSeatAt` (builds the hull rect inside the frame), `storedPoseOf`/`drawnPoseOf` (carry `hull`
+beside `w`/`h`; `vehicle-ride.js`'s pose comparison includes it, since a 2×4 → 4×2 reshape keeps the
+same square), `vehicleCoverRowsOn` (rect + footprint + engine cells — nose 35 / tail 10 survive
+unchanged), boarding reach (`hullRectOf` grown by one square), the outline, the occupancy badge, the
+sheet's Front picker and paint grid, and the sheet's Footprint fields — which now write
+`system.layout.hullW/hullH` and let the canvas layer derive the frame. `vehicle-area.js` and the
+missile flight path read token CENTRES only, which the split leaves identical.
+
+**The frame you see is the hull** (`vehicle-outline.js`). Core's square border is faded to alpha 0 on
+a vehicle handle and the drawn rotated hull takes over its job — in core's OWN border colour whenever
+`_getBorderColor()` returns one, so hover/control/target still read normally. The placeable's pointer
+`hitArea` is re-pointed at the same polygon, so clicking, hovering and targeting follow the bodywork
+instead of the corners of a square; both the assignment and the border fade are wrapped in try/catch,
+and the documented fallback if a core rejects a polygon is core's square hit zone with the outline
+still drawn. Token art is `fit: "contain"` on the square times a UNIFORM `hullArtScale` (short ÷ long)
+so it cannot hang outside its own outline — uniform rather than per-axis because squashing a GM's
+artwork is a worse trade than drawing it slightly smaller.
+
+**Migration** `vehicle-hull-migration.js` (stamp pair `vehicleHullFramed` / `…Completed`, api
+`migrations.vehicleHullFrames()`): records each vehicle's hull, squares its prototype token AND every
+deployed handle, and re-centres each handle so the bodywork does not move a pixel. It writes tokens
+first and the actor second, because the actor write is what the canvas hook watches to re-seat riders.
+⭐ An un-recorded hull taken from a WIDER-than-deep prototype is written the other way round — the long
+axis becomes depth. That is the cure for the "moves with the side forward" report: the module shipped
+4-across vehicles before `a64fd62`, and rig measurement confirms a 4-across token dragged east is
+turned to rotation 270 by the core, putting its longest face exactly broadside. A hull already
+recorded is never re-flipped, and a GM who wants a broad shallow vehicle types it into the Footprint
+fields afterwards.
 
 **Rider coupling is presentation, bookkeeping is one write.** `vehicle-ride.js` draws every aboard
 rider at its seat on each `refreshToken` frame of the vehicle (PIXI transforms only, per client,
@@ -152,6 +200,36 @@ rider documents once per pose change, from the vehicle's `_source` pose, with di
 Both ask the same `riderSeatAt()`, so the last drawn frame and the committed position are the same
 pixel. Seat position is derived from the seat INDEX, never carried as a delta — a dragged rider's
 new square is adopted as an index (`adoptDraggedSeat`) so it survives resizes and heading changes.
+
+**The ride lock** (`vehicle-ride-lock.js`): while a token is aboard, a hand-move whose destination is
+off the vehicle's hull is REFUSED at the source — `preUpdateToken` returns false on the initiating
+client, so nothing is written and nothing is undone (the prior behaviour wrote the drop and then wrote
+it back, which read as a snap-back). `shouldRefuseRiderMove()` is the pure decision; `riderMoveContext()`
+reads the live values, measuring the destination's CENTRE against the vehicle's stored-pose hull with
+`pointInRotatedRect`, so anything the seat-adopter would accept is inside. Four exemptions: a
+destination on the hull (the seat gesture), any update carrying `cp2020VehicleSync` (the one mark for
+"the module moved this rider" — `commitSeats` and the new `moduleRiderMove()` wrapper used by
+`boardVehicle`/`disembark` both stamp it), an update that clears the `boardedVehicle` flag, and a
+rider whose handle is not on the scene. ⛔ No GM exemption, by user ruling; a GM steps someone out with
+the HUD control. Membership is read from the TOKEN's flags, never the actor's — unlinked copies share
+an actor id.
+
+**What a grab picks up, and how loud a refusal is** (same file). Two more rules, both there to stop
+the refusal above being provoked or repeated. (1) `shouldDropFromGrab()` — a rider is taken back out
+of the selection whenever its vehicle's handle is in that selection too. The seam is the
+`controlToken` hook plus a band-context mark; no core method is overridden. The mark is read on the
+gesture's pointer MOVES, not its pointer-up: the core clears `canvas.controls.select.active` as the
+first act of its band-drop handler, which runs ahead of every pointer-up listener a module can add,
+capture phase and `window` included (rig-measured — `controlToken` and all three listener positions
+read it false, the last pointer move read it true). The prune itself is deferred by `setTimeout(0)`
+so it sees the finished control set instead of one token of a sweep in layer order. An aboard rider
+sits INSIDE its vehicle's token square, so the core's own `_overlapsSelection` cannot enclose one
+without the other — "a band over riders alone" is only reachable when the handle is off the scene,
+and that case keeps its riders. (2) `shouldAnnounceRefusal()` — the refusal is unchanged; only the
+message is rationed. Once per database OPERATION, latched with `cp2020RideLockAnnounced` on the
+shared `options` object that every document in one batch is handed, so one drag is one message
+however many riders it refused; and nothing at all when the vehicle is in the selection too, because
+that gesture is moving the car and the coupling seats the crew on arrival.
 
 ## 8. Shop (stub)
 

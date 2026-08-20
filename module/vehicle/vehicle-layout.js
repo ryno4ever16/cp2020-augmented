@@ -37,6 +37,115 @@
 /** The four headings. Stored lowercase on the actor; "" means "derive from the footprint". */
 export const FRONTS = ["n", "e", "s", "w"];
 
+/* ──────────────────────── the hull and the frame it is carried in ──────────────────────── */
+
+/**
+ * THE HULL / FRAME SPLIT (user ruling 2026-08-19, "make the frame follow the hull").
+ *
+ * On a square grid the core never turns a token's occupied rectangle. A 2-across, 4-deep vehicle
+ * turned 37° therefore drew its art at an angle INSIDE an upright 2×4 box: the picture leaned, the
+ * box did not, and every interaction the core scopes to that box (hover, click, the selection
+ * border, the drag marquee) answered for a rectangle the vehicle was no longer in.
+ *
+ * So the two facts are separated:
+ *   · THE HULL is the vehicle's real shape — `hullW` × `hullH` grid squares, recorded on the ACTOR
+ *     (`system.layout.hullW/hullH`). Every mechanic reads it: the seats, the engine region, the
+ *     cover cells, the boarding reach, the outline. It turns with the vehicle.
+ *   · THE FRAME is the token document's `width`/`height`, and it is now a SQUARE big enough to hold
+ *     the hull at ANY angle — `frameSquareFor` below. A square is the one rectangle that a rotation
+ *     cannot change the outline of, so the core's own box stops disagreeing with the vehicle the
+ *     moment the vehicle turns.
+ *
+ * The hull sits CENTRED in that square, because rotation is about the token's centre and centring is
+ * the only placement a turn leaves alone.
+ *
+ * ⚠ THE FALLBACK IS LOAD-BEARING. A vehicle saved before the hull was recorded has no hullW/hullH,
+ * and `hullDimsOf` then answers with the FRAME it was given — which for those vehicles is still the
+ * old rectangle, i.e. exactly the behaviour they have today. Nothing changes for them until the
+ * one-time migration records their hull and squares their frame.
+ */
+export const DEFAULT_HULL = Object.freeze({ w: 2, h: 4 });
+
+/** A stored hull dimension if it is a usable count of squares, else null. */
+function _hullDim(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
+/**
+ * Has this vehicle written its hull down, or is it still reading its shape off its token frame?
+ *
+ * ⛔ ASK THIS, never `Number.isFinite(Number(system.layout.hullW))`. The field's un-recorded value is
+ * `null`, and `Number(null)` is **0**, which is finite — so the obvious test answers "recorded" for
+ * every vehicle that has recorded nothing. It cost this unit a green migration that silently wrote no
+ * hull at all: the frames were squared, the field stayed null, and the pass reported success.
+ */
+export function hasRecordedHull(system) {
+  return _hullDim(system?.layout?.hullW) !== null && _hullDim(system?.layout?.hullH) !== null;
+}
+
+/**
+ * The hull a vehicle actually has: the recorded dimensions, else the frame it is being carried in.
+ * @param {object} system      the vehicle actor's system data
+ * @param {number} fallbackW   the token frame's width in squares (used when nothing is recorded)
+ * @param {number} fallbackH   the token frame's height in squares
+ * @returns {{w:number, h:number}}
+ */
+export function hullDimsOf(system, fallbackW, fallbackH) {
+  const w = _hullDim(system?.layout?.hullW);
+  const h = _hullDim(system?.layout?.hullH);
+  if (w && h) return { w, h };
+  return {
+    w: _hullDim(fallbackW) ?? DEFAULT_HULL.w,
+    h: _hullDim(fallbackH) ?? DEFAULT_HULL.h,
+  };
+}
+
+/**
+ * The token frame a hull needs: a square whose side covers the hull's LONG axis, so the hull fits
+ * inside it at every angle. (A tighter frame would clip the hull's corners on the diagonals; the
+ * circumscribing square of a rotated rectangle is bigger still, and paying for the diagonal would
+ * put a 6×6 box round a 2×4 car for the sake of two angles.)
+ */
+export function frameSquareFor(hull) {
+  return Math.max(1, Math.round(Math.max(Number(hull?.w) || 1, Number(hull?.h) || 1)));
+}
+
+/**
+ * The hull's own axis-aligned rectangle, centred inside the token frame. Turn it about its centre by
+ * the token's rotation and you have the shape the vehicle really occupies; every rotated-rect helper
+ * further down this file takes it as-is.
+ * @param {{x:number,y:number,w:number,h:number}} frameRect  the token's pixel rect (a square)
+ * @param {{w:number,h:number}} hull                          hull size in grid squares
+ * @param {number} grid                                       pixels per square
+ */
+export function hullRectIn(frameRect, hull, grid) {
+  const g = Math.max(1, Number(grid) || 100);
+  const hw = Math.max(1, Math.round(Number(hull?.w) || 1)) * g;
+  const hh = Math.max(1, Math.round(Number(hull?.h) || 1)) * g;
+  const c = rectCenter(frameRect);
+  return { x: c.x - hw / 2, y: c.y - hh / 2, w: hw, h: hh };
+}
+
+/**
+ * How far down the artwork is scaled so it stays inside the hull rather than filling the square.
+ *
+ * The token's texture is fitted (`fit: "contain"`) to the FRAME, which is now bigger than the hull —
+ * left alone, a car would be drawn a square wider than the shape it occupies, hanging outside its own
+ * outline. The scale is UNIFORM (`short ÷ long`) rather than per-axis: a per-axis scale would make the
+ * art exactly fill the hull, at the cost of squashing whatever picture the GM chose, and distorting a
+ * GM's artwork is a worse trade than drawing it a little smaller.
+ *
+ * For the ordinary case — a landscape vehicle picture in a deep hull — this reproduces the OLD
+ * drawing exactly: contain-in-a-square then ×(short/long) lands on the same pixels as contain-in-the-
+ * hull did, because the art's width was the limiting dimension both times.
+ */
+export function hullArtScale(hull) {
+  const w = Math.max(1, Math.round(Number(hull?.w) || 1));
+  const h = Math.max(1, Math.round(Number(hull?.h) || 1));
+  return Math.min(w, h) / Math.max(w, h);
+}
+
 /* ────────────────── which way a token points when its rotation is zero ────────────────── */
 
 /**
@@ -136,6 +245,43 @@ export function rankCells(w, h, front, rank) {
     if (i >= 0) out.push(i);
   }
   return out;
+}
+
+/**
+ * WHICH EDGE OF THE HULL IS THE NOSE, for a heading — the SAME answer `cellIndexAt` gives for rank 0,
+ * said once so the picture and the mechanics cannot state it differently.
+ *
+ * ⛔ WHY THIS EXISTS (reported from the table 2026-08-19: *"the Front buttons have no visible effect
+ * and there's no way to tell which side the front is"*). Front moved the seats, the engine region and
+ * the cover facings — `layoutFor` reads it — but the drawn hull outline did not read it at all: its
+ * nose spur was pinned to the bottom edge, i.e. to `ROTATION_ZERO_FRONT` alone. So a vehicle whose GM
+ * had pointed its nose east was drawn with a spur out of its flank while its engine block, its driver
+ * and its front armour were all at the other end. Two notions of "front" on one car.
+ *
+ * The pairs index `rotatedRectCorners`, which returns [top-left, top-right, bottom-right, bottom-left]
+ * — so the four edges are (0,1) top, (1,2) right, (2,3) bottom, (3,0) left, exactly the four faces
+ * `cellIndexAt` puts rank 0 against. Because those corners come back ALREADY turned by the token's
+ * rotation, taking the pair here composes the two facts: the heading picks the face, the rotation
+ * carries it round. PURE.
+ */
+export const NOSE_CORNERS = Object.freeze({ n: [0, 1], e: [1, 2], s: [2, 3], w: [3, 0] });
+
+/** The two corner indices of the nose edge for a stored heading (unrecognized ⇒ the convention's). */
+export function noseCornerPair(front) {
+  return NOSE_CORNERS[resolveFront(front)];
+}
+
+/**
+ * The midpoint of the nose edge, given a hull's four (already rotated) corners and a heading. The one
+ * point the outline's spur is drawn from and the one a keeper reads back.
+ * @param {{x:number,y:number}[]} corners  `rotatedRectCorners` output
+ * @param {string} front                   the stored heading
+ */
+export function noseMidpoint(corners, front) {
+  const [i, j] = noseCornerPair(front);
+  const a = corners?.[i], b = corners?.[j];
+  if (!a || !b) return null;
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
 /**

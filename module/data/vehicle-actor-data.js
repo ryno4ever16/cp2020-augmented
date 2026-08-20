@@ -70,6 +70,15 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
       layout: new f.SchemaField({
         // "" = derive from the footprint (wide ⇒ east, tall ⇒ south); else n/e/s/w.
         front:    new f.StringField({ initial: "" }),
+        // ── The HULL: the vehicle's real shape in grid squares, across × deep with the nose at the
+        // deep end. The token document's width/height are no longer this shape — they are the SQUARE
+        // that carries it at any angle (vehicle-layout.js frameSquareFor), because a square is the
+        // one rectangle a rotation does not change. Every mechanic reads the hull; the core reads the
+        // square. null = never recorded, in which case hullDimsOf falls back to the token frame, so a
+        // vehicle saved before this existed keeps behaving exactly as it did until the one-time hull
+        // migration records its shape. Nullable additive fields — no mergeDefaults, no rewrite.
+        hullW:    new f.NumberField({ initial: null, nullable: true, required: false, integer: true, min: 1 }),
+        hullH:    new f.NumberField({ initial: null, nullable: true, required: false, integer: true, min: 1 }),
         // The painted grid: one character per footprint cell, row-major ("." body / "S" seat /
         // "E" engine). "" = nothing painted, use the derived layout. A string whose length no
         // longer matches the footprint is ignored rather than repaired (see parseCells).

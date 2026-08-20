@@ -32,7 +32,7 @@
 import { localizeParam } from "../utils.js";
 import { footprintCells } from "./vehicle-seating.js";
 import { layoutFor, coverSpFor, segmentHitsRect, segmentIntoLocalFrame } from "./vehicle-layout.js";
-import { isVehicleTokenDoc, tokenHeadingOf } from "./vehicle-canvas.js";
+import { isVehicleTokenDoc, tokenHeadingOf, hullRectOf } from "./vehicle-canvas.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_ACTOR_TYPE = "cp2020-augmented.vehicle";
@@ -60,9 +60,11 @@ export function vehicleCoverRowsOn(scene) {
     const { providesCover, bodySp, engineSp } = coverSpFor(system);
     if (!providesCover || bodySp <= 0) continue;
 
-    const w = Math.max(1, Math.round(Number(tokenDoc.width) || 1));
-    const h = Math.max(1, Math.round(Number(tokenDoc.height) || 1));
-    const rect = { x: tokenDoc.x, y: tokenDoc.y, w: w * grid, h: h * grid };
+    // The cover geometry is the HULL, not the token's frame square. Measuring the square would give
+    // a car a metre of bulletproof pavement on each side of itself: the frame exists so the core's
+    // upright box can hold a turned vehicle, and it is not part of the vehicle.
+    const { rect, hull } = hullRectOf(tokenDoc, grid);
+    const w = hull.w, h = hull.h;
     const sdpMax = Math.max(0, Math.round(Number(system.sdp?.max) || 0));
     const tracked = sdpMax > 0;
     const pool = tracked ? Math.max(0, Math.round(Number(system.sdp?.value) || 0)) : 0;

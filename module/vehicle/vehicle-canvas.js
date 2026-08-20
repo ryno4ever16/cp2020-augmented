@@ -13,7 +13,7 @@
 
 import { deleteFieldUpdate, localizeParam } from "../utils.js";
 import { seatSlotPosition, placeBeside } from "./vehicle-seating.js";
-import { layoutFor } from "./vehicle-layout.js";
+import { layoutFor, hullDimsOf, hasRecordedHull, frameSquareFor, hullRectIn, hullArtScale, DEFAULT_HULL } from "./vehicle-layout.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_SORT = -100;            // render below crew tokens
@@ -24,18 +24,29 @@ const VEHICLE_SORT = -100;            // render below crew tokens
  * the person sitting in it. The prior scale is stored and restored verbatim on the way out.
  * ⚠ Read the prior value from `_source` — the PREPARED `texture.scaleX` is animated by the core
  * and reads back mid-transition (rig-measured 0.77 while 0.6 was stored).
+ *
+ * TODO (user, 2026-08-19): riders are "a bit too easy to select" when clicking the vehicle —
+ * "we can live with this." Recorded, not acted on. The full square kept here is exactly what makes
+ * a seat clickable, so shrinking the hit area to the drawn 60% would trade one complaint for the
+ * opposite one; any change here has to be weighed against the vehicle's own hull hitArea in
+ * vehicle-outline.js, which the seats sit on top of.
  */
 const BOARDED_SCALE = 0.6;
 /** How far above the vehicle handle a rider is lifted when its sort would leave it underneath. */
 const CREW_SORT_LIFT = 10;
 /**
- * The footprint a vehicle gets before anyone sizes it: TWO squares across, FOUR deep. Deep and not
- * wide, because a vehicle's long axis is the axis it travels along and a token at rotation 0 travels
+ * The HULL a vehicle gets before anyone sizes it: TWO squares across, FOUR deep. Deep and not wide,
+ * because a vehicle's long axis is the axis it travels along and a token at rotation 0 travels
  * SOUTH (vehicle-layout's ROTATION_ZERO_FRONT — the core's own convention, which its drag
  * auto-rotate then acts on). Shipping this the other way round is what made a driven vehicle
  * present its longest face to the direction of travel.
+ *
+ * ⚠ This is the HULL, not the token's width/height. The token document is given the SQUARE that
+ * carries this hull at any angle (`frameSquareFor`) — 4 × 4 for the 2 × 4 default. The name is kept
+ * for the callers that import it, and it now points at the layout layer's own constant so the two
+ * can never drift into two different shipped shapes.
  */
-export const DEFAULT_FOOTPRINT = Object.freeze({ w: 2, h: 4 });
+export const DEFAULT_FOOTPRINT = DEFAULT_HULL;
 /**
  * How long the heading has to hold still before riders are re-seated to it. Core's rotation
  * gestures stream one update per scroll notch, so this is what turns "a dozen updates" into "one
@@ -72,19 +83,25 @@ export async function deployVehicleToScene(actor, opts = {}) {
   }
 
   const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
-  const gw = Math.max(1, Number(opts.gw) || Number(actor.prototypeToken?.width) || DEFAULT_FOOTPRINT.w);
-  const gh = Math.max(1, Number(opts.gh) || Number(actor.prototypeToken?.height) || DEFAULT_FOOTPRINT.h);
-  const wpx = gw * gridSize, hpx = gh * gridSize;
-  const px = opts.x ?? Math.round(((scene.width ?? 2000) - wpx) / 2);
-  const py = opts.y ?? Math.round(((scene.height ?? 2000) - hpx) / 2);
+  // The HULL comes from the actor (a caller may still state one), and the token's own width/height
+  // are the SQUARE that carries it at any angle — see vehicle-layout's hull/frame note.
+  const hull = hullDimsOf(actor.system,
+    Number(opts.gw) || Number(actor.prototypeToken?.width),
+    Number(opts.gh) || Number(actor.prototypeToken?.height));
+  const side = frameSquareFor(hull);
+  const sidePx = side * gridSize;
+  const px = opts.x ?? Math.round(((scene.width ?? 2000) - sidePx) / 2);
+  const py = opts.y ?? Math.round(((scene.height ?? 2000) - sidePx) / 2);
 
   const [tokenDoc] = await scene.createEmbeddedDocuments("Token", [{
     // Link mode follows the actor's prototype token — the user's choice (linked = THE vehicle,
     // unlinked = independent copies), not a hardcoded override. New vehicles seed linked at creation.
     name: actor.name, actorId: actor.id, actorLink: actor.prototypeToken?.actorLink ?? true,
-    x: px, y: py, width: gw, height: gh,
+    x: px, y: py, width: side, height: side,
     sort: VEHICLE_SORT,                              // crew tokens render on top
-    texture: { src: actor.img, fit: "contain" },     // art scales to the footprint
+    // Art fits the square, then scales down to the hull — otherwise a car is drawn a square wider
+    // than the shape it occupies, hanging outside its own outline.
+    texture: { src: actor.img, fit: "contain", scaleX: hullArtScale(hull), scaleY: hullArtScale(hull) },
     flags: { [SCOPE]: { vehicleHandle: true } },
   }]);
   return { tokenId: tokenDoc.id, existing: false };
@@ -92,7 +109,12 @@ export async function deployVehicleToScene(actor, opts = {}) {
 
 /* ------------------------------------------------------------------ seating helpers */
 
-/** Pixel rectangle of a token document on its scene. */
+/**
+ * Pixel rectangle of a token document on its scene — its FRAME, deliberately. Used for placement
+ * clearance (where to stand a stepped-out rider, what a deploy must not land on), where the frame is
+ * the right measure precisely because it is the box core keeps the token in: a spot clear of the
+ * square is clear of the hull inside it, so nobody is ever put down under the bodywork.
+ */
 function tokenRect(doc, gridSize) {
   return { x: doc.x, y: doc.y, w: (doc.width ?? 1) * gridSize, h: (doc.height ?? 1) * gridSize };
 }
@@ -119,13 +141,20 @@ export function tokenHeadingOf(doc) {
 export function seatOrderFor(vehicleActor, vehicleTokenDoc) {
   const w = Number(vehicleTokenDoc?.width) || Number(vehicleActor?.prototypeToken?.width) || 1;
   const h = Number(vehicleTokenDoc?.height) || Number(vehicleActor?.prototypeToken?.height) || 1;
-  return seatOrderAt(vehicleActor, { w, h });
+  return seatOrderAt(vehicleActor, { w, h, hull: hullDimsOf(vehicleActor?.system, w, h) });
 }
 
-/** The seat order for a vehicle at a given footprint — the layout layer's answer, in one place. */
+/**
+ * The seat order for a vehicle at a given pose — the layout layer's answer, in one place.
+ *
+ * ⚠ It reads the pose's HULL, never its frame. The frame is the square the core carries the vehicle
+ * in and has no cells of its own; asking it for a seat order would put the driver a square out into
+ * empty tarmac on every vehicle whose hull is narrower than it is deep — which is all of them.
+ */
 export function seatOrderAt(vehicleActor, pose) {
   const layout = vehicleActor?.system?.layout ?? {};
-  return layoutFor(pose?.w, pose?.h, layout.front, layout.cells).seats;
+  const hull = pose?.hull ?? hullDimsOf(vehicleActor?.system, pose?.w, pose?.h);
+  return layoutFor(hull.w, hull.h, layout.front, layout.cells).seats;
 }
 
 /**
@@ -140,22 +169,29 @@ export function seatOrderAt(vehicleActor, pose) {
  */
 export function storedPoseOf(handleDoc) {
   const src = handleDoc?._source ?? handleDoc ?? {};
+  const w = Math.max(1, Number(src.width ?? handleDoc?.width) || 1);
+  const h = Math.max(1, Number(src.height ?? handleDoc?.height) || 1);
   return {
     x: Number(src.x) || 0,
     y: Number(src.y) || 0,
-    w: Math.max(1, Number(src.width ?? handleDoc?.width) || 1),
-    h: Math.max(1, Number(src.height ?? handleDoc?.height) || 1),
+    w, h,
+    // The frame is w × h; the HULL travels with the pose so every consumer of a pose answers for the
+    // vehicle's real shape without having to fetch the actor again. A vehicle that has not recorded
+    // one falls back to the frame, which for those vehicles IS the old rectangle.
+    hull: hullDimsOf(handleDoc?.actor?.system, w, h),
     rotation: tokenHeadingOf(handleDoc),
   };
 }
 
 /** The pose a vehicle handle is DRAWN at this frame — the prepared values, which the core animates. */
 export function drawnPoseOf(handleDoc) {
+  const w = Math.max(1, Number(handleDoc?.width) || 1);
+  const h = Math.max(1, Number(handleDoc?.height) || 1);
   return {
     x: Number(handleDoc?.x) || 0,
     y: Number(handleDoc?.y) || 0,
-    w: Math.max(1, Number(handleDoc?.width) || 1),
-    h: Math.max(1, Number(handleDoc?.height) || 1),
+    w, h,
+    hull: hullDimsOf(handleDoc?.actor?.system, w, h),
     rotation: Number(handleDoc?.rotation) || 0,
   };
 }
@@ -169,8 +205,26 @@ export function drawnPoseOf(handleDoc) {
  */
 export function riderSeatAt(pose, grid, seatIndex, riderSize, order) {
   const g = Math.max(1, Number(grid) || 100);
-  const rect = { x: pose.x, y: pose.y, w: pose.w * g, h: pose.h * g };
+  const frame = { x: pose.x, y: pose.y, w: pose.w * g, h: pose.h * g };
+  // Seats live in the HULL, centred inside the frame square — never in the square itself, which has a
+  // square's worth of tarmac round the vehicle on its narrow axis.
+  const rect = hullRectIn(frame, pose.hull ?? { w: pose.w, h: pose.h }, g);
   return seatSlotPosition(rect, g, seatIndex, riderSize, order, pose.rotation);
+}
+
+/**
+ * A vehicle handle's HULL rectangle on the map — the axis-aligned shape that, turned by the token's
+ * rotation about its own centre, is what the vehicle actually occupies. The one place the frame
+ * square is converted into the vehicle's real footprint, so cover, boarding reach and the outline
+ * cannot each measure it their own way.
+ */
+export function hullRectOf(tokenDoc, grid) {
+  const g = Math.max(1, Number(grid) || 100);
+  const w = Math.max(1, Math.round(Number(tokenDoc?.width) || 1));
+  const h = Math.max(1, Math.round(Number(tokenDoc?.height) || 1));
+  const hull = hullDimsOf(tokenDoc?.actor?.system, w, h);
+  const frame = { x: Number(tokenDoc?.x) || 0, y: Number(tokenDoc?.y) || 0, w: w * g, h: h * g };
+  return { rect: hullRectIn(frame, hull, g), hull };
 }
 
 /**
@@ -291,9 +345,21 @@ function displaceWaypointFor(tokenDoc, update) {
     action: "displace", snapped: false, explicit: false, checkpoint: true,
   }] };
 }
-function displaceOptionsFor(tokenDoc, update) {
+/**
+ * Update options for a rider the MODULE is moving — boarding, stepping out, a re-seat: the displace
+ * waypoint above, plus the mark that says we did it.
+ *
+ * `cp2020VehicleSync` is that mark. The crew-follow hook already read it to recognise its own writes
+ * and skip them; the ride lock in vehicle-ride-lock.js now reads the SAME mark to let those writes
+ * through while it refuses a hand-drag off the bodywork. One answer to "did we do this", rather than
+ * one per feature. Every module path that moves a rider goes through here or through `commitSeats`,
+ * which stamps it the same way.
+ */
+function moduleRiderMove(tokenDoc, update) {
   const instruction = displaceWaypointFor(tokenDoc, update);
-  return instruction ? { movement: { [tokenDoc.id]: instruction } } : {};
+  return instruction
+    ? { movement: { [tokenDoc.id]: instruction }, cp2020VehicleSync: true }
+    : { cp2020VehicleSync: true };
 }
 
 /** The vehicle's handle token on a scene (the one the crew token is sitting on/next to). */
@@ -359,7 +425,7 @@ export async function boardVehicle(crewTokenDoc, vehicleActor, vehicleTokenDoc =
     if ((Number(src.sort) || 0) < lift) update.sort = lift;
   }
 
-  await crewTokenDoc.update(update, displaceOptionsFor(crewTokenDoc, update));
+  await crewTokenDoc.update(update, moduleRiderMove(crewTokenDoc, update));
 
   // A handle placed outside our own defaults (an older token, a hand-made one) may sort at or
   // above its riders, which would let the hull swallow every seat click. Push it back down.
@@ -403,7 +469,7 @@ export async function disembark(crewTokenDoc) {
     update.x = spot.x;
     update.y = spot.y;
   }
-  await crewTokenDoc.update(update, displaceOptionsFor(crewTokenDoc, update));
+  await crewTokenDoc.update(update, moduleRiderMove(crewTokenDoc, update));
 }
 
 /**
@@ -525,22 +591,36 @@ export function registerVehicleCanvasHooks() {
     if (actor.type !== "cp2020-augmented.vehicle") return;
     const pt = change?.prototypeToken;
     const sizeChanged = !!pt && (pt.width !== undefined || pt.height !== undefined);
+    const hullChanged = change?.system?.layout?.hullW !== undefined
+      || change?.system?.layout?.hullH !== undefined;
     const layoutChanged = change?.system?.layout?.front !== undefined
       || change?.system?.layout?.cells !== undefined;
-    if (!sizeChanged && !layoutChanged) return;
+    if (!sizeChanged && !hullChanged && !layoutChanged) return;
     if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
-    const gw = Math.max(1, Number(actor.prototypeToken?.width) || 1);
-    const gh = Math.max(1, Number(actor.prototypeToken?.height) || 1);
+    // The HULL is the edited figure now (the sheet's Footprint fields write it); the frame square and
+    // the art scale are both derived from it, here, so there is exactly one place that decides them.
+    const hull = hullDimsOf(actor.system,
+      Number(actor.prototypeToken?.width), Number(actor.prototypeToken?.height));
+    const side = frameSquareFor(hull);
+    const scale = hullArtScale(hull);
+    if (hullChanged && (Number(actor.prototypeToken?.width) !== side
+        || Number(actor.prototypeToken?.height) !== side)) {
+      await actor.update({ prototypeToken: {
+        width: side, height: side, texture: { scaleX: scale, scaleY: scale },
+      } });
+    }
     for (const scene of game.scenes ?? []) {
       const handle = vehicleTokenFor(scene, actor.id);
       if (!handle) continue;
-      if (handle.width !== gw || handle.height !== gh) await handle.update({ width: gw, height: gh });
-      // The footprint comes from gw/gh — the actor's own new figures — and never from the handle
-      // document. Reading the token back after its resize looked equivalent and was not: rig-measured,
-      // the doc still answered with its old footprint on the pass that had just resized it, so the
-      // seat order was the old shape's while the rect was the new one, and riders landed in cells
-      // that belonged to neither.
-      const pose = { ...storedPoseOf(handle), w: gw, h: gh };
+      if (handle.width !== side || handle.height !== side) {
+        await handle.update({ width: side, height: side, texture: { scaleX: scale, scaleY: scale } });
+      }
+      // The pose comes from the actor's OWN new figures and never from the handle document. Reading
+      // the token back after its resize looked equivalent and was not: rig-measured, the doc still
+      // answered with its old footprint on the pass that had just resized it, so the seat order was
+      // the old shape's while the rect was the new one, and riders landed in cells that belonged to
+      // neither.
+      const pose = { ...storedPoseOf(handle), w: side, h: side, hull };
       await reseatRiders(scene, actor, pose);
     }
   });
@@ -553,16 +633,27 @@ export function registerVehicleCanvasHooks() {
     if (data?.type !== "cp2020-augmented.vehicle") return;
     try {
       const base = actor.prototypeToken?.toObject?.() ?? {};
-      // A footprint the caller ASKED for is left alone; the default only fills in for a prototype
-      // that never stated one (the core's own 1x1). The old line overwrote the request outright, so
-      // an actor created with a deliberate footprint silently came out at the module's shape.
-      const stated = (Number(base.width) || 1) > 1 || (Number(base.height) || 1) > 1;
-      const footprint = stated ? {} : { width: DEFAULT_FOOTPRINT.w, height: DEFAULT_FOOTPRINT.h };
-      actor.updateSource({ prototypeToken: foundry.utils.mergeObject(base, {
-        actorLink: true, ...footprint, sort: VEHICLE_SORT,
-        texture: { src: data.img ?? base.texture?.src, fit: "contain" },
-        flags: { [SCOPE]: { vehicleHandle: true } },
-      }, { inplace: false }) });
+      // A hull the caller ASKED for is left alone — either stated outright in system.layout, or, for
+      // the callers that still speak in token sizes, as a prototype footprint bigger than the core's
+      // own 1×1. The default only fills in when neither said anything.
+      const asked = hullDimsOf(data?.system, null, null);
+      const statedHull = hasRecordedHull(data?.system);
+      const statedFrame = (Number(base.width) || 1) > 1 || (Number(base.height) || 1) > 1;
+      const hull = statedHull ? asked
+        : (statedFrame ? { w: Number(base.width) || 1, h: Number(base.height) || 1 } : DEFAULT_HULL);
+      const side = frameSquareFor(hull);
+      const scale = hullArtScale(hull);
+      // The hull is RECORDED on the actor and the prototype token becomes the square that carries
+      // it — the two halves of the same fact, written together so a fresh vehicle never exists in a
+      // state where its frame and its hull disagree.
+      actor.updateSource({
+        system: { layout: { hullW: hull.w, hullH: hull.h } },
+        prototypeToken: foundry.utils.mergeObject(base, {
+          actorLink: true, width: side, height: side, sort: VEHICLE_SORT,
+          texture: { src: data.img ?? base.texture?.src, fit: "contain", scaleX: scale, scaleY: scale },
+          flags: { [SCOPE]: { vehicleHandle: true } },
+        }, { inplace: false }),
+      });
     } catch (e) { /* non-fatal */ }
   });
 }

@@ -125,6 +125,9 @@ const placed = await page.waitForFunction(({ sceneId }) => {
   return {
     actorId: actor.id, tokenId: tok.id,
     x: tok.x, y: tok.y, w: tok.width, h: tok.height, sort: tok.sort,
+    // The token's width/height are the carrying SQUARE; the vehicle's own shape is recorded on the
+    // actor. Both are read, because the contract is that they differ in exactly that way.
+    hullW: actor.system.layout?.hullW ?? null, hullH: actor.system.layout?.hullH ?? null,
     handleFlag: tok.flags?.["cp2020-augmented"]?.vehicleHandle === true,
     fit: tok.texture?.fit,
   };
@@ -140,8 +143,10 @@ if (placed) {
   check("placed token is adjacent (gap = 0 squares)", gapSquares === 0, String(gapSquares));
   check("placed token carries the vehicle-handle flag", placed.handleFlag === true);
   check("placed token sorts below crew (sort = -100)", placed.sort === -100, String(placed.sort));
-  check("placed token uses the vehicle footprint, deep rather than wide (2x4)",
-    placed.w === 2 && placed.h === 4, `${placed.w}x${placed.h}`);
+  check("the placed vehicle records a hull deep rather than wide (2x4)",
+    placed.hullW === 2 && placed.hullH === 4, `hull ${placed.hullW}x${placed.hullH}`);
+  check("its token carries the SQUARE that holds that hull at any angle (4x4)",
+    placed.w === 4 && placed.h === 4, `frame ${placed.w}x${placed.h}`);
 }
 
 /* ------------------------------------------------------------------ B. blocked side falls to the next candidate */
@@ -229,6 +234,18 @@ const seating = await page.evaluate(async ({ sceneId, riderId, driverId, grid })
   await canvasMod.boardVehicle(scene.tokens.get(r2.id), vehicle, vTok);
   // This core streams a token's document position while it animates along a movement path, so a
   // read taken too early lands mid-glide. Wait for the coordinates to stop changing.
+  // The vehicle's own rectangle inside its carrying square — the origin every seat expectation in
+  // this suite is measured from now that the token's rect is a square and not the shape.
+  window.__pwHull = (tokenDoc, grid) => {
+    const sysHull = tokenDoc.actor?.system?.layout ?? {};
+    const hw = Number(sysHull.hullW) >= 1 ? Math.round(Number(sysHull.hullW)) : Math.round(Number(tokenDoc.width));
+    const hh = Number(sysHull.hullH) >= 1 ? Math.round(Number(sysHull.hullH)) : Math.round(Number(tokenDoc.height));
+    return {
+      w: hw, h: hh,
+      x: tokenDoc.x + ((Number(tokenDoc.width) - hw) * grid) / 2,
+      y: tokenDoc.y + ((Number(tokenDoc.height) - hh) * grid) / 2,
+    };
+  };
   window.__pwSettle = async (sceneId, tokenId) => {
     const sc = game.scenes.get(sceneId);
     let last = null;
@@ -244,12 +261,17 @@ const seating = await page.evaluate(async ({ sceneId, riderId, driverId, grid })
   await window.__pwSettle(scene.id, r2.id);
 
   const a = scene.tokens.get(r1.id), b = scene.tokens.get(r2.id);
-  const inFootprint = (t) => t.x >= vTok.x && t.y >= vTok.y
-    && t.x + t.width * grid <= vTok.x + vTok.width * grid
-    && t.y + t.height * grid <= vTok.y + vTok.height * grid;
+  const hull = window.__pwHull(vTok, grid);
+  // Containment is measured against the HULL, not the carrying square: a rider inside the square but
+  // outside the bodywork is exactly the defect the split exists to prevent, so the square would be a
+  // weaker test than the one it replaces.
+  const inFootprint = (t) => t.x >= hull.x && t.y >= hull.y
+    && t.x + t.width * grid <= hull.x + hull.w * grid
+    && t.y + t.height * grid <= hull.y + hull.h * grid;
 
   return {
     vehicle: { id: vehicle.id, tokenId: vTok.id, x: vTok.x, y: vTok.y, w: vTok.width, h: vTok.height, sort: vTok.sort },
+    hull,
     r1Id: r1.id, r2Id: r2.id, priorScale, priorSort,
     seat1: { x: a.x, y: a.y, idx: a.flags["cp2020-augmented"].seatIndex, sort: a.sort, scale: a._source.texture.scaleX },
     seat2: { x: b.x, y: b.y, idx: b.flags["cp2020-augmented"].seatIndex, sort: b.sort, scale: b._source.texture.scaleX },
@@ -265,10 +287,14 @@ const seating = await page.evaluate(async ({ sceneId, riderId, driverId, grid })
 // west. Expectations are derived here from the handle's own footprint rather than copied off the
 // module, so a change to the layout code cannot quietly re-bless itself.
 const g = setup.grid;
-const vw = seating.vehicle.w, vh = seating.vehicle.h;
-const driverSeat = { x: seating.vehicle.x + (vw - 1) * g, y: seating.vehicle.y + (vh - 2) * g };
-const mateSeat = { x: seating.vehicle.x + (vw - 2) * g, y: seating.vehicle.y + (vh - 2) * g };
-check("the handle is deep rather than wide (the long axis is the travel axis)", vh > vw, `${vw}x${vh}`);
+// vw/vh are the HULL's dimensions and the seat coordinates are measured from the HULL's own top-left
+// corner. The token's rect is the square that carries it and has no cells of its own.
+const vw = seating.hull.w, vh = seating.hull.h;
+const driverSeat = { x: seating.hull.x + (vw - 1) * g, y: seating.hull.y + (vh - 2) * g };
+const mateSeat = { x: seating.hull.x + (vw - 2) * g, y: seating.hull.y + (vh - 2) * g };
+check("the hull is deep rather than wide (the long axis is the travel axis)", vh > vw, `hull ${vw}x${vh}`);
+check("the token frame that carries it is square", seating.vehicle.w === seating.vehicle.h,
+  `frame ${seating.vehicle.w}x${seating.vehicle.h}`);
 check("first rider takes the driver's seat, behind the engine rank (exact)",
   seating.seat1.idx === 0 && seating.seat1.x === driverSeat.x && seating.seat1.y === driverSeat.y,
   `idx=${seating.seat1.idx} at ${seating.seat1.x},${seating.seat1.y}; want ${driverSeat.x},${driverSeat.y}`);
@@ -307,8 +333,15 @@ const seatClick = await clickWorld(seating.seat1.x + g / 2, seating.seat1.y + g 
 check("clicking a seat square selects the person", seatClick.includes("__PW__Rider"), seatClick.join(","));
 await page.evaluate(() => canvas.tokens.releaseAll());
 // The engine rank is the bottom one and never holds a seat, so it is empty hull by construction.
-const hullClick = await clickWorld(seating.vehicle.x + 0.5 * g, seating.vehicle.y + (vh - 0.5) * g);
+const hullClick = await clickWorld(seating.hull.x + 0.5 * g, seating.hull.y + (vh - 0.5) * g);
 check("clicking empty hull selects the vehicle", hullClick.includes("__PW__Ride"), hullClick.join(","));
+await page.evaluate(() => canvas.tokens.releaseAll());
+// NEGATIVE, and the whole point of the pointer change: the same click a square OUT from the hull's
+// flank is still inside core's carrying square, and must now select nothing at all.
+const offHullClick = await clickWorld(seating.hull.x - 0.5 * g, seating.hull.y + (vh - 0.5) * g);
+check("NEGATIVE: clicking inside the carrying square but off the hull selects nothing",
+  offHullClick.length === 0
+  && seating.hull.x - 0.5 * g > seating.vehicle.x, offHullClick.join(",") || "(nothing)");
 await page.evaluate(() => canvas.tokens.releaseAll());
 
 /* ------------------------------------------------------------------ F. occupancy read-outs */
@@ -452,7 +485,8 @@ const outside = await page.evaluate(({ sceneId, grid }) => {
   const vehicle = game.actors.getName("__PW__Ride");
   const v = scene.tokens.find(t => t.actorId === vehicle.id);
   const r = scene.tokens.find(t => t.name === "__PW__Rider");
-  const vr = { x: v.x, y: v.y, w: v.width * grid, h: v.height * grid };
+  const vh2 = window.__pwHull(v, grid);
+  const vr = { x: vh2.x, y: vh2.y, w: vh2.w * grid, h: vh2.h * grid };
   const rr = { x: r.x, y: r.y, w: r.width * grid, h: r.height * grid };
   const overlap = rr.x < vr.x + vr.w && vr.x < rr.x + rr.w && rr.y < vr.y + vr.h && vr.y < rr.y + rr.h;
   const gapX = Math.max(vr.x - (rr.x + rr.w), rr.x - (vr.x + vr.w), 0);
@@ -475,7 +509,8 @@ const reseat = await page.evaluate(async ({ sceneId }) => {
   await canvasMod.boardVehicle(r, vehicle, vTok);
   await window.__pwSettle(scene.id, r.id);
   const t = scene.tokens.get(r.id);
-  return { idx: t.flags["cp2020-augmented"].seatIndex, x: t.x, y: t.y, vx: vTok.x, vy: vTok.y };
+  const hull = window.__pwHull(vTok, scene.grid.size);
+  return { idx: t.flags["cp2020-augmented"].seatIndex, x: t.x, y: t.y, vx: hull.x, vy: hull.y };
 }, setup);
 check("a freed seat is re-used by the next rider (lowest free index)",
   reseat.idx === 0 && reseat.x === reseat.vx + (vw - 1) * g && reseat.y === reseat.vy + (vh - 2) * g,
@@ -577,13 +612,16 @@ const frontLive = await page.evaluate(async ({ sceneId }) => {
   const rider = scene.tokens.find(t => t.name === "__PW__Rider");
   const grid = scene.grid.size;
 
-  // A 2-wide, 4-deep car facing north — the shape the seating rule is written about.
-  await vehicle.update({ "prototypeToken.width": 2, "prototypeToken.height": 4, "system.layout.front": "n" });
-  for (let i = 0; i < 40 && !(scene.tokens.get(vTok.id).width === 2 && scene.tokens.get(vTok.id).height === 4); i++) {
+  // A 2-wide, 4-deep car facing north — the shape the seating rule is written about. The HULL is
+  // what a footprint edit writes now; the token's frame square is derived from it by the canvas layer,
+  // so the wait is on the frame reaching the square that hull needs (4x4).
+  await vehicle.update({ "system.layout.hullW": 2, "system.layout.hullH": 4, "system.layout.front": "n" });
+  for (let i = 0; i < 40 && !(scene.tokens.get(vTok.id).width === 4 && scene.tokens.get(vTok.id).height === 4); i++) {
     await new Promise(r => setTimeout(r, 200));
   }
   await window.__pwSettle(scene.id, rider.id);
   const v = scene.tokens.get(vTok.id);
+  const hull = window.__pwHull(v, grid);
   const north = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
 
   // Same footprint, nose turned around: the driver's seat moves to the mirrored cell.
@@ -611,15 +649,18 @@ const frontLive = await page.evaluate(async ({ sceneId }) => {
   const mmSrc = await fetch("/modules/cp2020-augmented/templates/actor/vehicle-sheet.hbs").then(r => r.text());
 
   return {
-    grid, vx: v.x, vy: v.y, north, south,
+    grid, vx: hull.x, vy: hull.y, north, south,
     buttonCount: btns.length, litBefore, litAfter, storedAfterClick, rawKeyLeak,
     mmHasPicker: mmSrc.includes("parts/vehicle-layout.hbs"),
     handle: { w: v.width, h: v.height },
+    hull: { w: hull.w, h: hull.h },
   };
 }, setup);
 
-check("footprint change resizes the handle to 2x4", frontLive.handle.w === 2 && frontLive.handle.h === 4,
-  `${frontLive.handle.w}x${frontLive.handle.h}`);
+check("a footprint edit sets the vehicle's HULL to 2x4",
+  frontLive.hull.w === 2 && frontLive.hull.h === 4, `hull ${frontLive.hull.w}x${frontLive.hull.h}`);
+check("and the handle follows it to the square that carries that hull (4x4)",
+  frontLive.handle.w === 4 && frontLive.handle.h === 4, `frame ${frontLive.handle.w}x${frontLive.handle.h}`);
 check("north-facing driver sits in the left cell of rank 2 (exact)",
   frontLive.north.x === frontLive.vx && frontLive.north.y === frontLive.vy + frontLive.grid,
   `x=${frontLive.north.x} y=${frontLive.north.y} vs v=${frontLive.vx},${frontLive.vy}`);
@@ -706,8 +747,9 @@ const paint = await page.evaluate(async ({ sceneId }) => {
   afterReset.riderY = scene.tokens.get(rider.id).y;
   await vehicle.sheet.close();
 
+  const hull = window.__pwHull(scene.tokens.get(vTok.id), grid);
   return {
-    grid, vx: vTok.x, vy: vTok.y, opened, afterOne, afterTwo, afterReset, seatA, seatB,
+    grid, vx: hull.x, vy: hull.y, opened, afterOne, afterTwo, afterReset, seatA, seatB,
   };
 }, setup);
 
@@ -755,20 +797,23 @@ const eastSeat = await page.evaluate(async ({ sceneId }) => {
   for (const t of [rider, driver2]) await canvasMod.disembark(scene.tokens.get(t.id)).catch(() => {});
   await new Promise(r => setTimeout(r, 700));
 
+  // A 4-across, 2-deep HULL. The frame square the canvas layer derives for it is 4x4, so the hull
+  // sits inset half a square down inside it — which is exactly why the expectations below are
+  // measured from the hull's own corner and not the token's.
   await vehicle.update({
-    "prototypeToken.width": 4, "prototypeToken.height": 2,
+    "system.layout.hullW": 4, "system.layout.hullH": 2,
     "system.layout.front": "e", "system.layout.cells": "S..S....",
   });
-  await new Promise(r => setTimeout(r, 1200));
+  await new Promise(r => setTimeout(r, 1400));
   const vTok = scene.tokens.find(t => t.actorId === vehicle.id);
-  await vTok.update({ width: 4, height: 2 });
-  await new Promise(r => setTimeout(r, 900));
+  await new Promise(r => setTimeout(r, 600));
 
   await canvasMod.boardVehicle(scene.tokens.get(rider.id), vehicle, vTok);
   await window.__pwSettle(scene.id, rider.id);
   const seated = scene.tokens.get(rider.id);
+  const hull = window.__pwHull(scene.tokens.get(vTok.id), grid);
   const out = {
-    grid, vx: vTok.x, vy: vTok.y,
+    grid, vx: hull.x, vy: hull.y,
     x: seated.x, y: seated.y, idx: seated.flags["cp2020-augmented"].seatIndex,
   };
 
@@ -776,14 +821,14 @@ const eastSeat = await page.evaluate(async ({ sceneId }) => {
   await canvasMod.disembark(scene.tokens.get(rider.id)).catch(() => {});
   await new Promise(r => setTimeout(r, 600));
   await vehicle.update({
-    "prototypeToken.width": 2, "prototypeToken.height": 4,
+    "system.layout.hullW": 2, "system.layout.hullH": 4,
     "system.layout.front": "", "system.layout.cells": "",
   });
-  await vTok.update({ width: 2, height: 4 });
-  await new Promise(r => setTimeout(r, 900));
+  await new Promise(r => setTimeout(r, 1400));
   await canvasMod.boardVehicle(scene.tokens.get(rider.id), vehicle, vTok);
   await window.__pwSettle(scene.id, rider.id);
-  out.restoredWidth = scene.tokens.find(t => t.actorId === vehicle.id).width;
+  out.restoredHullW = vehicle.system.layout.hullW;
+  out.restoredFrameW = scene.tokens.find(t => t.actorId === vehicle.id).width;
   return out;
 }, setup);
 
@@ -793,7 +838,8 @@ check("the painted driver's seat is the car's FRONT-left cell, in coordinates",
 check("and it is NOT the top-left cell reading order would have picked (negative)",
   eastSeat.x !== eastSeat.vx, `x=${eastSeat.x} vs vehicle x=${eastSeat.vx}`);
 check("the car is put back on its original footprint for the sections that follow",
-  eastSeat.restoredWidth === 2, String(eastSeat.restoredWidth));
+  eastSeat.restoredHullW === 2 && eastSeat.restoredFrameW === 4,
+  `hull ${eastSeat.restoredHullW} across in a ${eastSeat.restoredFrameW}-square frame`);
 
 /* ------------------------------------------------------------------ P. free rotation (Layer 4) */
 
@@ -855,16 +901,20 @@ const spinLive = await page.evaluate(async ({ sceneId }) => {
     childOfToken: drawn?.cpFootprintOutline?.parent === drawn,
     clickThrough: drawn?.cpFootprintOutline?.eventMode === "none",
     borderAlpha: drawn?.border?.alpha ?? null,
+    hitAreaPoints: Array.isArray(drawn?.hitArea?.points) ? drawn.hitArea.points.length : 0,
     tokenImg: drawn?.document?.texture?.src ?? "",
     docRotation: scene.tokens.get(vTok.id).rotation,
     docWidth: scene.tokens.get(vTok.id).width,
     docHeight: scene.tokens.get(vTok.id).height,
+    hullW: vehicle.system.layout?.hullW ?? null,
+    hullH: vehicle.system.layout?.hullH ?? null,
   };
   await vTok.update({ rotation: 0 });
   await new Promise(r => setTimeout(r, 1400));
   await window.__pwSettle(scene.id, rider.id);
   const restored = { x: scene.tokens.get(rider.id).x, y: scene.tokens.get(rider.id).y };
-  return { vx: vTok.x, vy: vTok.y, before, after, restored, shape };
+  const hull = window.__pwHull(scene.tokens.get(vTok.id), scene.grid.size);
+  return { vx: hull.x, vy: hull.y, before, after, restored, shape };
 }, setup);
 
 // 2-wide, 4-deep, derived south: seat 0 is cell 5 (centre one square right and 2.5 squares down of
@@ -885,11 +935,14 @@ check("the outline is drawn as the token's own child graphic",
   `graphics=${spinLive.shape.isGraphics} child=${spinLive.shape.childOfToken}`);
 check("the outline never eats a click meant for the token", spinLive.shape.clickThrough === true,
   String(spinLive.shape.clickThrough));
-check("core's own rectangular frame is dimmed on a vehicle handle", spinLive.shape.borderAlpha === 0.2,
-  String(spinLive.shape.borderAlpha));
-check("the token keeps its image and its footprint document fields",
-  !!spinLive.shape.tokenImg && spinLive.shape.docWidth === 2 && spinLive.shape.docHeight === 4,
-  `${spinLive.shape.docWidth}x${spinLive.shape.docHeight} img=${spinLive.shape.tokenImg}`);
+check("core's own rectangular frame is out of the picture on a vehicle handle",
+  spinLive.shape.borderAlpha === 0, String(spinLive.shape.borderAlpha));
+check("the pointer area is the drawn hull polygon, not core's square",
+  spinLive.shape.hitAreaPoints === 8, `${spinLive.shape.hitAreaPoints} polygon coordinates`);
+check("the token keeps its image, a square frame, and the hull recorded beside it",
+  !!spinLive.shape.tokenImg && spinLive.shape.docWidth === 4 && spinLive.shape.docHeight === 4
+  && spinLive.shape.hullW === 2 && spinLive.shape.hullH === 4,
+  `frame ${spinLive.shape.docWidth}x${spinLive.shape.docHeight}, hull ${spinLive.shape.hullW}x${spinLive.shape.hullH}, img=${spinLive.shape.tokenImg}`);
 check("the heading is stored on the token itself, unsnapped", spinLive.shape.docRotation === 90,
   String(spinLive.shape.docRotation));
 

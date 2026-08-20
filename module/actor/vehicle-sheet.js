@@ -9,7 +9,7 @@ import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 import { localize, localizeParam } from "../utils.js";
 import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
-import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells } from "../vehicle/vehicle-layout.js";
+import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells, hullDimsOf, rankCells } from "../vehicle/vehicle-layout.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
 import { RIDER_COVER_MODES, derivedRiderCoverFor } from "../vehicle/vehicle-cover.js";
 
@@ -269,8 +269,11 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
    * stays a plain {{#each}} and no bare string is built in JS.
    */
   _cpLayoutContext(system) {
-    const w = Number(this.actor.prototypeToken?.width) || 1;
-    const h = Number(this.actor.prototypeToken?.height) || 1;
+    // The grid the GM paints is the HULL — the vehicle's own shape. The prototype token's width and
+    // height are the SQUARE that carries it (vehicle-layout's hull/frame note), and a grid drawn at
+    // that size would offer cells that are not part of the vehicle at all.
+    const hull = hullDimsOf(system, this.actor.prototypeToken?.width, this.actor.prototypeToken?.height);
+    const w = hull.w, h = hull.h;
     const front = resolveFront(system?.layout?.front);
     const ICONS = { n: "fa-solid fa-arrow-up", e: "fa-solid fa-arrow-right", s: "fa-solid fa-arrow-down", w: "fa-solid fa-arrow-left" };
     const KEYS = { n: "Vehicle.FrontNorth", e: "Vehicle.FrontEast", s: "Vehicle.FrontSouth", w: "Vehicle.FrontWest" };
@@ -288,13 +291,25 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       "S": { role: "seat", icon: "fa-solid fa-user", key: "Vehicle.CellSeat" },
       "E": { role: "engine", icon: "fa-solid fa-gear", key: "Vehicle.CellEngine" },
     };
+    // ⭐ WHICH CELLS ARE THE NOSE. The grid is drawn in the vehicle's own unrotated footprint, so
+    // nothing in it says which end leads — which is the reported gap ("there's no way to tell which
+    // side the front is"): the Front buttons moved the driver and the engine block and the picture
+    // never said so. Rank 0 IS the nose rank, read from the same helper the derived engine region and
+    // the seat order read, so the mark cannot point at a different end from the layout it decorates.
+    // It moves the moment a Front button is pressed, which is what makes that click visible on the sheet.
+    const noseCells = new Set(rankCells(w, h, front, 0));
     const grid = [];
     for (let row = 0; row < h; row++) {
       const cells = [];
       for (let col = 0; col < w; col++) {
         const index = row * w + col;
         const spec = ROLE[resolved.cells[index]] ?? ROLE["."];
-        cells.push({ index, role: spec.role, icon: spec.icon, title: localize(spec.key) });
+        const nose = noseCells.has(index);
+        const roleName = localize(spec.key);
+        cells.push({
+          index, role: spec.role, icon: spec.icon, nose,
+          title: nose ? localizeParam("Vehicle.CellNoseTitle", { role: roleName }) : roleName,
+        });
       }
       grid.push(cells);
     }
@@ -316,7 +331,15 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
 
     return {
       front,
+      // The heading spelled out, for the line under the grid that says which end is lit. Localized
+      // here (the render edge) from the same key map the picker's tooltips use.
+      frontName: localize(KEYS[front]),
       grid,
+      // The Footprint fields edit the HULL directly now. A vehicle that has never recorded one shows
+      // the shape it is behaving as (its frame), so saving the field it is already showing changes
+      // nothing about the vehicle and simply writes the fact down.
+      hullW: w,
+      hullH: h,
       painted: resolved.painted,
       riderCoverOptions,
       providesCover: cover.providesCover,
@@ -474,9 +497,9 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     if (!this.isEditable) return;
     const index = Number(target?.dataset?.index);
     if (!Number.isInteger(index) || index < 0) return;
-    const w = Number(this.actor.prototypeToken?.width) || 1;
-    const h = Number(this.actor.prototypeToken?.height) || 1;
     const layout = this.actor.system?.layout ?? {};
+    const { w, h } = hullDimsOf(this.actor.system,
+      this.actor.prototypeToken?.width, this.actor.prototypeToken?.height);
     const cells = [...layoutFor(w, h, layout.front, layout.cells).cells];
     if (index >= cells.length) return;
     cells[index] = cycleCell(cells[index]);

@@ -26,6 +26,7 @@
  */
 
 import { drawnPoseOf, storedPoseOf, riderSeatAt, seatOrderAt, ridersOf } from "./vehicle-canvas.js";
+import { registerVehicleRideLock } from "./vehicle-ride-lock.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -78,7 +79,11 @@ function _drawRiderAt(placeable, x, y) {
 /** Has a vehicle's drawn pose moved on from the one we last drew its crew for? */
 function _poseChanged(a, b) {
   if (!a || !b) return true;
-  return a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h || a.rotation !== b.rotation;
+  // The HULL is compared too: a vehicle re-shaped from 2×4 to 4×2 keeps the SAME frame square, so a
+  // frame-only comparison would call that pose unchanged and leave the crew drawn in the old cells
+  // until something else moved the car.
+  return a.x !== b.x || a.y !== b.y || a.w !== b.w || a.h !== b.h || a.rotation !== b.rotation
+    || (a.hull?.w ?? 0) !== (b.hull?.w ?? 0) || (a.hull?.h ?? 0) !== (b.hull?.h ?? 0);
 }
 
 /** Is a vehicle mid-move — drawn somewhere its document has not agreed to yet? */
@@ -155,6 +160,11 @@ function _restickRider(riderPlaceable) {
  * is a token's first appearance and `refresh` is every frame of every move afterwards.
  */
 export function registerVehicleRideHooks() {
+  // The other half of the coupling, wired here because it answers the same question this file
+  // does — where a rider is while it is aboard. This file draws that answer every frame;
+  // vehicle-ride-lock.js refuses a hand-drag that would contradict it.
+  registerVehicleRideLock();
+
   Hooks.on("drawToken", (placeable) => {
     if (_isVehicle(placeable?.document)) _syncRiders(placeable);
   });

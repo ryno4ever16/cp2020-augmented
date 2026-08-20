@@ -327,9 +327,19 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
     requestedX: 10 * grid, requestedY: 10 * grid, actualX: vTok?.x, actualY: vTok?.y,
   };
   const driver = game.actors.getName("__PW__Driver");
+  // Stand the crew beside the CAR, not beside the token's frame. The frame is the square the vehicle
+  // is carried in and stands proud of the bodywork on the narrow axis, so a token placed flush to the
+  // frame's edge is a square clear of the hull — further from the vehicle than any player would read
+  // it as standing, and outside the boarding reach the drawn outline promises.
+  const vHullW = Number(vTok.actor?.system?.layout?.hullW) >= 1
+    ? Math.round(Number(vTok.actor.system.layout.hullW)) : Math.round(Number(vTok.width));
+  const vHullH = Number(vTok.actor?.system?.layout?.hullH) >= 1
+    ? Math.round(Number(vTok.actor.system.layout.hullH)) : Math.round(Number(vTok.height));
+  const hullX = vTok.x + ((Number(vTok.width) - vHullW) * grid) / 2;
+  const hullY = vTok.y + ((Number(vTok.height) - vHullH) * grid) / 2;
   const [cTok] = await scene.createEmbeddedDocuments("Token", [{
     name: driver.name, actorId: driver.id, actorLink: true,
-    x: vTok.x + vTok.width * grid, y: vTok.y, width: 1, height: 1,
+    x: hullX + vHullW * grid, y: hullY, width: 1, height: 1,
     texture: { src: "icons/svg/mystery-man.svg" },
   }]);
   // wait for placeable
@@ -353,7 +363,10 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   // rotation-zero convention — nose SOUTH — so the engine is the bottom rank and the driver sits in
   // the rank behind it, at the driver's left, which facing south is the east (right-hand) file.
   const seated = scene.tokens.get(cTok.id);
-  out.seat = { x: seated.x, y: seated.y, vx: vTok.x, vy: vTok.y, vw: vTok.width, vh: vTok.height,
+  // Seats are cells of the HULL, so the coordinates are measured from the hull's own corner. The
+  // token's rect is the square that carries it and has no cells of its own.
+  out.seat = { x: seated.x, y: seated.y, vx: hullX, vy: hullY, vw: vHullW, vh: vHullH,
+               frame: { w: vTok.width, h: vTok.height },
                scale: seated._source.texture.scaleX, sort: seated.sort, hullSort: vTok.sort };
 
   // crew-follow: move the vehicle, crew translates by the same delta (seat offset preserved)
@@ -363,7 +376,9 @@ const boardRes = await gm.page.evaluate(async ({ SCOPE, sceneId, activeBefore })
   await settle(cTok.id);
   const c1 = { x: scene.tokens.get(cTok.id).x, y: scene.tokens.get(cTok.id).y };
   out.crewFollowed = c1.x === c0.x + 3 * grid && c1.y === c0.y + grid;
-  out.stillSeated = c1.x === vTok.x + (vTok.width - 1) * grid && c1.y === vTok.y + (vTok.height - 2) * grid;
+  const hullX1 = vTok.x + ((Number(vTok.width) - vHullW) * grid) / 2;
+  const hullY1 = vTok.y + ((Number(vTok.height) - vHullH) * grid) / 2;
+  out.stillSeated = c1.x === hullX1 + (vHullW - 1) * grid && c1.y === hullY1 + (vHullH - 2) * grid;
 
   // HUD now offers Disembark; click it; flag clears; the rider lands BESIDE the hull
   hud.clear(); hud.bind(placeable);
@@ -404,8 +419,9 @@ check("the reused handle keeps the position it was approved into rather than jum
   `requested (${boardRes.redeploy?.requestedX},${boardRes.redeploy?.requestedY}) -> stayed at (${boardRes.redeploy?.actualX},${boardRes.redeploy?.actualY})`);
 check("embark button renders on crew token near vehicle", boardRes.embarkBtn === true, boardRes.error ?? "");
 check("embark sets boardedVehicle flag", boardRes.boardedFlag === true);
-check("embark seats the rider in the driver's seat, behind the engine rank (exact)",
+check("embark seats the rider in the driver's seat of the HULL, behind the engine rank (exact)",
   Number.isFinite(boardRes.seat?.x) && boardRes.seat.vh > boardRes.seat.vw
+  && boardRes.seat.frame?.w === boardRes.seat.frame?.h
   && boardRes.seat.x === boardRes.seat.vx + (boardRes.seat.vw - 1) * setup.grid
   && boardRes.seat.y === boardRes.seat.vy + (boardRes.seat.vh - 2) * setup.grid,
   JSON.stringify(boardRes.seat));

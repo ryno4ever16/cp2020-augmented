@@ -12,7 +12,7 @@
  * fiction constantly.
  */
 
-import { boardVehicle, disembark, isVehicleTokenDoc, tokenHeadingOf } from "./vehicle-canvas.js";
+import { boardVehicle, disembark, isVehicleTokenDoc, tokenHeadingOf, hullRectOf } from "./vehicle-canvas.js";
 import { pointInRotatedRect } from "./vehicle-layout.js";
 import { occupancyOf, toggleOccupantFade, isVehicleFaded } from "./vehicle-occupancy.js";
 import { localizeParam, tryLocalize } from "../utils.js";
@@ -33,12 +33,16 @@ function _vehiclesInReach(tokenDoc) {
   const hits = [];
   for (const t of scene?.tokens ?? []) {
     if (t.id === tokenDoc.id || !isVehicleTokenDoc(t) || !t.actor) continue;
+    // Reach is measured from the HULL, grown by one square — not from the token's frame square,
+    // which on a narrow vehicle already stands half a square proud of the bodywork and would let a
+    // pedestrian board a car they are two squares away from.
+    const { rect } = hullRectOf(t, grid);
     const reach = {
-      x: t.x - grid, y: t.y - grid,
-      w: t.width * grid + 2 * grid, h: t.height * grid + 2 * grid,
+      x: rect.x - grid, y: rect.y - grid,
+      w: rect.w + 2 * grid, h: rect.h + 2 * grid,
     };
     if (pointInRotatedRect({ x: cx, y: cy }, reach, tokenHeadingOf(t))) {
-      const vx = t.x + (t.width * grid) / 2, vy = t.y + (t.height * grid) / 2;
+      const vx = rect.x + rect.w / 2, vy = rect.y + rect.h / 2;
       hits.push({ token: t, d2: (vx - cx) ** 2 + (vy - cy) ** 2 });
     }
   }

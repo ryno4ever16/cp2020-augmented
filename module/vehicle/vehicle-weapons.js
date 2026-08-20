@@ -200,6 +200,13 @@ export async function routeWeaponFiredToVehicle(payload, vehicleActor) {
   // presentation settled, so leaving the resolvers to sound it here would give a five-round burst five
   // more impacts, all of them late and none of them on the arrival clock. The resolvers keep their
   // penetration-gated sound for the path that has no shot behind it — the hand-resolved dialog.
+  // ⛔ AND ONE DICE SOUND FOR THE WHOLE VOLLEY, which this loop does NOT decide. Each round below posts
+  // its own resolution card, the Maximum Metal card carries its rolls, and the core stamps a dice sound
+  // on any message that carries rolls without naming one — so twenty rounds used to be twenty dice
+  // sounds inside one Apply click. The budget lives with the card instead of here, in vehicle-damage.js
+  // (`_diceSoundField`), because this loop is not the only fan-out: a pattern's shells arrive one at a
+  // time, each through its own single-hit call, and a flag threaded down this loop would have missed
+  // every one of them.
   const ruleSystem = effectiveVehicleRuleSystem();
   // Imported lazily to keep the pure-math top of this module free of Phase 4 UI deps in tests.
   const VD = await import("./vehicle-damage.js");

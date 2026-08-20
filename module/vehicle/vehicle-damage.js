@@ -50,6 +50,46 @@ function _sdpHitSound(fxSilent) {
   return fxHitSound("structure");
 }
 
+/**
+ * ⛔ THE DICE SOUND BUDGET FOR ONE APPLY, in milliseconds.
+ *
+ * WHAT WENT WRONG WITHOUT IT (reported from the table 2026-08-19: *"hitting apply on a large shotgun
+ * volley — 20 ROF tested — plays 20 dice sounds crushed together"*). The MM resolution card carries
+ * its rolls (`rolls: [...]`, so 3D-dice modules can read them), and the core stamps a dice sound onto
+ * ANY message that carries rolls and does not name a sound of its own — `ChatMessage._preCreate`:
+ * `if (this.isRoll) { if (!("sound" in data)) this.updateSource({sound: CONFIG.sounds.dice}); }`, and
+ * the chat log then plays whatever `message.sound` holds. A volley is resolved ROUND BY ROUND against
+ * the armour (vehicle-weapons.js `routeWeaponFiredToVehicle` — pooling the rounds would over-penetrate),
+ * so twenty rounds are twenty cards and twenty stamped dice sounds inside one click.
+ *
+ * ⭐ A ROLLING WINDOW RATHER THAN A LOOP INDEX, and the reason is that the loop is not the only fan-out:
+ * a pattern's shells reach this resolver one AT A TIME (damage-hooks `_confirmSpreadZone` →
+ * `_applyAreaHitToToken` → `applyAreaDamages`), each through its own single-hit call, so a
+ * "silence everything after the first" flag threaded down one loop would have left that path sounding
+ * twenty times over. The window is the same idiom the impact audio already uses for callers that keep
+ * no tally (fx/effects.js `HIT_SOUND_BURST_WINDOW_MS`), and it SLIDES: each card pushes the window out,
+ * so a resolution that takes a second per round is still one gesture and still one sound.
+ *
+ * A single-round apply is the first card in its window and therefore sounds exactly as it always did.
+ */
+const DICE_SOUND_WINDOW_MS = 700;
+
+/** When the last resolution card that was allowed to sound went out. Reset by quiet, never by a caller. */
+let _lastDiceCardAt = 0;
+
+/**
+ * The `sound` field a resolution card should carry: nothing at all for the first card of a gesture (so
+ * the core stamps its dice sound, i.e. the behaviour that shipped), and an explicit `null` for every
+ * card behind it — naming the key is what opts out, because the core only fills in a sound the message
+ * did not mention. Returns a spreadable object so the call site stays one `ChatMessage.create`.
+ */
+function _diceSoundField() {
+  const now = Date.now();
+  const quiet = (now - _lastDiceCardAt) <= DICE_SOUND_WINDOW_MS;
+  _lastDiceCardAt = now;
+  return quiet ? { sound: null } : {};
+}
+
 /* --------------------------------- CORE (p.112) --------------------------------- */
 
 /** Core damage: SP subtracted (AP halves SP), remainder off SDP. PURE. */
@@ -943,6 +983,8 @@ export async function applyVehicleDamageMM(actor, { basePen = 0, facing = "front
     systemLabel: localize(isACPA ? "Vehicle.DamageSystemACPA" : "Vehicle.DamageSystemMM"),
     body, lines,
   });
-  await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content, rolls });
+  // `_diceSoundField` is what keeps a twenty-round volley to ONE dice sound — see its note above. It is
+  // spread LAST so the card's own decision about its sound is the one that survives.
+  await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor }), content, rolls, ..._diceSoundField() });
   return { pen, effAV, isACPA, severity: sev?.severity, score: sev?.score, updates };
 }

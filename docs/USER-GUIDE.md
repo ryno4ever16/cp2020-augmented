@@ -48,10 +48,38 @@ expands to a full math breakdown naming every SP source (armor layers, cover, AP
   targetable (drive-by firefights with real tokens are the point). Drag onto another square of the
   footprint to change seats; the new seat is yours from then on, through resizes and turns. The
   walking-figure icon steps you out beside the car.
+- **Aboard, you cannot walk your token off the car.** A drag that ends anywhere off the bodywork is
+  refused outright — the token does not go and come back, it simply does not go, and a message says
+  who is aboard what. This holds for the GM too; to move somebody off a vehicle, step them out with
+  the walking-figure icon first. Drags that end ON the vehicle are unaffected: that is the
+  seat-change gesture above.
+- **Dragging a box round a vehicle selects the vehicle, not its crew.** Riders sit inside the car's
+  square, so a selection box drawn over a vehicle used to pick up everybody aboard as well — and the
+  next drag then refused each of them in turn. The crew are now dropped back out of any box
+  selection that caught their vehicle: you grabbed the car, and they ride with it anyway. Clicking a
+  rider still selects that rider (sheets, targeting, everything else), and shift-clicking still
+  builds whatever selection you want by hand. However many riders one drag refuses, it says so once
+  — and if the vehicle is in the selection too it says nothing at all, because the car is taking
+  them with it.
 - **Riding:** the crew stay glued to the vehicle while it drives and turns — no throwing anyone
   off on a hard stop. A vehicle is drawn deeper than it is wide because its long axis is the way
   it travels, so it leads with a short face; Foundry turns it to face where you drag it, and the
   seats, the engine block and the armour facings all turn with it.
+- **The outline round a vehicle IS the vehicle.** Foundry's own selection box cannot tilt, so a car
+  parked at an angle would otherwise sit inside an upright rectangle full of pavement it is nowhere
+  near. Vehicles are given a square token big enough to hold the car at any angle, that square's
+  border is hidden, and the module draws the car's true outline instead — turned to its heading, with
+  a short spur off the nose. Clicking, hovering and targeting follow that outline, so a click on the
+  empty ground beside a car selects the ground, not the car. When you select or hover a vehicle the
+  outline changes colour exactly as any other token's border would.
+- **Footprint** on the vehicle sheet is the CAR's size in squares, across × deep — not the token's.
+  Type the shape you want and the token resizes itself to suit; the seats, the engine block, the
+  paint grid and the cover geometry all follow it.
+- **First load after this update:** every vehicle already in your world is measured once. Cars that
+  were built broader than they were deep — everything the module shipped before the facing fix — are
+  turned to run nose-first, which is what stops them driving sideways. They do not move on the map.
+  If you genuinely wanted a broad, shallow vehicle, type its figures back into the Footprint field
+  and nothing will change them again.
 - **Occupancy:** the vehicle shows an aboard count; its sheet lists riders with per-person
   step-out buttons; your own sheet shows an "Aboard" strip while riding. A control on the
   vehicle's HUD fades occupants (only on your screen) when you want to admire the car.

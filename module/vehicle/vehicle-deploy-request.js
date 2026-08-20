@@ -219,12 +219,14 @@ export async function placeDeployedVehicle(actor, anchor) {
     if (!scene || !anchorToken) return { placed: false, sceneName: null };
 
     const grid = scene.grid?.size ?? 100;
-    // No explicit footprint on the prototype ⇒ the canvas layer's own default, imported rather than
-    // repeated here, so the two can never drift into two different shipped shapes.
-    const size = {
-      w: Number(actor.prototypeToken?.width) || DEFAULT_FOOTPRINT.w,
-      h: Number(actor.prototypeToken?.height) || DEFAULT_FOOTPRINT.h,
-    };
+    // The clearance to look for is the token's own FRAME — the square the vehicle is carried in —
+    // because that is the box the core will refuse to overlap, not the hull inside it. It is read
+    // off the prototype the preCreateActor seeding already squared; the DEFAULT_FOOTPRINT hull is
+    // the fallback for a prototype that somehow never got one, imported rather than repeated here so
+    // the two can never drift into two different shipped shapes.
+    const side = Number(actor.prototypeToken?.width)
+      || Math.max(DEFAULT_FOOTPRINT.w, DEFAULT_FOOTPRINT.h);
+    const size = { w: side, h: Number(actor.prototypeToken?.height) || side };
     const anchorRect = {
       x: anchorToken.x, y: anchorToken.y,
       w: (anchorToken.width ?? 1) * grid, h: (anchorToken.height ?? 1) * grid,

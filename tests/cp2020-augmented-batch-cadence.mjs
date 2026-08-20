@@ -315,6 +315,80 @@ const res = await page.evaluate(async () => {
       await wipeZones();
     }
 
+    /* ────────────────────────────────────────────────────────────────────────────────────────────
+       §6 ONE DICE SOUND PER APPLY.
+
+       Reported from the table 2026-08-19: *"hitting apply on a large shotgun volley — 20 ROF tested
+       — plays 20 dice sounds crushed together"*. The mechanism is the same one-application/many-events
+       shape the rest of this spec is about, one level further out. A volley against a vehicle is
+       resolved ROUND BY ROUND against the armour (pooling the rounds would over-penetrate), each round
+       posts its own resolution card, that card carries its rolls so dice modules can read them — and
+       the core stamps a dice sound onto any message that carries rolls without naming a sound of its
+       own. Twenty rounds, twenty stamped sounds, one click.
+
+       Counted BY VALUE off the created documents rather than by listening: `message.sound` IS what the
+       chat log plays, so the field is the honest reading and it is deterministic. The card count is
+       asserted beside it — the fix must silence sounds and change nothing else. */
+    {
+      const VW = await import(`/modules/${SCOPE}/module/vehicle/vehicle-weapons.js`);
+      const VKEYS = ["mmEnabled", "vehicleRuleSystem", "vehicleDamageEnabled"];
+      const vWas = {};
+      for (const k of VKEYS) { try { vWas[k] = game.settings.get(SCOPE, k); } catch { vWas[k] = null; } }
+      let rig = null;
+      try {
+        await set("mmEnabled", true);
+        await set("vehicleRuleSystem", "MaximumMetal");
+        await set("vehicleDamageEnabled", true);
+
+        rig = await Actor.create({
+          name: "__PWK__BATCH Rig", type: `${SCOPE}.vehicle`,
+          system: { vehicleType: "car", sdp: { value: 400, max: 400 } },
+        });
+        await sleep(400);
+
+        const rounds = (n) => ({ Torso: Array.from({ length: n }, () => ({ damage: 12 })) });
+        const readCards = (from) => [...game.messages].filter(m => !from.has(m.id));
+
+        // the volley: one apply gesture, twenty rounds
+        let from = since();
+        const sdpBefore = Number(rig.system.sdp?.value) || 0;
+        await VW.routeWeaponFiredToVehicle({ areaDamages: rounds(20), ap: false }, rig);
+        await sleep(2500);
+        const volley = readCards(from);
+        out.dice = {
+          volleyCards: volley.length,
+          volleySounded: volley.filter(m => !!m.sound).length,
+          volleySilenced: volley.filter(m => m.sound === null).length,
+          volleyAllCarryRolls: volley.length > 0 && volley.every(m => (m.rolls?.length ?? 0) > 0),
+          soundValue: volley.find(m => !!m.sound)?.sound ?? null,
+          // The resolution really RAN for every round: each card is the vehicle damage result card,
+          // naming this vehicle. (Maximum Metal resolves by severity and crit effects, so an ordinary
+          // round moves no SDP at all — the card is the outcome, not the pool.)
+          volleyAllResolved: volley.length > 0
+            && volley.every(m => (m.content ?? "").includes("vehicle-damage-result")
+                              && (m.content ?? "").includes("__PWK__BATCH Rig")),
+          sdpBefore,
+        };
+        await wipeSince(from);
+
+        // the single round, after the budget's window has gone quiet — the case that must be
+        // untouched: one card, and it still sounds exactly as it always did
+        await sleep(1200);
+        from = since();
+        await VW.routeWeaponFiredToVehicle({ areaDamages: rounds(1), ap: false }, rig);
+        await sleep(1200);
+        const single = readCards(from);
+        out.dice.singleCards = single.length;
+        out.dice.singleSounded = single.filter(m => !!m.sound).length;
+        await wipeSince(from);
+      } catch (e) {
+        out.dice = { error: String(e?.message ?? e) };
+      } finally {
+        if (rig) await rig.delete().catch(() => {});
+        for (const k of VKEYS) if (vWas[k] !== null) await set(k, vWas[k]);
+      }
+    }
+
   } catch (err) {
     ok("spec ran to completion", false, String(err?.message ?? err));
   } finally {
@@ -342,6 +416,27 @@ const res = await page.evaluate(async () => {
 for (const c of res.checks) {
   console.log(`  ${c.p ? "PASS" : "FAIL"}: ${c.n}${c.d ? ` — ${c.d}` : ""}`);
   c.p ? pass++ : fail++;
+}
+
+// §6 — the dice-sound budget, asserted in Node off the created documents
+{
+  const d = res.dice ?? {};
+  const line = (n, okv, detail) => {
+    console.log(`  ${okv ? "PASS" : "FAIL"}: ${n}${detail ? ` — ${detail}` : ""}`);
+    okv ? pass++ : fail++;
+  };
+  line("§6 the volley is still resolved round by round — twenty rounds, twenty resolution cards",
+    d.volleyCards === 20, `${d.volleyCards} card(s)${d.error ? ` (${d.error})` : ""}`);
+  line("§6 exactly ONE of them carries a sound; the other nineteen name none",
+    d.volleySounded === 1 && d.volleySilenced === (d.volleyCards - 1),
+    `${d.volleySounded} sounded / ${d.volleySilenced} silenced, sound="${d.soundValue}"`);
+  line("§6 and the change is sound-only: every card still carries its rolls for the dice modules",
+    d.volleyAllCarryRolls === true, String(d.volleyAllCarryRolls));
+  line("§6 every round was really resolved — twenty vehicle damage results naming the target",
+    d.volleyAllResolved === true, String(d.volleyAllResolved));
+  line("§6 NEGATIVE: a single-round apply is unchanged — one card, and it sounds",
+    d.singleCards === 1 && d.singleSounded === 1,
+    `${d.singleCards} card(s), ${d.singleSounded} sounded`);
 }
 const clean = (res.cleanup?.fixtures ?? 0) === 0 && (res.cleanup?.strayCards ?? 0) === 0;
 console.log(`  ${clean ? "PASS" : "FAIL"}: cleanup — fixtures and cards removed (${JSON.stringify(res.cleanup)})`);

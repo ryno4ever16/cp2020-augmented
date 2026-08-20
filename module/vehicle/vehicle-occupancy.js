@@ -16,6 +16,7 @@
  */
 
 import { localizeParam } from "../utils.js";
+import { hullDimsOf } from "./vehicle-layout.js";
 
 const SCOPE = "cp2020-augmented";
 const FADE_ALPHA = 0.25;
@@ -180,7 +181,15 @@ function _syncBadge(placeable) {
     badge.text = label;
   }
   const grid = placeable.document.parent?.grid?.size ?? canvas?.grid?.size ?? 100;
-  badge.position.set(placeable.document.width * grid - 4, 2);
+  // The badge sits on the HULL's top-right corner, not the carrying square's — on a 2-across car in
+  // a 4-square frame those are a whole square apart, and a count floating in empty tarmac beside the
+  // car reads as belonging to nothing. Measured un-rotated, like every other token badge: it stays
+  // upright and legible rather than swinging round with the bodywork.
+  const doc = placeable.document;
+  const hull = hullDimsOf(doc.actor?.system, Number(doc.width), Number(doc.height));
+  const inset = ((Number(doc.width) || 1) - hull.w) / 2;
+  const drop = ((Number(doc.height) || 1) - hull.h) / 2;
+  badge.position.set((inset + hull.w) * grid - 4, drop * grid + 2);
 }
 
 /** Redraw the badges of every vehicle carrying this actor's riders. */

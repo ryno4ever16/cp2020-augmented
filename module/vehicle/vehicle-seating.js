@@ -8,6 +8,10 @@
  *
  * A rectangle is `{x, y, w, h}` in PIXELS. A token's grid `width`/`height` are square counts, so
  * a rect is built as `{x: doc.x, y: doc.y, w: doc.width * gridSize, h: doc.height * gridSize}`.
+ * ⚠ For a VEHICLE the rect handed in is its HULL's, not its token's: a vehicle token is a square that
+ * carries the hull at any angle (vehicle-layout.js), and `riderSeatAt` converts one to the other
+ * before calling in here. Nothing in this file knows the difference — it seats occupants in whatever
+ * rectangle it is given.
  *
  * THE SEAT-SLOT RULE (user ruling 2026-08-11: occupants sit INSIDE the vehicle, one per square,
  * never point-stacked):
