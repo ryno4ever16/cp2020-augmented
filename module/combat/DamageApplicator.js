@@ -313,10 +313,19 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
    *  - THIS SEAM is the apply, and the apply happens after the presentation settles: for a burst that
    *    is the last round's tail, for a declared corridor it is whenever the GM confirms. Sounding a
    *    rail-driven shot here as well would be a second impact per round, seconds behind the first. So
-   *    `fxSilent` is set by the flows that came off a shot (_autoApply and its GM-side relay), and the
-   *    flows with NO arrival clock at all leave it false — the hand-applied damage dialog, an area
-   *    shell resolved on confirm, a vehicle-weapon hit on a passenger. Those have nothing to be late
-   *    for, so they play now.
+   *    `fxSilent` is set by the flows that came off a shot, and the flows with NO arrival clock at all
+   *    leave it false — an area shell resolved on confirm, a vehicle-weapon hit on a passenger, a burn
+   *    tick. Those have nothing to be late for, so they play now.
+   *
+   * ⛔⛔ THE DAMAGE WINDOW IS A SHOT-DERIVED FLOW, and this note used to say otherwise — which is the
+   * defect reported 2026-08-19 (*"the impact sound plays when I press Apply"*). The flag shipped with
+   * two shot-derived callers, `_autoApply` and its GM-side relay; the auto-apply ROUTE was deleted on
+   * 2026-08-14 with the world setting that selected it, and the flag's only shot-derived caller went
+   * with it. That left the damage WINDOW as the only route a shot's damage takes — and the window had
+   * never been given the flag, because while auto-apply existed the window WAS the hand-applied case
+   * this split leaves loud. Both window paths (DamageDialog._onApply and its `applyDamage` relay) now
+   * pass it, and neither decides it: the answer comes from the rail itself
+   * (fx/effects.js `railSoundedImpacts`), so the two clocks cannot disagree about one shot again.
    *
    * ⚠ IT IS ALSO SET BY THE APPLIES THAT ARE NOT IMPACTS AT ALL. A burn tick, an acid tick, a
    * radiation dose and an ACPA pilot's overflow all land damage through this seam and none of them is
@@ -331,6 +340,13 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
    * dead by armour is SILENT here (taken because the seam that can tell should), and a hit that routed
    * into a cyberlimb's own SDP sounds as STRUCTURE even on an otherwise flesh target — `routesToSdp`
    * answers per zone, which the rail explicitly cannot (see bearsStructuralSdp's note).
+   *
+   * ⚠ AND THOSE TWO REFINEMENTS DO NOT REACH THE EAR ON A SHOT-DERIVED APPLY — stated so it is a trade
+   * rather than a surprise. Once `fxSilent` is set, a round the armour stopped and a round that went
+   * into a cyberlimb both sound exactly as the rail sounded them at arrival: present, and keyed to the
+   * ACTOR rather than the zone. That is the same bargain the retired auto-apply route made, and it is
+   * the ruling's own direction — the sound belongs to the moment the round lands, and at that moment
+   * neither fact is known yet. The refinements still govern every apply with no arrival clock behind it.
    *
    * No index is passed: a caller here keeps no tally, so the element supplies the level ladder and the
    * burst bound itself (HIT_SOUND_BURST_WINDOW_MS) — which is what stops a multi-row dialog putting

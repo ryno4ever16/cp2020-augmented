@@ -77,6 +77,11 @@ const setup = await page.evaluate(async (SCOPE) => {
     // The base system's own verdict, carried so a section that depends on a shot having LANDED can
     // state that precondition instead of assuming it (see E).
     attackTotal: p.attackTotal ?? null, toHitDC: p.toHitDC ?? null,
+    // ⭐ THE RAIL'S OWN NON-DRAW REASONS, carried so a section that sees an empty draw list says WHY
+    // instead of leaving a reader to guess: a table-ruled fumble draws nothing at all (by ruling), and
+    // an aim the seam could not capture is the other way a shot reaches the rail with nothing to point at.
+    fumbleRuled: p.fumbleRuled ?? null, hasAim: !!p.spreadAim,
+    fxTarget: p.fxTargetTokenId ?? null, attackerTokenId: p.attackerTokenId ?? null,
     scattered: !!p.spreadScatter,
     // The band inputs, carried so E can re-derive its expectation through the printed rule: the
     // weapon's own range the seam stamps, and the AIMED reach the module actually bands on (the
@@ -96,6 +101,9 @@ const setup = await page.evaluate(async (SCOPE) => {
       dmg: r.getFlag(SCOPE, "dmgFormula"), declaredAim: r.getFlag(SCOPE, "declaredAim"),
       dirDeg: r.getFlag(SCOPE, "dirDeg"), lengthM: r.getFlag(SCOPE, "lengthM"), widthM: r.getFlag(SCOPE, "widthM"),
       ammoKey: r.getFlag(SCOPE, "ammoKey"),
+      // ⭐ 2026-08-19: whether the presentation rail already lit this corridor's ground on the shot's
+      // arrival clock. The confirm reads the same flag to decide whether it still owes the fires.
+      railFires: r.getFlag(SCOPE, "railFires"),
     });
   });
 
@@ -391,10 +399,14 @@ ok("F: and an apply route reaches the reviewer for this shot",
   slug.dialogs.length > 0 || slug.flagged > 0 || setup.autoApply === true,
   `${slug.dialogs.join(",") || "no window"} / ${slug.flagged} flagged card(s) / autoApply=${setup.autoApply}`);
 
-/* ══ G. 12 shell API — the pattern's OWN fires, laid down when the shot is APPLIED ════════════ */
-// The fires an incendiary shell leaves are scattered by the RESOLUTION, not by the fan-out — that is
-// the distinction this section exists for, and it is why the fires arrive on the press rather than as
-// the rounds land. Asserted below on the region's own recorded load, and on the file the press draws.
+/* ══ G. 12 shell API — the pattern's OWN fires, laid down on the shot's ARRIVAL CLOCK ═════════ */
+// ⏪ RE-PINNED 2026-08-19. This section used to assert the opposite: that a burning shell's fires were
+// scattered by the RESOLUTION and could not be on the canvas while the card was still waiting. The user
+// ruled the fires onto the shot's own arrival clock (FX-RAIL §6) — the same move the corridor's impact
+// audio made on 2026-08-14 — so for a corridor the shooter DECLARED they are laid by the fan-out, and
+// the region carries `railFires` to tell the confirm it no longer owes them. What the bench pins now is
+// that pairing: the fires are down before the press, the region says who laid them, and the press does
+// NOT lay a second set on top.
 console.log(`
 ── G · 12 Arasaka RAS-12 API → Review · Target (flesh) ──`);
 await page.evaluate(async () => {
@@ -405,8 +417,11 @@ await page.evaluate(async () => {
 });
 r = await fire("12", "Review · Target");   // same reason as E
 ok("G: the pattern records the load it was thrown with", r.patterns[0]?.ammoKey === "api", `ammoKey=${r.patterns[0]?.ammoKey}`);
-ok("G: the fires have NOT been laid while the card is still waiting — they belong to the resolution (negative)",
-  !drew(r.files, setup.keys.groundFire), r.files.join(", ").slice(0, 220));
+ok("G: the fires are already down before the card is pressed — they ride the shot's arrival clock",
+  drew(r.files, setup.keys.groundFire),
+  `${r.files.join(", ").slice(0, 180) || "(the rail drew NOTHING)"} · payload ${JSON.stringify(r.payloads[0] ?? null)}`);
+ok("G: and the region records that the rail laid them, so the confirm knows it no longer owes any",
+  r.patterns[0]?.railFires === true, `railFires=${r.patterns[0]?.railFires}`);
 // The press, then a fresh read of what the rail drew AFTER it — the capture hook keeps collecting, and
 // `fire()` only clears it at the start of the next shot.
 const afterG = await page.evaluate(async (SCOPE) => {
@@ -418,11 +433,18 @@ const afterG = await page.evaluate(async (SCOPE) => {
   return {
     pressed: !!btn,
     files: [...new Set(globalThis.__smoke.files)],
+    // The census the scene cap is a query of — the number BURNING after the press, which is what says
+    // whether the confirm laid a second set on top of the rail's.
+    live: (globalThis.Sequencer?.EffectManager?.getEffects?.({ name: `${SCOPE}.groundfire.*` }) ?? []).length,
     zones: (game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active).regions.filter(x => x.getFlag(SCOPE, "isSpreadZone")).length,
   };
 }, SCOPE);
-ok("G: an incendiary shell's fires reach the canvas when the shot is applied",
+ok("G: an incendiary shell's fires are on the canvas through the apply — parity, and the element stays reachable",
   afterG.pressed && drew(afterG.files, setup.keys.groundFire), afterG.files.join(", ").slice(0, 220));
+// ⛔ AND THE PRESS LAYS NO SECOND SET. The per-pattern bound is 5, so anything above it is the confirm
+// planting on top of the rail — the exact double this ruling's `railFires` flag exists to make impossible.
+ok("G: and the press adds none of its own — the corridor is lit once, not twice (negative)",
+  afterG.live > 0 && afterG.live <= 5, `${afterG.live} flame(s) burning after the press, per-pattern bound 5`);
 ok("G: that pattern is deleted too once it has been applied", afterG.zones === 0, `${afterG.zones} zone(s)`);
 
 /* ══ RESTORE ══════════════════════════════════════════════════════════════════════════════════ */
@@ -507,6 +529,7 @@ const parity = await page.evaluate(async ({ SCOPE, shooterName }) => {
   const FX = await import("/modules/cp2020-augmented/module/fx/effects.js");
   const SFX = await import("/modules/cp2020-augmented/module/fx/status-fx.js");
   const TT = await import("/modules/cp2020-augmented/module/fx/trauma-team-tool.js");
+  const GF = await import("/modules/cp2020-augmented/module/fx/ground-fire-tool.js");
   const actor = game.actors.getName(shooterName);
   const out = { shooterFound: !!actor };
   if (!actor) return out;
@@ -541,6 +564,17 @@ const parity = await page.evaluate(async ({ SCOPE, shooterName }) => {
   const probe = { tokens: { name: "tokens", tools: {} } };
   out.traumaRouted = TT.addTraumaTeamTool(probe) === true && !!probe.tokens.tools["cp-tt-land"];
   out.traumaOnLiveBar = Object.keys(ui.controls?.controls?.tokens?.tools ?? {}).includes("cp-tt-land");
+
+  // 5 — the ground-fire clear control reaches that same toolbar. It is the other half of the
+  //     `groundFirePersistent` switch: the thing it acts on is reachable from rows 07 and 12 (the two
+  //     burning rows above), and the control that puts those fires out has to be reachable beside them.
+  const fireProbe = { tokens: { name: "tokens", tools: {} } };
+  out.fireClearRouted = GF.addGroundFireClearTool(fireProbe) === true && !!fireProbe.tokens.tools["cp-fire-clear"];
+  out.fireClearOnLiveBar = Object.keys(ui.controls?.controls?.tokens?.tools ?? {}).includes("cp-fire-clear");
+  // …and the burning rows the control exists for are on the rack, read off the module's own table
+  // rather than restated here — a load whose row sets fires but has no bench gun reddens.
+  out.burningLoads = Object.entries(FX.AMMO_FX).filter(([, e]) => e?.groundFire === true)
+    .map(([k]) => ({ k, routed: benchLoads.has(k) }));
   return out;
 }, { SCOPE, shooterName: "Review · Shooter" });
 
@@ -557,6 +591,12 @@ ok("parity: every shipped condition row is raisable on a bench figure (by a load
 ok("parity: the arrival tool is reachable from the bench's own toolbar",
   parity.traumaRouted === true && parity.traumaOnLiveBar === true,
   `hook: ${parity.traumaRouted} · live bar: ${parity.traumaOnLiveBar}`);
+ok("parity: the ground-fire clear control is reachable from the bench's own toolbar",
+  parity.fireClearRouted === true && parity.fireClearOnLiveBar === true,
+  `hook: ${parity.fireClearRouted} · live bar: ${parity.fireClearOnLiveBar}`);
+ok("parity: and every load whose row sets fires has a bench gun to fire it from",
+  (parity.burningLoads ?? []).length > 0 && (parity.burningLoads ?? []).every(l => l.routed),
+  (parity.burningLoads ?? []).map(l => `${l.k}${l.routed ? "" : " ✗"}`).join(" "));
 
 ok("no console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 

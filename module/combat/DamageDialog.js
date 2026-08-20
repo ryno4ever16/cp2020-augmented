@@ -19,6 +19,11 @@ import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablate
 import { makeSeverityBatch, closeSeverityBatch, severityBatchHandledMortal } from "./severity-batch.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
+// ⛔ WHOSE CLOCK THE IMPACT SOUND IS ON. This window is clock 3 — it opens after the presentation has
+// settled — and the rail has already sounded every round that landed at its measured arrival (clock 2).
+// The rail owns the answer so the two cannot disagree; see railSoundedImpacts for the regression that
+// left this window sounding a second impact per round, seconds behind the first.
+import { railSoundedImpacts } from "../fx/effects.js";
 import { requestCoverChew, coverBetween, coverChewSummary } from "./cover.js";
 import { localize, localizeParam } from "../utils.js";
 
@@ -407,6 +412,13 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     });
     const totalApplied = resolvedHits.reduce((s, h) => s + h.netDamage, 0);
 
+    // ⭐ RESOLVED ONCE, HERE, FOR BOTH BRANCHES — and resolved on THIS client rather than on the GM's,
+    // because it is a property of the SHOT (did the rail sound this payload's arrivals?) and this is the
+    // client that watched the shot. The relay carries the answer rather than re-asking it: the GM's
+    // client may be looking at another scene, where the aimed-at figure resolves to nothing and the same
+    // question would answer "no" and sound the impact a second time.
+    const railSounded = railSoundedImpacts(this.payload);
+
     if (!game.user.isGM) {
       // Route through GM socket relay — player cannot write to unowned actor documents
       game.socket.emit("module.cp2020-augmented", {
@@ -421,6 +433,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         targetSceneId:    (this.payload?.targetTokenId ? canvas?.tokens?.get(this.payload.targetTokenId)?.document?.parent?.id : null) ?? canvas?.scene?.id ?? null,
         resolvedHits,
         totalApplied,
+        // Rides the datagram beside the other per-load statements, for the reason above: the answer is
+        // the firing client's to give. A relay emitted before this field existed arrives undefined and
+        // the GM side reads it as false, i.e. exactly the behaviour that shipped before.
+        fxSilent:         railSounded,
         ablate,
         armorMode,
         damageType:       this._damageType ?? "",
@@ -453,7 +469,8 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // prompt because the tail at the end of this method is this window's own.
     const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
     for (const hit of resolvedHits) {
-      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token, severityBatch: severity });
+      // `fxSilent` — the shot's impacts were sounded on arrival; this click must not sound them again.
+      const outcome = await applyLocationDamage({ target: this.target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token, fxSilent: railSounded, severityBatch: severity });
       applied += outcome.applied;
 
       // Ablation gates on the bullet penetrating, not on the doubled HP value.

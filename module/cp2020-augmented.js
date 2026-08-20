@@ -23,6 +23,7 @@ import { registerCombatFx } from "./fx/effects.js";
 import { registerStatusFx } from "./fx/status-fx.js";
 import { landTraumaTeam, endTraumaTeam, traumaTeamActive, traumaTeamState, registerTraumaTeam } from "./fx/trauma-team.js";
 import { registerTraumaTeamTool } from "./fx/trauma-team-tool.js";
+import { registerGroundFireClearTool, onGroundFireClearTool } from "./fx/ground-fire-tool.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -67,6 +68,7 @@ import { registerTypedArmorDisplay } from "./mech/typed-armor-display.js";
 import { registerBookLegality } from "./combat/book-legality.js";
 import { registerRadiation } from "./radiation/radiation.js";
 import { registerRadiationZones, migrateLegacyRadZones } from "./radiation/radiation-zones.js";
+import { registerVehicleHullMigration, migrateVehicleHullFrames } from "./vehicle/vehicle-hull-migration.js";
 import { registerRadiationTools } from "./radiation/radiation-tools.js";
 import { registerRadiationZoneBehavior, registerRadiationZoneVisibilityDefault } from "./radiation/radiation-zone-behavior.js";
 import { registerMechCyberlimb, cyberlimbSdp } from "./mech/cyberlimb.js";
@@ -321,6 +323,10 @@ Hooks.once("init", function () {
   // The medical-extraction arrival control. Same idiom again: one momentary button on the token group,
   // referee-only, and the button IS the opt-in — nothing in this feature runs until one is pressed.
   registerTraumaTeamTool();
+  // The ground-fire clear control — the same idiom a third time, and the other half of the
+  // `groundFirePersistent` setting: flames that do not burn out on their own need something that puts
+  // them out. Referee-only, momentary, and it acts on the census the FX rail already keeps.
+  registerGroundFireClearTool();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).
@@ -403,6 +409,9 @@ Hooks.once("init", function () {
   registerVehicleAboardBanner();
   // One-time stamp: pre-civilian-split vehicle actors keep the MM combat sheet.
   registerCivilianSheetMigration();
+  // One-time hull/frame split: a vehicle's shape moves onto the actor and its token becomes the
+  // square that carries it at any angle. Registers the stamp pair here; the sweep runs at ready.
+  registerVehicleHullMigration();
 
   // Public API surface for macros and other modules. Mirrors the system's game.cyberpunk.vehicles
   // shape under the module's own namespace so it never clobbers the system API.
@@ -425,6 +434,10 @@ Hooks.once("init", function () {
     },
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
+    // Presentation rail: put out the ground fires burning on the viewed scene. The macro path for the
+    // token-controls button, behind the same referee gate the control is (an API is a door too), and
+    // it reports what it did by value: `{cleared}` — or `{skipped: "permission"}` for a player.
+    fx: { clearGroundFires: onGroundFireClearTool },
     // Diagnostics: write the fault collector's ring into a journal entry a GM can read and keep.
     // The setting's hint names this call, so a GM who switched the collector on already has it.
     exportErrorJournal,
@@ -437,6 +450,7 @@ Hooks.once("init", function () {
     migrations: {
       fleshLimbStatus: (opts) => migrateFleshLimbStatus({ force: true, ...(opts ?? {}) }),
       legacyRadZones: (opts) => migrateLegacyRadZones({ force: true, ...(opts ?? {}) }),
+      vehicleHullFrames: (opts) => migrateVehicleHullFrames({ force: true, ...(opts ?? {}) }),
     },
   };
   const mod = game.modules.get(SCOPE);
@@ -660,6 +674,10 @@ Hooks.once("ready", function () {
   // One-time flesh/structural limb-state flag split (M18) — moves stale pre-split entries off the
   // shared key so they stop reading as structural state. World-flag-gated; GM applies.
   if (game.user?.isGM) migrateFleshLimbStatus().catch((e) => console.warn(`${SCOPE} | flesh-limb-status migration failed`, e));
+  // One-time vehicle hull/frame split — records each vehicle's own shape and squares its token frame,
+  // which is also what stops a pre-split vehicle driving with its longest face leading. Stamp-gated
+  // and self-healing; the GM applies.
+  if (game.user?.isGM) migrateVehicleHullFrames().catch((e) => console.warn(`${SCOPE} | vehicle hull/frame migration failed`, e));
 
   // P3 light emitters + P4 vision devices: item toggles drive the bearer's token light/sight
   // (the active GM applies the token writes).

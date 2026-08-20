@@ -24,7 +24,7 @@
 
 import { tokensOf } from "../mech/light.js";
 import { isFullBorg } from "../mech/borg.js";
-import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settings.js";
+import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled, persistentGroundFireEnabled } from "../settings.js";
 // THE EITHER/OR, borrowed rather than re-derived. damage-hooks.js asks this same function twice — once
 // to decide whether the single-target damage flow claims a payload and once to decide whether the shot
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
@@ -91,8 +91,65 @@ const SOUND_DIR = `modules/${SCOPE}/sounds`;
 /** Accepted delivery extensions, in preference order (the asset lane may land any of them). */
 const SOUND_EXTENSIONS = ["ogg", "mp3", "wav"];
 
-/** Interface-channel playback level for a shot sound (each client's own interface slider scales it). */
-const SHOT_VOLUME = 0.8;
+/**
+ * Interface-channel playback level for a shot sound (each client's own interface slider scales it).
+ *
+ * This is the level every class plays at unless its row names one of its own (`soundVolume` — see
+ * classShotVolume and the shell row's note). It is the DEFAULT, not the only answer.
+ */
+export const SHOT_VOLUME = 0.8;
+
+/**
+ * ⭐ THE SHIPPED REPORTS' MEASURED LEVELS (2026-08-19), because two of tonight's reports were the same
+ * fact seen from opposite ends and neither is a matter of taste.
+ *
+ * Read off the DELIVERED files with libsndfile (peak, and the RMS of the loudest 100 ms — the same pair
+ * HIT_SOUND is set against, for the same reason: a peak alone says nothing about how loud a clip reads):
+ *
+ *   | file                         | peak       | loudest 100 ms | duration |
+ *   |------------------------------|------------|----------------|----------|
+ *   | `shot-pistol.ogg`            | +1.88 dBFS | −4.76 dB       | 1.663 s  |
+ *   | `shot-smg.ogg`               | +1.45 dBFS | −8.42 dB       | 0.909 s  |
+ *   | `shot-rifle.ogg`             | +0.44 dBFS | −8.62 dB       | 1.950 s  |
+ *   | `shot-heavy.ogg`             | +0.50 dBFS | −10.46 dB      | 1.911 s  |
+ *   | `shot-shotgun-burst.ogg`     | +1.65 dBFS | −2.49 dB       | 1.450 s  |
+ *   | `shot-shotgun.ogg` (BEFORE)  | −42.05 dBFS| −51.42 dB      | 2.173 s  |
+ *   | `shot-shotgun.ogg` (AFTER)   | −1.53 dBFS | −10.42 dB      | 2.173 s  |
+ *
+ * ⛔ THE DEFECT THE "BEFORE" ROW IS: the shell class's SINGLE-round report was **43 dB below** every
+ * other report this module ships and 49 dB below its own multi-round twin. At SHOT_VOLUME it reached
+ * 0.0063 of full scale — which is what "the shotgun makes no sound on a single shot" means, and the
+ * fire mode that fires ONE shell is the ordinary one. It was not a missing key, an undelivered asset
+ * or an overlay that lost a field: the resolver returned the right path all along and the file played.
+ * The clip arrived that way. It was chosen on 2026-08-07 for its SPECTRUM ("73.6 % of energy below
+ * 500 Hz, centroid 1552 Hz — provably deeper than the rifle reference") and its level was never
+ * measured, so nothing caught it; the asset it replaced sits beside it at +1.40 dBFS.
+ *
+ * THE FIX IS THE ASSET, NOT A GAIN, and that is forced rather than chosen: a playback level is a
+ * fraction of full scale, so it can only ever turn a clip DOWN. Restoring 43 dB needs the sample data,
+ * so the delivered file is re-encoded at **+41.05 dB** — one number, aimed at a true peak of −1.0 dBFS.
+ * The AFTER row is read back off the re-encoded file rather than off the array it was written from
+ * (Vorbis is lossy and lands a shade under the aim): −1.53 dBFS, loudest 100 ms −10.42 dB, inside the
+ * family's own −4.76…−10.46 spread and sitting between the rifle and the heavy. No trim, no pitch work,
+ * no re-selection: the same recording, at a level a table can hear. Source and licence are unchanged
+ * and CC0; sounds/CREDITS.md records the level correction beside the entry.
+ * ⏪ REVERT: `git show` the file at the commit before this one — the −42 dBFS encode.
+ */
+
+/**
+ * WHAT ONE CLASS'S REPORT PLAYS AT — the default, or the class row's own `soundVolume`. Pure, so the
+ * per-class departure is asserted by value rather than by ear.
+ *
+ * ⭐ THE SHELL CLASS IS THE ONLY ROW THAT NAMES ONE (user ruling 2026-08-19: the report *"is good but
+ * startles the table at default volume — turn it down just a touch"*). It is a level call and it is the
+ * user's; what this file owes it is one editable number with the old one recorded beside it, and a
+ * mechanism that cannot quietly spread to the other four classes. Hence a per-class field rather than a
+ * move of SHOT_VOLUME: a class that names nothing is byte-identical to before.
+ */
+export function classShotVolume(cls) {
+  const own = Number(FX_CLASSES[cls]?.soundVolume);
+  return Number.isFinite(own) && own > 0 ? own : SHOT_VOLUME;
+}
 
 /**
  * DEFAULT per-shot cadence: 10 resolved shots in ~0.67s in the reference (design doc §2.1). A class
@@ -932,6 +989,33 @@ export const GROUND_FIRE = Object.freeze({
   // reaches it; a scene that does reach it drops its OLDEST flame, which is the right way round —
   // the shot a viewer is watching is the one that must be drawn.
   maxLive: 12,
+  // ⭐ THE LIFETIME A PLACEMENT TAKES WHILE THE `groundFirePersistent` WORLD SETTING IS ON (user
+  // approval 2026-08-19: persistent ground fire as a referee's environmental-hazard tool, default
+  // OFF). ⏪ REVERT IS THE SETTING, not this field: switched off, every placement takes `lifetimeMs`
+  // again and nothing else about the element differs by one byte.
+  //
+  // ⛔ WHY THIS IS A NUMBER AND NOT "FOREVER", and the bound is the HOST'S, not a taste call. There
+  // is no expressible infinity here: the expiry is scheduled on a `setTimeout`, and this host clamps
+  // that at 2^31−1 ms (~24.86 days) — a larger value overflows to fire IMMEDIATELY, which would end
+  // the flame the instant it was lit. So the mechanism has to be a duration under that ceiling, and
+  // this is one: 24 hours, ~3 456× the transient 25 s life and longer than any table's session, so
+  // inside a session it IS "until it is deliberately put out" — which is the whole of what the
+  // feature asked for. It also keeps this element's standing precedent intact: a long-lived thing on
+  // this rail always carries a cap, and this is still a cap.
+  //
+  // ⚠ IT IS STILL SESSION-BOUND, deliberately — see the note at the persistence branch in
+  // fxGroundFire for why Sequencer's own `persist()` is refused here (it writes the effect into the
+  // SCENE'S FLAGS, which is a document write from presentation, and under the performance score the
+  // aim-point branch runs on every client, so it would be N writes per shot rather than one).
+  //
+  // ⚠ AND THE CENSUS RAILS ARE UNCHANGED UNDER IT: `maxPerPayload`, `maxPerPattern` and `maxLive`
+  // all still apply. `maxLive` deliberately did NOT move — the user ruled it down 24 → 12 on
+  // 2026-08-13 against a profiled ~0.36 % of a frame per live flame, and that argument gets
+  // STRONGER under persistence, not weaker: a transient flame pays that cost for 25 s, a persistent
+  // one pays it for the rest of the session. Raising it is one field if a table wants a longer
+  // firebreak, and the consequence of not raising it is recorded in the doc's open items (a
+  // referee's planted hazard can be evicted by later burning fire, oldest-out, like anything else).
+  persistentLifetimeMs: 86400000,
 });
 
 /** The name every burning-ground flame is stamped with, so the scene cap can find and evict them. */
@@ -1139,6 +1223,55 @@ export function tracerBandFor(distSquares) {
  * REVERT: null (the engine's own five-band pick returns, backwash included).
  */
 export const TRACER_NEAR_BAND_FLOOR = "15ft";
+
+/**
+ * ⭐⭐ WHERE A PAINTED ROUND'S SPAN STARTS — the BARREL, not the middle of the shooter (user ruling
+ * 2026-08-19: *"the submachine gun and militech light assault still have the tail issue as well as
+ * shotgun slugs"*).
+ *
+ * ⛔ WHAT THE NEAR-BAND FLOOR ABOVE DID NOT COVER, and the decode that says so. The floor answers ONE
+ * band, because the 2026-08-17 decode found the huge backwash only there and judged the rest harmless.
+ * Re-decoded across all ten installed cuts at the same instrument, this time reading the ink's own
+ * LUMINANCE as well as its extent (leftmost lit column per frame vs the ranged template's 200 px start
+ * anchor):
+ *
+ *   family      05ft        15ft        30ft        60ft        90ft
+ *   bullet.01   114 px      **39 px**   **39 px**   **39 px**   **39 px**   ← luminance 107–223, all bands
+ *   bullet.02   136 px      4 px        0 px        0 px        0 px
+ *
+ * So `bullet.01` — the PISTOL, the SMG and the shell class — carries 39 px of BRIGHT ink (luminance
+ * 107 of 255, not a stray dim pixel) behind the start anchor in **every band this rail can serve**, and
+ * no choice of cut can avoid it because every cut has it. The earlier note called that "inside the
+ * token's own footprint", which is true of the FOOTPRINT and not of what a viewer sees: span sprites are
+ * drawn `aboveLighting`, so the stub is painted ON TOP of the shooter rather than under it. That is the
+ * SMG's every shot, at every range, and it is why the band floor alone did not close the report.
+ *
+ * THE REMEDY IS THE ANCHOR, WHICH IS ONE MECHANISM FOR EVERY CLASS AND EVERY BAND rather than a second
+ * per-band table. The span used to be planted on the token's CENTRE; it is planted at the MUZZLE POINT
+ * now — the same forward-edge point the muzzle lance and the smoke puff are already born at
+ * (`muzzlePoint`, MUZZLE_SPRITE.edgeFraction), half a token forward. The backwash then falls INSIDE the
+ * shooter's own square instead of out of its back, for every family and every cut:
+ *   bullet.01, worst case (90ft cut stretched to a 30-square shot): 39 px × 0.833 = 33 world px, against
+ *   the 50 px the anchor moved forward — 17 px clear. The two nearest bands are 12–20 px.
+ *   bullet.02 with the floor in place: 4 px × the near scale, i.e. about one pixel.
+ * ⚠ THE BOUND, stated rather than left to be discovered: the margin is 50 px of world space, so a shot
+ * longer than ~46 squares (a 4 600 px ray) scales bullet.01's 39 px back past it again. No shipped
+ * weapon reaches that on a battle map, and the near-band floor is unaffected either way.
+ *
+ * ⛔ THE ARRIVAL CLOCK IS UNTOUCHED, exactly as the floor leaves it untouched, and for the same stated
+ * reason: the timing is physics and the drawing is a look call. `arrivalSpecFor` is still measured from
+ * the true aim distance, so the mark, the spray, the impact audio and the tail all keep the numbers the
+ * band tables give them. What changes is where the ink starts — the drawn ray is half a token shorter.
+ *
+ * ⛔ THE TRAVELLED DASH IS DELIBERATELY NOT MOVED. Its crossing time is derived from the AIM DISTANCE
+ * (`pelletSpeed = aimDist / dashMs`), so starting it half a token forward would make it arrive early
+ * against the one clock everything else on the shot hangs on — a timing regression traded for nothing,
+ * because a dash draws the file at a fixed grid-unit width and its backwash is already about 4 world px
+ * (measured: buckshot's 1.0-square dash puts the 1000 px cut on 100 px of canvas). The shapes differ
+ * because one of them is scaled by the shot's length and the other is not.
+ * REVERT: false (the span returns to the token's centre, backwash included).
+ */
+export const SPAN_ANCHOR_AT_MUZZLE = true;
 
 /** The database key a SPAN draw hands the engine for this family at this distance — band-addressed
  *  up to the floor when the engine would otherwise serve the backwashed 05ft cut, the plain family
@@ -1773,7 +1906,10 @@ export const FX_CLASSES = Object.freeze({
   pistol:  { sound: "shot-pistol",  muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.1, motes: 8,  impactSquares: 0.7 },
   smg:     { sound: "shot-smg",     muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.2, motes: 12, impactSquares: 0.75 },
   rifle:   { sound: "shot-rifle",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 1.6, motes: 13, impactSquares: 0.95 },
-  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1.0, dashMs: 150, cadenceMs: 180 },
+  // `soundVolume: 0.58` — ⏱ THE ONE LEVEL DEPARTURE, on report (user ruling 2026-08-19: "turn it down
+  // just a touch"). 0.8 → 0.58 is −27.5 %, i.e. **−2.8 dB** off the report; ⏪ REVERT IS THIS ONE FIELD
+  // (delete it and the class returns to SHOT_VOLUME, 0.8, with nothing else moved). See classShotVolume.
+  shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", soundVolume: 0.58, muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1.0, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
 });
 
@@ -2645,11 +2781,16 @@ export function shotSoundSrc(cls, { burst = false } = {}) {
  * node stays a separate design call and is deliberately NOT taken as a rider on the score unit.
  * Recorded in §8.
  */
-export function sfx(cls, { volume = SHOT_VOLUME, burst = false } = {}) {
+export function sfx(cls, { volume, burst = false } = {}) {
   const src = shotSoundSrc(cls, { burst });
   if (!src) return null;
+  // ⚠ THE CLASS'S OWN LEVEL IS THE DEFAULT, and the test is for an ARGUMENT rather than for a truthy
+  // number: a caller that deliberately asks for silence passes 0, and a `volume = classShotVolume(cls)`
+  // default parameter would honour that while `Number(volume) || classShotVolume(cls)` would not. Same
+  // trap the impact element's index gate records (`Number(null)` is a finite 0).
+  const level = (volume === undefined || volume === null) ? classShotVolume(cls) : Number(volume);
   try {
-    return foundry.audio.AudioHelper.play({ src, volume, autoplay: true, loop: false, channel: "interface" }, false);
+    return foundry.audio.AudioHelper.play({ src, volume: level, autoplay: true, loop: false, channel: "interface" }, false);
   } catch (err) {
     console.warn(`${SCOPE} | combat fx audio failed`, err);
     return null;
@@ -2894,7 +3035,21 @@ export function hitSoundPlanFor(targetToken) {
  * Null when there is nothing to sound: no corridor declared, the flow does not own the payload, the
  * rail is off, or nobody stands in the swept footprint.
  */
-export function patternAudioPlanFor(payload, shooterToken) {
+/**
+ * ⭐ THE CORRIDOR THIS PAYLOAD IS POINTED DOWN, resolved at FIRE time — ONE derivation, two readers.
+ *
+ * Hoisted out of `patternAudioPlanFor` on 2026-08-19 when the burning ground became its second reader.
+ * The rule this file follows everywhere (one derivation per question, threaded) applies with force
+ * here: the sound a corridor's victims make and the fires a burning load leaves down that corridor have
+ * to be the same corridor, and two copies of this expression are exactly how they would stop being.
+ *
+ * It is the PLANT'S own answer, piecewise, from the relocated one-answer sites: the aimed record
+ * (`declaredSpreadAim`), or the SAME miss re-derivation the plant runs when the payload carries the
+ * base system's verdict and the scatter faces (`scatteredSpreadCorridor`). Null when there is no
+ * corridor to speak of — no declared aim, the flow does not own the payload, the rail is off, or the
+ * canvas cannot answer in pixels.
+ */
+export function patternCorridorFor(payload, shooterToken) {
   if (!combatFxEnabled() || !shooterToken || !payload) return null;
   if (!patternFlowOwns(payload)) return null;
   const declared = declaredSpreadAim(payload);
@@ -2919,8 +3074,14 @@ export function patternAudioPlanFor(payload, shooterToken) {
       dirFace, distFace, overshootM: declared.lengthM - declared.reachM,
     });
   }
-  const lengthPx = corridor.lengthM * ppm;
-  const poly = rayPolygonPoints(origin.x, origin.y, corridor.angleDeg, lengthPx, corridor.widthM * ppm);
+  return { corridor, origin, ppm, lengthPx: corridor.lengthM * ppm, widthPx: corridor.widthM * ppm };
+}
+
+export function patternAudioPlanFor(payload, shooterToken) {
+  const laid = patternCorridorFor(payload, shooterToken);
+  if (!laid) return null;
+  const { corridor, origin, lengthPx } = laid;
+  const poly = rayPolygonPoints(origin.x, origin.y, corridor.angleDeg, lengthPx, laid.widthPx);
   const victims = [];
   for (const tok of canvas.tokens?.placeables ?? []) {
     if (!tok?.actor || tok.id === shooterToken.id) continue;
@@ -2934,6 +3095,63 @@ export function patternAudioPlanFor(payload, shooterToken) {
   }
   if (!victims.length) return null;
   return { victims, queued: 0, cap: HIT_SOUND_MAX_PER_PAYLOAD };
+}
+
+/**
+ * ⭐⭐ DID THIS RAIL ALREADY SOUND THIS PAYLOAD'S ARRIVALS? — the question an APPLY has to ask before it
+ * sounds anything, asked of the rail rather than guessed at by the apply. Pure-ish (it reads the canvas
+ * and the world switch, nothing else) and exported for the apply seams.
+ *
+ * ⛔ THE DEFECT THIS EXISTS FOR (reported from the table twice — 2026-08-14 for the corridor, again
+ * 2026-08-19 for the single-target flow): *"that sound should play every time a bullet lands on the
+ * target… Not when apply damage is hit"*. The rail sounds a landed round at its measured ARRIVAL, which
+ * is clock 2; the damage window opens after the presentation settles and its Apply is clock 3, seconds
+ * later. Sounding a shot's impact there is not late by a frame, it is late by the whole action.
+ *
+ * ⚠ AND THE MECHANISM WAS A REGRESSION, not an omission — worth stating, because the comment at
+ * `applyLocationDamage` described a caller that no longer existed. `fxSilent` was introduced with TWO
+ * shot-derived callers: `_autoApply` and its GM-side relay. The auto-apply ROUTE was removed on
+ * 2026-08-14 with the world setting that selected it (damage-hooks.js: *"nothing emits 'auto' any
+ * more"*), and the flag's only shot-derived caller went with it. What was left is the damage WINDOW —
+ * which is now the ONLY route a shot's damage takes — and the window had never been given the flag,
+ * because while auto-apply existed the window was the hand-applied case the split deliberately left
+ * loud. So every shot has been sounding its impacts twice ever since: once on arrival, once on the
+ * click. Both halves are now asked of THIS function, so they cannot answer differently again.
+ *
+ * IT IS THE SAME COMPOSITION `fxWeaponFired` MAKES, in the same order, off the same helpers — the bails
+ * that mean "this rail drew nothing" (the switch, the class, the ruled fumble, a shooter with no figure
+ * on the map) and then the plan factory for whichever flow owns the payload. The plan factories are the
+ * one-answer sites (`hitSoundPlanFor`, `patternAudioPlanFor`); this asks them rather than restating
+ * what they decide, which is what stops a second derivation appearing.
+ *
+ * FALSE is the fail-safe direction and the answer for every case the rail genuinely did not sound: the
+ * switch off, a load fired at open ground with no figure aimed at, an asset that is not delivered, a
+ * hand-entered payload that never went down a barrel. Those keep the sound they have always made at the
+ * apply, which is the half of the 2026-08-14 split that was right and is unchanged.
+ */
+export function railSoundedImpacts(payload) {
+  // ⛔ WRAPPED, AND THE CATCH IS PART OF THE CONTRACT rather than defensive habit. This is a
+  // PRESENTATION query and its one caller is the Apply button on the damage window: a throw here would
+  // take the apply down, which is far worse than a doubled sound. "I could not tell" therefore answers
+  // FALSE — the same fail-safe direction the whole predicate is written in, and the same direction an
+  // un-updated caller takes.
+  try {
+    if (!combatFxEnabled() || !payload) return false;
+    if (payload.fumbleRuled) return false;
+    const actor = actorForPayload(payload);
+    if (!weaponFxClass(resolveFiredWeapon(payload, actor))) return false;
+    const shooter = shooterTokenForPayload(payload, actor);
+    if (!shooter) return false;
+    // The two flows never overlap, and each has exactly one plan factory — the same either/or the
+    // fan-out makes one line above where it resolves them.
+    if (patternFlowOwns(payload)) return !!patternAudioPlanFor(payload, shooter);
+    const aimTokenId = payload.targetTokenId ?? payload.fxTargetTokenId ?? null;
+    const target = aimTokenId ? (canvas?.tokens?.get(aimTokenId) ?? null) : null;
+    return !!hitSoundPlanFor(target);
+  } catch (err) {
+    console.warn(`${SCOPE} | rail-sounded query failed; the apply keeps its own impact`, err);
+    return false;
+  }
 }
 
 /* ══════════════════ Native muzzle flash — a client-local transient light source ══════════════════ */
@@ -4068,7 +4286,7 @@ function _held(effect, { shared = false } = {}) {
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
 export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null, lightHoldMs = 0 } = {}) {
-  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0, selfShot: false };
+  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0, selfShot: false, spanKey: null, spanOrigin: null, spanOriginPx: null };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
   // the same code for every load. The KEY is passed in rather than resolved here because there is no
@@ -4244,7 +4462,14 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
           const chaos = jitter[p] ?? null;
           // The file is band-addressed through the near floor — see TRACER_NEAR_BAND_FLOOR for the
           // decoded backwash measurement this answers.
-          const shot = _held(seq.effect().file(tracerSpanKey(entry.tracer, aimSquares))).atLocation(shooterToken)
+          // ⭐ AND A PAINTED ROUND STARTS AT THE BARREL, not at the middle of the shooter — the other
+          // half of the same report, and the half no choice of cut can answer (SPAN_ANCHOR_AT_MUZZLE
+          // carries the all-bands decode). A travelled dash keeps the centre: its crossing time is
+          // derived from the aim distance, so moving its origin would move its arrival off the one
+          // clock. Both shapes are ONE expression here so the difference is visible at the site.
+          const paints = !(entry.dashSquares > 0);
+          const springFrom = (SPAN_ANCHOR_AT_MUZZLE && paints) ? muzzle : shooterToken;
+          const shot = _held(seq.effect().file(tracerSpanKey(entry.tracer, aimSquares))).atLocation(springFrom)
             .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING);
           // TERMINAL ELEMENT — named so the engine's own end can be observed (see _watchSettleTag).
           if (settleTag) { shot.name(settleTag); out.tagged++; }
@@ -4284,6 +4509,17 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         }
         out.tracer = true;
         out.pellets = ends.length;
+        // WHICH FILE WAS HANDED TO THE ENGINE and WHERE THE SPAN WAS PLANTED — reported so a keeper
+        // asserts both by value rather than by looking at the canvas. `spanOrigin` is "muzzle" or
+        // "center"; the two backwash mechanisms are the only things that decide either.
+        out.spanKey = tracerSpanKey(entry.tracer, aimSquares);
+        const atMuzzle = SPAN_ANCHOR_AT_MUZZLE && !(entry.dashSquares > 0);
+        out.spanOrigin = atMuzzle ? "muzzle" : "center";
+        // The point actually planted on, per shape — the barrel for a painted round, the token's own
+        // centre for a travelled one. Reported rather than inferred from `spanOrigin`, so a reader of
+        // the result never has to know which shape resolves to which point.
+        const plantedAt = atMuzzle ? muzzle : from;
+        out.spanOriginPx = { x: Math.round(plantedAt?.x ?? from.x), y: Math.round(plantedAt?.y ?? from.y) };
       }
       // The HIT CONFIRMATION — one impact at the aimed-at point, and only for a round that LANDED.
       // The miss branch draws nothing on purpose: a miss already says so by where its tracer goes,
@@ -4574,12 +4810,41 @@ function _enforceGroundFireCap(incoming = 0) {
 }
 
 export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxPerPayload } = {}) {
-  const out = { fires: 0, fireMs: 0, evicted: 0, at: [] };
+  const out = { fires: 0, fireMs: 0, evicted: 0, at: [], persistent: false };
   const list = (Array.isArray(points) ? points : [points])
     .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
     .slice(0, Math.max(0, Math.trunc(max)));
   if (!list.length || !sequencerActive()) return out;
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
+  // ⭐⭐ THE PERSISTENCE SWITCH, read ONCE PER PLACEMENT and fail-closed (the reader answers false on an
+  // unreadable setting, so an unknown world draws today's clocks). Approved 2026-08-19 as a referee's
+  // environmental-hazard tool, world-scoped and default OFF per the module's standing rule for
+  // player-facing power.
+  //
+  // ⛔ WHAT IT CHANGES IS EXACTLY ONE THING — the expiry. Nothing else about the element branches on
+  // it: same asset, same size, same routing, same seeded points, same shared delivery, same stamped
+  // census name, same per-payload bound, same scene-wide `maxLive` with oldest-out eviction through
+  // the engine's manager, and the same exclusion from the settle signal (this element has never had a
+  // tail term and still has none, so `presentationTailMs` is byte-identical on both sides of the
+  // switch — the keeper pins that rather than reasoning about it).
+  //
+  // ⏪ NOT Sequencer's own `persist()`, and this is the same refusal the condition overlays made on
+  // 2026-08-12 for the same reason: `persist()` routes the effect through `flagManager.addFlags` into
+  // the document's `flags.sequencer.effects`, i.e. a DOCUMENT WRITE ON THE SCENE issued from
+  // presentation, which standard §9 G/22 forbids. It is worse here than it was there: this is the one
+  // per-shot element still delivered by the ENGINE'S broadcast, and under the performance score every
+  // connected client runs the aim-point branch (the pre-existing density defect recorded in the doc's
+  // open items), so a persisted placement would be one flag write PER CLIENT per shot. What is given
+  // up by refusing it is a redraw after a browser reload, and that boundary is stated in the doc
+  // rather than papered over: this is SESSION persistence. A scene change or a canvas rebuild keeps
+  // the flames (they live in the engine's manager, not in ours); a full reload does not.
+  //
+  // ⚠ READ PER PLACEMENT, NOT LATCHED. Flames already burning when the switch is flipped keep the
+  // clock they were lit with — the setting decides what a NEW placement takes, which is what makes it
+  // safe to flip mid-session in either direction.
+  const persistent = persistentGroundFireEnabled();
+  const lifetimeMs = persistent ? GROUND_FIRE.persistentLifetimeMs : GROUND_FIRE.lifetimeMs;
+  out.persistent = persistent;
   try {
     // THE CAP, applied before anything is queued: make room for this placement by ending the oldest.
     // Applied AGAIN once this placement's own flames actually exist — see the release below for why
@@ -4602,13 +4867,21 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
           .randomRotation()
           .name(`${GROUND_FIRE_NAME}.${foundry.utils.randomID()}`)
           .fadeIn(GROUND_FIRE.fadeInMs)
-          .duration(GROUND_FIRE.lifetimeMs)
+          // The ONE field the persistence switch moves. It is also what keeps the sprite LOOPING:
+          // the engine loops the media whenever the requested duration outruns the clip's own
+          // (5000 ms here), so a longer life is a longer loop and not a stalled last frame.
+          .duration(lifetimeMs)
+          // ⭐ KEPT ON BOTH SIDES OF THE SWITCH, and it is load-bearing in the persistent case rather
+          // than vestigial. `fadeOut` schedules its animation at (duration − fadeOut) — 24 h away and
+          // never reached — BUT the engine's own `endEffect` re-runs it with a zero offset, so a
+          // flame that is EVICTED by the scene cap or PUT OUT by the referee's control burns down
+          // over these same 2500 ms instead of popping off the map. Same constant, no new knob.
           .fadeOut(GROUND_FIRE.fadeOutMs);
         if (delay > 0) fire.delay(delay);
         out.fires++;
         out.at.push({ x: Math.round(p.x), y: Math.round(p.y) });
       }
-      out.fireMs = GROUND_FIRE.lifetimeMs;
+      out.fireMs = lifetimeMs;
     }
     // ⏪ The mark that used to be drawn here, at the flames' centroid, was removed 2026-08-10 on user
     // ruling — its final values are recorded in the block above.
@@ -4653,6 +4926,45 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
     }
   } catch (err) {
     console.warn(`${SCOPE} | ground fire failed`, err);
+  }
+  return out;
+}
+
+/**
+ * ⭐⭐ PUT THE GROUND FIRES OUT — the referee's deliberate-clear verb, and the other half of the
+ * persistence switch (a flame that does not expire needs something that ends it).
+ *
+ * THE CENSUS IS ALREADY THE QUERY THIS NEEDS, so this adds no bookkeeping of its own: every flame is
+ * stamped with a name under one prefix when it is queued, `liveGroundFires` asks the engine what is
+ * alive under it, and this ends exactly that set. The same prefix, the same manager and the same
+ * relay the scene cap's eviction has always used — so a clear reaches every client's copy exactly as
+ * an eviction does, and no client is left with a fire the others have put out.
+ *
+ * ⛔ SCOPED TO THE VIEWED SCENE by construction rather than by a filter we pass: the engine's manager
+ * holds the effects that are on the canvas, and its own filter defaults to `game.user.viewedScene`.
+ * A referee clears the map that is in front of them.
+ *
+ * ⚠ IT ENDS WHAT IS BURNING, NOT WHAT IS STILL ARRIVING, and that is stated rather than discovered: a
+ * placement is delayed by the rounds' own arrival time, so flames queued in the last fraction of a
+ * second land after the clear and stay lit. Pressing again takes them. In practice a clear happens
+ * long after the shot that lit the ground, so this is a boundary rather than a defect — recorded
+ * because the alternative (cancelling queued sections) would mean this verb keeping a ledger, which
+ * is the thing the census exists to avoid.
+ *
+ * Returns what it did BY VALUE (`cleared` = how many were burning when it was asked), so the control,
+ * the API and the keeper all read the same number instead of trusting a void call.
+ */
+export async function fxClearGroundFires() {
+  const out = { cleared: 0, failed: false };
+  if (!sequencerActive()) return out;
+  const live = liveGroundFires();
+  out.cleared = live.length;
+  if (!out.cleared) return out;
+  try {
+    await globalThis.Sequencer?.EffectManager?.endEffects?.({ name: `${GROUND_FIRE_NAME}.*` });
+  } catch (err) {
+    out.failed = true;
+    console.warn(`${SCOPE} | ground fire clear failed`, err);
   }
   return out;
 }
@@ -4705,10 +5017,69 @@ export function ammoLeavesGroundFire(ammoKey) {
  * aid, and a fire is not. Lighting the ground when the GM is still deciding would both leak the aim and
  * leave fires burning for a shot that was never resolved.
  */
-export async function fxPatternGroundFire({ x, y, dirDeg, lengthPx, widthPx, count, seed } = {}) {
+export async function fxPatternGroundFire({ x, y, dirDeg, lengthPx, widthPx, count, seed, delayMs = 0 } = {}) {
   const pts = patternFirePoints({ x, y, dirDeg, lengthPx, widthPx, count, seed });
   if (!pts.length) return { fires: 0, fireMs: 0, evicted: 0, at: [] };
-  return fxGroundFire(pts, { max: GROUND_FIRE.maxPerPattern });
+  return fxGroundFire(pts, { max: GROUND_FIRE.maxPerPattern, delayMs });
+}
+
+/**
+ * ⭐⭐ WHERE A BURNING PATTERN LOAD SETS THE GROUND ALIGHT, resolved at FIRE time so the flames can ride
+ * the ARRIVAL CLOCK instead of the confirm click. The pattern-flow counterpart of `groundFirePoints`,
+ * and the exact shape `patternAudioPlanFor` already has — same corridor, same one derivation, resolved
+ * once per payload and handed to the draw.
+ *
+ * ⏪⏪ THIS SUPERSEDES "PLACED ON CONFIRM" (user ruling 2026-08-19: line the fires up with the
+ * animation). The retired reasoning is kept because it was not wrong, it was outvoted: an unconfirmed
+ * corridor is a GM-only aiming aid and a fire is not, so lighting the ground while the GM was still
+ * deciding would both leak the aim and leave fires burning for a shot nobody resolved. What the table
+ * actually saw was the other side of that trade — the shell crossed the map, the corridor sat there
+ * while somebody read a card, and the ground caught fire seconds later with nothing on screen to
+ * connect it to. This is the SAME move the corridor's impact AUDIO made on 2026-08-14, for the same
+ * reason and on the same clock; the fires were simply left behind by it.
+ *
+ * ⚠ WHAT IS GIVEN UP, STATED RATHER THAN DISCOVERED: a corridor the GM later VOIDS has already lit its
+ * ground, and those flames burn out on their own clock (GROUND_FIRE.lifetimeMs) rather than being
+ * withdrawn. That is the accepted cost of the ruling, and it is bounded by the same census every other
+ * long-lived element on this rail is bounded by.
+ *
+ * ⛔ AND ONLY WHERE THE SHOOTER DECLARED A CORRIDOR. `patternCorridorFor` answers null for a payload
+ * whose aim was never declared (the GM builds that corridor later, from the target), so the rail cannot
+ * know where the shot went at fire time and does not guess: those keep the confirm-time placement they
+ * have always had. The confirm reads the answer off the REGION rather than re-deriving it — the pattern
+ * outlives the payload, which is why the geometry and the load key are already written there — so the
+ * two placements can never both fire and can never both decline.
+ *
+ * Null when this payload sets nothing alight: the load does not burn, no corridor was declared, the
+ * flow does not own the payload, or the rail is off.
+ */
+export function patternFirePlanFor(payload, shooterToken, ammoKey = null) {
+  const key = ammoKey ?? ammoFxKeyOf(payload);
+  if (!ammoLeavesGroundFire(key)) return null;
+  const laid = patternCorridorFor(payload, shooterToken);
+  if (!laid) return null;
+  const { corridor, origin, lengthPx, widthPx } = laid;
+  // Seeded off the payload's own fields — identity PLUS the rolled damage, the same per-event entropy
+  // term every other seed on this rail folds in, so two identical trigger pulls are two pictures and
+  // every client computes the one picture.
+  const seed = fxSeedOf(payload?.attackerId, payload?.weaponId, payload?.shotsFired, payload?.shotsHit,
+    Math.round(corridor.angleDeg * 100), Math.round(lengthPx), JSON.stringify(payload?.areaDamages ?? {}));
+  const points = patternFirePoints({
+    x: origin.x, y: origin.y, dirDeg: corridor.angleDeg, lengthPx, widthPx,
+    count: GROUND_FIRE.maxPerPattern, seed,
+  });
+  if (!points.length) return null;
+  return { points, seed, dirDeg: corridor.angleDeg, lengthPx, widthPx,
+    at: points.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) };
+}
+
+/**
+ * DOES THE PRESENTATION RAIL PLANT THIS PATTERN'S FIRES? — the one boolean the plant records on the
+ * corridor so the confirm knows whether it still owes them. Exported for damage-hooks.js, which asks it
+ * once, at placement, with the payload still in hand.
+ */
+export function railPlantsPatternFires(payload, shooterToken) {
+  return !!patternFirePlanFor(payload, shooterToken);
 }
 
 /**
@@ -5385,7 +5756,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // clients receive it through core's own token broadcast as they always did). Everything else —
   // seeds, cadence, draws, sounds, the settle bookkeeping and the canary — is deliberately identical,
   // because identical is the property the whole design stands on.
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = actorForPayload(payload);
   const weapon = resolveFiredWeapon(payload, actor);
@@ -5559,13 +5930,41 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // the class's own crossing time so the fires start when the rounds arrive. Not awaited — it must
   // never delay the first round.
   //
-  // ⭐ A PATTERN PAYLOAD IS NOT DRAWN HERE, and the gate is the same call the damage rail makes
-  // (spreadModeForAmmo — damage-hooks.js asks it twice and this is the third site of the identical
-  // question, not a fourth question). A shell that throws the p.109 pattern did not land its shot on
-  // the target: the rules put it across the whole path, so its fires belong to that path and are
-  // placed by the flow that owns the geometry, when the GM confirms it (fxPatternGroundFire). Drawing
-  // both would set the same shot alight twice.
+  // ⭐ A PATTERN PAYLOAD TAKES THE OTHER BRANCH, not no branch. A shell that throws the p.109 pattern
+  // did not land its shot on the target — the rules put it across the whole path — so its fires belong
+  // to that PATH and are scattered inside the corridor rather than clustered at an aim point. The gate
+  // is the same call the damage rail makes (spreadModeForAmmo, via patternFlowOwns), so the two shapes
+  // are exclusive by construction and one shot can never be set alight twice.
+  //
+  // ⏪ THE PATTERN'S FIRES USED TO BE PLACED AT THE GM'S CONFIRM and are placed HERE now, on this
+  // payload's own arrival clock (user ruling 2026-08-19 — see patternFirePlanFor for the ruling, what it
+  // supersedes and what it costs). The corridor is known at fire time whenever the shooter DECLARED one;
+  // where none was declared the plan is null and the confirm still owns them, exactly as before.
   let groundFire = null;
+  let patternFire = null;
+  // ⛔ THE FIRING CLIENT PLANTS, ONCE. This is the one element on this rail delivered by the ENGINE'S
+  // BROADCAST rather than `.locally()` (the stated opt-out at `_held`: its scene-wide census and its
+  // late-joiner replay need the engine's shared bookkeeping). Under the performance score EVERY client
+  // runs this fan-out, so a branch that is both performed remotely AND broadcast plants one set per
+  // connected client — N stacked copies of the same seeded points, each eating the same scene cap. The
+  // `!remote` gate is what keeps "broadcast" and "performed everywhere" from being applied to the same
+  // element. ⚠ The aim-point branch below does NOT carry this gate and predates the score; it is
+  // recorded as an open item rather than changed under a look-report unit.
+  if (shooter && !remote && ammoEntry?.groundFire && patternFlowOwns(payload)) {
+    // ⛔ NOT GATED ON `hits`, and that is the pattern flow's own rule rather than a slip: a corridor
+    // damages everyone standing in it, so a "miss" is a corridor that went somewhere else (the scatter
+    // re-derivation above puts it there) and it sets THAT ground alight. The single-target branch below
+    // keeps its hit gate because a round that missed a body landed nowhere this rail can name.
+    const plan = patternFirePlanFor(payload, shooter, ammoKey);
+    if (plan) {
+      patternFire = { queued: true, seed: plan.seed, points: plan.points.length, at: plan.at };
+      // Held back by the SAME arrival this payload resolved for its marks, its spray and its impacts —
+      // one derivation, threaded, so the flames start when the shot gets there. Never awaited and never
+      // tagged: scene dressing outlives the action by design and takes no term in the tail.
+      fxGroundFire(plan.points, { delayMs: arrivalMs, max: GROUND_FIRE.maxPerPattern })
+        .catch((err) => console.warn(`${SCOPE} | pattern ground fire failed`, err));
+    }
+  }
   if (shooter && hits > 0 && ammoEntry?.groundFire && !patternFlowOwns(payload)) {
     const gridPx = Number(canvas?.dimensions?.size) || 100;
     const at = aim;
@@ -5786,7 +6185,9 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // `lightHoldMs` is reported for the same reason the cadence is: "this burst was one held light rather
   // than N strobed ones" is a claim, and a number in the result is what lets a test say whether it held.
   return { ...result, shots, hits, flashes, weaponClass, cadenceMs, lightHoldMs, motes: ambience.motes, smokePuffs,
-    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, blood, volley,
+    // `patternFire` is the corridor's own burning ground, reported beside the aim-point one so a test can
+    // say WHICH shape answered — they are exclusive, so exactly one of the pair is ever non-null.
+    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, patternFire, blood, volley,
     // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
     arrival, impacts,
     // WHAT THE IMPACTS SOUNDED LIKE and how many were issued against their own cap — reported for the

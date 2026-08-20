@@ -1861,9 +1861,16 @@ const res = await page.evaluate(async () => {
   // offsets as a reading of 0. The claim is about the PELLETS, so the bound is taken over the
   // travelling marks: the FURTHEST offset is a pellet by construction (a painted streak cannot move),
   // and the painted bolt is still read from the rifle's own shot.
-  ok("drawn: a pellet is found out along the shot line while a painted bolt sits at the muzzle",
-    Math.max(...drawnDash.offsets) > shellRow.dashSquares * gridPx && drawnBolt.minOffset <= 2,
-    `furthest pellet ${Math.max(...drawnDash.offsets)}px from muzzle (offsets ${drawnDash.offsets.join(",")}) / bolt ${drawnBolt.minOffset}px`);
+  // ⏪ RE-PINNED 2026-08-19 (SPAN_ANCHOR_AT_MUZZLE): a painted streak is planted at the BARREL now, not
+  // at the token's centre, so its own near edge sits half a token forward — `gridPx / 2` on a 1x1
+  // figure — rather than at zero. The claim is unchanged (a painted round does not travel, a pellet
+  // does); the bolt's floor is the muzzle offset, with a couple of pixels of sampler slack, and the
+  // upper half of the bound is what keeps this from passing if the streak ever starts travelling.
+  const muzzleOffPx = gridPx * fx.MUZZLE_SPRITE.edgeFraction;
+  ok("drawn: a pellet is found out along the shot line while a painted bolt sits at the barrel",
+    Math.max(...drawnDash.offsets) > shellRow.dashSquares * gridPx
+    && Math.abs(drawnBolt.minOffset - muzzleOffPx) <= 4,
+    `furthest pellet ${Math.max(...drawnDash.offsets)}px from muzzle (offsets ${drawnDash.offsets.join(",")}) / bolt ${drawnBolt.minOffset}px against the ${muzzleOffPx}px barrel offset`);
   ok("drawn: the pellet carries a movement, the bolt does not (negative)",
     drawnDash.moves === true && drawnBolt.moves === false,
     `pellet moves ${drawnDash.moves} / bolt moves ${drawnBolt.moves}`);
@@ -5476,6 +5483,210 @@ try {
       `${spawned.filter(isFire).length} fire / ${spawned.filter(isScorch).length} scorch`);
     await endAll();
 
+    /* ══ 15z. THE EXPIRY SWITCH — `groundFirePersistent`, and the control that puts them out ═══════
+     * Approved 2026-08-19: a placement that skips its burn-down clock, as a referee's
+     * environmental-hazard tool, default OFF. The whole feature is ONE field of the draw — the
+     * duration — so these legs are about proving exactly that: nothing else moves with it, the census
+     * rails still hold under it, and there is something that ends what no longer ends itself.
+     *
+     * ⛔ EVERYTHING THIS SECTION DISTURBS IS RESTORED IN A `finally`: the world switch, and the
+     * flames themselves. A persistent flame left burning would be a 24-hour effect sitting on the rig
+     * for every later section (and for the next suite) — which is precisely the failure mode the
+     * clear control exists for, so the section uses its own subject to clean up after itself. */
+    const settings = await import(`/modules/${SCOPE}/module/settings.js`);
+    const tool = await import(`/modules/${SCOPE}/module/fx/ground-fire-tool.js`);
+    const persistWasLive = game.settings.get(SCOPE, "groundFirePersistent");
+    // ⚠ POLL, NEVER SLEEP, for a census reading. Every placement here is fire-and-forget AND delayed
+    // by the rounds' arrival, so a fixed sleep reads the scene mid-landing — the same trap the cap
+    // leg above documents.
+    const settledLive = async () => {
+      let now = -1, prev = -2;
+      for (let i = 0; i < 30; i++) {
+        await sleep(200); prev = now; now = fx.liveGroundFires().length;
+        if (i >= 3 && now === prev) break;
+      }
+      return now;
+    };
+    const drainFires = async () => {
+      try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ }
+      for (let i = 0; i < 40 && fx.liveGroundFires().length; i++) await sleep(150);
+    };
+    // The four points one placement is driven onto, fixed so both halves of the switch draw the
+    // identical picture and the ONLY difference between the readings is the clock.
+    const PTS = [{ x: 800, y: 1200 }, { x: 900, y: 1200 }, { x: 1000, y: 1200 }, { x: 1100, y: 1200 }];
+    // The tail is read across every class the rail ships, with and without the burning load, so the
+    // "byte-identical" claim below is about the arithmetic as a whole rather than one row.
+    const tailReading = () => JSON.stringify(["pistol", "smg", "rifle", "shotgun", "heavy"]
+      .flatMap(c => [null, "api", "standard"].map(a => [c, a, fx.presentationTailMs(c, a)])));
+
+    let offShape = null, offDurations = [], offFades = [], offTail = "";
+    let onShape = null, onDurations = [], onFades = [], onTail = "";
+    let onSettled = -1, capSettled = -1, capQueued = 0;
+    const capBursts = Math.ceil(fx.GROUND_FIRE.maxLive / fx.GROUND_FIRE.maxPerPayload) + 2;
+    let clearedFirst = null, clearedSecond = null, afterClear = -1, playerRefused = null;
+    let liveTools = [], gmTool = null, gmTitleLocalized = false, gmSelectSurvived = false;
+    let playerToolKeys = [], gestureCleared = -1, gestureRestored = false;
+    try {
+      /* ── a. THE SWITCH OFF: today's clocks, to the value, and the tail untouched ───────────── */
+      await game.settings.set(SCOPE, "groundFirePersistent", false);
+      await drainFires();
+      offTail = tailReading();
+      clearSpawns();
+      offShape = await fx.fxGroundFire(PTS, { delayMs: 0 });
+      await sleep(900);
+      // Read the clock off the ENGINE'S OWN effect data, not off our return value — the return value
+      // says what we asked for, the effect says what was built.
+      offDurations = fx.liveGroundFires().map(e => e?.data?.duration ?? null);
+      offFades = fx.liveGroundFires().map(e => e?.data?.fadeOut?.duration ?? null);
+      await drainFires();
+
+      /* ── b. THE SWITCH ON: the expiry is the only thing that moves ─────────────────────────── */
+      await game.settings.set(SCOPE, "groundFirePersistent", true);
+      onTail = tailReading();
+      clearSpawns();
+      onShape = await fx.fxGroundFire(PTS, { delayMs: 0 });
+      await sleep(900);
+      onDurations = fx.liveGroundFires().map(e => e?.data?.duration ?? null);
+      onFades = fx.liveGroundFires().map(e => e?.data?.fadeOut?.duration ?? null);
+      onSettled = await settledLive();
+
+      /* ── c. THE CENSUS RAILS STILL HOLD WITH THE EXPIRY GONE ───────────────────────────────
+       * This is the leg the feature could most plausibly have broken: with nothing burning out on its
+       * own, a scene fills to the cap and stays there, so the oldest-out eviction is now the ONLY
+       * thing bounding the scene. Driven the same way the transient cap leg is — enough real bursts to
+       * exceed the cap — and read off the engine. */
+      await drainFires();
+      clearSpawns();
+      for (let i = 0; i < capBursts; i++) {
+        await fx.fxWeaponFired(payload({
+          modifier: "api", shotsFired: 4, shotsHit: 4,
+          areaDamages: { Torso: [{ damage: i + 1 }, { damage: 3 }, { damage: 2 }, { damage: 1 }] },
+        }));
+      }
+      capSettled = await settledLive();
+      capQueued = spawned.filter(isFire).length;
+
+      /* ── d. THE CLEAR CONTROL, on a scene that is genuinely burning ────────────────────────── */
+      clearedFirst = await tool.onGroundFireClearTool();
+      for (let i = 0; i < 40 && fx.liveGroundFires().length; i++) await sleep(150);
+      afterClear = fx.liveGroundFires().length;
+      // THE SECOND ACT: the same gesture again, on the scene it just emptied.
+      clearedSecond = await tool.onGroundFireClearTool();
+
+      /* ── e. THE CONTROL'S WIRING, on the REAL hook, and the referee gate ───────────────────── */
+      liveTools = Object.keys(ui.controls?.controls?.tokens?.tools ?? {});
+      const shape = () => ({ tokens: { name: "tokens", tools: { select: { name: "select", order: 0 } } } });
+      const asGm = shape();
+      Hooks.callAll("getSceneControlButtons", asGm);
+      const landed = asGm.tokens.tools["cp-fire-clear"] ?? null;
+      gmTool = landed ? { name: landed.name, title: landed.title, button: landed.button,
+                          hasAction: typeof landed.onChange === "function" } : null;
+      gmTitleLocalized = typeof landed?.title === "string" && landed.title.length > 0
+        && !landed.title.includes("CYBERPUNK.");
+      gmSelectSurvived = !!asGm.tokens.tools.select;
+
+      /* ── f. THE OUTCOME OF THE REAL CONTROL'S OWN ACTION, driven ───────────────────────────── */
+      await drainFires();
+      await fx.fxGroundFire(PTS, { delayMs: 0 });
+      await sleep(900);
+      landed?.onChange?.();
+      for (let i = 0; i < 40 && fx.liveGroundFires().length; i++) await sleep(150);
+      gestureCleared = fx.liveGroundFires().length;
+
+      /* ── g. THE NEGATIVE: a player gets neither the control nor the action ─────────────────── */
+      const realIsGM = Object.getOwnPropertyDescriptor(game.user, "isGM");
+      Object.defineProperty(game.user, "isGM", { value: false, configurable: true });
+      const asPlayer = shape();
+      try {
+        Hooks.callAll("getSceneControlButtons", asPlayer);
+        playerRefused = await tool.onGroundFireClearTool();
+      } finally {
+        if (realIsGM) Object.defineProperty(game.user, "isGM", realIsGM);
+        else Object.defineProperty(game.user, "isGM", { value: true, configurable: true });
+      }
+      playerToolKeys = Object.keys(asPlayer.tokens.tools);
+      gestureRestored = game.user.isGM === true;
+    } finally {
+      // ⛔ THE SWITCH GOES BACK FIRST, so anything that lands after this point is transient again.
+      await game.settings.set(SCOPE, "groundFirePersistent", persistWasLive);
+      // ⚠ DRAINED TWICE WITH A BEAT BETWEEN. Placements on this path are fire-and-forget AND delayed
+      // by the rounds' arrival, so one can materialise AFTER an end call that was issued before it
+      // resolved. A straggler is survivable at 25 s and is NOT survivable at the persistent clock —
+      // it would sit on the rig for the rest of the session and be read as live by every later
+      // section. The documented single-straggler window is what the second pass is for.
+      await drainFires();
+      await sleep(1500);
+      await drainFires();
+    }
+
+    ok("expiry switch: the reader is fail-closed and the world default is OFF",
+      settings.persistentGroundFireEnabled() === (persistWasLive === true)
+      && game.settings.settings.get(`${SCOPE}.groundFirePersistent`)?.default === false
+      && game.settings.settings.get(`${SCOPE}.groundFirePersistent`)?.scope === "world",
+      JSON.stringify({ def: game.settings.settings.get(`${SCOPE}.groundFirePersistent`)?.default,
+                       scope: game.settings.settings.get(`${SCOPE}.groundFirePersistent`)?.scope }));
+    ok("expiry switch OFF: the placement takes the shipped 25 s clock, reported and built (negative)",
+      offShape?.persistent === false && offShape.fireMs === fx.GROUND_FIRE.lifetimeMs
+      && offShape.fireMs === 25000 && offDurations.length === 4
+      && offDurations.every(d => d === fx.GROUND_FIRE.lifetimeMs),
+      JSON.stringify({ fireMs: offShape?.fireMs, built: offDurations }));
+    ok("expiry switch ON: the placement takes the persistent clock instead — one field, both readings",
+      onShape?.persistent === true && onShape.fireMs === fx.GROUND_FIRE.persistentLifetimeMs
+      && onShape.fireMs === 86400000 && onDurations.length === 4
+      && onDurations.every(d => d === fx.GROUND_FIRE.persistentLifetimeMs),
+      JSON.stringify({ fireMs: onShape?.fireMs, built: onDurations }));
+    // ⛔ THE BOUND IS THE HOST'S TIMER, not a taste call: an expiry scheduled past 2^31−1 ms overflows
+    // this platform's setTimeout and fires IMMEDIATELY, which would end the flame the instant it lit.
+    ok("expiry switch: the persistent clock stays under the host's own timer ceiling",
+      fx.GROUND_FIRE.persistentLifetimeMs < 2147483647
+      && fx.GROUND_FIRE.persistentLifetimeMs > fx.GROUND_FIRE.lifetimeMs * 100,
+      `${fx.GROUND_FIRE.persistentLifetimeMs} vs 2147483647`);
+    ok("expiry switch: nothing but the clock differs — same count, same points, same burn-down",
+      offShape.fires === onShape.fires && offShape.fires === 4
+      && JSON.stringify(offShape.at) === JSON.stringify(onShape.at)
+      && JSON.stringify(offFades) === JSON.stringify(onFades)
+      && offFades.every(f => f === fx.GROUND_FIRE.fadeOutMs),
+      JSON.stringify({ at: offShape.at, fades: offFades }));
+    // The element has never had a tail term (it is scene dressing, excluded by the 2026-08-08 ruling)
+    // and it still has none — so the damage window's arithmetic is the SAME STRING on both sides.
+    ok("expiry switch: the presentation tail is byte-identical with it on and with it off",
+      offTail === onTail && offTail.length > 0, `${offTail.length} chars, identical=${offTail === onTail}`);
+    ok("expiry switch ON: the per-placement bound is still the bound (negative)",
+      onShape.fires === fx.GROUND_FIRE.maxPerPayload && onSettled <= fx.GROUND_FIRE.maxLive,
+      `${onShape.fires} placed, ${onSettled} alive`);
+    ok("expiry switch ON: the scene cap still holds across bursts — oldest out, newest drawn",
+      capQueued === capBursts * fx.GROUND_FIRE.maxPerPayload && capSettled <= fx.GROUND_FIRE.maxLive
+      && capSettled >= fx.GROUND_FIRE.maxPerPayload,
+      `queued ${capQueued}, ${capSettled} alive against a cap of ${fx.GROUND_FIRE.maxLive}`);
+    ok("clear control: it ends what the census says is burning, and the census is then empty",
+      clearedFirst?.cleared > 0 && clearedFirst.failed === false && afterClear === 0,
+      JSON.stringify({ cleared: clearedFirst?.cleared, left: afterClear }));
+    ok("clear control: the SECOND press on an already-clear scene reports nothing and does nothing",
+      clearedSecond?.cleared === 0 && clearedSecond.failed === false
+      && fx.liveGroundFires().length === 0,
+      JSON.stringify(clearedSecond));
+    ok("clear control: the module is on the real control-collection hook and the tool lands",
+      !!gmTool && gmTool.name === "cp-fire-clear" && gmTool.button === true
+      && gmTool.hasAction === true && gmTitleLocalized === true && gmSelectSurvived === true,
+      JSON.stringify({ tool: gmTool?.name ?? null, title: gmTool?.title ?? null }));
+    ok("clear control: the tool the client actually built carries it too",
+      liveTools.includes("cp-fire-clear"), JSON.stringify(liveTools));
+    ok("clear control: pressing the REAL tool's own action empties a burning scene (the gesture)",
+      gestureCleared === 0, String(gestureCleared));
+    // ⚠ THE CLAIM IS ABOUT *OUR* KEY, NOT ABOUT THE GROUP'S SIZE. First written as
+    // `keys.length === 1`, which went red on the real hook: Sequencer hooks the same collection and
+    // adds its own two viewer tools for everyone, GM or not. A leg that counts a shared group is
+    // asserting another module's behaviour, not this control's gate.
+    ok("clear control: a player is given no tool and the action refuses them (negative)",
+      playerToolKeys.includes("cp-fire-clear") === false && playerToolKeys.includes("select") === true
+      && JSON.stringify(playerRefused) === JSON.stringify({ skipped: "permission" })
+      && gestureRestored === true,
+      JSON.stringify({ keys: playerToolKeys, refused: playerRefused }));
+    ok("expiry switch: the world switch is back where this section found it, and nothing is left burning",
+      game.settings.get(SCOPE, "groundFirePersistent") === persistWasLive
+      && fx.liveGroundFires().length === 0,
+      `${String(persistWasLive)} / ${fx.liveGroundFires().length} alive`);
+
     // THE LIGHT SOURCE ITSELF, on this scene's own darkness. Core packs a colour to a NUMBER on the
     // source data, so the comparison is made in core's units rather than in ours.
     const darkness = fx.viewedSceneDarkness();
@@ -6622,9 +6833,18 @@ try {
       // Only the ORIGIN side is asserted here: elements anchored on the mark being shot at are the
       // target side of the same draw and belong there, so the claim is about which of the two twins
       // appears, never about the count of anchors.
+      // ⏪ RE-PINNED 2026-08-19 (SPAN_ANCHOR_AT_MUZZLE). A painted round used to be planted ON the
+      // shooter token, so "which twin was drawn from" could be read as a token id off the span's own
+      // anchor; it is planted at a derived POINT now (the barrel), so no origin-side element carries an
+      // id any more and the id list holds only the target-side anchors. The claim is unchanged and the
+      // evidence is stronger: every origin-side point must sit at the named figure, the other twin must
+      // appear nowhere on the canvas OR in the anchor ids, and the light — which is still keyed by token
+      // id — must be raised on that same figure.
       ok("twins: a payload naming the SECOND figure hangs its rounds on that figure, and never on the first",
-        named.anchoredIds.includes(secondTok.id) && !named.anchoredIds.includes(firstTok.id),
-        `anchored on ${JSON.stringify(named.anchoredIds)} (second=${secondTok.id}, first=${firstTok.id})`);
+        named.points.some((p) => near(p, secondC)) && !named.points.some((p) => near(p, firstC))
+        && !named.anchoredIds.includes(firstTok.id)
+        && named.flashTokenIds.length === 1 && named.flashTokenIds[0] === secondTok.id,
+        `points ${JSON.stringify(named.points)} / anchored ${JSON.stringify(named.anchoredIds)} / lit ${JSON.stringify(named.flashTokenIds)} (second=${secondTok.id}, first=${firstTok.id})`);
       ok("twins: the muzzle work is placed at the second figure and nothing is placed at the first",
         named.points.some((p) => near(p, secondC)) && !named.points.some((p) => near(p, firstC)),
         `${JSON.stringify(named.points)} — second ${JSON.stringify(secondC)} / first ${JSON.stringify(firstC)}`);
@@ -6637,17 +6857,21 @@ try {
 
       /* ── the fallbacks: unnamed, and named-but-not-drawn-here ────────────────────────────────── */
       const unnamed = await pull(payload());
+      // Both negatives re-pinned the same way and for the same reason as the positive above.
       ok("twins: a payload naming NO figure resolves the way it always did — the actor lookup (negative)",
-        unnamed.anchoredIds.includes(firstTok.id) && !unnamed.anchoredIds.includes(secondTok.id)
+        unnamed.points.some((p) => near(p, firstC)) && !unnamed.points.some((p) => near(p, secondC))
+        && !unnamed.anchoredIds.includes(secondTok.id)
         && unnamed.flashTokenIds[0] === firstTok.id
         && resolveVia(payload())?.id === fx.shooterTokenOf(actor)?.id,
-        `anchored ${JSON.stringify(unnamed.anchoredIds)} / lit ${JSON.stringify(unnamed.flashTokenIds)}`);
+        `points ${JSON.stringify(unnamed.points)} / anchored ${JSON.stringify(unnamed.anchoredIds)} / lit ${JSON.stringify(unnamed.flashTokenIds)}`);
       const foreign = await pull(payload({ attackerTokenId: "nosuchtoken000000" }));
       ok("twins: a figure this client is not drawing falls through to that same lookup, drawing nothing new (negative)",
-        foreign.anchoredIds.includes(firstTok.id) && !foreign.anchoredIds.includes(secondTok.id)
+        foreign.points.some((p) => near(p, firstC)) && !foreign.points.some((p) => near(p, secondC))
+        && !foreign.anchoredIds.includes(secondTok.id)
+        && foreign.flashTokenIds[0] === firstTok.id
         && foreign.res.skipped === null
         && resolveVia(payload({ attackerTokenId: "nosuchtoken000000" }))?.id === firstTok.id,
-        `anchored ${JSON.stringify(foreign.anchoredIds)} / skipped ${foreign.res.skipped}`);
+        `points ${JSON.stringify(foreign.points)} / anchored ${JSON.stringify(foreign.anchoredIds)} / skipped ${foreign.res.skipped}`);
 
       /* ── the window a caller waits out follows the same figure ───────────────────────────────── */
       // The two twins stand at different distances from the mark, and a PAINTED round's arrival is banded
@@ -8474,6 +8698,351 @@ try {
   pattern.checks.push({ n: "corridor-audio section ran", p: false, d: String(err?.message ?? err) });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════════
+ * 21. THE 2026-08-19 TABLE REPORTS — five findings, one section.
+ *
+ *  A  the impact sound rode the APPLY CLICK, not the arrival (the flag's only shot-derived caller was
+ *     deleted with the auto-apply route on 2026-08-14 and the damage window never had it)
+ *  B  the shell class's report is turned down on ruling, with the revert value pinned
+ *  D  the shell class's SINGLE-round asset was delivered ~43 dB below every other report — measured
+ *     here off the SERVED file through the browser's own decoder, not trusted
+ *  C  a burning pattern load lit its corridor at the confirm click; it now rides the arrival clock
+ *  E  the span's baked backwash: the near-band floor covered one band of two families, and the class
+ *     sweep says bullet.01 carries it in EVERY band — answered at the anchor
+ * ═══════════════════════════════════════════════════════════════════════════════════════════════════ */
+const tonight = { checks: [], measured: {} };
+try {
+  const t = await page.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const out = { checks: [], measured: {} };
+    const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+    const DA = await import(`/modules/${SCOPE}/module/combat/DamageApplicator.js`);
+    const { DamageDialog } = await import(`/modules/${SCOPE}/module/combat/DamageDialog.js`);
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
+    const gpx = Number(canvas.dimensions.size) || 100;
+
+    const wipe = async () => {
+      for (const tk of [...(scene?.tokens ?? [])].filter(x => x.name?.startsWith("__PW__T19"))) await tk.delete().catch(() => {});
+      for (const a of [...game.actors].filter(x => x.name?.startsWith("__PW__T19"))) await a.delete().catch(() => {});
+    };
+    await wipe();
+
+    const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
+    const spreadWas = game.settings.get(SCOPE, "shotgunSpreadEnabled");
+    const realSeq = globalThis.Sequence;
+    // The same recorder shape §9 uses — every builder call this rail makes, kept as VALUES.
+    const seqPlays = [];
+    class Rec {
+      constructor() { this.entries = []; }
+      effect() {
+        const e = { file: (f) => { this.entries.push({ file: f }); e._i = this.entries.length - 1; return e; } };
+        for (const m of ["atLocation", "size", "timeRange", "aboveLighting", "delay", "name", "duration",
+                         "fadeIn", "fadeOut", "opacity", "randomRotation", "stretchTo", "rotateTowards",
+                         "moveTowards", "moveSpeed", "playbackRate", "filter", "mirrorY", "locally",
+                         "scale", "endTimePerc", "elevation"]) {
+          e[m] = (v, o) => { this.entries[e._i][m] = v === undefined ? true : v; if (o !== undefined) this.entries[e._i][`${m}Opts`] = o; return e; };
+        }
+        return e;
+      }
+      async play() { seqPlays.push(this.entries); }
+    }
+
+    let shooterActor = null, targetActor = null, shooterTok = null, targetTok = null, ids = {};
+    try {
+      await game.settings.set(SCOPE, "combatFxEnabled", true);
+      shooterActor = await Actor.create({ name: "__PW__T19 Shooter", type: "character" });
+      targetActor = await Actor.create({ name: "__PW__T19 Target", type: "character" });
+      const items = await shooterActor.createEmbeddedDocuments("Item", [
+        { name: "__PW__T19 Shell", type: "weapon", system: { weaponType: "Rifle", attackType: "Autoshotgun", damage: "4d6", range: 50, rof: 2, shots: 10, shotsLeft: 10 } },
+        { name: "__PW__T19 Rifle", type: "weapon", system: { weaponType: "Rifle", attackType: "semiAuto", damage: "5d6", range: 400, rof: 1, shots: 30, shotsLeft: 30 } },
+      ]);
+      ids.shell = items.find(i => i.name.endsWith("Shell")).id;
+      ids.rifle = items.find(i => i.name.endsWith("Rifle")).id;
+      const toks = await scene.createEmbeddedDocuments("Token", [
+        { name: "__PW__T19 Shooter", actorId: shooterActor.id, actorLink: true, x: 6 * gpx, y: 6 * gpx, width: 1, height: 1 },
+        { name: "__PW__T19 Target", actorId: targetActor.id, actorLink: true, x: 12 * gpx, y: 6 * gpx, width: 1, height: 1 },
+      ]);
+      shooterTok = toks.find(t2 => t2.name.endsWith("Shooter"));
+      targetTok = toks.find(t2 => t2.name.endsWith("Target"));
+      await sleep(300);
+
+      /* ── a. THE SHELL CLASS'S REPORT LEVEL (B) ─────────────────────────────────────────────── */
+      // The ruling is a level call and it is the user's; what this pins is that the number moved by the
+      // amount reported, that it is the ONLY class that moved, and that the revert value is the default.
+      ok("report level: the default is unchanged and every class but the shell takes it (negative)",
+        fx.SHOT_VOLUME === 0.8
+        && ["pistol", "smg", "rifle", "heavy"].every(c => fx.classShotVolume(c) === fx.SHOT_VOLUME)
+        && Object.entries(fx.FX_CLASSES).filter(([, r]) => r.soundVolume !== undefined).map(([c]) => c).join(",") === "shotgun",
+        `default ${fx.SHOT_VOLUME}; rows naming their own: ${Object.entries(fx.FX_CLASSES).filter(([, r]) => r.soundVolume !== undefined).map(([c]) => c).join(",") || "none"}`);
+      const shellVol = fx.classShotVolume("shotgun");
+      const cut = 1 - shellVol / fx.SHOT_VOLUME;
+      out.measured.reportLevel = { was: fx.SHOT_VOLUME, now: shellVol,
+        cutPct: Number((cut * 100).toFixed(2)), cutDb: Number((20 * Math.log10(shellVol / fx.SHOT_VOLUME)).toFixed(2)) };
+      ok("report level: the shell class plays at 0.58 — the ruled 25-30% reduction off the 0.8 revert value",
+        shellVol === 0.58 && cut > 0.25 && cut < 0.30,
+        `${fx.SHOT_VOLUME} -> ${shellVol} = -${(cut * 100).toFixed(1)}% (${(20 * Math.log10(shellVol / fx.SHOT_VOLUME)).toFixed(2)} dB)`);
+      // The OUTCOME, off the core audio entry point rather than off the table: what is actually handed
+      // to the mixer for each class.
+      const AH2 = foundry.audio.AudioHelper;
+      const realPlay2 = AH2.play;
+      let lvl = [];
+      AH2.play = (data) => { lvl.push({ src: data?.src, volume: data?.volume }); return null; };
+      try {
+        fx._setSoundManifest(["shot-shotgun.ogg", "shot-shotgun-burst.ogg", "shot-rifle.ogg"]);
+        fx.sfx("shotgun"); fx.sfx("rifle"); fx.sfx("shotgun", { volume: 0 });
+      } finally { AH2.play = realPlay2; fx._setSoundManifest(null); }
+      ok("report level: the level reaching the mixer is the class's own, and an explicit 0 still wins",
+        lvl.length === 3 && lvl[0].volume === 0.58 && lvl[1].volume === fx.SHOT_VOLUME && lvl[2].volume === 0,
+        JSON.stringify(lvl));
+
+      /* ── b. THE SHELL CLASS'S SINGLE-ROUND ASSET IS AUDIBLE (D) ────────────────────────────── */
+      // ⛔ THE RED SIGNATURE THIS REPLACES: the delivered `shot-shotgun.ogg` peaked at -42.05 dBFS,
+      // 43.7 dB under its own multi-round twin and ~43 dB under every other report — which is what "the
+      // shotgun makes no sound" meant. Decoded HERE, off the SERVED bytes through the browser's own
+      // decoder, because a level is the one property a path check cannot see.
+      const peakOf = async (name) => {
+        const buf = await (await fetch(`modules/${SCOPE}/sounds/${name}`, { cache: "no-store" })).arrayBuffer();
+        const ctx = new OfflineAudioContext(1, 1024, 44100);
+        const audio = await ctx.decodeAudioData(buf);
+        let p = 0;
+        for (let ch = 0; ch < audio.numberOfChannels; ch++) {
+          const d = audio.getChannelData(ch);
+          for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > p) p = v; }
+        }
+        return p;
+      };
+      const pkSingle = await peakOf("shot-shotgun.ogg");
+      const pkBurst = await peakOf("shot-shotgun-burst.ogg");
+      const pkRifle = await peakOf("shot-rifle.ogg");
+      const dbBelow = 20 * Math.log10(pkSingle / pkBurst);
+      out.measured.assetLevels = {
+        single: Number((20 * Math.log10(pkSingle)).toFixed(2)),
+        burst: Number((20 * Math.log10(pkBurst)).toFixed(2)),
+        rifle: Number((20 * Math.log10(pkRifle)).toFixed(2)),
+        singleVsBurstDb: Number(dbBelow.toFixed(2)),
+      };
+      ok("asset level: the shell's single-round report is delivered within 6 dB of its multi-round twin",
+        pkSingle > 0.5 && dbBelow > -6,
+        `single ${(20 * Math.log10(pkSingle)).toFixed(2)} dBFS vs burst ${(20 * Math.log10(pkBurst)).toFixed(2)} dBFS = ${dbBelow.toFixed(2)} dB (was -43.70 dB)`);
+      ok("asset level: and it sits with the rest of the family rather than 43 dB under it",
+        Math.abs(20 * Math.log10(pkSingle / pkRifle)) < 6,
+        `single vs rifle ${(20 * Math.log10(pkSingle / pkRifle)).toFixed(2)} dB`);
+
+      /* ── c. THE ARRIVAL CLOCK OWNS THE IMPACT SOUND, NOT THE APPLY CLICK (A) ───────────────── */
+      const shotPayload = (over = {}) => globalThis.__goldenPayload("singleShot",
+        { attackerId: shooterActor.id, attackerTokenId: shooterTok.id, weaponId: ids.rifle,
+          targetTokenId: targetTok.id, targetActorId: targetActor.id }, over);
+      ok("apply clock: the rail's own answer is YES for a shot that named a figure (positive)",
+        fx.railSoundedImpacts(shotPayload()) === true, String(fx.railSoundedImpacts(shotPayload())));
+      ok("apply clock: NO for a ruled fumble, an unaimed shot and an unmapped weapon (negatives)",
+        fx.railSoundedImpacts(shotPayload({ fumbleRuled: true })) === false
+        && fx.railSoundedImpacts(shotPayload({ targetTokenId: null, fxTargetTokenId: null })) === false
+        && fx.railSoundedImpacts(shotPayload({ weaponId: "nope", weaponName: "nope" })) === false
+        && fx.railSoundedImpacts(null) === false,
+        `fumble ${fx.railSoundedImpacts(shotPayload({ fumbleRuled: true }))} / unaimed ${fx.railSoundedImpacts(shotPayload({ targetTokenId: null, fxTargetTokenId: null }))} / unmapped ${fx.railSoundedImpacts(shotPayload({ weaponId: "nope", weaponName: "nope" }))}`);
+      await game.settings.set(SCOPE, "combatFxEnabled", false);
+      const offAnswer = fx.railSoundedImpacts(shotPayload());
+      await game.settings.set(SCOPE, "combatFxEnabled", true);
+      ok("apply clock: NO with the world switch off — the apply keeps the sound it has always made (negative)",
+        offAnswer === false, String(offAnswer));
+      // The SEAM, by value: the flag really is what silences it, in both directions.
+      const seamHeard = [];
+      fx._setHitSoundSink((e) => seamHeard.push(e));
+      try {
+        await DA.applyLocationDamage({ target: targetActor, location: "Torso", netDamage: 3, penetrates: true, token: targetTok.object, fxSilent: true });
+        const quiet = seamHeard.length;
+        await DA.applyLocationDamage({ target: targetActor, location: "Torso", netDamage: 3, penetrates: true, token: targetTok.object, fxSilent: false });
+        ok("apply clock: the seam is silent under the flag and sounds without it (both directions)",
+          quiet === 0 && seamHeard.length === 1 && seamHeard[0].kind === "flesh",
+          `flagged ${quiet} impact(s), unflagged ${seamHeard.length}`);
+      } finally { fx._setHitSoundSink(null); }
+      await targetActor.update({ "system.damage": 0 });
+
+      // ⭐ THE WIRING, DRIVEN ON THE REAL WINDOW — the leg that would have caught this. A presence check
+      // on the flag certifies nothing; what is asserted is the OUTCOME of a real Apply click.
+      const dlgHeard = [];
+      fx._setHitSoundSink((e) => dlgHeard.push(e));
+      let dlg = null;
+      try {
+        dlg = new DamageDialog(shotPayload(), targetActor);
+        await dlg.render(true);
+        await sleep(500);
+        const btn = dlg.element?.querySelector('[data-action="applyDamage"]');
+        ok("apply clock: the window's Apply control is present and reachable (precondition)", !!btn, btn ? "found" : "missing");
+        btn?.dispatchEvent(new PointerEvent("click", { bubbles: true, cancelable: true }));
+        await sleep(900);
+        ok("apply clock: pressing Apply on a shot's own window makes NO impact sound — the rail already did",
+          dlgHeard.length === 0, `${dlgHeard.length} impact(s) at the click: ${JSON.stringify(dlgHeard.map(x => x.kind))}`);
+        ok("apply clock: and it still applied the damage — the silence is the audio leg, not the write",
+          Number(targetActor.system.damage) > 0, `damage now ${targetActor.system.damage}`);
+      } finally {
+        fx._setHitSoundSink(null);
+        try { await dlg?.close(); } catch (e) { /* already closed */ }
+        await targetActor.update({ "system.damage": 0 });
+      }
+
+      /* ── d. A BURNING PATTERN LOAD LIGHTS ITS CORRIDOR ON THE ARRIVAL CLOCK (C) ────────────── */
+      await game.settings.set(SCOPE, "shotgunSpreadEnabled", true);
+      const patPayload = (over = {}) => globalThis.__goldenPayload("shotgunSpread",
+        { attackerId: shooterActor.id, attackerTokenId: shooterTok.id, weaponId: ids.shell,
+          targetTokenId: null, targetActorId: null }, { modifier: "api", dotEnabled: true, dotType: "fire", ...over });
+      const burnPlan = fx.patternFirePlanFor(patPayload(), shooterTok.object);
+      const burnPlan2 = fx.patternFirePlanFor(patPayload(), shooterTok.object);
+      ok("pattern fires: a burning load's corridor resolves its own scatter at FIRE time, bounded and seeded",
+        !!burnPlan && burnPlan.points.length === fx.GROUND_FIRE.maxPerPattern
+        && JSON.stringify(burnPlan.at) === JSON.stringify(burnPlan2.at),
+        `${burnPlan?.points.length ?? "null"} point(s), cap ${fx.GROUND_FIRE.maxPerPattern}, deterministic ${JSON.stringify(burnPlan?.at) === JSON.stringify(burnPlan2?.at)}`);
+      ok("pattern fires: nothing for a load that does not burn, an undeclared corridor, or the rail's other flow (negatives)",
+        fx.patternFirePlanFor(patPayload({ modifier: "standard", dotEnabled: false }), shooterTok.object) === null
+        && fx.patternFirePlanFor(patPayload({ spreadAim: null }), shooterTok.object) === null
+        && fx.patternFirePlanFor(patPayload(), null) === null,
+        "standard / undeclared / no shooter all null");
+      ok("pattern fires: the plant records the SAME single answer it will read back at the confirm",
+        fx.railPlantsPatternFires(patPayload(), shooterTok.object) === true
+        && fx.railPlantsPatternFires(patPayload({ modifier: "standard", dotEnabled: false }), shooterTok.object) === false,
+        "burning true, standard false");
+      // The DRAW, on the recorder: the flames are queued with the payload's own resolved arrival as
+      // their delay, stamped under the census prefix, and NOT delivered `.locally()` (the one broadcast
+      // element on this rail — its scene-wide cap is a query of the engine's manager).
+      globalThis.Sequence = Rec;
+      seqPlays.length = 0;
+      let ranPat = null;
+      try {
+        ranPat = await fx.fxWeaponFired(patPayload());
+        await sleep(700);
+      } finally { globalThis.Sequence = realSeq; }
+      const flames = seqPlays.flat().filter(e => e.file === fx.GROUND_FIRE.key);
+      out.measured.patternFire = { queued: ranPat?.patternFire?.points ?? 0, arrivalMs: ranPat?.arrival?.ms ?? null,
+        delays: [...new Set(flames.map(f2 => f2.delay))], aimPointFire: ranPat?.groundFire };
+      ok("pattern fires: the fan-out reports the corridor shape and NOT the aim-point one — they are exclusive",
+        !!ranPat?.patternFire && ranPat.patternFire.points === fx.GROUND_FIRE.maxPerPattern && ranPat.groundFire === null,
+        JSON.stringify({ patternFire: ranPat?.patternFire?.points ?? null, groundFire: ranPat?.groundFire }));
+      ok("pattern fires: every flame is queued on the payload's ONE resolved arrival, not at the muzzle",
+        flames.length === fx.GROUND_FIRE.maxPerPattern && ranPat?.arrival?.ms > 0
+        && flames.every(f2 => f2.delay === ranPat.arrival.ms),
+        `${flames.length} flame(s) at delay ${JSON.stringify([...new Set(flames.map(f2 => f2.delay))])} vs arrival ${ranPat?.arrival?.ms}ms`);
+      ok("pattern fires: each keeps its own census name and the engine's shared delivery (long-lived contract)",
+        flames.length > 0
+        && flames.every(f2 => String(f2.name ?? "").startsWith(`${SCOPE}.groundfire.`))
+        && flames.every(f2 => f2.locally === undefined)
+        && new Set(flames.map(f2 => f2.name)).size === flames.length
+        && flames.every(f2 => f2.duration === fx.GROUND_FIRE.lifetimeMs),
+        `names ${new Set(flames.map(f2 => f2.name)).size}/${flames.length} unique, broadcast ${flames.every(f2 => f2.locally === undefined)}, lifetime ${flames[0]?.duration}`);
+      // ⛔ AND THE TAIL DOES NOT MOVE. Fires are scene dressing, excluded from the settle gate, and the
+      // ruling must not have bought the picture at the cost of the apply window opening late.
+      const tailBurn = fx.presentationTailMs("shotgun", "api", null, ranPat?.arrival?.ms ?? 0);
+      const tailPlain = fx.presentationTailMs("shotgun", "standard", null, ranPat?.arrival?.ms ?? 0);
+      ok("pattern fires: the presentation tail is untouched — the flames take no term in the settle arithmetic",
+        tailBurn === tailPlain && tailBurn > 0,
+        `burning ${tailBurn}ms vs plain ${tailPlain}ms`);
+      try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none */ }
+      await sleep(200);
+
+      /* ── e. THE SPAN'S BAKED BACKWASH — THE CLASS SWEEP (E) ────────────────────────────────── */
+      // ⛔ THE RED SIGNATURE: the 2026-08-17 floor answered the NEAREST band only. Re-decoded across all
+      // ten installed cuts, `bullet.01` carries 39 px of bright ink (luminance 107 of 255) behind the
+      // 200 px start anchor in EVERY band — the pistol's, the SMG's and the shell class's every shot, at
+      // every range — while `bullet.02` is clean above the nearest band. The floor cannot answer that:
+      // there is no clean cut to fall back to. The anchor can, and does it once for every class.
+      const FILE_BACKWASH = {
+        "jb2a.bullet.01.orange": { "05ft": 114, "15ft": 39, "30ft": 39, "60ft": 39, "90ft": 39 },
+        "jb2a.bullet.02.orange": { "05ft": 136, "15ft": 4, "30ft": 0, "60ft": 0, "90ft": 0 },
+      };
+      const REACH_PX = { "05ft": 200, "15ft": 600, "30ft": 1200, "60ft": 2400, "90ft": 3600 };
+      ok("span sweep: the near-band floor is still armed and still only answers the nearest band",
+        fx.TRACER_NEAR_BAND_FLOOR === "15ft"
+        && fx.tracerSpanKey("jb2a.bullet.01.orange", 1) === "jb2a.bullet.01.orange.15ft"
+        && fx.tracerSpanKey("jb2a.bullet.01.orange", 6) === "jb2a.bullet.01.orange",
+        `floor ${fx.TRACER_NEAR_BAND_FLOOR}`);
+      // THE ENUMERATION, closed: every mapped family x every band the engine can serve, with the floor
+      // applied, against the 50 px the anchor moves forward on a 1x1 token.
+      const sweep = [];
+      for (const [family, bands] of Object.entries(FILE_BACKWASH)) {
+        for (const [band, filePx] of Object.entries(bands)) {
+          const probeSquares = { "05ft": 1, "15ft": 4.9, "30ft": 8.9, "60ft": 14.9, "90ft": 30 }[band];
+          const drawn = fx.tracerSpanKey(family, probeSquares);
+          const servedBand = drawn.endsWith(".15ft") ? "15ft" : band;
+          const back = FILE_BACKWASH[family][servedBand];
+          const worldBack = back * ((probeSquares * gpx) / REACH_PX[servedBand]);
+          sweep.push({ family: family.split(".")[1], band, drawnBand: servedBand, filePx,
+            worldBack: Number(worldBack.toFixed(1)), clearsMuzzle: worldBack < gpx / 2 });
+        }
+      }
+      out.measured.spanSweep = sweep;
+      ok("span sweep: with the anchor at the barrel, no family x band puts ink past the shooter's own square",
+        sweep.every(s => s.clearsMuzzle),
+        sweep.filter(s => !s.clearsMuzzle).map(s => `${s.family}/${s.band}=${s.worldBack}px`).join(" ") || `all ${sweep.length} rows clear of ${gpx / 2}px`);
+      ok("span sweep: and the sweep really did find the defect it is bounding — bullet.01 carries it in every band (positive control)",
+        Object.values(FILE_BACKWASH["jb2a.bullet.01.orange"]).every(v => v > 0)
+        && ["30ft", "60ft", "90ft"].every(b => FILE_BACKWASH["jb2a.bullet.02.orange"][b] === 0),
+        `bullet.01 ${JSON.stringify(FILE_BACKWASH["jb2a.bullet.01.orange"])} vs bullet.02 ${JSON.stringify(FILE_BACKWASH["jb2a.bullet.02.orange"])}`);
+      // THE DRAW, by value: where the span was actually planted, per shape, on the recorder.
+      globalThis.Sequence = Rec;
+      const anchors = [];
+      try {
+        for (const [cls, ammo] of [["pistol", null], ["smg", null], ["rifle", null], ["heavy", null],
+                                   ["shotgun", "slug"], ["shotgun", null], ["shotgun", "flechette"]]) {
+          seqPlays.length = 0;
+          const to = { x: shooterTok.object.center.x + 6 * gpx, y: shooterTok.object.center.y };
+          const r2 = await fx.fxShot(shooterTok, null, { weaponClass: cls, hit: true, light: false, ammoKey: ammo, aimPoint: to });
+          await sleep(120);
+          const spanEntry = seqPlays.flat().find(e => String(e.file).includes("bullet."));
+          anchors.push({ cls, ammo: ammo ?? "-", origin: r2.spanOrigin, key: r2.spanKey,
+            px: r2.spanOriginPx, planted: spanEntry?.atLocation ?? null });
+        }
+      } finally { globalThis.Sequence = realSeq; }
+      out.measured.spanAnchors = anchors.map(a => ({ cls: a.cls, ammo: a.ammo, origin: a.origin, px: a.px }));
+      const from2 = shooterTok.object.center;
+      const painted = anchors.filter(a => ["pistol", "smg", "rifle", "heavy"].includes(a.cls) || a.ammo === "slug");
+      const dashed = anchors.filter(a => a.cls === "shotgun" && a.ammo !== "slug");
+      ok("span anchor: every PAINTED class plants its span at the barrel, half a token forward of centre",
+        fx.SPAN_ANCHOR_AT_MUZZLE === true && painted.length === 5
+        && painted.every(a => a.origin === "muzzle")
+        && painted.every(a => a.px.x === Math.round(from2.x + gpx / 2) && a.px.y === Math.round(from2.y)),
+        painted.map(a => `${a.cls}/${a.ammo}:${a.origin}@${a.px.x - Math.round(from2.x)}px`).join(" "));
+      ok("span anchor: and the queued sprite really is planted on that point, not on the token (outcome)",
+        painted.every(a => a.planted && Number.isFinite(a.planted.x)
+          && Math.round(a.planted.x) === Math.round(from2.x + gpx / 2)),
+        painted.map(a => `${a.cls}:${a.planted ? Math.round(a.planted.x) - Math.round(from2.x) : "none"}`).join(" "));
+      ok("span anchor: a TRAVELLED dash keeps the centre — its crossing time is derived from the aim (negative)",
+        dashed.length === 2 && dashed.every(a => a.origin === "center"),
+        dashed.map(a => `${a.cls}/${a.ammo}:${a.origin}`).join(" "));
+      ok("span anchor: the slug draws the clean family and the shell's own load draws the other (by value)",
+        anchors.find(a => a.ammo === "slug")?.key === "jb2a.bullet.02.orange"
+        && anchors.find(a => a.cls === "shotgun" && a.ammo === "-")?.key === "jb2a.bullet.01.orange",
+        `slug ${anchors.find(a => a.ammo === "slug")?.key} / buck ${anchors.find(a => a.cls === "shotgun" && a.ammo === "-")?.key}`);
+    } finally {
+      globalThis.Sequence = realSeq;
+      fx._setHitSoundSink(null);
+      fx._setSoundManifest(null);
+      try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none */ }
+      await sleep(200);
+      await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
+      await game.settings.set(SCOPE, "shotgunSpreadEnabled", spreadWas);
+      for (const m of game.messages.filter(m => m.speaker?.actor === shooterActor?.id || m.speaker?.actor === targetActor?.id)) {
+        try { await m.delete(); } catch (e) { /* gone */ }
+      }
+      for (const r3 of [...(scene?.regions ?? [])].filter(rg => rg.name?.includes("__PW__T19") || rg.getFlag?.(SCOPE, "isSpreadZone"))) {
+        try { await r3.delete(); } catch (e) { /* gone */ }
+      }
+      await wipe();
+    }
+    ok("2026-08-19 section cleanup: fixtures gone and both settings restored",
+      game.actors.filter(a => a.name?.startsWith("__PW__T19")).length === 0
+      && [...(scene?.tokens ?? [])].filter(tk => tk.name?.startsWith("__PW__T19")).length === 0
+      && game.settings.get(SCOPE, "combatFxEnabled") === fxWas
+      && game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWas,
+      JSON.stringify({ fx: fxWas, pattern: spreadWas }));
+    return out;
+  });
+  tonight.checks.push(...t.checks);
+  tonight.measured = t.measured;
+} catch (err) {
+  tonight.checks.push({ n: "2026-08-19 table-report section ran", p: false, d: String(err?.message ?? err) });
+}
+
 console.log("\n=== combat FX rail keeper ===");
 for (const c of res.checks) check(c.n, c.p, c.d);
 for (const c of xres.checks) check(c.n, c.p, c.d);
@@ -8493,6 +9062,12 @@ for (const c of corridor.checks) check(c.n, c.p, c.d);
 for (const c of pulse.checks) check(c.n, c.p, c.d);
 for (const c of preload.checks) check(c.n, c.p, c.d);
 for (const c of pattern.checks) check(c.n, c.p, c.d);
+for (const c of tonight.checks) check(c.n, c.p, c.d);
+console.log(`  report level (B), measured: ${JSON.stringify(tonight.measured?.reportLevel ?? null)}`);
+console.log(`  shipped asset peaks (D), decoded in-browser: ${JSON.stringify(tonight.measured?.assetLevels ?? null)}`);
+console.log(`  pattern fires (C), measured: ${JSON.stringify(tonight.measured?.patternFire ?? null)}`);
+console.log(`  span anchors (E), measured: ${JSON.stringify(tonight.measured?.spanAnchors ?? null)}`);
+console.log(`  span backwash sweep (E), enumerated: ${JSON.stringify(tonight.measured?.spanSweep ?? null)}`);
 console.log(`  park-level pulse, measured: ${JSON.stringify(pulse.measured ?? null)}`);
 console.log(`  preload manifest, measured: ${JSON.stringify(preload.measured ?? null)}`);
 console.log(`  corridor audio, measured: ${JSON.stringify(pattern.measured ?? null)}`);

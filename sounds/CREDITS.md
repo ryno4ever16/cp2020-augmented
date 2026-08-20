@@ -63,8 +63,13 @@ resample, no channel change — and their playback levels are set in code
 - **Author:** ken788
 - **Source:** https://freesound.org/people/ken788/sounds/386758/
 - **License:** CC0 1.0 Universal - https://creativecommons.org/publicdomain/zero/1.0/
-- **Modifications:** Renamed only. Original upload is WAV; this is Freesound's
-  site-generated Ogg Vorbis preview of that file (stereo, 44.1 kHz, 2.173 s).
+- **Modifications:** Renamed, and **level-corrected 2026-08-19**: a flat gain of +41.05 dB,
+  normalising the whole clip to a true peak of -1.0 dBFS (measured back off the re-encoded
+  file at -1.53 dBFS, loudest 100 ms -10.42 dB). Nothing else was touched - no trim, no
+  pitch work, no filtering, no re-selection. As delivered by Freesound this preview peaked
+  at -42.05 dBFS, roughly 43 dB below every other report in this library, which made the
+  shotgun class inaudible on a single-shell discharge. Original upload is WAV; this is
+  Freesound's site-generated Ogg Vorbis preview of that file (stereo, 44.1 kHz, 2.173 s).
 - **Note:** Replaced the previous 20-gauge recording (now `shot-shotgun-alt.ogg`) as the
   shotgun class's report. Chosen on measurement rather than description: 73.6% of its
   energy sits below 500 Hz against 31.2% for the 20-gauge clip and 58.5% for

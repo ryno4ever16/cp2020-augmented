@@ -205,13 +205,14 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 3 | **Muzzle lance** | `jb2a.muzzle_flash.single.01.yellow`, trimmed to 110 ms, dwelt by the row's `muzzleMs` | row names `muzzle` — **every class, including the shell again** | yes |
 | 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
 | 5 | ~~Discharge column~~ | ⏪ **DELETED 2026-08-09.** The whole mechanism — asset, 1.25 sq stretch, 55 ms trim, 220 ms dwell, its own colour field and its own tail term — is gone, not disabled. §6 | — | — |
-| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange`, or an ammo's own round (`rubber` → `jb2a.throwable.launch.cannon_ball.01.black`) | row names `tracer` | yes |
+| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange`, or an ammo's own round (`rubber` → `jb2a.throwable.launch.cannon_ball.01.black`). ⭐ *2026-08-19*: a **painted** (stretched) round is planted at the **muzzle point**, not the token centre (`SPAN_ANCHOR_AT_MUZZLE`) — every cut bakes ink behind its own start anchor and `bullet.01` does so in every band, so the anchor is what keeps it off the shooter's back. A **travelled dash** keeps the centre (its crossing time is derived from the aim distance). Both shapes still take the near-band floor for the file choice | row names `tracer` | yes |
 | ~~6b~~ | ~~**Buckshot volley**~~ | ⏪ **VETOED 2026-08-11** and switched off, not deleted. `VOLLEY.enabled: false` ⇒ the resolver answers null, buckshot draws #6 again and #9 comes back with it. §6, §3.2b | — | — |
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
 | 9 | **Hit confirmation** | `jb2a.impact.005.orange`, or one of three promoted keys (fire · ground crack · **dust puff**) | the round **hit** and the row has `impactSquares` — **delayed by that round's own arrival** (§4.2a), and drawn for a round the pacing rule refused as well as for one it drew | yes |
 | 9b | **Pellet arrival marks** ⭐ *new 2026-08-11, re-pointed 2026-08-14* | `jb2a.explosion.01.orange` at **0.45 sq**, trimmed to **550 ms**, one at each pellet endpoint — ⏪ the dust ring (`smoke.puff.ring.01.white` / 500 ms) is the recorded revert pair; the fire look was put to the user as a conscious razor override and **ratified** (§3.2b, §6) | the round **hit**, the class draws a **fan**, and the load does **not** set its own landing points alight (§3.2b) | yes |
-| 10 | **Burning ground** | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, ⏱ **25 s** (was 45 s), one flame per landing point | overlay names `groundFire` **and** ≥ 1 round landed **and** the single-target flow owns the payload — **one placement event per payload** | yes |
+| 10 | **Burning ground** (aim-point shape) | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, ⏱ **25 s** (was 45 s) — or ⭐ *since 2026-08-19* **24 h** while the `groundFirePersistent` world switch is on (§6), one flame per landing point, delayed by the payload's resolved arrival | overlay names `groundFire` **and** ≥ 1 round landed **and** the **single-target** flow owns the payload — **one placement event per payload** | yes |
+| 10b | **Burning ground** (corridor shape) ⭐ *moved onto the arrival clock 2026-08-19* | same asset and same lifetime, `GROUND_FIRE.maxPerPattern` (5) flames scattered inside the declared corridor (`patternFirePlanFor`, seeded off the payload including the rolled damage), delayed by the same one resolved `arrivalMs` the marks and impacts take. ⏪ these used to be placed at the GM's **confirm** click; the confirm still owns the case the rail cannot know — an **undeclared** corridor — and the two are kept exclusive by the `railFires` flag the plant stamps on the region. §6 | overlay names `groundFire` **and** the **pattern** flow owns the payload **and** the shooter DECLARED a corridor **and** this is the firing client (the one element on this rail delivered by the engine's broadcast rather than `.locally()`, so one client plants for all) | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
 | 13 | **Impact audio** ⭐ *new 2026-08-12, corridor half added 2026-08-14* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included. ⭐ A **declared corridor** has no target token, so its victims are swept once per payload instead (`patternAudioPlanFor`): every figure standing in the corridor's own polygon, wall-occlusion exempt, each sounded at **its own fraction of the crossing** — and the pattern's apply seam is quiet (`fxSilent`) so the confirm click can never sound the same bodies again (§6) | n/a (not drawn) |
 | 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
@@ -237,6 +238,75 @@ The scatter is **seeded off the payload** (`fxSeedOf` → `seededRng`), so two c
 and a test can compute it twice. Across bursts a scene holds at most ⏱ **`maxLive` = 12** flames (was 24); a
 placement that would exceed it ends the **oldest** first, through the engine's own manager, which
 relays the end to every client exactly as the placement was relayed.
+
+⭐⭐ **The expiry switch — `groundFirePersistent`, approved 2026-08-19 as a referee's
+environmental-hazard tool, world-scoped and default OFF** (the module's standing rule for
+player-facing power). The whole feature is **one field of the draw**: the placement's `duration`
+takes `GROUND_FIRE.persistentLifetimeMs` instead of `.lifetimeMs`, and nothing else about the element
+branches on it — same asset, same size, same routing, same seeded points, same shared delivery, same
+stamped census name, and the same **exclusion from the settle signal** (this element has never had a
+tail term, so the damage window's arithmetic is byte-identical on both sides of the switch — the
+keeper asserts that as a string comparison across all five classes rather than reasoning about it).
+
+**Three things the switch deliberately does NOT change**, each one a rail the census safety depends on:
+
+| Rail | Under persistence |
+|---|---|
+| `maxPerPayload` / `maxPerPattern` (4 / 5) | unchanged — one trigger pull still places at most its own bound |
+| scene-wide `maxLive` (12), oldest-out **through the engine's manager** | unchanged, and it is now the **only** thing bounding the scene, since nothing expires on its own any more. Driven by the keeper the same way the transient cap is: enough real bursts to exceed it, read off the engine (measured 20 queued, 5 alive against the cap of 12) |
+| the settle exclusion | unchanged — a fire that is meant to go on burning may never hold the damage window |
+
+⛔ **`maxLive` was deliberately not raised for persistent mode.** The user ruled it down 24 → 12 on
+2026-08-13 against a profiled ~0.36 % of a frame per live flame, and that argument gets **stronger**
+under persistence rather than weaker: a transient flame pays that cost for 25 s, a persistent one pays
+it for the rest of the session. Raising it back would partially undo a ruling without one. The
+consequence is stated in §8 rather than hidden: a referee's planted hazard can be evicted by later
+burning gunfire, oldest-out, like anything else.
+
+⚠ **It is SESSION persistence, and that boundary is a decision rather than a shortfall.** Sequencer's
+own `persist()` was refused, on the identical reasoning the condition overlays used on 2026-08-12
+(§2a, §6): `persist()` routes the effect through `flagManager.addFlags` into the document's
+`flags.sequencer.effects` — a **document write on the scene issued from presentation**, which standard
+§9 G/22 forbids. It is worse here than it was there, and the reason is the pre-existing density defect
+in §8: this is the one per-shot element still delivered by the *engine's* broadcast, and under the
+performance score **every** connected client runs the aim-point branch, so a persisted placement would
+be one flag write **per client per shot**. What is given up is a redraw after a browser reload. A
+scene change or a canvas rebuild keeps the flames (they live in the engine's manager, not in ours); a
+full page reload does not, and the referee lights them again.
+
+⚠ **Read per placement, not latched.** Flames already burning when the switch is flipped keep the
+clock they were lit with. The setting decides what a **new** placement takes, which is what makes it
+safe to flip mid-session in either direction.
+
+⛔ **The clock is a number because the host cannot express "forever."** The expiry is scheduled on a
+`setTimeout`, which this platform clamps at 2^31−1 ms (~24.86 days) — a larger value overflows and
+fires **immediately**, which would end the flame the instant it was lit. So the mechanism has to be a
+duration under that ceiling: **24 hours**, ~3 456× the transient life and longer than any table's
+session, so inside a session it *is* "until it is deliberately put out." The keeper pins the ceiling
+relationship, not just the value.
+
+⭐ **And something has to put them out** — `fxClearGroundFires()`, plus the referee control that calls
+it (`module/fx/ground-fire-tool.js`, tool id `cp-fire-clear` on the token scene-control group; macro
+path `game.cpAugmented.fx.clearGroundFires()`). It adds **no bookkeeping of its own**: the census is
+already a query of the engine by name prefix, so the clear ends exactly that set, through the same
+manager and the same relay the cap's eviction has always used — every client's copy goes out together.
+Scoped to the **viewed scene** by construction (the manager holds what is on the canvas, and its own
+filter defaults to `game.user.viewedScene`). It reports `{cleared}` **by value**, so the control, the
+API and the keeper read the same number. Referee-gated at the action layer as well as at the control,
+because an API is a door too. The `fadeOut` (2500 ms) is kept on both sides of the switch and is
+load-bearing in the persistent case: the engine's own `endEffect` re-runs it with a zero offset, so a
+flame that is **evicted or cleared** burns down over those 2500 ms instead of popping off the map.
+
+⚠ **The clear ends what is burning, not what is still arriving.** A placement is delayed by the
+rounds' arrival, so flames queued in the last fraction of a second land after the clear and stay lit;
+pressing again takes them. Recorded because the alternative — cancelling queued sections — would mean
+the verb keeping a ledger, which is the thing the census exists to avoid.
+
+**The control is shown to any referee whatever the setting says**, and that is a decision. Gating its
+visibility on `groundFirePersistent` would hide it in exactly the situation that needs it most: switch
+on, light a hazard, switch off again, and the flames already burning would have nothing left to put
+them out. It is also useful with the setting off — "clear the ground now" rather than waiting out the
+25 s burn — so the button is honest in both modes.
 
 **How the blood splash is aimed and how often it is drawn (#12), rebuilt 2026-08-09.** Both halves
 of this were reversed on report and both reversals are recorded in §6.
@@ -296,10 +366,14 @@ clip's peak by ~0.95 dB — so a gain computed from the MP3 would have been wron
 
 `HIT_SOUND.structure.gain` = **1.1677** (0.8677 / 0.7431) peak-matches the two to each other, so
 choosing a clip is not also choosing a loudness. `HIT_SOUND_VOLUME` = **0.55** sets both **against the
-reports**: the shot assets peak at +1.88 / +0.44 / +1.45 / −0.38 dBFS and play at `SHOT_VOLUME` 0.8, so a
-pistol report reaches ~0.99 of full scale and an impact reaches ~0.477 — **6.4 dB under the report of the
-weapon that caused it**, which is the relationship a downrange event should have to a muzzle event the
-listener already heard.
+reports**: the shot assets peak at +1.88 (pistol) / +1.45 (smg) / +0.44 (rifle) / +0.50 (heavy) dBFS and
+play at `SHOT_VOLUME` 0.8, so a pistol report reaches ~0.99 of full scale and an impact reaches ~0.477 —
+**6.4 dB under the report of the weapon that caused it**, which is the relationship a downrange event
+should have to a muzzle event the listener already heard.
+⏪ *Re-measured 2026-08-19 and the fourth figure was stale*: the list read "−0.38 dBFS" for the shell,
+which predates the 2026-08-07 asset swap and was never re-taken — the clip that actually shipped sat at
+**−42.05 dBFS** and was inaudible. It is now −1.53 after the level correction, and the shell is the one
+class that plays at its own level (`soundVolume` 0.58) rather than at `SHOT_VOLUME`. See §6.
 
 *Variation is by LEVEL, because this host has no rate.* The note on `sfx()` records at length why a
 per-round playback-rate wobble cannot be delivered uniformly here (no `playbackRate`, no `detune`, and
@@ -1595,6 +1669,9 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 
 | Knob | Ships as | Changes |
 |---|---|---|
+| `SPAN_ANCHOR_AT_MUZZLE` | **true** | where a PAINTED (stretched) round's span is planted — the token's forward edge (`muzzlePoint`) instead of its centre, so each cut's baked backwash falls inside the shooter's own square. Answers what the band floor structurally cannot: `bullet.01` carries 39 px of bright ink (luminance 107/255) behind the start anchor in **every** band, so there is no clean cut to fall back to. Arrival timing untouched; the travelled dash deliberately keeps the centre (its crossing time is derived from the aim distance). **Revert false** = the span returns to the token's centre, backwash included |
+| `FX_CLASSES.shotgun.soundVolume` | **0.58** | the shell class's report level — the one per-class departure from `SHOT_VOLUME`. −27.5 % / **−2.8 dB**, on the 2026-08-19 ruling ("turn it down just a touch"). **Revert = delete the field**, which returns the class to `SHOT_VOLUME` (0.8) with nothing else moved |
+| `SHOT_VOLUME` | 0.8 | the default report level for every class that names none of its own |
 | `TRACER_NEAR_BAND_FLOOR` | **"15ft"** | the nearest distance band's DRAWN tracer file — the 05ft cut carries a decoded 114/136 px muzzle backwash behind its start anchor (the reported backward tail); the floor serves the clean 15ft cut there instead, arrival timing untouched. **Revert null** = the engine's own band pick, backwash included |
 | `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the two standalone arrival sites (hit mark, blood) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
@@ -1655,7 +1732,9 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `GROUND_FIRE.scatterSquares` | 0.8 | radius of the landing scatter when the class gives no per-round geometry |
 | `GROUND_FIRE.maxPerPayload` | 4 | the most flames one payload may place |
 | `GROUND_FIRE.maxPerPattern` | 5 | the most flames one confirmed shot pattern may scatter |
-| `GROUND_FIRE.maxLive` | ⏱ **12** (was **24**) | the most flames alive on a scene at once — oldest evicted first. Trimmed 2026-08-13 (§6); ⚠ the number is the build lane's proposal, re-tune by eye |
+| `GROUND_FIRE.maxLive` | ⏱ **12** (was **24**) | the most flames alive on a scene at once — oldest evicted first. Trimmed 2026-08-13 (§6); ⚠ the number is the build lane's proposal, re-tune by eye. ⭐ **Unchanged by the persistence switch on purpose** (§2, §6) — under persistence it is the only bound left, and the profiled standing cost per flame argues for it more strongly, not less |
+| `GROUND_FIRE.persistentLifetimeMs` ⭐ *new 2026-08-19* | **86 400 000** (24 h) | how long a flame burns while `groundFirePersistent` is ON. ⏪ **The revert is the SETTING, not this field** — switched off, every placement takes `lifetimeMs` again and nothing else differs by a byte. ⛔ The value is bounded by the HOST rather than chosen for taste: an expiry past 2^31−1 ms overflows `setTimeout` and fires immediately, ending the flame the instant it lit — so "forever" is not expressible and this is the cap that stands in for it (§2, §6) |
+| `groundFirePersistent` (world setting, `module/settings.js`) ⭐ *new 2026-08-19* | default **`false`** | the expiry switch — config-visible in the Display section, world-scoped, fail-closed reader (`persistentGroundFireEnabled`), read **per placement** so it applies live and never re-clocks flames already burning. Approved as a referee's environmental-hazard tool; the caps and the settle exclusion are untouched by it |
 | `BLOOD_SPLATTER.key` | `jb2a.liquid.splash_side02.red` | the splash asset — **natively blood-coloured, no filter is applied**; the SIDE (directional) cut, rotated to the exit vector. ⏪ the radial `splash02.red` is still on the tier |
 | `BLOOD_SPLATTER.maxPerPayload` | 4 | the most sprays one payload may draw — repeated spray, never a fountain |
 | `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
@@ -1739,6 +1818,140 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-19 — the impact sound leaves the Apply button and goes back on the arrival clock (user
+report, second time of asking: "that sound should play every time a bullet lands on the target… not
+when apply damage is hit").** The 2026-08-14 ruling put the corridor's impacts on the arrival clock;
+the SINGLE-TARGET flow was still sounding its impacts at the click, and the mechanism turned out to
+be a regression rather than an omission. `fxSilent` shipped with two shot-derived callers, `_autoApply`
+and its GM-side relay. The auto-apply **route** was deleted with the world setting that selected it
+(ruling 2026-08-14, commit **`0021ed6`** "auto-apply retires") — and the diff is the proof rather than
+the reasoning: that commit removes both `fxSilent: true` call sites, the one in `_autoApply` carrying
+the comment *"this flow is the rail's own shot, already sounded at arrival"* and the matching one in the
+relay's `"auto"` mode. The flag's only shot-derived callers went with the route, leaving the damage
+WINDOW, which is
+now the only route a shot's damage takes, and which had never been given the flag because while
+auto-apply existed the window *was* the hand-applied case the split deliberately leaves loud. The doc
+comment at `applyLocationDamage` went on describing the deleted caller, which is why nothing caught it.
+Both window paths (`DamageDialog._onApply` and its `applyDamage` relay) now pass it, and **neither
+decides it**: the answer is one exported predicate on the rail, `railSoundedImpacts(payload)`, composed
+from the same bails and the same two plan factories `fxWeaponFired` uses. The relay CARRIES the boolean
+rather than re-asking it — the window's client is the one that watched the shot, and a GM looking at
+another scene would answer "nothing was sounded" and put a second impact on the click. False stays the
+fail-safe direction: the switch off, a shot at open ground, an undelivered asset and a hand-entered
+payload all keep the sound they have always made at the apply.
+
+**2026-08-19 — the shell class's report is turned down, and its single-round asset turns out to have
+been inaudible.** Two reports, opposite in direction, one fact underneath — the class has *two* assets
+and they were 43.7 dB apart.
+*The level call:* the report "is good but startles the table at default volume — turn it down just a
+touch". `FX_CLASSES.shotgun.soundVolume` = **0.58** against the 0.8 default: −27.5 %, −2.8 dB, the only
+per-class departure in the table, **revert = delete the field**.
+*The defect:* "buckshot semi-auto fires no sound" is the SINGLE-round asset, and semi-auto is the fire
+mode that fires one shell. Measured off the delivered files with libsndfile: `shot-shotgun.ogg` peaked
+**−42.05 dBFS** (loudest 100 ms −51.42 dB) against +0.44…+1.88 dBFS for every other report and +1.65
+for its own multi-round twin — at `SHOT_VOLUME` it reached 0.0063 of full scale. Not a missing key, not
+an undelivered asset, not an overlay that lost a field: the resolver returned the right path and the
+file played. The clip arrived that way — chosen on 2026-08-07 for its **spectrum** ("73.6 % of energy
+below 500 Hz"), with its level never measured. A playback volume is a fraction of full scale and can
+only turn a clip DOWN, so the fix has to be the asset: re-encoded at **+41.05 dB**, read back off the
+re-encoded file at −1.53 dBFS / loudest 100 ms −10.42 dB, which sits inside the family's own
+−4.76…−10.46 spread. Same recording, same CC0 source, no trim and no pitch work; `sounds/CREDITS.md`
+records the correction. The keeper now decodes the SERVED bytes in the browser and fails the leg if the
+single-round report is more than 6 dB under its twin — a level is the one property a path check cannot
+see, which is exactly why this survived a green suite.
+
+**2026-08-19 — ⏪ a burning pattern load lights its corridor on the SHOT'S ARRIVAL CLOCK, not at the
+confirm click (user ruling: line the fires up with the animation).** The retired reasoning is kept
+because it was not wrong, it was outvoted: an unconfirmed corridor is a GM-only aiming aid and a fire
+is not, so lighting the ground while the GM was still deciding would leak the aim and could leave fires
+burning for a shot nobody resolved. What the table actually saw was the other side of that trade — the
+shell crossed the map, the corridor sat there while somebody read a card, and the ground caught fire
+seconds later with nothing on screen to connect it to. This is the **same move the corridor's impact
+audio made on 2026-08-14**, on the same clock and for the same reason; the fires were simply left
+behind by it. `patternFirePlanFor` resolves the corridor at fire time off the hoisted single derivation
+(`patternCorridorFor`, now shared with `patternAudioPlanFor` so the sound and the fires cannot disagree
+about where the shot went), and the fan-out plants the flames with the payload's one resolved
+`arrivalMs` as their delay. **Every piece of the long-lived contract is unchanged**: `maxPerPattern`,
+the scene-wide `maxLive` with oldest-out eviction through the engine's manager, the stamped census
+name, the engine's shared delivery, and the exclusion from the settle gate — the keeper pins that the
+presentation tail is byte-identical to the non-burning load's.
+*Two bounds, stated rather than discovered.* (1) Only a corridor the shooter **declared** is known at
+fire time; where none was declared `patternCorridorFor` answers null and the confirm still plants,
+exactly as before. The plant stamps the rail's own single answer on the region as `railFires`, and the
+confirm reads it back — the region is the only thing that outlives the payload, which is what makes the
+two placements exclusive in both directions. (2) A corridor the GM later **voids** has already lit its
+ground, and those flames burn out on their own clock rather than being withdrawn. That is the accepted
+cost of the ruling.
+
+**2026-08-19 — persistent ground fire is approved as a referee's environmental-hazard tool, DEFAULT
+OFF.** The user asked for ground fires that can be used as a standing hazard rather than dressing that
+burns itself out, and the switch ships world-scoped and off, per the module's standing rule that
+player-facing power defaults GM-only with an opt-in. `groundFirePersistent` moves **one field of the
+draw** — the placement's `duration` takes `GROUND_FIRE.persistentLifetimeMs` (24 h) instead of
+`.lifetimeMs` (25 s). Nothing else branches on it, and the keeper pins that as a *string* rather than
+an argument: the presentation tail is byte-identical with the switch on and off, across all five
+classes and three loads, because this element has never had a tail term and still has none.
+
+*What was deliberately NOT done, and each is a decision rather than an omission.* (1) **`maxLive` was
+not raised.** The user ruled it 24 → 12 on 2026-08-13 against a profiled ~0.36 % of a frame per live
+flame, and persistence makes that argument stronger — a transient flame pays the cost for 25 s, a
+persistent one pays it all session. Raising it back would partially undo a ruling with no ruling behind
+it, so the cap stands and the consequence is recorded in §8 instead: a planted hazard can be evicted by
+later burning gunfire, oldest-out. (2) **Sequencer's `persist()` was refused**, on the identical
+reasoning the condition overlays used on 2026-08-12 — it writes the effect into the document's
+`flags.sequencer.effects`, a document write from presentation (§9 G/22). It is worse here: this is the
+one per-shot element still on the *engine's* broadcast, and under the performance score every client
+runs the aim-point branch, so a persisted placement would be one flag write **per client per shot**. So
+this is **session persistence**, stated rather than papered over — a scene change or canvas rebuild
+keeps the flames, a browser reload does not. (3) **The clock is a number because the host cannot
+express forever**: the expiry rides a `setTimeout`, clamped at 2^31−1 ms, past which a value overflows
+and fires *immediately* — which would end the flame the instant it was lit.
+
+*And the other half of the feature, because a fire that does not expire needs something that ends it.*
+`fxClearGroundFires()` plus a referee control (`cp-fire-clear` on the token scene-control group, the
+third use of the module's own augment-an-existing-group idiom; macro path
+`game.cpAugmented.fx.clearGroundFires()`). It adds **no bookkeeping**: the census was already a query
+of the engine by name prefix, so the clear ends exactly that set through the same manager and the same
+relay the cap's eviction uses. Referee-gated at the action layer as well as the control. Shown to any
+referee whatever the setting says — gating visibility on the switch would hide the control in the one
+state that needs it (switch on, light a hazard, switch off), and it is useful with the setting off too.
+The 2500 ms `fadeOut` is kept on both sides and turns out to be load-bearing under persistence: the
+engine's `endEffect` re-runs it at a zero offset, so an evicted or cleared flame burns **down** rather
+than popping out.
+
+*Red-first evidence.* The wiring negative was written as "the player's control group holds exactly
+`select`" and went **red** on the real hook — Sequencer hooks the same collection and adds its own two
+viewer tools for everyone, referee or not. The leg was asserting another module's behaviour; it now
+asserts *our* key's absence and `select`'s survival. Fifteen legs added to the fx-rail keeper (944/944)
+and two parity legs to the bench smoke (49/49), which also closes the load enumeration — every load
+whose row sets fires must have a bench gun to fire it from.
+
+**2026-08-19 — the span's baked backwash: the class sweep, and why the band floor could not close it.**
+The 2026-08-17 floor answered the nearest band of two families and judged the rest harmless. The table
+came back with "the submachine gun and militech light assault still have the tail issue as well as
+shotgun slugs", so all ten installed cuts were re-decoded on the same instrument, this time reading the
+ink's **luminance** as well as its extent:
+
+| family | 05ft | 15ft | 30ft | 60ft | 90ft |
+|---|---|---|---|---|---|
+| `bullet.01` (pistol · smg · shell) | 114 px | **39 px** | **39 px** | **39 px** | **39 px** |
+| `bullet.02` (rifle · heavy · slug) | 136 px | 4 px | 0 px | 0 px | 0 px |
+
+`bullet.01` carries its backwash at **luminance 107 of 255 in every band** — bright ink, not a stray dim
+pixel, and the earlier note's "inside the token's own footprint" is true of the footprint and false of
+what a viewer sees, because span sprites are drawn `aboveLighting` and the stub is painted **on top of**
+the shooter. No choice of cut can answer that: every cut has it. So the remedy is the **anchor**, which
+is one mechanism for every class and every band rather than a second per-band table —
+`SPAN_ANCHOR_AT_MUZZLE`, planting the painted span at the same forward-edge `muzzlePoint` the muzzle
+lance and the smoke puff are already born at, half a token ahead of centre. Worst case after it:
+`bullet.01`'s 90ft cut stretched to a 30-square shot is 39 px × 0.833 = 33 world px against the 50 px
+the anchor moved, 17 px clear; the bound is a ~46-square shot, past any battle map. The **arrival clock
+is untouched** (timing is physics, the drawing is a look call), and the **travelled dash keeps the
+centre** deliberately — its crossing time is derived from the aim distance, so moving its origin would
+put it ahead of the one clock everything else on the shot hangs on, and its backwash is already ~4 world
+px because a dash draws the cut at a fixed grid-unit width. The near-band floor stays armed: it answers
+the 114/136 px case, which is far larger than 50 px of anchor can absorb.
 
 **2026-08-18 — the condition overlays' end-reconciler gains a rapid-end guard.** The re-issue was
 built for one legitimate case — an overlay aging out at its 600 s lifetime — but answered EVERY
@@ -2761,8 +2974,13 @@ presented while the screen stayed empty.
 
 | Item | State |
 |---|---|
+| **⚠ THE OTHER END OF THE SPAN — `bullet.02` paints past the target, and no anchor closes it** | ⚠ **Measured 2026-08-19, deliberately NOT fixed, and it is the open call of this unit.** The all-ten-cut decode was run at BOTH anchors, and the two mapped families fail at opposite ends. Behind the 200 px start anchor: `bullet.01` 39 px at luminance **107**, every band (fixed — `SPAN_ANCHOR_AT_MUZZLE`); `bullet.02` 0–4 px, clean. Beyond the end anchor: `bullet.01` 99 px at luminance **13–17**, i.e. invisible; `bullet.02` **143–145 px**, and at the **60ft** cut at luminance **226** — bright. Stretched, that is roughly **70 world px of lit streak past the aim point** on a 9–15-square shot, which is the ordinary rifle engagement, and dim at the other bands, which is why such a thing reads as "occasional". So the table's one word covers two artifacts: the SMG's tail is *behind the shooter*, the rifle's and the slug's is *beyond the target*. ⛔ **The anchor cannot answer this one, and the arithmetic says so rather than an opinion**: pulling the stretch endpoint back by the same half-token leaves 68 px (15ft), 57 px (30ft), 21 px (60ft) and 71 px (90ft) still past the target's centre against its own 50 px half-width — three of five bands unclosed. Closing it needs either a **per-band endpoint table** (which is the shape this rail's asset rule explicitly refuses — "an asset that needs a trim and a dwell and a derived rate to show one frame of itself is the wrong asset") or a **different projectile asset for the painted classes**. Both are user calls: one is a look change on four classes, the other is a replacement. **Nothing is reverted by a constant here — this item has no shipped mechanism yet.** |
+| **The aim-point burning ground is broadcast AND performed on every client** | ⚠ **Observed 2026-08-19 while building the corridor shape; not changed, and not a look call.** The burning ground is the one per-shot element delivered by the *engine's* broadcast rather than `.locally()` — its scene-wide census and its late-joiner replay need the engine's shared bookkeeping (§1, `MSG_SCORE`). But under the performance score **every** client runs `fxWeaponFired`, so the aim-point branch plants one broadcast set **per connected client**: N stacked copies of the same seeded points, each eating the same `maxLive` cap. It hides itself — the points are identical, so the copies land on top of each other, and the cap evicts the excess — which is why nothing has reported it. The new **corridor** branch carries a `!remote` gate for exactly this reason (the firing client plants, the engine delivers); the aim-point branch was left alone because changing it under a look-report unit would move a shipped element's density with no ruling behind it. The fix is the same one line; it wants a deliberate unit and a re-run of the ground-fire census legs. ⭐ **Untouched again by the 2026-08-19 persistence unit, and that unit has now made it load-bearing in one direction**: this per-client multiplication is a large part of why Sequencer's `persist()` was refused there (it would be a flag write per client per shot rather than one), so whoever takes the one-line fix should read the §6 persistence entry first — closing this defect also removes one of the arguments against reload persistence. It is still N stacked copies eating one cap, and persistence does not change the count, only how long each copy is paid for. |
 | **Do the pellet arrival marks need the standalone treatment the hit mark got?** | ⚠ **Open, 2026-08-17.** The phase measurement (§6) moved the hit confirmation and the blood spray out of the shot's shared sequence and compensated the engine's start-up floor; the shot-pattern classes' per-pellet arrival marks still ride the shared sequence with their per-pellet delays, so they plausibly carry the same lateness class against the corridor's arrival-timed audio. Measure a shell class on the phase instrument (`tests/_probe-fx-phase.mjs`, swap the fixture to a spread weapon) before touching anything — the rifle's numbers do not transfer, and the instrument exists so nobody guesses twice. |
 | ~~The ammo's `modifier` id is ruled onto the payload but is not on it~~ | ✅ **CLOSED 2026-08-09.** `AMMO_EFFECT_FIELDS` had had `modifier` **replaced** by `caliber` rather than joined by it, so `payload.modifier` was `undefined` on every real shot and every load resolved through `ammoFxKeyOf`'s fingerprint branch — collapsing `dualPurpose` onto `ap`, the one case the id exists to settle. Both fields now sit in the list, with the comment block saying why one may never displace the other. The guard is the point: `tests/cp2020-augmented-b1-seam-payload.mjs` now fires bench guns **07** (`api`, 5.56) and **16** (`dualPurpose`, 20/9mm) through the real UI path and asserts `payload.modifier`, `payload.caliber` and the resolved key off the payload the hook actually carried — plus, on that same object, that stripping the id makes it answer `ap`. Reverting the one string turns four of its legs red. See §6. |
+| ⭐ **A referee's planted hazard can be evicted by later gunfire, and the cap was left at 12 on purpose** | ⚠ **Stated so it is a decision, not a surprise — new with the 2026-08-19 persistence switch.** With the expiry gone, `maxLive` = 12 is the *only* thing bounding the scene, and it evicts the **oldest** — which is the right rule for the element it was written for (the shot a viewer is watching is the one that must be drawn) and the **wrong** instinct for a hazard a referee placed deliberately three exchanges ago. So a referee who lines a burning barricade and then keeps firing incendiary rounds will watch the barricade go out from the far end. `maxLive` was **not** raised to compensate, and that is the defensible half: the user ruled it 24 → 12 on 2026-08-13 against a profiled ~0.36 % of a frame per live flame, and persistence strengthens that argument rather than weakening it (25 s of cost versus a whole session's). Raising it is **one field** (`GROUND_FIRE.maxLive`) if a table wants a longer firebreak, and 24 is the recorded revert. The other shape, if the eviction ORDER is what is wrong rather than the number, is a placement that opts out of oldest-out — which is a new mechanism and a bigger call than a constant. |
+| ⭐ **Persistent fires do not survive a browser reload** | ⚠ **A stated boundary rather than a defect, and the alternative was measured and refused (§6).** Nothing is persisted, so what is burning lives in each client's engine manager. A scene change and a canvas rebuild are fine; a full page reload clears the map and the referee lights it again. Closing it means Sequencer's `persist()`, which writes into `flags.sequencer.effects` — a document write from presentation (§9 G/22) — and under the performance score the aim-point branch runs on every client, so it would be one flag write **per client per shot**, not one. Same shape as the medical-extraction arrival's own reload row: the honest alternative, if it is ever wanted, is the referee's client answering a "what is burning?" request from a joining client, which is a socket round trip rather than a write. |
+| ⭐ **The persistent clock's 24 h and the control's icon are build-lane picks** | ⚠ The *feature* and its default-off are the user's; these two are mine. **24 h** (`GROUND_FIRE.persistentLifetimeMs`) is bounded from above by the host — anything past 2^31−1 ms overflows `setTimeout` and ends the flame instantly — so the only real question is whether something shorter (a 4-hour session cap, say) reads better as "a session"; it is one constant either way. The control's **`fa-fire-extinguisher`** icon and the "Put Out Ground Fires" label are also mine, and the tool is placed on the token group beside the module's two other referee controls. All three are one-edit vetoes. |
 | **The burning ground's size, density and lifetime are not signed off** | ⚠ **Still open, and the budget half moved 2026-08-13.** The asset was chosen by measurement and the placement was ruled, but the numbers are look calls the build lane made: one flame is **0.9 squares** (picked off a 0.5 / 0.7 / 1.0 / 1.6 comparison on the dark range), a payload places **up to 4** and a pattern **5**. The **lifetime** and the **scene cap** were trimmed on the user's ruling to ⏱ **25 s** and ⏱ **12** (⏪ 45 s / 24) against a profiled ~0.36 % of a frame per live flame — but those two numbers are the build lane's proposal too, and re-tuning either by eye is one field: `GROUND_FIRE.lifetimeMs`, `.maxLive`, `.squares`, `.maxPerPayload` / `.maxPerPattern`. Captures 61a–61d. |
 | ~~A scattered shot pattern and the rounds drawn for it point at two different places~~ | ✅ **CLOSED 2026-08-13**, the same day it was raised. It was raised because the scatter was rolled inside the plant, on the **active GM's** client, after the **firing** client's fan-out had already resolved its axis toward the aimed point — two clients, two rolls, two answers, and on every miss the rounds crossed one line while the pattern was planted on another. The dice now roll **once**, at the seam where the payload is assembled (`seam-shim.js`, firing client), guarded by `payloadScattersOnMiss`, and ride the payload as `spreadScatter: {dirFace, distFace}`; both rails turn those two faces into a landed point through the one pure site they share (`combat/scatter-table.js` `scatterLandedPoint`, clamp included), and the plant **never re-rolls** when the faces are carried. Results travel, not a seed — the payload is relayed as JSON and there is no cross-client generator to re-run. A roll is kept in the plant for payloads that carry no faces (an older client mid-update, a macro or keeper calling the plant directly, and the fork, where the shim is dormant). Pinned by `tests/cp2020-augmented-spread-zone.mjs` §14g: one forced-miss payload drives both rails and the drawn endpoint and the planted centre are asserted to be the **same coordinates**, with the hit case asserted at the aim. See §4.4. |
 | ~~A shell fired with the shot pattern **switched off** is claimed by neither flow~~ | ✅ **CLOSED 2026-08-09.** The world switch is now part of the flow question itself, asked at one shared site (`spreadFlowModeOf`, lookups.js) by both damage gates and by `patternFlowOwns`. With the pattern off a shell resolves to `single`, so the ordinary apply flow claims it exactly as it claims a slug, and the fan-out draws an incendiary shell's burning ground itself because no confirm will. Pinned three ways: the spread-zone spec drives a shell with the setting off and asserts the single-target flow **claimed** it (and that no pattern was placed), the fx-rail spec drives the same payload's fires on the rail, and a source leg asserts the damage rail reads the setting **nowhere** of its own. Both specs restore the setting in a `finally`. See §1.1a and §6. |

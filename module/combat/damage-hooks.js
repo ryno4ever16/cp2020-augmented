@@ -66,7 +66,7 @@ import { pixelsToMeters, metersToPixels } from "../vehicle/vehicle-grid.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
-import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns } from "../fx/effects.js";
+import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns, railPlantsPatternFires } from "../fx/effects.js";
 
 /**
  * The effect list, however a caller spelled it.
@@ -2664,6 +2664,14 @@ export async function _placeSpreadZone(payload) {
         scattered: !!scatter,
         scatterDirFace: scatter ? scatter.dirFace : 0,
         scatterDriftM: scatter ? scatter.driftM : 0,
+        // ⭐ HAS THE PRESENTATION RAIL ALREADY LIT THIS CORRIDOR'S GROUND? (2026-08-19 ruling — the fires
+        // moved onto the shot's own arrival clock.) Recorded for the same reason the geometry and the
+        // load key above are: the pattern OUTLIVES the payload, and at confirm time there is nothing
+        // left to ask. The answer is the RAIL'S single derivation (fx/effects.js railPlantsPatternFires
+        // → patternFirePlanFor), asked once here with the payload still in hand, so the plant and the
+        // confirm cannot both light one shot and cannot both decline it. A corridor placed before this
+        // field existed reads undefined — falsy — and the confirm still plants, exactly as it always did.
+        railFires: railPlantsPatternFires(payload, atk),
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Spread area creation failed"); return; }
@@ -2893,7 +2901,15 @@ export async function _confirmSpreadZone(templateId) {
   // Ordered before the delete so the pattern the fires are being scattered inside is still the thing on
   // screen; not awaited, so a resolved shot is never held up by scene dressing. The load is asked of
   // the presentation table (ammoLeavesGroundFire), so nothing here knows which loads burn.
-  if (ammoLeavesGroundFire(f.ammoKey)) {
+  //
+  // ⏪⏪ AND ONLY WHEN THE RAIL DID NOT ALREADY LIGHT IT (2026-08-19 ruling: the fires line up with the
+  // animation). A corridor the shooter DECLARED is known at fire time, so the rail scatters its flames
+  // on the shot's own arrival clock and stamps `railFires` on the region to say so; what is left here is
+  // the corridor nobody aimed — the one this function guessed, whose geometry did not exist until the
+  // GM was looking at it. Reading the REGION rather than re-deriving the question is what makes the two
+  // placements exclusive: the region is the only thing that outlives the payload. A region stamped
+  // before the field existed reads undefined and plants here, which is the pre-ruling behaviour intact.
+  if (ammoLeavesGroundFire(f.ammoKey) && !f.railFires) {
     const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
     const gridDist = scene.grid?.distance ?? 1;
     const pxPerM = gridSize / (gridDist || 1);
@@ -3399,7 +3415,12 @@ function _hookSocketRelay() {
         // The relayed window's rows are ONE application, exactly as the window's own Apply loop is.
         const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
         for (const hit of data.resolvedHits) {
-          const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken, severityBatch: severity });
+          // `fxSilent` RIDES THE RELAY rather than being re-asked here. The window that filled these rows
+          // is the client that watched the shot; this GM may be looking at another scene entirely, where
+          // the aimed-at figure resolves to nothing and the rail's own question would answer "nothing was
+          // sounded" and put a second impact on the click. A pre-field relay reads false — the behaviour
+          // that shipped before. See fx/effects.js railSoundedImpacts.
+          const outcome = await applyLocationDamage({ target, location: hit.location, netDamage: hit.netDamage, structuralDamage: hit.afterSP, penetrates: hit.penetrates, token: liveToken, fxSilent: Boolean(data.fxSilent), severityBatch: severity });
           totalApplied += outcome.applied;
 
           // Ablation gates on the bullet penetrating, not on the doubled HP value.

@@ -942,6 +942,23 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
+  // Ground fire that does not burn itself out — the GM's environmental-hazard tool (approved
+  // 2026-08-19). OFF by default and world-scoped, on the same reasoning goreEnabled carries: it
+  // changes what the whole table sees for the rest of the session, so it is a deliberate switch-on
+  // by the GM rather than a per-player preference. Read PER PLACEMENT (module/fx/effects.js
+  // fxGroundFire), so flipping it applies live and never re-clocks flames that are already burning.
+  // The census rails are unaffected either way — the per-placement bound and the scene-wide cap with
+  // oldest-out eviction still hold — and the GM's scene-control button (module/fx/ground-fire-tool.js)
+  // is what puts them out. Inert while combatFxEnabled is off: the rail draws nothing at all then.
+  game.settings.register(SCOPE, "groundFirePersistent", {
+    name: "SETTINGS.GroundFirePersistent",
+    hint: "SETTINGS.GroundFirePersistentHint",
+    scope:   "world",
+    config:  true,
+    type:    Boolean,
+    default: false,
+  });
+
   // --- Native System Settings page organizer (section headers + reorder + master-gating) ---
   // One data-driven pass (module/settings-sections.js) replacing the per-feature MM + IP grey-out
   // hooks: labelled section headers, contiguous reorder, and grey/disable of each master's sub-settings.
@@ -1132,4 +1149,13 @@ export function combatFxEnabled() {
 /** Blood on a landing hit (default OFF — fail-closed: an unreadable setting draws nothing). */
 export function goreEnabled() {
   try { return game.settings.get(SCOPE, "goreEnabled") === true; } catch { return false; }
+}
+
+/**
+ * Does a NEW burning-ground placement skip its burn-down clock (default OFF — fail-closed: an
+ * unreadable setting leaves the shipped 25 s lifetime in place, which is the behaviour every world
+ * already has). Read per placement by module/fx/effects.js so it applies live.
+ */
+export function persistentGroundFireEnabled() {
+  try { return game.settings.get(SCOPE, "groundFirePersistent") === true; } catch { return false; }
 }

@@ -152,6 +152,11 @@ const ALLOWED = [
   "combatFxEnabled",
   "faceTargetOnFire",
   "goreEnabled",
+  // An ordinary world boolean, in the matrix on the same footing as goreEnabled: no onChange, no
+  // document write, read per placement by the presentation rail. It is safe for the matrix to flip
+  // because the row's own shot carries the baseline load, which sets no fires whatever this says —
+  // and the row clears the rail in its finally regardless.
+  "groundFirePersistent",
 ];
 
 /** Kept out of the matrix, each with the reason the header states at length. */
