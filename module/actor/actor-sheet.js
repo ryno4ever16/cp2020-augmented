@@ -7,6 +7,7 @@ import { ModifiersDialog } from "../dialog/modifiers.js"
 import { SortOrders, sortSkills } from "./skill-sort.js";
 import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } from "./reputation.js";
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
+import { isUnreadableNumberField, refuseUnreadableNumberFields } from "../form-number-guard.js";
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
@@ -198,6 +199,29 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     };
 
     return sheetData;
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * Read the form, then refuse every numeric box the browser could not read as a number.
+   *
+   * `input[type=number]` is not a guarantee: Firefox lets arbitrary characters be typed, pasted or
+   * composed into one, and the element then reports `validity.badInput` with an EMPTY `.value` —
+   * which FormDataExtended turns into the same `null` a deliberately-cleared box produces. The stored
+   * number would be overwritten by that empty read. `refuseUnreadableNumberFields` puts the value the
+   * document already holds back in place of that read (so the stored number survives untouched),
+   * repaints the boxes from it, and says so once. Blank boxes are untouched and keep the meaning they
+   * already had.
+   *
+   * This runs synchronously inside `_prepareSubmitData`, i.e. before the sheet's own delegated change
+   * handlers see the event — see `_cpActivateActorFormControls`, which stands down on the same test.
+   * @override
+   */
+  _processFormData(event, form, formData) {
+    const submitData = super._processFormData(event, form, formData);
+    refuseUnreadableNumberFields(submitData, form, this.document);
+    return submitData;
   }
 
   /**
@@ -1218,6 +1242,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       const target = event.target;
       if (!target?.matches) return;
 
+      // A numeric box the browser could not read (Firefox accepts letters into input[type=number];
+      // the element then reports validity.badInput and an empty .value). Every write below reads
+      // `target.value`, so an unreadable box would put `Number("" || 0)` = 0 — or NaN — where the
+      // stored number was. The submit path has already refused the write and repainted the box
+      // (_processFormData); this is the same test at the second door, so the refusal does not depend
+      // on which listener the browser runs first. Blank is NOT unreadable and still writes as before.
+      if (isUnreadableNumberField(target)) return;
+
       if (target.matches('input[name^="system.sdp.current."]')) {
         const path = target.getAttribute("name");
         const zone = path?.split(".").pop();
@@ -1294,18 +1326,27 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   }
 
   /** "Hide; search reveals" predicate: true for a martial-arts discipline the actor has NOT trained —
-   *  level 0 AND banked IP 0 AND not chipped. A chipped or IP-carrying discipline counts as trained and
-   *  stays visible (user ruling). Only martial-arts skills are affected; every other item returns false. */
+   *  level 0 AND no improvement points riding on it AND not chipped. A chipped or IP-carrying discipline
+   *  counts as trained and stays visible (user ruling). Only martial-arts skills are affected; every
+   *  other item returns false. */
   _cpIsUntrainedMartial(skill) {
     if (!isMartialArtSkillItem(skill)) return false;
     const sys = skill.system ?? {};
-    if (sys.isChipped || sys.autoChipped) return false;   // chipped = trained
-    if ((Number(sys.level) || 0) > 0) return false;        // has a trained level
-    if ((Number(sys.ip) || 0) > 0) return false;           // carrying IP toward the first level
-    // The module's IP tracker banks per-skill IP in the FLAG, never system.ip (run-4; same fact as
-    // the chip-grant prune fix) — a discipline being worked via the tracker counts as trained too.
-    if ((Number(skill.getFlag?.("cp2020-augmented", "ip")) || 0) > 0) return false;
+    if (sys.isChipped || sys.autoChipped) return false;      // chipped = trained
+    if ((Number(sys.level) || 0) > 0) return false;           // has a trained level
+    if (this._cpSkillHasIpPresence(skill)) return false;      // points are riding on it — keep it reachable
     return true;
+  }
+
+  /** Any improvement points riding on this skill, across all three stores the row can print:
+   *  the base schema's own `system.ip`, the module's BANKED flag, and the GM's not-yet-released
+   *  PENDING flag. The pending bucket has to count: an award the GM makes by hand lands there first
+   *  (ip.js `awardPending`) and only becomes banked when Apply runs, so a row hidden until then hides
+   *  the award from the GM who just made it — and the pip that announces it — for the whole cycle. */
+  _cpSkillHasIpPresence(skill) {
+    if ((Number(skill?.system?.ip) || 0) > 0) return true;
+    const flag = (key) => Number(skill?.getFlag?.("cp2020-augmented", key)) || 0;
+    return flag("ip") > 0 || flag("ipPending") > 0;
   }
 
   /** Re-apply the current skill filter to the DOM + toggle the clear (×) button's visibility. Called

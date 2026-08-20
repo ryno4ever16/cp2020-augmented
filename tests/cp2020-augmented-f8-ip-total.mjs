@@ -23,6 +23,16 @@
  *     so a pool-funded raise offered a control on a row still reading "0/10";
  *   • the skill-item sheet offered an editable system.ip box that no code anywhere spends.
  *
+ * PART 4 (2026-08-19, the row-reachability unit) covers the row a user could not get to:
+ *   • an untrained discipline the sheet withholds from the unsearched list stayed withheld once the
+ *     GM attributed points to it — the predicate read the banked store only, and an award lands in
+ *     the pending store until Apply runs;
+ *   • neither row checkbox said what it does, and the chip one carried its hint on an input the base
+ *     stylesheet sets display:none, so the hint could never be hovered;
+ *   • the cost helper's multiplier term, pinned by value (the part-2 leg named `ipMultiplier`, which
+ *     is not a schema field, so the term was stuck at 1);
+ *   • which gesture actually opens a skill's own editor (right-click does not).
+ *
  * Run from the module's tests/:  FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-f8-ip-total.mjs
  */
 import { chromium } from "@playwright/test";
@@ -131,9 +141,12 @@ try {
       const cost = IP.ipCost(skill);
       // ⏪ 2026-08-16 (vacuous-leg audit): `cost > 0` cannot fail — the helper is max(1,level)×10×mult,
       // so it is ≥10 by construction. Asserted by VALUE against the same arithmetic the ladder states.
+      // ⏪ 2026-08-19: the multiplier term named a field that does not exist on the skill schema
+      // (`ipMultiplier`), so `Number(undefined)||1` pinned the term at 1 and the leg could never see a
+      // multiplied cost. The schema field is `system.diffMod` — the one the helper actually reads.
       ok("cost helper returns the ladder figure for this skill by value",
-        cost === Math.max(1, Number(skill.system?.level) || 0) * 10 * (Number(skill.system?.ipMultiplier) || 1),
-        { cost, level: skill.system?.level, mult: skill.system?.ipMultiplier });
+        cost === Math.max(1, Number(skill.system?.level) || 0) * 10 * Math.max(1, Number(skill.system?.diffMod) || 1),
+        { cost, level: skill.system?.level, mult: skill.system?.diffMod });
 
       // 1. Prepared context — through the real sheet chain, not a hand-built payload.
       const sheet = actor.sheet;
@@ -374,6 +387,156 @@ try {
   }
   console.log("\nIP level control: row identity, click chain, pool-contribution display\n" + A.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(58)} got=${c.got}`).join("\n"));
   failures += A.checks.filter(c => !c.pass).length;
+
+  // --- Part 4: the row's REACHABILITY and its two signposts. Three user reports, one row. ----------
+  //   • a discipline the sheet hides at level 0 stayed hidden once the GM attributed points to it —
+  //     the visibility predicate read the BANKED store only, and an award lands in the PENDING store
+  //     first, so the whole cycle between the award and Apply was invisible to the GM who made it;
+  //   • neither row checkbox said what it does — and the chip one carried its hint on an input the
+  //     base stylesheet sets `display:none`, so the hint could never be hovered;
+  //   • the cost helper multiplies by `system.diffMod`; this pins that term by value (the earlier leg
+  //     named a field the schema does not have, so the term was stuck at 1 and proved nothing).
+  const P = { checks: [] };
+  const okP = (name, cond, got) => P.checks.push({ name, pass: !!cond, got });
+  try {
+    const V = await page.evaluate(async () => {
+      const SCOPE = "cp2020-augmented";
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const { isMartialArtSkillItem, FNFF2_ONLY_MARTIAL_ART_KEYS } =
+        await import("/modules/cp2020-augmented/module/lookups.js");
+      const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
+      const prev = {};
+      for (const k of ["ipHideUI", "ipRawTracking"]) prev[k] = game.settings.get(SCOPE, k);
+      await game.settings.set(SCOPE, "ipHideUI", false);
+      await game.settings.set(SCOPE, "ipRawTracking", true);
+
+      for (const x of game.actors.filter(x => x.name === "__PW__ IP Row Reach")) await x.delete().catch(() => {});
+      const actor = await Actor.create({ name: "__PW__ IP Row Reach", type: "character" });
+      // Disciplines gated behind the supplement toggle are dropped from the render list outright, so
+      // the fixture uses base-list ones — the visibility filter, not the content gate, is under test.
+      const martials = actor.items.filter(i => i.type === "skill" && isMartialArtSkillItem(i)
+        && !FNFF2_ONLY_MARTIAL_ART_KEYS.has(i.name)).slice(0, 3);
+      const plain = actor.items.find(i => i.type === "skill" && !isMartialArtSkillItem(i));
+      const [mNone, mBank, mPend] = martials;
+
+      // Three points states on three otherwise identical untrained disciplines, plus a plain skill.
+      await mNone.update({ "system.level": 0, "system.ip": 0 });
+      await mBank.update({ "system.level": 0, "system.ip": 0, [`flags.${SCOPE}.ip`]: 5, [`flags.${SCOPE}.ipPending`]: 0 });
+      await mPend.update({ "system.level": 0, "system.ip": 0, [`flags.${SCOPE}.ip`]: 0, [`flags.${SCOPE}.ipPending`]: 5 });
+      await plain.update({ "system.level": 0, "system.ip": 0 });
+
+      const sheet = actor.sheet;
+      await sheet.render(true);
+      await sleep(900);
+      const root = sheet.element;
+      const row = (id) => root?.querySelector(`.field.skill[data-item-id="${id}"]`);
+      const state = (id) => {
+        const r = row(id);
+        return { present: !!r, hidden: !!r?.classList?.contains("cp-hidden") };
+      };
+
+      // Signposts: read from the elements the cursor can actually reach.
+      const r0 = row(mNone.id) || row(plain.id);
+      const chipTip = r0?.querySelector("label.chip-toggle")?.getAttribute("title") ?? null;
+      const modTip = r0?.querySelector(".skill-mod-toggle")?.getAttribute("title") ?? null;
+      const chipBoxHidden = (() => {
+        const box = r0?.querySelector("input.chip-toggle-checkbox");
+        return box ? getComputedStyle(box).display === "none" : null;
+      })();
+
+      // Cost term: the helper's multiplier leg, by value, at the figures the ladder prints.
+      const probe = plain;
+      await probe.update({ "system.level": 4, "system.diffMod": 1 });
+      const flat = IP.ipCost(actor.items.get(probe.id));
+      await probe.update({ "system.diffMod": 3 });
+      const tripled = IP.ipCost(actor.items.get(probe.id));
+      await probe.update({ "system.level": 0, "system.diffMod": 1 });
+      const first = IP.ipCost(actor.items.get(probe.id));
+
+      // What the shipped base-list data actually carries for a discipline: the neutral term. This is
+      // the reason a discipline raise currently costs the same as a plain skill of the same level.
+      const shippedMult = Number(mNone.system?.diffMod);
+
+      return {
+        prev, actorId: actor.id, appId: root?.id ?? null,
+        ids: { none: mNone.id, bank: mBank.id, pend: mPend.id, plain: plain.id },
+        names: { none: actor.getSkillDisplayName?.(mNone) ?? mNone.name },
+        rows: { none: state(mNone.id), bank: state(mBank.id), pend: state(mPend.id), plain: state(plain.id) },
+        tips: { chip: chipTip, mod: modTip, chipBoxHidden },
+        cost: { flat, tripled, first, shippedMult },
+      };
+    });
+
+    okP("fixture pins three untrained disciplines and a plain skill",
+      V.rows.none.present && V.rows.bank.present && V.rows.pend.present && V.rows.plain.present,
+      JSON.stringify([V.rows.none.present, V.rows.bank.present, V.rows.pend.present, V.rows.plain.present]));
+
+    // (a) reachability with an empty search box.
+    okP("untrained discipline with no points stays out of the unsearched list", V.rows.none.hidden === true, V.rows.none.hidden);
+    okP("untrained discipline holding banked points is listed unsearched", V.rows.bank.hidden === false, V.rows.bank.hidden);
+    okP("untrained discipline holding pending points is listed unsearched", V.rows.pend.hidden === false, V.rows.pend.hidden);
+    okP("untrained plain skill is never withheld from the list", V.rows.plain.hidden === false, V.rows.plain.hidden);
+
+    // (b) the search still reveals the withheld row, and withdraws it again on clear.
+    const SEARCH = `[id="${V.appId}"] input.skill-search`;
+    const term = String(V.names.none || "").replace(/^.*:\s*/, "").slice(0, 5);
+    await page.locator(SEARCH).fill(term);
+    await page.waitForTimeout(700);
+    const shown = await page.evaluate(({ appId, id }) =>
+      !document.querySelector(`[id="${appId}"] .field.skill[data-item-id="${id}"]`)?.classList?.contains("cp-hidden"),
+    { appId: V.appId, id: V.ids.none });
+    okP("a query reveals the withheld discipline row", shown === true, `term="${term}" shown=${shown}`);
+    await page.locator(SEARCH).fill("");
+    await page.waitForTimeout(700);
+    const rehidden = await page.evaluate(({ appId, id }) =>
+      !!document.querySelector(`[id="${appId}"] .field.skill[data-item-id="${id}"]`)?.classList?.contains("cp-hidden"),
+    { appId: V.appId, id: V.ids.none });
+    okP("clearing the query withdraws it again", rehidden === true, rehidden);
+
+    // (c) signposts — text present, plain, distinct, and on an element that can be hovered.
+    okP("chip cell carries a hint on the visible label", typeof V.tips.chip === "string" && V.tips.chip.length > 20, V.tips.chip?.slice(0, 40));
+    okP("modifier box carries a hint on its visible wrapper", typeof V.tips.mod === "string" && V.tips.mod.length > 20, V.tips.mod?.slice(0, 40));
+    okP("neither hint leaks a raw key", !String(V.tips.chip).includes("CYBERPUNK.") && !String(V.tips.mod).includes("CYBERPUNK."), `${String(V.tips.chip).slice(0, 12)}|${String(V.tips.mod).slice(0, 12)}`);
+    okP("the two hints describe different controls", V.tips.chip !== V.tips.mod, V.tips.chip === V.tips.mod);
+    okP("the chip input itself is display:none, which is why its hint moved", V.tips.chipBoxHidden === true, V.tips.chipBoxHidden);
+
+    // (d) cost term by value — the ladder figure the rules text prints for a ×3 skill at +4→+5.
+    okP("flat-term raise at level 4 costs the level figure", V.cost.flat === 40, V.cost.flat);
+    okP("tripled-term raise at level 4 costs three times the level figure", V.cost.tripled === 120, V.cost.tripled);
+    okP("first level costs the floor figure", V.cost.first === 10, V.cost.first);
+    okP("base-list discipline items ship the neutral term, so a raise is priced as a plain skill",
+      V.cost.shippedMult === 1, V.cost.shippedMult);
+
+    // (e) the gesture that opens a skill's own editor. Right-click is bound to a delete control the
+    // skill row does not carry, so it opens nothing; the row's pencil control is what opens the sheet.
+    const ROW = `[id="${V.appId}"] .field.skill[data-item-id="${V.ids.plain}"]`;
+    await page.locator(`${ROW} label.skill-roll`).click({ button: "right" });
+    await page.waitForTimeout(500);
+    const afterRight = await page.evaluate(({ actorId, id }) =>
+      game.actors.get(actorId).items.get(id).sheet?.rendered === true, { actorId: V.actorId, id: V.ids.plain });
+    okP("right-clicking a skill row opens no item editor", afterRight === false, afterRight);
+    await page.locator(`${ROW} .item-edit`).click();
+    await page.waitForTimeout(700);
+    const afterEdit = await page.evaluate(({ actorId, id }) =>
+      game.actors.get(actorId).items.get(id).sheet?.rendered === true, { actorId: V.actorId, id: V.ids.plain });
+    okP("the row's edit control opens the item editor", afterEdit === true, afterEdit);
+
+    await page.evaluate(async ({ actorId, prev }) => {
+      const a = game.actors.get(actorId);
+      for (const i of (a?.items ?? [])) { try { await i.sheet?.close(); } catch {} }
+      try { await a?.sheet?.close(); } catch {}
+      try { await a?.delete(); } catch {}
+      for (const [k, v] of Object.entries(prev)) { try { if (v !== undefined) await game.settings.set("cp2020-augmented", k, v); } catch {} }
+    }, { actorId: V.actorId, prev: V.prev });
+  } catch (e) {
+    console.error("IN-PAGE ERROR (part 4):", e?.stack || e?.message || e);
+    failures++;
+    await page.evaluate(async () => {
+      for (const x of game.actors.filter(x => x.name === "__PW__ IP Row Reach")) { try { await x.sheet?.close(); } catch {} await x.delete().catch(() => {}); }
+    }).catch(() => {});
+  }
+  console.log("\nSkill-row reachability, signposts, cost term and editor gesture\n" + P.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${String(c.name).padEnd(62)} got=${c.got}`).join("\n"));
+  failures += P.checks.filter(c => !c.pass).length;
 
   const clean = pageErrors.length === 0;
   console.log(`  [${clean ? "PASS" : "FAIL"}] ${"0 console errors".padEnd(58)} got=${pageErrors.length}`);

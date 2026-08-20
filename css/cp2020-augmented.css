@@ -263,10 +263,68 @@
 .cp-catalog-row.cp-buy-draggable { cursor: grab; }
 .cp-catalog-row.cp-buy-draggable:active { cursor: grabbing; }
 .cp-catalog-row.cp-dimmed { opacity: 0.5; }
-/* Ellipsize, don't spill: shrinkable (min-width:0) without overflow control let a long name's INK
+/* ── ROW FIELD PRIORITY: the NAME is what survives a narrowing window ────────────────────────────
+   Ellipsize, don't spill: shrinkable (min-width:0) without overflow control let a long name's INK
    run into the source badge at narrow widths (field report 2026-08-19) — same treatment the vendor
-   rows always had. */
-.cp-catalog-row .cp-cat-itemname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   rows always had.
+   ⚠ That treatment stopped the INK escaping but left the SHRINK ORDER backwards, which is the
+   second field report (2026-08-19): the name was the ONLY flexible item in the row (flex:1 1 0%
+   against `flex:0 0 auto` / min-content-floored siblings), so every pixel the window gave up came
+   out of the name while the source badge, price, add button, qty box and Buy button held their
+   full width. Measured on the rig at the window's 620px floor with the filter drawer open (its
+   default): row 298px wide, name box **7.3px** — the name gone, its neighbours untouched. Nothing
+   overlapped in rect terms, which is exactly why the floor-only ink leg stayed green.
+   The order is inverted here. The name keeps a floor and everything AFTER it yields, rightmost and
+   least-informative first, in tiers keyed off the ROW's own inline size (a container query, so a
+   row narrows by what the row actually got, drawer open or closed, in any of the three views):
+     ≤560px  the source tag ellipsizes into a stub
+     ≤470px  the decorative tags collapse (style / stock count / ammo box size); the pickers cap
+     ≤430px  gaps tighten
+     ≤380px  the source tag collapses — the field the report named, held until the name would
+             otherwise drop under a readable width (rig-measured: the tag can stay to a 438px row
+             and still leave the name ~155px); gaps tighten again, the qty box and the stock-a-shop
+             button compact, pickers cap harder
+     ≤330px  the price's (min–max) parenthetical collapses (the price itself stays), the pickers +
+             qty box take their last cut, and on the one shape that carries BOTH a picker and the
+             GM's stock-a-shop button (the fashion shelf) that button yields — measured, it is the
+             control that would otherwise be pushed out of the row's right edge
+   Trailing fields are pinned `flex: 0 0 auto` so a squeeze can never push their centred ink
+   leftward over the name: past the last tier the row overflows to the right (clipped by the list)
+   instead of painting on top of the name. */
+.cp-catalog-row { container-type: inline-size; }
+.cp-catalog-row .cp-cat-itemname { flex: 1 1 0; min-width: 5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-catalog-row .cp-cat-thumb { flex: 0 0 auto; }
+.cp-catalog-row .cp-cat-price { flex: 0 0 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-catalog-row .cp-catalog-qty { flex: 0 0 auto; }
+.cp-catalog-row .cp-catalog-buy { flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap; }
+/* The two pickers are the widest controls a row can carry, and only the ammo/fashion shelves carry
+   them. Make them the row's shock absorber: shrinkable to a still-clickable 44px, so whatever the
+   name's floor refuses to give up comes out of the picker instead of out of the row's right edge.
+   (The name's own shrink weight is zero — flex-basis 0 — so the deficit lands here by construction.) */
+.cp-catalog-row .cp-catalog-ammo-load, .cp-catalog-row .cp-catalog-style { flex: 0 1 auto; min-width: 44px; max-width: 132px; }
+@container (max-width: 560px) { .cp-catalog-row .cp-src-badge { max-width: 52px; } }
+@container (max-width: 470px) {
+  .cp-catalog-row .cp-style-tag, .cp-catalog-row .cp-shop-stockcount, .cp-catalog-row .cp-ammo-rounds { display: none; }
+  .cp-catalog-row .cp-catalog-ammo-load, .cp-catalog-row .cp-catalog-style { max-width: 84px; }
+}
+@container (max-width: 430px) { .cp-catalog-row { gap: 4px; } }
+@container (max-width: 380px) {
+  .cp-catalog-row { gap: 3px; }
+  .cp-catalog-row .cp-src-badge { display: none; }
+  .cp-catalog-row .cp-catalog-qty { width: 32px; }
+  .cp-catalog-row .cp-add-to-shop-btn { padding: 1px 3px; }
+  .cp-catalog-row .cp-catalog-ammo-load, .cp-catalog-row .cp-catalog-style { max-width: 64px; }
+}
+@container (max-width: 330px) {
+  .cp-catalog-row .cp-price-range { display: none; }
+  .cp-catalog-row .cp-catalog-ammo-load, .cp-catalog-row .cp-catalog-style { min-width: 34px; max-width: 54px; }
+  .cp-catalog-row .cp-catalog-qty { width: 30px; }
+  /* The fashion shelf is the only shape carrying BOTH a picker and the GM's stock-a-shop button —
+     one control more than the row can hold at this width. The button yields there and there only
+     (`:has`), because stocking a shop also has the drag-to-tray and context-menu paths, while the
+     style picker changes what the buyer actually pays. Every other shelf keeps its button. */
+  .cp-catalog-row:has(.cp-catalog-style, .cp-catalog-ammo-load) .cp-add-to-shop-btn { display: none; }
+}
 .cp-catalog-row:hover { background: rgba(255,255,255,0.045); border-radius: 3px; }
 .cp-catalog-row .cp-cat-thumb, .cp-catalog-row .cp-cat-itemname { cursor: pointer; }
 .cp-catalog-row .cp-cat-itemname:hover { text-decoration: underline; }
@@ -2281,7 +2339,11 @@ body.cp-carolingian .cyberpunk .cp-unworn-armor-notice {
 /* The GM's state-SET pencil sits beside the recovery controls but points the other way — it AUTHORS an
    injury rather than clearing one — so it rests fainter (it shows on every uninjured flesh limb a GM
    looks at, and must not compete with the badge) and hovers to the alert red, not the recovery green. */
-.cyberpunk .segment-repair.cp-flesh-set { opacity: 0.45; }
+/* ⏪ 0.45 → 0.6 (2026-08-20, table report "I don't see them" — the LIMB-SETTER-BUILD ⛔'s answer):
+   0.45 measured 4.35:1 on the black chip at ~14px, below the legibility bar in BOTH themes; 0.6
+   measures 7.03:1 and still rests fainter than the 0.7 recovery controls. Tuning points measured:
+   0.55 → 6.0:1 · 0.7 → 9.4:1 (= the repair/clear controls). */
+.cyberpunk .segment-repair.cp-flesh-set { opacity: 0.6; }
 .cyberpunk .segment-repair.cp-flesh-set:hover { opacity: 1; color: #d1502f; }
 /* Flesh-limb state picker (openFleshLimbStateDialog): the note under the select saying this records
    STATE only. Same hint treatment as the vehicle-fire dialog's. */
@@ -3525,10 +3587,21 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
   opacity: 0.55;
 }
 .cyberpunk .cp-veh-front-btn:hover { opacity: 0.9; }
+/* ⛔ `!important` HERE IS LOAD-BEARING, and it is answering one of OUR OWN rules rather than core's.
+   The Darkneet skin lays a blanket over every control inside a sheet —
+   `body.cp-carolingian .cyberpunk select, … button, … select option { background/border/color:
+   … !important }` (further down this file) — so the lit heading's gold was overruled and the only
+   thing left telling the four buttons apart was the 0.55→1 opacity step. That is the reported
+   *"the Front buttons have no visible effect"*, measured on the rig: lit and unlit computed to the
+   same `rgb(247,244,248)`. An `!important` declaration is only beatable by another one, so the lit
+   state states itself the same way; being later AND more specific, this one wins.
+   ⚠ The blanket flattens the paint grid's role colours the same way (a seat and a bodywork square
+   compute to one colour). That is a wider call about the skin, not this control, and is left alone
+   here — the nose ring next door is drawn with `box-shadow`, which the blanket does not set. */
 .cyberpunk .cp-veh-front-btn.cp-active {
   opacity: 1;
-  color: #ffcc00;
-  border-color: #ffcc00;
+  color: #ffcc00 !important;
+  border-color: #ffcc00 !important;
 }
 
 /* ── Vehicle paint grid (the footprint as clickable cells) ────────────────────────────────────
@@ -3568,6 +3641,12 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
   background: rgba(209, 80, 47, 0.22);
   color: #ff8f6b;
 }
+/* The NOSE rank — the front-most line of squares, whichever way the Front picker points it. Amber to
+   match the hull outline drawn on the map, and an INSET ring rather than a border so it lays over
+   whatever role colour the square already carries: a nose seat stays visibly a seat. The mark moves
+   with the picker, which is what makes a Front click visible without leaving the sheet. */
+.cyberpunk .cp-veh-cell-nose { box-shadow: inset 0 0 0 2px #d1a054; }
+.cyberpunk .cp-veh-nose-legend { opacity: 0.8; font-size: 11px; font-style: italic; }
 .cyberpunk .cp-veh-layout-reset { flex: 0 0 auto; font-size: 11px; text-decoration: underline; cursor: pointer; }
 .cyberpunk .cp-veh-nocover { opacity: 0.75; font-style: italic; }
 /* The apply window's rolled-cover note: a quiet line under the Cover SP field stating what the
@@ -3773,9 +3852,16 @@ body.theme-light .cp-veh-unmodeled,
 body.theme-light .cyberpunk .cp-occupancy-count.cp-occupancy-over,
 body.theme-light .vehicle-fire-dialog .arc-warn.soft { color: var(--cp-lt-warn); }
 
-body.theme-light .cyberpunk .cp-veh-cell-seat,
-body.theme-light .cyberpunk .cp-veh-front-btn.cp-active { color: var(--cp-lt-active); }
-body.theme-light .cyberpunk .cp-veh-front-btn.cp-active { border-color: var(--cp-lt-active); }
+body.theme-light .cyberpunk .cp-veh-cell-seat { color: var(--cp-lt-active); }
+/* Same `!important` reasoning as the dark rule this parallels (see the note beside it): the lit
+   heading has to beat a blanket that carries one, in whichever scheme the blanket is applied. */
+body.theme-light .cyberpunk .cp-veh-front-btn.cp-active {
+  color: var(--cp-lt-active) !important;
+  border-color: var(--cp-lt-active) !important;
+}
+/* The nose ring in the light scheme: the darkened brass token, since the dark #d1a054 does not clear
+   contrast against core's parchment ground. */
+body.theme-light .cyberpunk .cp-veh-cell-nose { box-shadow: inset 0 0 0 2px var(--cp-lt-brass); }
 body.theme-light .cp-active-badge { background: var(--cp-lt-active); }
 body.theme-light .cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-label,
 body.theme-light .cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-value { color: var(--cp-lt-brass); }

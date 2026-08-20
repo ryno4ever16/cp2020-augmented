@@ -2,7 +2,11 @@
 <div class="field skill" data-item-id="{{skill.id}}">
     <label class="skill-roll action" data-skill-id="{{skill.id}}">{{#if skill.displayName}}{{skill.displayName}}{{else}}{{skill.name}}{{/if}}</label>
     {{#with skill.system}}
-        <label class="chip-toggle" data-skill-id="{{../skill.id}}">
+        {{!-- The tooltip lives on the LABEL, not on the checkbox: the base system's own stylesheet
+              hides `.field.skill input[type=checkbox]` (cyberpunk2020.css), so a title on the input
+              alone can never be hovered. The label is the whole visible cell — stat text and chip
+              glyph — so the hint speaks wherever the cursor lands on the control. --}}
+        <label class="chip-toggle" data-skill-id="{{../skill.id}}" title="{{#if autoChipped}}{{CPLocal 'ControlledByChip'}}{{else}}{{CPLocal 'SkillChipToggleHint'}}{{/if}}">
             <div class="skill-stat-display">
                 {{~#if isRoleSkill~}}
                     {{CPLocal (properCase stat)}} [{{CPLocal "Role"}}]
@@ -18,7 +22,10 @@
         </label>
 
     <span class="item-controls">
-        <span class="skill-mod-toggle">
+        {{!-- Second row checkbox: `system.askMods`. Signposted here because the box says nothing at
+              face value. Title on the WRAPPER so it survives a skin that hides the input the way the
+              base stylesheet hides the chip one. --}}
+        <span class="skill-mod-toggle" title="{{CPLocal 'SkillAskModsHint'}}">
         <input type="checkbox" class="skill-ask-mod" data-skill-id="{{../skill.id}}" {{checked askMods}}>
         </span>
         <i class="fas fa-edit item-edit"   data-item-id="{{../skill.id}}"></i>

@@ -1383,32 +1383,153 @@ try {
       await new Promise(r => setTimeout(r, 400));
       const r = root.getBoundingClientRect();
       const clamped = { w: Math.round(r.width), h: Math.round(r.height) };
-      // At the floor, row INK must stay in its box: names ellipsize (no scrollWidth escape) and
-      // never intersect their source badge (the protection-fix lesson: assert ink, not just rects).
-      let inkEscapes = 0, badgeHits = 0, rowsChecked = 0;
-      for (const row of [...root.querySelectorAll(".cp-catalog-row")].slice(0, 15)) {
-        const name = row.querySelector(".cp-cat-itemname");
-        if (!name) continue;
-        rowsChecked++;
-        if (name.scrollWidth > name.clientWidth + 1 && getComputedStyle(name).overflow !== "hidden") inkEscapes++;
-        const badge = row.querySelector(".cp-src-badge");
-        if (badge) {
-          const nr = name.getBoundingClientRect(), br = badge.getBoundingClientRect();
-          if (nr.right > br.left + 1) badgeHits++;
-        }
-      }
-      const rowInk = { rowsChecked, inkEscapes, badgeHits };
       await w.setPosition({ width: 880, height: 820 });
       await new Promise(r2 => setTimeout(r2, 400));
-      return { perRow: +perRow.toFixed(1), widths, spread, clamped, rowInk };
+      return { perRow: +perRow.toFixed(1), widths, spread, clamped };
     });
     chk("S9 the books column lays out two chips per row", s9layout.perRow >= 1.9, JSON.stringify(s9layout));
     chk("S9 the drawer's width holds still across a scroll through varied rows", s9layout.spread <= 1, `widths=${JSON.stringify(s9layout.widths)}`);
     chk("S9 the window refuses to collapse below its floor (fields clip, never overlap)",
       s9layout.clamped.w >= 620 && s9layout.clamped.h >= 420, JSON.stringify(s9layout.clamped));
-    chk("S9 at the floor, row names ellipsize and never run into their source badge",
-      s9layout.rowInk.rowsChecked > 0 && s9layout.rowInk.inkEscapes === 0 && s9layout.rowInk.badgeHits === 0,
-      JSON.stringify(s9layout.rowInk));
+
+    // ── ROW FIELD PRIORITY across a real width sweep (field report 2026-08-19, second pass) ────
+    // The first pass gave the name `overflow:hidden` + ellipsis and asserted, at the 620px floor
+    // ONLY, that no ink escaped and the name's rect did not cross the badge's. Both stayed true
+    // while the reported defect was fully present, because the defect is not an overlap of boxes:
+    // the name was the row's only flexible item, so it absorbed 100% of the shrink and measured
+    // 7.3px wide at the floor with the drawer open (its default) — gone, while every field after
+    // it kept full width. These legs measure the SHRINK ORDER instead: at four widths, both drawer
+    // states, and on every row shape the shop paints (plain catalog · the ammo shelf, which carries
+    // one control more than any other · the build view's flex rows AND its vendor grid rows · the
+    // player-facing storefront), the name must keep a readable floor, nothing after it may paint
+    // into its box, and no control may be pushed out of the row's content box.
+    const FLOOR = 70;               // the name's css floor, 5em at the row's 14px
+    const s9pri = await hp.evaluate(async (shopId) => {
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+      const C = await import("/modules/cp2020-augmented/module/shop/catalog.js");
+      const winOf = () => [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
+      const rootOf = () => { const w = winOf(); return w?.element?.closest?.(".application") ?? w?.element ?? null; };
+      const open = async (view, sid, marker) => {
+        C.openShopWindow(null, { view, shopId: sid ?? null });
+        for (let i = 0; i < 60; i++) { const r = rootOf(); if (r?.querySelector(marker)) return r; await sleep(300); }
+        return rootOf();
+      };
+      const setDrawer = async (wantOpen) => {
+        const d = rootOf()?.querySelector(".cp-filter-drawer");
+        if (d && (d.dataset.open === "1") !== wantOpen) { rootOf().querySelector(".cp-drawer-toggle")?.click(); await sleep(700); }
+      };
+      /** One row's geometry: what is still shown, how wide the name got, and whether any field
+       *  after the name paints into it (ink, not just rects) or hangs outside the row. */
+      const audit = (row) => {
+        const kids = [...row.children].map(k => {
+          const cs = getComputedStyle(k), bx = k.getBoundingClientRect();
+          return {
+            cls: (k.className.toString() || k.tagName).split(" ")[0] || k.tagName.toLowerCase(),
+            tag: k.tagName, x: bx.left, r: bx.right, w: +bx.width.toFixed(1), ta: cs.textAlign,
+            gone: cs.display === "none", sw: k.scrollWidth, cw: k.clientWidth,
+            // a <select>/<input> is clipped by the UA whatever `overflow` computes to — only the
+            // text-bearing spans and buttons can actually spill ink.
+            esc: !/SELECT|INPUT/.test(k.tagName) && k.scrollWidth > k.clientWidth + 1 && !/hidden|clip/.test(cs.overflow),
+          };
+        }).filter(k => !k.gone);
+        const nm = kids.find(k => k.cls === "cp-cat-itemname");
+        if (!nm) return null;
+        let laps = 0;
+        for (let i = 0; i < kids.length - 1; i++) if (kids[i].r > kids[i + 1].x + 0.5) laps++;
+        let over = null;
+        for (const k of kids.slice(kids.indexOf(nm) + 1)) {
+          // centred ink in a squeezed box spills BOTH ways — the leftward half is what would land
+          // on the name, so measure the ink edge, not the border box.
+          const inkLeft = k.esc && k.ta === "center" ? k.x - (k.sw - k.cw) / 2 : k.x;
+          if (inkLeft < nm.r - 0.5) { over = k.cls; break; }
+        }
+        const rb = row.getBoundingClientRect(), cs = getComputedStyle(row);
+        const after = kids.slice(kids.indexOf(nm) + 1);
+        return { nameW: nm.w, laps, over, spill: +(kids[kids.length - 1].r - (rb.right - parseFloat(cs.paddingRight))).toFixed(1),
+          esc: kids.filter(k => k.esc).map(k => k.cls), fields: kids.map(k => k.cls),
+          // The contract in one number: the name outranks every INFORMATIONAL field that follows
+          // it (source tag, price, marks). Form controls are excluded — a picker or a Buy button
+          // has a floor of its own below which it stops being clickable, and that floor is allowed
+          // to exceed the name's on the one shelf that carries a picker.
+          beats: after.filter(k => !/SELECT|INPUT|BUTTON/.test(k.tag)).every(k => nm.w >= k.w - 0.5) };
+      };
+      const measure = async (label, sel, width, drawerOpen) => {
+        if (drawerOpen !== null) await setDrawer(drawerOpen);
+        await winOf().setPosition({ width, height: 800 });
+        await sleep(450);
+        const rows = [...rootOf().querySelectorAll(sel)].slice(0, 12).map(audit).filter(Boolean);
+        if (!rows.length) return { label, width, rows: 0 };
+        return {
+          label, width, rows: rows.length,
+          rowW: +rootOf().querySelector(sel).getBoundingClientRect().width.toFixed(1),
+          minNameW: +Math.min(...rows.map(r => r.nameW)).toFixed(1),
+          laps: rows.reduce((a, r) => a + r.laps, 0), over: rows.filter(r => r.over).length,
+          maxSpill: Math.max(...rows.map(r => r.spill)), esc: [...new Set(rows.flatMap(r => r.esc))],
+          fields: rows[0].fields, badge: rows.some(r => r.fields.includes("cp-src-badge")),
+          beats: rows.every(r => r.beats),
+        };
+      };
+      const WIDTHS = [880, 760, 700, 620];
+      const out = { sweep: [], variants: [] };
+
+      await open("catalog", null, ".cp-catalog-row");
+      for (const w of WIDTHS) out.sweep.push(await measure("catalog/open", ".cp-catalog-row", w, true));
+      for (const w of WIDTHS) out.sweep.push(await measure("catalog/closed", ".cp-catalog-row", w, false));
+      // Second act: widen the window back up and the yielded fields must come back — the tiers are
+      // width-driven, not a one-way collapse.
+      out.reopened = await measure("catalog/open", ".cp-catalog-row", 880, true);
+
+      // The ammo shelf is the heaviest shape in the shop: rounds badge + load picker on top of
+      // everything a normal row carries.
+      const ammoChip = [...rootOf().querySelectorAll(".cp-cat-chip")].find(c => /ammo/i.test(c.textContent || ""));
+      if (ammoChip) { ammoChip.click(); await sleep(1800); out.variants.push(await measure("catalog/ammo", ".cp-ammo-row", 620, true)); }
+      // Fashion rows carry the style picker; their chip lives inside a collapsed group, and a
+      // programmatic click reaches it there.
+      const fashChip = rootOf().querySelector('.cp-cat-chip[data-cat$="Fashion"]');
+      if (fashChip) { fashChip.click(); await sleep(1800); out.variants.push(await measure("catalog/fashion", ".cp-catalog-row", 620, true)); }
+
+      await open("build", shopId, ".cp-vendor-tray");
+      out.variants.push(await measure("build/rows", ".cp-catalog-row:not(.cp-vendor-row)", 620, true));
+      out.variants.push(await measure("build/vendor", ".cp-vendor-row", 620, null));
+      const SH = await import("/modules/cp2020-augmented/module/shop/shops.js");
+      await SH.updateShop(shopId, { open: true });
+      await open("storefront", shopId, ".cp-catalog-row, .cp-catalog-empty");
+      out.variants.push(await measure("storefront", ".cp-catalog-row", 620, null));
+
+      await open("catalog", null, ".cp-catalog-row");
+      await winOf().setPosition({ width: 880, height: 820 });
+      await sleep(400);
+      return out;
+    }, shopId);
+    const all9 = [...s9pri.sweep, ...s9pri.variants].filter(m => m.rows);
+    const worst = (f) => JSON.stringify(all9.map(m => `${m.label}@${m.width}:${f(m)}`));
+    chk("S9 every width and every row shape was actually measured", all9.length >= 12 && s9pri.sweep.every(m => m.rows),
+      JSON.stringify(all9.map(m => `${m.label}@${m.width}=${m.rows}`)));
+    chk("S9 the item name holds its readable floor at every width, drawer open and closed",
+      all9.every(m => m.minNameW >= FLOOR), worst(m => m.minNameW));
+    chk("S9 no field after the name ever paints into the name's box",
+      all9.every(m => m.over === 0 && m.laps === 0), worst(m => `${m.over}/${m.laps}`));
+    chk("S9 no text-bearing field spills its ink outside its own box",
+      all9.every(m => m.esc.length === 0), worst(m => JSON.stringify(m.esc)));
+    chk("S9 the trailing controls stay inside the row — nothing is pushed past its edge",
+      all9.every(m => m.maxSpill <= 1), worst(m => m.maxSpill));
+    // The order itself: the source tag is the field the report named, and it is the first to go.
+    const wide = s9pri.sweep.find(m => m.label === "catalog/open" && m.width === 880);
+    const tight = s9pri.sweep.find(m => m.label === "catalog/open" && m.width === 620);
+    chk("S9 a wide window still shows the source tag and gives the name the leftover space",
+      wide?.badge === true && wide?.minNameW > 200, JSON.stringify({ badge: wide?.badge, name: wide?.minNameW }));
+    chk("S9 the source tag is what yields as the window narrows, not the name",
+      tight?.badge === false && tight?.minNameW >= FLOOR, JSON.stringify({ badge: tight?.badge, name: tight?.minNameW }));
+    chk("S9 the fields that yield are a subset of the wide row — nothing new appears when narrowing",
+      !!wide && !!tight && tight.fields.every(f => wide.fields.includes(f)), JSON.stringify({ wide: wide?.fields, tight: tight?.fields }));
+    // The report's actual ask, stated as a measurement: whatever the window does, the name's box
+    // outranks every field that follows it. (Pre-fix witness, same rig, same config: name 7.3px
+    // against a 60.5px source tag and a 40.7px Buy button — the ranking exactly inverted.)
+    chk("S9 the name outranks every informational field after it, at every width and in every view",
+      all9.every(m => m.beats), worst(m => `${m.beats}:${m.minNameW}`));
+    chk("S9 widening the window again brings the yielded fields back (second act)",
+      s9pri.reopened?.badge === true && s9pri.reopened?.minNameW >= (wide?.minNameW ?? 0) - 1,
+      JSON.stringify({ badge: s9pri.reopened?.badge, name: s9pri.reopened?.minNameW, wide: wide?.minNameW }));
     const geo = await hp.evaluate(() => {
       const w = [...foundry.applications.instances.values()].find(x => x?.constructor?.name === "CatalogBrowser");
       const root = w?.element;
