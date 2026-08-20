@@ -52,12 +52,14 @@
         {{else}}
             <h2>{{localize "CYBERPUNK.CatalogTitle"}}</h2>
         {{/if}}
-        {{!-- GM setup mode: free, silent acquisitions on THIS client only. Lit state is a class, so the
-              colour lives in the stylesheet. It belongs to the two GM workbenches (catalog + builder);
-              the storefront is the player-facing view and carries no GM machinery but Manage. --}}
+        {{!-- GM setup mode: free, silent acquisitions on THIS client only, and armor delivered worn.
+              Lit state is a class, so the colour lives in the stylesheet. It belongs to the two GM
+              workbenches (catalog + builder); the storefront is the player-facing view and carries no
+              GM machinery but Manage. The armor sentence is its own key so the tooltip (read BEFORE
+              switching the mode on) and the banner (read WHILE it is on) state the same fact once. --}}
         {{#if showSetupToggle}}
         <button type="button" class="cp-shop-setup-toggle{{#if setupMode}} cp-active{{/if}}"
-                title="{{localize "CYBERPUNK.ShopSetupModeHint"}}">
+                title="{{localize "CYBERPUNK.ShopSetupModeHint"}} {{localize "CYBERPUNK.ShopSetupModeArmorNote"}}">
             <i class="fa-solid fa-screwdriver-wrench"></i> {{localize "CYBERPUNK.ShopSetupMode"}}
         </button>
         {{/if}}
@@ -66,7 +68,7 @@
         {{/unless}}
     </div>
     {{#if setupMode}}
-    <p class="cp-shop-setup-banner">{{localize "CYBERPUNK.ShopSetupModeBanner"}}</p>
+    <p class="cp-shop-setup-banner">{{localize "CYBERPUNK.ShopSetupModeBanner"}} {{localize "CYBERPUNK.ShopSetupModeArmorNote"}}</p>
     {{/if}}
 
     {{#if closed}}<p class="cp-src-none">⚫ {{localize "CYBERPUNK.ShopClosed"}}</p>{{/if}}

@@ -12,7 +12,12 @@
     <option value="">{{localize "CYBERPUNK.ShopBuyerPick"}}</option>
     {{#each buyerOptions}}<option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>{{/each}}
 </select>
-{{#if hasBuyer}}<span class="cp-buyer-funds">{{buyerFunds}}eb</span>{{/if}}
+{{!-- The picker being non-empty does NOT mean somebody is buying. A GM's option list now carries
+      controlled tokens and players' assigned characters (see _buyerOptions), so this branch is
+      reached with no buyer selected — and the "pick someone" notice has to survive that, or the
+      strip would look furnished while every Buy button is still grey. --}}
+{{#if hasBuyer}}<span class="cp-buyer-funds">{{buyerFunds}}eb</span>
+{{else}}<span class="cp-buyer-warn"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNeeded"}}</span>{{/if}}
 {{else}}
 {{#if hasBuyer}}<b class="cp-buyer-name" title="{{buyerName}}">{{buyerName}}</b> · {{buyerFunds}}eb{{else}}<span class="cp-buyer-warn"><i class="fa-solid fa-circle-exclamation"></i> {{localize "CYBERPUNK.ShopBuyerNeeded"}}</span>{{/if}}
 {{/if}}

@@ -340,11 +340,23 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
   _shop() { return this.shopId ? getShop(this.shopId) : null; }
 
-  /** Characters the current user can shop AS (players: their owned chars; GM: assigned + current buyer).
-   *  Lets a player with several characters pick who's buying instead of fishing for the right token. */
+  /** Characters the current user can shop AS (players: their owned chars; GM: see below).
+   *  Lets a player with several characters pick who's buying instead of fishing for the right token.
+   *
+   *  The GM list used to be just [own character, current buyer], which for a typical GM is [] — an
+   *  empty picker. A GM who opened the shop with nothing selected therefore had no way to name a buyer
+   *  at all and had to close and reopen the window with a token pre-selected. It now also carries the
+   *  actors of any CONTROLLED tokens and every player's ASSIGNED character, so "buy ammo for her" is a
+   *  pick rather than canvas gymnastics. Deliberately NOT every actor in the world — a GM's actor
+   *  directory is thousands long and the picker is a strip, not a browser. */
   _buyerOptions() {
     let cands;
-    if (game.user.isGM) cands = [game.user.character, this.buyer].filter(Boolean);
+    if (game.user.isGM) cands = [
+      ...(canvas?.tokens?.controlled ?? []).map(t => t.actor),
+      ...(game.users?.contents ?? []).map(u => u.character),
+      game.user.character,
+      this.buyer,
+    ].filter(Boolean);
     else cands = (game.actors?.contents ?? []).filter(a => a?.isOwner);
     const seen = new Set();
     return cands
@@ -777,22 +789,49 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
     };
   }
 
+  /**
+   * The buyer for a buy gesture happening RIGHT NOW, re-resolving if the window opened without one.
+   *
+   * The buyer used to be decided once, in the constructor, and never again. A GM who opened the shop
+   * with nothing selected got `null`, and because the GM picker was also empty (see _buyerOptions) the
+   * window was a dead end: selecting the token afterwards changed nothing, every Buy button stayed
+   * grey, and the only way out was to close it and reopen with the token already selected. Re-resolving
+   * at the gesture — the moment the user has just made their selection — turns that into the obvious
+   * thing working: select the token, click Buy.
+   *
+   * Adoption goes through _cpSyncBuyer so the buyer strip, the funds readout and the Buy buttons'
+   * `cp-buy-nobuyer` styling all repaint; without that the purchase would succeed under a button still
+   * painted grey. Precedence is resolveSidebarBuyer's, so item C's player/GM split is respected here
+   * too. Still nothing to find → the same warn as before.
+   * @returns {Promise<Actor|null>}
+   */
+  async _resolveBuyerForGesture() {
+    if (this.buyer) return this.buyer;
+    const found = resolveSidebarBuyer();
+    if (!found) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopBuyerNeeded")); return null; }
+    await this._cpSyncBuyer(found);
+    return this.buyer;
+  }
+
   // ── Purchase routing (the buy logic lives in module-level fns so the actor-sheet drop-to-buy can reuse it) ──
   async _directBuy(packId, itemId, opts) {
-    if (!this.buyer) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopBuyerNeeded")); return; }
-    return purchaseCatalogItem(this.buyer, packId, itemId, opts);
+    const buyer = await this._resolveBuyerForGesture();
+    if (!buyer) return;
+    return purchaseCatalogItem(buyer, packId, itemId, opts);
   }
 
   /** Buy a curated item from a shop: shop pricing (GM-set clothing style + discount), deplete stock. */
   async _shopBuy(sourceKey, opts) {
-    if (!this.buyer) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopBuyerNeeded")); return; }
-    return purchaseShopItem(this.buyer, this.shopId, sourceKey, opts);
+    const buyer = await this._resolveBuyerForGesture();
+    if (!buyer) return;
+    return purchaseShopItem(buyer, this.shopId, sourceKey, opts);
   }
 
   /** Buy ammunition by caliber + load (box pricing). Routes through the shared purchaseAmmo engine. */
   async _buyAmmo(caliber, modifier, boxes) {
-    if (!this.buyer) { ui.notifications?.warn(game.i18n.localize("CYBERPUNK.ShopBuyerNeeded")); return; }
-    return purchaseAmmo(this.buyer, { caliber, modifier, boxes });
+    const buyer = await this._resolveBuyerForGesture();
+    if (!buyer) return;
+    return purchaseAmmo(buyer, { caliber, modifier, boxes });
   }
 
   /** A row's stable identity for `_rowChoices`. Generated ammo rows are not compendium documents and
@@ -1681,11 +1720,23 @@ export class CatalogBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
 
 // ── Purchase engine (shared by the Buy button AND the actor-sheet drag-to-buy) ────────────────────────
 
-/** Buy a catalog item at flat Core cost for `buyer`. Routes cyberware → install, services → pay/subscribe. */
+/** Buy a catalog item at flat Core cost for `buyer`. Routes cyberware → install, services → pay/subscribe.
+ *
+ * Returns an OUTCOME rather than nothing, because one caller — the GM's Approve button
+ * (resolvePurchaseRequest) — has already written "approved" to a chat card by the time this runs and
+ * must be able to take it back if the buy refuses. Every other caller ignores the return, so the
+ * shape is free to be descriptive:
+ *   {ok:true}                              the goods were delivered (or a deferred cyberware choice was sent)
+ *   {ok:false, reason:"noBuyer"|"noItem"}  nothing to buy, or nobody to buy it
+ *   {ok:false, reason:"requested"}         re-routed to a GM request instead of buying (unpriced / player gate)
+ *   {ok:false, reason:"funds", need, have} refused for money — `need` and `have` are in eurobucks
+ *   {ok:false, reason:"refused"}           buyItem said no for another reason (buy in flight, create failed)
+ * @returns {Promise<{ok:boolean, reason?:string, need?:number, have?:number}>}
+ */
 export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styleMult = 1, styleLabel = "", requesterId = null } = {}) {
-  if (!buyer) return;
+  if (!buyer) return { ok: false, reason: "noBuyer" };
   const doc = await game.packs.get(packId)?.getDocument(itemId);
-  if (!doc) return;
+  if (!doc) return { ok: false, reason: "noItem" };
   // Price precedence: compendium cost → GM override → unpurchasable. An item the base leaves unpriced
   // is NEVER free — route it (for ANYONE, GM included) through the price-request flow so the GM sets a
   // price first; that price is saved as a self-disengaging override (re-runs here once set). For a
@@ -1694,7 +1745,7 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   const pr = resolveCatalogPrice(correctedCost(packId, itemId, doc.system?.cost), itemId, undefined, { preferOverride: !!corr?.priceRange });
   if (!pr.purchasable) {
     await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, styleMult, styleLabel, needsPrice: true });
-    return;
+    return { ok: false, reason: "requested" };
   }
   const unitPrice = Math.max(0, Math.round(pr.price * (Number(styleMult) || 1)));
   const label = styleLabel && styleMult !== 1 ? `${styleLabel} ×${styleMult}` : "";
@@ -1704,7 +1755,7 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   // request carries the book range so the GM can set the final price right on the card.
   if (!game.user.isGM && shopBuySource() === "shops") {
     await requestPurchase(buyer, { packId, itemId, name: doc.name, qty, unitPrice, styleMult, styleLabel, priceRange: corr?.priceRange ?? null });
-    return;
+    return { ok: false, reason: "requested" };
   }
   if (doc.type === "cyberware") {
     // A GM approving a player's REQUEST is not the person whose Humanity is about to be spent, so the
@@ -1712,14 +1763,22 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
     // the GM afterwards (module/cyberware/install.js, "the approved-request route"). `requesterId` is
     // set only by resolvePurchaseRequest; the direct paths — a player buying for themselves, a GM
     // buying for an NPC — leave it null and keep their own dialog on the client that started them.
-    if (requesterId) { await offerCyberwareChoice(buyer, doc, { partPrice: unitPrice, packId, itemId, requesterId }); return; }
-    await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice });
-    return;
+    if (requesterId) { await offerCyberwareChoice(buyer, doc, { partPrice: unitPrice, packId, itemId, requesterId }); return { ok: true }; }
+    const cw = await buyAndInstallCyberware(buyer, doc, { partPrice: unitPrice });
+    return cw === false ? { ok: false, reason: "refused" } : { ok: true };
   }
+  // Read funds BEFORE the buy so a refusal can be attributed. buyItem warns the clicking client and
+  // returns false without saying why; the money reason is the one the GM's Approve button has to be
+  // able to name on the card, and it is the only one derivable from outside.
+  const have = Number(buyer.system?.eurobucks ?? 0);
   const svc = classifyService(doc, game.packs.get(packId)?.metadata?.name ?? "");
-  if (svc === "oneoff") await payOneOffService(buyer, doc, { unitPrice, priceLabel: label });
-  else if (svc === "recurring") await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } });
-  else await buyItem(buyer, doc, { qty, unitPrice, priceLabel: label });
+  let ok;
+  let need = Math.max(0, Math.round(unitPrice * qty));
+  if (svc === "oneoff") { ok = await payOneOffService(buyer, doc, { unitPrice, priceLabel: label }); need = Math.max(0, Math.round(unitPrice)); }
+  else if (svc === "recurring") { ok = await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } }); need = Math.max(0, Math.round(unitPrice)); }
+  else ok = await buyItem(buyer, doc, { qty, unitPrice, priceLabel: label });
+  if (ok === false) return have < need ? { ok: false, reason: "funds", need, have } : { ok: false, reason: "refused" };
+  return { ok: true };
 }
 
 /** Buy a curated shop item for `buyer`: shop pricing (override × style × discount), then deplete stock. */
@@ -1826,10 +1885,29 @@ async function resolvePurchaseRequest(message, approve, price) {
     // Flip the shared pending flag as early as possible — before the awaited buy — so another client's
     // `status !== "pending"` guard fails and only one resolution charges + stocks.
     await message.update({ "flags.cp2020-augmented.purchaseRequest.status": approve ? "approved" : "denied" });
+    let outcome = { ok: true };
     if (approve) {
       if (req.needsPrice) await setShopPriceOverride(req.itemId, price);   // self-disengaging: compendium cost always wins later
       else if (req.priceRange && isValidPrice(price)) await setShopPriceOverride(req.itemId, price);   // range item: the GM's price becomes the standing final price
-      await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel, requesterId: req.requesterId });
+      outcome = await purchaseCatalogItem(buyer, req.packId, req.itemId, { qty: req.qty, styleMult: req.styleMult, styleLabel: req.styleLabel, requesterId: req.requesterId });
+      // The status flag is written BEFORE the buy (it is the concurrency claim — see above), so an
+      // approval whose buy then refuses would leave a card permanently reading "Approved" for goods
+      // that were never delivered, with nothing but a transient GM-side toast to say otherwise. The
+      // flag and the outcome must never disagree: walk it back to "failed" and say why, to the
+      // REQUESTER as well as the GMs — the player is the one who saw an approval and got nothing.
+      if (outcome?.ok === false) {
+        await message.update({ "flags.cp2020-augmented.purchaseRequest.status": "failed" });
+        const player = game.users.get(req.requesterId);
+        const safeName = foundry.utils.escapeHTML(req.name ?? "");
+        const body = outcome.reason === "funds"
+          ? game.i18n.format("CYBERPUNK.ShopRequestFailedFunds", {
+              buyer: foundry.utils.escapeHTML(buyer?.name ?? ""), name: safeName, cost: outcome.need, funds: outcome.have })
+          : game.i18n.format("CYBERPUNK.ShopRequestFailedOther", { name: safeName });
+        ChatMessage.create({
+          whisper: [...new Set([...(game.users.filter(u => u.isGM).map(u => u.id)), ...(player ? [player.id] : [])])],
+          content: body,
+        });
+      }
     } else {
       const player = game.users.get(req.requesterId);
       if (player) ChatMessage.create({
@@ -1845,7 +1923,10 @@ async function resolvePurchaseRequest(message, approve, price) {
     const content = await renderChatCard("shop/purchase-request.hbs", {
       requester: game.users.get(req.requesterId)?.name ?? "", buyer: buyer?.name ?? req.buyerId,
       name: req.name, qty: req.qty, total, label,
-      pending: false, approved: approve, resolvedBy: game.user.name,
+      // `approved` stays false when the buy refused, so the card can never claim an approval that
+      // delivered nothing; `failed` distinguishes that from a GM's deliberate Deny.
+      pending: false, approved: approve && outcome?.ok !== false, failed: approve && outcome?.ok === false,
+      resolvedBy: game.user.name,
     });
     await message.update({ content });
   } finally {
@@ -1951,11 +2032,35 @@ function canShopAs(actor) {
   return actor?.type === "character" || actor?.type === "npc";
 }
 
-function resolveSidebarBuyer() {
-  const tok = canvas?.tokens?.controlled?.find(t => canShopAs(t.actor));
-  if (tok?.actor) return tok.actor;
+/**
+ * Which actor stands at the counter when the shop is opened from the sidebar (no explicit buyer)?
+ *
+ * The order is DIFFERENT for players and GMs, because a controlled token means different things to them:
+ *
+ *  • PLAYER — their assigned character first. A player's own character is who they mean by "me"; a
+ *    token they happen to have selected is usually incidental (clicking around the scene, a test token
+ *    someone dropped). Token-first silently spent another actor's money with nothing on screen naming
+ *    the substitution, which is the whole defect. Falling back: their single owned shoppable actor if
+ *    they own exactly one (unambiguous, so no silent choice is being made), then the controlled token,
+ *    then null → the caller's existing "no buyer" warn.
+ *  • GM — controlled token first, UNCHANGED. Selecting an NPC token and shopping for it is the GM
+ *    workflow the 2026-08-12 fix exists to serve (see canShopAs); a GM has no single "my character"
+ *    to prefer, and the token IS their deliberate pick.
+ *
+ * The buyer strip in the shop window remains the explicit override for everyone — a player buying for
+ * a different owned actor picks it there, deliberately, instead of by whatever was selected on canvas.
+ * @returns {Actor|null}
+ */
+export function resolveSidebarBuyer() {
+  const controlled = canvas?.tokens?.controlled?.find(t => canShopAs(t.actor))?.actor ?? null;
+  if (game.user.isGM) return controlled ?? (canShopAs(game.user.character) ? game.user.character : null);
+
   if (canShopAs(game.user.character)) return game.user.character;
-  return null;
+  // Exactly one owned shoppable actor = no ambiguity to resolve, so prefer it over an incidental
+  // selection. Two or more and we do NOT guess — the token rule below stays the tiebreak.
+  const owned = game.actors?.filter?.(a => canShopAs(a) && a.isOwner) ?? [];
+  if (owned.length === 1) return owned[0];
+  return controlled;
 }
 
 /** Open (or focus) the single Shop window at the given view. */

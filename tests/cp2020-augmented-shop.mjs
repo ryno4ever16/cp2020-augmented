@@ -371,11 +371,15 @@ try {
       const receipts = game.messages.contents.filter(m => !msgsBefore.has(m.id));
       chk("BUY PATH: the armor row was actually delivered to the buyer",
         worn.length === 1 && worn[0].type === "armor", `${worn.length} copies of "${armorDoc.name}"`);
-      // The buy path is a PASS-THROUGH on the worn flag: it copies the source row and never sets it.
-      // (What the source rows themselves carry is a data question, reported separately — the
-      // INFORMATIONAL line below counts them.)
-      chk("BUY PATH: the delivered copy carries the source row's own worn flag, untouched by the purchase",
-        worn[0]?.system?.equipped === armorDoc.system?.equipped,
+      // CONTRACT CHANGE (2026-08-19): the buy path is no longer a pass-through on the worn flag — it
+      // NORMALIZES. This leg previously asserted pass-through and passed green while every base-system
+      // armor row was arriving worn, because the source's own flag was treated as a separate "data
+      // question" (the INFORMATIONAL line below counted the offenders without anyone acting on them).
+      // It was never a data question: the base system's schema defaults `equipped` to true and its
+      // pack rows omit the field, so no data fix is even possible. See clearEquippedOnAcquire in
+      // module/shop/purchase.js, and cp2020-augmented-shop-acquire-state.mjs for the full coverage.
+      chk("BUY PATH: the delivered copy is unworn REGARDLESS of the source row's worn flag",
+        worn[0]?.system?.equipped === false,
         `pack row ${JSON.stringify(armorDoc.system?.equipped)} -> delivered ${JSON.stringify(worn[0]?.system?.equipped)}`);
       chk("BUY PATH: the receipt carries the delivered-unworn notice exactly when the delivered copy is unworn",
         receipts.length === 1 && receipts[0].content.includes(unwornLine) === (worn[0]?.system?.equipped === false),
@@ -394,7 +398,7 @@ try {
         unwornReceipts.length === 1 && unwornReceipts[0].content.includes(unwornLine),
         `${unwornReceipts.length} card(s); notice: ${unwornReceipts.some(m => m.content.includes(unwornLine))}`);
       const armorEquippedTrue = [...armorIdx].filter(e => e.type === "armor" && e.system?.equipped === true).length;
-      console.info(`INFORMATIONAL — armor rows in cyberpunk2020.armor shipping equipped:true: ${armorEquippedTrue}/${[...armorIdx].filter(e => e.type === "armor").length}`);
+      console.info(`INFORMATIONAL — armor rows in cyberpunk2020.armor materializing equipped:true (all of them, by schema default — normalized at the buy seam, not in data): ${armorEquippedTrue}/${[...armorIdx].filter(e => e.type === "armor").length}`);
       const msgsBefore2 = new Set(game.messages.contents.map(m => m.id));
       await C.purchaseCatalogItem(buyer, "cyberpunk2020.fashion", JACKET, { qty: 1 });
       await new Promise(r => setTimeout(r, 600));

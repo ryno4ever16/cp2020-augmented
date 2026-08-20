@@ -33,8 +33,14 @@
   {{else}}
   {{#if approved}}
   <p class="cp-shop-request-status cp-approved">{{CPLocal "ShopRequestApproved" by=resolvedBy}}</p>
+  {{else}}{{#if failed}}
+  {{!-- Approved, but the buy then refused (e.g. the buyer could not afford it). The card must not keep
+        reading "Approved" for goods that were never delivered — see resolvePurchaseRequest. --}}
+  {{!-- Carries cp-denied for its existing "did not happen" colour (both themes) plus cp-failed as a
+        styling hook, so this needs no new css rule of its own. --}}
+  <p class="cp-shop-request-status cp-denied cp-failed">{{CPLocal "ShopRequestFailed" by=resolvedBy}}</p>
   {{else}}
   <p class="cp-shop-request-status cp-denied">{{CPLocal "ShopRequestDenied" by=resolvedBy}}</p>
-  {{/if}}
+  {{/if}}{{/if}}
   {{/if}}
 </div>

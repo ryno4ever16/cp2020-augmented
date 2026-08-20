@@ -113,6 +113,77 @@ export function priceFor(item, { styleMult = 1 } = {}) {
 }
 
 /**
+ * Force an ACQUIRED armor copy into the unworn state, in place.
+ *
+ * ⚠ The reason this exists is a SCHEMA DEFAULT, not a bad pack entry. The base system's common item
+ * schema declares `equipped: booleanField(true)` (systems/cyberpunk2020/module/data/item-data.js:144,
+ * mirrored by its DEFAULTS literal at :19 and its `normalizeBooleanIfPresent(source,"equipped",true)`
+ * migration at :161). Every one of the base system's 16 armor pack entries OMITS `system.equipped`
+ * from its stored source, so the DataModel materializes each one as `equipped: true` — the shipped
+ * `armor` pack (12 entries, incl. Flack Vest / Flack Pants) and `armor-add` (4 entries, incl. HeadGear
+ * Cybermodem Helmet) alike. No amount of pack-data correction fixes that: the default re-applies on
+ * every create, and the data is not ours to rewrite. It has to be normalized at the acquisition seam.
+ *
+ * Our own 85 `src/packs` armor entries all carry an explicit `equipped: false` and are unaffected —
+ * this is a no-op for them, which is the point: one rule, no per-source knowledge.
+ *
+ * Scope is deliberately narrow — ARMOR ONLY:
+ *   • cyberware's `equipped` means "installed", and buy-and-install decides it explicitly
+ *     (module/cyberware/install.js) — it never reaches this path.
+ *   • ammo's `equipped` means "loaded" (the base system's own item-sheet filters read it that way).
+ *   • the NPC generator deliberately creates goons WEARING their armor (module/npcgen/goon-factory.js
+ *     `data.system.equipped = true`, module/npcgen/materialize.js likewise). It creates via
+ *     `actor.createEmbeddedDocuments` directly and never calls buyItem, so the exemption is
+ *     STRUCTURAL — there is no flag to thread and no way for this to reach it.
+ *   • GM SETUP MODE takes the opposite branch at the call site (see `equipArmorOnAcquire` below).
+ *     The mode is client state read through `game.user`, so the choice is made in buyItem where the
+ *     rest of the impure world already is; this function stays a pure, unconditional state-setter.
+ *
+ * @param {object} data  item data for the buyer's copy (mutated in place)
+ * @returns {object} the same object
+ */
+export function clearEquippedOnAcquire(data) {
+  if (data?.type !== "armor") return data;
+  data.system = data.system ?? {};
+  data.system.equipped = false;
+  return data;
+}
+
+/**
+ * Force an ACQUIRED armor copy into the WORN state, in place — the GM setup-mode counterpart of
+ * `clearEquippedOnAcquire`, and armor-only for exactly the same reasons (cyberware's `equipped` means
+ * installed, ammo's means loaded).
+ *
+ * WHY the two directions exist rather than one rule: a PURCHASE is a delivery, and goods a buyer just
+ * paid for should not silently start protecting them — that is the standing rule. A GM in setup mode
+ * is not buying; they are furnishing, and every piece they hand out is one they would immediately have
+ * to switch on by hand. Twenty NPCs is twenty trips through a character sheet. So the mode that already
+ * waives the money and the chat card also delivers armor worn (user ruling: "equipped by default for
+ * setup mode").
+ *
+ * It FORCES the state rather than passing the source through. Our own 85 `src/packs` armor entries
+ * store `equipped: false` explicitly, so a passthrough would deliver most of the catalog unworn and the
+ * exemption would only appear to work on the base system's 16 entries — the same one-rule-no-per-source-
+ * knowledge argument that shaped its counterpart.
+ *
+ * @param {object} data  item data for the buyer's copy (mutated in place)
+ * @returns {object} the same object
+ */
+export function equipArmorOnAcquire(data) {
+  if (data?.type !== "armor") return data;
+  data.system = data.system ?? {};
+  data.system.equipped = true;
+  return data;
+}
+
+/**
+ * Has this client already been told, during the current furnishing run, that setup mode delivers armor
+ * worn? Reset by the first acquisition made with the mode OFF, so the notice returns for the next run.
+ * Module-local and in-memory, matching the lifetime of the mode it describes.
+ */
+let _setupArmorNoticeRaised = false;
+
+/**
  * Purchase `qty` of a source item for `actor`: deduct eurobucks, then add it to inventory.
  * @param {Actor} actor
  * @param {Item|object} source       catalog Item (compendium/world doc) or raw item data
@@ -166,6 +237,12 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
     delete data.ownership;
     // Don't carry shop-only metadata onto the buyer's copy.
     if (data.flags?.["cp2020-augmented"]?.shop) delete data.flags["cp2020-augmented"].shop;
+    // Bought armor is CARRIED, not worn — unless this is a GM furnishing run, which delivers it worn.
+    // Applied here — before the copies are cloned below and before the receipt reads the state — so
+    // every route into buyItem (catalog Buy, drag-to-buy, buy-for-NPC, a published-shop buy, an
+    // approved purchase request) gets the same decision from one place. See the two functions' notes:
+    // the standing rule defends against the base system's `equipped` default, not against a pack typo.
+    if (setup) equipArmorOnAcquire(data); else clearEquippedOnAcquire(data);
     // Feature metadata lives in module flags (survives a vanilla item schema, unlike a system field).
     if (flagPatch && typeof flagPatch === "object") {
       data.flags = data.flags ?? {};
@@ -191,11 +268,27 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
     return false;
   }
 
-  // Setup mode posts nothing. A "Bought Kevlar for 0eb" card in the log is a purchase that did not
-  // happen, and a GM furnishing twenty NPCs would fill the scrollback with twenty of them.
-  // Every armor entry in the packs ships `equipped: false`, so a coat bought here lands in inventory
-  // switched off. The receipt is the one place the buyer is already looking at the moment it happens,
-  // so it says so — one plain sentence appended to the existing card, no second card, no new surface.
+  // SETUP-MODE BRANCH — say that the armor arrived WORN, which is the opposite of what every other
+  // route does. It cannot be a chat card: the silence below is the mode's contract, and a furnishing
+  // run would post one per piece. So it uses the channel that matches the mode itself — a transient,
+  // CLIENT-LOCAL notice, on the one client the mode is even on. Raised once per furnishing run rather
+  // than once per piece, so kitting out a squad does not queue a stack of identical toasts; an
+  // acquisition made with the mode OFF re-arms it. This is the reminder at the moment it happens, not
+  // the only telling: the standing explanation lives on the mode's own surfaces (the toggle tooltip
+  // and the lit-mode banner, both in templates/shop/catalog.hbs).
+  if (!setup) _setupArmorNoticeRaised = false;
+  else if (data.type === "armor" && !_setupArmorNoticeRaised) {
+    _setupArmorNoticeRaised = true;
+    ui.notifications?.info(localize("ShopSetupArmorEquipped"));
+  }
+
+  // PAID BRANCH — setup mode posts nothing. A "Bought Kevlar for 0eb" card in the log is a purchase
+  // that did not happen, and a GM furnishing twenty NPCs would fill the scrollback with twenty of them.
+  // Armor bought here lands in inventory switched off — guaranteed by clearEquippedOnAcquire above
+  // rather than assumed of the source data (the base system's schema defaults `equipped` to TRUE, and
+  // its 16 armor entries all omit the field, so before that call this cue never fired for them).
+  // The receipt is the one place the buyer is already looking at the moment it happens, so it says so —
+  // one plain sentence appended to the existing card, no second card, no new surface.
   const deliveredUnworn = isUnwornArmor(data);
   if (!setup) ChatMessage.create({
     speaker: ChatMessage.getSpeaker({ actor }),
