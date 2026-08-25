@@ -21,11 +21,26 @@
  * combat movement gate (module/combat/movement-gate.js) uses for the once-per-turn rule, and the
  * same shape of thing a Foundry user already meets when a move is not allowed.
  *
+ * ⭐ THE IN-HULL HALF OF THE SAME REPORT (user ruling, 2026-08-20: *"refuse too"*). The rule above
+ * measured only whether the drop was ON the bodywork, so a rider dragged onto an ENGINE square — or
+ * any painted square that is not a seat — was still an ordinary move: written, then found by
+ * `adoptDraggedSeat` to be on no seat, then written back to the seat the rider's flag still named.
+ * That is the same two-write land-then-return the off-hull case used to do, one square further in,
+ * and it reads to the table as the same defect. A drop that is not on a seat is now refused wherever
+ * it is, so the lock's question is "did this land on a SEAT" rather than "did this land on the CAR".
+ *
+ * ⚠ THE SEAT TEST IS THE ADOPTER'S OWN TEST, not a second opinion about the same squares: the
+ * nearest seat position within half a grid square (`vehicle-canvas.js` adoptDraggedSeat). Asking the
+ * question the same way is what guarantees the lock never refuses a drop the adopter would have
+ * taken — a rule written independently would drift out of agreement the first time either moved.
+ *
  * WHAT IS DELIBERATELY STILL ALLOWED — four exemptions, and each one is a real gesture somebody
  * needs:
- *   1. A drop that lands ON the vehicle is the SEAT-CHANGE gesture (USER-GUIDE §4) and is passed
- *      straight through to `adoptDraggedSeat`. The lock only measures whether the destination is
- *      on the bodywork, never which cell it is.
+ *   1. A drop that lands on a SEAT is the SEAT-CHANGE gesture (USER-GUIDE §4) and is passed
+ *      straight through to `adoptDraggedSeat`. That includes a seat somebody else already holds:
+ *      the square IS a seat, the drop is a legitimate attempt at it, and the adopter's own
+ *      already-taken rule returns the rider to their own seat. That is the one land-then-return
+ *      still reachable by hand, and it is a refusal of the SEAT rather than of the gesture.
  *   2. Every move the MODULE makes to a rider — the crew-follow commit, the re-seat after a
  *      footprint or heading edit, boarding, stepping out — is marked `cp2020VehicleSync` on the
  *      update options and exempted by that mark. It is the flag the crew-follow hook already used
@@ -48,7 +63,7 @@
  */
 
 import { hullRectIn, pointInRotatedRect } from "./vehicle-layout.js";
-import { isVehicleTokenDoc, storedPoseOf, vehicleTokenFor } from "./vehicle-canvas.js";
+import { isVehicleTokenDoc, riderSeatAt, seatOrderAt, storedPoseOf, vehicleTokenFor } from "./vehicle-canvas.js";
 import { localizeParam } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -73,17 +88,23 @@ const ANNOUNCED = "cp2020RideLockAnnounced";
  * @param {boolean} o.leavesVehicle      this same update clears the aboard flag
  * @param {boolean} o.hullKnown          the vehicle's handle is on this scene, so a hull can be measured
  * @param {boolean} o.destinationInHull  the destination lies on the vehicle's hull
+ * @param {boolean} o.destinationIsSeat  the destination is close enough to a seat for the adopter to
+ *                                       take it (the adopter's own half-square tolerance). Defaults
+ *                                       true, so a caller that cannot measure the seats gets the
+ *                                       pre-ruling behaviour rather than a refusal it cannot explain.
  * @returns {boolean} true → cancel the move
  */
 export function shouldRefuseRiderMove({
   aboard, isPositionChange, moduleMove, leavesVehicle, hullKnown, destinationInHull,
+  destinationIsSeat = true,
 }) {
   if (!aboard) return false;             // an ordinary token: never ours to stop
   if (!isPositionChange) return false;   // elevation, name, a flag on its own — not a move
   if (moduleMove) return false;          // the module put them there
   if (leavesVehicle) return false;       // the same update takes them out of the vehicle
   if (!hullKnown) return false;          // no vehicle on this scene to be inside of
-  return !destinationInHull;             // off the bodywork ⇒ refused; on it ⇒ the seat gesture
+  if (!destinationInHull) return true;   // off the bodywork entirely
+  return !destinationIsSeat;             // on the car but not on a seat (engine rank, bare bodywork)
 }
 
 /**
@@ -153,6 +174,8 @@ export function riderMoveContext(tokenDoc, changes, options) {
     leavesVehicle: _leavesVehicle(changes),
     hullKnown: false,
     destinationInHull: false,
+    // True until a seat layout can actually be read and says otherwise — see the rule's own note.
+    destinationIsSeat: true,
     vehicleControlled: false,
     vehicleName: "",
   };
@@ -184,7 +207,37 @@ export function riderMoveContext(tokenDoc, changes, options) {
     y: ny + ((Number(tokenDoc.height) || 1) * grid) / 2,
   };
   ctx.destinationInHull = pointInRotatedRect(centre, rect, pose.rotation);
+  // Which SQUARE it landed on is only asked once the drop is on the car at all — off the bodywork the
+  // answer is already settled and the seat arithmetic would be wasted work on every rejected drag.
+  if (ctx.destinationInHull) ctx.destinationIsSeat = _dropLandsOnSeat(handle, pose, grid, tokenDoc, nx, ny);
   return ctx;
+}
+
+/**
+ * Would the seat adopter TAKE this drop? The adopter's own question, asked with the adopter's own
+ * numbers: the seat positions `seatOrderAt`/`riderSeatAt` compute for this pose, and the half-square
+ * tolerance a hand-drag needs (`adoptDraggedSeat` in vehicle-canvas.js).
+ *
+ * Compared against the drop's TOP-LEFT rather than its centre because that is the coordinate the
+ * adopter compares — seat positions are themselves top-left corners for a rider of this size — and a
+ * lock measured against a different point than the adopter would start refusing drops the adopter
+ * would have accepted.
+ *
+ * A vehicle whose seats cannot be read (no actor, a layout that throws) answers TRUE: unreadable is
+ * not the same as "not a seat", and the same reasoning governs the caller's try/catch — a lock that
+ * cannot measure lets the move through, which is what every token did before this file existed.
+ */
+function _dropLandsOnSeat(handle, pose, grid, riderDoc, nx, ny) {
+  const actor = handle?.actor;
+  if (!actor) return true;
+  const order = seatOrderAt(actor, pose);
+  if (!order?.length) return true;
+  const size = { w: riderDoc.width, h: riderDoc.height };
+  for (let i = 0; i < order.length; i++) {
+    const seat = riderSeatAt(pose, grid, i, size, order);
+    if (Math.hypot(seat.x - nx, seat.y - ny) <= grid / 2) return true;
+  }
+  return false;
 }
 
 /* ------------------------------------------------------ a band grab takes the car, not the crew */

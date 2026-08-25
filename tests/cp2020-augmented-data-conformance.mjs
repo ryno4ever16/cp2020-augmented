@@ -20,6 +20,9 @@
  *                           `getCalibers()`, or the reload match fails and a box prices at 0eb/1 round
  *   - damage formula        every non-blank damage string must satisfy `Roll.validate`
  *   - attack-skill legality every weaponType's attackSkill must be in that type's allowed list
+ *   - book-value pins      a module-pack value that was corrected against a READ book cell is
+ *                          pinned by exact value, so a re-seed or a merge cannot quietly put the
+ *                          wrong number back (see the BOOK-VALUE PINS block for the entry rule)
  *
  * THE ALLOWLIST is the load-bearing design piece. Data rot that is KNOWN-OPEN and awaiting a
  * decision is enumerated below as EXACT values with the reason it is open and what would close it.
@@ -382,6 +385,36 @@ try {
         !Object.prototype.hasOwnProperty.call(L.getCalibers(), L.normalizeCaliber(s)));
       ok(`ratified caliber-alias tier resolves: ${AL.RATIFIED_ALIAS_SPELLINGS.length}/${AL.RATIFIED_ALIAS_SPELLINGS.length} spellings reach a registry entry`,
         aliasUnresolved.length === 0, JSON.stringify(aliasUnresolved));
+
+      /* ── BOOK-VALUE PINS ───────────────────────────────────────────────────────────────────
+       * A pack value that was CORRECTED against a text-layer citation gets a pin here, so a later
+       * re-seed, a bulk edit or a merge that puts the wrong number back turns this lint red instead
+       * of silently reverting a decision somebody made with the book open.
+       *
+       * These are deliberately few and deliberately exact. A pin belongs here only when the book
+       * cell was actually READ (a text layer or the user's own eyes) and the module value was
+       * changed to match it — never for a value nobody has checked, and never as a bulk snapshot of
+       * a pack, which would just make every future correction a test failure. */
+      const bookPins = [
+        // Maximum Metal p.99, the BOMBS chart's COST/SPACES block, read off the PDF text layer
+        // (import-staging/mm-citation/pages/p099-raw.txt): the seven bomb rows read
+        // 250/1 · 450/1 · 500/2 · 600/3 · 700/4 · 1000/5 · 1500/6, so the 250-lb row is cost 450,
+        // ONE space. The pack held 3 — the p.22 chart prints no spaces cell for this row at all
+        // (MM-CITATION-PIN.md WCAT-06, "spaces TEXT-MISSING"), and 3 is the 750-lb row's value one
+        // line down. Corrected 2026-08-20 under the standing ruling.
+        { pack: "cp2020-augmented.vehicle-weapons", id: "DZDgJpcdbnypZ17x",
+          name: "250-lb Bomb", field: "space", want: 1, cite: "Maximum Metal p.99 bombs chart" },
+        // The cost cell from the same block, pinned beside it because the two were read together
+        // and a re-seed that loses one usually loses both.
+        { pack: "cp2020-augmented.vehicle-weapons", id: "DZDgJpcdbnypZ17x",
+          name: "250-lb Bomb", field: "cost", want: 450, cite: "Maximum Metal p.99 bombs chart" },
+      ];
+      for (const pin of bookPins) {
+        const doc = await game.packs.get(pin.pack)?.getDocument(pin.id).catch(() => null);
+        const got = doc?.system?.[pin.field];
+        ok(`book-value pin: ${pin.name} ${pin.field} = ${pin.want} (${pin.cite})`,
+          !!doc && got === pin.want, `got ${JSON.stringify(got)} from ${pin.pack}/${pin.id}`);
+      }
 
       /* structural guard: the allowlist can only ever match exact strings */
       const allAllow = [...Object.values(AL.OPEN_AMMO).flat(), ...Object.values(AL.OPEN_DAMAGE).flat(),

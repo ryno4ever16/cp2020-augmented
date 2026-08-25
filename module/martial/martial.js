@@ -243,7 +243,9 @@ export async function rollMeleeDefense(targetActor, { dodging = false } = {}) {
 }
 
 /**
- * The bonus a DECLARED dodge adds to the defender's opposed roll (CP2020 p.102): a generic +2 stance
+ * The bonus a DECLARED dodge adds to the defender's opposed roll (CP2020 p.111 martial menu "Dodge:
+ * -2 to Attacker's hit roll" + the p.112 sidebar; declaring one is the p.98 action. The cite here read
+ * p.102, which is an armor page): a generic +2 stance
  * available to anyone dodging (the book's "−2 to attacker", expressed as +2 to the defender's total),
  * PLUS the defender's martial-style Dodge key-attack bonus (Core p.100) — additive, per the user's
  * ruling. `dodgeKeyBonus` must be the key of the SAME art rollMeleeDefense chose (0 for a non-martial

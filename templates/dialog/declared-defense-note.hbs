@@ -1,0 +1,15 @@
+{{!--
+  Declared-defence notes, injected into the attacker's Modifiers window by
+  _hookDeclaredDefensePrefill (module/combat/damage-hooks.js) when a MELEE attack's target carries a
+  tracker-declared Dodge or Parry flag. The dodge's −2 is folded into the Extra Modifiers field
+  itself; this block is what says WHY the number moved, so a seeded value never looks like a bug.
+
+  Params:
+    notes  array of PRE-LOCALIZED strings (light inline <b> emphasis is intentional, as in the
+           save-prompt chat card). Rendered in order: dodge lines first, then parry reminders.
+--}}
+<div class="field-list cp-declared-defense">
+  {{#each notes}}
+  <p class="cp-field-note cp-declared-defense-note">{{{this}}}</p>
+  {{/each}}
+</div>

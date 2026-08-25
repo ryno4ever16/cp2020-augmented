@@ -47,6 +47,11 @@
  *     two different ways through the real preview and through the plant
  * §17 A SCATTERED PATTERN SAYS SO — a forced miss driven through the real fire gesture raises exactly one
  *     notification naming the rolled direction and distance, and a shot that lands raises none
+ * §18 WHO MAY END A SHOT — the pattern card's Apply/Clear controls answer to the firer's own user plus
+ *     the two elevated roles (user ruling 2026-08-20). Runs across TWO clients, after the main run's
+ *     teardown: the rule as a table, the firer recorded on both the pattern and its card, a GM keeping
+ *     both controls on either corridor, and a player who sees the card but no controls on somebody
+ *     else's — with a forged call to the resolve entry point refused and their own press still working
  *
  * ⛔ The three cover regions, the showcase combat and the four review targets on this rig belong to the
  * user's morning review; every fixture here is named __PWK__SPREAD and is deleted on the way out, and
@@ -2109,7 +2114,17 @@ const res = await page.evaluate(async () => {
       const formHit = dlgHit?.element?.tagName === "FORM" ? dlgHit.element : dlgHit?.element?.querySelector("form");
       if (formHit?.requestSubmit) formHit.requestSubmit();
       else formHit?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      await sleep(1200);
+      // ⚠ WAIT FOR THE SHOT, DO NOT TIME IT. This used to be a flat 1200 ms and went red about one
+      // run in three with "undefined vs undefined" — the premise leg reporting that no payload had
+      // been captured at all, which is the spec out-running its own fixture rather than a defect in
+      // the mechanism (the capture hook sits at the fire seam, upstream of everything this section
+      // asserts). The submit chain's length is not this spec's to predict: it runs a real roll, a
+      // real card and, for the first shot of the pair, a pattern whose own writes are still settling.
+      // Polling for the thing the next three legs read makes the wait as long as the shot needs and
+      // no longer, and a shot that genuinely never fires still fails — on the assertion, with the
+      // same message, after the bound.
+      for (let i = 0; i < 40 && missPayload === null; i++) await sleep(100);
+      await sleep(400);   // let the payload's own card/pattern chain land before the reads below
       CONFIG.Dice.randomUniform = origRU17;
       await waitForResolveCard(sinceHit);
 
@@ -2170,6 +2185,238 @@ for (const c of res.checks) check(c.n, c.p, c.d);
 check("scene left clean (no stray pattern, card, token or actor)",
   res.leftovers.zones === 0 && res.leftovers.cards === 0 && res.leftovers.tokens === 0 && res.leftovers.actors === 0,
   JSON.stringify(res.leftovers));
+
+/* ══ §18  WHO MAY END A SHOT — the pattern card's controls, across two clients ═══════════════════
+ *
+ * The reported behaviour (2026-08-19): the Apply Spread Damage / Clear Pattern controls rendered for
+ * EVERY viewer of the card, so any player at the table could resolve — or void — somebody else's shot.
+ * The ruling (2026-08-20) names three people: the two elevated roles, and the user whose client fired
+ * the shell.
+ *
+ * Two corridors are planted so ONE extra client covers both directions: corridor A is recorded as
+ * FIRED BY the player, corridor B as fired by the GM. The same player then reads both cards.
+ *
+ * ⚠ HIDING A BUTTON IS NOT THE GATE, so the negative is driven through the module's own entry point
+ * rather than through the DOM: the player calls the resolve function directly for the corridor that is
+ * not theirs, which is what a press would have reached, and the corridor must survive it.
+ *
+ * This section runs AFTER the main run's own teardown, so the leftovers assertion above still reports
+ * a clean scene; §18 cleans up after itself and is checked the same way. */
+const gateSetup = await page.evaluate(async () => {
+  const SCOPE = "cp2020-augmented";
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const out = { checks: [], err: "" };
+  const ok = (n, p, d = "") => out.checks.push({ n, p, d: String(d) });
+  try {
+    const DH = await import(`/modules/${SCOPE}/module/combat/damage-hooks.js`);
+    const scene = canvas.scene;
+    const player = game.users.find(u => u.role === CONST.USER_ROLES.PLAYER && /Test User 1/i.test(u.name))
+      ?? game.users.find(u => u.role === CONST.USER_ROLES.PLAYER);
+    if (!player) throw new Error("no PLAYER-role user on this rig to run the gate against");
+    out.playerId = player.id;
+    out.playerName = player.name;
+    out.gmId = game.user.id;
+
+    // The rule itself, as plain values — every row the ruling names, plus the unrecorded-firer case.
+    const asUser = (role, id) => ({ id, role });
+    out.table = {
+      firerIsPlayer:  DH.mayResolvePattern(player.id, asUser(CONST.USER_ROLES.PLAYER, player.id)),
+      otherPlayer:    DH.mayResolvePattern(player.id, asUser(CONST.USER_ROLES.PLAYER, "someone-else")),
+      trusted:        DH.mayResolvePattern(player.id, asUser(CONST.USER_ROLES.TRUSTED, "trusted-user")),
+      assistant:      DH.mayResolvePattern(player.id, asUser(CONST.USER_ROLES.ASSISTANT, "assistant-user")),
+      gamemaster:     DH.mayResolvePattern(player.id, asUser(CONST.USER_ROLES.GAMEMASTER, "gm-user")),
+      noFirerPlayer:  DH.mayResolvePattern("", asUser(CONST.USER_ROLES.PLAYER, player.id)),
+      noFirerGm:      DH.mayResolvePattern("", asUser(CONST.USER_ROLES.GAMEMASTER, "gm-user")),
+      noUser:         DH.mayResolvePattern(player.id, null),
+    };
+
+    // Fixtures: a shooter and a figure to stand in the corridor.
+    const shooter = await Actor.create({ name: "__PWK__SPREADGATE Shooter", type: "character" });
+    const victim  = await Actor.create({ name: "__PWK__SPREADGATE Victim",  type: "character" });
+    await victim.update({ "system.damage": 0, "system.stats.bt.value": 5 });
+    const grid = scene.grid?.size ?? 100;
+    const [sTok, vTok] = [
+      (await scene.createEmbeddedDocuments("Token", [{ name: "__PWK__SPREADGATE S", actorId: shooter.id,
+        actorLink: true, x: 6 * grid, y: 6 * grid, width: 1, height: 1,
+        texture: { src: "icons/svg/mystery-man.svg" } }]))[0],
+      (await scene.createEmbeddedDocuments("Token", [{ name: "__PWK__SPREADGATE V", actorId: victim.id,
+        actorLink: true, x: 9 * grid, y: 6 * grid, width: 1, height: 1,
+        texture: { src: "icons/svg/mystery-man.svg" } }]))[0],
+    ];
+    await sleep(400);
+    const payloadFrom = (firer) => ({
+      attackerId: shooter.id, weaponName: "__PWK__SPREADGATE Shell Gun",
+      areaDamages: { Torso: [{ damage: 7 }] }, shotsFired: 1, shotsHit: 1,
+      targetTokenId: vTok.id, fxTargetTokenId: vTok.id, firedByUserId: firer,
+      caliber: "00", modifier: "standard", spreadMode: "single",
+      spreadDamageShort: "3", spreadDamageMedium: "3", spreadDamageLong: "3",
+    });
+
+    const gateZones = () => [...(scene.regions ?? [])]
+      .filter(r => r.flags?.[SCOPE]?.isSpreadZone === true
+        && /__PWK__SPREADGATE/.test(String(r.flags?.[SCOPE]?.weaponName ?? "")));
+    for (const r of gateZones()) await r.delete().catch(() => {});
+
+    await DH._placeSpreadZone(payloadFrom(player.id));
+    await sleep(700);
+    const zoneA = gateZones().find(r => r.flags[SCOPE].firedByUserId === player.id) ?? null;
+    await DH._placeSpreadZone(payloadFrom(game.user.id));
+    await sleep(700);
+    const zoneB = gateZones().find(r => r.flags[SCOPE].firedByUserId === game.user.id) ?? null;
+
+    ok("§18 the pattern records WHICH USER fired it, not just which actor",
+      zoneA?.flags?.[SCOPE]?.firedByUserId === player.id && zoneA?.flags?.[SCOPE]?.attackerId === shooter.id,
+      `firer=${zoneA?.flags?.[SCOPE]?.firedByUserId} actor=${zoneA?.flags?.[SCOPE]?.attackerId}`);
+    ok("§18 the second corridor records the other user (the two fixtures really differ)",
+      !!zoneB && zoneB.flags[SCOPE].firedByUserId === game.user.id && zoneB.id !== zoneA?.id,
+      `${zoneA?.id} / ${zoneB?.id}`);
+
+    const cardA = game.messages.get(String(zoneA?.flags?.[SCOPE]?.cardMessageId ?? "")) ?? null;
+    const cardB = game.messages.get(String(zoneB?.flags?.[SCOPE]?.cardMessageId ?? "")) ?? null;
+    ok("§18 the firer travels onto the CARD too, so a client with no region can still be told",
+      cardA?.getFlag(SCOPE, "patternFirer") === player.id
+      && cardB?.getFlag(SCOPE, "patternFirer") === game.user.id,
+      `${cardA?.getFlag(SCOPE, "patternFirer")} / ${cardB?.getFlag(SCOPE, "patternFirer")}`);
+
+    // The GM's own view: both cards keep both controls, whoever fired them.
+    await sleep(500);
+    const domOf = (id) => document.querySelector(`.message[data-message-id="${id}"], li[data-message-id="${id}"]`);
+    const ctlCount = (id) => domOf(id)?.querySelectorAll(".cp-confirm-spread-zone, .cp-clear-spread-zone").length ?? -1;
+    ok("§18 a GM keeps both controls on a corridor a PLAYER fired", ctlCount(cardA?.id) === 2, String(ctlCount(cardA?.id)));
+    ok("§18 a GM keeps both controls on their own corridor too", ctlCount(cardB?.id) === 2, String(ctlCount(cardB?.id)));
+
+    out.zoneA = zoneA?.id ?? ""; out.zoneB = zoneB?.id ?? "";
+    out.cardA = cardA?.id ?? ""; out.cardB = cardB?.id ?? "";
+    out.victimId = victim.id;
+  } catch (e) { out.err = String(e?.message ?? e); }
+  return out;
+});
+for (const c of gateSetup.checks) check(c.n, c.p, c.d);
+check("§18 the two-client fixture was built", !gateSetup.err, gateSetup.err);
+{
+  const t = gateSetup.table ?? {};
+  check("§18 rule: the user who fired it may resolve it", t.firerIsPlayer === true, String(t.firerIsPlayer));
+  check("§18 rule NEGATIVE: another player at the same table may not", t.otherPlayer === false, String(t.otherPlayer));
+  check("§18 rule NEGATIVE: a TRUSTED player is still below the floor", t.trusted === false, String(t.trusted));
+  check("§18 rule: an assistant GM may", t.assistant === true, String(t.assistant));
+  check("§18 rule: a gamemaster may", t.gamemaster === true, String(t.gamemaster));
+  check("§18 rule NEGATIVE: a corridor naming no firer is not resolvable by a plain player",
+    t.noFirerPlayer === false, String(t.noFirerPlayer));
+  check("§18 rule: but the elevated roles still may resolve one", t.noFirerGm === true, String(t.noFirerGm));
+  check("§18 rule NEGATIVE: no user, no permission", t.noUser === false, String(t.noUser));
+}
+
+const playerPage = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+playerPage.on("console", m => { if (m.type() === "error" && !/compatibility|deprecat|screen resolution/i.test(m.text())) errors.push("player: " + m.text()); });
+playerPage.on("pageerror", e => errors.push("player: " + e.message));
+let gatePlayer = { checks: [], err: "no player client" };
+if (!gateSetup.err && gateSetup.playerName) {
+  try {
+    await playerPage.goto(`${URL}/join`);
+    await playerPage.waitForSelector('select[name="userid"]');
+    await playerPage.evaluate((name) => {
+      const sel = document.querySelector('select[name="userid"]');
+      sel.value = [...sel.options].find(o => o.textContent.trim() === name).value;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }, gateSetup.playerName);
+    // The rig's player fixtures are password-less; the rig password is tried as the fallback.
+    for (const pw of ["", PW]) {
+      await playerPage.fill('input[name="password"]', pw);
+      await Promise.all([
+        playerPage.waitForNavigation({ url: /\/game/, timeout: 20000 }).catch(() => {}),
+        playerPage.click('button[name="join"]'),
+      ]);
+      try { await playerPage.waitForFunction(() => window.game?.ready === true, undefined, { timeout: 20000 }); break; }
+      catch { await playerPage.goto(`${URL}/join`); await playerPage.waitForSelector('select[name="userid"]'); }
+    }
+    gatePlayer = await playerPage.evaluate(async (ids) => {
+      const SCOPE = "cp2020-augmented";
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const out = { checks: [], err: "" };
+      const ok = (n, p, d = "") => out.checks.push({ n, p, d: String(d) });
+      try {
+        const DH = await import(`/modules/${SCOPE}/module/combat/damage-hooks.js`);
+        ok("§18 the second client is a plain PLAYER, not a GM (the premise)",
+          game.user.isGM === false && game.user.role === CONST.USER_ROLES.PLAYER,
+          `isGM=${game.user.isGM} role=${game.user.role}`);
+        ok("§18 the rule agrees on this client: their own corridor yes, the GM's no",
+          DH.mayResolvePattern(game.user.id, game.user) === true
+          && DH.mayResolvePattern(ids.gmId, game.user) === false, "");
+
+        await sleep(1500);
+        const domOf = (id) => document.querySelector(`.message[data-message-id="${id}"], li[data-message-id="${id}"]`);
+        const cardBEl = domOf(ids.cardB);
+        const cardAEl = domOf(ids.cardA);
+        ok("§18 the player can SEE both cards — the card is not hidden, only its controls (the premise)",
+          !!cardAEl && !!cardBEl, `A=${!!cardAEl} B=${!!cardBEl}`);
+        ok("§18 a corridor somebody ELSE fired shows the player NO controls",
+          (cardBEl?.querySelectorAll(".cp-confirm-spread-zone, .cp-clear-spread-zone").length ?? -1) === 0,
+          String(cardBEl?.querySelectorAll(".cp-confirm-spread-zone, .cp-clear-spread-zone").length));
+        ok("§18 and the card's own text is still there — they can read what happened",
+          (cardBEl?.textContent ?? "").trim().length > 0 && !/CYBERPUNK\./.test(cardBEl?.textContent ?? ""),
+          (cardBEl?.textContent ?? "").slice(0, 60));
+        ok("§18 their OWN corridor keeps both controls",
+          (cardAEl?.querySelectorAll(".cp-confirm-spread-zone, .cp-clear-spread-zone").length ?? -1) === 2,
+          String(cardAEl?.querySelectorAll(".cp-confirm-spread-zone, .cp-clear-spread-zone").length));
+
+        // THE FORGED PRESS: the module's own entry point, called for the corridor that is not theirs.
+        const warns = [];
+        const realWarn = ui.notifications.warn.bind(ui.notifications);
+        ui.notifications.warn = (m, ...r) => { warns.push(String(m)); return realWarn(m, ...r); };
+        try {
+          await DH._confirmSpreadZone(ids.zoneB);
+          await sleep(900);
+          await DH._clearSpreadZone(ids.zoneB, ids.cardB);
+          await sleep(900);
+        } finally { ui.notifications.warn = realWarn; }
+        ok("§18 a forged apply/clear on somebody else's corridor is REFUSED, and says so",
+          warns.length === 2 && warns.every(w => !/CYBERPUNK\./.test(w)), warns.join(" | "));
+
+        // THE REAL PRESS on their own corridor, through the button that is actually rendered.
+        cardAEl?.querySelector(".cp-confirm-spread-zone")
+          ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        await sleep(2500);
+        out.pressed = true;
+      } catch (e) { out.err = String(e?.message ?? e); }
+      return out;
+    }, { cardA: gateSetup.cardA, cardB: gateSetup.cardB, zoneA: gateSetup.zoneA, zoneB: gateSetup.zoneB, gmId: gateSetup.gmId });
+  } catch (e) { gatePlayer = { checks: [], err: String(e?.message ?? e) }; }
+}
+for (const c of (gatePlayer.checks ?? [])) check(c.n, c.p, c.d);
+check("§18 the player client ran", !gatePlayer.err, gatePlayer.err ?? "");
+
+const gateAfter = await page.evaluate(async (ids) => {
+  const SCOPE = "cp2020-augmented";
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  await sleep(1500);
+  const scene = canvas.scene;
+  const victim = game.actors.get(ids.victimId);
+  const out = {
+    zoneBAlive: !!scene.regions?.get?.(ids.zoneB),
+    zoneAGone: !scene.regions?.get?.(ids.zoneA),
+    cardBCleared: game.messages.get(ids.cardB)?.getFlag(SCOPE, "spreadCleared") === true,
+    victimDamage: Number(victim?.system?.damage) || 0,
+  };
+  // teardown, by name
+  for (const r of [...(scene.regions ?? [])].filter(r => /__PWK__SPREADGATE/.test(String(r.flags?.[SCOPE]?.weaponName ?? "")))) await r.delete().catch(() => {});
+  await sleep(300);
+  for (const m of [...game.messages].filter(m => /__PWK__SPREADGATE/.test(m.content ?? ""))) await m.delete().catch(() => {});
+  for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__SPREADGATE"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
+  for (const a of [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREADGATE"))) await a.delete().catch(() => {});
+  out.leftovers = [...(scene.regions ?? [])].filter(r => /__PWK__SPREADGATE/.test(String(r.flags?.[SCOPE]?.weaponName ?? ""))).length
+    + [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREADGATE")).length
+    + [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__SPREADGATE")).length;
+  return out;
+}, { zoneA: gateSetup.zoneA, zoneB: gateSetup.zoneB, cardB: gateSetup.cardB, victimId: gateSetup.victimId });
+check("§18 the refused corridor is STILL ON THE TABLE — nothing was applied and nothing was voided",
+  gateAfter.zoneBAlive === true && gateAfter.cardBCleared === false,
+  `alive=${gateAfter.zoneBAlive} cleared=${gateAfter.cardBCleared}`);
+check("§18 the firer's own press went through — their corridor resolved and is gone",
+  gateAfter.zoneAGone === true, String(gateAfter.zoneAGone));
+check("§18 and it really applied — the figure in that corridor took damage",
+  gateAfter.victimDamage > 0, `${gateAfter.victimDamage} damage`);
+check("§18 the section left the scene clean", gateAfter.leftovers === 0, String(gateAfter.leftovers));
+
 check("0 console errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 console.log(`\nRESULT: ${fail === 0 ? "PASS" : "FAIL"} (${pass}/${pass + fail})`);
 await browser.close();

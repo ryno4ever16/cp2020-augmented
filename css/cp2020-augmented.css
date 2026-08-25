@@ -1401,6 +1401,15 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
   min-height: 0;
 }
 
+/* A short explanatory line sitting under a field, in the sheet's own ink at a smaller size.
+   Defined once here so the templates that need one stop carrying an inline style. Colour is
+   inherited, so it follows whichever theme the sheet is rendering in. */
+.cp-field-note {
+  margin: 2px 0 6px;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
 .application.cyberpunk.sheet.item .cp-item-sheet-root > header,
 .application.cyberpunk.sheet.item .cp-item-sheet-root > nav.sheet-tabs {
   flex: 0 0 auto;
@@ -3595,9 +3604,10 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
    *"the Front buttons have no visible effect"*, measured on the rig: lit and unlit computed to the
    same `rgb(247,244,248)`. An `!important` declaration is only beatable by another one, so the lit
    state states itself the same way; being later AND more specific, this one wins.
-   ⚠ The blanket flattens the paint grid's role colours the same way (a seat and a bodywork square
-   compute to one colour). That is a wider call about the skin, not this control, and is left alone
-   here — the nose ring next door is drawn with `box-shadow`, which the blanket does not set. */
+   ⏪ The blanket flattened the paint grid's role colours the same way (a seat and a bodywork square
+   computed to one colour). That was left alone here as a wider call about the skin; the call came
+   back GO (user, 2026-08-20) and the grid now states itself the same way — see the
+   `.cp-veh-cell.cp-veh-cell-seat` block below. */
 .cyberpunk .cp-veh-front-btn.cp-active {
   opacity: 1;
   color: #ffcc00 !important;
@@ -3631,15 +3641,30 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
   border: 1px solid rgba(140, 140, 140, 0.6);
   background: rgba(120, 120, 120, 0.12);
 }
-.cyberpunk .cp-veh-cell-seat {
-  border-color: #c0791a;
-  background: rgba(192, 121, 26, 0.22);
-  color: #ffcc00;
+/* ⛔ `!important` + THE DOUBLED CLASS ARE BOTH LOAD-BEARING, and they answer one of OUR OWN rules,
+   not core's — the same fix the Front picker next door carries, applied to the reported symptom it
+   explicitly left alone. The Darkneet skin lays a blanket over every control inside a sheet
+   (`body.cp-carolingian .cyberpunk select, … button, … select option { background/border/color: …
+   !important }`, further up this file), and these squares ARE buttons, so a seat, an engine square
+   and a bare bodywork square all computed to one colour: the grid said nothing about the layout it
+   exists to show ("the layout is hard to understand", 2026-08-19).
+   An `!important` declaration is only beatable by another one AT LEAST AS SPECIFIC, and the blanket
+   is `body + 2 classes + element`. A single `.cp-veh-cell-seat` under `.cyberpunk` loses that
+   comparison, so the ROLE class is written together with the base `cp-veh-cell` class the same
+   element already carries — three classes, which takes the column that decides it. The nose ring is
+   drawn with `box-shadow`, which the blanket never sets, so it still lays over whatever role colour
+   the square carries.
+   Light scheme needs neither: the skin stands down there entirely (see the parity layer's note), so
+   the plain rules below it are unopposed. */
+.cyberpunk .cp-veh-cell.cp-veh-cell-seat {
+  border-color: #c0791a !important;
+  background: rgba(192, 121, 26, 0.22) !important;
+  color: #ffcc00 !important;
 }
-.cyberpunk .cp-veh-cell-engine {
-  border-color: #d1502f;
-  background: rgba(209, 80, 47, 0.22);
-  color: #ff8f6b;
+.cyberpunk .cp-veh-cell.cp-veh-cell-engine {
+  border-color: #d1502f !important;
+  background: rgba(209, 80, 47, 0.22) !important;
+  color: #ff8f6b !important;
 }
 /* The NOSE rank — the front-most line of squares, whichever way the Front picker points it. Amber to
    match the hull outline drawn on the map, and an INSET ring rather than a border so it lays over

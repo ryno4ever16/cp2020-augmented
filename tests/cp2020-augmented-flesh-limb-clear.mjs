@@ -182,6 +182,21 @@ const r = await p.evaluate(async () => {
     opts.map(o => o.value));
   check("setter: every offered state carries a resolved label (no raw CYBERPUNK. key)",
     opts.length === 4 && opts.every(o => !!o.label && !/^CYBERPUNK\./.test(o.label)), opts);
+  // 7a2. THE PROVENANCE (user, 2026-08-20: the union vocabulary is accepted, but *"some GMs will
+  //      have no clue what the additional options mean"*). Each row must NAME the ruleset the state
+  //      comes from, and the attribution must be honest per state — not one blanket source word.
+  const srcOf = v => opts.find(o => o.value === v)?.source ?? "";
+  check("setter: every offered state names the RULESET it comes from, inside its own row",
+    opts.length === 4 && opts.every(o => !!o.source && !/^CYBERPUNK\./.test(o.source)
+      && String(o.label).includes(o.source) && String(o.label).includes(o.state)),
+    opts);
+  check("setter: the two Listen Up states are attributed to Listen Up",
+    /listen/i.test(srcOf("crippled")) && /listen/i.test(srcOf("destroyed")),
+    [srcOf("crippled"), srcOf("destroyed")]);
+  check("setter: disabled is attributed to W4RST4R and NOT to Core",
+    /w4rst4r/i.test(srcOf("disabled")) && !/core/i.test(srcOf("disabled")), srcOf("disabled"));
+  check("setter: severed names BOTH books that write it — Core's own >8 rule and W4RST4R's",
+    /core/i.test(srcOf("severed")) && /w4rst4r/i.test(srcOf("severed")), srcOf("severed"));
 
   // 7b. pipeline fixture on rArm — the comparison baseline for the parity leg
   await DA.applyAreaDamages({ target: setActor, areaDamages: { rArm:[{ damage:30 }] } });
@@ -204,6 +219,21 @@ const r = await p.evaluate(async () => {
   const optVals = [...(sel?.options ?? [])].map(o => o.value);
   check("picker: the rows are a clear row plus exactly the recorded states",
     JSON.stringify(optVals) === JSON.stringify(["","crippled","destroyed","disabled","severed"]), optVals);
+  // The provenance has to reach the RENDERED row, not just the option data the picker was built
+  // from. Read per VALUE, not by scanning every row for brackets: the clear row's own wording
+  // ("— none (clear the record) —") carries brackets of its own and would be counted as a source.
+  const optTexts = [...(sel?.options ?? [])].map(o => (o.textContent ?? "").trim());
+  const rowFor = (v) => [...(sel?.options ?? [])].find(o => o.value === v)?.textContent?.trim() ?? "";
+  const rowSources = { crippled: /Listen Up/, destroyed: /Listen Up/, disabled: /W4RST4R/,
+    severed: /Core \/ W4RST4R/ };
+  const rowsNamed = Object.entries(rowSources)
+    .filter(([v, re]) => re.test(rowFor(v)) && rowFor(v).startsWith(v));
+  check("picker: each state row shows its own ruleset in the row a GM actually reads",
+    rowsNamed.length === 4 && !optTexts.some(t => /CYBERPUNK\./.test(t)),
+    optTexts);
+  const sourceLine = dlg?.querySelector(".cp-flesh-state-sources")?.textContent?.trim() ?? "";
+  check("picker: a line under the field says why the list spans limb models, localized",
+    sourceLine.length > 0 && !/CYBERPUNK\./.test(sourceLine), sourceLine);
   if (sel) { sel.value = "severed"; sel.dispatchEvent(new Event("change", { bubbles: true }));
     dlg.closest(".application")?.querySelector('button[data-action="set"]')?.click(); await sleep(800); }
   const yesBtn = [...document.querySelectorAll('button[data-action="yes"]')].pop();
@@ -285,6 +315,86 @@ const r = await p.evaluate(async () => {
   for (const t of (tScene?.tokens ?? []).filter(t => /^__PW__FleshSetTok/.test(t.name))) await tScene.deleteEmbeddedDocuments("Token",[t.id]).catch(()=>{});
   await tBase.delete().catch(()=>{});
   await setActor.delete().catch(()=>{});
+
+  /* (9) THE CORE LIMB MODEL RECORDS THE LOSS (user ruling 2026-08-20, "yes, write severed").
+   *     Core's own rule is that a limb taking more than 8 net is gone, and that already produced the
+   *     mortal prompt — the RECORD was the one thing it did not write, so under the DEFAULT model the
+   *     sheet badge, the gone-limb hit-location re-roll and the cyberlimb severed-under check were
+   *     all blind. These legs pin the threshold from both sides.
+   *
+   *     netDamage is handed to the severity check DIRECTLY for the threshold legs: "more than 8" and
+   *     "exactly 8" are one point apart, and a number that has been through armour, BTM and a roll
+   *     cannot pin that edge. The whole apply path is exercised separately below, so both the rule
+   *     and the route it travels are covered. */
+  await game.settings.set(SCOPE,"limbModel","core");
+  await game.settings.set(SCOPE,"limbLossEnabled",true);
+  const mkCore = async (tag) => {
+    const a = await Actor.create({ name:`__PW__FleshClearCore${tag}`, type:"character" });
+    await a.update({ "system.damage":0, "system.stats.bt.value":2 });
+    return a;
+  };
+  const coreOver = await mkCore("A");
+  await DA.assessWoundSeverity(coreOver, "rArm", 9);
+  await sleep(700);
+  check("core model: 9 net to an arm records that zone as severed",
+    (coreOver.getFlag(SCOPE,"fleshLimbStatus")??{}).rArm === "severed",
+    coreOver.getFlag(SCOPE,"fleshLimbStatus"));
+  check("core model: the record reads back through the same accessor every reader uses",
+    CL.fleshLimbStatusOf(coreOver, "rArm") === "severed", CL.fleshLimbStatusOf(coreOver, "rArm"));
+  check("core model: only the struck zone is recorded — no sibling limb is touched",
+    Object.keys(coreOver.getFlag(SCOPE,"fleshLimbStatus") ?? {}).join() === "rArm",
+    coreOver.getFlag(SCOPE,"fleshLimbStatus"));
+
+  const coreAt = await mkCore("B");
+  await DA.assessWoundSeverity(coreAt, "rArm", 8);
+  await sleep(700);
+  check("core model NEGATIVE: exactly 8 net is below the rule and records nothing",
+    (coreAt.getFlag(SCOPE,"fleshLimbStatus")??{}).rArm === undefined,
+    coreAt.getFlag(SCOPE,"fleshLimbStatus"));
+
+  const coreHead = await mkCore("C");
+  await DA.assessWoundSeverity(coreHead, "Head", 12);
+  await sleep(900);
+  check("core model NEGATIVE: a head wound records no limb state (the head is not a limb)",
+    Object.keys(coreHead.getFlag(SCOPE,"fleshLimbStatus") ?? {}).length === 0,
+    coreHead.getFlag(SCOPE,"fleshLimbStatus"));
+  check("core model: the head rule itself is unchanged — the actor is marked dead",
+    [...(coreHead.statuses ?? [])].includes("dead"), [...(coreHead.statuses ?? [])]);
+
+  const corePipe = await mkCore("D");
+  await DA.applyAreaDamages({ target: corePipe, areaDamages: { lArm:[{ damage:30 }] } });
+  await sleep(700);
+  check("core model: the whole apply path records it too, not only the severity check",
+    (corePipe.getFlag(SCOPE,"fleshLimbStatus")??{}).lArm === "severed",
+    corePipe.getFlag(SCOPE,"fleshLimbStatus"));
+
+  await game.settings.set(SCOPE,"limbLossEnabled",false);
+  const coreOff = await mkCore("E");
+  await DA.assessWoundSeverity(coreOff, "rArm", 20);
+  await sleep(600);
+  check("core model NEGATIVE: with the limb-loss switch OFF nothing is recorded",
+    Object.keys(coreOff.getFlag(SCOPE,"fleshLimbStatus") ?? {}).length === 0,
+    coreOff.getFlag(SCOPE,"fleshLimbStatus"));
+  await game.settings.set(SCOPE,"limbLossEnabled",true);
+
+  // The other two models are untouched by this ruling — stated here so a future edit to the Core
+  // branch that leaked sideways would fail rather than pass quietly.
+  await game.settings.set(SCOPE,"limbModel","listenup");
+  const luActor = await mkCore("F");
+  await DA.assessWoundSeverity(luActor, "rArm", 9);
+  await sleep(700);
+  check("Listen Up is unchanged: 9 net records CRIPPLED, not severed",
+    (luActor.getFlag(SCOPE,"fleshLimbStatus")??{}).rArm === "crippled",
+    luActor.getFlag(SCOPE,"fleshLimbStatus"));
+  await game.settings.set(SCOPE,"limbModel","w4rst4r");
+  const w4Actor = await mkCore("G");
+  await DA.assessWoundSeverity(w4Actor, "rArm", 9);
+  await sleep(700);
+  check("W4RST4R is unchanged: 9 net records DISABLED, not severed",
+    (w4Actor.getFlag(SCOPE,"fleshLimbStatus")??{}).rArm === "disabled",
+    w4Actor.getFlag(SCOPE,"fleshLimbStatus"));
+
+  for (const a of [coreOver, coreAt, coreHead, corePipe, coreOff, luActor, w4Actor]) await a.delete().catch(()=>{});
 
   // 7i. hand a PLAYER-OWNED character to the second client for the non-GM negative (§8). Provisioned
   //     here rather than assumed: the rig's standing player fixture is not guaranteed on every world.

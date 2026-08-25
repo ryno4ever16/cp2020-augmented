@@ -49,6 +49,32 @@ const FLESH_STATUS_LABEL = {
   severed:   "FleshLimbStatusSevered",
 };
 
+/**
+ * WHICH RULESET EACH RECORDED STATE COMES FROM — the picker's own labelling, and nothing else's.
+ *
+ * The record's vocabulary is a UNION of three limb models (the reader seam is model-agnostic by
+ * design, so a state written under one model is still readable when the world is switched to
+ * another). The GM's direct picker therefore offers all four states whatever `limbModel` is set to
+ * — which is the ruled behaviour, and also the reported gap: *"some GMs will have no clue what the
+ * additional options mean"*. A state word on its own does not say which book it belongs to.
+ *
+ * So the PICKER's option text names the source; the badge, the arm notice and the confirm sentence
+ * keep the bare state word, because in those places the state is a fact about a limb rather than a
+ * menu of rules to choose between. That is why this map is separate from FLESH_STATUS_LABEL rather
+ * than folded into it.
+ *
+ * ⚠ `severed` HAS TWO SOURCES and is labelled with both. W4RST4R severs a limb above 12 net
+ * (combat/DamageApplicator.js, the W4RST4R branch) and Core's own >8 rule loses the limb outright
+ * (the Core branch, same file) — both record this exact string, so naming only one of them would be
+ * a false attribution to whichever half of the table the reader plays.
+ */
+const FLESH_STATUS_SOURCE = {
+  crippled:  "FleshLimbSourceListenUp",
+  destroyed: "FleshLimbSourceListenUp",
+  disabled:  "FleshLimbSourceW4rst4r",
+  severed:   "FleshLimbSourceCoreW4rst4r",
+};
+
 /** True when `location` is a limb zone carrying cyberlimb structure (SDP sum > 0). Pure-ish. */
 export function isCyberlimbZone(actor, location) {
   if (!LIMB_ZONES.has(location)) return false;
@@ -330,11 +356,21 @@ export async function severFleshUnder(actor, zone) {
  * the mirror of clearFleshLimb's deleteFieldUpdate on the way out).
  */
 
-/** The recorded flesh-limb states this module understands, as sheet-ready `{ value, label }` rows in a
- *  stable order. Built here — not in the template — so the picker can never drift from the badge/reader
- *  vocabulary (the dynamic-`<select>` idiom: JS builds the option data, the template just iterates). */
+/** The recorded flesh-limb states this module understands, as sheet-ready `{ value, label, state, source }`
+ *  rows in a stable order. Built here — not in the template — so the picker can never drift from the
+ *  badge/reader vocabulary (the dynamic-`<select>` idiom: JS builds the option data, the template just
+ *  iterates).
+ *
+ *  `label` is the row the picker shows: the state word with its RULESET named after it, composed here
+ *  through one parameterized key rather than as two template fragments, so the whole row is one
+ *  translatable sentence and the bracket style is the translator's to choose. `state` and `source` are
+ *  carried alongside it for any reader that wants the two halves apart (the keeper reads them). */
 export function fleshLimbStateOptions() {
-  return Object.keys(FLESH_STATUS_LABEL).map(value => ({ value, label: localize(FLESH_STATUS_LABEL[value]) }));
+  return Object.keys(FLESH_STATUS_LABEL).map(value => {
+    const state = localize(FLESH_STATUS_LABEL[value]);
+    const source = localize(FLESH_STATUS_SOURCE[value]);
+    return { value, state, source, label: localizeParam("FleshLimbStateOptionLabel", { state, source }) };
+  });
 }
 
 /** True when `state` is one of the recorded flesh-limb states. The closed-domain guard. Pure. */

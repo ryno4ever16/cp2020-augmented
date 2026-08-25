@@ -159,11 +159,198 @@ const r = await p.evaluate(async () => {
     await dnE.delete().catch(() => {});
   } catch (e) { out.offer.err = e?.message || String(e); }
 
+  // ── (D) the tracker stance flags reaching the ATTACKER's Modifiers window ──────────────────────
+  // The declared-stance flags used to be written and then read by (almost) nothing: `dodging` only by
+  // the offered grapple contest above, `parrying` by nothing at all. The prefill hook in
+  // combat/damage-hooks.js is where they now meet an ordinary attack. Everything here drives the REAL
+  // opener (the sheet's _cpOpenAttackModifiers, which builds the target list from the user's targets)
+  // and reads the rendered window, not the hook's internals.
+  out.prefill = { err: null };
+  out.stance  = { err: null };
+  let restoreSettings = {};
+  let prevActiveSceneId = null;
+  const madeFixtures = [];
+  try {
+    for (const k of ["activeDodgeParryEnabled", "multiActionPenaltyEnabled", "multiActionAutoTrack"]) {
+      try { restoreSettings[k] = game.settings.get(SCOPE, k); } catch { restoreSettings[k] = undefined; }
+    }
+    await game.settings.set(SCOPE, "activeDodgeParryEnabled", true);
+    // The multi-action fold writes the SAME field. Off for the readback section so every number in it
+    // is attributable to the stance hook; the stance section below turns it back on deliberately.
+    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);
+
+    prevActiveSceneId = game.scenes.active?.id ?? null;
+    for (const s of [...game.scenes]) if (s.name?.startsWith("__PW__Dodge")) await s.delete().catch(() => {});
+    const [scene] = await Scene.create([{
+      name: "__PW__DodgeDialogScene", width: 2000, height: 2000, padding: 0,
+      grid: { size: 100, type: CONST.GRID_TYPES.SQUARE },
+    }]);
+    await scene.activate();
+    for (let i = 0; i < 150 && !(canvas?.ready && canvas.scene?.id === scene.id); i++) await sleep(200);
+    const G = scene.grid?.size ?? 100;
+
+    const attacker = await mk("__PW__DodgeSwinger", { skills: { Brawling: 6 } });
+    const defA = await mk("__PW__DodgeTargetA", { skills: { Athletics: 5 } });
+    const defB = await mk("__PW__DodgeTargetB", { skills: { Athletics: 5 } });
+    const defC = await mk("__PW__DodgeTargetC", { skills: { Athletics: 5 } });
+    madeFixtures.push(attacker, defA, defB, defC);
+
+    // isRanged() is decided by weaponType/attackType (base item.js): "Melee" on either takes the melee
+    // road, a Pistol the ranged one. Both live on ONE attacker so the two dialogs differ in nothing
+    // except the flow under test.
+    const [knife] = await attacker.createEmbeddedDocuments("Item", [{
+      name: "__PW__DodgeKnife", type: "weapon",
+      system: { equipped: true, weaponType: "Melee", attackType: "Melee", damage: "1d6", accuracy: 0 } }]);
+    const [pistol] = await attacker.createEmbeddedDocuments("Item", [{
+      name: "__PW__DodgePistol", type: "weapon",
+      system: { equipped: true, weaponType: "Pistol", attackType: "P", damage: "2d6+1", rof: 2, range: 50, shots: 10, shotsLeft: 10, accuracy: 0 } }]);
+
+    const [tokA] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__DodgeTokA", actorId: defA.id, actorLink: true,  x: 4 * G, y: 2 * G, width: 1, height: 1 }]);
+    const [tokB] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__DodgeTokB", actorId: defB.id, actorLink: true,  x: 6 * G, y: 2 * G, width: 1, height: 1 }]);
+    // Fixture diversity: a linked figure and an UNLINKED second figure of the SAME actor. An unlinked
+    // token keeps its own flags, so the pair is what proves the read is token-scoped rather than
+    // "whatever actor shares this id" (the documented id-collision class).
+    const [tokC1] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__DodgeTokC1", actorId: defC.id, actorLink: true,  x: 8 * G, y: 2 * G, width: 1, height: 1 }]);
+    const [tokC2] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__DodgeTokC2", actorId: defC.id, actorLink: false, x: 10 * G, y: 2 * G, width: 1, height: 1 }]);
+    await sleep(500);
+
+    const sheet = attacker.sheet;
+    out.prefill.openerPresent = typeof sheet?._cpOpenAttackModifiers === "function";
+
+    /** Target the given tokens, open the weapon's real attack window, and report what the rendered
+     *  window says: whether the Extra Modifiers row exists at all, its value, and the note lines. */
+    const openAndRead = async (item, tokenIds) => {
+      const res = { found: false, val: null, noteCount: 0, notes: [], err: null };
+      let dlg = null;
+      try {
+        for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
+        await sleep(120);
+        for (const id of tokenIds) canvas.tokens.get(id)?.setTarget(true, { releaseOthers: false, groupSelection: true });
+        await sleep(200);
+        dlg = sheet._cpOpenAttackModifiers(item);
+        await sleep(800);   // render + the note block's own template fetch
+        const root = dlg?.element ?? null;
+        const inp = root?.querySelector?.("input[name='extraMod']") ?? null;
+        res.found = !!inp;
+        res.val = inp ? String(inp.value ?? "") : null;
+        const noteEls = root?.querySelectorAll?.(".cp-declared-defense .cp-declared-defense-note") ?? [];
+        res.notes = [...noteEls].map(n => (n.textContent || "").trim());
+        res.noteCount = res.notes.length;
+      } catch (e) { res.err = String(e?.message ?? e); }
+      try { await dlg?.close?.({ animate: false }); } catch (_e) { /* already gone */ }
+      await sleep(200);
+      return res;
+    };
+    // D1 — MELEE vs a declared dodge: the book's −2 lands in the field, with a line naming who and why.
+    await defA.setFlag(SCOPE, "dodging", true); await sleep(150);
+    out.prefill.meleeVsDodger = await openAndRead(knife, [tokA.id]);
+    // D2 — RANGED vs the SAME flagged target: nothing at all. Core prints no rule for dodging fire, so
+    // this is the book NEGATIVE, not an oversight — it is asserted as hard as the positive.
+    out.prefill.rangedVsDodger = await openAndRead(pistol, [tokA.id]);
+    // D8 (second-act rule) — reopening the same window re-reads the flag ONCE; −2 must not become −4.
+    out.prefill.meleeVsDodgerReopen = await openAndRead(knife, [tokA.id]);
+
+    // D3 — PARRY is a REMINDER: a note, and deliberately NO number (the outcome is an opposed roll).
+    await defB.setFlag(SCOPE, "parrying", true); await sleep(150);
+    out.prefill.meleeVsParry = await openAndRead(knife, [tokB.id]);
+
+    // D5 — two targets selected: `extraMod` is a single number on the attacker's roll, so it carries
+    // no per-target penalty. Both stances are NAMED and none is folded.
+    out.prefill.meleeMultiTarget = await openAndRead(knife, [tokA.id, tokB.id]);
+
+    // D6 — token scope: the stance is declared on the UNLINKED figure only. Its own dialog gets the
+    // fold; the linked twin (same base actor, clean flags) gets nothing.
+    await canvas.tokens.get(tokC2.id)?.actor?.setFlag(SCOPE, "dodging", true); await sleep(200);
+    out.prefill.unlinkedFigure = await openAndRead(knife, [tokC2.id]);
+    out.prefill.linkedTwin     = await openAndRead(knife, [tokC1.id]);
+    await canvas.tokens.get(tokC2.id)?.actor?.unsetFlag(SCOPE, "dodging").catch(() => {});
+
+    // D4 — flag cleared: back to nothing, on the same fixtures that just proved the positive.
+    await defA.unsetFlag(SCOPE, "dodging").catch(() => {});
+    await defB.unsetFlag(SCOPE, "parrying").catch(() => {});
+    await sleep(200);
+    out.prefill.flagsCleared = await openAndRead(knife, [tokA.id, tokB.id]);
+
+    // D7 — feature gate OFF: the flag may be set, the window stays untouched.
+    await defA.setFlag(SCOPE, "dodging", true); await sleep(150);
+    await game.settings.set(SCOPE, "activeDodgeParryEnabled", false);
+    out.prefill.gateOff = await openAndRead(knife, [tokA.id]);
+    await game.settings.set(SCOPE, "activeDodgeParryEnabled", true);
+    await defA.unsetFlag(SCOPE, "dodging").catch(() => {});
+
+    // The shipped constant itself, so the legs above are checked against the module's number rather
+    // than a re-typed copy of it.
+    const DH = await import("/modules/cp2020-augmented/module/combat/damage-hooks.js");
+    out.prefill.constant = DH.DECLARED_DODGE_ATTACK_MOD;
+
+    // ── (E) the tracker controls still toggle, and still count the action ──────────────────────────
+    // The −3-to-other-actions half of the p.112 clause is represented by the declaration COSTING an
+    // action, not by a second penalty — so this section is the proof that the counter still moves.
+    try {
+      await game.settings.set(SCOPE, "multiActionPenaltyEnabled", true);
+      await game.settings.set(SCOPE, "multiActionAutoTrack", true);
+      for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__Dodge"))) await c.delete().catch(() => {});
+      const combat = await Combat.create({});
+      await combat.createEmbeddedDocuments("Combatant", [{ actorId: attacker.id, name: "__PW__DodgeSwinger" }]);
+      await combat.activate(); await combat.startCombat(); await sleep(500);
+      try { ui.sidebar?.expand?.(); ui.sidebar?.activateTab?.("combat"); } catch (_e) { /* headless sidebar */ }
+      ui.combat?.render(true); await sleep(800);
+
+      const btn = (cls) => document.querySelector(`${cls}[data-actor-id="${attacker.id}"]`);
+      const count = () => Number(attacker.getFlag(SCOPE, "actionCount") ?? 0);
+
+      out.stance.dodgeBtnRendered = !!btn(".cp-dodge-btn");
+      out.stance.parryBtnRendered = !!btn(".cp-parry-btn");
+      // Wiring leg: the field the handler reads must be non-empty on the rendered node.
+      out.stance.dodgeBtnActorId = btn(".cp-dodge-btn")?.dataset?.actorId || "";
+
+      const c0 = count();
+      btn(".cp-dodge-btn")?.click();
+      for (let i = 0; i < 40 && !attacker.getFlag(SCOPE, "dodging"); i++) await sleep(120);
+      await sleep(300);
+      out.stance.dodgeSetsFlag = attacker.getFlag(SCOPE, "dodging") === true;
+      out.stance.dodgeCountsAction = count() === c0 + 1;
+
+      ui.combat?.render(true); await sleep(600);
+      const c1 = count();
+      btn(".cp-parry-btn")?.click();
+      for (let i = 0; i < 40 && !attacker.getFlag(SCOPE, "parrying"); i++) await sleep(120);
+      await sleep(300);
+      out.stance.parrySetsFlag = attacker.getFlag(SCOPE, "parrying") === true;
+      out.stance.parryCountsAction = count() === c1 + 1;
+
+      // Second act: the same gesture again is the CANCEL, and a cancel is not a new action.
+      ui.combat?.render(true); await sleep(600);
+      const c2 = count();
+      btn(".cp-dodge-btn")?.click();
+      for (let i = 0; i < 40 && attacker.getFlag(SCOPE, "dodging"); i++) await sleep(120);
+      await sleep(300);
+      out.stance.dodgeTogglesOff = (attacker.getFlag(SCOPE, "dodging") ?? false) === false;
+      out.stance.cancelCostsNothing = count() === c2;
+
+      await combat.delete().catch(() => {});
+    } catch (e) { out.stance.err = String(e?.message ?? e); }
+
+    for (const t of [...(game.user?.targets ?? [])]) t.setTarget(false, { releaseOthers: false, groupSelection: true });
+    await scene.delete().catch(() => {});
+  } catch (e) { out.prefill.err = String(e?.message ?? e); }
+  finally {
+    for (const a of madeFixtures) await a.delete().catch(() => {});
+    for (const s of [...game.scenes]) if (s.name?.startsWith("__PW__Dodge")) await s.delete().catch(() => {});
+    if (prevActiveSceneId) await game.scenes.get(prevActiveSceneId)?.activate().catch(() => {});
+    for (const [k, v] of Object.entries(restoreSettings)) {
+      if (v !== undefined) await game.settings.set(SCOPE, k, v).catch(() => {});
+    }
+  }
+
   for (const a of [aikido, karate, nonMart, mixed, maWins]) await a.delete().catch(() => {});
   return out;
 });
 
 console.log(JSON.stringify(r, null, 1));
+// "No fold-in" has to mean the row was FOUND and read as zero — a window that never rendered must
+// not be able to pass a negative leg by returning nothing (the vacuous-leg rule).
+const noFold = (x) => !!x && x.found === true && !x.err && (x.val === "" || x.val === "0");
 const checks = [
   ["Aikido dodger: Dodge key 3, art level 5 → declared-dodge bonus 5 (2+3)", r.aikidoDodging.key === 3 && r.aikidoDodging.skillVal === 5 && r.aikidoDodging.bonus === 5],
   ["Aikido NOT dodging: no Dodge key leaks into a plain defense (key 0)", r.aikidoNotDodge.key === 0],
@@ -183,6 +370,43 @@ const checks = [
   // ⏪ GATED 2026-08-16 (vacuous-leg audit): the whole offer section sits in one try/catch whose throw
   // went into `offer.err`, read by nothing. Named so a stopped section is legible in the log.
   ["offer section ran to the end (did not stop on a throw)", !r.offer.err, r.offer.err],
+
+  // ── (D) declared-stance flag → the attacker's Modifiers window ──
+  ["opener present: the sheet exposes the real attack-window builder", r.prefill.openerPresent === true],
+  ["shipped constant is −2", r.prefill.constant === -2],
+  ["MELEE flow, target flagged: Extra Modifiers row reads -2 and one note line is rendered",
+    r.prefill.meleeVsDodger?.found === true && r.prefill.meleeVsDodger?.val === "-2" && r.prefill.meleeVsDodger?.noteCount === 1],
+  ["that note names the flagged target (the GM can see WHY the field moved)",
+    /__PW__DodgeTargetA/.test(r.prefill.meleeVsDodger?.notes?.[0] ?? "")],
+  ["NEGATIVE — RANGED flow, same flagged target: field unchanged and NO note block",
+    noFold(r.prefill.rangedVsDodger) && r.prefill.rangedVsDodger?.noteCount === 0],
+  ["second act — reopening the melee window folds once, not twice (still -2)",
+    r.prefill.meleeVsDodgerReopen?.val === "-2" && r.prefill.meleeVsDodgerReopen?.noteCount === 1],
+  ["parry flag: a note is rendered and the field is deliberately NOT moved",
+    noFold(r.prefill.meleeVsParry) && r.prefill.meleeVsParry?.noteCount === 1 && /__PW__DodgeTargetB/.test(r.prefill.meleeVsParry?.notes?.[0] ?? "")],
+  ["two targets selected: both stances named, no number folded (one field cannot carry a per-target term)",
+    noFold(r.prefill.meleeMultiTarget) && r.prefill.meleeMultiTarget?.noteCount === 2],
+  ["token-scoped read: the UNLINKED figure's own flag folds -2 for its dialog",
+    r.prefill.unlinkedFigure?.val === "-2" && r.prefill.unlinkedFigure?.noteCount === 1],
+  ["token-scoped read: the LINKED twin of the same base actor gets nothing",
+    noFold(r.prefill.linkedTwin) && r.prefill.linkedTwin?.noteCount === 0],
+  ["flags cleared: same fixtures, same targets → field unchanged and no note block",
+    noFold(r.prefill.flagsCleared) && r.prefill.flagsCleared?.noteCount === 0],
+  ["feature gate OFF: flag set, window untouched",
+    noFold(r.prefill.gateOff) && r.prefill.gateOff?.noteCount === 0],
+  ["prefill section ran to the end (did not stop on a throw)", !r.prefill.err, r.prefill.err],
+
+  // ── (E) the tracker controls still toggle and still cost an action ──
+  ["tracker controls render for the active combatant, carrying a non-empty actor id",
+    r.stance.dodgeBtnRendered === true && r.stance.parryBtnRendered === true && (r.stance.dodgeBtnActorId ?? "") !== ""],
+  ["dodge control: real click writes the flag AND advances the shared action counter by 1",
+    r.stance.dodgeSetsFlag === true && r.stance.dodgeCountsAction === true],
+  ["parry control: real click writes the flag AND advances the counter by 1",
+    r.stance.parrySetsFlag === true && r.stance.parryCountsAction === true],
+  ["second act — the same control again clears the flag and costs nothing",
+    r.stance.dodgeTogglesOff === true && r.stance.cancelCostsNothing === true],
+  ["stance section ran to the end (did not stop on a throw)", !r.stance.err, r.stance.err],
+
   ["0 console errors", errors.length === 0],
 ];
 let fail = 0;

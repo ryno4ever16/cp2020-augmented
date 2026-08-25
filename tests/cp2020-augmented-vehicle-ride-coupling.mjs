@@ -301,15 +301,18 @@ const out = await page.evaluate(async (SCOPE) => {
       o.seatChange.heldIndex = Number(moved.flags?.[SCOPE]?.seatIndex);
       o.seatChange.heldSeat = moved._source.x === seatNow.x && moved._source.y === seatNow.y;
 
-      // NEGATIVE: a drop INSIDE the hull that is not on a seat — the engine rank — puts the rider
-      // back on its own seat. Deliberately inside: a drop outside the bodywork is now refused
-      // outright by the ride lock (§5c) and would never reach the seat-adopter at all, so testing
-      // the adopter's own tolerance has to be done somewhere the lock lets the drop through.
-      const engineIdx = L.layoutFor(movedPose.hull.w, movedPose.hull.h,
-        vehicle.system?.layout?.front, vehicle.system?.layout?.cells).engine[0];
-      const engineSpot = V.riderSeatAt(movedPose, grid, 0,
-        { w: moved.width, h: moved.height }, [engineIdx]);
-      await moved.update({ x: engineSpot.x, y: engineSpot.y }, { animate: false, teleport: true });
+      // NEGATIVE: the adopter's own land-then-return path, exercised where it is STILL REACHABLE by
+      // hand.
+      // ⏪ This leg used to drop the rider on the ENGINE rank. The ride lock was widened (user
+      // ruling 2026-08-20) to refuse every in-hull drop that is not a seat, so that drop is now
+      // cancelled before the adopter ever sees it — it is covered as a REFUSAL in §5c case (b2)
+      // instead. What the leg was actually pinning is the adopter's "this drop names no seat this
+      // rider can take, so put them back on their own" rule, and that is now reached by dropping
+      // onto a seat SOMEBODY ELSE HOLDS: the square IS a seat, so the lock passes it through, and
+      // the adopter's already-taken branch returns the rider. Same mechanism, live gesture.
+      const heldByOther = V.riderSeatAt(movedPose, grid, 0,
+        { w: moved.width, h: moved.height }, V.seatOrderAt(vehicle, movedPose));
+      await moved.update({ x: heldByOther.x, y: heldByOther.y }, { animate: false, teleport: true });
       await sleep(1200);
       const back = scene.tokens.get(riders[1].tokenId);
       const own = V.riderSeatAt(V.storedPoseOf(handle), grid, 2, { w: back.width, h: back.height },
@@ -373,6 +376,34 @@ const out = await page.evaluate(async (SCOPE) => {
           landedX: afterIn._source.x, landedY: afterIn._source.y,
           wantX: wanted.x, wantY: wanted.y,
           warned: warnings.length, writes: writes.length,
+        };
+
+        // (b2) a destination ON the bodywork but NOT on a seat — the engine rank — is refused the
+        // same way an off-hull drop is (user ruling 2026-08-20, "refuse too"). The write COUNT is
+        // what separates the two behaviours: before the ruling this drop was written and then
+        // written back by the seat adopter (2 position writes, the rider ending on its own seat
+        // either way), so only a per-write record can tell a refusal from a land-and-return.
+        warnings.length = 0; writes.length = 0;
+        const nonSeatPose = V.storedPoseOf(handle);
+        const engineIdx = L.layoutFor(nonSeatPose.hull.w, nonSeatPose.hull.h,
+          vehicle.system?.layout?.front, vehicle.system?.layout?.cells).engine[0];
+        const engineSpot = V.riderSeatAt(nonSeatPose, grid, 0, size, [engineIdx]);
+        const beforeEngine = scene.tokens.get(riders[1].tokenId);
+        const engineBase = { x: beforeEngine._source.x, y: beforeEngine._source.y,
+          seat: Number(beforeEngine.flags?.[SCOPE]?.seatIndex) };
+        await mover.update({ x: engineSpot.x, y: engineSpot.y }, { animate: false });
+        await sleep(1100);
+        const afterEngine = scene.tokens.get(riders[1].tokenId);
+        o.lock.engineCell = {
+          writes: writes.length,
+          warned: warnings.length,
+          srcUnchanged: afterEngine._source.x === engineBase.x && afterEngine._source.y === engineBase.y,
+          seat: Number(afterEngine.flags?.[SCOPE]?.seatIndex),
+          seatKept: Number(afterEngine.flags?.[SCOPE]?.seatIndex) === engineBase.seat,
+          // The square really is a non-seat one — stated rather than assumed, so a layout change
+          // that turned the engine rank into seats would fail this leg instead of silently
+          // weakening it.
+          engineIdx,
         };
 
         // (c) the vehicle's own batched commit is not caught by the lock
@@ -442,6 +473,12 @@ const out = await page.evaluate(async (SCOPE) => {
             moduleMove: LOCK.shouldRefuseRiderMove({ ...base, moduleMove: true }),
             leaving: LOCK.shouldRefuseRiderMove({ ...base, leavesVehicle: true }),
             hullUnknown: LOCK.shouldRefuseRiderMove({ ...base, hullKnown: false }),
+            // The ruled in-hull split: on the car AND on a seat passes; on the car and NOT on a
+            // seat refuses. Both stated explicitly rather than leaning on the argument's default.
+            insideSeat: LOCK.shouldRefuseRiderMove({ ...base, destinationInHull: true, destinationIsSeat: true }),
+            insideNotSeat: LOCK.shouldRefuseRiderMove({ ...base, destinationInHull: true, destinationIsSeat: false }),
+            // A caller that could not measure the seats gets the pre-ruling answer, not a refusal.
+            insideUnmeasured: LOCK.shouldRefuseRiderMove({ ...base, destinationInHull: true }),
           };
         } catch (e) {
           o.lock.table = null;
@@ -995,7 +1032,7 @@ check("the rider snaps onto that seat exactly",
 check("the new seat survives the next drive (it is an index, not a position)",
   out.seatChange?.heldIndex === 2 && out.seatChange?.heldSeat === true,
   `index ${out.seatChange?.heldIndex}, on seat ${out.seatChange?.heldSeat}`);
-check("NEGATIVE: a drop inside the hull that is not a seat returns the rider to its own",
+check("NEGATIVE: a drop on a seat somebody else holds returns the rider to its own",
   out.seatChange?.offSeatIndex === 2 && out.seatChange?.offSeatReturned === true,
   `index ${out.seatChange?.offSeatIndex}, back on seat ${out.seatChange?.offSeatReturned}`);
 
@@ -1020,6 +1057,17 @@ check("and lands on that seat exactly",
   `${out.lock?.inHull?.landedX},${out.lock?.inHull?.landedY} vs ${out.lock?.inHull?.wantX},${out.lock?.inHull?.wantY}`);
 check("NEGATIVE: a seat change raises no warning", out.lock?.inHull?.warned === 0,
   `${out.lock?.inHull?.warned} warnings`);
+check("a drop on the bodywork that is NOT a seat is REFUSED, not written and undone",
+  out.lock?.engineCell?.writes === 0,
+  `${out.lock?.engineCell?.writes} position writes reached the rider's document`);
+check("that refused rider's stored position is untouched",
+  out.lock?.engineCell?.srcUnchanged === true);
+check("that refusal says so — one warning, the same one-per-gesture latch",
+  out.lock?.engineCell?.warned === 1, `${out.lock?.engineCell?.warned} warnings`);
+check("the rider refused off a non-seat square keeps its seat index",
+  out.lock?.engineCell?.seatKept === true, `seat ${out.lock?.engineCell?.seat}`);
+check("the square used for that leg really is an engine cell of the painted layout",
+  Number.isInteger(out.lock?.engineCell?.engineIdx), String(out.lock?.engineCell?.engineIdx));
 check("EXEMPT: the vehicle's own drive still commits both riders in ONE batched write",
   out.lock?.drive?.riderWrites === 2, `${out.lock?.drive?.riderWrites} rider document updates`);
 check("EXEMPT: the drive raises no warning", out.lock?.drive?.warned === 0,
@@ -1046,6 +1094,12 @@ check("the decision table is readable as plain values", !!out.lock?.table,
 check("off the hull refuses; on the hull does not",
   out.lock?.table?.outside === true && out.lock?.table?.inside === false,
   `outside ${out.lock?.table?.outside}, inside ${out.lock?.table?.inside}`);
+check("on the hull AND on a seat does not refuse",
+  out.lock?.table?.insideSeat === false, String(out.lock?.table?.insideSeat));
+check("on the hull but NOT on a seat refuses",
+  out.lock?.table?.insideNotSeat === true, String(out.lock?.table?.insideNotSeat));
+check("a caller that cannot measure the seats gets the pre-ruling answer, not a refusal",
+  out.lock?.table?.insideUnmeasured === false, String(out.lock?.table?.insideUnmeasured));
 check("a token that is not aboard is never refused", out.lock?.table?.notAboard === false);
 check("a change that is not a move is never refused", out.lock?.table?.notAMove === false);
 check("a move the module itself makes is never refused", out.lock?.table?.moduleMove === false);

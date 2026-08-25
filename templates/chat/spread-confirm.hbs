@@ -8,6 +8,11 @@
   cp-clear-spread-zone beside it VOIDS the shot (delete the pattern, stamp this card cleared) — the
   same lifecycle the resolution card carries, because this card owns a pattern for the same reason and
   neither expiry clock will collect a pattern whose card is still unresolved.
+
+  BOTH buttons are rendered unconditionally here and REMOVED per reader by the render gate in
+  damage-hooks.js (_renderPatternControlGate): who may end a shot is a fact about the viewing user, not
+  about the card, so it cannot be baked into content every client shares. The card itself — band,
+  width, formula — stays visible to everyone.
 --}}
 <div class="cyberpunk save-prompt">
   <h3>{{CPLocal "SpreadConfirmTitle" weapon=weaponName}}</h3>

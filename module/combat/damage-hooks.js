@@ -224,7 +224,9 @@ export function _acpaMaxActions(actor) {
   return Math.max(1, Math.floor((Number(actor?.system?.effectiveRef) || 0) / 2));
 }
 /**
- * The multi-action penalty on the Nth declared action this round. CP2020 p.105: a flat −3 per additional
+ * The multi-action penalty on the Nth declared action this round. CP2020 p.98 (Actions — "More Than
+ * One Action: You may perform more than one action at a -3 penalty to each successive action"; the
+ * cite here read p.105, which is the death-save page): a flat −3 per additional
  * action (−3, −6, −9…). ACPA / PA (MM p.54): the pilot's brain + the suit's control system soften it —
  * the 2nd action is −3, and each action AFTER the second adds only −1 more (−3, −4, −5, −6…), i.e.
  * −(count+1). Pure of the feature toggle (callers gate). Exported for the keeper. */
@@ -250,6 +252,7 @@ export function registerDamageHooks() {
   _hookCreateChatMessage();
   _hookRenderChatMessage();
   _hookClearedPatternCard();
+  _hookPatternControlGate();
   _hookDamageDialogDismissed();
   _hookSuppressiveFire();
   _hookSuppressiveZoneEntered();
@@ -411,6 +414,12 @@ export function registerDamageHooks() {
         ui.notifications.info(localizeParam("DodgeCancelled", { name: actor.name }));
       } else {
         await actor.setFlag("cp2020-augmented", "dodging", true);
+        // THE OTHER HALF OF THE BOOK CLAUSE, AND WHY IT IS NOT CHARGED TWICE. p.112 reads "DODGE = -2
+        // TO ATTACKER ROLL, -3 TO DEFENDER'S OTHER ACTIONS". The −2 half is pre-filled into the
+        // attacker's melee dialog (_hookDeclaredDefensePrefill); the −3 half is not a second penalty
+        // to invent here — a dodge IS an action, so counting it is exactly what makes this actor's
+        // NEXT action this round pre-fill −3 through the shared multi-action counter. Adding a
+        // separate −3 on top would charge the same clause twice.
         if (_isMultiActionEnabled() && _isMultiActionAutoTrack()) await _incrementActionCount(actor);
         await postSavePromptCard({
           title: localizeParam("DodgeDeclareTitle", { name: actor.name }),
@@ -431,6 +440,8 @@ export function registerDamageHooks() {
         ui.notifications.info(localizeParam("ParryCancelled", { name: actor.name }));
       } else {
         await actor.setFlag("cp2020-augmented", "parrying", true);
+        // Same joint as the dodge above: p.112's "-3 TO DEFENDER'S OTHER ACTIONS" is represented by
+        // counting the parry as an action, not by a second penalty of its own.
         if (_isMultiActionEnabled() && _isMultiActionAutoTrack()) await _incrementActionCount(actor);
         await postSavePromptCard({
           title: localizeParam("ParryDeclareTitle", { name: actor.name }),
@@ -1370,14 +1381,25 @@ function _hookWaitForTurn() {
 }
 
 /**
- * Active defense buttons (CP2020 p.102).
+ * Declared-defence stances in the combat tracker (CP2020 Core p.98 Actions, p.111 melee resolution,
+ * p.112 sidebars).
  *
- * Dodge (active combatant): sets "dodging" flag → +2 to defender's contested roll until next turn.
- * Parry (any combatant): sets "parrying" flag → next incoming melee attack blocked; consumed on use.
- *   Parry also costs an action (−3 to other rolls this turn); chat reminds the GM to enforce it.
+ * Dodge (active combatant): sets the "dodging" flag. Book effect = −2 to the ATTACKER's hit roll,
+ *   MELEE ONLY (p.98 prints "Dodge (making yourself harder to hit. Melee attacks only.)"; a full-Core
+ *   sweep found no rule for dodging ranged fire). Cleared at the start of that actor's next turn.
+ * Parry (any combatant): sets the "parrying" flag. Book effect = a successful block/parry "stops the
+ *   attack" — but p.111 resolves melee as an OPPOSED roll, so that outcome is won, never automatic.
  *
- * The mechanical effects are applied in item.js __meleeBonk / __martialBonk, which
- * read these flags on the defending actor.
+ * ⏪ WHAT THIS DOCSTRING USED TO CLAIM, AND WHY IT WAS WRONG. It said the effects were applied in
+ * "item.js __meleeBonk / __martialBonk, which read these flags" — that was true of the FORK's item.js,
+ * which this module no longer ships against. On a vanilla 1.1.1 host the base rolls read neither flag:
+ * `dodging` was consumed by exactly one module consumer (the offered grapple contest in
+ * martial/martial.js) and `parrying` by nothing at all, so a declared stance changed no attack roll.
+ *
+ * Where they pay out NOW: _hookDeclaredDefensePrefill (below) meets the incoming MELEE attack at its
+ * Modifiers window — the dodge folds the book's −2 into the always-present `extraMod` term (honoured by
+ * both base melee formulas, __meleeModTerms and __martialBonk) and both stances post a labelled note.
+ * Nothing is auto-resolved and every number stays editable; the GM's typing always wins.
  */
 function _hookDodgeParry() {
   const isEnabled = () => {
@@ -1441,11 +1463,98 @@ function _hookDodgeParry() {
     if (actor.getFlag("cp2020-augmented", "dodging")) {
       await actor.unsetFlag("cp2020-augmented", "dodging").catch(() => {});
     }
-    // Parry is consumed in item.js on hit; clear it here on round end as a safety net
-    // in case it was declared but no melee attack ever came
+    // Parry lasts until the round ends. (It used to say "consumed in item.js on hit" — that was the
+    // FORK's item.js. Nothing consumes it on a vanilla host: the module posts the reminder and the GM
+    // adjudicates the opposed roll, so the round boundary is the only clear.)
     if (updateData.round !== undefined && actor.getFlag("cp2020-augmented", "parrying")) {
       await actor.unsetFlag("cp2020-augmented", "parrying").catch(() => {});
     }
+  });
+
+  _hookDeclaredDefensePrefill(isEnabled);
+}
+
+/** The book's declared-dodge penalty to the ATTACKER's roll: Core p.111 martial menu ("Dodge: -2 to
+ *  Attacker's hit roll") and the p.112 sidebar ("DODGE = -2 TO ATTACKER ROLL, -3 TO DEFENDER'S OTHER
+ *  ACTIONS"). Exported so the keeper asserts the shipped constant, not a re-typed one. */
+export const DECLARED_DODGE_ATTACK_MOD = -2;
+
+/**
+ * Where a declared stance meets an incoming attack: the attacker's Modifiers window.
+ *
+ * MELEE ONLY, and that is a BOOK NEGATIVE rather than an omission — p.98 prints "Dodge (making
+ * yourself harder to hit. Melee attacks only.)" and a full-Core sweep turned up no rule for dodging
+ * ranged fire, so a ranged dialog is left completely untouched by this hook.
+ *
+ * The dodge folds −2 into `extraMod`, the always-present catch-all term both base melee formulas read
+ * (__meleeModTerms for a plain swing, __martialBonk for a martial action) — the same road the
+ * multi-action prefill takes a few hundred lines down. The value stays an ordinary editable field, so
+ * a GM who disagrees just types over it. A note names WHY the number moved; without one a silently
+ * seeded −2 is indistinguishable from a bug.
+ *
+ * PARRY IS A REMINDER, NOT A NEGATION. "Parry stops the attack" (p.112) is the OUTCOME of winning the
+ * opposed melee roll p.111 describes — not something that happens because a flag is set — and on a
+ * 1.1.1 host that roll belongs to the base system's dice path, which this module does not wrap. So the
+ * parry note states the rule and the GM adjudicates; auto-cancelling an attack from a flag would be
+ * both a house rule and a reach into someone else's roll.
+ */
+function _hookDeclaredDefensePrefill(isEnabled) {
+  Hooks.on("renderModifiersDialog", async (app, html) => {
+    if (!isEnabled()) return;
+    const weapon = app?._weapon ?? app?.options?.weapon;
+    // No weapon at all = a skill-roll window; isRanged() true = the book negative above.
+    if (typeof weapon?.isRanged !== "function" || weapon.isRanged()) return;
+
+    const root = html instanceof jQuery ? html[0] : (Array.isArray(html) ? html[0] : html);
+    if (!root?.querySelector) return;
+    // Already marked up (a second render pass over the same DOM): re-running would fold the −2 in
+    // twice. The block's presence is the receipt.
+    if (root.querySelector(".cp-declared-defense")) return;
+
+    const targets = app?._targetTokens ?? app?.options?.targetTokens ?? [];
+    const declared = [];
+    for (const t of targets) {
+      // Read through the TOKEN's actor, not game.actors: an unlinked token keeps its own flags, and
+      // the token is what the attacker actually aimed at (the resolution the rest of the combat
+      // subsystem uses).
+      const actor = canvas?.tokens?.get?.(t?.id)?.actor;
+      if (!actor?.getFlag) continue;
+      const dodging  = !!actor.getFlag("cp2020-augmented", "dodging");
+      const parrying = !!actor.getFlag("cp2020-augmented", "parrying");
+      if (dodging || parrying) declared.push({ name: actor.name, dodging, parrying });
+    }
+    if (!declared.length) return;
+
+    const notes = [];
+    const mod = Math.abs(DECLARED_DODGE_ATTACK_MOD);
+    const dodgers = declared.filter(d => d.dodging);
+    // ONE target is both the melee case the book describes and the only one `extraMod` can carry: it
+    // is a single number on the attacker's roll, so with several targets selected there is no honest
+    // place to put a penalty that applies to some swings and not others. Multi-target melee therefore
+    // gets the note naming each dodger and NO number — the GM applies the −2 where it belongs.
+    const soleDodger = targets.length === 1 && dodgers.length === 1;
+    if (soleDodger) {
+      const input = root.querySelector("input[name='extraMod']");
+      if (input) input.value = String((Number(input.value) || 0) + DECLARED_DODGE_ATTACK_MOD);
+      notes.push(localizeParam("DeclaredDodgeDialogNote", { name: dodgers[0].name, mod }));
+    } else {
+      for (const d of dodgers) notes.push(localizeParam("DeclaredDodgeDialogNoteMulti", { name: d.name, mod }));
+    }
+    for (const d of declared.filter(d => d.parrying)) {
+      notes.push(localizeParam("DeclaredParryDialogNote", { name: d.name }));
+    }
+    if (!notes.length) return;
+
+    const render = foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate;
+    const holder = document.createElement("div");
+    holder.innerHTML = await render("modules/cp2020-augmented/templates/dialog/declared-defense-note.hbs", { notes });
+    const node = holder.firstElementChild;
+    if (!node) return;
+    // Sit directly above the confirm row so it is the last thing read before the roll goes out
+    // (the free-fire row's anchor idiom).
+    const buttonRow = root.querySelector("button[type='submit']")?.closest(".flexrow") ?? null;
+    if (buttonRow) buttonRow.before(node);
+    else (root.querySelector(".weapon-modifiers") ?? root).append(node);
   });
 }
 
@@ -2605,6 +2714,18 @@ export async function _placeSpreadZone(payload) {
       color: SPREAD_ZONE_LOOK.fillColor, borderColor: SPREAD_ZONE_LOOK.outlineColor,
       flags: {
         isSpreadZone: true, dmgFormula, band, attackerId, originX: ox, originY: oy, shells,
+        // ⭐ WHOSE CLIENT PULLED THE TRIGGER — a USER id, and deliberately not the attacker ACTOR id
+        // beside it. The ruling on who may resolve a pattern names people, not characters: the firer's
+        // own user plus the two elevated roles. `attackerId` cannot answer that question — an actor can
+        // have several owners, a GM can fire an NPC nobody owns, and an unlinked copy shares its base
+        // actor's id — so the one user who actually fired is recorded here instead.
+        //
+        // The value comes off the payload (seam-shim.js stamps it at the fire seam) rather than from
+        // `game.user` here, because THIS function runs on the ACTIVE GM: on a player's shot it was
+        // relayed, and reading the local user would have named the GM as the firer of every pattern on
+        // the table. A payload without the stamp records "" and the pattern is then resolvable by the
+        // elevated roles only — the safe answer for a corridor nobody can be shown to have fired.
+        firedByUserId: String(payload.firedByUserId ?? ""),
         // ⭐ THE PATTERN'S OWN GEOMETRY, recorded because the pattern OUTLIVES the payload that threw
         // it: the fires a burning load leaves are placed when the GM CONFIRMS (fx/effects.js
         // fxPatternGroundFire), by which point the payload is gone and the region carries no direction
@@ -2730,6 +2851,102 @@ async function _stampPatternCardId(handle, message) {
   if (!handle?.doc || !id) return;
   try { await handle.doc.setFlag("cp2020-augmented", "cardMessageId", id); }
   catch (err) { console.warn("CP2020 | could not record the pattern's card id on the pattern", err); }
+  // THE CARD LEARNS WHO FIRED IT, from the pattern, at the same moment the pattern learns its card.
+  // The render gate below runs on every client for a card in the log, and a client that cannot see the
+  // scene the pattern sits on (or is reading scrollback long after it was collected) has no region to
+  // ask — so the answer is copied onto the message, which every client has. Stamped here rather than at
+  // each ChatMessage.create because BOTH pattern cards pass through this one function.
+  try { await message.setFlag("cp2020-augmented", "patternFirer", _patternFirerFlagOf(handle)); }
+  catch (err) { console.warn("CP2020 | could not record the pattern's firer on its card", err); }
+}
+
+/** The firer's user id recorded on a pattern handle, or "" — one reader for the two sites below. */
+function _patternFirerFlagOf(handle) {
+  return String(handle?.doc?.flags?.["cp2020-augmented"]?.firedByUserId ?? "");
+}
+
+/**
+ * MAY THIS USER RESOLVE A PLACED PATTERN — apply its damage, or void it?
+ *
+ * The user's ruling in one function (2026-08-20): *"only users, GM, and assistant GM can see"* the
+ * Apply Spread Damage / Clear Pattern controls — i.e. the two ELEVATED ROLES, plus the one person
+ * whose client fired the shell. Everybody else still sees the card; what they lose is the ability to
+ * act on it, which is the reported behaviour ("the buttons render for every viewer").
+ *
+ * ROLE, not `isGM`. Foundry's `isGM` is true for both ASSISTANT (2) and GAMEMASTER (4), so a role
+ * comparison and an `isGM` test happen to agree today — but the ruling names the two roles explicitly
+ * and a role floor is what it says, so it is what is written. The numeric fallback covers a core that
+ * has not populated CONST at read time (the constant has been 2 since v0.7).
+ *
+ * Pure: every input is a plain value, so the rule can be checked without a running world — the shape
+ * `shouldBlockMovement` and `shouldRefuseRiderMove` already use. Exported for the keeper.
+ *
+ * @param {string} firerUserId  the user id recorded on the pattern (or "" when none was recorded)
+ * @param {{id?: string, role?: number}} user  the user asking
+ * @returns {boolean}
+ */
+export function mayResolvePattern(firerUserId, user) {
+  if (!user) return false;
+  const assistant = CONST?.USER_ROLES?.ASSISTANT ?? 2;
+  if ((Number(user.role) || 0) >= assistant) return true;
+  // A pattern with no recorded firer names nobody, so nobody below the role floor matches it.
+  return !!firerUserId && user.id === firerUserId;
+}
+
+/**
+ * Render pass: strip a pattern card's controls for a reader who may not act on it.
+ *
+ * Driven off the card's own `patternFirer` flag, so it works in scrollback, after a reload, and on a
+ * client that is looking at a different scene from the one the corridor sits on. Detection is by the
+ * BUTTONS rather than by the flag's presence: a card that carries neither control is not a pattern
+ * card and is left alone, and a pattern card from a build before the flag existed reads "" and keeps
+ * its controls for the elevated roles only — the safe direction.
+ *
+ * ⛔ THIS IS PRESENTATION, NOT THE GATE. Removing a button hides the gesture; it does not decide
+ * anything. The decision is re-taken inside `_confirmSpreadZone`/`_clearSpreadZone`, which is where a
+ * press arrives however it was produced.
+ *
+ * Idempotent (the contract every pass here has): once the buttons are gone there is nothing to remove.
+ */
+function _renderPatternControlGate(message, html) {
+  const root = getHtmlElement(html);
+  const controls = root?.querySelectorAll?.(".cp-confirm-spread-zone, .cp-clear-spread-zone") ?? [];
+  if (!controls.length) return;
+  const firer = String(message?.getFlag?.("cp2020-augmented", "patternFirer") ?? "");
+  if (mayResolvePattern(firer, game.user)) return;
+  for (const btn of controls) btn.remove();
+}
+
+function _hookPatternControlGate() {
+  // Registered through onChatCardRender for the same reason the cleared-card pass is: the log's first
+  // scrollback batch renders before `ready`, so a plain Hooks.on would leave every pattern card already
+  // in the log showing controls to readers who may not use them.
+  onChatCardRender(_renderPatternControlGate);
+}
+
+/**
+ * The gate itself, asked of a pattern that is about to be resolved or voided.
+ *
+ * A press arrives here from three places — a click on this client, a click relayed from another
+ * client, and a direct call — so the question is asked here rather than at the button, and the acting
+ * user is named explicitly when the press was relayed (`requestedBy`). Without that argument a relayed
+ * press would be re-checked against the ACTIVE GM who is executing it, which always passes and would
+ * make the whole check a formality.
+ *
+ * A refusal says so once, on the client that asked, and writes nothing.
+ */
+function _mayActOnPattern(templateId, requestedBy = "") {
+  const scene = canvas?.scene;
+  const handle = scene && templateId ? areaById(scene, templateId) : null;
+  // A pattern that is already gone is not this check's business — the caller's own not-found path
+  // reports that, and refusing here would report the wrong reason.
+  if (!handle) return true;
+  const firer = _patternFirerFlagOf(handle);
+  const user = requestedBy ? (game.users?.get(requestedBy) ?? null) : game.user;
+  if (mayResolvePattern(firer, user)) return true;
+  // Only the client the press came from has a reader to tell; the active GM executing a relay does not.
+  if (!requestedBy) ui.notifications?.warn?.(localize("SpreadResolveNotPermitted"));
+  return false;
 }
 
 /**
@@ -2822,9 +3039,12 @@ async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmg
  * from here that got as far as a real pattern, including the one where nothing was inside it: a
  * resolved shot must not leave an aiming aid on the table either way.
  */
-export async function _confirmSpreadZone(templateId) {
+export async function _confirmSpreadZone(templateId, requestedBy = "") {
   if (!canvas?.scene || !templateId) return;
-  if (!_claimAreaConfirm("confirmSpreadZone", { templateId }, templateId)) return;
+  // WHO IS ALLOWED TO END THIS SHOT — asked BEFORE the claim, so a press that is not permitted is not
+  // relayed to the GM either. `requestedBy` names the user when the press was relayed; see _mayActOnPattern.
+  if (!_mayActOnPattern(templateId, requestedBy)) return;
+  if (!_claimAreaConfirm("confirmSpreadZone", { templateId, requestedBy: game.user.id }, templateId)) return;
   const scene = canvas.scene;
 
   // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
@@ -2939,9 +3159,11 @@ export async function _confirmSpreadZone(templateId) {
  * @param {string} templateId  the pattern's area document id (the card's data-template-id)
  * @param {string} [messageId] the card that was pressed; falls back to the id the pattern itself carries
  */
-export async function _clearSpreadZone(templateId, messageId = "") {
+export async function _clearSpreadZone(templateId, messageId = "", requestedBy = "") {
   if (!templateId) return;
-  if (!_claimAreaConfirm("clearSpreadZone", { templateId, messageId }, templateId)) return;
+  // Voiding a shot is the apply's opposite exit on the same card, so it answers to the same rule.
+  if (!_mayActOnPattern(templateId, requestedBy)) return;
+  if (!_claimAreaConfirm("clearSpreadZone", { templateId, messageId, requestedBy: game.user.id }, templateId)) return;
 
   const scene = canvas?.scene;
   const handle = scene ? areaById(scene, templateId) : null;
@@ -3130,7 +3352,7 @@ export async function _sweepStaleSpreadZones() {
 let _spreadSweepBusy = false;
 
 /**
- * Multi-action penalty tracker (CP2020 p.105 — −3 per additional action).
+ * Multi-action penalty tracker (CP2020 p.98 — −3 per additional action).
  * Auto-tracks weapon fire, Aim, Dodge, and Parry; ➕ button for untracked actions.
  * Pre-fills extraMod in the attack dialog. Resets all counts on round end.
  */
@@ -3314,10 +3536,12 @@ function _hookSocketRelay() {
   // handlers also claim the template id, so a stray double-relay is idempotent).
   const AREA_CONFIRMERS = {
     confirmExplosion:  (d) => _confirmExplosion(d.templateId),
-    confirmSpreadZone: (d) => _confirmSpreadZone(d.templateId),
+    // The RELAYED press carries the user who made it, so the resolve gate is re-taken against them
+    // rather than against the active GM who is only executing it (see _mayActOnPattern).
+    confirmSpreadZone: (d) => _confirmSpreadZone(d.templateId, d.requestedBy ?? ""),
     // Clear is a resolution too — it deletes an area document and writes a message flag, both of which
     // want GM permissions and exactly one performer, so it rides the same relay as its Apply twin.
-    clearSpreadZone:   (d) => _clearSpreadZone(d.templateId, d.messageId ?? ""),
+    clearSpreadZone:   (d) => _clearSpreadZone(d.templateId, d.messageId ?? "", d.requestedBy ?? ""),
   };
 
   game.socket.on("module.cp2020-augmented", async (data) => {

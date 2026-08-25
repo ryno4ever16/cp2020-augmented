@@ -307,7 +307,36 @@ const out = await page.evaluate(async (SCOPE) => {
         return { onColor: a.color, offColor: b.color, onBorder: a.borderTopColor, offBorder: b.borderTopColor,
                  onOpacity: a.opacity, offOpacity: b.opacity, body: document.body.className };
       };
+      // THE PAINT GRID'S ROLE COLOURS, read the same way and for the same reason: the report was
+      // that the layout is unreadable, and the cause was our own skin blanket flattening a seat and
+      // an engine square onto the one colour it paints every button in a sheet.
+      //
+      // ⚠ THE BASELINE IS A PLAIN SHEET BUTTON, not a bodywork square. An UNPAINTED vehicle's grid
+      // is entirely seats and engine (derivedCells fills every non-engine cell as a seat), so there
+      // is no bodywork square on this fixture to compare against — and the thing actually being
+      // proved is "the role colour is its own and not the blanket's", which an unlit Front button
+      // (a sheet button the blanket paints and nothing else re-states) answers directly. A painted
+      // vehicle's bodywork square is picked up as well when one is present.
+      const readCells = (r) => {
+        const pick = (cls) => r?.querySelector(`.cp-veh-cell.cp-veh-cell-${cls}`);
+        const seat = pick("seat"), engine = pick("engine"), body = pick("body");
+        const blanket = r?.querySelector(".cp-veh-front-btn:not(.cp-active)");
+        if (!seat || !engine || !blanket) return null;
+        const read = (el) => { const s = getComputedStyle(el);
+          return { color: s.color, border: s.borderTopColor, background: s.backgroundColor }; };
+        return {
+          seat: read(seat), engine: read(engine), blanket: read(blanket),
+          body: body ? read(body) : null, bodyClass: document.body.className,
+        };
+      };
       const litStyle = readLit(root);
+      const cellStyle = readCells(root);
+      // The nose mark is a box-shadow, which is exactly why it survives a blanket that sets
+      // background/border/color — measured rather than assumed, since the role colours now state
+      // themselves loudly enough to hide a ring that stopped drawing.
+      const noseEl = root.querySelector(".cp-veh-cell.cp-veh-cell-nose");
+      const noseRingDrawn = !!noseEl && getComputedStyle(noseEl).boxShadow !== "none"
+        && getComputedStyle(noseEl).boxShadow.trim() !== "";
       const legend = root.querySelector(".cp-veh-nose-legend")?.textContent?.trim() ?? "";
       const noseTitle = root.querySelector(".cp-veh-cell.cp-veh-cell-nose")?.getAttribute("title") ?? "";
 
@@ -324,7 +353,7 @@ const out = await page.evaluate(async (SCOPE) => {
       // reads in one scheme is not a colour that reads in both. Core's uiConfig is the switch (its
       // onChange re-stamps <body>), and the prior value goes back in the section's own teardown.
       const priorScheme = foundry.utils.deepClone(game.settings.get("core", "uiConfig").colorScheme ?? {});
-      let litStyleLight = null;
+      let litStyleLight = null, cellStyleLight = null;
       try {
         const cfg = foundry.utils.deepClone(game.settings.get("core", "uiConfig"));
         cfg.colorScheme = Object.assign({}, cfg.colorScheme, { applications: "light" });
@@ -333,6 +362,7 @@ const out = await page.evaluate(async (SCOPE) => {
         await veh.sheet.render(true);
         await sleep(900);
         litStyleLight = readLit(veh.sheet.element);
+        cellStyleLight = readCells(veh.sheet.element);
       } finally {
         const cfg = foundry.utils.deepClone(game.settings.get("core", "uiConfig"));
         cfg.colorScheme = priorScheme;
@@ -345,7 +375,7 @@ const out = await page.evaluate(async (SCOPE) => {
         beforeMarks, beforeExpected: rank0("s"), beforeLit,
         afterMarks, afterExpected: rank0("e"), afterLit,
         storedAfter: veh.system.layout?.front ?? "",
-        litStyle, litStyleLight, legend, noseTitle,
+        litStyle, litStyleLight, cellStyle, cellStyleLight, noseRingDrawn, legend, noseTitle,
         rawKeyLeak: /CYBERPUNK\./.test(legend) || /CYBERPUNK\./.test(noseTitle),
       };
       await veh.sheet.close().catch(() => {});
@@ -585,6 +615,29 @@ console.log("\n§3c — the sheet states which end leads, and a Front click is v
   check("and it is told apart in the other colour scheme too",
     !!s.litStyleLight && s.litStyleLight.onColor !== s.litStyleLight.offColor,
     JSON.stringify(s.litStyleLight));
+  // The paint grid's own colours — the same complaint one control over, and the same measurement.
+  const cellsDiffer = (c) => !!c
+    && c.seat.color !== c.blanket.color
+    && c.engine.color !== c.blanket.color
+    && c.seat.color !== c.engine.color;
+  check("the grid gives a seat square, an engine square and a plain sheet button to compare",
+    !!s.cellStyle && !!s.cellStyleLight,
+    `dark ${JSON.stringify(s.cellStyle)} · light ${JSON.stringify(s.cellStyleLight)}`);
+  check("a seat square, an engine square and an ordinary sheet button are three different colours",
+    cellsDiffer(s.cellStyle), JSON.stringify(s.cellStyle));
+  check("the seat square's fill and border also read as its own, not the blanket's",
+    !!s.cellStyle && s.cellStyle.seat.border !== s.cellStyle.blanket.border
+    && s.cellStyle.seat.background !== s.cellStyle.blanket.background,
+    JSON.stringify(s.cellStyle));
+  check("the engine square's fill and border read as its own too",
+    !!s.cellStyle && s.cellStyle.engine.border !== s.cellStyle.blanket.border
+    && s.cellStyle.engine.border !== s.cellStyle.seat.border,
+    JSON.stringify(s.cellStyle));
+  check("and the three read apart in the other colour scheme too",
+    cellsDiffer(s.cellStyleLight), JSON.stringify(s.cellStyleLight));
+  check("the nose ring still lays over a role square (box-shadow survives the role colour)",
+    !!s.beforeMarks && s.beforeMarks.length > 0 && s.noseRingDrawn === true,
+    `marks ${JSON.stringify(s.beforeMarks)} · ring ${s.noseRingDrawn}`);
   check("the grid carries a legend and a nose tooltip, both localized",
     (s.legend ?? "").length > 0 && (s.noseTitle ?? "").length > 0 && s.rawKeyLeak === false,
     `legend "${s.legend}" · title "${s.noseTitle}"`);

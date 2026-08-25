@@ -45,14 +45,19 @@ expands to a full math breakdown naming every SP source (armor layers, cover, AP
   deployed vehicle stay linked both ways.
 - **Board:** stand within a square of the vehicle, right-click YOUR token, click the van icon.
   You take a seat inside the vehicle's footprint — shrunk to ride, still fully clickable and
-  targetable (drive-by firefights with real tokens are the point). Drag onto another square of the
-  footprint to change seats; the new seat is yours from then on, through resizes and turns. The
+  targetable (drive-by firefights with real tokens are the point). Drag onto another SEAT square of
+  the footprint to change seats; the new seat is yours from then on, through resizes and turns. The
   walking-figure icon steps you out beside the car.
-- **Aboard, you cannot walk your token off the car.** A drag that ends anywhere off the bodywork is
+- **Aboard, the only drag that goes anywhere is onto a seat.** A drag that ends off the bodywork is
   refused outright — the token does not go and come back, it simply does not go, and a message says
-  who is aboard what. This holds for the GM too; to move somebody off a vehicle, step them out with
-  the walking-figure icon first. Drags that end ON the vehicle are unaffected: that is the
-  seat-change gesture above.
+  who is aboard what. A drag that ends ON the car but on a square that is not a seat (the engine
+  block, bare bodywork) is refused the same way, for the same reason: there is nothing there to sit
+  in. This holds for the GM too; to move somebody off a vehicle, step them out with the
+  walking-figure icon first.
+  Dropping onto a seat somebody else already holds is not refused — that seat is a real place to
+  aim for — but it does not take: the rider goes back to their own seat rather than sharing a
+  square. Which squares are seats is shown on the vehicle sheet's paint grid, where seats and the
+  engine block each carry their own colour.
 - **Dragging a box round a vehicle selects the vehicle, not its crew.** Riders sit inside the car's
   square, so a selection box drawn over a vehicle used to pick up everybody aboard as well — and the
   next drag then refused each of them in turn. The crew are now dropped back out of any box

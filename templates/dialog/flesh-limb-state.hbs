@@ -4,6 +4,10 @@
   The option rows are built in JS (fleshLimbStateOptions) so the picker can never offer a state the
   reader seam does not recognize; the empty row is the CLEAR direction. i18n via CPLocal; the prompt is
   triple-stashed because it carries <b>. No HTML/CSS built in JS.
+
+  Each row's `label` already carries the RULESET it comes from (cyberlimb.js FLESH_STATUS_SOURCE), so
+  the template still iterates one flat list — the source line under the field only says why the list
+  spans models at all.
 --}}
 <div class="cp-flesh-state-dialog">
   <p class="cp-flesh-state-target">{{{CPLocal "FleshLimbSetPrompt" name=name limb=limb}}}</p>
@@ -16,5 +20,6 @@
       {{/each}}
     </select>
   </div>
+  <p class="cp-flesh-state-hint cp-flesh-state-sources">{{CPLocal "FleshLimbSetSourceHint"}}</p>
   <p class="cp-flesh-state-hint">{{CPLocal "FleshLimbSetHint"}}</p>
 </div>

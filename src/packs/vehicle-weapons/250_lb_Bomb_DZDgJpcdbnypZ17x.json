@@ -20,7 +20,7 @@
     "shots": 1,
     "range": 0,
     "reliability": "VR",
-    "space": 3,
+    "space": 1,
     "shellVariants": [
       {
         "name": "250-lb Cluster",

@@ -113,7 +113,7 @@ const legA = await p.evaluate(async () => {
     out.nums.afterTwo = cnt(actor) ?? null;
     out.ok.accrualCounts = (cnt(actor) ?? 0) === 2;
 
-    // standard math (CP2020 p.105 −3 per extra action) vs the unchanged pure fn
+    // standard math (CP2020 p.98 −3 per extra action; this cite read p.105, the death-save page) vs the unchanged pure fn
     out.nums.std2 = DH._multiActionPenaltyFor(actor, 2);
     out.nums.std3 = DH._multiActionPenaltyFor(actor, 3);
     out.ok.stdMath = DH._multiActionPenaltyFor(actor, 1) === 0 && DH._multiActionPenaltyFor(actor, 2) === -3 && DH._multiActionPenaltyFor(actor, 3) === -6;
