@@ -247,6 +247,37 @@ function _getMultiActionPenalty(actor) {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve the DOCUMENT a combat-tracker control writes its flags to.
+ *
+ * The controls are stamped with their COMBATANT id, and `combatant.actor` is the document that
+ * combatant actually plays: the world actor for a linked token, the token's own synthetic actor for
+ * an unlinked one. An id lookup cannot make that distinction — a synthetic actor SHARES its id with
+ * its world actor (the documented id-collision class), so `game.actors.get(id)` silently retargets
+ * the shared base and every unlinked copy of one base writes into a single pool of flags. Worse, the
+ * READ side of these same flags (the declared-defence prefill, which resolves through the targeted
+ * token) then looks at a different document than the write landed on, so the button appears to do
+ * nothing while stray flags pile up on the base.
+ *
+ * `combatant.actor` is the combatant's own live reference — not a re-fetch by id, which is banned in
+ * this codebase precisely because it converts a correct synthetic document back into the base.
+ *
+ * The `dataset.actorId` fallback is the compatibility leg: a tracker DOM rendered before this change
+ * (or by an older client) carries no combatant id, and behaves exactly as it did.
+ */
+function _combatantControlActor(btn) {
+  const combatantId = btn?.dataset?.combatantId;
+  if (combatantId) {
+    const combat = game.combat?.combatants?.get(combatantId)
+      ? game.combat
+      : game.combats?.find?.(c => c.combatants?.get?.(combatantId)) ?? null;
+    const actor = combat?.combatants?.get?.(combatantId)?.actor ?? null;
+    if (actor) return actor;
+  }
+  const actorId = btn?.dataset?.actorId;
+  return (actorId ? game.actors.get(actorId) : null) ?? null;
+}
+
 export function registerDamageHooks() {
   _hookWeaponFired();
   _hookCreateChatMessage();
@@ -346,7 +377,7 @@ export function registerDamageHooks() {
 
     if (takeAimBtn) {
       ev.preventDefault();
-      const actor = game.actors.get(takeAimBtn.dataset.actorId);
+      const actor = _combatantControlActor(takeAimBtn);
       if (!actor) return;
       const current = actor.getFlag("cp2020-augmented", "aimRounds") ?? 0;
       const next = current >= 3 ? 0 : current + 1;
@@ -406,7 +437,7 @@ export function registerDamageHooks() {
 
     if (dodgeBtn) {
       ev.preventDefault();
-      const actor = game.actors.get(dodgeBtn.dataset.actorId);
+      const actor = _combatantControlActor(dodgeBtn);
       if (!actor) return;
       const alreadyDodging = actor.getFlag("cp2020-augmented", "dodging") ?? false;
       if (alreadyDodging) {
@@ -432,7 +463,7 @@ export function registerDamageHooks() {
 
     if (parryBtn) {
       ev.preventDefault();
-      const actor = game.actors.get(parryBtn.dataset.actorId);
+      const actor = _combatantControlActor(parryBtn);
       if (!actor) return;
       const alreadyParrying = actor.getFlag("cp2020-augmented", "parrying") ?? false;
       if (alreadyParrying) {
@@ -471,7 +502,7 @@ export function registerDamageHooks() {
     if (addActionBtn) {
       ev.preventDefault();
       if (!_isMultiActionEnabled()) return;
-      const actor = game.actors.get(addActionBtn.dataset.actorId);
+      const actor = _combatantControlActor(addActionBtn);
       if (!actor) return;
       await _incrementActionCount(actor);
       const count   = _getActionCount(actor);
@@ -1260,6 +1291,9 @@ function _hookAimTracking() {
     const controls = li.querySelector(".combatant-controls") ?? li.querySelector("menu") ?? li;
     const btn = document.createElement("a");
     btn.classList.add("cp-take-aim-btn", "combatant-control");
+    // The combatant id is the write target's only unambiguous handle (see _combatantControlActor);
+    // actorId stays alongside it as the compatibility fallback and for anything reading the row.
+    btn.dataset.combatantId = combatant.id;
     btn.dataset.actorId = actor.id;
     btn.title = aimCount > 0
       ? localizeParam("TakeAimTitleActive", { n: aimCount })
@@ -1432,6 +1466,7 @@ function _hookDodgeParry() {
       if (isActive) {
         const dodgeBtn = document.createElement("a");
         dodgeBtn.classList.add("cp-dodge-btn", "combatant-control");
+        dodgeBtn.dataset.combatantId = combatant.id;
         dodgeBtn.dataset.actorId = actor.id;
         dodgeBtn.title = isDodging ? localize("DodgeTitleActive") : localize("DodgeTitle");
         if (isDodging) dodgeBtn.classList.add("cp-active");
@@ -1441,6 +1476,7 @@ function _hookDodgeParry() {
 
       const parryBtn = document.createElement("a");
       parryBtn.classList.add("cp-parry-btn", "combatant-control");
+      parryBtn.dataset.combatantId = combatant.id;
       parryBtn.dataset.actorId = actor.id;
       parryBtn.title = isParrying ? localize("ParryTitleActive") : localize("ParryTitle");
       if (isParrying) parryBtn.classList.add("cp-active");
@@ -3397,6 +3433,7 @@ function _hookMultiActionPenalty() {
       if (combatant.id === combat.current?.combatantId) {
         const addBtn = document.createElement("a");
         addBtn.classList.add("cp-add-action-btn", "combatant-control");
+        addBtn.dataset.combatantId = combatant.id;
         addBtn.dataset.actorId = actor.id;
         addBtn.title = localize("AddActionTitle");
         addBtn.innerHTML = "➕";
