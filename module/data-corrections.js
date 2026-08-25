@@ -484,8 +484,9 @@ export function correctedArmorType(item) {
   return (t === "hard" || t === "soft") ? t : "";
 }
 
-/** Parse "Compendium.<pack.id>.Item.<docId>" → {packId, itemId}, else null. */
-function parseCompendiumSource(uuid) {
+/** Parse "Compendium.<pack.id>.Item.<docId>" → {packId, itemId}, else null. Exported so any other
+ *  reader of an owned copy's pack origin uses THIS parser rather than a second regex of its own. */
+export function parseCompendiumSource(uuid) {
   const m = /^Compendium\.(.+)\.Item\.([A-Za-z0-9]{16})$/.exec(String(uuid ?? ""));
   return m ? { packId: m[1], itemId: m[2] } : null;
 }

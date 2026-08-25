@@ -33,6 +33,14 @@
  *     is not a schema field, so the term was stuck at 1);
  *   • which gesture actually opens a skill's own editor (right-click does not).
  *
+ * PART 5 (2026-08-20, the cost-rule unit) pins the two rules the helper was not following:
+ *   • the first level charged the multiplier with everything else, where the rules text sets a flat
+ *     floor for it and scopes the multiplier to the raises after it;
+ *   • every built-in martial-style document ships the multiplier field unset, so a style raise was
+ *     priced exactly like a plain skill — the module's own style table is now consulted while that
+ *     field is still the neutral value, a hand-entered value still wins, and the style sheet says
+ *     which of the two the price came from.
+ *
  * Run from the module's tests/:  FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-f8-ip-total.mjs
  */
 import { chromium } from "@playwright/test";
@@ -259,10 +267,11 @@ try {
       const pick = actor.items.filter(i => i.type === "skill" && !isMartialArtSkillItem(i)).slice(0, 3);
       const [sA, sB, sC] = pick;
       // Bank-covered row (bank alone pays), pool-covered row (bank 0, the fungible pool pays), and a
-      // row beyond bank + pool. Costs are pinned via the difficulty multiplier: max(1,level)×10×mult.
+      // row beyond bank + pool. The first raise is a flat 10 whatever the multiplier says, so the
+      // out-of-reach row is put ABOVE the floor — level 2 on a tripled term = 2 × 10 × 3.
       await sA.update({ "system.level": 0, "system.diffMod": 1, [`flags.${SCOPE}.ip`]: 10 });
       await sB.update({ "system.level": 0, "system.diffMod": 1, [`flags.${SCOPE}.ip`]: 0 });
-      await sC.update({ "system.level": 0, "system.diffMod": 3, [`flags.${SCOPE}.ip`]: 0 });
+      await sC.update({ "system.level": 2, "system.diffMod": 3, [`flags.${SCOPE}.ip`]: 0 });
       await actor.setFlag(SCOPE, "ipPool", 10);
 
       const sheet = actor.sheet;
@@ -293,7 +302,7 @@ try {
       };
     });
 
-    okA("fixture pins a bank-covered, a pool-covered and an out-of-reach row", S.costs.a === 10 && S.costs.b === 10 && S.costs.c === 30, `${S.costs.a}/${S.costs.b}/${S.costs.c}`);
+    okA("fixture pins a bank-covered, a pool-covered and an out-of-reach row", S.costs.a === 10 && S.costs.b === 10 && S.costs.c === 60, `${S.costs.a}/${S.costs.b}/${S.costs.c}`);
     okA("all three fixture rows paint and none are filtered out", S.rows.a.rowFound && S.rows.b.rowFound && S.rows.c.rowFound && !S.rows.a.hidden && !S.rows.b.hidden && !S.rows.c.hidden, JSON.stringify([S.rows.a.hidden, S.rows.b.hidden, S.rows.c.hidden]));
 
     // (a) row identity — the control must carry the row's own item id, not an empty string.
@@ -335,15 +344,15 @@ try {
 
     // Handler hardening: blank the control's own row id in the DOM — the exact shape of the shipped
     // regression — and the click must still resolve the document through the row's [data-item-id].
-    const G = await page.evaluate(async ({ actorId, idC }) => {
+    const G = await page.evaluate(async ({ actorId, idC, costC }) => {
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       const actor = game.actors.get(actorId); const s = actor.items.get(idC);
-      await s.setFlag("cp2020-augmented", "ip", 30);      // fund the out-of-reach row so a control paints
+      await s.setFlag("cp2020-augmented", "ip", costC);   // fund the out-of-reach row so a control paints
       await sleep(900);                                    // let the flag write's re-render settle first
       const arrow = actor.sheet.element?.querySelector(`.field.skill[data-item-id="${idC}"] .cp2020ae-ip-level-up`);
       if (arrow) arrow.dataset.skillId = "";
       return { arrowFound: !!arrow, blanked: arrow?.dataset?.skillId === "", level: Number(s.system.level) || 0 };
-    }, { actorId: S.actorId, idC: S.ids.c });
+    }, { actorId: S.actorId, idC: S.ids.c, costC: S.costs.c });
     okA("funding the out-of-reach row paints a level control", G.arrowFound === true && G.blanked === true, `${G.arrowFound}/${G.blanked}`);
     const clickC = await clickArrow(S.appId, S.ids.c);
     const afterC = await page.evaluate(async ({ actorId, idC }) => {
@@ -446,16 +455,50 @@ try {
 
       // Cost term: the helper's multiplier leg, by value, at the figures the ladder prints.
       const probe = plain;
-      await probe.update({ "system.level": 4, "system.diffMod": 1 });
-      const flat = IP.ipCost(actor.items.get(probe.id));
-      await probe.update({ "system.diffMod": 3 });
-      const tripled = IP.ipCost(actor.items.get(probe.id));
-      await probe.update({ "system.level": 0, "system.diffMod": 1 });
-      const first = IP.ipCost(actor.items.get(probe.id));
+      const costAt = (level, diffMod, item = probe) =>
+        item.update({ "system.level": level, "system.diffMod": diffMod })
+          .then(() => IP.ipCost(actor.items.get(item.id)));
 
-      // What the shipped base-list data actually carries for a discipline: the neutral term. This is
-      // the reason a discipline raise currently costs the same as a plain skill of the same level.
+      const flat = await costAt(4, 1);
+      const tripled = await costAt(4, 3);
+      const first = await costAt(0, 1);
+      // The first raise is the flat floor whatever the multiplier says; the multiplier starts at the
+      // SECOND raise, where the figure is the current level's ten times the term.
+      const firstTripled = await costAt(0, 3);
+      const secondTripled = await costAt(1, 3);
+      const secondFlat = await costAt(1, 1);
+      await costAt(0, 1);
+
+      // What the shipped base-list data actually carries for a discipline: the neutral term. The
+      // module's style table is the read side that fills that hole; these legs price a real style
+      // document off it, and prove a hand-entered term still overrides it.
       const shippedMult = Number(mNone.system?.diffMod);
+
+      const { martialArtKeyForItem, MARTIAL_ART_IP_MULTIPLIER } =
+        await import("/modules/cp2020-augmented/module/lookups.js");
+      const STYLE_KEY = "Martial Arts: Karate";                 // base-list, table term 2
+      const style = actor.items.find(i => i.type === "skill" && martialArtKeyForItem(i) === STYLE_KEY);
+      const styleTableMult = MARTIAL_ART_IP_MULTIPLIER[STYLE_KEY];
+      const styleShippedMult = Number(style?.system?.diffMod);
+      const styleAtFour = style ? await costAt(4, 1, style) : null;
+      const styleFirst = style ? await costAt(0, 1, style) : null;
+      const styleOverridden = style ? await costAt(4, 5, style) : null;
+      if (style) await costAt(0, 1, style);
+
+      // The item sheet's Difficulty Mod box reads the stored 1; the note is what says which term the
+      // cost actually used. Read it off the rendered sheet, and off it again once a term is typed in.
+      let styleNote = null, styleNoteAfterOverride = null;
+      if (style) {
+        await style.sheet.render(true);
+        await sleep(700);
+        styleNote = style.sheet.element?.querySelector(".cp-field-note")?.textContent?.trim() ?? null;
+        await style.update({ "system.diffMod": 5 });
+        await style.sheet.render(true);
+        await sleep(700);
+        styleNoteAfterOverride = style.sheet.element?.querySelector(".cp-field-note")?.textContent?.trim() ?? null;
+        await style.update({ "system.diffMod": 1 });
+        await style.sheet.close().catch(() => {});
+      }
 
       return {
         prev, actorId: actor.id, appId: root?.id ?? null,
@@ -463,7 +506,12 @@ try {
         names: { none: actor.getSkillDisplayName?.(mNone) ?? mNone.name },
         rows: { none: state(mNone.id), bank: state(mBank.id), pend: state(mPend.id), plain: state(plain.id) },
         tips: { chip: chipTip, mod: modTip, chipBoxHidden },
-        cost: { flat, tripled, first, shippedMult },
+        cost: { flat, tripled, first, firstTripled, secondTripled, secondFlat, shippedMult },
+        style: {
+          found: !!style, tableMult: styleTableMult, shippedMult: styleShippedMult,
+          atFour: styleAtFour, atFirst: styleFirst, overridden: styleOverridden,
+          note: styleNote, noteAfterOverride: styleNoteAfterOverride,
+        },
       };
     });
 
@@ -500,12 +548,34 @@ try {
     okP("the two hints describe different controls", V.tips.chip !== V.tips.mod, V.tips.chip === V.tips.mod);
     okP("the chip input itself is display:none, which is why its hint moved", V.tips.chipBoxHidden === true, V.tips.chipBoxHidden);
 
-    // (d) cost term by value — the ladder figure the rules text prints for a ×3 skill at +4→+5.
+    // (d) cost term by value — the ladder figures the rules text prints (Core p.53/54).
     okP("flat-term raise at level 4 costs the level figure", V.cost.flat === 40, V.cost.flat);
     okP("tripled-term raise at level 4 costs three times the level figure", V.cost.tripled === 120, V.cost.tripled);
     okP("first level costs the floor figure", V.cost.first === 10, V.cost.first);
-    okP("base-list discipline items ship the neutral term, so a raise is priced as a plain skill",
+    // The floor is flat: the text scopes the multiplier to the raises after the first one, so a
+    // tripled-term entry costs the same 10 to open as any other and only diverges from the second.
+    okP("first level ignores the multiplier entirely", V.cost.firstTripled === 10, V.cost.firstTripled);
+    okP("second level is the current level's ten, times the term", V.cost.secondTripled === 30, V.cost.secondTripled);
+    okP("second level on a neutral term is the bare ten", V.cost.secondFlat === 10, V.cost.secondFlat);
+    okP("base-list discipline items ship the neutral term in the document",
       V.cost.shippedMult === 1, V.cost.shippedMult);
+
+    // (d2) the style table fills the hole that neutral term leaves — id-resolved, override-respecting.
+    okP("the fixture resolves a base-list style document by its stable identity", V.style.found === true, V.style.found);
+    okP("that style's document still carries the neutral term", V.style.shippedMult === 1, V.style.shippedMult);
+    okP("its raise is priced off the table term, not the neutral one",
+      V.style.atFour === 10 * 4 * V.style.tableMult, `${V.style.atFour} vs ${10 * 4 * V.style.tableMult}`);
+    okP("that style is priced above an identically-levelled plain skill",
+      V.style.atFour > V.cost.flat, `${V.style.atFour} > ${V.cost.flat}`);
+    okP("the table term does not reach the first level either", V.style.atFirst === 10, V.style.atFirst);
+    okP("a hand-entered term overrides the table", V.style.overridden === 200, V.style.overridden);
+    // (d3) the sheet says which term is in force, and stops saying it once one is typed in.
+    okP("the style sheet prints the table term next to the difficulty box",
+      typeof V.style.note === "string" && V.style.note.includes(`×${V.style.tableMult}`), V.style.note?.slice(0, 60));
+    okP("that note leaks no raw key",
+      typeof V.style.note === "string" && !V.style.note.includes("CYBERPUNK."), V.style.note?.slice(0, 20));
+    okP("the note is withdrawn once a term is entered by hand",
+      V.style.noteAfterOverride === null, V.style.noteAfterOverride);
 
     // (e) the gesture that opens a skill's own editor. Right-click is bound to a delete control the
     // skill row does not carry, so it opens nothing; the row's pencil control is what opens the sheet.

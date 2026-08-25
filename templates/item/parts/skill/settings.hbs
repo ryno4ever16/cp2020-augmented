@@ -11,6 +11,12 @@
 <div class="field-list">
     {{>(template "fields/number") label="DifficultyMod" edit="system.diffMod"}}
 </div>
+{{!-- Built-in martial-art styles ship this field unset (the schema default 1), so while it reads 1
+      the IP cost helper prices the raise off the module's style table instead. Say so, rather than
+      leaving the box reading a number the cost does not use. Typing a value here overrides it. --}}
+{{#if ipMultiplierFromTable}}
+<p class="cp-field-note">{{CPLocal "SkillIpMultiplierFromTable" mult=ipMultiplierFromTable}}</p>
+{{/if}}
 <div class="field-list">
     {{>(template "fields/select") label="Stat" edit="system.stat" choices=stats noTranslateOptions=true}}
     {{>(template "fields/boolean") label="IsRoleSkill" edit="system.isRoleSkill"}}

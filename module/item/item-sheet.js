@@ -1,4 +1,4 @@
-import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, getCalibers, AMMO_MODIFIERS, modifiersForCaliber, modifierAppliesToCaliber, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice, VEHICLE_TYPE_SUGGESTIONS } from "../lookups.js";
+import { weaponTypes, meleeAttackTypes, rangedAttackTypes, attackSkills, concealability, availability, reliability, getStatNames, MARTIAL_BONUS_ACTIONS, martialArtIpMultiplier, getCalibers, AMMO_MODIFIERS, modifiersForCaliber, modifierAppliesToCaliber, caliberMatches, normalizeCaliber, getCaliberBox, getAmmoBoxPrice, VEHICLE_TYPE_SUGGESTIONS } from "../lookups.js";
 import { canBuyAmmo, applyAmmoModifierUpdate } from "../dialog/buy-ammo.js";
 import { serviceModeOf, servicePeriodOf } from "../shop/services.js";
 import { formulaHasDice } from "../dice.js";
@@ -7,6 +7,7 @@ import { deleteFieldUpdate, localize, localizeParam, cwHasType, getSkillIndex, p
 import { MECH_PROTECTION_HAZARDS } from "../data/mech-item-data.js";
 import { VISION_DEVICE_MODES } from "../mech/vision.js";
 import { useConsumable } from "../mech/consumable.js";
+import { canRestoreArmor, restoreArmorToCatalog } from "../mech/armor-restore.js";
 import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
 import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds, usedSlots, checkInstall } from "../mech/container.js";
@@ -235,6 +236,16 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
     sheet.stats = getStatNames();
     // Action keys for the per-style bonus editor (shown when the skill is a martial art). Our net-new.
     sheet.martialBonusActions = MARTIAL_BONUS_ACTIONS;
+    // The Difficulty Mod box binds the stored `system.diffMod`, which every built-in martial style
+    // ships as the neutral 1. While it is neutral the IP cost helper falls back to the module's style
+    // table, so the number the box shows and the number the raise is priced at can differ. Surface the
+    // table's value as a read-only note so the box stops lying by omission; anything the GM types wins
+    // and the note goes away. Nothing is written — this is a display read only.
+    const stored = Number(this.item.system?.diffMod);
+    const fromTable = martialArtIpMultiplier(this.item);
+    sheet.ipMultiplierFromTable = (fromTable !== null && (!Number.isFinite(stored) || stored === 1))
+      ? fromTable
+      : null;
   }
 
   _prepareAmmo(sheet) {
@@ -476,6 +487,10 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       { value: "soft", label: localize("ArmorTypeSoft") },
       { value: "hard", label: localize("ArmorTypeHard") }
     ];
+    // Catalog-restore control: offered only to a GM, and only on a copy whose pack entry still
+    // resolves — hand-made armor has no catalog to restore from and gets no control at all. The
+    // check is a registry/index read, not a document fetch; the numbers are read when it is pressed.
+    sheet.canRestoreArmor = game.user.isGM && canRestoreArmor(this.item);
   }
 
 /**
@@ -795,6 +810,25 @@ async _prepareCyberware(sheet) {
     this._cpActivateVehicleWeaponShellControls(root);
     this._cpActivateAmmoControls(root);
     this._cpActivateMechConsumableControls(root);
+    this._cpActivateArmorRestoreControl(root);
+  }
+
+  /**
+   * The armor catalog-restore button (bind-once, one delegated click handler — the same idiom as
+   * the consumable controls above). The engine re-checks the GM tier and the pack source itself, so
+   * this handler only has to route the press.
+   */
+  _cpActivateArmorRestoreControl(root) {
+    if (!root?.ownerDocument) return;
+    if (this.item.type !== "armor") return;
+    if (!this.isEditable) return;
+    if (root.dataset.cpArmorRestoreBound === "1") return;
+    root.dataset.cpArmorRestoreBound = "1";
+    root.addEventListener("click", async (event) => {
+      if (!event.target?.closest?.(".cp-armor-restore")) return;
+      event.preventDefault();
+      await restoreArmorToCatalog(this.item);
+    });
   }
 
   /** P7 consumable Use button + Q2 chip-choice reset — both spend/reset via the mech engines

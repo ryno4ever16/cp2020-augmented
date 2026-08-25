@@ -767,6 +767,136 @@ export function martialArtDisplayName(name) {
     .trim();
 }
 
+/* ------------------------------------------------------------------------- */
+/*  Improvement-point difficulty multipliers for the built-in martial styles  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Per-style IP difficulty multiplier, keyed by the canonical style key above.
+ *
+ * WHY THIS TABLE EXISTS. The multiplier is a real cost term (Core p.53: it "multiplies the number of
+ * points required to learn the next level of skill"), and the base system's cost helper reads it from
+ * the skill item's `system.diffMod`. Every one of the 24 built-in style documents in
+ * `default-skills-en.db` ships that field UNSET, so the DataModel default (1) applies and a style
+ * raise is priced exactly like a plain skill. The numbers exist upstream only inside the DISPLAY
+ * strings in `lang/en.json` ("Karate(2)"), which no code reads as a number. This table is the read
+ * side that was missing; it is CONSULTED ONLY while the item still carries the neutral 1, so a
+ * hand-entered Difficulty Mod always wins and the upstream pack data is never patched.
+ *
+ * PROVENANCE, per row. Core p.51's skill entry prints ten forms and is the clean source; the styles
+ * the core does not print take the value carried by the base system's own display strings, which
+ * match the fan "Reference Book" (Andrew James, 2002) table style-for-style. Two deliberate
+ * departures from those strings are marked below.
+ */
+export const MARTIAL_ART_IP_MULTIPLIER = {
+  // ── Core p.51 (the printed ten) ────────────────────────────────────────────────────────────────
+  "Martial Arts: Aikido": 3,          // Core p.51
+  "Martial Arts: AnimalKungFu": 3,    // Core p.51
+  "Martial Arts: Boxing": 1,          // Core p.51 (no suffix printed ⇒ neutral)
+  "Martial Arts: Capoeira": 3,        // Core p.51
+  "Martial Arts: ChoiLiFut": 3,       // Core p.51; the p.54 worked example (+4→+5 = 120) is this row
+  "Martial Arts: Judo": 1,            // Core p.51 (no suffix printed ⇒ neutral)
+  "Martial Arts: Karate": 2,          // Core p.51
+  // Core p.51 prints (3). The p.100 martial table reads (4) — that page's text layer is garbled
+  // (OCR), so p.51's prose entry is taken as canonical and the disagreement is recorded here.
+  // 👁 Eyes on the printed p.100 would settle it; until then this row is p.51.
+  "Martial Arts: TaeKwonDo": 3,       // Core p.51 (p.100 prints 4 — suspected OCR artifact)
+  "Martial Arts: ThaiKickBoxing": 4,  // Core p.51
+  "Martial Arts: Wrestling": 1,       // Core p.51 (no suffix printed ⇒ neutral)
+
+  // ── DEPARTURE FROM THE UPSTREAM DISPLAY STRINGS ───────────────────────────────────────────────
+  // The base system's string is a bare "Savate" with no suffix, so reading its strings would price
+  // Savate as neutral. Both the p.100 table and the fan table print (2); the omission upstream is a
+  // dropped suffix, not a statement that the style is neutral. Marked per the ruling, 2026-08-20.
+  "Martial Arts: Savate": 2,          // Core p.100 table + fan Reference Book (upstream string omits it)
+
+  // ── Styles the core does not print — the base system's display strings (= fan Reference Book) ──
+  // Arasaka-Te also reads (1) in the LUYPS text layer, agreeing with the bare upstream string.
+  "Martial Arts: ArasakaTe": 1,       // LUYPS text layer; upstream string carries no suffix
+  "Martial Arts: GunFu": 3,           // upstream "Gun-Fu(3)"; LUYPS text layer agrees
+  "Martial Arts: JeetKunDo": 3,       // upstream "Jeet Kun Do(3)"
+  "Martial Arts: Jujitsu": 2,         // upstream "Jujitsu(2)" — absent from the primary corpus
+  "Martial Arts: Koppo": 4,           // upstream "Koppo(4)"
+  "Martial Arts: Ninjutsu": 5,        // upstream "Ninjutsu(5)"
+  "Martial Arts: PanzerFaust": 5,     // upstream "PanzerFaust(5)~"
+  "Martial Arts: Sambo": 3,           // upstream "Sambo(3)"
+  "Martial Arts: Sumo": 3,            // upstream "Sumo(3)"
+  "Martial Arts: TaiChiChuan": 4,     // upstream "Tai Chi Chuan(4)"
+  "Martial Arts: Te": 3,              // upstream "Te(3)"
+  "Martial Arts: Thamoc": 2,          // upstream "Thamoc(2)"; LUYPS text layer unreadable (display font)
+  "Martial Arts: WingChung": 3        // upstream "Wing Chung(3)"
+};
+
+/**
+ * Reduce a style name to a comparison form: drop the "Martial Arts:" prefix, the trailing "(N)"
+ * display suffix, the "~" marker, then every space, hyphen and case difference. This is what lets
+ * the pack's printed name ("Martial Arts: Tai Chi Chuan") meet the canonical key
+ * ("Martial Arts: TaiChiChuan") — they differ only in spacing.
+ */
+function _martialNameSlug(name) {
+  return martialArtDisplayName(name).replace(/[\s-]/g, "").toLowerCase();
+}
+
+const _MARTIAL_KEY_BY_SLUG = Object.fromEntries(
+  Object.keys(MARTIAL_ART_ID_BY_KEY).map(k => [_martialNameSlug(k), k])
+);
+
+/** Every stable id that can identify an item: embedded id, source id, compendium origin. */
+function _idCandidates(item) {
+  const out = [];
+  const add = (v) => { if (typeof v === "string" && v) out.push(v); };
+  const addTail = (v) => { if (typeof v === "string" && v) out.push(v.split(".").pop()); };
+  add(item?.id);
+  add(item?._id);
+  add(item?._source?._id);
+  addTail(item?.flags?.core?.sourceId);
+  addTail(item?._source?.flags?.core?.sourceId);
+  addTail(item?._stats?.compendiumSource);
+  addTail(item?._source?._stats?.compendiumSource);
+  return out;
+}
+
+/**
+ * The canonical style key for a skill item, or null.
+ *
+ * IDENTITY, in order: the stable compendium id first (the reference-by-id rule — the ids in
+ * MARTIAL_ART_ID_BY_KEY are the base system's own and are what its martial engine already matches
+ * on), then the item NAME reduced to a slug. The name leg is a documented fallback, not the primary:
+ * it is what recovers a style whose id was lost (an item re-created by hand, imported from a world
+ * export, or generated by our own NPC materializer, none of which carry a compendium origin), and it
+ * is what a localized pack breaks — a translated name slugs to something this table has no row for,
+ * which is a clean miss (neutral multiplier), not a wrong number.
+ */
+export function martialArtKeyForItem(item) {
+  if (!item) return null;
+  for (const id of _idCandidates(item)) {
+    const key = MARTIAL_ART_KEY_BY_ID[id];
+    if (key) return key;
+  }
+  return _MARTIAL_KEY_BY_SLUG[_martialNameSlug(item?.name)] ?? null;
+}
+
+/** The table's IP multiplier for a skill item's style, or null when the style is not a known one. */
+export function martialArtIpMultiplier(item) {
+  const key = martialArtKeyForItem(item);
+  const mult = key ? MARTIAL_ART_IP_MULTIPLIER[key] : undefined;
+  return Number.isFinite(mult) ? mult : null;
+}
+
+/**
+ * The IP difficulty multiplier actually in force for a skill item.
+ *
+ * A hand-set `system.diffMod` ALWAYS wins: the field is the GM's override and the table only fills a
+ * hole. The table is consulted only while the stored value is the neutral 1 — which is what every
+ * built-in style ships and what a plain skill legitimately carries (a plain skill matches no row, so
+ * it stays 1 either way).
+ */
+export function skillIpMultiplier(skill) {
+  const stored = Number(skill?.system?.diffMod);
+  if (Number.isFinite(stored) && stored !== 1 && stored > 0) return stored;
+  return martialArtIpMultiplier(skill) ?? 1;
+}
+
 // Actions that can carry a per-style bonus, shown in the skill sheet's martial-art editor.
 export const MARTIAL_BONUS_ACTIONS = [
   "Strike", "Punch", "Kick", "Disarm", "SweepTrip", "BlockParry",

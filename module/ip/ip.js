@@ -1,5 +1,6 @@
 import { localize } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
+import { skillIpMultiplier } from "../lookups.js";
 import {
   ipEnabled, ipRawTracking, ipAwardModel, ipAutoBaselineAmount, ipThrottle, ipSkillLockMode, ipShowPending
 } from "../settings.js";
@@ -31,11 +32,30 @@ const skillIp      = (skill) => Number(skill?.getFlag?.(SCOPE, "ip")) || 0;
 const skillPending = (skill) => Number(skill?.getFlag?.(SCOPE, "ipPending")) || 0;
 const actorPool    = (actor) => Number(actor?.getFlag?.(SCOPE, "ipPool")) || 0;
 
-/** RAW IP cost to raise this skill one level: max(1, level) × 10 × diffMod. */
+/** The flat price of the very first level, before any multiplier (Core p.53). */
+export const FIRST_LEVEL_IP_COST = 10;
+
+/**
+ * IP cost to raise this skill one level.
+ *
+ * Core p.53, verbatim: "The first level of a skill will always cost 10 IP. To determine how many
+ * points are required to raise a skill higher than this, multiply the current level of skill by 10."
+ * The multiplier clause is scoped to the raises AFTER that one — it "multiplies the number of points
+ * required to learn the NEXT level of skill" — so:
+ *
+ *   • 0 → 1  costs a flat 10, with NO multiplier, whatever the skill is;
+ *   • L → L+1 (L ≥ 1) costs L × 10 × multiplier.
+ *
+ * Both printed worked examples land on the second branch: Brawling +4→+5 = 40 (p.53) and the ×3
+ * Choi Li Fut +4→+5 = 120 (p.54). A ×3 style's 1→2 is therefore 1 × 10 × 3 = 30.
+ *
+ * The multiplier comes from `skillIpMultiplier` — the item's own `system.diffMod` when a GM has set
+ * one, else the module's style table (see lookups.js) while the field is still the neutral 1.
+ */
 export function ipCost(skill) {
   const level = Number(skill?.system?.level) || 0;
-  const mult = Math.max(1, Number(skill?.system?.diffMod) || 1);
-  return Math.max(1, level) * 10 * mult;
+  if (level < 1) return FIRST_LEVEL_IP_COST;
+  return level * 10 * Math.max(1, skillIpMultiplier(skill));
 }
 
 /**

@@ -5,3 +5,13 @@
           name/encumbrance heuristic in getArmorHardness); "soft"/"hard" force it. --}}
     {{> (template "fields/select") label="ArmorType" edit="system.armorType" choices=armorTypeChoices}}
 </div>
+{{!-- Armor degradation writes the reduced stopping power straight into the coverage boxes above, so
+      a worn garment's original rating survives nowhere on the actor. This puts it back from the
+      item's own pack entry. GM-only, and absent entirely when no pack entry resolves. --}}
+{{#if canRestoreArmor}}
+<div class="field">
+    <label>{{CPLocal "ArmorRestoreHint"}}</label>
+    <span class="flex-pad"></span>
+    <button type="button" class="cp-armor-restore nogrow">{{CPLocal "ArmorRestore"}}</button>
+</div>
+{{/if}}
