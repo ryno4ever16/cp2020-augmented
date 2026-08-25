@@ -1110,8 +1110,31 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-goon .cp-goon-check { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; font-weight: bold; }
 .cp-goon .cp-goon-check input { flex: 0 0 auto; }
 
-.cp-goon .cp-goon-band { padding: 6px 0; border-top: 1px solid rgba(255, 255, 255, 0.12); border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
-.cp-goon .cp-goon-outfit-row { margin-bottom: 2px; }
+/* ⭐ THE BAND OWNS ITS OWN RHYTHM (field report 2026-08-25). The four picks read as a ladder, so the
+ * distance between them has to be ONE number. It was a margin STACK before: every row carried
+ * `margin-bottom: 6px` from .cp-goon-row except .cp-goon-outfit-row, which tightened itself to 2px
+ * to hug the "based on" caption that only renders when an outfit is picked — so in the window's
+ * DEFAULT state (no outfit, no caption) the rig measured pitches of 38 / 38 / 34 / 38px and the
+ * Outfit→Disposition step read 4px short. A per-element margin cannot know whether the caption is
+ * there; the CONTAINER can, so the container is what spaces now. The band is a flex column with one
+ * `gap`, and every child's own bottom margin is zeroed inside it — add a row or a caption and it
+ * lands on the same rhythm without a new rule. */
+.cp-goon .cp-goon-band {
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* `flex: 0 0 auto` is deliberate: Foundry's `.flexcol > *` idiom equal-grows children, and a band row
+ * must keep its own content height whether or not something above it inherits that class.
+ * ⚠ The `:is(div, p)` is NOT decoration — it is what makes the margin reset WIN. The generic
+ * `.cp-goon .cp-goon-basedon` and `.cp-goon .cp-goon-hint` rules score the same (0,2,0) as a plain
+ * `> *` and are written LATER in this file, so a bare `> *` reset loses to them on source order and
+ * the caption rows measured 10px and 12px against the band's 6px (rig-measured, first attempt).
+ * `:is(div, p)` adds a type selector's weight — (0,2,1) — so the container wins wherever it sits. */
+.cp-goon .cp-goon-band > :is(div, p, span, ul) { flex: 0 0 auto; margin-bottom: 0; }
 .cp-goon .cp-goon-basedon { margin: 0 0 4px; font-size: 0.82em; opacity: 0.8; }
 .cp-goon .cp-goon-seednote { margin-bottom: 8px; }
 
@@ -1234,11 +1257,34 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-goon .cp-goon-honesty-info { opacity: 0.72; }
 .cp-goon .cp-goon-honesty-warn { color: #c0791a; opacity: 0.95; }
 
-/* The fused Generate control: one button carrying its destination, per §1. */
-.cp-goon .cp-goon-generate { display: flex; gap: 6px; align-items: center; margin-top: 12px; }
-.cp-goon .cp-goon-btn { flex: 1 1 auto; width: auto; }
+/* The fused Generate control: one button carrying its destination, per §1.
+ *
+ * ⭐ ONE ROW HEIGHT FOR THREE CONTROLS (field report 2026-08-25). The destination dropdown stood
+ * TALLER than the buttons it sits between, and neither height was ours — they came from two
+ * DIFFERENT core tokens that only look alike:
+ *   · a form field takes `height: var(--input-height)`, and core sets `--input-height: 2rem` on
+ *     <body> — a ROOT-relative 32px;
+ *   · a button takes `height: var(--button-size)`, and core sets `--button-size: 2em` on the button
+ *     itself — an EM, resolved against the button's own 14px font, so 28px.
+ * Rem against em is the whole defect: the strip inherited a 4px mismatch and `align-items: center`
+ * hung the select 2px proud at both edges. The row now names ONE height, core's own `--input-height`,
+ * and hands it to both kinds of control. The dropdown keeps the size every other control in this
+ * window wears (all five band controls measure 32px) instead of being squeezed to a shape nothing
+ * else here has, and the buttons are raised to meet it through `--button-size` — core's own knob, so
+ * they keep their core padding, radius and icon metrics at the new height.
+ * ⚠ The `32px` fallbacks are load-bearing: `--form-field-height` was the first guess here and it is
+ * NOT defined anywhere in this scope, which made the calc invalid and collapsed the whole strip to
+ * a 19px intrinsic height (rig-measured). A var used for a height gets a literal fallback. */
+.cp-goon .cp-goon-generate {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  margin-top: 12px;
+  --cp-goon-ctl-h: var(--input-height, 32px);
+}
+.cp-goon .cp-goon-btn { flex: 1 1 auto; width: auto; --button-size: var(--cp-goon-ctl-h, 32px); }
 .cp-goon .cp-goon-go { font-weight: bold; flex: 2 1 auto; }
-.cp-goon .cp-goon-dest { flex: 1 1 40%; min-width: 0; }
+.cp-goon .cp-goon-dest { flex: 1 1 40%; min-width: 0; height: var(--cp-goon-ctl-h, 32px); min-height: var(--cp-goon-ctl-h, 32px); }
 
 /* ===================================================================================
  * Augmented actor-sheet styling — vendored DELTA over the base cyberpunk2020 system CSS.
@@ -2850,6 +2896,62 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
 .cp-veh-unmodeled { opacity: 0.85; font-style: italic; color: #c0791a; }
 .cp-veh-source { font-size: 0.82em; opacity: 0.75; cursor: pointer; }
 .cp-veh-source:hover { opacity: 1; text-decoration: underline; }
+
+/* ── SHEET-FACE STRIP — the first row of every vehicle/ACPA face, above the header. It picks the
+   whole LAYOUT, not one of the vehicle's stats, so it reads as its own band (full width, its own
+   ground, a hairline under it) instead of a checkbox among the identity fields, which is where the
+   control it replaces was buried.
+   ⚠ `flex: 0 0 auto` is load-bearing, not decoration: the sheet roots carry Foundry's `.flexcol`,
+   whose `> * { flex: 1 1 0% }` equal-grows every child — without this the strip would claim a share
+   of the sheet's height alongside the scrolling body. */
+.cyberpunk.sheet.vehicle .cp-veh-face-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.05);
+}
+.cyberpunk.sheet.vehicle .cp-veh-face-label {
+  flex: 0 0 auto;
+  font-weight: bold;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+/* The install-picker idiom: the select shares the leftover width instead of sizing to its longest
+   option, and the explicit min-width replaces the flex auto-minimum so a narrow sheet clips the
+   select rather than shoving the label to a stub. Height is pinned because a bare <select> is
+   ~39px intrinsic in Foundry's Chromium beside 24px inputs. */
+.cyberpunk.sheet.vehicle .cp-veh-face-select {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 8em;
+  max-width: 100%;
+  height: 24px;
+  min-height: 24px;
+}
+/* The gate breadcrumb names a world setting, so it takes its own line rather than squeezing the
+   control it explains. */
+.cyberpunk.sheet.vehicle .cp-veh-face-hint {
+  flex: 1 1 100%;
+  font-size: 0.8em;
+  opacity: 0.85;
+  color: #c0791a;
+}
+/* Standard face + Maximum Metal world + combat data the standard face does not print. */
+.cyberpunk.sheet.vehicle .cp-veh-mm-data-note {
+  flex: 0 0 auto;
+  padding: 0 6px 4px;
+  font-size: 0.82em;
+  font-style: italic;
+  color: #6fb7c9;
+}
 /* Unit selects (mph/kph, mi/km) on the vehicle ITEM sheet: compact inline controls sized to their
    content, not full-width chips. The actor-sheet select-sizing rules below are scoped to
    .cyberpunk.vehicle, which the item sheet's class set (.cyberpunk.sheet.item) does not include, so
@@ -3874,8 +3976,17 @@ body.theme-light .cp-goon .cp-goon-warn,
 body.theme-light .cp-goon .cp-goon-clamp,
 body.theme-light .cp-goon .cp-goon-honesty-warn,
 body.theme-light .cp-veh-unmodeled,
+body.theme-light .cyberpunk.sheet.vehicle .cp-veh-face-hint,
 body.theme-light .cyberpunk .cp-occupancy-count.cp-occupancy-over,
 body.theme-light .vehicle-fire-dialog .arc-warn.soft { color: var(--cp-lt-warn); }
+
+/* Sheet-face strip in the light scheme: the dark band's white washes are invisible on parchment,
+   so the strip takes the shared line/fill tokens, and the MM-data note the info token. */
+body.theme-light .cyberpunk.sheet.vehicle .cp-veh-face-strip {
+  border-bottom-color: var(--cp-lt-line);
+  background: var(--cp-lt-fill);
+}
+body.theme-light .cyberpunk.sheet.vehicle .cp-veh-mm-data-note { color: var(--cp-lt-info); }
 
 body.theme-light .cyberpunk .cp-veh-cell-seat { color: var(--cp-lt-active); }
 /* Same `!important` reasoning as the dark rule this parallels (see the note beside it): the lit
