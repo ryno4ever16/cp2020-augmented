@@ -78,6 +78,7 @@ const SWEPT = [
   "module/dialog/ip-neglect.js",
   "module/dialog/buy-ammo.js",
   "module/combat/DamageDialog.js",
+  "module/combat/damage-hooks.js",
   "module/vehicle/vehicle-weapons.js",
   "module/vehicle/vehicle-control.js",
   "module/vehicle/vehicle-boarding-hud.js",
@@ -219,6 +220,9 @@ const MANIFEST = [
   ["module/npcgen/npcgen-app.js:665", "_onRerollOne", "goon-factory", "click", "[data-action=\"goonRerollOne\"]", "index", "the preview strip renders only while a generated batch is held — the fixture's Generate click did not settle one", null],
   ["module/npcgen/npcgen-app.js:681", "_onDeleteOne", "goon-factory", "click", "[data-action=\"goonDeleteOne\"]", "index", "the preview strip renders only while a generated batch is held — the fixture's Generate click did not settle one", null],
   ["module/npcgen/npcgen-app.js:629", "_onGenerate", "goon-factory", "click", "[data-action=\"goonPickDestination\"]", "", "a COMPUTED action key: the go-button paints data-action=\"{{generateAction}}\", which is this key only while a destination is still unpicked", null],
+  // HOOK-BUILT (grammar 2): no template paints this — renderActorDirectory builds the button and
+  // binds it in place. Censused against the real directory, with the feature setting forced on.
+  ["module/npcgen/npcgen-app.js:718", "injectNpcGenButton", "actor-directory", "click", ".cp2020ae-npcgen-btn", "", null, null],
   ["module/shop/catalog.js:868", "_activateRowChoices", "shop-catalog", "input", ".cp-catalog-qty", "", null, null],
   ["module/shop/catalog.js:881", "_activateRowChoices", "shop-catalog", "change", ".cp-catalog-ammo-load", "", null, null],
   ["module/shop/catalog.js:881", "_activateRowChoices", "shop-catalog", "change", ".cp-cat-price b", "", null, null],
@@ -282,6 +286,9 @@ const MANIFEST = [
   ["module/shop/catalog.js:1606", "_wireShopCardControls", "chat-card", "click", ".cp-shop-request-btn", "action", null, null],
   ["module/shop/catalog.js:1606", "_wireShopCardControls", "chat-card", "click", ".cp-shop-request", "", null, null],
   ["module/shop/catalog.js:1606", "_wireShopCardControls", "chat-card", "click", ".cp-shop-request-price", "", null, null],
+  // HOOK-BUILT (grammar 2): the sidebar's Shop tab, built by renderSidebar. Its class literal names
+  // six classes at once, so the derived selector is the compound the node actually carries.
+  ["module/shop/catalog.js:2101", "injectSidebarShopButton", "sidebar", "click", ".ui-control.plain.icon.fa-solid.fa-cart-shopping.cp-shop-tab", "", null, null],
   ["module/item/item-sheet.js:806", "_cpActivateMechConsumableControls", "item-sheet:consumable", "click", ".cp-consumable-use", "", null, null],
   ["module/item/item-sheet.js:806", "_cpActivateMechConsumableControls", "item-sheet:consumable", "click", ".cp-drug-take", "", null, null],
   ["module/item/item-sheet.js:806", "_cpActivateMechConsumableControls", "item-sheet:consumable", "click", ".cp-drug-end", "", "the wear-off control renders only while the drug is active on a holder", null],
@@ -366,9 +373,32 @@ const MANIFEST = [
   ["module/combat/DamageDialog.js:236", "_onRender", "dialog:damage", "change", "input.after-sp-override", "hitIndex", null, null],
   ["module/combat/DamageDialog.js:372", "_onApply", "dialog:damage", "click", "[data-action=\"applyDamage\"]", "", null, null],
   ["module/combat/DamageDialog.js:491", "_onCancel", "dialog:damage", "click", "[data-action=\"cancelDialog\"]", "", null, null],
+  // ── the global click delegator (grammar 3) — one registration, two surfaces ──────────────────
+  // COMBAT TRACKER: seven buttons built into the combatant row by renderCombatTracker. `reads` is
+  // empty for the five that resolve their actor through `_combatantControlActor(btn)` — the dataset
+  // is read one call deeper than `readsIn` follows, so the control is censused and its data contract
+  // is not. The two that read `data-combatant-id` inline carry it.
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-take-aim-btn", "", "the tracker paints these per combatant only during a LIVE combat the user controls — the census starts no combat and places no combatants", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-wait-for-turn-btn", "combatantId", "as above, and only on the combatant whose turn is current", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-wait-act-btn", "combatantId", "as above, and only on a combatant already flagged waitingForTurn", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-dodge-btn", "", "as above, and only while the declared-defense feature is on", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-parry-btn", "", "as above, and only while the declared-defense feature is on", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-add-action-btn", "", "as above, and only while multi-action tracking is on", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "combat-tracker", "click", ".cp-manual-tick-btn", "", "as above, and only while manual round-ticking is on", null],
+  // CHAT CARDS: the same delegator answers the cards the combat pipeline posts.
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", ".cp-suppression-evasion-roll", "actorId,attackerId,dmgFormula,saveDc,sceneId,tokenId", "renders on a suppressive-fire card, one row per defender caught in the lane", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", ".cp-suppressive-unlock", "regionId,sceneId", "renders on a placed suppressive-lane card, GM only", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", ".cp-confirm-explosion", "templateId", "renders on an explosion card, which needs a fired blast weapon", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", ".cp-confirm-explosion-scatter", "templateId", "renders on the same explosion card as its second exit", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", ".cp-confirm-spread-zone", "templateId", "renders on a spread/pattern card, which needs a fired shotgun or gas round", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", ".cp-clear-spread-zone", "templateId", "renders on the same pattern card as its voiding exit", null],
+  ["module/combat/damage-hooks.js:307", "onGlobalClick", "chat-card", "click", "[data-message-id]", "", "the card wrapper each of the above resolves through — present only once one of those cards is posted", null],
+  // HOOK-BUILT (grammar 2): the Apply Damage button, built onto a damage card at render.
+  ["module/combat/damage-hooks.js:791", "_injectApplyDamageControl", "chat-card", "click", ".cp2020-apply-damage-btn", "", "injected only onto a card carrying an areaDamages payload, for a GM or the attacker's owner", null],
   ["module/vehicle/vehicle-weapons.js:463", "openVehicleFireDialog", "dialog:vehicle-fire", "change", "#cp-vf-gunner", "", null, null],
   ["module/vehicle/vehicle-weapons.js:472", "openVehicleFireDialog", "dialog:vehicle-fire", "change", "#cp-vf-shell", "", null, null],
   ["module/vehicle/vehicle-weapons.js:479", "openVehicleFireDialog", "dialog:vehicle-fire", "change", "#cp-vf-rofmode", "", null, null],
+  ["module/vehicle/vehicle-weapons.js:681", "onGlobalClick", "chat-card", "click", ".cp-vfire-apply", "ap,dmg,facing,gs,hda,heat,hef,pen,range,rg,rounds,weapon", "renders on a vehicle-fire card — needs a mounted weapon fired at a target", null],
   ["module/vehicle/vehicle-control.js:391", "openControlRollDialog", "dialog:vehicle-control", "change", "#cp-ctl-driver", "", null, null],
   ["module/vehicle/vehicle-control.js:392", "openControlRollDialog", "dialog:vehicle-control", "change", "#cp-ctl-skillkey", "", null, null],
   ["module/vehicle/vehicle-control.js:393", "openControlRollDialog", "dialog:vehicle-control", "change", "#cp-ctl-difficulty", "", null, null],
@@ -382,30 +412,31 @@ const MANIFEST = [
 //  Recorded rather than guessed: a guessed selector is a green leg that proves nothing.
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 const MANUAL_REVIEW = [
-  ["module/actor/actor-sheet.js:338","_cpActivateStatusStrip","character-sheet","addEventListener(\"toggle\") on `root` — no literal selector at the registration"],
-  ["module/actor/actor-sheet.js:619","$","character-sheet","addEventListener(\"dragstart\") on `node` — no literal selector at the registration"],
-  ["module/actor/actor-sheet.js:626","$","character-sheet","addEventListener(\"dragend\") on `node` — no literal selector at the registration"],
-  ["module/actor/actor-sheet.js:1444","bindHideListeners","character-sheet","addEventListener(\"DYNAMIC\") on `for (const e of HIDE_EVENTS) doc` — no literal selector at the registration"],
-  ["module/actor/actor-sheet.js:2598","_activateTabTearOff","character-sheet","addEventListener(\"click\") on `nav` — no literal selector at the registration"],
-  ["module/actor/actor-sheet.js:2724","_activateGearDragSort","character-sheet","addEventListener(\"drop\") on `list` — no literal selector at the registration"],
-  ["module/actor/actor-sheet.js:3554","_cpSetupNotesAutosave","character-sheet","addEventListener(\"DYNAMIC\") on `root` — no literal selector at the registration"],
-  ["module/npcgen/npcgen-app.js:707","registerGoonCountMemory","actor-directory","addEventListener(\"click\") on `btn` — no literal selector at the registration"],
-  ["module/shop/catalog.js:849","activateListeners","shop-catalog","selector built from a template literal"],
-  ["module/shop/catalog.js:970","_activateFilterPaint","shop-catalog","addEventListener(\"pointerdown\") on `btn` — no literal selector at the registration"],
-  ["module/shop/catalog.js:978","_activateFilterPaint","shop-catalog","addEventListener(\"pointermove\") on `root` — no literal selector at the registration"],
-  ["module/shop/catalog.js:980","_activateFilterPaint","shop-catalog","addEventListener(\"pointerup\") on `btn` — no literal selector at the registration"],
-  ["module/shop/catalog.js:981","_activateFilterPaint","shop-catalog","addEventListener(\"pointercancel\") on `btn` — no literal selector at the registration"],
-  ["module/shop/catalog.js:982","_activateFilterPaint","shop-catalog","addEventListener(\"click\") on `btn` — no literal selector at the registration"],
-  ["module/shop/catalog.js:993","_activateFilterPaint","shop-catalog","addEventListener(\"pointerup\") on `root` — no literal selector at the registration"],
-  ["module/shop/catalog.js:994","_activateFilterPaint","shop-catalog","addEventListener(\"pointercancel\") on `root` — no literal selector at the registration"],
-  ["module/shop/catalog.js:1545","injectSidebarShopButton","sidebar","addEventListener(\"click\") on `btn` — no literal selector at the registration"],
-  ["module/item/item-sheet.js:1651","_cpActivateCyberwareSyncControls","item-sheet:cyberware","addEventListener(\"change\") on `root` — no literal selector at the registration"],
-  ["module/item/item-sheet.js:2417","_cpSetupNotesAutosave","item-sheet:any","addEventListener(\"DYNAMIC\") on `root` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:362","_cpActivateStatusStrip","character-sheet","addEventListener(\"toggle\") on `root` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:643","$","character-sheet","addEventListener(\"dragstart\") on `node` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:650","$","character-sheet","addEventListener(\"dragend\") on `node` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:1485","bindHideListeners","character-sheet","addEventListener(\"DYNAMIC\") on `for (const e of HIDE_EVENTS) doc` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:2639","_activateTabTearOff","character-sheet","addEventListener(\"click\") on `nav` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:2765","_activateGearDragSort","character-sheet","addEventListener(\"drop\") on `list` — no literal selector at the registration"],
+  ["module/actor/actor-sheet.js:3595","_cpSetupNotesAutosave","character-sheet","addEventListener(\"DYNAMIC\") on `root` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1042","activateListeners","shop-catalog","selector built from a template literal"],
+  ["module/shop/catalog.js:1068","activateListeners","shop-catalog","selector built from a template literal"],
+  ["module/shop/catalog.js:1237","_activateFilterPaint","shop-catalog","addEventListener(\"pointerdown\") on `btn` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1254","_activateFilterPaint","shop-catalog","addEventListener(\"pointermove\") on `root` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1256","_activateFilterPaint","shop-catalog","addEventListener(\"pointerup\") on `btn` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1257","_activateFilterPaint","shop-catalog","addEventListener(\"pointercancel\") on `btn` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1258","_activateFilterPaint","shop-catalog","addEventListener(\"click\") on `btn` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1272","_activateFilterPaint","shop-catalog","addEventListener(\"pointerup\") on `root` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1273","_activateFilterPaint","shop-catalog","addEventListener(\"pointercancel\") on `root` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1346","_activateEyePaint","shop-catalog","addEventListener(\"pointerup\") on `root` — no literal selector at the registration"],
+  ["module/shop/catalog.js:1347","_activateEyePaint","shop-catalog","addEventListener(\"pointercancel\") on `root` — no literal selector at the registration"],
+  ["module/item/item-sheet.js:1685","_cpActivateCyberwareSyncControls","item-sheet:cyberware","addEventListener(\"change\") on `root` — no literal selector at the registration"],
+  ["module/item/item-sheet.js:2451","_cpSetupNotesAutosave","item-sheet:any","addEventListener(\"DYNAMIC\") on `root` — no literal selector at the registration"],
   ["module/dialog/modifiers.js:592","updateVisibility","dialog:modifiers","addEventListener(\"change\") on `fireModeEl` — no literal selector at the registration"],
   ["module/dialog/modifiers.js:593","updateVisibility","dialog:modifiers","addEventListener(\"change\") on `dualWieldEl` — no literal selector at the registration"],
   ["module/dialog/modifiers.js:595","updateVisibility","dialog:modifiers","addEventListener(\"DYNAMIC\") on `autoRoundsEl` — no literal selector at the registration"],
   ["module/dialog/modifiers.js:597","updateVisibility","dialog:modifiers","addEventListener(\"DYNAMIC\") on `numberInput(name)` — no literal selector at the registration"],
-  ["module/vehicle/vehicle-boarding-hud.js:77","_hudButton","token-hud","addEventListener(\"click\") on `btn` — no literal selector at the registration"],
+  ["module/vehicle/vehicle-boarding-hud.js:81","_hudButton","token-hud","addEventListener(\"click\") on `btn` — no literal selector at the registration"],
 ];
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════
@@ -413,30 +444,101 @@ const MANUAL_REVIEW = [
 //  be a dead control; listed so the swept files are fully accounted for.
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 const NON_DOM = [
-  ["module/actor/actor-sheet.js:2594","doc.addEventListener(\"pointermove\") — gesture continuation","_activateTabTearOff"],
-  ["module/actor/actor-sheet.js:2595","doc.addEventListener(\"pointerup\") — gesture continuation","_activateTabTearOff"],
-  ["module/actor/actor-sheet.js:2596","doc.addEventListener(\"pointercancel\") — gesture continuation","_activateTabTearOff"],
+  ["module/actor/actor-sheet.js:2635","doc.addEventListener(\"pointermove\") — gesture continuation","_activateTabTearOff"],
+  ["module/actor/actor-sheet.js:2636","doc.addEventListener(\"pointerup\") — gesture continuation","_activateTabTearOff"],
+  ["module/actor/actor-sheet.js:2637","doc.addEventListener(\"pointercancel\") — gesture continuation","_activateTabTearOff"],
   ["module/npcgen/npcgen-app.js:698","Hooks.on(\"renderActorDirectory\")","registerGoonCountMemory"],
-  ["module/shop/catalog.js:1093","doc.addEventListener(\"click\") — gesture continuation","setTimeout"],
-  ["module/shop/catalog.js:1647","Hooks.on(\"renderSidebar\")","registerShopHooks"],
-  ["module/shop/catalog.js:1657","Hooks.on(\"controlToken\")","registerShopHooks"],
-  ["module/shop/catalog.js:1676","game.socket.on(\"module.cp2020-augmented\")","onChatCardRender"],
-  ["module/shop/catalog.js:1683","Hooks.on(\"dropActorSheetData\")","onChatCardRender"],
-  ["module/item/item-sheet.js:908","root.ownerDocument.addEventListener(\"click\") — gesture continuation","_cpActivateVehicleSpeedControls"],
-  ["module/item/item-sheet.js:1395","root.ownerDocument.addEventListener(\"click\") — gesture continuation","_cpActivateCyberwareMechanicTypeControls"],
-  ["module/item/item-sheet.js:1792","Hooks.on(\"updateItem\")","_cpActivateCyberwareSiblingRefresh"],
-  ["module/vehicle/vehicle-weapons.js:499","Hooks.on(\"updateToken\")","openVehicleFireDialog"],
-  ["module/vehicle/vehicle-boarding-hud.js:82","Hooks.on(\"renderTokenHUD\")","registerVehicleBoardingHud"],
+  ["module/shop/catalog.js:1576","doc.addEventListener(\"click\") — gesture continuation","setTimeout"],
+  ["module/shop/catalog.js:2203","Hooks.on(\"renderSidebar\")","registerShopHooks"],
+  ["module/shop/catalog.js:2213","Hooks.on(\"controlToken\")","registerShopHooks"],
+  ["module/shop/catalog.js:2232","game.socket.on(\"module.cp2020-augmented\")","onChatCardRender"],
+  ["module/shop/catalog.js:2239","Hooks.on(\"dropActorSheetData\")","onChatCardRender"],
+  ["module/item/item-sheet.js:942","root.ownerDocument.addEventListener(\"click\") — gesture continuation","_cpActivateVehicleSpeedControls"],
+  ["module/item/item-sheet.js:1429","root.ownerDocument.addEventListener(\"click\") — gesture continuation","_cpActivateCyberwareMechanicTypeControls"],
+  ["module/item/item-sheet.js:1826","Hooks.on(\"updateItem\")","_cpActivateCyberwareSiblingRefresh"],
+  ["module/combat/damage-hooks.js:544","Hooks.on(\"cyberpunk2020.weaponFired\")","_hookWeaponFired"],
+  ["module/combat/damage-hooks.js:700","Hooks.on(\"createChatMessage\")","_hookCreateChatMessage"],
+  ["module/combat/damage-hooks.js:750","Hooks.on(\"DYNAMIC\")","_hookDamageDialogDismissed"],
+  ["module/combat/damage-hooks.js:901","Hooks.on(\"cyberpunk2020.suppressiveFire\")","_hookSuppressiveFire"],
+  ["module/combat/damage-hooks.js:1075","Hooks.on(\"DYNAMIC\")","_hookSuppressiveZoneEntered"],
+  ["module/combat/damage-hooks.js:1105","Hooks.on(\"updateCombat\")","_hookSuppressiveExpiry"],
+  ["module/combat/damage-hooks.js:1281","Hooks.on(\"renderCombatTracker\")","_hookAimTracking"],
+  ["module/combat/damage-hooks.js:1311","Hooks.on(\"renderModifiersDialog\")","_hookAimTracking"],
+  ["module/combat/damage-hooks.js:1322","Hooks.on(\"cyberpunk2020.weaponFired\")","_hookAimTracking"],
+  ["module/combat/damage-hooks.js:1353","Hooks.on(\"renderCombatTracker\")","_hookWaitForTurn"],
+  ["module/combat/damage-hooks.js:1390","Hooks.on(\"updateCombat\")","_hookWaitForTurn"],
+  ["module/combat/damage-hooks.js:1454","Hooks.on(\"renderCombatTracker\")","_hookDodgeParry"],
+  ["module/combat/damage-hooks.js:1498","Hooks.on(\"updateCombat\")","_hookDodgeParry"],
+  ["module/combat/damage-hooks.js:1549","Hooks.on(\"renderModifiersDialog\")","_hookDeclaredDefensePrefill"],
+  ["module/combat/damage-hooks.js:1609","Hooks.on(\"updateCombat\")","_hookDotEffects"],
+  ["module/combat/damage-hooks.js:1818","Hooks.on(\"cyberpunk2020.weaponFired\")","_hookGasCloud"],
+  ["module/combat/damage-hooks.js:1925","Hooks.on(\"updateCombat\")","_hookGasCloudPerTurn"],
+  ["module/combat/damage-hooks.js:2100","Hooks.on(\"renderCombatTracker\")","_hookManualRoundTick"],
+  ["module/combat/damage-hooks.js:2317","Hooks.on(\"cyberpunk2020.weaponFired\")","_hookExplosion"],
+  ["module/combat/damage-hooks.js:2567","Hooks.on(\"cyberpunk2020.weaponFired\")","_hookSpread"],
+  ["module/combat/damage-hooks.js:3297","Hooks.on(\"updateCombat\")","_hookSpreadZoneExpiry"],
+  ["module/combat/damage-hooks.js:3308","Hooks.on(\"DYNAMIC\")","_hookSpreadZoneExpiry"],
+  ["module/combat/damage-hooks.js:3327","Hooks.on(\"canvasReady\")","_hookSpreadZoneExpiry"],
+  ["module/combat/damage-hooks.js:3407","Hooks.on(\"renderCombatTracker\")","_hookMultiActionPenalty"],
+  ["module/combat/damage-hooks.js:3455","Hooks.on(\"renderModifiersDialog\")","_hookMultiActionPenalty"],
+  ["module/combat/damage-hooks.js:3468","Hooks.on(\"cyberpunk2020.weaponFired\")","_hookMultiActionPenalty"],
+  ["module/combat/damage-hooks.js:3495","Hooks.on(\"updateCombat\")","_incrementActionCount"],
+  ["module/combat/damage-hooks.js:3502","Hooks.on(\"combatStart\")","_incrementActionCount"],
+  ["module/combat/damage-hooks.js:3566","Hooks.on(\"updateActor\")","_hookLiveSheetUpdate"],
+  ["module/combat/damage-hooks.js:3570","Hooks.on(\"updateItem\")","_hookLiveSheetUpdate"],
+  ["module/combat/damage-hooks.js:3597","game.socket.on(\"module.cp2020-augmented\")","_hookSocketRelay"],
+  ["module/vehicle/vehicle-weapons.js:523","Hooks.on(\"updateToken\")","openVehicleFireDialog"],
+  ["module/vehicle/vehicle-boarding-hud.js:86","Hooks.on(\"renderTokenHUD\")","registerVehicleBoardingHud"],
   ["module/vehicle/vehicle-aboard-banner.js:57","Hooks.on(\"renderActorSheetV2\")","registerVehicleAboardBanner"],
   ["module/vehicle/vehicle-aboard-banner.js:63","Hooks.on(\"updateToken\")","_syncBanner"],
-  ["module/vehicle/vehicle-acpa-combat.js:242","Hooks.on(\"updateCombat\")","wrapAcpaRollData"],
-  ["module/vehicle/vehicle-acpa-combat.js:249","Hooks.on(\"updateActor\")","wrapAcpaRollData"],
+  ["module/vehicle/vehicle-acpa-combat.js:250","Hooks.on(\"updateCombat\")","wrapAcpaRollData"],
+  ["module/vehicle/vehicle-acpa-combat.js:257","Hooks.on(\"updateActor\")","wrapAcpaRollData"],
 ];
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 //  SOURCE EXTRACTION — the same derivation that produced the manifest, run again at suite time.
 //  Leg B compares its output to the table above; that comparison is what stops an uncensused
 //  control from shipping.
+//
+//  Three grammars produce a censused row. The first reads a control off a TEMPLATE-PAINTED node the
+//  handler goes looking for; the other two exist because a whole family of the module's controls is
+//  never painted by a template at all:
+//
+//   1 QUERIED BIND     `root.querySelector(".x").addEventListener(…)`, the `for (const x of
+//                      root.querySelectorAll(".y"))` loop, the `.forEach(btn => …)` form, and the
+//                      in-handler `ev.target.closest(".z")` lookup. The selector is a literal at or
+//                      near the registration.
+//
+//   2 CREATED CONTROL  a button the module BUILDS: `const btn = document.createElement("button")`,
+//                      given a LITERAL class in the same construct (`btn.className = "…"` or
+//                      `btn.classList.add("…")`), then bound with `btn.addEventListener(…)`. No
+//                      template paints it, so grammar 1 sees nothing and the site landed in
+//                      manual-review — which is how the Actors-directory Goon Factory button and the
+//                      chat card's Apply-Damage button went uncensused for their whole lives.
+//                      The class literal IS the selector: `.cp2020ae-npcgen-btn`.
+//                      Deliberate limits, so nothing here is a guess:
+//                        · only the FIRST class-setting call on the variable counts. A later
+//                          `classList.add("cp-active")` is STATE, not identity, and folding it in
+//                          would census a selector the control only sometimes matches.
+//                        · a multi-class literal becomes a compound selector in source order
+//                          (`"ui-control plain … cp-shop-tab"` → `.ui-control.plain.….cp-shop-tab`).
+//                          A subset of a node's classes can over-match but can never under-match.
+//                        · a class built from a template literal (`\`control-icon ${cls}\``) or from
+//                          any expression yields NOTHING and the site stays in manual-review. The
+//                          token-HUD boarding button is exactly that shape and stays there.
+//
+//   3 DELEGATOR CALL   `onGlobalClick(handler)` (module/popout-compat.js) is a click registration
+//                      like any other — it binds the handler to the main `document` and to every
+//                      PopOut! window. It carries no `.addEventListener` at the call site, so the
+//                      site scan never saw it, and every control it serves was invisible: the whole
+//                      combat-tracker button row (Take Aim, Wait, Act Now, Dodge, Parry, +Action,
+//                      manual tick) plus the explosion/spread/suppression chat-card buttons. Read as
+//                      an event="click" registration on `document`, its body's
+//                      `ev.target.closest(".x")` lookups become controls through grammar 1's
+//                      machinery, and `readsIn` derives their `data-*` contract as usual.
+//                      Deliberate limit: `readsIn` reads the HANDLER BODY only. A control whose
+//                      dataset is read inside a helper it is PASSED to (`_combatantControlActor(btn)`)
+//                      derives an empty `reads` — the control is censused, its data contract is not.
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 const SELRE = `("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')`;
 const unq = (s) => (s == null ? s : s.replace(/^["']|["']$/g, ""));
@@ -492,6 +594,32 @@ function blockAfter(src, from) {
   for (let i = b; i < src.length; i++) { const c = src[i]; if (c === "{") d++; else if (c === "}") { d--; if (!d) return i; } }
   return src.length;
 }
+/** End of the block a statement sits INSIDE — the first `}` that closes further out than the
+ *  statement does. A created element's class literal and its bind must both live in here, or the
+ *  two belong to different constructs and pairing them would be a guess. */
+function enclosingEnd(src, from) {
+  let d = 0, inS = null, esc = false;
+  for (let i = from; i < src.length; i++) {
+    const c = src[i];
+    if (inS) { if (esc) { esc = false; continue; } if (c === "\\") { esc = true; continue; } if (c === inS) inS = null; continue; }
+    if (c === '"' || c === "'" || c === "`") { inS = c; continue; }
+    if (c === "{") d++;
+    else if (c === "}") { if (!d) return i; d--; }
+  }
+  return src.length;
+}
+/** The class literal a created element is given, as a selector. `null` when the class is not a
+ *  plain string literal — the control then stays in manual-review rather than being guessed at. */
+function createdClassSelector(src, v, from, end) {
+  const q = v.replace(/[.$?[\]()]/g, "\\$&");
+  const win = src.slice(from, end);
+  const m = win.match(new RegExp(`${q}\\s*\\.\\s*(?:className\\s*=\\s*${SELRE}|classList\\s*\\.\\s*add\\s*\\(([^)]*)\\))`));
+  if (!m) return null;
+  const lits = m[1] ? [unq(m[1])] : [...(m[2] ?? "").matchAll(new RegExp(SELRE, "g"))].map(x => unq(x[1]));
+  const classes = lits.join(" ").split(/\s+/).filter(Boolean);
+  if (!classes.length) return null;
+  return "." + classes.join(".");
+}
 const NONDOM_RECV = /^(Hooks|game\.socket|socket|window|canvas)$/;
 const GESTURE_RECV = /^(doc|document|root\.ownerDocument)$/;
 
@@ -504,12 +632,21 @@ function surfaceOf(rel, fn, sel = "") {
     if (/\.cp-home-/.test(sel)) return "shop-home";
     if (/\.cp-shop-manage/.test(sel)) return "shop-storefront";
   }
+  // One global click delegator serves two completely different surfaces — the combat tracker's
+  // per-combatant button row and the chat log's cards — from one registration, so the enclosing
+  // method cannot say which. The selector can: these seven classes are built into a tracker row.
+  if (rel === "module/combat/damage-hooks.js") {
+    return /^\.cp-(take-aim|wait-for-turn|wait-act|dodge|parry|add-action|manual-tick)-btn$/.test(sel)
+      ? "combat-tracker" : "chat-card";
+  }
   switch (rel) {
     case "module/actor/actor-sheet.js": return "character-sheet";
     case "module/vehicle/vehicle-aboard-banner.js": return "character-sheet";
     case "module/actor/vehicle-sheet.js": return "vehicle-sheet";
     case "module/actor/actor-tab-popout.js": return "actor-tab-popout";
-    case "module/npcgen/npcgen-app.js": return fn === "registerGoonCountMemory" ? "actor-directory" : "goon-factory";
+    // The Goon Factory is two things: a window, and the Actors-directory button that opens it.
+    case "module/npcgen/npcgen-app.js":
+      return /^(registerGoonCountMemory|injectNpcGenButton|registerNpcGenHooks)$/.test(fn) ? "actor-directory" : "goon-factory";
     // One window class paints four distinct views; a control that lives in the home directory is
     // not "on the shop window", it is on the HOME view, and censusing it against the catalog view
     // would report the whole directory as dead.
@@ -537,7 +674,10 @@ function surfaceOf(rel, fn, sel = "") {
     case "module/dialog/ip-neglect.js": return "dialog:ip-neglect";
     case "module/dialog/buy-ammo.js": return "dialog:buy-ammo";
     case "module/combat/DamageDialog.js": return "dialog:damage";
-    case "module/vehicle/vehicle-weapons.js": return "dialog:vehicle-fire";
+    // The fire dialog's own fields, except the delegator that answers its chat card's apply button
+    // — one file, two surfaces, told apart by the selector for the same reason the shop's are.
+    case "module/vehicle/vehicle-weapons.js":
+      return /^\.cp-vfire-/.test(sel) ? "chat-card" : "dialog:vehicle-fire";
     case "module/vehicle/vehicle-control.js": return "dialog:vehicle-control";
     case "module/vehicle/vehicle-boarding-hud.js": return "token-hud";
     case "module/vehicle/vehicle-acpa-combat.js": return "dialog:acpa-melee";
@@ -567,15 +707,27 @@ function extractFile(rel) {
   while ((m = p1.exec(src))) { const o = src.indexOf("(", m.index + m[0].indexOf(".forEach")); defs.push({ v: unq(m[2]), sel: unq(m[1]), at: m.index, end: callSlice(src, o)[1] }); }
   const p2 = new RegExp(`(?:const|let|var)\\s+([\\w$]+)\\s*=\\s*[^;\\n]*?\\.(?:querySelector|querySelectorAll|closest)\\s*\\??\\.?\\s*\\(\\s*${SELRE}\\s*\\)`, "g");
   while ((m = p2.exec(src))) defs.push({ v: m[1], sel: unq(m[2]), at: m.index, end: m.index + 1500 });
+  // GRAMMAR 2 — created controls. The element is built, classed and bound inside one construct, so
+  // the construct is the scope: a `btn` two functions down cannot borrow this one's class.
+  const p3 = /(?:const|let|var)\s+([\w$]+)\s*=\s*(?:[\w$]+\s*\.\s*)*createElement\s*\(/g;
+  while ((m = p3.exec(src))) {
+    const end = enclosingEnd(src, m.index + m[0].length);
+    const sel = createdClassSelector(src, m[1], m.index, end);
+    if (sel) defs.push({ v: m[1], sel, at: m.index, end });
+  }
 
   // Registration sites.
   const sites = [];
-  const re = /\.(addEventListener|on)\s*\(/g;
+  // GRAMMAR 3 — `onGlobalClick(fn)` is the module's own click delegator (popout-compat.js): a
+  // `document.addEventListener("click", fn)` that also reaches PopOut! windows. Counted as a
+  // registration site, or every control it serves is invisible to the census.
+  const re = /\.(addEventListener|on)\s*\(|\bonGlobalClick\s*\(/g;
   while ((m = re.exec(src))) {
+    const delegator = m[1] === undefined;
     const dot = m.index, open = m.index + m[0].length - 1;
-    const [s, e] = callSlice(src, open), rs = receiverStart(src, dot);
-    sites.push({ kind: m[1], line: lineOf(rs), s, e, body: src.slice(s, e),
-      recv: src.slice(rs, dot).replace(/\s+/g, " ").trim().replace(/\?$/, "") });
+    const [s, e] = callSlice(src, open), rs = delegator ? m.index : receiverStart(src, dot);
+    sites.push({ kind: delegator ? "delegator" : m[1], line: lineOf(rs), s, e, body: src.slice(s, e),
+      recv: delegator ? "document" : src.slice(rs, dot).replace(/\s+/g, " ").trim().replace(/\?$/, "") });
   }
 
   const entries = [], manual = [], nondom = [];
@@ -604,9 +756,15 @@ function extractFile(rel) {
       }
     }
     const at = `${rel}:${site.line}`, fn = fnAt(site.line);
-    const event = unq((b.match(new RegExp(`^\\(\\s*${SELRE}`)) || [])[1]) || "DYNAMIC";
+    // The delegator takes the handler as its FIRST argument, so there is no event literal to read:
+    // the call itself names the event.
+    const event = site.kind === "delegator"
+      ? "click"
+      : unq((b.match(new RegExp(`^\\(\\s*${SELRE}`)) || [])[1]) || "DYNAMIC";
     if (site.kind === "on" && NONDOM_RECV.test(site.recv)) { nondom.push([at, `${site.recv}.on("${event}")`, fn]); continue; }
-    if (GESTURE_RECV.test(site.recv)) { nondom.push([at, `${site.recv}.addEventListener("${event}") — gesture continuation`, fn]); continue; }
+    // A delegator's receiver IS the document — deliberately, so the controls it serves survive a
+    // PopOut!. That is the opposite of a gesture-continuation listener and must not be filed as one.
+    if (site.kind !== "delegator" && GESTURE_RECV.test(site.recv)) { nondom.push([at, `${site.recv}.addEventListener("${event}") — gesture continuation`, fn]); continue; }
 
     const readsIn = (v, text) => {
       const rd = new Set(); const q = v.replace(/[.$?[\]()]/g, "\\$&"); let x;
@@ -768,7 +926,7 @@ function inMarkup(sel) {
 //  simply NOT-EXERCISED; that is the gap list, and adding an opener is how it shrinks.
 // ═════════════════════════════════════════════════════════════════════════════════════════════
 const RENDERED = [
-  "character-sheet", "vehicle-sheet", "goon-factory", "ip-tracker",
+  "character-sheet", "vehicle-sheet", "goon-factory", "actor-directory", "ip-tracker",
   "shop-home", "shop-catalog", "shop-build", "shop-storefront",
   "item-sheet:any", "item-sheet:skill", "item-sheet:cyberware", "item-sheet:ammo",
   "item-sheet:vehicleweapon", "item-sheet:consumable", "item-sheet:vehicle",
@@ -862,7 +1020,7 @@ try {
     const rootOf = (app) => (app?.element instanceof HTMLElement ? app.element : app?.element?.[0] ?? null);
     const out = { surfaces: {}, results: [], notes: [], fixtureErr: null };
     const made = { actors: [], shopIds: [], apps: [] };
-    let shopWas = null, ipWas = null, pcId = null;
+    let shopWas = null, ipWas = null, npcWas = null, pcId = null;
 
     try {
       // ── FIXTURES ───────────────────────────────────────────────────────────────────────────
@@ -1082,6 +1240,21 @@ try {
         return rootOf(doc.sheet);
       }, 250);
 
+      // ── the Actors directory, for the one control that opens the goon factory ───────────────
+      // A HOOK-BUILT control: no template paints it, `renderActorDirectory` builds it in JS. It is
+      // GM-only and setting-gated, so the setting is forced on and the directory re-rendered — which
+      // is also the exact path the 2026-08-25 field case took (the button was absent until something
+      // forced a render), so a match here certifies the injection, not just the class name.
+      try {
+        npcWas = game.settings.get(SCOPE, "npcGenEnabled");
+        if (npcWas !== true) await game.settings.set(SCOPE, "npcGenEnabled", true);
+      } catch {}
+      await open("actor-directory", async () => {
+        await ui.actors?.render({ force: true });
+        await sleep(700);
+        return rootOf(ui.actors);
+      }, 300);
+
       // ── the goon factory, measured TWICE: empty, then holding a generated preview, because the
       //    confirm/discard/reroll/delete row only exists once a batch has been rolled.
       await open("goon-factory", async () => {
@@ -1192,6 +1365,9 @@ try {
       }
       if (ipWas !== null && ipWas !== true) {
         try { await game.settings.set("cp2020-augmented", "ipRawTracking", ipWas); } catch {}
+      }
+      if (npcWas !== null && npcWas !== true) {
+        try { await game.settings.set("cp2020-augmented", "npcGenEnabled", npcWas); } catch {}
       }
     }
     return out;
@@ -1321,7 +1497,10 @@ function writeReport(c, g) {
   for (const r of g.notEx) (gaps[r.why ?? "?"] ??= []).push(r);
   for (const why of Object.keys(gaps).sort()) {
     out.push(`\n**${why}** (${gaps[why].length})\n`);
-    for (const r of gaps[why].slice(0, 60)) out.push(`- \`${r.at}\` [${r.surface}] \`${r.sel}\``);
+    // A row on a surface the fixture never opens still carries its own state gate — the classifier
+    // stops at the surface and never reads it, so print it here or the gate is invisible.
+    for (const r of gaps[why].slice(0, 60))
+      out.push(`- \`${r.at}\` [${r.surface}] \`${r.sel}\`${r.gate && !/^gate not met/.test(why) ? ` — ${r.gate}` : ""}`);
     if (gaps[why].length > 60) out.push(`- …${gaps[why].length - 60} more`);
   }
   out.push("\n## MANUAL-REVIEW — registrations whose contract cannot be derived mechanically\n");
