@@ -1774,9 +1774,14 @@ export async function purchaseCatalogItem(buyer, packId, itemId, { qty = 1, styl
   const svc = classifyService(doc, game.packs.get(packId)?.metadata?.name ?? "");
   let ok;
   let need = Math.max(0, Math.round(unitPrice * qty));
+  // `requesterId` is threaded into the buy for the same reason it is threaded into the cyberware
+  // branch above: it is what says these goods are settling somebody else's REQUEST rather than being
+  // furnished by the GM for themselves. buyItem uses it to keep GM setup mode off an approved
+  // purchase entirely — charged, receipted, armor unworn (user ruling 2026-08-20; the reasoning is
+  // written out at the `setup` line in module/shop/purchase.js).
   if (svc === "oneoff") { ok = await payOneOffService(buyer, doc, { unitPrice, priceLabel: label }); need = Math.max(0, Math.round(unitPrice)); }
-  else if (svc === "recurring") { ok = await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" } }); need = Math.max(0, Math.round(unitPrice)); }
-  else ok = await buyItem(buyer, doc, { qty, unitPrice, priceLabel: label });
+  else if (svc === "recurring") { ok = await buyItem(buyer, doc, { qty: 1, unitPrice, priceLabel: label, flagPatch: { serviceMode: "recurring" }, requesterId }); need = Math.max(0, Math.round(unitPrice)); }
+  else ok = await buyItem(buyer, doc, { qty, unitPrice, priceLabel: label, requesterId });
   if (ok === false) return have < need ? { ok: false, reason: "funds", need, have } : { ok: false, reason: "refused" };
   return { ok: true };
 }

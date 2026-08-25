@@ -24,7 +24,7 @@
 
 import { tokensOf } from "../mech/light.js";
 import { isFullBorg } from "../mech/borg.js";
-import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled, persistentGroundFireEnabled } from "../settings.js";
+import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settings.js";
 // THE EITHER/OR, borrowed rather than re-derived. damage-hooks.js asks this same function twice — once
 // to decide whether the single-target damage flow claims a payload and once to decide whether the shot
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
@@ -989,33 +989,6 @@ export const GROUND_FIRE = Object.freeze({
   // reaches it; a scene that does reach it drops its OLDEST flame, which is the right way round —
   // the shot a viewer is watching is the one that must be drawn.
   maxLive: 12,
-  // ⭐ THE LIFETIME A PLACEMENT TAKES WHILE THE `groundFirePersistent` WORLD SETTING IS ON (user
-  // approval 2026-08-19: persistent ground fire as a referee's environmental-hazard tool, default
-  // OFF). ⏪ REVERT IS THE SETTING, not this field: switched off, every placement takes `lifetimeMs`
-  // again and nothing else about the element differs by one byte.
-  //
-  // ⛔ WHY THIS IS A NUMBER AND NOT "FOREVER", and the bound is the HOST'S, not a taste call. There
-  // is no expressible infinity here: the expiry is scheduled on a `setTimeout`, and this host clamps
-  // that at 2^31−1 ms (~24.86 days) — a larger value overflows to fire IMMEDIATELY, which would end
-  // the flame the instant it was lit. So the mechanism has to be a duration under that ceiling, and
-  // this is one: 24 hours, ~3 456× the transient 25 s life and longer than any table's session, so
-  // inside a session it IS "until it is deliberately put out" — which is the whole of what the
-  // feature asked for. It also keeps this element's standing precedent intact: a long-lived thing on
-  // this rail always carries a cap, and this is still a cap.
-  //
-  // ⚠ IT IS STILL SESSION-BOUND, deliberately — see the note at the persistence branch in
-  // fxGroundFire for why Sequencer's own `persist()` is refused here (it writes the effect into the
-  // SCENE'S FLAGS, which is a document write from presentation, and under the performance score the
-  // aim-point branch runs on every client, so it would be N writes per shot rather than one).
-  //
-  // ⚠ AND THE CENSUS RAILS ARE UNCHANGED UNDER IT: `maxPerPayload`, `maxPerPattern` and `maxLive`
-  // all still apply. `maxLive` deliberately did NOT move — the user ruled it down 24 → 12 on
-  // 2026-08-13 against a profiled ~0.36 % of a frame per live flame, and that argument gets
-  // STRONGER under persistence, not weaker: a transient flame pays that cost for 25 s, a persistent
-  // one pays it for the rest of the session. Raising it is one field if a table wants a longer
-  // firebreak, and the consequence of not raising it is recorded in the doc's open items (a
-  // referee's planted hazard can be evicted by later burning fire, oldest-out, like anything else).
-  persistentLifetimeMs: 86400000,
 });
 
 /** The name every burning-ground flame is stamped with, so the scene cap can find and evict them. */
@@ -4810,41 +4783,12 @@ function _enforceGroundFireCap(incoming = 0) {
 }
 
 export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxPerPayload } = {}) {
-  const out = { fires: 0, fireMs: 0, evicted: 0, at: [], persistent: false };
+  const out = { fires: 0, fireMs: 0, evicted: 0, at: [] };
   const list = (Array.isArray(points) ? points : [points])
     .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
     .slice(0, Math.max(0, Math.trunc(max)));
   if (!list.length || !sequencerActive()) return out;
   const delay = Number(delayMs) > 0 ? Number(delayMs) : 0;
-  // ⭐⭐ THE PERSISTENCE SWITCH, read ONCE PER PLACEMENT and fail-closed (the reader answers false on an
-  // unreadable setting, so an unknown world draws today's clocks). Approved 2026-08-19 as a referee's
-  // environmental-hazard tool, world-scoped and default OFF per the module's standing rule for
-  // player-facing power.
-  //
-  // ⛔ WHAT IT CHANGES IS EXACTLY ONE THING — the expiry. Nothing else about the element branches on
-  // it: same asset, same size, same routing, same seeded points, same shared delivery, same stamped
-  // census name, same per-payload bound, same scene-wide `maxLive` with oldest-out eviction through
-  // the engine's manager, and the same exclusion from the settle signal (this element has never had a
-  // tail term and still has none, so `presentationTailMs` is byte-identical on both sides of the
-  // switch — the keeper pins that rather than reasoning about it).
-  //
-  // ⏪ NOT Sequencer's own `persist()`, and this is the same refusal the condition overlays made on
-  // 2026-08-12 for the same reason: `persist()` routes the effect through `flagManager.addFlags` into
-  // the document's `flags.sequencer.effects`, i.e. a DOCUMENT WRITE ON THE SCENE issued from
-  // presentation, which standard §9 G/22 forbids. It is worse here than it was there: this is the one
-  // per-shot element still delivered by the ENGINE'S broadcast, and under the performance score every
-  // connected client runs the aim-point branch (the pre-existing density defect recorded in the doc's
-  // open items), so a persisted placement would be one flag write PER CLIENT per shot. What is given
-  // up by refusing it is a redraw after a browser reload, and that boundary is stated in the doc
-  // rather than papered over: this is SESSION persistence. A scene change or a canvas rebuild keeps
-  // the flames (they live in the engine's manager, not in ours); a full reload does not.
-  //
-  // ⚠ READ PER PLACEMENT, NOT LATCHED. Flames already burning when the switch is flipped keep the
-  // clock they were lit with — the setting decides what a NEW placement takes, which is what makes it
-  // safe to flip mid-session in either direction.
-  const persistent = persistentGroundFireEnabled();
-  const lifetimeMs = persistent ? GROUND_FIRE.persistentLifetimeMs : GROUND_FIRE.lifetimeMs;
-  out.persistent = persistent;
   try {
     // THE CAP, applied before anything is queued: make room for this placement by ending the oldest.
     // Applied AGAIN once this placement's own flames actually exist — see the release below for why
@@ -4867,21 +4811,13 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
           .randomRotation()
           .name(`${GROUND_FIRE_NAME}.${foundry.utils.randomID()}`)
           .fadeIn(GROUND_FIRE.fadeInMs)
-          // The ONE field the persistence switch moves. It is also what keeps the sprite LOOPING:
-          // the engine loops the media whenever the requested duration outruns the clip's own
-          // (5000 ms here), so a longer life is a longer loop and not a stalled last frame.
-          .duration(lifetimeMs)
-          // ⭐ KEPT ON BOTH SIDES OF THE SWITCH, and it is load-bearing in the persistent case rather
-          // than vestigial. `fadeOut` schedules its animation at (duration − fadeOut) — 24 h away and
-          // never reached — BUT the engine's own `endEffect` re-runs it with a zero offset, so a
-          // flame that is EVICTED by the scene cap or PUT OUT by the referee's control burns down
-          // over these same 2500 ms instead of popping off the map. Same constant, no new knob.
+          .duration(GROUND_FIRE.lifetimeMs)
           .fadeOut(GROUND_FIRE.fadeOutMs);
         if (delay > 0) fire.delay(delay);
         out.fires++;
         out.at.push({ x: Math.round(p.x), y: Math.round(p.y) });
       }
-      out.fireMs = lifetimeMs;
+      out.fireMs = GROUND_FIRE.lifetimeMs;
     }
     // ⏪ The mark that used to be drawn here, at the flames' centroid, was removed 2026-08-10 on user
     // ruling — its final values are recorded in the block above.
@@ -4926,45 +4862,6 @@ export async function fxGroundFire(points, { delayMs = 0, max = GROUND_FIRE.maxP
     }
   } catch (err) {
     console.warn(`${SCOPE} | ground fire failed`, err);
-  }
-  return out;
-}
-
-/**
- * ⭐⭐ PUT THE GROUND FIRES OUT — the referee's deliberate-clear verb, and the other half of the
- * persistence switch (a flame that does not expire needs something that ends it).
- *
- * THE CENSUS IS ALREADY THE QUERY THIS NEEDS, so this adds no bookkeeping of its own: every flame is
- * stamped with a name under one prefix when it is queued, `liveGroundFires` asks the engine what is
- * alive under it, and this ends exactly that set. The same prefix, the same manager and the same
- * relay the scene cap's eviction has always used — so a clear reaches every client's copy exactly as
- * an eviction does, and no client is left with a fire the others have put out.
- *
- * ⛔ SCOPED TO THE VIEWED SCENE by construction rather than by a filter we pass: the engine's manager
- * holds the effects that are on the canvas, and its own filter defaults to `game.user.viewedScene`.
- * A referee clears the map that is in front of them.
- *
- * ⚠ IT ENDS WHAT IS BURNING, NOT WHAT IS STILL ARRIVING, and that is stated rather than discovered: a
- * placement is delayed by the rounds' own arrival time, so flames queued in the last fraction of a
- * second land after the clear and stay lit. Pressing again takes them. In practice a clear happens
- * long after the shot that lit the ground, so this is a boundary rather than a defect — recorded
- * because the alternative (cancelling queued sections) would mean this verb keeping a ledger, which
- * is the thing the census exists to avoid.
- *
- * Returns what it did BY VALUE (`cleared` = how many were burning when it was asked), so the control,
- * the API and the keeper all read the same number instead of trusting a void call.
- */
-export async function fxClearGroundFires() {
-  const out = { cleared: 0, failed: false };
-  if (!sequencerActive()) return out;
-  const live = liveGroundFires();
-  out.cleared = live.length;
-  if (!out.cleared) return out;
-  try {
-    await globalThis.Sequencer?.EffectManager?.endEffects?.({ name: `${GROUND_FIRE_NAME}.*` });
-  } catch (err) {
-    out.failed = true;
-    console.warn(`${SCOPE} | ground fire clear failed`, err);
   }
   return out;
 }

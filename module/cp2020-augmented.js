@@ -23,7 +23,6 @@ import { registerCombatFx } from "./fx/effects.js";
 import { registerStatusFx } from "./fx/status-fx.js";
 import { landTraumaTeam, endTraumaTeam, traumaTeamActive, traumaTeamState, registerTraumaTeam } from "./fx/trauma-team.js";
 import { registerTraumaTeamTool } from "./fx/trauma-team-tool.js";
-import { registerGroundFireClearTool, onGroundFireClearTool } from "./fx/ground-fire-tool.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -323,10 +322,6 @@ Hooks.once("init", function () {
   // The medical-extraction arrival control. Same idiom again: one momentary button on the token group,
   // referee-only, and the button IS the opt-in — nothing in this feature runs until one is pressed.
   registerTraumaTeamTool();
-  // The ground-fire clear control — the same idiom a third time, and the other half of the
-  // `groundFirePersistent` setting: flames that do not burn out on their own need something that puts
-  // them out. Referee-only, momentary, and it acts on the census the FX rail already keeps.
-  registerGroundFireClearTool();
   // Cyberlimb install lifecycle: a structural implant equipping into a zone clears that zone's
   // sticky limb state (a NEW limb must not inherit the wound recorded against the meat or the
   // wreck it replaces).
@@ -434,10 +429,6 @@ Hooks.once("init", function () {
     },
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
-    // Presentation rail: put out the ground fires burning on the viewed scene. The macro path for the
-    // token-controls button, behind the same referee gate the control is (an API is a door too), and
-    // it reports what it did by value: `{cleared}` — or `{skipped: "permission"}` for a player.
-    fx: { clearGroundFires: onGroundFireClearTool },
     // Diagnostics: write the fault collector's ring into a journal entry a GM can read and keep.
     // The setting's hint names this call, so a GM who switched the collector on already has it.
     exportErrorJournal,

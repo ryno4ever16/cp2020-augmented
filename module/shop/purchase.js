@@ -193,9 +193,14 @@ let _setupArmorNoticeRaised = false;
  * @param {string} [opts.priceLabel] short note shown on the chat card (e.g. "High Fashion ×4")
  * @param {object} [opts.flagPatch]  module flags merged onto the created item under
  *                                   `flags.cp2020-augmented` (e.g. {serviceMode:"recurring"})
+ * @param {string} [opts.requesterId] the player whose PURCHASE REQUEST this buy is settling. Set only
+ *                                   by the approval path (catalog.js `resolvePurchaseRequest` →
+ *                                   `purchaseCatalogItem`); every direct route leaves it null. Its
+ *                                   only job here is to answer "is this the GM's own furnishing, or
+ *                                   somebody else's purchase?" — see the `setup` line below.
  * @returns {Promise<boolean>} true on success
  */
-export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = "", flagPatch = null } = {}) {
+export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = "", flagPatch = null, requesterId = null } = {}) {
   if (!actor) { ui.notifications?.warn(localize("ShopNoActor")); return false; }
   if (!canShop()) { ui.notifications?.warn(localize("ShopNotAllowed")); return false; }
 
@@ -220,7 +225,33 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
   // call sites so every route in — the Buy button, buy-for-NPC, drag-to-sheet — gets it from one place
   // and none of them can be forgotten. Everything below (the compendium-source stamp, the flag patch,
   // the quantity-vs-copies decision) is untouched, which is the point: same goods, no invoice.
-  const setup = isShopSetupMode();
+  //
+  // ⛔⛔ AN APPROVED PLAYER REQUEST IS NOT A FURNISHING RUN, whatever this client's mode says (user
+  // ruling 2026-08-20: "exclude approvals from setup mode exemption"). `requesterId` is the one thing
+  // that tells the two apart, and it is exactly the right thing: catalog.js sets it ONLY on the
+  // resolvePurchaseRequest → purchaseCatalogItem path, so it is present when and only when the goods
+  // are settling somebody else's request.
+  //
+  // WHY THE MODE MUST NOT REACH THAT PATH. Setup mode is deliberately CLIENT-LOCAL so that a GM's
+  // convenience can never make PLAYERS' purchases free (module/shop/setup-mode.js states that as the
+  // whole safety argument). The approval path is the one route that punches through it anyway: a
+  // player's request is resolved on the GM's client, so it read the GM's mode and delivered a
+  // player-requested purchase free, unnarrated, and — since the equip exemption shipped — worn. The
+  // player asked to BUY something and expects an invoice; the GM was mid-furnishing and never chose to
+  // gift it. So an approval takes the ordinary paid route in every respect: charged, receipted, and
+  // armor delivered switched off by clearEquippedOnAcquire below.
+  //
+  // ⏪ THIS REVERSES the note that used to stand in setup-mode.js ("an approval made while setup mode
+  // is on is free — that is a GM deliberately gifting an approved request"). It described the
+  // mechanism accurately and was ruled against: a mode that exists to keep the GM's own bookkeeping
+  // out of the economy should not be the thing that quietly gifts a player their shopping.
+  //
+  // ⚠ SCOPE, stated rather than assumed: this is the buyItem path. A GM who genuinely wants to gift an
+  // approved request still can — deny it and hand the item over directly, which is a furnishing
+  // acquisition and takes the mode. The one-off SERVICE route (module/shop/services.js) and the
+  // cyberware install route (module/cyberware/install.js) read the mode on their own and are NOT
+  // touched by this ruling yet; a recurring service comes through here and is.
+  const setup = isShopSetupMode() && !requesterId;
   const total = setup ? 0 : Math.max(0, Math.round(base * n));
 
   const funds = Number(actor.system?.eurobucks ?? 0);
@@ -242,6 +273,7 @@ export async function buyItem(actor, source, { qty = 1, unitPrice, priceLabel = 
     // every route into buyItem (catalog Buy, drag-to-buy, buy-for-NPC, a published-shop buy, an
     // approved purchase request) gets the same decision from one place. See the two functions' notes:
     // the standing rule defends against the base system's `equipped` default, not against a pack typo.
+    // ⛔ An APPROVED REQUEST always takes the left-hand branch: `setup` is already false for it above.
     if (setup) equipArmorOnAcquire(data); else clearEquippedOnAcquire(data);
     // Feature metadata lives in module flags (survives a vanilla item schema, unlike a system field).
     if (flagPatch && typeof flagPatch === "object") {

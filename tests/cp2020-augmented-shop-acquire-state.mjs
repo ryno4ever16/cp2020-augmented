@@ -332,6 +332,100 @@ try {
   chk("D/helper: cyberware untouched (its equipped means installed)",
     D.helperCyberUntouched === true, D.helperCyberUntouched);
 
+  /* ══ SECTION D2 — an APPROVED REQUEST is not a furnishing acquisition ═══════════════════════════
+   * Setup mode is client-local precisely so a GM's convenience can never reach a PLAYER's economy
+   * (module/shop/setup-mode.js states that as the whole safety argument). The approval route was the
+   * one place it did anyway: a request is resolved on the GM's CLIENT, so it read the GM's mode and
+   * delivered a player's requested purchase free, unnarrated, and — once D's exemption shipped —
+   * WORN. Ruled out 2026-08-20 ("exclude approvals from setup mode exemption"): an approval takes the
+   * ordinary paid route whatever the mode says.
+   *
+   * Driven through the REAL Approve button on a real request card, with the mode LIT the whole time,
+   * so what is asserted is the shipped path and not a hand-called helper. The paired control is the
+   * point of the section — the same client, the same mode, the same instant: the approval arrives
+   * unworn and the GM's own direct acquisition still arrives worn.
+   */
+  const D2setup = await gm.evaluate(async () => {
+    const S = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
+    const buyer = await Actor.create({ name: "__PW__ApprBuyer", type: "character",
+      system: { eurobucks: 50000 }, flags: { "cp2020-augmented": { __pwtest: true } } });
+    const doc = await game.packs.get("cyberpunk2020.armor").getDocument("aiehEkbdjqqYZD9j");
+    const total = Number(doc.system.cost) || 200;
+    const requester = game.users.find(u => !u.isGM);
+    // ⛔ THE MODE IS ON FOR THE WHOLE OF THIS SECTION — that is the condition under test, not a stray.
+    const modeOn = S.setShopSetupMode(true) === true && S.isShopSetupMode() === true;
+    const msg = await ChatMessage.create({
+      whisper: game.users.filter(u => u.isGM).map(u => u.id),
+      content: `<div class="cp-shop-request"><p class="cp-shop-request-body">__PW__ approval request</p>
+        <div class="cp-shop-request-actions">
+        <button type="button" class="cp-shop-request-btn cp-approve" data-action="approve">Approve</button>
+        <button type="button" class="cp-shop-request-btn cp-deny" data-action="deny">Deny</button></div></div>`,
+      flags: { "cp2020-augmented": { purchaseRequest: {
+        buyerId: buyer.id, packId: "cyberpunk2020.armor", itemId: "aiehEkbdjqqYZD9j",
+        qty: 1, styleMult: 1, styleLabel: "", name: doc.name, total,
+        needsPrice: false, priceRange: null, requesterId: requester?.id ?? game.user.id, status: "pending",
+      } } },
+    });
+    return { msgId: msg.id, buyerId: buyer.id, itemName: doc.name, cost: total, modeOn,
+             funds: Number(buyer.system?.eurobucks ?? 0) };
+  });
+
+  await gm.locator(`li[data-message-id="${D2setup.msgId}"] .cp-shop-request-btn[data-action="approve"]`).first()
+    .waitFor({ state: "visible", timeout: 20000 });
+  const d2MsgsBefore = await gm.evaluate(() => game.messages.size);
+  await gm.locator(`li[data-message-id="${D2setup.msgId}"] .cp-shop-request-btn[data-action="approve"]`).first().click();
+  await sleep(2500);
+
+  const D2 = await gm.evaluate(async ({ buyerId, itemName, msgsBefore }) => {
+    const S = await import("/modules/cp2020-augmented/module/shop/setup-mode.js");
+    const P = await import("/modules/cp2020-augmented/module/shop/purchase.js");
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const buyer = game.actors.get(buyerId);
+    const out = {};
+    try {
+      out.modeStillOn = S.isShopSetupMode() === true;
+      const piece = buyer?.items?.find(i => i.name === itemName && i.type === "armor");
+      out.delivered = !!piece;
+      out.approvedEquipped = piece?.system?.equipped === true;
+      out.fundsAfter = Number(buyer?.system?.eurobucks ?? -1);
+      const newCards = game.messages.contents.slice(msgsBefore).map(m => m.content).join(" ");
+      out.unwornLine = newCards.includes(game.i18n.localize("CYBERPUNK.ShopArmorUnworn"));
+      out.boughtCard = /ShopBought|eb\b/.test(newCards) && newCards.length > 0;
+
+      // ── THE PAIRED CONTROL, same client, same lit mode: the GM's OWN direct acquisition ─────────
+      const npc = await Actor.create({ name: "__PW__ApprNpc", type: "npc",
+        system: { eurobucks: 50000 }, flags: { "cp2020-augmented": { __pwtest: true } } });
+      const doc = await game.packs.get("cyberpunk2020.armor").getDocument("aiehEkbdjqqYZD9j");
+      const cardsBefore = game.messages.size;
+      const npcFundsBefore = Number(npc.system?.eurobucks ?? 0);
+      await P.buyItem(npc, doc, { qty: 1, unitPrice: 10 });
+      await sleep(400);
+      out.directEquipped = npc.items.find(i => i.name === doc.name)?.system?.equipped === true;
+      out.directFree = Number(npc.system?.eurobucks ?? -1) === npcFundsBefore;
+      out.directSilent = game.messages.size === cardsBefore;
+      await npc.delete().catch(() => {});
+    } finally {
+      S.setShopSetupMode(false);
+      await buyer?.delete().catch(() => {});
+    }
+    return out;
+  }, { buyerId: D2setup.buyerId, itemName: D2setup.itemName, msgsBefore: d2MsgsBefore });
+
+  chk("D2/precondition: setup mode was lit on the approving GM's client",
+    D2setup.modeOn === true && D2.modeStillOn === true, `${D2setup.modeOn} / ${D2.modeStillOn}`);
+  chk("D2: the approved request delivered the goods", D2.delivered === true, D2.delivered);
+  chk("D2: an approved request arrives equipped:false even with setup mode ON",
+    D2.approvedEquipped === false, D2.approvedEquipped);
+  chk("D2: and it carries the unworn receipt line — an approval is receipted, not silent",
+    D2.unwornLine === true, `${D2.unwornLine} (cards seen: ${D2.boughtCard})`);
+  chk("D2: an approval is charged at the listed price, not waived by the GM's mode",
+    D2.fundsAfter === D2setup.funds - D2setup.cost, `${D2.fundsAfter} vs ${D2setup.funds - D2setup.cost}`);
+  chk("D2/pair: the GM's OWN direct acquisition in the same lit mode still arrives WORN (negative)",
+    D2.directEquipped === true, D2.directEquipped);
+  chk("D2/pair: and it is still free and still silent — the mode is untouched for furnishing",
+    D2.directFree === true && D2.directSilent === true,
+    `free=${D2.directFree} silent=${D2.directSilent}`);
+
   /* ══ SECTION B — approved-but-unaffordable ══════════════════════════════════════════════════════ */
   const Bsetup = await gm.evaluate(async () => {
     const pauper = await Actor.create({ name: "__PW__AcqPauper", type: "character",
@@ -582,7 +676,10 @@ try {
       if (prev && scene?.active) await prev.activate().catch(() => {});
       await scene?.delete().catch(() => {});
       for (const a of game.actors.filter(a => a.name?.startsWith("__PW__"))) await a.delete().catch(() => {});
-      for (const m of game.messages.filter(m => /__PW__|could not afford|cp-shop-request/.test(m.content))) await m.delete().catch(() => {});
+      // Content OR speaker: the approval receipt (Section D2) names the item, not the fixture, so the
+      // only thing tying it to this run is the actor it was spoken by.
+      for (const m of game.messages.filter(m => /__PW__|could not afford|cp-shop-request/.test(m.content)
+                                             || /^__PW__/.test(m.speaker?.alias ?? ""))) await m.delete().catch(() => {});
     });
   } catch { /* cleanup is best-effort */ }
   await b.close();

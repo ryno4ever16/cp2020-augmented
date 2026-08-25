@@ -19,9 +19,15 @@
  *   · A world setting would make purchases free for the PLAYERS TOO, which silently breaks the
  *     economy the shop exists to enforce — the exact bug a "GM convenience" toggle must never cause.
  *   · A player's own buy on their own client never consults this, so they keep paying while the GM's
- *     mode is on. A purchase REQUEST a GM approves runs on the GM's client, so an approval made while
- *     setup mode is on is free — that is a GM deliberately gifting an approved request, and the mode
- *     badge is lit on screen while they do it.
+ *     mode is on. ⏪⏪ AND AN APPROVED REQUEST NO LONGER SLIPS THROUGH THAT GAP (user ruling
+ *     2026-08-20: "exclude approvals from setup mode exemption"). A purchase REQUEST a GM approves is
+ *     resolved on the GM's client, so it used to read this mode and deliver a player's requested
+ *     purchase free, unnarrated and — once the armor exemption shipped — worn. That was the one route
+ *     by which a GM's own convenience reached a PLAYER's economy, which is the exact thing the
+ *     client-local design exists to prevent. `buyItem` now settles an approval on the ordinary paid
+ *     route whatever this says; the discriminator is the `requesterId` the approval path threads, and
+ *     the reasoning is written out at the `setup` line in module/shop/purchase.js. A GM who does want
+ *     to gift a request still can — deny it and hand the goods over directly, which is furnishing.
  *
  * ⚠ IN MEMORY, NOT PERSISTED, AND THAT IS DELIBERATE. It resets on reload. A persisted "everything is
  * free" flag that a GM set three sessions ago and forgot is a much worse failure than having to click

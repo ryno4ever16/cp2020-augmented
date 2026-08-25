@@ -529,7 +529,6 @@ const parity = await page.evaluate(async ({ SCOPE, shooterName }) => {
   const FX = await import("/modules/cp2020-augmented/module/fx/effects.js");
   const SFX = await import("/modules/cp2020-augmented/module/fx/status-fx.js");
   const TT = await import("/modules/cp2020-augmented/module/fx/trauma-team-tool.js");
-  const GF = await import("/modules/cp2020-augmented/module/fx/ground-fire-tool.js");
   const actor = game.actors.getName(shooterName);
   const out = { shooterFound: !!actor };
   if (!actor) return out;
@@ -565,14 +564,10 @@ const parity = await page.evaluate(async ({ SCOPE, shooterName }) => {
   out.traumaRouted = TT.addTraumaTeamTool(probe) === true && !!probe.tokens.tools["cp-tt-land"];
   out.traumaOnLiveBar = Object.keys(ui.controls?.controls?.tokens?.tools ?? {}).includes("cp-tt-land");
 
-  // 5 — the ground-fire clear control reaches that same toolbar. It is the other half of the
-  //     `groundFirePersistent` switch: the thing it acts on is reachable from rows 07 and 12 (the two
-  //     burning rows above), and the control that puts those fires out has to be reachable beside them.
-  const fireProbe = { tokens: { name: "tokens", tools: {} } };
-  out.fireClearRouted = GF.addGroundFireClearTool(fireProbe) === true && !!fireProbe.tokens.tools["cp-fire-clear"];
-  out.fireClearOnLiveBar = Object.keys(ui.controls?.controls?.tokens?.tools ?? {}).includes("cp-fire-clear");
-  // …and the burning rows the control exists for are on the rack, read off the module's own table
-  // rather than restated here — a load whose row sets fires but has no bench gun reddens.
+  // 5 — every load whose row sets the ground alight is on the rack, read off the module's own table
+  //     rather than restated here: a load whose row sets fires but has no bench gun reddens. (⏪ the
+  //     two legs that stood beside this one were retired 2026-08-20 with the expiry switch and its
+  //     clear control — the element itself still ships and rows 07 and 12 still exercise it.)
   out.burningLoads = Object.entries(FX.AMMO_FX).filter(([, e]) => e?.groundFire === true)
     .map(([k]) => ({ k, routed: benchLoads.has(k) }));
   return out;
@@ -591,10 +586,7 @@ ok("parity: every shipped condition row is raisable on a bench figure (by a load
 ok("parity: the arrival tool is reachable from the bench's own toolbar",
   parity.traumaRouted === true && parity.traumaOnLiveBar === true,
   `hook: ${parity.traumaRouted} · live bar: ${parity.traumaOnLiveBar}`);
-ok("parity: the ground-fire clear control is reachable from the bench's own toolbar",
-  parity.fireClearRouted === true && parity.fireClearOnLiveBar === true,
-  `hook: ${parity.fireClearRouted} · live bar: ${parity.fireClearOnLiveBar}`);
-ok("parity: and every load whose row sets fires has a bench gun to fire it from",
+ok("parity: every load whose row sets fires has a bench gun to fire it from",
   (parity.burningLoads ?? []).length > 0 && (parity.burningLoads ?? []).every(l => l.routed),
   (parity.burningLoads ?? []).map(l => `${l.k}${l.routed ? "" : " ✗"}`).join(" "));
 

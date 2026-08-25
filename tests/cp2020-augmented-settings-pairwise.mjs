@@ -152,11 +152,6 @@ const ALLOWED = [
   "combatFxEnabled",
   "faceTargetOnFire",
   "goreEnabled",
-  // An ordinary world boolean, in the matrix on the same footing as goreEnabled: no onChange, no
-  // document write, read per placement by the presentation rail. It is safe for the matrix to flip
-  // because the row's own shot carries the baseline load, which sets no fires whatever this says —
-  // and the row clears the rail in its finally regardless.
-  "groundFirePersistent",
 ];
 
 /** Kept out of the matrix, each with the reason the header states at length. */
@@ -172,6 +167,11 @@ const EXCLUDED = {
   radZonesMigrated: "migration stamps: flipping re-fires or suppresses one-time world sweeps (document writes); restoring wrong re-runs a migration",
   fleshLimbStatusMigratedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
   radZonesMigratedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
+  // ⚠ Classified 2026-08-20 after §1 went red on them. They are the vehicle hull/frame sweep's stamp
+  // pair (module/vehicle/vehicle-hull-migration.js), registered config:false and never added here when
+  // that sweep landed — the same shape as the five stamps above, and the same reason for staying out.
+  vehicleHullFramed: "migration stamps: flipping re-fires or suppresses one-time world sweeps (document writes); restoring wrong re-runs a migration",
+  vehicleHullFramedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
 };
 
 /** Master → sub-settings, mirrored from settings-sections.js MASTERS. The row asserts the greying. */
