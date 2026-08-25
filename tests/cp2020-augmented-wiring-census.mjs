@@ -194,6 +194,7 @@ const MANIFEST = [
   ["module/actor/vehicle-sheet.js:382", "_cpActivateCountermeasures", "vehicle-sheet", "change", "input.cp-cm-box", "", null, null],
   ["module/actor/vehicle-sheet.js:382", "_cpActivateCountermeasures", "vehicle-sheet", "change", "input.cp-cm-box:checked", "", "`:checked` is a live-state selector — no countermeasure box is ticked on the fixture", null],
   ["module/actor/vehicle-sheet.js:400", "_cpActivateAcpaMode", "vehicle-sheet", "change", "select[name='system.acpaCombatModel']", "", null, null],
+  ["module/actor/vehicle-sheet.js:417", "_cpActivateFaceSelect", "vehicle-sheet", "change", "select.cp-veh-face-select", "faceCurrent", null, null],
   ["module/actor/vehicle-sheet.js:437", "_onControlRoll", "vehicle-sheet", "click", "[data-action=\"controlRoll\"]", "", null, null],
   ["module/actor/vehicle-sheet.js:497", "_onVehicleDamage", "vehicle-sheet", "click", "[data-action=\"vehicleDamage\"]", "", null, null],
   ["module/actor/vehicle-sheet.js:502", "_onAcpaMelee", "vehicle-sheet", "click", "[data-action=\"acpaMelee\"]", "", null, null],

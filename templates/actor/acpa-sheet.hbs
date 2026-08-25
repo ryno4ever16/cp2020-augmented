@@ -6,16 +6,15 @@
           is being added incrementally below the existing combat fields.
           V2 requires each PART to render a SINGLE root element, so wrap everything in one div. --}}
 <div class="cp-acpa-sheet-root flexcol">
+    {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-face.hbs"}}
     <header class="cyberheader">
         <div class="flexrow">
             <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64"/>
             <div class="flexcol" style="flex:1; margin-left:8px;">
                 <h1 class="title"><input type="search" class="field-value" name="name" value="{{actor.name}}" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore/></h1>
                 <div class="fieldrow">
-                    <div class="field" title="{{CPLocal 'Vehicle.AcpaCheckboxTip'}}">
-                        <label>{{CPLocal "Vehicle.AcpaLabel"}}</label>
-                        <input type="checkbox" name="system.isACPA" {{#if system.isACPA}}checked{{/if}}/>
-                    </div>
+                    {{!-- The powered-armor checkbox that used to sit here is gone: leaving the ACPA
+                          face is picking another option in the sheet-face strip at the top. --}}
                     <div class="field" title="{{CPLocal 'Vehicle.RulesetTip'}}">
                         <label>{{CPLocal "Vehicle.RulesetLabel"}}</label>
                         <span class="cp-ruleset-badge">{{ruleSystemLabel}}</span>

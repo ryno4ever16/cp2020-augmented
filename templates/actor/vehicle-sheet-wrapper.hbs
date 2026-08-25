@@ -1,9 +1,12 @@
 {{!-- V2 single-root part for the vehicle / ACPA actor sheet. Renders the ACPA layout for powered
      armor, otherwise the plain-vehicle layout, by including the matching sub-template as a
      Handlebars partial (both registered via preloadHandlebarsTemplates). This wrapper div is the
-     part's single root element, which ApplicationV2's HandlebarsApplicationMixin requires. --}}
+     part's single root element, which ApplicationV2's HandlebarsApplicationMixin requires.
+     ⭐ The branch reads the sheet context's RESOLVED FACE (isACPAFace / useCivilianSheet), not the
+     raw stored flags: a compendium-deployed vehicle derives its face from its own data, and one
+     resolver (module/vehicle/vehicle-face.js) settles both the derived and the designated case. --}}
 <div class="cp-vehicle-sheet-root flexcol" style="flex:1;min-height:0;">
-{{#if system.isACPA}}
+{{#if isACPAFace}}
 {{> "modules/cp2020-augmented/templates/actor/acpa-sheet.hbs"}}
 {{else}}{{#if useCivilianSheet}}
 {{!-- Civilian (default) layout: mirrors the vehicle ITEM sheet so a deployed vehicle looks like

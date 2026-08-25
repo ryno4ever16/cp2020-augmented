@@ -4,6 +4,13 @@
      layout (vehicle-sheet.hbs) is the specialist view. Reuses .cp-vehicle-item-fields so the
      containment/boundary CSS covers both sheets. --}}
 <div class="cp-vehicle-sheet-root flexcol">
+    {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-face.hbs"}}
+    {{#if mmDataNote}}
+    {{!-- This vehicle is showing the standard face in a Maximum Metal world while carrying combat
+          data the standard face does not print (flank armor, mounts, MM fittings). Say so, because
+          damage resolution reads that data whichever face is on screen. --}}
+    <div class="cp-veh-mm-data-note" title="{{CPLocal 'Vehicle.MMDataNoteTip'}}">{{CPLocal "Vehicle.MMDataNote"}}</div>
+    {{/if}}
     <header class="cyberheader">
         <div class="flexrow">
             <img class="profile-img" src="{{actor.img}}" data-edit="img" title="{{actor.name}}" height="64" width="64"/>
@@ -80,12 +87,8 @@
             <label class="cp-veh-unmodeled" title="{{CPLocal 'VehicleUnmodeledTip'}}">{{CPLocal "VehicleUnmodeled" subtype=system.vehicleTypeText}}</label>
         </div>
         {{/if}}
-        {{#if mmOn}}
-        <div class="field" title="{{CPLocal 'VehicleMMSheetTip'}}">
-            <label>{{CPLocal "VehicleMMSheet"}}</label>
-            <input type="checkbox" name="system.isMMVehicle" {{#if system.isMMVehicle}}checked{{/if}}/>
-        </div>
-        {{/if}}
+        {{!-- The "MM combat sheet" checkbox that used to sit here is gone: choosing the face is
+              the job of the labelled strip at the top of the sheet, which every face carries. --}}
     </div>
 
     {{!-- SDP + SP — same shape as the item sheet. --}}

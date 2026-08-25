@@ -2,6 +2,7 @@
      Template content starts directly with the header.
      V2 requires each PART to render a SINGLE root element, so wrap everything in one div. --}}
 <div class="cp-vehicle-sheet-root flexcol">
+    {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-face.hbs"}}
     {{!-- Header --}}
     <header class="cyberheader">
         <div class="flexrow">
@@ -15,10 +16,9 @@
                             {{#each vehicleTypes}}<option value="{{this}}" {{#if (equals ../system.vehicleType this)}}selected{{/if}}>{{CPLocal this}}</option>{{/each}}
                         </select>
                     </div>
-                    <div class="field" title="{{CPLocal 'Vehicle.AcpaPoweredArmorTip'}}">
-                        <label>{{CPLocal "Vehicle.AcpaPoweredArmorLabel"}}</label>
-                        <input type="checkbox" name="system.isACPA" {{#if system.isACPA}}checked{{/if}}/>
-                    </div>
+                    {{!-- The powered-armor checkbox that used to sit here is gone: the ACPA face is
+                          one option of the sheet-face strip at the top (which confirms first,
+                          because isACPA re-derives Body Value, frame SDP and destruction). --}}
                     <div class="field" title="{{CPLocal 'Vehicle.RulesetTip'}}">
                         <label>{{CPLocal "Vehicle.RulesetLabel"}}</label>
                         <span class="cp-ruleset-badge">{{ruleSystemLabel}}</span>

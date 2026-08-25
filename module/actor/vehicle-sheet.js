@@ -12,6 +12,7 @@ import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
 import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells, hullDimsOf, rankCells } from "../vehicle/vehicle-layout.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
 import { RIDER_COVER_MODES, derivedRiderCoverFor } from "../vehicle/vehicle-cover.js";
+import { FACES, FACE_STANDARD, FACE_MM, FACE_ACPA, facePatch, resolveVehicleFace, carriesMMCombatData } from "../vehicle/vehicle-face.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -196,6 +197,29 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       : null;
     const acpaModeEffectiveLabel = _modeLabelKey ? localize(_modeLabelKey) : "";
 
+    // ── Which FACE this sheet renders, and the picker that changes it (vehicle-face.js owns the
+    // rules). `face` replaces the old inline `!isACPA && !(isMMVehicle && mmOn)` expression; the
+    // predicate it gates the MM face on is the same `mmOn`, so no existing world's sheet changes.
+    const faceState = resolveVehicleFace(actor, { mmOn });
+    const FACE_KEYS = { [FACE_STANDARD]: "Vehicle.FaceStandard", [FACE_MM]: "Vehicle.FaceMM", [FACE_ACPA]: "Vehicle.FaceACPA" };
+    const faceControl = {
+      // Catalog (compendium-deployed) vehicles derive their face and offer no picker — the choice
+      // belongs to vehicles someone built, which is where it is actually a choice.
+      show: faceState.showPicker,
+      // A viewer who cannot edit still sees WHICH face is in force; the control just won't move.
+      locked: !editable,
+      value: faceState.chosen,
+      mmGated: faceState.mmGated,
+      options: FACES.map(key => ({
+        value: key,
+        label: localize(FACE_KEYS[key]),
+        selected: key === faceState.chosen,
+        // Visible, not hidden: the option a world's settings put out of reach still shows, so the
+        // sheet says the face exists and the hint says which setting opens it.
+        disabled: key === FACE_MM && faceState.mmGated,
+      })),
+    };
+
     return {
       actor,
       system,
@@ -205,9 +229,15 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       ruleSystemLabel: localize(isMM ? "Vehicle.RulesetNameMM" : "Vehicle.RulesetNameCore"),
       isMM,
       mmOn,
-      // ── Civilian (item-mirror) sheet context — unified-sheet plan Phase 2. The civilian layout
-      // renders unless the vehicle is ACPA or designated an MM combat vehicle under the MM gate.
-      useCivilianSheet: !system.isACPA && !(system.isMMVehicle && mmOn),
+      // ── Which layout the wrapper includes. `isACPAFace` and `useCivilianSheet` are the wrapper's
+      // two branches; both come from the one resolver so a catalog vehicle's DERIVED face and a
+      // custom vehicle's designated one are decided in the same place.
+      isACPAFace: faceState.face === FACE_ACPA,
+      useCivilianSheet: faceState.face === FACE_STANDARD,
+      faceControl,
+      // The standard face is showing on a Maximum Metal world's vehicle that carries combat data
+      // the standard face does not print — resolution still uses that data, so say so.
+      mmDataNote: faceState.face === FACE_STANDARD && isMM && carriesMMCombatData(actor),
       // Unit conversion hints (mirror of the item sheet's veh context; 1 mi = 1.609 km).
       speedAltMax: system.speedUnit === "kph" ? Math.round((Number(system.topSpeed) || 0) / 1.609)
                                               : Math.round((Number(system.topSpeed) || 0) * 1.609),
@@ -362,6 +392,51 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     this._cpActivateCountermeasures(this.element);
     this._cpActivateAcpaMode(this.element);
     this._cpActivateCivilianControls(this.element);
+    this._cpActivateFaceSelect(this.element);
+  }
+
+  /**
+   * The sheet-face picker (the strip at the top of every face). One select, three options, and one
+   * ATOMIC write of the stored pair {isACPA, isMMVehicle} — never two updates, so no observer ever
+   * sees the vehicle as both a suit and an MM combat vehicle, or as neither.
+   *
+   * Crossing INTO or OUT OF the ACPA option confirms first. isACPA is not presentation: the data
+   * model derives Body Value from chassis STR instead of SDP, derives per-area frame SDP, and
+   * changes what "destroyed" means for the actor. Standard↔MM flips are presentation only and go
+   * through without a prompt.
+   *
+   * Delegated on the persistent sheet root and bound once. The select carries no `name`, so it is
+   * not part of the form's submitOnChange payload — nothing writes it but this handler. CAPTURE
+   * phase (the trailing `true`), the same reason `_cpActivateAcpaMode` uses it: the sheet root IS
+   * the form, so ApplicationV2's submitOnChange listener sits on this very node; a capture listener
+   * runs before it and `stopPropagation` can then suppress the re-render that would otherwise fire
+   * underneath an open confirm dialog.
+   */
+  _cpActivateFaceSelect(root) {
+    if (!root || root.dataset.cpFaceBound === "1") return;
+    root.dataset.cpFaceBound = "1";
+    root.addEventListener("change", async (ev) => {
+      const sel = ev.target?.closest?.("select.cp-veh-face-select");
+      if (!sel || !root.contains(sel)) return;
+      ev.stopPropagation();
+      ev.stopImmediatePropagation();
+      if (!this.isEditable) { this.render(false); return; }
+      const next = String(sel.value ?? "");
+      const prev = String(sel.dataset.faceCurrent ?? "");
+      if (!FACES.includes(next) || next === prev) return;
+      // The ACPA boundary in either direction — entering powered armor or leaving it.
+      if (next === FACE_ACPA || prev === FACE_ACPA) {
+        const ok = await foundry.applications.api.DialogV2.confirm({
+          window: { title: localize("Vehicle.FaceAcpaConfirmTitle") },
+          content: `<p>${localize(next === FACE_ACPA ? "Vehicle.FaceAcpaConfirmOn" : "Vehicle.FaceAcpaConfirmOff")}</p>`,
+          rejectClose: false, modal: true,
+        });
+        // Cancel writes NOTHING (the select is nameless, so no auto-write beat us here) — a
+        // re-render puts the control back on the face still in force.
+        if (!ok) { this.render(false); return; }
+      }
+      await this.actor.update(facePatch(next));
+    }, true);
   }
 
   /**

@@ -1,0 +1,26 @@
+{{!-- THE SHEET-FACE STRIP — the first thing on every vehicle/ACPA face, and the same control on
+     all three, so any face can reach any other (returning to the standard sheet is simply picking
+     Standard). Deliberately its own labelled strip above the header rather than a checkbox among
+     the identity fields: it selects the whole layout, not one of the vehicle's stats.
+
+     Custom vehicles only. A vehicle deployed from a compendium item derives its face from its own
+     data (see vehicle-face.js) and renders no picker, so context.faceControl.show is false there.
+
+     The select carries NO `name`: it is not one stored field. Picking an option writes the pair
+     {isACPA, isMMVehicle} atomically through the sheet's own handler. --}}
+{{#if faceControl.show}}
+<div class="cp-veh-face-strip" title="{{CPLocal 'Vehicle.FaceTip'}}">
+    <label class="cp-veh-face-label" for="cp-veh-face-{{actor.id}}">{{CPLocal "Vehicle.FaceLabel"}}</label>
+    <select class="cp-veh-face-select" id="cp-veh-face-{{actor.id}}"
+            data-face-current="{{faceControl.value}}" {{#if faceControl.locked}}disabled{{/if}}>
+        {{#each faceControl.options}}
+        <option value="{{value}}" {{#if selected}}selected{{/if}} {{#if disabled}}disabled{{/if}}>{{label}}</option>
+        {{/each}}
+    </select>
+    {{#if faceControl.mmGated}}
+    {{!-- The breadcrumb: the MM option stays VISIBLE and disabled, and this line names the world
+          setting the path runs through, so the gate can be learned from the sheet. --}}
+    <span class="cp-veh-face-hint">{{CPLocal "Vehicle.FaceMMGateHint"}}</span>
+    {{/if}}
+</div>
+{{/if}}

@@ -116,6 +116,7 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/actor/parts/countermeasures.hbs",
   "modules/cp2020-augmented/templates/actor/parts/vehicle-occupants.hbs",
   "modules/cp2020-augmented/templates/actor/parts/vehicle-layout.hbs",
+  "modules/cp2020-augmented/templates/actor/parts/vehicle-face.hbs",
   "modules/cp2020-augmented/templates/actor/parts/aboard-banner.hbs",
   // Augmented character/NPC actor sheet (Option B) + its parts. The {{> "modules/…/parts/X.hbs"}}
   // includes resolve as registered partials only once preloaded here.

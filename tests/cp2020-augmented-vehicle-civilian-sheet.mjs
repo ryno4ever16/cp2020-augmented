@@ -124,6 +124,18 @@ const res = await page.evaluate(async () => {
   ok("matrix: civilian layout for isMMVehicle=false + MM on", L.civ === true);
   out.civAppId = actor.sheet.id;
 
+  // ⏪ 2026-08-25 (face-picker unit): the MM designation is no longer a checkbox buried in the
+  // identity grid — it is one option of the labelled strip at the top of EVERY face. These two legs
+  // are the anti-regression for the buried placement; the picker's own behaviour is certified by
+  // cp2020-augmented-vehicle-face-dropdown.mjs.
+  ok("face control: the buried MM-sheet checkbox is gone from the identity grid",
+    L.root.querySelectorAll('input[name="system.isMMVehicle"]').length === 0);
+  const civStrip = L.root.querySelector(".cp-veh-face-strip");
+  const civHeader = L.root.querySelector("header.cyberheader");
+  ok("face control: a face strip renders above the header instead",
+    !!civStrip && civStrip.getBoundingClientRect().top < civHeader.getBoundingClientRect().top,
+    `strip top ${Math.round(civStrip?.getBoundingClientRect().top)} vs header top ${Math.round(civHeader?.getBoundingClientRect().top)}`);
+
   // honest label: seed a submarine-ish clone
   const subSrc = src.toObject(); subSrc.system.vehicleType = "submarine (working-class)"; subSrc.name = "__PWC__SubSrc";
   const subItem = new Item.implementation(subSrc);
@@ -140,6 +152,11 @@ const res = await page.evaluate(async () => {
   await new Promise(r => setTimeout(r, 600));
   L = await layoutOf(actor);
   ok("matrix: MM sheet for isMMVehicle=true + MM on", L.mm === true && L.civ === false);
+  // The one-way defect this replaced: the MM combat face used to render NOTHING that could clear
+  // the designation. It now carries the same picker as every other face.
+  ok("face control: the MM combat face offers a way back",
+    !!L.root.querySelector("select.cp-veh-face-select")
+    && [...L.root.querySelector("select.cp-veh-face-select").options].some(o => o.value === "standard" && !o.disabled));
   // MM off forces civilian even when designated
   await game.settings.set(SCOPE, "mmEnabled", false);
   L = await layoutOf(actor);
