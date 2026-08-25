@@ -678,3 +678,57 @@ export function resolveActorRef({ tokenId = null, sceneId = null, actorUuid = nu
   }
   return (actorId ? game.actors?.get(actorId) : null) ?? null;
 }
+
+/**
+ * WHICH DOCUMENT FIRED THIS SHOT — the attacker side of a `cyberpunk2020.weaponFired` payload,
+ * resolved as a FIGURE rather than as a directory entry.
+ *
+ * ⭐ WHY AN ACTOR ID IS NOT AN ANSWER. An unlinked token's synthetic actor SHARES its id with the
+ * world actor it was drawn from (the id-collision class recorded in combat-data-hazards), so
+ * `game.actors.get(payload.attackerId)` on a mook's shot hands back the BASE actor every time. Every
+ * attacker-side read and write then lands in one shared pool: one goon's aim is spent off the base
+ * while its own remains standing, one goon's shot advances an action counter every copy of that base
+ * reads back, and one goon's mono blade breaks on all of them. That is the same defect the four
+ * combat-tracker controls were fixed for (they resolve through `combatant.actor`); this is its
+ * counterpart on the fire path.
+ *
+ * THE FALLBACK LADDER, in order, each rung strictly narrower than the next:
+ *
+ *   1. `payload.attackerTokenId` — the figure the seam captured AT THE TRIGGER PULL
+ *      (seam-shim.js `firingTokenIdOf`), which is the one moment the identity is unambiguous. Its
+ *      token's own actor is the synthetic document when unlinked and the world actor when linked, so
+ *      a linked attacker resolves to exactly what the id lookup produced.
+ *   2. THE COMBATANT, only when the answer is unique. With no named figure, a shot from an actor that
+ *      has EXACTLY ONE combatant in the viewed combat can only have come from that figure, and
+ *      `combatant.actor` is the combatant's own live reference (never a re-fetch by id — that idiom is
+ *      what converts a correct synthetic document back into the base). Two or more matching combatants
+ *      is a genuine ambiguity and is NOT guessed at: it falls through.
+ *   3. `game.actors.get(attackerId)` — exactly today's behaviour, and deliberately so. A macro-fired
+ *      payload, a shot from an actor that is not in the fight, an emitter older than the seam field,
+ *      or a token id this client cannot see all land here and behave as they always did.
+ *
+ * A fourth rung — the speaker's token off the triggering chat message — is NOT used: the shot's card
+ * is created a round trip AFTER this hook is raised, so at listener time there is no message to read.
+ *
+ * Sibling of damage-hooks' `_firingTokenOf`, which answers the same question for PLACEMENT and so
+ * must return a canvas placeable; this one wants the DOCUMENT and takes it from the scene.
+ *
+ * @param {object} payload  a weaponFired payload (or anything carrying the same attacker fields)
+ * @returns {Actor|null}
+ */
+export function firingActorOf(payload) {
+  const actorId = payload?.attackerId ?? payload?.attackerActorId ?? payload?.actorId ?? null;
+  const tokenId = payload?.attackerTokenId ?? null;
+  if (tokenId) {
+    const scene = (payload?.sceneId ? game.scenes?.get(payload.sceneId) : null) ?? canvas?.scene ?? null;
+    const tokActor = scene?.tokens?.get(tokenId)?.actor ?? null;
+    if (tokActor) return tokActor;
+  }
+  if (actorId) {
+    try {
+      const matches = [...(game.combat?.combatants ?? [])].filter(c => c.actor?.id === actorId);
+      if (matches.length === 1 && matches[0].actor) return matches[0].actor;
+    } catch (_e) { /* no combat / exotic collection — fall through to the id lookup */ }
+  }
+  return (actorId ? game.actors?.get(actorId) : null) ?? null;
+}

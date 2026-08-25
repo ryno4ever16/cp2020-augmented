@@ -43,7 +43,7 @@ import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 // combatFxEnabled is read (with the presentation rail's patternFlowOwns) at the pattern's apply, so one
 // round is not sounded twice — once on arrival by the rail and again when the corridor is confirmed.
 import { mechRoundTickEnabled, combatFxEnabled } from "../settings.js";
-import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, localize, localizeParam, tryLocalize } from "../utils.js";
+import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize } from "../utils.js";
 import { renderChatCard, getHtmlElement }                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea, areaOcclusionTest } from "./area-shapes.js";
@@ -611,7 +611,14 @@ function _hookWeaponFired() {
     // Mono-edge break-on-fumble (CP2020 p.112): this is the shot's single authoritative client, so mark
     // the weapon broken + post the note here (exactly once). Runs BEFORE the areaDamages guard so a
     // damage-less fumble card still breaks the blade; a no-op unless the weapon is mono and it fumbled.
-    await _maybeBreakMonoWeapon(payload, attackerActor);
+    //
+    // ⚠ A DIFFERENT DOCUMENT FROM THE ONE THE ROUTING QUESTIONS ABOVE USE, on purpose. The break is a
+    // WRITE onto the attacker's own weapon, so it must land on the figure that swung — resolved
+    // through the seam's named token, else exactly the id lookup as before. The permission readings
+    // above (`ownerOnline` / `isMyShot` / `gmHandles`) deliberately stay on the directory actor: they
+    // ask who may present this shot, a question the base document already answers, and re-pointing
+    // them would move the presentation seat as a side effect of a weapon-breakage fix.
+    await _maybeBreakMonoWeapon(payload, firingActorOf(payload) ?? attackerActor);
 
     if (!hasAreaDamages) return;
 
@@ -1314,10 +1321,15 @@ function _hookAimTracking() {
     if (select) select.value = String(Math.min(3, savedAim));
   });
 
+  // THE AIM IS SPENT BY THE FIGURE THAT FIRED, not by the directory entry it was drawn from.
+  // The declaration side already writes per-figure (the tracker control resolves through its
+  // combatant; the dialog prefill reads the weapon's own actor, which for an unlinked token IS the
+  // synthetic one) — so an id lookup here spent the aim on a THIRD document, and the two never met:
+  // the goon's aim stood forever while stray clears landed on the base. `firingActorOf` prefers the
+  // figure the seam named at the trigger pull; with nothing to name, it is the id lookup verbatim.
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
-    const actorId = payload.attackerId ?? payload.actorId;
-    if (!isEnabled() || !actorId) return;
-    const actor = game.actors.get(actorId);
+    if (!isEnabled()) return;
+    const actor = firingActorOf(payload);
     if (!actor) return;
     if ((actor.getFlag("cp2020-augmented", "aimRounds") ?? 0) > 0) {
       actor.unsetFlag("cp2020-augmented", "aimRounds").catch(() => {});
@@ -1851,9 +1863,6 @@ async function _placeGasCloud(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
 
-    // item.js emits the attacker as "attackerId"; accept legacy aliases too.
-    const attackerId = payload.attackerId ?? payload.attackerActorId ?? payload.actorId ?? null;
-
     // Determine cloud center: target token position, or attacker position if none
     let cloudX = null, cloudY = null;
     if (payload.targetTokenId) {
@@ -1902,10 +1911,28 @@ async function _placeGasCloud(payload) {
     const handle = await createArea(scene, descriptor);
     if (!handle?.doc) { console.warn("CP2020 | Gas cloud creation failed"); return; }
 
+    // ⭐ WHOSE NAME THE CARD CARRIES — the FIGURE that threw it, not its directory entry. This is the
+    // first of the three area cards that ask the question; the reasoning is written out once, here, and
+    // pointed at from _placeExplosion and _placeSpreadZone.
+    //
+    // `game.actors.get(attackerId)` cannot name a figure: an unlinked copy's synthetic actor shares the
+    // base actor's id (the id-collision class recorded in combat-data-hazards), so every copy of one
+    // base produced a card headed with the BASE's name — and, because Foundry's own getSpeaker then
+    // takes `actor.getActiveTokens()[0]` for a world actor, pointed at whichever figure of that base the
+    // canvas listed first rather than at the thrower. `firingActorOf` (utils.js) prefers the figure the
+    // seam captured at the trigger pull, and for a synthetic actor getSpeaker resolves through
+    // `actor.token` — so the card names THAT figure and carries its token. A LINKED figure resolves to
+    // the world actor, i.e. to exactly what the id lookup produced, so nothing about its card moves.
+    //
+    // `?? undefined` keeps the no-identity rung byte-identical to the line it replaces: an absent or
+    // unresolvable attacker yields `undefined` here exactly as it did before.
+    //
+    // ⚠ NAME AND PORTRAIT ONLY. The seat questions in _hookWeaponFired (who may present this shot)
+    // deliberately stay on the directory actor — see the note at the mono-break call.
     await postSavePromptCard({
       title: localizeParam("GasCloudTitle", { weapon: payload.weaponName ?? localize("GasGrenade") }),
       body: localizeParam("GasCloudPlacedBody", { radius, mod: stunSaveMod, duration }),
-      speaker: ChatMessage.getSpeaker({ actor: attackerId ? game.actors.get(attackerId) : undefined }),
+      speaker: ChatMessage.getSpeaker({ actor: firingActorOf(payload) ?? undefined }),
     });
 }
 
@@ -2367,9 +2394,12 @@ async function _placeExplosion(payload) {
       "modules/cp2020-augmented/templates/chat/explosion-confirm.hbs",
       { weaponName, radius, baseDamage, fullWithin, templateId: handle.doc.id }
     );
+    // The card names the FIGURE that threw it — same change, same reasoning as the gas cloud's card
+    // (written out at _placeGasCloud). `attackerId` above is untouched: the AREA still records the base
+    // actor's id in its flags, which is what _confirmExplosion reads back.
     await ChatMessage.create({
       content: explosionCard,
-      speaker: ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined }),
+      speaker: ChatMessage.getSpeaker({ actor: firingActorOf(payload) ?? undefined }),
     });
 }
 
@@ -2852,7 +2882,10 @@ export async function _placeSpreadZone(payload) {
     // (fx/effects.js presentationSettled) — the signal on the client that drew the shot, and the honest
     // arithmetic floor on a client that did not (a player's shot relayed here, where no fan-out ran).
     // Nothing is held open by it: the cap inside presentationSettled bounds the wait either way.
-    const speaker = ChatMessage.getSpeaker({ actor: attackerId ? (game.actors.get(attackerId) ?? undefined) : undefined });
+    // Both of this shot's cards name the FIGURE that fired — same change, same reasoning as the gas
+    // cloud's card (written out at _placeGasCloud). `attackerId` above is untouched: the PATTERN still
+    // records the base actor's id in its flags, which is what the confirm path reads back.
+    const speaker = ChatMessage.getSpeaker({ actor: firingActorOf(payload) ?? undefined });
     if (declared) {
       await presentationSettled(payload);
       // The region is still on the scene and stays there until the card is resolved — the reader is
@@ -3463,8 +3496,11 @@ function _hookMultiActionPenalty() {
     const trackForMultiAction = _isMultiActionEnabled() && _isMultiActionAutoTrack();
     const trackForMovementGate = (() => { try { return game.settings.get("cp2020-augmented", "restrictMovementOncePerTurn") === true; } catch { return false; } })();
     if (!trackForMultiAction && !trackForMovementGate) return;
-    const actorId = payload.attackerId ?? payload.actorId;
-    const actor = actorId ? game.actors.get(actorId) : null;
+    // THE COUNTER BELONGS TO THE FIGURE THAT ACTED. The tracker badge and the dialog prefill both read
+    // it off the combatant's / weapon's own actor, so an id lookup here recorded the action on the base
+    // and every unlinked copy of that base inherited it — one mook's shot handed its siblings a −3 they
+    // never earned, and the ➕ control (fixed for the same reason) wrote somewhere else again.
+    const actor = firingActorOf(payload);
     if (!actor) return;
     _incrementActionCount(actor).catch(() => {});
   });

@@ -17,7 +17,7 @@
  *
  * Pure helpers are exported for the rig spec; the combat routing lives in combat/DamageApplicator.js.
  */
-import { deleteFieldUpdate, localize, localizeParam, getLimbStatusMap } from "../utils.js";
+import { deleteFieldUpdate, localize, localizeParam, getLimbStatusMap, firingActorOf } from "../utils.js";
 import { postSavePromptCard, renderChatCard } from "../compat.js";
 import { isFullBorg } from "./borg.js";
 import { cyberlimbRepairGmOnly } from "../settings.js";
@@ -578,7 +578,11 @@ export function registerMechCyberlimb() {
   // The hook is local to the initiating client, so the card posts exactly once per use.
   Hooks.on("cyberpunk2020.weaponFired", (payload) => {
     try {
-      const actor = game.actors.get(payload?.attackerId ?? payload?.actorId ?? "");
+      // WHOSE ARM — the figure that pulled the trigger, not the directory entry behind it. Limb state
+      // is written by the damage pipeline through the TARGET's token, so a mook's wrecked arm lives on
+      // that token's own document; an id lookup here read the base instead and reported the arms of an
+      // actor that may not even be in the fight. Named token first, else exactly the id lookup as before.
+      const actor = firingActorOf(payload);
       if (!actor || actor.type === "cp2020-augmented.vehicle") return;
       const lines = [];
       for (const zone of ["rArm", "lArm"]) {
