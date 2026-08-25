@@ -23,6 +23,18 @@ p.on("pageerror", e => errors.push("pageerror: " + e.message));
 p.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
 await joinGM(p);
 
+// ── FRESH-LOAD BUTTON PRESENCE (field case 2026-08-25) ──
+// Core paints the sidebar BEFORE module ready fires, so the directory's first render precedes the
+// module's renderActorDirectory hook — only the ready-time catch-up injection can put the button on a
+// fresh page. Probed here, before ANY code below can re-render the directory: the master-setting legs
+// further down deliberately call ui.actors.render(true), and a forced render summoning the button is
+// exactly how this gap stayed hidden.
+const fresh = await p.evaluate(() => ({
+  present: !!document.querySelector(".cp2020ae-npcgen-btn"),
+  gm: game.user?.isGM === true,
+  setting: game.settings.get("cp2020-augmented", "npcGenEnabled") === true
+}));
+
 const r = await p.evaluate(async () => {
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const out = { checks: [], fails: [] };
@@ -280,6 +292,13 @@ const r = await p.evaluate(async () => {
   return out;
 });
 
+{ // The fresh-load leg, recorded ahead of the in-page checks. All three values are demanded so a
+  // misconfigured fixture (non-GM seat, setting off) reads as a loud failure, never a vacuous pass.
+  const ok = fresh.gm && fresh.setting && fresh.present;
+  const name = "fresh page load ⇒ the directory button exists with NO forced re-render (ready-time catch-up)";
+  r.checks.unshift(`${ok ? "  PASS" : "  FAIL"}  ${name}${ok ? "" : "  got=" + JSON.stringify(fresh)}`);
+  if (!ok) r.fails.unshift(name);
+}
 for (const line of r.checks) console.log(line);
 const consoleFails = errors.length;
 console.log(consoleFails ? `  FAIL  0 console errors  got=${JSON.stringify(errors.slice(0, 6))}` : "  PASS  0 console errors");

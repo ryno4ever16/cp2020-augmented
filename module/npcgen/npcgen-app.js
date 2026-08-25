@@ -696,20 +696,30 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
  */
 export function registerNpcGenHooks() {
   registerGoonCountMemory();          // R4's per-user store, registered with the feature that writes it
-  Hooks.on("renderActorDirectory", (app, html) => {
-    try {
-      if (!game.user?.isGM || !npcGenEnabled()) return;
-      const root = html instanceof HTMLElement ? html : (html?.[0] ?? html);
-      if (!root?.querySelector || root.querySelector(".cp2020ae-npcgen-btn")) return;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "cp2020ae-npcgen-btn";
-      btn.innerHTML = `<i class="fas fa-users-gear"></i> ${game.i18n.localize("CYBERPUNK.GoonFactory.Button")}`;
-      btn.addEventListener("click", () => openNpcGenerator());
-      const header = root.querySelector(".directory-header") ?? root.querySelector(".header-actions") ?? root.firstElementChild ?? root;
-      header.prepend(btn);
-    } catch (e) { /* non-fatal */ }
-  });
+  Hooks.on("renderActorDirectory", (app, html) => injectNpcGenButton(html));
+  // ⚠ CATCH-UP, NOT REDUNDANCY: core paints the sidebar BEFORE module ready fires, so on a fresh page
+  // load the hook above has already missed the directory's first render — the button then existed only
+  // after something ELSE re-rendered the directory (field case 2026-08-25: absent on the live world
+  // until a forced render summoned it). One injection into the already-rendered directory closes the
+  // gap; the in-DOM class check keeps hook + catch-up idempotent in either arrival order.
+  try { if (ui.actors?.rendered) injectNpcGenButton(ui.actors.element); } catch { /* non-fatal */ }
+}
+
+/** Put the button into one rendered directory DOM (jQuery or HTMLElement). Every guard lives here so
+ *  the hook path and the ready-time catch-up meet identical gates. */
+function injectNpcGenButton(html) {
+  try {
+    if (!game.user?.isGM || !npcGenEnabled()) return;
+    const root = html instanceof HTMLElement ? html : (html?.[0] ?? html);
+    if (!root?.querySelector || root.querySelector(".cp2020ae-npcgen-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cp2020ae-npcgen-btn";
+    btn.innerHTML = `<i class="fas fa-users-gear"></i> ${game.i18n.localize("CYBERPUNK.GoonFactory.Button")}`;
+    btn.addEventListener("click", () => openNpcGenerator());
+    const header = root.querySelector(".directory-header") ?? root.querySelector(".header-actions") ?? root.firstElementChild ?? root;
+    header.prepend(btn);
+  } catch (e) { /* non-fatal */ }
 }
 
 /** Open (or focus) the single generator window. GM-only and setting-gated, checked here as well as

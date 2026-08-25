@@ -512,6 +512,13 @@ const r = await p.evaluate(async () => {
     check("a grade whose armor band pulls nothing SAYS so in the preview",
       lintRows[0].honesty.some(h => h.code === "bandNoPull"),
       lintRows[0].honesty.map(h => h.code));
+    // Grade E's weapons rung is the book's "bare hands, improvised" — its shop pool is empty BY
+    // DESIGN, and the preview must say that, never the world-data message (field report 2026-08-25).
+    check("an empty-by-the-book weapons rung reads unarmedByTheBook, never noWeaponAvailable",
+      !lintRows[0].weapon
+      && lintRows[0].honesty.some(h => h.code === "unarmedByTheBook")
+      && !lintRows[0].honesty.some(h => h.code === "noWeaponAvailable"),
+      { weapon: lintRows[0].weapon?.name ?? null, codes: lintRows[0].honesty.map(h => h.code) });
 
     // ── MATERIALIZE ───────────────────────────────────────────────────────────────────────────────
     const made = await GF.materializeGoonSquad(planRows, { mode: "existing", folderId: locker.id });
@@ -846,7 +853,7 @@ const r = await p.evaluate(async () => {
       const inRange = ["int", "ref", "tech", "cool", "luck", "ma", "bt"]
         .every(k => Number(st[k]?.base) >= 2 && Number(st[k]?.base) <= 10);
       const levelled = actor.items.filter(i => i.type === "skill" && Number(i.system?.level) > 0).length;
-      const armedOrHonest = !!plan.weapon || plan.honesty.some(h => h.code === "noWeaponAvailable");
+      const armedOrHonest = !!plan.weapon || plan.honesty.some(h => h.code === "noWeaponAvailable" || h.code === "unarmedByTheBook");
       check(`${row.id} — the actor is a legal goon: stats in range, skills levelled, armed or honest`,
         inRange && levelled > 0 && armedOrHonest,
         { stats: Object.fromEntries(Object.entries(st).map(([k, v]) => [k, v?.base])), levelled, weapon: plan.weapon?.name ?? null });

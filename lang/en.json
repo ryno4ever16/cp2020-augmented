@@ -2508,6 +2508,7 @@
         "HumanityTruth": "Chrome HC {hc} → EMP {from}→{to}",
         "Cyberpsycho": "Chrome HC {hc} → EMP 0 — cyberpsycho.",
         "NoWeapon": "No weapon in this threat level's pool is available in this world's packs.",
+        "UnarmedRung": "This threat level arms itself with fists and improvised weapons — the book's pool lists no purchasable weapon.",
         "PostureLoadMissing": "No {posture} load exists for {caliber} — standard rounds were loaded instead.",
         "LauncherNeedsAmmo": "{name} arrives empty — it needs its own ammunition item.",
         "ArmorWeightClamp": "Light armor caps near SP 20 — this threat level's band is unreachable; showing best available.",

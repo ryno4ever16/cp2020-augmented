@@ -306,7 +306,16 @@ export async function planGoonSquad(opts = {}) {
       ammoType: weaponDoc.system?.ammoType ?? "",
       shots: Math.max(0, Math.trunc(Number(weaponDoc.system?.shots) || 0)),
     } : null;
-    if (!weapon) honesty.push({ code: "noWeaponAvailable", messageKey: "GoonFactory.Honesty.NoWeapon" });
+    if (!weapon) {
+      // Two different truths share this null: a rung whose book pool holds no purchasable weapon at
+      // all ("Bare hands, improvised weapons" — shop mapping deliberately empty), and a rung whose
+      // pool is real but this world's packs cannot fill it. Saying "not available in this world's
+      // packs" for the first misreports the book as a data gap (field report 2026-08-25).
+      const rungShopPool = (WEAPONS_DIAL_BY_RUNG[cfg.weaponsRung] ?? WEAPONS_DIAL_BY_RUNG[5])?.shop ?? [];
+      honesty.push(rungShopPool.length
+        ? { code: "noWeaponAvailable", messageKey: "GoonFactory.Honesty.NoWeapon" }
+        : { code: "unarmedByTheBook", messageKey: "GoonFactory.Honesty.UnarmedRung" });
+    }
 
     // ── 3b. AMMO LOAD, posture-biased and honest when the posture cannot be met ───────────────────
     const load = loadForPosture(cfg.armament, weapon?.ammoType);
