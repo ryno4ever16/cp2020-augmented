@@ -18,7 +18,10 @@ const AMMO_AUGMENT_FIELDS = {
   modifier: (f) => new f.StringField({ initial: "standard" }),
   dotType:  (f) => new f.StringField({ initial: "acid" }),
   boxSize:  (f) => new f.NumberField({ initial: 0 }),
-  boxCost:  (f) => new f.NumberField({ initial: 0 })
+  boxCost:  (f) => new f.NumberField({ initial: 0 }),
+  // The sheet's quantity-lock toggle writes this; without a schema home the write is stripped
+  // and the control is inert (connection audit N2). `true` matches the sheet's own fallback.
+  qtyLocked: (f) => new f.BooleanField({ initial: true })
 };
 
 /**

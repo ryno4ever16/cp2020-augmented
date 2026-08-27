@@ -86,6 +86,60 @@ const r = await p.evaluate(async () => {
   out.arrowDropdown = { hasBroadhead: arrowOpts.includes("Broadhead"), hasTarget: arrowOpts.includes("Target"), hasAP: arrowOpts.includes("Armor-Piercing") };
   await arrowAmmo.sheet.close().catch(() => {});
 
+  // ── (5) quantity-lock augment field ───────────────────────────────────────
+  //  The lock control writes `system.qtyLocked`. That field had no home in either the base ammo
+  //  schema or the augment factory, so every write was stripped on the way to storage and the
+  //  control was inert (connection audit N2). Three layers: the field is DECLARED with its
+  //  initial, a write ROUND-TRIPS to the stored source, and the real DOM control flips both the
+  //  icon and the quantity input's readonly state — both ways.
+  const [lockAmmo] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__LockAmmo", type: "ammo",
+    system: { caliber: "9mm", quantity: 50 } }]);
+  out.lockField = {
+    declared: !!lockAmmo.system?.schema?.fields?.qtyLocked,
+    initial: lockAmmo.system?.qtyLocked,
+    sourceInitial: lockAmmo._source?.system?.qtyLocked
+  };
+
+  // Round trip: write, then read back off the STORED source (not just the prepared view) after a
+  // re-fetch — a stripped write leaves the source untouched while the live object can still lie.
+  await lockAmmo.update({ "system.qtyLocked": false }); await sleep(250);
+  const relock = actor.items.get(lockAmmo.id);
+  out.lockRoundTrip = { prepared: relock?.system?.qtyLocked, stored: relock?.toObject()?.system?.qtyLocked };
+  await lockAmmo.update({ "system.qtyLocked": true }); await sleep(250);
+  out.lockRoundTripBack = actor.items.get(lockAmmo.id)?.toObject()?.system?.qtyLocked;
+
+  // GESTURE: render the sheet and click the real control; read the redrawn DOM each time.
+  await lockAmmo.sheet.render(true); await sleep(900);
+  const readLock = () => {
+    const el = lockAmmo.sheet.element;
+    const btn = el?.querySelector(".cp-ammo-qty-lock");
+    const icon = btn?.querySelector("i");
+    const qty = el?.querySelector('input[name="system.quantity"]');
+    const rc = btn?.getBoundingClientRect();
+    const cs = btn ? getComputedStyle(btn) : null;
+    const hit = rc ? document.elementFromPoint(rc.left + rc.width / 2, rc.top + rc.height / 2) : null;
+    return {
+      present: !!btn,
+      boxed: !!rc && rc.width > 0 && rc.height > 0 && cs.display !== "none" && cs.visibility !== "hidden",
+      reachable: !!hit && (hit === btn || btn.contains(hit)),
+      closedIcon: !!icon?.classList.contains("fa-lock"),
+      openIcon: !!icon?.classList.contains("fa-lock-open"),
+      readonly: qty ? qty.hasAttribute("readonly") : null,
+      doc: lockAmmo.system?.qtyLocked
+    };
+  };
+  const clickLock = async () => {
+    lockAmmo.sheet.element?.querySelector(".cp-ammo-qty-lock")?.click();
+    await sleep(900);
+  };
+  out.lockAtRest = readLock();
+  await clickLock();
+  out.lockAfterClick = readLock();
+  // Second act: the same gesture again must send it back, not stick in the released state.
+  await clickLock();
+  out.lockAfterSecondClick = readLock();
+  await lockAmmo.sheet.close().catch(() => {});
+
   await actor.delete().catch(() => {});
   return out;
 });
@@ -109,6 +163,13 @@ const checks = [
   ["buy: broadhead on Arrow keeps the load (pen 2)", r.buyArrow.modifier === "broadhead" && r.buyArrow.pen === 2],
   ["dropdown: bullet ammo hides Broadhead, shows Armor-Piercing", r.bulletDropdown.hasBroadhead === false && r.bulletDropdown.hasAP === true],
   ["dropdown: arrow ammo shows Broadhead+Target, hides Armor-Piercing", r.arrowDropdown.hasBroadhead === true && r.arrowDropdown.hasTarget === true && r.arrowDropdown.hasAP === false],
+  ["augment field: quantity-lock declared on the ammo schema, initial engaged", r.lockField.declared === true && r.lockField.initial === true && r.lockField.sourceInitial === true],
+  ["augment field: quantity-lock write round-trips (released value reaches stored source)", r.lockRoundTrip.prepared === false && r.lockRoundTrip.stored === false],
+  ["augment field: quantity-lock write-back round-trips (engaged value returns to stored source)", r.lockRoundTripBack === true],
+  ["lock control: real box, reachable by hit-test at rest", r.lockAtRest.present === true && r.lockAtRest.boxed === true && r.lockAtRest.reachable === true],
+  ["lock control at rest: closed icon, quantity readonly, document engaged", r.lockAtRest.closedIcon === true && r.lockAtRest.openIcon === false && r.lockAtRest.readonly === true && r.lockAtRest.doc === true],
+  ["lock control click: icon flips open, readonly drops, document released", r.lockAfterClick.openIcon === true && r.lockAfterClick.closedIcon === false && r.lockAfterClick.readonly === false && r.lockAfterClick.doc === false],
+  ["lock control second click: icon re-closes, readonly returns, document engaged", r.lockAfterSecondClick.closedIcon === true && r.lockAfterSecondClick.openIcon === false && r.lockAfterSecondClick.readonly === true && r.lockAfterSecondClick.doc === true],
   ["0 console errors", errors.length === 0]
 ];
 let fail = 0;
