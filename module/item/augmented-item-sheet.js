@@ -1,3 +1,5 @@
+import { refuseUnreadableNumberFields } from "../form-number-guard.js";
+
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 
 // Module flag / settings scope (per-file convention used across the module).
@@ -47,6 +49,24 @@ export class CyberpunkAugmentedItemSheet extends HandlebarsApplicationMixin(foun
       // Bare sub-type name (drop the module prefix) → selects which item/parts/<type>/ partials render.
       partType: String(item.type).replace(`${SCOPE}.`, ""),
     };
+  }
+
+  /**
+   * @override
+   *
+   * The same numeric refusal the character and vehicle sheets carry: a box the browser could not read
+   * as a number submits as EMPTY and is indistinguishable from a deliberately-cleared one, so the
+   * stored figure would be overwritten by that empty read. The guard puts the stored figure back,
+   * repaints the box and says so once. Blank boxes are untouched.
+   *
+   * ⚠ It runs on the object `super` returned, i.e. before the comma-separator repaint in `_onRender`
+   * ever matters: that listener rewrites a readable "1,5" into "1.5", while this refuses the entries
+   * that are not readable at all. The two do not overlap.
+   */
+  _processFormData(event, form, formData) {
+    const submitData = super._processFormData(event, form, formData);
+    refuseUnreadableNumberFields(submitData, form, this.document);
+    return submitData;
   }
 
   /** @override */

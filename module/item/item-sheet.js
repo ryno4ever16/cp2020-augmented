@@ -12,7 +12,10 @@ import { takeDrug, endDrug, drugMarkersFor } from "../mech/drug.js";
 import { resetChipChoice } from "../mech/chip-grant.js";
 import { isContainer, freeSlots, slotsTakenOf, installedInOf, descendantIds, usedSlots, checkInstall } from "../mech/container.js";
 import { createCyberpunkChatMessage, getHtmlElement, getPublicMessageMode, getRichEditorHTML, saveRichEditorHTML, rollToCyberpunkChatMessage } from "../compat.js";
-import { findDeployedVehicleActor } from "../vehicle/vehicle-deploy-request.js";
+import { findDeployedVehicleActor, deployRequestPending } from "../vehicle/vehicle-deploy-request.js";
+import { FACES, FACE_MM, FACE_ACPA, facePatch, resolveVehicleItemFace } from "../vehicle/vehicle-face.js";
+import { mmEnabled } from "../settings.js";
+import { refuseUnreadableNumberFields } from "../form-number-guard.js";
 
 const { HandlebarsApplicationMixin } = foundry.applications.api;
 const { ItemSheetV2 } = foundry.applications.sheets;
@@ -215,20 +218,75 @@ export class CyberpunkItemSheet extends HandlebarsApplicationMixin(ItemSheetV2) 
       fuelUnit: fUnit,
       fuelCapSuffix: fUnit === "gal" ? "gal" : "L",
       fuelEffSuffix: fUnit === "gal" ? "mpg" : "km/L",
+      // What ONE press of the +/− controls actually does, in the figures this vehicle carries, so
+      // the tooltip can state the step rather than describe it. `decFallback` marks the case the
+      // handler has always had and the sheet never said out loud: a vehicle with no DEC recorded
+      // brakes at its ACC. (User ruling 2026-08-25: tooltips only — no step or granularity change.)
+      speedStep: (() => {
+        const acc = Number(sys.speed?.acceleration) || 0;
+        const dec = Number(sys.speed?.deceleration) || 0;
+        return { acc, dec: dec || acc, decFallback: dec === 0 };
+      })(),
       // Fuel is DEMOTED in the UI (VEHICLE-SPEC.md §4 — printed on ~1% of vehicles): a locked sheet
       // with no fuel data skips the block; an editable sheet always shows it (data entry).
       showFuel: !!sheet.editable || !!(Number(sys.fuel?.max) || Number(sys.fuel?.value)
         || Number(sys.fuel?.efficiency) || String(sys.fuel?.type ?? "").trim()),
       // Soft-enum suggestions for the class datalist (VEHICLE_TYPE_SUGGESTIONS, module/lookups.js).
       vehicleTypeSuggestions: VEHICLE_TYPE_SUGGESTIONS,
-      // Deploy discoverability: the vehicle ACTOR this user already created from this item
-      // (flags-keyed, rename-proof) — the Deploy row shows "Deployed as X" + Open instead.
+      // Deploy discoverability: the vehicle ACTOR this item is linked to (flags-keyed, rename-proof)
+      // — the Deploy row shows "Deployed as X" + Open instead.
+      //
+      // ⭐ THE LINK IS THE ITEM'S, NOT (ITEM, USER)'S (bug bundle 2026-08-25). It used to be keyed on
+      // `createdBy === game.user.id`, so a GM deploying a player's truck left the player's own row
+      // still reading "Deploy" — she pressed it, the request was approved, and the world ended up
+      // with TWO trucks. `canOpen` is asked separately because "a vehicle exists for this pink slip"
+      // and "I am allowed to open it" are different questions, and only the first one may gate a
+      // second deploy.
       deployedActor: (() => {
         try {
-          const a = findDeployedVehicleActor(sheet.item, game.user.id);
-          return a ? { id: a.id, name: a.name } : null;
+          const a = findDeployedVehicleActor(sheet.item);
+          return a ? { id: a.id, name: a.name, canOpen: a.testUserPermission(game.user, "LIMITED") } : null;
         } catch (e) { return null; }
-      })()
+      })(),
+      // A request this client has sent and the GM has not yet answered. Without it the row stayed
+      // on "Deploy" through the whole approval round trip and took a second click happily.
+      deployPending: (() => {
+        try { return deployRequestPending(sheet.item); } catch (e) { return false; }
+      })(),
+      // The sheet-face designation this pink slip carries — which face a vehicle deployed from it
+      // opens on. Same control, same partial, same one table as the vehicle actor's own strip
+      // (module/vehicle/vehicle-face.js); see _cpActivateVehicleFaceSelect for the write.
+      faceControl: this._cpVehicleFaceControl(sheet)
+    };
+  }
+
+  /**
+   * Render data for the vehicle ITEM's sheet-face strip — the mirror of the actor sheet's, built
+   * from the same resolver and the same option table so the two can never offer different faces.
+   *
+   * Shown even on a locked (compendium) sheet, disabled: what face this pink slip deploys onto is
+   * worth reading off a catalog vehicle, it just cannot be changed there.
+   */
+  _cpVehicleFaceControl(sheet) {
+    let mmOn = false;
+    try { mmOn = mmEnabled(); } catch (e) { /* settings not ready */ }
+    const state = resolveVehicleItemFace(this.item, { mmOn });
+    const KEYS = { standard: "Vehicle.FaceStandard", mm: "Vehicle.FaceMM", acpa: "Vehicle.FaceACPA" };
+    return {
+      show: true,
+      domId: this.item.id,
+      locked: !sheet.editable,
+      value: state.chosen,
+      mmGated: state.mmGated,
+      derivedOnly: !state.explicit,
+      // See the actor sheet's twin: the derived-only line names the face it is showing.
+      chosenLabel: localize(KEYS[state.chosen] ?? KEYS.standard),
+      options: FACES.map(key => ({
+        value: key,
+        label: localize(KEYS[key]),
+        selected: key === state.chosen,
+        disabled: key === FACE_MM && state.mmGated,
+      })),
     };
   }
 
@@ -795,6 +853,7 @@ async _prepareCyberware(sheet) {
     this._cpActivateNotesEditor(root);
     this._cpActivateVehicleSpeedControls(root);
     this._cpActivateVehicleDeployControls(root);
+    this._cpActivateVehicleFaceSelect(root);
     this._cpActivateBasicItemActions(root);
     this._cpActivateCyberwareBasicControls(root);
     this._cpActivateCyberwareMechanicTypeControls(root);
@@ -861,7 +920,15 @@ async _prepareCyberware(sheet) {
     });
   }
 
-  /** Deploy button (vehicle items): item → vehicle-actor bridge, GM-approved for players. */
+  /**
+   * Deploy button (vehicle items): item → vehicle-actor bridge, GM-approved for players.
+   *
+   * ⭐ THE OPEN BUTTON RE-RESOLVES (bug bundle 2026-08-25). It used to open whatever
+   * `data-actor-id` said and do NOTHING AT ALL when that actor had been deleted — a dead control
+   * that stayed dead until the sheet was closed and reopened. The id is now a hint: the link is
+   * re-read from the item, and a row that turns out to point at nothing says so and reverts itself
+   * to Deploy on the spot.
+   */
   _cpActivateVehicleDeployControls(root) {
     if (!root?.ownerDocument) return;
     if (this.item.type !== "vehicle" || !this.isEditable) return;
@@ -871,16 +938,69 @@ async _prepareCyberware(sheet) {
       const open = event.target?.closest?.(".cp-vehicle-open");
       if (open) {
         event.preventDefault();
-        game.actors.get(open.dataset.actorId)?.sheet?.render(true);
+        // The id first (it is the row's own answer), then the live link, so a stale button on a
+        // sheet that has not re-rendered yet still lands on the right vehicle.
+        const byId = game.actors.get(open.dataset.actorId);
+        const actor = (byId?.flags?.["cp2020-augmented"]?.sourceItemUuid === this.item.uuid)
+          ? byId
+          : findDeployedVehicleActor(this.item);
+        if (actor?.testUserPermission(game.user, "LIMITED")) actor.sheet?.render(true);
+        else if (!actor) ui.notifications?.warn?.(localize("VehicleDeployLinkGone"));
+        else ui.notifications?.warn?.(localizeParam("VehicleDeployNotVisible", { name: actor.name }));
+        // Either way the row is repainted from what is true NOW: a vanished vehicle reverts the
+        // control to Deploy instead of leaving a button that does nothing.
+        this.render();
         return;
       }
-      if (!event.target?.closest?.(".cp-vehicle-deploy")) return;
+      const deploy = event.target?.closest?.(".cp-vehicle-deploy");
+      if (!deploy) return;
       event.preventDefault();
+      if (deploy.disabled) return;
       const { requestVehicleDeploy } = await import("../vehicle/vehicle-deploy-request.js");
       await requestVehicleDeploy(this.item);
-      // Re-render so a GM's direct create flips the row to "Deployed as …" immediately.
+      // Re-render so a GM's direct create flips the row to "Deployed as …" immediately, and a
+      // player's sent request flips it to the pending state instead of leaving Deploy armed.
       this.render();
     });
+  }
+
+  /**
+   * The vehicle ITEM's sheet-face picker — the pink-slip mirror of the actor sheet's strip
+   * (module/actor/vehicle-sheet.js `_cpActivateFaceSelect`), down to the capture phase and the
+   * ACPA confirm. Both booleans travel in ONE `Item#update` from the one table in vehicle-face.js.
+   *
+   * CAPTURE phase (the trailing `true`) for the same reason the actor sheet uses it: the sheet root
+   * IS the form, so ApplicationV2's submitOnChange listener sits on this very node. The select
+   * carries no `name`, so nothing but this handler writes it — but a bubble-phase listener would
+   * still let the form's re-render fire underneath an open confirm dialog.
+   */
+  _cpActivateVehicleFaceSelect(root) {
+    if (!root?.ownerDocument) return;
+    if (this.item.type !== "vehicle") return;
+    if (root.dataset.cpVehicleFaceBound === "1") return;
+    root.dataset.cpVehicleFaceBound = "1";
+    root.addEventListener("change", async (event) => {
+      const sel = event.target?.closest?.("select.cp-veh-face-select");
+      if (!sel || !root.contains(sel)) return;
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      if (!this.isEditable) { this.render(); return; }
+      const next = String(sel.value ?? "");
+      const prev = String(sel.dataset.faceCurrent ?? "");
+      if (!FACES.includes(next) || next === prev) return;
+      // The ACPA boundary in either direction. On the ITEM it is a statement about what this
+      // vehicle IS, and a deploy reads it to decide how the new actor derives Body Value and what
+      // "destroyed" means for it — the same reason the actor-side flip confirms.
+      if (next === FACE_ACPA || prev === FACE_ACPA) {
+        const ok = await foundry.applications.api.DialogV2.confirm({
+          window: { title: localize("Vehicle.FaceAcpaConfirmTitle") },
+          content: `<p>${localize(next === FACE_ACPA ? "Vehicle.FaceItemAcpaConfirmOn" : "Vehicle.FaceItemAcpaConfirmOff")}</p>`,
+          rejectClose: false, modal: true,
+        });
+        if (!ok) { this.render(); return; }
+      }
+      await this.item.update(facePatch(next));
+    }, true);
   }
 
   _cpActivateVehicleSpeedControls(root) {
@@ -2587,9 +2707,19 @@ async _prepareCyberware(sheet) {
     return super._preClose(options);
   }
 
-  /** @override */
+  /**
+   * @override
+   *
+   * ⛔ THE NUMERIC REFUSAL RUNS FIRST, before any of the per-type coercion below. An unreadable box
+   * (Firefox holds a letter in `input[type=number]`; Chromium holds "1e" the same way) reports an
+   * EMPTY value, which the coercions here would faithfully turn into a stored 0 — `fixNum` on a skill
+   * level, `Number.isFinite(n) ? n : 0` on a cyberware slot count. Refusing at the top means those
+   * paths never see the empty read at all and the stored figure survives. Same guard, same idiom, as
+   * the character sheet (`CyberpunkActorSheet._processFormData`).
+   */
   _processFormData(event, form, formData) {
     const data = super._processFormData(event, form, formData);
+    refuseUnreadableNumberFields(data, form, this.document);
 
     if (this.item.type === "cyberware") {
       const pickLastString = (v) => {

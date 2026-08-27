@@ -169,3 +169,100 @@ export function refuseUnreadableNumberFields(submitData, form, doc) {
   ui.notifications?.warn?.(localizeParam("NumberFieldUnreadable", { fields: labels.join(", ") }));
   return refused;
 }
+
+/* ───────────────────────────── the other way a number is wrong ───────────────────────────── */
+
+/**
+ * The `min`/`max` a numeric input declares, as numbers, or null when it declares neither.
+ *
+ * The attributes are read from the ELEMENT rather than from a table in code for the same reason the
+ * unreadable check is: the box is where the range is already written down. `input type="number"`
+ * carries min/max for the spinner and for native validation, both of which a typed-in figure walks
+ * straight past — the browser marks the field `:out-of-range` and submits it anyway — so the range is
+ * stated but nothing was enforcing it.
+ * @param {HTMLInputElement} el
+ * @returns {{min:number, max:number}|null}
+ */
+function declaredRangeOf(el) {
+  // ⛔ ASK THE ATTRIBUTE WHETHER IT IS THERE, never `Number.isFinite(Number(getAttribute(...)))`.
+  // A missing attribute reads back as `null`, and **`Number(null)` is 0** — which is finite. The
+  // obvious test therefore answers "this box declares min 0 and max 0" for every numeric box that
+  // declares neither, and the guard then clamps every ordinary figure on the sheet to zero. Caught on
+  // the rig the first time this ran: one footprint edit reported the vehicle's Crew and Passengers as
+  // 2 and 3 in their boxes and stored 0 for both. (The same `Number(null)` trap the hull's
+  // `hasRecordedHull` carries a warning about — it is worth re-reading before writing either idiom.)
+  const read = (name) => {
+    const raw = el.getAttribute(name);
+    if (raw === null || String(raw).trim() === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+  const min = read("min"), max = read("max");
+  if (min === null && max === null) return null;
+  return { min: min ?? -Infinity, max: max ?? Infinity };
+}
+
+/** `n` forced into `range`. */
+function clampTo(n, range) {
+  return Math.min(range.max, Math.max(range.min, n));
+}
+
+/**
+ * Refuse every numeric field in `form` whose entry is outside the range the box itself declares:
+ * replace the submitted figure with the nearest one the field will actually hold, repaint the box
+ * from it, and say so once.
+ *
+ * ⛔ WHY THIS EXISTS, WHICH IS NOT TIDINESS (field incident 2026-08-25). A GM typed `10000` into a
+ * vehicle's Footprint box, which declares `min="1"` and nothing else. The write took; the sheet then
+ * asked the browser for 20,000 grid cells and the token layer for a 10000-square frame, the tab ran
+ * out of memory, and — because both are recomputed on every open — the vehicle could not be opened
+ * again to correct the number. A figure the box's own attributes call illegal must not reach the
+ * document.
+ *
+ * ⚠ HOW THIS DIFFERS FROM THE UNREADABLE GUARD ABOVE, deliberately. A box holding "1e" carries no
+ * usable intention, so the guard puts the STORED value back and the write becomes a no-op. A box
+ * holding 10000 carries a perfectly clear intention that is simply out of bounds, so the field goes
+ * to the nearest legal figure instead: the stored value clamped when the document holds a number
+ * there, and otherwise the entry itself clamped. Reverting an out-of-range entry to the raw stored
+ * value would be the one wrong answer available — on a vehicle already poisoned with 10000 that
+ * would write 10000 straight back, which is the state this whole unit exists to get out of.
+ *
+ * Call from a sheet's `_processFormData` override, AFTER `refuseUnreadableNumberFields` (an
+ * unreadable box has no figure to compare against a range). Returns the field paths that were
+ * refused, so a caller can assert on them.
+ *
+ * @param {object} submitData             The expanded submit object, mutated in place
+ * @param {HTMLFormElement} form          The form being read
+ * @param {foundry.abstract.Document} doc The document the sheet edits
+ * @returns {string[]}                    The refused field paths
+ */
+export function refuseOutOfRangeNumberFields(submitData, form, doc) {
+  if (!form?.querySelectorAll) return [];
+  const refused = [];
+  const labels = [];
+  for (const el of Array.from(form.querySelectorAll("input[name]"))) {
+    if (el.disabled || el.readOnly || !isNumericField(el)) continue;
+    if (isUnreadableNumberField(el)) continue;              // the other guard owns this one
+    const range = declaredRangeOf(el);
+    if (!range) continue;
+    const raw = String(el.value ?? "").trim();
+    if (raw === "") continue;                               // blank keeps whatever meaning it had
+    const entered = Number(raw);
+    if (!Number.isFinite(entered)) continue;
+    if (entered >= range.min && entered <= range.max) continue;
+
+    // `typeof`, not `Number(...)`: an unrecorded nullable field stores `null`, and `Number(null)` is
+    // 0 — which would put a floor-clamped 1 into a field whose whole meaning is "nothing recorded".
+    // Nothing stored ⇒ the entry itself is what gets clamped.
+    const stored = storedValueOf(doc, el.name);
+    const hasStored = (typeof stored === "number") && Number.isFinite(stored);
+    const kept = clampTo(hasStored ? stored : entered, range);
+    foundry.utils.setProperty(submitData, el.name, kept);
+    el.value = String(kept);
+    refused.push(el.name);
+    labels.push(fieldLabelOf(el));
+  }
+  if (!refused.length) return [];
+  ui.notifications?.warn?.(localizeParam("NumberFieldOutOfRange", { fields: labels.join(", ") }));
+  return refused;
+}

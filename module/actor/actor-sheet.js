@@ -1,4 +1,4 @@
-import { martialOptions, martialActionGroups, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
+import { martialOptions, martialActionGroups, MARTIAL_ACTION_CATALOG_UUID, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
 import { armSpreadPreview } from "../combat/spread-placement.js";
 import { firingTokenIdOf } from "../seam-shim.js";
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, isUnwornArmor, properCase } from "../utils.js"
@@ -7,7 +7,7 @@ import { ModifiersDialog } from "../dialog/modifiers.js"
 import { SortOrders, sortSkills } from "./skill-sort.js";
 import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } from "./reputation.js";
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
-import { isUnreadableNumberField, refuseUnreadableNumberFields } from "../form-number-guard.js";
+import { isUnreadableNumberField, refuseUnreadableNumberFields, refuseOutOfRangeNumberFields } from "../form-number-guard.js";
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
@@ -204,7 +204,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   /* -------------------------------------------- */
 
   /**
-   * Read the form, then refuse every numeric box the browser could not read as a number.
+   * Read the form, then refuse the two ways a numeric box on this sheet can be wrong — the same pair,
+   * in the same order, as the vehicle sheet.
    *
    * `input[type=number]` is not a guarantee: Firefox lets arbitrary characters be typed, pasted or
    * composed into one, and the element then reports `validity.badInput` with an EMPTY `.value` —
@@ -221,6 +222,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
   _processFormData(event, form, formData) {
     const submitData = super._processFormData(event, form, formData);
     refuseUnreadableNumberFields(submitData, form, this.document);
+    // ⭐ THE SECOND REFUSAL, in the shared order (rider 2026-08-26). The vehicle sheet already runs
+    // both — an unreadable box has no figure at all, so the stored value goes back; a readable figure
+    // outside the range the box's own `min`/`max` declare goes to the nearest one the box will hold.
+    // The character sheet ran only the first, which meant the two sheets refused different things for
+    // no reason a user could see. What each box permits is written on the box in the template, so this
+    // enforces exactly what the sheet already states and nothing more: a numeric field that declares
+    // no bounds is not touched, which is every field on this sheet that has not asked to be.
+    refuseOutOfRangeNumberFields(submitData, form, this.document);
     return submitData;
   }
 
@@ -1858,30 +1867,109 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       if (martial) {
         event.preventDefault();
         event.stopPropagation();
-        this._cpOpenMartialActionDialog(martial);
+        await this._cpOpenMartialActionDialog(martial);
         return;
       }
     });
   }
 
+  /** Can this document be the implement of a martial action at all — i.e. is it something
+   *  `__weaponRoll` can fire? A weapon item, or a cyberware item carrying an ENABLED Weapon
+   *  work-type (the same two kinds the panel's own fallback picks from). Without this, an exact
+   *  name match could hand a SKILL document to the weapon-roll path, which reads damage off a
+   *  system shape skills do not have. */
+  _cpIsMartialImplement(item) {
+    if (!item) return false;
+    if (item.type === "weapon") return true;
+    return item.type === "cyberware" && cwHasType(item, "Weapon") && cwIsEnabled(item);
+  }
+
+  /**
+   * Resolve WHICH owned item a martial-action row fires.
+   *
+   * The consolidated panel stamps ONE item id on every row — the actor's first martial-arts weapon —
+   * and the base system takes an unarmed action's DAMAGE off the item it is fired through. So an
+   * actor owning both catalog items had the Strike row roll whichever of them happened to sort
+   * first, creation-order dependent (issue #2). The item is therefore chosen PER ACTION at click
+   * time, on three deterministic rungs, highest first:
+   *
+   *   1. CATALOG SOURCE POINTER — an owned implement whose `_stats.compendiumSource` is exactly the
+   *      pinned base-system catalog UUID for this action (MARTIAL_ACTION_CATALOG_UUID). Name-blind,
+   *      so a renamed or re-statted copy of the catalog Strike still answers the Strike row.
+   *   2. EXACT NAME — trimmed, case-insensitive EQUALITY against the action key. Equality, never a
+   *      substring: "Nova Strike" is not Strike.
+   *   3. Whatever the row stamped (the panel's first-martial-weapon id). The caller falls back to a
+   *      stand-in item when that resolves nothing.
+   *
+   * Several copies match a rung: an EQUIPPED one wins, else the first found — so the answer never
+   * depends on creation order. Rungs 1 and 2 can both match, and match DIFFERENT items; rung 1 wins,
+   * silently. The catalog pointer is the stronger claim, and a hand-named duplicate is not worth
+   * interrupting a click over.
+   */
+  _cpResolveMartialActionItem(action, fallbackId) {
+    const pick = (matches) => matches.find(i => i.system?.equipped === true) ?? matches[0] ?? null;
+    const candidates = this.actor.items.filter(i => this._cpIsMartialImplement(i));
+
+    const uuid = MARTIAL_ACTION_CATALOG_UUID[action];
+    if (uuid) {
+      const sourced = pick(candidates.filter(i => i._stats?.compendiumSource === uuid));
+      if (sourced) return sourced;
+    }
+
+    const key = String(action ?? "").trim().toLowerCase();
+    if (key) {
+      const named = pick(candidates.filter(i => String(i.name ?? "").trim().toLowerCase() === key));
+      if (named) return named;
+    }
+
+    return (fallbackId ? this.actor.items.get(fallbackId) : null) ?? null;
+  }
+
+  /**
+   * Build the stand-in item the dialog fires when the actor owns nothing for this action.
+   *
+   * The base system reads the damage off the ITEM, so an empty-handed Strike has to know what a
+   * strike does — and that number already has a home: the system's own melee catalog, at the same
+   * UUID rung 1 matches on. The stand-in is a CLONE of that entry, so the values stay the system's
+   * single source of truth and no formula is duplicated into module code. The pack ships with the
+   * system, so a failed fetch is exceptional: it degrades to the bare unarmed stand-in this method
+   * has always built (roll-only, no damage), rather than eating the click.
+   */
+  async _cpBuildTransientMartialItem(action) {
+    const uuid = MARTIAL_ACTION_CATALOG_UUID[action];
+    if (uuid) {
+      try {
+        const source = await fromUuid(uuid);
+        if (source) {
+          const data = source.toObject();
+          delete data._id;
+          return new CONFIG.Item.documentClass(data, { parent: this.actor });
+        }
+        console.warn("cp2020-augmented | martial catalog entry not found; falling back to the bare stand-in", { action, uuid });
+      } catch (e) {
+        console.warn("cp2020-augmented | martial catalog entry unreadable; falling back to the bare stand-in", { action, uuid, error: e });
+      }
+    }
+    return new CONFIG.Item.documentClass(
+      { name: localize("MartialArt"), type: "weapon", img: "systems/cyberpunk2020/img/punch-icon.svg",
+        system: { attackType: meleeAttackTypes.martial, weaponType: "Melee" } },
+      { parent: this.actor }
+    );
+  }
+
   /**
    * Open the attack dialog for a martial-arts action button: the action is fixed by the button, so
    * the dialog only collects martial-art style + cyberlimb, injecting the action into the fire
-   * options. Uses a real martial weapon if the button names one, else a transient unarmed weapon.
+   * options. The item fired is resolved PER ACTION (_cpResolveMartialActionItem); when the actor
+   * owns nothing for it, a stand-in cloned from the system's catalog stands in its place.
    * (Body ported verbatim from the former .martial-action jQuery handler; Stage A2.)
    */
-  _cpOpenMartialActionDialog(button) {
+  async _cpOpenMartialActionDialog(button) {
     const action = button.dataset.action;
     if (!action) return;
 
-    let item = button.dataset.itemId ? this.actor.items.get(button.dataset.itemId) : null;
-    if (!item) {
-      item = new CONFIG.Item.documentClass(
-        { name: localize("MartialArt"), type: "weapon", img: "systems/cyberpunk2020/img/punch-icon.svg",
-          system: { attackType: meleeAttackTypes.martial, weaponType: "Melee" } },
-        { parent: this.actor }
-      );
-    }
+    let item = this._cpResolveMartialActionItem(action, button.dataset.itemId);
+    if (!item) item = await this._cpBuildTransientMartialItem(action);
 
     const targetTokens = Array.from(game.users.current.targets.values()).map(target => ({
       name: target.document.name, id: target.id,

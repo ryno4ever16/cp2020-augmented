@@ -2849,11 +2849,21 @@ body.cp-carolingian .cyberpunk.sheet.item.cp-item-vehicle .field {
    shared Equipped/Cost footer row (outside the vehicle partial) rendered "Cost90000". */
 .cyberpunk.sheet.item .field { column-gap: 4px; }
 
-/* Civilian vehicle ACTOR sheet (unified-sheet plan): its layout mirrors the item sheet and
-   reuses .cp-vehicle-item-fields, so it gets the same containment guarantees — bordered padded
-   field boxes, real gutters, value rows that wrap as one block, input floors. */
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list { column-gap: 8px; row-gap: 6px; }
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list .field {
+/* ⭐ EVERY VEHICLE FACE'S FIELDS, not just the civilian one (user report 2026-08-25: "the Maximum
+   Metal sheet looks messy by comparison"; the ACPA face joined it in the same addendum). The
+   containment guarantees below were written for the civilian face and scoped to the
+   .cp-vehicle-item-fields wrapper it happens to carry — so the MM and ACPA faces, which lay their
+   fields out in the same .field-list grid without that wrapper, rig-measured `0px none` border and
+   `0px` padding while the civilian face measured the intended 1px/2px 4px. That is the whole defect:
+   the base system's own `.cyberpunk .field` border is unset by the skin, and the restore below was
+   the only thing putting one back.
+   The wrapper is `display: contents`, so dropping it from these selectors is a pure WIDENING — every
+   value the civilian face computes is unchanged, and the other two faces now compute the same ones.
+   Scoped to `.field-list .field` rather than to every `.field`, because the header rows (the ruleset
+   badge, the Control Roll / Damage buttons) are `.field`s outside any field-list and have never been
+   boxed on any face. */
+.cyberpunk.sheet.vehicle .field-list { column-gap: 8px; row-gap: 6px; }
+.cyberpunk.sheet.vehicle .field-list .field {
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
@@ -2861,20 +2871,20 @@ body.cp-carolingian .cyberpunk.sheet.item.cp-item-vehicle .field {
   padding: 2px 4px;
   overflow: hidden;
 }
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list .field > label {
+.cyberpunk.sheet.vehicle .field-list .field > label {
   flex: 1 1 auto;
   min-width: max-content;
   white-space: nowrap;
 }
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list .field > span.flexrow {
+.cyberpunk.sheet.vehicle .field-list .field > span.flexrow {
   flex: 1 1 8em;
   min-width: 0;
 }
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list .field > span.flexrow:not(:has(.cp-unit-conv)) {
+.cyberpunk.sheet.vehicle .field-list .field > span.flexrow:not(:has(.cp-unit-conv)) {
   flex-wrap: nowrap;
 }
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list .field input[type=number] { min-width: 2.2em; }
-.cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field-list .field input[type=text] { min-width: 4em; }
+.cyberpunk.sheet.vehicle .field-list .field input[type=number] { min-width: 2.2em; }
+.cyberpunk.sheet.vehicle .field-list .field input[type=text] { min-width: 4em; }
 .cyberpunk.sheet.vehicle .cp-vehicle-item-fields select.cp-unit-select {
   flex: 0 0 auto;
   width: auto;
@@ -2889,21 +2899,104 @@ body.cp-carolingian .cyberpunk.sheet.item.cp-item-vehicle .field {
   row-gap: 2px;
   align-items: center;
 }
-body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
+body.cp-carolingian .cyberpunk.sheet.vehicle .field-list .field {
   border: 1px solid var(--restyler-border);
 }
+/* ── PAIRED VALUE BOXES: two entries either side of a separator symbol (Crew / Pass., Footprint
+   W × H, and the value/max pairs). Rig-measured before this rule: the two boxes were flex-stretched
+   to whatever the row had spare — 144px each on SDP, for a figure of at most five digits — and the
+   separator was jammed hard against both of them at 0px on each side.
+   Two guarantees, both from ONE gap-owning container rather than from any margin on the boxes (a
+   margin stack cannot keep the two sides equal once one box wraps):
+   1. the separator sits the SAME distance from each box, because the single `column-gap` is the only
+      thing between them;
+   2. each box is only as wide as the largest figure the field permits, stated on the row as a DIGIT
+      COUNT — which is the fact the sheet actually knows (a footprint is capped at the hull maximum,
+      so two digits; a capacity or a structural figure needs more).
+   The container keeps whatever flex the surrounding field rules give it, so the row still fills its
+   cell; the spare width now collects AFTER the pair instead of inside the boxes. */
+.cyberpunk.sheet.vehicle .cp-paired-values,
+.cyberpunk.sheet.item .cp-paired-values {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  column-gap: 6px;
+  row-gap: 2px;
+}
+.cyberpunk.sheet.vehicle .cp-paired-values > input[type=number],
+.cyberpunk.sheet.item .cp-paired-values > input[type=number] {
+  flex: 0 0 auto;
+  /* digits × the width of a figure, plus the box's own chrome (the base system gives these inputs
+     `padding: 0 6px` and a border). Measured, not guessed: at the 14px these rows render at, a
+     five-digit box lands at ~58px and the tightest paired row on either sheet offers 143px — so the
+     pair fits with room, which is what keeps the row from breaking BETWEEN the separator and the
+     second box (rig-measured at 1.8em: 70px boxes, 159px needed, the pair split across two lines). */
+  width: calc(var(--cp-pair-digits, 3) * 1ch + 1.15em);
+  margin: 0;
+  text-align: center;
+}
+/* The separator carries its own class rather than being addressed as "the .nogrow in here": the unit
+   pickers and the ≈ conversion hint on the speed and fuel rows are `.nogrow` too, and stripping THEIR
+   padding is not what this rule is for. */
+.cyberpunk.sheet.vehicle .cp-paired-values > .cp-pair-sep,
+.cyberpunk.sheet.item .cp-paired-values > .cp-pair-sep {
+  flex: 0 0 auto;
+  margin: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* ⛔ THE PAIR MUST NOT BE THE THING THAT BREAKS. Two of these rows carry a unit picker and an
+   "≈ conversion" hint after the second box, on a row that is deliberately allowed to wrap so the hint
+   can drop to its own line. Once the boxes stopped shrinking, the row's first opportunity to wrap
+   became the gap between the separator and the SECOND BOX — rig-measured on the vehicle item sheet at
+   520px, where the pair split across two lines (a right-hand gap of −83px). Giving the hint a
+   full-width basis makes it start a line of its own, so the wrap that has to happen happens after the
+   pair rather than inside it, and the unit picker is next in line to drop if the row is tighter still.
+   ⚠ The type selector on the hint is load-bearing, not decoration: both sheet families already set
+   `flex: 0 0 auto` on `.cp-unit-conv` further down this file, and a shorthand resets the basis — so a
+   plain class selector here ties on specificity and LOSES on source order (rig-measured `flex-basis:
+   auto` on a rule that was supposedly winning). */
+.cyberpunk.sheet.vehicle .cp-paired-values > span.cp-unit-conv,
+.cyberpunk.sheet.item .cp-paired-values > span.cp-unit-conv {
+  flex: 0 0 100%;
+}
+/* …and the row that STILL cannot hold two fixed boxes keeps flexible ones. Rig-measured on the vehicle
+   item slip: the Speed row's value span offers 135px of content width (its own padding comes off the
+   143px cell), and a pair of five-digit boxes needs 141px — so the boxes there are sized by the row
+   instead, and only the GAP discipline applies. This is a deliberate, narrow exception rather than a
+   width fudge: shaving the box formula until it fitted this one row would have left it 2px from
+   breaking again on the next label that grows. Rows with a unit picker but no hint (Fuel, Range) fit
+   and keep their declared sizing. The alternative — lifting the picker and the hint out of the pair's
+   span so the pair is one unbreakable flex item — is a markup change that would move the inputs out of
+   the base system's `.field > span > *` styling, so it is left for a considered pass, not a polish one. */
+.cyberpunk.sheet.vehicle .cp-paired-values:has(> span.cp-unit-conv) > input[type=number],
+.cyberpunk.sheet.item .cp-paired-values:has(> span.cp-unit-conv) > input[type=number] {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 2.2em;
+}
+
+/* The digit count each pair declares. One knob, read by the width calc above. */
+.cp-pair-2d { --cp-pair-digits: 2; }
+.cp-pair-3d { --cp-pair-digits: 3; }
+.cp-pair-5d { --cp-pair-digits: 5; }
+
 /* Honest-subtype label + the provenance line back to the source item. */
 .cp-veh-unmodeled { opacity: 0.85; font-style: italic; color: #c0791a; }
 .cp-veh-source { font-size: 0.82em; opacity: 0.75; cursor: pointer; }
 .cp-veh-source:hover { opacity: 1; text-decoration: underline; }
 
-/* ── SHEET-FACE STRIP — the first row of every vehicle/ACPA face, above the header. It picks the
-   whole LAYOUT, not one of the vehicle's stats, so it reads as its own band (full width, its own
-   ground, a hairline under it) instead of a checkbox among the identity fields, which is where the
-   control it replaces was buried.
+/* ── SHEET-FACE STRIP — the first row of every vehicle/ACPA face, above the header, AND the first
+   row of the vehicle ITEM sheet's settings tab. It picks the whole LAYOUT, not one of the vehicle's
+   stats, so it reads as its own band (full width, its own ground, a hairline under it) instead of a
+   checkbox among the identity fields, which is where the control it replaces was buried.
+   The item-sheet scope (`.cyberpunk.sheet.item`) is listed on every rule rather than the class being
+   styled unscoped, so the band can never bleed onto a sheet that has not asked for it.
    ⚠ `flex: 0 0 auto` is load-bearing, not decoration: the sheet roots carry Foundry's `.flexcol`,
-   whose `> * { flex: 1 1 0% }` equal-grows every child — without this the strip would claim a share
+   whose > * { flex: 1 1 0% } equal-grows every child — without this the strip would claim a share
    of the sheet's height alongside the scrolling body. */
+.cyberpunk.sheet.item .cp-veh-face-strip,
 .cyberpunk.sheet.vehicle .cp-veh-face-strip {
   flex: 0 0 auto;
   display: flex;
@@ -2913,9 +3006,17 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
   row-gap: 2px;
   padding: 4px 6px;
   margin-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.05);
+  /* ⭐ BOUNDED LIKE A FIELD, NOT TINTED (user verdict 2026-08-26: the grey box "looks strange").
+     The band used to be drawn as a lightened ground with a hairline under it, which is a device
+     nothing else on these sheets uses — so the strip read as pasted on rather than as part of the
+     sheet. It is now bounded exactly the way every field box on the same sheet is: one line, in the
+     same token. `--cp-line` resolves to the skin's border colour under the dark theme and falls back
+     to the base system's own literal under the light one, so the strip matches whichever set of
+     field borders is in force without a second rule. */
+  border: 1px solid var(--cp-line, black);
+  background: none;
 }
+.cyberpunk.sheet.item .cp-veh-face-label,
 .cyberpunk.sheet.vehicle .cp-veh-face-label {
   flex: 0 0 auto;
   font-weight: bold;
@@ -2928,6 +3029,7 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
    option, and the explicit min-width replaces the flex auto-minimum so a narrow sheet clips the
    select rather than shoving the label to a stub. Height is pinned because a bare <select> is
    ~39px intrinsic in Foundry's Chromium beside 24px inputs. */
+.cyberpunk.sheet.item .cp-veh-face-select,
 .cyberpunk.sheet.vehicle .cp-veh-face-select {
   flex: 0 1 auto;
   width: auto;
@@ -2938,11 +3040,22 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
 }
 /* The gate breadcrumb names a world setting, so it takes its own line rather than squeezing the
    control it explains. */
+.cyberpunk.sheet.item .cp-veh-face-hint,
 .cyberpunk.sheet.vehicle .cp-veh-face-hint {
   flex: 1 1 100%;
   font-size: 0.8em;
   opacity: 0.85;
   color: #c0791a;
+}
+/* "Nothing recorded — this came from the vehicle's class." A statement of fact, not a warning, so
+   it takes the muted body voice rather than the gate breadcrumb's amber. Its own line, so the two
+   never share one and neither is squeezed. */
+.cyberpunk.sheet.item .cp-veh-face-derived,
+.cyberpunk.sheet.vehicle .cp-veh-face-derived {
+  flex: 1 1 100%;
+  font-size: 0.78em;
+  font-style: italic;
+  opacity: 0.7;
 }
 /* Standard face + Maximum Metal world + combat data the standard face does not print. */
 .cyberpunk.sheet.vehicle .cp-veh-mm-data-note {
@@ -3681,6 +3794,14 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .cp-vehicle-item-fields .field {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The REMOTE statement — "aboard X, on <scene>" — is the whole reason the Step Out control beside
+   it is not acting where the viewer is looking, so it is the one thing that must never be ellipsed
+   away. It wraps instead. */
+.cyberpunk .cp-aboard-banner.cp-aboard-remote .cp-aboard-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
 
 /* ── Vehicle map layout (Front picker) ────────────────────────────────────────────────────────
    Four compass buttons living in one .field cell beside the Footprint inputs. Foundry's app
@@ -3976,12 +4097,14 @@ body.theme-light .cp-goon .cp-goon-warn,
 body.theme-light .cp-goon .cp-goon-clamp,
 body.theme-light .cp-goon .cp-goon-honesty-warn,
 body.theme-light .cp-veh-unmodeled,
+body.theme-light .cyberpunk.sheet.item .cp-veh-face-hint,
 body.theme-light .cyberpunk.sheet.vehicle .cp-veh-face-hint,
 body.theme-light .cyberpunk .cp-occupancy-count.cp-occupancy-over,
 body.theme-light .vehicle-fire-dialog .arc-warn.soft { color: var(--cp-lt-warn); }
 
 /* Sheet-face strip in the light scheme: the dark band's white washes are invisible on parchment,
    so the strip takes the shared line/fill tokens, and the MM-data note the info token. */
+body.theme-light .cyberpunk.sheet.item .cp-veh-face-strip,
 body.theme-light .cyberpunk.sheet.vehicle .cp-veh-face-strip {
   border-bottom-color: var(--cp-lt-line);
   background: var(--cp-lt-fill);
@@ -4035,3 +4158,37 @@ body.theme-light .chat-message .cyberpunk h1,
 body.theme-light .chat-message .cyberpunk h2,
 body.theme-light .chat-message .cyberpunk h3,
 body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
+
+/* ═══════════════ Cover lifecycle UI — the wall fieldset and the placement dialog ═══════════════
+   Added 2026-08-26 with the diegetic-labels ruling. Two mechanisms, both rig-measured first:
+
+   1. THE BOOK TAG IS A DESIGNED SECOND LINE, not an accidental wrap. Core sizes a `.form-group`
+      label with `flex: 1 1 0%`, which on the 480px Wall sheet resolves to 133px — measured, a
+      34-character label ("Structure left (Maximum Metal p.58)") broke mid-phrase across THREE lines
+      and grew its row to 96px. The tag is its own span, so it drops to its own line deliberately, at
+      a smaller size and lighter weight, and the row settles at two even lines.
+   2. THE LABEL COLUMN IS WIDENED to fit the longest field NAME on one line, which is what makes the
+      two-line shape read as "name / book" rather than as a ragged wrap. `flex-basis` rather than
+      `width`, so it still shares the row and still shrinks on a narrowed sheet. */
+.cp-cover-wall-fields .form-group > label { flex: 1 1 11em; min-width: 8em; }
+.cp-cover-book {
+  display: block;
+  font-size: 0.85em;
+  font-weight: normal;
+  opacity: 0.72;
+  line-height: 1.25;
+}
+/* The hint stack is its own rhythm — ONE gap-owning container rather than a margin stack, so a
+   conditionally-rendered hint (the breached note) cannot leave an uneven pitch behind it. */
+.cp-cover-wall-fields { display: flex; flex-direction: column; gap: 8px; }
+.cp-cover-wall-fields > :is(p, div) { margin: 0; flex: 0 0 auto; }
+.cp-cover-wall-fields .cp-cover-breached-note { font-weight: bold; }
+/* Small buttons in a row: Foundry defaults buttons to fill, so they are pinned to their content. */
+.cp-cover-wall-buttons { display: flex; gap: 8px; align-items: center; }
+.cp-cover-wall-buttons button {
+  flex: 0 0 auto; width: auto; min-width: max-content; white-space: nowrap;
+}
+/* The placement dialog's own rows use the `.field` idiom; the same two-line label shape applies. */
+.cp-cover-place-body .field > label { flex: 1 1 11em; min-width: 8em; }
+.cp-cover-place-body { display: flex; flex-direction: column; gap: 8px; }
+.cp-cover-place-body > :is(p, div) { margin: 0; flex: 0 0 auto; }
