@@ -2,7 +2,8 @@
  * KEEPER: cover zones Unit 1 (behavior + presets + placement + chew lifecycle).
  *  - behavior type registered (two-part manifest registration) + TYPES label resolves
  *  - COVER_PRESETS match the Core "Common Cover SPs" table (text-layer values)
- *  - placeCoverZone creates a region: behavior prefilled (pool = 3xSP), ALWAYS visible, amber
+ *  - placeCoverZone creates a region: behavior takes the structure it is GIVEN (2026-08-26: it no
+ *    longer re-supplies 3xSP), ALWAYS visible, amber; structure 0 = permanent Core p.103 cover
  *  - chewCoverZone: exact pool debit, band recolor (amber->orange->gray), destroyed flip at 0,
  *    chat card per chew, destroyed card, idempotent on already-destroyed (no extra card)
  *  - coverChoicesFor sorts by distance to the target token
@@ -64,11 +65,13 @@ const res = await page.evaluate(async () => {
   ok("Armored Car Body 40 / AV-4 Body 40", P["Armored Car Body"] === 40 && P["AV-4 Body"] === 40);
 
   // 3. placement
-  const region = await cov.placeCoverZone({ scene, label: "__PWK__Brick", sp: 25 });
+  // ⭐ THE PLACER NO LONGER RE-SUPPLIES 3xSP (ruled 2026-08-26): the dialog prefills it VISIBLY and a
+  // caller that wants the Maximum Metal lifecycle states it. See the core-mode legs at the end.
+  const region = await cov.placeCoverZone({ scene, label: "__PWK__Brick", sp: 25, poolMax: 75 });
   ok("placement creates region", !!region, region?.name);
   const b = region?.behaviors?.find(x => x.type === beh.COVER_ZONE_BEHAVIOR);
   ok("behavior prefilled sp 25", b?.system?.sp === 25);
-  ok("pool seeds 3xSP = 75", b?.system?.pool === 75 && b?.system?.poolMax === 75, `${b?.system?.pool}/${b?.system?.poolMax}`);
+  ok("pool seeds the stated structure = 75", b?.system?.pool === 75 && b?.system?.poolMax === 75, `${b?.system?.pool}/${b?.system?.poolMax}`);
   ok("visibility ALWAYS", region?.visibility === (CONST?.REGION_VISIBILITY?.ALWAYS ?? 2), String(region?.visibility));
   ok("intact color amber", region?.color?.css?.toLowerCase?.() === "#d1a054" || String(region?.color).toLowerCase() === "#d1a054", String(region?.color?.css ?? region?.color));
 
@@ -94,9 +97,9 @@ const res = await page.evaluate(async () => {
   ok("already-destroyed chew is a no-op", r4?.already === true && newCards().length === 3);
 
   // 5. choices sorting by distance
-  const far = await cov.placeCoverZone({ scene, label: "__PWK__Far", sp: 5 });
+  const far = await cov.placeCoverZone({ scene, label: "__PWK__Far", sp: 5, poolMax: 15 });
   await far.update({ shapes: [{ type: "rectangle", x: 100, y: 100, width: 100, height: 100, rotation: 0 }] });
-  const near = await cov.placeCoverZone({ scene, label: "__PWK__Near", sp: 10 });
+  const near = await cov.placeCoverZone({ scene, label: "__PWK__Near", sp: 10, poolMax: 30 });
   await near.update({ shapes: [{ type: "rectangle", x: 2000, y: 1000, width: 100, height: 100, rotation: 0 }] });
   const actor = await Actor.create({ name: "__PWK__Target", type: "character" });
   const [tok] = await scene.createEmbeddedDocuments("Token", [{ name: actor.name, actorId: actor.id, x: 2100, y: 1100, width: 1, height: 1 }]);
@@ -110,6 +113,35 @@ const res = await page.evaluate(async () => {
           r4-r6 face SP 0 and land their full 25 each. */
   const DA = await import(`/modules/${SCOPE}/module/combat/DamageApplicator.js`);
   const bare = await Actor.create({ name: "__PWK__Bare", type: "npc" });
+  /* ── ② THE ZONE'S OWN CORE/MM SPLIT (ruled 2026-08-26) ─────────────────────────────────────
+     A zone with an SP and a TOTAL STRUCTURE OF ZERO is Core p.103 cover: it soaks and it is
+     permanent. Zero is the "blank" here because the behavior's NumberField is `required` and cannot
+     hold one — a wall stores its structure as a flag and CAN be genuinely empty, and the two entry
+     surfaces are deliberately made to say the same thing in the only way each of them can. */
+  const coreZone = await cov.placeCoverZone({ scene, label: "__PWK__CoreOnly", sp: 15, poolMax: 0 });
+  const coreBeh = coreZone.behaviors.find(x => x.type === beh.COVER_ZONE_BEHAVIOR);
+  const coreRow = cov.coverZonesOn(scene).find(x => x.uuid === coreBeh.uuid);
+  ok("core zone: SP kept, no structure, and 0 is NOT destruction",
+    coreRow?.sp === 15 && coreRow?.structured === false && coreRow?.poolMax === 0 && coreRow?.destroyed === false,
+    JSON.stringify({ sp: coreRow?.sp, structured: coreRow?.structured, pool: coreRow?.pool, destroyed: coreRow?.destroyed }));
+  ok("core zone: the mode predicates agree", cov.coverModeOf(coreRow) === "core" && cov.coverChews(coreRow) === false);
+  ok("core zone: it is placed INTACT, not drawn as rubble",
+    String(coreZone.color?.css ?? coreZone.color).toLowerCase() !== "#555555",
+    String(coreZone.color?.css ?? coreZone.color));
+  const coreMsgs = new Set(game.messages.map(m => m.id));
+  const coreChew = await cov.chewCoverZone({ behaviorUuid: coreBeh.uuid, damage: 999 });
+  await new Promise(r => setTimeout(r, 400));
+  ok("core zone: a chew is refused with the core marker and writes nothing",
+    coreChew?.skipped === "core" && coreBeh.system.destroyed === false, JSON.stringify(coreChew));
+  ok("core zone: ⛔ NO structure card is posted for it",
+    game.messages.filter(m => !coreMsgs.has(m.id) && m.content.includes("cp-cover-chew")).length === 0,
+    String(game.messages.filter(m => !coreMsgs.has(m.id) && m.content.includes("cp-cover-chew")).length));
+  ok("core zone: it still SOAKS — the ledger hands its SP out every round and books nothing",
+    (() => { const l = cov.makeCoverLedger({ coverSP: coreRow.sp, cover: coreRow }); return l.spForRound() === 15 && l.absorb(999) === null && l.spForRound() === 15; })());
+  ok("core zone: it is still a real crossing an area can soak against",
+    cov.coverZonesOn(scene).some(x => x.uuid === coreBeh.uuid && x.sp === 15));
+  await coreZone.delete().catch(() => {});
+
   const coverRow = { uuid: "__PWK__uuid", label: "__PWK__Door", sp: 20, pool: 60, poolMax: 60, destroyed: false };
   const burst = { Torso: Array.from({ length: 6 }, () => ({ damage: 25 })) };
   const rows = DA.resolveAreaDamagesSync({

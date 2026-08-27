@@ -1,7 +1,17 @@
 {{!-- Cover chew card: ONE card per apply (cover.js chewCoverZone / chewCoverWall). The headline
       is the whole burst's debit; roundLines (present only when the burst had more than one
       debiting round) show the round-by-round wear, and brokeLine names the round the object
-      gave out. A single debit posts exactly the card it always did. --}}
+      gave out. A single debit posts exactly the card it always did.
+
+      ⛔ THIS CARD NEVER APPEARS FOR CORE-MODE COVER (an SP entered with no structure). Those objects
+      keep no ledger, so the chew sites return before rendering — see cover.js COVER_MODE_CORE.
+
+      ⭐ THE BREACH LINE + REPAIR BUTTON (user ruling 2026-08-26). A wall whose structure reaches zero
+      opens its movement, sight and sound restrictions, and the card SAYS SO and hands the referee the
+      undo in the same breath — the breach is reversible by design, and a card that announced a hole in
+      the map without saying how to close it would read as a one-way accident.
+      `canRepair` is the GM render gate; `.cp-cover-repair` + data-wall-uuid are what cover.js
+      registerCoverRepairButton dispatches on. --}}
 <div class="cyberpunk cp-cover-chew">
     <h3>{{#if destroyed}}{{CPLocal "CoverDestroyedTitle"}}{{else}}{{CPLocal "CoverChewTitle"}}{{/if}}</h3>
     <p>{{CPLocal "CoverChewLine" name=label damage=damage}}{{#if weaponName}} ({{weaponName}}){{/if}}</p>
@@ -13,6 +23,16 @@
     {{#if brokeLine}}<p class="cp-cover-broke-line">{{brokeLine}}</p>{{/if}}
     {{#if destroyed}}
     <p class="cp-cover-destroyed-line">{{#if doorOpened}}{{CPLocal "CoverDoorOpenedLine" name=label}}{{else}}{{CPLocal "CoverDestroyedLine" name=label}}{{/if}}</p>
+    {{#if breached}}
+    <p class="cp-cover-breach-line">{{CPLocal "CoverBreachLine" name=label}}</p>
+    {{/if}}
+    {{#if canRepair}}
+    <div class="save-buttons">
+        <button class="cp-cover-repair" data-wall-uuid="{{wallUuid}}" data-tooltip="{{CPLocal 'CoverRepairTip'}}">
+            <i class="fa-solid fa-trowel-bricks"></i> {{CPLocal "CoverRepairBtn"}}
+        </button>
+    </div>
+    {{/if}}
     {{else}}
     <p class="cp-cover-pool-line">{{CPLocal "CoverPoolLine" pool=pool poolMax=poolMax}}</p>
     {{/if}}

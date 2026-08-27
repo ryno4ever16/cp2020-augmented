@@ -24,6 +24,8 @@
  * reload is not enough.
  */
 
+import { isPrimaryGMSession } from "../gm-session-primary.js";
+
 const SCOPE = "cp2020-augmented";
 
 /** The behavior document type string (module-namespaced, matches module.json). */
@@ -55,17 +57,24 @@ export function registerCoverZoneBehavior() {
         sp: new fields.NumberField({
           required: true, integer: true, min: 0, initial: 10,
           label: "CYBERPUNK.CoverZoneSP",
-          hint: "CYBERPUNK.CoverZoneSPHint",
+          hint: "CYBERPUNK.CoverZoneSPTip",
         }),
+        // ⭐ ZERO TOTAL STRUCTURE = CORE-MODE COVER (user ruling 2026-08-26; the model is written out
+        // at cover.js COVER_MODE_CORE). A zone with an SP and a total structure of 0 soaks exactly as
+        // Core p.103 prints and is PERMANENT: it never chews, never destroys and posts no structure
+        // card. Above zero it takes the Maximum Metal p.58 lifecycle it always had.
+        // ⛔ Zero is the "blank" here because a `required` NumberField cannot hold one — a wall stores
+        // its structure as a flag and can therefore be genuinely empty, and the two entry surfaces are
+        // deliberately kept saying the same thing in the only way each of them can.
         pool: new fields.NumberField({
           required: true, integer: true, min: 0, initial: 30,
           label: "CYBERPUNK.CoverZonePool",
-          hint: "CYBERPUNK.CoverZonePoolHint",
+          hint: "CYBERPUNK.CoverZonePoolTip",
         }),
         poolMax: new fields.NumberField({
           required: true, integer: true, min: 0, initial: 30,
           label: "CYBERPUNK.CoverZonePoolMax",
-          hint: "CYBERPUNK.CoverZonePoolMaxHint",
+          hint: "CYBERPUNK.CoverZonePoolMaxTip",
         }),
         // A `material` StringField lived here and rendered as a free-text "Material" input on the
         // behavior's native config sheet. Removed (user ruling 2026-08-11, completed 2026-08-12):
@@ -103,7 +112,7 @@ export function registerCoverZoneVisibilityDefault() {
   Hooks.on("createRegionBehavior", async (behavior) => {
     try {
       if (behavior?.type !== COVER_ZONE_BEHAVIOR) return;
-      if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+      if (!isPrimaryGMSession()) return;
       const region = behavior.parent;
       if (!region?.update) return;
       const V = CONST?.REGION_VISIBILITY ?? {};

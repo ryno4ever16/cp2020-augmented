@@ -1,0 +1,11 @@
+{{!-- Breach-undo receipt (cover.js repairCoverWall). Posted when a GM presses the destruction card's
+      repair button (or the wall sheet's), so the table sees the map change back rather than only the
+      referee. Reports BOTH halves of the restore — the barrier stands again AND its structure is
+      full — because either half alone would leave the wall in a state nobody chose. --}}
+<div class="cyberpunk cp-cover-repair-card">
+    <h3>{{CPLocal "CoverRepairTitle"}}</h3>
+    <p>{{CPLocal "CoverRepairLine" name=label}}</p>
+    {{#if poolMax}}
+    <p class="cp-cover-pool-line">{{CPLocal "CoverPoolLine" pool=pool poolMax=poolMax}}</p>
+    {{/if}}
+</div>

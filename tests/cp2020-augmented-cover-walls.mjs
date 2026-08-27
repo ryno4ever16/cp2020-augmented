@@ -69,14 +69,49 @@ const res = await page.evaluate(async (SCOPE) => {
   const wPlain = await mkWall({ c: [2000, 1000, 2200, 1000] });
   ok("unflagged wall absent from wall rows", !rowFor(wPlain.uuid));
 
-  /* b. SP-only wall floats on the 3xSP structure default */
+  /* b. ⭐ SP ALONE IS CORE-MODE COVER — permanent, no structure ledger (ruled 2026-08-26).
+     ⏪ THIS LEG IS INVERTED FROM WHAT IT PINNED BEFORE. It used to assert that a blank structure
+     field floated on a silent 3xSP default, which is exactly the behaviour the ruling removed: a GM
+     who has only read the core rulebook could watch a door they priced at SP 5 shatter under a rule
+     from a book they do not own. Blank now means permanent, and the 3xSP figure is offered VISIBLY
+     in the form instead (see the sheet phase below). */
   const wDefault = await mkWall({ c: [2000, 1040, 2200, 1040], flags: { [SCOPE]: { coverSp: 10 } } });
   const rDefault = rowFor(wDefault.uuid);
   ok("SP-only wall: sp 10", rDefault?.sp === 10, String(rDefault?.sp));
-  ok("SP-only wall: structure default 30/30", rDefault?.pool === 30 && rDefault?.poolMax === 30, `${rDefault?.pool}/${rDefault?.poolMax}`);
-  ok("SP-only wall: not destroyed", rDefault?.destroyed === false, String(rDefault?.destroyed));
+  ok("SP-only wall: it is CORE mode — no structure at all", rDefault?.structured === false, String(rDefault?.structured));
+  ok("SP-only wall: reports no pool, and 0 is NOT destruction", rDefault?.pool === 0 && rDefault?.poolMax === 0 && rDefault?.destroyed === false,
+    `${rDefault?.pool}/${rDefault?.poolMax} destroyed=${rDefault?.destroyed}`);
+  ok("SP-only wall: the mode predicates agree with the row", cov.coverModeOf(rDefault) === "core" && cov.coverChews(rDefault) === false,
+    `${cov.coverModeOf(rDefault)} / ${cov.coverChews(rDefault)}`);
+  ok("SP-only wall: it still SOAKS — the ledger hands out its SP every round",
+    (() => { const l = cov.makeCoverLedger({ coverSP: rDefault.sp, cover: rDefault }); return l.spForRound() === 10 && l.absorb(999) === null && l.spForRound() === 10; })(),
+    "sp held, nothing booked");
   ok("SP-only wall: localized fallback label", rDefault?.label === "Wall", String(rDefault?.label));
   ok("fallback label carries no raw key text", !/CYBERPUNK\./.test(String(rDefault?.label)));
+  /* ⛔ AND NO CARD, EVER, for core-mode cover — the whole point of the split. */
+  const coreMsgIds = new Set(game.messages.map(m => m.id));
+  const coreChew = await cov.chewCoverWall({ wallUuid: wDefault.uuid, damage: 999, weaponName: "__PWX__Source" });
+  await new Promise(r => setTimeout(r, 400));
+  ok("SP-only wall: a chew is refused with the core marker, nothing written",
+    coreChew?.skipped === "core" && coreChew?.mode === "core" && wDefault.flags?.[SCOPE]?.coverPool === undefined,
+    JSON.stringify(coreChew));
+  ok("SP-only wall: NO structure card is posted for it",
+    game.messages.filter(m => !coreMsgIds.has(m.id) && m.content.includes("cp-cover-chew")).length === 0,
+    String(game.messages.filter(m => !coreMsgIds.has(m.id) && m.content.includes("cp-cover-chew")).length));
+  ok("SP-only wall: it is not breached, and its restrictions are untouched",
+    !wDefault.flags?.[SCOPE]?.coverBreach && rowFor(wDefault.uuid)?.destroyed === false);
+
+  /* b-bis. ⭐ ONE NUMBER OPTS IT IN. Same wall shape, one structure value, full MM lifecycle. */
+  const wOptIn = await mkWall({ c: [2000, 1020, 2200, 1020], flags: { [SCOPE]: { coverSp: 10, coverPoolMax: 30 } } });
+  const rOptIn = rowFor(wOptIn.uuid);
+  ok("opt-in wall: a stored total is what turns the lifecycle on",
+    rOptIn?.structured === true && rOptIn?.poolMax === 30 && rOptIn?.pool === 30,
+    `${rOptIn?.pool}/${rOptIn?.poolMax} structured=${rOptIn?.structured}`);
+  ok("opt-in wall: the mode predicates agree", cov.coverModeOf(rOptIn) === "mm" && cov.coverChews(rOptIn) === true);
+  const wOptPool = await mkWall({ c: [2000, 1000, 2100, 1002], flags: { [SCOPE]: { coverSp: 10, coverPool: 18 } } });
+  ok("opt-in wall: a REMAINING structure alone also opts in, and becomes its own total",
+    rowFor(wOptPool.uuid)?.structured === true && rowFor(wOptPool.uuid)?.pool === 18 && rowFor(wOptPool.uuid)?.poolMax === 18,
+    JSON.stringify(rowFor(wOptPool.uuid)));
 
   /* c. explicit structure numbers respected; material wins the label; door fallback label */
   const wExplicit = await mkWall({ c: [2000, 1080, 2200, 1080], flags: { [SCOPE]: { coverSp: 10, coverPool: 12, coverPoolMax: 40, coverMaterial: "__PWX__Barrier" } } });
@@ -84,14 +119,17 @@ const res = await page.evaluate(async (SCOPE) => {
   ok("explicit structure numbers respected 12/40", rExplicit?.pool === 12 && rExplicit?.poolMax === 40, `${rExplicit?.pool}/${rExplicit?.poolMax}`);
   ok("explicit row keeps sp 10 (structure independent of SP)", rExplicit?.sp === 10, String(rExplicit?.sp));
   ok("material string wins the label", rExplicit?.label === "__PWX__Barrier", String(rExplicit?.label));
-  const wDoorLabel = await mkWall({ c: [2000, 1120, 2200, 1120], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 5 } } });
+  const wDoorLabel = await mkWall({ c: [2000, 1120, 2200, 1120], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 5, coverPoolMax: 15 } } });
   const rDoorLabel = rowFor(wDoorLabel.uuid);
   ok("door wall flagged isDoor", rDoorLabel?.isDoor === true, String(rDoorLabel?.isDoor));
   ok("door fallback label", rDoorLabel?.label === "Door", String(rDoorLabel?.label));
-  ok("door structure default 15/15", rDoorLabel?.pool === 15 && rDoorLabel?.poolMax === 15, `${rDoorLabel?.pool}/${rDoorLabel?.poolMax}`);
+  ok("door with a stated structure reads 15/15", rDoorLabel?.pool === 15 && rDoorLabel?.poolMax === 15, `${rDoorLabel?.pool}/${rDoorLabel?.poolMax}`);
+  const wDoorCore = await mkWall({ c: [2000, 1100, 2100, 1102], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 5 } } });
+  ok("a DOOR with SP alone is core cover too — it soaks and never breaks open",
+    rowFor(wDoorCore.uuid)?.structured === false && rowFor(wDoorCore.uuid)?.destroyed === false);
 
   /* d. picker rows merge zones + walls, nearest-first */
-  const farZone = await cov.placeCoverZone({ scene, label: "__PWX__FarZone", sp: 5 });
+  const farZone = await cov.placeCoverZone({ scene, label: "__PWX__FarZone", sp: 5, poolMax: 15 });
   await farZone.update({ shapes: [{ type: "rectangle", x: 100, y: 100, width: 100, height: 100, rotation: 0 }] });
   const wNear = await mkWall({ c: [2100, 1200, 2300, 1200], flags: { [SCOPE]: { coverSp: 10, coverMaterial: "__PWX__NearWall" } } });
   const actor = await Actor.create({ name: "__PWX__Probe", type: "character" });
@@ -106,7 +144,7 @@ const res = await page.evaluate(async (SCOPE) => {
   const msgIds = new Set(game.messages.map(m => m.id));
   const newCards = () => game.messages.filter(m => !msgIds.has(m.id) && m.content.includes("cp-cover-chew"));
 
-  const wChew = await mkWall({ c: [2000, 1160, 2200, 1160], flags: { [SCOPE]: { coverSp: 10, coverMaterial: "__PWX__ChewWall" } } });
+  const wChew = await mkWall({ c: [2000, 1160, 2200, 1160], flags: { [SCOPE]: { coverSp: 10, coverPoolMax: 30, coverMaterial: "__PWX__ChewWall" } } });
   const c1 = await cov.chewCoverWall({ wallUuid: wChew.uuid, damage: 14, weaponName: "__PWX__Source" });
   ok("structure debit exact: 30 -> 16", c1?.pool === 16 && c1?.destroyed === false, JSON.stringify(c1));
   ok("debit persisted to wall flags", wChew.flags?.[SCOPE]?.coverPool === 16 && wChew.flags?.[SCOPE]?.coverPoolMax === 30, JSON.stringify(wChew.flags?.[SCOPE]));
@@ -131,7 +169,7 @@ const res = await page.evaluate(async (SCOPE) => {
   ok("no extra card for the no-op", newCards().length === 2, String(newCards().length));
 
   /* g. DOOR wall broken open at zero structure */
-  const wDoor = await mkWall({ c: [2000, 1240, 2200, 1240], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 5, coverMaterial: "__PWX__ChewDoor" } } });
+  const wDoor = await mkWall({ c: [2000, 1240, 2200, 1240], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 5, coverPoolMax: 15, coverMaterial: "__PWX__ChewDoor" } } });
   ok("door starts closed", (wDoor._source?.ds ?? wDoor.ds) === 0, String(wDoor._source?.ds ?? wDoor.ds));
   const d1 = await cov.chewCoverWall({ wallUuid: wDoor.uuid, damage: 15 });
   ok("door structure debit to zero flips destroyed", d1?.pool === 0 && d1?.destroyed === true, JSON.stringify(d1));
@@ -140,19 +178,130 @@ const res = await page.evaluate(async (SCOPE) => {
   cards = newCards();
   ok("door card posted", cards.length === 3, String(cards.length));
   ok("door card carries the broken-open line", /broken open/i.test(cards[2]?.content ?? ""), (cards[2]?.content ?? "").slice(0, 200));
+  // ⭐ THE DOOR POP-OPEN PATH IS THE REGRESSION PIN (field-confirmed working before this unit; the
+  // ruling asked only that it keep working). The BREACH below is the new behaviour beside it.
+  ok("door regression pin: the pop-open path still fires at zero structure",
+    (wDoor._source?.ds ?? wDoor.ds) === (CONST?.WALL_DOOR_STATES?.OPEN ?? 1));
+
+  /* ── ① THE BREACH: at zero structure the wall's three restrictions OPEN, reversibly ────────── */
+  const OPEN_MOVE = CONST?.WALL_MOVEMENT_TYPES?.NONE ?? 0;
+  const OPEN_SENSE = CONST?.WALL_SENSE_TYPES?.NONE ?? 0;
+  const wBreach = await mkWall({
+    c: [2000, 1400, 2200, 1400],
+    move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL, sound: CONST.WALL_SENSE_TYPES.NORMAL,
+    flags: { [SCOPE]: { coverSp: 10, coverPoolMax: 30, coverMaterial: "__PWX__BreachWall" } },
+  });
+  ok("breach: the wall starts restricting all three", wBreach.move !== OPEN_MOVE && wBreach.sight !== OPEN_SENSE && wBreach.sound !== OPEN_SENSE,
+    `${wBreach.move}/${wBreach.sight}/${wBreach.sound}`);
+  const preMove = wBreach.move, preSight = wBreach.sight, preSound = wBreach.sound;
+  const b1 = await cov.chewCoverWall({ wallUuid: wBreach.uuid, damage: 12 });
+  ok("breach: a PARTIAL debit breaches nothing (negative)",
+    b1?.breached !== true && wBreach.move === preMove && !wBreach.flags?.[SCOPE]?.coverBreach,
+    `${JSON.stringify(b1)} move=${wBreach.move}`);
+  const b2 = await cov.chewCoverWall({ wallUuid: wBreach.uuid, damage: 18 });
+  ok("breach: the debit that empties the pool reports the breach", b2?.destroyed === true && b2?.breached === true, JSON.stringify(b2));
+  ok("breach: ALL THREE restrictions are open — move, sight and sound",
+    wBreach.move === OPEN_MOVE && wBreach.sight === OPEN_SENSE && wBreach.sound === OPEN_SENSE,
+    `${wBreach.move}/${wBreach.sight}/${wBreach.sound}`);
+  const snap = wBreach.flags?.[SCOPE]?.coverBreach;
+  ok("breach: the ORIGINAL values are snapshotted, so the change is reversible by construction",
+    snap && snap.move === preMove && snap.sight === preSight && snap.sound === preSound, JSON.stringify(snap));
+  await new Promise(r => setTimeout(r, 400));
+  const breachCard = game.messages.filter(m => !msgIds.has(m.id) && m.content.includes("__PWX__BreachWall")).pop();
+  ok("breach: the card ANNOUNCES it", /breached/i.test(breachCard?.content ?? ""), (breachCard?.content ?? "").slice(0, 260));
+  ok("breach: the card carries the GM repair control, wired to this wall",
+    (breachCard?.content ?? "").includes("cp-cover-repair") && (breachCard?.content ?? "").includes(wBreach.uuid),
+    (breachCard?.content ?? "").includes("cp-cover-repair") ? "button present" : "button ABSENT");
+  // A second debit on a breached wall must not re-snapshot the OPEN values as the "original".
+  await cov.chewCoverWall({ wallUuid: wBreach.uuid, damage: 5 });
+  ok("breach: a later debit does not overwrite the snapshot with the open values",
+    wBreach.flags?.[SCOPE]?.coverBreach?.move === preMove, JSON.stringify(wBreach.flags?.[SCOPE]?.coverBreach));
+
+  /* ── ① THE REPAIR: one call, both halves back ─────────────────────────────────────────────── */
+  const rep = await cov.repairCoverWall({ wallUuid: wBreach.uuid });
+  ok("repair: it reports the restore and the refilled total", rep?.repaired === true && rep?.pool === 30, JSON.stringify(rep));
+  ok("repair: all three restrictions are EXACTLY what they were",
+    wBreach.move === preMove && wBreach.sight === preSight && wBreach.sound === preSound,
+    `${wBreach.move}/${wBreach.sight}/${wBreach.sound} vs ${preMove}/${preSight}/${preSound}`);
+  ok("repair: the structure is full again", rowFor(wBreach.uuid)?.pool === 30 && rowFor(wBreach.uuid)?.destroyed === false,
+    JSON.stringify(rowFor(wBreach.uuid)));
+  ok("repair: the snapshot is cleared, so the wall is indistinguishable from one never breached",
+    wBreach.flags?.[SCOPE]?.coverBreach === undefined, String(wBreach.flags?.[SCOPE]?.coverBreach));
+  await new Promise(r => setTimeout(r, 400));
+  ok("repair: it posts its own receipt so the table sees the map change back",
+    game.messages.filter(m => !msgIds.has(m.id) && m.content.includes("cp-cover-repair-card")).length === 1,
+    String(game.messages.filter(m => !msgIds.has(m.id) && m.content.includes("cp-cover-repair-card")).length));
+  const rep2 = await cov.repairCoverWall({ wallUuid: wBreach.uuid });
+  ok("repair: a second press on an unbreached wall is a no-op (negative)", rep2?.already === true, JSON.stringify(rep2));
+  // And the wall breaches AGAIN afterwards — the lifecycle is a cycle, not a one-shot.
+  await cov.chewCoverWall({ wallUuid: wBreach.uuid, damage: 30 });
+  ok("repair: a repaired wall can breach again", wBreach.move === OPEN_MOVE && !!wBreach.flags?.[SCOPE]?.coverBreach);
+  await cov.repairCoverWall({ wallUuid: wBreach.uuid });
+
+  /* ── ① a DOOR's own state rides the snapshot ──────────────────────────────────────────────── */
+  const wDoorBreach = await mkWall({
+    c: [2000, 1440, 2200, 1440], door: 1, ds: 0,
+    move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL,
+    flags: { [SCOPE]: { coverSp: 5, coverPoolMax: 15, coverMaterial: "__PWX__BreachDoor" } },
+  });
+  await cov.chewCoverWall({ wallUuid: wDoorBreach.uuid, damage: 15 });
+  ok("breach: a door breaches AND pops open together",
+    (wDoorBreach._source?.ds ?? wDoorBreach.ds) === (CONST?.WALL_DOOR_STATES?.OPEN ?? 1)
+    && wDoorBreach.move === OPEN_MOVE && !!wDoorBreach.flags?.[SCOPE]?.coverBreach,
+    `ds=${wDoorBreach._source?.ds ?? wDoorBreach.ds} move=${wDoorBreach.move}`);
+  await cov.repairCoverWall({ wallUuid: wDoorBreach.uuid });
+  ok("repair: the door is shut again and restricts what it did",
+    (wDoorBreach._source?.ds ?? wDoorBreach.ds) === 0 && wDoorBreach.move !== OPEN_MOVE,
+    `ds=${wDoorBreach._source?.ds ?? wDoorBreach.ds} move=${wDoorBreach.move}`);
+
+  /* ── ⑤ THE NAKED-INDESTRUCTIBLE GUARANTEE ─────────────────────────────────────────────────── */
+  // A wall with no cover values is not a cover row, cannot be chewed, cannot breach, and is
+  // spread-EXEMPT rather than soaking. Every one of those asserted, plus the same state reached by
+  // CLEARING a wall that used to carry values.
+  const wNaked = await mkWall({ c: [2000, 1480, 2200, 1480], move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL });
+  ok("naked: no picker row", !rowFor(wNaked.uuid));
+  ok("naked: no row in coverChoicesFor either", !cov.coverChoicesFor(tok).some(r => r.uuid === wNaked.uuid));
+  ok("naked: a chew is refused outright", (await cov.chewCoverWall({ wallUuid: wNaked.uuid, damage: 50 })) === null);
+  ok("naked: it cannot breach — its restrictions are untouched and no snapshot is written",
+    wNaked.move === CONST.WALL_MOVEMENT_TYPES.NORMAL && !wNaked.flags?.[SCOPE]?.coverBreach,
+    `move=${wNaked.move}`);
+  ok("naked: it is not a VALUED crossing, so an area exempts rather than soaks",
+    cov.valuedCoverAlong(scene, { x: 2000, y: 1400 }, { x: 2200, y: 1560 }).every(r => r.uuid !== wNaked.uuid));
+  const wCleared = await mkWall({
+    c: [2000, 1520, 2200, 1520], move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL,
+    flags: { [SCOPE]: { coverSp: 20, coverPool: 10, coverPoolMax: 60 } },
+  });
+  ok("cleared: it starts as a real cover row", !!rowFor(wCleared.uuid) && rowFor(wCleared.uuid)?.structured === true);
+  await cov.chewCoverWall({ wallUuid: wCleared.uuid, damage: 10 });
+  ok("cleared: and it breaches, so the clear has something to undo", !!wCleared.flags?.[SCOPE]?.coverBreach);
+  const clearedMove = wCleared.flags?.[SCOPE]?.coverBreach?.move;
+  await cov.repairCoverWall({ wallUuid: wCleared.uuid });
+  await wCleared.update({
+    [`flags.${SCOPE}.-=coverSp`]: null, [`flags.${SCOPE}.-=coverPool`]: null,
+    [`flags.${SCOPE}.-=coverPoolMax`]: null, [`flags.${SCOPE}.-=coverBreach`]: null,
+  });
+  ok("cleared: clearing the values returns EXACTLY the naked state — no row, no chew, no breach",
+    !rowFor(wCleared.uuid)
+    && (await cov.chewCoverWall({ wallUuid: wCleared.uuid, damage: 50 })) === null
+    && wCleared.move === clearedMove && !wCleared.flags?.[SCOPE]?.coverBreach,
+    `move=${wCleared.move} (was ${clearedMove})`);
+  ok("cleared: and it is spread-EXEMPT again, not a valued crossing",
+    cov.valuedCoverAlong(scene, { x: 2000, y: 1400 }, { x: 2200, y: 1560 }).every(r => r.uuid !== wCleared.uuid));
 
   /* partial door debit does NOT open it (negative case) */
-  const wDoor2 = await mkWall({ c: [2000, 1280, 2200, 1280], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 10, coverMaterial: "__PWX__PartialDoor" } } });
+  const wDoor2 = await mkWall({ c: [2000, 1280, 2200, 1280], door: 1, ds: 0, flags: { [SCOPE]: { coverSp: 10, coverPoolMax: 30, coverMaterial: "__PWX__PartialDoor" } } });
   const d2 = await cov.chewCoverWall({ wallUuid: wDoor2.uuid, damage: 5 });
   ok("partial door debit: 30 -> 25, not destroyed", d2?.pool === 25 && d2?.destroyed === false, JSON.stringify(d2));
   ok("partial door stays closed", (wDoor2._source?.ds ?? wDoor2.ds) === 0, String(wDoor2._source?.ds ?? wDoor2.ds));
 
   /* h. dispatcher routes by resolved document type */
-  const wDisp = await mkWall({ c: [2000, 1320, 2200, 1320], flags: { [SCOPE]: { coverSp: 10, coverMaterial: "__PWX__DispatchWall" } } });
+  const wDisp = await mkWall({ c: [2000, 1320, 2200, 1320], flags: { [SCOPE]: { coverSp: 10, coverPoolMax: 30, coverMaterial: "__PWX__DispatchWall" } } });
   const h1 = await cov.chewCover({ uuid: wDisp.uuid, damage: 5, weaponName: "__PWX__Source" });
   ok("dispatcher debits a wall uuid: 30 -> 25", h1?.pool === 25 && h1?.destroyed === false, JSON.stringify(h1));
   ok("dispatcher wall write persisted", wDisp.flags?.[SCOPE]?.coverPool === 25, String(wDisp.flags?.[SCOPE]?.coverPool));
-  const dispZone = await cov.placeCoverZone({ scene, label: "__PWX__DispatchZone", sp: 5 });
+  // ⭐ THE PLACER TAKES THE STRUCTURE IT IS GIVEN AND NO LONGER RE-SUPPLIES ONE (2026-08-26): the
+  // dialog prefills 3xSP visibly, and a caller that wants the lifecycle states it.
+  const dispZone = await cov.placeCoverZone({ scene, label: "__PWX__DispatchZone", sp: 5, poolMax: 15 });
   const dispBeh = dispZone.behaviors.find(b => b.type === `${SCOPE}.coverZone`);
   ok("dispatch zone seeded 15/15", dispBeh?.system?.pool === 15 && dispBeh?.system?.poolMax === 15, `${dispBeh?.system?.pool}/${dispBeh?.system?.poolMax}`);
   const h2 = await cov.chewCover({ behaviorUuid: dispBeh.uuid, damage: 5 });
@@ -166,7 +315,8 @@ const res = await page.evaluate(async (SCOPE) => {
   /* the wall used by the configuration-sheet phase stays flag-free until the sheet writes it */
   const wCfg = await mkWall({ c: [2000, 1360, 2200, 1360] });
 
-  out.ids.wallIds = [wPlain, wDefault, wExplicit, wDoorLabel, wNear, wChew, wDoor, wDoor2, wDisp, wCfg].map(w => w.id);
+  out.ids.wallIds = [wPlain, wDefault, wOptIn, wOptPool, wExplicit, wDoorLabel, wDoorCore, wNear, wChew,
+    wDoor, wDoor2, wDisp, wBreach, wDoorBreach, wNaked, wCleared, wCfg].map(w => w.id);
   out.ids.cfgWallId = wCfg.id;
   out.ids.regionIds = [farZone.id, dispZone.id];
   out.ids.actorId = actor.id;
@@ -205,6 +355,56 @@ if (fieldsetSeen) {
   check("fieldset sits inside the sheet's own form", dom.inForm === true);
   check("no raw key text leaks into the fieldset", !/CYBERPUNK\./.test(dom.text), dom.text.slice(0, 120));
 
+  /* ── ③ DIEGETIC BOOK LABELS + REAL TOOLTIPS, asserted by CONTENT, not by presence ──────────── */
+  const diegetic = await page.evaluate(() => {
+    const fs = document.querySelector(".cp-cover-wall-fields");
+    const rows = [...fs.querySelectorAll(".form-group")].map(g => ({
+      label: g.querySelector("label")?.textContent?.trim() ?? "",
+      labelTip: g.querySelector("label")?.getAttribute("data-tooltip") ?? "",
+      inputTip: g.querySelector("input")?.getAttribute("data-tooltip") ?? "",
+      inputName: g.querySelector("input")?.getAttribute("name") ?? "",
+    })).filter(r => r.inputName);
+    const btns = [...fs.querySelectorAll("button")].map(b => ({
+      cls: b.className, text: b.textContent.trim(), tip: b.getAttribute("data-tooltip") ?? "",
+    }));
+    return { rows, btns, hints: [...fs.querySelectorAll("p.hint")].map(h => h.textContent.trim()) };
+  });
+  check("every field carries a SHORT book-tagged label",
+    diegetic.rows.length === 3
+    && /Cover SP \(Core p\.103\)/.test(diegetic.rows[0].label)
+    && /Maximum Metal p\.58/.test(diegetic.rows[1].label)
+    && /Maximum Metal p\.58/.test(diegetic.rows[2].label),
+    diegetic.rows.map(r => r.label).join(" | "));
+  check("labels stay SHORT — the teaching is in the tooltip, not the label",
+    diegetic.rows.every(r => r.label.length > 0 && r.label.length <= 44),
+    diegetic.rows.map(r => `${r.label.length}`).join(","));
+  check("every field AND its input carry a real tooltip",
+    diegetic.rows.every(r => r.labelTip.length > 40 && r.inputTip === r.labelTip),
+    diegetic.rows.map(r => r.labelTip.length).join(","));
+  check("every tooltip names the BOOK and the PAGE",
+    diegetic.rows.every(r => /p\.\d+/.test(r.labelTip)) && /Core/.test(diegetic.rows[0].labelTip)
+    && diegetic.rows.slice(1).every(r => /Maximum Metal/.test(r.labelTip)),
+    diegetic.rows.map(r => (r.labelTip.match(/p\.\d+/) ?? ["-"])[0]).join(","));
+  check("every tooltip says what leaving the field BLANK means",
+    diegetic.rows.every(r => /blank/i.test(r.labelTip)),
+    diegetic.rows.map(r => /blank/i.test(r.labelTip)).join(","));
+  check("no tooltip leaks a raw i18n key",
+    diegetic.rows.every(r => !/CYBERPUNK\./.test(r.labelTip)) && diegetic.btns.every(b => !/CYBERPUNK\./.test(b.tip)));
+  check("the hint block explains BOTH models and names both books",
+    diegetic.hints.some(h => /Core p\.103/.test(h) && /Maximum Metal p\.58/.test(h)),
+    diegetic.hints.join(" // ").slice(0, 200));
+  /* ── ④ the hint block covers zero structure (breach + repair) and blesses low cover ────────── */
+  check("the hints explain what zero structure does — breach AND repair",
+    diegetic.hints.some(h => /breach/i.test(h)) && diegetic.hints.some(h => /[Rr]epair/.test(h)),
+    diegetic.hints.filter(h => /breach/i.test(h)).join(" // ").slice(0, 200));
+  check("the hints BLESS the low-cover idiom (a movement- or sight-open valued wall)",
+    diegetic.hints.some(h => /chest-high|armoured window|armored window/i.test(h)
+      && /movement/i.test(h) && /sight/i.test(h)),
+    diegetic.hints.filter(h => /chest-high/i.test(h)).join("").slice(0, 200));
+  check("the Clear Cover button is present, book-tagged and tooltipped",
+    diegetic.btns.some(b => /cp-cover-wall-clear/.test(b.cls) && b.text.length > 0 && b.tip.length > 40),
+    JSON.stringify(diegetic.btns));
+
   // SP -> structure pre-fill fires on a REAL change event
   await page.evaluate((SCOPE) => {
     const sp = document.querySelector(`.cp-cover-wall-fields input[name="flags.${SCOPE}.coverSp"]`);
@@ -216,7 +416,72 @@ if (fieldsetSeen) {
     const q = k => document.querySelector(`.cp-cover-wall-fields input[name="flags.${SCOPE}.${k}"]`)?.value;
     return { pool: q("coverPool"), poolMax: q("coverPoolMax") };
   }, SCOPE);
-  check("SP edit pre-fills empty structure fields with 3xSP", filled.pool === "60" && filled.poolMax === "60", JSON.stringify(filled));
+  // ⭐ THE PREFILL IS THE OPT-IN, AND IT IS VISIBLE — the whole difference from the retired silent
+  // default. The figure lands IN THE INPUT where the GM can read it and blank it.
+  check("SP edit pre-fills empty structure fields with 3xSP, visibly in the form", filled.pool === "60" && filled.poolMax === "60", JSON.stringify(filled));
+
+  /* ── ④ CLEAR COVER: drive the REAL click and assert the DOCUMENT outcome ───────────────────── */
+  {
+    // Seed the wall with values AND a breach, so the clear has both halves to undo.
+    await page.evaluate(async ({ sceneId, cfgWallId }) => {
+      const scope = "cp2020-augmented";
+      const w = game.scenes.get(sceneId).walls.get(cfgWallId);
+      await w.update({
+        move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL,
+        [`flags.${scope}.coverSp`]: 20, [`flags.${scope}.coverPool`]: 60, [`flags.${scope}.coverPoolMax`]: 60,
+      });
+      const cov = await import(`/modules/${scope}/module/combat/cover.js`);
+      await cov.chewCoverWall({ wallUuid: w.uuid, damage: 60 });
+      await w.sheet.render(true);
+      await new Promise(r => setTimeout(r, 800));
+    }, res.ids);
+    const before = await page.evaluate(({ sceneId, cfgWallId }) => {
+      const w = game.scenes.get(sceneId).walls.get(cfgWallId);
+      return { move: w.move, sight: w.sight, breached: !!w.flags?.["cp2020-augmented"]?.coverBreach,
+               sp: w.flags?.["cp2020-augmented"]?.coverSp };
+    }, res.ids);
+    check("clear: the wall is breached and valued before the press",
+      before.breached === true && before.sp === 20 && before.move === 0, JSON.stringify(before));
+    // WIRING: the handler's selector matches the rendered node, and the node is real.
+    const wired = await page.evaluate(() => {
+      const b = document.querySelector(".cp-cover-wall-fields .cp-cover-wall-clear");
+      return { found: !!b, tag: b?.tagName, type: b?.getAttribute("type") };
+    });
+    check("clear: the rendered control matches the handler's own selector",
+      wired.found === true && wired.tag === "BUTTON" && wired.type === "button", JSON.stringify(wired));
+    await page.click(".cp-cover-wall-fields .cp-cover-wall-clear");
+    await page.waitForTimeout(900);
+    const after = await page.evaluate(({ sceneId, cfgWallId }) => {
+      const scope = "cp2020-augmented";
+      const w = game.scenes.get(sceneId).walls.get(cfgWallId);
+      const f = w.flags?.[scope] ?? {};
+      const q = k => document.querySelector(`.cp-cover-wall-fields input[name="flags.${scope}.${k}"]`)?.value;
+      return { sp: f.coverSp, pool: f.coverPool, poolMax: f.coverPoolMax, breach: f.coverBreach,
+               move: w.move, sight: w.sight,
+               inputs: { sp: q("coverSp"), pool: q("coverPool"), poolMax: q("coverPoolMax") } };
+    }, res.ids);
+    check("clear: ALL cover values are gone from the document, not merely blanked in the form",
+      after.sp === undefined && after.pool === undefined && after.poolMax === undefined, JSON.stringify(after));
+    check("clear: the breach is repaired first — the wall restricts again and keeps no snapshot",
+      after.breach === undefined && after.move !== 0 && after.sight !== 0,
+      `move=${after.move} sight=${after.sight} breach=${after.breach}`);
+    check("clear: the form's own inputs are emptied so a pending submit cannot rewrite them",
+      after.inputs.sp === "" && after.inputs.pool === "" && after.inputs.poolMax === "",
+      JSON.stringify(after.inputs));
+    const rowAfter = await page.evaluate(({ sceneId, cfgWallId }) => import("/modules/cp2020-augmented/module/combat/cover.js").then(cov => {
+      const scene = game.scenes.get(sceneId);
+      const w = scene.walls.get(cfgWallId);
+      return cov.coverWallsOn(scene).some(r => r.uuid === w.uuid);
+    }), res.ids);
+    check("clear: ⑤ the wall is plain-indestructible again — no cover row at all", rowAfter === false, String(rowAfter));
+    // Re-seed for the submit-persistence legs below, which expect an SP of 20 typed into the sheet.
+    await page.evaluate((SCOPE) => {
+      const sp = document.querySelector(`.cp-cover-wall-fields input[name="flags.${SCOPE}.coverSp"]`);
+      sp.value = "20";
+      sp.dispatchEvent(new Event("change", { bubbles: true }));
+    }, SCOPE);
+    await page.waitForTimeout(300);
+  }
 
   // the sheet's OWN submit persists the flags
   let submitted = false;

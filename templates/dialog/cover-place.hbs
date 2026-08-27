@@ -1,10 +1,20 @@
 {{!-- Cover placement dialog: pick a book preset (Core "Common Cover SPs"), tune SP/structure,
-      place a ready-made region at the view centre — then reshape with the native Region tools. --}}
+      place a ready-made region at the view centre — then reshape with the native Region tools.
+
+      ⭐ SAME DIEGETIC CONTRACT AS THE WALL FIELDSET (user ruling 2026-08-26): every field carries a
+      SHORT book-tagged label and a plain-language `data-tooltip` naming the mechanism, the book and
+      the page, and what blanking it means.
+
+      ⭐ THE STRUCTURE FIELD IS PREFILLED AT 3 × SP AND THE PREFILL IS THE POINT. Picking a preset
+      writes the Maximum Metal figure into the input WHERE IT CAN BE SEEN, so the lifecycle is
+      offered rather than assumed — and blanking it (or entering 0) is the one keystroke that places
+      permanent Core p.103 cover instead. The hint below says so in as many words. --}}
 <div class="cp-cover-place-body">
     <p class="cp-cover-place-hint">{{CPLocal "CoverPlaceHint"}}</p>
+    <p class="cp-cover-place-hint">{{CPLocal "CoverPlaceModeHint"}}</p>
     <div class="field">
-        <label for="cp-cover-preset">{{CPLocal "CoverPreset"}}</label>
-        <select name="cp-cover-preset">
+        <label for="cp-cover-preset" data-tooltip="{{CPLocal 'CoverPresetTip'}}">{{CPLocal "CoverPresetName"}} <span class="cp-cover-book">{{CPLocal "CoverPresetBook"}}</span></label>
+        <select name="cp-cover-preset" data-tooltip="{{CPLocal 'CoverPresetTip'}}">
             <option value="">{{CPLocal "CoverPresetCustom"}}</option>
             {{#each presets}}
             <option value="{{key}}">{{label}} [{{sp}}]</option>
@@ -12,15 +22,15 @@
         </select>
     </div>
     <div class="field">
-        <label for="cp-cover-label">{{CPLocal "CoverLabel"}}</label>
-        <input type="text" name="cp-cover-label" value=""/>
+        <label for="cp-cover-label" data-tooltip="{{CPLocal 'CoverLabelTip'}}">{{CPLocal "CoverLabel"}}</label>
+        <input type="text" name="cp-cover-label" value="" data-tooltip="{{CPLocal 'CoverLabelTip'}}"/>
     </div>
     <div class="field">
-        <label for="cp-cover-sp" title="{{CPLocal "CoverZoneSPHint"}}">{{CPLocal "CoverZoneSP"}}</label>
-        <input type="number" name="cp-cover-sp" value="10" min="0"/>
+        <label for="cp-cover-sp" data-tooltip="{{CPLocal 'CoverZoneSPTip'}}">{{CPLocal "CoverWallSPName"}} <span class="cp-cover-book">{{CPLocal "CoverWallSPBook"}}</span></label>
+        <input type="number" name="cp-cover-sp" value="10" min="0" data-tooltip="{{CPLocal 'CoverZoneSPTip'}}"/>
     </div>
     <div class="field">
-        <label for="cp-cover-pool" title="{{CPLocal "CoverZonePoolMaxHint"}}">{{CPLocal "CoverZonePoolMax"}}</label>
-        <input type="number" name="cp-cover-pool" value="30" min="1"/>
+        <label for="cp-cover-pool" data-tooltip="{{CPLocal 'CoverZonePoolMaxTip'}}">{{CPLocal "CoverWallPoolMaxName"}} <span class="cp-cover-book">{{CPLocal "CoverWallPoolMaxBook"}}</span></label>
+        <input type="number" name="cp-cover-pool" value="30" min="0" data-tooltip="{{CPLocal 'CoverZonePoolMaxTip'}}"/>
     </div>
 </div>

@@ -1,26 +1,64 @@
 {{!-- Cover fields injected into the NATIVE Wall configuration sheet (cover.js Unit 3).
       Inputs are named flags.<scope>.* so the sheet's own form submit persists them.
-      Field meanings mirror the cover-zone behavior schema (same i18n labels). --}}
+
+      ⚠ THE BOOK TAG IS ITS OWN SPAN, and that is a LAYOUT decision, not decoration. Core gives a
+      `.form-group label` `flex: 1 1 0%`, which on this 480px sheet is 133px — rig-measured, a
+      34-character label wrapped to THREE lines and grew the row to 96px. Splitting the tag out lets
+      it sit on a designed second line at a smaller weight instead of breaking mid-phrase. The label's
+      textContent is unchanged ("Cover SP (Core p.103)"), so the keeper reads the same string.
+
+      ⭐ EVERY FIELD AND BUTTON CARRIES ITS BOOK (user ruling 2026-08-26): a SHORT book-tagged label
+      so a GM can see at a glance which rulebook a number comes from, and a `data-tooltip` written in
+      plain language saying what the field does mechanically, where it comes from, and — the part
+      that actually matters under the structure-as-opt-in design — WHAT LEAVING IT BLANK MEANS.
+      The labels stay short on purpose; the teaching lives in the tooltip.
+
+      ⭐ THE TWO MODELS, which is what the hint block exists to explain:
+        SP alone            → Core p.103 cover. Soaks, permanent, no cards.
+        SP + a structure    → Maximum Metal p.58. Chews, destroys, breaches, repairs.
+      Structure is PREFILLED at 3 × SP by the SP handler in cover.js, visibly, so opting in is one
+      keystroke and opting out (clear the field) is one keystroke.
+
+      i18n via CPLocal throughout; no inline styles, no strings built in JS. --}}
 <fieldset class="cp-cover-wall-fields">
-    <legend>{{CPLocal "CoverZoneFallbackName"}}</legend>
+    <legend>{{CPLocal "CoverWallLegend"}}</legend>
     <p class="hint">{{#if isDoor}}{{CPLocal "CoverWallDoorHint"}}{{else}}{{CPLocal "CoverWallHint"}}{{/if}}</p>
+    <p class="hint">{{CPLocal "CoverWallModeHint"}}</p>
+    <p class="hint">{{CPLocal "CoverWallLowCoverHint"}}</p>
+    <p class="hint">{{#if isDoor}}{{CPLocal "CoverWallDoorBreachHint"}}{{else}}{{CPLocal "CoverWallBreachHint"}}{{/if}}</p>
+    {{#if breached}}
+    <p class="hint cp-cover-breached-note">{{CPLocal "CoverWallBreachedNote"}}</p>
+    {{/if}}
     <div class="form-group">
-        <label title="{{CPLocal 'CoverZoneSPHint'}}">{{CPLocal "CoverZoneSP"}}</label>
+        <label data-tooltip="{{CPLocal 'CoverWallSPTip'}}">{{CPLocal "CoverWallSPName"}} <span class="cp-cover-book">{{CPLocal "CoverWallSPBook"}}</span></label>
         <div class="form-fields">
-            <input type="number" name="flags.{{scope}}.coverSp" value="{{sp}}" min="0" step="1"/>
+            <input type="number" name="flags.{{scope}}.coverSp" value="{{sp}}" min="0" step="1"
+                   data-tooltip="{{CPLocal 'CoverWallSPTip'}}"/>
         </div>
     </div>
     <div class="form-group">
-        <label title="{{CPLocal 'CoverZonePoolHint'}}">{{CPLocal "CoverZonePool"}}</label>
+        <label data-tooltip="{{CPLocal 'CoverWallPoolTip'}}">{{CPLocal "CoverWallPoolName"}} <span class="cp-cover-book">{{CPLocal "CoverWallPoolBook"}}</span></label>
         <div class="form-fields">
-            <input type="number" name="flags.{{scope}}.coverPool" value="{{pool}}" min="0" step="1"/>
+            <input type="number" name="flags.{{scope}}.coverPool" value="{{pool}}" min="0" step="1"
+                   data-tooltip="{{CPLocal 'CoverWallPoolTip'}}"/>
         </div>
     </div>
     <div class="form-group">
-        <label title="{{CPLocal 'CoverWallPoolMaxHint'}}">{{CPLocal "CoverZonePoolMax"}}</label>
+        <label data-tooltip="{{CPLocal 'CoverWallPoolMaxTip'}}">{{CPLocal "CoverWallPoolMaxName"}} <span class="cp-cover-book">{{CPLocal "CoverWallPoolMaxBook"}}</span></label>
         <div class="form-fields">
-            <input type="number" name="flags.{{scope}}.coverPoolMax" value="{{poolMax}}" min="0" step="1"/>
+            <input type="number" name="flags.{{scope}}.coverPoolMax" value="{{poolMax}}" min="0" step="1"
+                   data-tooltip="{{CPLocal 'CoverWallPoolMaxTip'}}"/>
         </div>
+    </div>
+    <div class="form-group cp-cover-wall-buttons">
+        <button type="button" class="cp-cover-wall-clear" data-tooltip="{{CPLocal 'CoverWallClearTip'}}">
+            <i class="fa-solid fa-eraser"></i> {{CPLocal "CoverWallClearBtn"}}
+        </button>
+        {{#if breached}}
+        <button type="button" class="cp-cover-wall-repair" data-tooltip="{{CPLocal 'CoverRepairTip'}}">
+            <i class="fa-solid fa-trowel-bricks"></i> {{CPLocal "CoverRepairBtn"}}
+        </button>
+        {{/if}}
     </div>
     {{!-- A free-text material/name field lived here. It was removed: the three structure numbers
           are the whole of what a cover wall needs, and the name added a field to fill in for no
