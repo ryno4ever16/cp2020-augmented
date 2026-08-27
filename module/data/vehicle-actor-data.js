@@ -9,6 +9,7 @@ import {
 
 import { acpaAreaSDP, chassisStats, realityInterface, reflexControl, acpaReflexMod, acpaEffectiveRef, acpaArmorWeight, acpaArmorCost, acpaSib, acpaRunM, acpaJumpM } from "../vehicle/vehicle-acpa.js";
 import { isPACombatSenseSkill, isPAPilotSkill } from "../utils.js";
+import { HULL_MAX_SQUARES } from "../vehicle/vehicle-layout.js";
 
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
@@ -77,8 +78,19 @@ export class CyberpunkVehicleActorData extends foundry.abstract.TypeDataModel {
         // square. null = never recorded, in which case hullDimsOf falls back to the token frame, so a
         // vehicle saved before this existed keeps behaving exactly as it did until the one-time hull
         // migration records its shape. Nullable additive fields — no mergeDefaults, no rewrite.
-        hullW:    new f.NumberField({ initial: null, nullable: true, required: false, integer: true, min: 1 }),
-        hullH:    new f.NumberField({ initial: null, nullable: true, required: false, integer: true, min: 1 }),
+        //
+        // ⛔ BOUNDED AT BOTH ENDS (field incident 2026-08-25: a typed 10000 took, and the vehicle's
+        // sheet then crashed the tab every time it was opened — see HULL_MAX_SQUARES for the chain
+        // and the number). `min`/`max` on a NumberField CLAMP rather than throw: Foundry cleans the
+        // change set before validating it (DataModel#updateSource → cleanData with `partial: true`,
+        // then NumberField#_cleanType's Math.max(min)/Math.min(max)), so an API or macro write of
+        // 10000 lands as the ceiling instead of failing the update or storing the absurd figure.
+        // Additive in the migration sense: the bound is a CEILING on a field whose every legitimate
+        // value is far below it, so no existing vehicle's recorded hull changes. A vehicle that
+        // already stored an absurd one reads back clamped — that is the read path doing its job, and
+        // its stored bytes are left alone until someone edits the Footprint field.
+        hullW:    new f.NumberField({ initial: null, nullable: true, required: false, integer: true, min: 1, max: HULL_MAX_SQUARES }),
+        hullH:    new f.NumberField({ initial: null, nullable: true, required: false, integer: true, min: 1, max: HULL_MAX_SQUARES }),
         // The painted grid: one character per footprint cell, row-major ("." body / "S" seat /
         // "E" engine). "" = nothing painted, use the derived layout. A string whose length no
         // longer matches the footprint is ignored rather than repaired (see parseCells).

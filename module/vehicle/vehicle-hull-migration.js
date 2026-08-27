@@ -31,6 +31,7 @@
  */
 
 import { hullDimsOf, hasRecordedHull, frameSquareFor, hullArtScale } from "./vehicle-layout.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_ACTOR_TYPE = "cp2020-augmented.vehicle";
@@ -80,7 +81,9 @@ function _handlesOf(scene, actorId) {
  */
 export async function migrateVehicleHullFrames({ force = false } = {}) {
   const nothing = { actors: 0, tokens: 0, skipped: true };
-  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return nothing;
+  // One migrating session. Idempotent by design (a recorded hull is kept, a square centred handle is
+  // skipped), so the `ready`-time startup race costs at worst a redundant pass, never a wrong one.
+  if (!isPrimaryGMSession()) return nothing;
   const attempted = game.settings.get(SCOPE, HULL_MIGRATED);
   const completed = game.settings.get(SCOPE, HULL_COMPLETED);
   if (!force && attempted && completed) return nothing;

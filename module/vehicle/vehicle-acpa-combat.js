@@ -13,6 +13,7 @@ import { postStunSavePrompt } from "../combat/save-rolls.js";
 import { openSingletonDialog, localize, localizeParam } from "../utils.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
 import { getSkillVal, trainedMartials } from "../martial/martial.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const _enabled = (k, d = true) => { try { return game.settings.get(SCOPE, k); } catch { return d; } };
@@ -249,7 +250,8 @@ function wrapAcpaRollData() {
 export function registerAcpaCombatHooks() {
   wrapAcpaRollData();
   Hooks.on("updateCombat", async (combat, changed) => {
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    // One acting session — `tickAcpaCombatant` writes heat/charge, so a second client double-ticks it.
+    if (!isPrimaryGMSession()) return;
     if (changed.round === undefined) return;   // once per round
     for (const c of combat.combatants ?? []) {
       await tickAcpaCombatant(c.actor);

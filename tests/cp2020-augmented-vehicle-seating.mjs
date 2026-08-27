@@ -375,24 +375,34 @@ check("badge is drawn on the handle placeable", occ.badgeText === "2/4", String(
 
 /* ------------------------------------------------------------------ G. client-local fade */
 
+// ⭐ CONTRACT CHANGE 2026-08-25: the fade is keyed on the vehicle HANDLE TOKEN, not the vehicle
+// actor. The control lives on one truck's HUD, and keyed by actor it also dimmed the crew of any
+// other copy of that vehicle on the canvas — a control pressed on one token changing another.
 const fade = await page.evaluate(async ({ sceneId }) => {
   const scene = game.scenes.get(sceneId);
   const vehicle = game.actors.getName("__PW__Ride");
   const mod = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-occupancy.js`);
+  const C = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-canvas.js`);
   const riderTok = scene.tokens.find(t => t.name === "__PW__Rider");
+  const handleId = C.vehicleTokenFor(scene, vehicle.id)?.id ?? null;
   const p = canvas.tokens.get(riderTok.id);
-  const on = mod.toggleOccupantFade(vehicle.id);
+  const on = mod.toggleOccupantFade(handleId);
   await new Promise(r => setTimeout(r, 300));
   const dimmed = { state: on, alpha: p.alpha, docAlpha: riderTok.alpha };
   // survive a refresh (the mechanism that made a bare assignment useless)
   p.renderFlags.set({ refresh: true });
   await new Promise(r => setTimeout(r, 300));
   const afterRefresh = canvas.tokens.get(riderTok.id).alpha;
-  const off = mod.toggleOccupantFade(vehicle.id);
+  // NEGATIVE: the vehicle ACTOR's id is no longer a key the fade answers to.
+  const byActorId = mod.isVehicleFaded(vehicle.id);
+  const off = mod.toggleOccupantFade(handleId);
   await new Promise(r => setTimeout(r, 300));
-  return { dimmed, afterRefresh, offState: off, alphaAfterOff: canvas.tokens.get(riderTok.id).alpha,
+  return { dimmed, afterRefresh, handleId, byActorId, offState: off,
+           alphaAfterOff: canvas.tokens.get(riderTok.id).alpha,
            docAlphaAfterOff: scene.tokens.get(riderTok.id).alpha };
 }, setup);
+check("the fade is keyed on the vehicle's handle token, not its actor",
+  !!fade.handleId && fade.byActorId === false, `handle=${fade.handleId} actorKeyed=${fade.byActorId}`);
 check("fade dims the occupant placeable", fade.dimmed.state === true && fade.dimmed.alpha === 0.25, String(fade.dimmed.alpha));
 check("fade writes nothing to the token document", fade.dimmed.docAlpha === 1, String(fade.dimmed.docAlpha));
 check("fade survives a placeable refresh", fade.afterRefresh === 0.25, String(fade.afterRefresh));

@@ -1,8 +1,16 @@
 {{!-- "You are aboard X" strip, injected at the top of a character's own sheet while their token
       is riding a vehicle. The sheet is reachable from the sidebar with no token selected (and
-      with no canvas at all), so this is the one surface a passenger can always get to. --}}
-<div class="cp-aboard-banner" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">
+      with no canvas at all), so this is the one surface a passenger can always get to.
+
+      ⭐ When the aboard token is on a scene the viewer is NOT looking at, the strip names that
+      scene and the control says it acts there. The control is deliberately still offered — it
+      works, and it is the one way off a vehicle for someone whose token is elsewhere — but a
+      Step Out button with no vehicle on screen has to say where it reaches. --}}
+<div class="cp-aboard-banner{{#if remote}} cp-aboard-remote{{/if}}" data-token-id="{{tokenId}}" data-scene-id="{{sceneId}}">
     <i class="fas fa-van-shuttle cp-aboard-icon"></i>
-    <span class="cp-aboard-text">{{CPLocal "Vehicle.AboardBanner" vehicle=vehicleName}}</span>
-    <button type="button" class="cp-aboard-out" title="{{CPLocal 'Vehicle.StepOutTip'}}">{{CPLocal "Vehicle.StepOut"}}</button>
+    <span class="cp-aboard-text">
+        {{#if remote}}{{CPLocal "Vehicle.AboardBannerElsewhere" vehicle=vehicleName scene=sceneName}}{{else}}{{CPLocal "Vehicle.AboardBanner" vehicle=vehicleName}}{{/if}}
+    </span>
+    <button type="button" class="cp-aboard-out"
+            title="{{#if remote}}{{CPLocal 'Vehicle.StepOutTipElsewhere' scene=sceneName}}{{else}}{{CPLocal 'Vehicle.StepOutTip'}}{{/if}}">{{CPLocal "Vehicle.StepOut"}}</button>
 </div>

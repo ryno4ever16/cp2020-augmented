@@ -10,12 +10,15 @@
  *       and what a catalog vehicle's own data derives
  *    B  rendered geometry — the strip is the FIRST content row, above the header, on all three
  *       faces, at two window widths (the sheet is resizable)
- *    C  provenance — a compendium-deployed vehicle shows NO picker and derives its face; a custom
- *       one shows the picker; a stored designation is never re-derived
+ *    C  provenance + derivation — EVERY vehicle offers the picker (2026-08-25 ruling); derivation
+ *       only chooses the DEFAULT selection, a stored designation is never re-derived, and a pick on
+ *       a derived vehicle records it
  *    D  the world gate — the MM option stays VISIBLE and disabled with a hint naming the setting
  *    E  the ACPA boundary — confirm on entry AND on exit, cancel writes nothing, confirm writes
  *       BOTH booleans in ONE update; Standard<->MM flips free and preserves the MM data
  *    F  the MM-data note — appears under exactly its three conditions and never otherwise
+ *    G  the same control on the vehicle ITEM sheet — resolver, rendered strip, the atomic write of
+ *       the item's own pair, the ACPA confirm, and what a deploy from that item then seeds
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node <this file>
  */
@@ -70,15 +73,31 @@ const res = await page.evaluate(async () => {
 
   try {
     // ══ A — resolver values ════════════════════════════════════════════════════════════════
+    const CHOSE = `flags.${SCOPE}.faceChosen`;
     ok("A pair written by Standard is false/false",
-      JSON.stringify(F.facePatch("standard")) === JSON.stringify({ "system.isACPA": false, "system.isMMVehicle": false }),
+      F.facePatch("standard")["system.isACPA"] === false
+      && F.facePatch("standard")["system.isMMVehicle"] === false,
       JSON.stringify(F.facePatch("standard")));
     ok("A pair written by Maximum Metal is false/true",
-      JSON.stringify(F.facePatch("mm")) === JSON.stringify({ "system.isACPA": false, "system.isMMVehicle": true }),
+      F.facePatch("mm")["system.isACPA"] === false && F.facePatch("mm")["system.isMMVehicle"] === true,
       JSON.stringify(F.facePatch("mm")));
     ok("A pair written by ACPA is true/false",
-      JSON.stringify(F.facePatch("acpa")) === JSON.stringify({ "system.isACPA": true, "system.isMMVehicle": false }),
+      F.facePatch("acpa")["system.isACPA"] === true && F.facePatch("acpa")["system.isMMVehicle"] === false,
       JSON.stringify(F.facePatch("acpa")));
+    // ⭐ THE THIRD STATE. Two false booleans cannot say "Standard" — they are also what a vehicle
+    // nobody has touched carries — so every pick also records that it WAS a pick, in the same
+    // single update. Without it, picking Standard on a tank was a no-op the derivation undid.
+    ok("A every pick also records that a human made it, in the SAME update",
+      ["standard", "mm", "acpa"].every(f => F.facePatch(f)[CHOSE] === true),
+      JSON.stringify(F.facePatch("standard")));
+    ok("A a pick is still ONE update — three keys, no second write",
+      Object.keys(F.facePatch("standard")).length === 3, JSON.stringify(Object.keys(F.facePatch("standard"))));
+    ok("A NEGATIVE: an untouched document has no explicit face at all",
+      F.explicitFace({ system: { isACPA: false, isMMVehicle: false } }) === "");
+    ok("A a document carrying the choice flag and a false pair explicitly means Standard",
+      F.explicitFace({ system: { isACPA: false, isMMVehicle: false }, flags: { [SCOPE]: { faceChosen: true } } }) === "standard");
+    ok("A a stored true still designates without needing the flag",
+      F.explicitFace({ system: { isACPA: false, isMMVehicle: true } }) === "mm");
     ok("A both-false pair designates nothing", F.designatedFace({ isACPA: false, isMMVehicle: false }) === "");
     ok("A a stored MM flag designates the MM face", F.designatedFace({ isACPA: false, isMMVehicle: true }) === "mm");
     ok("A a stored ACPA flag designates the ACPA face", F.designatedFace({ isACPA: true, isMMVehicle: false }) === "acpa");
@@ -148,7 +167,7 @@ const res = await page.evaluate(async () => {
     out.shotId = custStd.sheet.id;
     for (const a of [custMM, custACPA]) await a.sheet.close();
 
-    // ══ C — provenance ════════════════════════════════════════════════════════════════════
+    // ══ C — provenance + derivation ═══════════════════════════════════════════════════════
     const pack = game.packs.get("cyberpunk2020.vehicles");
     const idx = await pack.getIndex({ fields: ["type"] });
     const packItem = await pack.getDocument(idx.find(e => e.type === "vehicle")._id);
@@ -159,7 +178,11 @@ const res = await page.evaluate(async () => {
     ok("C deploy stamps a resolvable compendium provenance",
       F.isCatalogVehicle(deployed) === true, JSON.stringify(F.vehiclePackSource(deployed)));
     const dr = await open(deployed);
-    ok("C a compendium-deployed vehicle shows NO picker", !sel(dr) && !strip(dr));
+    // ⭐ 2026-08-25 RULING: the picker is offered on EVERY vehicle sheet. This leg asserted the
+    // opposite for the whole life of the control.
+    ok("C a compendium-deployed vehicle DOES offer the picker", !!sel(dr) && !!strip(dr));
+    ok("C the resolver reports the picker as offered even for catalog provenance",
+      F.resolveVehicleFace(deployed, { mmOn: true }).showPicker === true);
     await deployed.sheet.close();
 
     // C2 the owned-copy chain: actor -> world item copy -> its _stats.compendiumSource -> pack.
@@ -171,18 +194,33 @@ const res = await page.evaluate(async () => {
     ok("C provenance resolves through an owned copy's compendiumSource",
       F.isCatalogVehicle(viaOwned) === true, JSON.stringify(F.vehiclePackSource(viaOwned)));
     let r = await open(viaOwned);
-    ok("C catalog tank: no picker", !sel(r));
+    ok("C catalog tank offers the picker, showing the derived face as the selection",
+      !!sel(r) && sel(r).value === "mm", sel(r)?.value);
     ok("C catalog tank derives the MM combat face", !!r.querySelector('input[name="system.sp.side"]'));
     ok("C catalog tank does NOT write a designation (stored pair untouched)",
       viaOwned.system.isMMVehicle === false && viaOwned.system.isACPA === false,
       `${viaOwned.system.isACPA}/${viaOwned.system.isMMVehicle}`);
+    ok("C a derived-only selection says so on the strip",
+      !!r.querySelector(".cp-veh-face-derived"));
 
     // NEGATIVE: same provenance, a class that derives nothing special -> the standard face.
     const viaOwnedCar = await mk("__PWF__ViaOwnedCar", { vehicleType: "car", vehicleTypeText: "Sedan", sp: { front: 10 } },
       { [SCOPE]: { sourceItemUuid: owned.uuid, createdBy: game.user.id } });
     let rc = await open(viaOwnedCar);
-    ok("C catalog car derives the standard face, still no picker",
-      !!rc.querySelector('input[name="system.speedValue"]') && !sel(rc));
+    ok("C catalog car derives the standard face and offers the picker on it",
+      !!rc.querySelector('input[name="system.speedValue"]') && !!sel(rc) && sel(rc).value === "standard",
+      sel(rc)?.value);
+
+    // ⭐ THE VEHICLE THE OLD RULE FAILED HARDEST ON: a hand-built tank, no provenance at all.
+    // Derivation is now the default selection for it too, and the picker was always offered.
+    const customTank = await mk("__PWF__CustomTank", { vehicleType: "tank", vehicleTypeText: "Tank", sp: { front: 30 } });
+    const ctr = await open(customTank);
+    ok("C a CUSTOM tank defaults to the MM combat face and can be moved off it",
+      !!sel(ctr) && sel(ctr).value === "mm" && !!ctr.querySelector('input[name="system.sp.side"]'),
+      sel(ctr)?.value);
+    ok("C that default wrote nothing", customTank.system.isMMVehicle === false && customTank.system.isACPA === false,
+      `${customTank.system.isACPA}/${customTank.system.isMMVehicle}`);
+    await customTank.sheet.close();
 
     // The world gate applies to a DERIVED MM face too.
     await game.settings.set(SCOPE, "mmEnabled", false);
@@ -196,7 +234,10 @@ const res = await page.evaluate(async () => {
       { [SCOPE]: { sourceItemUuid: packItem.uuid, createdBy: game.user.id } });
     const psr = await open(packStored);
     ok("C a stored designation beats the derivation on a catalog vehicle",
-      !!psr.querySelector('input[name="system.sp.side"]') && !sel(psr));
+      !!psr.querySelector('input[name="system.sp.side"]') && !!sel(psr) && sel(psr).value === "mm",
+      sel(psr)?.value);
+    ok("C a STORED designation raises no derived-only note",
+      !psr.querySelector(".cp-veh-face-derived"));
     await packStored.sheet.close();
 
     // NEGATIVE: a source item with no compendium origin at all = a custom vehicle, picker shown.
@@ -207,8 +248,42 @@ const res = await page.evaluate(async () => {
     ok("C NEGATIVE: a non-compendium source item is not catalog provenance",
       F.isCatalogVehicle(viaLoose) === false);
     const vlr = await open(viaLoose);
-    ok("C NEGATIVE: that vehicle keeps its picker, and its undesignated face is Standard",
-      !!sel(vlr) && sel(vlr).value === "standard", sel(vlr)?.value);
+    // Its class still derives the combat face — derivation no longer depends on provenance — but
+    // the point of this leg is that the loose source item is NOT catalog provenance.
+    ok("C NEGATIVE: that vehicle keeps its picker, defaulted from its own class",
+      !!sel(vlr) && sel(vlr).value === "mm" && !!vlr.querySelector(".cp-veh-face-derived"),
+      sel(vlr)?.value);
+
+    // ⭐ REVERSIBLE ON A CATALOG VEHICLE — the whole point of the ruling. Drive the real control on
+    // the deployed tank and read the stored pair back.
+    // Fail-SOFT: on a build with no picker on this face the legs below must go RED with a readable
+    // detail, not take the whole evaluate down and cost the run its tally.
+    const catalogPick = async (a, value) => {
+      const s = sel(a.sheet.element);
+      if (!s) return false;
+      s.value = value;
+      s.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(450);
+      return true;
+    };
+    await open(viaOwned);
+    const pick1 = await catalogPick(viaOwned, "standard");
+    // ⭐ THE ONE-WAY DOOR. Standard is the option whose stored bytes are indistinguishable from
+    // "untouched", so on a vehicle whose class derives Maximum Metal this is the pick that used to
+    // bounce straight back. It must RECORD, and the civilian layout must actually render.
+    ok("C picking Standard on a catalog tank RECORDS it and the civilian layout renders",
+      pick1 && viaOwned.system.isMMVehicle === false && viaOwned.system.isACPA === false
+      && F.explicitFace(viaOwned) === "standard"
+      && !!viaOwned.sheet.element.querySelector('input[name="system.speedValue"]')
+      && !viaOwned.sheet.element.querySelector(".cp-veh-face-derived"),
+      pick1 ? `${viaOwned.system.isACPA}/${viaOwned.system.isMMVehicle} explicit=${F.explicitFace(viaOwned)}` : "no picker on the sheet");
+    const pick2 = await catalogPick(viaOwned, "mm");
+    ok("C and back again — the catalog vehicle is not one-way",
+      pick2 && viaOwned.system.isMMVehicle === true
+      && !!viaOwned.sheet.element.querySelector('input[name="system.sp.side"]'),
+      pick2 ? `${viaOwned.system.isACPA}/${viaOwned.system.isMMVehicle}` : "no picker on the sheet");
+    await viaOwned.update({ "system.isMMVehicle": false, "system.isACPA": false,
+      [`flags.${SCOPE}.-=faceChosen`]: null });
     for (const a of [viaOwned, viaOwnedCar, viaLoose]) await a.sheet.close();
 
     // ══ D — the world gate on the MM option ═══════════════════════════════════════════════
@@ -323,6 +398,145 @@ const res = await page.evaluate(async () => {
     ok("F a mounted weapon alone raises the note", !!(await noteOf(mounts)));
     ok("F resolver NEGATIVE: an empty vehicle carries no MM combat data", F.carriesMMCombatData(bare) === false);
     for (const a of [carrier, bare, mounts]) await a.sheet.close();
+
+    // ══ G — the same control on the vehicle ITEM (the pink slip) ══════════════════════════
+    await game.settings.set(SCOPE, "mmEnabled", true);
+
+    // G1 resolver: the item's own class derives a default, its stored pair overrides it.
+    // Fail-SOFT on a build that has no item-side resolver at all — these must RED, not throw.
+    const itemFace = (sys) => {
+      try { return F.resolveVehicleItemFace({ system: sys }); }
+      catch (e) { return { chosen: "", stored: null, derived: "" }; }
+    };
+    ok("G item resolver: no class recorded -> Standard is the default selection",
+      itemFace({}).chosen === "standard", itemFace({}).chosen);
+    ok("G item resolver: a class string of Tank -> the MM face is the default",
+      itemFace({ vehicleType: "Tank" }).chosen === "mm", itemFace({ vehicleType: "Tank" }).chosen);
+    ok("G item resolver: powered armor by class string -> the ACPA face is the default",
+      itemFace({ vehicleType: "ACPA (Powered Armor)" }).chosen === "acpa");
+    ok("G item resolver: a STORED pair beats the class",
+      itemFace({ vehicleType: "Tank", isMMVehicle: false, isACPA: false }).stored === ""
+      && itemFace({ vehicleType: "Tank", isMMVehicle: true }).stored === "mm");
+
+    // G2 the ITEM carries the pair at all — the schema addition, by value.
+    const vItem = await Item.create({ name: "__PWF__PinkSlip", type: "vehicle",
+      system: { vehicleType: "Sedan", crew: 1, passengers: 3 } });
+    out.items.push(vItem.id);
+    ok("G a vehicle item stores the designation pair, both false out of the box",
+      vItem.system.isACPA === false && vItem.system.isMMVehicle === false,
+      `${vItem.system.isACPA}/${vItem.system.isMMVehicle}`);
+
+    // G3 the rendered strip, on the item sheet.
+    await vItem.sheet.render(true);
+    await sleep(900);
+    const ir = vItem.sheet.element;
+    const iStrip = ir.querySelector(".cp-veh-face-strip");
+    const iSel = ir.querySelector("select.cp-veh-face-select");
+    ok("G the item sheet renders the face strip", !!iStrip);
+    ok("G it offers all three faces, defaulted from the item's class",
+      iSel?.options?.length === 3 && iSel?.value === "standard", `${iSel?.options?.length} / ${iSel?.value}`);
+    ok("G the strip is the FIRST row of the settings tab, above the fields",
+      !!iStrip && iStrip.parentElement?.querySelector(".cp-veh-face-strip, .cp-vehicle-item-fields") === iStrip);
+    // Separate from the other checkboxes: the strip is not inside a .field-list at all.
+    ok("G the control sits in its own band, not among the field rows",
+      !!iStrip && !iStrip.closest(".field-list") && !iStrip.closest(".field"));
+    const iLabel = ir.querySelector(".cp-veh-face-label");
+    ok("G the strip's label is not clipped at the sheet's default width",
+      !!iLabel && iLabel.scrollWidth <= iLabel.clientWidth + 1,
+      `${iLabel?.scrollWidth} vs ${iLabel?.clientWidth}`);
+    ok("G nothing recorded yet, so the strip says the selection is derived",
+      !!ir.querySelector(".cp-veh-face-derived"));
+
+    // G4 the write: ONE update carrying BOTH booleans, from the one table.
+    const itemSeen = [];
+    const iHook = Hooks.on("preUpdateItem", (doc, changes) => {
+      if (doc.name?.startsWith("__PWF__")) itemSeen.push(foundry.utils.deepClone(changes.system ?? {}));
+    });
+    const pickItem = async (value) => {
+      const s = vItem.sheet.element.querySelector("select.cp-veh-face-select");
+      if (!s) return false;
+      s.value = value;
+      s.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(500);
+      return true;
+    };
+    const gotPicker = await pickItem("mm");
+    ok("G Standard->MM on the item writes the pair in ONE update",
+      gotPicker && itemSeen.length === 1 && itemSeen[0].isACPA === false && itemSeen[0].isMMVehicle === true,
+      gotPicker ? JSON.stringify(itemSeen) : "no picker on the item sheet");
+    ok("G the item's stored pair lands", vItem.system.isMMVehicle === true && vItem.system.isACPA === false);
+    await sleep(300);
+    ok("G the strip stops calling the selection derived once it is recorded",
+      !vItem.sheet.element.querySelector(".cp-veh-face-derived"));
+
+    // G5 REVERSIBLE, and the ACPA boundary confirms here too.
+    itemSeen.length = 0;
+    await pickItem("standard");
+    ok("G MM->Standard on the item clears the designation, no prompt",
+      vItem.system.isMMVehicle === false && vItem.system.isACPA === false && itemSeen.length === 1,
+      `${vItem.system.isACPA}/${vItem.system.isMMVehicle} updates=${itemSeen.length}`);
+    itemSeen.length = 0;
+    await pickItem("acpa");
+    ok("G Standard->ACPA on the item raises a confirm", (await dialogUp()) === true);
+    await answer("no");
+    ok("G CANCEL on the item writes nothing",
+      itemSeen.length === 0 && vItem.system.isACPA === false,
+      `updates=${itemSeen.length} isACPA=${vItem.system.isACPA}`);
+    itemSeen.length = 0;
+    await pickItem("acpa");
+    await answer("yes");
+    ok("G CONFIRM on the item writes BOTH booleans in one update",
+      itemSeen.length === 1 && itemSeen[0].isACPA === true && itemSeen[0].isMMVehicle === false,
+      JSON.stringify(itemSeen));
+    Hooks.off("preUpdateItem", iHook);
+    out.itemShotId = vItem.sheet.id;
+
+    // G6 WHAT THE DEPLOY THEN DOES — the reason the control is on the item at all.
+    const fromAcpaItem = await D.createVehicleActorFromItem(vItem, { name: "__PWF__FromACPAItem" });
+    out.made.push(fromAcpaItem.id);
+    ok("G a deploy seeds the actor from the ITEM's designation",
+      fromAcpaItem.system.isACPA === true && fromAcpaItem.system.isMMVehicle === false,
+      `${fromAcpaItem.system.isACPA}/${fromAcpaItem.system.isMMVehicle}`);
+    await vItem.update(F.facePatch("mm"));
+    const fromMMItem = await D.createVehicleActorFromItem(vItem, { name: "__PWF__FromMMItem" });
+    out.made.push(fromMMItem.id);
+    ok("G a pink slip marked Maximum Metal deploys onto the MM combat face",
+      fromMMItem.system.isMMVehicle === true && fromMMItem.system.isACPA === false,
+      `${fromMMItem.system.isACPA}/${fromMMItem.system.isMMVehicle}`);
+    // NEGATIVE / regression: an item that designates NOTHING seeds exactly what it always did.
+    const plainItem = await Item.create({ name: "__PWF__PlainSlip", type: "vehicle",
+      system: { vehicleType: "Sedan" } });
+    out.items.push(plainItem.id);
+    const fromPlain = await D.createVehicleActorFromItem(plainItem, { name: "__PWF__FromPlain" });
+    out.made.push(fromPlain.id);
+    ok("G NEGATIVE: an undesignated pink slip still deploys onto the standard face",
+      fromPlain.system.isACPA === false && fromPlain.system.isMMVehicle === false,
+      `${fromPlain.system.isACPA}/${fromPlain.system.isMMVehicle}`);
+
+    // ⭐ THE AMBIGUOUS CASE, END TO END: a TANK pink slip whose GM picked Standard. Its stored pair
+    // is the same two false booleans an untouched item carries, so only the choice flag stops the
+    // class derivation putting the deployed vehicle back on the combat sheet.
+    const tankItem = await Item.create({ name: "__PWF__TankSlip", type: "vehicle",
+      system: { vehicleType: "Tank" } });
+    out.items.push(tankItem.id);
+    const tankDefault = await D.createVehicleActorFromItem(tankItem, { name: "__PWF__TankDefault" });
+    out.made.push(tankDefault.id);
+    const tankDefaultFace = F.resolveVehicleFace(tankDefault, { mmOn: true }).face;
+    await tankItem.update(F.facePatch("standard"));
+    ok("G a tank slip marked Standard records the choice its two booleans cannot express",
+      F.explicitFace(tankItem) === "standard" && tankItem.system.isMMVehicle === false,
+      `explicit=${F.explicitFace(tankItem)} pair=${tankItem.system.isACPA}/${tankItem.system.isMMVehicle}`);
+    const tankStd = await D.createVehicleActorFromItem(tankItem, { name: "__PWF__TankStd" });
+    out.made.push(tankStd.id);
+    ok("G …and a vehicle deployed from it opens on the STANDARD face, not the class-derived one",
+      F.resolveVehicleFace(tankStd, { mmOn: true }).face === "standard",
+      F.resolveVehicleFace(tankStd, { mmOn: true }).face);
+    ok("G CONTROL: the same slip UNmarked deploys onto the class-derived combat face",
+      tankDefaultFace === "mm", tankDefaultFace);
+    // Left OPEN on purpose: the screenshot for the user's sign-off is taken from Node after this
+    // evaluate returns, and the cleanup pass at the very end closes and deletes it.
+    await vItem.sheet.render(true);
+    await sleep(600);
   } finally {
     await game.settings.set(SCOPE, "mmEnabled", mmWas);
     await game.settings.set(SCOPE, "vehicleRuleSystem", ruleWas);
@@ -336,10 +550,17 @@ for (const c of res.checks) check(c.n, c.p, c.d);
 if (res.shotId) {
   await page.locator(`#${res.shotId}`).screenshot({ path: `${SHOT_DIR}/veh-face-strip.png` }).catch(() => {});
 }
+if (res.itemShotId) {
+  await page.locator(`#${res.itemShotId}`).screenshot({ path: `${SHOT_DIR}/veh-item-face-strip.png` }).catch(() => {});
+}
 
 await page.evaluate(async ({ made, items }) => {
   for (const id of made) { const a = game.actors.get(id); await a?.sheet?.close(); await a?.delete().catch(() => {}); }
-  for (const id of items) await game.items.get(id)?.delete().catch(() => {});
+  for (const id of items) {
+    const i = game.items.get(id);
+    await i?.sheet?.close().catch(() => {});
+    await i?.delete().catch(() => {});
+  }
   const f = game.folders.find(x => x.type === "Actor" && x.name === "Vehicles");
   if (f && f.contents.length === 0) await f.delete().catch(() => {});
 }, res);

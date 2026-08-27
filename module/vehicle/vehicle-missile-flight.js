@@ -14,6 +14,7 @@ import { onGlobalClick } from "../popout-compat.js";
 import { pixelsToMeters } from "./vehicle-grid.js";
 import { localize, localizeParam } from "../utils.js";
 import { renderChatCard, postSavePromptCard } from "../compat.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const MISSILE_IMG = "modules/cp2020-augmented/img/missile.webp";
@@ -46,11 +47,11 @@ export async function launchMissile({ scene: sceneArg, shooterToken, targetToken
   const sDoc = shooterToken.document ?? shooterToken;
   const tDoc = targetToken.document ?? targetToken;
 
-  // Creating the proxy actor + the missile token requires the GM. If we're not the active GM (a
-  // player, or a non-active GM), relay the launch by ids; the active GM spawns the missile. Mirrors
-  // the vehicle-damage relay (_relayVehicleAttack). Without this a player's guided missile spawned
-  // nothing. The GM-side handler is in registerMissileFlightHooks.
-  if (game.users?.activeGM?.id !== game.user.id) {
+  // Creating the proxy actor + the missile token requires the GM. If we're not the primary GM SESSION
+  // (a player, another GM, or this GM's second tab), relay the launch by ids; the primary spawns the
+  // missile. Mirrors the vehicle-damage relay (_relayVehicleAttack). Without this a player's guided
+  // missile spawned nothing. The GM-side handler is in registerMissileFlightHooks.
+  if (!isPrimaryGMSession()) {
     if (!game.users?.activeGM) { ui.notifications?.warn?.(localize("Vehicle.NoGMForMissile")); return null; }
     game.socket.emit("module.cp2020-augmented", {
       type: "missileLaunch", sceneId: scene.id,
@@ -371,7 +372,7 @@ export function registerMissileFlightHooks() {
   // requester actually owns the targeted vehicle so a stray socket can't trigger a reaction).
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "missileReaction") return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     const scene = (data.sceneId ? game.scenes.get(data.sceneId) : null) ?? canvas?.scene ?? game.scenes?.find(s => s.tokens.get(data.tokenId));
     const f = scene?.tokens?.get(data.tokenId)?.flags?.[SCOPE]?.missile;
     const target = f ? scene.tokens.get(f.targetTokenId)?.actor : null;
@@ -384,7 +385,9 @@ export function registerMissileFlightHooks() {
   // firer's behalf (Actor/Token.create are GM-only). Emitted by launchMissile when a non-GM fires.
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "missileLaunch") return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    // ⛔ NOT idempotent — a launch CREATES a token, so a second acting client puts a second missile in
+    // the air for one trigger pull.
+    if (!isPrimaryGMSession()) return;
     const scene = (data.sceneId ? game.scenes.get(data.sceneId) : null) ?? canvas?.scene;
     const shooterToken = scene?.tokens?.get(data.shooterTokenId);
     const targetToken  = scene?.tokens?.get(data.targetTokenId);
@@ -415,7 +418,9 @@ export function registerMissileFlightHooks() {
   });
 
   Hooks.on("updateCombat", async (combat, changed) => {
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    // One acting session — `advanceMissiles` moves and detonates, so two clients fly the same missile
+    // two legs in one round.
+    if (!isPrimaryGMSession()) return;
     if (changed.round === undefined) return;    // once per round
     await advanceMissiles(undefined, Number(combat.round) || 0);
   });

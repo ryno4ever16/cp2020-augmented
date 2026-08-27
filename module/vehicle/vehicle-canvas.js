@@ -7,13 +7,33 @@
  * `sort` makes crew tokens render on top of it. Crew flagged as "boarded" ride along when the
  * vehicle moves.
  *
- *   vehicleToken.flags.cp2020-augmented.vehicleHandle = true
- *   crewToken.flags.cp2020-augmented.boardedVehicle  = <vehicleActorId>
+ *   vehicleToken.flags.cp2020-augmented.vehicleHandle      = true
+ *   crewToken.flags.cp2020-augmented.boardedVehicle       = <vehicleActorId>
+ *   crewToken.flags.cp2020-augmented.boardedVehicleToken  = <vehicleTokenId>   ⭐ see below
+ *
+ * ⛔ WHICH TOKEN, NOT JUST WHICH VEHICLE (field report 2026-08-25). A rider recorded only the
+ * vehicle ACTOR it was aboard. With TWO tokens of the same vehicle actor on one canvas — the
+ * reported "Goofy Goobermobile", two 40-Ton trucks — both tokens matched every rider, so the seats
+ * belonged to whichever token moved last: driving the EMPTY truck yanked the other truck's crew out
+ * of it and into the one being driven. `boardedVehicleToken` is the second half of the answer, and
+ * it is what every GEOMETRY question now asks: whose seats are these, which handle do they follow,
+ * which badge counts them.
+ *
+ * The actor flag stays and stays authoritative for every question that is about the MACHINE rather
+ * than the drawn copy — cover, the control-roll crew list, the gunnery crew list, the vehicle
+ * sheet's passenger list. Those are the same answer for every token of one vehicle, and should be.
+ *
+ * ADDITIVE, with the neutralization at the READ path (project migration discipline): a rider
+ * boarded before this exists carries no token id, so `riderVehicleTokenIdOn` resolves it to the
+ * FIRST handle of that vehicle in the scene's own document order — one deterministic answer on
+ * every client, and byte-for-byte today's behaviour wherever there is only one handle. No migration
+ * pass, no rewrite of anybody's flags.
  */
 
 import { deleteFieldUpdate, localizeParam } from "../utils.js";
 import { seatSlotPosition, placeBeside } from "./vehicle-seating.js";
 import { layoutFor, hullDimsOf, hasRecordedHull, frameSquareFor, hullRectIn, hullArtScale, DEFAULT_HULL } from "./vehicle-layout.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_SORT = -100;            // render below crew tokens
@@ -228,14 +248,56 @@ export function hullRectOf(tokenDoc, grid) {
 }
 
 /**
- * Everyone aboard `vehicleActorId` on a scene, each with the seat index they claim. The occupancy
- * flag is the only membership test anywhere in the module, so the coupling, the badge and the
- * re-seat can never disagree about who is in the car.
+ * WHICH HANDLE a rider is aboard on a given scene — the id of one token, never a set.
+ *
+ * The stamped token id is the answer whenever it still names a token on this scene. Otherwise (a
+ * rider boarded before the stamp existed, or one whose handle has since been deleted) the answer
+ * is the FIRST handle of that vehicle in the scene's own document order: deterministic, identical
+ * on every client, and exactly today's behaviour wherever a vehicle has only one handle.
+ *
+ * @returns {string|null}
  */
-export function ridersOf(scene, vehicleActorId) {
+export function riderVehicleTokenIdOn(scene, riderDoc) {
+  const f = riderDoc?.flags?.[SCOPE];
+  const actorId = f?.boardedVehicle;
+  if (!actorId) return null;
+  const stamped = f?.boardedVehicleToken;
+  const stampedDoc = stamped ? (scene?.tokens?.get?.(stamped) ?? null) : null;
+  // A stamp that still names a live handle OF THIS VEHICLE wins. The actor check matters: a token
+  // id can be recycled by a scene import, and a stamp pointing at somebody else's token would seat
+  // a rider inside a vehicle they never boarded.
+  if (stampedDoc && stampedDoc.actorId === actorId) return stamped;
+  return vehicleTokenFor(scene, actorId)?.id ?? null;
+}
+
+/**
+ * THE membership test: is this rider aboard THIS handle? Every geometry site asks it — the per-frame
+ * draw, the crew-follow commit, the seat-claim search, the badge, the drag-lock — so no two of them
+ * can disagree about which truck somebody is sitting in.
+ */
+export function riderIsAboardToken(riderDoc, vehicleTokenDoc) {
+  if (!vehicleTokenDoc) return false;
+  if (riderDoc?.flags?.[SCOPE]?.boardedVehicle !== vehicleTokenDoc.actorId) return false;
+  return riderVehicleTokenIdOn(vehicleTokenDoc.parent, riderDoc) === vehicleTokenDoc.id;
+}
+
+/**
+ * Everyone aboard a vehicle on a scene, each with the seat index they claim. The occupancy flag is
+ * the only membership test anywhere in the module, so the coupling, the badge and the re-seat can
+ * never disagree about who is in the car.
+ *
+ * @param {Scene} scene
+ * @param {string} vehicleActorId
+ * @param {TokenDocument|null} [vehicleTokenDoc]  narrow to ONE handle. Every caller that is about a
+ *   drawn vehicle passes it — seats, movement and the badge belong to a token, not to an actor with
+ *   two copies on the canvas. Omitting it keeps the actor-wide answer, which is what the questions
+ *   that really are about the machine (cross-scene occupancy totals) want.
+ */
+export function ridersOf(scene, vehicleActorId, vehicleTokenDoc = null) {
   const out = [];
   for (const doc of scene?.tokens ?? []) {
     if (doc.flags?.[SCOPE]?.boardedVehicle !== vehicleActorId) continue;
+    if (vehicleTokenDoc && !riderIsAboardToken(doc, vehicleTokenDoc)) continue;
     const seatIndex = Number(doc.flags?.[SCOPE]?.seatIndex);
     if (!Number.isInteger(seatIndex) || seatIndex < 0) continue;
     out.push({ doc, seatIndex });
@@ -252,11 +314,13 @@ export function ridersOf(scene, vehicleActorId) {
  * Riders already sitting on their seat are left out entirely, which is what keeps a move that
  * changes nothing from writing anything.
  */
-function seatUpdatesFor(scene, actor, pose) {
+function seatUpdatesFor(scene, actor, pose, vehicleTokenDoc = null) {
   const grid = scene?.grid?.size ?? 100;
   const order = seatOrderAt(actor, pose);
   const updates = [];
-  for (const { doc, seatIndex } of ridersOf(scene, actor.id)) {
+  // ⛔ TOKEN-SCOPED. Without the handle this moved every rider of every copy of this vehicle to the
+  // seats of whichever copy was being driven — the reported two-truck swap.
+  for (const { doc, seatIndex } of ridersOf(scene, actor.id, vehicleTokenDoc)) {
     const seat = riderSeatAt(pose, grid, seatIndex, { w: doc.width, h: doc.height }, order);
     const src = doc._source ?? doc;
     if (seat.x === src.x && seat.y === src.y) continue;
@@ -287,8 +351,8 @@ async function commitSeats(scene, updates) {
  * drive, a footprint resize, a Front change, a repaint, a turn of the wheel — so all of them put
  * people in the same places.
  */
-async function reseatRiders(scene, actor, pose) {
-  return commitSeats(scene, seatUpdatesFor(scene, actor, pose));
+async function reseatRiders(scene, actor, pose, vehicleTokenDoc = null) {
+  return commitSeats(scene, seatUpdatesFor(scene, actor, pose, vehicleTokenDoc));
 }
 
 /**
@@ -306,7 +370,9 @@ async function commitCrewFollow(handle) {
   const scene = handle?.parent;
   const actor = handle?.actor;
   if (!scene || !actor) return 0;
-  const updates = seatUpdatesFor(scene, actor, storedPoseOf(handle));
+  // The handle that moved carries ONLY its own riders. A second token of the same vehicle standing
+  // elsewhere on the canvas keeps the people sitting in it.
+  const updates = seatUpdatesFor(scene, actor, storedPoseOf(handle), handle);
   if (!updates.length) return 0;
 
   // A non-GM driver can move the vehicle but cannot write token documents they do not own (an
@@ -362,21 +428,37 @@ function moduleRiderMove(tokenDoc, update) {
     : { cp2020VehicleSync: true };
 }
 
-/** The vehicle's handle token on a scene (the one the crew token is sitting on/next to). */
+/**
+ * The vehicle's FIRST handle token on a scene, in the scene's own document order.
+ *
+ * ⚠ "First" is load-bearing where a vehicle has more than one handle: it is the deterministic
+ * fallback `riderVehicleTokenIdOn` gives a rider that carries no token stamp, and every client
+ * walks the same list in the same order, so they all name the same token. Callers that need every
+ * copy — a resize that has to reach all of them — use `vehicleTokensFor`.
+ */
 export function vehicleTokenFor(scene, vehicleActorId) {
   return (scene?.tokens ?? []).find(t => t.actorId === vehicleActorId && isVehicleTokenDoc(t)) ?? null;
+}
+
+/** EVERY handle of one vehicle on a scene. Two copies of a truck are two trucks to draw and seat. */
+export function vehicleTokensFor(scene, vehicleActorId) {
+  return (scene?.tokens ?? []).filter(t => t.actorId === vehicleActorId && isVehicleTokenDoc(t));
 }
 
 /**
  * The lowest seat index not already claimed on this vehicle. Seats are claimed by flag rather
  * than by counting heads, so a rider stepping out of the middle frees THAT seat instead of
  * silently doubling two passengers into one square.
+ *
+ * Claims are counted PER HANDLE: the driver's seat of one truck says nothing about the driver's
+ * seat of the truck parked beside it, so two copies of a vehicle each fill from seat 0.
  */
-function nextFreeSeatIndex(scene, vehicleActorId, exceptTokenId = null) {
+function nextFreeSeatIndex(scene, vehicleActorId, exceptTokenId = null, vehicleTokenDoc = null) {
   const taken = new Set();
   for (const t of scene?.tokens ?? []) {
     if (t.id === exceptTokenId) continue;
     if (t.flags?.[SCOPE]?.boardedVehicle !== vehicleActorId) continue;
+    if (vehicleTokenDoc && !riderIsAboardToken(t, vehicleTokenDoc)) continue;
     const idx = Number(t.flags?.[SCOPE]?.seatIndex);
     if (Number.isInteger(idx) && idx >= 0) taken.add(idx);
   }
@@ -398,10 +480,13 @@ export async function boardVehicle(crewTokenDoc, vehicleActor, vehicleTokenDoc =
   const vehicleDoc = vehicleTokenDoc ?? vehicleTokenFor(scene, vehicleActor.id);
 
   const update = { [`flags.${SCOPE}.boardedVehicle`]: vehicleActor.id };
+  // ⭐ WHICH COPY. The handle the rider actually boarded is recorded alongside the vehicle, so a
+  // second token of the same vehicle elsewhere on the canvas has no claim on this person.
+  if (vehicleDoc) update[`flags.${SCOPE}.boardedVehicleToken`] = vehicleDoc.id;
 
   if (vehicleDoc) {
     const src = crewTokenDoc._source ?? crewTokenDoc;
-    const seatIndex = nextFreeSeatIndex(scene, vehicleActor.id, crewTokenDoc.id);
+    const seatIndex = nextFreeSeatIndex(scene, vehicleActor.id, crewTokenDoc.id, vehicleDoc);
     const pose = storedPoseOf(vehicleDoc);
     const seat = riderSeatAt(pose, grid, seatIndex,
       { w: crewTokenDoc.width, h: crewTokenDoc.height }, seatOrderAt(vehicleActor, pose));
@@ -445,12 +530,17 @@ export async function disembark(crewTokenDoc) {
   const scene = crewTokenDoc.parent;
   const grid = scene?.grid?.size ?? canvas?.grid?.size ?? 100;
   const vehicleActorId = crewTokenDoc.flags?.[SCOPE]?.boardedVehicle;
-  const vehicleDoc = vehicleActorId ? vehicleTokenFor(scene, vehicleActorId) : null;
+  // Step out beside the handle this rider was actually IN, not beside whichever copy of the vehicle
+  // the scene happens to list first.
+  const boardedTokenId = riderVehicleTokenIdOn(scene, crewTokenDoc);
+  const vehicleDoc = (boardedTokenId ? scene?.tokens?.get?.(boardedTokenId) : null)
+    ?? (vehicleActorId ? vehicleTokenFor(scene, vehicleActorId) : null);
   const prior = crewTokenDoc.flags?.[SCOPE]?.boardedRestore ?? null;
 
   // deleteFieldUpdate picks the core's supported deletion form (ForcedDeletion on v14, `-=` on v13).
   const update = {
     ...deleteFieldUpdate(`flags.${SCOPE}.boardedVehicle`),
+    ...deleteFieldUpdate(`flags.${SCOPE}.boardedVehicleToken`),
     ...deleteFieldUpdate(`flags.${SCOPE}.seatIndex`),
     ...deleteFieldUpdate(`flags.${SCOPE}.boardedRestore`),
   };
@@ -490,7 +580,11 @@ async function adoptDraggedSeat(riderDoc) {
   const scene = riderDoc?.parent;
   const vehicleActorId = riderDoc?.flags?.[SCOPE]?.boardedVehicle;
   if (!scene || !vehicleActorId) return;
-  const handle = vehicleTokenFor(scene, vehicleActorId);
+  // The seat the drag landed in is a seat of the handle this rider is IN — measured against the
+  // other copy of the vehicle it would be measured against the wrong rectangle entirely.
+  const boardedTokenId = riderVehicleTokenIdOn(scene, riderDoc);
+  const handle = (boardedTokenId ? scene.tokens.get(boardedTokenId) : null)
+    ?? vehicleTokenFor(scene, vehicleActorId);
   const actor = handle?.actor;
   if (!handle || !actor) return;
 
@@ -510,7 +604,7 @@ async function adoptDraggedSeat(riderDoc) {
     if (d < bestDistance) { bestDistance = d; best = i; }
   }
   const landed = (bestDistance <= grid / 2) ? best : -1;
-  const taken = landed >= 0 && ridersOf(scene, vehicleActorId)
+  const taken = landed >= 0 && ridersOf(scene, vehicleActorId, handle)
     .some(r => r.doc.id !== riderDoc.id && r.seatIndex === landed);
   const target = (landed >= 0 && !taken) ? landed : current;
   if (!Number.isInteger(target) || target < 0) return;
@@ -569,11 +663,13 @@ export function registerVehicleCanvasHooks() {
     await commitCrewFollow(doc);
   });
 
-  // GM-side relay: a non-GM driver emits the un-owned crew moves; only the active GM (who can write
-  // any token) applies them. cp2020VehicleSync suppresses the crew-follow hooks so nothing loops.
+  // GM-side relay: a non-GM driver emits the un-owned crew moves; only the primary GM SESSION (which
+  // can write any token) applies them. cp2020VehicleSync suppresses the crew-follow hooks so nothing
+  // loops. Converges — both clients would write the same seat coordinates — so this row cost a
+  // redundant token update, not a wrong one.
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "vehicleCrewFollow") return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     const scene = data.sceneId ? game.scenes?.get(data.sceneId) : canvas?.scene;
     if (scene && Array.isArray(data.updates) && data.updates.length) {
       await commitSeats(scene, data.updates);
@@ -596,9 +692,16 @@ export function registerVehicleCanvasHooks() {
     const layoutChanged = change?.system?.layout?.front !== undefined
       || change?.system?.layout?.cells !== undefined;
     if (!sizeChanged && !hullChanged && !layoutChanged) return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     // The HULL is the edited figure now (the sheet's Footprint fields write it); the frame square and
     // the art scale are both derived from it, here, so there is exactly one place that decides them.
+    //
+    // ⛔ THIS IS THE WRITE THAT BLEW THE TOKEN UP (field incident 2026-08-25). A Footprint edit of
+    // 10000 arrived here and `frameSquareFor` squared it into a 10000 × 10000 token before anything
+    // had questioned the figure. Both halves are bounded now — the model clamps the hull on the way
+    // in, and `frameSquareFor`/`hullDimsOf` bound whatever they are handed on the way out — so `side`
+    // cannot exceed the ceiling however this hook is reached. It also HEALS: a vehicle left with a
+    // poisoned frame gets it rewritten to the bounded square the moment its hull is edited again.
     const hull = hullDimsOf(actor.system,
       Number(actor.prototypeToken?.width), Number(actor.prototypeToken?.height));
     const side = frameSquareFor(hull);
@@ -610,18 +713,20 @@ export function registerVehicleCanvasHooks() {
       } });
     }
     for (const scene of game.scenes ?? []) {
-      const handle = vehicleTokenFor(scene, actor.id);
-      if (!handle) continue;
-      if (handle.width !== side || handle.height !== side) {
-        await handle.update({ width: side, height: side, texture: { scaleX: scale, scaleY: scale } });
+      // EVERY handle, not just the first: two copies of one vehicle on a scene are two vehicles to
+      // resize and two sets of riders to re-seat, each into its own copy's cells.
+      for (const handle of vehicleTokensFor(scene, actor.id)) {
+        if (handle.width !== side || handle.height !== side) {
+          await handle.update({ width: side, height: side, texture: { scaleX: scale, scaleY: scale } });
+        }
+        // The pose comes from the actor's OWN new figures and never from the handle document. Reading
+        // the token back after its resize looked equivalent and was not: rig-measured, the doc still
+        // answered with its old footprint on the pass that had just resized it, so the seat order was
+        // the old shape's while the rect was the new one, and riders landed in cells that belonged to
+        // neither.
+        const pose = { ...storedPoseOf(handle), w: side, h: side, hull };
+        await reseatRiders(scene, actor, pose, handle);
       }
-      // The pose comes from the actor's OWN new figures and never from the handle document. Reading
-      // the token back after its resize looked equivalent and was not: rig-measured, the doc still
-      // answered with its old footprint on the pass that had just resized it, so the seat order was
-      // the old shape's while the rect was the new one, and riders landed in cells that belonged to
-      // neither.
-      const pose = { ...storedPoseOf(handle), w: side, h: side, hull };
-      await reseatRiders(scene, actor, pose);
     }
   });
 

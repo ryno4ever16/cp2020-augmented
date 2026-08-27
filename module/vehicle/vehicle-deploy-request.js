@@ -22,6 +22,13 @@
 import { localizeParam, tryLocalize } from "../utils.js";
 import { deployVehicleToScene, DEFAULT_FOOTPRINT } from "./vehicle-canvas.js";
 import { placeBeside } from "./vehicle-seating.js";
+// ⚠ vehicle-face.js imports `normalizeVehicleType` back out of THIS file, so the two form an ESM
+// cycle. It is safe and must stay safe: neither side may touch the other's bindings at module
+// evaluation time. Both uses here are inside function bodies, and `normalizeVehicleType` is a
+// hoisted function declaration, so whichever module is evaluated first the other is complete by
+// the time anything is called.
+import { FACE_DESIGNATIONS, FACE_ACPA, FACE_STANDARD, FACE_CHOSEN, explicitFace } from "./vehicle-face.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_ACTOR_TYPE = "cp2020-augmented.vehicle";
@@ -82,14 +89,84 @@ export function normalizeVehicleType(text) {
   return { type: "car", modeled: false };
 }
 
-/** The actor this user already created from this item, if any (flags-keyed — rename-proof). */
-export function findDeployedVehicleActor(item, userId) {
-  return game.actors.find(a =>
-    a.type === VEHICLE_ACTOR_TYPE
-    && a.flags?.[SCOPE]?.sourceItemUuid === item.uuid
-    && a.flags?.[SCOPE]?.createdBy === userId
-  ) ?? null;
+/**
+ * The vehicle actor this ITEM is linked to, if any (flags-keyed — rename-proof for both documents).
+ *
+ * ⛔ THE LINK IS THE ITEM'S, NOT (ITEM, USER)'S — the load-bearing correction of the 2026-08-25 bug
+ * bundle. This used to also require `createdBy === userId`, which made the link a per-user opinion:
+ * a GM who deployed a player's truck stamped `createdBy` with the GM's id, so the SAME item's row on
+ * the player's client still read "Deploy". She pressed it, the request was approved, and the world
+ * gained a second truck for the same pink slip. One item, one vehicle.
+ *
+ * `preferUserId` does not filter, it only ORDERS: when several actors are already linked (worlds
+ * that ran the old per-user rule can hold two), the one this user created is the one they get back,
+ * and everyone else converges on the oldest — a stable answer on every client, which is what makes
+ * the button read the same everywhere.
+ *
+ * @param {Item} item
+ * @param {string|null} [preferUserId]  tie-break only; NEVER a filter
+ * @returns {Actor|null}
+ */
+export function findDeployedVehicleActor(item, preferUserId = null) {
+  const uuid = item?.uuid;
+  if (!uuid) return null;
+  const linked = game.actors.filter(a =>
+    a.type === VEHICLE_ACTOR_TYPE && a.flags?.[SCOPE]?.sourceItemUuid === uuid);
+  if (linked.length === 0) return null;
+  if (linked.length === 1) return linked[0];
+  const mine = preferUserId ? linked.find(a => a.flags?.[SCOPE]?.createdBy === preferUserId) : null;
+  // Oldest first, so two clients looking at the same leftover pair name the same vehicle.
+  return mine ?? [...linked].sort((a, b) => (a._stats?.createdTime ?? 0) - (b._stats?.createdTime ?? 0))[0];
 }
+
+/**
+ * Who owns a vehicle deployed from this item — the SAME answer on both deploy paths.
+ *
+ * ⛔ The GM path used to hand out no ownership at all (its requester is a GM, and a GM owns
+ * everything), so a GM deploying a player's truck produced a vehicle the player could not see. The
+ * player's own row then had nothing to point at and offered Deploy again. Ownership follows the
+ * ITEM: whoever owns the character whose inventory holds the pink slip owns the machine, plus the
+ * requester when they are a player. A GM needs no entry either way.
+ */
+export function deployOwnershipFor(item, requesterUserId = null) {
+  const OWNER = CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+  const ownership = {};
+  const carrier = item?.parent;               // the character holding the item, if any
+  for (const [userId, level] of Object.entries(carrier?.ownership ?? {})) {
+    if (userId === "default") continue;       // never widen to the world
+    if (level !== OWNER) continue;
+    if (game.users.get(userId)?.isGM) continue;
+    ownership[userId] = OWNER;
+  }
+  const requester = requesterUserId ? game.users.get(requesterUserId) : null;
+  if (requester && !requester.isGM) ownership[requesterUserId] = OWNER;
+  return ownership;
+}
+
+/* ------------------------------------------------------- the pending-request state, client-local */
+
+/**
+ * Requests this client has sent and the GM has not answered yet, keyed by item uuid.
+ *
+ * Why client-local and not a flag on the item: a request is not a fact about the vehicle, it is a
+ * fact about this browser's last click. It must not survive a reload, must not be visible to other
+ * players, and must never need a write to a document the requester may not own.
+ *
+ * The stamp is a TIME, not a boolean, so a GM who drops off the world cannot wedge the button
+ * forever — an unanswered request ages out and the row offers Deploy again.
+ */
+const _pendingDeploys = new Map();
+const PENDING_TTL_MS = 120000;
+
+/** True while THIS client is waiting on a GM verdict for this item. */
+export function deployRequestPending(item) {
+  const at = _pendingDeploys.get(item?.uuid);
+  if (!at) return false;
+  if (Date.now() - at > PENDING_TTL_MS) { _pendingDeploys.delete(item.uuid); return false; }
+  return true;
+}
+export function markDeployRequestPending(itemUuid) { _pendingDeploys.set(itemUuid, Date.now()); }
+export function clearDeployRequestPending(itemUuid) { _pendingDeploys.delete(itemUuid); }
 
 /** Name-entry prompt. Resolves the chosen name, or null on cancel.
  *  Default = "[owning actor]'s [vehicle]" (the character whose inventory holds the item —
@@ -133,9 +210,9 @@ export async function createVehicleActorFromItem(item, { name, requesterUserId }
   const folder = game.folders.find(f => f.type === "Actor" && f.name === folderName)
     ?? await Folder.create({ type: "Actor", name: folderName });
 
-  const ownership = {};
-  const requester = requesterUserId ? game.users.get(requesterUserId) : null;
-  if (requester && !requester.isGM) ownership[requesterUserId] = CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER;
+  // ONE ownership answer for both deploy paths — see deployOwnershipFor. A GM deploying a player's
+  // truck now produces a vehicle that player owns, which is what makes their own Deploy row flip.
+  const ownership = deployOwnershipFor(item, requesterUserId);
 
   // Handling normalization + the whole-vehicle catalog layer (unified-sheet plan Phase 3):
   // the seed is essentially verbatim now — the civilian sheet mirrors the item sheet, so the
@@ -143,6 +220,17 @@ export async function createVehicleActorFromItem(item, { name, requesterUserId }
   const norm = normalizeVehicleType(sys.vehicleType);
   const isAcpa = norm.type === "acpa";
   const topSpeed = num(sys.speed?.max) || num(sys.speed?.value);
+
+  // Which FACE the new actor opens on. The ITEM's own designation wins when it has one (the pink
+  // slip's face control, user ruling 2026-08-25); with nothing designated the class decides, which
+  // is exactly what this line did before the item carried a designation at all. The pair is read
+  // out of the ONE table so the actor can never be seeded with a combination the picker cannot
+  // produce — the old literal `isMMVehicle: isAcpa` seeded a suit as {true, true}.
+  // `explicitFace` and not `designatedFace`, because an item whose GM picked "Standard" carries the
+  // same two booleans as one nobody has touched — only the choice flag tells them apart, and a
+  // Standard-marked tank must not deploy onto the combat sheet its class would otherwise derive.
+  const itemFace = explicitFace(item);
+  const facePair = FACE_DESIGNATIONS[itemFace || (isAcpa ? FACE_ACPA : FACE_STANDARD)];
 
   return Actor.create({
     name: name || item.name,
@@ -153,12 +241,19 @@ export async function createVehicleActorFromItem(item, { name, requesterUserId }
     // Linked prototype: the deployed vehicle IS this vehicle — dents persist across scenes
     // (matches deployVehicleToScene's "new vehicles seed linked at creation" convention).
     prototypeToken: { actorLink: true, texture: { src: item.img } },
-    flags: { [SCOPE]: { sourceItemUuid: item.uuid, createdBy: requesterUserId ?? game.user.id } },
+    flags: { [SCOPE]: {
+      sourceItemUuid: item.uuid,
+      createdBy: requesterUserId ?? game.user.id,
+      // A pink slip whose face was CHOSEN hands that choice on, so the new vehicle opens where the
+      // item said and does not re-derive from its class. An item nobody designated hands on nothing
+      // and the actor keeps deriving, exactly as before.
+      ...(itemFace ? { [FACE_CHOSEN]: true } : {}),
+    } },
     system: {
       vehicleType: isAcpa ? "car" : norm.type,
       vehicleTypeText: String(sys.vehicleType ?? ""),
-      isACPA: isAcpa,
-      isMMVehicle: isAcpa,          // civilians open on the item-mirror sheet
+      isACPA: facePair.isACPA,
+      isMMVehicle: facePair.isMMVehicle,   // civilians open on the item-mirror sheet
       sp: { front: sp, side: sp, rear: sp, top: sp, bottom: sp },
       sdp: { value: num(sys.sdp?.value) || sdpMax, max: sdpMax },
       topSpeed,
@@ -255,7 +350,11 @@ export function registerCivilianSheetMigration() {
     scope: "world", config: false, type: Boolean, default: false,
   });
   Hooks.once("ready", async () => {
-    if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+    // ⚠ THE ONE PLACE THE STARTUP RACE CAN STILL BE FELT: `ready` runs early enough that a second GM
+    // session opened at the very same moment may not have been observed yet, so both could sweep. The
+    // sweep is stamp-gated and its per-actor write is the same value from either client, so a doubled
+    // run is redundant rather than wrong. See module/gm-session-primary.js for the bound.
+    if (!isPrimaryGMSession()) return;
     if (game.settings.get(SCOPE, "civilianSheetMigrated")) return;
     // Every vehicle actor that exists when this first runs predates the civilian sheet (deploy-
     // created civilians can only appear after ready) — stamp them all onto the combat sheet.
@@ -272,6 +371,11 @@ export function registerCivilianSheetMigration() {
 
 /**
  * Sheet-button entry point. Dedupe → name prompt → direct create (GM) or GM-approval relay.
+ *
+ * ⭐ TWO dedupe questions, not one (bug bundle 2026-08-25): is a vehicle already linked to this
+ * item — BY ANYONE, either deploy path — and is a request for it already in the GM's hands? The
+ * second one is what stopped the reported double-request: the row stayed on "Deploy" for the whole
+ * round trip, so a second click sent a second request before the first was answered.
  */
 export async function requestVehicleDeploy(item) {
   if (item?.type !== "vehicle") return null;
@@ -279,6 +383,11 @@ export async function requestVehicleDeploy(item) {
   const existing = findDeployedVehicleActor(item, game.user.id);
   if (existing) {
     ui.notifications?.info?.(localizeParam("VehicleDeployAlready", { name: existing.name }));
+    return null;
+  }
+  if (deployRequestPending(item)) {
+    ui.notifications?.info?.(tryLocalize("VehicleDeployPendingNotice",
+      "A deploy request for this vehicle is already waiting for the GM."));
     return null;
   }
 
@@ -302,6 +411,12 @@ export async function requestVehicleDeploy(item) {
     return null;
   }
 
+  // Marked BEFORE the emit: the row must read "pending" from the instant the request leaves, not
+  // from whenever the GM gets round to answering. The repaint belongs HERE and not only in the
+  // button's own handler, so the state is a property of the request rather than of one caller —
+  // a macro, a relay or the API produce the same row a click does.
+  markDeployRequestPending(item.uuid);
+  refreshVehicleItemSheets(item.uuid);
   game.socket.emit(`module.${SCOPE}`, {
     type: MSG_REQUEST,
     itemUuid: item.uuid,
@@ -314,16 +429,29 @@ export async function requestVehicleDeploy(item) {
   return null;
 }
 
-/** Active-GM side: show the approval prompt and act on the verdict. */
+/** Primary-GM-session side: show the approval prompt and act on the verdict. */
 async function _handleDeployRequest(data) {
-  if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+  // ⛔ THE MOST VISIBLE ROW OF THE LOT: without a session-level answer a referee with two tabs open
+  // got TWO approval prompts for one request, and answering both deployed two vehicles. The
+  // cross-path dedupe below catches a request already fulfilled, but only after a prompt was shown.
+  if (!isPrimaryGMSession()) return;
 
   const item = await fromUuid(data.itemUuid);
   if (!item) return;
 
-  // Race guard: the request may have been fulfilled already (double click, second GM).
+  // ⛔ CROSS-PATH DEDUPE. The request may have been fulfilled already — by a double click, by a
+  // second GM, or (the reported case) by a GM who deployed this very pink slip themselves before
+  // the player pressed anything. Silence was the old answer, which left the requester's row stuck
+  // on "pending" and told them nothing; the verdict now travels back so the row settles on the
+  // vehicle that already exists.
   const dupe = findDeployedVehicleActor(item, data.requesterId);
-  if (dupe) return;
+  if (dupe) {
+    game.socket.emit(`module.${SCOPE}`, {
+      type: MSG_RESULT, requesterId: data.requesterId, itemUuid: data.itemUuid,
+      approved: true, already: true, actorName: dupe.name, actorId: dupe.id, placed: true,
+    });
+    return;
+  }
 
   const content = await renderTemplate(`modules/${SCOPE}/templates/dialog/vehicle-deploy-approve.hbs`, {
     requesterName: data.requesterName,
@@ -348,12 +476,12 @@ async function _handleDeployRequest(data) {
     const { placed } = await placeDeployedVehicle(actor, data.anchor);
     if (!placed) ui.notifications?.warn?.(localizeParam("Vehicle.DeployNoTokenFallback", { name: actor.name }));
     game.socket.emit(`module.${SCOPE}`, {
-      type: MSG_RESULT, requesterId: data.requesterId, approved: true,
+      type: MSG_RESULT, requesterId: data.requesterId, itemUuid: data.itemUuid, approved: true,
       actorName: actor.name, actorId: actor.id, placed,
     });
   } else {
     game.socket.emit(`module.${SCOPE}`, {
-      type: MSG_RESULT, requesterId: data.requesterId, approved: false,
+      type: MSG_RESULT, requesterId: data.requesterId, itemUuid: data.itemUuid, approved: false,
     });
   }
 }
@@ -362,8 +490,16 @@ async function _handleDeployRequest(data) {
  *  teaches the pink-slip → vehicle model: the player watches the item become an actor). */
 function _handleDeployResult(data) {
   if (data.requesterId !== game.user.id) return;
+  // Whatever the verdict, this client is no longer waiting: release the row's pending state and
+  // repaint it from what is true now. A verdict that never arrives ages out instead (PENDING_TTL_MS).
+  if (data.itemUuid) clearDeployRequestPending(data.itemUuid);
+  refreshVehicleItemSheets(data.itemUuid ?? null);
   if (data.approved) {
-    ui.notifications?.info?.(localizeParam("VehicleDeployApproved", { name: data.actorName }));
+    // The already-deployed answer is not an approval — nothing was created, the vehicle was
+    // already there. Say that instead of announcing a creation that did not happen.
+    ui.notifications?.info?.(data.already
+      ? localizeParam("VehicleDeployAlready", { name: data.actorName })
+      : localizeParam("VehicleDeployApproved", { name: data.actorName }));
     // Deploy normally lands the vehicle beside the player. When it couldn't (they had no token
     // on a scene), say where the vehicle actually is instead of leaving them hunting the canvas.
     if (data.placed === false) {
@@ -385,5 +521,58 @@ export function registerVehicleDeploySocket() {
   game.socket.on(`module.${SCOPE}`, async data => {
     if (data?.type === MSG_REQUEST) await _handleDeployRequest(data);
     else if (data?.type === MSG_RESULT) _handleDeployResult(data);
+  });
+}
+
+/* ------------------------------------------------------------------ keeping the row honest */
+
+/**
+ * Repaint every open vehicle ITEM sheet (or just the one item's), so the Deploy row states what is
+ * true NOW rather than what was true when the sheet was opened.
+ *
+ * @param {string|null} itemUuid  limit to one item's sheets; null repaints all vehicle item sheets
+ */
+export function refreshVehicleItemSheets(itemUuid = null) {
+  let apps = [];
+  try { apps = [...foundry.applications.instances.values()]; } catch (e) { return; }
+  for (const app of apps) {
+    const doc = app.document ?? app.item ?? null;
+    if (doc?.documentName !== "Item" || doc.type !== "vehicle") continue;
+    if (itemUuid && doc.uuid !== itemUuid) continue;
+    if (!app.rendered) continue;
+    try { app.render(); } catch (e) { /* a sheet mid-close is not a fault */ }
+  }
+}
+
+/**
+ * The deploy link, kept live on every client.
+ *
+ * ⛔ THE REPORTED DEAD BUTTON. Both trucks were deleted and the row still read "Open" — and that
+ * Open did nothing, because the actor it named was gone and nothing repainted the sheet. The row
+ * was a photograph taken when the sheet opened. These three hooks make it a reading: the moment a
+ * linked vehicle is created, deleted, renamed or re-shared, every open pink slip that points at it
+ * repaints. A vehicle that no longer exists therefore reverts the control to Deploy LIVE, on every
+ * client that can see the item, without closing anything.
+ *
+ * Presentation only — no document writes, so this is safe to run on every client (it must, or the
+ * player's sheet would only ever update when the GM happened to have it open).
+ */
+export function registerVehicleDeployLinkHooks() {
+  const relink = (actor) => {
+    if (actor?.type !== VEHICLE_ACTOR_TYPE) return;
+    const uuid = actor.flags?.[SCOPE]?.sourceItemUuid ?? null;
+    if (!uuid) return;
+    // A linked vehicle appearing or vanishing answers any request this client was waiting on.
+    clearDeployRequestPending(uuid);
+    refreshVehicleItemSheets(uuid);
+  };
+  Hooks.on("createActor", relink);
+  Hooks.on("deleteActor", relink);
+  // A rename changes the row's TEXT ("Deployed as …"), and an ownership change decides whether the
+  // Open button is offered at all — both are things the row states, so both repaint it.
+  Hooks.on("updateActor", (actor, changes) => {
+    if (!changes) return;
+    if (changes.name === undefined && changes.ownership === undefined) return;
+    relink(actor);
   });
 }

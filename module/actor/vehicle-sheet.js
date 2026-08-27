@@ -9,7 +9,8 @@ import { effectiveVehicleRuleSystem, mmEnabled } from "../settings.js";
 import { localize, localizeParam } from "../utils.js";
 import { normalizeVehicleType } from "../vehicle/vehicle-deploy-request.js";
 import { occupancyAcrossScenes } from "../vehicle/vehicle-occupancy.js";
-import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells, hullDimsOf, rankCells } from "../vehicle/vehicle-layout.js";
+import { FRONTS, resolveFront, coverSpFor, layoutFor, cycleCell, formatCells, hullDimsOf, rankCells, HULL_MAX_SQUARES } from "../vehicle/vehicle-layout.js";
+import { refuseUnreadableNumberFields, refuseOutOfRangeNumberFields } from "../form-number-guard.js";
 import { disembark } from "../vehicle/vehicle-canvas.js";
 import { RIDER_COVER_MODES, derivedRiderCoverFor } from "../vehicle/vehicle-cover.js";
 import { FACES, FACE_STANDARD, FACE_MM, FACE_ACPA, facePatch, resolveVehicleFace, carriesMMCombatData } from "../vehicle/vehicle-face.js";
@@ -203,13 +204,25 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
     const faceState = resolveVehicleFace(actor, { mmOn });
     const FACE_KEYS = { [FACE_STANDARD]: "Vehicle.FaceStandard", [FACE_MM]: "Vehicle.FaceMM", [FACE_ACPA]: "Vehicle.FaceACPA" };
     const faceControl = {
-      // Catalog (compendium-deployed) vehicles derive their face and offer no picker — the choice
-      // belongs to vehicles someone built, which is where it is actually a choice.
+      // ⭐ EVERY vehicle sheet offers the picker (user ruling 2026-08-25). It used to be withheld
+      // from compendium-deployed vehicles, which left a deployed APC with no control on the sheet
+      // at all; derivation now only picks the DEFAULT selection (vehicle-face.js header).
       show: faceState.showPicker,
+      // The strip's own element id — supplied here rather than read off `actor` in the template,
+      // because the same partial renders on the vehicle ITEM sheet, which has no actor.
+      domId: actor.id,
       // A viewer who cannot edit still sees WHICH face is in force; the control just won't move.
       locked: !editable,
       value: faceState.chosen,
       mmGated: faceState.mmGated,
+      // Nothing is stored, so what the control shows came from the vehicle's own class. Say so —
+      // otherwise the select looks like a recorded decision, and picking the option it is already
+      // showing looks like a no-op when it is in fact the write that records it.
+      derivedOnly: !faceState.explicit,
+      // The localized name of the face on screen, so the derived-only line can SAY which sheet it is
+      // showing instead of only that one was derived. Same table as the options below, so the line and
+      // the select can never name different faces.
+      chosenLabel: localize(FACE_KEYS[faceState.chosen] ?? FACE_KEYS[FACE_STANDARD]),
       options: FACES.map(key => ({
         value: key,
         label: localize(FACE_KEYS[key]),
@@ -245,6 +258,15 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       rangeAlt: system.rangeUnit === "km" ? Math.round((Number(system.range) || 0) / 1.609)
                                           : Math.round((Number(system.range) || 0) * 1.609),
       rangeAltUnit: system.rangeUnit === "km" ? "mi" : "km",
+      // What ONE press of the +/− speed controls does, in this vehicle's own figures — mirrors the
+      // vehicle ITEM sheet's `veh.speedStep`. `decFallback` is the case _cpActivateCivilianControls
+      // has always had (`Number(sys.dec) || acc`) and the sheet never stated: with no DEC recorded,
+      // the brake steps by ACC. Tooltip data only — the step itself is unchanged.
+      speedStep: (() => {
+        const acc = Number(system.acc) || 0;
+        const dec = Number(system.dec) || 0;
+        return { acc, dec: dec || acc, decFallback: dec === 0 };
+      })(),
       showFuel: !!(Number(system.fuel?.max) || Number(system.fuel?.value) || system.fuel?.type),
       // Honest handling label: the subtype has no modeled ruleset (submarine/spacecraft/exotics).
       unmodeledSubtype: !!system.vehicleTypeText && !normalizeVehicleType(system.vehicleTypeText).modeled,
@@ -291,6 +313,28 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       // exception) — rendered for the GM only.
       userIsGM: game.user?.isGM === true,
     };
+  }
+
+  /**
+   * Read the form, then refuse the two ways a numeric box on this sheet can be wrong.
+   *
+   * ⛔ THE VEHICLE SHEET WAS NOT COVERED BY EITHER GUARD UNTIL NOW, and the cost was measured at a
+   * table on 2026-08-25: a `10000` typed into the Footprint box was stored, squared into a
+   * 10000 × 10000 token frame, and drew a paint grid of 20,000 cells — the tab ran out of memory and
+   * the vehicle could not be opened again to undo it. A stray "E" in the same box submitted as empty
+   * and nulled the stored dimension, which is what pointed the footprint at the ruined token frame.
+   *
+   * Both refusals are the shared guard's, in the shared order: an unreadable box has no figure at all
+   * so the stored value goes back, and an out-of-range figure goes to the nearest one the box's own
+   * `min`/`max` allow. Nothing bespoke to vehicles lives here — the range each box permits is written
+   * on the box, in the template.
+   * @override
+   */
+  _processFormData(event, form, formData) {
+    const submitData = super._processFormData(event, form, formData);
+    refuseUnreadableNumberFields(submitData, form, this.document);
+    refuseOutOfRangeNumberFields(submitData, form, this.document);
+    return submitData;
   }
 
   /**
@@ -370,6 +414,9 @@ export class CyberpunkVehicleSheet extends HandlebarsApplicationMixin(foundry.ap
       // nothing about the vehicle and simply writes the fact down.
       hullW: w,
       hullH: h,
+      // The ceiling the Footprint boxes declare (`max=`), which is also what the submit guard refuses
+      // against and what the data model clamps to — one number, stated in one place (vehicle-layout).
+      hullMax: HULL_MAX_SQUARES,
       painted: resolved.painted,
       riderCoverOptions,
       providesCover: cover.providesCover,

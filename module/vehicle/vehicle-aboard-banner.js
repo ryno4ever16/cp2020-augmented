@@ -12,7 +12,7 @@
  * this file only supplies data and binds the click, per the Category-B injected-UI pattern.
  */
 
-import { aboardVehicleFor } from "./vehicle-occupancy.js";
+import { aboardPlacesFor } from "./vehicle-occupancy.js";
 import { disembark } from "./vehicle-canvas.js";
 
 const SCOPE = "cp2020-augmented";
@@ -29,11 +29,22 @@ async function _syncBanner(app, root) {
 
   const actor = app?.document ?? app?.actor;
   if (!actor || actor.type === `${SCOPE}.vehicle`) return;
-  const aboard = aboardVehicleFor(actor);
+  // Prefer the aboard token on the scene being LOOKED AT, so the ordinary case reads as "here" and
+  // only a genuinely remote seat reads as remote.
+  const places = aboardPlacesFor(actor);
+  const here = canvas?.scene?.id ?? null;
+  const aboard = places.find(p => p.scene.id === here) ?? places[0] ?? null;
   if (!aboard) return;
 
+  // ⭐ SAY WHERE IT ACTS (field report 2026-08-25). The strip used to name only the vehicle, so a
+  // character with a second token on another scene saw a Step Out control with no vehicle in sight
+  // and no way to tell that pressing it would act somewhere else entirely. It does act correctly —
+  // on the token that is actually aboard — so the fix is to NAME that place, not to hide the
+  // control. On the scene you are looking at, the wording stays exactly as it was.
   const html = await renderTemplate(TEMPLATE, {
     vehicleName: aboard.vehicle.name,
+    sceneName: aboard.scene.name,
+    remote: aboard.scene.id !== here,
     tokenId: aboard.tokenDoc.id,
     sceneId: aboard.scene.id,
   });

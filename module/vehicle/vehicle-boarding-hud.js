@@ -56,7 +56,10 @@ async function _onEmbark(tokenDoc) {
     return;
   }
   const va = vehicle.actor;
-  const { count: aboard, capacity: cap } = occupancyOf(va, tokenDoc.parent);
+  // Capacity is asked of the TRUCK BEING BOARDED, not of every copy of it on the canvas — two
+  // parked copies of a 5-seater are ten seats, and counting them together declared the empty one
+  // full the moment the other filled up.
+  const { count: aboard, capacity: cap } = occupancyOf(va, tokenDoc.parent, vehicle);
   if (cap > 0 && aboard >= cap) {
     ui.notifications?.warn?.(localizeParam("VehicleEmbarkFull", { name: va.name, count: aboard + 1, cap }));
   }
@@ -94,8 +97,10 @@ export function registerVehicleBoardingHud() {
     // cab stops hiding the hull. Client-local (see vehicle-occupancy.js) — nobody else's view
     // changes, so it needs no ownership beyond being able to see the token.
     if (isVehicleTokenDoc(tokenDoc)) {
-      const vehicleId = tokenDoc.actorId;
-      if (!vehicleId || occupancyOf(tokenDoc.actor, tokenDoc.parent).count === 0) return;
+      // The fade is a statement about THIS token: its own riders, its own dim. Keyed by actor it
+      // reached across to any other copy of the same vehicle standing on the canvas.
+      const vehicleId = tokenDoc.id;
+      if (!tokenDoc.actorId || occupancyOf(tokenDoc.actor, tokenDoc.parent, tokenDoc).count === 0) return;
       const faded = isVehicleFaded(vehicleId);
       const label = faded
         ? tryLocalize("Vehicle.ShowOccupants", "Show occupants")

@@ -139,10 +139,10 @@
             <div class="field" title="{{CPLocal 'Vehicle.PassengerSlotsTip'}}"><label>{{CPLocal "Vehicle.PassengerSlotsLabel"}}</label><input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}"/></div>
             <div class="field" title="{{CPLocal 'Vehicle.FootprintTip'}}">
                 <label>{{CPLocal "Vehicle.FootprintLabel"}}</label>
-                <span class="flexrow flex-pad">
-                    <input type="number" name="system.layout.hullW" value="{{layout.hullW}}" min="1" step="1"/>
-                    <span class="nogrow">×</span>
-                    <input type="number" name="system.layout.hullH" value="{{layout.hullH}}" min="1" step="1"/>
+                <span class="flexrow flex-pad cp-paired-values cp-pair-2d">
+                    <input type="number" name="system.layout.hullW" value="{{layout.hullW}}" min="1" max="{{layout.hullMax}}" step="1"/>
+                    <span class="nogrow cp-pair-sep">×</span>
+                    <input type="number" name="system.layout.hullH" value="{{layout.hullH}}" min="1" max="{{layout.hullMax}}" step="1"/>
                 </span>
             </div>
             {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-layout.hbs"}}

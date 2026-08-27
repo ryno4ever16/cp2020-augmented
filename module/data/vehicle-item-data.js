@@ -247,7 +247,17 @@ export function makeVehicleItemData(SystemVehicleData) {
         crew:        numberField(0),                       // operating crew (49% printed)
         body:        numberField(0),                       // abstract Body rating ("SDP 100 (Body 5)")
         cargo:       valueUnitField("kg"),                 // cargo capacity (33% printed)
-        mass:        valueUnitField("tons")                // vehicle mass (41% printed) — NOT inventory `weight`
+        mass:        valueUnitField("tons"),               // vehicle mass (41% printed) — NOT inventory `weight`
+        // ⭐ THE SHEET-FACE DESIGNATION, on the pink slip (user ruling 2026-08-25). The same pair
+        // the vehicle ACTOR stores, under the same two names, so the one table in
+        // module/vehicle/vehicle-face.js writes both documents (`facePatch`). What it means HERE is
+        // "which face a vehicle deployed from this item opens on" — stated once on the thing that
+        // gets deployed instead of re-picked on every actor it produces.
+        // ADDITIVE and default-false, i.e. "nothing designated", which is the state every vehicle
+        // item in every existing world is already in: the deploy path keeps deriving from the
+        // vehicle's class exactly as before until a GM picks something. No migration.
+        isACPA:      booleanField(false),
+        isMMVehicle: booleanField(false)
       };
     }
     // No migrateData override: the old mergeDefaults floors are superseded by the SchemaFields

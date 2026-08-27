@@ -20,6 +20,7 @@ import { effectiveVehicleRuleSystem } from "../settings.js";
 import { pxPerMeter, metersPerUnit } from "./vehicle-grid.js";
 import { headingVector } from "./vehicle-layout.js";
 import { renderChatCard } from "../compat.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -266,11 +267,12 @@ export function registerVehicleTargetingHandlers() {
   });
 
   // GM-side relay: a player firing at a GM-owned vehicle can't write it, so they emit a vehicleDamage
-  // request (see _relayVehicleAttack). The socket fires on every connected GM — only the active GM
-  // applies (else N GMs apply N×). The active GM re-runs dispatchAttack, which writes directly here.
+  // request (see _relayVehicleAttack). The socket fires on every connected GM CLIENT — a second GM, and
+  // a second tab of the same GM — so only the primary SESSION applies (else N clients apply N×). It
+  // re-runs dispatchAttack, which writes directly here. ⛔ NOT idempotent: SDP is debited per call.
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "vehicleDamage") return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     // Token-first: an unlinked vehicle/ACPA copy's damage belongs to THAT token's synthetic actor —
     // resolving by actor id here sent every player-relayed hit to the shared world actor, which all
     // pristine copies then displayed (the mass-damage report). Bare id stays as the legacy fallback.

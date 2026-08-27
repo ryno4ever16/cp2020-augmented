@@ -3,18 +3,36 @@
       `vehicle` item sheet has no `.vehicle` class, so it never gets the actor sheet's label
       rules and its long labels (Speed/Fuel/Passengers/Maneuverability/Efficiency) otherwise
       collapse to ~0 width and overprint their inputs. --}}
+{{!-- The sheet-face strip, FIRST and on its own band — it says which face a vehicle deployed from
+      this pink slip opens on, which is a statement about the whole layout rather than one of the
+      vehicle's stats, so it is deliberately not a checkbox among them. Same partial, same option
+      table and same atomic write as the vehicle ACTOR's three faces. --}}
+{{> "modules/cp2020-augmented/templates/actor/parts/vehicle-face.hbs" faceControl=@root.veh.faceControl}}
 <div class="cp-vehicle-item-fields">
 {{!-- Deploy: bridge this inventory item to a vehicle ACTOR (GM-approved for players; the GM
-      places tokens later like any other actor). Once THIS user has deployed it, the row shows
-      where the vehicle went and opens it — the pink slip visibly points at the machine.
-      Hidden on locked sheets (compendium). --}}
+      places tokens later like any other actor). Once a vehicle exists for this item, the row shows
+      where it went and opens it — the pink slip visibly points at the machine.
+      Hidden on locked sheets (compendium).
+
+      ⭐ THREE STATES, not two (bug bundle 2026-08-25). The row used to be "deployed by me" vs
+      "not deployed by me", so a GM's deploy of a player's truck left the player's row on Deploy
+      and a second truck got made; and a sent request looked identical to no request at all, so a
+      second one could be sent while the first was still on the GM's screen. --}}
 {{#if @root.editable}}
 <div class="field-list one-col">
     <div class="field">
         {{#if @root.veh.deployedActor}}
         <label title="{{CPLocal "VehicleOpenActorTip"}}">{{CPLocal "VehicleDeployedAs" name=@root.veh.deployedActor.name}}</label>
         <span class="flex-pad"></span>
+        {{#if @root.veh.deployedActor.canOpen}}
         <button type="button" class="cp-vehicle-open nogrow" data-actor-id="{{@root.veh.deployedActor.id}}" title="{{CPLocal "VehicleOpenActorTip"}}">{{CPLocal "VehicleOpenActor"}}</button>
+        {{/if}}
+        {{else if @root.veh.deployPending}}
+        {{!-- Sent, unanswered. The button stays visible so the row does not jump, and is disabled
+              so the second click that made the second vehicle cannot happen. --}}
+        <label title="{{CPLocal "VehicleDeployPendingTip"}}">{{CPLocal "VehicleDeployPending"}}</label>
+        <span class="flex-pad"></span>
+        <button type="button" class="cp-vehicle-deploy nogrow" disabled title="{{CPLocal "VehicleDeployPendingTip"}}">{{CPLocal "VehicleDeploy"}}</button>
         {{else}}
         <label title="{{CPLocal "VehicleDeployTip"}}">{{CPLocal "VehicleDeployHint"}}</label>
         <span class="flex-pad"></span>
@@ -36,10 +54,15 @@
             {{#each @root.veh.vehicleTypeSuggestions}}<option value="{{this}}"></option>{{/each}}
         </datalist>
     </div>
-    <div class="field">
-        <label for="system.crew">{{CPLocal "Crew"}}</label>
-        <span class="flexrow flex-pad">
+    {{!-- ⭐ CREW AND PASSENGERS AS ONE ROW (user ruling 2026-08-25) — see the matching note on the
+          actor's civilian face. Passengers sat in a field-list three blocks down, which read as an
+          unrelated stat; they are the two halves of the capacity a deployed vehicle's badge sums. --}}
+    <div class="field" title="{{CPLocal 'CrewPassengersTip'}}">
+        <label for="system.crew">{{CPLocal "CrewPassengers"}}</label>
+        <span class="flexrow flex-pad cp-paired-values cp-pair-3d">
             <input type="number" name="system.crew" value="{{system.crew}}">
+            <span class="nogrow cp-pair-sep">/</span>
+            <input type="number" name="system.passengers" value="{{system.passengers}}">
         </span>
     </div>
     <div class="field">
@@ -62,9 +85,9 @@
 
         <div class="field">
             <label class="larger" for="system.sdp.value" title="{{CPLocal "SDPFull"}}">{{CPLocal "SDP"}}</label>
-            <span class="flexrow flex-pad">
+            <span class="flexrow flex-pad cp-paired-values cp-pair-5d">
                 <input type="number" name="system.sdp.value" value="{{value}}"> 
-                <span class="nogrow">/</span>
+                <span class="nogrow cp-pair-sep">/</span>
                 <input type="number" name="system.sdp.max" value="{{max}}">
             </span>
         </div>
@@ -91,9 +114,9 @@
     <div class="field">
         {{!-- Make larger to indicate a kind of heading almost --}}
         <label class="larger" for="system.speed.value">{{CPLocal "Speed"}}</label>
-        <span class="flexrow flex-pad">
+        <span class="flexrow flex-pad cp-paired-values">
             <input type="number" name="system.speed.value" value="{{value}}"> 
-            <span class="nogrow">/</span>
+            <span class="nogrow cp-pair-sep">/</span>
             <input type="number" name="system.speed.max" value="{{max}}">
             {{#if @root.editable}}
             <select name="system.speed.unit" class="nogrow cp-unit-select">
@@ -107,7 +130,7 @@
         </span>
     </div>
      <div class="field">
-        <label for="system.speed.acceleration">{{CPLocal "Accel"}}</label>
+        <label for="system.speed.acceleration" title="{{CPLocal "VehicleAccelFieldTip"}}">{{CPLocal "Accel"}}</label>
         <span class="flexrow flex-pad">
             <input type="number" name="system.speed.acceleration" value="{{acceleration}}">
             <span class="nogrow">{{@root.veh.speedUnit}}</span>
@@ -115,7 +138,7 @@
     </div>
      <div class="field">
         {{!-- The books print accel/decel as a pair ("ACC/DEC 18/30") — VEHICLE-SPEC.md §6 --}}
-        <label for="system.speed.deceleration">{{CPLocal "Decel"}}</label>
+        <label for="system.speed.deceleration" title="{{CPLocal "VehicleDecelFieldTip"}}">{{CPLocal "Decel"}}</label>
         <span class="flexrow flex-pad">
             <input type="number" name="system.speed.deceleration" value="{{deceleration}}">
             <span class="nogrow">{{@root.veh.speedUnit}}</span>
@@ -123,11 +146,14 @@
     </div>
 
     {{!-- Accel/decel buttons — only when editable; they write speed.value, so on a locked compendium
-          item they would fire item.update() and warn. Hidden (and unwired) when !editable. --}}
+          item they would fire item.update() and warn. Hidden (and unwired) when !editable.
+          The tooltips state the STEP this vehicle actually takes (one combat turn's worth), and the
+          brake names ACC instead when no DEC is recorded — which is what the handler has always
+          done. Nothing about the step changed here. --}}
     {{#if @root.editable}}
     <div class="flexrow">
-        <div class="field decel" title="{{CPLocal "VehicleDecelBtnTip"}}"><label class="fillwidth" style="text-align: center; font-size: larger">-</label></div>
-        <div class="field accel" title="{{CPLocal "VehicleAccelBtnTip"}}"><label class="fillwidth" style="text-align: center; font-size: larger">+</label></div>
+        <div class="field decel" title="{{#if @root.veh.speedStep.decFallback}}{{CPLocal "VehicleDecelBtnTipFallback" step=@root.veh.speedStep.dec unit=@root.veh.speedUnit}}{{else}}{{CPLocal "VehicleDecelBtnTip" step=@root.veh.speedStep.dec unit=@root.veh.speedUnit}}{{/if}}"><label class="fillwidth" style="text-align: center; font-size: larger">-</label></div>
+        <div class="field accel" title="{{CPLocal "VehicleAccelBtnTip" step=@root.veh.speedStep.acc unit=@root.veh.speedUnit}}"><label class="fillwidth" style="text-align: center; font-size: larger">+</label></div>
     </div>
     {{/if}}
    <div class="field">
@@ -142,14 +168,9 @@
     {{/with}}
 </div>
 
-{{!-- Miscellaneous vehicle-only other --}}
+{{!-- Miscellaneous vehicle-only other. Passengers moved UP beside Crew — it is half the capacity,
+      not a miscellaneous stat. --}}
 <div class="field-list">
-    <div class="field">
-        <label for="system.passengers">{{CPLocal "Passengers"}}</label>
-        <span class="flexrow flex-pad">
-            <input type="number" name="system.passengers" value="{{system.passengers}}"> 
-        </span>
-    </div>
     <div class="field">
         <label for="system.maneuverability.value" title="{{CPLocal "ManeuverabilityHint"}}">{{CPLocal "ManeuverabilityFull"}}</label>
         <span class="flexrow flex-pad">
@@ -221,9 +242,9 @@
     {{/if}}
     <div class="field">
         <label class="larger" for="system.fuel.value">{{CPLocal "Fuel"}}</label>
-        <span class="flexrow flex-pad">
+        <span class="flexrow flex-pad cp-paired-values cp-pair-5d">
             <input type="number" name="system.fuel.value" value="{{value}}">
-            <span class="nogrow">/</span>
+            <span class="nogrow cp-pair-sep">/</span>
             <input type="number" name="system.fuel.max" value="{{max}}">
             {{#if @root.editable}}
             <select name="system.fuel.unit" class="nogrow cp-unit-select">

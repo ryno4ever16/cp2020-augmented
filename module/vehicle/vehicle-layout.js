@@ -66,10 +66,79 @@ export const FRONTS = ["n", "e", "s", "w"];
  */
 export const DEFAULT_HULL = Object.freeze({ w: 2, h: 4 });
 
-/** A stored hull dimension if it is a usable count of squares, else null. */
+/**
+ * ⛔ THE CEILING ON A FOOTPRINT, AND WHY THERE HAS TO BE ONE (field incident 2026-08-25).
+ *
+ * A GM typed `10000` into the second Footprint box. Nothing anywhere refused it, and three separate
+ * costs compounded off that one number:
+ *   · the sheet's paint grid is one `<button>` per cell, so a 2 × 10000 hull asked the browser for
+ *     20,000 buttons, each with a localized tooltip — the sheet drew a mile-long column and then the
+ *     tab ran out of memory;
+ *   · `frameSquareFor` squares to the LONG axis, so the token frame became 10000 × 10000 squares —
+ *     a million grid squares of canvas, a texture the renderer cannot allocate;
+ *   · and because both are recomputed every time the sheet opens, the vehicle became unopenable:
+ *     the crash reproduced on every attempt to get back in and fix the number.
+ *
+ * THE NUMBER. Grid squares, not metres: on the 2 m squares these vehicles are drawn on, the largest
+ * thing the books actually print is a Maximum Metal airframe — an Osprey-class tilt-rotor at roughly
+ * 8–9 squares along its long axis. 20 squares is 40 m, better than double the biggest printed hull,
+ * so no book vehicle can reach it and a GM's oversized homebrew still fits. It is also small enough
+ * that the two costs above stay ordinary: 20 × 20 is 400 paint cells and a 400-square token frame.
+ * Deliberately a SOFT sanity ceiling rather than a rules limit — it exists to stop a typo, not to
+ * tell a GM what they may build.
+ */
+export const HULL_MAX_SQUARES = 20;
+
+/**
+ * A count of grid squares, forced into the range a footprint may occupy: at least 1, at most
+ * `HULL_MAX_SQUARES`, rounded to a whole square. Unreadable input answers `fallback`.
+ *
+ * ⭐ THIS IS THE READ-PATH NEUTRALIZATION, and it is why nothing has to be written to repair a
+ * poisoned vehicle. An actor that already stores 10000 keeps storing it; every reader of that
+ * number — the seats, the engine region, the paint grid, the frame square, the outline — comes
+ * through here or through one of the helpers below that call it, so what they all RETURN is
+ * bounded. The vehicle's sheet opens, its token draws, and the GM can then type a real number over
+ * the stored one (which the sheet's submit guard and the data model both now hold to this range).
+ */
+export function clampHullDim(v, fallback = 1) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(HULL_MAX_SQUARES, Math.max(1, n));
+}
+
+/**
+ * A stored hull dimension if it is a usable count of squares, else null.
+ *
+ * ⚠ An out-of-range stored number is CLAMPED here, not rejected: 10000 is a recorded hull that is
+ * too big, not an absent one. Answering null for it would send `hullDimsOf` to the token frame —
+ * which on a poisoned vehicle is the same absurd figure, squared — and would make `hasRecordedHull`
+ * say the vehicle had never stated a shape, so the hull migration would "record" one over it.
+ */
 function _hullDim(v) {
   const n = Math.round(Number(v));
-  return Number.isFinite(n) && n >= 1 ? n : null;
+  return Number.isFinite(n) && n >= 1 ? Math.min(HULL_MAX_SQUARES, n) : null;
+}
+
+/**
+ * A TOKEN FRAME dimension if it is a credible statement of a vehicle's shape, else null.
+ *
+ * ⛔ THE FALLBACK NEEDS ITS OWN TEST, AND THE FIELD INCIDENT IS WHY (2026-08-25, measured on the
+ * reporter's own actor). The crash was NOT a vehicle carrying an absurd recorded hull. The sequence
+ * was: the GM typed 10000 into the Footprint box, the hull-change watcher squared the token frame to
+ * 10000 × 10000 — and THEN a stray "E" keystroke in the same box submitted as empty and nulled
+ * `hullH`. With the hull no longer recorded, `hullDimsOf` fell back to the frame, which by that point
+ * was the poison; the sheet asked for 10000 × 10000 = one hundred million grid cells and the tab died.
+ * So the number that has to be disbelieved is the one on the TOKEN, and a clamp alone would have
+ * answered "20 × 20" — bounded, but a shape the GM never chose and nine times the car's real size.
+ *
+ * A frame beyond the ceiling is therefore not clamped but REJECTED: it is damage, not a measurement,
+ * and rejecting it drops through to `DEFAULT_HULL`, which puts the poisoned vehicle back to the
+ * ordinary 2 × 4 car it always was. A frame WITHIN the range is trusted exactly as before, so the
+ * pre-migration vehicles this fallback exists for are untouched.
+ */
+function _frameDim(v) {
+  const n = _hullDim(v);
+  return (n !== null && Math.round(Number(v)) <= HULL_MAX_SQUARES) ? n : null;
 }
 
 /**
@@ -95,9 +164,12 @@ export function hullDimsOf(system, fallbackW, fallbackH) {
   const w = _hullDim(system?.layout?.hullW);
   const h = _hullDim(system?.layout?.hullH);
   if (w && h) return { w, h };
+  // `_frameDim`, not `_hullDim`: a frame bigger than the ceiling is discarded rather than clamped, so
+  // a vehicle whose token was blown up by the field incident falls back to the default car instead of
+  // to a 20 × 20 slab. See `_frameDim` for the measured sequence.
   return {
-    w: _hullDim(fallbackW) ?? DEFAULT_HULL.w,
-    h: _hullDim(fallbackH) ?? DEFAULT_HULL.h,
+    w: _frameDim(fallbackW) ?? DEFAULT_HULL.w,
+    h: _frameDim(fallbackH) ?? DEFAULT_HULL.h,
   };
 }
 
@@ -108,7 +180,11 @@ export function hullDimsOf(system, fallbackW, fallbackH) {
  * put a 6×6 box round a 2×4 car for the sake of two angles.)
  */
 export function frameSquareFor(hull) {
-  return Math.max(1, Math.round(Math.max(Number(hull?.w) || 1, Number(hull?.h) || 1)));
+  // Clamped, and not only for tidiness: this is the number that becomes a token's width AND height,
+  // so an unbounded long axis is squared into the canvas cost — 10000 deep asked for 100,000,000
+  // grid squares of token. The hull it is given is normally already bounded; a caller handing over a
+  // raw pair (a legacy token frame, say) is bounded here.
+  return clampHullDim(Math.max(Number(hull?.w) || 1, Number(hull?.h) || 1));
 }
 
 /**
@@ -121,8 +197,8 @@ export function frameSquareFor(hull) {
  */
 export function hullRectIn(frameRect, hull, grid) {
   const g = Math.max(1, Number(grid) || 100);
-  const hw = Math.max(1, Math.round(Number(hull?.w) || 1)) * g;
-  const hh = Math.max(1, Math.round(Number(hull?.h) || 1)) * g;
+  const hw = clampHullDim(hull?.w) * g;
+  const hh = clampHullDim(hull?.h) * g;
   const c = rectCenter(frameRect);
   return { x: c.x - hw / 2, y: c.y - hh / 2, w: hw, h: hh };
 }
@@ -141,8 +217,8 @@ export function hullRectIn(frameRect, hull, grid) {
  * hull did, because the art's width was the limiting dimension both times.
  */
 export function hullArtScale(hull) {
-  const w = Math.max(1, Math.round(Number(hull?.w) || 1));
-  const h = Math.max(1, Math.round(Number(hull?.h) || 1));
+  const w = clampHullDim(hull?.w);
+  const h = clampHullDim(hull?.h);
   return Math.min(w, h) / Math.max(w, h);
 }
 
@@ -203,8 +279,10 @@ export function resolveFront(front) {
  * @returns {{front:string, ranks:number, files:number, w:number, h:number}}
  */
 export function layoutFrame(w, h, front) {
-  const gw = Math.max(1, Math.round(Number(w) || 1));
-  const gh = Math.max(1, Math.round(Number(h) || 1));
+  // Every rank/file walk in this file goes through here, so bounding the two dimensions once bounds
+  // the cell enumeration everywhere: no caller can ask for a rank list a browser cannot hold.
+  const gw = clampHullDim(w);
+  const gh = clampHullDim(h);
   const f = resolveFront(front);
   const sideways = (f === "e" || f === "w");
   return { front: f, ranks: sideways ? gw : gh, files: sideways ? gh : gw, w: gw, h: gh };
@@ -335,8 +413,8 @@ const CELL_CYCLE = [CELL_BODY, CELL_SEAT, CELL_ENGINE];
  * on the sheet the moment it is opened.
  */
 export function parseCells(cells, w, h) {
-  const gw = Math.max(1, Math.round(Number(w) || 1));
-  const gh = Math.max(1, Math.round(Number(h) || 1));
+  const gw = clampHullDim(w);
+  const gh = clampHullDim(h);
   const s = String(cells ?? "").trim().toUpperCase();
   if (!s || s.length !== gw * gh) return null;
   const arr = [...s];
@@ -360,8 +438,8 @@ export function cycleCell(ch) {
  * out, so the grid opens showing what the vehicle is already doing instead of a blank slate.
  */
 export function derivedCells(w, h, front) {
-  const gw = Math.max(1, Math.round(Number(w) || 1));
-  const gh = Math.max(1, Math.round(Number(h) || 1));
+  const gw = clampHullDim(w);
+  const gh = clampHullDim(h);
   const arr = new Array(gw * gh).fill(CELL_BODY);
   for (const i of derivedEngineCells(gw, gh, front)) arr[i] = CELL_ENGINE;
   for (const i of derivedSeatOrder(gw, gh, front)) arr[i] = CELL_SEAT;
@@ -402,8 +480,11 @@ export function paintedSeatOrder(painted, w, h, front) {
  * @returns {{front:string, painted:boolean, cells:string[], engine:number[], seats:number[]}}
  */
 export function layoutFor(w, h, front, cells) {
-  const gw = Math.max(1, Math.round(Number(w) || 1));
-  const gh = Math.max(1, Math.round(Number(h) || 1));
+  // The one answer every consumer reads is also the one place a runaway footprint would reach all of
+  // them from, so the bound is applied here as well as inside layoutFrame — `cells` is sized from
+  // these two figures directly.
+  const gw = clampHullDim(w);
+  const gh = clampHullDim(h);
   const f = resolveFront(front);
   const painted = parseCells(cells, gw, gh);
   if (!painted) {

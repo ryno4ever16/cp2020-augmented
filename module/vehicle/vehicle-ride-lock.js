@@ -63,7 +63,7 @@
  */
 
 import { hullRectIn, pointInRotatedRect } from "./vehicle-layout.js";
-import { isVehicleTokenDoc, riderSeatAt, seatOrderAt, storedPoseOf, vehicleTokenFor } from "./vehicle-canvas.js";
+import { isVehicleTokenDoc, riderSeatAt, seatOrderAt, storedPoseOf, vehicleTokenFor, riderVehicleTokenIdOn, riderIsAboardToken } from "./vehicle-canvas.js";
 import { localizeParam } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -182,7 +182,11 @@ export function riderMoveContext(tokenDoc, changes, options) {
   if (!ctx.aboard || !isPositionChange) return ctx;
 
   const scene = tokenDoc.parent;
-  const handle = scene ? vehicleTokenFor(scene, aboardId) : null;
+  // The hull a rider must stay on is the hull of the handle they are IN. Resolved by the rider's own
+  // record so two copies of one vehicle cannot each claim the drop (field report 2026-08-25).
+  const handleId = scene ? riderVehicleTokenIdOn(scene, tokenDoc) : null;
+  const handle = (handleId ? scene.tokens.get(handleId) : null)
+    ?? (scene ? vehicleTokenFor(scene, aboardId) : null);
   if (!handle) return ctx;
   ctx.hullKnown = true;
   ctx.vehicleName = handle.name ?? handle.actor?.name ?? "";
@@ -268,14 +272,18 @@ let _prunePending = false;
 function _dropRidersOfGrabbedVehicles() {
   const controlled = canvas?.tokens?.controlled ?? [];
   if (controlled.length < 2) return;
-  const grabbedVehicles = new Set();
+  // The grabbed HANDLES, not the grabbed vehicle actors: a rider is released because the truck they
+  // are sitting in came along, and the identical truck parked across the street coming along is not
+  // the same fact.
+  const grabbed = [];
   for (const p of controlled) {
-    if (isVehicleTokenDoc(p.document)) grabbedVehicles.add(p.document.actorId);
+    if (isVehicleTokenDoc(p.document)) grabbed.push(p.document);
   }
-  if (!grabbedVehicles.size) return;
+  if (!grabbed.length) return;
   for (const p of [...controlled]) {
     const aboard = p.document?.flags?.[SCOPE]?.boardedVehicle ?? null;
-    if (shouldDropFromGrab({ aboard: !!aboard, vehicleGrabbed: grabbedVehicles.has(aboard) })) {
+    const vehicleGrabbed = !!aboard && grabbed.some(h => riderIsAboardToken(p.document, h));
+    if (shouldDropFromGrab({ aboard: !!aboard, vehicleGrabbed })) {
       p.release();
     }
   }

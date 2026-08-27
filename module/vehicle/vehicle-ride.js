@@ -25,7 +25,7 @@
  * nothing has moved yet, so the crew stay where they are and follow when the drop animates.
  */
 
-import { drawnPoseOf, storedPoseOf, riderSeatAt, seatOrderAt, ridersOf } from "./vehicle-canvas.js";
+import { drawnPoseOf, storedPoseOf, riderSeatAt, seatOrderAt, ridersOf, riderVehicleTokenIdOn } from "./vehicle-canvas.js";
 import { registerVehicleRideLock } from "./vehicle-ride-lock.js";
 
 const SCOPE = "cp2020-augmented";
@@ -112,7 +112,9 @@ function _syncRiders(vehiclePlaceable) {
 
   const grid = scene.grid?.size ?? canvas?.grid?.size ?? 100;
   const order = seatOrderAt(actor, pose);
-  for (const { doc: riderDoc, seatIndex } of ridersOf(scene, doc.actorId)) {
+  // ⛔ THIS HANDLE'S riders only. Actor-scoped, two tokens of one vehicle each drew the OTHER'S
+  // crew into their own seats every frame, and the last one to move won.
+  for (const { doc: riderDoc, seatIndex } of ridersOf(scene, doc.actorId, doc)) {
     const rider = canvas?.tokens?.get(riderDoc.id);
     if (!_isLive(rider) || _isBeingHandled(rider)) continue;
     const seat = riderSeatAt(pose, grid, seatIndex, { w: riderDoc.width, h: riderDoc.height }, order);
@@ -120,14 +122,20 @@ function _syncRiders(vehiclePlaceable) {
   }
 }
 
-/** The drawn vehicle a rider is aboard, or null when it is on another scene or not drawn yet. */
+/**
+ * The drawn vehicle a rider is aboard, or null when it is on another scene or not drawn yet.
+ *
+ * ⛔ ONE token, chosen by the rider's own record — not "the first placeable whose actor matches",
+ * which is what this used to be. With two copies of a vehicle on the canvas that old answer handed
+ * every rider the same copy, so half the crew re-stuck themselves to a truck they were not in.
+ */
 function _vehicleOf(riderDoc) {
-  const id = riderDoc?.flags?.[SCOPE]?.boardedVehicle;
-  if (!id) return null;
-  for (const p of canvas?.tokens?.placeables ?? []) {
-    if (p.document?.actorId === id && _isVehicle(p.document)) return p;
-  }
-  return null;
+  const actorId = riderDoc?.flags?.[SCOPE]?.boardedVehicle;
+  if (!actorId) return null;
+  const tokenId = riderVehicleTokenIdOn(riderDoc?.parent, riderDoc);
+  if (!tokenId) return null;
+  const p = canvas?.tokens?.get?.(tokenId) ?? null;
+  return (p && _isVehicle(p.document) && p.document?.actorId === actorId) ? p : null;
 }
 
 /**

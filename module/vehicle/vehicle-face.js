@@ -13,18 +13,34 @@
  *     control that clears isMMVehicle at all, so selecting it was ONE-WAY: nothing on the rendered
  *     sheet could return the vehicle to the civilian layout.
  *  2. Nothing said what a catalog (compendium-deployed) vehicle should look like, so a deployed
- *     tank opened on the civilian sheet. A catalog vehicle now DERIVES its face from its own data
- *     and offers no picker; the picker belongs to custom vehicles, which is where the choice is
- *     actually a choice.
+ *     tank opened on the civilian sheet. A catalog vehicle DERIVES its face from its own data.
  *
- * ⛔ No schema change and no migration: `designatedFace` READS the stored pair and `facePatch`
- * WRITES it; a stored designation is never re-derived or rewritten by this module.
+ * ⭐ WHAT DERIVATION IS FOR (user ruling 2026-08-25: "put the control on all vehicle sheets").
+ * Derivation used to also decide WHO GETS A PICKER — a catalog vehicle got none, on the theory that
+ * its face was not a choice. It is: a GM who deploys an APC and wants the civilian dashboard, or a
+ * car they have up-armoured into a combat vehicle, had no control on the sheet at all. So the
+ * picker is now offered on EVERY vehicle actor sheet, and provenance/class derivation is demoted to
+ * what it should always have been — the DEFAULT SELECTION when the vehicle designates nothing.
+ * Precedence is unchanged and unchanged in both places: STORED first, derived only as a default.
+ *
+ * ⭐ THE SAME CONTROL ON THE VEHICLE ITEM. A vehicle ITEM (the pink slip) now carries the same
+ * stored pair, and the same one table writes it (`facePatch` names `system.isACPA`/
+ * `system.isMMVehicle`, which is where both documents keep it). The item's designation is what a
+ * deploy seeds the new actor with, so "this pink slip opens on the Maximum Metal sheet" is stated
+ * once, on the thing that gets deployed, instead of re-picked on every actor it produces.
+ *
+ * ⛔ No migration: `designatedFace` READS the stored pair and `facePatch` WRITES it; a stored
+ * designation is never re-derived or rewritten by this module. The item-side pair is two additive
+ * booleans that default false, i.e. "nothing designated" — exactly the state every existing vehicle
+ * item is already in.
  */
 
 import { parseCompendiumSource } from "../data-corrections.js";
 import { normalizeVehicleType } from "./vehicle-deploy-request.js";
 
 const SCOPE = "cp2020-augmented";
+/** Flag key: "a human picked this vehicle's face", which is what the stored pair cannot say alone. */
+export const FACE_CHOSEN = "faceChosen";
 
 export const FACE_STANDARD = "standard";
 export const FACE_MM       = "mm";
@@ -43,12 +59,21 @@ export const FACE_DESIGNATIONS = {
 
 /**
  * The ONE atomic update a face choice produces. Both booleans travel in a single `Actor#update`
- * call so a vehicle is never momentarily observed as both a suit and an MM combat vehicle (or as
- * neither) by a hook, a re-render, or another client.
+ * (or `Item#update`) call so a vehicle is never momentarily observed as both a suit and an MM
+ * combat vehicle (or as neither) by a hook, a re-render, or another client.
+ *
+ * The same patch serves the ACTOR and the ITEM: both keep the pair at `system.isACPA` /
+ * `system.isMMVehicle`, so there is one table and one writer for both documents.
  */
 export function facePatch(face) {
   const d = FACE_DESIGNATIONS[face] ?? FACE_DESIGNATIONS[FACE_STANDARD];
-  return { "system.isACPA": d.isACPA, "system.isMMVehicle": d.isMMVehicle };
+  return {
+    "system.isACPA": d.isACPA,
+    "system.isMMVehicle": d.isMMVehicle,
+    // ⭐ THE THIRD STATE — see `explicitFace`. Travels in the same single update as the pair, so a
+    // choice and the fact that it was a choice can never be observed apart.
+    [`flags.${SCOPE}.${FACE_CHOSEN}`]: true,
+  };
 }
 
 /**
@@ -59,6 +84,27 @@ export function designatedFace(system) {
   if (system?.isACPA === true) return FACE_ACPA;
   if (system?.isMMVehicle === true) return FACE_MM;
   return "";
+}
+
+/**
+ * ⛔ THE PAIR ALONE CANNOT SAY "STANDARD". `{isACPA:false, isMMVehicle:false}` is both "nobody has
+ * designated anything" and "somebody designated the standard sheet" — the same two bytes. That was
+ * harmless while derivation only applied to catalog vehicles, because for everything else "nothing
+ * designated" already MEANT standard. Once derivation became the default for every vehicle
+ * (2026-08-25 ruling) the ambiguity turned into a one-way door: on a vehicle whose class derives the
+ * Maximum Metal face, picking Standard wrote the two bytes it already had, the derivation won again
+ * on the next read, and the sheet snapped back. Rig-caught by the keeper's own reversibility leg.
+ *
+ * The third state is one additive module flag meaning "a human answered this question". Absent — on
+ * every document in every existing world — it reads exactly as before, so there is nothing to
+ * migrate; it is only ever written by `facePatch`, i.e. by somebody using the control.
+ *
+ * @returns {string} the face a human designated, or "" when nobody has.
+ */
+export function explicitFace(doc) {
+  const stored = designatedFace(doc?.system);
+  if (stored) return stored;
+  return doc?.flags?.[SCOPE]?.[FACE_CHOSEN] === true ? FACE_STANDARD : "";
 }
 
 /**
@@ -120,22 +166,48 @@ export function derivedFace(system) {
  *   stored     the stored designation, "" when none
  *   derived    the data-derived face for a catalog vehicle, "" for a custom one
  *   catalog    came from a compendium item
- *   showPicker the face picker is offered (custom vehicles only)
+ *   showPicker the face picker is offered — TRUE ON EVERY VEHICLE ACTOR (see the header ruling).
+ *              Kept as a field rather than dropped so the sheet asks one question and the answer
+ *              stays in this file if it ever needs a condition again.
  *   mmGated    the MM option is unavailable in this world
  */
 export function resolveVehicleFace(actor, { mmOn = false } = {}) {
   const system = actor?.system ?? {};
   const catalog = isCatalogVehicle(actor);
   const stored = designatedFace(system);
-  const derived = catalog ? derivedFace(system) : "";
-  // Stored FIRST, always: a designation someone put on this actor is never re-derived away.
-  const chosen = stored || (catalog ? derived : FACE_STANDARD);
+  // Derivation is now the DEFAULT SELECTION for any vehicle that designates nothing, catalog or
+  // not. A custom vehicle's class is just as good an answer as a deployed one's — and the vehicle
+  // the old rule failed hardest on (a hand-built tank) is precisely a custom one.
+  const derived = derivedFace(system);
+  // A HUMAN'S ANSWER FIRST, always — including an answer of "Standard", which the pair alone cannot
+  // express (see explicitFace). A designation someone put on this actor is never re-derived away.
+  const explicit = explicitFace(actor);
+  const chosen = explicit || derived;
   // The world gate falls the MM face back to standard for the render only — the designation stays
   // stored, so turning Maximum Metal back on restores the combat sheet with nothing re-entered.
   // The ACPA face is deliberately NOT gated: a suit rendered as a suit in a Core world before this
   // control existed, and still does.
   const face = (chosen === FACE_MM && !mmOn) ? FACE_STANDARD : chosen;
-  return { face, chosen, stored, derived, catalog, showPicker: !catalog, mmGated: !mmOn };
+  return { face, chosen, stored, explicit, derived, catalog, showPicker: true, mmGated: !mmOn };
+}
+
+/**
+ * The same answer for a vehicle ITEM (the pink slip), which has no provenance question to ask and
+ * no face to render — only a designation to state and a default to state it against.
+ *
+ * The item keeps the book's class as free text in `system.vehicleType` (the actor splits that into
+ * a normalized handling enum plus the verbatim string), so the derivation is the ACTOR's own,
+ * handed the item's string in the slot the normalizer reads. One table, one derivation, two
+ * document types.
+ *
+ * @returns {{chosen:string, stored:string, explicit:string, derived:string, mmGated:boolean}}
+ */
+export function resolveVehicleItemFace(item, { mmOn = false } = {}) {
+  const system = item?.system ?? {};
+  const stored = designatedFace(system);
+  const explicit = explicitFace(item);
+  const derived = derivedFace({ vehicleTypeText: system?.vehicleType });
+  return { chosen: explicit || derived, stored, explicit, derived, mmGated: !mmOn };
 }
 
 /**

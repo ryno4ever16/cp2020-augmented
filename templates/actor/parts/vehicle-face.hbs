@@ -1,17 +1,23 @@
-{{!-- THE SHEET-FACE STRIP — the first thing on every vehicle/ACPA face, and the same control on
-     all three, so any face can reach any other (returning to the standard sheet is simply picking
+{{!-- THE SHEET-FACE STRIP — the first thing on every vehicle face, and the same control on all of
+     them, so any face can reach any other (returning to the standard sheet is simply picking
      Standard). Deliberately its own labelled strip above the header rather than a checkbox among
      the identity fields: it selects the whole layout, not one of the vehicle's stats.
 
-     Custom vehicles only. A vehicle deployed from a compendium item derives its face from its own
-     data (see vehicle-face.js) and renders no picker, so context.faceControl.show is false there.
+     ⭐ SHARED BY TWO DOCUMENT TYPES. The vehicle ACTOR's three faces include it, and so does the
+     vehicle ITEM sheet, where the same designation says which face a deploy from that pink slip
+     opens on. Everything the strip needs arrives in `faceControl` — including its own element id —
+     so the partial never reaches for `actor` or `item` and reads the same on both.
+
+     Offered on EVERY vehicle sheet (user ruling 2026-08-25). It used to be withheld from
+     compendium-deployed vehicles; class/provenance derivation now only chooses the DEFAULT
+     selection when nothing is designated (module/vehicle/vehicle-face.js).
 
      The select carries NO `name`: it is not one stored field. Picking an option writes the pair
      {isACPA, isMMVehicle} atomically through the sheet's own handler. --}}
 {{#if faceControl.show}}
 <div class="cp-veh-face-strip" title="{{CPLocal 'Vehicle.FaceTip'}}">
-    <label class="cp-veh-face-label" for="cp-veh-face-{{actor.id}}">{{CPLocal "Vehicle.FaceLabel"}}</label>
-    <select class="cp-veh-face-select" id="cp-veh-face-{{actor.id}}"
+    <label class="cp-veh-face-label" for="cp-veh-face-{{faceControl.domId}}">{{CPLocal "Vehicle.FaceLabel"}}</label>
+    <select class="cp-veh-face-select" id="cp-veh-face-{{faceControl.domId}}"
             data-face-current="{{faceControl.value}}" {{#if faceControl.locked}}disabled{{/if}}>
         {{#each faceControl.options}}
         <option value="{{value}}" {{#if selected}}selected{{/if}} {{#if disabled}}disabled{{/if}}>{{label}}</option>
@@ -21,6 +27,15 @@
     {{!-- The breadcrumb: the MM option stays VISIBLE and disabled, and this line names the world
           setting the path runs through, so the gate can be learned from the sheet. --}}
     <span class="cp-veh-face-hint">{{CPLocal "Vehicle.FaceMMGateHint"}}</span>
+    {{/if}}
+    {{#if faceControl.derivedOnly}}
+    {{!-- Nothing designated: the option shown was read off the vehicle's own class, not recorded.
+          Its own line and its own class so the world-gate breadcrumb above can be asserted
+          separately from this one. The face it is showing is NAMED in the line (`chosenLabel`, the
+          same localized option label the select carries) — the earlier wording said only "the sheet
+          the vehicle's own class calls for", which the user read as a statement about the class
+          rather than about which sheet was on screen. --}}
+    <span class="cp-veh-face-derived">{{CPLocal "Vehicle.FaceDerivedHint" sheet=faceControl.chosenLabel}}</span>
     {{/if}}
 </div>
 {{/if}}

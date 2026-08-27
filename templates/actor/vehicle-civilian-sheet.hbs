@@ -61,10 +61,17 @@
                 </select>
             </span>
         </div>
-        <div class="field">
-            <label for="system.crewSlots">{{CPLocal "Crew"}}</label>
-            <span class="flexrow flex-pad">
+        {{!-- ⭐ CREW AND PASSENGERS AS ONE ROW (user ruling 2026-08-25). Passengers used to live in a
+              field-list four blocks further down, so a sheet reading "Crew 2" looked like the whole
+              capacity and the handle's "1 of 6" badge read as a bug. They are the two halves of one
+              number, so they are stated as a pair — the same value/value idiom the SDP and Speed
+              rows already use on this sheet. No data change: two fields, same two names. --}}
+        <div class="field" title="{{CPLocal 'CrewPassengersTip'}}">
+            <label for="system.crewSlots">{{CPLocal "CrewPassengers"}}</label>
+            <span class="flexrow flex-pad cp-paired-values cp-pair-3d">
                 <input type="number" name="system.crewSlots" value="{{system.crewSlots}}">
+                <span class="nogrow cp-pair-sep">/</span>
+                <input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}">
             </span>
         </div>
         <div class="field">
@@ -75,10 +82,10 @@
         </div>
         <div class="field" title="{{CPLocal 'Vehicle.FootprintTip'}}">
             <label>{{CPLocal "Vehicle.FootprintLabel"}}</label>
-            <span class="flexrow flex-pad">
-                <input type="number" name="system.layout.hullW" value="{{layout.hullW}}" min="1" step="1">
-                <span class="nogrow">×</span>
-                <input type="number" name="system.layout.hullH" value="{{layout.hullH}}" min="1" step="1">
+            <span class="flexrow flex-pad cp-paired-values cp-pair-2d">
+                <input type="number" name="system.layout.hullW" value="{{layout.hullW}}" min="1" max="{{layout.hullMax}}" step="1">
+                <span class="nogrow cp-pair-sep">×</span>
+                <input type="number" name="system.layout.hullH" value="{{layout.hullH}}" min="1" max="{{layout.hullMax}}" step="1">
             </span>
         </div>
         {{> "modules/cp2020-augmented/templates/actor/parts/vehicle-layout.hbs"}}
@@ -103,9 +110,9 @@
             </div>
             <div class="field">
                 <label class="larger" for="system.sdp.value" title="{{CPLocal "SDPFull"}}">{{CPLocal "SDP"}}</label>
-                <span class="flexrow flex-pad">
+                <span class="flexrow flex-pad cp-paired-values cp-pair-5d">
                     <input type="number" name="system.sdp.value" value="{{value}}">
-                    <span class="nogrow">/</span>
+                    <span class="nogrow cp-pair-sep">/</span>
                     <input type="number" name="system.sdp.max" value="{{max}}">
                 </span>
             </div>
@@ -133,9 +140,9 @@
         </div>
         <div class="field">
             <label class="larger" for="system.speedValue">{{CPLocal "Speed"}}</label>
-            <span class="flexrow flex-pad">
+            <span class="flexrow flex-pad cp-paired-values">
                 <input type="number" name="system.speedValue" value="{{system.speedValue}}">
-                <span class="nogrow">/</span>
+                <span class="nogrow cp-pair-sep">/</span>
                 <input type="number" name="system.topSpeed" value="{{system.topSpeed}}">
                 {{#if editable}}
                 <select name="system.speedUnit" class="nogrow cp-unit-select">
@@ -149,23 +156,26 @@
             </span>
         </div>
         <div class="field">
-            <label for="system.acc">{{CPLocal "Accel"}}</label>
+            <label for="system.acc" title="{{CPLocal "VehicleAccelFieldTip"}}">{{CPLocal "Accel"}}</label>
             <span class="flexrow flex-pad">
                 <input type="number" name="system.acc" value="{{system.acc}}">
                 <span class="nogrow">{{system.speedUnit}}</span>
             </span>
         </div>
         <div class="field">
-            <label for="system.dec">{{CPLocal "Decel"}}</label>
+            <label for="system.dec" title="{{CPLocal "VehicleDecelFieldTip"}}">{{CPLocal "Decel"}}</label>
             <span class="flexrow flex-pad">
                 <input type="number" name="system.dec" value="{{system.dec}}">
                 <span class="nogrow">{{system.speedUnit}}</span>
             </span>
         </div>
+        {{!-- Same tooltips as the vehicle ITEM sheet's pair, off the same `speedStep` shape: one
+              press = one combat turn's step, stated in this vehicle's own figures, with the brake
+              naming ACC when no DEC is recorded. No step or granularity change. --}}
         {{#if editable}}
         <div class="flexrow">
-            <div class="field decel" title="{{CPLocal "VehicleDecelBtnTip"}}"><label class="fillwidth" style="text-align: center; font-size: larger">-</label></div>
-            <div class="field accel" title="{{CPLocal "VehicleAccelBtnTip"}}"><label class="fillwidth" style="text-align: center; font-size: larger">+</label></div>
+            <div class="field decel" title="{{#if speedStep.decFallback}}{{CPLocal "VehicleDecelBtnTipFallback" step=speedStep.dec unit=system.speedUnit}}{{else}}{{CPLocal "VehicleDecelBtnTip" step=speedStep.dec unit=system.speedUnit}}{{/if}}"><label class="fillwidth" style="text-align: center; font-size: larger">-</label></div>
+            <div class="field accel" title="{{CPLocal "VehicleAccelBtnTip" step=speedStep.acc unit=system.speedUnit}}"><label class="fillwidth" style="text-align: center; font-size: larger">+</label></div>
         </div>
         {{/if}}
         <div class="field">
@@ -177,14 +187,9 @@
         </div>
     </div>
 
-    {{!-- Passengers / maneuverability / range / mass / cargo — item-sheet mirror. --}}
+    {{!-- Maneuverability / range / mass / cargo — item-sheet mirror. Passengers moved UP beside Crew
+          (see the identity block); it is not a miscellaneous stat, it is half of the capacity. --}}
     <div class="field-list">
-        <div class="field">
-            <label for="system.passengerSlots">{{CPLocal "Passengers"}}</label>
-            <span class="flexrow flex-pad">
-                <input type="number" name="system.passengerSlots" value="{{system.passengerSlots}}">
-            </span>
-        </div>
         <div class="field">
             <label for="system.controlMod" title="{{CPLocal 'ManeuverabilityHint'}}">{{CPLocal "ManeuverabilityFull"}}</label>
             <span class="flexrow flex-pad">
@@ -255,9 +260,9 @@
         {{/if}}
         <div class="field">
             <label class="larger" for="system.fuel.value">{{CPLocal "Fuel"}}</label>
-            <span class="flexrow flex-pad">
+            <span class="flexrow flex-pad cp-paired-values cp-pair-5d">
                 <input type="number" name="system.fuel.value" value="{{value}}">
-                <span class="nogrow">/</span>
+                <span class="nogrow cp-pair-sep">/</span>
                 <input type="number" name="system.fuel.max" value="{{max}}">
                 {{#if @root.editable}}
                 <select name="system.fuel.unit" class="nogrow cp-unit-select">

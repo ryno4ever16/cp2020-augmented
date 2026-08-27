@@ -17,16 +17,28 @@
 
 import { localizeParam } from "../utils.js";
 import { hullDimsOf } from "./vehicle-layout.js";
+import { riderIsAboardToken, riderVehicleTokenIdOn } from "./vehicle-canvas.js";
 
 const SCOPE = "cp2020-augmented";
 const FADE_ALPHA = 0.25;
 
 /* --------------------------------------------------------------- queries */
 
-/** Token documents currently riding `vehicleActorId` on this scene. */
-export function occupantTokens(scene, vehicleActorId) {
+/**
+ * Token documents currently riding a vehicle on this scene.
+ *
+ * @param {Scene} scene
+ * @param {string} vehicleActorId
+ * @param {TokenDocument|null} [vehicleTokenDoc]  narrow to ONE handle. The BADGE passes it: a count
+ *   floating over a truck has to be the people in THAT truck, not the total across every copy of it
+ *   on the canvas. The sheet's list and the cross-scene total deliberately do not — those questions
+ *   are about the machine.
+ */
+export function occupantTokens(scene, vehicleActorId, vehicleTokenDoc = null) {
   if (!scene || !vehicleActorId) return [];
-  return (scene.tokens ?? []).filter(t => t.flags?.[SCOPE]?.boardedVehicle === vehicleActorId);
+  return (scene.tokens ?? []).filter(t =>
+    t.flags?.[SCOPE]?.boardedVehicle === vehicleActorId
+    && (!vehicleTokenDoc || riderIsAboardToken(t, vehicleTokenDoc)));
 }
 
 /** Seats the vehicle claims to have: crew + passengers (0 = unstated, not "no room"). */
@@ -38,9 +50,9 @@ export function vehicleCapacity(actor) {
  * Occupancy of a vehicle actor across the scene it is on (defaults to the active/viewed scene).
  * @returns {{count:number, capacity:number, over:boolean, occupants:object[]}}
  */
-export function occupancyOf(vehicleActor, scene = null) {
+export function occupancyOf(vehicleActor, scene = null, vehicleTokenDoc = null) {
   const sc = scene ?? canvas?.scene ?? game?.scenes?.active ?? null;
-  const occupants = occupantTokens(sc, vehicleActor?.id);
+  const occupants = occupantTokens(sc, vehicleActor?.id, vehicleTokenDoc);
   const capacity = vehicleCapacity(vehicleActor);
   return { count: occupants.length, capacity, over: capacity > 0 && occupants.length > capacity, occupants };
 }
@@ -73,31 +85,61 @@ export function vehicleOfOccupant(tokenDoc) {
 }
 
 /**
- * The vehicle an ACTOR is aboard, found from any of its tokens on any scene — the character sheet
- * has no token of its own to ask, and the sidebar must answer the same question a token would.
- * @returns {{vehicle:Actor, tokenDoc:object, scene:object}|null}
+ * EVERY place this actor is currently sitting in a vehicle — one entry per ABOARD TOKEN.
+ *
+ * ⭐ TOKEN-SCOPED, and it has to be (field report 2026-08-25). An actor with two tokens can be
+ * aboard on one scene and standing on the pavement on another; "is this actor aboard" has no
+ * single answer, and answering it actor-wide is what let a character sheet opened on the second
+ * scene offer a Step Out control with nothing on screen to step out of. Each entry names the
+ * token, its scene and the HANDLE it is in, so a caller can say WHERE it would act.
+ *
+ * @returns {{vehicle:Actor, tokenDoc:object, scene:object, handle:object|null}[]}
  */
-export function aboardVehicleFor(actor) {
-  if (!actor?.id) return null;
+export function aboardPlacesFor(actor) {
+  const out = [];
+  if (!actor?.id) return out;
   for (const scene of game.scenes ?? []) {
     for (const t of scene.tokens ?? []) {
       if (t.actorId !== actor.id) continue;
       const vehicleId = t.flags?.[SCOPE]?.boardedVehicle;
       if (!vehicleId) continue;
       const vehicle = game.actors?.get(vehicleId);
-      if (vehicle) return { vehicle, tokenDoc: t, scene };
+      if (!vehicle) continue;
+      const handleId = riderVehicleTokenIdOn(scene, t);
+      out.push({ vehicle, tokenDoc: t, scene, handle: handleId ? (scene.tokens.get(handleId) ?? null) : null });
     }
   }
-  return null;
+  return out;
+}
+
+/**
+ * The vehicle an ACTOR is aboard, found from any of its tokens on any scene — the character sheet
+ * has no token of its own to ask, and the sidebar must answer the same question a token would.
+ *
+ * Deliberately still cross-scene: the sidebar sheet is the one surface a passenger can always
+ * reach, and a rider parked on a scene nobody is looking at is still a rider. What CHANGED is that
+ * the answer names one specific aboard token — see `aboardPlacesFor` — so the caller can say which
+ * vehicle on which scene it is talking about instead of implying "here".
+ *
+ * @returns {{vehicle:Actor, tokenDoc:object, scene:object, handle:object|null}|null}
+ */
+export function aboardVehicleFor(actor) {
+  return aboardPlacesFor(actor)[0] ?? null;
 }
 
 /* --------------------------------------------------------------- client-local occupant fade */
 
-/** Vehicle actor ids whose riders this client is currently dimming. Never persisted. */
+/**
+ * Vehicle HANDLE TOKEN ids whose riders this client is currently dimming. Never persisted.
+ *
+ * Token ids, not actor ids: the control lives on one truck's HUD, so fading it must dim the people
+ * in THAT truck. Keyed by actor it also dimmed the crew of every other copy of the same vehicle on
+ * the canvas — a control pressed on one token silently changing another.
+ */
 const _faded = new Set();
 
-export function isVehicleFaded(vehicleActorId) {
-  return _faded.has(vehicleActorId);
+export function isVehicleFaded(vehicleTokenId) {
+  return _faded.has(vehicleTokenId);
 }
 
 /**
@@ -109,34 +151,40 @@ function _isLive(placeable) {
   return !!placeable && placeable.destroyed !== true && !!placeable.transform;
 }
 
-/** Apply (or clear) the dim on one placeable, from its own boarding flag. */
+/** Apply (or clear) the dim on one placeable, from the HANDLE its own boarding flag resolves to. */
 function _applyFade(placeable) {
   if (!_isLive(placeable)) return;
-  const vehicleId = placeable?.document?.flags?.[SCOPE]?.boardedVehicle;
-  if (!vehicleId) return;
-  const alpha = _faded.has(vehicleId) ? FADE_ALPHA : 1;
+  const doc = placeable?.document;
+  if (!doc?.flags?.[SCOPE]?.boardedVehicle) return;
+  const handleId = riderVehicleTokenIdOn(doc.parent, doc);
+  if (!handleId) return;
+  const alpha = _faded.has(handleId) ? FADE_ALPHA : 1;
   placeable.alpha = alpha;
   if (placeable.mesh) placeable.mesh.alpha = alpha;
 }
 
-/** Re-apply the dim across every drawn token (after a toggle). */
-function _refreshFadedTokens(vehicleActorId) {
+/** Re-apply the dim across the riders of one handle (after a toggle). */
+function _refreshFadedTokens(vehicleTokenId) {
+  const scene = canvas?.scene ?? null;
+  const handle = scene?.tokens?.get?.(vehicleTokenId) ?? null;
   for (const p of canvas?.tokens?.placeables ?? []) {
-    if (p.document?.flags?.[SCOPE]?.boardedVehicle !== vehicleActorId) continue;
+    if (!p.document?.flags?.[SCOPE]?.boardedVehicle) continue;
+    if (handle && !riderIsAboardToken(p.document, handle)) continue;
     _applyFade(p);
   }
 }
 
 /**
- * Toggle this client's dimming of one vehicle's occupants.
+ * Toggle this client's dimming of one HANDLE's occupants.
+ * @param {string} vehicleTokenId  the vehicle token whose HUD the control was pressed on
  * @returns {boolean} the new state (true = dimmed)
  */
-export function toggleOccupantFade(vehicleActorId) {
-  if (!vehicleActorId) return false;
-  if (_faded.has(vehicleActorId)) _faded.delete(vehicleActorId);
-  else _faded.add(vehicleActorId);
-  _refreshFadedTokens(vehicleActorId);
-  return _faded.has(vehicleActorId);
+export function toggleOccupantFade(vehicleTokenId) {
+  if (!vehicleTokenId) return false;
+  if (_faded.has(vehicleTokenId)) _faded.delete(vehicleTokenId);
+  else _faded.add(vehicleTokenId);
+  _refreshFadedTokens(vehicleTokenId);
+  return _faded.has(vehicleTokenId);
 }
 
 /* --------------------------------------------------------------- occupancy badge */
@@ -152,11 +200,17 @@ function _badgeText(content) {
   return text;
 }
 
-/** The badge label for a vehicle token, or "" when nobody is aboard (no clutter on empty cars). */
+/**
+ * The badge label for a vehicle token, or "" when nobody is aboard (no clutter on empty cars).
+ *
+ * ⛔ PER TOKEN. Two copies of one vehicle on a canvas used to wear the same count — the total of
+ * both — so an empty truck parked beside a full one claimed a full load. The count is now the
+ * people in THIS truck.
+ */
 export function badgeLabelFor(tokenDoc) {
   const actor = tokenDoc?.actor;
   if (!actor) return "";
-  const { count, capacity } = occupancyOf(actor, tokenDoc.parent);
+  const { count, capacity } = occupancyOf(actor, tokenDoc.parent, tokenDoc);
   if (count <= 0) return "";
   return capacity > 0
     ? localizeParam("Vehicle.OccupancyBadge", { count, cap: capacity })
