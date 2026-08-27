@@ -701,6 +701,25 @@ export const MARTIAL_ART_ID_BY_KEY = {
   "Martial Arts: Wrestling": "GZtVOGgtxv8CCuuz"
 };
 
+/**
+ * Base-system catalog entries for the martial-arts ACTIONS that ship as real weapon items, pinned
+ * by UUID (read off the installed system pack, packs/melee.db). Strike and Kick are the only two —
+ * a closed sweep of every `cyberpunk2020` Item pack finds no other item named after a panel action.
+ *
+ * By UUID and never by name, so the pointer survives a rename: a player who calls their catalog
+ * Strike "Super Punch" still has it answer the Strike row, and an unrelated item that happens to be
+ * called "Strike" does not get promoted over it.
+ *
+ * Two consumers, both in the actor sheet's martial panel: the top rung of the per-action item
+ * resolver, and the stand-in item the dialog builds when the actor owns nothing for the action —
+ * that stand-in is a CLONE of the catalog entry, so the damage values stay in their single home
+ * (the system's pack) instead of being copied into module code.
+ */
+export const MARTIAL_ACTION_CATALOG_UUID = Object.freeze({
+  Strike: "Compendium.cyberpunk2020.melee.Item.TZoiQuE8fUzJ8Jta",
+  Kick:   "Compendium.cyberpunk2020.melee.Item.TF0nBrjofPX2RiuG",
+});
+
 export const MARTIAL_ART_KEY_BY_ID = Object.fromEntries(
   Object.entries(MARTIAL_ART_ID_BY_KEY).map(([k, id]) => [id, k])
 );
@@ -1197,8 +1216,15 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
         // its DC formula assumes, its rounds cap at min(ROF, shots left), its target count floors at 1);
         // ours had dropped everything but the rounds pair. Restored to his numbers, and his
         // `suppressive-field` selector classes with them so both dialogs address the rows the same way.
+        // ⭐ THE CEILING (2026-08-27): a zone wider than the burst's own round count prices a save the
+        // formula can no longer state — rounds ÷ width falls below 1 and only the floor at 1 holds it
+        // up — so every metre past that is free ground. `roundsFiredMax` is the widest burst this weapon
+        // and magazine can produce, which is the widest zone that can ever be honest; the dialog then
+        // tightens it further to the rounds actually entered (module/dialog/modifiers.js). The canvas
+        // preview cannot re-size any more — its wheel turns the square — so the declaration is the one
+        // place the bound belongs.
         {localKey:"FireZoneWidth",  dataPath:"zoneWidth",  dtype:"Number", defaultValue: 2,
-         min: 2, step: 1, extraClasses: "suppressive-field suppressive-zone-width"},
+         min: 2, max: roundsFiredMax, step: 1, extraClasses: "suppressive-field suppressive-zone-width"},
         {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: roundsFiredMax,
          min: 1, max: roundsFiredMax, step: 1, extraClasses: "suppressive-field suppressive-rounds-fired"},
         {

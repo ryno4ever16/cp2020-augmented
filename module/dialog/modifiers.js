@@ -509,14 +509,17 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       return showFieldValidation(input, localizeParam(messageKey, { min, max }), { report });
     };
 
-    const validateNumberMinInput = (input, { min = 1, messageKey = "NumberMinInvalid", report = false } = {}) => {
+    // The floor-only shape the base system uses for a zone width is not enough here: ours is bounded at
+    // BOTH ends (see the cap note in validateSuppressiveInputs), so this is the same helper with a
+    // ceiling. Kept non-integer like the base's floor-only one, so a half-metre zone is still declarable.
+    const validateNumberRangeInput = (input, { min = 1, max = Infinity, messageKey = "NumberRangeInvalid", report = false } = {}) => {
       if (!input) return true;
       input.setCustomValidity("");
       const raw = String(input.value ?? "").trim();
       const value = Number(raw);
-      const invalid = raw === "" || !Number.isFinite(value) || value < min;
+      const invalid = raw === "" || !Number.isFinite(value) || value < min || value > max;
       if (!invalid) return true;
-      return showFieldValidation(input, localizeParam(messageKey, { min }), { report });
+      return showFieldValidation(input, localizeParam(messageKey, { min, max }), { report });
     };
 
     const validateIntegerMinInput = (input, { min = 1, messageKey = "IntegerMinInvalid", report = false } = {}) => {
@@ -561,8 +564,21 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!validateIntegerRangeInput(roundsInput, { min: 1, max: maxRounds, messageKey: "IntegerRangeInvalid", report })) return false;
       }
 
+      // ⭐ THE WIDTH IS ALSO CAPPED, at the rounds this burst fires (ruled 2026-08-27, ledger #23as).
+      // The save is rounds ÷ width, so at width > rounds the quotient drops below 1 and the floor at 1
+      // is the only thing left holding it up: every further metre of zone is free, and the declaration
+      // stops meaning anything. The ceiling is the LIVE rounds entry rather than the field's static
+      // `data-max`, because the shooter can change the burst length in this same dialog and the pair
+      // has to stay consistent with what they will actually fire; the static max is the fallback for a
+      // rounds box that is blank or unreadable. The zone geometry does not enforce this — the wheel out
+      // on the canvas turns the square now and cannot re-size it — so this is the one door.
       const zoneMin = Math.max(1, Math.floor(Number(zoneWidthInput?.dataset?.min) || 2));
-      if (!validateNumberMinInput(zoneWidthInput, { min: zoneMin, messageKey: "NumberMinInvalid", report })) return false;
+      const enteredRounds = Number(String(roundsInput?.value ?? "").trim());
+      const roundsCeiling = Number.isFinite(enteredRounds) && enteredRounds > 0
+        ? Math.floor(enteredRounds)
+        : maxRounds;
+      const zoneMax = roundsCeiling > 0 ? Math.max(zoneMin, roundsCeiling) : Infinity;
+      if (!validateNumberRangeInput(zoneWidthInput, { min: zoneMin, max: zoneMax, messageKey: "NumberRangeInvalid", report })) return false;
 
       if (!validateIntegerMinInput(targetsInput, { min: 1, messageKey: "IntegerMinInvalid", report })) return false;
 

@@ -18,8 +18,15 @@
  */
 
 import { localize, localizeParam, tryLocalize } from "./utils.js";
-import { payloadScattersOnMiss, scatterDriftM } from "./combat/scatter-table.js";
+import { scatterDriftM } from "./combat/scatter-table.js";
+// The scatter DECISION comes from the verdict's own home (2026-08-26), the drift TABLE from the file
+// above; they were one import until the predicate had to start reading the base's ruling.
+import { payloadScattersOnMiss } from "./combat/spread-geometry.js";
 import { getWeaponLongRange } from "./combat/rangefinding.js";
+// ⭐ WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED. This file is the ONE caller of the derivation —
+// see the "one derivation, one caller" note in combat/fumble-outcome.js. Its answer rides the payload
+// as `fumbleClass` and every consumer reads the FIELD, never the derivation.
+import { rangedFumbleClassFrom } from "./combat/fumble-outcome.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -250,6 +257,32 @@ export function firingTokenIdOf(actor) {
   } catch (_e) { return null; }   // no canvas / no scene on this client
 }
 
+/**
+ * Whether a fumble on THIS weapon would take the base's auto-only-jam early return instead of rolling
+ * the printed Reflex (Combat) table — the one fact the class derivation cannot get from the card.
+ *
+ * Mirrors base item.js:226-227 exactly and prefers the base's OWN predicate over any restatement of it:
+ * `_isAutoWeapon(sys)` (item.js:216) is what actually chooses the branch, so asking it is the only
+ * reading that cannot drift from the branch it describes. The literal comparison below is reached only
+ * on a host where that method is missing, and it uses the same two `rangedAttackTypes` values the
+ * predicate does. Never throws — a weapon this cannot read reports FALSE, which puts the derivation on
+ * the table-reading path, and the derivation's own anchor check refuses anything it cannot read there.
+ *
+ * @param {object} item a base CyberpunkItem (a weapon)
+ * @returns {boolean}
+ */
+export function _autoOnlyJamBranchFor(item) {
+  try {
+    if (!game.settings.get("cyberpunk2020", "autoFumbleOnlyJam")) return false;
+    const sys = item?._getWeaponSystem?.() ?? item?.system ?? {};
+    if (typeof item?._isAutoWeapon === "function") return !!item._isAutoWeapon(sys);
+    const atk = sys?.attackType;
+    return atk === "Auto" || atk === "Autoshotgun";
+  } catch (_e) {
+    return false;
+  }
+}
+
 function installWeaponFiredShim(ItemProto) {
   if (prototypeEmits(ItemProto, WEAPON_FIRED)) return false;   // base system emits it (method or helper) → disengage
   let patchedAny = false, foundAny = false;
@@ -294,6 +327,21 @@ function installWeaponFiredShim(ItemProto) {
         // the same number. Read through the shared resolver (combat/rangefinding.js), the same call the
         // aim gesture makes, so the ghost the shooter drew and the region the GM plants cannot disagree.
         spreadRangeM: getWeaponLongRange(this),
+        // ⭐ WHETHER A FUMBLE ON THIS SHOT WOULD SKIP THE PRINTED TABLE (2026-08-26). The base's
+        // `buildRangedCombatFumbleData` has an early return for auto-class weapons when the
+        // `autoFumbleOnlyJam` setting is on: it rolls RELIABILITY instead of the Reflex (Combat) table,
+        // so the fumble block it writes carries no table row at all (base utils.js:617-638). The class
+        // derivation has to be told which branch was taken — it reads the block's html positionally and
+        // a reliability face sitting where a table face belongs would be classified as a table row.
+        //
+        // ⛔ ASKED OF THE WEAPON, AT THE TRIGGER PULL, THE WAY THE BASE ASKS IT. `_isAutoWeapon` is the
+        // base's own predicate (item.js:216) and this is the base's own pair of inputs (item.js:226-227),
+        // so the two cannot drift; the literal fallback exists only for a host that has renamed the
+        // method, and it uses the same two `rangedAttackTypes` values that predicate does ("Auto",
+        // "Autoshotgun", lookups.js:35,50). Captured HERE rather than at the emit because it is a fact
+        // about this weapon and this trigger pull, like the aim and the range beside it, and because the
+        // render wrapper has the card's data but not the item.
+        fumbleAutoOnlyJam: _autoOnlyJamBranchFor(this),
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       return orig.call(this, attackMods, ...rest);
@@ -382,10 +430,32 @@ function installRenderEmit() {
         // shooter actually declared AND the base system's own verdict of a miss (see that function).
         // Every ordinary shot leaves this field absent, and every reader treats absent as "nobody
         // asked" — the behaviour that shipped before this existed.
+        //
+        // ⭐ THE PROBE CARRIES THE BASE'S RULED VERDICT TOO, not just the two numbers, and it must: the
+        // predicate reads `spreadAttackOutcome`, and a probe assembled without `baseHit`/`fumbleRuled`
+        // would send it back to the bare comparison — the very reading that ruled a fumbled shell a hit
+        // (2026-08-26). Same three fields the emitted payload carries below, spelled the same way.
+        // ⭐⭐ THE FUMBLE'S OUTCOME CLASS, DERIVED EXACTLY ONCE, HERE (2026-08-26). The base rules its
+        // fumble table row before this render and writes the face into the block's html; nothing else in
+        // this module may read it. Both the probe below and the emitted payload take THIS value, and the
+        // four consumers switch on the field rather than deriving anything of their own — see
+        // combat/fumble-outcome.js for the table, the parse and why the sub-roll is not on a field.
+        // Null on every ordinary shot (no fumble block) and on a block this cannot read honestly.
+        const fumbleClass = data?.fumble
+          ? rangedFumbleClassFrom({ html: data.fumble?.html, autoOnlyJamBranch: !!_fireCtx.fumbleAutoOnlyJam })
+          : null;
         const verdict = {
           spreadAim: _fireCtx.spreadAim ?? null,
           attackTotal: Number.isFinite(Number(data?.attackRoll?.total)) ? Number(data.attackRoll.total) : null,
           toHitDC: Number.isFinite(Number(data?.toHit)) ? Number(data.toHit) : null,
+          baseHit: typeof data?.hit === "boolean" ? data.hit : null,
+          fumbleRuled: !!data?.fumble,
+          // ⛔ THE CLASS RIDES THE PROBE TOO, and it must: `payloadScattersOnMiss` is what decides
+          // whether the grenade-table faces are rolled at all, and a rows-1-4 fumble is an ORDINARY MISS
+          // that scatters. A probe assembled without this field would send that shell down the uniform
+          // bail — no faces rolled — while the plant, reading the emitted payload, scattered it anyway
+          // and rolled its own. That is the two-rails-two-answers defect, re-entered through the probe.
+          fumbleClass,
         };
         let spreadScatter = null;
         if (payloadScattersOnMiss(verdict)) {
@@ -461,6 +531,29 @@ function installRenderEmit() {
           // shot a hit against a DC of zero. Nulled at the source and null-checked at the reader.
           attackTotal: Number.isFinite(Number(data?.attackRoll?.total)) ? Number(data.attackRoll.total) : null,
           toHitDC: Number.isFinite(Number(data?.toHit)) ? Number(data.toHit) : null,
+          // ⭐⭐ AND THE BASE'S RULED VERDICT ITSELF (2026-08-26), which is a DIFFERENT fact from the two
+          // numbers above and is why both travel now.
+          //
+          // The two numbers are the INPUTS to the base's ruling; they are not the ruling. The base
+          // decides on more than the arithmetic — `_maybeApplyRangedFumble` (base item/item.js:221)
+          // returns `forceMiss` for every fumble its table resolves, and each fire path then zeroes its
+          // own hit count from that flag (autofire item.js:508, burst item.js:577, semi-auto
+          // item.js:690) — so the card it posts can read MISS while `attackRoll.total` stands well over
+          // the DC. It also does not rule the same way in every fire mode: autofire counts rounds as
+          // `total − DC` (item.js:503), so a TIE lands zero rounds there and hits in semi-auto
+          // (item.js:689). Any consumer re-deriving hit-or-miss from the two numbers therefore had to
+          // disagree with the card sooner or later, and did — reported from the table: a fumbled shell
+          // posted the base's fumble card and drew no presentation, while the corridor card announced
+          // "31 vs 15 — hit". `templateData.hit` is the base's own boolean, computed after every one of
+          // those rules; carrying it ends the second derivation.
+          //
+          // ⚠ BOOLEAN OR NULL, never coerced. This payload is relayed as JSON, and the readers treat
+          // "not a boolean" as "the payload does not say" and fall back to the comparison — which is
+          // what a payload from a client on an older build genuinely is.
+          baseHit: typeof data?.hit === "boolean" ? data.hit : null,
+          // How many rounds the base ruled home, beside the boolean, for readers that want the count
+          // rather than the yes/no (the pattern flow wants the yes/no). Null when the card computes none.
+          baseHits: Number.isFinite(Number(data?.hits)) ? Number(data.hits) : null,
           // WHO PULLED THE TRIGGER. This hook is a LOCAL `Hooks.callAll` — it is raised only on the
           // client that resolved the shot, never broadcast — so this field names the one client that
           // has the shot in hand. The damage handler uses it to decide who presents the result:
@@ -488,6 +581,21 @@ function installRenderEmit() {
           // carried, not the block: the title/html are localized prose for the CARD, and the rail needs
           // one yes/no.
           fumbleRuled: !!data?.fumble,
+          // ⭐⭐ WHICH ROW OF THE FUMBLE TABLE (2026-08-26, user ruling decided by Core p.43's REFLEX
+          // Combat column, text-verified). `fumbleRuled` says a fumble was resolved; it does NOT say
+          // what the table ruled, and the table does not rule one thing. Forty per cent of it (rows 1–4)
+          // reads "No fumble. You just screw up." — a round that went down-range and MISSED — while the
+          // rest is a dropped weapon, a jam, a harmless discharge, or a wound to the shooter's own side.
+          // Treating them alike made every fumbled shell vanish, including the four-in-ten that should
+          // have scattered like any other miss (p.108).
+          //
+          // ONE OF: "plainMiss" | "noDischarge" | "harmlessDischarge" | "ownSide" | null. Null is
+          // "the class could not be read" and every consumer treats it as the old uniform bail, which is
+          // also what a payload relayed from a client on an older build honestly is.
+          //
+          // ⛔ DERIVED ONCE, ABOVE, FROM THE BASE'S OWN ROLL. Nothing here re-rolls the table die — the
+          // card on the table and this field describe the same 1d10, or they would be two fumbles.
+          fumbleClass,
           ...(_fireCtx.effectFields ?? {}),   // explosion/gas/spread/DOT/taser/AP/pen fields from the ammo
         });
       } else if (_suppressiveCtx && path === SUPPRESSIVE_TEMPLATE) {

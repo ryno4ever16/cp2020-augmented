@@ -34,6 +34,8 @@
  * (GM-writable, readable by every client) so the GM Unlock control never has to touch this schema.
  */
 
+import { isPrimaryGMSession } from "../gm-session-primary.js";
+
 const SCOPE = "cp2020-augmented";
 
 /** The behavior document type string (module-namespaced, matches module.json). */
@@ -101,9 +103,10 @@ export function registerSuppressiveZoneBehavior() {
 
     static async #onTokenEnter(event) {
       try {
-        // The event runs on EVERY connected client; only the single active GM acts (it owns the
-        // prompts + hit routing, exactly like the round-tick zones).
-        if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+        // The event runs on EVERY connected client; only the single primary GM SESSION acts (it owns
+        // the prompts + hit routing, exactly like the round-tick zones). Session, not user: a referee
+        // with two tabs open is one user and two clients, and both used to answer yes here.
+        if (!isPrimaryGMSession()) return;
         Hooks.callAll(SUPPRESSIVE_ZONE_ENTERED_HOOK, {
           behavior: this.parent,
           region: event.region,
@@ -139,7 +142,7 @@ export function registerSuppressiveZoneVisibilityDefault() {
   Hooks.on("createRegionBehavior", async (behavior) => {
     try {
       if (behavior?.type !== SUPPRESSIVE_ZONE_BEHAVIOR) return;
-      if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+      if (!isPrimaryGMSession()) return;
       const region = behavior.parent;
       if (!region?.update) return;
       const V = CONST?.REGION_VISIBILITY ?? {};

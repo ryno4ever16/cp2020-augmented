@@ -248,9 +248,18 @@ export async function moveArea(handle, dx, dy) {
 }
 
 /**
- * Is `tok` shielded from an area effect originating at (ox,oy) by a wall? (CP2020 p.108 — cover
- * between the source and a target exempts it.) Gated by areaEffectOcclusion. Graceful: if the
- * collision backend is unavailable, nothing is treated as occluded.
+ * Is `tok` shielded from an area effect originating at (ox,oy) by a wall the module knows nothing
+ * about? Gated by areaEffectOcclusion. Graceful: if the collision backend is unavailable, nothing is
+ * treated as occluded.
+ *
+ * ⭐ THIS IS NOW THE **NAKED** HALF OF A TWO-PART SPLIT (user ruling 2026-08-25). A wall carrying
+ * cover VALUES no longer reaches this test at all: `combat/cover.js` `areaCoverVerdict` asks its own
+ * valued-cover question first and only falls through to this one when nothing valued is in the way.
+ * The behaviour here is deliberately unchanged — an unvalued move-blocking wall stays a full occluder
+ * for area effects and stays nothing at all for aimed fire — because a wall nobody has priced is map
+ * furniture, and giving it an SP would be inventing the table's map. ⛔ Callers deciding whether a
+ * figure is damaged must ask `areaCoverVerdict`, not this: reached directly, it cannot tell a valued
+ * barrier from a bare one.
  *
  * ⏩ Moved here from damage-hooks.js (2026-08-14, with the spread-geometry relocation): the
  * presentation rail asks this same question of a corridor's occupants at its rounds' arrival, and it
@@ -265,4 +274,43 @@ export function areaOcclusionTest(ox, oy, tok) {
     if (backend?.testCollision) return !!backend.testCollision(origin, dest, { type: "move", mode: "any" });
   } catch (e) { /* no collision support → not occluded */ }
   return false;
+}
+
+/**
+ * WHERE A RAY FIRST MEETS A BLOCKING WALL — the `closest`-mode sibling of the boolean above.
+ *
+ * ⭐ WHY IT EXISTS (user ruling 2026-08-26): when a shot's verdict is EXEMPT — a naked, unpriced,
+ * move-blocking wall between the origin and the figure — the resolution says the rounds never reached
+ * anybody, and until now the PRESENTATION drew them sailing straight through the wall anyway. The
+ * picture contradicted the card. Each drawn round is now cut off at the point ITS OWN ray meets the
+ * wall, so the eye is told the same thing the card is.
+ *
+ * ⛔ PER-RAY, NOT PER-SHOT. Six pellets of a fan meet a wall at six different points (and at an oblique
+ * angle they can meet different walls entirely), so the caller asks this once per endpoint rather than
+ * clipping the whole group to one impact. That is the same rule the rest of this rail follows about
+ * never inventing a position it could have asked for.
+ *
+ * Same backend, same `type: "move"` as the boolean, so the wall a shot is stopped by is by construction
+ * the same wall the exemption was decided on — two tests with different notions of "blocking" would
+ * clip against one wall and exempt against another.
+ *
+ * ⚠ DELIBERATELY UNGATED by the world switch. The switch decides whether cover interacts with areas at
+ * all, and that question is settled by the caller BEFORE it gets here (`areaCoverVerdict` returns
+ * EXEMPT only when the switch is on). Re-asking it here would be a second copy of the same gate.
+ *
+ * Returns `{x, y}` or **null** — null meaning "nothing in the way, or this platform cannot answer",
+ * and every caller must treat null as "draw the full ray", which is exactly today's behaviour.
+ */
+export function wallImpactPoint(from, to) {
+  if (!from || !to) return null;
+  try {
+    const backend = CONFIG?.Canvas?.polygonBackends?.move;
+    if (!backend?.testCollision) return null;
+    const hit = backend.testCollision(
+      { x: from.x, y: from.y }, { x: to.x, y: to.y }, { type: "move", mode: "closest" },
+    );
+    if (!hit || !Number.isFinite(hit.x) || !Number.isFinite(hit.y)) return null;
+    return { x: hit.x, y: hit.y };
+  } catch (e) { /* no collision support → nothing to clip against */ }
+  return null;
 }

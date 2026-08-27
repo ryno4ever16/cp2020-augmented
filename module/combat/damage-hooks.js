@@ -46,7 +46,14 @@ import { mechRoundTickEnabled, combatFxEnabled } from "../settings.js";
 import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize } from "../utils.js";
 import { renderChatCard, getHtmlElement }                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
-import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea, areaOcclusionTest } from "./area-shapes.js";
+import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea } from "./area-shapes.js";
+// The area↔cover split and the chew it books (user ruling 2026-08-25). `areaCoverVerdict` is the ONE
+// predicate that tells a valued barrier (soaks + chews) from a naked wall (exempt, unchanged); the
+// three helpers beside it run one structure ledger per crossed object per application.
+import {
+  areaCoverVerdict, areaCoverEnabled, valuedCoverAlong, valuedCoverWithin, resolveAreaCoverChew, coverChews,
+  areaCoverSpForRound, commitAreaCoverChew, AREA_COVER_SOAKED, AREA_COVER_EXEMPT,
+} from "./cover.js";
 import { GAS_CLOUD_BEHAVIOR } from "./gas-cloud-behavior.js";
 import { SUPPRESSIVE_ZONE_BEHAVIOR, SUPPRESSIVE_ZONE_ENTERED_HOOK } from "./suppressive-zone-behavior.js";
 import { rayPolygonShape } from "./area-geometry.js";
@@ -62,11 +69,15 @@ import { SPREAD_MIN_LENGTH_M, SPREAD_MIN_WIDTH_M } from "./spread-placement.js";
 // rose/drift re-export): a `export {...} from` alone wires importers but binds NOTHING here — the
 // certification lane caught _placeSpreadZone throwing ReferenceError on exactly that.
 import { declaredSpreadAim, spreadAttackOutcome, scatteredSpreadCorridor } from "./spread-geometry.js";
+// WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED — the payload's carried class, read through the one
+// predicate the presentation rail also asks. See combat/fumble-outcome.js.
+import { fumbleIsOrdinaryMiss } from "./fumble-outcome.js";
 import { pixelsToMeters, metersToPixels } from "../vehicle/vehicle-grid.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
 import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns, railPlantsPatternFires } from "../fx/effects.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 /**
  * The effect list, however a caller spelled it.
@@ -572,12 +583,13 @@ function _hookWeaponFired() {
       u => u.active && attackerActor.testUserPermission(u, "OWNER")
     );
     const isMyShot  = !game.user.isGM && (attackerActor?.isOwner ?? false);
-    // Only the PRIMARY (active) GM handles a shot NOBODY here fired — an NPC or offline-owner payload
+    // Only the PRIMARY GM SESSION handles a shot NOBODY here fired — an NPC or offline-owner payload
     // that arrived by some route other than this client pulling the trigger. Without that rule, every
     // GM client receiving such a payload would open its own DamageDialog (and, with auto-apply on,
     // each would apply the damage → N× HP loss); it is also what guarantees exactly one client reaches
-    // dispatchAttack, which the vehicle-damage relay below relies on.
-    const gmHandles = game.user.isGM && !ownerOnline && game.users.activeGM?.id === game.user.id;
+    // dispatchAttack, which the vehicle-damage relay below relies on. SESSION, not user — the old
+    // user-id form was true in every tab the referee had open.
+    const gmHandles = !ownerOnline && isPrimaryGMSession();
 
     // ⚠ THE SEAT IS THE WRONG QUESTION FOR A SHOT THIS CLIENT ITSELF FIRED, and that was a reported
     // regression: at a table with TWO GM sessions, every fire mode stopped opening the apply window
@@ -998,12 +1010,12 @@ async function _postSuppressivePlacementCard({ weaponName, saveDC, regionId, sce
 /**
  * GM UNLOCK: re-open the shooter's aim/size preview for a placed lane. Clears the region's lock flag and
  * re-arms the preview (locally if the shooter is this GM, else relayed to the shooter's client) primed with
- * the lane's stored geometry + its regionId, so a re-confirm UPDATES this same region. Gated to the active
- * GM (only it owns the region write; a stray click on another GM client is a no-op). The lane keeps firing
- * while unlocked — the enter listener is not gated on the lock.
+ * the lane's stored geometry + its regionId, so a re-confirm UPDATES this same region. Gated to the primary
+ * GM session (only it owns the region write; a stray click on another GM client — or on the referee's own
+ * second tab — is a no-op). The lane keeps firing while unlocked — the enter listener is not gated on the lock.
  */
 export async function _unlockSuppressiveZone(regionId, sceneId) {
-  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+  if (!isPrimaryGMSession()) return;
   // Resolve the lane's OWN scene (the card carries it), not necessarily the GM's viewed scene.
   const scene = (sceneId ? game.scenes?.get(sceneId) : null) ?? canvas?.scene;
   const region = scene?.regions?.get?.(regionId);
@@ -1011,7 +1023,11 @@ export async function _unlockSuppressiveZone(regionId, sceneId) {
   const geo = foundry.utils.deepClone(region.flags?.["cp2020-augmented"]?.suppressiveGeometry ?? null);
   await region.update({ flags: { "cp2020-augmented": { suppressiveLocked: false } } }).catch(() => {});
   if (!geo) return;
-  await _relaySuppressiveRearm({ ...geo, regionId: region.id, saveDC: Math.ceil((Number(geo.roundsFired) || 0) / Math.max(1, Number(geo.widthM) || 2)) });
+  // ⭐ FLOOR, matching the placement preview's `_dcFor` (flipped 2026-08-27 on the p.106 worked example:
+  // 64 rounds over 5 m = a save of 12, not 13). This is OUR second derivation of the same number — the
+  // seed the re-armed preview opens with — so it has to round the same way the preview will when the
+  // shooter re-confirms, or an untouched unlock would silently reprice the zone by one.
+  await _relaySuppressiveRearm({ ...geo, regionId: region.id, saveDC: Math.floor((Number(geo.roundsFired) || 0) / Math.max(1, Number(geo.widthM) || 2)) });
 }
 
 /** Send the re-arm to the shooter's client (arm locally if that client is this GM — a socket never reaches
@@ -1019,7 +1035,11 @@ export async function _unlockSuppressiveZone(regionId, sceneId) {
 async function _relaySuppressiveRearm(geo) {
   if (geo.userId && geo.userId === game.user?.id) {
     const { armSuppressivePreview } = await import("./suppressive-placement.js");
-    await armSuppressivePreview({ ...geo, rearm: true });
+    // ⛔ STARTED, NOT AWAITED. On the native placement path the arm's promise does not settle until the
+    // shooter CONFIRMS OR DISMISSES the zone — so awaiting it here would hold the unlock open for as
+    // long as they take to aim, and this call sits under a chat-button handler. Nothing downstream reads
+    // the result; the placement finishes on its own and relays itself.
+    armSuppressivePreview({ ...geo, rearm: true }).catch((e) => console.warn("cp2020-augmented | suppressive re-arm failed", e));
   } else {
     game.socket.emit("module.cp2020-augmented", { type: "suppressiveZoneRearm", payload: geo });
   }
@@ -1028,18 +1048,23 @@ async function _relaySuppressiveRearm(geo) {
 // Area-Confirm ids already resolved on THIS client. The confirm handlers below apply their effect but do
 // NOT consume the template (it persists for scatter + visibility), so without this a double-click — or two
 // GMs each clicking Confirm — applies the blast/spread/fire-zone twice. The synchronous check+add (before
-// any await) makes it race-free; all confirms route to the active GM, so its Set is the authoritative one.
+// any await) makes it race-free; all confirms route to the primary session, so its Set is the authoritative one.
+//
+// ⛔ THIS SET IS PER CLIENT, WHICH IS EXACTLY WHY IT COULD NOT COVER THE TWO-TAB CASE ON ITS OWN. Two
+// sessions of one referee each held their own empty Set, so each claimed the same template id and each
+// applied the area. The claim is only authoritative because the line below now routes every confirm to
+// ONE session; the Set then does the job it was written for (a double click, a double relay).
 const _resolvedAreaConfirms = new Set();
 
 /**
- * Gate an area-Confirm to the active GM and make it idempotent. A non-active-GM's click is relayed to the
- * active GM (mirrors the placement relay) so exactly one client resolves the effect; the active GM claims
+ * Gate an area-Confirm to the primary GM session and make it idempotent. Any other client's click is
+ * relayed (mirrors the placement relay) so exactly one client resolves the effect; the primary claims
  * the template id so a stray double-click/double-relay is a no-op. `relayData` is spread into the socket
  * payload (fire-zone carries its full args; blast/spread carry only the template id).
  * @returns {boolean} true iff this client should resolve the Confirm now.
  */
 function _claimAreaConfirm(relayType, relayData, templateId) {
-  if (game.users.activeGM?.id !== game.user.id) {
+  if (!isPrimaryGMSession()) {
     game.socket.emit("module.cp2020-augmented", { type: relayType, ...relayData });
     return false;
   }
@@ -1104,8 +1129,7 @@ function _hookSuppressiveZoneEntered() {
  */
 function _hookSuppressiveExpiry() {
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;   // one GM only, else a delete race
+    if (!isPrimaryGMSession()) return;                      // one SESSION only, else a delete race
     if (updateData.round === undefined) return;             // round advance only
     if (!_suppressiveSavesEnabled()) return;
     const scene = canvas?.scene;
@@ -1390,9 +1414,9 @@ function _hookWaitForTurn() {
   });
 
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM) return;
-    // Active GM only — otherwise each connected GM posts a duplicate "your moment" alert.
-    if (game.users.activeGM?.id !== game.user.id) return;
+    // Primary GM SESSION only — otherwise each connected GM client (a second GM, or a second tab of
+    // the same GM) posts a duplicate "your moment" alert.
+    if (!isPrimaryGMSession()) return;
 
     if (updateData.round !== undefined) {
       for (const combatant of combat.combatants) {
@@ -1498,10 +1522,9 @@ function _hookDodgeParry() {
   });
 
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM) return;
-    // Active GM only — keeps multi-GM tables from double-clearing dodge/parry flags
+    // Primary GM session only — keeps multi-client tables from double-clearing dodge/parry flags
     // (idempotent, but consistent with the other per-turn handlers).
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
 
     const combatant = combat.combatant;
@@ -1608,11 +1631,11 @@ function _hookDeclaredDefensePrefill(isEnabled) {
 
 function _hookDotEffects() {
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM) return;
-    // Only the primary GM applies DOT damage/ablation. updateCombat fires on EVERY
-    // connected GM client; without this guard, N connected GMs each apply the tick,
-    // multiplying HP loss / armor degradation by N (matches the gas-cloud guard below).
-    if (game.users.activeGM?.id !== game.user.id) return;
+    // ⛔ NOT idempotent, and the costliest row of the lot: only the primary GM SESSION applies DOT
+    // damage/ablation. updateCombat fires on EVERY connected GM client — a second GM, and a second TAB
+    // of the same GM — so without this guard N clients each apply the tick, multiplying HP loss /
+    // armor degradation by N (matches the gas-cloud guard below).
+    if (!isPrimaryGMSession()) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
     // Starting combat is not a turn elapsing: the round-0→1 transition must not tick an
     // ongoing effect (a character carrying one into the encounter would take instant
@@ -1821,10 +1844,10 @@ function _hookGasCloud() {
     if (!gasEnabled()) return;
     const types = _effectTypesOf(payload);
     if (!types.includes("Gas")) return;
-    // weaponFired fires only on the firing client; placing the cloud needs the GM. The active GM
-    // places it directly; anyone else (a player, or a non-active GM) relays to it. Without this a
-    // player's gas grenade produced no cloud. Mirrors _hookSuppressiveFire.
-    if (game.users.activeGM?.id === game.user.id) await _placeGasCloud(payload);
+    // weaponFired fires only on the firing client; placing the cloud needs the GM. The primary GM
+    // SESSION places it directly; anyone else (a player, another GM, or this GM's other tab) relays
+    // to it. Without this a player's gas grenade produced no cloud. Mirrors _hookSuppressiveFire.
+    if (isPrimaryGMSession()) await _placeGasCloud(payload);
     else game.socket.emit("module.cp2020-augmented", { type: "gasCloudFired", payload });
   });
 }
@@ -1939,9 +1962,8 @@ async function _placeGasCloud(payload) {
 /** Per-turn: prompt saves for tokens in a gas cloud; decrement turns; delete when expired. */
 function _hookGasCloudPerTurn() {
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM) return;
-    // Only the primary GM runs the per-turn cloud logic, else duplicate prompts/updates.
-    if (game.users.activeGM?.id !== game.user.id) return;
+    // Only the primary GM SESSION runs the per-turn cloud logic, else duplicate prompts/updates.
+    if (!isPrimaryGMSession()) return;
     // Per-ROUND, not per-combatant-turn: a cloud adjudicates its tokens ONCE per combat round (a CP2020
     // turn = one 3-second round), and its duration counts down once per round. Firing on every turn
     // advance would prompt each token N× per round (N = combatant count) and expire the cloud N× too fast.
@@ -2232,7 +2254,7 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
  * explosion path through this helper is unchanged by their arrival.
  * Once per landed shell per token, which is what the pattern flow already does with everything else it
  * applies (N shells = N banded rolls = N trips through the armour pipeline). */
-async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null) {
+async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null, coverSP = 0) {
   const { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
           stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula } = payload;
   if (!tok?.actor || dmg <= 0) return 0;
@@ -2256,6 +2278,11 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
     penDamageMult: Number(penDamageMult ?? 1),
     armorMode:     game.settings.get("cp2020-augmented", "damageArmorMode"),
     ablate:        game.settings.get("cp2020-augmented", "damageAblation"),
+    // ⭐ THE SOAK, and NOT a second chew. `coverSP` is folded as the outermost armour layer by exactly
+    // the fold the aimed path uses (resolveHitMath → combineArmorSP); `cover` is deliberately left
+    // unset, which is what stops applyAreaDamages booking a per-figure structure debit on top of the
+    // ONE the caller already booked for the whole application (cover.js resolveAreaCoverChew).
+    coverSP:       Math.max(0, Number(coverSP) || 0),
     dryRun:        false,
     fxSilent:      railSounded,
     // The application is WIDER than this shell — every shell of the burst, against every figure in the
@@ -2284,12 +2311,15 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
   return total;
 }
 
-/**
- * ⏩ The wall-occlusion exemption now lives in `combat/area-shapes.js` (`areaOcclusionTest`) — moved
- * 2026-08-14 with the spread-geometry relocation so the presentation rail can ask the identical
- * question of a corridor's occupants without importing this file. Local alias keeps every call site.
+/*
+ * ⏩ The wall-occlusion exemption moved to `combat/area-shapes.js` (`areaOcclusionTest`) on
+ * 2026-08-14 so the presentation rail could ask the identical question without importing this file,
+ * and on 2026-08-25 it stopped being asked from here at all: every area path in this file now asks
+ * `cover.js` `areaCoverVerdict`, which puts the VALUED-cover question first and falls through to that
+ * naked-wall test only when nothing valued is in the way. The local alias that used to stand here is
+ * gone with its last caller — reaching for the bare occlusion test again would re-open the very gap
+ * the split closed (a priced barrier read as an exemption).
  */
-const _isOccluded = areaOcclusionTest;
 
 /**
  * HEP concussion (Listen Up p.105): SP ignored, BTM applies, half of what gets through is
@@ -2334,10 +2364,10 @@ function _hookExplosion() {
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!enabled()) return;
     if (!_effectTypesOf(payload).includes("Explosive")) return;
-    // weaponFired fires only on the firing client; placing the blast needs the GM. The active GM
-    // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
-    // _hookSuppressiveFire. Without this a player's grenade produced no blast.
-    if (game.users.activeGM?.id === game.user.id) await _placeExplosion(payload);
+    // weaponFired fires only on the firing client; placing the blast needs the GM. The primary GM
+    // SESSION places it directly; anyone else (a player, another GM, or this GM's other tab) relays
+    // to it. Mirrors _hookSuppressiveFire. Without this a player's grenade produced no blast.
+    if (isPrimaryGMSession()) await _placeExplosion(payload);
     else game.socket.emit("module.cp2020-augmented", { type: "explosionFired", payload });
   });
 }
@@ -2428,16 +2458,43 @@ async function _confirmExplosion(templateId) {
 
   const detailed = (() => { try { return game.settings.get("cp2020-augmented", "explosivesDetailed"); } catch { return false; } })();
 
-  // Token containment via shim; also apply cover check using origin from flags.
+  // Token containment via shim; then the SAME area↔cover split the pattern flow uses, asked from the
+  // blast centre. p.107's own diagram is an explosion behind cover, so a barrier in a detonation gets
+  // the identical treatment: a VALUED object folds its SP for the figure behind it and takes its own
+  // share of the blast against its structure; a NAKED move-blocking wall still exempts outright.
   const candidates = (scene.tokens?.contents ?? canvas.tokens.placeables.map(t => t.document ?? t))
     .filter(td => (td.actor ?? td.document?.actor));
   const inBlast = tokensInArea(handle, candidates);
-  const tokens = inBlast.filter(td => {
-    // td is a TokenDocument; _isOccluded expects the placeable object, so find it.
+  const targets = [];
+  for (const td of inBlast) {
+    // td is a TokenDocument; the verdict wants a placeable where the scene has one, so find it.
     const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
-    return !_isOccluded(originX, originY, tok);   // cover between center and target exempts it
-  });
-  if (!tokens.length) { ui.notifications.info(localize("NoTokensInBlast")); return; }
+    const verdict = areaCoverVerdict(originX, originY, tok, scene);
+    if (verdict.state === AREA_COVER_EXEMPT) continue;
+    targets.push({ tok, sp: verdict.sp, row: verdict.row, soaked: verdict.state === AREA_COVER_SOAKED });
+  }
+
+  // ONE DETONATION, ONE DEBIT PER OBJECT — the same cardinality the corridor uses, and for the same
+  // reason (cover.js resolveAreaCoverChew). What the object receives is the blast at ITS OWN distance
+  // band, computed by the same falloff the figures get, so a barrier at the edge of the radius is
+  // charged edge damage. Objects inside the radius that shielded nobody are charged too: a grenade in
+  // a doorway wrecks the door whether or not anyone was behind it (ruling 3).
+  const bandDamage = (px, py) => {
+    const distM = (Math.hypot(px - originX, py - originY) / gridSize) * gridDist;
+    let mult = 1;
+    if (distM > fullR) {
+      const span = Math.max(0.0001, radius - fullR);
+      const b = Math.min(mults.length - 1, Math.max(0, Math.floor(((distM - fullR) / span) * mults.length)));
+      mult = Number(mults[b]) || 0;
+    }
+    return Math.max(0, Math.floor(base * mult));
+  };
+  const chewRows = _blastCoverCrossings(scene, originX, originY, targets, radius, gridSize, gridDist);
+  // One round: a detonation is a single event, so the ledger runs once per object rather than N times.
+  const chewPlan = await resolveAreaCoverChew(chewRows, 1,
+    (row) => bandDamage(row.center?.x ?? originX, row.center?.y ?? originY));
+
+  if (!targets.length && !chewPlan.size) { ui.notifications.info(localize("NoTokensInBlast")); return; }
 
   // One detonation is ONE application batch, which matters most on the detailed branch: the blow and the
   // fragments it throws are two applications on the same body at the same instant, and each used to post
@@ -2446,40 +2503,71 @@ async function _confirmExplosion(templateId) {
   // application — nothing after it posts a tail of its own.
   const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
 
-  for (const td of tokens) {
-    // Get pixel position from either a TokenDocument or a placeable.
-    const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
-    const dxPx = (tok.center?.x ?? tok.document?.x ?? tok.x ?? 0) - originX;
-    const dyPx = (tok.center?.y ?? tok.document?.y ?? tok.y ?? 0) - originY;
-    const distM = (Math.hypot(dxPx, dyPx) / gridSize) * gridDist;
-
-    let mult = 1;
-    if (distM > fullR) {
-      const span = Math.max(0.0001, radius - fullR);
-      const band = Math.min(mults.length - 1, Math.max(0, Math.floor(((distM - fullR) / span) * mults.length)));
-      mult = Number(mults[band]) || 0;
-    }
-    const dmg = Math.max(0, Math.floor(base * mult));
+  for (const entry of targets) {
+    const tok = entry.tok;
+    const dmg = bandDamage(tok.center?.x ?? tok.document?.x ?? tok.x ?? 0,
+                           tok.center?.y ?? tok.document?.y ?? tok.y ?? 0);
     if (dmg <= 0) continue;
+    // The barrier's SP for this detonation — a single event, so round 0 of its ledger.
+    const coverSP = entry.soaked ? areaCoverSpForRound(chewPlan, entry.row, 0) : 0;
 
     if (detailed) {
       // HEP concussion (SP ignored, ½ permanent + ½ stun, soft armor −2). Optional shrapnel on top.
+      // ⛔ NO COVER FOLD ON THIS BRANCH, deliberately: Listen Up p.105 has concussion ignore SP, and a
+      // barrier's SP is SP. The object is still charged for the blast it received (the plan above ran
+      // for it either way) — what a wall stops is the fragments, not the overpressure.
       await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
       if (f.blastShrapnel) {
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
           { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) },
-          severity);
+          severity, coverSP);
       }
     } else {
-      // Core blast: range-banded damage through normal armor.
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
+      // Core blast: range-banded damage through normal armor, with the barrier folded outermost.
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity, coverSP);
     }
   }
 
   // Every body the detonation touched, reported once: the progression card, then the one mortal prompt
   // at the tier the detonation finished on.
   await closeSeverityBatch(severity);
+
+  // …and every object it charged, once each.
+  await commitAreaCoverChew(chewPlan, f.weaponName ?? localize("WpnExplosion"));
+}
+
+/**
+ * The valued objects a DETONATION charges: whatever shielded a figure in the blast, plus every valued
+ * object whose own centre stands inside the radius.
+ *
+ * The second half is the blast's form of the miss-chew ruling. A corridor has an axis to test; a
+ * circle has no direction, so "did the shot land on it" is simply "is it in the radius" — the same
+ * question the figures are asked. Deduplicated by uuid, first-seen order, so an object that both
+ * shielded someone and stands in the radius is one entry and one debit.
+ */
+function _blastCoverCrossings(scene, originX, originY, targets, radiusM, gridSize, gridDist) {
+  if (!areaCoverEnabled()) return [];
+  const seen = new Set();
+  const out = [];
+  const take = (r) => {
+    const uuid = String(r?.uuid ?? "");
+    if (!uuid || seen.has(uuid) || r.destroyed || !(r.sp > 0)) return;
+    // ⭐ CORE-MODE COVER IS NOT A CROSSING THE APPLY WILL CHARGE (2026-08-26 — the split is written
+    // out at cover.js COVER_MODE_CORE). An SP entered on its own keeps no structure, so the apply books
+    // nothing against it and ⛔ no structure card is ever posted for it. This list is DEFINED as "what
+    // the button is going to debit", so a row with no ledger does not belong on it — printing it would
+    // promise a structure line that never arrives. The figure sheltering behind it still gets its own
+    // row, which is where its soak is reported (SpreadRowSoakedCore).
+    if (!coverChews(r)) return;
+    seen.add(uuid); out.push(r);
+  };
+  for (const e of targets ?? []) if (e.soaked) take(e.row);
+  try {
+    const radiusPx = (radiusM / (gridDist || 1)) * (gridSize || 100);
+    for (const r of valuedCoverWithin(scene, { x: originX, y: originY }, radiusPx)) take(r);
+  } catch (err) { console.warn("CP2020 | blast cover scan failed", err); }
+  return out;
 }
 
 /**
@@ -2590,10 +2678,10 @@ function _hookSpread() {
     // defect that fix removed: this hook stood down for the setting while the gate above stood down for
     // the cartridge, and the payload fell between them — no window, no pattern, no damage.
     if (_spreadModeOf(payload) === SPREAD_MODE_SINGLE) return;
-    // weaponFired fires only on the firing client; placing the pattern needs the GM. The active GM
-    // places it directly; anyone else (a player, or a non-active GM) relays to it. Mirrors
-    // _hookSuppressiveFire. Without this a player's shotgun produced no spread.
-    if (game.users.activeGM?.id === game.user.id) await _placeSpreadZone(payload);
+    // weaponFired fires only on the firing client; placing the pattern needs the GM. The primary GM
+    // SESSION places it directly; anyone else (a player, another GM, or this GM's other tab) relays
+    // to it. Mirrors _hookSuppressiveFire. Without this a player's shotgun produced no spread.
+    if (isPrimaryGMSession()) await _placeSpreadZone(payload);
     else game.socket.emit("module.cp2020-augmented", { type: "spreadFired", payload });
   });
 }
@@ -2627,6 +2715,53 @@ function _halfTokenWidthAtM(scene, x, y, gridSize) {
 export async function _placeSpreadZone(payload) {
     const scene = canvas?.scene;
     if (!scene) return;
+
+    // ⛔⛔ A RULED FUMBLE PLANTS NOTHING — the RESOLUTION half of a ruling the presentation rail already
+    // makes, and it is here so the two rails cannot answer differently about the same shell.
+    //
+    // WHAT THE BASE DOES, which is what this follows: `_maybeApplyRangedFumble` (base item/item.js:221)
+    // builds its fumble block only when the `fumbleTableEnabled` setting is on, and every path that
+    // builds it also sets `forceMiss`; the fire method then zeroes its own hit count from that flag and
+    // posts the base's fumble card in place of a result. Nobody is damaged. Nothing is aimed at. The
+    // shot's outcome is the fumble table's, not the range table's.
+    //
+    // WHAT THE RAIL ALREADY DOES: fx/effects.js bails the whole fan-out on the same field (`skipped:
+    // "fumble"`) and reports a zero presentation span for it — the user's ruling after a fumbled shotgun
+    // threw a full muzzle blast down-range: *"if the shotgun didn't fire, it shouldn't blast visibly."*
+    //
+    // Reported from the table 2026-08-26: presentation honoured that and drew nothing while THIS
+    // function planted a corridor anyway and posted a card reading "31 vs 15 — hit" over it. So a ruled
+    // fumble is planted the way it is drawn — which, since the ruling below, means "not at all for three
+    // of the table's four outcomes, and exactly like any other miss for the fourth".
+    //
+    // ⏪ SUPERSEDED, SAME DAY, BY THE USER'S RULING BELOW — kept because the argument it makes is still
+    // the right argument for the three classes it now covers: *"scattering it instead would only trade
+    // one disagreement for another — a corridor nobody can see, over ground the rounds were never drawn
+    // crossing, still able to chew a door or catch a bystander that the base's own card damaged nobody
+    // through."* That reasoning stands wherever no round left the barrel. It does NOT stand for the
+    // table's rows 1-4, where a round did leave and the rail draws it, so there is no unseen corridor to
+    // object to — which is precisely the distinction the ruling makes.
+    //
+    // ⚠ THE GATE IS THE RULED FUMBLE, NOT A NATURAL 1. With the fumble table switched off a natural 1 is
+    // an ordinary bad roll, the gun really did fire, and the shell patterns like any other miss — the
+    // payload's separate `fumble` field says only which face came up and is deliberately not read here.
+    //
+    // ⭐⭐ AND IT IS NOW THE RULED FUMBLE'S CLASS, NOT EVERY RULED FUMBLE (2026-08-26, user ruling
+    // decided by Core p.43's REFLEX Combat column, text-verified). The paragraphs above are right about
+    // a dropped weapon, a jam, a harmless discharge and a wound to the shooter's own side — but they
+    // were being applied to the table's rows 1–4 as well, and those rows read "No fumble. You just
+    // screw up." That is FORTY PER CENT of the table, and it is an ordinary miss: the shell left the
+    // barrel and went somewhere else. p.108 already says what a pattern owes an ordinary miss — a
+    // scattered true centre — and the branch below does exactly that, unchanged. So a rows-1–4 fumble
+    // now falls THROUGH this gate and is planted at its scattered centre with its bands and width
+    // re-derived there, while the other three classes still plant nothing at all.
+    //
+    // ⛔ ONE PREDICATE, BOTH RAILS. `fumbleIsOrdinaryMiss` is the same call fx/effects.js makes at its
+    // own four sites; the class it reads was derived once at the seam from the base's own table die.
+    // Presentation and resolution answer this identically by construction, which is the entire point —
+    // and a payload that carries no class at all (an older client's relay, a hand-built keeper payload)
+    // reads false here and keeps the uniform bail exactly as it shipped.
+    if (payload?.fumbleRuled && !fumbleIsOrdinaryMiss(payload)) return;
 
     const attackerId = payload.attackerId ?? payload.attackerActorId ?? payload.actorId ?? null;
     // The corridor's ORIGIN, and it must be the figure that actually fired — the corridor is rebuilt
@@ -2680,6 +2815,14 @@ export async function _placeSpreadZone(payload) {
       //
       // The MUZZLE does not move — the shell left the same barrel — so only the far end is re-aimed
       // and the corridor is rebuilt from the shooter as they stand to wherever the shell landed.
+      //
+      // ⭐ "THE BASE'S OWN VERDICT" NOW MEANS ITS RULED BOOLEAN, not this file's arithmetic on the two
+      // numbers it sent (2026-08-26). `spreadAttackOutcome` prefers `payload.baseHit` — the value the
+      // base's own card was rendered from — and only compares total against DC for payloads that carry
+      // no verdict. The consequence here is that a shot the base ruled a MISS for a reason the numbers
+      // do not show scatters like any other miss: an autoshotgun burst that TIED its DC (the base counts
+      // rounds as `total − DC`, so a tie lands none) used to plant on target because the comparison read
+      // the tie as a hit. Nothing else about this branch changes — the dice are still the payload's.
       outcome = spreadAttackOutcome(payload);
       if (outcome && !outcome.hit) {
         // ⭐⭐ THE DICE ARE THE PAYLOAD'S, NOT THIS FUNCTION'S (2026-08-13). This runs on the ACTIVE GM,
@@ -3023,9 +3166,16 @@ function _mayActOnPattern(templateId, requestedBy = "") {
  * reader is looking at and the resolution the button runs cannot disagree about the same corridor.
  *
  * Reads only; no document is written here, which is what lets the resolution card be built from it on
- * the presentation path. The attacker is never their own target, and cover between the pattern's origin
- * and a space exempts that space (CP2020 p.108) — the same two rules the resolution applied inline
- * before this was lifted out of it.
+ * the presentation path. The attacker is never their own target.
+ *
+ * ⭐ THREE BUCKETS SINCE 2026-08-25, not two (the soak-and-chew ruling; see cover.js areaCoverVerdict
+ * for the reasoning and reference-cover-rules-raw for the book basis):
+ *   `hit`     — everyone the corridor damages, each carrying the cover SP their line has to get
+ *               through: 0 for a clear line, the nearest VALUED object's SP for a soaked one.
+ *   `covered` — figures behind a NAKED move-blocking wall, exempt exactly as they were.
+ * The two-bucket `exposed`/`covered` shape this used to return is gone with its last reader: a caller
+ * that took `exposed` as "everyone the shot damages" would now be silently short by every soaked
+ * figure, so the name was retired rather than left to mean something new.
  *
  * Returns placeables where the scene has them and the token documents otherwise, which is what both
  * callers already coped with.
@@ -3039,12 +3189,74 @@ function _spreadPatternOccupants(handle) {
   const originY = Number(f.originY ?? handle?.doc?.y ?? 0);
   const candidates = (scene?.tokens?.contents ?? canvas?.tokens?.placeables?.map(t => t.document ?? t) ?? [])
     .filter(td => (td.actor ?? td.document?.actor) && (td.actor?.id ?? td.document?.actor?.id) !== f.attackerId);
-  const exposed = [], covered = [];
+  const hit = [], covered = [];
   for (const td of tokensInArea(handle, candidates)) {
     const tok = canvas?.tokens?.placeables?.find(t => (t.document?.id ?? t.id) === (td.id ?? td.document?.id)) ?? td;
-    (_isOccluded(originX, originY, tok) ? covered : exposed).push(tok);
+    const verdict = areaCoverVerdict(originX, originY, tok, scene);
+    if (verdict.state === AREA_COVER_EXEMPT) { covered.push(tok); continue; }
+    hit.push({ tok, sp: verdict.sp, row: verdict.row, soaked: verdict.state === AREA_COVER_SOAKED });
   }
-  return { originX, originY, exposed, covered };
+  return { originX, originY, hit, covered };
+}
+
+/**
+ * The far end of a pattern's own axis, in scene pixels — the corridor's centre line, from the muzzle
+ * point to its printed reach.
+ *
+ * ⭐ THIS IS WHAT MAKES A MISS COST SOMETHING (ruling 3, 2026-08-25). Every other cover question this
+ * file asks is "what is between the origin and this FIGURE", which cannot be asked of a corridor that
+ * caught nobody. A corridor that lands on a barrier and hits no one still put its shot into that
+ * barrier, so the axis is asked the same valued-cover question a figure's line is, and whatever it
+ * crosses chews. A SCATTERED corridor needs nothing extra here: the relocation happens at placement
+ * (_placeSpreadZone folds the scatter into the angle, reach and width the region is built from and
+ * records those numbers in its own flags), so the axis this derives off those flags is already the
+ * corridor the shot actually went down — declared or scattered, one derivation.
+ */
+function _spreadAxisEnd(scene, f, originX, originY) {
+  const pxPerM = metersToPixels(scene, 1) || 1;
+  const lengthPx = (Number(f.lengthM) || 0) * pxPerM;
+  const rad = ((Number(f.dirDeg) || 0) * Math.PI) / 180;
+  return { x: originX + Math.cos(rad) * lengthPx, y: originY + Math.sin(rad) * lengthPx };
+}
+
+/**
+ * EVERY VALUED OBJECT THIS CORRIDOR IS GOING TO CHARGE — one list, read by the card and by the apply,
+ * so the button cannot debit an object the card never named.
+ *
+ * The union of two questions, deduplicated by uuid in first-seen order:
+ *   · the barrier each SOAKED figure is behind (`hit`, already resolved by areaCoverVerdict), and
+ *   · whatever the corridor's own axis crosses (`_spreadAxisEnd`) — the miss-chew half, which is the
+ *     only one that answers at all when the corridor caught nobody.
+ * A barrier that appears in both is ONE entry, which is the cardinality rule stated in cover.js:
+ * one ledger per object per application, however many figures shelter behind it.
+ *
+ * Empty when the world switch is off — the same switch that decides whether cover interacts with
+ * areas at all, asked once so the soak, the exemption and the chew are enabled together.
+ */
+function _spreadCoverCrossings(handle, originX, originY, hit) {
+  if (!areaCoverEnabled()) return [];
+  const scene = canvas?.scene;
+  const f = handle?.doc?.flags?.["cp2020-augmented"] ?? {};
+  const seen = new Set();
+  const out = [];
+  const take = (r) => {
+    const uuid = String(r?.uuid ?? "");
+    if (!uuid || seen.has(uuid) || r.destroyed || !(r.sp > 0)) return;
+    // ⭐ CORE-MODE COVER IS NOT A CROSSING THE APPLY WILL CHARGE (2026-08-26 — the split is written
+    // out at cover.js COVER_MODE_CORE). An SP entered on its own keeps no structure, so the apply books
+    // nothing against it and ⛔ no structure card is ever posted for it. This list is DEFINED as "what
+    // the button is going to debit", so a row with no ledger does not belong on it — printing it would
+    // promise a structure line that never arrives. The figure sheltering behind it still gets its own
+    // row, which is where its soak is reported (SpreadRowSoakedCore).
+    if (!coverChews(r)) return;
+    seen.add(uuid); out.push(r);
+  };
+  for (const e of hit ?? []) if (e.soaked) take(e.row);
+  try {
+    const end = _spreadAxisEnd(scene, f, originX, originY);
+    for (const r of valuedCoverAlong(scene, { x: originX, y: originY }, end)) take(r);
+  } catch (err) { console.warn("CP2020 | pattern axis cover scan failed", err); }
+  return out;
 }
 
 /** The name a pattern card prints for one figure, from a placeable or a bare token document. */
@@ -3057,23 +3269,45 @@ function _spreadRowName(tok) {
  *
  * Posted for a DECLARED corridor once the shot has finished being presented. It states the corridor's
  * own terms (band, width, the banded formula, how many shells ride it), then one row per figure the
- * corridor contains — each row saying whether that figure is IN the pattern or exempted by cover — and
- * the p.109 basis the rows rest on: everyone in the pattern takes the banded damage and nobody is rolled
- * against individually. The button is the same `.cp-confirm-spread-zone` the guessed-corridor card
- * carries, so it runs the same resolution through the same dispatch and the same GM relay.
+ * corridor contains — each row saying which of THREE things that figure is (in the pattern · in the
+ * pattern behind a rated barrier, named with its SP · behind an unrated wall and exempt) — plus a line
+ * naming every rated object the apply is going to charge, and the p.109 basis the rows rest on:
+ * everyone in the pattern takes the banded damage and nobody is rolled against individually. The
+ * button is the same `.cp-confirm-spread-zone` the guessed-corridor card carries, so it runs the same
+ * resolution through the same dispatch and the same GM relay.
  *
  * The rows are a SNAPSHOT of the moment the card is posted; the resolution re-reads the corridor when
  * the button is pressed, so a figure who walks in or out between the two is resolved as it stands then.
  * That is deliberate — the region is on the table for exactly that reason.
  */
 async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmgFormula, shells, speaker, outcome = null, scatter = null }) {
-  const { exposed, covered } = _spreadPatternOccupants(handle);
+  const { originX, originY, hit, covered } = _spreadPatternOccupants(handle);
   // Status is assembled in JS and passed as a localized param (the GasCloudPenaltyClause pattern), so the
   // template stays one declarative row shape rather than branching per figure.
+  // ⭐ THREE STATES, and the middle one is the ruling: a figure behind a VALUED barrier is in the
+  // pattern and says which barrier and at what SP, because the apply is about to fold exactly that
+  // number and the card must not be readable as "exempt".
   const rows = [
-    ...exposed.map(t => ({ name: _spreadRowName(t), status: localize("SpreadRowInPattern") })),
+    ...hit.map(e => ({
+      name: _spreadRowName(e.tok),
+      // ⭐ FOUR ROW STATES NOW, because SOAK-WITHOUT-A-LEDGER IS A NEW ONE (2026-08-26). A figure
+      // behind CORE-mode cover — an SP the GM typed with no structure — is soaked exactly like anyone
+      // behind a rated barrier, but nothing is going to be charged for it and no structure card will
+      // follow. The row says so in its own words, so the reader is not left waiting for a wear line
+      // that never comes and cannot read "no structure line" as "the module forgot".
+      status: e.soaked
+        ? localizeParam(coverChews(e.row) ? "SpreadRowSoaked" : "SpreadRowSoakedCore",
+                        { cover: e.row?.label ?? "", sp: e.sp })
+        : localize("SpreadRowInPattern"),
+    })),
     ...covered.map(t => ({ name: _spreadRowName(t), status: localize("SpreadRowCovered") })),
   ];
+  // WHAT THE CORRIDOR ITSELF IS GOING TO COST — the objects the apply will debit, including the ones
+  // nobody is standing behind (ruling 3). Named on the card because the button must resolve exactly
+  // what the card shows, and an empty corridor that still breaks a door would otherwise arrive as a
+  // chew card out of nowhere. Pre-localized here, like every other assembled line on this card.
+  const coverLines = _spreadCoverCrossings(handle, originX, originY, hit)
+    .map(r => localizeParam("SpreadCoverCrossedLine", { cover: r.label, sp: r.sp, pool: r.pool, poolMax: r.poolMax }));
   // ⭐ THE ROLL LINE, and the scatter under it when there is one. Assembled here as PRE-LOCALIZED
   // strings rather than as branches in the template (the GasCloudPenaltyClause pattern), so the card
   // stays two declarative optional lines and the verdict's own colour lives inside its i18n value —
@@ -3096,7 +3330,7 @@ async function _postSpreadResolutionCard(handle, { weaponName, band, widthM, dmg
   const content = await renderChatCard("spread-resolution.hbs", {
     weaponName, band, widthM, dmgFormula, shells, multiShell: shells > 1,
     templateId: handle.doc.id, rows, anyRows: rows.length > 0,
-    rollLine, scatterLine,
+    rollLine, scatterLine, coverLines, anyCoverLines: coverLines.length > 0,
   });
   const message = await ChatMessage.create({ content, speaker });
   await _stampPatternCardId(handle, message);
@@ -3142,28 +3376,85 @@ export async function _confirmSpreadZone(templateId, requestedBy = "") {
   // Who the corridor caught, read through the SAME reader the resolution card was built from, so the
   // rows a reader pressed the button on and the figures this loop resolves against are one answer to
   // one question (containment, minus the attacker, minus whatever cover exempts).
-  const { originX, originY, exposed: tokens } = _spreadPatternOccupants(handle);
+  const { originX, originY, hit } = _spreadPatternOccupants(handle);
 
   const weaponName = localizeParam("WpnVariantSpread", { name: f.weaponName ?? localize("WpnShotgun") });
+
+  // ⭐ THE BARRIERS ARE RESOLVED FIRST, and that ordering is load-bearing. Each crossed object gets one
+  // ledger (cover.js resolveAreaCoverChew), which produces the per-shell SP the figures behind it then
+  // face — so an object that gives out on shell 3 is no longer soaking for shells 4..N of this same
+  // burst. Doing it the other way round would have every figure resolve against an intact barrier and
+  // then break it afterwards, the exact defect the aimed path's ledger was built to end.
+  //
+  // ⭐⭐ ONE ROLL DOES BOTH JOBS (user ruling 2026-08-26, verbatim: *"I would also expect one roll to do
+  // both jobs. It just makes sense. In the game flow, the attacker rolls the damage dice, so a bullet
+  // doesn't get two different damage resolutions."*). A shell that goes through a door and into the
+  // person behind it is ONE shell with ONE damage number: the door is charged that number, and the
+  // person takes that same number less the door's SP. So the barrier is charged the FIRST soaked
+  // figure's rolls, made ONCE here and reused by that figure's own resolution below — never rolled a
+  // second time for the same shell.
+  //
+  // ⏪ THE BARRIER ROLLS FOR ITSELF ONLY WHEN IT SHIELDED NOBODY. That is the miss-chew case (ruling 3):
+  // with no figure behind it there is no shell-roll to share, and the corridor still went through the
+  // object, so it is resolved as a body standing in the pattern in its own right (Core p.109).
+  //
+  // A SECOND figure behind the same barrier rolls its own shells — they are its own bullets — but the
+  // barrier is not charged again: the cardinality rule is unchanged at one debit per object per
+  // application (cover.js resolveAreaCoverChew).
+  const chewRows = _spreadCoverCrossings(handle, originX, originY, hit);
+  const rollShell = async () => {
+    const r = await new Roll(f.dmgFormula || "3d6").evaluate();
+    return Math.max(0, Math.floor(r.total));
+  };
+  // Which figure PAYS for each barrier — the first one the corridor found behind it, by uuid.
+  const payerOf = new Map();
+  for (const e of hit) {
+    const uuid = e.soaked ? String(e.row?.uuid ?? "") : "";
+    if (uuid && !payerOf.has(uuid)) payerOf.set(uuid, e);
+  }
+  // Their shells, rolled once. Keyed by the hit entry so the figure loop can find its own numbers back.
+  const sharedShots = new Map();
+  for (const e of payerOf.values()) {
+    const shots = [];
+    for (let i = 0; i < shells; i++) shots.push(await rollShell());
+    sharedShots.set(e, shots);
+  }
+  const chewPlan = await resolveAreaCoverChew(chewRows, shells, async (row, i) => {
+    const payer = payerOf.get(String(row?.uuid ?? ""));
+    return payer ? sharedShots.get(payer)[i] : await rollShell();
+  });
   // ONE APPLICATION BATCH: every shell of this burst, against every figure in the corridor, is one
   // moment of the fight. The ledger collects each figure's severity steps and zone outcomes and emits
   // once per figure — one progression card, one mortal prompt at the tier the burst finished on (see
   // combat/severity-batch.js, and _postWoundSavePrompts for why a burst owes at most one).
   const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
   const rows = [];
-  for (const tok of tokens) {
+  for (const entry of hit) {
+    const tok = entry.tok;
     // ⭐ N ROLLS, NOT ONE ROLL APPLIED N TIMES. Each shell is its own discharge of shot, so each gets
     // its own banded roll and its own trip through the armour pipeline — which is a different number
     // from N × one roll the moment armour is in the way, because SP is subtracted per hit.
+    //
+    // ⭐ …AND WHEN THIS FIGURE IS A BARRIER'S PAYER, those rolls were already made above and are reused
+    // here rather than re-rolled: one shell, one damage number, spent on the barrier and on the body
+    // behind it (the one-roll ruling at the plan). A figure that pays for nothing rolls fresh, and so
+    // does the SECOND figure behind a barrier somebody else already paid for.
+    const preset = sharedShots.get(entry) ?? null;
     const shots = [];
     for (let i = 0; i < shells; i++) {
-      const dmgRoll = await new Roll(f.dmgFormula || "3d6").evaluate();
-      const dmg = Math.max(0, Math.floor(dmgRoll.total));
+      const dmg = preset ? preset[i] : await rollShell();
       shots.push(dmg);
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, severity);
+      // The SP this shell had to get through: 0 on a clear line, and on a soaked one the SP the
+      // barrier still had when this shell left — read from the plan resolved above, never re-derived.
+      const coverSP = entry.soaked ? areaCoverSpForRound(chewPlan, entry.row, i) : 0;
+      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, severity, coverSP);
     }
     rows.push({ name: _spreadRowName(tok), rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0) });
   }
+
+  // The structure debits, written once each after the figures are resolved — one relayed chew per
+  // object (the active GM writes; anyone else relays), so a player's confirm wears the same door down.
+  await commitAreaCoverChew(chewPlan, f.weaponName ?? localize("WpnShotgun"));
 
   // Closed before the resolution card so the per-figure progression cards sit next to the numbers that
   // produced them rather than after the burst's own summary.
@@ -3177,7 +3468,9 @@ export async function _confirmSpreadZone(templateId, requestedBy = "") {
       { weaponName: f.weaponName ?? localize("WpnShotgun"), band: f.band, shells, multiShell: shells > 1, dmgFormula: f.dmgFormula, rows }
     );
     await ChatMessage.create({ content: resultCard });
-  } else {
+  } else if (!chewPlan.size) {
+    // "Nothing happened" is only true when the corridor also charged no barrier — a shot that caught
+    // nobody but put a door down has its own chew card and must not be reported as a wasted shell.
     ui.notifications.info(localize("NoTokensInSpread"));
   }
 
@@ -3354,9 +3647,9 @@ function _hookSpreadZoneExpiry() {
 /** The one live sweep interval, so a re-registration cannot stack a second one. */
 let _spreadSweepTimer = null;
 
-/** Only the active GM deletes zones — every GM client receives the same hooks, and two would race. */
+/** Only the primary GM session deletes zones — every GM client receives the same hooks, and two would race. */
 function _ownsSpreadSweep() {
-  return !!game.user?.isGM && game.users.activeGM?.id === game.user.id;
+  return isPrimaryGMSession();
 }
 
 /**
@@ -3516,18 +3809,18 @@ function _hookMultiActionPenalty() {
   };
 
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM || updateData.round === undefined) return;
-    // Active GM only — consistent with the other per-turn handlers (idempotent flag clears).
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (updateData.round === undefined) return;
+    // Primary GM session only — consistent with the other per-turn handlers (idempotent flag clears).
+    if (!isPrimaryGMSession()) return;
     await _clearActionCounts(combat);
   });
 
   // A fresh combat must start from a clean count. The round-stamp guard in _getActionCount can be fooled
   // when a new combat reuses a round number a stale stamp still matches (e.g. a prior combat left a count
   // stamped at round 1 and this combat is also at round 1). Clearing on combatStart guarantees the first
-  // in-combat action counts as the first. Active GM only, idempotent — mirrors the round-reset above.
+  // in-combat action counts as the first. Primary session only, idempotent — mirrors the round-reset above.
   Hooks.on("combatStart", async (combat) => {
-    if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     await _clearActionCounts(combat);
   });
 }
@@ -3623,7 +3916,9 @@ function _hookSocketRelay() {
     if (data.type === "suppressiveZoneRearm") {
       if (data.payload?.userId && data.payload.userId === game.user.id) {
         const { armSuppressivePreview } = await import("./suppressive-placement.js");
-        await armSuppressivePreview({ ...data.payload, rearm: true });
+        // Started, not awaited — see the note in _relaySuppressiveRearm: on the native placement path the
+        // arm outlives this callback by however long the shooter takes to aim.
+        armSuppressivePreview({ ...data.payload, rearm: true }).catch((e) => console.warn("cp2020-augmented | suppressive re-arm failed", e));
       }
       return;
     }
@@ -3637,37 +3932,42 @@ function _hookSocketRelay() {
       return;
     }
 
-    // Suppressive lane geometry relayed from a non-GM shooter's confirmed preview → the active GM plants
-    // (or, with a regionId, updates) the lane.
+    // Suppressive lane geometry relayed from a non-GM shooter's confirmed preview → the primary GM
+    // SESSION plants (or, with a regionId, updates) the lane. ⛔ NOT idempotent without a regionId:
+    // a second session plants a SECOND lane on top of the first.
     if (data.type === "suppressiveZonePlace") {
-      if (game.users.activeGM?.id !== game.user.id) return;
+      if (!isPrimaryGMSession()) return;
       await placeSuppressiveZoneFromGeometry(data.payload);
       return;
     }
 
-    // Relayed area placement (suppressive / gas / explosion / spread): only the active GM performs
-    // it, else N connected GMs each place a duplicate.
+    // Relayed area placement (suppressive / gas / explosion / spread): only the primary GM SESSION
+    // performs it, else N connected clients each place a duplicate region. ⛔ NOT idempotent — a
+    // placement CREATES, so this row shows the fault at full size.
     const areaPlacer = AREA_PLACERS[data.type];
     if (areaPlacer) {
-      if (game.users.activeGM?.id !== game.user.id) return;
+      if (!isPrimaryGMSession()) return;
       await areaPlacer(data.payload);
       return;
     }
 
-    // Relayed area-Confirm (blast / spread / fire-zone): only the active GM resolves it, else two GMs
-    // both clicking Confirm apply it twice. The handler also claims the template id (double-relay safe).
+    // Relayed area-Confirm (blast / spread / fire-zone): only the primary GM SESSION resolves it, else
+    // two clients both resolving apply it twice. The handler also claims the template id — but that
+    // claim Set is per client, so it only covers a repeat on the SAME session; this line is what makes
+    // the claim authoritative at all (see _claimAreaConfirm).
     const areaConfirmer = AREA_CONFIRMERS[data.type];
     if (areaConfirmer) {
-      if (game.users.activeGM?.id !== game.user.id) return;
+      if (!isPrimaryGMSession()) return;
       await areaConfirmer(data);
       return;
     }
 
     // Relayed special martial hit-effect (A6): a player performed a grapple/choke/hold on a target
-    // they can't write. Only the active GM applies it (writes the target's held/grapple/choke flags +
-    // posts the effect card), else N GMs each apply it N times.
+    // they can't write. Only the primary GM SESSION applies it (writes the target's held/grapple/choke
+    // flags + posts the effect card). The flag writes converge on the same value, but the CARD does
+    // not — a second session posts a second one.
     if (data.type === "martialEffect") {
-      if (game.users.activeGM?.id !== game.user.id) return;
+      if (!isPrimaryGMSession()) return;
       // Token-first: an unlinked token's grapple/choke flags belong to THAT token's synthetic
       // actor, not the shared world actor its id also resolves to.
       const tgt = resolveActorRef({ tokenId: data.targetTokenId, sceneId: data.targetSceneId,
@@ -3682,9 +3982,14 @@ function _hookSocketRelay() {
 
     if (data.type !== "applyDamage") return;
 
-    // The socket fires on every connected GM client. Only the primary (active) GM
-    // applies the damage, otherwise N connected GMs would each apply it N times.
-    if (game.users.activeGM?.id !== game.user.id) return;
+    // ⛔⛔ THE ROW THE WHOLE ELECTION EXISTS FOR. The socket fires on every connected GM client — a
+    // second GM, and a second TAB of the same GM. Only the primary GM SESSION applies the damage.
+    // And the fault this prevents does NOT look like doubled damage: the wound-track write below is
+    // read-modify-write (`current + netDamage` in DamageApplicator.applyLocationDamage), so two
+    // sessions read the same `current` and write the same sum. One application's worth lands from two
+    // applications, and a multi-row volley lands an interleaved SUBSET of its rows. The hit points
+    // therefore UNDER-report the fault; the cards, which are create-shaped, show it at full size.
+    if (!isPrimaryGMSession()) return;
 
     // Token-first (the player-relay path is where prototype bleed-through hurt most): a hit on an
     // unlinked token must write that token's synthetic actor. The bare-actorId fallback keeps

@@ -335,7 +335,22 @@ const liveKeys = liveWhole?.keys ?? [];
 const storedKeys = stored?.keys ?? [];
 const added = liveKeys.filter(k => !storedKeys.includes(k));
 const dropped = storedKeys.filter(k => !liveKeys.includes(k));
-const retyped = liveKeys.filter(k => storedKeys.includes(k) && liveWhole.types[k] !== stored.types[k])
+// ⛔ `null` IS A VALUE, NOT A TYPE — and a pair where either side is null is not a re-typing (repaired
+// 2026-08-26, after this leg went red on one run in ten and green on the next with no code between).
+// `typeOf` records `"null"` as a pseudo-type, so a field the producer sets to null on MOST shots and to
+// something else on SOME records whichever of the two the captured shot happened to carry. That is not
+// drift, it is a NULLABLE field, and this module has several: `fumbleClass` is null unless the base's
+// fumble table actually ruled on the shot (roughly one attack roll in ten with the table on, which is
+// the rig's standing state), and `spreadScatter`, `attackerTokenId` and `targetTokenId` carry the same
+// shape for their own reasons. Comparing them by pseudo-type made the contract leg a dice roll.
+//
+// What the leg still catches is the whole point of it: a field that changed from one REAL type to
+// another — string→number, object→string, array→object. Fields that merely varied against a null are
+// listed as `nullable` in the detail line, so a reader sees them rather than having them hidden.
+const typePairs = liveKeys.filter(k => storedKeys.includes(k) && liveWhole.types[k] !== stored.types[k]);
+const nullable = typePairs.filter(k => stored.types[k] === "null" || liveWhole.types[k] === "null")
+  .map(k => `${k}: fixture ${stored.types[k]} / live ${liveWhole.types[k]}`);
+const retyped = typePairs.filter(k => stored.types[k] !== "null" && liveWhole.types[k] !== "null")
   .map(k => `${k}: fixture ${stored.types[k]} → live ${liveWhole.types[k]}`);
 
 ok("§4 contract: the live emission carries no field the stored fixture has never seen",
@@ -348,7 +363,9 @@ ok("§4 contract: the live emission drops no field the stored fixture carries",
                  : `${storedKeys.length} stored field(s), all still emitted`);
 ok("§4 contract: every shared field still carries the type the stored fixture recorded",
   !!liveWhole && !liveWhole.err && retyped.length === 0,
-  retyped.length ? `RE-TYPED BY THE PRODUCER: ${retyped.join(" · ")}` : `${liveKeys.length} field(s) type-identical`);
+  retyped.length ? `RE-TYPED BY THE PRODUCER: ${retyped.join(" · ")}`
+                 : `${liveKeys.length} field(s) type-identical`
+                   + (nullable.length ? ` (nullable, not a re-typing: ${nullable.join(" · ")})` : ""));
 
 /* ══ RESTORE ═════════════════════════════════════════════════════════════════════════════════════ */
 console.log("\n===== restore =====");

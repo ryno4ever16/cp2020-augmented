@@ -98,6 +98,17 @@ const res = await page.evaluate(async () => {
   const areas = await import(`/modules/${SCOPE}/module/combat/area-shapes.js`);
   const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
   const scatterTable = await import(`/modules/${SCOPE}/module/combat/scatter-table.js`);
+  // The corridor's VERDICT questions — the hit ruling and the scatter decision that reads it — live in
+  // spread-geometry.js; scatter-table.js keeps the drift TABLE. `payloadScattersOnMiss` moved across on
+  // 2026-08-26 when it started asking the ruling instead of re-comparing the roll against the DC.
+  const geo = await import(`/modules/${SCOPE}/module/combat/spread-geometry.js`);
+  // The fumble OUTCOME CLASS — which row of the base's Reflex (Combat) table was ruled. Its own home
+  // (2026-08-26) because both rails read it and neither may derive it: the seam derives once, the
+  // consumers switch on the carried field.
+  const fumbleMod = await import(`/modules/${SCOPE}/module/combat/fumble-outcome.js`);
+  // ⭐ THE BASE SYSTEM'S OWN PRODUCER, imported so the parse is asserted against REAL output rather than
+  // against a fixture that agrees with it by construction. This is the module the class derivation reads.
+  const baseUtils = await import("/systems/cyberpunk2020/module/utils.js");
 
   // SCOPE STATEMENT: this suite asserts the REGIONS shape — zone documents in scene.regions and the
   // Region-mesh look (§4 reads placeable meshes and shader uniforms that only exist on that backend).
@@ -504,6 +515,11 @@ const res = await page.evaluate(async () => {
 
   // Cover occlusion: a wall between shooter and target exempts it, so a pattern that contains the token
   // resolves against nobody. Uses this spec's own wall, deleted below.
+  // ⭐ THE WALL IS DELIBERATELY UNVALUED (no cover flags), and since the 2026-08-25 soak ruling that is
+  // the whole reason this leg still reads "exempt": a wall carrying `coverSp` would put the figure IN
+  // the corridor with that SP folded outermost and would debit the wall's structure. This leg pins the
+  // NAKED half of the split; the valued half and the barrier's own wear live in
+  // cp2020-augmented-cover-area-soak.mjs.
   const occlusionOn = game.settings.get(SCOPE, "areaEffectOcclusion");
   const [wall] = await scene.createEmbeddedDocuments("Wall", [{ c: [500, 0, 500, 500] }]);
   await sleep(400);
@@ -1326,6 +1342,200 @@ const res = await page.evaluate(async () => {
     hooks.spreadAttackOutcome(JSON.parse(JSON.stringify({ attackTotal: NaN, toHitDC: NaN }))) === null,
     JSON.stringify(JSON.parse(JSON.stringify({ attackTotal: NaN, toHitDC: NaN }))));
 
+  // §14a-bis — THE BASE'S RULED BOOLEAN OUTRANKS THE COMPARISON (2026-08-26). The comparison alone
+  // cannot see everything the base ruled on: `_maybeApplyRangedFumble` sets `forceMiss`, and every fire
+  // path zeroes its hit count from that flag while `attackRoll.total` still stands over the DC. The
+  // field-repro'd numbers are used verbatim — 31 against a DC of 15, which the arithmetic calls a hit
+  // and the base's own card called a miss.
+  ok("§14 a ruled FUMBLE is a miss whatever the roll totalled — the field repro, by value",
+    hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true })?.hit === false
+    && hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true })?.source === "fumble"
+    && hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true })?.total === 31,
+    JSON.stringify(hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true })));
+  ok("§14 a ruled MISS over the DC reads as a miss, and a ruled HIT under it as a hit (both directions)",
+    hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false })?.hit === false
+    && hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false })?.source === "base"
+    && hooks.spreadAttackOutcome({ attackTotal: 9, toHitDC: 15, baseHit: true })?.hit === true,
+    JSON.stringify([hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false }),
+                    hooks.spreadAttackOutcome({ attackTotal: 9, toHitDC: 15, baseHit: true })]));
+  ok("§14 an autoshotgun's TIE arrives ruled a miss, which is how the base counts its rounds",
+    hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20, baseHit: false, baseHits: 0 })?.hit === false
+    && hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20, baseHit: false, baseHits: 0 })?.hits === 0,
+    JSON.stringify(hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20, baseHit: false, baseHits: 0 })));
+  // ⏪ THE UNSTAMPED FALLBACK IS UNCHANGED, tie included. A payload with no verdict field — a macro, a
+  // keeper placement, a client mid-update — still gets the comparison, and its tie still reads as a hit
+  // because that is the base's SEMI-AUTO rule (item.js:689), the only fire mode a plain shotgun has
+  // (__getFireModes, item.js:408). ⛔ Whether that fallback should instead be strictly-over is a live
+  // user call, recorded in import-staging/SPREAD-FUMBLE-VERDICT.md; nothing about a fired-in-anger shot
+  // depends on it any more.
+  ok("§14 a payload carrying NO verdict field keeps the comparison, tie included (negative)",
+    hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20 })?.source === "derived"
+    && hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20 })?.hit === true
+    && hooks.spreadAttackOutcome({ attackTotal: 19, toHitDC: 20 })?.hit === false
+    && hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: null })?.source === "derived",
+    JSON.stringify([hooks.spreadAttackOutcome({ attackTotal: 20, toHitDC: 20 }),
+                    hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: null })]));
+
+  /* ── §14a-ter  THE RULED FUMBLE'S OUTCOME CLASS — the base's table row, read once ──────────── */
+  // A ruled fumble is not one outcome. The base rolls a second d10 against its Reflex (Combat) table
+  // (base utils.js:641-648) and the rows say different things: 1-4 is "no fumble, you just screw up" —
+  // an ordinary miss with a round in flight — while 5 and 7 put no round out at all, 6 puts one out
+  // harmlessly, and 8-10 are resolved entirely by the base's own card. Treating them alike made the
+  // 40 % case vanish. These legs pin the mapping, the ANCHOR that decides whether the html can be read
+  // at all, the auto-only-jam branch that prints no table row, and the two predicates both rails ask.
+  {
+    // The two shapes the base's `_dieSpan` emits (base utils.js:286-304): the anchor form when it has a
+    // Roll in hand, the span form when it does not. Both must be recognised — a real block carries one
+    // of each, because the main-roll line often has no Roll object to serialise.
+    const dieAnchor = (v) => `<a class="inline-roll inline-result cp-inline-roll roll-result roll die d10" data-roll="%7B%22formula%22%3A%221d10%22%7D">${v}</a>`;
+    const dieSpan = (v) => `<span class="roll-result roll die d10">${v}</span>`;
+    // The block's shape, in the base's own order: main-roll line, table-roll line, row prose, then any
+    // trailing dice a row asks for (a location die, a reliability die).
+    const blockHtml = (sub, { main = 1, trailing = [] } = {}) =>
+      `<p><b>Fumble</b>: main roll was ${dieSpan(main)}.</p>`
+      + `<p><b>Reflex (Combat)</b>: additional roll ${dieAnchor(sub)}.</p>`
+      + `<p>row prose</p>`
+      + trailing.map(v => `<p>trailing ${dieAnchor(v)}</p>`).join("");
+    const classOf = (sub, opts) => fumbleMod.rangedFumbleClassFrom({ html: blockHtml(sub, opts) });
+
+    const EXPECT = { 1: "plainMiss", 2: "plainMiss", 3: "plainMiss", 4: "plainMiss",
+                     5: "noDischarge", 6: "harmlessDischarge", 7: "noDischarge",
+                     8: "ownSide", 9: "ownSide", 10: "ownSide" };
+    const mapped = {};
+    for (let s = 1; s <= 10; s++) mapped[s] = classOf(s);
+    ok("§14a-ter every table row maps to its outcome class, by value across all ten faces",
+      Object.keys(EXPECT).every(k => mapped[k] === EXPECT[k]), JSON.stringify(mapped));
+    // Trailing dice belong to the ROW, not to the classification — a row-8 block carries a location die
+    // and a damage total after its table face, and a row-6 block carries a reliability die. Neither may
+    // move the answer, which is what makes the SECOND face (not the last) the one that is read.
+    ok("§14a-ter trailing row dice do not move the class (row 8 + location, row 6 + reliability)",
+      classOf(8, { trailing: [4] }) === "ownSide" && classOf(6, { trailing: [9] }) === "harmlessDischarge",
+      JSON.stringify({ eight: classOf(8, { trailing: [4] }), six: classOf(6, { trailing: [9] }) }));
+    // ⭐ THE ANCHOR. A fumble block only exists because the main die came up 1 (base isFumbleRoll,
+    // utils.js:282-284), so the first face is a checkable invariant. A block whose first face is not 1
+    // is not the shape this parse was written against, and it must say UNKNOWN rather than read the
+    // wrong element — a null falls back to the uniform bail, which is the behaviour that already ships.
+    ok("§14a-ter a block whose first face is not 1 is refused, not guessed at (the anchor)",
+      classOf(3, { main: 7 }) === null
+      && fumbleMod.rangedFumbleClassFrom({ html: `<p>${dieSpan(1)}</p>` }) === null
+      && fumbleMod.rangedFumbleClassFrom({ html: "" }) === null
+      && fumbleMod.rangedFumbleClassFrom({}) === null,
+      JSON.stringify({ wrongAnchor: classOf(3, { main: 7 }),
+                       oneFace: fumbleMod.rangedFumbleClassFrom({ html: `<p>${dieSpan(1)}</p>` }),
+                       empty: fumbleMod.rangedFumbleClassFrom({ html: "" }) }));
+    ok("§14a-ter the face reader returns the base's own faces in document order",
+      JSON.stringify(fumbleMod.fumbleTableDieFaces(blockHtml(6, { trailing: [9] }))) === "[1,6,9]"
+      && fumbleMod.fumbleTableSubRoll(blockHtml(6, { trailing: [9] })) === 6,
+      JSON.stringify(fumbleMod.fumbleTableDieFaces(blockHtml(6, { trailing: [9] }))));
+    // The auto-only-jam early return prints NO table row — its second face is a reliability die — so the
+    // branch is stated by the caller and classified without parsing. Both of its ends are rounds that
+    // never left, so the whole branch is noDischarge (a lane call, recorded in the file's header).
+    ok("§14a-ter the auto-only-jam branch classifies without parsing, whatever face the html shows",
+      fumbleMod.rangedFumbleClassFrom({ html: blockHtml(3), autoOnlyJamBranch: true }) === "noDischarge"
+      && fumbleMod.rangedFumbleClassFrom({ html: blockHtml(9), autoOnlyJamBranch: true }) === "noDischarge"
+      && fumbleMod.rangedFumbleClassFrom({ html: "", autoOnlyJamBranch: true }) === "noDischarge",
+      JSON.stringify([fumbleMod.rangedFumbleClassFrom({ html: blockHtml(3), autoOnlyJamBranch: true }),
+                      fumbleMod.rangedFumbleClassFrom({ html: blockHtml(9), autoOnlyJamBranch: true })]));
+
+    // The reader consumers use, and the two predicates. An unknown string, a null and an absent field
+    // all read as "the payload does not say" — the legacy shape, which must keep the uniform bail.
+    ok("§14a-ter the carried class is normalised: only the four known strings survive the read",
+      fumbleMod.fumbleClassOf({ fumbleClass: "plainMiss" }) === "plainMiss"
+      && fumbleMod.fumbleClassOf({ fumbleClass: "somethingElse" }) === null
+      && fumbleMod.fumbleClassOf({ fumbleClass: null }) === null
+      && fumbleMod.fumbleClassOf({}) === null,
+      JSON.stringify(fumbleMod.FUMBLE_CLASSES));
+    const pred = (fumbleClass) => ({
+      down: fumbleMod.fumbleStandsRailsDown({ fumbleRuled: true, fumbleClass }),
+      miss: fumbleMod.fumbleIsOrdinaryMiss({ fumbleRuled: true, fumbleClass }),
+    });
+    ok("§14a-ter exactly one class keeps both rails running, and the other three stand them down",
+      pred("plainMiss").miss === true && pred("plainMiss").down === false
+      && pred("noDischarge").down === true && pred("noDischarge").miss === false
+      && pred("harmlessDischarge").down === true && pred("harmlessDischarge").miss === false
+      && pred("ownSide").down === true && pred("ownSide").miss === false
+      && pred(undefined).down === true && pred(undefined).miss === false,
+      JSON.stringify({ plainMiss: pred("plainMiss"), noDischarge: pred("noDischarge"),
+                       harmlessDischarge: pred("harmlessDischarge"), ownSide: pred("ownSide"),
+                       legacy: pred(undefined) }));
+    ok("§14a-ter a payload with no ruled fumble stands nothing down and is no ordinary-miss fumble",
+      fumbleMod.fumbleStandsRailsDown({ fumbleClass: "plainMiss" }) === false
+      && fumbleMod.fumbleIsOrdinaryMiss({ fumbleClass: "plainMiss" }) === false
+      && fumbleMod.fumbleStandsRailsDown({}) === false,
+      JSON.stringify({ unruledPlain: fumbleMod.fumbleStandsRailsDown({ fumbleClass: "plainMiss" }) }));
+
+    // The verdict site carries the class through, and the scatter decision reads it: an ordinary-miss
+    // fumble goes to the grenade table like any other miss, the other three roll nothing.
+    const fp = (fumbleClass) => ({ attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true, fumbleClass });
+    ok("§14a-ter the verdict site carries the class beside the ruling, and still rules every fumble a miss",
+      hooks.spreadAttackOutcome(fp("plainMiss"))?.fumbleClass === "plainMiss"
+      && hooks.spreadAttackOutcome(fp("plainMiss"))?.hit === false
+      && hooks.spreadAttackOutcome(fp("plainMiss"))?.source === "fumble"
+      && hooks.spreadAttackOutcome({ attackTotal: 31, toHitDC: 15, baseHit: false })?.fumbleClass === null,
+      JSON.stringify(hooks.spreadAttackOutcome(fp("plainMiss"))));
+    // A corridor record good enough for the predicate's entry condition (declaredSpreadAim wants a
+    // finite angle and three positive lengths); the behavioural sections build the real one.
+    const aim14ater = { angleDeg: 0, reachM: 20, lengthM: 22, widthM: 2, band: "Medium" };
+    const scat = (fumbleClass) => geo.payloadScattersOnMiss({ spreadAim: aim14ater, ...fp(fumbleClass) });
+    ok("§14a-ter only the ordinary-miss class sends the centre to the grenade table",
+      scat("plainMiss") === true && scat("noDischarge") === false
+      && scat("harmlessDischarge") === false && scat("ownSide") === false && scat(undefined) === false,
+      JSON.stringify({ plainMiss: scat("plainMiss"), noDischarge: scat("noDischarge"),
+                       harmlessDischarge: scat("harmlessDischarge"), ownSide: scat("ownSide"),
+                       legacy: scat(undefined) }));
+
+    /* THE LIVE PRODUCER. Everything above reads a fixture built to the base's shape; this drives the
+     * BASE SYSTEM'S OWN builder and classifies what it actually writes, so a base edit that moves a line
+     * or drops a die is caught here rather than at somebody's table. 300 builds sample every row
+     * (P(missing the 10 % row) ≈ 3e-14), and the two structured flags the base DOES expose
+     * (`outcome.discharge`, `outcome.jam`) cross-check the parsed face independently of the parse. */
+    const stubWeapon = {
+      _getWeaponSystem: () => ({ reliability: "Standard", damage: "1d6" }),
+      actor: { getRollData: () => ({}) },
+    };
+    const seen = new Set();
+    let builds = 0, unreadable = 0, mismatched = 0, dischargeOffRow6 = 0, jamOffRow7 = 0;
+    for (let i = 0; i < 300; i++) {
+      const built = await baseUtils.buildRangedCombatFumbleData({
+        item: stubWeapon, attackRoll: {}, isAutoWeapon: false, autoOnlyJam: false,
+      });
+      builds++;
+      const face = fumbleMod.fumbleTableSubRoll(built.html);
+      const cls = fumbleMod.rangedFumbleClassFrom({ html: built.html });
+      if (face === null || cls === null) { unreadable++; continue; }
+      if (cls !== EXPECT[face]) mismatched++;
+      if (built.outcome?.discharge === true && face !== 6) dischargeOffRow6++;
+      if (built.outcome?.jam === true && face !== 7) jamOffRow7++;
+      seen.add(cls);
+    }
+    ok("§14a-ter every block the base's own builder writes is readable and classifies to its own face",
+      builds === 300 && unreadable === 0 && mismatched === 0,
+      JSON.stringify({ builds, unreadable, mismatched }));
+    ok("§14a-ter the two flags the base DOES expose agree with the parsed face (independent cross-check)",
+      dischargeOffRow6 === 0 && jamOffRow7 === 0,
+      JSON.stringify({ dischargeOffRow6, jamOffRow7 }));
+    ok("§14a-ter all four classes are produced by the live builder over 300 draws",
+      seen.size === 4 && fumbleMod.FUMBLE_CLASSES.every(c => seen.has(c)),
+      JSON.stringify([...seen].sort()));
+    // …and the auto-only-jam branch really is unreadable positionally, which is why the caller states it.
+    // Its second face is a reliability die, so a positional read answers a table row that was never rolled.
+    let autoBlocks = 0, autoMisread = 0;
+    for (let i = 0; i < 60; i++) {
+      const built = await baseUtils.buildRangedCombatFumbleData({
+        item: stubWeapon, attackRoll: {}, isAutoWeapon: true, autoOnlyJam: true,
+      });
+      autoBlocks++;
+      const naive = fumbleMod.rangedFumbleClassFrom({ html: built.html });
+      const stated = fumbleMod.rangedFumbleClassFrom({ html: built.html, autoOnlyJamBranch: true });
+      if (stated !== "noDischarge") autoMisread++;
+      if (naive !== null && naive !== "noDischarge") seen.add("__autoNaiveDiffered__");
+    }
+    ok("§14a-ter the stated branch classifies every auto-only-jam block the base writes",
+      autoBlocks === 60 && autoMisread === 0, JSON.stringify({ autoBlocks, autoMisread }));
+    ok("§14a-ter …and that flag is load-bearing: read positionally the same blocks answer differently",
+      seen.has("__autoNaiveDiffered__"), JSON.stringify([...seen].sort()));
+  }
+
   // §14b — the rose and the drift, by value. Diagonals are unit-normalised, so a 3 travels the rolled
   // distance south-east rather than that distance on each axis; faces 5 and 10 are the no-drift results.
   const drift3 = hooks.scatterDriftM(3, 10);
@@ -1557,16 +1767,31 @@ const res = await page.evaluate(async () => {
 
     // the decision itself, before any dice: a corridor plus the base system's own verdict
     ok("§14h the scatter decision wants BOTH a declared corridor and a ruled miss",
-      scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }) === true
-      && scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }) === false
-      && scatterTable.payloadScattersOnMiss({ attackTotal: 9, toHitDC: 15 }) === false
-      && scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: null, toHitDC: null }) === false,
+      geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }) === true
+      && geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }) === false
+      && geo.payloadScattersOnMiss({ attackTotal: 9, toHitDC: 15 }) === false
+      && geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: null, toHitDC: null }) === false,
       JSON.stringify([
-        scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }),
-        scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }),
-        scatterTable.payloadScattersOnMiss({ attackTotal: 9, toHitDC: 15 }),
-        scatterTable.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: null, toHitDC: null }),
+        geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }),
+        geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 30, toHitDC: 15 }),
+        geo.payloadScattersOnMiss({ attackTotal: 9, toHitDC: 15 }),
+        geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: null, toHitDC: null }),
       ]));
+    // …and it reads the RULING, not the arithmetic: a payload whose numbers say "over the DC" but whose
+    // base verdict says miss scatters, and a ruled FUMBLE scatters nothing at all because nothing is
+    // planted for one. The drift table is no longer the home of this question — assert that too, so a
+    // future edit that puts a second copy back in scatter-table.js is caught by name.
+    ok("§14h the scatter decision follows the base's ruling over the two numbers",
+      geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false }) === true
+      && geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15, baseHit: true }) === false
+      && geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true }) === false
+      && scatterTable.payloadScattersOnMiss === undefined,
+      JSON.stringify({
+        ruledMiss: geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false }),
+        ruledHit: geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 9, toHitDC: 15, baseHit: true }),
+        fumble: geo.payloadScattersOnMiss({ spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true }),
+        stillInDriftTable: scatterTable.payloadScattersOnMiss !== undefined,
+      }));
 
     // WHERE THE DICE ARE ROLLED, read off the served code: the seam that assembles the payload on the
     // FIRING client, not the plant that runs on the GM's. The behavioural legs below prove the plant
@@ -1633,6 +1858,122 @@ const res = await page.evaluate(async () => {
         { x: landedPt.x, y: landedPt.y }),
       say(fx.declaredAimPointOf(basePayload({ shotsFired: 1, spreadAim: declaredAim, attackTotal: 9, toHitDC: 15 }), shooterPlaceable)));
     await wipeZones(); await wipeCards();
+  }
+
+  /* ── §14i  THE BASE'S RULING REACHES THE PLANT, AND A FUMBLE PLANTS NOTHING ───────────────── */
+  // Reported from the table 2026-08-26: a shell that FUMBLED posted the base system's fumble card and
+  // drew no presentation at all — and this flow planted a corridor anyway and put a card over it reading
+  // "Attack 31 vs 15 — HIT". One shot, two verdicts, in the same chat log. The mechanism was that the
+  // payload carried the roll and the DC but not the base's own RULING, and the base rules on more than
+  // the arithmetic (`forceMiss` on every fumble its table resolves). The pure legs for that live in
+  // §14a-bis; these are the two behaviours it buys, end to end through the plant.
+  await wipeZones(); await wipeCards();
+  {
+    // (a) A RULED FUMBLE: nothing planted, nothing posted. The presentation rail has skipped its whole
+    // fan-out on this field since it shipped, so this is the resolution half of one answer.
+    const fumbleSince = new Set(game.messages.map(m => m.id));
+    await hooks._placeSpreadZone(basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true,
+    }));
+    await sleep(900);
+    ok("§14i a ruled FUMBLE plants no corridor at all",
+      myZones().length === 0, String(myZones().length));
+    ok("§14i …and posts no resolution card over it — the base's fumble card is the whole account",
+      resolveCards().filter(m => !fumbleSince.has(m.id)).length === 0,
+      String(resolveCards().filter(m => !fumbleSince.has(m.id)).length));
+    // The presentation answers the same way about the same payload, which is the point of the pair —
+    // and the identical payload WITHOUT the ruling still describes a corridor, so the null above is the
+    // fumble and not the rail being off or the flow disowning the payload.
+    const fumbledFxP = basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false, fumbleRuled: true,
+    });
+    const notFumbledFxP = basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false,
+    });
+    ok("§14i the presentation rail describes no corridor for it either (one answer, two rails)",
+      fx.patternCorridorFor(fumbledFxP, shooterPlaceable) === null
+      && fx.patternCorridorFor(notFumbledFxP, shooterPlaceable) !== null
+      && fxOn === true,
+      `fumbled=${fx.patternCorridorFor(fumbledFxP, shooterPlaceable) === null} ` +
+      `control=${fx.patternCorridorFor(notFumbledFxP, shooterPlaceable) !== null} fxOn=${fxOn}`);
+    await wipeZones(); await wipeCards();
+
+    // (b) A RULED MISS whose NUMBERS say hit — the shape the arithmetic could never see. It scatters
+    // like any other miss, and the card says MISS over the same total the base printed.
+    const ruledSince = new Set(game.messages.map(m => m.id));
+    await hooks._placeSpreadZone(basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false,
+      spreadScatter: { dirFace: 2, distFace: 7 },
+    }));
+    const ruledCard = await newCardSince(ruledSince);
+    const ruledF = myZones()[0]?.flags?.[SCOPE] ?? {};
+    ok("§14i a shot the base RULED a miss scatters, though its total stands over the DC",
+      ruledF.scattered === true && ruledF.scatterDirFace === 2 && ruledF.scatterDriftM === 7,
+      JSON.stringify({ scattered: ruledF.scattered, face: ruledF.scatterDirFace, drift: ruledF.scatterDriftM }));
+    ok("§14i and its card prints the base's own verdict beside the base's own total",
+      /31/.test(plain(ruledCard)) && /MISS/.test(plain(ruledCard)) && !/HIT/.test(plain(ruledCard)),
+      plain(ruledCard).slice(0, 200));
+    await wipeZones(); await wipeCards();
+
+    // (c) ⏪ THE LEGACY PAYLOAD IS UNTOUCHED — the same numbers with NO verdict field still plant as a
+    // hit, on the comparison, exactly as they did before any of this existed. This is the macro, the
+    // keeper placement and the client mid-update, and it is the half that must not move.
+    const legacySince = new Set(game.messages.map(m => m.id));
+    await hooks._placeSpreadZone(basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15,
+    }));
+    const legacyCard = await newCardSince(legacySince);
+    ok("§14i a payload with NO verdict field keeps the comparison and plants as aimed (negative)",
+      (myZones()[0]?.flags?.[SCOPE] ?? {}).scattered === false && /HIT/.test(plain(legacyCard)),
+      JSON.stringify({ scattered: myZones()[0]?.flags?.[SCOPE]?.scattered,
+                       card: plain(legacyCard).slice(0, 120) }));
+    await wipeZones(); await wipeCards();
+
+    /* (d) ⭐⭐ THE ORDINARY-MISS CLASS PLANTS (2026-08-26). Rows 1-4 of the base's table read "no
+     * fumble, you just screw up" — a round left the barrel and went somewhere else — so this class is
+     * resolved as a miss like any other: the centre goes to the grenade table, the corridor is rebuilt
+     * there, and the card is posted over it. Leg (a) above is the SAME payload minus the class, and it
+     * still plants nothing, which is what makes this the class doing the work and not the gate falling
+     * over. The two faces are carried so the plant cannot reach for dice of its own. */
+    const plainSince = new Set(game.messages.map(m => m.id));
+    const plainMissP = basePayload({
+      shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false,
+      fumbleRuled: true, fumbleClass: "plainMiss", spreadScatter: { dirFace: 2, distFace: 7 },
+    });
+    await hooks._placeSpreadZone(plainMissP);
+    const plainCard = await newCardSince(plainSince);
+    const plainF = myZones()[0]?.flags?.[SCOPE] ?? {};
+    ok("§14i the ordinary-miss class plants a corridor at the SCATTERED centre, off the carried faces",
+      myZones().length === 1 && plainF.scattered === true
+      && plainF.scatterDirFace === 2 && plainF.scatterDriftM === 7,
+      JSON.stringify({ zones: myZones().length, scattered: plainF.scattered,
+                       face: plainF.scatterDirFace, drift: plainF.scatterDriftM }));
+    ok("§14i …and posts one resolution card reading MISS over the base's own total",
+      !!plainCard && /31/.test(plain(plainCard)) && /MISS/.test(plain(plainCard)) && !/HIT/.test(plain(plainCard)),
+      plain(plainCard ?? {}).slice(0, 200));
+    ok("§14i the presentation rail describes the SAME corridor for it (one answer, two rails)",
+      fx.patternCorridorFor(plainMissP, shooterPlaceable) !== null,
+      JSON.stringify(fx.patternCorridorFor(plainMissP, shooterPlaceable) ?? null));
+    await wipeZones(); await wipeCards();
+
+    /* (e) AND THE OTHER THREE CLASSES PLANT NOTHING, each asserted on its own so a gate that collapsed
+     * to "any class plants" or "no class plants" cannot pass. Same payload, same carried faces, same
+     * declared corridor — only the class differs, which is the single-variable form of the check. */
+    for (const cls of ["noDischarge", "harmlessDischarge", "ownSide"]) {
+      const since = new Set(game.messages.map(m => m.id));
+      const p = basePayload({
+        shotsFired: 1, spreadAim: declaredAim, attackTotal: 31, toHitDC: 15, baseHit: false,
+        fumbleRuled: true, fumbleClass: cls, spreadScatter: { dirFace: 2, distFace: 7 },
+      });
+      await hooks._placeSpreadZone(p);
+      await sleep(900);
+      const posted = resolveCards().filter(m => !since.has(m.id)).length;
+      ok(`§14i the ${cls} class plants no corridor and posts no card, and the rail agrees`,
+        myZones().length === 0 && posted === 0 && fx.patternCorridorFor(p, shooterPlaceable) === null,
+        JSON.stringify({ cls, zones: myZones().length, cards: posted,
+                         corridor: fx.patternCorridorFor(p, shooterPlaceable) }));
+      await wipeZones(); await wipeCards();
+    }
   }
 
   /* ── §15  THE ORIGIN IS THE FIGURE THAT FIRED, not the actor's first figure ───────────────── */
@@ -2048,7 +2389,7 @@ const res = await page.evaluate(async () => {
       await sheet.render(true);
       await sleep(600);
 
-      /* §17a — a forced MISS: the attack die at 1 against a fumbling REF, then the two grenade faces */
+      /* §17a — a forced MISS: a low attack die against a low REF, then the two grenade faces */
       await shooter.update({ "system.stats.ref.base": 1 });
       const gesture17 = sheet._cpOpenWeaponAttackDialog(aimGun);
       await sleep(500);
@@ -2057,9 +2398,19 @@ const res = await page.evaluate(async () => {
       const dlg17 = await gesture17;
       await sleep(600);
       notes.length = 0;                                    // drop the gesture's own "aim armed" notice
-      // The ATTACK die only — forced to 1, which misses and (unlike a forced 10 on the exploding die)
-      // terminates. Every later roll, the scatter faces included, falls as it really falls.
-      const Q17 = [1 - (1 - 0.5) / 10];
+      // The ATTACK die only — forced to 2, which misses against this REF and (unlike a forced 10 on the
+      // exploding die) terminates. Every later roll, the scatter faces included, falls as it really falls.
+      //
+      // ⚠ NOT A 1, AND THAT IS THE FIXTURE'S WHOLE POINT NOW (2026-08-26). This section used to force the
+      // attack die to 1 to guarantee a miss. With `fumbleTableEnabled` on — the rig's standing state —
+      // a natural 1 is not an ordinary miss: the base RULES a fumble, sets `forceMiss`, and posts its own
+      // fumble card in place of a result. A ruled fumble now plants no corridor at all and rolls no
+      // grenade-table faces (damage-hooks `_placeSpreadZone`, spread-geometry `payloadScattersOnMiss`),
+      // matching the presentation rail, which has skipped its whole fan-out on that field since it
+      // shipped. So a forced 1 tests the FUMBLE path, not the SCATTER path this section is about, and it
+      // red-herringed five legs here the first run after the verdict fix. Two is the smallest die face
+      // that misses without being ruled a fumble; the fumble path has its own legs in §14i.
+      const Q17 = [1 - (2 - 0.5) / 10];
       CONFIG.Dice.randomUniform = () => (Q17.length ? Q17.shift() : origRU17());
       const since17 = new Set(game.messages.map(m => m.id));
       const form17 = dlg17?.element?.tagName === "FORM" ? dlg17.element : dlg17?.element?.querySelector("form");

@@ -225,7 +225,7 @@ try {
   log.push(`player preview readout: "${previewTxt}"`);
   const dcNeedle = SANITY_RED ? /save 9\b/i : /save 3\b/i;   // SANITY-RED flips the expected DC
   const previewOk = !!previewTxt && !/CYBERPUNK\.|SuppPreviewReadout/.test(previewTxt) && /4m/i.test(previewTxt) && dcNeedle.test(previewTxt);
-  check(`(b) PLAYER page: preview armed, localized, width 4m & ${SANITY_RED ? "save 9 [SANITY-RED]" : "save 3"} (DC ceil(12/4))`, previewOk, JSON.stringify(previewTxt));
+  check(`(b) PLAYER page: preview armed, localized, width 4m & ${SANITY_RED ? "save 9 [SANITY-RED]" : "save 3"} (DC floor(12/4))`, previewOk, JSON.stringify(previewTxt));
   const gmHasPreview = await gm.evaluate(() => !!document.querySelector(".cp-supp-preview-readout"));
   check("(b) GM page: NO preview readout (the aim hook is local to the firer)", !gmHasPreview, `gmHasPreview=${gmHasPreview}`);
 
