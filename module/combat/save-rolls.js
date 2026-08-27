@@ -2,6 +2,7 @@ import { onGlobalClick } from "../popout-compat.js";
 import { localize, localizeParam, resolveActorRef } from "../utils.js";
 import { renderChatCard } from "../compat.js";
 import { markCardResolved } from "../card-lock.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 // The chat-card helpers now live in compat.js so the vehicle module can reuse them without
 // importing the combat module. Re-exported here for back-compat (damage-hooks.js imports
@@ -84,8 +85,9 @@ function _relayStabilizedFlag({ actorId, tokenId = null, sceneId = null }) {
 function _registerStabilizeSocket() {
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "stabilizeFlag") return;
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
+    // Idempotent (both writes set the same flag to true), so this row never showed a visible fault —
+    // it is here for the same reason as the others: one session, one write.
+    if (!isPrimaryGMSession()) return;
     // Token-first: stabilizing an unlinked token's patient must flag THAT token's synthetic actor.
     const actor = resolveActorRef({ tokenId: data.tokenId, sceneId: data.sceneId, actorId: data.actorId });
     if (!actor) return;
@@ -675,11 +677,11 @@ export function registerSaveRollHandlers() {
     }
   });
 
-  // Only the ACTIVE GM processes this — an isGM-only gate posts the death/stun prompt card twice when two
-  // GMs are connected (each connected GM client fires updateCombat). Post-only; no data write.
+  // Only the PRIMARY GM SESSION processes this — an isGM-only gate posts the death/stun prompt card
+  // twice when two GM clients are connected, and "two GM clients" includes one referee with the world
+  // open in two tabs (each connected client fires updateCombat). Post-only; no data write.
   Hooks.on("updateCombat", async (combat, updateData) => {
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     // Only fire on turn/round change, not on other combat updates
     if (updateData.turn === undefined && updateData.round === undefined) return;
 

@@ -28,6 +28,7 @@
 
 import { localize, localizeParam } from "../utils.js";
 import { postSavePromptCard, getGMUserIds } from "../compat.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -54,7 +55,7 @@ const SCOPE = "cp2020-augmented";
  */
 async function _postRadZoneEntryCue(behaviorSystem, tokenDoc) {
   if (!tokenDoc?.name) return;
-  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+  if (!isPrimaryGMSession()) return;
   const sys = behaviorSystem ?? {};
   const source = String(sys.sourceLabel ?? "").trim() || localize("RadiationSourceDefault");
   const formula = String(sys.radsFormula ?? "").trim() || "1d10";
@@ -158,7 +159,7 @@ export function registerRadiationZoneVisibilityDefault() {
   Hooks.on("createRegionBehavior", async (behavior) => {
     try {
       if (behavior?.type !== RAD_ZONE_BEHAVIOR) return;
-      if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+      if (!isPrimaryGMSession()) return;
       const region = behavior.parent;
       if (!region?.update) return;
       const V = CONST?.REGION_VISIBILITY ?? {};

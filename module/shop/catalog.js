@@ -11,6 +11,7 @@ import { renderChatCard, getHtmlElement } from "../compat.js";
 import { onChatCardRender } from "../chat-render-compat.js";
 import { getCalibers, getCaliberBox, getAmmoBoxPrice, modifiersForCaliber, ammoCatalogSignature } from "../lookups.js";
 import { purchaseAmmo } from "./buy-ammo.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 import {
   getShop, listShops, shopsVisibleTo, createShop, updateShop, deleteShop, duplicateShop,
   addShopItem, addShopItems, removeShopItem, clearShopItems, setShopItem, setAllShopStock, decrementShopStock,
@@ -2233,7 +2234,9 @@ export function registerShopHooks() {
 
   game.socket.on("module.cp2020-augmented", async (data) => {
     if (data?.type !== "shopBuyRelay") return;
-    if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
+    // ⛔ NOT idempotent: `decrementShopStock` is read-modify-write on the shop's quantity, so a second
+    // acting client debits the shelf twice for one purchase.
+    if (!isPrimaryGMSession()) return;
     try { await decrementShopStock(data.shopId, data.sourceKey, data.qty, { buyerName: data.buyerName ?? "" }); }
     catch (e) { console.warn("cp2020-augmented | shopBuyRelay failed", e); }
   });

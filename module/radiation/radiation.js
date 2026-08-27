@@ -71,6 +71,7 @@ import { rollDurationTurns } from "../mech/consumable.js";
 import { enqueueApply } from "../mech/light.js";
 import { applyLocationDamage } from "../combat/DamageApplicator.js";
 import { btmFromBT } from "../lookups.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const EXPOSURE_FLAG     = "radExposure";      // number — CURRENT-exposure cumulative rads (effects table keys on this)
@@ -789,14 +790,13 @@ export function registerRadiation() {
     await markCardResolved(btn.closest("[data-message-id]")?.dataset?.messageId, "radDeathCheck");
   });
 
-  // Round tick — the ACTIVE GM counts the CURRENT combatant's timed radiation markers down when their
-  // turn comes up (the drug/consumable per-turn pattern, incl. the multi-GM + begin-combat guards).
+  // Round tick — the PRIMARY GM SESSION counts the CURRENT combatant's timed radiation markers down when
+  // their turn comes up (the drug/consumable per-turn pattern, incl. the multi-client + begin-combat guards).
   // Gated by the feature toggle AND the round-tick toggle: off = durations run narratively, the GM
   // cure controls still work.
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!mechRoundTickEnabled()) return;
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
     const prevRound = combat.previous?.round;
     if (prevRound !== undefined && prevRound < 1) return;   // Begin Combat is not a turn elapsing

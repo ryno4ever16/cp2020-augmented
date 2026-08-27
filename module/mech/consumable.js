@@ -23,6 +23,7 @@ import { localizeParam } from "../utils.js";
 import { mechRoundTickEnabled, mechDocumentAutomationEnabled } from "../settings.js";
 import { postSavePromptCard } from "../compat.js";
 import { enqueueApply } from "./light.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const FLAG = "consumableState";
@@ -300,13 +301,12 @@ export function registerMechConsumable() {
     await clearMarkersFor(item.actor, item.id ?? item._id);
   });
 
-  // Round tick — the ACTIVE GM processes the CURRENT combatant's timers when their turn comes up
-  // (mirrors the acid/fire per-turn block in combat/damage-hooks.js, including the multi-GM guard).
+  // Round tick — the PRIMARY GM SESSION processes the CURRENT combatant's timers when their turn comes
+  // up (mirrors the acid/fire per-turn block in combat/damage-hooks.js, including its multi-client guard).
   // Gated by the round-tick toggle: off = timers wait; Use/activation and the cards still work.
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!mechRoundTickEnabled()) return;
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
     // Starting combat is not a turn elapsing (matches the damage-hooks per-turn blocks): an
     // effect running when the GM clicks Begin Combat keeps its full remaining duration.

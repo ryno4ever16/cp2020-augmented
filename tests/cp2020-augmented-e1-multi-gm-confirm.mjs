@@ -58,12 +58,17 @@ try {
     const sr = await (await fetch("/modules/cp2020-augmented/module/combat/save-rolls.js", { cache: "no-store" })).text();
     return {
       e1Code: dh.includes("_claimAreaConfirm") && dh.includes("AREA_CONFIRMERS") && dh.includes("_resolvedAreaConfirms"),
-      // E4: the death/stun updateCombat handler now activeGM-gated (the gate line follows the isGM guard).
-      e4Gate: /Only the ACTIVE GM processes this[\s\S]{0,400}activeGM\?\.id !== game\.user\.id\) return;/.test(sr),
+      // E4: the death/stun updateCombat handler stands down for every client but the one elected to act.
+      // ⚠ THE GATE MOVED (2026-08-26): it used to compare USER ids inline here, which is true in every
+      // tab a referee has open, so a two-tab GM posted the prompt twice. Both halves of the old
+      // expression — the isGM check and the seat check — now live inside the shared predicate
+      // `isPrimaryGMSession()` (module/gm-session-primary.js), so what this leg reads is the CALL.
+      e4Gate: /Only the PRIMARY GM SESSION processes this[\s\S]{0,500}if \(!isPrimaryGMSession\(\)\) return;/.test(sr)
+              && /import \{ isPrimaryGMSession \} from "\.\.\/gm-session-primary\.js";/.test(sr),
     };
   });
-  log.push(`served: e1Code(_claimAreaConfirm+AREA_CONFIRMERS)=${src.e1Code} e4Gate(activeGM)=${src.e4Gate}`);
-  results.served = { pass: src.e1Code && src.e4Gate, detail: "damage-hooks carries the confirm relay+guard; save-rolls death/stun handler is activeGM-gated" };
+  log.push(`served: e1Code(_claimAreaConfirm+AREA_CONFIRMERS)=${src.e1Code} e4Gate(primary-session predicate)=${src.e4Gate}`);
+  results.served = { pass: src.e1Code && src.e4Gate, detail: "damage-hooks carries the confirm relay+guard; the save-rolls death/stun handler stands down for every client but the elected session" };
 
   const S = await gm1.evaluate(async () => {
     // Ensure a second GM user (idempotent). Empty password → join with "".

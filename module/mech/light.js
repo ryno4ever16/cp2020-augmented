@@ -16,6 +16,7 @@
 import { mechTokenWritesEnabled } from "../settings.js";
 import { contributingItems } from "./cyberlimb.js";
 import { cwIsEnabled, deleteFieldUpdate } from "../utils.js";
+import { isPrimaryGMSession, primaryGMSessionIsElsewhere } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const BASE_FLAG = "mechBaseLight";
@@ -190,8 +191,9 @@ export async function reconcileTokenWrites(enabled) {
 /** True when THIS client should perform the token writes for the event.
  *  Shared by the mech/ engines (vision.js imports it). */
 export function iAmTheApplier(actor) {
-  const gm = game.users?.activeGM;
-  if (gm) return gm.id === game.user.id;      // exactly one applier when any GM is on
+  // Exactly one applier when any GM is on — and "one" means one SESSION, not one user: a referee with
+  // the world open in two tabs used to answer yes in both, so both wrote the token.
+  if (game.users?.activeGM) return isPrimaryGMSession();
   return !!actor?.isOwner;                     // no GM online: an owner tries directly
 }
 
@@ -205,8 +207,7 @@ export function iAmTheApplier(actor) {
  *  the actors it owns) — the loop's own iAmTheApplier call still decides that case, unchanged.
  *  Shared by the mech/ engines (vision.js imports it). */
 export function someoneElseIsTheApplier() {
-  const gm = game.users?.activeGM;
-  return !!gm && gm.id !== game.user?.id;
+  return primaryGMSessionIsElsewhere();
 }
 
 /** Does this item event concern the light engine at all? */

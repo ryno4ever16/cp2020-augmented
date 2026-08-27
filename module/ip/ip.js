@@ -1,6 +1,7 @@
 import { localize } from "../utils.js";
 import { postSavePromptCard } from "../compat.js";
 import { skillIpMultiplier } from "../lookups.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 import {
   ipEnabled, ipRawTracking, ipAwardModel, ipAutoBaselineAmount, ipThrottle, ipSkillLockMode, ipShowPending
 } from "../settings.js";
@@ -155,13 +156,17 @@ async function setQueue(q) {
   try { await game.settings.set(SCOPE, "ipQueue", q); } catch (e) { console.warn("cp2020-augmented | IP queue write failed", e); }
 }
 
-function _isActiveGM() { return game.user.isGM && game.users.activeGM?.id === game.user.id; }
+/** ⛔ WHY EVERY QUEUE WRITE FUNNELS THROUGH ONE CLIENT: the mutators below are read-modify-write on
+ *  the `ipQueue` world setting, so a second acting client enqueues/resolves the same row twice — or
+ *  clobbers the other's write outright. `isPrimaryGMSession()` (module/gm-session-primary.js) is that
+ *  single-writer question, asked at SESSION level: this file used to hold its own `_isActiveGM()`
+ *  user-id comparison, which was true in every tab the referee had open. */
 
-/** Relay a queue mutation to the active GM (mirrors recordSkillRoll's `ipSkillRolled` relay). Called by
- *  the queue mutators when the current user is a NON-active GM, so all queue writes funnel through the
- *  single active-GM client (no last-write-wins clobber on the ipQueue world setting). The active GM
- *  re-broadcasts the resulting setting change, which re-renders every open tracker (see updateSetting). */
-function _relayToActiveGM(type, payload) {
+/** Relay a queue mutation to the primary GM session (mirrors recordSkillRoll's `ipSkillRolled` relay).
+ *  Called by the queue mutators when this client is not the acting one, so all queue writes funnel
+ *  through a single client. That client re-broadcasts the resulting setting change, which re-renders
+ *  every open tracker (see updateSetting). */
+function _relayToPrimaryGMSession(type, payload) {
   if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type, payload });
 }
 
@@ -200,7 +205,7 @@ function _neglectFlag(key) { try { return game.settings.get(SCOPE, key) === true
 
 /** Fire the once-per-episode GM neglect nudge when the queue crosses the threshold (active GM only). */
 async function _maybeNudgeNeglect(queueLength) {
-  if (!_isActiveGM() || !ipRawTracking()) return;
+  if (!isPrimaryGMSession() || !ipRawTracking()) return;
   if (!shouldNudgeNeglect({ rawOn: true, queueLength, muted: _neglectFlag("ipNeglectMuted"), nudged: _neglectFlag("ipNeglectNudged") })) return;
   try { await game.settings.set(SCOPE, "ipNeglectNudged", true); } catch (e) { /* ignore */ }
   try {
@@ -216,7 +221,7 @@ async function _maybeNudgeNeglect(queueLength) {
  * so re-arming there would let the full-log warning nag once per Apply while still over the cap.
  */
 async function _rearmQueueNotices() {
-  if (!_isActiveGM()) return;
+  if (!isPrimaryGMSession()) return;
   const length = getQueue().length;
   if (length < QUEUE_MAX) _overflowNotified = false;
   if (length < NEGLECT_THRESHOLD && _neglectFlag("ipNeglectNudged")) {
@@ -227,7 +232,7 @@ async function _rearmQueueNotices() {
 /** Empty the queue without awarding — the tracker's Clear control and the nudge's "Clear the
  *  backlog" off-ramp. Active-GM only; a non-active GM relays, like every other queue mutation. */
 export async function clearQueue() {
-  if (!_isActiveGM()) { _relayToActiveGM("ipClearQueue", {}); return; }
+  if (!isPrimaryGMSession()) { _relayToPrimaryGMSession("ipClearQueue", {}); return; }
   await setQueue([]);
   await _rearmQueueNotices();
   _rerenderTracker();
@@ -239,7 +244,7 @@ export async function clearQueue() {
  *  world setting, independent of the actor document. Active-GM only (world-setting write). Returns the
  *  number of rows removed. `rerender:false` when called from inside a tracker render (avoids re-entry). */
 export async function pruneOrphanQueue({ rerender = true } = {}) {
-  if (!_isActiveGM()) return 0;
+  if (!isPrimaryGMSession()) return 0;
   const q = getQueue();
   const live = q.filter(r => game.actors.get(r.actorId));
   if (live.length === q.length) return 0;
@@ -251,7 +256,7 @@ export async function pruneOrphanQueue({ rerender = true } = {}) {
 
 /** Drop every queued row for one actor id — called when that actor is deleted. Active-GM only. */
 export async function removeActorFromQueue(actorId) {
-  if (!_isActiveGM()) return 0;
+  if (!isPrimaryGMSession()) return 0;
   const q = getQueue();
   const kept = q.filter(r => r.actorId !== actorId);
   if (kept.length === q.length) return 0;
@@ -288,7 +293,7 @@ async function _notifyQueueOverflow() {
  */
 export function recordSkillRoll(payload) {
   if (!ipRawTracking()) return;
-  if (_isActiveGM()) return _enqueue(payload);
+  if (isPrimaryGMSession()) return _enqueue(payload);
   else if (game.users.activeGM) game.socket.emit("module.cp2020-augmented", { type: "ipSkillRolled", payload });
 }
 
@@ -342,7 +347,7 @@ async function _enqueue(row) {
 
 /** Remove a queue row without awarding (skip). Active-GM only; a non-active GM relays. */
 export async function dismissQueueRow(rowId) {
-  if (!_isActiveGM()) { _relayToActiveGM("ipDismissRow", { rowId }); return; }
+  if (!isPrimaryGMSession()) { _relayToPrimaryGMSession("ipDismissRow", { rowId }); return; }
   await setQueue(getQueue().filter(r => r.id !== rowId));
   await _rearmQueueNotices();
   _rerenderTracker();
@@ -354,7 +359,7 @@ export async function dismissQueueRow(rowId) {
  * with it (an empty group is not a decision anybody can make). Active-GM only; a non-active GM relays.
  */
 export async function pruneQueueRoll(rowId, rollId) {
-  if (!_isActiveGM()) { _relayToActiveGM("ipPruneRoll", { rowId, rollId }); return; }
+  if (!isPrimaryGMSession()) { _relayToPrimaryGMSession("ipPruneRoll", { rowId, rollId }); return; }
   const q = getQueue();
   const row = q.find(r => r.id === rowId);
   if (!row) return;
@@ -375,7 +380,7 @@ export async function pruneQueueRoll(rowId, rollId) {
 
 /** Patch a queue row in place (e.g. the GM-entered IP amount or success tick). Active-GM only; relay. */
 export async function updateQueueRow(rowId, patch) {
-  if (!_isActiveGM()) { _relayToActiveGM("ipUpdateRow", { rowId, patch }); return; }
+  if (!isPrimaryGMSession()) { _relayToPrimaryGMSession("ipUpdateRow", { rowId, patch }); return; }
   const q = getQueue();
   const row = q.find(r => r.id === rowId);
   if (!row) return;
@@ -447,7 +452,7 @@ export async function awardPending(actor, skill, amount, { bypassThrottle = fals
  * plus any typed bonus) to the rolled skill's pending, then drop the row.
  */
 export async function resolveQueueRow(rowId) {
-  if (!_isActiveGM()) { _relayToActiveGM("ipResolveRow", { rowId }); return; }
+  if (!isPrimaryGMSession()) { _relayToPrimaryGMSession("ipResolveRow", { rowId }); return; }
   const row = getQueue().find(r => r.id === rowId);
   if (!row) return;
   const actor = game.actors.get(row.actorId);
@@ -581,7 +586,7 @@ export function registerIpHooks() {
   // GM-side: receive relayed skill rolls (from players) AND relayed queue mutations (from a non-active
   // GM whose tracker is open) — every queue write funnels through the single active-GM client.
   game.socket.on("module.cp2020-augmented", async (data) => {
-    if (!_isActiveGM()) return;
+    if (!isPrimaryGMSession()) return;
     try {
       switch (data?.type) {
         case "ipSkillRolled": await _enqueue(data.payload); break;

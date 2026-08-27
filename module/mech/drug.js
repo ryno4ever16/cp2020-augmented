@@ -33,6 +33,7 @@ import { rollDurationTurns } from "./consumable.js";
 import { enqueueApply } from "./light.js";
 import { borgSetStatKeys } from "./borg.js";
 import { btmFromBT } from "../lookups.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const DRUG_FLAG = "drugState";
@@ -520,13 +521,12 @@ export function registerMechDrug() {
     }
   });
 
-  // Round tick — the ACTIVE GM counts down the CURRENT combatant's timed drugs when their turn comes
-  // up (the acid/fire/consumable per-turn pattern, including the multi-GM + begin-combat guards).
+  // Round tick — the PRIMARY GM SESSION counts down the CURRENT combatant's timed drugs when their turn
+  // comes up (the acid/fire/consumable per-turn pattern, incl. the multi-client + begin-combat guards).
   // Gated by the round-tick toggle: off = durations run narratively, the sheet controls still work.
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!mechRoundTickEnabled()) return;
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     if (updateData.turn === undefined && updateData.round === undefined) return;
     const prevRound = combat.previous?.round;
     if (prevRound !== undefined && prevRound < 1) return;   // Begin Combat is not a turn elapsing

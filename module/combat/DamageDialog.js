@@ -67,6 +67,9 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // The segment auto-detect is a ONE-SHOT seed on the first context build — this latch is what
     // keeps a later re-render from re-picking over a value the GM typed.
     this._autoCoverTried = false;
+    // The cover-only control is a one-shot too, for the ordinary reason a write-once control is: a
+    // second press would take a second debit out of the same object for the same damage number.
+    this._coverOnlyCharged = false;
   }
 
   static DEFAULT_OPTIONS = {
@@ -76,8 +79,9 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     position:  { width: 500, height: "auto" },
     resizable: true,
     actions: {
-      applyDamage:  DamageDialog._onApply,
-      cancelDialog: DamageDialog._onCancel,
+      applyDamage:   DamageDialog._onApply,
+      chewCoverOnly: DamageDialog._onChewCoverOnly,
+      cancelDialog:  DamageDialog._onCancel,
     },
     form: {
       // No meaningful submit — the Apply button is handled via action.
@@ -134,6 +138,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
           this._coverRow = {
             uuid: picked.uuid, label: picked.label, displayLabel: picked.displayLabel || picked.label,
             sp: picked.sp, pool: picked.pool, poolMax: picked.poolMax, destroyed: picked.destroyed,
+            // ⭐ WHICH COVER MODEL THIS ROW IS IN (2026-08-26 — cover.js COVER_MODE_CORE). Carried on the
+            // snapshot rather than re-derived, so the ledger, the cover-only control and the card all
+            // read the one answer. `structured === false` is CORE cover: it soaks and keeps no pool.
+            structured: picked.structured,
           };
           this._coverSP = Math.max(0, Number(picked.sp) || 0);
         }
@@ -206,7 +214,33 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       // it is — and, when the row was decided by a roll, of which way that roll went. An EXPOSED row
       // carries no SP at all, so it produces no line in the breakdown; this is where it speaks.
       coverRowLabel: this._coverRow?.displayLabel ?? "",
+      // ⭐ THE COVER-ONLY CONTROL, offered only when there is an OBJECT to charge. A hand-typed Cover SP
+      // folds into the math but names no document, so there would be nothing for the button to debit.
+      // ⛔ NOT OFFERED FOR CORE-MODE COVER. The control debits a structure pool; an SP the GM typed
+      // with no structure has none, so the press would write nothing and post nothing — a button that
+      // does nothing is worse than no button. (`structured === false` only; a row shape that predates
+      // the field, and every vehicle row, keeps the control it already had.)
+      canChewCoverOnly: !!this._coverZoneUuid && !this._coverOnlyCharged
+        && this._coverRow?.structured !== false,
+      coverOnlyCharged: !!this._coverOnlyCharged,
+      coverOnlyDamage:  this._rawDamageTotal(),
     };
+  }
+
+  /**
+   * The RAW damage this window is holding — every row of the payload, before armour, cover or BTM.
+   *
+   * It is the number the cover-only control charges, and raw is the right number for the same reason
+   * the burst ledger uses raw: MM p.58 counts damage RECEIVED against an object's structure. The
+   * per-row after-SP overrides are deliberately NOT consulted — they are the GM's edits to what reaches
+   * the BODY, and the object was hit by the bullet, not by the remainder.
+   */
+  _rawDamageTotal() {
+    let total = 0;
+    for (const hits of Object.values(this.payload?.areaDamages ?? {})) {
+      for (const h of (hits ?? [])) total += Number(h?.damage ?? h?.dmg) || 0;
+    }
+    return Math.max(0, Math.round(total));
   }
 
   _onRender(context, options) {
@@ -503,6 +537,49 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
 
     this._damageApplied = true;   // an applied close — see the flag's note in the constructor
     this.close();
+  }
+
+  /**
+   * ⭐ CHARGE THE OBJECT, AND ONLY THE OBJECT (user ruling 2026-08-26, built this batch).
+   *
+   * The affordance the book has no mechanic for: a referee who wants a shot to land on the cover
+   * itself — someone shooting the lock off, a burst walked into a door nobody is standing behind, a
+   * called shot at the engine block. The book prints no aimed-miss landing model, so nothing here
+   * GUESSES where a missed shot went; the referee says "this went into that object" by pressing this,
+   * and the module does the bookkeeping it already knows how to do.
+   *
+   * ⛔ IT TOUCHES NO ACTOR. No wound track, no armour ablation, no severity ledger, no save prompts —
+   * the one write is the structure debit, through the SAME relay every other chew uses
+   * (`requestCoverChew`: the active GM writes, everyone else relays), producing the SAME structure card.
+   * A DOOR ground to zero swings open through that same path (cover.js `chewCoverWall`), so the
+   * affordance needs no door handling of its own.
+   *
+   * The window is deliberately left OPEN and the button latched instead: charging the object is not
+   * resolving the shot, so the referee may still want to Apply to the body afterwards — and because
+   * `_damageApplied` stays false, dismissing the window afterwards still hands the shot back to its own
+   * card (see `_preClose`), which is what keeps the shot applicable at all.
+   */
+  static async _onChewCoverOnly(event, target) {
+    event?.preventDefault?.();
+    if (this._coverOnlyCharged) return;                 // latched: one debit per window
+    const uuid = String(this._coverZoneUuid || "");
+    if (!uuid) return;                                  // nothing to charge — the control is not offered
+    const damage = this._rawDamageTotal();
+    if (damage <= 0) { ui.notifications?.warn?.(localize("DamageDlgChewCoverNoDamage")); return; }
+
+    this._coverOnlyCharged = true;
+    await requestCoverChew({
+      behaviorUuid: uuid,
+      // The row's own clean name, for the same reason the burst debit sends it: a vehicle row can be
+      // named after the PART the line crossed, and the wear receipt should say so.
+      label:      this._coverRow?.label ?? "",
+      damage,
+      weaponName: String(this.payload?.weaponName || ""),
+    });
+    ui.notifications?.info?.(localizeParam("DamageDlgChewCoverDone", {
+      amount: damage, name: this._coverRow?.displayLabel || this._coverRow?.label || "",
+    }));
+    this.render(false);   // re-render so the latched control shows as spent
   }
 
   static _onCancel(event, target) {

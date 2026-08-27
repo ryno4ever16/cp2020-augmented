@@ -25,6 +25,7 @@ import { onGlobalClick } from "./popout-compat.js";
 import { onChatCardRender } from "./chat-render-compat.js";
 import { getHtmlElement } from "./compat.js";
 import { localize } from "./utils.js";
+import { isPrimaryGMSession } from "./gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 const FLAG = "cardResolved";
@@ -139,11 +140,13 @@ export function registerCardLock() {
   // live again, no re-arm control). See module/chat-render-compat.js.
   onChatCardRender(_lockRenderedCard);
 
-  // Active-GM listener: write the stamp on behalf of a player who resolved a GM-authored card. Only the
-  // active GM writes (mirrors the other relays) so a two-GM table does not double-write the flag.
+  // Primary-GM-session listener: write the stamp on behalf of a player who resolved a GM-authored
+  // card. Exactly one session writes (mirrors the other relays) so neither a second GM nor a second
+  // TAB of the same GM double-writes the flag. Idempotent either way — both writes carry the same
+  // value — which is why this row was never a visible fault, only a redundant document update.
   game.socket.on(`module.${SCOPE}`, async (data) => {
     if (data?.type !== RELAY_TYPE) return;
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     const message = game.messages?.get(data.messageId);
     if (!message || isCardResolved(message)) return;
     try {

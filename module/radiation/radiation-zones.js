@@ -46,6 +46,7 @@ import { postSavePromptCard } from "../compat.js";
 import { areasByFlag, tokensInArea, deleteArea } from "../combat/area-shapes.js";
 import { applyRadiationDose } from "./radiation.js";
 import { RAD_ZONE_BEHAVIOR, radiationZoneBehaviorClass } from "./radiation-zone-behavior.js";
+import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -191,7 +192,9 @@ export async function runRadZoneTick(combat) {
  * `force` runs the sweep with both stamps already set — that same manual re-run path.
  */
 export async function migrateLegacyRadZones({ force = false } = {}) {
-  if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+  // One migrating client. Stamp-gated and idempotent, so a duplicate run is bounded rather than
+  // harmful — but the stamps are a world setting, and two clients writing them race.
+  if (!isPrimaryGMSession()) return;
   if (!radiationZoneBehaviorClass()) return;   // pre-region core → nothing to migrate onto
   const attempted = game.settings.get(SCOPE, RAD_ZONES_MIGRATED);
   const completed = game.settings.get(SCOPE, RAD_ZONES_COMPLETED);
@@ -274,8 +277,7 @@ export async function migrateLegacyRadZones({ force = false } = {}) {
 function _hookRadZonePerTurn() {
   Hooks.on("updateCombat", async (combat, updateData) => {
     if (!mechRoundTickEnabled()) return;
-    if (!game.user.isGM) return;
-    if (game.users.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     // Per-ROUND, not per-combatant-turn: a zone doses everyone inside ONCE per combat round (Deep Space
     // "for every turn of exposure" — a CP2020 turn = one 3-second round), and a finite zone counts down
     // once per round. Firing on every turn advance would dose each token N× per round (N = combatant
