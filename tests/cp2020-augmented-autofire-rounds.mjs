@@ -470,6 +470,15 @@ try {
     supBounds.rounds?.max === String(setup.maxRounds) && supBounds.rounds?.min === "1"
     && supBounds.width?.min === "2" && supBounds.targets?.min === "1",
     `rounds ${supBounds.rounds?.min}..${supBounds.rounds?.max}, width min ${supBounds.width?.min}, targets min ${supBounds.targets?.min}`);
+  // ⭐ THE WIDTH NOW CARRIES A CEILING TOO (2026-08-27, ledger #23as). The save is rounds ÷ width, so a
+  // zone wider than the burst's own round count prices a save the formula can no longer state — the
+  // quotient falls under 1 and only the floor at 1 holds it up, i.e. every further metre is free
+  // ground. The row states the widest burst this gun and magazine can produce; the validator below
+  // tightens it to the rounds actually entered. This became the ONLY door when the canvas gesture
+  // stopped re-sizing: out there the wheel turns the square now, so nothing downstream can cap it.
+  ok("E1b the width row carries the same ceiling the rounds row does",
+    supBounds.width?.max === String(setup.maxRounds),
+    `width data-max ${supBounds.width?.max} vs rounds max ${setup.maxRounds}`);
 
   // ⚠ ONE COMPLAINT AT A TIME, IN ORDER — the base system's validator stops at the first row it can
   // fault, which is why each row is faulted on its own here rather than all three at once. (Setting all
@@ -484,6 +493,20 @@ try {
   const supWidth = await setSup({ rounds: 10, width: 0, targets: 2 });
   ok("E4 a corridor of no width is refused", supWidth.width?.valid === false,
     `checkValidity() = ${supWidth.width?.valid} for width 0 against min 2`);
+
+  // The CEILING, faulted on its own row like the others. A ten-round burst cannot honestly cover a
+  // twelve-metre zone: 10 ÷ 12 is under 1, and the save the card would quote is the floor, not the
+  // declaration. The refusal is the dialog's — the geometry out on the canvas has no say in the width.
+  const supWide = await setSup({ rounds: 10, width: 12, targets: 2 });
+  ok("E4b a zone wider than the rounds fired is refused (save would go inert)", supWide.gate === false,
+    `gate ${supWide.gate} for width 12 against 10 rounds`);
+  // …and the ceiling is the LIVE rounds entry, not a number fixed when the window opened: raise the
+  // burst and the same width becomes legal. This is the leg that fails if the cap reads `data-max`.
+  const wideRounds = Math.min(setup.maxRounds, 20);
+  const supWideOk = await setSup({ rounds: wideRounds, width: 12, targets: 2 });
+  ok("E4c the ceiling tracks the rounds actually entered — a longer burst makes the same width legal",
+    wideRounds >= 12 ? supWideOk.gate === true : supWideOk.gate === false,
+    `gate ${supWideOk.gate} for width 12 against ${wideRounds} rounds (magazine ceiling ${setup.maxRounds})`);
 
   const supTargets = await setSup({ rounds: 10, width: 3, targets: 0 });
   ok("E5 a burst aimed at nobody is refused", supTargets.targets?.valid === false,

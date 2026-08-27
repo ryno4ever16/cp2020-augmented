@@ -13,7 +13,7 @@ import { registerDamageHooks } from "./combat/damage-hooks.js";
 import { registerGasCloudBehavior, registerGasCloudVisibilityDefault } from "./combat/gas-cloud-behavior.js";
 import { registerSuppressiveZoneBehavior, registerSuppressiveZoneVisibilityDefault } from "./combat/suppressive-zone-behavior.js";
 import { registerCoverZoneBehavior, registerCoverZoneVisibilityDefault } from "./combat/cover-zone-behavior.js";
-import { registerCoverSocket, registerCoverTools, registerCoverWallConfig } from "./combat/cover.js";
+import { registerCoverSocket, registerCoverTools, registerCoverWallConfig, registerCoverRepairButton } from "./combat/cover.js";
 import { registerSpreadZoneLook } from "./combat/spread-zone-look.js";
 import { registerMovementGate } from "./combat/movement-gate.js";
 import { registerSaveRollHandlers } from "./combat/save-rolls.js";
@@ -30,7 +30,7 @@ import { CyberpunkVehicleWeaponData, CyberpunkAcpaSystemData, makeVehicleItemDat
 import { CyberpunkVehicleSheet } from "./actor/vehicle-sheet.js";
 import { CyberpunkAugmentedItemSheet } from "./item/augmented-item-sheet.js";
 import { registerVehicleCanvasHooks, deployVehicleToScene, boardVehicle, disembark } from "./vehicle/vehicle-canvas.js";
-import { registerVehicleDeploySocket, requestVehicleDeploy, createVehicleActorFromItem, registerCivilianSheetMigration } from "./vehicle/vehicle-deploy-request.js";
+import { registerVehicleDeploySocket, registerVehicleDeployLinkHooks, requestVehicleDeploy, createVehicleActorFromItem, registerCivilianSheetMigration } from "./vehicle/vehicle-deploy-request.js";
 import { registerVehicleBoardingHud } from "./vehicle/vehicle-boarding-hud.js";
 import { registerVehicleOccupancyHooks } from "./vehicle/vehicle-occupancy.js";
 import { registerVehicleOutlineHooks } from "./vehicle/vehicle-outline.js";
@@ -77,6 +77,7 @@ import { registerMartialDefense } from "./martial/martial.js";
 import { registerFreeFire } from "./mech/free-fire.js";
 import { registerMechLoadout } from "./mech/loadout.js";
 import { registerSeamShim } from "./seam-shim.js";
+import { registerGmSessionPrimary, isPrimaryGMSession, gmSessionId, gmSessionPrimaryState } from "./gm-session-primary.js";
 import { registerMartialIdResolutionShim } from "./martial/id-resolution-shim.js";
 import { registerIconNormalizationShim } from "./icon-normalization-shim.js";
 import { hostProvides } from "./system-api.js";
@@ -185,6 +186,13 @@ const AUGMENTED_TEMPLATES = [
 
 Hooks.once("init", function () {
   console.log(`${SCOPE} | Initializing Cyberpunk 2020: Augmented Edition`);
+
+  // ⭐ FIRST, because everything GM-side downstream asks it the same question. The module's relayed and
+  // hook-driven writes are performed by ONE client, and until this existed that client was chosen by
+  // comparing USER ids — which is true in every tab a referee has open, so a two-tab GM ran every
+  // relayed write twice. This registers the per-session presence protocol; `isPrimaryGMSession()` is
+  // the single predicate every one of those guards now calls. See module/gm-session-primary.js.
+  registerGmSessionPrimary();
 
   registerAugmentedSettings();
   // GM-only "Settings Presets" menu button — applies one of the 4 playstyle tiers in one click.
@@ -310,6 +318,10 @@ Hooks.once("init", function () {
   // Unit 3: native Wall documents carry the same cover data via flags; the fields live on the
   // native Wall configuration sheet, and flagged walls join the damage dialog's cover picker.
   registerCoverWallConfig();
+  // The breach undo (2026-08-26): a wall shot to zero structure opens its move/sight/sound
+  // restrictions, and the destruction card carries a GM-only one-click restore. Registered here
+  // beside the socket the press relays through.
+  registerCoverRepairButton();
   // Shot patterns (buckshot / flechette) are drawn as a ghost rather than as core's half-opaque hatched
   // slab. UNCONDITIONAL, like the FX rail: it only ever touches a region carrying our own isSpreadZone
   // flag, so it costs a flag read per region draw and changes nothing else on the scene.
@@ -394,6 +406,10 @@ Hooks.once("init", function () {
   // Item→actor deploy requests (player asks, active GM approves + creates) and the
   // embark/disembark token-HUD gesture.
   registerVehicleDeploySocket();
+  // …and the live state of the item↔actor link, so a pink slip's Deploy/Open control repaints the
+  // moment its vehicle is created, deleted, renamed or re-shared — on every client, not on the
+  // next time someone reopens the sheet.
+  registerVehicleDeployLinkHooks();
   registerVehicleBoardingHud();
   // Occupancy badge on the handle + the client-local occupant fade; and the "aboard" strip on a
   // rider's own character sheet. Both are presentation only — no document writes.
@@ -430,6 +446,10 @@ Hooks.once("init", function () {
     },
     // Shop API: open the shop window (the sidebar cart is the primary entry point).
     shop: { open: openShopWindow },
+    // Which client is doing the GM-side work, and why. A referee who has the world open more than
+    // once can read straight off this whether their tabs agree about who is acting: one session
+    // reports `isPrimary: true` and lists the other under `peers`. See module/gm-session-primary.js.
+    gmSession: { isPrimary: isPrimaryGMSession, id: gmSessionId, state: gmSessionPrimaryState },
     // Diagnostics: write the fault collector's ring into a journal entry a GM can read and keep.
     // The setting's hint names this call, so a GM who switched the collector on already has it.
     exportErrorJournal,

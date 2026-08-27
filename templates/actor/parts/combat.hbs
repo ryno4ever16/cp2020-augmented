@@ -160,8 +160,10 @@
         {{!-- Consolidated Martial Arts panel: one action per row (styled like the weapon rows —
              icon + name box, full-width), stacked vertically under the Defensive / Attacks /
              Grapple headers. The martial-art style is chosen in the dialog after clicking. The
-             panel is weapon-less: if the actor has a real martial weapon its id is used, otherwise
-             the handler builds a transient unarmed weapon (damage derives from the action). --}}
+             panel is weapon-less: the stamped id is only the LAST rung — the handler resolves the
+             item PER ACTION at click time (_cpResolveMartialActionItem: catalog source pointer →
+             exact name → this id), and when nothing resolves it stands in a clone of the system's
+             own catalog entry for the action. --}}
         <div class="martial-panel">
             <h3 class="martial-panel-title">{{CPLocal "MartialArt"}}</h3>
             {{#each @root.martialActionGroups as |grp|}}

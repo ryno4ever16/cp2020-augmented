@@ -261,10 +261,34 @@ if (guardOn) fs.writeFileSync(path.join(LOG_DIR, "_guard.log"), "");
  */
 const HEAL_EVERY = Number(process.env.CP_BATTERY_HEAL_EVERY ?? 12);
 
+/**
+ * ⭐ THE GAP BETWEEN SUITES — a session, not a process, is what has to be gone.
+ *
+ * PROVEN 2026-08-26. A suite exits and closes its browser, but the SERVER can still hold that
+ * client's session for a moment. The next suite joins as the SAME `Gamemaster` user, and for that
+ * moment the world has TWO sessions of one user — which every `activeGM` guard in this module waves
+ * through, because those guards compare USER ids (`game.users.activeGM?.id === game.user.id`) and a
+ * user is not a session. One relayed write is then performed once per live session: measured at
+ * THREE chat cards for a single player-side `requestCoverChew`, with `game.users.filter(u => u.active)`
+ * still reporting one "Gamemaster", so nothing in the world state shows the condition.
+ *
+ * That is why it presents as a phantom red — duplicate documents, duplicate cards, or a
+ * read-modify-write race between two copies of the same handler — always in the suite that follows
+ * another, never when the suite is run alone.
+ *
+ * `CP_BATTERY_SUITE_GAP_MS` tunes it; 2500 ms was enough to stop reproducing across repeated pairs.
+ * ⛔ THE GAP IS A HARNESS MITIGATION, NOT THE FIX. The module-side hazard is real for a referee with
+ * the world open in two tabs; see import-staging/COVER-SOAK-CHEW.md for the proof and the proposal.
+ */
+const SUITE_GAP_MS = Number(process.env.CP_BATTERY_SUITE_GAP_MS ?? 2500);
+
 const rows = [];
 const batteryStart = Date.now();
 let sinceHeal = 0;
+let firstSuite = true;
 for (const s of suites) {
+  if (!firstSuite && SUITE_GAP_MS > 0) await new Promise((r) => setTimeout(r, SUITE_GAP_MS));
+  firstSuite = false;
   const row = await runOne(s);
   rows.push(row);
   sinceHeal++;

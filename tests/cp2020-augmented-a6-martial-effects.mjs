@@ -45,6 +45,9 @@ const browser = await chromium.launch({ headless: true });
 let failures = 0;
 try {
   const page = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
+  const consoleErrors = [];
+  page.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message));
+  page.on("console", (m) => { if (m.type() === "error") consoleErrors.push("console: " + m.text()); });
   await joinAs(page, /^gamemaster$/i, [GM_PW]);
 
   const R = await page.evaluate(async () => {
@@ -321,6 +324,285 @@ try {
   if (A.error) { console.error("IN-PAGE ERROR (called shot):", A.error); failures++; }
   console.log("\nmartial called shot\n" + A.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(60)} got=${c.got}`).join("\n"));
   failures += A.checks.filter(c => !c.pass).length;
+
+  // ── PER-ACTION ITEM RESOLUTION (issue #2). The consolidated panel stamps ONE item id on every
+  //    row (the actor's first martial-arts weapon), and the base system takes the DAMAGE off the
+  //    ITEM — so an actor owning several martial items had every button roll whichever item sorted
+  //    first, creation-order dependent. The sheet now resolves the item PER ACTION at click time on
+  //    a three-rung ladder (catalog source pointer → exact name → the stamped fallback).
+  //
+  //    Every leg reads the damage formula the base actually built off the resolved item, taken from
+  //    the produced card's inline damage roll — a value, not a selection the test asserted itself.
+  const P = await page.evaluate(async () => {
+    const out = { checks: [], notes: [] };
+    const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const norm = (s) => String(s ?? "").replace(/\s+/g, "").toLowerCase();
+    const STRIKE_UUID ="Compendium.cyberpunk2020.melee.Item.TZoiQuE8fUzJ8Jta";
+    const KICK_UUID   = "Compendium.cyberpunk2020.melee.Item.TF0nBrjofPX2RiuG";
+    const PANEL_ACTIONS = ["Dodge", "BlockParry", "AllOutParry", "AllOutDodge", "Strike", "Punch",
+      "Kick", "Disarm", "SweepTrip", "Ram", "JumpKick", "Cast", "Grapple", "Hold", "Choke",
+      "Throw", "Escape"];
+    let actor = null, sheet = null;
+    const cards = [];
+    try {
+      const L = await import("/modules/cp2020-augmented/module/lookups.js");
+
+      // ── The pinned table vs the INSTALLED pack: the ladder's top rung is only as good as its
+      //    UUIDs, and a closed sweep of every base pack proves the table is complete, not just
+      //    correct. Strike and Kick are the only catalog items whose name is a panel action.
+      const table = L.MARTIAL_ACTION_CATALOG_UUID ?? {};
+      const meleeIdx = [...(await game.packs.get("cyberpunk2020.melee").getIndex())];
+      const byName = (n) => meleeIdx.find(e => e.name === n);
+      ok("pinned Strike UUID matches the installed melee pack entry",
+        byName("Strike") && `Compendium.cyberpunk2020.melee.Item.${byName("Strike")._id}` === STRIKE_UUID,
+        byName("Strike")?._id);
+      ok("pinned Kick UUID matches the installed melee pack entry",
+        byName("Kick") && `Compendium.cyberpunk2020.melee.Item.${byName("Kick")._id}` === KICK_UUID,
+        byName("Kick")?._id);
+      ok("the shipped table pins exactly those two, by UUID",
+        table.Strike === STRIKE_UUID && table.Kick === KICK_UUID && Object.keys(table).length === 2,
+        JSON.stringify(table));
+      const sweep = [];
+      for (const p of game.packs.filter(p => p.metadata.packageName === "cyberpunk2020" && p.documentName === "Item")) {
+        for (const e of await p.getIndex()) if (PANEL_ACTIONS.includes(String(e.name ?? "").trim())) sweep.push(`${p.collection}:${e.name}`);
+      }
+      ok("closed sweep of the base packs finds no third action-named catalog item",
+        sweep.length === 2 && sweep.every(s => s.startsWith("cyberpunk2020.melee:")), sweep.join(",") || "none");
+      ok("NEGATIVE: an action with no catalog item (Throw) is deliberately unpinned",
+        table.Throw === undefined, table.Throw);
+
+      for (const a of game.actors.filter(a => a.name === "__PW__MartialItem")) await a.delete().catch(() => {});
+      actor = await Actor.create({ name: "__PW__MartialItem", type: "character" });
+      await sleep(400);
+      sheet = actor.sheet;
+      await sheet.render(true);
+      await sleep(1200);
+
+      ok("the sheet carries a per-action item resolver",
+        typeof sheet._cpResolveMartialActionItem === "function", typeof sheet._cpResolveMartialActionItem);
+
+      /** Wipe every weapon/cyberware fixture so the next case owns its own creation order. */
+      const clearGear = async () => {
+        const ids = actor.items.filter(i => i.type === "weapon" || i.type === "cyberware").map(i => i.id);
+        if (ids.length) await actor.deleteEmbeddedDocuments("Item", ids);
+        await sleep(200);
+      };
+      const dropCatalog = async (uuid, patch) => {
+        const doc = await Item.implementation.fromDropData({ type: "Item", uuid });
+        const [it] = await actor.createEmbeddedDocuments("Item", [doc.toObject()]);
+        if (patch) await it.update(patch);
+        return it;
+      };
+      const handMade = async (name, damage) => {
+        const [it] = await actor.createEmbeddedDocuments("Item", [{
+          name, type: "weapon",
+          system: { attackType: "Martial", weaponType: "Melee", damage, accuracy: 0 },
+        }]);
+        return it;
+      };
+      /** The id the TEMPLATE stamps on every panel row: the actor's first martial-arts weapon. */
+      const stampedId = () => actor.items.find(i => i.type === "weapon" && i.system?.attackType === "Martial")?.id ?? "";
+
+      /** Drive the dialog the panel row opens, submit it, and read the damage formula the base
+       *  built off whatever item was resolved. `head` is the formula's leading term — the item's
+       *  own damage, before the strength / martial bonuses the base appends. */
+      const rollFor = async (action, itemId) => {
+        const before = new Set(game.messages.map(m => m.id));
+        sheet._cpOpenMartialActionDialog({ dataset: { action, itemId: itemId ?? stampedId() } });
+        await sleep(1300);
+        const dlg = [...foundry.applications.instances.values()].find(a => a.element?.querySelector?.(".weapon-modifiers"));
+        const btn = dlg?.element?.querySelector('button.fire, button[type="submit"]');
+        if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        let card = null;
+        for (let i = 0; i < 60 && !card; i++) { await sleep(100); card = [...game.messages].reverse().find(m => !before.has(m.id)); }
+        await sleep(300);
+        try { await dlg?.close?.(); } catch (e) { /* already closed */ }
+        if (card) cards.push(card.id);
+        const m = /<a class="[^"]*\bdamage\b[^"]*"\s+data-roll="([^"]+)"/.exec(card?.content ?? "");
+        let formula = null;
+        if (m) { try { formula = JSON.parse(decodeURIComponent(m[1]))?.formula ?? null; } catch (e) { formula = null; } }
+        return { opened: !!dlg, hasDamage: !!m, formula, head: formula ? norm(formula).split("+")[0] : null };
+      };
+
+      // ── Case 1: both catalog items owned, KICK CREATED FIRST (the reported order). ──
+      await clearGear();
+      const k1 = await dropCatalog(KICK_UUID);
+      const s1 = await dropCatalog(STRIKE_UUID);
+      ok("the dropped catalog copies carry the v12+ source pointer",
+        s1._stats?.compendiumSource === STRIKE_UUID && k1._stats?.compendiumSource === KICK_UUID,
+        `${s1._stats?.compendiumSource} / ${k1._stats?.compendiumSource}`);
+      ok("the stamped panel id is the FIRST-created item — one id for every row",
+        stampedId() === k1.id, stampedId() === k1.id ? "kick" : "strike");
+      const c1s = await rollFor("Strike");
+      const c1k = await rollFor("Kick");
+      ok("Kick first: the Strike row rolls the catalog Strike's damage", c1s.head === "1d6/2", c1s.formula);
+      ok("Kick first: the Kick row rolls the catalog Kick's damage", c1k.head === "1d6", c1k.formula);
+
+      // ── Case 2: the same pair, STRIKE CREATED FIRST — the answer must not move. ──
+      await clearGear();
+      const s2 = await dropCatalog(STRIKE_UUID);
+      await dropCatalog(KICK_UUID);
+      ok("the stamped panel id flipped with the creation order (the input that used to decide)",
+        stampedId() === s2.id, stampedId() === s2.id ? "strike" : "kick");
+      const c2s = await rollFor("Strike");
+      const c2k = await rollFor("Kick");
+      ok("Strike first: the Strike row still rolls the catalog Strike's damage", c2s.head === "1d6/2", c2s.formula);
+      ok("Strike first: the Kick row still rolls the catalog Kick's damage", c2k.head === "1d6", c2k.formula);
+
+      // ── Case 3: rung 1 is NAME-BLIND — a renamed, re-statted catalog copy still answers. ──
+      await clearGear();
+      await dropCatalog(STRIKE_UUID, { name: "Super Punch", "system.damage": "3D6" });
+      const c3 = await rollFor("Strike");
+      ok("a renamed catalog Strike still answers the Strike row, at its edited damage",
+        c3.head === "3d6", c3.formula);
+
+      // ── Case 4: rung 2 — an exact, case-insensitive name, no source pointer. ──
+      await clearGear();
+      await handMade("strike", "4D6");
+      const c4 = await rollFor("Strike");
+      ok("a hand-made item named exactly Strike resolves on the name rung", c4.head === "4d6", c4.formula);
+
+      // ── Case 5: both rungs match different items — rung 1 wins, silently. ──
+      await clearGear();
+      await handMade("Strike", "4D6");
+      await dropCatalog(STRIKE_UUID, { name: "Super Punch", "system.damage": "3D6" });
+      const c5 = await rollFor("Strike");
+      ok("catalog pointer outranks an exact name match on the same action", c5.head === "3d6", c5.formula);
+
+      // ── Case 6: NEGATIVE — a name that merely CONTAINS the action never matches. ──
+      await clearGear();
+      const nova = await handMade("Nova Strike", "5D6");
+      const k6 = await dropCatalog(KICK_UUID);
+      const c6 = await rollFor("Strike", k6.id);
+      ok("a containing name is not a match — the Strike row does not roll Nova Strike",
+        c6.head !== "5d6", c6.formula);
+      ok("with nothing better, the stamped fallback item is what fires (unchanged behaviour)",
+        c6.head === "1d6", c6.formula);
+      ok("NEGATIVE: the resolver reports no per-action match for this actor",
+        sheet._cpResolveMartialActionItem?.("Strike", "") == null, sheet._cpResolveMartialActionItem?.("Strike", "")?.name);
+      ok("an action with neither rung falls through to the stamped id",
+        sheet._cpResolveMartialActionItem?.("BlockParry", nova.id)?.id === nova.id,
+        sheet._cpResolveMartialActionItem?.("BlockParry", nova.id)?.name);
+
+      // ── Case 7: two catalog Strikes — the equipped copy wins, in both directions. ──
+      await clearGear();
+      const dup1 = await dropCatalog(STRIKE_UUID, { "system.damage": "7D6", "system.equipped": false });
+      const dup2 = await dropCatalog(STRIKE_UUID, { "system.damage": "8D6", "system.equipped": true });
+      const c7a = await rollFor("Strike");
+      ok("two catalog copies: the equipped one is the one that fires", c7a.head === "8d6", c7a.formula);
+      await dup1.update({ "system.equipped": true });
+      await dup2.update({ "system.equipped": false });
+      await sleep(200);
+      const c7b = await rollFor("Strike");
+      ok("moving the equipped mark moves the answer with it", c7b.head === "7d6", c7b.formula);
+
+      // ── Case 8: Throw — no catalog item exists, so the name rung carries it. ──
+      await clearGear();
+      await dropCatalog(KICK_UUID);
+      await handMade("Throw", "2D6");
+      const c8 = await rollFor("Throw");
+      ok("Throw resolves on the name rung even with another martial item owned", c8.head === "2d6", c8.formula);
+
+      // ── Case 9: no martial items at all — the stand-in is a CLONE of the system's catalog entry,
+      //    so an empty-handed action still rolls the system's own damage for it. Actions with no
+      //    catalog entry, and actions that deal no damage, keep the bare stand-in's behaviour. ──
+      await clearGear();
+      const c9s = await rollFor("Strike", "");
+      const c9k = await rollFor("Kick", "");
+      ok("with no owned martial item the dialog still opens", c9s.opened, c9s.opened);
+      ok("empty-handed Strike rolls the catalog entry's damage", c9s.head === "1d6/2", c9s.formula);
+      ok("empty-handed Kick rolls the catalog entry's damage", c9k.head === "1d6", c9k.formula);
+      // NEGATIVE: no catalog entry → the bare stand-in, which is NOT damage-less. A weapon document
+      // with no damage written on it inherits the base template's default ("2d6+1"), so this is what
+      // an empty-handed Throw has always rolled — and still does. Recorded as a finding.
+      const c9t = await rollFor("Throw", "");
+      const c9tFull = norm(c9t.formula);
+      ok("NEGATIVE: an action with no catalog entry keeps the bare stand-in and its template default",
+        c9t.hasDamage === true && c9tFull.startsWith("2d6+1"), c9t.formula);
+      if (c9tFull.startsWith("2d6+1")) out.notes.push('the bare stand-in inherits the base template default damage "2d6+1" (a weapon document with no damage written on it is not damage-less) — every damage-bearing action with no catalog entry rolls that');
+      const c9d = await rollFor("SweepTrip", "");
+      ok("NEGATIVE: a non-damaging action still posts the roll-only card", c9d.hasDamage === false, c9d.formula);
+
+      // ── Case 9b: the same path reached by DELETION, not by never owning one. ──
+      await clearGear();
+      const gone = await dropCatalog(STRIKE_UUID, { "system.damage": "6D6" });
+      const c9b1 = await rollFor("Strike");
+      ok("while owned, the owned copy's own damage is what fires", c9b1.head === "6d6", c9b1.formula);
+      await actor.deleteEmbeddedDocuments("Item", [gone.id]);
+      await sleep(200);
+      const c9b2 = await rollFor("Strike", "");
+      ok("once deleted, the row falls to the catalog stand-in rather than to nothing",
+        c9b2.head === "1d6/2", c9b2.formula);
+
+      // ── AUDIT (report, never fail): the catalog's damage vs Core p.111, text-layer verified.
+      //    A disagreement here is a DATA finding about the base system's pack, not a defect in this
+      //    code — the no-mass-patching policy governs what happens next, so the leg records it. ──
+      const BOOK_P111 = { Strike: "1D6/2", Kick: "1D6", Throw: "1D6" };
+      const melee = game.packs.get("cyberpunk2020.melee");
+      for (const [act, want] of Object.entries(BOOK_P111)) {
+        const e = byName(act);
+        if (!e) { out.notes.push(`no catalog entry named "${act}" — book p.111 gives ${want}; its stand-in falls to the base template default instead`); continue; }
+        const doc = await melee.getDocument(e._id);
+        const got = String(doc?.system?.damage ?? "").trim();
+        if (norm(got) !== norm(want)) out.notes.push(`catalog "${act}" damage ${JSON.stringify(got)} vs book p.111 ${JSON.stringify(want)}`);
+      }
+      // Every action the base pays damage for (item.js damagingMartialActions) needs an entry to
+      // reach a damaging stand-in; the ones without are recorded, not silently accepted.
+      const DAMAGING = ["Strike", "Punch", "Kick", "JumpKick", "Ram", "Cast", "Throw", "Choke"];
+      const unpinned = DAMAGING.filter(a => !table[a]);
+      if (unpinned.length) out.notes.push(`damage-bearing actions with no catalog entry (stand-in falls to the base template default "2d6+1"): ${unpinned.join(", ")}`);
+      ok("catalog damage audited against Core p.111 (findings are reported, not failed)", true,
+        out.notes.length ? `${out.notes.length} finding(s)` : "no discrepancy");
+
+      // ── WIRING: the rendered rows still stamp one id, and a real click on the Strike row lands
+      //    on the resolved item — the resolver, not the template, is doing the work. ──
+      await clearGear();
+      await dropCatalog(KICK_UUID);
+      await dropCatalog(STRIKE_UUID, { "system.damage": "9D6" });
+      await sheet.render(false);
+      await sleep(1000);
+      const rows = [...(sheet.element?.querySelectorAll(".martial-action") ?? [])];
+      const strikeRow = rows.find(r => r.dataset.action === "Strike");
+      const kickRow = rows.find(r => r.dataset.action === "Kick");
+      ok("the panel renders a row per action, each carrying an action key",
+        rows.length > 0 && rows.every(r => !!r.dataset.action), rows.length);
+      ok("every rendered row still stamps the same single item id (the defect's input, kept)",
+        !!strikeRow && !!kickRow && strikeRow.dataset.itemId === kickRow.dataset.itemId && !!strikeRow.dataset.itemId,
+        `${strikeRow?.dataset?.itemId} / ${kickRow?.dataset?.itemId}`);
+      const beforeClick = new Set(game.messages.map(m => m.id));
+      strikeRow?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await sleep(1300);
+      const dlg = [...foundry.applications.instances.values()].find(a => a.element?.querySelector?.(".weapon-modifiers"));
+      dlg?.element?.querySelector('button.fire, button[type="submit"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      let clickCard = null;
+      for (let i = 0; i < 60 && !clickCard; i++) { await sleep(100); clickCard = [...game.messages].reverse().find(m => !beforeClick.has(m.id)); }
+      await sleep(300);
+      try { await dlg?.close?.(); } catch (e) { /* already closed */ }
+      if (clickCard) cards.push(clickCard.id);
+      const cm = /<a class="[^"]*\bdamage\b[^"]*"\s+data-roll="([^"]+)"/.exec(clickCard?.content ?? "");
+      let clickHead = null;
+      if (cm) { try { clickHead = norm(JSON.parse(decodeURIComponent(cm[1]))?.formula).split("+")[0]; } catch (e) { clickHead = null; } }
+      ok("a real click on the Strike row rolls the Strike item's damage, not the stamped one",
+        clickHead === "9d6", clickHead);
+    } catch (e) {
+      out.error = e?.stack || e?.message || String(e);
+    } finally {
+      for (const id of cards) { try { await game.messages.get(id)?.delete(); } catch (e) { /* gone */ } }
+      try { if (sheet) await sheet.close(); } catch {}
+      try { if (actor) await actor.delete(); } catch {}
+    }
+    return out;
+  });
+  if (P.error) { console.error("IN-PAGE ERROR (per-action item):", P.error); failures++; }
+  console.log("\nmartial per-action item resolution\n" + P.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(68)} got=${c.got}`).join("\n"));
+  if (P.notes?.length) console.log("  catalog-data findings (reported, not failed):\n" + P.notes.map(n => `    - ${n}`).join("\n"));
+  failures += P.checks.filter(c => !c.pass).length;
+
+  const errOk = consoleErrors.length === 0;
+  console.log(`\n  [${errOk ? "PASS" : "FAIL"}] 0 console errors${errOk ? "" : "  got=" + JSON.stringify(consoleErrors.slice(0, 5))}`);
+  if (!errOk) failures++;
 
   console.log(`\n${failures === 0 ? "ALL GREEN" : failures + " FAILURE(S)"}`);
   process.exitCode = failures === 0 ? 0 : 1;

@@ -8,6 +8,7 @@
 import { enhanceSettingsConfig } from "./settings-sections.js";
 import { reconcileTokenWrites as reconcileLightTokenWrites } from "./mech/light.js";
 import { reconcileTokenWrites as reconcileVisionTokenWrites } from "./mech/vision.js";
+import { isPrimaryGMSession } from "./gm-session-primary.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -75,14 +76,15 @@ const SCRAPED_PACK_IDS = ["cyberpunk2020.pistols-add", "cyberpunk2020.rifles-add
  * the key so the pack falls back to its manifest ownership) and clears the stamp, so a later re-ON
  * snapshots whatever the GM has chosen since.
  *
- * The write is made by the ACTIVE GM client only: `core.compendiumConfiguration` is a world setting
- * (a player write would be rejected) and one writer avoids N GM clients racing the same map. The
- * re-assert is idempotent — a pack already carrying PLAYER/TRUSTED "NONE" is not rewritten, so after
- * the first application every later load is a no-op. Wrapped so a config hiccup cannot break ready.
+ * The write is made by the PRIMARY GM SESSION only: `core.compendiumConfiguration` is a world setting
+ * (a player write would be rejected) and one writer avoids N GM clients racing the same map — including
+ * two tabs of one referee, which the old user-id form counted as one. The re-assert is idempotent — a
+ * pack already carrying PLAYER/TRUSTED "NONE" is not rewritten, so after the first application every
+ * later load is a no-op. Wrapped so a config hiccup cannot break ready.
  */
 export async function applyScrapedPackVisibility() {
   try {
-    if (!game.user?.isGM || game.users?.activeGM?.id !== game.user.id) return;
+    if (!isPrimaryGMSession()) return;
     const on = hideScrapedPacks();
     const prior = { ...(game.settings.get(SCOPE, "hideScrapedPacksPrior") ?? {}) };
     let priorChanged = false;

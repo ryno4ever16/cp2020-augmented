@@ -26,6 +26,8 @@
  * time so a stored value never freezes the UI language).
  */
 
+import { isPrimaryGMSession } from "../gm-session-primary.js";
+
 const SCOPE = "cp2020-augmented";
 
 /** The behavior document type string (module-namespaced, matches module.json). */
@@ -97,7 +99,7 @@ export function registerGasCloudVisibilityDefault() {
   Hooks.on("createRegionBehavior", async (behavior) => {
     try {
       if (behavior?.type !== GAS_CLOUD_BEHAVIOR) return;
-      if (!game.user?.isGM || game.users?.activeGM?.id !== game.user?.id) return;
+      if (!isPrimaryGMSession()) return;
       const region = behavior.parent;
       if (!region?.update) return;
       const V = CONST?.REGION_VISIBILITY ?? {};
