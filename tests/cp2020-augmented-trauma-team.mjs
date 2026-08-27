@@ -384,15 +384,45 @@ const negatives = await page.evaluate(async (mod) => {
     await game.settings.set(SCOPE, "combatFxEnabled", was);
   }
   // The key-absent degrade, through the rail's own database seam.
+  //
+  // ⛔⛔ POLLED TO THE ENGINE'S OWN ANSWER, NOT SLEPT AT FOR A FIXED 400 ms (repaired 2026-08-26 after
+  // it was routed here as a product defect and A/B-proved not to be one). What this section asserts is
+  // "with every database key absent, the one SHAPE-drawn part still carries the placement" — a
+  // statement about WHAT is drawn, with no timing claim in it at all. The fixed sleep turned it into a
+  // bet against the engine's creation latency, and here is why that bet is unwinnable:
+  //
+  //   · the suite compresses the MODULE's schedule with `_setTraumaTimeScale(0.05)`, but the ENGINE's
+  //     own create pipeline is not scaled by anything — `_scaled()` reaches the module's ladder and
+  //     nothing else;
+  //   · that pipeline was measured at 171–181 ms idle on 2026-08-17 (SEQ_PRESTART_COMP_MS), and
+  //     re-measured on this rig on 2026-08-26 at a median of **269–275 ms with excursions to 460 ms**
+  //     — a headless software rasteriser, and it has drifted.
+  //
+  // So the airframe was being created at ~470–540 ms against a 400 ms budget: a coin flip. Measured
+  // both ways with the FX lane's own uncommitted work neutralised in the serve copy — green on one run,
+  // red on the identical two legs on the next — which is what proves the flakiness is the leg's and
+  // not any lane's. Polling costs nothing when the element is already there and removes the whole class.
   try {
     FX._setDbProbe(() => false);
     out.missingResult = await M.landTraumaTeam(centre);
-    await sleep(400);
-    out.missingLive = M.liveTraumaFx().map(e => String(e?.data?.name ?? ""));
+    out.missingLive = [];
+    for (let i = 0; i < 40; i++) {
+      await sleep(100);
+      out.missingLive = M.liveTraumaFx().map(e => String(e?.data?.name ?? ""));
+      if (out.missingLive.length) break;
+    }
   } finally {
     FX._setDbProbe(null);
+    // ⛔ AND THE SWEEP IS POLLED TOO, for the same reason and to close the SAME defect's second half.
+    // `the rig is left clean` was red only ever as a CONSEQUENCE of the leg above: an airframe created
+    // after the fixed sleep had expired was also created after `endTraumaTeam` had already swept, so it
+    // survived the departure and the count came back 1. With the arrival waited for, the sweep has
+    // something to take; waiting for the sweep to finish is the other half of not guessing.
     await M.endTraumaTeam();
-    await sleep(600);
+    for (let i = 0; i < 40; i++) {
+      if (M.liveTraumaFx().length === 0) break;
+      await sleep(100);
+    }
     M._setTraumaTimeScale(null);
   }
   out.finalLive = M.liveTraumaFx().length;

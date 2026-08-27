@@ -380,6 +380,37 @@ ok("E: the apply control is on the rendered card and the press lands the shot",
   afterApply.pressed && afterApply.resultCards === 1, `pressed=${afterApply.pressed}, ${afterApply.resultCards} result card(s)`);
 ok("E: and nothing is left hovering on the canvas afterwards", afterApply.zones === 0, `${afterApply.zones} left`);
 
+/* ══ E2. BENCH PARITY FOR THE ARRIVAL CHOKE (SHELL_CHOKE, ruled 2026-08-25) ═══════════════════
+ * The three figures above stand at ~10 m, which is inside the class cone's own reach — so every shot
+ * section E fires draws the UN-clamped fan and the bench could never show the shipped choked group.
+ * The provisioning script therefore stands a fourth figure out at range ("Review · Target (Long)"),
+ * and this leg is the parity claim, asserted on the REAL bench geometry rather than on a plan: with
+ * the shell class's own row and the bench gun's own Range, a shot from the shooter's figure to that
+ * one is CHOKED, and one to the near figure is not. A reviewer who fires gun 10 at the long figure is
+ * then looking at the clamped look; if this leg is red, the bench cannot show it. */
+console.log(`\n── E2 · bench parity: the arrival choke is reachable from the bench ──`);
+const chokeParity = await page.evaluate(async ({ SCOPE, names }) => {
+  const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+  const grid = await import(`/modules/${SCOPE}/module/vehicle/vehicle-grid.js`);
+  const scene = game.scenes.get(globalThis.__BENCH_SCENE_ID) ?? game.scenes.active;
+  const gpx = Number(scene.grid?.size) || 100;
+  const ppm = grid.pxPerMeter(scene);
+  const at = (nm) => { const t = scene.tokens.find(x => x.name === nm); return t ? { x: t.x + gpx / 2, y: t.y + gpx / 2 } : null; };
+  const shooter = at(names.shooter), near = at(names.near), far = at(names.far);
+  const shell = fx.FX_CLASSES.shotgun;
+  const measure = (p) => p && shooter ? fx.shellChokeSpec(shell.spreadRad, {
+    distancePx: Math.hypot(p.x - shooter.x, p.y - shooter.y), pixelsPerMeter: ppm, gridSizePx: gpx,
+    rangeM: 50, widths: { short: 1, medium: 2, long: 3 }, targetHalfPx: gpx / 2 }) : null;
+  return { farPlaced: !!far, near: measure(near), far: measure(far),
+    metresPerSquare: ppm > 0 ? gpx / ppm : null };
+}, { SCOPE, names: { shooter: "Review · Shooter", near: "Review · Target", far: "Review · Target (Long)" } });
+ok("E2: the bench carries a figure at a range where the arrival clamp is what answers",
+  chokeParity.farPlaced === true && chokeParity.far?.choked === true && chokeParity.far?.capSource !== "cone",
+  JSON.stringify(chokeParity.far));
+ok("E2: and the near figures still draw the class's own cone, so the bench shows BOTH sides of the clamp",
+  chokeParity.near?.choked === false && chokeParity.near?.capSource === "cone",
+  `${chokeParity.metresPerSquare} m/square · near ${JSON.stringify(chokeParity.near)}`);
+
 /* ══ F. 11 shell SLUG — the single-target contrast: no pattern, an apply route ════════════════ */
 console.log(`\n── F · 11 Arasaka RAS-12 Slug → Review · Target (flesh) ──`);
 r = await fireUntilHit("11", "Review · Target");

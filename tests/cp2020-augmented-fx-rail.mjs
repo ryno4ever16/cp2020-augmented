@@ -92,6 +92,27 @@ await page.waitForFunction(() => window.game?.ready === true, null, { timeout: 6
 //
 // It falls back to the active scene, then to the first scene, so a rig without the review fixtures still
 // runs; the name is the ONE place the choice is written.
+//
+// ⛔⛔ AND IT IS STILL **VIEWED, NEVER ACTIVATED** — a 2026-08-26 attempt to activate it here was
+// REVERTED the same session, and the measurement is worth keeping so nobody tries it again. The
+// motivation was real: a `view()` is per-client, so a sibling lane leaving its own scene ACTIVE
+// (`cp2020-augmented-cover-area-soak.mjs` pins `Foundry Virtual Tabletop` and restores the prior one in
+// its finally) takes this canvas away the moment anything falls back to the world's active scene, and
+// four sections then dereference placeables that were never drawn. But `Scene#activate` is a WORLD
+// write that makes every connected client tear its canvas down and rebuild it, and driven from a
+// keeper's own first page it **navigated the page out from under the run**: the log filled with
+// `Failed to fetch dynamically imported module: chrome-error://chromewebdata/…`,
+// `Execution context was destroyed, most likely because of a navigation` and `game is not defined`,
+// and 39 legs went red across sections that have nothing to do with scenes. Activating is the RIG's
+// job, not a spec's — the bench is left active by the provisioning script and by the cleanup a lane
+// runs between suites.
+//
+// What DID survive from that attempt, and is the real fix at this level: `drawnToken` waits for the
+// canvas's own copy of a token instead of dereferencing it blind, and re-views this pinned scene once
+// if the canvas is found showing another. Plus a named harness-guard leg in §26.
+//
+// It falls back to the active scene, then to the first scene, so a rig without the review fixtures still
+// runs; the name is the ONE place the choice is written.
 const FX_SCENE_NAME = "Review · Dark Range";
 await page.evaluate(async (name) => {
   const scene = game.scenes.getName(name) ?? game.scenes.active ?? game.scenes.contents[0];
@@ -99,6 +120,10 @@ await page.evaluate(async (name) => {
   globalThis.__FX_SCENE_ID = scene?.id ?? null;
 }, FX_SCENE_NAME);
 await page.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 60000 });
+await page.waitForTimeout(1500);
+check("fixture scene: the canvas is showing the scene this spec pinned, and it is ready to draw on",
+  await page.evaluate(() => canvas.scene?.id === globalThis.__FX_SCENE_ID && canvas.ready === true),
+  await page.evaluate(() => `canvas "${canvas.scene?.name}" active=${canvas.scene?.active} ready=${canvas.ready}`));
 
 // ⭐ THE GOLDEN PAYLOAD, PUT ON THE PAGE ONCE (VACUOUS-LEG-AUDIT F1).
 //
@@ -123,6 +148,24 @@ const res = await page.evaluate(async () => {
   const out = { checks: [], soundsDelivered: null };
   const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // ⛔ THE DRAWN PLACEABLE FOR A TOKEN DOCUMENT, WAITED FOR (added 2026-08-26 after it cost two runs).
+  // `canvas.tokens.get(id)` is the CANVAS's copy, not the document's, and it is absent for a beat after
+  // a create AND for a beat after any canvas re-draw — a scene activation on another client is enough.
+  // Reading `.center` off it unguarded aborts the WHOLE section with
+  // `Cannot read properties of undefined (reading 'center')`, which reads as a product fault and is
+  // not one. Every site in this spec that needs the placeable goes through here.
+  const drawnToken = async (doc, tries = 40) => {
+    for (let i = 0; i < tries; i++) {
+      const pl = canvas.tokens?.get(doc?.id ?? doc);
+      if (pl?.center) return pl;
+      // ⛔ SELF-REPAIR, ONCE. If the canvas is showing a DIFFERENT scene then this spec's figures are
+      // not on it and never will be, so spinning to the timeout only delays the same failure. Re-view
+      // the pinned scene instead — this is the whole mechanism behind the stale-ACTIVE-scene fault.
+      if (i === 5 && scene && canvas.scene?.id !== scene.id) { await scene.view(); await sleep(1500); }
+      await sleep(100);
+    }
+    return null;
+  };
 
   // The pinned scene (see FX_SCENE_NAME above), never `game.scenes.active` — which another client can
   // change under a running section.
@@ -713,8 +756,13 @@ const res = await page.evaluate(async () => {
   const arrivalOf = async (hit) => {
     globalThis.Sequencer?.EffectManager?.endAllEffects?.();
     await sleep(1200);
-    const shooter = canvas.tokens.get(tokenDoc.id), target = canvas.tokens.get(targetDoc.id);
+    const shooter = await drawnToken(tokenDoc), target = await drawnToken(targetDoc);
     const from = fx.centerOf(shooter), to = fx.centerOf(target);
+    // ⛔ AN UNDRAWN FIGURE IS AN EMPTY SAMPLE, NOT A THROW. The caller already treats a short sample as
+    // unusable and retries it, and a retry is exactly what a canvas that is a beat behind needs; if it
+    // is still empty after the retries the assertion says "0 pellets" instead of the whole section
+    // aborting on `Cannot read properties of null`.
+    if (!from || !to) return [];
     const line = Math.hypot(to.x - from.x, to.y - from.y);
     const seen = new Map();
     const t0 = performance.now();
@@ -777,14 +825,21 @@ const res = await page.evaluate(async () => {
     fx.FX_CLASSES.shotgun.dashMs > 0 && fx.DASH_ARRIVAL_HOLD_MS > 0
     && fx.presentationTailMs("shotgun") >= fx.FX_CLASSES.shotgun.dashMs,
     `${fx.FX_CLASSES.shotgun.dashMs}ms crossing + ${fx.DASH_ARRIVAL_HOLD_MS}ms hold`);
-  // NEGATIVE: a MISS must NOT be made to arrive — the divergence design sends each pellet to its own
-  // reach and angle, so the group splays wide and at mixed depths instead of converging.
+  // ⭐ RE-POINTED 2026-08-26. ⏪ This leg used to pin the opposite — that a MISS splays wider and at
+  // mixed depths than a hit, because the divergence was rolled PER PELLET. The user ruled that out
+  // (the pattern belongs to the barrel, not to the outcome), and the same change closed the
+  // late-volley report. What a miss must still do is LAND SOMEWHERE ELSE: the group is now as tight
+  // as a hit's, and the thing that says "that went wide" is the group's DISTANCE FROM THE BODY, not
+  // its width. So the negative moves to where the ruling put it.
   const missArrival = await arrivalOf(false);
   const missSpread = Math.max(...missArrival.map(p => p.fraction)) - Math.min(...missArrival.map(p => p.fraction));
   const hitSpread = Math.max(...hitArrival.map(p => p.fraction)) - Math.min(...hitArrival.map(p => p.fraction));
-  ok("arrival: a MISSED round still splays instead of converging (negative)",
-    missArrival.some(p => p.toCentre > halfWidth) && missSpread > hitSpread,
-    `miss spread ${missSpread.toFixed(3)} of the line vs hit spread ${hitSpread.toFixed(3)}; worst ${Math.max(...missArrival.map(p => p.toCentre))}px from centre`);
+  ok("arrival: a MISSED round still lands AWAY from the body it was aimed at (negative)",
+    missArrival.some(p => p.toCentre > halfWidth),
+    `worst ${Math.max(...missArrival.map(p => p.toCentre))}px from centre vs ${halfWidth}px half-width`);
+  ok("arrival: but its group is now as TIGHT as a hit's — the ruled pattern, not a splay",
+    missSpread <= hitSpread + 0.05,
+    `miss spread ${missSpread.toFixed(3)} of the line vs hit spread ${hitSpread.toFixed(3)}`);
   await sleep(1200);
 
   ok("impact: the hit confirmation is a different family from the muzzle spark, sized per class",
@@ -796,7 +851,7 @@ const res = await page.evaluate(async () => {
   /* ── 5. source lifecycle: it appears, it is a real light, it goes away ──── */
   // The flash is a light source this client builds and destroys. Nothing is persisted, so the whole
   // former write-sequence/restore/stale-recovery section is replaced by the source's own lifecycle.
-  const shooterPlaceable = canvas.tokens.get(tokenDoc.id);
+  const shooterPlaceable = await drawnToken(tokenDoc);   // waited for — see `drawnToken`
   // Scoped to THIS shooter. The collection is world-wide, so a human firing at the table while the
   // keeper runs puts THEIR flash in it — which says nothing about whether the rail cleans up after the
   // token this section is about. liveFlashCount() stays unscoped on purpose: it counts what this
@@ -2010,7 +2065,9 @@ const res = await page.evaluate(async () => {
   // ⏪ RE-PINNED 2026-08-17: the queued delay is the crossing LESS the engine's measured start-up
   // floor (SEQ_PRESTART_COMP_MS), floored at zero — a crossing shorter than the floor queues with no
   // delay call at all, which the recorder reads as undefined. The NOMINAL still governs the tail.
-  const lessFloor = (n) => Math.max(0, n - fx.SEQ_PRESTART_COMP_MS);
+  // ⏪ RE-POINTED 2026-08-26 (the audio phase): the floor that comes off an arrival is now the
+  // RESOLVED compensation, which is ZERO while the audio is phased instead. See fxArrivalCompMs.
+  const lessFloor = (n) => Math.max(0, n - fx.fxArrivalCompMs());
   ok("impact: BOTH tracer shapes hold their confirmation back until the round gets there, less the engine floor",
     !!shellImpact && (shellImpact.delay ?? 0) === lessFloor(fx.FX_CLASSES.shotgun.dashMs)
     && (paintedImpact?.delay ?? 0) === lessFloor(fx.arrivalSpecFor("rifle", null, paintedSquares).ms)
@@ -2033,7 +2090,9 @@ const res = await page.evaluate(async () => {
   fx._setDbProbe(null);
   played.length = 0; playedEntries.length = 0;
   {
-    const shooterTok = canvas.tokens.get(tokenDoc.id);
+    const shooterTok = await drawnToken(tokenDoc);
+    ok("span file: the shooter's figure is on the canvas before the one-square shot is composed (harness guard)",
+      !!shooterTok, `canvas scene "${canvas.scene?.name}", placeable ${!!shooterTok}`);
     const nearTo = { x: shooterTok.center.x + gridPx, y: shooterTok.center.y };
     await fx.fxShot(tokenDoc, targetDoc, { weaponClass: "rifle", hit: true, light: false, aimPoint: nearTo });
     await sleep(150);
@@ -2705,19 +2764,21 @@ const res = await page.evaluate(async () => {
   ok("fan geometry: symmetric about the aim line, with no pellet sitting on it",
     coneAngles.every(a => Math.abs(a) > 1e-6) && Math.abs(coneAngles[0] + coneAngles[3]) < 1e-9,
     coneAngles.map(a => a.toFixed(5)).join(","));
-  // A miss draws the miss divergence PER PELLET — its own angle AND its own reach — which is what makes
-  // the group splay rather than fan neatly past the target. Counted by draws consumed from a fed
-  // sequence, so "independently" is asserted rather than assumed.
+  // ⭐ RULED 2026-08-26: a missed pellet round draws ONE landing roll for the whole group and then the
+  // same choked fan a hit draws, about that landing point. Counted by draws consumed from a fed
+  // sequence, so "once per round" is asserted rather than assumed — the pre-ruling shape consumed two
+  // draws PER PELLET and this leg is what goes red if anyone puts it back.
   const draws = [0, 0, 1, 1, 0, 0, 1, 1];
   let drawn = 0;
   const splay = fx.pelletEndpoints(fanFrom, fanTo, { pellets: 4, spreadRad: 0.07, hit: false, rng: () => draws[drawn++] });
-  const lowMiss = fx.missEndpoint(fanFrom, fanTo, () => 0);
-  const highMiss = fx.missEndpoint(fanFrom, fanTo, () => 1);
-  ok("fan geometry: a miss draws the miss divergence independently per pellet",
-    splay.length === 4 && drawn === 8
-    && Math.abs(splay[0].x - lowMiss.x) < 0.001 && Math.abs(splay[0].y - lowMiss.y) < 0.001
-    && Math.abs(splay[1].x - highMiss.x) < 0.001 && Math.abs(splay[1].y - highMiss.y) < 0.001,
-    `${drawn} draws consumed for ${splay.length} pellets`);
+  const landing = fx.missEndpoint(fanFrom, fanTo, (() => { let i = 0; return () => draws[i++]; })());
+  const landAng = Math.atan2(landing.y - fanFrom.y, landing.x - fanFrom.x);
+  const splayOffsets = splay.map(pt => Math.atan2(pt.y - fanFrom.y, pt.x - fanFrom.x) - landAng);
+  ok("fan geometry: a miss rolls ONE landing point for the round, not one per pellet",
+    splay.length === 4 && drawn === 2, `${drawn} draws consumed for ${splay.length} pellets`);
+  ok("fan geometry: the missed group is a fan about that landing point, symmetric, none on the axis",
+    Math.abs(splayOffsets[0] + splayOffsets[3]) < 1e-9 && splayOffsets.every(a => Math.abs(a) > 1e-9),
+    splayOffsets.map(a => a.toFixed(5)).join(","));
   // The legs above feed the pure function fixed inputs; this one feeds it the SHIPPED row, so the
   // count actually in the table is exercised rather than a number that used to be in it.
   const shipped = fx.pelletEndpoints(fanFrom, fanTo, { pellets: shellRow.pellets, spreadRad: shellRow.spreadRad, hit: true });
@@ -3603,9 +3664,20 @@ const res = await page.evaluate(async () => {
       if (e.position.x === 0 && e.position.y === 0) continue;
       if (!shellFirstSeen.has(e.id)) { shellFirstSeen.set(e.id, now); continue; }
       if (now - shellFirstSeen.get(e.id) < 150) continue;
-      const prev = shellSeen.get(e.id) ?? { dist: 0, alpha: 0 };
+      const prev = shellSeen.get(e.id) ?? { dist: 0, alpha: 0, worldAlpha: 0, sprite: false };
       prev.dist = Math.max(prev.dist, Math.hypot(e.position.x - sc.x, e.position.y - sc.y) / grid);
-      prev.alpha = Math.max(prev.alpha, Number(e.sprite?.worldAlpha ?? 0));
+      // ⚠ TWO ALPHAS, AND THE LEG BELOW TAKES THE BETTER OF THEM (repaired 2026-08-26 after an
+      // intermittent red: `alpha 0 (spec opacity 0.28)` on a run whose sibling legs saw the puff drawn,
+      // at the right distance, on the very next run of the same bytes). `worldAlpha` is a RENDER-TIME
+      // product — PIXI writes it while compositing — so under a headless ticker that throttles or skips
+      // frames it can read 0 for a sprite that is fully configured and on the canvas. `alpha` is the
+      // value the rail actually SET, which is defined without a render pass and is the number the
+      // defect this leg guards would corrupt (a puff drawn transparent). Both are recorded so the
+      // detail line says which one answered; the presence of the sprite object is recorded too, so
+      // "no sprite at all" reads as its own diagnosis instead of as a transparent one.
+      prev.sprite = prev.sprite || !!e.sprite;
+      prev.worldAlpha = Math.max(prev.worldAlpha, Number(e.sprite?.worldAlpha ?? 0));
+      prev.alpha = Math.max(prev.alpha, Number(e.sprite?.worldAlpha ?? 0), Number(e.sprite?.alpha ?? 0));
       shellSeen.set(e.id, prev);
     }
   }, 16);
@@ -3620,7 +3692,7 @@ const res = await page.evaluate(async () => {
     `reported ${shellOne.smokePuffs}, observed ${shellPuffs.length}`);
   ok("shell smoke: the drawn puff is visible — it carries a real alpha, not a transparent one",
     shellPuffs.length > 0 && shellPuffs[0].alpha > 0,
-    `alpha ${shellPuffs[0]?.alpha ?? "none"} (spec opacity ${fx.MUZZLE_SMOKE.opacity})`);
+    `alpha ${shellPuffs[0]?.alpha ?? "none"} (set ${shellPuffs[0]?.alpha ?? "none"} / composited ${shellPuffs[0]?.worldAlpha ?? "none"}, sprite ${shellPuffs[0]?.sprite ?? "none"}, spec opacity ${fx.MUZZLE_SMOKE.opacity})`);
   ok("shell smoke: and it stays with the shooter, inside the cap the spec names",
     shellPuffs.length > 0 && shellPuffs[0].dist <= fx.MUZZLE_SMOKE.driftMaxSquares + 0.1,
     `${shellPuffs[0]?.dist?.toFixed(2)} squares out, cap ${fx.MUZZLE_SMOKE.driftMaxSquares}`);
@@ -3906,7 +3978,11 @@ const res = await page.evaluate(async () => {
   const realRenderTemplate = globalThis.renderTemplate;
   globalThis.renderTemplate = async function (path, data, ...rest) {
     if (/multi-hit\.hbs$/.test(String(path))) {
-      fumbleCard = { fired: data?.fired, hits: data?.hits, hasFumbleBlock: !!data?.fumble };
+      // The block's HTML is captured too (2026-08-26): the outcome CLASS the seam stamps on the payload
+      // is derived from it, so keeping it here is what lets the legs below re-derive independently and
+      // prove the seam read the base's own table die rather than inventing one.
+      fumbleCard = { fired: data?.fired, hits: data?.hits, hasFumbleBlock: !!data?.fumble,
+                     fumbleHtml: data?.fumble?.html ?? null };
     }
     return realRenderTemplate.call(this, path, data, ...rest);
   };
@@ -3915,6 +3991,22 @@ const res = await page.evaluate(async () => {
     const realUniform = CONFIG.Dice.randomUniform;
     CONFIG.Dice.randomUniform = () => 0.9999;
     try { return await realAttackRoll(mods); } finally { CONFIG.Dice.randomUniform = realUniform; }
+  };
+  // ⛔⛔ THE FUMBLE TABLE'S OWN DIE IS PINNED TOO, AND IT HAS TO BE (2026-08-26). A ruled fumble is not
+  // one outcome any more: the base rolls a second d10 against its Reflex (Combat) table and rows 1-4 —
+  // FORTY PER CENT — now mean "an ordinary miss, drawn in full", while the rest mean the rail draws
+  // nothing. Left on the real generator this section's own negatives ("the rail drew nothing for it")
+  // would be right six times in ten and red four times in ten, which is a flake and not a finding.
+  // Face 5 is forced — a class this rail stands down for — so the legs below assert the SAME behaviour
+  // they always asserted, deterministically; the four classes are then driven by value from the
+  // captured payload. Scoped to this one method and restored in its own `finally`, the way the attack
+  // roll above is: the dice inside are plain 1d10/1d6 with no explosion, so a flat uniform is safe here.
+  const FUMBLE_FACE = 5;
+  const realMaybeFumble = shellItem._maybeApplyRangedFumble.bind(shellItem);
+  shellItem._maybeApplyRangedFumble = async function (roll) {
+    const realUniform = CONFIG.Dice.randomUniform;
+    CONFIG.Dice.randomUniform = () => 1 - (FUMBLE_FACE - 0.5) / 10;
+    try { return await realMaybeFumble(roll); } finally { CONFIG.Dice.randomUniform = realUniform; }
   };
   const fumbleMsgMark = game.messages.map(m => m.id);
   globalThis.Sequencer?.EffectManager?.endAllEffects?.();
@@ -3926,6 +4018,7 @@ const res = await page.evaluate(async () => {
     .catch((e) => { fumblePayloads.push({ err: String(e?.message ?? e) }); });
   await sleep(2200);
   delete shellItem.attackRoll;
+  delete shellItem._maybeApplyRangedFumble;
   globalThis.renderTemplate = realRenderTemplate;
   const liveEffectsAfter = (globalThis.Sequencer?.EffectManager?.effects ?? []).length;
   const fumbleAudioOnFire = [...ourAudio];
@@ -3977,6 +4070,78 @@ const res = await page.evaluate(async () => {
     ourAudio.length === 1, `${ourAudio.length} shot sound(s)`);
   ok("fumble: its presentation span comes back too",
     fx.payloadPresentationMs(notRuled) > 0, `${fx.payloadPresentationMs(notRuled)}ms`);
+
+  /* ── 11d-bis. THE RULED FUMBLE'S OUTCOME CLASS DECIDES, not the ruling alone ──────────────── */
+  // A ruled fumble is not one outcome. The base rolls a second d10 against its Reflex (Combat) table
+  // and the rows differ: 1-4 is "no fumble, you just screw up" — a round left the barrel and missed, so
+  // this rail owes it the ordinary miss presentation — while 5 and 7 put no round out, 6 puts one out
+  // harmlessly, and 8-10 are the base card's own business. Everything above ran on a forced face 5, so
+  // it asserted the STAND-DOWN half; these legs drive the other three classes by value off the same
+  // live payload and pin that presentation answers exactly as the plant does.
+  const fumbleMod = await import(`/modules/${SCOPE}/module/combat/fumble-outcome.js`);
+  ok("fumble class: the seam stamped the class the base's OWN table die produced (forced face 5)",
+    fp?.fumbleClass === "noDischarge"
+    && fumbleMod.rangedFumbleClassFrom({ html: fumbleCard?.fumbleHtml }) === "noDischarge"
+    && fumbleMod.fumbleTableSubRoll(fumbleCard?.fumbleHtml ?? "") === 5,
+    `payload ${fp?.fumbleClass} / re-derived ${fumbleMod.rangedFumbleClassFrom({ html: fumbleCard?.fumbleHtml })} / face ${fumbleMod.fumbleTableSubRoll(fumbleCard?.fumbleHtml ?? "")}`);
+
+  // THE ORDINARY-MISS CLASS IS DRAWN IN FULL — one round, one flash, one report, and a real span to
+  // wait out. Same payload as the silent legs above; only the class differs, which is what makes the
+  // class the variable under test.
+  ourAudio.length = 0;
+  await drain();
+  const plainMissP = { ...(fp ?? {}), fumbleClass: "plainMiss" };
+  const plainMissRes = await fx.fxWeaponFired(plainMissP);
+  await sleep(700);
+  ok("fumble class: the ordinary-miss class runs the whole fan-out — nothing is skipped",
+    plainMissRes.skipped === null && plainMissRes.shots === 1 && plainMissRes.flashes === 1,
+    JSON.stringify({ skipped: plainMissRes.skipped, shots: plainMissRes.shots, flashes: plainMissRes.flashes }));
+  ok("fumble class: …and it sounds its round, unlike the classes that stand the rail down",
+    ourAudio.length === 1, `${ourAudio.length} shot sound(s)`);
+  ok("fumble class: …and reports a real presentation span, so no caller opens its window early",
+    fx.payloadPresentationMs(plainMissP) > 0, `${fx.payloadPresentationMs(plainMissP)}ms`);
+  // It is a MISS, not a hit — the base zeroed the card's hit count on the same ruling, so no round is
+  // drawn as landing and no impact family is issued. The presentation is the ordinary-miss one.
+  ok("fumble class: the ordinary-miss class draws no landing round (the base ruled zero hits)",
+    plainMissRes.hits === 0 && (plainMissRes.impacts?.queued ?? 0) === 0 && plainMissRes.blood === null,
+    JSON.stringify({ hits: plainMissRes.hits, impacts: plainMissRes.impacts, blood: plainMissRes.blood }));
+
+  // AND THE OTHER THREE STAND THE RAIL DOWN, each on its own so a gate that collapsed either way
+  // cannot pass. `harmlessDischarge` is silent BY CHOICE, not by omission: the ruling allowed a
+  // muzzle-only picture if the rail could do it cheaply, and it cannot — fxShot composes the flash, the
+  // sprite, the tracer and the arrival mark into one Sequence, so muzzle-without-tracer is a new draw
+  // shape with its own spec block and tail term. Recorded in docs/FX-RAIL.md §8; this leg pins today's
+  // answer so the day it changes, it changes here too.
+  for (const cls of ["noDischarge", "harmlessDischarge", "ownSide"]) {
+    ourAudio.length = 0;
+    await drain();
+    const p = { ...(fp ?? {}), fumbleClass: cls };
+    const r = await fx.fxWeaponFired(p);
+    await sleep(500);
+    ok(`fumble class: the ${cls} class draws nothing, sounds nothing and waits out nothing`,
+      r.skipped === "fumble" && r.fumbleClass === cls && r.shots === 0 && r.flashes === 0
+      && ourAudio.length === 0 && fx.payloadPresentationMs(p) === 0,
+      JSON.stringify({ cls, skipped: r.skipped, echoed: r.fumbleClass, shots: r.shots,
+                       flashes: r.flashes, audio: ourAudio.length, span: fx.payloadPresentationMs(p) }));
+  }
+  // ⏪ THE LEGACY SHAPE. A payload carrying the ruling but NO class — a relay from a client on an older
+  // build, a hand-built macro payload — keeps the uniform bail exactly as it shipped. This is the
+  // backward-compatibility half and it must not move.
+  ourAudio.length = 0;
+  await drain();
+  const noClassP = { ...(fp ?? {}) };
+  delete noClassP.fumbleClass;
+  const noClassRes = await fx.fxWeaponFired(noClassP);
+  await sleep(500);
+  ok("fumble class: a ruled fumble carrying NO class keeps the uniform bail (backward compatible)",
+    noClassRes.skipped === "fumble" && noClassRes.flashes === 0 && ourAudio.length === 0
+    && fx.payloadPresentationMs(noClassP) === 0,
+    JSON.stringify({ skipped: noClassRes.skipped, flashes: noClassRes.flashes, audio: ourAudio.length }));
+  ok("fumble class: an unrecognised class string reads as no class at all, not as a fourth behaviour",
+    (await fx.fxWeaponFired({ ...(fp ?? {}), fumbleClass: "somethingElse" })).skipped === "fumble",
+    String((await fx.fxWeaponFired({ ...(fp ?? {}), fumbleClass: "somethingElse" })).skipped));
+  await drain();
+
   foundry.audio.AudioHelper.play = realAudioPlay;
   if (!fumbleWas) await game.settings.set("cyberpunk2020", "fumbleTableEnabled", fumbleWas);
   for (const m of game.messages.filter(m => !fumbleMsgMark.includes(m.id))) { try { await m.delete(); } catch (e) { /* gone */ } }
@@ -5432,17 +5597,32 @@ try {
     // rounds' own arrival time, so the last burst's flames do not exist yet when its fan-out returns —
     // and the cap is re-applied at the moment they do. A fixed sleep reads the scene mid-landing and
     // says nothing about whether the cap holds; this waits for two consecutive identical readings.
-    let liveNow = -1, prevLive = -2;
+    // ⛔ THE PEAK IS THE READING, NOT THE TAIL (repaired 2026-08-26 inside the unit that observed it).
+    // These flames carry a LIFETIME (GROUND_FIRE.lifetimeMs, 25 s), so the population this poll walks
+    // is DECAYING: a settled reading taken after five bursts measures how long the harness took to get
+    // through them, not whether the cap held. It read 4 alive on two runs and 2 on the next with no
+    // change to the cap — the change was upstream, in the fan-out's own duration (the presentation
+    // feedback lets more rounds be drawn, so each burst lasts longer and more of the early flames have
+    // aged out by the time the last one lands). The claim this leg exists for is "the cap held and the
+    // newest were drawn", and both are properties of the PEAK, which is sampled here rather than
+    // inferred from what is left over.
+    let liveNow = -1, prevLive = -2, peakLive = 0;
     for (let i = 0; i < 30; i++) {
       await sleep(250);
       prevLive = liveNow;
       liveNow = fx.liveGroundFires().length;
+      if (liveNow > peakLive) peakLive = liveNow;
       if (i >= 4 && liveNow === prevLive) break;
     }
-    ok("live: the scene cap holds across bursts — the oldest are evicted, the newest are drawn",
-      liveNow <= 12 && liveNow <= fx.GROUND_FIRE.maxLive && liveNow >= fx.GROUND_FIRE.maxPerPayload
-      && spawned.filter(isFire).length === bursts * fx.GROUND_FIRE.maxPerPayload,
-      `${bursts} bursts queued ${spawned.filter(isFire).length} flames, ${liveNow} alive against a cap of ${fx.GROUND_FIRE.maxLive}`);
+    ok("live: the scene cap holds across bursts — the peak never exceeds it",
+      peakLive <= fx.GROUND_FIRE.maxLive,
+      `peak ${peakLive} against a cap of ${fx.GROUND_FIRE.maxLive}`);
+    ok("live: …and the NEWEST burst's flames were drawn rather than refused by the cap",
+      peakLive >= fx.GROUND_FIRE.maxPerPayload,
+      `peak ${peakLive} vs one payload's ${fx.GROUND_FIRE.maxPerPayload}`);
+    ok("live: every burst queued its full placement — the cap evicts, it does not refuse",
+      spawned.filter(isFire).length === bursts * fx.GROUND_FIRE.maxPerPayload,
+      `${bursts} bursts queued ${spawned.filter(isFire).length} flames (peak alive ${peakLive}, settled ${liveNow})`);
     await endAll();
     ok("live: and clearing the canvas leaves none of them behind (negative)",
       fx.liveGroundFires().length === 0, String(fx.liveGroundFires().length));
@@ -7253,8 +7433,8 @@ try {
       // in it); the QUEUED delay is that nominal less the engine's measured start-up floor.
       ok("arrival driven: a painted round's hit mark is DELAYED by its banded crossing less the engine floor",
         one.arrivalMs === expectMs && one.impactDelayMs === expectMs
-        && (mark?.delay ?? 0) === Math.max(0, expectMs - fx.SEQ_PRESTART_COMP_MS) && expectMs > 0,
-        JSON.stringify({ band: fx.tracerBandFor(squares), reported: one.impactDelayMs, queued: mark?.delay ?? null, floor: fx.SEQ_PRESTART_COMP_MS }));
+        && (mark?.delay ?? 0) === Math.max(0, expectMs - fx.fxArrivalCompMs()) && expectMs > 0,
+        JSON.stringify({ band: fx.tracerBandFor(squares), reported: one.impactDelayMs, queued: mark?.delay ?? null, floor: fx.fxArrivalCompMs() }));
       // ⏪ THE REVERTED SHAPE, computed rather than driven: the old expression gave a painted class zero.
       ok("arrival driven: the old expression would have queued it at zero — the defect, by value (negative)",
         (fx.FX_CLASSES.rifle.dashSquares > 0 ? fx.FX_CLASSES.rifle.dashMs : 0) === 0 && mark?.delay > 0,
@@ -7323,8 +7503,8 @@ try {
       // ⏪ RE-PINNED 2026-08-17: the verb reports and queues the delay LESS the engine's measured
       // start-up floor — its report is what it actually asked the engine for.
       ok("budget: the refused round's verb queues that mark, delayed less the floor, and NEVER names a settle tag",
-        lone.drawn === true && lone.delayMs === 250 - fx.SEQ_PRESTART_COMP_MS
-        && loneQueued?.delay === 250 - fx.SEQ_PRESTART_COMP_MS
+        lone.drawn === true && lone.delayMs === 250 - fx.fxArrivalCompMs()
+        && loneQueued?.delay === 250 - fx.fxArrivalCompMs()
         && loneQueued?.name === undefined && loneQueued?.size?.width === fx.FX_CLASSES.rifle.impactSquares,
         JSON.stringify({ key: lone.key, delay: lone.delayMs, named: loneQueued?.name ?? null }));
     } finally {
@@ -8346,10 +8526,16 @@ try {
         && fx.patternAudioPlanFor(withTarget, shooterPl) !== null,
         "both plans are individually available");
       const src = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
+      // ⚠ THE LITERAL WAS WIDENED 2026-08-26, not weakened. `hitSoundPlanFor` gained a second
+      // argument (the wall clip's structure kind), so a regex pinned to the bare one-argument call
+      // went red while the guard it exists to check was untouched. What this leg certifies is the
+      // TERNARY — that the corridor plan stands the target plan down — so the argument list is
+      // matched as "anything but a comma-free bare call" rather than by exact text.
+      const audioGuard = /const hitAudio = patternAudio \? null : hitSoundPlanFor\(target[^)]*\);/;
       ok("corridor audio: the fan-out stands the target plan down when the corridor plan answers",
-        /const hitAudio = patternAudio \? null : hitSoundPlanFor\(target\);/.test(src)
+        audioGuard.test(src)
         && (src.match(/const patternAudio = patternAudioPlanFor\(payload, shooter\);/g) ?? []).length === 1,
-        `guard present: ${/const hitAudio = patternAudio \? null : hitSoundPlanFor\(target\);/.test(src)}`);
+        `guard present: ${audioGuard.test(src)}`);
 
       /* ── g. DRIVEN: what a real trigger pull actually sounds ───────────────────────────────── */
       // The wall comes down first, so the corridor holds TWO victims at DIFFERENT fractions — which is
@@ -8437,8 +8623,19 @@ try {
       const lrad = (landed.angleDeg * Math.PI) / 180;
       const mid = { x: from.x + Math.cos(lrad) * landed.lengthM * ppm * 0.5,
                     y: from.y + Math.sin(lrad) * landed.lengthM * ppm * 0.5 };
-      await near.doc.update({ x: mid.x - gpx / 2, y: mid.y - gpx / 2 });
-      await sleep(400);
+      // ⛔⛔ MOVED WITHOUT ANIMATION, AND SETTLED (repaired 2026-08-26 — this site was the last one in
+      // the suite still carrying the hazard; the three moves in the range-band section already pass the
+      // same option). `TokenDocument#update({x})` ANIMATES, and every engine under test reads
+      // `canvas.tokens.get(id).center`, which reports a point PART-WAY ALONG THE PATH until the
+      // animation finishes. This move is a long one — from the aimed corridor out to the middle of the
+      // SCATTERED one — so 400 ms left the figure in flight, and the two legs below read it wherever it
+      // happened to be at that instant: the scattered sweep found NOBODY (its target had not arrived)
+      // while the aimed sweep sometimes found the figure still crossing the corridor it was leaving,
+      // which is the exact inverse of what they assert. Observed red on 2026-08-26, green on the same
+      // bytes before it — a race, not a product change. `animate: false` puts the figure at its
+      // destination in one step and the settle covers the document round trip and the canvas redraw.
+      await near.doc.update({ x: mid.x - gpx / 2, y: mid.y - gpx / 2 }, { animate: false });
+      await sleep(900);
       const aimedPoly = areaGeo.rayPolygonPoints(from.x, from.y, declared.angleDeg,
         declared.lengthM * ppm, declared.widthM * ppm);
       out.measured.scatter = { landedAngle: Number(landed.angleDeg.toFixed(2)),
@@ -8448,7 +8645,18 @@ try {
         areaGeo.pointInPolygon(mid.x, mid.y, aimedPoly) === false
         && Math.abs(landed.angleDeg - declared.angleDeg) > 5,
         `aimed heading ${declared.angleDeg}, landed ${landed.angleDeg.toFixed(2)}, drift ${landed.driftM.toFixed(2)}m`);
-      const missPayload = payload({ attackTotal: 5, toHitDC: 20, spreadScatter: { dirFace: 2, distFace } });
+      // ⛔⛔ THE VERDICT IS STATED, NOT IMPLIED BY THE TWO NUMBERS (fixture repair, 2026-08-26).
+      // `spreadAttackOutcome` now prefers the base system's own ruled boolean — `payload.baseHit`, the
+      // value its card was rendered from — over the total-against-DC comparison, because the base rules
+      // on more than the arithmetic (a fumble's `forceMiss`, and autofire counting rounds as
+      // `total − DC`). The golden fixture these payloads hydrate from was captured off a shot that HIT,
+      // so it carries `baseHit: true`; overriding only `attackTotal`/`toHitDC` therefore produced a
+      // payload that still READS as a hit, the corridor was never re-derived about the landed point, and
+      // the two legs below went red describing the fixture rather than the rail. Every payload in this
+      // block now states the verdict the same way a real card does — boolean and count beside the two
+      // numbers — which is also what stops these legs passing vacuously in the other direction.
+      const missPayload = payload({ attackTotal: 5, toHitDC: 20, baseHit: false, baseHits: 0,
+        spreadScatter: { dirFace: 2, distFace } });
       const aimedPlan = fx.patternAudioPlanFor(payload(), shooterPl);
       const scatterPlan = fx.patternAudioPlanFor(missPayload, shooterPl);
       ok("scatter sweep: the aimed corridor now sweeps nobody (the control)",
@@ -8460,12 +8668,12 @@ try {
       // …and only because the base system ruled it a MISS. The same two faces on a payload the base
       // ruled a HIT sweep the AIMED corridor, which is empty.
       ok("scatter sweep: the same faces on a HIT payload sweep the aimed corridor instead (negative)",
-        fx.patternAudioPlanFor(payload({ attackTotal: 25, toHitDC: 20, spreadScatter: { dirFace: 2, distFace } }), shooterPl) === null
-        && geo.spreadAttackOutcome({ attackTotal: 25, toHitDC: 20 }).hit === true
+        fx.patternAudioPlanFor(payload({ attackTotal: 25, toHitDC: 20, baseHit: true, baseHits: 1, spreadScatter: { dirFace: 2, distFace } }), shooterPl) === null
+        && geo.spreadAttackOutcome({ attackTotal: 25, toHitDC: 20, baseHit: true }).hit === true
         && geo.spreadAttackOutcome(missPayload).hit === false,
-        "hit sweeps the aimed corridor, miss sweeps the landed one");
+        `hit sweeps the aimed corridor, miss sweeps the landed one — miss outcome ${JSON.stringify(geo.spreadAttackOutcome(missPayload))}`);
       ok("scatter sweep: a miss with no faces recorded keeps the aimed corridor (negative)",
-        fx.patternAudioPlanFor(payload({ attackTotal: 5, toHitDC: 20 }), shooterPl) === null,
+        fx.patternAudioPlanFor(payload({ attackTotal: 5, toHitDC: 20, baseHit: false, baseHits: 0 }), shooterPl) === null,
         "no faces, no re-derivation");
     } finally {
       globalThis.Sequence = realSequence;
@@ -8638,6 +8846,16 @@ try {
         && fx.railSoundedImpacts(shotPayload({ weaponId: "nope", weaponName: "nope" })) === false
         && fx.railSoundedImpacts(null) === false,
         `fumble ${fx.railSoundedImpacts(shotPayload({ fumbleRuled: true }))} / unaimed ${fx.railSoundedImpacts(shotPayload({ targetTokenId: null, fxTargetTokenId: null }))} / unmapped ${fx.railSoundedImpacts(shotPayload({ weaponId: "nope", weaponName: "nope" }))}`);
+      // ⭐ AND IT IS THE FUMBLE'S CLASS THAT DECIDES (2026-08-26). The ordinary-miss class is DRAWN by
+      // this rail, so it also SOUNDS by this rail, and the apply must keep quiet over it or one shot is
+      // sounded twice. The other three classes drew nothing, so the apply keeps its own impact. The
+      // legacy no-class shape above stays on the bail, which is the row this pair sits beside.
+      const soundedFor = (fumbleClass) => fx.railSoundedImpacts(shotPayload({ fumbleRuled: true, fumbleClass }));
+      ok("apply clock: YES for the ordinary-miss fumble class, NO for the three that draw nothing",
+        soundedFor("plainMiss") === true && soundedFor("noDischarge") === false
+        && soundedFor("harmlessDischarge") === false && soundedFor("ownSide") === false,
+        JSON.stringify({ plainMiss: soundedFor("plainMiss"), noDischarge: soundedFor("noDischarge"),
+                         harmlessDischarge: soundedFor("harmlessDischarge"), ownSide: soundedFor("ownSide") }));
       await game.settings.set(SCOPE, "combatFxEnabled", false);
       const offAnswer = fx.railSoundedImpacts(shotPayload());
       await game.settings.set(SCOPE, "combatFxEnabled", true);
@@ -8839,6 +9057,835 @@ try {
   tonight.checks.push({ n: "2026-08-19 table-report section ran", p: false, d: String(err?.message ?? err) });
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+ * §26. THE ARRIVAL CHOKE — the absolute cap on how wide a fanned round's group may LAND
+ *      (SHELL_CHOKE, user ruling 2026-08-25)
+ *
+ * The reported defect was a UNIT, not a value: `spreadRad` is an angle, so the group it draws widens
+ * with range. These legs pin the clamp that replaced it — by value, at both ends of the crossover, on
+ * both capping answers, on everything DERIVED from the endpoints, and with the miss branch asserted
+ * UNTOUCHED so a future edit cannot silently choke it without a ruling.
+ *
+ * Everything is written against the scene's OWN pixels-per-metre and grid size, read live, so the legs
+ * hold on any grid rather than encoding one rig's scale (the stale-5 m-grid class of red).
+ * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+const chokeSec = { checks: [], measured: {} };
+try {
+  const r = await page.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const out = { checks: [], measured: {} };
+    const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+    const look = await import(`/modules/${SCOPE}/module/lookups.js`);
+    const grid = await import(`/modules/${SCOPE}/module/vehicle/vehicle-grid.js`);
+    const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
+    const gpx = Number(canvas.dimensions.size) || 100;
+    const ppm = grid.pxPerMeter(scene);
+    const shell = fx.FX_CLASSES.shotgun;
+    const RANGE_M = 50;                                   // the golden shell gun's own Long range
+    out.measured.scale = { gridPx: gpx, pxPerMeter: ppm, metresPerSquare: gpx / ppm };
+
+    /* ── a. the block, by value ──────────────────────────────────────────────────────────────── */
+    ok("choke block: the three knobs ship at their ruled values",
+      fx.SHELL_CHOKE.enabled === true && fx.SHELL_CHOKE.tokenFraction === 1
+      && fx.SHELL_CHOKE.floorSquares === 0.15,
+      JSON.stringify(fx.SHELL_CHOKE));
+    ok("choke block: the class's declared half-angle was NOT moved — the clamp is the whole change",
+      shell.spreadRad === 0.07 && shell.pellets === 6, `spreadRad ${shell.spreadRad}, pellets ${shell.pellets}`);
+    ok("choke block: the knobs are frozen against a live edit", Object.isFrozen(fx.SHELL_CHOKE));
+
+    // One helper so every leg below asks the resolver the same way the rail does.
+    const spec = (distSquares, over = {}) => fx.shellChokeSpec(shell.spreadRad, {
+      distancePx: distSquares * gpx, pixelsPerMeter: ppm, gridSizePx: gpx,
+      rangeM: RANGE_M, widths: { short: 1, medium: 2, long: 3 },
+      targetHalfPx: gpx / 2, ...over,
+    });
+    // ⚠ THE TWO PROBE DISTANCES ARE FOUND, NOT ASSUMED. Which side of the cap a given shot length
+    // falls on depends on the scene's METRES PER SQUARE (the book cap is in metres, the token cap is in
+    // squares), and a leg that hard-codes one rig's scale is the stale-grid class of red this suite has
+    // already paid for once. So the ladder is walked and the crossover is READ off it.
+    const ladder = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 30];
+    const unchokedDs = ladder.filter(d => spec(d).choked === false);
+    const chokedDs = ladder.filter(d => spec(d).choked === true);
+    const nearSq = unchokedDs.length ? unchokedDs[unchokedDs.length - 1] : 1;
+    const farSq = chokedDs.length ? chokedDs[chokedDs.length - 1] : 30;
+    // The LIVE legs place real tokens, so their far probe is bounded to a distance that fits the bench
+    // scene rather than taking the ladder's own end.
+    const liveFarSq = chokedDs.filter(d => d <= 12).pop() ?? chokedDs[0] ?? 12;
+    out.measured.crossover = { tokenCrossoverSquares: Number((0.5 / Math.sin(shell.spreadRad)).toFixed(3)),
+      lastUnchoked: unchokedDs[unchokedDs.length - 1] ?? null, firstChoked: chokedDs[0] ?? null,
+      probeNear: nearSq, probeFar: farSq };
+    ok("choke resolver: the clamp has BOTH sides on this scene — shot lengths that keep the cone and shot lengths that lose it",
+      unchokedDs.length > 0 && chokedDs.length > 0 && nearSq < farSq,
+      JSON.stringify(out.measured.crossover));
+
+    /* ── b. the resolver: a CLAMP, not a replacement ─────────────────────────────────────────── */
+    const near = spec(nearSq), far = spec(farSq);
+    ok("choke resolver: inside the cap the class's own half-angle is returned untouched",
+      near.coneRad === shell.spreadRad && near.choked === false && near.capSource === "cone",
+      `${nearSq.toFixed(2)} sq → ${JSON.stringify(near)}`);
+    ok("choke resolver: outside the cap the half-angle is narrowed, and the cap is what set it",
+      far.choked === true && far.coneRad < shell.spreadRad && far.capSource !== "cone"
+      && far.capPx > 0,
+      `${farSq.toFixed(2)} sq → ${JSON.stringify(far)}`);
+    // The cap bounds the JITTERED fan, so the angle it resolves to is the one whose offset times the
+    // depth allowance is the cap — see the reachAllowance note in shellChokeSpec.
+    ok("choke resolver: the narrowed half-angle is the one whose WORST-CASE arrival offset is exactly the cap",
+      Math.abs((farSq * gpx) * Math.sin(far.coneRad) * far.reachAllowance - far.capPx) < 0.5
+      && far.reachAllowance === Number((1 + fx.PELLET_CHAOS.reachFraction * shell.spreadRad).toFixed(6)),
+      `offset ${((farSq * gpx) * Math.sin(far.coneRad)).toFixed(2)}px × allowance ${far.reachAllowance} = ${((farSq * gpx) * Math.sin(far.coneRad) * far.reachAllowance).toFixed(2)}px vs cap ${far.capPx}px`);
+    ok("choke resolver: the cap never widens — the resolved half-angle is <= the class's at every distance",
+      [0.5, 1, 2, 4, 6, 8, 12, 16, 20, 30].every(d => spec(d).coneRad <= shell.spreadRad),
+      [0.5, 2, 8, 20].map(d => `${d}:${spec(d).coneRad}`).join(" "));
+
+    /* ── c. WHICH answer bound the shot — the three capping numbers, each driven separately ──── */
+    // Each case is CONSTRUCTED against the resolver's own reported book half-width rather than against
+    // an assumed grid scale, so the three sources are exercised on any scene.
+    const bigBody = spec(farSq, { targetHalfPx: 1e9 });            // no body can be tighter → the book
+    const bookHalfSq = (look.spreadBandSpec(farSq * gpx / ppm, { short: 1, medium: 2, long: 3 }, RANGE_M).widthM / 2) * ppm / gpx;
+    ok("choke resolver: with no body tighter than the pattern the BOOK row is what binds, at the p.109 width",
+      bigBody.capSource === "book" && Math.abs(bigBody.capSquares - bookHalfSq) < 1e-3,
+      `${JSON.stringify(bigBody)} vs book half ${bookHalfSq.toFixed(4)} sq`);
+    const halfBook = spec(farSq, { targetHalfPx: bigBody.bookHalfPx * 0.6 });
+    ok("choke resolver: a body tighter than the pattern is what binds instead, at the body's own half-width",
+      halfBook.capSource === "token" && Math.abs(halfBook.capPx - bigBody.bookHalfPx * 0.6) < 1e-3,
+      JSON.stringify({ capSource: halfBook.capSource, capPx: halfBook.capPx, expect: bigBody.bookHalfPx * 0.6 }));
+    const tiny = spec(farSq, { targetHalfPx: 1 });
+    ok("choke resolver: a cap that would draw a LINE is floored instead",
+      tiny.capSource === "floor" && Math.abs(tiny.capSquares - fx.SHELL_CHOKE.floorSquares) < 1e-6,
+      JSON.stringify(tiny));
+    out.measured.oneSquareBody = { squares: farSq, capSource: far.capSource, capSquares: far.capSquares };
+
+    /* ── d. the band is BORROWED, not re-derived ─────────────────────────────────────────────── */
+    const bandRows = [1, 4, 8, 12, 20].map(d => {
+      const s = spec(d);
+      const m = look.spreadBandSpec(d * gpx / ppm, { short: 1, medium: 2, long: 3 }, RANGE_M);
+      return { d, mine: s.band, mechanics: m.band, widthM: m.widthM };
+    });
+    out.measured.bands = bandRows;
+    ok("choke resolver: the range band is the SAME answer the pattern mechanics get, at every distance",
+      bandRows.every(r => r.mine === r.mechanics), JSON.stringify(bandRows));
+    // ⚠ ALL THREE ROWS are widened, not one: which band a given probe distance falls in depends on the
+    // scene's scale, and an override on the wrong row is a leg that silently measures nothing.
+    const wide = spec(farSq, { widths: { short: 6, medium: 12, long: 18 }, targetHalfPx: 1e9 });
+    const narrow = spec(farSq, { widths: { short: 1, medium: 2, long: 3 }, targetHalfPx: 1e9 });
+    ok("choke resolver: a load that prints its OWN pattern width reaches the cap through the same call",
+      wide.capPx === narrow.capPx * 6 && wide.coneRad > narrow.coneRad,
+      JSON.stringify({ wide: wide.capPx, narrow: narrow.capPx, band: narrow.band }));
+
+    /* ── e. the bails: an unresolvable choke draws the pre-choke fan, never a narrower one ───── */
+    ok("choke resolver: no shot length, no scene scale and no body each answer the class cone (negative)",
+      spec(0).coneRad === shell.spreadRad
+      && fx.shellChokeSpec(shell.spreadRad, { distancePx: 900, pixelsPerMeter: 0, targetHalfPx: 0 }).coneRad === shell.spreadRad
+      && fx.shellChokeSpec(0, { distancePx: 900, pixelsPerMeter: ppm, targetHalfPx: gpx / 2 }).coneRad === 0,
+      JSON.stringify({ zeroDist: spec(0).capSource, noScale: fx.shellChokeSpec(shell.spreadRad, { distancePx: 900, pixelsPerMeter: 0, targetHalfPx: 0 }).capSource }));
+    ok("choke resolver: the floor alone can never become the cap (negative — that would narrow on a guard)",
+      fx.shellChokeSpec(shell.spreadRad, { distancePx: 9000, pixelsPerMeter: 0, gridSizePx: gpx, targetHalfPx: 0 }).choked === false);
+
+    /* ── f. ENDPOINT VALUES — the property the ruling is actually about ──────────────────────── */
+    const F = { x: 0, y: 0 };
+    const offsets = (ends, dpx) => ends.map(e => Math.abs(e.y));   // aim along +x, so |y| IS the offset
+    const farPx = farSq * gpx, nearPx = nearSq * gpx;
+    const farTo = { x: farPx, y: 0 }, nearTo = { x: nearPx, y: 0 };
+    const fanChoked = fx.pelletEndpoints(F, farTo, { pellets: shell.pellets, spreadRad: far.coneRad, hit: true });
+    const fanRaw = fx.pelletEndpoints(F, farTo, { pellets: shell.pellets, spreadRad: shell.spreadRad, hit: true });
+    const offChoked = offsets(fanChoked), offRaw = offsets(fanRaw);
+    out.measured.farFan = { squares: Number(farSq.toFixed(2)), capPx: far.capPx,
+      widestRawPx: Number(Math.max(...offRaw).toFixed(2)), widestChokedPx: Number(Math.max(...offChoked).toFixed(2)),
+      groupRawSquares: Number((2 * Math.max(...offRaw) / gpx).toFixed(3)),
+      groupChokedSquares: Number((2 * Math.max(...offChoked) / gpx).toFixed(3)) };
+    ok("fan endpoints: at a range where the cone would overshoot, EVERY pellet lands inside the cap",
+      offChoked.every(o => o <= far.capPx + 0.01) && Math.max(...offRaw) > far.capPx + 1,
+      `widest choked ${Math.max(...offChoked).toFixed(2)}px vs cap ${far.capPx}px; un-clamped would be ${Math.max(...offRaw).toFixed(2)}px`);
+    // ⛔ THE CAP IS A BOUND ON THE JITTERED FAN, so the un-jittered ladder sits one depth-allowance
+    // inside it (`1 + reachFraction × classRad`, subtracted in the resolver so a pellet sent further
+    // along its own line still cannot cross). Both numbers are stated rather than one being fudged.
+    const nominalPx = far.capPx / far.reachAllowance;
+    ok("fan endpoints: the outermost pellet lands ON the cap, less the depth allowance the cap reserves",
+      Math.abs(Math.max(...offChoked) - nominalPx) < 0.5 && far.reachAllowance > 1,
+      `${Math.max(...offChoked).toFixed(2)}px vs cap ${far.capPx}px ÷ allowance ${far.reachAllowance} = ${nominalPx.toFixed(2)}px`);
+    const nearChoked = fx.pelletEndpoints(F, nearTo, { pellets: shell.pellets, spreadRad: near.coneRad, hit: true });
+    const nearRaw = fx.pelletEndpoints(F, nearTo, { pellets: shell.pellets, spreadRad: shell.spreadRad, hit: true });
+    ok("fan endpoints: under the cap the drawn fan is IDENTICAL to the pre-choke one, point for point",
+      nearChoked.length === nearRaw.length
+      && nearChoked.every((p, i) => Math.abs(p.x - nearRaw[i].x) < 1e-9 && Math.abs(p.y - nearRaw[i].y) < 1e-9),
+      `${nearSq.toFixed(2)} sq, ${nearChoked.length} pellets`);
+    const angC = fanChoked.map(p => Math.atan2(p.y, p.x));
+    ok("fan endpoints: the choked fan keeps every property the cone had — even ladder, symmetric, none on the aim line, all at the aim distance",
+      fanChoked.length === shell.pellets
+      && Math.abs(angC[0] + angC[angC.length - 1]) < 1e-9
+      && Math.abs(angC[0] + far.coneRad) < 1e-9
+      && angC.every(a => Math.abs(a) > 1e-9)
+      && fanChoked.every(p => Math.abs(Math.hypot(p.x, p.y) - farPx) < 0.001),
+      angC.map(a => a.toFixed(6)).join(","));
+
+    /* ── g. the per-pellet nudge is resolved against the CHOKED cone, and stays inside it ────── */
+    let worstJit = 0;
+    for (let sd = 0; sd < 400; sd++) {
+      const jj = fx.pelletJitterFor(sd, shell.pellets, far.coneRad);
+      for (const e of fx.pelletEndpoints(F, farTo, { pellets: shell.pellets, spreadRad: far.coneRad, hit: true, jitter: jj })) {
+        worstJit = Math.max(worstJit, Math.abs(e.y));
+      }
+    }
+    out.measured.jitterSweep = { seeds: 400, worstPx: Number(worstJit.toFixed(2)), capPx: far.capPx,
+      allowance: far.reachAllowance, nominalPx: Number(nominalPx.toFixed(2)) };
+    // ⛔ THIS IS THE LEG THE ALLOWANCE EXISTS FOR. Before it, the depth roll pushed an outermost pellet
+    // to 30.2 px against a 30 px cap on the rig — a bound that is not a bound. It now holds by value.
+    ok("fan endpoints: over four hundred seeds the jittered group never crosses the cap either",
+      worstJit <= far.capPx + 0.01 && worstJit > nominalPx,
+      `worst ${worstJit.toFixed(2)}px vs cap ${far.capPx}px (un-jittered ladder sits at ${nominalPx.toFixed(2)}px)`);
+    const jitRaw = fx.pelletJitterFor(7, shell.pellets, shell.spreadRad);
+    const jitChoked = fx.pelletJitterFor(7, shell.pellets, far.coneRad);
+    ok("fan endpoints: the nudge SHRINKS with the cone rather than being measured against the old one",
+      jitChoked.every((c, i) => Math.abs(c.angleRad) < Math.abs(jitRaw[i].angleRad) + 1e-9)
+      && Math.max(...jitChoked.map(c => Math.abs(c.angleRad))) < Math.max(...jitRaw.map(c => Math.abs(c.angleRad))),
+      `choked max ${Math.max(...jitChoked.map(c => Math.abs(c.angleRad))).toFixed(6)} vs class max ${Math.max(...jitRaw.map(c => Math.abs(c.angleRad))).toFixed(6)}`);
+
+    /* ── h. everything DERIVED reads the choked endpoints ────────────────────────────────────── */
+    const jitFire = fx.pelletJitterFor(99, shell.pellets, far.coneRad);
+    const firePts = fx.groundFirePoints(F, farTo, { landed: 3, pellets: shell.pellets, spreadRad: far.coneRad, max: 3, seed: 99, jitter: jitFire });
+    const fanFire = fx.pelletEndpoints(F, farTo, { pellets: shell.pellets, spreadRad: far.coneRad, hit: true, jitter: jitFire });
+    ok("derived marks: the incendiary ground points ARE pellet endpoints of the choked fan, not new positions",
+      firePts.length === 3
+      && firePts.every(p => fanFire.some(e => Math.abs(e.x - p.x) < 1e-9 && Math.abs(e.y - p.y) < 1e-9)),
+      `${firePts.length} points, all matched: ${firePts.every(p => fanFire.some(e => Math.abs(e.x - p.x) < 1e-9 && Math.abs(e.y - p.y) < 1e-9))}`);
+    ok("derived marks: those points are inside the cap, where the un-choked cone would have put them outside",
+      firePts.every(p => Math.abs(p.y) <= far.capPx + 0.01)
+      && fx.groundFirePoints(F, farTo, { landed: 3, pellets: shell.pellets, spreadRad: shell.spreadRad, max: 3, seed: 99,
+        jitter: fx.pelletJitterFor(99, shell.pellets, shell.spreadRad) }).some(p => Math.abs(p.y) > far.capPx + 1),
+      `choked widest ${Math.max(...firePts.map(p => Math.abs(p.y))).toFixed(2)}px vs cap ${far.capPx}px`);
+
+    /* ── i. the MISS takes the same choked pattern as a hit (ruled 2026-08-26) ────────────────── */
+    // ⏪ THIS SECTION USED TO PIN THE OPPOSITE — a per-pellet ±12° splay that read the choked cone not
+    // at all. The user ruled it out on the reasoning that the pattern belongs to the barrel and not to
+    // the outcome ("misses look the same as hits except they don't hit the target"), and the same
+    // change closed the "late rounds go wide in a long volley" report, whose mechanism is that a
+    // burst's hits are its LEADING rounds and everything after them took the splay branch.
+    const feed = [0, 0, 1, 1, 0.5, 0.5, 0.25, 0.75, 1, 0, 0.3, 0.9];
+    let k = 0;
+    const missFan = fx.pelletEndpoints(F, farTo, { pellets: shell.pellets, spreadRad: far.coneRad, hit: false, rng: () => feed[k++] });
+    ok("miss pattern: ONE landing roll for the whole round — two rng draws, not two per pellet",
+      missFan.length === shell.pellets && k === 2,
+      `${k} draws consumed for ${missFan.length} pellets`);
+    const landPt = fx.missEndpoint(F, farTo, (() => { let i = 0; return () => feed[i++]; })());
+    const landAng = Math.atan2(landPt.y - F.y, landPt.x - F.x);
+    const landDist = Math.hypot(landPt.x - F.x, landPt.y - F.y);
+    const missOffsets = missFan.map(pt => Math.atan2(pt.y - F.y, pt.x - F.x) - landAng);
+    ok("miss pattern: the group is a symmetric fan about the LANDING point, none on its axis",
+      Math.abs(missOffsets[0] + missOffsets[missOffsets.length - 1]) < 1e-9
+      && missOffsets.every(a => Math.abs(a) > 1e-9),
+      missOffsets.map(a => a.toFixed(5)).join(","));
+    // ⭐ THE WIDTH CLAIM, by value: the missed group spans the SAME number of pixels as the hit group,
+    // even though it landed at a different distance. That is the half-angle being re-solved for the
+    // landing distance so the absolute p.109 width is preserved.
+    const missHalfPx = Math.max(...missFan.map(pt => {
+      const d = Math.hypot(pt.x - F.x, pt.y - F.y);
+      return Math.abs(d * Math.sin(Math.atan2(pt.y - F.y, pt.x - F.x) - landAng));
+    }));
+    const hitFanPx = Math.max(...fx.pelletEndpoints(F, farTo, { pellets: shell.pellets, spreadRad: far.coneRad, hit: true })
+      .map(pt => {
+        const aimA = Math.atan2(farTo.y - F.y, farTo.x - F.x);
+        const d = Math.hypot(pt.x - F.x, pt.y - F.y);
+        return Math.abs(d * Math.sin(Math.atan2(pt.y - F.y, pt.x - F.x) - aimA));
+      }));
+    out.measured.missPattern = { squares: Number(farSq.toFixed(2)),
+      landDistPx: Number(landDist.toFixed(1)), aimDistPx: Number(farPx.toFixed(1)),
+      missHalfPx: Number(missHalfPx.toFixed(2)), hitHalfPx: Number(hitFanPx.toFixed(2)),
+      capPx: Number(far.capPx.toFixed(2)),
+      preRulingHalfPx: Number((fx.MISS_REACH_MAX * farPx * Math.sin(fx.MISS_SPREAD_RAD)).toFixed(2)) };
+    // ⚠ COMPARED TO THE HIT GROUP, AND BOUNDED BY THE CAP — not equated to the cap. The cap reserves
+    // 2.45 % up front for the depth jitter (SHELL_CHOKE's reach allowance), so a fan that lands
+    // exactly on its cone measures 29.28 px against a 30 px cap by design. The claim the ruling makes
+    // is "a miss is drawn the same width as a hit", and that is the equality asserted here.
+    ok("miss pattern: the missed group is the same drawn width as the hit group, inside the cap",
+      Math.abs(missHalfPx - hitFanPx) < 0.5 && missHalfPx <= far.capPx + 0.01,
+      JSON.stringify(out.measured.missPattern));
+    // The NEGATIVE that says the ruling actually moved something: the pre-ruling splay was far wider.
+    ok("miss pattern: it is dramatically tighter than the retired per-pellet splay",
+      missHalfPx * 2 < fx.MISS_REACH_MAX * farPx * Math.sin(fx.MISS_SPREAD_RAD),
+      `${missHalfPx.toFixed(2)}px vs retired ${(fx.MISS_REACH_MAX * farPx * Math.sin(fx.MISS_SPREAD_RAD)).toFixed(2)}px`);
+    // ⛔ THE RULING'S OWN BOUNDARY: only pellet classes changed. A class carrying no pellet count still
+    // takes the single wide missEndpoint in fxShot and is byte-identical.
+    ok("miss pattern: a non-fanning class is NOT in scope (negative)",
+      fx.pelletEndpoints(F, farTo, { pellets: 1, spreadRad: far.coneRad, hit: false }).length === 0
+      && fx.pelletEndpoints(F, farTo, { pellets: 0, spreadRad: far.coneRad, hit: false }).length === 0);
+
+    /* ── i-bis. THE LATE-VOLLEY LEG — the case the bench never exercised ──────────────────────── */
+    // ⭐ THE REPORT, reproduced as arithmetic. A long volley assigns `hit: i < hits`, so its LATE
+    // rounds are misses. This walks a 20-round volley the way the fan-out does and asserts the
+    // OUTERMOST pellet of a LATE round is inside the same cap the first round's was — which is what
+    // "the choke gives out partway through" would break, and what nothing pinned before today.
+    {
+      const VOLLEY_ROUNDS = 20, VOLLEY_HITS = 6;
+      const widths = [];
+      for (let r = 0; r < VOLLEY_ROUNDS; r++) {
+        const isHit = r < VOLLEY_HITS;
+        const jit = fx.pelletJitterFor(1000 + r, shell.pellets, far.coneRad);
+        const ends = fx.pelletEndpoints(F, farTo, {
+          pellets: shell.pellets, spreadRad: far.coneRad, hit: isHit, jitter: jit,
+          rng: (() => { let i = 0; const seq = [0.31, 0.77]; return () => seq[i++ % 2]; })(),
+        });
+        const anchor = isHit ? farTo : fx.missEndpoint(F, farTo, (() => { let i = 0; const seq = [0.31, 0.77]; return () => seq[i++ % 2]; })());
+        const aA = Math.atan2(anchor.y - F.y, anchor.x - F.x);
+        widths.push(Math.max(...ends.map(pt => {
+          const d = Math.hypot(pt.x - F.x, pt.y - F.y);
+          return Math.abs(d * Math.sin(Math.atan2(pt.y - F.y, pt.x - F.x) - aA));
+        })));
+      }
+      out.measured.lateVolley = {
+        rounds: VOLLEY_ROUNDS, hits: VOLLEY_HITS, capPx: Number(far.capPx.toFixed(2)),
+        firstRoundHalfPx: Number(widths[0].toFixed(2)),
+        lastRoundHalfPx: Number(widths[VOLLEY_ROUNDS - 1].toFixed(2)),
+        widestHalfPx: Number(Math.max(...widths).toFixed(2)),
+        widestLateHalfPx: Number(Math.max(...widths.slice(VOLLEY_HITS)).toFixed(2)),
+      };
+      ok("late volley: round 20 of 20 draws inside the SAME cap round 1 did",
+        widths[VOLLEY_ROUNDS - 1] <= far.capPx + 0.01, JSON.stringify(out.measured.lateVolley));
+      ok("late volley: EVERY round of the twenty is inside the cap — no round reverts",
+        widths.every(w => w <= far.capPx + 0.01),
+        `widest ${Math.max(...widths).toFixed(2)}px vs cap ${far.capPx.toFixed(2)}px`);
+      ok("late volley: the MISSED rounds (7..20) are the ones this pins — they are not the wide splay",
+        Math.max(...widths.slice(VOLLEY_HITS)) * 2 < fx.MISS_REACH_MAX * farPx * Math.sin(fx.MISS_SPREAD_RAD),
+        `widest late ${Math.max(...widths.slice(VOLLEY_HITS)).toFixed(2)}px`);
+    }
+
+    /* ── i-ter. THE SYNC HELPERS, by value (2026-08-26) ───────────────────────────────────────── */
+    ok("sync: a healthy renderer leaves the schedule clock in charge",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 100, presentationLagMs: 40 }) === 100,
+      String(fx.effectiveRoundLagMs({ scheduleLagMs: 100, presentationLagMs: 40 })));
+    ok("sync: observed PRESENTATION lateness past the grace outranks a perfect schedule",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 0, presentationLagMs: fx.FX_PRESENTATION_LAG_GRACE_MS + 300 }) === 300,
+      `grace ${fx.FX_PRESENTATION_LAG_GRACE_MS}`);
+    ok("sync: lateness inside the engine's own start-up floor is free (negative)",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 0, presentationLagMs: fx.FX_PRESENTATION_LAG_GRACE_MS - 1 }) === 0);
+    ok("sync: the grace IS the measured engine floor plus its measured margin, not a loose number",
+      fx.FX_PRESENTATION_LAG_GRACE_MS === fx.SEQ_PRESTART_COMP_MS + fx.FX_PRESENTATION_LAG_MARGIN_MS,
+      `${fx.FX_PRESENTATION_LAG_GRACE_MS} = ${fx.SEQ_PRESTART_COMP_MS} + ${fx.FX_PRESENTATION_LAG_MARGIN_MS}`);
+    ok("sync: the two clocks are MAXed, never summed (a round late on both is not doubly late)",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 200, presentationLagMs: fx.FX_PRESENTATION_LAG_GRACE_MS + 200 }) === 200);
+    // ⛔ THE BOUND, and the runaway it exists for. Measured 2026-08-26: unbounded, the feedback
+    // dropped 18 of 20 rounds (17 presentation-driven, peak reading 3334 ms) against a control that
+    // dropped 0 and peaked at 461 ms — because a REFUSED round queues nothing, so it can never move the
+    // observation that refused it, and every later round was measured against the same stale instant.
+    ok("sync: an un-reported round cannot report an UNBOUNDED lateness — the reading is capped",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 0, presentationLagMs: 999999, capMs: 360 }) === 360,
+      String(fx.effectiveRoundLagMs({ scheduleLagMs: 0, presentationLagMs: 999999, capMs: 360 })));
+    ok("sync: the cap never RAISES a reading that was already under it (negative)",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 0, presentationLagMs: fx.FX_PRESENTATION_LAG_GRACE_MS + 50, capMs: 360 }) === 50);
+    ok("sync: no cap passed = no cap applied, so an unbounded caller is unchanged",
+      fx.effectiveRoundLagMs({ scheduleLagMs: 0, presentationLagMs: fx.FX_PRESENTATION_LAG_GRACE_MS + 5000 }) === 5000);
+    ok("sync: the cap is stated in CADENCE SLOTS, so it holds at every cadence the table ships",
+      fx.FX_PRESENTATION_LAG_CAP_CADENCES === 2
+      && Object.values(fx.FX_CLASSES).every(c => !c.cadenceMs || fx.FX_PRESENTATION_LAG_CAP_CADENCES * c.cadenceMs > 0),
+      `${fx.FX_PRESENTATION_LAG_CAP_CADENCES} slots`);
+    // ⭐ THE SELF-CORRECTION, asserted at its SOURCE: the loop must re-stamp the observation when it
+    // refuses a round, or the cap alone only slows the runaway down instead of stopping it.
+    {
+      const src2 = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
+      const loop = src2.slice(src2.indexOf("export async function fxWeaponFired"));
+      ok("sync: a refused round RE-STAMPS the observation, so the drop cannot compound",
+        /if \(refused\) lastIssue = \{ at: Date\.now\(\), seen: _drawObserved\.count \};/.test(loop),
+        "re-stamp present");
+      ok("sync: the loop passes the cap into the judgement rather than judging unbounded",
+        /capMs: FX_PRESENTATION_LAG_CAP_CADENCES \* cadenceMs/.test(loop));
+    }
+    // The preload's key list, by value — a payload's own assets, not the whole manifest.
+    const warmKeys = fx.fxPayloadPreloadKeys(fx.ammoFxEntry("shotgun", null), null);
+    ok("sync: the payload preload names the class's own keys and the arrival family",
+      warmKeys.includes(shell.tracer) && warmKeys.includes(shell.muzzle)
+      && warmKeys.includes(fx.PELLET_ARRIVAL.key) && warmKeys.every(kk => kk.startsWith("jb2a.")),
+      `${warmKeys.length} keys`);
+    ok("sync: it is a PAYLOAD list, not the session manifest (strictly smaller)",
+      warmKeys.length < fx.fxPreloadManifest().keys.length,
+      `${warmKeys.length} vs manifest ${fx.fxPreloadManifest().keys.length}`);
+
+    /* ── i-2. THE TREATMENT SWEEP — every load's own assets are in ITS OWN warm list ──────────────
+     * ⭐ THE GAP THIS PINS (found 2026-08-26 by sweeping all seven rows rather than the one reported).
+     * The warm list is built by SCRAPING the resolved entry for strings that look like database keys,
+     * which finds `tracer`, `muzzle` and `impactKey` — and finds nothing at all for an element the row
+     * turns on with a NUMBER or a BOOLEAN. So the incendiary load's burning ground (`groundFire: true`),
+     * the muzzle motes (`motes`) and the shell's smoke puff (`smokeSquares`) were named nowhere in the
+     * per-payload warm and rode only the session-wide manifest, which is fire-and-forget and which a
+     * client that joined mid-session or reloaded never ran. Swept by VALUE, one row at a time. */
+    {
+      const rows = ["standard", "api", "ap", "dualPurpose", "slug", "flechette", "rubber", "stundart"];
+      const miss = [];
+      for (const key of rows) {
+        const entry = fx.ammoFxEntry("shotgun", key === "standard" ? null : key);
+        const keys = fx.fxPayloadPreloadKeys(entry, null);
+        // every jb2a string the resolved row itself holds
+        for (const v of Object.values(entry ?? {})) {
+          if (typeof v === "string" && v.startsWith("jb2a.") && !keys.includes(v)) miss.push(`${key}:${v}`);
+        }
+        // and the constant-keyed elements this row's own gates turn on
+        if (entry?.groundFire && !keys.includes(fx.GROUND_FIRE.key)) miss.push(`${key}:groundFire`);
+        if (Number(entry?.motes) > 0 && !keys.includes(fx.MUZZLE_MOTES.key)) miss.push(`${key}:motes`);
+        if (Number(entry?.smokeSquares) > 0 && !keys.includes(fx.MUZZLE_SMOKE.key)) miss.push(`${key}:smoke`);
+      }
+      ok("sync: EVERY shell load's own drawables are in its own warm list — all eight rows swept",
+        miss.length === 0, miss.length ? `missing ${miss.join(", ")}` : `${rows.length} rows, 0 gaps`);
+      // The NEGATIVE beside it: a row that does NOT ask for an element must not queue that asset.
+      const rifleWarm = fx.fxPayloadPreloadKeys(fx.ammoFxEntry("rifle", null), null);
+      ok("sync: a class that draws no smoke does not warm the smoke asset (negative)",
+        !(Number(fx.FX_CLASSES.rifle.smokeSquares) > 0) && !rifleWarm.includes(fx.MUZZLE_SMOKE.key),
+        `rifle smokeSquares=${fx.FX_CLASSES.rifle.smokeSquares ?? "none"}`);
+      // ⚠ PELLET_CHAOS is a GEOMETRY record, not an asset — pinned so nobody "fixes" it into the list.
+      ok("sync: the pellet chaos record carries no key, so there is nothing for the warm to hold (negative)",
+        fx.PELLET_CHAOS.key === undefined, `keys=${Object.keys(fx.PELLET_CHAOS).join(",")}`);
+    }
+
+    /* ── i-3. THE AUDIO PHASE — the residual the arrival compensation structurally cannot reach ────
+     * ⭐ THE FIELD REPORT (2026-08-26): the shell class puts about two rounds' PICTURES on screen after
+     * the last REPORT, most volleys, on buckshot as well as the dart load. The mechanism is arithmetic
+     * rather than a fault — a round's muzzle and tracer are issued with NO delay, so the compensation
+     * `max(0, 0 − comp)` clamps to zero and the picture trails its own report by the engine's whole
+     * create latency on every round. See the FX_AUDIO_PHASE block for the full derivation. */
+    ok("phase: while the audio is phased, an arrival element's compensation is ZERO",
+      fx.fxArrivalCompMs({ enabled: true }) === 0, String(fx.fxArrivalCompMs({ enabled: true })));
+    ok("phase: with the flag off it is the shipped static floor again — the one-field revert",
+      fx.fxArrivalCompMs({ enabled: false }) === fx.SEQ_PRESTART_COMP_MS,
+      `${fx.fxArrivalCompMs({ enabled: false })} = ${fx.SEQ_PRESTART_COMP_MS}`);
+    // ⛔ SHIPPED OFF — a deliberate hand-back, not a half-built feature: the trade is a FEEL change
+    // (the report lands one engine-latency after the trigger) and the only rig that can measure it is
+    // a software rasteriser that over-corrects. Pinned so the shipped state is a decision on the
+    // record and an accidental flip is a red. See the FX_AUDIO_PHASE block and §8.
+    ok("phase: it ships OFF, so the rail's audio is un-phased and the arrival keeps the static floor",
+      fx.FX_AUDIO_PHASE === false && fx.fxAudioPhaseEnabled() === false
+      && fx.audioPhaseMs() === 0 && fx.fxArrivalCompMs() === fx.SEQ_PRESTART_COMP_MS,
+      `flag=${fx.FX_AUDIO_PHASE} phase=${fx.audioPhaseMs()} comp=${fx.fxArrivalCompMs()}`);
+    // ...and the seam drives the other state, so the mechanism is pinned in BOTH rather than only in
+    // the one that ships. The pairing is the whole arithmetic: phase on ⟺ compensation zero.
+    try {
+      fx._setAudioPhase(true);
+      ok("phase: enabled, the pair moves TOGETHER — audio phased and the arrival compensation zeroed",
+        fx.fxAudioPhaseEnabled() === true && fx.audioPhaseMs() > 0 && fx.fxArrivalCompMs() === 0,
+        `phase=${fx.audioPhaseMs()} comp=${fx.fxArrivalCompMs()}`);
+      fx._setAudioPhase(false);
+      ok("phase: disabled through the same seam, both halves revert together (negative)",
+        fx.audioPhaseMs() === 0 && fx.fxArrivalCompMs() === fx.SEQ_PRESTART_COMP_MS);
+    } finally { fx._setAudioPhase(null); }
+    ok("phase: the seam restores the shipped constant when it is disarmed",
+      fx.fxAudioPhaseEnabled() === fx.FX_AUDIO_PHASE);
+    // ⚠ `enabled: true` is passed EXPLICITLY here rather than relying on the default — the default now
+    // reads the shipped constant, which is false, and these legs are about the arithmetic rather than
+    // about which state ships.
+    ok("phase: the phase is the client's own estimate, clamped by the responsiveness ceiling",
+      fx.audioPhaseMs({ estimateMs: 250, maxMs: 400, enabled: true }) === 250
+      && fx.audioPhaseMs({ estimateMs: 9999, maxMs: 400, enabled: true }) === 400,
+      `${fx.audioPhaseMs({ estimateMs: 250, maxMs: 400, enabled: true })} / ${fx.audioPhaseMs({ estimateMs: 9999, maxMs: 400, enabled: true })}`);
+    ok("phase: disabled, or a non-positive estimate, phases nothing at all (negative)",
+      fx.audioPhaseMs({ estimateMs: 250, enabled: false }) === 0
+      && fx.audioPhaseMs({ estimateMs: 0, enabled: true }) === 0
+      && fx.audioPhaseMs({ estimateMs: -5, enabled: true }) === 0);
+    // The estimate's convergence, by value — the seed moves TOWARD an observation, never to it.
+    ok("phase: one observation moves the estimate toward it by the blend, not onto it",
+      fx.nextEngineLatencyEstimate({ prevMs: 175, observedMs: 275, alpha: 0.3 }) === 205,
+      String(fx.nextEngineLatencyEstimate({ prevMs: 175, observedMs: 275, alpha: 0.3 })));
+    ok("phase: an out-of-range or absent observation is NOT evidence and leaves the estimate alone",
+      fx.nextEngineLatencyEstimate({ prevMs: 175, observedMs: NaN }) === 175
+      && fx.nextEngineLatencyEstimate({ prevMs: 175, observedMs: -1 }) === 175
+      && fx.nextEngineLatencyEstimate({ prevMs: 175, observedMs: fx.FX_AUDIO_PHASE_MAX_MS + 1 }) === 175,
+      "NaN / negative / above the ceiling all hold");
+    ok("phase: the estimate converges on a repeated observation rather than oscillating",
+      (() => { let e = 175; for (let i = 0; i < 25; i++) e = fx.nextEngineLatencyEstimate({ prevMs: e, observedMs: 260 }); return e === 260; })(),
+      "25 blends of 260");
+    {
+      const src3 = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
+      const loop3 = src3.slice(src3.indexOf("export async function fxWeaponFired"));
+      ok("phase: it is resolved ONCE per payload and handed to the report, so the cadence cannot stretch",
+        /const audioPhase = audioPhaseMs\(\);/.test(loop3)
+        && /sfx\(weaponClass, \{ burst, delayMs: audioPhase \}\);/.test(loop3)
+        && !/audioPhaseMs\(\)[\s\S]{0,200}for \(let i = 0/.test(loop3.slice(loop3.indexOf("for (let i = 0"))),
+        "resolved above the loop, threaded into the report");
+      ok("phase: only round 0 marks the observer — every later round would be measuring a queue",
+        /if \(i === 0\) _markDrawObservation\(\);/.test(loop3)
+        && /if \(i === 1\) _observeEngineLatency\(_drawObserved\.firstAfterMarkMs \|\| NaN\);/.test(loop3),
+        "mark at 0, read at 1");
+    }
+
+    /* ── j. THE LIVE PATH — two separate trigger pulls at two ranges ─────────────────────────── */
+    for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__CHK"))) await t.delete().catch(() => {});
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__CHK"))) await a.delete().catch(() => {});
+    const actor = await Actor.create({ name: "__PW__CHK Shooter", type: "character" });
+    const [gun] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__CHK shell gun", type: "weapon",
+      system: { weaponType: "Shotgun", attackType: "Shotgun", ammoType: "12ga", damage: "3d6", range: RANGE_M, rof: 1, shots: 8, shotsLeft: 8 } }]);
+    const [rifleItem] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__CHK rifle", type: "weapon",
+      system: { weaponType: "Rifle", attackType: "Rifle", ammoType: "5.56mm", damage: "5d6", range: 400, rof: 1, shots: 30, shotsLeft: 30 } }]);
+    const dummy = await Actor.create({ name: "__PW__CHK Dummy", type: "character" });
+    const [shooterTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__CHK Shooter", actorId: actor.id, actorLink: true, x: 600, y: 1400 }]);
+    const [targetTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__CHK Dummy", actorId: dummy.id, actorLink: true, x: 600 + liveFarSq * gpx, y: 1400 }]);
+    await sleep(400);
+    // ⛔ HARNESS GUARD, and it is worth its line: a token the CANVAS has not drawn is invisible to the
+    // fan-out, which then synthesizes an aim from the shooter's own facing (FACING_AIM_SQUARES) and
+    // every leg below silently measures a three-square shot instead of the one it placed. That is
+    // exactly what a stale ACTIVE scene did to this section once (a prior lane's leftover scene left
+    // `canvas.scene` pointing elsewhere), and it read as four choke failures rather than as the
+    // environment fault it was. Named here so the diagnosis is the leg.
+    const shooterOnCanvas = canvas.tokens.get(shooterTok.id), targetOnCanvas = canvas.tokens.get(targetTok.id);
+    ok("live path: the canvas is showing THIS scene and has drawn both figures before anything is fired",
+      !!shooterOnCanvas && !!targetOnCanvas && canvas.scene?.id === scene.id,
+      `canvas scene "${canvas.scene?.name}" vs fixture scene "${scene.name}"; shooter drawn ${!!shooterOnCanvas}, target drawn ${!!targetOnCanvas}`);
+    // The pure answer for the exact geometry the live shot will have — the live legs assert the fan-out
+    // against THIS rather than against a hard-coded cap, so they hold on any scene scale.
+    const expectAt = (squares) => fx.shellChokeSpec(shell.spreadRad, {
+      distancePx: squares * gpx, pixelsPerMeter: ppm, gridSizePx: gpx,
+      rangeM: RANGE_M, widths: { short: 1, medium: 2, long: 3 }, targetHalfPx: gpx / 2 });
+    const mk = (over = {}) => globalThis.__goldenPayload("shotgunSpread",
+      { attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: gun.id,
+        targetTokenId: targetTok.id, targetActorId: dummy.id },
+      // ⛔ The corridor is cleared so the aim is the aimed-at TOKEN — these legs are about the distance
+      // to a body and the body's own width, which a declared corridor would replace with open ground.
+      { weaponName: "__PW__CHK shell gun", shotsFired: 1, shotsHit: 1, spreadAim: null, spreadScatter: null,
+        spreadRangeM: RANGE_M, areaDamages: { Torso: [{ damage: 6 }] }, ...over });
+
+    const farPull = await fx.fxWeaponFired(mk());
+    const farExpect = expectAt(liveFarSq);
+    ok("live path: a shell fired at a body beyond the crossover reports a CHOKED cone, and it is the resolver's own answer for that geometry",
+      farPull?.choke?.choked === true && farPull.choke.coneRad === farExpect.coneRad
+      && farPull.choke.capSource === farExpect.capSource
+      && Math.abs(farPull.choke.capPx - farExpect.capPx) < 0.01,
+      `${JSON.stringify(farPull?.choke ?? null)} vs ${JSON.stringify(farExpect)}`);
+    ok("live path: the reported band is the one the weapon's own Range puts that distance in",
+      farPull?.choke?.band === look.spreadBandSpec(farPull.choke.distanceM, {}, RANGE_M).band,
+      `${farPull?.choke?.distanceM} m at range ${RANGE_M} → ${farPull?.choke?.band}`);
+    // SECOND TRIGGER PULL, the target moved inside the crossover — a different answer from the same gun.
+    // ⛔ NO ANIMATION, AND WAIT FOR IT. A token move is ANIMATED, so `canvas.tokens.get(id).center` —
+    // which is what the fan-out reads — reports a point part-way along the path for the whole
+    // animation. Measured: a leg that slept 300 ms after a twelve-square move had the shot resolved at
+    // 9.2 squares and the choke answered for that distance, which looked like a product failure and was
+    // the harness moving the target while the shot was being composed.
+    await targetTok.update({ x: 600 + nearSq * gpx }, { animate: false });
+    await sleep(900);
+    const nearPull = await fx.fxWeaponFired(mk());
+    ok("live path: the SAME gun fired at a body inside the crossover is not choked at all",
+      nearPull?.choke?.choked === false && nearPull.choke.coneRad === shell.spreadRad
+      && nearPull.choke.capSource === "cone",
+      JSON.stringify(nearPull?.choke ?? null));
+    // ⛔ A DECLARED CORRIDOR AIMS AT OPEN GROUND — the aimed-at body is not where the rounds land, so
+    // the token half of the cap must stand down and the book row must be what answers.
+    await targetTok.update({ x: 600 + liveFarSq * gpx }, { animate: false });
+    await sleep(900);
+    // ⚠ THE CORRIDOR POINTS AWAY FROM THE BODY, and that is the whole fixture. Aimed along the SAME
+    // bearing as the target (angleDeg 0, the reach it stands at) the aim lands ON it — the body is then
+    // legitimately where the rounds go and legitimately caps them, which is the rule working, not
+    // failing. This leg is about open ground, so the corridor is turned 90° to the same reach.
+    const reachM = (liveFarSq * gpx) / ppm;
+    const corridorPull = await fx.fxWeaponFired(mk({ spreadAim: { sceneId: scene.id,
+      originX: 600 + gpx / 2, originY: 1400 + gpx / 2, angleDeg: 90, reachM, lengthM: reachM,
+      widthM: 2, band: "Medium", dmgFormula: "3d6", declaredAt: Date.now() } }));
+    const corridorExpect = fx.shellChokeSpec(shell.spreadRad, { distancePx: liveFarSq * gpx,
+      pixelsPerMeter: ppm, gridSizePx: gpx, rangeM: RANGE_M, widths: { short: 1, medium: 2, long: 3 }, targetHalfPx: 0 });
+    ok("live path: a DECLARED corridor is capped by the p.109 row alone — the aimed-at body stands down, because it is not where the rounds land",
+      corridorPull?.choke?.tokenHalfPx === null && corridorPull.choke.capSource !== "token"
+      && corridorPull.choke.coneRad === corridorExpect.coneRad
+      && corridorPull.choke.capSource === corridorExpect.capSource,
+      `${JSON.stringify(corridorPull?.choke ?? null)} vs ${JSON.stringify(corridorExpect)}`);
+    out.measured.livePulls = { far: farPull?.choke ?? null, near: nearPull?.choke ?? null, corridor: corridorPull?.choke ?? null };
+    const riflePull = await fx.fxWeaponFired(globalThis.__goldenPayload("singleShot",
+      { attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: rifleItem.id,
+        targetTokenId: targetTok.id, targetActorId: dummy.id },
+      { weaponName: "__PW__CHK rifle", caliber: "5.56mm", spreadMode: "single", modifier: "standard",
+        shotsFired: 1, shotsHit: 1, spreadAim: null, spreadScatter: null, areaDamages: { Torso: [{ damage: 6 }] } }));
+    ok("live path: a class that does not FAN is never choked (negative — the clamp is not a global)",
+      riflePull?.choke?.choked === false && riflePull.choke.capSource === "cone" && riflePull.choke.coneRad === 0,
+      JSON.stringify(riflePull?.choke ?? null));
+
+    /* ── j-2. THE REPORTED BOUND: how many rounds' PICTURES land after the last REPORT ──────────
+     * ⭐ THIS IS THE FIELD REPORT'S OWN METRIC (2026-08-26), and it is pinned across REPEATED volleys
+     * rather than one, because the behaviour it answers is probabilistic: the reporter saw two trailing
+     * rounds "most of the time", which is one residual sitting across a threshold rather than an
+     * intermittent fault. A single-volley leg would go green on the lucky runs exactly as the field did.
+     *
+     * INSTRUMENT: the report clock is `AudioHelper.play` wrapped (a call whose src is a shot report is
+     * the instant a listener hears it); the picture clock is `createSequencerEffect`, filtered to the
+     * MUZZLE FLASH — one per drawn round, so flashes-after-the-last-report IS the number the reporter
+     * counts. An arrival mark is deliberately excluded: it lands after the last report because the
+     * round is still crossing the room, which is correct rather than a trail.
+     *
+     * ⚠ POLLED TO QUIET, never slept against (the standing no-fixed-sleeps rule) — Sequencer's create
+     * latency moves with rig load and a fixed wait makes this a coin flip.
+     * MEASURED HERE BEFORE THE FIX: a median of 10 trailing round-elements and a 1374 ms worst offset
+     * on 8-round shell volleys. After: 0 across every volley, both loads. */
+    {
+      const reportsAt = [], muzzlesAt = [];
+      const lastDraw = { at: 0 };
+      const helperRef = foundry.audio.AudioHelper;
+      const origHelperPlay = helperRef.play.bind(helperRef);
+      helperRef.play = function (opts, broadcast) {
+        try { if (/shot-/.test(String(opts?.src ?? ""))) reportsAt.push(Date.now()); } catch (_e) { /* instrument only */ }
+        return origHelperPlay(opts, broadcast);
+      };
+      const phaseHook = Hooks.on("createSequencerEffect", (eff) => {
+        lastDraw.at = Date.now();
+        if (/muzzle_flash/i.test(String(eff?.data?.file ?? eff?.data?.src ?? ""))) muzzlesAt.push(Date.now());
+      });
+      const volley = async () => {
+        reportsAt.length = 0; muzzlesAt.length = 0; lastDraw.at = 0;
+        await fx.fxWeaponFired(globalThis.__goldenPayload("shotgunSpread",
+          { attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: gun.id,
+            targetTokenId: targetTok.id, targetActorId: dummy.id },
+          { weaponName: "__PW__CHK shell gun", shotsFired: 8, shotsHit: 2,
+            // the rolled figure varies per pull, so repeats are separate EVENTS, not two indexes
+            areaDamages: { Torso: [{ damage: 3 + Math.floor(Math.random() * 6) }] } }));
+        // drain: poll until the engine has been quiet, with a generous ceiling — never a fixed sleep
+        for (let w = 0; w < 200; w++) {
+          if (lastDraw.at && Date.now() - lastDraw.at > 1200) break;
+          await sleep(100);
+        }
+        if (!reportsAt.length) return null;
+        const last = Math.max(...reportsAt);
+        const after = muzzlesAt.filter(t => t > last);
+        return { trailing: after.length, offset: after.length ? Math.max(...after) - last : 0 };
+      };
+      const runs = async (n) => {
+        const t = [], o = [];
+        for (let v = 0; v < n; v++) { const r = await volley(); if (r) { t.push(r.trailing); o.push(r.offset); } }
+        return { t, o };
+      };
+      let off = { t: [], o: [] }, on = { t: [], o: [] };
+      try {
+        // ⛔ BOTH STATES DRIVEN, because a bound is only meaningful against the thing it improves on.
+        off = await runs(4);                       // shipped: the phase is off
+        fx._setAudioPhase(true);
+        fx._resetFxWarmed?.();
+        on = await runs(4);                        // the mechanism, driven through its seam
+      } finally {
+        fx._setAudioPhase(null);
+        Hooks.off("createSequencerEffect", phaseHook);
+        helperRef.play = origHelperPlay;
+      }
+      out.measured.reportPhase = { off, on };
+      // ⭐ THE DEFECT ITSELF, REPRODUCED — the shipped state trails, which is what the field reported.
+      // Asserted as a RANGE rather than a floor: this pins that the measurement is live and sensitive,
+      // so a green "phase fixes it" below cannot come from an instrument that sees nothing either way.
+      ok("report phase: with the phase OFF the shell class trails after the last report — the reported defect, reproduced",
+        off.t.length >= 3 && off.t.some(n => n >= 1),
+        `off: trailing [${off.t.join(", ")}], worst offset ${off.o.length ? Math.max(...off.o) : 0} ms`);
+      // ⛔ AND THE BOUND THE MECHANISM ACHIEVES, across every volley — not a median, not a best case.
+      ok("report phase: with the phase ON no volley leaves two or more rounds drawing after the last report",
+        on.t.length >= 3 && on.t.every(n => n <= 1),
+        `on: trailing [${on.t.join(", ")}], worst offset ${on.o.length ? Math.max(...on.o) : 0} ms`);
+      ok("report phase: and it is strictly better than the state that ships, by value",
+        on.t.length >= 3 && off.t.length >= 3
+        && (on.t.reduce((a, b) => a + b, 0) / on.t.length) < (off.t.reduce((a, b) => a + b, 0) / off.t.length),
+        `mean trailing ${(on.t.reduce((a, b) => a + b, 0) / Math.max(1, on.t.length)).toFixed(2)} on vs ${(off.t.reduce((a, b) => a + b, 0) / Math.max(1, off.t.length)).toFixed(2)} off`);
+      // The estimate is a real number learned from THIS client, not the shipped seed left untouched.
+      ok("report phase: the client's engine-latency estimate is live and inside its own ceiling",
+        fx.fxEngineLatencyMs() > 0 && fx.fxEngineLatencyMs() <= fx.FX_AUDIO_PHASE_MAX_MS,
+        `${fx.fxEngineLatencyMs()} ms (ceiling ${fx.FX_AUDIO_PHASE_MAX_MS}, seed ${fx.SEQ_PRESTART_COMP_MS})`);
+    }
+
+    /* ── k. fxShot on its own derives the same choke rather than drawing the raw cone ────────── */
+    const shooterPl = canvas.tokens.get(shooterTok.id);
+    await targetTok.update({ x: 600 + liveFarSq * gpx }, { animate: false });
+    await sleep(900);
+    const targetPl = canvas.tokens.get(targetTok.id);
+    const solo = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false });
+    ok("standalone draw: the verb called on its own resolves the choke itself, and reports which answer bound it",
+      solo.coneRad < solo.classConeRad && solo.classConeRad === shell.spreadRad
+      && solo.chokeSource !== "threaded" && solo.chokeSource !== "cone",
+      JSON.stringify({ coneRad: solo.coneRad, classConeRad: solo.classConeRad, chokeSource: solo.chokeSource }));
+    const threaded = await fx.fxShot(shooterPl, targetPl, { weaponClass: "shotgun", hit: true, light: false, coneRad: 0.02 });
+    ok("standalone draw: a threaded cone is used verbatim, so the fan-out's one derivation wins",
+      threaded.coneRad === 0.02 && threaded.chokeSource === "threaded",
+      JSON.stringify({ coneRad: threaded.coneRad, chokeSource: threaded.chokeSource }));
+
+    /* ── l. the tail arithmetic, re-checked rather than assumed ──────────────────────────────── */
+    const tail = fx.presentationTailMs("shotgun", null, null, farPull.arrival?.ms ?? 0);
+    ok("tail arithmetic: no term of the scheduled floor is a function of the cone — the choked payload's floor is the resolver's own answer",
+      farPull.settleTailMs === tail, `${farPull.settleTailMs} vs ${tail}`);
+    const worstCrossRaw = shell.dashMs * (1 + fx.PELLET_CHAOS.reachFraction * shell.spreadRad);
+    const worstCrossChoked = shell.dashMs * (1 + fx.PELLET_CHAOS.reachFraction * far.coneRad);
+    out.measured.crossing = { rawMs: Number(worstCrossRaw.toFixed(2)), chokedMs: Number(worstCrossChoked.toFixed(2)) };
+    ok("tail arithmetic: the worst pellet crossing moves EARLIER under the choke, so the floor keeps over-stating",
+      worstCrossChoked <= worstCrossRaw + 1e-9,
+      `${worstCrossChoked.toFixed(2)} ms vs ${worstCrossRaw.toFixed(2)} ms (floor ${tail} ms)`);
+
+    /* ── m. the source guard: ONE derivation per payload, and no raw cone left on the draw path ─ */
+    const src = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
+    const fanOut = src.slice(src.indexOf("export async function fxWeaponFired"));
+    ok("source guard: the fan-out resolves the choke exactly once and hands it down",
+      (fanOut.match(/arrivalConeFor\(/g) ?? []).length === 1
+      && /coneRad: choke\.coneRad/.test(fanOut),
+      `arrivalConeFor ×${(fanOut.match(/arrivalConeFor\(/g) ?? []).length}, threaded ${/coneRad: choke\.coneRad/.test(fanOut)}`);
+    ok("source guard: no draw site still reads the class row's raw half-angle",
+      !/spreadRad:\s*(entry|ammoEntry)\.spreadRad/.test(src)
+      && !/pelletJitterFor\([^)]*\.spreadRad\)/.test(src),
+      `raw-entry uses ${(src.match(/spreadRad:\s*(entry|ammoEntry)\.spreadRad/g) ?? []).length}`);
+
+    for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__CHK"))) await t.delete().catch(() => {});
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__CHK"))) await a.delete().catch(() => {});
+    for (const m of game.messages.filter(m => m.speaker?.actor === actor.id)) { try { await m.delete(); } catch (e) { /* gone */ } }
+    ok("choke cleanup: the fixtures are gone",
+      game.actors.filter(a => a.name?.startsWith("__PW__CHK")).length === 0
+      && [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__CHK")).length === 0);
+    return out;
+  });
+  chokeSec.checks.push(...r.checks);
+  chokeSec.measured = r.measured;
+} catch (err) {
+  chokeSec.checks.push({ n: "arrival-choke section ran", p: false, d: String(err?.message ?? err) });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+ * §27 — THE EXEMPT WALL CLIP (2026-08-26). A shot the resolution rail has ruled reached nobody must
+ * not be DRAWN reaching them: each ray is cut at its own closest wall intersection, the arrival family
+ * is planted at the wall, and the impact is reported as structure. The legs below drive the real
+ * predicates against real Wall documents, and every one of them has its negative beside it — the
+ * SOAKED case that must keep drawing through, and the aimed shot that LANDED and must never be
+ * clipped, which is the gate that stops this fix becoming the same defect pointed the other way.
+ * ════════════════════════════════════════════════════════════════════════════════════════════════ */
+const clipSec = { checks: [] };
+try {
+  const r = await page.evaluate(async () => {
+    // ⚠ DECLARED IN HERE, not passed in: this suite's other sections each define SCOPE inside their
+    // own evaluate, and there is no module-scope binding to close over at this point in the file.
+    const SCOPE = "cp2020-augmented";
+    const out = { checks: [] };
+    const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+    const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+    const shapes = await import(`/modules/${SCOPE}/module/combat/area-shapes.js`);
+    const scene = canvas.scene;
+
+    /* stale sweep from any interrupted run */
+    const stale = [...scene.walls].filter(w => w.flags?.[SCOPE]?.__pwclip === true).map(w => w.id);
+    if (stale.length) await scene.deleteEmbeddedDocuments("Wall", stale);
+    for (const t of [...scene.tokens].filter(t => t.name?.startsWith("__PW__CLIP"))) await t.delete().catch(() => {});
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__CLIP"))) await a.delete().catch(() => {});
+
+    const gpx = canvas.dimensions.size;
+    const rect = canvas.dimensions.sceneRect;
+    // ⚠ INSIDE sceneRect. The movement backend bounds its rays by the canvas rectangle, so an
+    // off-rect probe answers the wall question wrongly in BOTH directions (the documented
+    // cover-area-soak fixture defect).
+    const baseX = Math.round(rect.x + gpx * 2);
+    const baseY = Math.round(rect.y + gpx * 2);
+    const shooterAt = { x: baseX, y: baseY };
+    const targetAt = { x: baseX + gpx * 8, y: baseY };
+
+    const actor = await Actor.create({ name: "__PW__CLIP Shooter", type: "character" });
+    const victim = await Actor.create({ name: "__PW__CLIP Target", type: "character" });
+    const [sTok] = await scene.createEmbeddedDocuments("Token", [{
+      name: "__PW__CLIP Shooter", actorId: actor.id, actorLink: true, x: shooterAt.x, y: shooterAt.y, width: 1, height: 1,
+    }]);
+    const [tTok] = await scene.createEmbeddedDocuments("Token", [{
+      name: "__PW__CLIP Target", actorId: victim.id, actorLink: true, x: targetAt.x, y: targetAt.y, width: 1, height: 1,
+    }]);
+    // Settle: a freshly created token is not on the canvas the instant the promise resolves.
+    await new Promise(res => setTimeout(res, 900));
+    const shooter = canvas.tokens.get(sTok.id);
+    const target = canvas.tokens.get(tTok.id);
+    ok("harness guard: both figures are drawn on the pinned scene",
+      canvas.scene?.id === scene.id && !!shooter && !!target,
+      `${canvas.scene?.id === scene.id} / ${!!shooter} / ${!!target}`);
+
+    // A NAKED, move-blocking wall across the middle of the shot — no cover values at all.
+    const wallX = baseX + gpx * 4 + gpx / 2;
+    const mkWall = async (flags) => {
+      const [w] = await scene.createEmbeddedDocuments("Wall", [{
+        c: [wallX, baseY - gpx * 3, wallX, baseY + gpx * 3],
+        move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL,
+        flags: { [SCOPE]: { __pwclip: true, ...(flags ?? {}) } },
+      }]);
+      return w;
+    };
+    const naked = await mkWall(null);
+    await new Promise(res => setTimeout(res, 250));
+
+    const from = fx.centerOf(shooter);
+    const aim = fx.centerOf(target);
+
+    /* ── a. the geometry primitive answers with a POINT ON THE WALL ─────────────────────────── */
+    const stop = shapes.wallImpactPoint(from, aim);
+    ok("wall impact: the closest-mode query returns a point, not a boolean",
+      !!stop && Number.isFinite(stop.x) && Number.isFinite(stop.y),
+      stop ? `${stop.x.toFixed(1)},${stop.y.toFixed(1)}` : "null");
+    ok("wall impact: the point is ON the wall's own line, and short of the target",
+      !!stop && Math.abs(stop.x - wallX) < 2 && stop.x < aim.x,
+      stop ? `x ${stop.x.toFixed(1)} vs wall ${wallX} vs target ${aim.x}` : "null");
+    ok("wall impact: null when nothing is in the way (negative)",
+      shapes.wallImpactPoint(from, { x: from.x, y: from.y - gpx * 2 }) === null);
+
+    /* ── b. THE GATE: an aimed shot that LANDED is never clipped ────────────────────────────── */
+    // ⚠ THE HIT COUNT LIVES IN `areaDamages`, NOT IN A `hits` FIELD. The first build of this fixture
+    // said `{ shots: 3, hits: 3 }`, which is not a shape the rail ever sees — `hitCountOf` counts the
+    // ENTRIES of `areaDamages`, so that payload read as a shot that landed nothing and the gate
+    // correctly clipped it. The leg went red describing the fixture rather than the product. Stated
+    // the way the seam states it, and a leg below asserts the count so the fixture cannot lie again.
+    const payloadHit = { attackerId: actor.id, shotsFired: 3, targetTokenId: tTok.id,
+      areaDamages: { Torso: [{ damage: 4 }, { damage: 3 }, { damage: 5 }] } };
+    ok("clip gate fixture: the LANDED payload really does read as three hits",
+      fx.hitCountOf(payloadHit) === 3, String(fx.hitCountOf(payloadHit)));
+    ok("clip gate: an aimed shot that LANDED draws through — the damage card must not be contradicted",
+      fx.wallClipPlanFor(payloadHit, shooter, target) === null,
+      JSON.stringify(fx.wallClipPlanFor(payloadHit, shooter, target)));
+
+    /* ── c. an aimed shot that landed NOTHING behind a naked wall DOES clip ─────────────────── */
+    const payloadMiss = { attackerId: actor.id, shotsFired: 3, targetTokenId: tTok.id, areaDamages: {} };
+    ok("clip gate fixture: the MISSED payload really does read as zero hits",
+      fx.hitCountOf(payloadMiss) === 0, String(fx.hitCountOf(payloadMiss)));
+    const plan = fx.wallClipPlanFor(payloadMiss, shooter, target);
+    ok("clip gate: an aimed shot that landed NOTHING behind a naked wall clips",
+      !!plan?.clip && plan.source === "aimed", JSON.stringify(plan));
+    ok("clip: the impact is reported as STRUCTURE, not as the body's own flesh",
+      plan?.kind === "structure", String(plan?.kind));
+
+    /* ── d. THE NEGATIVE THAT MATTERS: a VALUED wall soaks, and a soaked shot draws THROUGH ─── */
+    await naked.update({ [`flags.${SCOPE}.coverSp`]: 10 });
+    await new Promise(res => setTimeout(res, 200));
+    ok("clip: a VALUED barrier answers SOAKED and is NOT clipped (shoot-through-the-door)",
+      fx.wallClipPlanFor(payloadMiss, shooter, target) === null,
+      JSON.stringify(fx.wallClipPlanFor(payloadMiss, shooter, target)));
+    await naked.update({ [`flags.${SCOPE}.-=coverSp`]: null });
+    await new Promise(res => setTimeout(res, 200));
+    ok("clip: clearing the value returns it to the exempt (clipped) case",
+      !!fx.wallClipPlanFor(payloadMiss, shooter, target)?.clip);
+
+    /* ── e. the DRAW actually stops there — fxShot reports the clip by value ─────────────────── */
+    const drawnClipped = await fx.fxShot(shooter, target, {
+      weaponClass: "shotgun", hit: false, light: false, clipWalls: true, coneRad: 0.05, arrivalMs: 200,
+    });
+    const drawnFull = await fx.fxShot(shooter, target, {
+      weaponClass: "shotgun", hit: false, light: false, clipWalls: false, coneRad: 0.05, arrivalMs: 200,
+    });
+    ok("clip: every ray of the fan is cut, not just one",
+      drawnClipped.clipped === drawnClipped.pellets && drawnClipped.pellets > 1,
+      `${drawnClipped.clipped} clipped of ${drawnClipped.pellets} pellets`);
+    ok("clip: the surviving fraction of the ray is under 1 and above 0",
+      drawnClipped.clipFrac > 0 && drawnClipped.clipFrac < 1, String(drawnClipped.clipFrac));
+    ok("clip: an UNCLIPPED draw of the same shot cuts nothing (negative)",
+      drawnFull.clipped === 0 && drawnFull.clipFrac === 1,
+      `${drawnFull.clipped} / ${drawnFull.clipFrac}`);
+    ok("clip: the clip does not change how many rounds are drawn",
+      drawnClipped.pellets === drawnFull.pellets && drawnClipped.tracer === drawnFull.tracer,
+      `${drawnClipped.pellets} vs ${drawnFull.pellets}`);
+
+    /* ── f. a wall the rounds are NOT pointed at cannot clip them ────────────────────────────── */
+    const asideAim = { x: from.x, y: from.y - gpx * 2 };
+    const drawnAside = await fx.fxShot(shooter, null, {
+      weaponClass: "shotgun", hit: true, light: false, clipWalls: true, coneRad: 0.05,
+      arrivalMs: 200, aimPoint: asideAim,
+    });
+    ok("clip: a shot pointed away from the wall is not cut by it (negative)",
+      drawnAside.clipped === 0 && drawnAside.clipFrac === 1,
+      `${drawnAside.clipped} / ${drawnAside.clipFrac}`);
+
+    /* ── g. cleanup ─────────────────────────────────────────────────────────────────────────── */
+    const mine = [...scene.walls].filter(w => w.flags?.[SCOPE]?.__pwclip === true).map(w => w.id);
+    if (mine.length) await scene.deleteEmbeddedDocuments("Wall", mine);
+    for (const t of [...scene.tokens].filter(t => t.name?.startsWith("__PW__CLIP"))) await t.delete().catch(() => {});
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__CLIP"))) await a.delete().catch(() => {});
+    ok("clip cleanup: the fixtures are gone",
+      [...scene.walls].filter(w => w.flags?.[SCOPE]?.__pwclip === true).length === 0
+      && game.actors.filter(a => a.name?.startsWith("__PW__CLIP")).length === 0);
+    return out;
+  });
+  clipSec.checks.push(...r.checks);
+} catch (err) {
+  clipSec.checks.push({ n: "exempt wall-clip section ran", p: false, d: String(err?.message ?? err) });
+}
+
 console.log("\n=== combat FX rail keeper ===");
 for (const c of res.checks) check(c.n, c.p, c.d);
 for (const c of xres.checks) check(c.n, c.p, c.d);
@@ -8859,6 +9906,17 @@ for (const c of pulse.checks) check(c.n, c.p, c.d);
 for (const c of preload.checks) check(c.n, c.p, c.d);
 for (const c of pattern.checks) check(c.n, c.p, c.d);
 for (const c of tonight.checks) check(c.n, c.p, c.d);
+for (const c of chokeSec.checks) check(c.n, c.p, c.d);
+for (const c of clipSec.checks) check(c.n, c.p, c.d);
+console.log(`  arrival choke, scene scale: ${JSON.stringify(chokeSec.measured?.scale ?? null)}`);
+console.log(`  arrival choke, crossover: ${JSON.stringify(chokeSec.measured?.crossover ?? null)}`);
+console.log(`  arrival choke, one-square body: ${JSON.stringify(chokeSec.measured?.oneSquareBody ?? null)}`);
+console.log(`  arrival choke, band agreement: ${JSON.stringify(chokeSec.measured?.bands ?? null)}`);
+console.log(`  arrival choke, far fan measured: ${JSON.stringify(chokeSec.measured?.farFan ?? null)}`);
+console.log(`  arrival choke, jitter sweep: ${JSON.stringify(chokeSec.measured?.jitterSweep ?? null)}`);
+console.log(`  arrival choke, live pulls: ${JSON.stringify(chokeSec.measured?.livePulls ?? null)}`);
+console.log(`  MISS SPLAY (unchanged — user ruling pending, §8): ${JSON.stringify(chokeSec.measured?.missSplay ?? null)}`);
+console.log(`  arrival choke, worst pellet crossing: ${JSON.stringify(chokeSec.measured?.crossing ?? null)}`);
 console.log(`  report level (B), measured: ${JSON.stringify(tonight.measured?.reportLevel ?? null)}`);
 console.log(`  shipped asset peaks (D), decoded in-browser: ${JSON.stringify(tonight.measured?.assetLevels ?? null)}`);
 console.log(`  pattern fires (C), measured: ${JSON.stringify(tonight.measured?.patternFire ?? null)}`);

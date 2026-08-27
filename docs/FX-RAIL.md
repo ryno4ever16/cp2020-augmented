@@ -49,6 +49,7 @@ The payload is one resolved burst against one target. Its presentation-relevant 
 | `fxTargetTokenId` | the aimed-at token — **presentation only**, set on every fire mode | seam shim |
 | `firedByUserId` | the one client that resolved the shot | seam shim |
 | `fumbleRuled` | the base actually *resolved* a fumble (not merely "a 1 was rolled") | seam shim |
+| `fumbleClass` | **which row of the base's fumble table was ruled** — `plainMiss` \| `noDischarge` \| `harmlessDischarge` \| `ownSide`, or null when it could not be read. Only `plainMiss` is drawn (§4.1) | seam shim, derived once in `combat/fumble-outcome.js` from the base's own table die |
 | `modifier` | the loaded ammo's modifier id — **the ammo overlay's input** | seam shim, from the loaded ammo item. Sits **beside** `caliber` in `AMMO_EFFECT_FIELDS`, never instead of it: the two answer different questions (which load, which cartridge) and a build that swapped one for the other cost `dualPurpose` its identity for a day — see §6, 2026-08-09 |
 | `caliber` | the cartridge in the chamber — **the pattern flow's input** | seam shim, from the loaded ammo's `caliber`, falling back to the weapon's own `ammoType` |
 | `armorMultSoft`, `penDamageMult`, `spreadMode`, `dotType`, … | the loaded ammo's mechanics | seam shim, from the loaded ammo item |
@@ -205,7 +206,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 3 | **Muzzle lance** | `jb2a.muzzle_flash.single.01.yellow`, trimmed to 110 ms, dwelt by the row's `muzzleMs` | row names `muzzle` — **every class, including the shell again** | yes |
 | 4 | **Spark star** | `jb2a.impact.006.yellow` | row names `spark` — **no shipped row does** | yes |
 | 5 | ~~Discharge column~~ | ⏪ **DELETED 2026-08-09.** The whole mechanism — asset, 1.25 sq stretch, 55 ms trim, 220 ms dwell, its own colour field and its own tail term — is gone, not disabled. §6 | — | — |
-| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange`, or an ammo's own round (`rubber` → `jb2a.throwable.launch.cannon_ball.01.black`). ⭐ *2026-08-19*: a **painted** (stretched) round is planted at the **muzzle point**, not the token centre (`SPAN_ANCHOR_AT_MUZZLE`) — every cut bakes ink behind its own start anchor and `bullet.01` does so in every band, so the anchor is what keeps it off the shooter's back. A **travelled dash** keeps the centre (its crossing time is derived from the aim distance). Both shapes still take the near-band floor for the file choice | row names `tracer` | yes |
+| 6 | **Tracer / pellet fan** | `jb2a.bullet.01/02.orange`, or an ammo's own round (`rubber` → `jb2a.throwable.launch.cannon_ball.01.black`). ⭐ *2026-08-19*: a **painted** (stretched) round is planted at the **muzzle point**, not the token centre (`SPAN_ANCHOR_AT_MUZZLE`) — every cut bakes ink behind its own start anchor and `bullet.01` does so in every band, so the anchor is what keeps it off the shooter's back. A **travelled dash** keeps the centre (its crossing time is derived from the aim distance). Both shapes still take the near-band floor for the file choice. ⭐ *2026-08-25*: the FAN's half-angle is now a **ceiling**, not the answer — the group is clamped to an absolute arrival half-width (`SHELL_CHOKE`, §3.2c), so it stops widening with range | row names `tracer` | yes |
 | ~~6b~~ | ~~**Buckshot volley**~~ | ⏪ **VETOED 2026-08-11** and switched off, not deleted. `VOLLEY.enabled: false` ⇒ the resolver answers null, buckshot draws #6 again and #9 comes back with it. §6, §3.2b | — | — |
 | 7 | **Mote spray** | `jb2a.impact.006.yellow` at speck size | row names `motes` **and** payload is multi-round | yes |
 | 8 | **Smoke puff** | `jb2a.smoke.puff.side.grey` | row names `smokeSingle` **and** payload is *single*-round | **no** (smoke does not glow) |
@@ -214,7 +215,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 10 | **Burning ground** (aim-point shape) | `jb2a.flames.orange.03.1x1` (Flames03, a 05x05ft ground plate), 0.9 sq, ⏱ **25 s** (was 45 s), one flame per landing point, delayed by the payload's resolved arrival | overlay names `groundFire` **and** ≥ 1 round landed **and** the **single-target** flow owns the payload — **one placement event per payload** | yes |
 | 10b | **Burning ground** (corridor shape) ⭐ *moved onto the arrival clock 2026-08-19* | same asset and same lifetime, `GROUND_FIRE.maxPerPattern` (5) flames scattered inside the declared corridor (`patternFirePlanFor`, seeded off the payload including the rolled damage), delayed by the same one resolved `arrivalMs` the marks and impacts take. ⏪ these used to be placed at the GM's **confirm** click; the confirm still owns the case the rail cannot know — an **undeclared** corridor — and the two are kept exclusive by the `railFires` flag the plant stamps on the region. §6 | overlay names `groundFire` **and** the **pattern** flow owns the payload **and** the shooter DECLARED a corridor **and** this is the firing client (the one element on this rail delivered by the engine's broadcast rather than `.locally()`, so one client plants for all) | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
-| 13 | **Impact audio** ⭐ *new 2026-08-12, corridor half added 2026-08-14* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included. ⭐ A **declared corridor** has no target token, so its victims are swept once per payload instead (`patternAudioPlanFor`): every figure standing in the corridor's own polygon, wall-occlusion exempt, each sounded at **its own fraction of the crossing** — and the pattern's apply seam is quiet (`fxSilent`) so the confirm click can never sound the same bodies again (§6) | n/a (not drawn) |
+| 13 | **Impact audio** ⭐ *new 2026-08-12, corridor half added 2026-08-14* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included. ⭐ A **declared corridor** has no target token, so its victims are swept once per payload instead (`patternAudioPlanFor`): every figure standing in the corridor's own polygon, **naked**-wall-occlusion exempt (a figure behind a cover-VALUED barrier is still sounded — the confirm damages it through that barrier's SP; `areaCoverVerdict`, ruling 2026-08-25), each sounded at **its own fraction of the crossing** — and the pattern's apply seam is quiet (`fxSilent`) so the confirm click can never sound the same bodies again (§6) | n/a (not drawn) |
 | 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
 
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
@@ -987,6 +988,111 @@ asset lights roughly a fifth of it; **0.5 was the first value ever tried on this
 by eye as "a few pixels, reads as dirt on the screen" — that floor measurement is why the size jitter
 was tightened alongside the restore rather than left at ±25 %.
 
+### 3.2c The arrival choke — ⭐ the fan stops widening with range (`SHELL_CHOKE`, ruled 2026-08-25)
+
+⭐ **USER RULING 2026-08-25, release-gating, from the live table:** the drawn pellet spread is too wide
+to read as powerful — *"it looks like the bullets have lost their energy and spread out"*. The
+instruction: choke the arrival group so it reads tight and brutal. **The sound is signed off and was
+not touched.**
+
+⛔ **The defect was the UNIT, not the value.** `spreadRad` is an ANGLE, so the group it draws is
+`dist · sin(spreadRad)` wide *at the far end* — the fan **widens with range**, which is the opposite of
+what a choked bore does. On the shipped 0.07 rad, against a one-square token whose own half-width is
+0.5 squares:
+
+| shot length | 1 sq | 2 sq | 4 sq | 6 sq | 8 sq | 12 sq | 16 sq | 20 sq |
+|---|---|---|---|---|---|---|---|---|
+| **outermost pellet, un-clamped** | 0.070 | 0.140 | 0.280 | 0.420 | 0.560 | 0.839 | 1.119 | 1.399 |
+| **whole group, un-clamped** | 0.140 | 0.280 | 0.560 | 0.839 | 1.119 | 1.679 | 2.238 | 2.798 |
+| **whole group, CHOKED** | 0.140 | 0.280 | **0.500** | **0.500** | **1.000** | **1.000** | **1.000** | **1.000** |
+
+*(squares, 2 m grid, 1×1 target, weapon Long range 50 m. The un-clamped group is 2.8 squares wide at
+20 — nearly three bodies. Shrinking `spreadRad` would have kept that shape and bought a narrower
+version of it; capping the ARRIVAL width fixes the shape.)*
+
+⚠ **THE ANSWER IS GRID-DEPENDENT, and that is the book being in metres rather than a bug.** The bench
+scene *Review · Dark Range* measures **5 m per square** (`gridPx` 100, `pxPerMeter` 20, read live by
+the keeper), where the p.109 rows are 0.2 / 0.4 / 0.6 squares TOTAL — tighter than a one-square body at
+every band, so on that scene the **book always binds and the token never does**. Measured there at
+15.7 squares: the group goes from **2.2 squares wide to 0.6**. On a 2 m grid the same rows are 0.5 /
+1.0 / 1.5 squares and the token takes over past ~7 squares. Both are correct; the cap is a distance in
+metres and a square is worth whatever the scene says.
+
+⚠ **AND IT DOES NOTHING AT CLOSE RANGE, WHICH IS THE POINT OF A CLAMP** — worth stating so nobody
+re-reads a report against a shot the clamp never touched. The cone is only narrowed where it is
+already wider than the cap: below **~2.5 squares on a 5 m grid** and below **~4 squares on a 2 m grid**
+the class cone answers and the fan is byte-for-byte what it was. On a 2 m grid at those ranges the cone
+is in fact already *tighter* than the book's own Short row; on a 5 m grid it sits under the floor. If a
+close shot ever needs tightening, the lever is `FX_CLASSES.shotgun.spreadRad` itself (**0.0488 rad /
+2.80°** would put a 2-square shot on a 5 m grid exactly on the book's 1 m Short row), with
+`floorSquares` coming down to ~0.10 beside it — that is a second look call and is **not** taken here.
+
+**The cap is a `min` of two live answers, each with a reason, floored so it cannot draw a line:**
+
+| Answer | Source | Why |
+|---|---|---|
+| the **book's** pattern half-width for this shot's band | `spreadBandSpec(distM, widths, rangeM).widthM / 2` — Core **p.109**, text-verified: **1 m Close/PB · 2 m Medium · 3 m Long**, with the band edges fractions of the firing weapon's own Range (p.99: Close ¼, Medium ½, Long full) | ⛔ **borrowed, never re-derived** — the aim preview, the plant and the banded damage all read this one function, and the per-load `spreadWidth*` overrides ride it. A rail with its own ladder draws one width while the region plants another |
+| the aimed-at **token's** own drawn half-width | `tokenRadiusPx × SHELL_CHOKE.tokenFraction` | the half that makes the ruling true on screen: the book's Long row is 1.5 m = 0.75 squares on a 2 m grid, still **wider than the one-square body it is landing on**. A group that overhangs the target reads as spray whatever the book says about open air. A vehicle or an ACPA is a bigger body and gets the book's answer instead — which is why this is a `min` of two live numbers and not a table |
+| the **floor**, `floorSquares` 0.15 | a guard, not a look | six pellets in a group narrower than 0.3 squares are drawn one behind another, and at `dashSquares: 1.0` the sprites overlap outright — the opposite failure. It can never *widen* anything (the resolved cone is `min(classCone, capAngle)`) |
+
+⛔ **The body only caps the group when the shot is actually pointed at it**, and the test is the aim
+point rather than a list of exceptions: the token half stands down whenever the aim falls outside the
+token's own drawn radius. That covers every case at once — a declared corridor aimed short of a figure,
+past it or at open ground (§4.4); a missed corridor moved to the grenade table's answer; an untargeted
+shot drawn along the shooter's own facing. In all of them the aimed-at token is not where the rounds
+land, and the p.109 row alone caps the group, which is what the pattern's own rules say about open
+ground.
+
+⛔ **The depth jitter is paid for inside the cap, or the cap is not a bound.** `pelletEndpoints` clamps
+the *angle*, but `pelletJitterFor` then scales a pellet's **reach** by `1 + reachFraction × cone` — so
+an outermost pellet sent further along its own line lands that fraction *past* a cap derived from the
+aim distance alone. **Measured on the rig before the term existed: 30.2 px against a 30 px cap.** Small,
+but an absolute cap that is not absolute is not worth having, so the allowance is subtracted up front
+(computed off the CLASS cone, which keeps it non-circular and conservative; worst case it costs 2.4 %).
+The un-jittered ladder therefore sits one allowance *inside* the cap and the jittered worst case sits
+*on* it — both numbers are reported (`capPx`, `reachAllowance`) rather than one being rounded away.
+
+The cap is a lateral distance and the fan is built from an angle, so it is converted back:
+`asin(capPx / (distancePx × reachAllowance))` is the half-angle whose worst-case arrival offset is
+exactly the cap, and the fan takes `min(classCone, thatAngle)`. ⭐ **That makes it a CLAMP and not a replacement** — inside the cap every
+short shot returns the class's cone byte for byte, and the choke only ever narrows. On a 2 m grid
+against a 1×1 body the crossover is at **≈7.15 squares**. ⚠ The group does still *step* at a band edge
+(0.50 sq wide at 6 squares, 0.98 at 7, then flat at 1.00) — that step is the book's own 1 m → 2 m row
+change, not the angle coming back.
+
+⭐⭐ **It is applied as the RESOLVED CONE, once per payload — not as a filter on the endpoints.**
+`pelletEndpoints` and `pelletJitterFor` are handed the choked half-angle in place of the row's, so every
+property those two already guarantee survives by construction: the offsets stay evenly spaced across the
+narrower cone, an even count still leaves no pellet on the aim line, the per-pellet nudge is still
+scaled by half of its OWN slot and still clamped to the cone it belongs to (§9 B — an unclamped
+symmetric nudge walks the outermost pellet off the target, measured at 113 px against a 50 px
+half-width). Everything **derived** inherits it for free because it reads the same array or the same
+resolved cone: the pellet arrival marks, the chaos record, the incendiary ground fire
+(`groundFirePoints`, handed the same cone *and* the same jitter) and any overlay repaint, which never
+sees geometry at all. **One new number on the rail, and it is the cone.**
+
+⚠ **One consequence, stated rather than discovered:** `PELLET_CHAOS.reachFraction` scales the DEPTH
+jitter by the cone's own lateral half-spread, so a choked cone tightens the near/far scatter in the same
+proportion — at 12 squares the depth spread goes from ±0.294 squares to ±0.175. Intended direction, and
+it preserves the load-bearing invariant that the irregularity lives *inside* the declared cone. It is a
+look call, so it is in §8.
+
+⏱ **The tail arithmetic is unchanged, re-checked rather than assumed.** `presentationTailMs` reads the
+resolved entry's `dashMs`, `impactSquares`/`impactClipMs`, `spark` and the muzzle envelope — no term of
+it is a function of `spreadRad`. The only duration the cone touches is a pellet's own crossing,
+`dashMs × reachScale`, worst case `1 + reachFraction × cone` = **153.7 ms** at the class cone and
+strictly less under any choke. Every arrival moves earlier or not at all, so the floor keeps
+**over-stating**, the only safe direction (§9 E).
+
+⛔ **A MISS is untouched, deliberately and pending a ruling.** A missed round still takes `missEndpoint`
+**per pellet** (MISS_SPREAD_RAD ≈12°, reach 0.6–1.15 of the shot), which at 8 squares splays the group
+across ~3.8 squares of width and ~4.4 squares of depth — see §8 for the choked-miss proposal with its
+numbers.
+
+⏪ **The revert is one field:** `SHELL_CHOKE.enabled: false` returns the resolver to the class cone at
+every distance and every element above is byte-identical to the pre-choke build. No other value moves;
+`FX_CLASSES.shotgun.spreadRad` is still **0.07**.
+
 #### The arrival marks — ⏪⏪ dust re-pointed to fire (2026-08-14, ratified), and what survives of the razor split
 
 `PELLET_ARRIVAL` — now **`jb2a.explosion.01.orange`** at **0.45 squares**, trimmed to **550 ms**, one at
@@ -1199,6 +1305,28 @@ not which, and inventing an order would be inventing a fact.
 **A ruled fumble draws nothing at all** — no light, no sprite, no tracer, no impact, no audio. The gate
 is `payload.fumbleRuled` (the base actually resolved a fumble), *not* a natural 1: with the fumble
 table switched off a natural 1 is an ordinary bad roll and the weapon really did fire.
+
+⭐ **…EXCEPT THE ROWS THE TABLE CALLS "NO FUMBLE" (2026-08-26, user ruling decided by Core p.43's REFLEX
+Combat column, text-verified).** `fumbleRuled` says a fumble was resolved; it does not say *what* the
+table ruled, and the table does not rule one thing. The base rolls a second d10 (p.105: *"roll an
+additional 1D10 and check the result against the Fumble Table"*) and the payload now carries the row's
+outcome class beside the boolean. The gate at every one of the rail's four fumble sites is
+`fumbleStandsRailsDown(payload)` (`combat/fumble-outcome.js`), which is the same predicate the damage
+rail's plant asks — **presentation and resolution answer this identically by construction**:
+
+| Table row | `fumbleClass` | This rail |
+|---|---|---|
+| 1–4 *"No fumble. You just screw up."* | `plainMiss` | **Drawn in full** — an ordinary miss. The base zeroed the card's hits, so every round draws with `hit: false` and no impact family is issued. `payloadPresentationMs` returns a real span; `railSoundedImpacts` answers true; `patternCorridorFor` describes the scattered corridor the plant plants (p.108). |
+| 5 *"You drop your weapon."* | `noDischarge` | Silent — nothing left the barrel. |
+| 7 *"Weapon jams…"* | `noDischarge` | Silent — same reason. Also the whole **auto-only-jam** branch, which prints no table row at all (a lane call; see the file header). |
+| 6 *"Weapon discharges or strikes something harmless."* | `harmlessDischarge` | **Silent today, by choice** — see §8. |
+| 8–10 *"You wound yourself / a party member."* | `ownSide` | Silent — the base's own fumble card is the whole account. |
+| *(no class on the payload)* | `null` | Silent — the uniform bail exactly as it shipped, which is what a relayed payload from an older client honestly is. |
+
+The class is derived **once**, at the seam, from the base's own table die — nothing on this rail
+re-rolls or re-derives it. The sub-roll is not on a field the base exposes (`outcome` carries only
+`discharge`/`jam`), so it is read out of the fumble block's own html, anchored on the main die being a
+1; an html that fails the anchor classifies as `null` and takes the uniform bail.
 
 ### 4.1a Pacing: an anchored schedule, and a late round dropped rather than queued
 
@@ -1607,6 +1735,14 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the two standalone arrival sites (hit mark, blood) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
 | `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
+| `FX_PRESENTATION_FEEDBACK` | **true** | whether the drop rule judges the **presentation** clock as well as its own schedule (§4.1b). **Revert false** = the pre-2026-08-26 build: the loop watches only when it reached each slot, and a client whose renderer is three slots behind drops nothing because its timers are fine |
+| `FX_PRESENTATION_LAG_MARGIN_MS` | **60** | the measured spread of the engine's start-up floor under a real burst, added on top of `SEQ_PRESTART_COMP_MS` to make the grace. Raising it weakens the feedback smoothly; **revert 0** = the feedback judges anything past the bare idle floor as backlog |
+| `FX_PRESENTATION_LAG_GRACE_MS` | **235** (derived) | `SEQ_PRESTART_COMP_MS + FX_PRESENTATION_LAG_MARGIN_MS`. Observed presentation lateness under this figure is the engine working normally and costs nothing. ⛔ Declared beside `SEQ_PRESTART_COMP_MS`, not beside the drop rule — a `const` reading a later `const` is a temporal-dead-zone throw at module load |
+| `FX_PAYLOAD_PRELOAD_WAIT_MS` | **400** | how long a volley may wait for its OWN assets to warm before the first round (§4.1b). Once per key per session; a timeout proceeds into first-play decode, which is the pre-ruling behaviour. **Revert 0** = never wait |
+| `FX_AUDIO_PHASE` | **false** ⛔ *shipped off — an open user call, §8* | whether the rail's AUDIO waits for the picture instead of the picture chasing the audio (§4.1c). **`true`** turns on the phase AND zeroes `fxArrivalCompMs` together — the only pairing the arithmetic permits. Built, measured and keeper-pinned in **both** states; off because the trade is a FEEL change (the report lands one engine-latency after the trigger) and the only rig that can measure it over-corrects. Seam `_setAudioPhase(on)` drives the other state for tests |
+| `FX_AUDIO_PHASE_MAX_MS` | **400** | the ceiling on the phase, and it is a **responsiveness** bound rather than a rendering one — past it a gun feels unresponsive, which is worse than a visible trail. **Revert:** a large number lifts the bound |
+| `FX_ENGINE_LATENCY_ALPHA` | **0.3** | how much one round-0 observation moves the running latency estimate. Deliberately slow: the figure is a property of the hardware, and a single volley's reading can be perturbed by anything else drawing in that instant. **Revert 1** = the last observation outright (jittery); **0** freezes the estimate at its seed |
+| `SEQ_PRESTART_COMP_MS` *(as a seed)* | **175** | ⚠ since 2026-08-26 this is the **seed** for the per-client estimate, not the shipped answer — see §4.1c. It is still the literal compensation whenever `FX_AUDIO_PHASE` is false |
 | `FX_DROP_LAG_FRACTION` | **0.5** | how late a round may be before it is dropped, as a share of its own slot (§4.1a). 0 drops nothing — anchoring alone, which measurably bunches. ⏪ the earlier flat figure was **150 ms**, which does not hold the separation guarantee at any cadence we ship |
 | `MUZZLE_MODE` | `"cone"` | flash shape: `cone` / `omni` / `hybrid` |
 | `MUZZLE_LIGHT.coneDegrees` | 270 | wedge width (a 90° notch behind the shooter) |
@@ -1630,6 +1766,9 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `FX_CLASSES.shotgun.muzzleMs` | **220** | the shell's lance dwell, the only row that names one; delivered as `muzzleRateFor("shotgun")` = 0.5 |
 | ~~`COLUMN_SQUARES` / `COLUMN_TRIM_MS` / `COLUMN_DWELL_MS` / `columnRateFor()`~~ | ⏪ **deleted 2026-08-09** | the discharge column's four constants went with the mechanism (§6). A keeper leg asserts all four are `undefined` |
 | `VOLLEY.enabled` | ⏪ **false** — *vetoed 2026-08-11* | the buckshot volley master switch, and the whole of the shelf. **True restores the trial**: the resolver answers a band spec again, the volley replaces the fan and the hit mark is suppressed once more. Nothing else is edited either way |
+| `SHELL_CHOKE.enabled` ⭐⭐ | **true** — *ruled 2026-08-25* | the arrival choke's master switch: the drawn fan is clamped to an absolute arrival half-width instead of a fixed angle, so the group stops widening with range (§3.2c). **False restores the pre-choke build** with no other edit — `FX_CLASSES.shotgun.spreadRad` is still 0.07 either way |
+| `SHELL_CHOKE.tokenFraction` ⭐ | **1.0** | what share of the aimed-at token's own drawn half-width the group may span. 1.0 = the outermost pellet lands ON the body and not past it. **This is the knob a "still too wide" report moves** — 0.7 pulls the group to 70 % of the body's half-width and nothing else changes |
+| `SHELL_CHOKE.floorSquares` ⭐ | **0.15** | a floor on the cap, in squares, so the clamp cannot draw a LINE — six pellets in a group under 0.3 squares are drawn one behind another and at `dashSquares: 1.0` overlap outright. A guard, not a look: it can never widen anything, because the resolved cone is `min(classCone, capAngle)` |
 | `PELLET_CHAOS.slotFraction` ⭐ | **0.9** | how far a pellet's angle may wander, as a share of **half its own slot** in the even ladder. At 0.9 a pellet almost reaches its neighbour's place; the result is clamped to the class's declared cone, so this can never widen a spread |
 | `PELLET_CHAOS.reachFraction` ⭐ | **0.35** | how much nearer or further a pellet stops, as a share of the cone's own **lateral** half-spread. The depth half of the irregular cluster. ⚠ Raising it past ~0.5 walks a pellet of a HIT off a one-square token — measured, §6 |
 | `PELLET_CHAOS.sizeFraction` ⭐ | ⏪ **0.15** (was **0.25**, tightened 2026-08-14) | per-pellet drawn-width variance about the row's `dashSquares`. Tightened with the dash restore so the smallest pellet (1.0 × 0.85 = 0.85 sq) stays clear of the 0.5 "reads as dirt" floor the old pairing grazed (0.7 × 0.75 = 0.53). Revert **0.25** |
@@ -1747,6 +1886,247 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-26 — ⭐⭐ ⏪ A MISSED SHELL DRAWS THE SAME CHOKED PATTERN AS A HIT (user ruling, and it closes
+the choke unit's open item #1 in the affirmative).** Verbatim: *"If you shot a shotgun in real life and
+missed the target, the gun would not then malfunction as a consequence and spray the bullets everywhere
+- so the animation is an animation tied to firing the weapon, not hitting with it. In other words,
+misses look the same as hits except they don't hit the target."* The pattern belongs to the **barrel**,
+not to the outcome.
+
+⛔ **AND IT IS THE ROOT CAUSE OF THE LATE-VOLLEY REPORT**, which arrived the same day: *"in a ~20-round
+volley, EARLY rounds draw the choked fan but LATE rounds revert to the pre-choke wide spread."* Four
+mechanisms were suspected — the tracer budget cap, the drop-lag fallback, eviction, and a draw site
+reading the raw class `spreadRad`. **None of them.** The fan-out assigns `hit: i < hits`, so a burst's
+HITS ARE ITS LEADING ROUNDS and every round after them is a MISS; the miss branch of `pelletEndpoints`
+rolled `missEndpoint` **per pellet** (±`MISS_SPREAD_RAD` ≈ 12°, reach 0.6–1.15 of the shot) and read the
+choked cone not at all. A twenty-round volley with six hits therefore drew the clamped group six times
+and birdshot fourteen times — on the clock, every time, on a perfectly healthy client. Nothing had to
+degrade; it is the shape of a burst. A source leg had confirmed no draw site reads the raw `spreadRad`,
+which is true and was never the point: the miss branch reads **no** cone.
+
+**What it does now.** One `missEndpoint` roll per ROUND for where the group came down, then the pellets
+fan about the shooter→landing ray through the same resolver a hit uses — even ladder, per-pellet jitter,
+clamp. The landing scatter is **untouched** (same angle range, same reach range, same rng draw order),
+so a missed shell still visibly goes somewhere else; it simply arrives as a pattern instead of a cloud.
+
+⭐ **And the group is the same width it would have been on a hit, in pixels.** The threaded cone is a
+half-ANGLE resolved for the AIM distance, and a miss lands at 0.6–1.15 of it — so re-using the angle
+unchanged would draw a group up to 15 % wider than the cap at long reach and 40 % narrower at short,
+which is the ruling only half-kept. The angle is re-solved for the landing distance
+(`asin(aimDist · sin(cone) / landDist)`) so the absolute p.109 band width is preserved exactly.
+**Measured on the rig:** at a 1000 px aim with a 0.05 cone, a miss landing at 600 px draws a **49.98 px**
+half-width against the hit fan's **49.98 px** cap. The BAND is not re-looked-up — it is resolved once per
+payload against the shot the shooter took, which is this rail's standing one-derivation rule. The jitter
+travels by the same ratio so each nudge stays a fraction of its own slot and the clamp bites evenly.
+
+⚠ **Only the pellet classes are in scope, by construction rather than by a flag** — `pelletEndpoints`
+fans for `pellets > 1` and returns `[]` otherwise, so a rifle/SMG/pistol miss still takes the single wide
+`missEndpoint` in `fxShot` and is byte-identical. That is the ruling's own stated boundary.
+⏪ **REVERT:** one line at `pelletEndpoints` (`return Array.from({length:n}, () => missEndpoint(from, to,
+rng))`). The keeper leg that pinned the branch untouched was **re-pointed** at the ruled shape rather
+than deleted, and a late-volley leg walks a 20-round volley and asserts round 20's outermost pellet is
+inside the same cap round 1's was — the case the bench never exercised.
+**Signed off the same day:** the choked HIT look (*"So far it looks fine, it's properly choked"*) and
+point-blank (*"point blank looks fine"*), so `FX_CLASSES.shotgun.spreadRad` stays **0.07** and the choke
+unit's open item #3 is closed with no change.
+
+**2026-08-26 — ⭐⭐ A SHOT THE RESOLUTION RULED REACHED NOBODY IS NO LONGER DRAWN REACHING THEM: the
+EXEMPT wall clip (user ruling).** When the area verdict is `AREA_COVER_EXEMPT` — a naked, unpriced,
+move-blocking wall between the origin and the figure — the resolution gives that figure no damage and
+`patternAudioPlanFor` already silences it, while the rail drew every tracer sailing **through** the wall
+and planted its arrival mark on the far side, on the body. The picture contradicted the card.
+Each ray is now cut at **its own** closest wall intersection
+(`CONFIG.Canvas.polygonBackends.move.testCollision`, `mode: "closest"`, via the new
+`area-shapes.js wallImpactPoint`) — ⛔ per RAY, not per shot, because six pellets meet a wall at six
+points and at an oblique angle can meet different walls. The arrival mark is planted at the wall, the
+impact is sounded as **structure** rather than as the body's own flesh, and blood never sprays for a
+clipped shot because the round reached masonry.
+⛔ **SOAKED shots keep drawing THROUGH, deliberately** — that is the shoot-through-the-door fiction and
+the damage card is about to say the figure was hit through the barrier's SP. Breached/destroyed passes
+with no branch of its own: such a row is no longer valued and no longer blocks movement, so it answers
+`IN`.
+⛔ **AND THE GATE THAT KEEPS THIS FROM BECOMING THE SAME DEFECT REVERSED**: a **single-target aimed**
+shot is *not* ruled by this verdict — a wall nobody has priced is nothing whatsoever to aimed fire, the
+base rolls the attack and the figure takes the hit — so an aimed shot that LANDED is never clipped,
+however solid the wall looks. The one aimed case that does clip is a shot that landed **nothing**, where
+there is no damage card for the picture to contradict. Corridor payloads clip on the corridor's own axis,
+asked with the same backend the exemption is decided on, and only when nothing VALUED is on that axis.
+⏱ **Tail arithmetic restated, not assumed:** the clip moves an arrival strictly EARLIER (the mark and the
+impact ride `arrivalMs × clipFrac`), and `presentationTailMs` deliberately keeps reading the **unclipped**
+arrival — over-stating the tail is the only safe direction (§9), so a clipped shot's damage window opens
+strictly later than its last element ends.
+⚠ **Cover ZONES are not clipped, and the reason is stated rather than skipped:** a Region exposes
+containment but no ray-vs-edge query, so an edge would have to be bisected along the ray — neither cheap
+nor exact. It also never arises under the rule above, because a valued zone answers SOAKED and SOAKED
+draws through. Recorded as a named follow-up (§8).
+
+**2026-08-26 — ⭐⭐ THE DROP RULE GAINS A SECOND CLOCK: measured PRESENTATION lateness (user ruling,
+pre-release — long volleys drift between what is heard and what is seen).** Sound rides the browser's
+audio engine and pays essentially nothing; sprites ride the single-threaded renderer. ⛔ The drop rule
+was **blind in exactly the case it exists for**: a loop whose timers are healthy measures `lagMs ≈ 0`,
+drops nothing, and keeps queueing rounds into a renderer falling further behind every slot — while the
+reports keep arriving on time. That is the drift. The sound is not early; the picture is late, and the
+loop could not tell because it was watching its own schedule.
+**(a) Texture preload.** `fxPreloadAssets` already warms the whole manifest at `ready`, but it is
+fire-and-forget (so the session's first volley can start while its own tracer is still being fetched and
+a video asset's first draw pays that cost **on screen**), a client that joined mid-session or reloaded
+never ran it, and an ammo overlay can re-point a key afterwards. The payload's OWN keys are now warmed
+immediately before its first round via Sequencer's preloader, awaited for at most
+`FX_PAYLOAD_PRELOAD_WAIT_MS` and **once per key per session** — every later volley of that class is a
+no-op that awaits nothing. Awaited ABOVE the loop anchor so the wait cannot be charged to round 0 as
+lateness, and after the score emit so a remote client warms in parallel.
+**(b) Measured-lateness feedback.** The engine reports when an effect actually begins
+(`createSequencerEffect`, which this file already listens to for the presentation canary). The loop
+timestamps each round as it is issued and the next iteration reads how long the engine took to report
+anything for it; that observed lateness is folded into the drop budget through the pure
+`effectiveRoundLagMs`. So the loop drops rounds when **pictures** lag, not only when scheduling slips.
+⛔ **Drop-not-queue semantics are untouched** — `roundDropped` is unchanged, a dropped round still goes
+whole with its audio, and the LAST ROUND IS STILL NEVER DROPPED. Only the lateness handed in changed.
+The grace is the engine's **own** measured idle cost (`SEQ_PRESTART_COMP_MS`, 171–181 ms) plus its
+measured spread under load, not an invented cushion — without it the feedback would declare a healthy
+burst backlogged and drop half of it. The two clocks are **MAXed, never summed**: they are two views of
+the same lateness. ⏪ **REVERT:** `FX_PRESENTATION_FEEDBACK = false`.
+
+**2026-08-26 (later) — ⭐⭐ THE AUDIO IS PHASED TO THE PICTURE, because compensating the picture could
+never finish the job (user report, the shell class: *"2 shots still came out at the end after the last
+sound"* — "most of the time", and on buckshot as well as the dart load, i.e. the WHOLE class).**
+
+⛔ **Three candidate mechanisms were named and two were killed by measurement, not by argument.**
+*Treatment-path blindness* — that the dart load takes some private draw path the sync machinery cannot
+see — is **false**: `VOLLEY.enabled` has been false since 2026-08-11, so buckshot and stun-dart both take
+the ordinary pellet fan, and their resolved warm lists are **byte-identical** (6 keys, same assets); the
+dart row differs only by `dashMs` 170 vs 150, a colour matrix and a mark scale. *A stale
+`SEQ_PRESTART_COMP_MS`* is real but is **not the mechanism** — it is now only a seed (below).
+
+⭐ **THE ACTUAL MECHANISM IS ARITHMETIC, AND IT IS STRUCTURAL.** `SEQ_PRESTART_COMP_MS` is subtracted
+from an element's DELAY so its sprite lands on its own audio instant — which works for an element that
+HAS a delay. A round's own muzzle flash and tracer are issued by the fan-out with **no delay at all**,
+so the subtraction is `max(0, 0 − 175)` and **clamps to zero**. There is nothing to borrow from, and a
+sprite cannot be drawn in the past. So the picture trails its own report by the engine's whole create
+latency `L` on **every round of every volley**, and the last `ceil(L / cadence)` rounds necessarily draw
+after the last report is heard. MEASURED on :30004 (8-round shell volleys,
+`tests/_probe-shell-report-phase.mjs`): a round-0 report→picture phase of **234 ms median with no
+backlog under it**, against the shell's **180 ms** cadence — two rounds trail before the renderer has
+fallen behind by a single frame. That is also the whole of the "most of the time": `L` moves with load,
+so a volley whose `L` lands under one cadence shows nothing. One residual across a threshold, not an
+intermittent fault. ⛔ And **the drop rule cannot reach it**: dropping takes a round's report AND its
+picture together, so it cannot close a phase error, and the last round is never dropped by design.
+
+⭐ **THE FIX — and it is the only one available.** Two things can move: the picture earlier, or the
+report later. The picture cannot go earlier. So the AUDIO is phased by the same `L` the picture pays.
+With `ph` the audio phase and `comp` the arrival compensation:
+`report T+ph` vs `muzzle T+L`, and `hit sound T+arrive+ph` vs `arrival mark T+arrive−comp+L`. Both pairs
+agree for exactly **one** choice: **`ph = L` and `comp = 0`**. The compensation is not deleted so much as
+moved to the other side of the equation, where it also reaches the elements that had no delay.
+The phase is resolved **ONCE per payload** and threaded, so every round of a volley shifts by the same
+number and the **cadence is untouched by construction** — only the volley's onset moves.
+
+⭐⭐ **`L` IS MEASURED ON THE CLIENT, NEVER BAKED**, and this is the half that retires the stale-constant
+problem rather than re-opening it. The shipped 175 was taken on one machine on one day (171–181 ms on
+2026-08-17; **269–275 ms** re-measured on the same rig 2026-08-26; 234 ms in the volley probe) — no
+static number can be right for both a software rasteriser and a GPU. Each volley's **round 0** runs
+against an empty renderer, so the time from issuing it to the engine's first reported creation IS that
+client's idle create latency; it is folded into a running estimate (`FX_ENGINE_LATENCY_ALPHA`) that the
+next volley phases by, clamped to `FX_AUDIO_PHASE_MAX_MS`. A table converges on its own hardware within
+a volley or two. ⚠ **The reading must be the engine's FIRST element after the round, not its last** — a
+defect this build made and measured on itself: `_drawObserved.atMs` is overwritten by every creation, so
+reading it measured how long the engine took to draw the round's *whole* six-pellet fan, over-stating by
+~130 ms; the phase then OVERSHOT and the picture began LEADING its own report by up to 350 ms (measured:
+round-0 phase −119/−232/−353 ms with the estimate climbing 175→324). Hence `_markDrawObservation` and
+`firstAfterMarkMs`, separate from the pending reading the drop rule wants.
+
+**MEASURED, same rig, same instrument, 12 volleys each of buckshot and stun-dart:** trailing round
+elements after the last report went from a **median of 10 (worst offset 1374 ms)** to **0 in every
+volley, both loads**. ⚠ **Honest limit:** :30004 is a headless software rasteriser that drops 4 of 8
+rounds on these volleys, and on it the phase's own `setTimeout` is starved ~120 ms late, so the picture
+now *leads* the report by about that much there. On a client whose timers are not starved the pair
+coincides. The reporter's GPU rig is the real number. ⏪ **REVERT:** `FX_AUDIO_PHASE = false`.
+
+**2026-08-26 (later) — ⭐ THE PER-PAYLOAD WARM WAS BLIND TO EVERY ELEMENT GATED BY A NUMBER OR A
+BOOLEAN** (found by sweeping all eight ammo rows rather than the one reported). `fxPayloadPreloadKeys`
+builds its list by **scraping the resolved entry for strings that look like database keys** — which
+finds `tracer`, `muzzle` and `impactKey`, and finds nothing for an element whose row turns it on with a
+gate. So the incendiary load's burning ground (`groundFire: true`), the muzzle motes (`motes`) and the
+shell's smoke puff (`smokeSquares`) were named **nowhere** in the per-payload warm and rode only the
+session-wide manifest — which is fire-and-forget and which a client that joined mid-session, reloaded or
+switched the rail on afterwards never ran at all. Each is now added **only when this payload's resolved
+entry actually asks for it**, so a class that draws no motes still queues nothing. ⚠ `PELLET_CHAOS` is
+deliberately absent and the keeper pins that it stays absent: it is a GEOMETRY record (slot, reach,
+size, stagger), not an asset with a key. Not the reported defect — the dart and buckshot lists were
+already identical — but a real gap on the same mechanism, and cheap.
+
+**2026-08-26 — ⭐⭐ ⏪ A RULED FUMBLE IS NOT ONE OUTCOME: the rail's blanket silence is split by table row
+(user ruling, decided by the book — Core p.43 Fumble Table, REFLEX Combat column, text-verified;
+p.105 for the additional 1D10).** The rail had bailed on `payload.fumbleRuled` since the shipped ruling
+*"if the shotgun didn't fire, it shouldn't blast visibly"*, and the damage rail was brought into step
+with it the day before (the plant stopped planting for a ruled fumble at all). Both were right about
+three of the table's outcomes and **wrong about the biggest one**: rows **1–4** read *"No fumble. You
+just screw up."* — forty per cent of the table, and in the book's own words not a fumble at all. A round
+left the barrel and missed. Suppressing it made four fumbled shells in ten vanish from the table with
+no picture, no sound and no pattern, when what they owed was the ordinary miss presentation and a
+scattered true centre (p.108).
+
+**What changed.** The seam now derives an outcome CLASS once, from the base's own table die, and puts
+it on the payload as `fumbleClass` (`combat/fumble-outcome.js`; the sub-roll is not on any field the
+base exposes — its `outcome` object carries only `discharge`/`jam` — so it is read out of the fumble
+block's html, anchored on the main die being a 1). Four classes: `plainMiss` (rows 1–4) is **drawn and
+planted in full, as an ordinary miss**; `noDischarge` (5, 7), `harmlessDischarge` (6) and `ownSide`
+(8–10) keep the silence, and so does a payload that carries no class at all. Every one of the rail's
+four fumble sites — the fan-out bail, `payloadPresentationMs`, `railSoundedImpacts`,
+`patternCorridorFor` — now asks the single predicate `fumbleStandsRailsDown`, which is the same
+predicate the damage rail's plant asks inverted, so **presentation and resolution cannot answer
+differently about one shell**. ⛔ Nothing re-rolls the table die: one roll, the base's, is the truth.
+Two calls made under it are open items in §8 (the muzzle-only question for row 6, and the auto-only-jam
+branch). See §4.1 for the row-by-row table.
+
+**2026-08-25 — ⭐⭐ THE FAN'S ARRIVAL IS CHOKED: an absolute cap replaces a fixed angle (user ruling,
+release-gating).** From the live table: the drawn pellet spread *"is too wide to read as powerful — it
+looks like the bullets have lost their energy and spread out."* The instruction was to choke the
+arrival group so it reads tight and brutal. **The audio was signed off in the same breath and is
+untouched.**
+
+**The defect was a unit.** `spreadRad` is an angle, so the drawn group is `dist · sin(spreadRad)` wide
+where it lands — 0.28 squares at 4, **0.84 at 12**, 1.4 at 20, against a body whose own half-width is
+0.5. The fan got broader the further the shot went. Core **p.109** does the opposite: the pattern is
+**1 m / 2 m / 3 m TOTAL** by range band, an absolute figure. So the fix is a clamp on the ARRIVAL
+half-width — `min(` the book's band half-width, the aimed-at token's own drawn half-width `)`, floored
+at 0.15 squares so it cannot draw a line — converted back to a half-angle with `asin(cap / dist)` and
+taken as `min(classCone, that)`. **A clamp, not a replacement:** every shot inside the cap returns the
+class's cone byte for byte, and the crossover on a 2 m grid against a 1×1 body is ≈7.15 squares.
+
+**The band is BORROWED, not re-derived** — `lookups.js spreadBandSpec`, the same call the aim preview,
+the plant and the banded damage make, with the firing weapon's own Range off the payload
+(`spreadRangeM`) and the load's own `spreadWidth*` overrides riding along. A presentation rail with its
+own band ladder is how a drawn group starts disagreeing with the pattern the rules threw.
+
+**And it is applied as the resolved CONE, once per payload, so everything derived inherits it for
+free** — the endpoint ladder, the per-pellet nudge and its clamp, the arrival marks, the incendiary
+ground fire. One new number on the rail. `FX_CLASSES.shotgun.spreadRad` was NOT moved; the revert is
+`SHELL_CHOKE.enabled: false` and nothing else. **The MISS branch is untouched pending its own ruling**
+(§8). Tail arithmetic re-checked: no term of `presentationTailMs` is a function of the cone, and the
+worst pellet crossing moves earlier under the choke, so the floor keeps over-stating. §3.2c has the
+tables; the fx-rail keeper's §26 pins the values.
+
+**2026-08-25 — the corridor's impact sweep stops asking the bare wall test and asks the area↔cover
+VERDICT instead (user ruling: cover SOAKS, it does not exempt; `reference-cover-rules-raw`, Core
+p.103).** `patternAudioPlanFor` skipped any figure with a move-blocking wall between the muzzle point
+and it (`area-shapes.js areaOcclusionTest`), which was correct only for as long as the confirm made
+the same call. The confirm now splits that question in two: a barrier carrying cover VALUES (a
+`coverZone` region, a wall with `flags.cp2020-augmented.coverSp`) leaves the figure IN the pattern and
+folds its SP as the outermost armour layer, while a wall nobody has priced still exempts outright. So
+the sweep imports `combat/cover.js areaCoverVerdict` and silences a figure only on `AREA_COVER_EXEMPT`.
+
+**The rule this enforces is the parity rule, not a new look.** A figure the resolution damages must
+not be presented as untouched, and a figure the resolution exempts must stay silent — the two answers
+come from one function so they cannot drift. The rail's own limit is unchanged and worth restating:
+it sounds what the rounds CROSSING the corridor reached, and whether the SP stopped the round is still
+the apply's late answer, exactly as armour always has been (§4.2a).
+
+**Import direction, checked:** `cover.js` reaches `utils.js`, `cover-zone-behavior.js`,
+`area-shapes.js` and the vehicle geometry files, none of which reach `fx/effects.js` — so the new edge
+adds no cycle. `areaOcclusionTest` stays exported from `area-shapes.js` (the fx-rail keeper pins it)
+and is now documented there as the NAKED half of the split.
 
 **2026-08-20 — ⏪⏪ PERSISTENT GROUND FIRE IS REVERTED, one day after it was approved (user ruling,
 verbatim: "yea, revert it. without true persistence, it's kind of dumb").** The 2026-08-19 entry that
@@ -2013,7 +2393,7 @@ target-token gate correctly answers null for it — and until this, corridor vic
 APPLY seam at the confirm click, late by the whole action. `patternAudioPlanFor` now sweeps the
 corridor once per payload at fire time: the geometry is the plant's own answer (the declared record, or
 the same miss re-derivation the plant runs, via the relocated `spread-geometry.js` sites), the footprint
-is the same ray polygon the region is built from, the occupants take the same wall-occlusion exemption
+is the same ray polygon the region is built from, the occupants take the same naked-wall exemption
 the confirm applies, and each victim is sounded at **its own fraction of the crossing** — the sound
 rides the round, not the corridor's end. Issued from the fan-out per shell per victim, outside the drop
 branch (audio budget, not tracer budget), capped by `HIT_SOUND_MAX_PER_PAYLOAD`. The pattern's apply
@@ -2558,6 +2938,36 @@ prove the socket relay draws a flash on a client the fire never ran on · a non-
 write, because a rule that reads right and a write the server refuses look identical from the GM's
 side · 0 console errors.
 
+⭐ **§26, the arrival choke (2026-08-25)** — the clamp that stopped the fan widening with range
+(§3.2c), pinned by value at both ends of the crossover. ⚠ **Every leg is written against the scene's
+own pixels-per-metre and grid size, read live**, because which side of the cap a shot length falls on
+depends on the scale (the book cap is in metres, the token cap is in squares) — a leg encoding one
+rig's grid is the stale-grid class of red this suite has already paid for once, so the two probe
+distances are **found by walking a ladder** rather than stated. What it pins: the three knobs and the
+untouched `spreadRad` · a clamp not a replacement (inside the cap the fan is IDENTICAL point-for-point
+to the pre-choke one) · the outermost pellet landing exactly ON the cap · each of the three capping
+answers driven separately (**book**, **token**, **floor**), each constructed against the resolver's own
+reported half-widths · the band agreeing with `lookups.spreadBandSpec` at five distances and a per-load
+width override reaching it · every bail returning the class cone, and the floor never becoming the cap
+on its own · the choked fan keeping the even ladder, the symmetry, the no-pellet-on-the-aim-line
+property and the aim distance · a 400-seed jitter sweep never crossing the cap, and the nudge shrinking
+with the cone · the incendiary ground points being pellet endpoints **of the choked fan** while the
+un-choked cone puts them outside it · **the miss branch asserted untouched**, which is the tripwire that
+goes red the moment anyone chokes it without the §8 ruling · two live trigger pulls at two ranges plus a
+non-fanning class as the negative · a declared corridor capped by the book row alone (no body stands at
+its far end) · `fxShot` deriving the choke on its own and honouring a threaded one · and the tail
+arithmetic re-checked by value. ⚠ It also carries a **harness guard leg** — `canvas.scene` is this
+section's own scene and both figures are drawn — because a leftover ACTIVE scene once made four
+sections' tokens invisible to the canvas, at which point the fan-out synthesized an aim from the
+shooter's facing and every geometry leg silently measured a three-square shot. That read as four product
+failures; the guard makes it read as itself. ⏪ Making the spec **activate** its pinned scene was tried
+on 2026-08-26 and **reverted the same session** — `Scene#activate` is a world write that rebuilds every
+client's canvas, and from the keeper's own page it navigated the run out from under itself (39
+unrelated legs red). The scene stays VIEWED; leaving the bench active is the rig cleanup's job. **Bench parity** is
+`tests/cp2020-augmented-review-bench-smoke.mjs` §E2
+with a fourth figure the provisioning script stands out at range — the three bench targets sit at ~10 m,
+where the clamp does *not* bind, so without it the bench could never show the shipped look.
+
 ⭐ **§19, the review-fix section (2026-08-10)** — three legs' worth of blind spot the review found in
 *this spec* rather than in the product, each written so that reverting its fix fails it. The chaos had
 been varied across round **indexes** and never across two separate **trigger pulls**, which is exactly
@@ -2886,6 +3296,12 @@ presented while the screen stayed empty.
 
 | Item | State |
 |---|---|
+| ⛔⛔ **SHOULD THE RAIL'S AUDIO WAIT FOR THE PICTURE? `FX_AUDIO_PHASE` IS BUILT, PROVEN AND SHIPPED OFF** | ⛔ **THE open call of the 2026-08-26 sync unit — a build-lane hand-back, not an omission.** The field report (*"2 shots still came out at the end after the last sound"*, most volleys, buckshot **and** the dart load) was root-caused to an arithmetic residual the arrival compensation **structurally cannot reach**: a round's own muzzle and tracer are issued with **no delay**, so `max(0, 0 − comp)` clamps to zero and the picture trails its own report by the engine's whole create latency on every round — measured **234 ms median against a 180 ms cadence**, i.e. two rounds trail before the renderer has fallen behind a single frame (§4.1c / §6). The only lever is to move the audio, because a sprite cannot be drawn in the past; the arithmetic admits exactly one consistent pairing, **phase = latency and arrival compensation = 0**, and that is what `FX_AUDIO_PHASE = true` turns on. **MEASURED, both states, same rig and instrument:** trailing round-elements after the last report go from a **median of 10 (worst offset 1374 ms)** to **0 in every volley**, on buckshot and stun-dart alike. ⛔ **It ships OFF for two reasons, both honest:** (1) it is a **feel change to every gun** — the report lands one engine-latency (~0.2 s) after the trigger resolves, and although the volley's *rhythm* is untouched by construction (one phase per payload, every round shifted equally), a trigger that answers late is a look call and look calls are the user's; (2) the only rig that can measure it is a headless **software rasteriser** that drops four rounds of eight, and on it the phase's own `setTimeout` is starved by the same renderer everything else is queued behind — sprite-vs-report gaps of **−256 to −385 ms** where the phase asked for 168, i.e. the picture ends up *leading* there. A client whose timers are not starved does not do that, and **the reporter's GPU is the only place the real number lives**. Enabling is one field; the seam `_setAudioPhase(on)` drives the other state so the keeper pins **both** (the defect reproduced with it off, the bound achieved with it on, and that on is strictly better by value). ⚠ The latency itself is **measured per client** (round 0 of each volley against an empty renderer, blended by `FX_ENGINE_LATENCY_ALPHA`, clamped by `FX_AUDIO_PHASE_MAX_MS`) — so `SEQ_PRESTART_COMP_MS` is now a **seed**, and the stale-constant problem is retired rather than re-tuned. |
+| ⭐ **THE `harmlessDischarge` FUMBLE CLASS IS DRAWN AS NOTHING, AND THE RULING ALLOWED A MUZZLE** | ⚠ **A build-lane call made under the 2026-08-26 ruling's own escape clause, recorded so it is a decision and not an omission.** Row **6** of the base's fumble table — *"Weapon discharges or strikes something harmless"* — is the one class where a round genuinely left the weapon and yet no damage corridor is owed. The ruling asked for a **muzzle-only** presentation *"if the rail can do that cheaply within the fx skill's rules (spec block etc.), else silent; document the choice"*. It cannot be done cheaply: `fxShot` composes the flash, the muzzle sprite, the tracer/pellets and the arrival mark into **one Sequence**, so "muzzle without tracer" is a new **draw shape**, not a gate on an existing one — it needs its own frozen spec block, its own clock-2 answer, its own term in `presentationTailMs`, and its own Review·Shooter entry (§9's element contract). Silence is also the answer that stays in step with the resolution rail, which plants no corridor for this class either. ⛔ **Building it is a unit of its own**; the class already rides the payload, so the change is one branch at the `fumbleStandsRailsDown` bail in `fxWeaponFired` plus the new shape. The current answer is pinned by an fx-rail leg (`fumble class: the harmlessDischarge class draws nothing…`), so the day it changes, the keeper says so. |
+| ⚠ **THE AUTO-ONLY-JAM FUMBLE BRANCH IS CLASSIFIED WHOLESALE, NOT BY ITS OWN ROLL** | ⚠ **A lane call, 2026-08-26, outside the user's ruling.** With `autoFumbleOnlyJam` on and an auto-class weapon the base **skips the printed table entirely** and rolls reliability instead (base `utils.js:617-638`), so there is no table row to map. The whole branch is classified `noDischarge` — a jam and the *"lucky you, it didn't jam - just a misfire"* pass are both rounds that never went down-range — which is the conservative direction: it never invents a shell in flight. The alternative is to read the branch's own reliability face against `reliabilityThreshold` (base `utils.js:479`) and rule the pass differently. One branch in `rangedFumbleClassFrom`. |
+| ⚠ **COVER ZONES ARE NOT WALL-CLIPPED** | ⚠ **A named follow-up from the 2026-08-26 EXEMPT-clip ruling, recorded rather than guessed at.** The ruling asked for a zone-edge clip *"only if region-edge intersection is cheap"*. It is not: a Region exposes native **containment** (`testPoint`) and no ray-vs-edge query, so finding the edge along a ray means bisecting — neither cheap nor exact, and it would be a second geometry answer for a question `areaCoverVerdict` already answers. It also never arises under the shipped rule, because a valued zone answers **SOAKED** and SOAKED draws through by design. It would only matter for a GM who wants a zone read as *solid* (an exempting barrier rather than a soaking one), which is a cover-model question and not a presentation one. Nothing is reverted by a constant — there is no mechanism here yet. |
+| ~~⛔⛔ **SHOULD A MISSED SHELL'S GROUP BE CHOKED TOO, AROUND ITS OWN LANDING POINT?**~~ | ✅ **CLOSED 2026-08-26 — RULED YES, and the same change closed the late-volley report.** The user ruled the pattern a property of the barrel rather than of the outcome (*"misses look the same as hits except they don't hit the target"*), and the per-pellet splay turned out to be the mechanism behind *"late rounds revert to the pre-choke wide spread"* — a burst's hits are its leading rounds, so every round after them took the splay branch. Built as proposed, with one correction the proposal did not carry: the cone is re-solved for the **landing** distance so the absolute group width is preserved exactly rather than varying with the reach roll. See §6, and the record of what was proposed follows, struck through: ⏪ **THE OPEN CALL OF THE 2026-08-25 choke unit — measured, proposed, NOT built.** The ruling covered the group that ARRIVES; a miss takes the other branch and was left exactly as it was. What that branch draws today: `missEndpoint` **per pellet** — each takes its own angle in ±`MISS_SPREAD_RAD` (0.209 rad ≈ 12°) *and* its own reach in 0.6–1.15 of the shot — so the group has no landing point at all, it has a region. Measured, in squares: at **4 sq** 1.9 wide × 2.2 deep · **8 sq** 3.8 × 4.4 · **12 sq** 5.7 × 6.6 · **16 sq** 7.6 × 8.8. Against the choked HIT group's 1.0 squares that is four to eight times the width, and it grows with range for exactly the reason the hit fan used to. **The argument for choking it:** the book's pattern is 1–3 m wide *wherever it happens to land* — a shot that went somewhere else is still a shot pattern, so it arguably should read as a tight group at the wrong address rather than as birdshot. **The proposed shape** (one line of mechanism, no new constants): roll `missEndpoint` **once per round** for the group's landing point, then fan the pellets about the shooter→landing ray with the same `shellChokeSpec` cap — with no body at the landing point only the book row binds, giving **0.5 sq of group at Close, 1.0 at Medium, 1.5 at Long**, while the landing point itself still goes up to 1.9 sq off-axis at 8 squares and 0.6–1.15 of the way out. **The argument against:** a miss reading as tight makes it harder to tell a miss from a hit at a glance, and the current splay is the only thing on the rail that says "that went wide" without a number. ⛔ **User's call.** Nothing is reverted by a constant here — the branch has no choke mechanism yet; building it is `pelletEndpoints`' `hit: false` path plus the resolver already shipped. A keeper leg (§26 i) asserts the branch is untouched today, so it goes red the moment anyone changes it without this ruling. |
+| **The choke tightens the fan's DEPTH as well as its width** | ⚠ **A consequence of the 2026-08-25 clamp, stated at the site and here rather than discovered later.** `PELLET_CHAOS.reachFraction` scales the near/far jitter by the cone's *own lateral half-spread*, so a narrower cone narrows the depth in the same proportion: at 12 squares ±0.294 squares becomes ±0.175. That is the intended direction (a tight group is tight in both axes) and it keeps the load-bearing invariant that the irregularity lives inside the declared cone — but "how much near/far scatter does a tight group want" is a look call nobody has made. Restoring the old depth without the old width is one line: resolve the jitter against `entry.spreadRad` while the endpoints take the choked cone. It is deliberately NOT written that way today, because the clamp inside `pelletEndpoints` would then pile the outer pellets against the cap instead of spacing them. |
 | **⚠ THE OTHER END OF THE SPAN — `bullet.02` paints past the target, and no anchor closes it** | ⚠ **Measured 2026-08-19, deliberately NOT fixed, and it is the open call of this unit.** The all-ten-cut decode was run at BOTH anchors, and the two mapped families fail at opposite ends. Behind the 200 px start anchor: `bullet.01` 39 px at luminance **107**, every band (fixed — `SPAN_ANCHOR_AT_MUZZLE`); `bullet.02` 0–4 px, clean. Beyond the end anchor: `bullet.01` 99 px at luminance **13–17**, i.e. invisible; `bullet.02` **143–145 px**, and at the **60ft** cut at luminance **226** — bright. Stretched, that is roughly **70 world px of lit streak past the aim point** on a 9–15-square shot, which is the ordinary rifle engagement, and dim at the other bands, which is why such a thing reads as "occasional". So the table's one word covers two artifacts: the SMG's tail is *behind the shooter*, the rifle's and the slug's is *beyond the target*. ⛔ **The anchor cannot answer this one, and the arithmetic says so rather than an opinion**: pulling the stretch endpoint back by the same half-token leaves 68 px (15ft), 57 px (30ft), 21 px (60ft) and 71 px (90ft) still past the target's centre against its own 50 px half-width — three of five bands unclosed. Closing it needs either a **per-band endpoint table** (which is the shape this rail's asset rule explicitly refuses — "an asset that needs a trim and a dwell and a derived rate to show one frame of itself is the wrong asset") or a **different projectile asset for the painted classes**. Both are user calls: one is a look change on four classes, the other is a replacement. **Nothing is reverted by a constant here — this item has no shipped mechanism yet.** |
 | **The aim-point burning ground is broadcast AND performed on every client** | ⚠ **Observed 2026-08-19 while building the corridor shape; not changed, and not a look call.** The burning ground is the one per-shot element delivered by the *engine's* broadcast rather than `.locally()` — its scene-wide census and its late-joiner replay need the engine's shared bookkeeping (§1, `MSG_SCORE`). But under the performance score **every** client runs `fxWeaponFired`, so the aim-point branch plants one broadcast set **per connected client**: N stacked copies of the same seeded points, each eating the same `maxLive` cap. It hides itself — the points are identical, so the copies land on top of each other, and the cap evicts the excess — which is why nothing has reported it. The new **corridor** branch carries a `!remote` gate for exactly this reason (the firing client plants, the engine delivers); the aim-point branch was left alone because changing it under a look-report unit would move a shipped element's density with no ruling behind it. The fix is the same one line; it wants a deliberate unit and a re-run of the ground-fire census legs. |
 | **Do the pellet arrival marks need the standalone treatment the hit mark got?** | ⚠ **Open, 2026-08-17.** The phase measurement (§6) moved the hit confirmation and the blood spray out of the shot's shared sequence and compensated the engine's start-up floor; the shot-pattern classes' per-pellet arrival marks still ride the shared sequence with their per-pellet delays, so they plausibly carry the same lateness class against the corridor's arrival-timed audio. Measure a shell class on the phase instrument (`tests/_probe-fx-phase.mjs`, swap the fixture to a spread weapon) before touching anything — the rifle's numbers do not transfer, and the instrument exists so nobody guesses twice. |
@@ -3097,7 +3513,7 @@ the plan, not half in the row and half in the loop condition.
 |---|---|---|
 | Flash light (native) | **A** | n/a (not Sequencer); spec-blocked, capped, socket-announced |
 | Muzzle lance | **A** | model citizen — spec, decode, dwell-as-rate, capture-seam order |
-| Tracer / pellet fan | **A** | irregularised 2026-08-11, seeded with per-event entropy, bounded by the class's own cone |
+| Tracer / pellet fan | **A** | irregularised 2026-08-11, seeded with per-event entropy, bounded by the class's own cone — and, since 2026-08-25, by an absolute arrival cap borrowed from the p.109 band ladder (`SHELL_CHOKE`, §3.2c) |
 | Impact marks (`HIT_CONFIRM` / crack / dust) | **A** | parent-path keys documented; promotion masked; **arrival-anchored and off the tracer budget since 2026-08-11** |
 | Pellet arrival marks | **A−** | new 2026-08-11 — spec-blocked, endpoint-reusing, excluded from settle; size and trim are unsigned look calls (§8) |
 | Smoke puff | **B+** | gate still split row-flag + loop condition — the drift the idiom above retires |

@@ -285,6 +285,47 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
     rangeReport.push(`${name}: ${d.toFixed(1)} m · spread band ${d <= 6 ? "Short" : d <= 25 ? "Medium" : "Long"} · label ${t.displayName === ALWAYS ? "ALWAYS" : t.displayName}`);
   }
 
+  /* ── 6b. THE LONG FIGURE — ⭐ ADDED 2026-08-25 for the ARRIVAL CHOKE's bench parity ───────────
+   * The three figures above stand at ~10 m, which is deliberate (inside every bench gun's Close band)
+   * and is exactly where the fan's arrival clamp does NOT bind: at two squares the class cone's own
+   * offset is under the cap, so the bench could fire buckshot all morning and never show the choked
+   * group (SHELL_CHOKE, docs/FX-RAIL.md §3.2c). A shipped look the bench cannot reach fails the
+   * review-shooter parity rule, so ONE more figure stands out at range where the clamp is what
+   * answers. It is a SECOND TOKEN of the flesh target's own actor — no new actor, no new state to
+   * reset, and the damage zeroing above already reaches it through that actor.
+   *
+   * The distance is FITTED to the scene rather than stated: the largest whole number of squares from
+   * eight down to four whose x still leaves a square of margin inside the scene's own rectangle. The
+   * achieved distance and band are reported, so the claim is a reading.
+   */
+  let longReport = "Review · Target (Long): NOT PLACED";
+  try {
+    const flesh = scene.tokens.find(x => x.name === "Review · Target");
+    const shooterTok = scene.tokens.find(x => x.name === "Review · Shooter");
+    if (flesh && shooterTok) {
+      const gsz = scene.grid?.size ?? 100;
+      const rect = scene.dimensions?.sceneRect ?? { x: 0, y: 0, width: Number.MAX_SAFE_INTEGER, height: 0 };
+      const maxX = (rect.x ?? 0) + (rect.width ?? Number.MAX_SAFE_INTEGER) - 2 * gsz;
+      let squares = 0;
+      for (let s = 8; s >= 4; s--) { if (shooterTok.x + s * gsz <= maxX) { squares = s; break; } }
+      if (squares > 0) {
+        const at = { x: shooterTok.x + squares * gsz, y: shooterTok.y };
+        const existing = scene.tokens.find(x => x.name === "Review · Target (Long)");
+        if (existing) await existing.update({ x: at.x, y: at.y, displayName: ALWAYS, displayBars: ALWAYS });
+        else {
+          const src = flesh.toObject();
+          delete src._id;
+          await scene.createEmbeddedDocuments("Token", [{ ...src, name: "Review · Target (Long)",
+            x: at.x, y: at.y, displayName: ALWAYS, displayBars: ALWAYS }]);
+        }
+        const gd = scene.grid?.distance ?? 1;
+        const dM = squares * gd;
+        longReport = `Review · Target (Long): ${dM.toFixed(1)} m · spread band ${dM <= 6 ? "Short" : dM <= 25 ? "Medium" : "Long"} · the arrival choke BINDS here (it does not at ~10 m)`;
+      } else longReport = "Review · Target (Long): NOT PLACED — the scene is too narrow for a four-square shot";
+    }
+  } catch (e) { longReport = `Review · Target (Long): ERR ${e.message}`; }
+  rangeReport.push(longReport);
+
   /* ── 7. GORE ON (the spec: blood must show without touching settings) ────────────────────────── */
   let gore = null;
   try {

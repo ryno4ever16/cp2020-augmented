@@ -29,7 +29,12 @@ import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settin
 // to decide whether the single-target damage flow claims a payload and once to decide whether the shot
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
 // does. Importing the derivation is what makes a third caller impossible to disagree with the first two.
-import { spreadFlowModeOf, spreadModeForAmmo, SPREAD_MODE_SINGLE, SPREAD_MODE_BUCK } from "../lookups.js";
+// ⭐ AND `spreadBandSpec` FOR THE SAME REASON, added 2026-08-25 with the arrival choke (SHELL_CHOKE):
+// the width the drawn fan is clamped to is the p.109 pattern width for the shot's own range band, and
+// that band ladder already exists — the aim preview, the plant and the banded damage all read this one
+// function. Re-deriving "which band is this shot in" on the presentation rail is exactly how a drawn
+// group starts disagreeing with the pattern the rules threw.
+import { spreadFlowModeOf, spreadModeForAmmo, spreadBandSpec, SPREAD_MODE_SINGLE, SPREAD_MODE_BUCK } from "../lookups.js";
 // The shot pattern's confirmed corridor arrives on the payload in METRES (it is a rules distance, and
 // the region is planted from the same numbers) — this is the one conversion that turns it into the
 // pixels this file draws in, and it is the same helper the plant and the aim preview use.
@@ -42,8 +47,21 @@ import { scatterLandedPoint } from "../combat/scatter-table.js";
 // import damage-hooks to ask it. The polygon primitives and the occlusion exemption come from the
 // shared homes both flows already read.
 import { declaredSpreadAim, spreadAttackOutcome, scatteredSpreadCorridor } from "../combat/spread-geometry.js";
+// WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED. Pure and dependency-free, like the two above, and for
+// the same reason: this rail and the plant must answer "does this shell still go down-range" with ONE
+// predicate. The class itself is derived once at the seam; nothing here re-derives it.
+import { fumbleStandsRailsDown } from "../combat/fumble-outcome.js";
 import { rayPolygonPoints, pointInPolygon } from "../combat/area-geometry.js";
-import { areaOcclusionTest } from "../combat/area-shapes.js";
+// The closest-mode wall query behind the EXEMPT clip (2026-08-26). Same file and same backend the
+// naked-wall exemption itself is decided on, so a round is stopped by the very wall that exempted it.
+import { wallImpactPoint } from "../combat/area-shapes.js";
+// ⭐ THE SAME AREA↔COVER QUESTION THE APPLY ASKS, from the one place that owns it. Before the
+// 2026-08-25 soak ruling this rail imported the bare wall test (area-shapes.js areaOcclusionTest) and
+// the apply used it too, so the two agreed by construction. They still have to: a figure the corridor
+// now DAMAGES must not be presented as untouched, and a figure the corridor exempts must stay silent.
+// Importing the verdict rather than re-deriving it is what keeps that true when the split moves again.
+// (cover.js reaches nothing in this file — no cycle.)
+import { areaCoverVerdict, areaCoverEnabled, valuedCoverAlong, AREA_COVER_EXEMPT } from "../combat/cover.js";
 import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
@@ -268,6 +286,104 @@ export function dropLagMsFor(cadenceMs) {
   if (_dropLagOverride !== null) return _dropLagOverride;
   return Math.max(0, (Number(cadenceMs) || 0) * FX_DROP_LAG_FRACTION);
 }
+
+/* ─────────────── The sync half of the drop rule: measured PRESENTATION lateness ─────────────── */
+
+/**
+ * ⭐⭐ WHY THE DROP RULE NEEDED A SECOND INPUT (user ruling 2026-08-26, pre-release: long volleys drift
+ * out of sync between what is heard and what is seen).
+ *
+ * There are TWO clocks and the loop above could only see one of them:
+ *   · the SCHEDULE clock — when the loop reached this round's slot. That is `lagMs`, and it is what
+ *     the drop rule has always measured.
+ *   · the PRESENTATION clock — when the engine actually put a sprite on the canvas. Audio is a bare
+ *     `setTimeout` on the browser's audio engine and pays essentially nothing; sprites go through the
+ *     renderer, which is single-threaded and can be backlogged for hundreds of milliseconds while the
+ *     loop's own timer is firing perfectly on time.
+ *
+ * ⛔ SO THE OLD RULE WAS BLIND IN EXACTLY THE CASE IT EXISTS FOR. A loop whose timers are healthy
+ * measures `lagMs ≈ 0`, drops nothing, and keeps queueing rounds into a renderer that is falling
+ * further behind every slot — while the reports keep arriving on time. That is the drift: the sound is
+ * not early, the picture is late, and the loop cannot tell because it is watching its own schedule.
+ *
+ * ⭐ THE FEEDBACK: the engine tells us when an effect actually begins (`createSequencerEffect`, which
+ * this file already listens to for the presentation canary). The loop timestamps each round as it is
+ * issued, and the NEXT iteration reads how long the engine took to report anything for it. That
+ * observed lateness is folded into the drop budget through the pure function below, so the loop drops
+ * rounds when PICTURES lag and not only when scheduling slips — and drop-not-queue semantics are
+ * untouched: a dropped round still goes whole, audio with picture, and ⛔ the last round is still never
+ * dropped (that rule lives in `roundDropped` and is not reached through this).
+ *
+ * ⭐ THE GRACE IS THE ENGINE'S OWN IDLE COST, NOT AN INVENTED CUSHION. A healthy client charges
+ * `SEQ_PRESTART_COMP_MS` (171–181 ms measured, 2026-08-17, tests/_probe-fx-phase.mjs) between
+ * `play()` and an effect's own start. Observed lateness under that figure is the engine working
+ * normally, and subtracting it is what stops the feedback from declaring a healthy burst backlogged
+ * and dropping half of it. `FX_PRESENTATION_LAG_MARGIN_MS` on top is the measured spread of that floor
+ * under a real burst rather than idle — see the report for the before/after cadence figures.
+ *
+ * ⏪ THE REVERT IS ONE FIELD: `FX_PRESENTATION_FEEDBACK = false` returns the drop rule to the schedule
+ * clock alone and every number above is the pre-ruling build. Raising the grace weakens the feedback
+ * smoothly; there is no cliff.
+ */
+export const FX_PRESENTATION_FEEDBACK = true;
+
+/**
+ * ⚠ THE GRACE IS DERIVED FROM `SEQ_PRESTART_COMP_MS`, WHICH IS DECLARED FURTHER DOWN THIS FILE, so
+ * `FX_PRESENTATION_LAG_MARGIN_MS` and `FX_PRESENTATION_LAG_GRACE_MS` live BESIDE IT rather than here.
+ * A `const` initialiser that reads a later `const` throws at module-evaluation time (temporal dead
+ * zone) — it would take the whole rail down on load, silently, for every client. `effectiveRoundLagMs`
+ * below names the grace in a DEFAULT PARAMETER, which is evaluated per call and is therefore safe.
+ */
+
+/**
+ * THE LAG THE DROP RULE ACTUALLY JUDGES — the worse of the two clocks, with the engine's own floor
+ * forgiven on the presentation one. Pure, so both halves are pinned by value without starving a real
+ * renderer.
+ *
+ * `max`, not a sum: they are two measurements of the SAME lateness seen from two places, and adding
+ * them would double-count a round that is late on both.
+ */
+export function effectiveRoundLagMs({ scheduleLagMs = 0, presentationLagMs = 0, graceMs = FX_PRESENTATION_LAG_GRACE_MS, capMs = 0 } = {}) {
+  const sched = Math.max(0, Number(scheduleLagMs) || 0);
+  if (!FX_PRESENTATION_FEEDBACK) return sched;
+  let seen = Math.max(0, (Number(presentationLagMs) || 0) - Math.max(0, Number(graceMs) || 0));
+  // ⛔ BOUNDED — see FX_PRESENTATION_LAG_CAP_CADENCES for the runaway this exists to stop.
+  const cap = Math.max(0, Number(capMs) || 0);
+  if (cap > 0) seen = Math.min(seen, cap);
+  return Math.max(sched, seen);
+}
+
+/**
+ * ⛔⛔ HOW MUCH OBSERVED LATENESS ONE ROUND MAY REPORT, in cadence slots — and this bound is not a
+ * refinement, it is the fix for a RUNAWAY the first build of this feedback had.
+ *
+ * MEASURED, 2026-08-26, 20-round volley on :30004 (a headless SOFTWARE rasteriser, so a deliberately
+ * slow client): the unbounded feedback dropped **18 of 20 rounds**, 17 of them presentation-driven,
+ * and reported a peak presentation lateness of **3334 ms** — against a schedule-blind control on the
+ * same fixture in the same session that dropped **0** and peaked at **461 ms**. A burst that draws two
+ * rounds of twenty is not a sync fix.
+ *
+ * THE MECHANISM, and it is a feedback loop eating itself. When the engine has reported nothing since
+ * the last round was issued, the honest reading is "at least this late" — `Date.now() - lastIssue.at`.
+ * But a REFUSED round queues nothing, so it cannot move that reading; the loop then measures every
+ * later round against the same stale instant, the pending figure grows without bound, and from the
+ * first drop onward EVERY remaining round is refused. The rule stopped being a measurement of the
+ * renderer and became a measurement of how long ago it last spoke.
+ *
+ * TWO CHANGES CLOSE IT, and both are in the loop rather than here:
+ *   1. the pending reading is CAPPED at this many cadence slots, so one un-reported round can say
+ *      "the picture is behind" but never "the picture is three seconds behind";
+ *   2. the observation is RE-STAMPED after a refusal, so the next round measures the state the drop
+ *      created rather than the state that caused it. That is what makes the rule self-correcting in
+ *      the same way the original drop rule is: refusing work removes the backlog, and the next
+ *      reading sees that.
+ *
+ * TWO SLOTS is the value: one slot is the cadence itself (a round drawn a full slot late is exactly
+ * the bunching FX_DROP_LAG_FRACTION already refuses), so two leaves the feedback able to say "beyond
+ * anything the schedule clock would have caught" without letting it say an unbounded number.
+ * ⏪ REVERT: 0 disables the cap (the runaway above returns).
+ */
+export const FX_PRESENTATION_LAG_CAP_CADENCES = 2;
 
 /**
  * How the flash is SHAPED — one of the three shapes muzzleSourceSpecs below can build.
@@ -1810,12 +1926,24 @@ export function rotateAbout(origin, point, deg) {
  *    cadence below, so one discharge's pellets have landed before the next round leaves the muzzle;
  *    that is what keeps an automatic burst reading as separate discharges rather than a moving stream.
  *  - `cadenceMs: 180` — see classCadenceMs for why this number.
- *  - `spreadRad: 0.07` (≈4°) — the half-angle of the HIT cone. Deliberately far tighter than the miss
- *    divergence (MISS_SPREAD_RAD, ≈12°): a hit has to CONVERGE on the target, and at the ranges a
- *    battle map actually spans (roughly 4–12 grid squares) this puts the outermost pellet 0.28–0.84
- *    squares off the aim point — visibly a cone, still landing on a one-square target. A MISS reuses
- *    the wide miss divergence per pellet instead, so a missed shell splays wide and lands at mixed
- *    depths rather than fanning neatly past the target.
+ *  - `spreadRad: 0.07` (≈4°) — the half-angle of the HIT cone, and ⛔ **AS OF 2026-08-25 IT IS THE
+ *    CEILING RATHER THAN THE ANSWER**: the drawn fan is clamped to an ABSOLUTE arrival half-width by
+ *    SHELL_CHOKE (the block immediately below the class table), so the cone still governs at the short
+ *    ranges where it is already inside that cap and the cap governs everywhere else. ⏪ THE FIELD IS
+ *    UNCHANGED AT 0.07 — the revert for the whole choke is `SHELL_CHOKE.enabled: false` at that block
+ *    and nothing here. The record this bullet used to carry, kept whole because it is the measurement
+ *    the choke answers: deliberately far tighter than the miss divergence (MISS_SPREAD_RAD, ≈12°),
+ *    because a hit has to CONVERGE on the target — but at the ranges a battle map actually spans
+ *    (roughly 4–12 grid squares) an ANGLE puts the outermost pellet 0.28–0.84 squares off the aim
+ *    point, i.e. the group gets BROADER the further the shot goes, which is the read the table
+ *    reported as "the bullets have lost their energy and spread out". ⭐⭐ AND A MISS TAKES THE SAME
+ *    CONE NOW (2026-08-26): the missed shell still lands somewhere else — one `missEndpoint` roll for
+ *    the round — but its pellets fan about THAT point through this same clamped half-angle instead of
+ *    each taking their own ±MISS_SPREAD_RAD divergence. ⛔ That per-pellet splay was the whole of the
+ *    "late rounds go wide in a long volley" report: the leading rounds of a burst are its hits and
+ *    every round after them is a miss, so a twenty-round volley drew the choked group and then
+ *    birdshot, by construction. See pelletEndpoints for the ruling, the two stated consequences and
+ *    the one-line revert.
  *  - `muzzle` / `muzzleSquares: 1.9` / `muzzleMs: 220` — ⏪⏪ THE LANCE IS BACK, AND THE DISCHARGE
  *    COLUMN IS GONE (2026-08-09, user ruling: *"just replace the control with Shotgun blast muzzle 01.
  *    Randomize between 01 and 02 on each shot."*). FR#22 had taken the lance OFF this row because it
@@ -1884,6 +2012,114 @@ export const FX_CLASSES = Object.freeze({
   // (delete it and the class returns to SHOT_VOLUME, 0.8, with nothing else moved). See classShotVolume.
   shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", soundVolume: 0.58, muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1.0, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
+});
+
+/**
+ * ⛔⛔ THE ARRIVAL CHOKE — an ABSOLUTE cap on how wide a fanned round may be WHERE IT LANDS.
+ *
+ * ⭐ USER RULING 2026-08-25 (release-gating, from the live table): the drawn pellet spread *"is too
+ * wide to read as powerful — it looks like the bullets have lost their energy and spread out"*. The
+ * instruction is to choke the arrival group so it reads tight and brutal.
+ *
+ * ⛔ THE DEFECT IS THE UNIT, NOT THE VALUE, which is why the fix is a clamp and not a smaller number.
+ * `spreadRad` is an ANGLE, so the group it draws is `dist · sin(spreadRad)` wide at the far end — the
+ * fan WIDENS WITH RANGE. On the shipped 0.07 rad the outermost pellet sits **0.14 sq at 2 squares,
+ * 0.28 at 4, 0.56 at 8 and 0.84 at 12** (`sin 0.07` = 0.069943, measured against a one-square token
+ * whose own half-width is 0.5). A choked bore does the opposite of that, and a shot pattern in the
+ * BOOK does the opposite too: Core **p.109** (text-verified, memory `reference-shotgun-pattern-table`)
+ * prints the pattern's TOTAL width as **1 m Close/PB · 2 m Medium · 3 m Long** — metres, an absolute
+ * figure per band, not a fraction of the distance. Simply shrinking `spreadRad` would keep the wrong
+ * shape and buy a narrower version of it; capping the ARRIVAL width fixes the shape.
+ *
+ * THE CAP, and it is a `min` of two independent answers, each with a reason:
+ *
+ *  1. **THE BOOK'S OWN PATTERN HALF-WIDTH FOR THIS SHOT'S BAND** — `spreadBandSpec(distanceM, widths,
+ *     rangeM).widthM / 2`, converted to pixels. ⛔ ASKED OF THE SAME FUNCTION THE MECHANICS ASK, never
+ *     re-derived: the band edges are fractions of the FIRING WEAPON'S OWN Range (p.99 — Close ¼,
+ *     Medium ½, Long the full range), the per-load `spreadWidth*` overrides ride the same call, and
+ *     the ladder SATURATES at Long. A rail that re-derived any of that would draw a group of one width
+ *     while the region planted another. `rangeM` comes off the payload (`spreadRangeM`, captured at
+ *     the trigger pull in seam-shim.js) and is absent only on a direct call, where `spreadBandSpec`'s
+ *     documented compat edges (6 m / 25 m) answer exactly as they always have.
+ *  2. **THE AIMED-AT TOKEN'S OWN DRAWN HALF-WIDTH** (`tokenRadiusPx`, times `tokenFraction`). This is
+ *     the half that makes the ruling true on screen rather than only in metres: on a 2 m grid the
+ *     book's Long row is 1.5 m = 0.75 squares, which is still WIDER than the one-square body it is
+ *     landing on. A group that overhangs the target reads as spray whatever the book says about the
+ *     pattern's width in open air. A vehicle or an ACPA is a bigger body and gets the book's answer
+ *     instead, because for those the token is no longer the tighter of the two — which is the whole
+ *     reason this is a `min` of two live numbers and not a table.
+ *
+ * ⛔ AND THE DEPTH JITTER IS PAID FOR INSIDE IT, or the cap is not a bound — see the `reachAllowance`
+ * term in shellChokeSpec for the mechanism and for the 30.2-px-against-a-30-px-cap measurement that
+ * put it there. It costs at most 2.45 % of the cap.
+ *
+ * The cap is a LATERAL distance, and the fan is built from an angle, so the cap is converted back:
+ * `asin(capPx / (distancePx · reachAllowance))` is the half-angle whose worst-case arrival offset is
+ * exactly the cap, and the fan takes `min(classCone, thatAngle)`. ⭐ THAT MAKES IT A CLAMP AND NOT A
+ * REPLACEMENT — inside the cap (every short shot) the class's cone is returned untouched, byte for
+ * byte what shipped before this, and the choke only ever narrows.
+ *
+ * ⚠ THE ANSWER IS GRID-DEPENDENT, and that is the BOOK BEING IN METRES rather than a defect: a square
+ * is worth whatever the scene says it is, and the p.109 rows are metres. On the bench's 5 m grid
+ * (MEASURED: `gridPx` 100, `pxPerMeter` 20) the rows are 0.2 / 0.4 / 0.6 squares TOTAL, tighter than a
+ * one-square body at every band, so the BOOK always binds and the token never does — the group there
+ * goes from 2.2 squares wide to 0.59 at 16 squares. On a 2 m grid the same rows are 0.5 / 1.0 / 1.5
+ * squares and the TOKEN takes over past ≈7.15 squares (where `dist · sin 0.07` first exceeds 0.5).
+ *
+ * ⭐⭐ AND IT IS APPLIED AS THE RESOLVED CONE, ONCE PER PAYLOAD, NOT AS A FILTER ON THE ENDPOINTS.
+ * `pelletEndpoints` and `pelletJitterFor` are handed the CHOKED half-angle in place of the row's, so
+ * every property those two functions already guarantee survives by construction instead of being
+ * re-argued: the offsets stay EVENLY spaced across the (now narrower) cone, an even count still leaves
+ * no pellet on the aim line, the per-pellet nudge is still scaled by half of its OWN slot and still
+ * CLAMPED to the cone it belongs to (standard §2 — an unclamped symmetric nudge walks the outermost
+ * pellet off the target, measured at 113 px against a 50 px half-width), and everything DERIVED from
+ * the endpoints inherits the choke for free because it reads the same array or the same resolved cone:
+ * the arrival marks (PELLET_ARRIVAL, one per endpoint), the chaos record (PELLET_CHAOS), the incendiary
+ * ground fire (`groundFirePoints`, handed the same cone and the same jitter) and any overlay repaint,
+ * which never sees geometry at all. There is exactly ONE new number on the rail and it is the cone.
+ *
+ * ⚠ ONE CONSEQUENCE, STATED RATHER THAN DISCOVERED: `PELLET_CHAOS.reachFraction` scales the DEPTH
+ * jitter by the cone's own lateral half-spread, so a choked cone tightens the near/far scatter in the
+ * same proportion — at 12 squares the depth spread goes from ±0.294 squares to ±0.175. That is the
+ * intended direction (a tight group is tight in both axes) and it preserves the load-bearing invariant
+ * that the irregularity lives INSIDE the declared cone. It is a look call, so it is in §8.
+ *
+ * ⏱ THE TAIL ARITHMETIC IS UNCHANGED, re-checked rather than assumed. `presentationTailMs` reads the
+ * resolved entry's `dashMs`, `impactSquares`/`impactClipMs`, `spark` and the muzzle envelope — no term
+ * of it is a function of `spreadRad`. The only duration the cone touches at all is a pellet's own
+ * crossing, `dashMs × reachScale`, whose worst case is `1 + reachFraction × cone` — 153.7 ms at the
+ * class cone and STRICTLY LESS under any choke. So every arrival moves earlier or not at all and the
+ * scheduled floor keeps over-stating, which is the only direction that is safe (standard §5).
+ *
+ * ⭐⭐ THE MISS TAKES THE CONE TOO, AS OF 2026-08-26 — the open item this block used to carry was
+ * RULED, and by a field report rather than by argument. The report read *"early rounds draw the choked
+ * fan but late rounds revert to the pre-choke wide spread"* in a ~20-round volley, and the mechanism is
+ * not lateness at all: the fan-out assigns `hit: i < hits`, so a burst's hits are its LEADING rounds
+ * and everything after them is a miss — and the miss branch splayed `missEndpoint` PER PELLET
+ * (MISS_SPREAD_RAD ≈12°, reach 0.6–1.15 of the shot: ~3.8 squares of width and ~4.4 of depth at 8
+ * squares). So the choke visibly "gave out" partway through every long volley, on the clock.
+ * A missed round now rolls ONE landing point and fans its pellets about THAT point through this same
+ * clamped cone — the shot still goes somewhere else, it just arrives as a pattern. The two stated
+ * consequences (the cone was resolved for the AIM distance; the aimed-at body still capped it) and the
+ * one-line revert are written at `pelletEndpoints`, which is where the branch lives.
+ *
+ * ⏪ THE REVERT IS ONE FIELD: `enabled: false` returns `shellChokeSpec` to the class cone at every
+ * distance and every element above is byte-identical to the pre-choke build. No other value moves —
+ * `FX_CLASSES.shotgun.spreadRad` is still 0.07.
+ */
+export const SHELL_CHOKE = Object.freeze({
+  enabled: true,
+  // What share of the aimed-at token's own drawn half-width the group may span. 1.0 = the token's own
+  // edge, i.e. "the outermost pellet lands on the body and not past it". Lower it to pull the group in
+  // toward the centre of the figure; it is the one knob a "still too wide" report moves.
+  tokenFraction: 1.0,
+  // ⛔ A FLOOR, IN SQUARES, so the clamp cannot draw a LINE. Six pellets whose whole group is narrower
+  // than this are drawn one behind another rather than as a spread, and at `dashSquares: 1.0` the
+  // sprites overlap outright — the opposite failure to the reported one, and a real risk at the
+  // combinations that make the cap tiny (a coarse grid, a sub-square token, the Close/PB row's 1 m on
+  // a 5 m grid). It can never WIDEN anything: the resolved cone is `min(classCone, capAngle)`, so a
+  // floor above the class cone is simply not reached. 0.15 sq of half-width = a 0.3-square group.
+  floorSquares: 0.15,
 });
 
 /* ══════════════════════ The ammo overlay (FR#24) ══════════════════════ */
@@ -2754,20 +2990,32 @@ export function shotSoundSrc(cls, { burst = false } = {}) {
  * node stays a separate design call and is deliberately NOT taken as a rider on the score unit.
  * Recorded in §8.
  */
-export function sfx(cls, { volume, burst = false } = {}) {
+export function sfx(cls, { volume, burst = false, delayMs = 0 } = {}) {
   const src = shotSoundSrc(cls, { burst });
   if (!src) return null;
+  // ⭐ THE AUDIO PHASE (2026-08-26 — see the FX_AUDIO_PHASE block for the whole mechanism). The report
+  // waits the same number of ms the engine will charge to put this round's picture on screen, so the
+  // two land together. The number is resolved ONCE per payload by the caller and handed down, never
+  // read here: a phase that moved between rounds would distort the cadence.
+  const phase = Number(delayMs) > 0 ? Math.round(Number(delayMs)) : 0;
   // ⚠ THE CLASS'S OWN LEVEL IS THE DEFAULT, and the test is for an ARGUMENT rather than for a truthy
   // number: a caller that deliberately asks for silence passes 0, and a `volume = classShotVolume(cls)`
   // default parameter would honour that while `Number(volume) || classShotVolume(cls)` would not. Same
   // trap the impact element's index gate records (`Number(null)` is a finite 0).
   const level = (volume === undefined || volume === null) ? classShotVolume(cls) : Number(volume);
-  try {
-    return foundry.audio.AudioHelper.play({ src, volume: level, autoplay: true, loop: false, channel: "interface" }, false);
-  } catch (err) {
-    console.warn(`${SCOPE} | combat fx audio failed`, err);
-    return null;
-  }
+  const play = () => {
+    try {
+      return foundry.audio.AudioHelper.play({ src, volume: level, autoplay: true, loop: false, channel: "interface" }, false);
+    } catch (err) {
+      console.warn(`${SCOPE} | combat fx audio failed`, err);
+      return null;
+    }
+  };
+  // A phased report is a timer, for the reason fxHitSound records at length: AudioHelper.play never
+  // passes a Sound's own `delay` through, so one setTimeout on the issuing client is the whole
+  // mechanism. Un-phased, the call is byte-for-byte what it always was.
+  if (phase > 0) { setTimeout(play, phase); return { delayed: true, delayMs: phase, src }; }
+  return play();
 }
 
 /* ══════════════════════════ Hit-impact audio — what a LANDED round sounds like ══════════════════════════ */
@@ -2903,7 +3151,7 @@ export function hitSoundVolume(kind, index = 0) {
  * Returns what it WILL play, synchronously, so the keeper asserts the values without waiting out the
  * clock — the same reporting shape fxHitMark uses.
  */
-export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true } = {}) {
+export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true, phaseMs = null } = {}) {
   // ⭐ `broadcast` SAYS WHICH SEAM IS CALLING (2026-08-15, the score — see MSG_SCORE). The RAIL passes
   // `false`: every client performs the score, so a rail impact is one local play per client, in phase
   // with that client's own sprites. The APPLY seams (DamageApplicator, vehicle damage) keep the
@@ -2951,7 +3199,24 @@ export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true }
   try { if (!captured && game?.audio?.locked) return { ...out, skipped: "locked" }; } catch (_e) { /* no audio layer */ }
   const volume = hitSoundVolume(kind, idx);
   const delay = Number(delayMs) > 0 ? Math.round(Number(delayMs)) : 0;
-  out.played = true; out.src = src; out.volume = volume; out.delayMs = delay;
+  // ⭐ THE AUDIO PHASE RIDES EVERY RAIL SOUND, NOT ONLY THE REPORT (2026-08-26 — the FX_AUDIO_PHASE
+  // block carries the arithmetic). If the report waits for the picture and the impact does not, the
+  // gap a listener hears between firing and landing shrinks by exactly the phase — so the whole audio
+  // track moves together, and the arrival elements stop being compensated in the same edit.
+  // ⚠ `out.delayMs` STAYS THE DELAY THE CALLER ASKED FOR. It is what the arrival arithmetic means and
+  // what the keeper legs read; the phase is reported beside it rather than folded into it.
+  // ⛔⛔ THE PHASE IS THE CALLER'S TO SUPPLY, AND THE DEFAULT IS ZERO — a correction this build made
+  // after the keeper caught it. The phase exists to pair a sound with a PICTURE this rail is drawing
+  // in the same instant (see the FX_AUDIO_PHASE block). The FAN-OUT has one and hands its own down —
+  // resolved once for the payload, because the estimate is updated mid-volley by round 1 and a sound
+  // reading it live would be phased differently from the report of the round it belongs to.
+  // ⛔ AN APPLY SEAM HAS NO SUCH PICTURE. DamageApplicator and the vehicle path sound a damage
+  // APPLICATION; there is no sprite of ours for it to land with, so delaying it corrects nothing and
+  // costs something real — it also makes a zero-delay impact ASYNCHRONOUS, which is a behaviour change
+  // nothing asked for and which eight keeper legs correctly refused (an armed capture seam read empty
+  // because the sound it expected in the same tick was now on a timer).
+  const phase = Number.isFinite(Number(phaseMs)) ? Math.max(0, Math.round(Number(phaseMs))) : 0;
+  out.played = true; out.src = src; out.volume = volume; out.delayMs = delay; out.phaseMs = phase;
   const fire = () => {
     if (_hitSoundSink) { _hitSoundSink({ kind, src, volume, delayMs: delay, broadcast }); return; }
     try {
@@ -2964,7 +3229,8 @@ export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true }
       console.warn(`${SCOPE} | hit impact audio failed`, err);
     }
   };
-  if (delay > 0) setTimeout(fire, delay); else fire();
+  const waitMs = delay + phase;
+  if (waitMs > 0) setTimeout(fire, waitMs); else fire();
   return out;
 }
 
@@ -2977,9 +3243,13 @@ export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true }
  * to a thing that was hit, exactly as blood belongs to a body — an aim point is a direction, not a
  * victim), or the kind's asset is not delivered.
  */
-export function hitSoundPlanFor(targetToken) {
+export function hitSoundPlanFor(targetToken, kindOverride = null) {
   if (!combatFxEnabled() || !targetToken?.actor) return null;
-  const kind = hitSoundKindFor(targetToken.actor);
+  // ⭐ THE OVERRIDE IS THE WALL CLIP'S (2026-08-26) and nothing else uses it: a round stopped by a
+  // naked wall struck STRUCTURE, whatever the figure behind the wall is made of. It is a parameter
+  // rather than a second plan factory so `railSoundedImpacts` keeps asking the one question it always
+  // asked — "did this rail sound this payload" — and gets the same answer either way.
+  const kind = (kindOverride && HIT_SOUND[kindOverride]) ? kindOverride : hitSoundKindFor(targetToken.actor);
   const src = hitSoundSrc(kind);
   if (!src) return null;
   return { kind, src, queued: 0, cap: HIT_SOUND_MAX_PER_PAYLOAD };
@@ -2996,8 +3266,10 @@ export function hitSoundPlanFor(targetToken) {
  * THE SWEEP IS THE PLANT'S OWN ANSWER, piecewise: the corridor geometry comes from the relocated
  * one-answer site (spread-geometry.js — the aimed record, or the SAME miss re-derivation the plant
  * runs when the payload carries the base system's verdict and the scatter faces), the footprint is the
- * same ray polygon the region is built from, and the occupants take the same wall-occlusion exemption
- * the confirm applies (`areaOcclusionTest`, the relocated site). What this cannot know at fire time is
+ * same ray polygon the region is built from, and the occupants take the same area↔cover verdict the
+ * confirm applies (`areaCoverVerdict`, the one owning site — a NAKED move-blocking wall exempts a
+ * figure and silences it here; a VALUED barrier does not, because the confirm damages through it).
+ * What this cannot know at fire time is
  * the APPLY's own late answers — armour, penetration, a figure that walks in before the confirm — and
  * it does not guess at them: it sounds what the rounds crossing the corridor struck, which is the same
  * information the tracers already draw.
@@ -3024,6 +3296,19 @@ export function hitSoundPlanFor(targetToken) {
  */
 export function patternCorridorFor(payload, shooterToken) {
   if (!combatFxEnabled() || !shooterToken || !payload) return null;
+  // A RULED FUMBLE HAS NO CORRIDOR (2026-08-26). Both callers already stand down for one further out —
+  // the fan-out bails with `skipped: "fumble"` and `railSoundedImpacts` answers false — so this is not
+  // what makes a fumbled shell silent today. It is here because the QUESTION this function answers is
+  // "which corridor is this payload pointed down", and for a shell the base ruled a fumble the honest
+  // answer is "none": the resolution plants no pattern for it (damage-hooks `_placeSpreadZone`), so a
+  // corridor described here would be one nothing on the table corresponds to. Kept in step deliberately
+  // — the pair of rails disagreeing about a fumble is the whole defect this edit came from.
+  //
+  // ⭐ AND IT IS THE FUMBLE'S CLASS THAT DECIDES (2026-08-26). The base's table rules rows 1–4 as "No
+  // fumble. You just screw up." — an ordinary miss with a real shell in the air — and the plant now
+  // builds that shell's corridor at its scattered centre. So this answers with a corridor for that class
+  // and null for the other three, which is the same call `_placeSpreadZone` makes off the same predicate.
+  if (fumbleStandsRailsDown(payload)) return null;
   if (!patternFlowOwns(payload)) return null;
   const declared = declaredSpreadAim(payload);
   if (!declared) return null;
@@ -3060,7 +3345,12 @@ export function patternAudioPlanFor(payload, shooterToken) {
     if (!tok?.actor || tok.id === shooterToken.id) continue;
     const c = tok.center ?? centerOf(tok);
     if (!c || !pointInPolygon(c.x, c.y, poly)) continue;
-    if (areaOcclusionTest(origin.x, origin.y, tok)) continue;
+    // ⭐ ONLY A NAKED-WALL EXEMPTION SILENCES A FIGURE. A figure behind a VALUED barrier is in the
+    // pattern and the confirm is going to damage it through that barrier's SP, so it is sounded like
+    // anyone else the rounds reach — presenting it as untouched would be the rail contradicting the
+    // resolution, which is the one thing this sweep exists to avoid. What the rail still cannot know
+    // is whether the SP stopped the round; it never could (armour has always been the apply's answer).
+    if (areaCoverVerdict(origin.x, origin.y, tok).state === AREA_COVER_EXEMPT) continue;
     const kind = hitSoundKindFor(tok.actor);
     if (!hitSoundSrc(kind)) continue;
     victims.push({ tokenId: tok.id, kind,
@@ -3068,6 +3358,92 @@ export function patternAudioPlanFor(payload, shooterToken) {
   }
   if (!victims.length) return null;
   return { victims, queued: 0, cap: HIT_SOUND_MAX_PER_PAYLOAD };
+}
+
+/**
+ * ⭐⭐ DOES THIS PAYLOAD'S PICTURE STOP AT A WALL? — resolved ONCE per payload, threaded down (user
+ * ruling 2026-08-26).
+ *
+ * ⛔ THE DEFECT IT EXISTS FOR: when the verdict is **EXEMPT** — a naked, unpriced, move-blocking wall
+ * between the origin and the figure — the resolution rail says the rounds never reached anybody and
+ * posts a card saying so, while the presentation rail drew every tracer sailing straight through the
+ * wall and planted its arrival mark on the far side, on the body. The picture contradicted the card,
+ * which is the one failure this pair of rails exists to avoid.
+ *
+ * ⭐ THE SPLIT IS THE VERDICT'S OWN, NOT A SECOND OPINION. Only EXEMPT clips:
+ *   · **EXEMPT** — the rounds stop at the wall. Each ray is cut at ITS OWN closest wall intersection
+ *     (`wallImpactPoint`, per endpoint — six pellets meet a wall at six points), the arrival mark is
+ *     planted there, and the impact is sounded as STRUCTURE at the moment the round reaches the wall.
+ *   · **SOAKED** — the rounds keep drawing THROUGH, deliberately. That is the shoot-through-the-door
+ *     fiction and the damage card is about to say the figure was hit through the barrier's SP;
+ *     clipping it would contradict the card in the opposite direction.
+ *   · **IN** — nothing in the way, nothing to clip. A breached or destroyed barrier is no longer a
+ *     valued row and no longer blocks movement, so it answers IN and the rounds pass, which is the
+ *     ruling's "breached/destroyed passes" with no branch of its own.
+ *
+ * ⚠ COVER ZONES ARE NOT CLIPPED, and the reason is stated rather than skipped: a zone is a Region, and
+ * the platform exposes containment (`testPoint`) but no ray-vs-edge query — finding a region's edge
+ * means bisecting along the ray, which is neither cheap nor exact. It also never arises under the rule
+ * above: a valued zone answers SOAKED, and SOAKED draws through. Recorded as a named follow-up (an
+ * edge clip for a zone that a GM wants read as solid) rather than guessed at.
+ *
+ * ⛔⛔ AND IT ONLY CLIPS WHERE THE RESOLUTION RAIL HONOURS THE EXEMPTION. This is the gate that keeps
+ * the fix from becoming the same defect pointed the other way, and it is worth stating plainly because
+ * the naive reading ("EXEMPT ⇒ clip") is wrong:
+ *
+ *   · An **AREA / CORRIDOR** payload IS ruled by this verdict — `_applyAreaHitToToken` gives an exempt
+ *     figure no damage at all and `patternAudioPlanFor` already silences it. Drawing rounds through
+ *     the wall there contradicts a card that says nobody was reached, so it clips.
+ *   · A **SINGLE-TARGET AIMED** shot is NOT. A naked, unpriced wall is nothing whatsoever to aimed
+ *     fire (that is the standing ruling at `areaOcclusionTest`: a wall nobody has priced is map
+ *     furniture) — the base system rolls the attack, the damage window opens, the figure takes the
+ *     hit. Clipping that round at a wall would draw a shot stopping dead while the card next to it
+ *     reports a wound. So an aimed shot that LANDED is never clipped, however solid the wall looks.
+ *   · The one aimed case that DOES clip is an aimed shot that landed **nothing** (`hits === 0`)
+ *     against an exempt figure: there is no damage card for the picture to contradict, and the rounds
+ *     visibly stopping at the wall is then the only statement being made — which is the correct one.
+ *
+ * @returns {{clip: true, kind: string, source: string}|null}
+ */
+export function wallClipPlanFor(payload, shooterToken, targetToken) {
+  try {
+    if (!combatFxEnabled() || !shooterToken) return null;
+    const origin = centerOf(shooterToken);
+    if (!origin) return null;
+    // A wall is structure, so a clipped round is sounded as structure rather than as the body's own
+    // flesh. Resolved here, WITH the clip, so the sound and the picture cannot disagree about what the
+    // round hit.
+    const kind = "structure";
+
+    // ── the corridor form: the verdict rules this payload's occupants, so the axis may be clipped ──
+    if (patternFlowOwns(payload)) {
+      const laid = patternCorridorFor(payload, shooterToken);
+      if (!laid) return null;
+      if (!areaCoverEnabled()) return null;
+      // Asked of the CORRIDOR'S OWN AXIS with the same backend the exemption is decided on, so the
+      // wall that stops the rounds is by construction the wall that exempted the figures behind it.
+      // A valued barrier on the axis answers SOAKED for those figures and must NOT clip — so the
+      // valued question is asked first here, exactly as `areaCoverVerdict` asks it.
+      const end = {
+        x: origin.x + Math.cos((laid.corridor.angleDeg * Math.PI) / 180) * laid.lengthPx,
+        y: origin.y + Math.sin((laid.corridor.angleDeg * Math.PI) / 180) * laid.lengthPx,
+      };
+      if (valuedCoverAlong(canvas?.scene, origin, end).length) return null;
+      if (!wallImpactPoint(origin, end)) return null;
+      return { clip: true, kind, source: "corridor" };
+    }
+
+    // ── the aimed form: only a shot that landed NOTHING may clip (see the gate note above) ──
+    if (!targetToken) return null;
+    if (hitCountOf(payload) > 0) return null;
+    if (areaCoverVerdict(origin.x, origin.y, targetToken).state !== AREA_COVER_EXEMPT) return null;
+    return { clip: true, kind, source: "aimed" };
+  } catch (err) {
+    // Fail-safe direction is NO CLIP — the pre-ruling picture — because a presentation query that
+    // throws must never be the thing that stops a shot being drawn.
+    console.warn(`${SCOPE} | wall-clip query failed; the round draws its full ray`, err);
+    return null;
+  }
 }
 
 /**
@@ -3110,7 +3486,11 @@ export function railSoundedImpacts(payload) {
   // un-updated caller takes.
   try {
     if (!combatFxEnabled() || !payload) return false;
-    if (payload.fumbleRuled) return false;
+    // The ruled fumble bail, by CLASS (2026-08-26). A rows-1–4 fumble is an ordinary miss: the fan-out
+    // draws it and its corridor sounds its victims exactly as any other missed pattern does, so this
+    // must NOT answer false for that class or the apply would sound a second set of impacts over the
+    // rail's own. The other three classes drew nothing, so the apply keeps its own sound.
+    if (fumbleStandsRailsDown(payload)) return false;
     const actor = actorForPayload(payload);
     if (!weaponFxClass(resolveFiredWeapon(payload, actor))) return false;
     const shooter = shooterTokenForPayload(payload, actor);
@@ -3643,9 +4023,49 @@ export function missEndpoint(from, to, rng = Math.random) {
  * be asserted directly. An even count leaves no pellet exactly on the aim line, which is what keeps the
  * fan from reading as "one bolt plus some strays".
  *
- * A MISS does not fan neatly — it reuses missEndpoint per pellet, so each tracer takes its own wide
- * divergence AND its own reach and the group splays wide at mixed depths. That is the whole reason the
- * miss machinery is called per pellet instead of being applied once to the group.
+ * ⭐⭐ A MISSED SHELL DRAWS THE SAME CHOKED PATTERN AS A HIT (user ruling 2026-08-26, verbatim:
+ * *"If you shot a shotgun in real life and missed the target, the gun would not then malfunction as a
+ * consequence and spray the bullets everywhere - so the animation is an animation tied to firing the
+ * weapon, not hitting with it. In other words, misses look the same as hits except they don't hit the
+ * target."*). The pattern is a property of the BARREL, not of the outcome.
+ *
+ * ⛔ AND THIS IS THE ROOT CAUSE OF THE LATE-VOLLEY REPORT — *"early rounds draw the choked fan but
+ * late rounds revert to the pre-choke wide spread"* in a ~20-round volley. It was never a late-round
+ * path, an eviction, a tracer-budget cap or a drop-lag fallback: the fan-out assigns `hit: i < hits`,
+ * so a burst's HITS ARE ITS LEADING ROUNDS and every round after them is a miss — and the miss branch
+ * rolled `missEndpoint` PER PELLET, each pellet taking its own ±MISS_SPREAD_RAD (≈12°) divergence and
+ * its own 0.6–1.15 reach (~3.8 squares of width and ~4.4 of depth at 8 squares). A twenty-round volley
+ * with six hits therefore drew the clamped group six times and birdshot fourteen times, on the clock,
+ * every single time. Nothing had to degrade for it to happen; it is the shape of a burst.
+ *
+ * ⭐ WHAT IT DOES NOW, and it introduces NO new constant: roll `missEndpoint` ONCE for where this
+ * round's group came down, then fan the pellets about the shooter→landing ray through the SAME
+ * resolver the hit branch uses — the even ladder, the per-pellet jitter and the clamp. The shot still
+ * goes somewhere else (the landing scatter is untouched — same angle range, same reach range, drawing
+ * the rng in the same order), it simply arrives as a shot pattern instead of as a cloud.
+ *
+ * ⭐ AND THE GROUP IS THE SAME WIDTH IT WOULD HAVE BEEN ON A HIT, IN PIXELS. The cone handed in is a
+ * half-ANGLE resolved for the AIM distance, and a miss lands at 0.6–1.15 of that — so re-using the
+ * angle unchanged would draw a group up to 15 % wider than the cap at long reach and 40 % narrower at
+ * short, which is the ruling only half-kept. The angle is therefore re-solved for the landing distance
+ * so the ABSOLUTE half-width is preserved exactly: `cap = aimDist · sin(cone)` is the p.109 band width
+ * the choke already resolved for this payload, and the miss flies `asin(cap / landDist)`.
+ * ⛔ The BAND ITSELF is not re-looked-up: it is resolved once per payload against the shot the shooter
+ * took (SHELL_CHOKE), which is this rail's standing one-derivation rule, and the 0.6–1.15 reach range
+ * does not reliably cross a band edge anyway.
+ *
+ * ⚠ THE JITTER IS RE-SCALED WITH IT. `pelletJitterFor` produced each nudge as a fraction of the cone
+ * it was handed, so a nudge built against the aim cone and applied inside a re-solved one would stop
+ * being "a fraction of the pellet's OWN slot" and the clamp would bite unevenly across the group. It
+ * travels by the same ratio, which keeps every property the hit fan guarantees.
+ *
+ * ⚠ ONLY THE PELLET CLASSES ARE IN SCOPE, by construction rather than by a flag: this function fans
+ * for `pellets > 1` and returns [] otherwise, so a rifle/SMG/pistol miss still takes the single
+ * `missEndpoint` splay in `fxShot` and is byte-identical. That is the ruling's own stated boundary.
+ *
+ * ⏪ THE REVERT to the per-pellet splay is one line — `return Array.from({length:n}, () =>
+ * missEndpoint(from, to, rng))` ahead of the body below — and the keeper leg that used to pin the
+ * branch untouched has been re-pointed at the ruled shape rather than deleted.
  *
  * Pure, and `rng` is injectable, so both branches are value-asserted rather than eyeballed.
  * Returns [] when there is nothing to fan (no aim, or a class carrying no pellet count).
@@ -3653,13 +4073,26 @@ export function missEndpoint(from, to, rng = Math.random) {
 export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = true, rng = Math.random, jitter = null } = {}) {
   const n = Math.trunc(pellets);
   if (!from || !to || !(n > 1)) return [];
-  if (!hit) return Array.from({ length: n }, () => missEndpoint(from, to, rng));
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
+  // WHERE THIS ROUND'S GROUP CAME DOWN. One roll for the whole round — the group has a landing point
+  // again instead of being a region — and everything below then treats it exactly as the aim point.
+  const land = hit ? to : missEndpoint(from, to, rng);
+  if (!land) return [];
+  const dx = land.x - from.x;
+  const dy = land.y - from.y;
   const dist = Math.hypot(dx, dy) || 1;
   const aim = Math.atan2(dy, dx);
+  // THE HALF-ANGLE THIS GROUP ACTUALLY FLIES. Exactly the one handed in, for a hit. For a miss it is
+  // re-solved so the group's ABSOLUTE half-width — the p.109 band the choke resolved for this payload
+  // — spans the same number of pixels at the landing distance that it would have at the aim distance.
+  // `asin` is clamped at 1 for the degenerate case of a landing point nearer than the cap is wide.
+  const aimDist = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const cone = hit ? spreadRad
+    : Math.asin(Math.min(1, (aimDist * Math.sin(spreadRad)) / dist));
+  // The nudge was built as a fraction of the cone `pelletJitterFor` was handed; carried into a
+  // re-solved cone it has to travel in the same proportion or it stops being one.
+  const jitterScale = (spreadRad > 0) ? (cone / spreadRad) : 1;
   return Array.from({ length: n }, (_v, i) => {
-    const offset = spreadRad * ((2 * i) / (n - 1) - 1);   // −1 … +1 of the cone, evenly spaced
+    const offset = cone * ((2 * i) / (n - 1) - 1);   // −1 … +1 of the cone, evenly spaced
     // ⭐ THE PER-PELLET IRREGULARITY (2026-08-11), and it is OPTIONAL so the even ladder above stays
     // the readable default: `jitter[i]` adds this pellet's own angle nudge and pushes its endpoint
     // nearer or further along its own line, which is what turns a neat arc into a grouped cluster at
@@ -3670,10 +4103,128 @@ export function pelletEndpoints(from, to, { pellets = 0, spreadRad = 0, hit = tr
     // pushed past the half-angle its class declares — and measured on the rig that is what took a hit
     // off the body it was aimed at. The clamp is what makes "the group stays inside the cone" a
     // guarantee rather than an intention; inner pellets never reach it.
-    const nudged = Math.max(-spreadRad, Math.min(spreadRad, offset + (Number(j?.angleRad) || 0)));
+    const nudged = Math.max(-cone, Math.min(cone, offset + (Number(j?.angleRad) || 0) * jitterScale));
     const angle = aim + nudged;
     const reach = dist * (Number(j?.reachScale) > 0 ? Number(j.reachScale) : 1);
     return { x: from.x + Math.cos(angle) * reach, y: from.y + Math.sin(angle) * reach };
+  });
+}
+
+/**
+ * THE CHOKED HALF-ANGLE A FANNED ROUND ACTUALLY FLIES — one derivation, pure, fully assertable.
+ *
+ * The ruling, the arithmetic and the reverts are at SHELL_CHOKE (beside the class table). This is only
+ * the resolver, and it is kept PURE — no canvas, no payload, no setting — for the reason every geometry
+ * helper on this rail is: a clamp that can only be checked by looking at the screen is a clamp nothing
+ * can assert. `arrivalConeFor` below is the thin impure wrapper that fetches the four live numbers.
+ *
+ * It returns a SPEC rather than a bare number, so a keeper (and the fan-out's own result) can say WHICH
+ * of the three answers bound this shot — `capSource` is `"cone"` (the class's own half-angle was already
+ * inside the cap and is returned untouched), `"book"` (the p.109 band width bound it), `"token"` (the
+ * aimed-at body was tighter than the book) or `"floor"` (the cap would have drawn a line).
+ *
+ * @param {number} spreadRad the class's declared half-angle — the CEILING
+ * @param {{distancePx?: number, pixelsPerMeter?: number, gridSizePx?: number, distanceM?: number|null,
+ *          rangeM?: number|null, widths?: object|null, targetHalfPx?: number}} opts
+ * @returns {{coneRad: number, classRad: number, choked: boolean, capSource: string, band: string|null,
+ *            capPx: number|null, capSquares: number|null, bookHalfPx: number|null,
+ *            tokenHalfPx: number|null, floorPx: number|null, distanceM: number|null}}
+ */
+export function shellChokeSpec(spreadRad, {
+  distancePx = 0, pixelsPerMeter = 0, gridSizePx = 100, distanceM = null,
+  rangeM = null, widths = null, targetHalfPx = 0,
+} = {}) {
+  const classRad = Number(spreadRad) > 0 ? Number(spreadRad) : 0;
+  // The untouched answer, returned by every bail below — so "the choke could not be resolved" and "the
+  // choke did not bind" produce the same drawn fan, which is the pre-choke build.
+  const unchoked = Object.freeze({
+    coneRad: classRad, classRad, choked: false, capSource: "cone", band: null,
+    capPx: null, capSquares: null, reachAllowance: null,
+    bookHalfPx: null, tokenHalfPx: null, floorPx: null, distanceM: null,
+  });
+  const dist = Number(distancePx);
+  if (!SHELL_CHOKE.enabled || !(classRad > 0) || !(dist > 0)) return unchoked;
+  const grid = Number(gridSizePx) > 0 ? Number(gridSizePx) : 100;
+  const ppm = Number(pixelsPerMeter);
+  // Metres are asked for directly where a caller has them and derived from the scene's own scale
+  // otherwise; without either there is no band to look up and the book half of the cap stands down.
+  const declaredM = Number(distanceM);
+  const dM = Number.isFinite(declaredM) && declaredM > 0 ? declaredM : (ppm > 0 ? dist / ppm : null);
+  const spec = (ppm > 0 && dM !== null) ? spreadBandSpec(dM, widths ?? {}, rangeM) : null;
+  const bookHalfPx = spec ? (spec.widthM / 2) * ppm : Infinity;
+  const tokenHalfPx = Number(targetHalfPx) > 0 ? Number(targetHalfPx) * SHELL_CHOKE.tokenFraction : Infinity;
+  // Neither answer available (no scene scale AND no aimed-at body) → nothing to clamp against. The
+  // floor alone must never become the cap: that would NARROW every shot on the strength of a guard.
+  if (!Number.isFinite(bookHalfPx) && !Number.isFinite(tokenHalfPx)) return unchoked;
+  const tightest = Math.min(bookHalfPx, tokenHalfPx);
+  const floorPx = SHELL_CHOKE.floorSquares * grid;
+  const capPx = Math.max(floorPx, tightest);
+  // ⛔ THE DEPTH JITTER IS PAID FOR HERE, or the cap is not a bound. `pelletEndpoints` clamps the
+  // ANGLE to the cone, but a pellet's REACH is then scaled by `1 + reachFraction × cone`
+  // (pelletJitterFor) — so an outermost pellet sent further along its own line lands
+  // `dist × reachScale × sin(cone)` off the aim, i.e. that fraction PAST a cap derived from `dist`
+  // alone. Measured on the rig before this term existed: 30.2 px against a 30 px cap. Small, but the
+  // whole point of an absolute cap is that it is absolute, so the allowance is subtracted up front.
+  // It is computed off the CLASS cone rather than the resolved one, which keeps it non-circular and
+  // conservative (the resolved cone is never larger). Worst case it costs 2.4 % of the cap.
+  const reachAllowance = 1 + PELLET_CHAOS.reachFraction * classRad;
+  // The half-angle whose arrival offset is exactly the cap. `asin` and not `atan`, because a hit keeps
+  // the AIM DISTANCE as its reach (pelletEndpoints) — the pellet flies the hypotenuse, not the leg.
+  const capRad = Math.asin(Math.min(1, capPx / (dist * reachAllowance)));
+  const coneRad = Number(Math.min(classRad, capRad).toFixed(6));
+  const capSource = coneRad >= classRad ? "cone"
+    : (capPx > tightest ? "floor" : (tokenHalfPx <= bookHalfPx ? "token" : "book"));
+  return Object.freeze({
+    coneRad, classRad, choked: coneRad < classRad, capSource,
+    band: spec ? spec.band : null,
+    capPx: Number(capPx.toFixed(3)),
+    capSquares: Number((capPx / grid).toFixed(4)),
+    // What the cap cost the un-jittered fan, reported so the two numbers a reviewer might compare —
+    // "the cap" and "where the outermost pellet actually lands with no depth roll" — are both stated.
+    reachAllowance: Number(reachAllowance.toFixed(6)),
+    bookHalfPx: Number.isFinite(bookHalfPx) ? Number(bookHalfPx.toFixed(3)) : null,
+    tokenHalfPx: Number.isFinite(tokenHalfPx) ? Number(tokenHalfPx.toFixed(3)) : null,
+    floorPx: Number(floorPx.toFixed(3)),
+    distanceM: dM === null ? null : Number(dM.toFixed(3)),
+  });
+}
+
+/**
+ * The same answer with the four live numbers fetched — the scene's pixels-per-metre, the shot's own
+ * length, the aimed-at token's drawn half-width and the firing weapon's Range off the payload.
+ *
+ * A class that does not FAN (no pellet count, or a load whose overlay reduced it to one) is returned
+ * unchoked without touching the canvas: there is no group to narrow, and `pelletEndpoints` answers []
+ * for it anyway. Every client computes this from the same scene and the same payload, so a performance
+ * played remotely draws the identical group — the determinism rule the whole rail follows.
+ *
+ * ⛔ THE BODY ONLY CAPS THE GROUP WHEN THE SHOT IS ACTUALLY POINTED AT IT, and the test is the aim
+ * point itself rather than a list of the cases where it is not. A spread weapon is AIMED before it is
+ * declared (combat/spread-placement.js) and its corridor may point short of a figure, past it, or at
+ * open ground; a missed corridor moves to the grenade table's answer; an untargeted shot is drawn along
+ * the shooter's own facing. In every one of those the aimed-at token is simply not where the rounds
+ * land, and capping the group against its width would be measuring the shot against a body that is not
+ * there. So the token half stands down whenever the aim falls outside the token's own drawn radius, and
+ * the p.109 row alone caps it — which is the answer the pattern's own rules give for open ground.
+ */
+export function arrivalConeFor(entry, from, to, targetToken, gridSizePx = 100, payload = null) {
+  const classRad = Number(entry?.spreadRad) || 0;
+  if (!(Number(entry?.pellets) > 1) || !(classRad > 0) || !from || !to) return shellChokeSpec(classRad, {});
+  let ppm = 0;
+  try { ppm = metersToPixels(canvas?.scene, 1); } catch (err) { ppm = 0; }
+  const bodyHalfPx = targetToken ? tokenRadiusPx(targetToken, gridSizePx) : 0;
+  const bodyAt = targetToken ? centerOf(targetToken) : null;
+  const aimOnBody = !!bodyAt && Math.hypot(to.x - bodyAt.x, to.y - bodyAt.y) <= bodyHalfPx;
+  return shellChokeSpec(classRad, {
+    distancePx: Math.hypot(to.x - from.x, to.y - from.y),
+    pixelsPerMeter: ppm,
+    gridSizePx,
+    // The weapon's own Long range and the load's own width overrides — the SAME two inputs the plant
+    // and the aim preview thread into spreadBandSpec (combat/spread-placement.js). Absent on a payload
+    // assembled before those fields existed, which is the documented compat path, not a defect.
+    rangeM: payload?.spreadRangeM ?? null,
+    widths: { short: payload?.spreadWidthShort, medium: payload?.spreadWidthMedium, long: payload?.spreadWidthLong },
+    targetHalfPx: aimOnBody ? bodyHalfPx : 0,
   });
 }
 
@@ -4258,8 +4809,14 @@ function _held(effect, { shared = false } = {}) {
  *
  * Returns which parts ran, so a caller (and the keeper) can assert the degrade path by value.
  */
-export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null, lightHoldMs = 0 } = {}) {
-  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0, selfShot: false, spanKey: null, spanOrigin: null, spanOriginPx: null };
+export async function fxShot(shooterToken, targetToken, { weaponClass, hit = true, light = true, mode = MUZZLE_MODE, settleTag = null, ammoKey = null, volley = null, shotSeed = 0, arrivalMs = null, aimPoint = null, lightHoldMs = 0, coneRad = null, clipWalls = false } = {}) {
+  const out = { light: false, muzzle: false, spark: false, volley: false, tracer: false, pellets: 0, impact: false, tagged: 0, ammoKey: ammoKey ?? null, arrivalMs: 0, pelletArrivals: 0, selfShot: false, spanKey: null, spanOrigin: null, spanOriginPx: null, coneRad: 0, classConeRad: 0, chokeSource: null,
+    // ⭐ THE EXEMPT CLIP, by value (2026-08-26). `clipWalls` is what the fan-out asked for, `clipped`
+    // is how many of this round's drawn rays were actually cut short, and `clipFrac` is the shortest
+    // surviving fraction of the ray — the number the arrival clock is scaled by. Reported for the same
+    // reason the choke is: a clip that can only be checked by looking at the canvas is a clip nothing
+    // can assert.
+    clipWalls: !!clipWalls, clipped: 0, clipFrac: 1 };
   // THE CLASS ROW WITH THE LOADED ROUND'S OVERLAY ON TOP (FR#24). Everything below reads `entry` and
   // nothing below knows an overlay happened — which is the point: one merge site, and the draw path is
   // the same code for every load. The KEY is passed in rather than resolved here because there is no
@@ -4293,6 +4850,39 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
   const arrival = (arrivalMs !== null && Number(arrivalMs) >= 0)
     ? Number(arrivalMs) : arrivalSpecFor(weaponClass, ammoKey, aimSquares, volley).ms;
   out.arrivalMs = arrival;
+  // ⭐ HOW WIDE THIS ROUND'S GROUP MAY BE WHEN IT GETS THERE (2026-08-25) — the same shape as the
+  // arrival above: threaded in by the fan-out, which resolves it ONCE for the payload off the payload's
+  // own weapon Range, and derived HERE from the same resolver when this verb is called on its own (the
+  // keeper and the bench do, and a caller who has not measured the shot must still get the choke rather
+  // than the un-clamped cone). It is the resolved HALF-ANGLE, so everything downstream — the endpoint
+  // ladder, the per-pellet nudge and its clamp, the arrival marks, the ground fire — reads one number.
+  // See SHELL_CHOKE for the ruling, the two capping answers and the one-field revert.
+  const choke = (coneRad !== null && Number(coneRad) >= 0)
+    ? null : arrivalConeFor(entry, from, to, targetToken, gridPx, null);
+  const cone = choke ? choke.coneRad : Number(coneRad);
+  out.coneRad = cone;
+  out.classConeRad = Number(entry.spreadRad) || 0;
+  out.chokeSource = choke ? choke.capSource : "threaded";
+  // ⭐ WHERE THIS ROUND ACTUALLY STOPS, PER RAY. On an EXEMPT shot the resolution has already ruled
+  // that nothing reached the figure, so each drawn ray is cut at its OWN closest wall intersection
+  // rather than at the point it was aimed at. ⛔ PER RAY, not per shot: six pellets meet a wall at six
+  // different points, and at an oblique angle they can meet different walls. Everything DERIVED from
+  // an endpoint — the rotation, the travel, the stretch, this pellet's arrival mark — reads the
+  // returned point, so the whole family inherits the clip for free rather than each learning about it.
+  // Returns the endpoint unchanged when there is nothing in the way or the platform cannot answer,
+  // which is byte-for-byte the pre-ruling picture.
+  const clipRay = (end) => {
+    if (!clipWalls || !from || !end) return end;
+    const stop = wallImpactPoint(from, end);
+    if (!stop) return end;
+    out.clipped++;
+    const full = Math.hypot(end.x - from.x, end.y - from.y);
+    if (full > 0) {
+      const frac = Math.min(1, Math.max(0, Math.hypot(stop.x - from.x, stop.y - from.y) / full));
+      if (frac < out.clipFrac) out.clipFrac = frac;
+    }
+    return stop;
+  };
   // The flash is announced and drawn first because it costs nothing to wait for — it is synchronous.
   // It takes the SAME axis as the sprites, so the notch behind the shooter lines up with the bolt.
   // The ammo's own flash colour where its overlay names one. It reaches the source through the
@@ -4366,7 +4956,8 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
       const volleyOk = volley && to && !selfShot && fxDbEntryExists(volley.key);
       if (volleyOk) {
         const chaos = volleyChaosFor(shotSeed);
-        const aimed = hit ? rotateAbout(from, to, chaos.jitterDeg) : missEndpoint(from, to);
+        // The volley sprite IS the whole discharge in one asset, so it is one ray and takes one clip.
+        const aimed = clipRay(hit ? rotateAbout(from, to, chaos.jitterDeg) : missEndpoint(from, to));
         const shot = _held(seq.effect().file(volley.key)).atLocation(shooterToken)
           .aboveLighting(LIT_SPRITE_ABOVE_LIGHTING)
           .mirrorY(chaos.mirrorY)
@@ -4404,9 +4995,13 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         // from THIS shot's seed so two clients draw the identical cluster and two trigger pulls do not.
         // See PELLET_CHAOS for the ruling. A class carrying no pellet count computes an empty record and
         // reads exactly as it did.
-        const jitter = pelletJitterFor(shotSeed, Math.trunc(entry.pellets) || 0, entry.spreadRad);
-        const fan = pelletEndpoints(from, to, { pellets: entry.pellets, spreadRad: entry.spreadRad, hit, jitter });
-        const ends = fan.length ? fan : [hit ? to : missEndpoint(from, to)];
+        // ⭐ AND THE CONE THEY FLY IS THE CHOKED ONE (2026-08-25), handed to BOTH calls — the jitter is
+        // resolved against the same half-angle the ladder is spaced across, which is what keeps
+        // "the nudge is a fraction of the pellet's OWN slot" true after the clamp instead of piling
+        // the outer pellets against the cap. See SHELL_CHOKE.
+        const jitter = pelletJitterFor(shotSeed, Math.trunc(entry.pellets) || 0, cone);
+        const fan = pelletEndpoints(from, to, { pellets: entry.pellets, spreadRad: cone, hit, jitter });
+        const ends = fan.length ? fan : [hit ? to : missEndpoint(from, to)];   // clipped per-ray below
         // Two ways to draw one round, chosen by whether the class asked for a dash length:
         //
         // STRETCHED (no `dashSquares`) — the mapped asset is a ranged database entry, a streak drawn
@@ -4431,7 +5026,10 @@ export async function fxShot(shooterToken, targetToken, { weaponClass, hit = tru
         const aimDist = Math.hypot(to.x - from.x, to.y - from.y) || 1;
         const pelletSpeed = (aimDist / Math.max(1, dashMs)) * 1000;
         for (let p = 0; p < ends.length; p++) {
-          const end = ends[p];
+          // ⭐ THE DRAWN endpoint, which is the aimed one unless this shot is stopping at a wall. Taken
+          // ONCE per ray and used by every element below, so the tracer, its rotation, its travel and
+          // its arrival mark cannot end up in two different places (see clipRay).
+          const end = clipRay(ends[p]);
           const chaos = jitter[p] ?? null;
           // The file is band-addressed through the near floor — see TRACER_NEAR_BAND_FLOOR for the
           // decoded backwash measurement this answers.
@@ -5030,8 +5628,10 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
     clipMs: BLOOD_SPLATTER.clipMs, exitPoint: null };
   if (!targetToken || !sequencerActive() || !fxDbEntryExists(BLOOD_SPLATTER.key)) return out;
   // The engine's start-up floor comes off the arrival, exactly as the hit mark subtracts it — the
-  // spray and the mark answer the same audio instant. See SEQ_PRESTART_COMP_MS for the measurement.
-  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - SEQ_PRESTART_COMP_MS);
+  // spray and the mark answer the same audio instant. ⭐ ZERO while the audio is phased instead (see
+  // the FX_AUDIO_PHASE block): the correction moved to the audio side, where it also reaches the
+  // round's own elements, which have no delay to subtract from.
+  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - fxArrivalCompMs());
   try {
     const seq = new globalThis.Sequence();
     const splash = _held(seq.effect().file(BLOOD_SPLATTER.key)).atLocation(targetToken)
@@ -5082,6 +5682,195 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
  */
 export const SEQ_PRESTART_COMP_MS = 175;
 
+/* ─────────────── THE AUDIO PHASE — why compensating the picture could never finish the job ─────────────── */
+
+/**
+ * ⭐⭐ THE RESIDUAL THE ARRIVAL COMPENSATION STRUCTURALLY CANNOT REACH (user report 2026-08-26, the
+ * shell class: *"2 shots still came out at the end after the last sound"* — "most of the time", and on
+ * buckshot as well as the dart load, i.e. the WHOLE class).
+ *
+ * ⛔ READ THE ARITHMETIC BEFORE MOVING ANYTHING HERE. `SEQ_PRESTART_COMP_MS` above is subtracted from
+ * an element's DELAY so the sprite lands on its own audio instant, and it works — for an element that
+ * HAS a delay. The round's own muzzle flash and tracer are issued by the fan-out with **no delay at
+ * all**, so the subtraction is `max(0, 0 − 175)` and clamps to zero. There is nothing to borrow from.
+ * The round's picture therefore trails its own report by the engine's whole create latency, on EVERY
+ * round of EVERY volley, and no amount of compensation at that site can change it: a sprite cannot be
+ * drawn in the past.
+ *
+ * ⭐ SO THE TAIL IS ARITHMETIC, NOT A FAILURE. If the picture trails the report by `L` and the class
+ * fires every `cadence` ms, then the last `ceil(L / cadence)` rounds necessarily put their pictures on
+ * screen after the last report is heard. MEASURED on :30004 (a headless software rasteriser, 8-round
+ * shell volleys, tests/_probe-shell-report-phase.mjs): the round-0 report→picture phase is a tight
+ * **234 ms median** with no backlog at all under it, against the 180 ms cadence — so two rounds trail
+ * before the renderer has fallen behind by a single frame. That also explains the "most of the time":
+ * `L` moves with load, so a volley whose `L` happens to land under one cadence shows nothing, and the
+ * same build on the same table shows two rounds on the next pull. It is one residual sitting across a
+ * threshold, not an intermittent fault.
+ *
+ * ⛔ AND IT IS NOT SOMETHING THE DROP RULE CAN FIX, which is worth saying plainly because that is where
+ * the previous two passes looked. Dropping a round removes its report AND its picture together, so it
+ * cannot close a phase error; and the last round is never dropped by design (it carries the settle
+ * tag). The pacing rule holds the BACKLOG down and does that well — this is the floor underneath it.
+ *
+ * ⭐ THE FIX, AND WHY IT IS THE ONLY ONE AVAILABLE. Two things can be moved: the picture earlier, or the
+ * report later. The picture cannot go earlier than the engine will draw it. So the AUDIO is phased by
+ * the same `L` the picture pays, and then every pair lands together. Written out, with `ph` the audio
+ * phase and `comp` the arrival compensation:
+ *      report      T + ph              muzzle/tracer   T + L
+ *      hit sound   T + arrive + ph     arrival mark    T + arrive − comp + L
+ * Both pairs agree for exactly one choice: **ph = L and comp = 0.** That is this block. The
+ * compensation is not deleted so much as MOVED to the other side of the equation, where it also
+ * reaches the elements that had no delay to subtract from.
+ *
+ * ⚠ WHAT A LISTENER ACTUALLY LOSES: the report now lands `L` after the trigger resolved — about a fifth
+ * of a second on this rig, less on hardware that renders. Nothing about the volley's RHYTHM changes,
+ * because the phase is resolved ONCE per payload and every round of that volley shifts by the same
+ * number; the cadence is untouched by construction, and the keeper pins that as a property.
+ *
+ * ⭐⭐ AND `L` IS MEASURED ON THE CLIENT, NEVER BAKED. This is the half that matters most, because the
+ * shipped constant above is a figure taken on ONE machine on one day (171–181 ms on 2026-08-17;
+ * re-measured at 269–275 ms on the same rig on 2026-08-26, and 234 ms in the volley probe) — a static
+ * number cannot be right for both a software rasteriser and the reporter's GPU. So the constant is only
+ * the SEED: each volley's round 0 runs with an empty renderer, so the time from issuing it to the
+ * engine's first report of a creation IS that client's own idle create latency, and it is folded into a
+ * running estimate that the NEXT volley phases by. A table converges on its own hardware within a
+ * volley or two and nobody has to ship a number for it.
+ *
+ * ⛔⛔ SHIPPED **OFF**, AND THAT IS A DELIBERATE HAND-BACK RATHER THAN A HALF-BUILT FEATURE (2026-08-26).
+ * The mechanism is complete, measured and pinned in both states; what is NOT established is whether the
+ * trade feels right at a table, and the only rig available to measure it is a headless SOFTWARE
+ * RASTERISER that drops four rounds of eight on these volleys. On that client the correction WORKS —
+ * end-of-volley trailing goes from a median of 10 round-elements to 0 — but it also OVER-corrects,
+ * because the phase's own `setTimeout` is starved by the same renderer everything else is waiting on:
+ * measured sprite-vs-report gaps of −256 to −385 ms where the phase asked for 168, i.e. the picture
+ * now LEADS its own report there. A client whose timers are not starved does not do that, and the
+ * reporter's hardware is the only place the real number lives.
+ * ⚠ AND IT IS A FEEL CHANGE TO EVERY GUN: the report lands one engine-latency after the trigger
+ * resolves. Nothing about the volley's RHYTHM moves — the phase is resolved once per payload, so every
+ * round shifts by the same number and the cadence is untouched by construction — but a trigger that
+ * answers late is exactly the kind of thing a table notices in ten seconds, and look calls on this
+ * project belong to the user.
+ *
+ * ⏩ TO ENABLE: `FX_AUDIO_PHASE = true`, one field. That turns on the audio phase AND zeroes the
+ * arrival compensation together, which is the only pairing the arithmetic above permits.
+ * ⏪ OFF (shipped) is exactly the pre-2026-08-26 build: audio at zero phase, arrival elements
+ * compensated by the static `SEQ_PRESTART_COMP_MS`.
+ */
+// ⏵ FLIPPED ON 2026-08-27 for the ruled one-listen trial (ledger #23as window; give-up criterion:
+// if the user still hears trailing — or the delayed trigger feels wrong — revert to `false` and
+// ship the drawn-round cap fallback instead).
+export const FX_AUDIO_PHASE = true;
+
+/**
+ * Test seam, of the same family as `_setDropLagMs` and armed by nothing that ships — the keeper has to
+ * drive BOTH states to pin this honestly: the bound the phase achieves, and the trail that returns
+ * without it. Null restores the shipped constant.
+ */
+let _audioPhaseOverride = null;
+export function _setAudioPhase(on) {
+  _audioPhaseOverride = (on === null || on === undefined) ? null : !!on;
+  return _audioPhaseOverride;
+}
+
+/** Whether the audio phase is live on this client right now — the constant, unless a seam is armed. */
+export function fxAudioPhaseEnabled() {
+  return _audioPhaseOverride === null ? FX_AUDIO_PHASE : _audioPhaseOverride;
+}
+
+/**
+ * ⛔ THE CEILING ON THE PHASE, and it is a responsiveness bound rather than a rendering one. A client
+ * whose engine is genuinely half a second behind would, unbounded, push its own reports half a second
+ * after the trigger — at which point the gun feels unresponsive, which is a worse defect than the one
+ * being fixed. Past this figure the rail accepts a visible trail instead of an audible delay.
+ * ⏪ REVERT: a large number lifts the bound; 0 makes the phase always zero (equivalent to the flag off
+ * for the audio half, while still zeroing the arrival compensation — not a state anything wants).
+ */
+export const FX_AUDIO_PHASE_MAX_MS = 400;
+
+/**
+ * How much of a new observation moves the running estimate. Deliberately slow: one volley's round 0 can
+ * be perturbed by anything else on the canvas that happened to draw in the same instant, and the figure
+ * being estimated is a property of the hardware, which does not change between volleys.
+ * ⏪ REVERT: 1 makes the estimate the last observation outright (jittery); 0 freezes it at the seed.
+ */
+export const FX_ENGINE_LATENCY_ALPHA = 0.3;
+
+/**
+ * The next running estimate of this client's engine create latency. Pure, so the convergence is
+ * asserted by value rather than by watching volleys go by.
+ */
+export function nextEngineLatencyEstimate({ prevMs = SEQ_PRESTART_COMP_MS, observedMs = 0, alpha = FX_ENGINE_LATENCY_ALPHA, maxMs = FX_AUDIO_PHASE_MAX_MS } = {}) {
+  const prev = Math.max(0, Number(prevMs) || 0);
+  const obs = Number(observedMs);
+  // ⛔ AN OBSERVATION OUT OF RANGE IS NOT EVIDENCE. A negative or non-finite reading is a bookkeeping
+  // slip, and one above the ceiling is a stalled tab rather than a latency — either would drag the
+  // estimate somewhere no volley should be phased by, so both leave it exactly where it was.
+  if (!Number.isFinite(obs) || obs < 0 || obs > Math.max(0, Number(maxMs) || 0)) return prev;
+  const a = Math.min(1, Math.max(0, Number(alpha) || 0));
+  const next = Math.round(prev + (obs - prev) * a);
+  // ⛔ A ROUNDED BLEND CAN STALL SHORT OF ITS TARGET, and it did: at prev 259 against a steady 260 the
+  // step is 0.3, `Math.round` returns 259, and the estimate sits one millisecond away for ever. Nudge
+  // by one when the blend rounds to nothing but the two still disagree, so convergence is a property
+  // rather than an approach. (`alpha: 0` still freezes — that is the documented revert.)
+  if (next === prev && obs !== prev && a > 0) return prev + Math.sign(obs - prev);
+  return next;
+}
+
+/** This client's running estimate of the engine's create latency. Session-lived; seeded, never zeroed. */
+let _engineLatencyMs = SEQ_PRESTART_COMP_MS;
+
+/** What the rail currently believes this client's engine charges to start an effect, in ms. */
+export function fxEngineLatencyMs() { return _engineLatencyMs; }
+
+/** Fold one round-0 observation into the estimate. Returns the new value. */
+export function _observeEngineLatency(observedMs) {
+  _engineLatencyMs = nextEngineLatencyEstimate({ prevMs: _engineLatencyMs, observedMs });
+  return _engineLatencyMs;
+}
+
+/** Test seam: put the estimate back to its seed so a keeper can drive convergence more than once. */
+export function _resetEngineLatency(ms = SEQ_PRESTART_COMP_MS) {
+  _engineLatencyMs = Math.max(0, Number(ms) || 0);
+  return _engineLatencyMs;
+}
+
+/**
+ * THE PHASE ONE PAYLOAD'S AUDIO IS ISSUED AT. Resolved ONCE per payload and threaded, exactly as the
+ * arrival and the choked cone are — a phase that moved between rounds would distort the cadence, which
+ * is the one thing this change must not touch. Pure in its arguments so the keeper asserts it by value.
+ */
+export function audioPhaseMs({ estimateMs = null, enabled = null, maxMs = FX_AUDIO_PHASE_MAX_MS } = {}) {
+  if (enabled === null || enabled === undefined) enabled = fxAudioPhaseEnabled();
+  if (!enabled) return 0;
+  const est = estimateMs === null || estimateMs === undefined ? fxEngineLatencyMs() : Number(estimateMs);
+  if (!Number.isFinite(est) || est <= 0) return 0;
+  return Math.round(Math.min(est, Math.max(0, Number(maxMs) || 0)));
+}
+
+/**
+ * WHAT COMES OFF AN ARRIVAL ELEMENT'S DELAY. Zero while the audio is phased — see the arithmetic in the
+ * block above: with the audio moved by `L`, subtracting `L` from the picture as well would move the
+ * pair apart again by exactly the amount that was just corrected.
+ */
+export function fxArrivalCompMs({ enabled = null } = {}) {
+  const on = (enabled === null || enabled === undefined) ? fxAudioPhaseEnabled() : enabled;
+  return on ? 0 : SEQ_PRESTART_COMP_MS;
+}
+
+/**
+ * Measured spread of the engine's start-up floor under a real burst, above the idle figure above.
+ * ⏪ REVERT: 0 (the feedback then judges anything past the bare idle floor as backlog).
+ */
+export const FX_PRESENTATION_LAG_MARGIN_MS = 60;
+
+/**
+ * WHAT OBSERVED PRESENTATION LATENESS IS FREE — the engine's own idle start-up cost plus its measured
+ * spread under load. Read by `effectiveRoundLagMs` (see the block beside the drop rule for the whole
+ * mechanism and the one-field revert). ⛔ Declared HERE, after the figure it is derived from: placed
+ * with the drop rule it would be a temporal-dead-zone throw at module load.
+ */
+export const FX_PRESENTATION_LAG_GRACE_MS = SEQ_PRESTART_COMP_MS + FX_PRESENTATION_LAG_MARGIN_MS;
+
 /**
  * THE HIT CONFIRMATION, standalone — one impact, its own Sequence, no muzzle, no report, no tracer.
  *
@@ -5123,8 +5912,9 @@ export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKe
   const to = aimPoint ?? (shooterToken ? aimPointOf(shooterToken, targetToken, gridPx) : (targetToken ? centerOf(targetToken) : null));
   if (!to) return out;
   // The engine's own start-up floor comes OFF the arrival so the sprite lands on the audio instant —
-  // the constant carries the measurement; a zero-travel round keeps the floor as its residue.
-  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - SEQ_PRESTART_COMP_MS);
+  // ⭐ or ZERO while the audio is phased instead, which is the shipped state: see the FX_AUDIO_PHASE
+  // block for why compensating both sides moves the pair apart by exactly what it just corrected.
+  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - fxArrivalCompMs());
   try {
     const seq = new globalThis.Sequence();
     const impact = _held(seq.effect().file(mark.key)).atLocation(to)
@@ -5413,7 +6203,12 @@ export function payloadPresentationMs(payload) {
   // A ruled fumble draws nothing (see the bail in fxWeaponFired), so there is no presentation to wait
   // out. Kept in step with the fan-out deliberately: the two are read by the same callers, and a span
   // reported for a shot that is never drawn would park a window for a second over an empty canvas.
-  if (payload?.fumbleRuled) return 0;
+  //
+  // ⭐ BY CLASS SINCE 2026-08-26, off the same predicate the fan-out's bail uses — a rows-1–4 fumble IS
+  // drawn (it is an ordinary miss) and therefore owes its caller a real span. Reporting zero for it
+  // would open the apply window while the shell was still crossing the map, which is the one direction
+  // this arithmetic must never err in (see the over-state rule at presentationTailMs).
+  if (fumbleStandsRailsDown(payload)) return 0;
   // The LEAD-IN. When the shooter turns first, the rounds do not start until the turn finishes, so
   // the span a caller waits out has to include it — otherwise the apply window would open a turn's
   // worth of time early, which is the whole thing the wait exists to prevent. Read from the same
@@ -5653,7 +6448,10 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // clients receive it through core's own token broadcast as they always did). Everything else —
   // seeds, cadence, draws, sounds, the settle bookkeeping and the canary — is deliberately identical,
   // because identical is the property the whole design stands on.
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false };
+  // `fumbleClass` is REPORTED, not decided here: it is the payload's own field (derived once at the
+  // seam) and it rides the result so a reader — the keeper, a bench run — can tell WHICH ruled fumble
+  // produced a silent return, rather than only that one did. Null on every other payload.
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false, fumbleClass: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   const actor = actorForPayload(payload);
   const weapon = resolveFiredWeapon(payload, actor);
@@ -5681,7 +6479,39 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // Placed with the other bail-outs, ahead of _armSettlement, for the reason stated there: a
   // payload this rail will not draw must fall to the arithmetic rather than leave a caller waiting on
   // a promise nobody will resolve.
-  if (payload?.fumbleRuled) return { ...result, weaponClass, skipped: "fumble" };
+  //
+  // ⭐⭐ WHICH FUMBLES (2026-08-26, user ruling decided by Core p.43's REFLEX Combat column,
+  // text-verified). Everything above is right about three of the table's four outcomes and wrong about
+  // the biggest one. The rows the ruling splits, and what this rail does for each:
+  //
+  //   1–4  "No fumble. You just screw up."        → `plainMiss`         — DRAWN. An ordinary miss: a
+  //        round left the barrel and went somewhere else, so the fan-out below runs unchanged and
+  //        presents the miss it presents for any other missed shot. The base hands the card `hits: 0`,
+  //        so every round is drawn with `hit: false` and no impact family is issued — no extra branch
+  //        is needed to make it look like a miss, because it IS one.
+  //   5    "You drop your weapon."                 → `noDischarge`       — SILENT.
+  //   7    "Weapon jams, or knocks you down."      → `noDischarge`       — SILENT.
+  //   6    "Weapon discharges or strikes something harmless." → `harmlessDischarge` — SILENT TODAY, and
+  //        this is the one deliberate under-draw. The ruling allowed a MUZZLE-ONLY presentation "if the
+  //        rail can do that cheaply within the fx skill's rules", and it cannot: `fxShot` composes the
+  //        flash, the muzzle sprite, the tracer/pellets and the arrival mark into ONE Sequence (the call
+  //        below), so muzzle-without-tracer is a new DRAW SHAPE — a new parameter threaded through
+  //        fxShot, its own frozen spec block, its own clock-2 answer, its own term in presentationTailMs
+  //        and its own Review·Shooter entry — not a gate on an existing one. That is a unit of its own,
+  //        and it is recorded as such in docs/FX-RAIL.md §8. Silence is also the direction that stays
+  //        consistent with the resolution rail, which plants no corridor for this class either. ⏪ To
+  //        revert to a drawn muzzle later, the class is on the payload and this is the one line to split.
+  //   8–10 "You wound yourself / a party member."  → `ownSide`           — SILENT. The base's own fumble
+  //        card is the whole account of that shot and this rail has nothing to add to it.
+  //   (no class on the payload)                    → SILENT — the uniform bail exactly as it shipped,
+  //        which is what an older client's relayed payload honestly is.
+  //
+  // ⛔ ONE PREDICATE, BOTH RAILS: `fumbleStandsRailsDown` is the same call the plant makes (inverted —
+  // combat/damage-hooks.js `_placeSpreadZone`). Presentation and resolution cannot answer differently
+  // about one shell, which is the defect this whole line of work came out of.
+  if (fumbleStandsRailsDown(payload)) {
+    return { ...result, weaponClass, skipped: "fumble", fumbleClass: payload?.fumbleClass ?? null };
+  }
 
   // WHICH LOAD IS IN THE GUN — resolved ONCE, here, with the payload in hand, and threaded into every
   // verb below. It cannot be resolved further down: fxShot and the tail arithmetic never see a payload,
@@ -5772,6 +6602,40 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // TRACER_ARRIVAL_MS for the decode.
   const arrival = arrivalSpecFor(weaponClass, ammoKey, aimSquares, volley);
   const arrivalMs = arrival.ms;
+
+  // ⭐ HOW WIDE THIS PAYLOAD'S GROUP MAY LAND — resolved ONCE here, beside the aim and the arrival and
+  // for the same reason: the rounds, their arrival marks and the incendiary ground they set alight all
+  // have to be built from ONE half-angle or they stop describing the same shot. It is the only site
+  // that can resolve it, because the p.109 band is measured against the FIRING WEAPON'S own Range and
+  // that number lives on the payload (`spreadRangeM`). Every other class computes an unchoked answer
+  // and is untouched. See SHELL_CHOKE for the ruling and the one-field revert.
+  const choke = arrivalConeFor(ammoEntry, centerOf(shooter), aim, target, gridSizePx, payload);
+
+  // ⭐ WHETHER THIS PAYLOAD'S ROUNDS STOP AT A WALL — resolved ONCE here, beside the aim, the arrival
+  // and the choke, and for the identical reason: every round, every pellet arrival mark and every
+  // impact report has to agree about where the shot ended. See wallClipPlanFor for the ruling and for
+  // the gate that keeps an aimed shot which LANDED from ever being clipped.
+  const wallClip = wallClipPlanFor(payload, shooter, target);
+  // WHERE THE AIMED RAY ITSELF STOPS, and what fraction of its length that is. The fraction is the one
+  // number the arrival family is scaled by: a round that stops at a wall halfway to the figure gets
+  // there in half the time, so its mark and its report land when it arrives rather than when it would
+  // have arrived at a body it never reached. Null/1 when nothing is clipped, which is the pre-ruling
+  // arithmetic exactly.
+  const clipStop = (wallClip && shooter && aim) ? wallImpactPoint(centerOf(shooter), aim) : null;
+  const clipFrac = (() => {
+    if (!clipStop || !shooter || !aim) return 1;
+    const o = centerOf(shooter);
+    const full = Math.hypot(aim.x - o.x, aim.y - o.y);
+    if (!(full > 0)) return 1;
+    return Math.min(1, Math.max(0, Math.hypot(clipStop.x - o.x, clipStop.y - o.y) / full));
+  })();
+  // The point the arrival family is planted at, and the clock it is planted on.
+  // ⏱ ⛔ THE TAIL IS DELIBERATELY *NOT* SHORTENED BY THIS. `presentationTailMs` keeps reading the
+  // UNCLIPPED arrival, so a clipped shot's damage window opens strictly later than its last element
+  // ends. Over-stating the tail is the only safe direction (standard §5) — under-stating it opens the
+  // apply early and fails silently — and a clip can only ever move an arrival EARLIER.
+  const markAim = clipStop ?? aim;
+  const markArrivalMs = Math.max(0, Math.round(arrivalMs * clipFrac));
 
   // ONE round's seed, built in ONE place. Attacker, weapon, the two counts, the ROUND INDEX and the
   // rolled damage — identity plus per-event entropy, which is the rule this file follows everywhere it
@@ -5873,11 +6737,16 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       const seed = fxSeedOf(payload?.attackerId, payload?.weaponId, shots, hits,
         Math.round(at.x), Math.round(at.y), JSON.stringify(payload?.areaDamages ?? {}));
       const pts = groundFirePoints(from, at, {
-        landed: hits, pellets: ammoEntry.pellets, spreadRad: ammoEntry.spreadRad,
+        // ⭐ THE CHOKED CONE, not the row's (2026-08-25). The claim this branch is built on is that the
+        // flames are literally where the pellets went — so the moment the drawn fan started flying a
+        // clamped half-angle, a fire placement taking the row's raw `spreadRad` would have gone back to
+        // scattering across a cone nothing flies. Same number the draw resolved, threaded, exactly as
+        // the jitter and the arrival already are. See SHELL_CHOKE.
+        landed: hits, pellets: ammoEntry.pellets, spreadRad: choke.coneRad,
         scatterPx: GROUND_FIRE.scatterSquares * gridPx, max: GROUND_FIRE.maxPerPayload, seed,
         // The FIRST round's own pellet jitter, so the flames sit where that round's pellets actually
         // went rather than on the even ladder they no longer fly. Same helper, same seed the draw uses.
-        jitter: pelletJitterFor(shotSeedFor(0), Math.trunc(ammoEntry.pellets) || 0, ammoEntry.spreadRad),
+        jitter: pelletJitterFor(shotSeedFor(0), Math.trunc(ammoEntry.pellets) || 0, choke.coneRad),
       });
       if (pts.length) {
         groundFire = { queued: true, seed, points: pts.length, at: pts.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })) };
@@ -5900,7 +6769,9 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // What CHANGED is only how many times the draw is issued and when: once per landing round, on that
   // round's own visual-impact clock, bounded by BLOOD_SPLATTER.maxPerPayload. Still never awaited and
   // still never tagged, so it can neither delay a round nor hold the damage window.
-  const bleeds = goreEnabled() && hits > 0 && !!target && !bearsStructuralSdp(target.actor);
+  // ⛔ AND NEVER FOR A CLIPPED SHOT (2026-08-26). Blood needs a body the round reached; a round that
+  // stopped at a wall reached masonry. The gate is the plan, not a second opinion about the geometry.
+  const bleeds = goreEnabled() && hits > 0 && !!target && !bearsStructuralSdp(target.actor) && !wallClip;
   let blood = bleeds ? { queued: 0, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
     tokenId: target.id, cap: BLOOD_SPLATTER.maxPerPayload } : null;
 
@@ -5930,7 +6801,9 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // When the pattern flow owns the payload the target-token plan stands down: the two plans answer the
   // same question for the two flows and must never both sound one shot.
   const patternAudio = patternAudioPlanFor(payload, shooter);
-  const hitAudio = patternAudio ? null : hitSoundPlanFor(target);
+  // ⭐ A CLIPPED ROUND SOUNDS LIKE THE WALL IT STOPPED ON, not like the body it never reached — the
+  // plan's own `kind`, resolved with the clip so the ear and the eye are told the same thing.
+  const hitAudio = patternAudio ? null : hitSoundPlanFor(target, wallClip?.kind ?? null);
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -5941,9 +6814,31 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // THE ANCHOR. Every round's due time is measured from this one instant (roundDueAtMs), so a round
   // that starts late cannot push the rounds after it — see FX_DROP_LAG_FRACTION for the measurement that
   // made this necessary and for why the loop may not trust its own sleep.
+  // ⭐ WARM THIS PAYLOAD'S OWN ASSETS BEFORE THE FIRST ROUND (2026-08-26, sync half (a)). Bounded,
+  // once per key per session, and a no-op for every volley after the first of its class — see
+  // fxWarmPayloadAssets for why the session-wide `ready` warm is not sufficient on its own.
+  // ⛔ AWAITED HERE, ABOVE THE ANCHOR, so the wait is spent BEFORE `loopStart` is taken and cannot be
+  // charged to round 0 as lateness. It is also after the score emit, so a remote client's own warm
+  // runs in parallel with the firing client's rather than after it.
+  const preload = await fxWarmPayloadAssets(ammoEntry, volley);
+
+  // ⭐⭐ THE AUDIO PHASE FOR THIS PAYLOAD, RESOLVED ONCE (2026-08-26 — the whole mechanism, the
+  // arithmetic and the field report are at the FX_AUDIO_PHASE block). Every round of this volley waits
+  // the SAME number of ms before its report, so the cadence a listener hears is untouched and only the
+  // volley's onset moves. Resolving it per round instead would stretch the rhythm, which is the one
+  // thing this correction must not do — so it is threaded, exactly as the arrival and the cone are.
+  const audioPhase = audioPhaseMs();
+
   const loopStart = Date.now();
   let dropped = 0;
   let maxLagMs = 0;
+  // ⭐ THE PRESENTATION CLOCK'S BOOKKEEPING (2026-08-26 — the whole mechanism is at
+  // effectiveRoundLagMs). `lastIssue` is when the previous round was handed to the engine and what the
+  // engine's creation count stood at then; the next iteration reads how long it took the engine to
+  // report anything for it. Two numbers, no polling, no extra hook.
+  let lastIssue = null;
+  let maxPresentationLagMs = 0;
+  let presentationDrops = 0;
   for (let i = 0; i < shots; i++) {
     // Sleep the REMAINDER to this round's slot, not a fixed interval. A round already past its slot
     // waits not at all and is dealt with by the drop rule below.
@@ -5954,6 +6849,30 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     // How far behind its own slot this round actually is, measured at the moment it would be issued.
     const lagMs = Date.now() - roundDueAtMs(loopStart, i, cadenceMs);
     if (lagMs > maxLagMs) maxLagMs = lagMs;
+    // ⭐ HOW LATE THE PICTURE IS, measured rather than assumed. If the engine has reported a creation
+    // since the previous round was issued, the lateness is how long that took; if it has reported
+    // NOTHING yet, the round is at least this late already and the pending time is the reading. Either
+    // way it is the renderer's answer, not the loop's own opinion of its schedule.
+    let presentationLagMs = 0;
+    let presentationPending = false;
+    if (lastIssue) {
+      const obs = _drawObserved;
+      presentationPending = !(obs.count > lastIssue.seen);
+      presentationLagMs = presentationPending
+        ? Math.max(0, Date.now() - lastIssue.at)     // nothing reported yet: at LEAST this late
+        : Math.max(0, obs.atMs - lastIssue.at);      // reported: exactly this late
+      if (presentationLagMs > maxPresentationLagMs) maxPresentationLagMs = presentationLagMs;
+      // ⭐ ROUND 1 IS WHERE THIS CLIENT'S ENGINE LATENCY IS LEARNED, and it is the only round that can
+      // teach it honestly: the reading spans round 0, which ran against an EMPTY renderer, so it is the
+      // engine's idle create cost rather than a measurement of backlog. Later rounds measure the queue
+      // and would drag the estimate up until the phase hit its own ceiling.
+      // ⛔ AND IT READS `firstAfterMarkMs`, NOT `presentationLagMs` — the two answer different
+      // questions and using the wrong one is a defect this build made and measured on itself (see
+      // _markDrawObservation: the round's LAST element vs its FIRST, a ~130 ms over-state that made the
+      // phase overshoot and the picture lead its own report). Zero means the engine has not reported
+      // anything yet, which is a floor rather than a latency and is not evidence.
+      if (i === 1) _observeEngineLatency(_drawObserved.firstAfterMarkMs || NaN);
+    }
     const isLast = i === shots - 1;
     // ⭐ THE DROP, and it takes the WHOLE round — its audio with its picture. The first build of this
     // rule kept the audio and refused only the sprites, on the reading that the ear should still get
@@ -5964,7 +6883,26 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     // rounds that DO play sitting on their own slots, so the burst keeps its rhythm at the cost of a
     // round rather than losing the rhythm to keep one. That is what the ruling's reason says out loud:
     // the audio already told the ear the story, so one more report is what there is least need of.
-    const refused = roundDropped({ lagMs, isLast, dropLagMs: dropLagMsFor(cadenceMs) });
+    // ⭐ THE DROP NOW JUDGES THE WORSE OF THE TWO CLOCKS. `roundDropped` is unchanged — the threshold
+    // and the ⛔ last-round exemption both still live there and are still the only things that decide;
+    // what changed is the lateness handed to it. A loop whose timers are perfect but whose renderer is
+    // three slots behind now drops rounds, which is the entire point of the ruling.
+    // ⛔ CAPPED, because an un-reported round must not be able to report an unbounded lateness — see
+    // FX_PRESENTATION_LAG_CAP_CADENCES for the 18-of-20 runaway that measured this bound into being.
+    const judgedLagMs = effectiveRoundLagMs({
+      scheduleLagMs: lagMs, presentationLagMs,
+      capMs: FX_PRESENTATION_LAG_CAP_CADENCES * cadenceMs,
+    });
+    const refused = roundDropped({ lagMs: judgedLagMs, isLast, dropLagMs: dropLagMsFor(cadenceMs) });
+    // Counted apart so the report can say WHICH clock refused the round — a drop the schedule alone
+    // would not have made is the feedback working, and a number is what says whether it did.
+    if (refused && judgedLagMs > lagMs) presentationDrops++;
+    // ⭐ RE-STAMP ON A REFUSAL. A dropped round queues nothing, so it can never move the observation
+    // that dropped it; without this the loop measures every later round against the same stale instant
+    // and refuses the whole rest of the burst. Re-stamping makes the rule self-correcting in exactly
+    // the way the original drop rule is: refusing work removes the backlog, and the NEXT reading sees
+    // the state the drop created rather than the state that caused it.
+    if (refused) lastIssue = { at: Date.now(), seen: _drawObserved.count };
     // ⭐⭐ THE IMPACT FAMILY IS NOT ON THE TRACER'S BUDGET (user ruling 2026-08-11: *"hits late in a long
     // burst get NO blood at all"*). The pacing rule above refuses a late round's PICTURE AND ITS REPORT,
     // and it is right to — but it was also refusing the round's ARRIVAL, and those are two different
@@ -5976,7 +6914,10 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     //
     // The remaining lateness comes OFF the arrival, so a round already 200ms behind its slot puts its
     // mark up 200ms sooner and lands on the canvas alongside the rounds that were drawn on time.
-    const arriveIn = Math.max(0, arrivalMs - lagMs);
+    // ⭐ THE CLIPPED ARRIVAL where this shot stops at a wall (`markArrivalMs`, the payload's one
+    // resolved arrival scaled by how much of the ray survives), the full one otherwise — identical
+    // number when nothing is clipped.
+    const arriveIn = Math.max(0, markArrivalMs - lagMs);
     // What a LANDING round owes at the far end of the shot, issued from one place so the drawn round
     // and the refused one cannot drift. `issueMark` is false for a round that is being drawn: fxShot
     // puts the mark in the same Sequence as that round's tracer, and a second one here would be two
@@ -5986,7 +6927,9 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
         impacts.queued++;
         if (issueMark) {
           impacts.refused++;
-          fxHitMark(shooter, target, { weaponClass, ammoKey, delayMs: arriveIn, aimPoint: aim })
+          // ⭐ PLANTED AT THE WALL on a clipped shot (`markAim`), at the aim point otherwise — one
+          // point, resolved once per payload, so the mark cannot land somewhere the rounds did not.
+          fxHitMark(shooter, target, { weaponClass, ammoKey, delayMs: arriveIn, aimPoint: markAim })
             .catch((err) => console.warn(`${SCOPE} | hit mark failed`, err));
         }
       }
@@ -6004,7 +6947,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       if (hitAudio && hitAudio.queued < hitAudio.cap) {
         // `broadcast: false` — a RAIL impact is scored (MSG_SCORE): every client performs this same
         // loop, so the play is local and in phase with this client's own draws.
-        fxHitSound(hitAudio.kind, { delayMs: arriveIn, index: hitAudio.queued, broadcast: false });
+        fxHitSound(hitAudio.kind, { delayMs: arriveIn, index: hitAudio.queued, broadcast: false, phaseMs: audioPhase });
         hitAudio.queued++;
       }
     };
@@ -6016,7 +6959,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     if (patternAudio && patternAudio.queued < patternAudio.cap) {
       for (const v of patternAudio.victims) {
         if (patternAudio.queued >= patternAudio.cap) break;
-        fxHitSound(v.kind, { delayMs: Math.max(0, Math.round(arrivalMs * v.frac) - lagMs), index: patternAudio.queued, broadcast: false });
+        fxHitSound(v.kind, { delayMs: Math.max(0, Math.round(arrivalMs * v.frac) - lagMs), index: patternAudio.queued, broadcast: false, phaseMs: audioPhase });
         patternAudio.queued++;
       }
     }
@@ -6025,7 +6968,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       if (shooter && i < hits) markAndBleed(true);
       continue;
     }
-    sfx(weaponClass, { burst });
+    sfx(weaponClass, { burst, delayMs: audioPhase });
     // Flash + sprite + tracer all start in the SAME tick as this shot's audio, and none of them is
     // awaited: the loop's timer is the cadence a viewer and a listener both read. Every round of a
     // burst still announces its own flash — a round is never silently dropped on the way out — and what
@@ -6055,8 +6998,24 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       // term, same position, as the burning-ground seed above; see the VOLLEY block's chaos note.
       // THE ARRIVAL IS HANDED DOWN rather than re-derived: one derivation per payload, so this round's
       // mark and this round's spray (issued above) are hung on the identical number.
+      // THE CHOKED CONE IS HANDED DOWN with it, for the identical reason: one derivation per payload,
+      // so this round's pellets, its arrival marks and the payload's ground fire are all built from the
+      // same half-angle. See SHELL_CHOKE.
+      // WHEN THIS ROUND WENT TO THE ENGINE, and what the engine had drawn by then. Read by the NEXT
+      // iteration as the presentation clock's measurement (see effectiveRoundLagMs). Stamped only for
+      // a round that is actually issued — a refused round queues nothing, so it is not evidence about
+      // the renderer either way.
+      lastIssue = { at: Date.now(), seen: _drawObserved.count };
+      // ⭐ ROUND 0 ALSO MARKS THE OBSERVER, so round 1 can read how long the engine took to start
+      // drawing AT ALL — this client's own idle create latency, which is what the audio phase is.
+      // Only round 0: every later round is measuring a queue rather than the engine (see the reading
+      // site above and _markDrawObservation).
+      if (i === 0) _markDrawObservation();
       fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
-        volley, arrivalMs, shotSeed: shotSeedFor(i), aimPoint: aim, lightHoldMs })
+        volley, arrivalMs, coneRad: choke.coneRad, shotSeed: shotSeedFor(i), aimPoint: aim, lightHoldMs,
+        // THE EXEMPT CLIP, handed down like the arrival and the cone: resolved once for the payload,
+        // applied per RAY inside fxShot (six pellets meet a wall at six points).
+        clipWalls: !!wallClip })
         .catch((err) => console.warn(`${SCOPE} | combat fx shot failed`, err));
       // ⭐ ONE SPRAY PER LANDING ROUND, on THIS round's own visual-impact clock, and the mark counted
       // against the same budget the refused rounds draw from. The hits are the LEADING rounds of the
@@ -6087,6 +7046,11 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, patternFire, blood, volley,
     // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
     arrival, impacts,
+    // ⭐ AND THE ARRIVAL CHOKE, by value — the resolved half-angle, the class's own ceiling, the cap in
+    // pixels and squares, the p.109 band that supplied it and WHICH of the four answers bound this shot
+    // (`capSource`: cone / book / token / floor). Reported for the same reason the aim is: a clamp that
+    // can only be checked by looking at the canvas is a clamp nothing can assert. See SHELL_CHOKE.
+    choke,
     // WHAT THE IMPACTS SOUNDED LIKE and how many were issued against their own cap — reported for the
     // same reason the mark tally is: "an N-round burst on a vehicle sounds M structure impacts" is the
     // claim, and this is the number that says whether it held.
@@ -6100,9 +7064,26 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     aim: aim ? { x: aim.x, y: aim.y } : null,
     aimSquares,
     aimDeclared: !!declaredAimPointOf(payload, shooter),
+    // ⭐ THE EXEMPT CLIP, by value: the plan (or null), how much of the aimed ray survived, and where
+    // the arrival family was planted. Reported for the same reason the choke is — a clip nothing can
+    // assert is a clip nobody can trust.
+    wallClip, clipFrac, clipStop: clipStop ? { x: Math.round(clipStop.x), y: Math.round(clipStop.y) } : null,
+    markArrivalMs,
     // The pacing report, by value: how many rounds' pictures were refused and the worst lateness seen.
     // `loopMs` against `(shots-1) × cadence` is the drift the anchored schedule exists to hold down.
-    dropped, maxLagMs, loopMs: Date.now() - loopStart };
+    // ⭐ AND THE SYNC REPORT beside it: the worst PRESENTATION lateness observed, how many rounds the
+    // schedule clock alone would have kept, and what the preload cost. The claim "a twenty-round volley
+    // holds its cadence against the drawn frames" is exactly these numbers.
+    dropped, maxLagMs, maxPresentationLagMs, presentationDrops, preload,
+    // ⭐ THE PHASE THIS VOLLEY'S AUDIO WAITED, and the estimate it was drawn from — reported so the
+    // keeper can pin "every report of one volley took the SAME phase" and watch the estimate converge
+    // on a real client, rather than inferring either from a stopwatch.
+    audioPhaseMs: audioPhase, engineLatencyMs: fxEngineLatencyMs(),
+    // What round 1 actually read off the engine for round 0 — the observation the estimate is built
+    // from, reported so a keeper can watch convergence rather than infer it. 0 = nothing was reported
+    // in time, which is not evidence and does not move the estimate.
+    engineLatencyObservedMs: _drawObserved.firstAfterMarkMs,
+    loopMs: Date.now() - loopStart };
 }
 
 /* ══════════════════════════ Wiring ══════════════════════════ */
@@ -6110,6 +7091,35 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
 // Every effect the engine has reported creating on this client, ever. A counter, not a list: the only
 // question asked of it is "did this number move while that shot was being drawn".
 let _drawsSeen = 0;
+/**
+ * WHEN THE ENGINE LAST ACTUALLY STARTED SOMETHING — the presentation clock's only reading (see
+ * effectiveRoundLagMs). A count and a timestamp, nothing more: the one question asked of it is "has
+ * the engine reported anything since I issued that round, and how long did it take".
+ */
+let _drawObserved = { count: 0, atMs: 0, markAt: 0, firstAfterMarkMs: 0 };
+
+/**
+ * ⭐ MARK THE OBSERVER, so the NEXT creation the engine reports can be timed from here (2026-08-26).
+ *
+ * ⛔ WHY THIS EXISTS RATHER THAN REUSING `atMs`, and it is a defect this build made and measured on
+ * itself. `atMs` is overwritten by EVERY creation, so it always names the engine's MOST RECENT element
+ * — and one shell round is a muzzle flash plus six pellets plus its arrivals, whose creations are
+ * spread over a hundred milliseconds or more. Reading `atMs` to learn "how long did the engine take to
+ * start drawing this round" therefore measured how long it took to finish drawing ALL of it, which on
+ * this rig over-stated the latency by about 130 ms — enough that the audio phase built on it OVERSHOT
+ * and the picture began LEADING its own report by up to 350 ms. Measured, before the fix:
+ * round-0 report→picture phase of −119/−232/−353 ms against an estimate climbing 175→324.
+ *
+ * The latency wanted is to the FIRST element after the round was handed over, so the first one after a
+ * mark is recorded once and left alone until the next mark.
+ */
+export function _markDrawObservation() {
+  _drawObserved.markAt = Date.now();
+  _drawObserved.firstAfterMarkMs = 0;
+  return _drawObserved.markAt;
+}
+/** Read the presentation clock. Exported so a keeper can assert the feedback off a real burst. */
+export function fxDrawObservation() { return { count: _drawObserved.count, atMs: _drawObserved.atMs }; }
 // One message per session. The condition it reports does not clear by itself — it is a property of
 // the tab — so repeating it every shot would only be noise on top of silence.
 let _silentPresentationWarned = false;
@@ -6256,6 +7266,110 @@ export function fxPreloadAssets() {
   return out;
 }
 
+/**
+ * ⭐⭐ THE PER-PAYLOAD WARM (user ruling 2026-08-26, the audio/visual sync unit, half (a)).
+ *
+ * `fxPreloadAssets` above already warms the whole manifest at `ready`, and that is still the main
+ * defence. It is not a complete one, and the gap is exactly where the drift is worst:
+ *   · it is fire-and-forget, so the FIRST volley of a session can start while the fetch+decode of its
+ *     own tracer is still in flight — and a video asset's first draw pays that cost ON SCREEN, which
+ *     is the audio landing on time while the picture arrives late, one round at a time;
+ *   · a client that joined mid-session, reloaded, or had the rail switched on afterwards never ran it;
+ *   · an ammo overlay can re-point a key after the manifest was warmed.
+ *
+ * So the payload's OWN keys are warmed immediately before its first round, and the volley waits — but
+ * ⛔ ONLY FOR A BOUNDED TIME, and only ONCE PER KEY PER SESSION. A shot that stalls waiting on a
+ * preloader is worse than a shot that draws late, so the wait is capped and a timeout simply proceeds
+ * into exactly today's behaviour (first-play decode). After the first warm, the keys are remembered
+ * and every later volley of that class pays nothing at all — the common case is a no-op that returns
+ * without awaiting anything.
+ *
+ * ⏪ REVERT: `FX_PAYLOAD_PRELOAD_WAIT_MS = 0` makes every call return immediately, which is the
+ * pre-ruling behaviour with the bookkeeping still reported.
+ */
+export const FX_PAYLOAD_PRELOAD_WAIT_MS = 400;
+
+/** Keys this client has already asked the engine to warm. Session-lived; never cleared. */
+const _warmedFxKeys = new Set();
+
+/** Test seam: forget what has been warmed, so a keeper can assert the FIRST-warm path more than once. */
+export function _resetFxWarmed() { _warmedFxKeys.clear(); }
+
+/**
+ * Every database key ONE payload can draw — the class row with its overlay already merged, plus the
+ * volley asset when that branch owns the round. Pure and separately exported so the keeper can assert
+ * the list by value rather than by watching a network tab.
+ */
+export function fxPayloadPreloadKeys(entry, volley = null) {
+  const keys = new Set();
+  for (const v of Object.values(entry ?? {})) {
+    if (typeof v === "string" && v.startsWith("jb2a.")) keys.add(v);
+  }
+  // The arrival family a fanned round draws is not on the class row, so it is named here rather than
+  // scraped — a pellet fan whose arrival marks decode mid-volley is the same defect as a late tracer.
+  for (const c of [PELLET_ARRIVAL, HIT_CONFIRM, MUZZLE_SPARK, BLOOD_SPLATTER]) if (c?.key) keys.add(c.key);
+  // ⭐⭐ THE ELEMENTS WHOSE KEY IS A CONSTANT AND WHOSE GATE IS NOT A KEY (found by the treatment sweep,
+  // 2026-08-26). The scrape above finds a key only where the resolved entry HOLDS one as a string —
+  // which is true of `tracer`, `muzzle` and `impactKey`, and false of every element the row turns on
+  // with a number or a boolean. So the incendiary load's burning ground (`groundFire: true`), the
+  // muzzle motes (`motes: 10`) and the shell's smoke puff (`smokeSquares: 0.6`) were named nowhere in
+  // this list and were warmed only by the session-wide manifest — which is fire-and-forget, and which
+  // a client that joined mid-session, reloaded, or switched the rail on afterwards never ran at all.
+  // ⚠ THE GATE IS READ, NOT THE KEY GUESSED: each is added only when THIS payload's resolved entry
+  // actually asks for it, so a class that draws no motes does not queue the motes asset.
+  if (entry?.groundFire && GROUND_FIRE?.key) keys.add(GROUND_FIRE.key);
+  if (Number(entry?.motes) > 0 && MUZZLE_MOTES?.key) keys.add(MUZZLE_MOTES.key);
+  if (Number(entry?.smokeSquares) > 0 && MUZZLE_SMOKE?.key) keys.add(MUZZLE_SMOKE.key);
+  // ⚠ PELLET_CHAOS IS DELIBERATELY ABSENT and it is not an oversight: it is a GEOMETRY record (slot,
+  // reach, size, stagger) that perturbs the fan's own tracer, not an asset with a key of its own. There
+  // is nothing there to warm.
+  if (volley?.key) keys.add(volley.key);
+  return [...keys];
+}
+
+/**
+ * Warm this payload's keys and wait, at most `waitMs`, for the engine to finish. Returns the
+ * bookkeeping by value: what was already warm, what this call asked for, how long it actually waited
+ * and whether it gave up. Never throws — a preloader that fails leaves the shot exactly as it was.
+ */
+export async function fxWarmPayloadAssets(entry, volley = null, { waitMs = FX_PAYLOAD_PRELOAD_WAIT_MS } = {}) {
+  const out = { asked: 0, warm: 0, waitedMs: 0, timedOut: false, skipped: null };
+  try {
+    if (!sequencerActive() || !globalThis.Sequencer?.Preloader?.preloadForClients) {
+      return { ...out, skipped: "no-engine" };
+    }
+    const want = fxPayloadPreloadKeys(entry, volley)
+      .filter((k) => !_warmedFxKeys.has(k) && fxDbEntryExists(k));
+    out.warm = _warmedFxKeys.size;
+    out.asked = want.length;
+    if (!want.length) return out;
+    // ⛔ MARKED WARM BEFORE THE AWAIT, deliberately. Two volleys fired inside the wait window must not
+    // both queue the same preload, and a warm that FAILS must not make every later volley re-wait for
+    // it — the failure case is the pre-ruling behaviour, which is acceptable, and a retry loop on the
+    // firing path is not.
+    for (const k of want) _warmedFxKeys.add(k);
+    const started = Date.now();
+    const cap = Math.max(0, Number(waitMs) || 0);
+    if (cap <= 0) {
+      Promise.resolve(Sequencer.Preloader.preloadForClients(want))
+        .catch((err) => console.warn(`${SCOPE} | payload preload failed`, err));
+      return out;
+    }
+    let done = false;
+    await Promise.race([
+      Promise.resolve(Sequencer.Preloader.preloadForClients(want))
+        .then(() => { done = true; })
+        .catch((err) => { done = true; console.warn(`${SCOPE} | payload preload failed`, err); }),
+      _sleep(cap),
+    ]);
+    out.waitedMs = Date.now() - started;
+    out.timedOut = !done;
+  } catch (err) {
+    console.warn(`${SCOPE} | payload preload failed`, err);
+  }
+  return out;
+}
+
 export function registerCombatFx() {
   // Warm every drawable and every sound at registration (ready), so the first trigger pull of a
   // session pays no fetch+decode on screen. Best-effort; see fxPreloadAssets.
@@ -6294,6 +7408,13 @@ export function registerCombatFx() {
   // what Sequencer's own broadcast used to deliver: effects on scene A never rendered for a viewer
   // of scene B.
   // ⏪ The retired MSG_FLASH branch stood here (per-flash relay; see the constant's retirement note).
+  //
+  // ⭐ ONE OF THE TWO DELIBERATE EXEMPTIONS from the single-acting-session election
+  // (module/gm-session-primary.js). Every other relay in the module answers "am I the one client that
+  // should do this" before it acts, because acting means WRITING. This one draws: the announcement
+  // exists precisely so that N clients each render their own copy of the same shot, so electing one
+  // would leave every other viewer looking at nothing. Nothing here writes a document, so there is
+  // nothing to duplicate. (The sibling exemption is fx/trauma-team.js.)
   game.socket.on(`module.${SCOPE}`, (data) => {
     if (data?.type !== MSG_SCORE) return;
     if (!combatFxEnabled()) return;
@@ -6311,6 +7432,17 @@ export function registerCombatFx() {
   // our names, so nothing else on the canvas is affected.
   Hooks.on("createSequencerEffect", (effect) => {
     _drawsSeen++;   // the canary's only reading: did the engine actually make anything (see above)
+    // ⭐ AND THE PRESENTATION CLOCK'S (2026-08-26). This hook firing IS the engine saying "a sprite
+    // exists now", which is the only honest signal this rail has that the picture kept up. One
+    // assignment, in a hook that already runs for every effect — see effectiveRoundLagMs.
+    _drawObserved.count = _drawsSeen;
+    _drawObserved.atMs = Date.now();
+    // ⭐ THE FIRST ONE AFTER A MARK, recorded once (see _markDrawObservation for the 130 ms over-state
+    // this separation exists to stop). `atMs` above still means "the most recent", which is what the
+    // drop rule's pending reading wants; this one means "how long until the engine started at all".
+    if (_drawObserved.markAt && !_drawObserved.firstAfterMarkMs) {
+      _drawObserved.firstAfterMarkMs = _drawObserved.atMs - _drawObserved.markAt;
+    }
     const w = _tagWatches.get(effect?.data?.name);
     if (w && !w.done) { w.created++; clearTimeout(w.confirm); }
   });

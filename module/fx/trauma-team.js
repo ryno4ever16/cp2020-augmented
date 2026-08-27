@@ -927,8 +927,11 @@ function _onEffectEnded(effect) {
  * effect immediately with no reload and the listeners are inert while it is off.
  */
 export function registerTraumaTeam() {
-  // Every client draws its own copy; nothing is written, so there is no referee gate on the RECEIVING
-  // side and no active-referee election — the same shape the muzzle-flash announcement uses.
+  // ⭐ THE SECOND OF THE TWO DELIBERATE EXEMPTIONS from the single-acting-session election
+  // (module/gm-session-primary.js): every client draws its own copy, nothing is written, so there is
+  // no referee gate on the RECEIVING side and no session election — the same shape the muzzle-flash
+  // announcement in fx/effects.js uses, and for the same reason. Electing one client here would mean
+  // exactly one viewer saw the arrival.
   game.socket.on(`module.${SCOPE}`, (data) => {
     if (data?.type === MSG_LAND) {
       if (!combatFxEnabled()) return;
