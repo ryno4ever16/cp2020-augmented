@@ -105,26 +105,16 @@ export function scatterLandedPoint({
 }
 
 /**
- * THE TWO FACES A MISSED PATTERN SHOULD SCATTER ON, or null when this shot does not scatter. PURE.
+ * ⏪ `payloadScattersOnMiss` LIVED HERE UNTIL 2026-08-26 and now lives in combat/spread-geometry.js,
+ * beside `spreadAttackOutcome`, which it now asks instead of re-comparing the roll against the DC on its
+ * own. It could not stay: a payload's hit-or-miss verdict has exactly one owner, that owner is in
+ * spread-geometry.js, and this file is already IMPORTED BY it — so the dependency could only run one
+ * way without a cycle. What remains here is the TABLE itself: the 1d10 direction faces, the drift
+ * arithmetic and the landed point, which is what this file is named after and what both rails read.
  *
- * ⛔ THE DECISION AND THE DICE MUST HAPPEN ONCE, ON THE FIRING CLIENT — that is the whole point of this
- * function existing next to the roll rather than inside the plant. See the note at the roll site in
- * seam-shim.js.
- *
- * A shot scatters when the shooter DECLARED a corridor (an undeclared shot has no aimed centre to miss
- * from — the plant computes an axis instead) and the base system RULED IT A MISS. Both facts are already
- * on the payload by the time it is assembled; nothing is re-derived and nothing is rolled here.
- *
- * @param {object} payload a weaponFired payload, as far as it has been assembled
- * @returns {boolean} whether this shot's centre needs the grenade table
+ * The mechanism that forced the move: while this predicate carried its own `total < dc` it could not see
+ * a ruled FUMBLE — the base sets `forceMiss` and posts a miss card while the roll's total still stands
+ * over the DC — so it answered "hit, no scatter" for a shot the base had ruled a miss, and the seam
+ * rolled no faces for it. Same defect, same shape, as the one in `spreadAttackOutcome`.
  */
-export function payloadScattersOnMiss(payload) {
-  if (!payload?.spreadAim) return false;
-  const total = payload.attackTotal, dc = payload.toHitDC;
-  // ⚠ Absent means absent. `Number(null)` is 0 — a finite number — so a payload whose verdict fields
-  // were never computed would otherwise be ruled a miss against a DC of zero and scatter every time.
-  if (total === null || total === undefined || dc === null || dc === undefined) return false;
-  const t = Number(total), d = Number(dc);
-  if (!Number.isFinite(t) || !Number.isFinite(d)) return false;
-  return t < d;
-}
+

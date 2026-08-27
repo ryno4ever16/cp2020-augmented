@@ -12,6 +12,9 @@
 import { spreadBandSpec } from "../lookups.js";
 import { scatterLandedPoint } from "./scatter-table.js";
 import { SPREAD_MIN_LENGTH_M, SPREAD_MIN_WIDTH_M } from "./spread-placement.js";
+// WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED — read from the payload's carried field, never derived
+// here (the derivation has one caller, the seam). See combat/fumble-outcome.js.
+import { fumbleClassOf, fumbleIsOrdinaryMiss } from "./fumble-outcome.js";
 
 /**
  * THE CORRIDOR THE SHOOTER DECLARED, or null when nobody declared one.
@@ -52,8 +55,36 @@ export function declaredSpreadAim(payload) {
  * that reads it plants where it was aimed, which is what every pattern did before this existed. A shot
  * driven straight through `_placeSpreadZone` (a macro, the keeper's own placement legs) lands there.
  *
+ * ⭐⭐ THE BASE'S RULED BOOLEAN IS PREFERRED OVER THE COMPARISON (2026-08-26 — the defect that sent me
+ * here). Re-deriving hit-or-miss from the two numbers looked equivalent to reading the base's own
+ * verdict, and it is not, because the base rules on more than the arithmetic: `_maybeApplyRangedFumble`
+ * (base item/item.js:221) sets `forceMiss` on every fumble the table resolves, and EVERY fire path then
+ * zeroes its own hit count from that flag — autofire item.js:508, the burst item.js:577, semi-auto
+ * item.js:690 — so the card the base posts says MISS while its `attackRoll.total` still stands well over
+ * the DC. Reproduced at the table: a fumbled shell posted the base's fumble card and drew no
+ * presentation at all, while this function's comparison ruled the same shot a hit and the corridor card
+ * announced "31 vs 15 — hit". One shot, two verdicts, in the same chat log — the exact failure the
+ * paragraph above says this function exists to prevent, arriving through the one input it did not read.
+ *
+ * So the ORDER is: a ruled fumble is a miss; else the base's own `baseHit` when the payload carries it;
+ * else the comparison, for payloads that carry no verdict at all.
+ *
+ * ⏪ THE COMPARISON FALLBACK IS `>=` — MEETS-IT-BEATS-IT — AND IT IS NOT A CHOICE THIS FUNCTION MAKES.
+ * It mirrors the base's own semi-auto rule (`attackRoll.total >= DC`, item.js:689), which is the path a
+ * plain shotgun ALWAYS takes: `__getFireModes` (item.js:408) gives a non-auto weapon semi-auto and
+ * nothing else, so every ordinary buckshot pattern is ruled by that line. The base is NOT uniform about
+ * this — its autofire path counts rounds as `total − DC` (item.js:503) and so rules a TIE zero hits,
+ * a miss — which means "the base's tie rule" is a different answer per fire mode and cannot be restated
+ * here as one constant. It does not have to be: an autoshotgun's fired-in-anger tie now arrives with
+ * `baseHit: false` on the payload and is ruled a miss by the base's own word, above the fallback. Only
+ * an UNSTAMPED payload (a macro, a keeper placement, a client mid-update) reaches the comparison, and
+ * for those the semi-auto rule is the honest default. ⛔ Do not flip this to strictly-over without
+ * flipping `payloadScattersOnMiss` in the same edit — see the note there.
+ *
  * @param {object} payload a weaponFired payload
- * @returns {null|{hit:boolean, total:number, dc:number}}
+ * @returns {null|{hit:boolean, total:number, dc:number, hits:number|null, fumbled:boolean,
+ *   fumbleClass:("plainMiss"|"noDischarge"|"harmlessDischarge"|"ownSide"|null),
+ *   source:"fumble"|"base"|"derived"}}
  */
 export function spreadAttackOutcome(payload) {
   const rawTotal = payload?.attackTotal, rawDc = payload?.toHitDC;
@@ -61,10 +92,81 @@ export function spreadAttackOutcome(payload) {
   // so a payload that reached here over the socket with its fields nulled (JSON has no NaN) would
   // otherwise rule the shot a HIT against a DC of zero on every relayed player shot. Absent means
   // absent; only a real number is an answer.
+  //
+  // ⚠ AND THE TWO NUMBERS REMAIN THE ENTRY CONDITION even now that the ruled boolean outranks them,
+  // because the corridor's own card PRINTS them ("31 vs 15 — hit"): an outcome object with a verdict
+  // and no numbers behind it would put a line reading "null vs null" on the table. Every card the base
+  // renders through multi-hit.hbs computes `toHit` and `attackRoll` beside its `hit`, so this costs
+  // nothing real — the only payloads it turns away are the ones that never went down a barrel.
   if (rawTotal === null || rawTotal === undefined || rawDc === null || rawDc === undefined) return null;
   const total = Number(rawTotal), dc = Number(rawDc);
   if (!Number.isFinite(total) || !Number.isFinite(dc)) return null;
-  return { hit: total >= dc, total, dc };
+  // A RULED FUMBLE IS A MISS, ahead of everything. `fumbleRuled` is true only when the base's fumble
+  // TABLE actually resolved a fumble (seam-shim.js forwards `templateData.fumble`), and every path that
+  // builds that block also sets `forceMiss` — so this is not a second opinion about the roll, it is the
+  // same ruling read one field earlier. It sits above `baseHit` rather than trusting it because the
+  // fail-safe direction for "the gun misbehaved" is that nothing went down-range.
+  const fumbled = payload?.fumbleRuled === true;
+  // THE BASE'S OWN WORD, when the payload carries it. Strictly a boolean — an absent field, a null over
+  // the socket, or anything else is "the payload does not say" and falls through to the comparison.
+  const ruled = typeof payload?.baseHit === "boolean" ? payload.baseHit : null;
+  const rawHits = payload?.baseHits;
+  const hits = (rawHits === null || rawHits === undefined || !Number.isFinite(Number(rawHits)))
+    ? null : Number(rawHits);
+  if (fumbled) {
+    // ⭐ THE VERDICT IS STILL "MISS" FOR EVERY FUMBLE — what CHANGED on 2026-08-26 is that the outcome
+    // now says WHICH KIND, because the table does not rule one thing (Core p.43). A rows-1–4 fumble is
+    // an ordinary miss and the pattern scatters for it; the other classes put no round down-range and
+    // nothing is planted or drawn at all. The class is carried, not re-derived: the seam derived it once
+    // from the base's own table die (combat/fumble-outcome.js) and every reader switches on the field.
+    return { hit: false, total, dc, hits: 0, fumbled: true, fumbleClass: fumbleClassOf(payload), source: "fumble" };
+  }
+  if (ruled !== null) return { hit: ruled, total, dc, hits, fumbled: false, fumbleClass: null, source: "base" };
+  return { hit: total >= dc, total, dc, hits, fumbled: false, fumbleClass: null, source: "derived" };
+}
+
+/**
+ * WHETHER THIS SHOT'S CENTRE NEEDS THE GRENADE TABLE, or false when it does not. PURE.
+ *
+ * ⛔ THE DECISION AND THE DICE MUST HAPPEN ONCE, ON THE FIRING CLIENT — that is the whole point of this
+ * predicate living beside the roll rather than inside the plant. See the note at the roll site in
+ * seam-shim.js.
+ *
+ * A shot scatters when the shooter DECLARED a corridor (an undeclared shot has no aimed centre to miss
+ * from — the plant computes an axis instead) and the base system RULED IT A MISS. Both facts are already
+ * on the payload by the time it is assembled; nothing is re-derived and nothing is rolled here.
+ *
+ * ⛔ ONE VERDICT, ASKED ONCE. This reads `spreadAttackOutcome` rather than re-comparing the two numbers
+ * itself, and that is the fix for the second half of the 2026-08-26 defect: while it carried its own
+ * `total < dc` it could not see a ruled fumble either, so on a fumbled shell the seam rolled NO scatter
+ * faces and announced no drift — and had the plant been left to rule the same shot a miss on its own, it
+ * would have scattered on dice the presentation never saw. A predicate and the flow it gates must not be
+ * able to disagree about what "miss" means.
+ *
+ * ⏪ MOVED HERE FROM combat/scatter-table.js on 2026-08-26 for that one reason, and the direction of the
+ * move is forced: this file already imports the drift table, so the verdict could not travel the other
+ * way without a cycle. What is left in scatter-table.js is the TABLE — the 1d10 faces and the drift
+ * arithmetic — which is what that file is named after.
+ *
+ * A RULED FUMBLE DOES NOT SCATTER. Nothing is planted for one at all (damage-hooks `_placeSpreadZone`)
+ * and nothing is drawn for one (fx/effects.js), so rolling its faces would light the "the pattern
+ * scattered N metres <direction>" notice over a shot that produced no pattern to scatter.
+ *
+ * @param {object} payload a weaponFired payload, as far as it has been assembled
+ * @returns {boolean} whether this shot's centre needs the grenade table
+ */
+export function payloadScattersOnMiss(payload) {
+  if (!payload?.spreadAim) return false;
+  const outcome = spreadAttackOutcome(payload);
+  if (!outcome) return false;
+  // ⭐ A ROWS-1–4 FUMBLE SCATTERS LIKE ANY OTHER MISS (2026-08-26). The book calls that row "No fumble.
+  // You just screw up." — the shell left the barrel and missed, which is precisely the case p.108 sends
+  // to the grenade table. The other three classes put no round down-range, so there is no centre to
+  // move and rolling their faces would light the "the pattern scattered N metres <direction>" notice
+  // over a shot that produced no pattern. `fumbleIsOrdinaryMiss` is the ONE predicate the plant and the
+  // presentation rail both ask, so the faces are rolled exactly when a corridor will be built from them.
+  if (outcome.fumbled) return fumbleIsOrdinaryMiss(payload);
+  return !outcome.hit;
 }
 
 /**
