@@ -2552,8 +2552,20 @@ async function _placeExplosion(payload) {
     if (missedThrow) {
       const gridSizePx = scene.grid?.size ?? canvas?.grid?.size ?? 100;
       const gridDistM = Number(scene.grid?.distance) || 1;
-      const dirRoll = await new Roll("1d10").evaluate();
-      const distRoll = await new Roll("1d10").evaluate();
+      // ⭐⭐ THE PAYLOAD'S OWN FACES FIRST (2026-08-28) — the same carried-scatter idiom the pattern
+      // flow keeps (`spreadScatter`). The faces are rolled ONCE where the payload is assembled on the
+      // firing client (seam-shim.js `blastScatter`), because the PRESENTATION also reads them: the
+      // lob is drawn flying to the landed point (fx/effects.js declaredAimPointOf), and a roll made
+      // only here — on the active GM's client, after the animation already flew — is a roll the
+      // picture never sees. That was the reported defect: the grenade flew to the aim point exactly
+      // while the circle appeared where the plant's own dice put it. The local roll below survives as
+      // the fallback for a payload relayed from a build without the field — absence, not a version
+      // gate, exactly as every other field in this flow.
+      const carried = payload?.blastScatter ?? null;
+      const dirRoll = Number.isFinite(Number(carried?.dirFace))
+        ? { total: Number(carried.dirFace) } : await new Roll("1d10").evaluate();
+      const distRoll = Number.isFinite(Number(carried?.distFace))
+        ? { total: Number(carried.distFace) } : await new Roll("1d10").evaluate();
       const landed = scatterLandedPoint({
         aimedX, aimedY, pixelsPerMeter: gridSizePx / gridDistM,
         dirFace: dirRoll.total, distFace: distRoll.total,

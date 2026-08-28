@@ -22,6 +22,7 @@ import { scatterDriftM } from "./combat/scatter-table.js";
 // The scatter DECISION comes from the verdict's own home (2026-08-26), the drift TABLE from the file
 // above; they were one import until the predicate had to start reading the base's ruling.
 import { payloadScattersOnMiss } from "./combat/spread-geometry.js";
+import { areaDeliveryKind } from "./combat/area-delivery.js";
 import { getWeaponLongRange } from "./combat/rangefinding.js";
 // ⭐ WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED. This file is the ONE caller of the derivation —
 // see the "one derivation, one caller" note in combat/fumble-outcome.js. Its answer rides the payload
@@ -505,6 +506,28 @@ function installRenderEmit() {
           };
           _signpostSpreadScatter(spreadScatter);
         }
+        // ⭐⭐ A MISSED WARHEAD'S FACES ARE ROLLED HERE TOO (2026-08-28, user report at the release
+        // gate: the grenade flew to the aim point while the blast circle appeared where it landed).
+        // Same two-rails reason as spreadScatter above: the plant scatters the blast on the active
+        // GM's client (`_placeExplosion`), the presentation draws the lob on whoever pulled the
+        // trigger, and a roll made at the plant is one the picture never sees. The miss test is the
+        // SAME one the plant makes — a delivery payload whose card carried no rolled damage (the
+        // base fills areaDamages only on a hit) — so the two sites cannot rule differently. Null on
+        // every hit and every non-delivery shot; the plant keeps its own roll as the fallback for a
+        // payload relayed from a build without this field.
+        let blastScatter = null;
+        if (areaDeliveryKind(_fireCtx.attackType)) {
+          let landedDmg = 0;
+          for (const hits of Object.values(data?.areaDamages ?? {})) {
+            for (const h of (hits ?? [])) landedDmg += Number(h?.damage ?? h?.dmg) || 0;
+          }
+          if (landedDmg <= 0) {
+            blastScatter = {
+              dirFace: (await new Roll("1d10").evaluate()).total,
+              distFace: (await new Roll("1d10").evaluate()).total,
+            };
+          }
+        }
         Hooks.callAll(WEAPON_FIRED, {
           attackerId: _fireCtx.attackerId,
           // WHICH FIGURE ON THE MAP FIRED — the attacker's id names the ACTOR, and an actor can have
@@ -560,6 +583,11 @@ function installRenderEmit() {
           // WHERE THE MISSED CENTRE WENT — the two grenade-table faces, rolled once above. Null on every
           // shot that hit and on every shot that declared no corridor.
           spreadScatter,
+          // WHERE THE MISSED WARHEAD WENT — the same two faces for the delivery flow, rolled once
+          // above. Read by the presentation (the lob flies to the landed point) and by the plant
+          // (`_placeExplosion` consumes these instead of rolling its own). Null on every hit and
+          // every non-delivery shot.
+          blastScatter,
           // ⭐ WHETHER THE SHOT ACTUALLY HIT WHAT IT WAS POINTED AT, as the BASE SYSTEM already ruled it.
           //
           // The base rolls one attack per card — REF + the attack skill + every modifier the window

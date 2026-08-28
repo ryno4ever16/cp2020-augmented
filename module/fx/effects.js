@@ -4932,7 +4932,28 @@ export function declaredAimPointOf(payload, shooterToken) {
   // stands; a designated point is stated about the GROUND, and p.108's spot does not move because the
   // thrower did. Same reasoning as the payload field itself.
   const p = payload?.aimPoint;
-  if (Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y))) return { x: Number(p.x), y: Number(p.y) };
+  if (Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y))) {
+    const aimedX = Number(p.x), aimedY = Number(p.y);
+    // ⭐⭐ THE OBJECT FOLLOWS THE SCATTER (2026-08-28, user report at the release gate: "the grenade
+    // still visually goes to the targeted location exactly and the circle appears elsewhere"). A
+    // missed throw's true centre moves to the grenade table's answer (CP2020 p.108) and the damage
+    // rail places the blast THERE — so the lob has to fly there too, or the picture and the geometry
+    // describe two different throws. Same construction as the corridor's scatter below, for the same
+    // two-rails reason: the faces are the throw's OWN, rolled once at payload assembly on the firing
+    // client (seam-shim.js `blastScatter`), and the landing point comes from the one site both rails
+    // read (combat/scatter-table.js) so the clamp cannot part them. Absent on every hit, every
+    // pre-gesture payload, and every non-delivery shot — a plain fall-through to the designated point.
+    const bs = payload?.blastScatter;
+    const dirFace = Number(bs?.dirFace), distFace = Number(bs?.distFace);
+    if (!Number.isFinite(dirFace) || !Number.isFinite(distFace)) return { x: aimedX, y: aimedY };
+    const landed = scatterLandedPoint({
+      aimedX, aimedY,
+      pixelsPerMeter: metersToPixels(canvas?.scene, 1) || 1,
+      dirFace, distFace,
+      sceneRect: canvas?.dimensions?.sceneRect ?? null,
+    });
+    return { x: landed.x, y: landed.y };
+  }
   const a = payload?.spreadAim;
   if (!a) return null;
   const angleDeg = Number(a.angleDeg), reachM = Number(a.reachM);
