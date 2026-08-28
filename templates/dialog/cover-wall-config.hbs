@@ -19,13 +19,42 @@
       Structure is PREFILLED at 3 × SP by the SP handler in cover.js, visibly, so opting in is one
       keystroke and opting out (clear the field) is one keystroke.
 
+      ⭐ THE PROSE MOVED ONTO HOVER (user ruling 2026-08-27, the pre-ship walk: the block "eats half the
+      screen"). Four paragraphs of teaching used to stand open above the fields — rig-measured at 4 stacked
+      `.hint` blocks on a 480px sheet, which is most of a native Wall config before a single number is
+      reachable. Each is now a ONE-LINE summary carrying the SAME full text as its `data-tooltip`, so the
+      words are not lost, they are asked for: nothing was deleted from `lang/en.json` and the long strings
+      are still the single source for what each rule says.
+      ⛔ THE BOOK NAMES STAY ON THE FACE, not in the tooltip. "Core p.103" and "Maximum Metal p.58" are what
+      a GM scans for to know which rulebook a number comes from (the 2026-08-26 ruling), so the mode line
+      prints both in the open and every field label keeps its own book tag beside it.
+      ⚠ The BREACHED note is NOT a hint and does not collapse: it is a statement about this wall's current
+      state, and a state notice a reader has to hover to discover is a state notice nobody reads.
+
       i18n via CPLocal throughout; no inline styles, no strings built in JS. --}}
 <fieldset class="cp-cover-wall-fields">
     <legend>{{CPLocal "CoverWallLegend"}}</legend>
-    <p class="hint">{{#if isDoor}}{{CPLocal "CoverWallDoorHint"}}{{else}}{{CPLocal "CoverWallHint"}}{{/if}}</p>
-    <p class="hint">{{CPLocal "CoverWallModeHint"}}</p>
-    <p class="hint">{{CPLocal "CoverWallLowCoverHint"}}</p>
-    <p class="hint">{{#if isDoor}}{{CPLocal "CoverWallDoorBreachHint"}}{{else}}{{CPLocal "CoverWallBreachHint"}}{{/if}}</p>
+    {{!-- The info glyph on each line IS the hover affordance — a one-line summary with no signal that
+          more exists reads as all there is. One glyph per line, not one for the block, because each
+          line carries a DIFFERENT rule behind it. --}}
+    <div class="cp-cover-wall-hints">
+        <p class="hint cp-cover-hint" data-tooltip="{{#if isDoor}}{{CPLocal 'CoverWallDoorHint'}}{{else}}{{CPLocal 'CoverWallHint'}}{{/if}}">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>{{#if isDoor}}{{CPLocal "CoverWallDoorHintShort"}}{{else}}{{CPLocal "CoverWallHintShort"}}{{/if}}</span>
+        </p>
+        <p class="hint cp-cover-hint" data-tooltip="{{CPLocal 'CoverWallModeHint'}}">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>{{CPLocal "CoverWallModeHintShort"}}</span>
+        </p>
+        <p class="hint cp-cover-hint" data-tooltip="{{CPLocal 'CoverWallLowCoverHint'}}">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>{{CPLocal "CoverWallLowCoverHintShort"}}</span>
+        </p>
+        <p class="hint cp-cover-hint" data-tooltip="{{#if isDoor}}{{CPLocal 'CoverWallDoorBreachHint'}}{{else}}{{CPLocal 'CoverWallBreachHint'}}{{/if}}">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>{{#if isDoor}}{{CPLocal "CoverWallDoorBreachHintShort"}}{{else}}{{CPLocal "CoverWallBreachHintShort"}}{{/if}}</span>
+        </p>
+    </div>
     {{#if breached}}
     <p class="hint cp-cover-breached-note">{{CPLocal "CoverWallBreachedNote"}}</p>
     {{/if}}

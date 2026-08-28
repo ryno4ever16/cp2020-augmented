@@ -33,7 +33,7 @@
  * with it. Non-door walls at 0 simply stop contributing (the map art stays).
  */
 
-import { localize, localizeParam } from "../utils.js";
+import { localize, localizeParam, deleteFieldUpdate } from "../utils.js";
 import { onGlobalClick } from "../popout-compat.js";
 import { COVER_ZONE_BEHAVIOR } from "./cover-zone-behavior.js";
 // The NAKED half of the area split (see areaCoverVerdict): a move-blocking wall with no cover values
@@ -380,6 +380,56 @@ export function coverBetween(attackerTokenDoc, targetTokenDoc) {
   // Anything a rider was exposed to this attack trails the real crossings: it carries no SP, only a
   // name that says the roll happened and which way it went.
   return [...out, ...exposed];
+}
+
+/**
+ * ⭐⭐ THE AIMED SHOT'S VERDICT — valued cover, or a wall the round never got past.
+ *
+ * ⛔ THE GAP THIS CLOSES (user field report 2026-08-27, hypothesis "only shotguns stop": correct).
+ * `coverBetween` above can only see rows somebody VALUED — it walks `coverChoicesFor`, which is built
+ * from cover zones, walls carrying `coverSp`, and deployed vehicles. A plain move-blocking wall with no
+ * cover values is in none of those lists, so it was in nothing the aimed path ever asked about, and an
+ * aimed round crossed it as if it were not on the map. The AREA paths never had that gap — they ask
+ * `areaCoverVerdict`, which falls through to the naked-wall test — which is exactly why the table saw
+ * pattern weapons stopped by a wall and aimed fire sail through the same wall in the same firefight.
+ *
+ * SAME SPLIT, SAME ORDER, SAME HELPER as `areaCoverVerdict` twenty lines below, deliberately: a second
+ * notion of "blocking" would exempt against one wall and soak against another.
+ *   SOAKED — something valued is on the line. Unchanged in every particular: `rows` is `coverBetween`'s
+ *            own answer in its own order, so the Apply window's seed is the row it always picked.
+ *   EXEMPT — nothing valued, and a move-blocking wall stands between the two figures. The round did not
+ *            reach the body.
+ *   IN     — a clear line.
+ *
+ * ⛔ NO ORIGIN TRIM ON THE NAKED HALF, and that is a decision rather than an oversight. `coverBetween`
+ * trims the first half-grid at the shooter's end so their own adjacent cover cannot block their outgoing
+ * shot, and a valued row keeps that trim here. The naked test does NOT get it: the case it exists for is
+ * a shooter INSIDE a closed room firing at somebody outside it, where the blocking wall is by
+ * construction the one at their elbow — trimming it away would answer "clear line" for the very shape
+ * the report is about. The area path makes the same choice (it tests from the blast's own point with no
+ * trim), and the referee's override below is what covers the shot this reads too strictly.
+ *
+ * ⚠ GATED BY THE AREA-OCCLUSION SWITCH, because `areaOcclusionTest` reads it itself. A table that turned
+ * that off has said walls do not interact with shots, and this half honours it for the same reason the
+ * area half does. The VALUED half stays ungated, exactly as it was — placing a cover object IS the opt-in.
+ *
+ * @returns {{state:string, row:object|null, sp:number, rows:object[]}}
+ */
+export function aimedCoverVerdict(attackerTokenDoc, targetTokenDoc) {
+  const rows = coverBetween(attackerTokenDoc, targetTokenDoc);
+  const valued = rows.filter(r => (Number(r.sp) || 0) > 0);
+  if (valued.length) {
+    return { state: AREA_COVER_SOAKED, row: rows[0] ?? null, sp: Math.max(0, Number(rows[0]?.sp) || 0), rows };
+  }
+  if (!attackerTokenDoc || !targetTokenDoc) return { state: AREA_COVER_IN, row: rows[0] ?? null, sp: 0, rows };
+  const from = _tokenCenter(attackerTokenDoc);
+  const to   = _tokenCenter(targetTokenDoc);
+  // `areaOcclusionTest` reads `tok.center?.x ?? tok.x`, so it is handed a resolved centre rather than a
+  // document whose `x` is a top-left corner — the same point the geometry above measured to.
+  if (areaOcclusionTest(from.x, from.y, { center: to })) {
+    return { state: AREA_COVER_EXEMPT, row: rows[0] ?? null, sp: 0, rows };
+  }
+  return { state: AREA_COVER_IN, row: rows[0] ?? null, sp: 0, rows };
 }
 
 /* ════════════════ The area split: valued cover soaks, a naked wall exempts ════════════════ */
@@ -885,7 +935,9 @@ export async function repairCoverWall({ wallUuid } = {}) {
   if (!snap) return { repaired: false, already: true, pool: row?.pool ?? 0 };
 
   const poolMax = Math.max(0, Math.round(Number(row?.poolMax) || 0));
-  const changes = { [`flags.${SCOPE}.-=coverBreach`]: null };
+  // Modern deletion operator with the legacy `-=` fallback on v13 (utils.deleteFieldUpdate)
+  // — the hand-rolled legacy key tripped core v14's compatibility warning on every repair/clear.
+  const changes = { ...deleteFieldUpdate(`flags.${SCOPE}.coverBreach`) };
   for (const k of WALL_BREACH_FIELDS) {
     const v = Number(snap[k]);
     if (Number.isFinite(v)) changes[k] = v;
@@ -1152,10 +1204,33 @@ export function registerCoverWallConfig() {
       if (!game.user?.isGM) return;
       const root = html instanceof HTMLElement ? html : html?.[0];
       const form = root?.tagName === "FORM" ? root : root?.querySelector?.("form");
-      if (!form || form.querySelector(".cp-cover-wall-fields")) return;
+      if (!form) return;
 
       const doc = app.document;
       const f = doc?.flags?.[SCOPE] ?? {};
+      // ⭐ THE FIELDSET IS REBUILT WHEN THE WALL'S STATE HAS MOVED UNDER IT (2026-08-27, ship-walk
+      // finding). This guard used to be a plain "already injected → return", which is right for the
+      // re-renders that change nothing and WRONG for the one that changes everything: a shot breaches
+      // the wall, the document update re-renders the open sheet, and the early return left the
+      // pre-breach fieldset in place — no Repair control, no breach notice — until the referee closed
+      // the sheet and opened it again. The state the fieldset was built for is stamped on it, so
+      // "still current?" is an identity question with a yes/no answer rather than an assumption.
+      // ⛔ THE DOUBLE-INJECTION GUARD IS KEPT, and this is still it: a render whose stamp MATCHES
+      // returns exactly as before, so nothing can end up with two fieldsets.
+      //
+      // ⛔ THE STAMP CARRIES EVERY FACT THE FIELDSET RENDERS, not just the breach — a correction the
+      // cover-walls keeper caught the same session. With only the breach on it, pressing CLEAR (which
+      // repairs first, then deletes the values) rebuilt the fieldset on the REPAIR's re-render, while
+      // the values were still on the document, and then early-returned on the delete's re-render
+      // because the breach flag had not moved again. The result was a fieldset showing 20/60/60 for a
+      // wall that no longer had them, and the handler's own blanking wrote to the node it had just
+      // been detached from. A stamp that changes when the DISPLAY changes cannot have that shape.
+      const stamp = JSON.stringify([f.coverSp ?? null, f.coverPool ?? null, f.coverPoolMax ?? null, !!f.coverBreach, (doc?.door ?? 0) > 0]);
+      const existing = form.querySelector(".cp-cover-wall-fields");
+      if (existing) {
+        if (existing.dataset.cpCoverState === stamp) return;
+        existing.remove();
+      }
       const content = await renderTpl(`modules/${SCOPE}/templates/dialog/cover-wall-config.hbs`, {
         scope: SCOPE,
         sp: (typeof f.coverSp === "number" && Number.isFinite(f.coverSp)) ? f.coverSp : "",
@@ -1172,6 +1247,8 @@ export function registerCoverWallConfig() {
       holder.innerHTML = content;
       const fieldset = holder.firstElementChild;
       if (!fieldset) return;
+      // WHICH STATE THIS FIELDSET WAS BUILT FOR — read by the guard above on the next render.
+      fieldset.dataset.cpCoverState = stamp;
       const footer = form.querySelector(".form-footer");
       if (footer) footer.before(fieldset); else form.append(fieldset);
 
@@ -1194,10 +1271,10 @@ export function registerCoverWallConfig() {
         try {
           if (doc?.flags?.[SCOPE]?.coverBreach) await repairCoverWall({ wallUuid: doc.uuid });
           await doc.update({
-            [`flags.${SCOPE}.-=coverSp`]: null,
-            [`flags.${SCOPE}.-=coverPool`]: null,
-            [`flags.${SCOPE}.-=coverPoolMax`]: null,
-            [`flags.${SCOPE}.-=coverBreach`]: null,
+            ...deleteFieldUpdate(`flags.${SCOPE}.coverSp`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.coverPool`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.coverPoolMax`),
+            ...deleteFieldUpdate(`flags.${SCOPE}.coverBreach`),
           });
           for (const input of [spIn, poolIn, poolMaxIn]) if (input) input.value = "";
           ui.notifications?.info?.(localize("CoverWallCleared"));
