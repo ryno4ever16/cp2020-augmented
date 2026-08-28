@@ -3,7 +3,7 @@
  * PHASE MEASUREMENT for delayed arrival elements.
  *
  * WHAT IS MEASURED. A landing round schedules three things on one nominal number (`arriveIn`): an
- * arrival mark (Sequencer section with `.delay`), a blood spray (same), and one impact audio call
+ * arrival mark (Sequencer section with `.delay`) and one impact audio call
  * (`fxHitSound`, `setTimeout`). Bundle-read 2026-08-17: the engine ALSO consumes `.delay` through
  * `setTimeout` (sequencer/dist `_execute()`), so both media sit on the same host timer — the phase
  * risk is what happens AFTER the timers fire: audio hands off to the WebAudio thread immediately,
@@ -82,7 +82,7 @@ const res = await page.evaluate(async () => {
 
   // ── pinned world state, restored in finally ──────────────────────────────────────────────────
   const pinned = {};
-  for (const k of ["combatFxEnabled", "goreEnabled"]) { try { pinned[k] = game.settings.get(SCOPE, k); } catch (_e) {} }
+  for (const k of ["combatFxEnabled"]) { try { pinned[k] = game.settings.get(SCOPE, k); } catch (_e) {} }
 
   // ── the three instruments ────────────────────────────────────────────────────────────────────
   const audioRecs = [];   // {t, delayMs, kind}
@@ -173,7 +173,6 @@ const res = await page.evaluate(async () => {
 
   try {
     await game.settings.set(SCOPE, "combatFxEnabled", true);
-    await game.settings.set(SCOPE, "goreEnabled", false);   // marks only → clean 1:1 pairing
     fx._setDropLagMs(600000);                               // a dropped round would unpair the count
     fx._setHitSoundSink((r) => audioRecs.push({ t: performance.now(), delayMs: r.delayMs, kind: r.kind }));
     AH.play = () => null;                                   // belt over the sink's braces

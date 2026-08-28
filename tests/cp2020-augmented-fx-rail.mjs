@@ -1540,18 +1540,20 @@ const res = await page.evaluate(async () => {
     const files = (this.sections ?? []).map(sec => String(sec?._file ?? sec?.file ?? ""));
     const isSmoke = files.length > 0 && files.every(f => /SmokePuffSide|smoke\.puff/.test(f));
     const isAmbience = !isSmoke && files.some(f => f.includes(fx.MUZZLE_MOTES.key));
-    // The blood splash is a once-per-payload sequence like the ambience, and it plays BEFORE the
-    // rounds. Left unclassified it counts as a sixth "round" and shifts every sprite-vs-audio pairing
-    // by one — which is exactly what this leg reported the first time the gore switch was left on.
-    const isBlood = !isSmoke && !isAmbience && files.some(f => f.includes(fx.BLOOD_SPLATTER.key));
-    // ⭐ AND THE LONE HIT MARK (2026-08-11). A round the pacing rule REFUSES still marks its arrival,
+    // ⏪ THE SPRAY CLASSIFIER IS GONE with the element it sorted (withdrawn 2026-08-28, §16). It
+    // existed only so a once-per-payload sequence playing BEFORE the rounds could not be counted as a
+    // sixth "round" and shift every sprite-vs-audio pairing by one. With nothing drawing it, the
+    // remaining classes are the smoke, the ambience, the lone marks and the rounds themselves.
+    // ⭐ THE LONE HIT MARK (2026-08-11). A round the pacing rule REFUSES still marks its arrival,
     // and that mark is issued as its own single-section sequence — so left unclassified it counts as a
-    // sixth "round" and shifts every sprite-vs-audio pairing by one, exactly as the splash did before
-    // it was classified. A DRAWN round's sequence carries its lance and its tracers too, so the section
-    // count is what tells the two apart rather than the file.
-    const isMark = !isSmoke && !isAmbience && !isBlood && files.length === 1
+    // sixth "round" and shifts every sprite-vs-audio pairing by one. A DRAWN round's sequence carries
+    // its lance and its tracers too, so the section count is what tells the two apart, not the file.
+    const isMark = !isSmoke && !isAmbience && files.length === 1
       && /impact\.|ground_crack|smoke\.puff\.ring/.test(files[0]);
-    seqPlays.push({ t: Date.now(), isSmoke, isAmbience, isBlood, isMark });
+    // The WITHDRAWN spray, still watched for by its own asset key: the negative below is only worth
+    // anything if something is actually looking for the file on the wire.
+    const isSpray = files.some(f => /liquid\.splash_side02\.red|LiquidSplashSide02/i.test(f));
+    seqPlays.push({ t: Date.now(), isSmoke, isAmbience, isMark, isSpray });
     return realSeqPlay.apply(this, a);
   };
   plays = [];
@@ -1566,31 +1568,22 @@ const res = await page.evaluate(async () => {
   // and the first play is the ambience; the per-unit sync below is measured on the rounds themselves.
   const smokeSeqs = seqPlays.filter(x => x.isSmoke);
   const ambienceSeqs = seqPlays.filter(x => x.isAmbience);
-  const bloodSeqs = seqPlays.filter(x => x.isBlood);
   const markSeqs = seqPlays.filter(x => x.isMark);
-  const shotSeqPlays = seqPlays.filter(x => !x.isSmoke && !x.isAmbience && !x.isBlood && !x.isMark).map(x => x.t);
-  // The gore switch is a world setting a GM may have left either way, so this leg says what it EXPECTS
-  // of it rather than assuming: the payload above lands on a real target, so one splash if the switch
-  // is on and none if it is off — and either way it is not one of the rounds.
-  // ⏪ RE-PINNED 2026-08-09: the splash is now ONE PER LANDING ROUND (capped), not one per payload.
-  // This burst lands all five of its rounds, so the count is the cap — and the legs below still need
-  // it excluded from the ROUNDS, which is what this classification is actually for.
-  const goreOn = game.settings.get(SCOPE, "goreEnabled") === true;
-  // A refused round draws no spray either, so the expected count is what the fan-out itself reports
-  // it queued — bounded by the hits and by the cap, both asserted here so the report cannot be trusted
-  // blindly.
-  const expectedSplashes = goreOn ? (aimedBurst.blood?.queued ?? 0) : 0;
-  ok("aimed burst: a splash per drawn landing round up to the cap, and none of them is one of the rounds",
-    bloodSeqs.length === expectedSplashes
-    && expectedSplashes <= Math.min(aimedBurst.hits, fx.BLOOD_SPLATTER.maxPerPayload),
-    `switch ${goreOn ? "on" : "off"}, ${aimedBurst.hits} hits, ${aimedBurst.dropped} dropped -> ${bloodSeqs.length} splash sequence(s)`);
+  const shotSeqPlays = seqPlays.filter(x => !x.isSmoke && !x.isAmbience && !x.isMark).map(x => x.t);
+  // ⏪ RE-VALUED 2026-08-28: the spray element is withdrawn, so the leg that counted its sequences is
+  // now the NEGATIVE that proves none reach the wire on a burst that lands every round — and that the
+  // fan-out's report carries no field for it either.
+  const withdrawnSpray = seqPlays.filter(x => x.isSpray);
+  ok("aimed burst: the withdrawn spray reaches the wire on no round, and the report has no field for it",
+    withdrawnSpray.length === 0 && aimedBurst.blood === undefined,
+    `${aimedBurst.hits} hits, ${aimedBurst.dropped} dropped -> ${withdrawnSpray.length} spray sequence(s)`);
   // ⏪ RE-PINNED (FR#22): a burst's sequence count is now units + the one ambience, with NO puff
   // sequences among them — the smoke a viewer sees in a burst is inside the tracer clips themselves.
   ok("aimed burst: one sequence per DRAWN round plus the burst ambience, and no puff sequences (negative)",
     shotSeqPlays.length === aimedBurst.shots - aimedBurst.dropped
     && ambienceSeqs.length === 1
     && smokeSeqs.length === 0 && aimedBurst.smokePuffs === 0,
-    `${seqPlays.length} sequences = ${shotSeqPlays.length} units + ${ambienceSeqs.length} ambience + ${markSeqs.length} lone mark(s) + ${bloodSeqs.length} splash(es) + ${smokeSeqs.length} puff(s)`);
+    `${seqPlays.length} sequences = ${shotSeqPlays.length} units + ${ambienceSeqs.length} ambience + ${markSeqs.length} lone mark(s) + ${smokeSeqs.length} puff(s)`);
   // ⏪ RE-PINNED 2026-08-17 (the phase measurement): the arrival family is STANDALONE for every
   // landing round now, not just the refused ones — embedded in the shot's shared sequence the mark
   // reached the engine ~600ms after its own audio. So the lone-mark sequences on the wire equal the
@@ -3609,9 +3602,10 @@ const res = await page.evaluate(async () => {
   }));
   await sleep(400);
   // ⚠ THE LANCE's rotation, named by its file rather than taken as "the first thing with a rotation".
-  // A landing round now also queues a blood splash, which takes its OWN rotation toward a point one
-  // grid unit BEYOND the target — a perfectly correct heading for that element and the wrong answer to
-  // this question, which is about the shot's axis.
+  // Other elements on a landing round carry rotations of their own — perfectly correct headings for
+  // those elements and the wrong answer to this question, which is about the shot's axis. (The spray
+  // that first forced this naming, rotated toward a point beyond the target, was withdrawn 2026-08-28;
+  // the naming stays, because the reason is general.)
   const fxOnlyEntry = playedEntries.flat().find(e => !!e.rotateTowards && e.file === fx.FX_CLASSES.rifle.muzzle);
   const fxAimPoint = fx.centerOf(targetDoc);
   ok("presentation field: a payload with only the aim field still draws a directional sprite",
@@ -4115,8 +4109,8 @@ const res = await page.evaluate(async () => {
   // It is a MISS, not a hit — the base zeroed the card's hit count on the same ruling, so no round is
   // drawn as landing and no impact family is issued. The presentation is the ordinary-miss one.
   ok("fumble class: the ordinary-miss class draws no landing round (the base ruled zero hits)",
-    plainMissRes.hits === 0 && (plainMissRes.impacts?.queued ?? 0) === 0 && plainMissRes.blood === null,
-    JSON.stringify({ hits: plainMissRes.hits, impacts: plainMissRes.impacts, blood: plainMissRes.blood }));
+    plainMissRes.hits === 0 && (plainMissRes.impacts?.queued ?? 0) === 0,
+    JSON.stringify({ hits: plainMissRes.hits, impacts: plainMissRes.impacts }));
 
   // AND THE OTHER THREE STAND THE RAIL DOWN, each on its own so a gate that collapsed either way
   // cannot pass. `harmlessDischarge` is silent BY CHOICE, not by omission: the ruling allowed a
@@ -5757,12 +5751,13 @@ try {
   ares.checks.push({ n: "ammo overlay section ran", p: false, d: String(err?.message ?? err) });
 }
 
-/* ══ 16. THE BLOOD SPLASH: the four gates, the chosen asset, and the wait it must not join ════════ */
-// One element, four independent gates, and each of them is a way the element must NOT be drawn — so
-// almost every leg below is a negative. The value half asserts the switch, the target-type answer and
-// the chosen asset's own numbers; the live half drives the real fan-out and reads what the ENGINE was
-// handed, because "exactly one per attack" and "nothing on a structure target" cannot be seen from a
-// return value alone.
+/* ══ 16. THE SPRAY ELEMENT IS WITHDRAWN — source, setting and draw path all absent ════════════════ */
+// Ruled 2026-08-28: the element is removed for this release ("it never looked right") and returns in a
+// later one folded into the arrival composition with NO switch of its own. So this section is now the
+// record of an ABSENCE, held in the three places an absence has to hold — the rail's own exports, the
+// world settings registry, and what the fan-out actually hands the engine — plus the regression that
+// matters most: the rest of the arrival composition shared this element's call site and its clock, and
+// every other member of it must still draw.
 const bres = { checks: [] };
 try {
   const r = await page.evaluate(async () => {
@@ -5772,310 +5767,142 @@ try {
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
     const settings = await import(`/modules/${SCOPE}/module/settings.js`);
+    const text = async (p) => (await fetch(`/modules/${SCOPE}/${p}`)).text();
+    const WITHDRAWN_ASSET = /liquid\.splash_side02\.red|LiquidSplashSide02/i;
 
-    /* ── a. the switch: registered, world-scoped, visible, and OFF ──────────── */
-    const decl = game.settings.settings.get(`${SCOPE}.goreEnabled`);
-    ok("switch: registered as a world setting the GM can see, typed Boolean",
-      !!decl && decl.scope === "world" && decl.config === true && decl.type === Boolean,
-      JSON.stringify({ scope: decl?.scope, config: decl?.config, type: decl?.type?.name }));
-    ok("switch: the shipped DEFAULT is OFF",
-      decl?.default === false, String(decl?.default));
-    ok("switch: its label and hint resolve to real text, not to the key",
-      typeof decl?.name === "string" && game.i18n.localize(decl.name) !== decl.name
-      && game.i18n.localize(decl.hint) !== decl.hint,
-      `${decl?.name} -> ${game.i18n.localize(decl?.name ?? "")}`.slice(0, 80));
+    /* ── a. the rail's own exports ──────────────────────────────────────────── */
+    ok("source: the element's spec object is gone from the rail's exports",
+      fx.BLOOD_SPLATTER === undefined, typeof fx.BLOOD_SPLATTER);
+    ok("source: its draw verb is gone from the rail's exports",
+      fx.fxBloodSplatter === undefined, typeof fx.fxBloodSplatter);
+    const railText = await text("module/fx/effects.js");
+    ok("source: the rail's text names the withdrawn asset key nowhere",
+      !WITHDRAWN_ASSET.test(railText), railText.match(WITHDRAWN_ASSET)?.[0] ?? "absent");
+    ok("source: a tombstone stands at the removal site so the absence is deliberate, not lost",
+      /withdrawn 2026-08-28|removed 2026-08-28/i.test(railText),
+      String(/withdrawn 2026-08-28|removed 2026-08-28/i.test(railText)));
 
-    const priorGore = game.settings.get(SCOPE, "goreEnabled");
-    await game.settings.set(SCOPE, "goreEnabled", false);
-    ok("switch: the reader follows it, and fails closed", settings.goreEnabled() === false);
-    await game.settings.set(SCOPE, "goreEnabled", true);
-    ok("switch: the reader follows it the other way", settings.goreEnabled() === true);
+    /* ── b. the world setting is unregistered, strings and all ──────────────── */
+    ok("setting: the retired key is not in the world settings registry",
+      game.settings.settings.get(`${SCOPE}.goreEnabled`) === undefined,
+      String(game.settings.settings.get(`${SCOPE}.goreEnabled`)?.key ?? "absent"));
+    let readThrew = null;
+    try { game.settings.get(SCOPE, "goreEnabled"); readThrew = false; } catch (e) { readThrew = true; }
+    ok("setting: reading the retired key by name throws rather than answering",
+      readThrew === true, String(readThrew));
+    ok("setting: its reader function is gone from the settings module",
+      settings.goreEnabled === undefined, typeof settings.goreEnabled);
+    ok("setting: its registration is gone from the settings source",
+      !/goreEnabled/.test(await text("module/settings.js")), "goreEnabled");
+    ok("setting: its row is gone from the settings-section grouping",
+      !/goreEnabled/.test(await text("module/settings-sections.js")), "goreEnabled");
+    ok("setting: its label and hint keys resolve to nothing (orphan strings removed)",
+      game.i18n.localize("CYBERPUNK.SETTINGS.Gore") === "CYBERPUNK.SETTINGS.Gore"
+      && game.i18n.localize("SETTINGS.Gore") === "SETTINGS.Gore"
+      && game.i18n.localize("SETTINGS.GoreHint") === "SETTINGS.GoreHint",
+      game.i18n.localize("SETTINGS.Gore"));
 
-    /* ── b. the target-type answer, by value ────────────────────────────────── */
-    // Phase 1 answers at the ACTOR level: the hit location is not known when this is drawn, so the
-    // question asked is "is this actor structure", not "was this zone structure".
-    // ⚠ TOKENS BEFORE ACTORS (2026-08-11). Deleting an actor that still has a figure on the canvas
-    // sends an update down the figure's own chain against a document that is already gone, which throws
-    // out of the server backend and takes the whole section with it. Same ordering fix the radiation
-    // keeper took, applied at every sweep in this spec.
-    for (const t of [...((game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active)?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__GORE"))) await t.delete();
-    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__GORE"))) await a.delete();
-    const fleshActor = await Actor.create({ name: "__PW__GORE Flesh", type: "character" });
-    const npcActor = await Actor.create({ name: "__PW__GORE NPC", type: "npc" });
-    const vehActor = await Actor.create({ name: "__PW__GORE Vehicle", type: `${SCOPE}.vehicle` });
-    const acpaActor = await Actor.create({ name: "__PW__GORE Suit", type: `${SCOPE}.vehicle`, system: { isACPA: true } });
-    const borgActor = await Actor.create({ name: "__PW__GORE Borg", type: "character" });
-    await borgActor.setFlag(SCOPE, "fullBorg", true);
-    // A cyberlimbed FLESH actor: the ruled case, and it is built from a REAL structural implant rather
-    // than by writing the pool — `system.sdp.sum` is derived by the base from equipped cyberware every
-    // prepare, so a direct write to it is discarded and a leg resting on one proves nothing.
-    const limbActor = await Actor.create({ name: "__PW__GORE Cyberlimb", type: "character" });
-    await limbActor.createEmbeddedDocuments("Item", [{
-      name: "__PW__GORE Cyberarm", type: "cyberware",
-      // The base folds an implant into the pool only when it is EQUIPPED, enabled, carries the
-      // "Implant" work type and names a side — all four, or the pool stays zero.
-      system: { equipped: true, MountZone: "Arm", CyberBodyType: { Location: "Right" },
-        CyberWorkType: { Type: "Implant", Types: ["Implant"], SDP: 30 } },
-    }]);
+    /* ── c. the asset is no longer warmed by either preloader ───────────────── */
+    const manifest = fx.fxPreloadManifest();
+    ok("preload: the session manifest no longer warms the withdrawn asset",
+      Array.isArray(manifest.keys) && !manifest.keys.some(k => WITHDRAWN_ASSET.test(String(k))),
+      `${manifest.keys?.length} keys`);
+    const perPayload = fx.fxPayloadPreloadKeys(fx.FX_CLASSES.rifle ?? {}, null);
+    ok("preload: the per-payload key list no longer warms it either",
+      ![...perPayload].some(k => WITHDRAWN_ASSET.test(String(k))),
+      `${[...perPayload].length} keys`);
 
-    ok("target type: flesh is not structure (character, npc)",
-      fx.bearsStructuralSdp(fleshActor) === false && fx.bearsStructuralSdp(npcActor) === false);
-    ok("target type: a vehicle-type actor IS structure, suit or not",
-      fx.bearsStructuralSdp(vehActor) === true && fx.bearsStructuralSdp(acpaActor) === true);
-    ok("target type: a full-conversion body IS structure, though its actor type is character",
-      fx.bearsStructuralSdp(borgActor) === true);
-    // THE RULED NUANCE, and the contrast is the whole leg: the per-zone router says that ARM is
-    // structure, while the actor-level answer this rail uses says the target is flesh. Both are
-    // right — the payload never says which zone was hit, so the rail cannot ask the per-zone question.
-    const cyb = await import(`/modules/${SCOPE}/module/mech/cyberlimb.js`);
-    ok("target type: a cyberlimbed flesh actor is NOT structure — the ruled phase-1 answer",
-      limbActor.system?.sdp?.sum?.rArm === 30
-      && cyb.routesToSdp(limbActor, "rArm") === true
-      && cyb.routesToSdp(limbActor, "Torso") === false
-      && fx.bearsStructuralSdp(limbActor) === false,
-      `rArm sdp sum ${limbActor.system?.sdp?.sum?.rArm}, zone routes to structure ${cyb.routesToSdp(limbActor, "rArm")}`);
-    ok("target type: nothing at all is not structure (negative)",
-      fx.bearsStructuralSdp(null) === false && fx.bearsStructuralSdp(undefined) === false);
+    /* ── d. the cap the impact audio used to borrow from it survives ────────── */
+    // It was `HIT_SOUND_MAX_PER_PAYLOAD = BLOOD_SPLATTER.maxPerPayload` — taken by import so the two
+    // moved together. With the lender gone the number has to stand on its own, at the same value.
+    ok("cap: the impact-audio bound is its own stated value now, unchanged at 4",
+      fx.HIT_SOUND_MAX_PER_PAYLOAD === 4, String(fx.HIT_SOUND_MAX_PER_PAYLOAD));
+    ok("cap: it is still far under the mark's own bound",
+      fx.HIT_SOUND_MAX_PER_PAYLOAD < fx.HIT_MARK_MAX_PER_PAYLOAD,
+      `${fx.HIT_SOUND_MAX_PER_PAYLOAD} vs ${fx.HIT_MARK_MAX_PER_PAYLOAD}`);
 
-    /* ── c. the chosen asset and its numbers ────────────────────────────────── */
-    ok("asset: the shipped key is the free tier's SIDE (directional) red liquid splash, and the tier carries it",
-      fx.BLOOD_SPLATTER.key === "jb2a.liquid.splash_side02.red" && fx.fxDbEntryExists(fx.BLOOD_SPLATTER.key) === true,
-      fx.BLOOD_SPLATTER.key);
-    // ⏪ The radial splash it replaced is still on the tier — pinned so the supersession is a CHOICE
-    // between two available assets rather than the only one that resolved.
-    ok("asset: the superseded radial splash is still installed — the swap was a decision, not a fallback",
-      fx.fxDbEntryExists("jb2a.liquid.splash02.red") === true
-      && fx.BLOOD_SPLATTER.key !== "jb2a.liquid.splash02.red");
-    ok("asset: the payload cap is the measured 4 — repeated spray, not a fountain",
-      fx.BLOOD_SPLATTER.maxPerPayload === 4 && fx.BLOOD_SPLATTER.maxPerPayload > 1,
-      String(fx.BLOOD_SPLATTER.maxPerPayload));
-    ok("asset: it is sized in grid units, about one body wide",
-      fx.BLOOD_SPLATTER.squares === 1.5 && fx.BLOOD_SPLATTER.squares > 1 && fx.BLOOD_SPLATTER.squares <= 2,
-      String(fx.BLOOD_SPLATTER.squares));
-    ok("asset: the trim keeps it transient — under the beat the ruling asked for",
-      fx.BLOOD_SPLATTER.clipMs === 900 && fx.BLOOD_SPLATTER.clipMs > 0 && fx.BLOOD_SPLATTER.clipMs <= 1200,
-      `${fx.BLOOD_SPLATTER.clipMs}ms`);
-    // The measured file length, read off the install rather than assumed, so a tier that ever ships a
-    // different cut of this clip is caught here rather than by the mark outstaying the trim.
-    const src = Sequencer.Database.getAllFileEntries(fx.BLOOD_SPLATTER.key);
-    const file = Array.isArray(src) ? String(src[0]) : String(src);
-    const media = await new Promise((res) => {
-      const v = document.createElement("video");
-      v.preload = "metadata";
-      v.onloadedmetadata = () => res({ ms: Math.round(v.duration * 1000), w: v.videoWidth, h: v.videoHeight });
-      v.onerror = () => res({ ms: -1 });
-      v.src = "/" + file.replace(/^\//, "");
-      setTimeout(() => res({ ms: -2 }), 8000);
-    });
-    out.measured.file = { file, ...media };
-    ok("asset: the installed file is the one measured, and the trim sits inside it",
-      media.ms === 1033 && fx.BLOOD_SPLATTER.clipMs < media.ms,
-      `${media.ms}ms ${media.w}x${media.h}`);
-    ok("asset: it is the SIDE cut of the file family, not the radial one",
-      /LiquidSplashSide02/i.test(file), file);
-    ok("asset: it is drawn above the lighting — the documented departure, pinned so it is a choice",
-      fx.BLOOD_SPLATTER.aboveLighting === true);
+    /* ── e. the tail arithmetic is untouched by the removal ─────────────────── */
+    // It never took a term for this element, so every class's tail must read exactly as before.
+    const tails = Object.fromEntries(Object.keys(fx.FX_CLASSES).map(c => [c, fx.presentationTailMs(c)]));
+    out.measured.tails = tails;
+    ok("the wait: every class still answers a positive tail with the element gone",
+      Object.values(tails).every(v => Number.isFinite(v) && v > 0), JSON.stringify(tails));
 
-    /* ── d. it is NOT part of the wait ──────────────────────────────────────── */
-    // Structural, not incidental: the tail arithmetic takes no gore input at all, so no value of the
-    // switch can move it. Asserted across every class and both regimes.
-    const tailsOff = Object.keys(fx.FX_CLASSES).map(c => fx.presentationTailMs(c));
-    await game.settings.set(SCOPE, "goreEnabled", false);
-    const tailsOffAgain = Object.keys(fx.FX_CLASSES).map(c => fx.presentationTailMs(c));
-    await game.settings.set(SCOPE, "goreEnabled", true);
-    ok("the wait: the tail arithmetic is identical with the switch on and off, every class",
-      JSON.stringify(tailsOff) === JSON.stringify(tailsOffAgain),
-      JSON.stringify(tailsOff));
-
-    /* ── e. LIVE: what the fan-out actually queues ──────────────────────────── */
+    /* ── f. LIVE: a landing burst draws no spray, and the rest of the composition still draws ── */
     const scene = game.scenes.get(globalThis.__FX_SCENE_ID) ?? game.scenes.active;
     for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__GORE"))) await t.delete();
+    for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__GORE"))) await a.delete();
     const shooterActor = await Actor.create({ name: "__PW__GORE Shooter", type: "character" });
+    const fleshActor = await Actor.create({ name: "__PW__GORE Flesh", type: "character" });
     const [rifleItem] = await shooterActor.createEmbeddedDocuments("Item", [{
       name: "__PW__GORE rifle", type: "weapon",
       system: { weaponType: "Rifle", attackType: "Auto", damage: "1d6", range: 50, rof: 1, shots: 40, shotsLeft: 40 },
     }]);
-    // ⚠ ONE TOKEN PER CALL, never a multi-create destructured by position: this rig has been seen to
-    // return the created documents in database order rather than in the order they were asked for,
-    // and the first run of this section did exactly that — the flesh and vehicle handles came back
-    // swapped, so the two target-type legs each read the OTHER target's result.
+    // ⚠ ONE TOKEN PER CALL — this rig has returned multi-creates in database order, which once had two
+    // target handles swapped and each leg reading the other's result.
     const mkTok = async (name, actorId, x, y) => (await scene.createEmbeddedDocuments("Token",
       [{ name, actorId, x, y, width: 1, height: 1 }]))[0];
     const shooterDoc = await mkTok("__PW__GORE Shooter", shooterActor.id, 1000, 1500);
     const fleshDoc = await mkTok("__PW__GORE Flesh", fleshActor.id, 1700, 1500);
-    const vehDoc = await mkTok("__PW__GORE Vehicle", vehActor.id, 1700, 1700);
-    const borgDoc = await mkTok("__PW__GORE Borg", borgActor.id, 1700, 1300);
     await sleep(400);
-    // The handles really are the actors they are named for — the guard that makes every target-type
-    // leg below mean what it says.
-    ok("live fixtures: each target token carries the actor its leg names",
-      canvas.tokens.get(fleshDoc.id)?.actor?.id === fleshActor.id
-      && canvas.tokens.get(vehDoc.id)?.actor?.id === vehActor.id
-      && canvas.tokens.get(borgDoc.id)?.actor?.id === borgActor.id,
-      JSON.stringify([canvas.tokens.get(fleshDoc.id)?.actor?.name, canvas.tokens.get(vehDoc.id)?.actor?.name, canvas.tokens.get(borgDoc.id)?.actor?.name]));
+    ok("live fixtures: the target handle carries the actor its legs name",
+      canvas.tokens.get(fleshDoc.id)?.actor?.id === fleshActor.id,
+      String(canvas.tokens.get(fleshDoc.id)?.actor?.name));
 
     const AH = foundry.audio.AudioHelper;
     const realPlay = AH.play;
     AH.play = () => null;
 
-    // Read what the ENGINE was handed, not what our own return value says: "exactly one splash per
-    // attack" is a property of the queue, and the settle exclusion is a property of the effect's name.
     const spawned = [];
     const spawnHook = Hooks.on("createSequencerEffect", (e) => {
       spawned.push({ file: String(e?.data?.file ?? e?.data?.src ?? ""), name: String(e?.data?.name ?? "") });
     });
-    const clearSpawns = () => { spawned.length = 0; };
     const endAll = async () => { try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ } await sleep(150); };
-    const isBlood = (s) => /liquid\.splash_side02\.red|LiquidSplashSide02/i.test(s.file);
-    const bloods = () => spawned.filter(isBlood);
 
-    // HYDRATED from the recorded full-auto emission (VACUOUS-LEG-AUDIT F1). The counts and the hit list
-    // stay stated here rather than inherited: this section's whole subject is "one spray per LANDING
-    // round", so the ten-fired/four-landed shape IS the fixture and every leg reads its arithmetic off it.
+    // HYDRATED from the recorded full-auto emission: ten fired, four landed — the same fixture shape
+    // the removed element's own legs used, kept so the composition regression is measured on it.
     const payload = (over = {}) => __goldenPayload("fullAuto",
       { attackerId: shooterActor.id, weaponId: rifleItem.id, attackerTokenId: shooterDoc?.id ?? null,
         targetTokenId: fleshDoc.id, targetActorId: null },
       { weaponName: "__PW__GORE rifle", shotsFired: 10, shotsHit: 4,
         areaDamages: { Torso: [{ damage: 3 }, { damage: 3 }, { damage: 2 }, { damage: 2 }] }, ...over });
-    const HIT_WAIT = 1500;
 
-    // ⚠ THE DROP THRESHOLD IS HELD OUT OF REACH FOR THIS WHOLE SECTION. A dropped round draws no
-    // picture at all, and its spray goes with it (deliberately — see the call site), so a headless
-    // client slow enough to drop a round would make these counts a measure of the host rather than of
-    // the rule. Held high here so the counts are exact; the drop rule has its own section, where the
-    // seam is armed the other way. Restored in the section's own finally.
+    // The drop threshold is held out of reach so the counts below are exact rather than a measure of
+    // this host's speed; the drop rule has its own section. Restored at the end of this one.
     fx._setDropLagMs(600000);
-
-    // 1. THE SWITCH OFF — the whole point of the setting.
-    await game.settings.set(SCOPE, "goreEnabled", false);
-    clearSpawns();
-    const offRun = await fx.fxWeaponFired(payload());
-    await sleep(HIT_WAIT);
-    ok("live: with the switch OFF a landing burst draws no splash at all (negative)",
-      offRun.blood === null && bloods().length === 0,
-      `${bloods().length} of ${spawned.length} effects`);
+    spawned.length = 0;
+    const run = await fx.fxWeaponFired(payload());
+    await sleep(1500);
+    const sprays = spawned.filter(s => WITHDRAWN_ASSET.test(s.file));
+    out.measured.live = { hits: run.hits, shots: run.shots, spawned: spawned.length,
+      sprays: sprays.length, impacts: run.impacts, hitAudio: run.hitAudio, blood: run.blood };
+    ok("live: a landing burst hands the engine no spray at all (negative)",
+      sprays.length === 0, `${sprays.length} of ${spawned.length} effects`);
+    ok("live: the fan-out's report carries no spray field any more",
+      run.blood === undefined, JSON.stringify(run.blood));
+    ok("live: the composition still marks every landing round (regression, by value)",
+      run.impacts?.queued === 4 && run.hits === 4,
+      JSON.stringify({ hits: run.hits, impacts: run.impacts }));
+    ok("live: those marks really reached the engine (regression, by value)",
+      spawned.filter(s => s.file.includes(fx.HIT_CONFIRM.key)).length === 4,
+      `${spawned.filter(s => s.file.includes(fx.HIT_CONFIRM.key)).length} marks of ${spawned.length} effects`);
+    // ⚠⚠ THE PLAN'S POSITIVE ANSWER IS NOT AVAILABLE AT THIS POINT IN THE SUITE, and the mechanism is
+    // PROVEN rather than assumed (2026-08-28). An earlier section arms the delivered-sound seam with a
+    // RESTRICTED manifest naming only five `shot-*.ogg` files, and the next `_setSoundManifest(null)`
+    // is thousands of lines further down — so for this whole span `hitSoundSrc("flesh")` answers null
+    // and `hitSoundPlanFor` therefore answers null for a perfectly good figure. Proven by a throwaway
+    // probe on a clean page, where the same call answers `{kind:"flesh", src:"…/hit-flesh.ogg", cap:4}`.
+    // That leak is the suite's, not the product's, and it is reported rather than silently worked
+    // around here; this leg is written so it cannot depend on it either way.
+    const audioPlan = fx.hitSoundPlanFor(canvas.tokens.get(fleshDoc.id));
+    out.measured.audioPlan = audioPlan;
+    ok("live: the impact-audio plan factory survives the removal — present, still declining a figure-less shot, and still carrying the inherited cap wherever it answers",
+      typeof fx.hitSoundPlanFor === "function" && fx.hitSoundPlanFor(null) === null
+      && (audioPlan === null || audioPlan.cap === 4),
+      JSON.stringify({ plan: audioPlan, figureless: fx.hitSoundPlanFor(null) }));
+    ok("live: the rounds themselves still draw (regression, by value)",
+      run.shots === 10 && spawned.length > 4, `${run.shots} rounds, ${spawned.length} effects`);
     await endAll();
-
-    // 2. ⏪ THE RULE THAT REPLACED "ONCE PER PAYLOAD": one spray per LANDING round. This payload lands
-    // four of its ten rounds, so four sprays — not one (the superseded rule) and not ten (the rounds
-    // that missed draw nothing).
-    await game.settings.set(SCOPE, "goreEnabled", true);
-    clearSpawns();
-    const onRun = await fx.fxWeaponFired(payload());
-    await sleep(HIT_WAIT);
-    ok("live: a ten-round burst landing FOUR draws four sprays — one per landing round, not one per payload",
-      onRun.blood?.queued === 4 && bloods().length === 4,
-      `queued ${onRun.blood?.queued}, drawn ${bloods().length} of ${spawned.length} effects`);
-    ok("live: the sprays are one per LANDING round, so the six that missed drew none (negative)",
-      bloods().length === onRun.hits && bloods().length < onRun.shots,
-      `${bloods().length} sprays / ${onRun.hits} hits / ${onRun.shots} rounds`);
-    ok("live: and it is the mapped asset, at the target, sized as the table says",
-      onRun.blood?.key === fx.BLOOD_SPLATTER.key && onRun.blood?.tokenId === fleshDoc.id
-      && onRun.blood?.squares === fx.BLOOD_SPLATTER.squares,
-      JSON.stringify(onRun.blood));
-    await endAll();
-
-    // 2b. THE CAP — ten LANDING rounds must not draw ten sprays.
-    clearSpawns();
-    const capRun = await fx.fxWeaponFired(payload({
-      shotsFired: 10,
-      areaDamages: { Torso: Array.from({ length: 10 }, () => ({ damage: 2 })) },
-    }));
-    await sleep(HIT_WAIT);
-    ok("live: ten LANDING rounds are capped at maxPerPayload sprays — repeated spray, never a fountain",
-      capRun.hits === 10 && capRun.blood?.queued === fx.BLOOD_SPLATTER.maxPerPayload
-      && bloods().length === fx.BLOOD_SPLATTER.maxPerPayload,
-      `${capRun.hits} hits -> ${bloods().length} sprays (cap ${fx.BLOOD_SPLATTER.maxPerPayload})`);
-    ok("live: the cap is reported on the result, so it is readable without counting the canvas",
-      capRun.blood?.cap === fx.BLOOD_SPLATTER.maxPerPayload, String(capRun.blood?.cap));
-    await endAll();
-
-    // 2c. THE DIRECTION — the ruled exit vector, asserted as geometry rather than as a look.
-    const shooterTokPlaceable = canvas.tokens.placeables.find(t => t.document.id === shooterDoc.id);
-    const fleshTokPlaceable = canvas.tokens.placeables.find(t => t.document.id === fleshDoc.id);
-    const dir = await fx.fxBloodSplatter(shooterTokPlaceable, fleshTokPlaceable, { delayMs: 0 });
-    const fromC = fx.centerOf(shooterTokPlaceable), atC = fx.centerOf(fleshTokPlaceable);
-    const exit = dir.exitPoint;
-    const angOf = (p) => Math.atan2(p.y - fromC.y, p.x - fromC.x);
-    const degApart = exit ? Math.abs(((angOf(atC) - angOf(exit)) * 180) / Math.PI) : null;
-    ok("direction: the spray is aimed at a point BEYOND the target on the shooter→target ray — an exit, not a splash-back",
-      !!exit && Math.hypot(exit.x - fromC.x, exit.y - fromC.y) > Math.hypot(atC.x - fromC.x, atC.y - fromC.y),
-      JSON.stringify({ exit, targetDist: Math.round(Math.hypot(atC.x - fromC.x, atC.y - fromC.y)) }));
-    ok("direction: that point is COLLINEAR with the shot — the spray continues the round's own line",
-      degApart !== null && degApart < 1, `${degApart}° off the shot axis`);
-    ok("direction: a shot with no shooter falls back to a random rotation rather than a baked heading (negative)",
-      (await fx.fxBloodSplatter(null, fleshTokPlaceable, {})).exitPoint === null);
-    await endAll();
-
-    // 2d. THE IMPACT CLOCK — the spray waits out the round's own crossing time, per load.
-    clearSpawns();
-    const flechRun = await fx.fxWeaponFired(payload({ modifier: "flechette", shotsFired: 2,
-      areaDamages: { Torso: [{ damage: 2 }, { damage: 2 }] } }));
-    await sleep(HIT_WAIT);
-    const flechEntry = fx.ammoFxEntry(flechRun.weaponClass, "flechette");
-    ok("clock: a travelled load's spray is held back by that load's own crossing time",
-      Number(flechEntry.dashMs) === 170 && flechRun.blood?.queued === 2 && bloods().length === 2,
-      `dashMs ${flechEntry.dashMs}, ${bloods().length} sprays`);
-    await endAll();
-    // THE SETTLE EXCLUSION, read off the queue: the terminal elements of the last round carry the
-    // fan-out's settle name; the splash must not, or the damage window would wait for it.
-    ok("live: the splash carries no settle name — the damage window cannot wait on it",
-      bloods().every(b => !/\.settle\./.test(b.name)) && spawned.some(s => /\.settle\./.test(s.name)),
-      JSON.stringify({ blood: bloods().map(b => b.name), tagged: spawned.filter(s => /\.settle\./.test(s.name)).length }));
-    // The scheduled floor is the same number it was with the switch off — the splash joined nothing.
-    ok("live: the scheduled tail is unmoved by the splash",
-      onRun.settleTailMs === offRun.settleTailMs,
-      `${offRun.settleTailMs} -> ${onRun.settleTailMs}`);
-    out.measured.tail = { off: offRun.settleTailMs, on: onRun.settleTailMs };
-    await endAll();
-
-    // 3. A STRUCTURE TARGET, same shot — nothing.
-    clearSpawns();
-    const vehRun = await fx.fxWeaponFired(payload({ targetTokenId: vehDoc.id }));
-    await sleep(HIT_WAIT);
-    ok("live: the same landing burst on a vehicle target draws no splash (negative)",
-      vehRun.blood === null && bloods().length === 0,
-      `${bloods().length} of ${spawned.length} effects`);
-    await endAll();
-
-    clearSpawns();
-    const borgRun = await fx.fxWeaponFired(payload({ targetTokenId: borgDoc.id }));
-    await sleep(HIT_WAIT);
-    ok("live: nor on a full-conversion body, whose actor type is character (negative)",
-      borgRun.blood === null && bloods().length === 0,
-      `${bloods().length} of ${spawned.length} effects`);
-    await endAll();
-
-    // 4. A RULED FUMBLE — the rail draws nothing at all, and that includes this.
-    clearSpawns();
-    const fumbleRun = await fx.fxWeaponFired(payload({ fumbleRuled: true }));
-    await sleep(600);
-    ok("live: a ruled fumble draws no splash, with everything else it does not draw (negative)",
-      fumbleRun.skipped === "fumble" && fumbleRun.blood === null && bloods().length === 0,
-      `${fumbleRun.skipped} / ${bloods().length}`);
-    await endAll();
-
-    // 5. THE MISS, and the shot with nobody aimed at — the other two ways nothing is drawn.
-    clearSpawns();
-    const missRun = await fx.fxWeaponFired(payload({ shotsHit: 0, areaDamages: {} }));
-    await sleep(HIT_WAIT);
-    ok("live: a burst that lands nothing draws no splash (negative)",
-      missRun.blood === null && bloods().length === 0,
-      `${bloods().length} of ${spawned.length} effects`);
-    await endAll();
-
-    clearSpawns();
-    const noAimRun = await fx.fxWeaponFired(payload({ targetTokenId: null, fxTargetTokenId: null }));
-    await sleep(HIT_WAIT);
-    ok("live: a shot with no target token draws no splash — blood needs a body (negative)",
-      noAimRun.blood === null && bloods().length === 0,
-      `${bloods().length} of ${spawned.length} effects`);
-    await endAll();
-
-    // 6. The verb's own degrade path, driven directly: nothing to draw on means nothing drawn.
-    const direct = await fx.fxBloodSplatter(null, null);
-    ok("verb: called with no token it draws nothing and says so (negative)",
-      direct.drawn === false && direct.key === fx.BLOOD_SPLATTER.key);
 
     /* ── cleanup ───────────────────────────────────────────────────────────── */
     fx._setDropLagMs(null);
@@ -6085,17 +5912,15 @@ try {
     Hooks.off("createSequencerEffect", spawnHook);
     AH.play = realPlay;
     await endAll();
-    await game.settings.set(SCOPE, "goreEnabled", priorGore);
-    ok("cleanup: the switch is left as it was found", game.settings.get(SCOPE, "goreEnabled") === priorGore, String(priorGore));
     for (const m of game.messages.filter(m => m.speaker?.actor === shooterActor.id)) { try { await m.delete(); } catch (e) { /* gone */ } }
-    try { await scene.deleteEmbeddedDocuments("Token", [shooterDoc.id, fleshDoc.id, vehDoc.id, borgDoc.id]); } catch (e) { /* gone */ }
-    for (const a of [shooterActor, fleshActor, npcActor, vehActor, acpaActor, borgActor, limbActor]) { try { await a.delete(); } catch (e) { /* gone */ } }
+    try { await scene.deleteEmbeddedDocuments("Token", [shooterDoc.id, fleshDoc.id]); } catch (e) { /* gone */ }
+    for (const a of [shooterActor, fleshActor]) { try { await a.delete(); } catch (e) { /* gone */ } }
     return out;
   });
   bres.checks.push(...r.checks);
   bres.measured = r.measured;
 } catch (err) {
-  bres.checks.push({ n: "blood splash section ran", p: false, d: String(err?.message ?? err) });
+  bres.checks.push({ n: "withdrawn-spray section ran", p: false, d: String(err?.message ?? err) });
 }
 
 /* ══ 17. THE PACING CONTRACT: an anchored schedule, and a late round DROPPED rather than queued ════ */
@@ -7095,11 +6920,10 @@ try {
         areaDamages: { Torso: Array.from({ length: ROUNDS }, () => ({ damage: 2 })) }, ...over });
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
-    const goreWas = game.settings.get(SCOPE, "goreEnabled");
     await game.settings.set(SCOPE, "combatFxEnabled", true);
-    // The spray is scene dressing that lingers by design and is excluded from the settle rule; switching
-    // it off keeps the census below about the round's own elements rather than about a ruled exclusion.
-    await game.settings.set(SCOPE, "goreEnabled", false);
+    // ⏪ THE SPRAY SWITCH IS GONE (withdrawn 2026-08-28, §16). This census used to stand the element
+    // down so it counted the round's own elements rather than a ruled exclusion; with the element
+    // removed there is nothing to stand down and nothing to restore.
     const AH = foundry.audio.AudioHelper;
     const realPlay = AH.play;
     const realSequence = globalThis.Sequence;
@@ -7282,14 +7106,13 @@ try {
       try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ }
       await sleep(300);
       await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
-      await game.settings.set(SCOPE, "goreEnabled", goreWas);
       for (const m of game.messages.filter(m => m.speaker?.actor === shooterActor.id)) { try { await m.delete(); } catch (e) { /* gone */ } }
       for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__SF"))) await t.delete().catch(() => {});
       for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__SF"))) await a.delete().catch(() => {});
     }
-    ok("cleanup: the fixtures are gone and the switches are as they were found",
+    ok("cleanup: the fixtures are gone and the switch is as it was found",
       game.actors.filter(a => a.name?.startsWith("__PW__SF")).length === 0
-      && game.settings.get(SCOPE, "goreEnabled") === goreWas,
+      && game.settings.get(SCOPE, "combatFxEnabled") === fxWas,
       `${game.actors.filter(a => a.name?.startsWith("__PW__SF")).length} left`);
     return out;
   });
@@ -7411,12 +7234,10 @@ try {
     await sleep(400);
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
-    const goreWas = game.settings.get(SCOPE, "goreEnabled");
     const realSequence = globalThis.Sequence;
     const playedEntries = [];
     try {
       await game.settings.set(SCOPE, "combatFxEnabled", true);
-      await game.settings.set(SCOPE, "goreEnabled", true);
       class RecSequence {
         constructor() { this.entries = []; }
         effect() {
@@ -7487,26 +7308,28 @@ try {
       const long = await fx.fxWeaponFired(burst(20));
       await sleep(400);
       out.measured.longBurst = { shots: long.shots, hits: long.hits, dropped: long.dropped,
-        impacts: long.impacts, blood: long.blood, maxLagMs: long.maxLagMs };
+        impacts: long.impacts, maxLagMs: long.maxLagMs };
       ok("budget: an N-round burst with M hits schedules exactly M impact sets, refused rounds included",
         long.impacts.queued === long.hits && long.hits === 20 && long.impacts.cap === fx.HIT_MARK_MAX_PER_PAYLOAD,
         JSON.stringify({ shots: long.shots, hits: long.hits, dropped: long.dropped, impacts: long.impacts.queued }));
       ok("budget: the refused rounds' marks were issued on their own — the count the drop used to lose",
         long.impacts.refused === long.dropped || long.dropped === 0,
         `${long.dropped} refused, ${long.impacts.refused} marks issued separately`);
-      ok("budget: the blood cap is the SPRAY's own and is still much tighter than the mark's",
-        long.blood?.queued === Math.min(long.hits, fx.BLOOD_SPLATTER.maxPerPayload)
-        && fx.BLOOD_SPLATTER.maxPerPayload < fx.HIT_MARK_MAX_PER_PAYLOAD,
-        JSON.stringify({ sprays: long.blood?.queued, cap: fx.BLOOD_SPLATTER.maxPerPayload }));
+      // ⏪ RE-VALUED 2026-08-28: the tighter of the two budgets belonged to the withdrawn element.
+      // The impact AUDIO carries that number in its own right now, and it is still far under the mark's.
+      ok("budget: the tighter per-payload bound survives the removal and is still under the mark's",
+        fx.HIT_SOUND_MAX_PER_PAYLOAD === 4 && fx.HIT_SOUND_MAX_PER_PAYLOAD < fx.HIT_MARK_MAX_PER_PAYLOAD
+        && long.blood === undefined,
+        JSON.stringify({ audioCap: fx.HIT_SOUND_MAX_PER_PAYLOAD, markCap: fx.HIT_MARK_MAX_PER_PAYLOAD }));
       // The negative: a burst that MISSED everything schedules nothing, however many rounds it fired.
       playedEntries.length = 0;
       const allMiss = await fx.fxWeaponFired({ attackerId: actor.id, weaponId: rifle.id,
         weaponName: "__PW__ARV rifle", caliber: "5.56", modifier: "standard", shotsFired: 12,
         targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id, areaDamages: {} });
       await sleep(300);
-      ok("budget: a burst that landed nothing schedules no impacts and no blood (negative)",
-        allMiss.hits === 0 && allMiss.impacts.queued === 0 && allMiss.blood === null,
-        JSON.stringify({ hits: allMiss.hits, impacts: allMiss.impacts.queued, blood: allMiss.blood }));
+      ok("budget: a burst that landed nothing schedules no impacts at all (negative)",
+        allMiss.hits === 0 && allMiss.impacts.queued === 0,
+        JSON.stringify({ hits: allMiss.hits, impacts: allMiss.impacts.queued }));
       // And the mark a refused round draws is the SAME resolved mark the drawn round draws — one
       // resolver, so a promoted asset cannot appear on one path and not the other.
       ok("budget: both paths resolve the same mark, so a promotion cannot reach only one of them",
@@ -7529,7 +7352,6 @@ try {
     } finally {
       globalThis.Sequence = realSequence;
       await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
-      await game.settings.set(SCOPE, "goreEnabled", goreWas);
       for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__ARV"))) await t.delete().catch(() => {});
       for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__ARV"))) await a.delete().catch(() => {});
     }
@@ -7601,9 +7423,10 @@ try {
     ok("impact audio: an impact peaks well under the shot report it follows (the loudness discipline)",
       (fx.hitSoundVolume("flesh", 0) * 0.8677) < (0.8 * 1.241) * 0.55,
       `impact ${(fx.hitSoundVolume("flesh", 0) * 0.8677).toFixed(3)} vs pistol report ${(0.8 * 1.241).toFixed(3)}`);
-    ok("impact audio: the payload cap IS the blood spray's, by import, and is far under the mark's",
-      fx.HIT_SOUND_MAX_PER_PAYLOAD === fx.BLOOD_SPLATTER.maxPerPayload
-      && fx.HIT_SOUND_MAX_PER_PAYLOAD === 4
+    // ⏪ RE-VALUED 2026-08-28: this bound used to be taken BY IMPORT from the withdrawn element so
+    // the two moved together. The lender is gone; the number is stated on its own, at the same value.
+    ok("impact audio: the payload cap stands on its own at 4 and is far under the mark's",
+      fx.HIT_SOUND_MAX_PER_PAYLOAD === 4
       && fx.HIT_SOUND_MAX_PER_PAYLOAD < fx.HIT_MARK_MAX_PER_PAYLOAD,
       `${fx.HIT_SOUND_MAX_PER_PAYLOAD} vs the mark's ${fx.HIT_MARK_MAX_PER_PAYLOAD}`);
 
@@ -7620,21 +7443,19 @@ try {
     const [rigTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PW__HIT Frame", actorId: rig.id, actorLink: true, x: 1600, y: 1000 }]);
     await sleep(400);
 
-    ok("impact audio: the clip is chosen by the SAME structure predicate the blood spray asks",
+    ok("impact audio: the clip is chosen by the structure predicate, both ways",
       fx.hitSoundKindFor(meat) === "flesh" && fx.hitSoundKindFor(rig) === "structure"
       && fx.bearsStructuralSdp(rig) === true && fx.bearsStructuralSdp(meat) === false
       && fx.hitSoundKindFor(null) === "flesh",
       `${fx.hitSoundKindFor(meat)} / ${fx.hitSoundKindFor(rig)}`);
 
     const fxWas = game.settings.get(SCOPE, "combatFxEnabled");
-    const goreWas = game.settings.get(SCOPE, "goreEnabled");
     const realSequence = globalThis.Sequence;
     const played = [];
     // Hoisted out of the try so the finally can restore it — this page's real audio-context state.
     const lockedWas = game.audio.locked;
     try {
       await game.settings.set(SCOPE, "combatFxEnabled", true);
-      await game.settings.set(SCOPE, "goreEnabled", true);
       fx._setHitSoundSink((e) => played.push({ ...e, at: Date.now() }));
 
       /* ── c. THE NEGATIVES, before anything is driven ───────────────────────────────────────── */
@@ -7700,7 +7521,7 @@ try {
       ok("impact audio: it rides the existing FX master switch and carries no gate of its own (negative)",
         off.played === false && off.skipped === "disabled" && offPlan === null && played.length === 0,
         JSON.stringify(off));
-      // No target token → no impact, for the reason blood has none: an aim point is not a victim.
+      // No target token → no impact: an aim point is a direction, not a victim.
       ok("impact audio: a shot aimed at nobody plans no impact (negative)",
         fx.hitSoundPlanFor(null) === null && fx.hitSoundPlanFor({ actor: null }) === null);
 
@@ -7848,7 +7669,6 @@ try {
       delete globalThis.__HIT_ENTRIES;
       try { Sequencer.EffectManager.endAllEffects(); } catch (e) { /* none live */ }
       await game.settings.set(SCOPE, "combatFxEnabled", fxWas);
-      await game.settings.set(SCOPE, "goreEnabled", goreWas);
       for (const t of [...(scene?.tokens ?? [])].filter(t => t.name?.startsWith("__PW__HIT"))) await t.delete().catch(() => {});
       for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__HIT"))) await a.delete().catch(() => {});
     }
@@ -10141,7 +9961,7 @@ console.log(`  arrival clock, measured: ${JSON.stringify(arrive.measured ?? null
 console.log(`  impact audio, measured: ${JSON.stringify(hitaudio.measured ?? null)}`);
 console.log(`  declared corridor, measured: ${JSON.stringify(corridor.measured ?? null)}`);
 console.log(`  pacing under load, measured: ${JSON.stringify(cres.measured ?? null)}`);
-console.log(`  blood splash, measured: ${JSON.stringify(bres.measured ?? null)}`);
+console.log(`  withdrawn spray section, measured: ${JSON.stringify(bres.measured ?? null)}`);
 console.log(`  burning-ground clip, decoded off the install: ${JSON.stringify(ares.groundFireDecode ?? null)}`);
 console.log(`  measured envelope on this rig: ${JSON.stringify(res.measuredEnvelope)}`);
 console.log(`  sounds directory listing at run time: ${JSON.stringify(res.soundsDelivered)}`);

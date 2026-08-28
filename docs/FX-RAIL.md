@@ -179,7 +179,7 @@ and sound can no longer skew against each other on any client.
 |---|---|---|
 | Shot audio | **none — each client plays its own** (`AudioHelper.play(..., false)`) | interface channel, so each player's own slider still governs it. ⏪ was broadcast |
 | Muzzle **light** | **none — each client builds and drives its own** from its performance | ⏪ the per-flash datagram (`MSG_FLASH`) and its `holdMs`-rides-the-socket rule are retired; each client computes the identical hold and pulse from the identical payload |
-| Sprites (lance, tracer, impacts, smoke, blood, marks) | **none — `.locally()` on every transient section** (the `_held` helper is the one site) | ⏪ was Sequencer's per-sprite socket |
+| Sprites (lance, tracer, impacts, smoke, marks) | **none — `.locally()` on every transient section** (the `_held` helper is the one site) | ⏪ was Sequencer's per-sprite socket |
 | **Burning ground** | **Sequencer's socket — deliberately still shared** | the one per-shot element left on the engine's broadcast: its scene-wide census (`maxLive`, oldest-out through the engine's manager) and late-joiner replay need the engine's shared bookkeeping. `_held(effect, { shared: true })` |
 | Impact audio from the **apply seams** | `AudioHelper.play(..., true)` broadcast — unchanged | an apply runs on ONE client and has no remote performance to deliver it; `fxHitSound`'s `broadcast` option defaults true so an un-updated caller doubles a sound rather than silencing one |
 | **Condition overlays** (§2a) | **none — each client draws its own** | the 2026-08-13 ruling that prefigured the score: every client reconciles the same public state to the same answer. `.locally()` on the draw, `push = false` on the end |
@@ -216,7 +216,7 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 10b | **Burning ground** (corridor shape) ⭐ *moved onto the arrival clock 2026-08-19* | same asset and same lifetime, `GROUND_FIRE.maxPerPattern` (5) flames scattered inside the declared corridor (`patternFirePlanFor`, seeded off the payload including the rolled damage), delayed by the same one resolved `arrivalMs` the marks and impacts take. ⏪ these used to be placed at the GM's **confirm** click; the confirm still owns the case the rail cannot know — an **undeclared** corridor — and the two are kept exclusive by the `railFires` flag the plant stamps on the region. §6 | overlay names `groundFire` **and** the **pattern** flow owns the payload **and** the shooter DECLARED a corridor **and** this is the firing client (the one element on this rail delivered by the engine's broadcast rather than `.locally()`, so one client plants for all) | yes |
 | ~~11~~ | ~~**Ground mark**~~ | ⏪ **REMOVED 2026-08-10** — the dark decal that used to be drawn under #10 was withdrawn on user ruling. The flames are unchanged. Revert values in the rulings log below and in the note beside `GROUND_FIRE` in `module/fx/effects.js`. | — | — |
 | 13 | **Impact audio** ⭐ *new 2026-08-12, corridor half added 2026-08-14* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included. ⭐ A **declared corridor** has no target token, so its victims are swept once per payload instead (`patternAudioPlanFor`): every figure standing in the corridor's own polygon, **naked**-wall-occlusion exempt (a figure behind a cover-VALUED barrier is still sounded — the confirm damages it through that barrier's SP; `areaCoverVerdict`, ruling 2026-08-25), each sounded at **its own fraction of the crossing** — and the pattern's apply seam is quiet (`fxSilent`) so the confirm click can never sound the same bodies again (§6) | n/a (not drawn) |
-| 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
+| ~~12~~ | ~~**Hit spray**~~ | ⏪ **REMOVED 2026-08-28.** The element, its draw verb, its per-round issue, its result field, its preload entries and its `goreEnabled` world setting are all gone rather than switched off. It returns in a future release **inside the arrival composition, with no option of its own**. Every value a rebuild needs is in §6 under the dated entry. | — | — |
 
 | 14 | **Delivered warhead** ⭐ *new 2026-08-27* | `jb2a.throwable.throw.bomb.01.black` (thrown) / `jb2a.throwable.launch.cannon_ball.01.black` warm-tinted through `TRACER_COLOR_ROCKET` (launched — ⭐ **the ball SHIPS; the bolt trial was REJECTED by the user 2026-08-27**, §6, and real rocket art remains the standing §8 ask; ⏪ the rejected trial is still declared as `ROCKET_PROJECTILE_BOLT`, one identifier away) — both painted/banded like a bullet family, so the object crosses on the SAME `stretchTo` shape and the SAME arrival ladder machinery, with **one object per throw** (a delivery card reports one round fired, so the fan-out loop runs once and there is no cadence, no drop rule and no queue) | the fired weapon's ATTACK TYPE is Grenade / Missile / Rocket / RPG (`combat/area-delivery.js`), thrown vs launched decided by whether there is a round in the tube | yes |
 | 14b | **Detonation mark** ⭐ *new 2026-08-27* | `jb2a.explosion.shrapnel.bomb.01.black` at **2.0 sq / 700 ms** (thrown) · `jb2a.explosion.01.orange` at **2.4 sq**, trimmed to its measured **1067 ms** content end inside a 1367 ms clip (launched) — promoted through the row's own `impactKey`/`impactClipMs`, so it is the ordinary hit-mark element with a different asset | the object arrived — which for a delivery payload is **always**, hit or miss (p.108 sends a missed centre to the grenade table, not to nowhere) | yes |
@@ -244,49 +244,16 @@ and a test can compute it twice. Across bursts a scene holds at most ⏱ **`maxL
 placement that would exceed it ends the **oldest** first, through the engine's own manager, which
 relays the end to every client exactly as the placement was relayed.
 
-**How the blood splash is aimed and how often it is drawn (#12), rebuilt 2026-08-09.** Both halves
-of this were reversed on report and both reversals are recorded in §6.
-
-*Direction.* The first build used `liquid.splash02.red` precisely **because** it is radial — its ink
-centroid holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it needed no rotation and could
-never disagree with the shot axis. That safety is what made it wrong: a radial burst says the wound has
-no direction. The shipped asset is now `liquid.splash_side02.red`, whose ink **traverses** its own frame
-0.29 → 0.65 left-to-right, and it is rotated (`rotateTowards`, the tracers' own call and the tracers'
-own basis) at a point **one grid unit beyond the target on the shooter→target ray**. The spray therefore
-continues the round's line and leaves on the far side, as an exit. A shot with no shooter — nothing on
-the rail draws one today, but the verb is callable — falls back to a random rotation rather than to a
-baked heading, because a wrong direction is a worse lie than none. Capture 64a.
-
-*How many.* One spray per **landing round**, not one per payload, capped at `maxPerPayload` = **4**.
-The cap is measured rather than picked: the clip lives 900 ms and hits are the leading rounds of the
-burst, so at the default 80 ms cadence ten hits would put ten sprays inside one clip's life — a fountain
-rather than a body being hit repeatedly. Four are still four distinguishable arrivals, each still on
-screen when the next lands. A round the pacing rule **refuses** (§4.1a) draws no spray either; the spray
-is issued from the same place the arrival mark is, so the two can never disagree.
-
-⏪ **A round the pacing rule refuses now sprays and marks anyway (2026-08-11).** The sentence above used
-to read "a round the pacing rule **refuses** draws no spray either", and that was the second half of the
-bench report: *"hits late in a long burst get NO blood at all"*. The drop rule is right about what it was
-written for — a tracer is a sprite per pellet, every cadence slot, and a backlog of them is what put the
-picture a second behind the sound — but a mark and a spray are one sprite each, at the far end of the
-shot, and they are the only thing that says the round landed on somebody. The two budgets are separate
-now: §4.1a. Capture 64b.
-
-**The one departure from that rule is the blood splash (#12).** Blood is not a light source, so the
-rule as written puts it below — and on the rig's own dark range that is not a dimmer effect, it is no
-effect (capture 58d is the same splash routed below, and there is a smudge where there should be a
-mark). The trade is therefore between an element invisible exactly where a table plays and an element
-drawn over ground the viewer cannot see, and the second is the lesser cost *here only*, because this
-element lives for under a second. The one element that took the other side of the same trade — a dark
-ground mark that stayed below the lighting and therefore vanished on a dark range, for minutes at a
-time — was removed on 2026-08-10, so the splash is now the only place the departure is taken. It is a
-knob (`BLOOD_SPLATTER.aboveLighting`), not a constant in the draw path.
+⏪ **The hit spray's own paragraphs stood here and are RETIRED WITH THE ELEMENT (2026-08-28).** Its
+direction ruling, its per-landing-round rule, its measured cap and the above-the-lighting departure it
+was the last holder of are all preserved verbatim in §6, under the removal's dated entry, so a rebuild
+is a transcription rather than a re-derivation. Nothing on the rail takes the routing departure today.
 
 **What a landed round SOUNDS like (#13), added 2026-08-12.** The rail has always played the weapon's
 own report from inside the fan-out loop; this is the other half — the noise at the far end of the shot.
 
-*Two clips, chosen by what took it.* `hitSoundKindFor` asks the **same** predicate the blood splash asks
-(`bearsStructuralSdp`), so structure and flesh cannot disagree about one target: a vehicle, a
+*Two clips, chosen by what took it.* `hitSoundKindFor` asks `bearsStructuralSdp` — the predicate the
+removed hit spray also asked — so structure and flesh cannot disagree about one target: a vehicle, a
 powered-armour suit or a full-conversion cyborg sounds as **structure**, everything else as **flesh**.
 Assets are resolved through `_deliveredSrc` exactly as the reports are, so a build that ships without
 them is silent rather than broken — the audio equivalent of the missing-key skip.
@@ -317,8 +284,9 @@ the broadcast path discards extra fields). Volume **is** carried on both paths, 
 = `[1, 0.9, 0.96, 0.86]` is applied by round index — deterministic and indexed rather than rolled, so a
 keeper asserts the ladder by value.
 
-*The cap is the blood splash's, by import rather than by copy.* `HIT_SOUND_MAX_PER_PAYLOAD` **is**
-`BLOOD_SPLATTER.maxPerPayload` (4) and moves with it. It is deliberately **not** the mark's 30: thirty
+*The cap is 4, stated in its own right.* ⏪ It used to be taken **by import** from the hit spray's cap so
+the two moved together; that element was removed 2026-08-28 and the number stayed. It is deliberately
+**not** the mark's 30: thirty
 marks are thirty sprites over thirty squares of canvas and the eye reads them as thirty confirmations,
 where thirty copies of one 0.16 s clip inside a two-second burst is one continuous noise.
 
@@ -1113,7 +1081,7 @@ instead, split by whether the item has a round in the tube (`combat/area-deliver
 | `rifle` | bullet.02 | 1.6 sq lance | 0.95 | 80 ms | 13 motes |
 | `shotgun` | bullet.01, `tracerColor: null` | **1.9 sq lance, 220 ms dwell** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, **0.7 sq** dashes crossing in 150 ms, per-pellet jitter (§3.2b), single-shot smoke |
 | `heavy` | bullet.02 | 2.1 sq lance | 1.30 | 80 ms | 16 motes |
-| `thrown` ⭐ | `throwable.throw.bomb.01.black` (banded, arc + wind-up baked in) | ⛔ **none — a hand has no muzzle** (`noMuzzleFlash` also stands the native flash light down) | 2.00 (`explosion.shrapnel.bomb`, 700 ms) | n/a — **one object per throw** | `grenade-pin` → `explosion-big` at the arrival; no blood; the object always arrives |
+| `thrown` ⭐ | `throwable.throw.bomb.01.black` (banded, arc + wind-up baked in) | ⛔ **none — a hand has no muzzle** (`noMuzzleFlash` also stands the native flash light down) | 2.00 (`explosion.shrapnel.bomb`, 700 ms) | n/a — **one object per throw** | `grenade-pin` → `explosion-big` at the arrival; the object always arrives |
 | `rocket` ⭐ | `throwable.launch.cannon_ball.01.black` warm-tinted with `TRACER_COLOR_ROCKET` (⭐ **shipped** — the `bolt.physical.orange` trial was rejected 2026-08-27, §6; real rocket art = §8) | 1.8 sq lance — a launch tube DOES flash | 2.40 (`explosion.01.orange`, trimmed to its 1067 ms content end) | n/a — one object | `rocket-launch` → `explosion-big`; 10 motes |
 
 Sizes are in **grid units**, not scale factors — the same fraction of a square on any scene.
@@ -1579,7 +1547,6 @@ faceTarget()                       ← awaited; the rounds start from a token al
 fxBurstAmbience()                  ← once, multi-round payloads only (mote spray)
 fxGroundFire(points)               ← ONE placement, N flames, incendiary + at least one hit +
                                      the single-target flow owns the payload; NOT awaited
-fxBloodSplatter()                  ← once, gore on + a hit + a flesh target token; NOT awaited
 for each round i of shots:
     sleep until t0 + i×cadence      ← the ONE wait, and it is ANCHORED (§4.1a)
     if this round is too late:     ← DROP it entirely and go to the next
@@ -1587,7 +1554,6 @@ for each round i of shots:
     sfx()                          ← audio
     fxSmokePuff()                  ← single-discharge classes only; NOT awaited
     fxShot()                       ← light + sprites + tracer + impact; NOT awaited
-    fxBloodSplatter()              ← landing rounds only, up to the cap; NOT awaited
 _watchSettleTag(settleTag, presentationTailMs(class, ammo))
 ```
 
@@ -1697,12 +1663,12 @@ The fan-out reports `dropped`, `maxLagMs` and `loopMs` on its result, so the pac
 than inferred. `_setDropLagMs(ms)` is a test seam for an absolute threshold; nothing ships with it armed.
 
 ⭐⭐ **THE IMPACT FAMILY IS NOT ON THE TRACER'S BUDGET (2026-08-11).** Bench report: *"hits late in a
-long burst get NO blood at all"*. The drop rule above takes a late round **whole** — audio with picture —
+long burst get NO [arrival element] at all"*. The drop rule above takes a late round **whole** — audio with picture —
 and it is right about what it was written for: a report landing on top of another report is worse than a
 missing report, and a backlog of tracers is what put the picture a second behind the sound. But it was
 also taking the round's **arrival** with it, and an arrival is not a pacing cost. A tracer is a sprite
-per pellet, issued from the muzzle every cadence slot; a hit mark and a blood spray are **one sprite
-each**, at the far end of the shot, and they are the only thing on screen that says the round landed on
+per pellet, issued from the muzzle every cadence slot; a hit mark is **one sprite**, at the far end of
+the shot, and it is the only thing on screen that says the round landed on
 somebody. A ten-round burst that hit six times was marking three, which reads as a burst that mostly
 missed.
 
@@ -1712,7 +1678,7 @@ So the two budgets are separate:
 |---|---|---|
 | **tracer / audio / flash / lance** | the pacing rule — may refuse a late round outright | the last round is never refused |
 | **hit mark** | the payload's own hit count | `HIT_MARK_MAX_PER_PAYLOAD` = `MAX_FX_SHOTS` (30) |
-| **blood spray** | the same, capped much tighter | `BLOOD_SPLATTER.maxPerPayload` = 4 |
+| **impact audio** | the same, capped much tighter | `HIT_SOUND_MAX_PER_PAYLOAD` = 4 |
 
 A round that **hit** gets its impact family whether or not its tracer was drawn. A refused round's mark
 is issued on its own (`fxHitMark`) with the lateness that caused the drop **subtracted** from the
@@ -1855,7 +1821,8 @@ a round that is painted — 410 ms against a real 933 — and the apply window o
 every slug. Zeroing it is what puts the tail on the branch the round is actually on, and the shell's slug
 consequently reads **933 ms, identical to a rifle's standard round**, which is what it now looks like.
 
-**Deliberately *not* in the tail:** burst smoke, mote spray, burning ground, **blood splash**.
+**Deliberately *not* in the tail:** burst smoke, mote spray, burning ground. (The hit spray was on this
+list too until it was removed, 2026-08-28 — §6.)
 They are scene dressing that lingers on purpose; waiting for them would hold the damage window shut for
 seconds after a viewer has already called the action over. The exclusion is structural rather than a
 flag — none of them is given a settle name, and `presentationTailMs` takes no term for any of them, so
@@ -1928,9 +1895,9 @@ The table is keyed by the tracer key rather than by the class, which is what mak
 `bullet.02`, and the slug is banded off the picture it was replaced with. A key the table does not carry
 falls to `TRACER_ARRIVAL_FALLBACK_MS` (400).
 
-⛔ **It is ONE derivation per payload.** The hit mark, the pellet arrival marks, the blood spray, the
+⛔ **It is ONE derivation per payload.** The hit mark, the pellet arrival marks, the impact audio, the
 burning ground and the tail floor all hang on this number; a second derivation anywhere is a way for the
-mark and the blood on one shot to disagree about when the round got there. `fxWeaponFired` resolves it
+mark and the sound on one shot to disagree about when the round got there. `fxWeaponFired` resolves it
 once, before the loop, and threads it into every verb — exactly as it threads the load key. `fxShot`
 derives its own only when called on its own (the keeper does, and a caller with no measured shot must
 still get an arrival rather than the zero that was the defect).
@@ -2083,7 +2050,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `TRACER_COLOR_ROCKET` ⭐ | `{hue 12, saturate 0.45, brightness 1.55}` | what warms the launched warhead off a black cannon-ball asset (this library ships no rocket-with-exhaust cut). ⭐ **APPLIED** — the ball is back on the row after the 2026-08-27 bolt rejection (§6), so this matrix is live again; the rejected trial asset was natively orange and carried `tracerColor: null`. ⚠ unsigned look call (§8) |
 | `ROCKET_PROJECTILE` | `= ROCKET_PROJECTILE_BALL` → `{key: "jb2a.throwable.launch.cannon_ball.01.black", tracerColor: TRACER_COLOR_ROCKET}` | ⛔ **THE ONE KNOB for the launched warhead's picture.** Carries the key AND the tint together, so the two cannot drift. ⭐ **RULED 2026-08-27:** the `ROCKET_PROJECTILE_BOLT` trial (`jb2a.bolt.physical.orange`) was **rejected by the user** — *"very small and kind of still looks like a bullet"* — because a `stretchTo` draw takes its width from the asset's own frame and thin ink reads as a streak; growing it would be scale tricks on the wrong asset (§9 A3). The bolt row is left declared, one identifier away, the way this file leaves every superseded mechanism wired. Both arrival ladders stay in `TRACER_ARRIVAL_MS` so neither choice drops to the fallback. **Real rocket art is the standing §8 ask; with art this is one `.file()` swap** |
 | `TRACER_NEAR_BAND_FLOOR` | **"15ft"** | the nearest distance band's DRAWN tracer file — the 05ft cut carries a decoded 114/136 px muzzle backwash behind its start anchor (the reported backward tail); the floor serves the clean 15ft cut there instead, arrival timing untouched. **Revert null** = the engine's own band pick, backwash included |
-| `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the two standalone arrival sites (hit mark, blood) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
+| `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the standalone arrival site (hit mark) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
 | `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
 | `FX_PRESENTATION_FEEDBACK` | **true** | whether the drop rule judges the **presentation** clock as well as its own schedule (§4.1b). **Revert false** = the pre-2026-08-26 build: the loop watches only when it reached each slot, and a client whose renderer is three slots behind drops nothing because its timers are fine |
@@ -2131,7 +2098,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `TRACER_ARRIVAL_FALLBACK_MS` ⭐ | 400 | the arrival for a tracer family this file has not decoded |
 | `HIT_MARK_MAX_PER_PAYLOAD` ⭐ | `MAX_FX_SHOTS` (30) | the bound on arrival marks per payload, refused rounds included. Deliberately the fan-out's own round cap: the mark is one transient sprite on the aimed square, and N of them is N confirmations of N landed rounds |
 | `VOLLEY.key` | `volley_of_projectiles_Line.bullet.001.001.orangeyellow` | which picture the volley is (variant `001` is the 5-round fan) |
-| `VOLLEY.crossMs` | 240 / 480 / 840 / 1200 by band | when the rounds ARRIVE — what the blood spray and the burning ground are delayed by |
+| `VOLLEY.crossMs` | 240 / 480 / 840 / 1200 by band | when the rounds ARRIVE — what the arrival marks and the burning ground are delayed by |
 | `VOLLEY.tailMs` | 600 / 800 / 1200 / 1600 by band | when the element stops being worth waiting for — the tail term (§3.2b) |
 | `VOLLEY.jitterDeg` | **5** | how far the aim may be rotated per discharge, about the shooter. Mean \|jitter\| measures 2.45° over 300 seeds |
 | `VOLLEY.mirrorFlip` | `true` | mirror the sprite across its own long axis on ~half of discharges |
@@ -2154,12 +2121,6 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `GROUND_FIRE.maxPerPayload` | 4 | the most flames one payload may place |
 | `GROUND_FIRE.maxPerPattern` | 5 | the most flames one confirmed shot pattern may scatter |
 | `GROUND_FIRE.maxLive` | ⏱ **12** (was **24**) | the most flames alive on a scene at once — oldest evicted first. Trimmed 2026-08-13 (§6); ⚠ the number is the build lane's proposal, re-tune by eye |
-| `BLOOD_SPLATTER.key` | `jb2a.liquid.splash_side02.red` | the splash asset — **natively blood-coloured, no filter is applied**; the SIDE (directional) cut, rotated to the exit vector. ⏪ the radial `splash02.red` is still on the tier |
-| `BLOOD_SPLATTER.maxPerPayload` | 4 | the most sprays one payload may draw — repeated spray, never a fountain |
-| `BLOOD_SPLATTER.squares` | 1.5 | the drawn **frame** width in grid units; the ink is ~0.75 sq at 170 ms, ~1.3 sq at peak |
-| `BLOOD_SPLATTER.clipMs` | 900 | the trim — content is spent by ~700 ms of an 1133 ms file |
-| `BLOOD_SPLATTER.aboveLighting` | `true` | the documented departure from the routing rule (§2) |
-| `goreEnabled` (world setting, `module/settings.js`) | default `false` | the blood master switch — config-visible, fail-closed reader; every splash gate reads it |
 | `shotgunSpreadEnabled` (world setting) | default `true` | the pattern master switch — read ONLY inside `spreadFlowModeOf` (§1.1a); off ⇒ shells take the single-target flow |
 | `MUZZLE_SMOKE.*` | see the block | one puff's size, phase, drift and cap |
 | `MUZZLE_MOTES.*` | see the block | speck geometry, all off the reference frame |
@@ -2169,7 +2130,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `FACE_TARGET.durationMs` / `minDegrees` | 220 / 5 | the turn sweep and its dead zone |
 | `HIT_SOUND_VOLUME` ⭐ | **0.55** | interface level for a landed round's impact, before the per-asset gain and the index wobble. Set against the reports: 6.4 dB under a pistol's peak at `SHOT_VOLUME` 0.8 |
 | `HIT_SOUND.<kind>.gain` ⭐ | flesh **1.0** / structure **1.1677** | peak-matches the two impact clips to each other (0.8677 / 0.7431, measured off the shipped `.ogg`s). Raise the structure figure to let a vehicle hit sit above a body hit |
-| `HIT_SOUND_MAX_PER_PAYLOAD` ⭐ | **4** (= `BLOOD_SPLATTER.maxPerPayload`) | how many impacts one payload may sound. Shared with the splash by import, not by copy |
+| `HIT_SOUND_MAX_PER_PAYLOAD` ⭐ | **4** | how many impacts one payload may sound. ⏪ was imported from the hit spray's cap; that element was removed 2026-08-28 and the number stayed |
 | `HIT_SOUND_VARIANCE` ⭐ | `[1, 0.9, 0.96, 0.86]` | the per-round level wobble, by round index — the only variation this host's audio layer can deliver uniformly |
 | `HIT_SOUND_BURST_WINDOW_MS` ⭐ | **700** | how long the rolling tally an UN-indexed caller draws on stays open. Past the cap inside one window a play is refused (`skipped: "burst"`); quiet reopens it. The fan-out supplies its own index and is exempt |
 
@@ -2261,6 +2222,41 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+⏪⏪ **2026-08-28 — THE HIT SPRAY IS REMOVED ENTIRELY, ELEMENT AND OPTION BOTH.** User, verbatim:
+*"Remove the note on blood splatter, and additionally remove the option. In addition we'll remove the
+splatter itself in this release and focus on adding it for the next one. It never looked right. When it
+does come out, it will just be added into the stack with no option."* So three separate things went, in
+one pass: the **element** (spec block, draw verb, per-payload gates, per-round issue in the fan-out loop,
+the `blood` field on the fan-out's result, both preload-manifest entries), the **world setting**
+(`goreEnabled` — its registration, its reader, its settings-section row and its two `en.json` strings),
+and the **release-notes bullet**. Deleted, not disabled, on the same principle the incendiary ground mark
+was retired under: a mechanism that is always inert is a mechanism a later reader has to disprove. Two
+things deliberately survive it — `bearsStructuralSdp`, because the impact AUDIO asks the same predicate
+for which clip a landed round takes, and `HIT_SOUND_MAX_PER_PAYLOAD`, which used to be **imported** from
+the element's own cap and is now stated in its own right at the same value (**4**).
+
+⭐ **THE RETURN IS ALREADY RULED: no option.** When it comes back it comes back as part of the arrival
+composition, gated by nothing but the rail itself — so there is no setting to keep registered for it, now
+or later. A world that has the retired key stored keeps a value nothing reads; core leaves such orphans
+alone and so does this module (no migration; the read path is simply gone).
+
+⭐ **THE FULL REBUILD RECORD — every value, so a restore is a transcription and not a re-derivation:**
+
+| What | Value | Why it was that |
+|---|---|---|
+| asset key | `jb2a.liquid.splash_side02.red` | the free tier ships no family *named* for it, but `jb2a.liquid.*` ships red variants; decoded off the installed file it is R91 G1 B1 at 113 ms, R95 G1 B2 at 283 ms, R157 G3 B4 at 453 ms — a deep near-black red with the other two channels at zero, so a ColorMatrix over it would repaint red with red. ⏪ the radial `splash02.red` is the superseded pick and is still on the tier |
+| drawn frame | **1.5 squares** | it is the FRAME, not the ink: the ink reaches 0.50 of the frame at 170 ms and peaks at 0.87 at 510 ms, so it opened at ~0.75 sq and peaked a little over 1 sq — the size of the body it sat on |
+| trim | **900 ms** of a **1033 ms** file | chosen where the CONTENT ends: coverage falls from 17.1 % of the frame at 283 ms to 0.07 % at 680 ms, peak alpha 5/255 by 963 ms |
+| per-payload cap | **4** | measured, not picked: the clip lives 900 ms and hits are the leading rounds, so at the 80 ms cadence ten hits put ten inside one clip's life — a fountain. Four are still four distinguishable arrivals, each still on screen when the next lands |
+| issue policy | one per **landing round**, `per-round-capped` | ⏪ supersedes the original once-per-payload rule (user, 2026-08-09, on the MPK-9 burst: a ten-round burst marked its target exactly as hard as a single shot) |
+| refused rounds | **included** | ⏪ 2026-08-11 reversal: the drop rule owns the TRACER budget only, so a round the pacing rule refused still got its arrival elements, with the lateness subtracted |
+| direction | `rotateTowards` a point **one grid unit beyond the target** on the shooter→target ray | user, 2026-08-09, verbatim: *"It's angled. The blood pushes out in a direction. It should move in the same direction as the bullet that strikes the target."* The side cut's ink traverses its own frame 0.29 → 0.65, so pointing that travel past the body makes it leave on the far side. No shooter ⇒ random rotation, because a wrong direction is a worse lie than none |
+| routing | **above** the lighting | the one departure from the rail's own routing rule. It is not a light source, so the rule put it below — and measured on the dark range at darkness 1.0 that is not a dimmer effect, it is no effect (captures 58a vs 58d). The trade was accepted only because the element lived under a second |
+| settle | **excluded**, by construction | never given a settle tag and no term in `presentationTailMs`, so the damage window never waited on it |
+| gates | world setting · ≥ 1 round landed · a TARGET TOKEN (not an aim point) · target not structure (`bearsStructuralSdp`) · not a wall-clipped shot (2026-08-26) · not a delivered warhead (2026-08-27) | the last two are the later additions: a round stopped at a wall reached masonry, and a lobbed object arrives at a PLACE — what it does to the bodies there is the blast's business |
+| the switch | `goreEnabled`, world-scoped, config-visible, default **false**, fail-closed reader | it was the one thing the rail drew that a table might find objectionable rather than merely noisy, so it was a GM decision for the whole table rather than a per-player preference |
+
 
 **2026-08-28 — THE MOVEMENT ECHO TRAIL IS BUILT CLEAN-ROOM FROM THE FRAME STUDY (ledger #23bv).** The
 user's order was "build it using the reference". No macro was ever sourced for it (the reference's own
@@ -2502,8 +2498,8 @@ came down.
 
 ⛔ **AND THE DETONATION IS NOT A BODY IMPACT.** The delivery classes stand the flesh/structure plan down
 and `railSoundedImpacts` answers **false** for them, so the bodies the blast catches still sound their own
-impacts at the confirm — two different events, deliberately not merged. Blood is stood down for the same
-reason: a warhead arrives at a *place*.
+impacts at the confirm — two different events, deliberately not merged. (The hit spray was stood down for
+the same reason before it was removed outright: a warhead arrives at a *place*.)
 
 ⭐ **THE OBJECT ALWAYS ARRIVES.** A missed throw is not a grenade that vanished — CP2020 p.108 sends its
 true centre to the grenade table, and the damage rail's Scatter button is where that is resolved. So the
@@ -2563,8 +2559,8 @@ Each ray is now cut at **its own** closest wall intersection
 (`CONFIG.Canvas.polygonBackends.move.testCollision`, `mode: "closest"`, via the new
 `area-shapes.js wallImpactPoint`) — ⛔ per RAY, not per shot, because six pellets meet a wall at six
 points and at an oblique angle can meet different walls. The arrival mark is planted at the wall, the
-impact is sounded as **structure** rather than as the body's own flesh, and blood never sprays for a
-clipped shot because the round reached masonry.
+impact is sounded as **structure** rather than as the body's own flesh, because the round reached
+masonry. (The hit spray took the same gate for the same reason, until its removal — §6.)
 ⛔ **SOAKED shots keep drawing THROUGH, deliberately** — that is the shoot-through-the-door fiction and
 the damage card is about to say the figure was hit through the barrier's SP. Breached/destroyed passes
 with no branch of its own: such a row is no longer valued and no longer blocks movement, so it answers
@@ -2913,7 +2909,7 @@ is issued **standalone through `fxHitMark` for every round** (the refused-round 
 shape and already fast; fxShot threads the settle name and the resolved travel through it, and
 `impactDelayMs` keeps reporting the NOMINAL arrival the tail arithmetic reasons in). And the measured
 floor is subtracted from the arrival delay at both standalone arrival sites (`SEQ_PRESTART_COMP_MS`
-175, revert 0 — mark and blood), floored at zero. Re-measured on the same instrument: first-frame
+175, revert 0 — the mark, and the hit spray while it existed), floored at zero. Re-measured on the same instrument: first-frame
 minus audio-fire **median +10 ms / p95 +14 ms idle; median +82 ms / p95 +238 ms under the injector**,
 with the residual excursions picture-early — the forgiving direction. ⏪ The candidate designs this
 measurement killed: co-scheduled `.sound()` sections (a sound section is just its own timer plus an
@@ -3179,14 +3175,14 @@ drew nothing at all: no streak, and no flash or impact either.
 | a self-shot is a legitimate action | classified, never refused | the mercy shot is a thing that happens at this table; a presentation rail does not reject a table's move |
 | the question is asked **once, about the geometry** | `isSelfShot(from, to, gridPx)` in `fxShot`, reported as `out.selfShot` | one place a reader goes; no way for one span element to be guarded while a sibling is missed |
 | **span** elements are skipped | the volley sprite, the stretched streak, the travelled dash, the pellet fan | there is nothing meaningful to draw along a ray of zero length |
-| **point** elements still play | muzzle flash, impact, blood, sounds, ground fire | the action still reads at the table; only the travel is gone |
+| **point** elements still play | muzzle flash, impact, sounds, ground fire | the action still reads at the table; only the travel is gone |
 | the threshold | `SELF_SHOT_SQUARES` = 0.25 squares | inside the shooter's own figure, and above the few pixels of span an aim REBUILT from an angle and a reach can leave |
 
 ⭐ **Survey of the other span-shaped operations on this path, since a zero ray reaches all of them**:
 `muzzlePoint`, `pointAlong` and `faceTargetRotation` already return the origin (or null) at zero length;
 `missEndpoint`, `pelletEndpoints` and `smokePuffPlan` already floor their divisor with `|| 1`;
-`rotateAbout` returns the origin unchanged; and the blood splash already tests `from ≠ at` and falls
-back to `randomRotation`. **Nothing else needed a fix** — `stretchTo` was the only operation that
+`rotateAbout` returns the origin unchanged; and the hit spray (since removed) already tested
+`from ≠ at`. **Nothing else needed a fix** — `stretchTo` was the only operation that
 resolves an ASSET by distance, which is why it was the only one that failed rather than degrading.
 
 **2026-08-13 — the lasting-damage flags speak core's vocabulary too.**
@@ -3291,8 +3287,8 @@ had been wired into the two SDP-decrement sites to prove the trigger seam.
 | **An un-indexed caller gets a tally from the element** | `HIT_SOUND_BURST_WINDOW_MS` 700 ms, refused past the cap as `skipped: "burst"` | The apply seams walk their rows in one synchronous loop and have no payload to count against, so N plays land in the SAME tick and phase into one smear. Tested on the raw argument, not on `Number(index)` — `Number(null)` is 0, which is finite, and coercing first made every un-indexed caller look like caller zero (measured: nine rows in one tick, all at one level). |
 | ⭐ **The capture seam is consulted before the host's audio state** | `_setHitSoundSink` wins over the `locked` check | §9 I says the seam is applied first, and here that is load-bearing rather than tidy: a sink never reaches an audio device, and a headless keeper page is GENUINELY locked (it never produces a user gesture on the game document — the join click lands on the previous one). With the order reversed every driven leg would have been measuring the page instead of the element. |
 | **A hit stopped by armour is silent on the apply seam, and audible on the rail** | apply: `penetrates && (netDamage > 0 ‖ cyberlimb structural > 0)`; rail: the round landed | Asymmetric on purpose, and the asymmetry is which seam can answer. Penetration exists only after the armour math, which is the apply; at the arrival the rail knows only what its own two draws know. Matching the picture is the point — an impact the eye is shown and the ear is not reads as a defect. |
-| **The apply seam chooses its clip per ZONE, the rail per ACTOR** | apply: `routesToSdp` (via `applyLocationDamage`'s `cyberlimb`) ‖ `isFullBorg`; rail: `bearsStructuralSdp` | The same known limit the blood splash carries: the payload says how many rounds landed and never where, so a per-zone answer does not exist at draw time. Where it DOES exist it is used, so a round into a cyberarm sounds like the chrome it hit. |
-| **The cap is the blood splash's, not the mark's** | `HIT_SOUND_MAX_PER_PAYLOAD` = `BLOOD_SPLATTER.maxPerPayload` = 4 | Thirty marks are thirty confirmations; thirty copies of one 0.16 s clip inside a two-second burst is one noise. Taken by import so the two move together rather than drifting apart. |
+| **The apply seam chooses its clip per ZONE, the rail per ACTOR** | apply: `routesToSdp` (via `applyLocationDamage`'s `cyberlimb`) ‖ `isFullBorg`; rail: `bearsStructuralSdp` | The same known limit the removed hit spray carried: the payload says how many rounds landed and never where, so a per-zone answer does not exist at draw time. Where it DOES exist it is used, so a round into a cyberarm sounds like the chrome it hit. |
+| **The cap is the tighter one, not the mark's** | `HIT_SOUND_MAX_PER_PAYLOAD` = 4 (⏪ was imported from the hit spray's cap, removed 2026-08-28) | Thirty marks are thirty confirmations; thirty copies of one 0.16 s clip inside a two-second burst is one noise. Taken by import so the two move together rather than drifting apart. |
 | ⭐ **A locked audio context is a skip, not a delay** | `fxHitSound` returns `skipped: "locked"` when `game.audio.locked` | **Measured on the rig 2026-08-12, and it is the defect the placeholder was reported for.** Until a client produces a genuine user gesture the three audio contexts do not exist (`game.audio.interface` and `.music` both read `undefined`), and core's `Sound#load` opens with `if (game.audio.locked) await game.audio.unlock;` — so `AudioHelper.play` hands back a promise that **never settles** on such a client. Two consequences, both observed: a caller that awaits it stalls outright (two probe runs parked for minutes on one play call), and a rejection arriving after the eventual unlock lands **outside** the synchronous try/catch that issued it. Skipping is also the right behaviour: a parked impact plays at the first click, not at the arrival. The play promise additionally carries a `.catch` naming the verb, the same discipline every fire-and-forget draw here follows. |
 | **The delay is a timer, not a playback option** | one `setTimeout` before the `AudioHelper.play` call | Read from core rather than assumed: `AudioHelper.play` hands `game.audio.play` exactly `{volume, loop, context}` on the local path, and the receiving client's `playAudio` handler rebuilds the same three — a `delay` put on the object is dropped at both ends. One timer on the issuing client is enough **because the rail runs on one client**: it fires there and the broadcast goes out at the arrival instant, so every listener hears it then. |
 
@@ -3955,7 +3951,7 @@ presented while the screen stayed empty.
 | **`sfx()` carries the same locked-context hazard the impact leg now guards** | ⚠ **Found while fixing the impact leg 2026-08-12, deliberately NOT changed.** A shot fired on a client whose audio context has never been unlocked hands back a promise that never settles, and the report then plays whenever the first click happens rather than when the shot did (§6, same date). The impact leg skips outright; `sfx()` still parks, because changing it changes SHOT audio behaviour and that is a different unit's call. One line if it is wanted: the same `game.audio.locked` guard, with a `skipped` report. |
 | Audio for the ammo treatments | Sourcing owed; no runtime pitch variation is available through this host's audio API (verified against core's audio sources — no `playbackRate`, no `detune`). |
 | ⭐ **The score re-opens the pitch-variation question** | ⚠ **New with the 2026-08-15 transport rebuild, deliberately not taken as a rider.** The old objection to poking `Sound#sourceNode`'s Web Audio rate was that only the FIRING client would hear the variation while the broadcast copies played straight. Under the score every client plays its own copy, so a local rate wobble would now be uniform by construction. Still a design call (it reaches into a node core does not surface), recorded here so it is chosen rather than stumbled into. One site if wanted: `sfx()` / the hit-sound `fire()`. |
-| Real decal persistence (**blood only** now) | Needs a ruling: who owns the write, who cleans it up, what a table does about a scene that accumulates them. The blood splash is transient by ruling — floor decals were explicitly held out of phase 1. ⏪ This row used to carry the incendiary ground mark alongside it; that element was **removed outright on 2026-08-10**, so the question is the splash's alone. |
+| ~~Real decal persistence~~ | ✅ **MOOT 2026-08-28.** The question belonged first to the incendiary ground mark (removed 2026-08-10) and then to the hit spray alone (removed 2026-08-28). Nothing on the rail asks it today; it returns with whatever element next wants to leave a mark. |
 | ~~Animations run in slow motion and trail out after the shooting stops~~ | ✅ **CLOSED 2026-08-09.** Measured, not guessed: a fixed per-round sleep against a starved timer compounded to **2.24×** on every burst size tried. Anchored schedule + drop rule brings a 30-round burst from +6 461 ms of drift to **+89 ms**. §4.1a, and the keeper drives both halves. |
 | ~~The out-of-combat pattern TTL may not be deleting~~ | ✅ **CHECKED LIVE 2026-08-09, and it works.** A real fired pattern was placed out of combat, was still there at 20 s, and was removed by the module's own interval at **70.0 s** (TTL 60 s + one 15 s tick), with nothing called by hand. What had been seen lingering was a different rule — see the row below. |
 | **A started encounter that never advances a round keeps its patterns forever** | ⚠ **Found during the 2026-08-09 autopsy; needs a ruling, not a fix.** 11 patterns were sitting on the rig's review scene 105 minutes after they were thrown. All of them belonged to an encounter that was **started and still on round 3**, and both clocks decline them by design: the wall-clock rule stands down whenever the owning encounter is running (`encounterRunning`), and the round rule only fires on a round **advance**. So an encounter left started and idle makes its patterns immortal. That is the rules as written — a pattern belongs to the round it was thrown on — but a table that stops advancing rounds accumulates them. Options are a wall-clock backstop for in-combat patterns, or a sweep when an encounter is deleted; both are design calls. |
@@ -3963,9 +3959,9 @@ presented while the screen stayed empty.
 | **A pattern on an unviewed scene survives a round advance** | ⚠ **CONFIRMED 2026-08-10 (review finding F8), cosmetic, needs a ruling.** Probed on the rig with the probe's own encounter: a pattern placed on scene A at round 1, the GM then viewing scene B, `combat.update({round: 2})` → **the pattern is still there**, while the pure rule (`spreadZoneRoundExpired`) says `true` for exactly that pattern. Both expiry paths walk `canvas.scene` only. Returning to A and advancing to round 3 collected it. So it self-corrects the moment the GM looks back and a round passes; the fix would be to walk the pattern's **own** scene (`areasByFlag` per scene, or the combat's scene) rather than the viewed one. |
 | **A missed PAINTED round is scheduled off a different band than it flies** | ⚠ **MEASURED 2026-08-10 as F5 against the volley, RE-MEASURED 2026-08-11 against the arrival ladder that replaced it (§4.2a); still no ruling.** A miss draws **no mark at all**, so nothing visible hangs on it — what moves is the scheduled floor. The old volley reading follows for the record: ⏪ A missed shell stretches to `missEndpoint`, whose reach is **0.6–1.15 ×** the true aim distance, while every timing came from the true aim's band. Swept by value over the reach range: at 6 squares the drawn file is a **shorter** band 42.3 % of the time, at 12 and 20 squares 27.4 % — all in the safe direction (the tail over-states). The unsafe direction is confined to the neighbourhood just **under** a boundary, where 1.15 × reaches the next band up: at 4.5 squares **7.5 %** of missed shells draw a longer band (tail under-stated by **200 ms**), at 8.5 squares **16.9 %** (**400 ms**), at 14.5 squares **21.4 %** (**400 ms**). It moves the **scheduled floor** only: the settle still waits on the engine's own end for the effect that was really drawn, so the exposure is the no-engine fallback rather than ordinary play. |
 | ~~**The arithmetic still prices a volley for a shot the fan-out now refuses**~~ | ⏪ **Moot with the veto** — no volley term is resolved for any payload. The reading for the record: ⚠ **MEASURED 2026-08-10 (F5a), no ruling.** `payloadPresentationMs` resolves its volley spec without the `&& shooter` guard the fan-out applies, so a buckshot payload from an actor with no token computes **600 ms** (the 15ft band at a zero-square aim) for a shot the rail now reports as `skipped: "shooter"` and does not draw at all; the same payload with no volley term computes 983 ms. Harmless today — a caller waits a beat over an empty canvas — but the two answers should come from one question. |
-| Blood asks the ACTOR, not the hit location | A cyberlimbed character bleeds even when the round struck the chrome arm. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. |
-| The blood splash is routed above the lighting | The one departure from the file's own routing rule, taken because below it the mark does not exist on a dark scene. It is a **look** call the user has not yet made in motion: the cost is that a splash is drawn over ground the viewer cannot see, for under a second. One constant (`BLOOD_SPLATTER.aboveLighting`) reverses it. Captures 58a vs 58d. |
-| **The rebuilt blood splash is not signed off** | ⚠ **The open item of this unit.** The direction and the per-hit rule are both rulings and both are built; the remaining numbers are build-lane calls made while the user was away — the payload cap of **4** and the one-grid-unit exit offset that sets the heading. Each is one constant (`BLOOD_SPLATTER.maxPerPayload`; the `+ gridPx` in `fxBloodSplatter`). Captures 64a (angled shot, held) and 64b (burst). |
+| The structure predicate asks the ACTOR, not the hit location | A cyberlimbed character reads as flesh even when the round struck the chrome arm — so the impact AUDIO takes the flesh clip. The payload carries how many rounds landed and never where, so the per-zone answer does not exist at draw time; getting it would mean the seam forwarding hit locations to the presentation rail, which is a change to what the payload *is*. Recorded as a known limit, not a defect. (Inherited from the removed hit spray, which asked the same question.) |
+| ~~The spray is routed above the lighting~~ | ✅ **MOOT 2026-08-28** — the element was removed, so the rail takes no departure from its own routing rule anywhere. The measurement and the trade are in §6 for whoever rebuilds it. |
+| ~~**The rebuilt spray is not signed off**~~ | ✅ **ANSWERED 2026-08-28 — by removal.** It never got its sign-off and the user's verdict when it came was *"it never looked right"*. The element is out for this release; §6 carries every number a rebuild would start from. |
 | **The incendiary load still burns the ground the target is standing on** | ⚠ **Raised by capture 64c, needs a ruling.** The blast ring the report named is gone. But on a hit the aim point *is* the target's square, so the burning ground — which was ruled to stay — still lands there and reads as fire on the target. If what was actually objected to was the fire rather than the ring, the fix is a different one (offset the landing points off the target, or suppress ground fire on a hit). One look at 64c settles which. |
 | **The slug is modelled as a LOAD, and that is a build-lane call** | ⚠ **The open item of the spread unit.** The registry has one shotgun cartridge, `"00"`, labelled *"00 Buck / Slug"* — so nothing about the caliber can say which is chambered, and the build expressed the slug as a shotgun-family ammo modifier instead (see §6). The alternative is splitting the cartridge into two registry entries, which is a migration and a re-seed and would break the gauge aliases that currently all point at one id. A veto is cheap by construction: the whole thing is one row in `AMMO_MODIFIERS`, one option on the ammo sheet's spread selector, and the first branch of `spreadModeForAmmo`. |
 | One shipped shell weapon records **no gauge** | 10 of the 11 shell weapons in `supplement-shotguns` carry a gauge in `ammoType`; one carries an empty string, so it reports no cartridge and throws no pattern until an ammo item is loaded. Same shape as the known blank-`vehicleType` data gap, and it belongs to the pack-data sweep rather than to this rail. |

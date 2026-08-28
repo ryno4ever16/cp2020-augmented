@@ -45,7 +45,7 @@ const SECTIONS = [
   { key: "SectionNpcGen", keys: ["npcGenEnabled", "npcGenTokenArtFolder"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
-  { key: "SectionDisplay", keys: ["combatFxEnabled", "goreEnabled", "faceTargetOnFire"] },
+  { key: "SectionDisplay", keys: ["combatFxEnabled", "faceTargetOnFire"] },
   // Per-user diagnostics (module/dev/*), last because they are for chasing a report, not for play.
   { key: "SectionDiagnostics", keys: ["devFieldAssertions", "devErrorJournal"] },
 ];

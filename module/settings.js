@@ -930,19 +930,13 @@ export function registerAugmentedSettings() {
     default: true,
   });
 
-  // Blood on a landing hit. OFF by default and world-scoped, which is the point of it existing at all:
-  // this is the one thing the rail draws that a table may find objectionable rather than merely noisy,
-  // so it is a deliberate switch-on by the GM for the whole table rather than a per-player preference
-  // (a table that has agreed to it should not have one player seeing a different scene). Read per shot,
-  // so it applies live. Inert while combatFxEnabled is off — the rail draws nothing at all then.
-  game.settings.register(SCOPE, "goreEnabled", {
-    name: "SETTINGS.Gore",
-    hint: "SETTINGS.GoreHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
+  // ⏪ RETIRED 2026-08-28 — the hit-spray switch that was registered on this spot is GONE, not
+  // disabled, and so is the element it switched (module/fx/effects.js carries the tombstone; the
+  // record is docs/FX-RAIL.md §6). The user withdrew the element for this release and ruled that when
+  // it returns it returns as part of the arrival composition with NO option of its own — so there is
+  // no setting to keep registered for it, now or later. A world that had the key set carries a stored
+  // value nothing reads; core leaves such orphans alone and so do we (no migration, the read path is
+  // simply gone).
 
   // ⏪ RETIRED 2026-08-20 — the burning-ground expiry switch that was registered on this spot on
   // 2026-08-19 is GONE, not disabled. It swapped a placement's expiry from the shipped 25 s clock to
@@ -1141,7 +1135,3 @@ export function combatFxEnabled() {
   try { return game.settings.get(SCOPE, "combatFxEnabled") !== false; } catch { return true; }
 }
 
-/** Blood on a landing hit (default OFF — fail-closed: an unreadable setting draws nothing). */
-export function goreEnabled() {
-  try { return game.settings.get(SCOPE, "goreEnabled") === true; } catch { return false; }
-}

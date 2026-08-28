@@ -24,7 +24,7 @@
 
 import { tokensOf } from "../mech/light.js";
 import { isFullBorg } from "../mech/borg.js";
-import { combatFxEnabled, faceTargetOnFireEnabled, goreEnabled } from "../settings.js";
+import { combatFxEnabled, faceTargetOnFireEnabled } from "../settings.js";
 // THE EITHER/OR, borrowed rather than re-derived. damage-hooks.js asks this same function twice — once
 // to decide whether the single-target damage flow claims a payload and once to decide whether the shot
 // pattern does — and the burning ground has to land on the same side of that answer as the damage
@@ -440,7 +440,7 @@ export const FACING_AIM_SQUARES = 3;
  * ⚠ AND IT IS A LEGITIMATE ACTION, not bad input. A mercy shot is a thing that happens in this game, so
  * the rail classifies the discharge rather than refusing it: everything that SPANS the shooter→target
  * line is skipped (there is nothing meaningful to draw along a ray of zero length), and everything that
- * happens AT a point still plays on the shooter's own square — the flash, the impact, the blood, the
+ * happens AT a point still plays on the shooter's own square — the flash, the impact, the
  * sounds, a burning ground if the load leaves one. The action still reads at the table; only the travel
  * is gone.
  *
@@ -1132,84 +1132,24 @@ export const GROUND_FIRE_NAME = `${SCOPE}.groundfire`;
  *
  * The two facts that outlive it, because they were never its alone: the fire's own `lifetimeMs` was
  * set on the precedent this element established for a session-bound element with a cap in place of a
- * persistence ruling; and REAL decal persistence is still an open question, now carried by the blood
- * splash by itself (see the doc's open items).
+ * persistence ruling; and REAL decal persistence is still an open question, carried by nothing on the
+ * rail today (see the doc's open items).
  */
 
 /**
- * THE BLOOD SPLASH — a short red burst drawn over a LIVING target that a round actually reached.
- * Phase 1: transient only. Nothing is left on the floor and nothing is written anywhere.
+ * ⏪⏪ THE HIT SPRAY IS WITHDRAWN — removed 2026-08-28 by user ruling ("it never looked right").
  *
- * ⚠ THE GATES are somewhere else on purpose — this block is only the look. The world setting
- * (`goreEnabled`, default OFF), "at least one round landed" and "the target is not structure" are all
- * resolved ONCE at the call site in fxWeaponFired; only the per-round issue and the cap live in the
- * loop. See that site for why the gates and the draws are now in two different places.
- *
- * ⏪⏪ ONCE PER PAYLOAD IS DEAD (user ruling 2026-08-09, on the MPK-9 burst). The first build drew one
- * splash for a whole payload — deliberately, as the burning ground still does — and a ten-round burst
- * therefore marked its target exactly as hard as a single shot did. The rule is now ONE SPRAY PER
- * LANDING ROUND, bounded by `maxPerPayload`.
- *
- * ⭐ WHY THE CAP IS 4, measured rather than picked. The clip lives 900 ms and the hits are the leading
- * rounds of the burst, so at the default 80 ms cadence ten hits would put ten sprays inside one clip's
- * life — every one of them still on screen while the next arrives, which is a fountain rather than a
- * body being hit repeatedly. Four is the most that still reads as SEPARATE events: at 80 ms apart they
- * are four distinguishable arrivals spread over the burst's opening, and each is still visible when the
- * next lands, which is the "repeated spray" the ruling asks for. The cap is a payload bound, not a
- * scene bound — a second burst sprays again.
- *
- * ⭐ THE ASSET IS NATIVELY BLOOD-COLOURED — no colour filter is applied. The free tier carries no
- * family NAMED blood, which is true and is what the earlier survey found; but `jb2a.liquid.*` ships RED
- * variants, and decoding off the installed files gives near-black deep red in every frame with the
- * green and blue channels essentially at zero. A ColorMatrix over that would be repainting red with
- * red.
- *
- * ⏪⏪ THE RADIAL SPLASH IS SUPERSEDED (user ruling 2026-08-09, verbatim: *"It's angled. The blood
- * pushes out in a direction. It should move in the same direction as the bullet that strikes the
- * target."*). The first build chose `liquid.splash02.red` precisely BECAUSE it is radial — its ink
- * centroid holds at 0.50/0.51 of its own frame from 170 ms to 510 ms, so it needed no rotation and
- * could never disagree with the shot axis. That safety is exactly what made it wrong: a radial burst
- * says the wound has no direction. The shipped asset is now `liquid.splash_side02.red`, whose ink
- * TRAVERSES its own frame 0.29 → 0.65 left-to-right — a directional wave — and it is rotated so that
- * travel continues the shooter→target vector THROUGH the target: the spray leaves on the far side,
- * away from the shooter, as an exit. The rotation basis is the tracers' own (`rotateTowards` at a point
- * further along the same ray), so the spray and the round that caused it can never disagree about which
- * way the shot was going.
- *
- * `squares` IS THE DRAWN FRAME, NOT THE INK — the same trap the flechette dart length records. The
- * ink reaches 0.50 of the frame at 170ms and peaks at 0.87 at 510ms, so at 1.5 squares the splash
- * opens at about three quarters of a square and peaks a little wider than one: a mark the size of the
- * body it is on, growing past its edges, rather than a pool over the neighbouring squares.
- *
- * `clipMs` is a trim, and it is chosen where the CONTENT ends rather than where the file does. The
- * clip runs 1133ms but its ink is spent well before that: coverage falls from 17.1% of the frame at
- * 283ms to 0.07% at 680ms, and peak alpha is 5/255 by 963ms. 900 keeps every frame that has anything
- * in it and drops a dead tail, and it holds the element inside the "under a beat" the user asked for.
- *
- * ⚠⚠ ABOVE THE LIGHTING, WHICH IS A DELIBERATE DEPARTURE from this file's own routing rule (the rule
- * is in LIT_SPRITE_ABOVE_LIGHTING: self-luminous elements go up, lit-by-the-world elements stay
- * down). Blood is not a light source, so the rule as written
- * would put it below — and measured on the rig's own dark range at darkness 1.0 that is not a dimmer
- * version of the effect, it is no effect at all. The trade is therefore between an element that is
- * invisible exactly where a table plays and an element drawn across ground the viewer cannot see;
- * the second is the lesser cost HERE and only here, because this element lives for under a second.
- * The one element that took the other side of the same trade — a dark ground mark that stayed down
- * and therefore vanished on a dark range, for minutes at a time — was removed on 2026-08-10 (the note
- * beside GROUND_FIRE), so this is now the only place the departure is taken. It is a knob rather
- * than a constant in the code path so the call can be reversed without finding the draw site.
- *
- * ⛔ EXCLUDED FROM THE SETTLE SIGNAL, by construction and not by a flag: nothing here is given a
- * settleTag name and presentationTailMs takes no term for it, so the damage window never waits on
- * it. Same ruling as the burning ground — the action is over when the last round's own terminal
- * elements end.
+ * The element that stood here drew a short burst over a living figure a round had reached: its own
+ * spec block, its draw verb, its once-per-payload gates in `fxWeaponFired`, its per-round issue inside
+ * the fan-out loop, its field on the fan-out's result, its entries in both preload manifests, and the
+ * world setting that switched it on — all deleted rather than switched off, on the same principle the
+ * incendiary ground mark was retired under (a mechanism that is always inert is a mechanism a later
+ * reader has to disprove). It returns in a FUTURE RELEASE as part of the arrival composition, with NO
+ * setting of its own. THE FULL RECORD — the asset key, the measured frame size and clip trim, the cap
+ * of four, the directional-vs-radial ruling, the per-landing-round rule that replaced once-per-payload,
+ * the above-the-lighting departure, and every number a rebuild would transcribe — is kept in
+ * docs/FX-RAIL.md §6 under this removal's dated entry. Nothing about it is lost; it is just not here.
  */
-export const BLOOD_SPLATTER = Object.freeze({
-  key: "jb2a.liquid.splash_side02.red",
-  squares: 1.5,
-  clipMs: 900,
-  aboveLighting: true,
-  maxPerPayload: 4,
-});
 
 /**
  * How long a PAINTED (stretched) tracer stays on screen, in milliseconds — the other candidate for the
@@ -1229,13 +1169,13 @@ export const TRACER_CLIP_MS = 933;
  * WHEN A PAINTED (STRETCHED) ROUND ACTUALLY ARRIVES — the missing half of this rail's second clock,
  * measured per distance band off the installed files.
  *
- * ⏪ THE DEFECT THIS ANSWERS (user, at the bench, 2026-08-11): *"blood splashes and dust/impact marks
+ * ⏪ THE DEFECT THIS ANSWERS (user, at the bench, 2026-08-11): *"[arrival] splashes and dust/impact marks
  * play when the round DEPARTS"*, and worst on the rifle and the heavy — the two classes whose round is
  * on screen longest. The mechanism was one expression: the impact was held back by
  * `dashSquares > 0 ? dashMs : 0`, so only a TRAVELLED round had an arrival at all and every PAINTED
  * one confirmed its hit in the same tick the muzzle lit. Four of the five shipped classes are painted,
- * so the bug was the ordinary case rather than an edge of it. The same zero reached the blood splash
- * through `arrivalMs`, which is why the two elements were reported together.
+ * so the bug was the ordinary case rather than an edge of it. The same zero reached every other element
+ * hung on `arrivalMs`, which is why they were reported together.
  *
  * ⚠ A PAINTED ROUND HAS AN ARRIVAL — it just is not one this file was computing. `stretchTo` scales the
  * asset across the whole shooter→aim line in one go, but the asset is not a static streak: it animates
@@ -1844,7 +1784,7 @@ export const TRACER_COLOR_DART = Object.freeze({ hue: 0, saturate: -0.90, bright
  *     90ft   4000x400     3433ms     1200ms                               1600ms
  *
  * Two numbers per band, and they answer two different questions.
- *  - `crossMs` (the ARRIVAL) is when the rounds get there, so it is what the blood spray and the
+ *  - `crossMs` (the ARRIVAL) is when the rounds get there, so it is what the arrival marks and the
  *    burning ground are delayed by — the same role `dashMs` plays for a travelled fan.
  *  - `tailMs` (the CONTENT END) is how long the element is worth looking at, so it is the term
  *    `presentationTailMs` takes. It is NOT the file's own duration: every band spends its last one to
@@ -2265,9 +2205,9 @@ export const FX_CLASSES = Object.freeze({
  * plain fall-through.
  *
  *   `flash`      — a launch tube lights; a hand does not.
- *   `bleeds`     — FALSE for both. Blood belongs to a bullet that went into a body; a warhead ARRIVES
- *                  at a place, and what it does to the bodies there is the blast's business (the
- *                  detonation's own applications sound and mark themselves at the confirm).
+ *   ⏪ the plan's `bleeds` gate is GONE with the element it gated (withdrawn 2026-08-28). Its ruling
+ *      still holds and is recorded in docs/FX-RAIL.md §6: a warhead ARRIVES at a place, and what it
+ *      does to the bodies there is the blast's business, not the round's.
  *   `arrives`    — TRUE for both, and it is the one thing a delivery shot asserts over a bullet: the
  *                  object gets THERE whatever the attack roll said. A missed throw is not a grenade
  *                  that vanished — p.108 sends its true centre to the grenade table, and the damage
@@ -2284,7 +2224,6 @@ export function deliveryPlanFor(weaponClass) {
   return {
     kind,
     flash: !row.noMuzzleFlash,
-    bleeds: false,
     arrives: true,
     detonation: row.detonation ?? null,
     detonationVolume: Number(row.detonationVolume) > 0 ? Number(row.detonationVolume) : DETONATION_VOLUME,
@@ -2451,7 +2390,7 @@ export const IMPACT_CRACK = Object.freeze({ key: "jb2a.impact.ground_crack.orang
  *                                          217/255, so it exists on a dark range.
  *
  * ⚠ IT IS SMOKE ROUTED ABOVE THE LIGHTING, which is a departure from this file's own routing rule in
- * the same shape as the blood splash's — dust does not glow. It is not a NEW departure: the impact draw
+ * the same shape the withdrawn hit spray took — dust does not glow. It is not a NEW departure: the impact draw
  * path lifts every hit mark unconditionally, so this asset simply inherits what the element already
  * does. Recorded here so a reader meets the fact at the asset rather than discovering it.
  */
@@ -2999,9 +2938,9 @@ export function ammoFxEntry(weaponClass, ammoKey = null) {
  * muzzle instead of at the target (the defect is written up at TRACER_ARRIVAL_MS). The painted answer
  * is now read off the same measured band table the engine picks its file from.
  *
- * IT IS ONE FUNCTION AND NOT THREE BECAUSE THE ELEMENTS HAVE TO AGREE. The hit mark, the blood spray,
+ * IT IS ONE FUNCTION AND NOT THREE BECAUSE THE ELEMENTS HAVE TO AGREE. The hit mark, the impact audio,
  * the burning ground and the tail floor all hang on this number; a second derivation anywhere is a way
- * for the mark and the blood on one shot to disagree about when the round got there. The fan-out
+ * for the mark and the sound on one shot to disagree about when the round got there. The fan-out
  * resolves it ONCE per payload and threads it, exactly as it threads the load key and the volley spec.
  *
  * `distSquares` is the only impure input, and it is passed rather than measured here so this stays
@@ -3405,11 +3344,15 @@ export const HIT_SOUND_VOLUME = 0.55;
  * ⛔ DELIBERATELY NOT `HIT_MARK_MAX_PER_PAYLOAD` (30), and the reason is the difference between an eye
  * and an ear. Thirty marks are thirty sprites spread over thirty squares' worth of canvas and the eye
  * reads them as thirty confirmations; thirty copies of one 0.16 s clip inside a two-second burst is
- * one continuous noise. The element that already learned this on this rail is the blood spray, which
- * keeps its own much tighter bound for exactly the same reason — so this takes the SAME number
- * (BLOOD_SPLATTER.maxPerPayload = 4) rather than a second invented one, and moves with it.
+ * one continuous noise. Four is the number that was measured for it, on the element that first hit the
+ * limit here — the hit spray, which took four sprays inside its own 900 ms clip before a body being hit
+ * repeatedly read as a fountain.
+ *
+ * ⏪ IT USED TO BE TAKEN BY IMPORT from the hit spray's own cap, so the two moved together. That
+ * element was withdrawn 2026-08-28 (see the tombstone at its removal site), so the number now stands on
+ * its own at the value it always had. Nothing about the ear's answer changed with the eye's.
  */
-export const HIT_SOUND_MAX_PER_PAYLOAD = BLOOD_SPLATTER.maxPerPayload;
+export const HIT_SOUND_MAX_PER_PAYLOAD = 4;
 
 /**
  * The per-hit level wobble, as multipliers on the resolved volume, taken by round index.
@@ -3448,7 +3391,7 @@ export function _setHitSoundSink(fn) {
 }
 
 /**
- * WHICH CLIP A TARGET TAKES. One question, asked of the same predicate the blood spray asks — an actor
+ * WHICH CLIP A TARGET TAKES. One question, asked of the predicate the withdrawn hit spray also asked — an actor
  * that carries structural SDP (a vehicle, a powered-armour suit, a full-conversion cyborg) is
  * structure, and everything else is flesh. Asking it here rather than at each call site is what stops
  * the sound and the spray disagreeing about what was hit.
@@ -3650,11 +3593,11 @@ export function fxDetonationSound(weaponClass, { delayMs = 0, volume = null, pha
 /**
  * The once-per-payload plan for a fan-out's impacts: resolved BEFORE the loop, issued from inside it,
  * `per-round-capped` — the standard's second issue policy (§9, "the one idiom"), the same shape the
- * blood spray and the hit mark carry.
+ * hit mark carries.
  *
  * Null when there is nothing to sound for: the rail is off, no figure was aimed at (an impact belongs
- * to a thing that was hit, exactly as blood belongs to a body — an aim point is a direction, not a
- * victim), or the kind's asset is not delivered.
+ * to a thing that was hit — an aim point is a direction, not a victim), or the kind's asset is not
+ * delivered.
  */
 export function hitSoundPlanFor(targetToken, kindOverride = null) {
   if (!combatFxEnabled() || !targetToken?.actor) return null;
@@ -6022,9 +5965,9 @@ export function railPlantsPatternFires(payload, shooterToken) {
  * landed, not where — the fan-out already assigns hits to the leading rounds for the same reason. So
  * a per-zone answer is not available at draw time and would have to be invented. The consequence is
  * stated rather than hidden: an ordinary character with a cyberarm reads as FLESH here, and a round
- * that in fact struck that arm still draws blood. That is phase 1's known limit (the doc's open
- * items carry it), and it is the right way round — the alternative, suppressing blood for anyone
- * wearing chrome, would be wrong far more often than this is.
+ * that in fact struck that arm reads as flesh. That is the known limit of the actor-level answer (the
+ * doc's open items carry it), and it is the right way round — the alternative, calling anyone wearing
+ * chrome structure, would be wrong far more often than this is.
  */
 export function bearsStructuralSdp(actor) {
   if (!actor) return false;
@@ -6032,71 +5975,7 @@ export function bearsStructuralSdp(actor) {
   return isFullBorg(actor) === true;
 }
 
-/**
- * THE BLOOD SPLASH for one payload — drawn ON the target token, once, for a hit that landed.
- *
- * Every gate lives at the call site (see the BLOOD_SPLATTER block); this verb only draws. It is given
- * the TOKEN rather than a point on purpose: blood belongs to a body, so a shot with nothing aimed at
- * has nowhere to put it and the caller simply does not call — the synthesized aim point the rest of
- * the rail falls back to is a direction, not a victim.
- *
- * `delayMs` is the class's own crossing time where it travels one, so the splash appears when the
- * round arrives rather than when it leaves — the same number, from the same row field, that holds
- * back the hit confirmation and the burning ground.
- *
- * The rotation is randomised so two hits on one token are not the same picture; the asset is radial
- * about its own centre (measured — see the spec block), so a rotation cannot put it out of line with
- * anything. One section, one roll: Sequencer rolls its randomisers once per section, which is exactly
- * one splash's worth here.
- *
- * NOT AWAITED by its caller and NOT TAGGED for the settle signal. Returns what it queued so the gate
- * and the values are assertable without looking at the canvas.
- */
-export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 } = {}) {
-  const out = { drawn: false, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
-    clipMs: BLOOD_SPLATTER.clipMs, exitPoint: null };
-  if (!targetToken || !sequencerActive() || !fxDbEntryExists(BLOOD_SPLATTER.key)) return out;
-  // The engine's start-up floor comes off the arrival, exactly as the hit mark subtracts it — the
-  // spray and the mark answer the same audio instant. ⭐ ZERO while the audio is phased instead (see
-  // the FX_AUDIO_PHASE block): the correction moved to the audio side, where it also reaches the
-  // round's own elements, which have no delay to subtract from.
-  const delay = Math.max(0, (Number(delayMs) > 0 ? Number(delayMs) : 0) - fxArrivalCompMs());
-  try {
-    const seq = new globalThis.Sequence();
-    const splash = _held(seq.effect().file(BLOOD_SPLATTER.key)).atLocation(targetToken)
-      .size({ width: BLOOD_SPLATTER.squares }, { gridUnits: true })
-      // The departure from the routing rule, with the measurement and the reason at the spec block.
-      .aboveLighting(BLOOD_SPLATTER.aboveLighting)
-      .timeRange(0, BLOOD_SPLATTER.clipMs);
-    // ⭐ THE EXIT VECTOR (2026-08-09 ruling). The asset's ink travels left-to-right across its own
-    // frame, so pointing that travel at a location makes the spray move that way. The location asked
-    // for is a point BEYOND the target on the shooter→target ray — one grid unit past the body — so the
-    // spray continues the round's line and leaves on the far side rather than washing back toward the
-    // muzzle. `rotateTowards` is the same call and the same basis the tracers take their heading from,
-    // which is what keeps the two from ever disagreeing.
-    //
-    // The rotation is only possible when the shot HAS an axis; a call with no shooter falls back to the
-    // old random rotation rather than drawing every splash pointing screen-right, which would be a
-    // worse lie than no direction at all.
-    const from = shooterToken ? centerOf(shooterToken) : null;
-    const at = centerOf(targetToken);
-    if (from && at && (from.x !== at.x || from.y !== at.y)) {
-      const gridPx = Number(canvas?.dimensions?.size) || 100;
-      const reach = Math.hypot(at.x - from.x, at.y - from.y) + gridPx;
-      const exit = pointAlong(from, at, reach);
-      splash.rotateTowards(exit);
-      out.exitPoint = { x: Math.round(exit.x), y: Math.round(exit.y) };
-    } else {
-      splash.randomRotation();
-    }
-    if (delay > 0) splash.delay(delay);
-    out.drawn = true;
-    seq.play().catch((err) => console.warn(`${SCOPE} | blood splash play failed`, err));
-  } catch (err) {
-    console.warn(`${SCOPE} | blood splash failed`, err);
-  }
-  return out;
-}
+/* ⏪ The withdrawn spray's draw verb stood here — removed 2026-08-28; see the tombstone above. */
 
 /**
  * WHAT THE ENGINE CHARGES TO START A DELAYED EFFECT, compensated so the picture lands ON the audio.
@@ -6105,7 +5984,7 @@ export async function fxBloodSplatter(shooterToken, targetToken, { delayMs = 0 }
  * .delay(500)): the engine's pre-timer pipeline costs a tight 171–181ms between play() and the effect's
  * own start, idle. The impact AUDIO is a bare setTimeout and pays none of it — so before this constant,
  * every arrival element trailed its own audio by at least the floor. Subtracted from the arrival delay
- * at the two standalone arrival-element sites (fxHitMark, fxBloodSplatter), floored at zero: a
+ * at the standalone arrival-element site (fxHitMark), floored at zero: a
  * zero-travel round cannot start earlier than the engine allows and keeps the floor as its residue.
  * REVERT: 0 (elements return to trailing their audio by the engine floor).
  */
@@ -6312,13 +6191,14 @@ export const FX_PRESENTATION_LAG_GRACE_MS = SEQ_PRESTART_COMP_MS + FX_PRESENTATI
  * audio was the faithful clock all along; the picture was late. So fxShot now issues its mark through
  * here too, and both paths pay one known floor, compensated by SEQ_PRESTART_COMP_MS.
  *
- * ⭐ WHY THIS VERB EXISTS (user ruling 2026-08-11): *"hits late in a long burst get NO blood at all"*.
+ * ⭐ WHY THIS VERB EXISTS (user ruling 2026-08-11): *"hits late in a long burst get NO [arrival mark]
+ * at all"*.
  * The pacing rule (roundDropped) takes a late round WHOLE — audio with picture — and that rule is right
  * about what it was written for: a report landing on top of another report is worse than a missing
  * report, and a backlog of tracers is what made the picture run a second behind the sound. But it was
- * also taking the round's ARRIVAL with it, and an arrival is not a pacing cost: the mark and the spray
- * are ONE sprite each, they are drawn at the far end of the shot rather than at the muzzle, and they
- * are the only thing on screen that says the round landed on somebody. A ten-round burst that hit six
+ * also taking the round's ARRIVAL with it, and an arrival is not a pacing cost: the mark is ONE sprite,
+ * it is drawn at the far end of the shot rather than at the muzzle, and it is the only thing on screen
+ * that says the round landed on somebody. A ten-round burst that hit six
  * times was marking three, which reads as a burst that mostly missed.
  *
  * So the two budgets are now separate: the TRACER budget is the pacing rule's and may refuse rounds,
@@ -6370,9 +6250,9 @@ export async function fxHitMark(shooterToken, targetToken, { weaponClass, ammoKe
  * It is the fan-out's own round cap and not a smaller number, deliberately: the mark lives 833ms, it is
  * one sprite, and it lands on the square the shot was aimed at — so N of them is N confirmations of N
  * landed rounds, which is the thing the ruling asks to stop losing. The element that genuinely does not
- * survive repetition is the blood spray (four sprays inside one 900ms clip is a fountain), and that one
- * keeps its own much tighter cap at BLOOD_SPLATTER.maxPerPayload. Stated as a constant rather than left
- * implicit so the bound is a value a keeper can read.
+ * survive repetition is the impact AUDIO, which keeps its own much tighter cap at
+ * HIT_SOUND_MAX_PER_PAYLOAD. Stated as a constant rather than left implicit so the bound is a value a
+ * keeper can read.
  */
 export const HIT_MARK_MAX_PER_PAYLOAD = MAX_FX_SHOTS;
 
@@ -6888,7 +6768,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // `fumbleClass` is REPORTED, not decided here: it is the payload's own field (derived once at the
   // seam) and it rides the result so a reader — the keeper, a bench run — can tell WHICH ruled fumble
   // produced a silent return, rather than only that one did. Null on every other payload.
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, delivery: null, detonationAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false, fumbleClass: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, volley: null, arrival: null, impacts: null, hitAudio: null, delivery: null, detonationAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false, fumbleClass: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
   // ⭐ A MUTED PAYLOAD IS A DAMAGE RE-EMISSION, NOT A SHOT (2026-08-27, user ruling). The suppressive
   // zone's failed save re-enters this hook only to reach the damage pipeline — no round is arriving on
@@ -6963,7 +6843,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   const ammoEntry = ammoFxEntry(weaponClass, ammoKey);
 
   // ⭐ THE DELIVERED-WARHEAD PLAN, resolved ONCE here beside the load and threaded into the four gates
-  // it moves (the flash, the blood, the impact audio and whether the object arrives). Null for every
+  // it moves (the flash, the impact audio and whether the object arrives). Null for every
   // ordinary shot, so each of those gates is a plain fall-through. See deliveryPlanFor.
   const delivery = deliveryPlanFor(weaponClass);
 
@@ -7040,12 +6920,12 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   const volley = volleyOwns(payload) && shooter && !ammoRedefinesProjectile(ammoKey)
     ? volleySpecFor(aimSquares) : null;
   // WHEN THIS ROUND ARRIVES — the one clock every delayed element of the shot is hung on: the hit mark,
-  // the pellet arrival marks, the blood spray and the burning ground. Resolved ONCE, here, and threaded
+  // the pellet arrival marks, the impact audio and the burning ground. Resolved ONCE, here, and threaded
   // into every verb below and into the tail floor, so nothing on one shot can disagree with anything
   // else about when the round got there.
   //
   // ⏪ IT USED TO BE `dashMs, or zero` (2026-08-11). Zero was the answer for the four PAINTED classes,
-  // which is why their impacts and their blood played at the muzzle — the reported defect. The painted
+  // which is why their arrival elements played at the muzzle — the reported defect. The painted
   // arrival is a measured band crossing now; see arrivalSpecFor for the three shapes and
   // TRACER_ARRIVAL_MS for the decode.
   const arrival = arrivalSpecFor(weaponClass, ammoKey, aimSquares, volley);
@@ -7204,28 +7084,10 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     }
   }
 
-  // THE BLOOD SPLASH — its gates resolved ONCE here, its draws issued PER LANDING ROUND from inside
-  // the loop below. ⏪ REBUILT 2026-08-09: the once-per-payload rule this block used to enforce is
-  // dead (user, on the MPK-9 burst — a ten-round burst marked its target once, which read as one
-  // wound however many rounds went in). The gates themselves are unchanged and still all in one place:
-  //  1. the world setting, read per shot so a GM switching it takes effect with no reload;
-  //  2. a round LANDED — a burst that misses draws nothing (the ruled fumble is already gone, several
-  //     lines above, so nothing here has to know about it);
-  //  3. a TARGET TOKEN, not an aim point: blood needs a body, and an untargeted shot has none;
-  //  4. that token's actor is not STRUCTURE (bearsStructuralSdp — vehicles, powered armour and full
-  //     conversions), which is where the actor-level limit of the phase-1 answer is documented.
-  // What CHANGED is only how many times the draw is issued and when: once per landing round, on that
-  // round's own visual-impact clock, bounded by BLOOD_SPLATTER.maxPerPayload. Still never awaited and
-  // still never tagged, so it can neither delay a round nor hold the damage window.
-  // ⛔ AND NEVER FOR A CLIPPED SHOT (2026-08-26). Blood needs a body the round reached; a round that
-  // stopped at a wall reached masonry. The gate is the plan, not a second opinion about the geometry.
-  //  5. ⭐ AND NOT A DELIVERED WARHEAD (2026-08-27). Blood belongs to a round that went INTO a body; a
-  //     grenade arrives at a PLACE, and what it does to the bodies there is the detonation's business —
-  //     the blast's own applications mark and sound themselves when the referee confirms it. A lobbed
-  //     object that landed on somebody's square is not a wound yet.
-  const bleeds = goreEnabled() && hits > 0 && !!target && !bearsStructuralSdp(target.actor) && !wallClip && !delivery;
-  let blood = bleeds ? { queued: 0, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
-    tokenId: target.id, cap: BLOOD_SPLATTER.maxPerPayload } : null;
+  // ⏪ THE HIT SPRAY'S PLAN STOOD HERE — five gates resolved once per payload, its draws issued per
+  // landing round from the loop below. Element withdrawn 2026-08-28; see the tombstone at its removal
+  // site and docs/FX-RAIL.md §6. `bearsStructuralSdp`, which was one of those gates, is NOT removed —
+  // the impact audio asks the same predicate for which clip a landed round takes.
 
   // THE IMPACT TALLY — how many of this payload's landing rounds have had their arrival marked, drawn
   // and refused rounds counted together, against the bound at HIT_MARK_MAX_PER_PAYLOAD. Reported by
@@ -7246,7 +7108,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // ⚠ THE CONSEQUENCE, STATED: at arrival the rail knows the round LANDED, not that it BEAT ARMOUR —
   // penetration is computed at apply time and cannot be had here. So a round stopped dead by a
   // vehicle's SP still makes the structure sound from this seam. That is the same information the hit
-  // mark and the blood spray already draw on, and matching the picture is the point: an impact the eye
+  // mark already draws on, and matching the picture is the point: an impact the eye
   // is shown and the ear is not reads as a bug. The apply-side legs, which DO know, are penetration-
   // gated — the asymmetry is deliberate and documented in docs/FX-RAIL.md §2.
   // ⭐ A CORRIDOR SOUNDS ITS OWN VICTIMS AT ARRIVAL (patternAudioPlanFor — the 2026-08-14 ruling).
@@ -7380,12 +7242,12 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     // the way the original drop rule is: refusing work removes the backlog, and the NEXT reading sees
     // the state the drop created rather than the state that caused it.
     if (refused) lastIssue = { at: Date.now(), seen: _drawObserved.count };
-    // ⭐⭐ THE IMPACT FAMILY IS NOT ON THE TRACER'S BUDGET (user ruling 2026-08-11: *"hits late in a long
-    // burst get NO blood at all"*). The pacing rule above refuses a late round's PICTURE AND ITS REPORT,
+    // ⭐⭐ THE IMPACT FAMILY IS NOT ON THE TRACER'S BUDGET (user ruling 2026-08-11: late hits in a long
+    // burst were getting no arrival element at all). The pacing rule above refuses a late round's PICTURE AND ITS REPORT,
     // and it is right to — but it was also refusing the round's ARRIVAL, and those are two different
     // costs. A tracer is a sprite per pellet drawn from the muzzle every cadence slot and it is what
-    // creates the backlog the rule exists to hold down; a hit mark and a blood spray are one sprite each,
-    // at the far end of the shot, and they are the only thing that says the round landed on somebody. So
+    // creates the backlog the rule exists to hold down; a hit mark is one sprite,
+    // at the far end of the shot, and it is the only thing that says the round landed on somebody. So
     // this block sits ABOVE the drop rather than inside the branch below it, and a round that HIT gets
     // its impact family whether or not its tracer was drawn. See fxHitMark for the ruling in full.
     //
@@ -7410,13 +7272,8 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
             .catch((err) => console.warn(`${SCOPE} | hit mark failed`, err));
         }
       }
-      // ⏫ MOVED OUT OF THE DRAW BRANCH with the mark, and for the same reason — this is where the "no
-      // blood at all" half of the report was coming from. The gates and the cap are unchanged.
-      if (blood && blood.queued < BLOOD_SPLATTER.maxPerPayload) {
-        blood.queued++;
-        fxBloodSplatter(shooter, target, { delayMs: arriveIn })
-          .catch((err) => console.warn(`${SCOPE} | blood splash failed`, err));
-      }
+      // ⏪ The withdrawn spray was issued here, on this same `arriveIn`, under its own tighter cap
+      // (removed 2026-08-28). The mark above and the audio below kept the clock it shared.
       // The impact's AUDIO, on the same `arriveIn` the two draws above take, so what a viewer sees and
       // what a listener hears are one event. Its own cap, for the reason at HIT_SOUND_MAX_PER_PAYLOAD.
       // The queued index rides the variance ladder, so four impacts are four levels rather than four
@@ -7550,7 +7407,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   return { ...result, shots, hits, flashes, weaponClass, cadenceMs, lightHoldMs, motes: ambience.motes, smokePuffs,
     // `patternFire` is the corridor's own burning ground, reported beside the aim-point one so a test can
     // say WHICH shape answered — they are exclusive, so exactly one of the pair is ever non-null.
-    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, patternFire, blood, volley,
+    turnedDeg: turn ? turn.deltaDeg : null, settleTailMs, ammoKey, groundFire, patternFire, volley,
     // The arrival clock, by value, with WHICH of the three shapes answered — see arrivalSpecFor.
     arrival, impacts,
     // ⭐ AND THE ARRIVAL CHOKE, by value — the resolved half-angle, the class's own ceiling, the cap in
@@ -7723,7 +7580,7 @@ function _confirmSilentPresentation(result, drawsBefore) {
  */
 export function fxPreloadManifest() {
   const keys = new Set();
-  for (const c of [MUZZLE_SPARK, HIT_CONFIRM, GROUND_FIRE, BLOOD_SPLATTER, MUZZLE_MOTES, MUZZLE_SMOKE,
+  for (const c of [MUZZLE_SPARK, HIT_CONFIRM, GROUND_FIRE, MUZZLE_MOTES, MUZZLE_SMOKE,
                    PELLET_ARRIVAL, BATON_ROUND, IMPACT_FIRE, IMPACT_CRACK, IMPACT_DUST]) {
     if (c?.key) keys.add(c.key);
   }
@@ -7833,7 +7690,7 @@ export function fxPayloadPreloadKeys(entry, volley = null) {
   }
   // The arrival family a fanned round draws is not on the class row, so it is named here rather than
   // scraped — a pellet fan whose arrival marks decode mid-volley is the same defect as a late tracer.
-  for (const c of [PELLET_ARRIVAL, HIT_CONFIRM, MUZZLE_SPARK, BLOOD_SPLATTER]) if (c?.key) keys.add(c.key);
+  for (const c of [PELLET_ARRIVAL, HIT_CONFIRM, MUZZLE_SPARK]) if (c?.key) keys.add(c.key);
   // ⭐⭐ THE ELEMENTS WHOSE KEY IS A CONSTANT AND WHOSE GATE IS NOT A KEY (found by the treatment sweep,
   // 2026-08-26). The scrape above finds a key only where the resolved entry HOLDS one as a string —
   // which is true of `tracer`, `muzzle` and `impactKey`, and false of every element the row turns on
