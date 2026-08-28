@@ -438,14 +438,19 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       if (out) out.textContent = t.value;
     });
 
-    // ⭐ NUMBER FIELDS TAKE NUMBERS (user-ordered 2026-08-28, the chrome-count report): a
-    // type="number" input still lets Chromium type the exponent characters e E + - . — which is
-    // what "I can type letters in it" was. Blocked at the keystroke for every number field in the
-    // window, and the value is clamped to the field's own integer min/max when the edit lands.
+    // ⭐ NUMBER FIELDS TAKE DIGITS, full stop (user-ordered 2026-08-28, two rounds): a type="number"
+    // input lets Chromium type the exponent characters e E + - . into the VALUE — the original
+    // "I can type letters" report — and blocking only those left the other letters to Chromium's own
+    // handling, which "accepts" one typed over a selection by wiping the visible value into the
+    // bad-input state until blur (round two: visual-only, but an inconsistency). So the rule is the
+    // consistent one: any single character that is not a digit is refused at the keystroke, for
+    // every number field in the window. Editing and navigation keys (Backspace, arrows, Tab …) have
+    // multi-character names and pass untouched; Ctrl/Cmd chords (copy, paste, select-all) pass, and
+    // a pasted mess is caught by the clamp below when the edit lands.
     root.addEventListener("keydown", (ev) => {
       const t = ev.target;
       if (!t?.matches?.('input[type="number"]')) return;
-      if (["e", "E", "+", "-", "."].includes(ev.key)) ev.preventDefault();
+      if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !/[0-9]/.test(ev.key)) ev.preventDefault();
     });
     root.addEventListener("change", (ev) => {
       const t = ev.target;
