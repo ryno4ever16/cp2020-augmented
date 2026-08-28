@@ -194,6 +194,42 @@ export function shortLocalize(str) {
     return tryLocalize(makeShort ? str + "Short" : str);
 }
 
+/* ═════════════════════════ THE WOUND TRACK'S OWN CEILING ═════════════════════════
+ *
+ * ⭐ WHY THIS EXISTS (user report 2026-08-27: a stun card printed "penalty 94"). The wound track is a
+ * printed sheet with a fixed number of boxes — ten wound states, four boxes each, forty in total (the
+ * base system's own `woundtracker.hbs` draws exactly that, and `woundState()` is `ceil(damage / 4)`).
+ * Every writer in this module appended raw damage to `system.damage` with nothing stopping it, so a
+ * range dummy shot at all afternoon banked ~380 damage, `woundState()` answered 95, and the stun card's
+ * penalty line — `woundState − 1` — printed 94. The wound LABEL was already capped at Mortal 6; the
+ * penalty line was not, so the two disagreed on the same card.
+ *
+ * TWO HALVES, BOTH NEEDED, and they are not the same fix:
+ *   WRITE — `cappedWoundDamage` clamps what goes onto the track, so no NEW actor can bank past the
+ *           sheet. The base's own ceiling: 40 = Mortal 6 = a −9 stun penalty, the last row the table
+ *           prints (Core p.104).
+ *   READ  — `cappedWoundState` clamps what comes OFF it, so an actor that ALREADY carries banked damage
+ *           from a build before this one prints sanely without a migration touching anybody's sheet.
+ *
+ * ⛔ THE CAP IS A DISPLAY AND ARITHMETIC BOUND, NOT A RULE CHANGE. Nothing about death, stabilization or
+ * severity reads differently at 40 than it did at 380 — everything past Mortal 6 was already resolved
+ * as Mortal 6 by the label, the death threshold (`getDeathThreshold`) and the ladder. What changes is
+ * only that the numbers now agree with each other.
+ */
+export const WOUND_TRACK_MAX = 40;
+
+/** What may be written to `system.damage`: the track's own ceiling, floored at 0. Pure. */
+export function cappedWoundDamage(n) {
+  return Math.min(WOUND_TRACK_MAX, Math.max(0, Number(n) || 0));
+}
+
+/** The wound state to PRINT and to price penalties from — the actor's own, clamped to the last row the
+ *  table defines (10 = Mortal 6). Pure apart from reading the actor. */
+export function cappedWoundState(actor) {
+  const raw = Number(actor?.woundState?.() ?? 0) || 0;
+  return Math.min(WOUND_TRACK_MAX / 4, Math.max(0, raw));
+}
+
 export function deleteFieldUpdate(path) {
   const ForcedDeletion = globalThis.foundry?.data?.operators?.ForcedDeletion;
   if (typeof ForcedDeletion === "function") {

@@ -30,6 +30,14 @@
     {{/if}}
   </div>
 
+  {{#if blockedByWall}}
+  {{!-- The shot met a move-blocking wall nobody gave cover values to, so the rounds never reached the
+        body and every row below is seeded at 0. It is stated here rather than left to be inferred from
+        a column of zeroes — and the rows stay editable, so a referee who rules the round found a gap
+        types a value back in and applies it. --}}
+  <div class="field cp-blocked-wall-note"><span>{{CPLocal "DamageDlgBlockedByWall"}}</span></div>
+  {{/if}}
+
   <hr>
 
   {{!-- Per-hit table --}}

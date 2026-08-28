@@ -15,7 +15,7 @@
 
 import { getArmorContributors, getArmorHardness } from "./armor-layers.js";
 import { postSavePromptCard } from "../compat.js";
-import { localize, localizeParam, combineArmorSP, foldArmorSP, getLimbStatus } from "../utils.js";
+import { localize, localizeParam, combineArmorSP, foldArmorSP, getLimbStatus, cappedWoundDamage } from "../utils.js";
 // The per-application severity cadence: N damage events on one body produce ONE progression card and
 // ONE mortal prompt at the tier the application finished on (combat/severity-batch.js). Nothing here
 // posts a severity card directly any more — it records, and the ledger emits when the batch closes.
@@ -366,7 +366,12 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
   }
   if (netDamage > 0) {
     const current = Number(target.system.damage) || 0;
-    await target.update({ "system.damage": current + netDamage }, { render: false, fromCyberpunkDamageSystem: true });
+    // ⭐ CLAMPED TO THE TRACK'S LAST BOX (utils `cappedWoundDamage`, 2026-08-27). The sheet has forty
+    // boxes and `woundState()` is `ceil(damage / 4)`, so an unclamped append let a figure bank a state
+    // the table has no row for — and the stun card's penalty line, which is `woundState − 1`, printed
+    // it (reported at 94). Nothing about death, severity or stabilization reads differently at the
+    // ceiling: everything past Mortal 6 already resolved as Mortal 6.
+    await target.update({ "system.damage": cappedWoundDamage(current + netDamage) }, { render: false, fromCyberpunkDamageSystem: true });
     // New damage clears stabilization — death saves restart (CP2020 p.105).
     if (target.getFlag?.("cp2020-augmented", "stabilized")) {
       await target.unsetFlag("cp2020-augmented", "stabilized");

@@ -16,7 +16,7 @@
 import { ARMOR_MODES, resolveAreaDamagesSync, applyBTM, computeNetDamage, ablateLocationOnce, applyLocationDamage } from "./DamageApplicator.js";
 // One apply = one application: the rows share a severity ledger, which emits one progression card and
 // one mortal prompt at the final tier (combat/severity-batch.js).
-import { makeSeverityBatch, closeSeverityBatch, severityBatchHandledMortal } from "./severity-batch.js";
+import { makeSeverityBatch, closeSeverityBatch, severityBatchHandledMortal, severityBatchHandledStun } from "./severity-batch.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload } from "./save-rolls.js";
 import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 // ⛔ WHOSE CLOCK THE IMPACT SOUND IS ON. This window is clock 3 — it opens after the presentation has
@@ -24,7 +24,7 @@ import { routesToSdp, cyberlimbSdp } from "../mech/cyberlimb.js";
 // The rail owns the answer so the two cannot disagree; see railSoundedImpacts for the regression that
 // left this window sounding a second impact per round, seconds behind the first.
 import { railSoundedImpacts } from "../fx/effects.js";
-import { requestCoverChew, coverBetween, coverChewSummary } from "./cover.js";
+import { requestCoverChew, aimedCoverVerdict, coverChewSummary, AREA_COVER_EXEMPT } from "./cover.js";
 import { localize, localizeParam } from "../utils.js";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -67,6 +67,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // The segment auto-detect is a ONE-SHOT seed on the first context build — this latch is what
     // keeps a later re-render from re-picking over a value the GM typed.
     this._autoCoverTried = false;
+    // ⭐ DID THIS SHOT GET PAST A NAKED WALL? (user report 2026-08-27: aimed fire crossed unvalued
+    // move-blocking walls while pattern weapons were stopped by them.) Resolved with the cover seed
+    // below, from the same one call, and null until that runs — see `_wallBlocked`.
+    this._blockedByWall = null;
     // The cover-only control is a one-shot too, for the ordinary reason a write-once control is: a
     // second press would take a second debit out of the same object for the same damage number.
     this._coverOnlyCharged = false;
@@ -112,6 +116,35 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     return canvas?.tokens?.placeables?.find(t => t.actor?.id === aid)?.document ?? null;
   }
 
+  /**
+   * ⭐ WAS THIS SHOT STOPPED BY A WALL NOBODY VALUED? Resolved once, lazily, and cached — the preview
+   * build normally settles it, and this method is what makes the Apply path safe if it is ever reached
+   * without one (a relayed or hand-driven apply). Never re-asks: the answer is a property of where the
+   * two figures stood when the shot was resolved, and re-asking after somebody walked would change the
+   * verdict under a window the referee is already reading.
+   */
+  _wallBlocked() {
+    if (this._blockedByWall === null) {
+      try {
+        this._blockedByWall = aimedCoverVerdict(this._attackerTokenDoc(), this._targetTokenDoc()).state === AREA_COVER_EXEMPT;
+      } catch (e) { this._blockedByWall = false; }
+    }
+    return this._blockedByWall === true;
+  }
+
+  /**
+   * THE SEEDED after-SP FOR ONE ROW, and the seeded penetration beside it — ONE definition, read by the
+   * preview and by the Apply, so the number a referee looks at is the number that gets written.
+   *
+   * ⛔ ZEROED, NOT REFUSED. A blocked shot's rows are seeded at 0 and marked non-penetrating, and they
+   * stay ORDINARY EDITABLE ROWS: the referee who decides the round found a gap, or that the wall is a
+   * curtain the map calls a wall, types a value back in and applies it. That is the same fiat the Cover
+   * SP field has always offered, and it is why the geometry may answer strictly (see the no-trim note in
+   * cover.js `aimedCoverVerdict`) without taking the table's ruling away from it.
+   */
+  _seededAfterSP(hit) { return this._wallBlocked() ? 0 : hit.damageAfterSP; }
+  _seededPenetrates(hit) { return this._wallBlocked() ? false : hit.penetrates; }
+
   async _prepareContext(_options) {
     const armorMode = this._armorMode ?? game.settings.get("cp2020-augmented", "damageArmorMode");
     const ablate    = this._ablate    ?? game.settings.get("cp2020-augmented", "damageAblation");
@@ -126,7 +159,13 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     if (!this._autoCoverTried && !this._coverZoneUuid) {
       this._autoCoverTried = true;
       try {
-        const picked = coverBetween(this._attackerTokenDoc(), this._targetTokenDoc())[0];
+        // ⭐ ONE QUESTION, ONE ANSWER (2026-08-27). `aimedCoverVerdict` returns the rows this shot
+        // crossed AND whether an unvalued move-blocking wall stopped it — the second half is the gap the
+        // field report found, and asking it here rather than in a second call is what guarantees the
+        // seed and the block are decided about the same line.
+        const verdict = aimedCoverVerdict(this._attackerTokenDoc(), this._targetTokenDoc());
+        this._blockedByWall = verdict.state === AREA_COVER_EXEMPT;
+        const picked = verdict.rows[0];
         if (picked) {
           this._coverZoneUuid = picked.uuid;
           // TWO NAMES, ON PURPOSE. `label` is the object's own clean name and is what the wear
@@ -169,7 +208,8 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     const btm = Number(this.target.system.stats?.bt?.modifier) || 0;
 
     const resolvedHits = rawHits.map((hit, i) => {
-      const afterSP = this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP;
+      const afterSP = this._overrides[i] !== undefined ? this._overrides[i] : this._seededAfterSP(hit);
+      const penetrates = this._overrides[i] !== undefined ? hit.penetrates : this._seededPenetrates(hit);
       // A machine-zone (SDP) row exposes its zone's remaining/max pool for the tag tooltip. This is a
       // pure synchronous lookup — cyberlimbSdp reads the same sdp.sum/current pool the seam reduces,
       // and it already covers a full borg's Head/Torso zones as well as ordinary cyberlimbs.
@@ -177,6 +217,7 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       return {
         ...hit,
         afterSP,
+        penetrates,
         overridden:   this._overrides[i] !== undefined,
         btm,   // per-row so the flesh after-SP tooltip needs no fragile parent-path lookup
         sdpRemaining: pool ? pool.current : null,
@@ -214,6 +255,10 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
       // it is — and, when the row was decided by a roll, of which way that roll went. An EXPOSED row
       // carries no SP at all, so it produces no line in the breakdown; this is where it speaks.
       coverRowLabel: this._coverRow?.displayLabel ?? "",
+      // ⭐ THE SHOT MET A WALL NOBODY VALUED. Stated on the face of the window rather than left to be
+      // inferred from a column of zeroes: the rows read 0 because the round did not reach the body, and
+      // a referee who disagrees types over them (see `_seededAfterSP`).
+      blockedByWall: this._wallBlocked(),
       // ⭐ THE COVER-ONLY CONTROL, offered only when there is an OBJECT to charge. A hand-typed Cover SP
       // folds into the math but names no document, so there would be nothing for the button to debit.
       // ⛔ NOT OFFERED FOR CORE-MODE COVER. The control debits a structure pool; an SP the GM typed
@@ -368,11 +413,14 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     let fleshTotal = 0;
     let sdpTotal   = 0;
     base.forEach((hit, i) => {
-      const afterSP = this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP;
+      // THE SAME TWO SEEDS the preview and the Apply use — this is the live readout, and a total that
+      // recomputed a blocked shot's untouched rows at full damage would contradict the column above it.
+      const afterSP    = this._overrides[i] !== undefined ? this._overrides[i] : this._seededAfterSP(hit);
+      const penetrates = this._overrides[i] !== undefined ? hit.penetrates : this._seededPenetrates(hit);
       if (hit.sdp) {
-        sdpTotal += hit.penetrates ? Math.max(0, Math.round(afterSP)) : 0;
+        sdpTotal += penetrates ? Math.max(0, Math.round(afterSP)) : 0;
       } else {
-        fleshTotal += computeNetDamage(afterSP, btm, hit.penetrates, hit.location);
+        fleshTotal += computeNetDamage(afterSP, btm, penetrates, hit.location);
       }
     });
     const el = root.querySelector(".damage-total-value");
@@ -439,10 +487,14 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
     // computeNetDamage centralizes head doubling (p.103) + the optional Listen Up limb model,
     // so the player-side resolved values match the GM-side and area paths exactly.
     const resolvedHits = rawHits.map((hit, i) => {
-      const afterSP   = this._overrides[i] !== undefined ? this._overrides[i] : hit.damageAfterSP;
-      const btmResult = applyBTM(afterSP, btm, hit.penetrates);
-      const netDamage = computeNetDamage(afterSP, btm, hit.penetrates, hit.location);
-      return { location: hit.location, afterSP, penetrates: hit.penetrates, btmResult, netDamage };
+      // ⭐ THE SAME TWO SEEDS THE PREVIEW USED (`_seededAfterSP` / `_seededPenetrates`), so a shot the
+      // window showed as stopped by a wall is applied as stopped by it — and a row the referee typed
+      // over is applied as they typed it, wall or no wall.
+      const afterSP    = this._overrides[i] !== undefined ? this._overrides[i] : this._seededAfterSP(hit);
+      const penetrates = this._overrides[i] !== undefined ? hit.penetrates : this._seededPenetrates(hit);
+      const btmResult = applyBTM(afterSP, btm, penetrates);
+      const netDamage = computeNetDamage(afterSP, btm, penetrates, hit.location);
+      return { location: hit.location, afterSP, penetrates, btmResult, netDamage };
     });
     const totalApplied = resolvedHits.reduce((s, h) => s + h.netDamage, 0);
 
@@ -480,6 +532,11 @@ export class DamageDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         dotTurns:         Number(this.payload.dotTurns        ?? 0),
         dotDamageFormula: String(this.payload.dotDamageFormula || "1d6"),
         dotType:          String(this.payload.dotType         || "acid"),
+        // Whether that burn's multiplier diminishes — the fifth field of the same statement, on the
+        // datagram for the same reason as the four above it: the GM side seeds the tick's state from
+        // what arrives here. A relay emitted before this field existed reads false on arrival, which is
+        // the halving that shipped before.
+        dotFlat:          Boolean(this.payload.dotFlat),
         weaponName:       String(this.payload.weaponName      || ""),
         firstHitLocation: rawHits[0]?.location ?? null,
       });
@@ -621,6 +678,17 @@ async function _postSavePrompts(actor, token = null, severityBatch = null) {
     // The mortal half is the application's ledger's when there is one — offered once, at the tier the
     // apply finished on. Without a ledger this is exactly what it always was.
     if (!severityBatchHandledMortal(severityBatch, actor, tok)) await postDeathSavePrompt(actor, tok);
+    // ⭐ AND THE CONSCIOUSNESS QUESTION WITH IT (2026-08-27) — a correction, not a new rule. Both
+    // SIBLING rails post the pair at Mortal: save-rolls.js `postSavePrompts` has always done so on
+    // p.99's reading (the stun save governs whether the body stays on its feet, the death save whether
+    // it survives at all), and damage-hooks.js `_postWoundSavePrompts` was corrected to match. This
+    // one asked only whether the figure lived, so a body dropped to Mortal through the apply window
+    // was never asked whether it was still standing.
+    // ⛔ ONCE, NOT ZERO. The user's once-per-batch ruling (2026-08-27) moved the stun prompt onto the
+    // application's ledger where there IS one — so this posts only when the ledger is not carrying it,
+    // which is the same test the mortal half above makes and for the same reason. Death first, in the
+    // single-target rail's own order: the more urgent question is the one a reader should meet first.
+    if (!severityBatchHandledStun(severityBatch, actor, tok)) await postStunSavePrompt(actor, tok);
   } else {
     await postStunSavePrompt(actor, tok);
   }

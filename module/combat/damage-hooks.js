@@ -35,7 +35,7 @@ import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLoca
 // The per-application severity cadence — one progression card and one mortal prompt per body per
 // application, whatever the application is made of (a burst's rounds, a corridor's shells, a blast and
 // the fragments it throws). See combat/severity-batch.js for who owns the wound-track prompt.
-import { makeSeverityBatch, closeSeverityBatch, severityBatchOwnsMortal, severityBatchHandledMortal, isSeverityBatch } from "./severity-batch.js";
+import { makeSeverityBatch, closeSeverityBatch, severityBatchOwnsMortal, severityBatchHandledMortal, isSeverityBatch, recordSeverityStun } from "./severity-batch.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
 import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus } from "./save-rolls.js";
@@ -43,7 +43,7 @@ import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 // combatFxEnabled is read (with the presentation rail's patternFlowOwns) at the pattern's apply, so one
 // round is not sounded twice — once on arrival by the rail and again when the corridor is confirmed.
 import { mechRoundTickEnabled, combatFxEnabled } from "../settings.js";
-import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize } from "../utils.js";
+import { rollLocation, rerollGoneLimbAreaDamages, resolveActorRef, firingActorOf, localize, localizeParam, tryLocalize, cappedWoundDamage } from "../utils.js";
 import { renderChatCard, getHtmlElement }                     from "../compat.js";
 import { dispatchAttack }                                     from "../vehicle/vehicle-targeting.js";
 import { createArea, tokensInArea, areasByFlag, deleteArea, areaById, areaDeleteHook, usesRegions, moveArea } from "./area-shapes.js";
@@ -76,8 +76,13 @@ import { pixelsToMeters, metersToPixels } from "../vehicle/vehicle-grid.js";
 // One source of truth for when a shot has FINISHED being looked at: the fx adapter queues the cadence,
 // the round count and every clip length, so it reports its own completion rather than having the sum
 // duplicated here — a copy that would drift the moment any of them is tuned.
-import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns, railPlantsPatternFires } from "../fx/effects.js";
+import { presentationSettled, ammoFxKeyOf, ammoLeavesGroundFire, fxPatternGroundFire, fxSeedOf, patternFlowOwns, railPlantsPatternFires, resolveFiredWeapon, actorForPayload } from "../fx/effects.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
+// WHETHER A FIRED THING ARRIVES SOMEWHERE AND GOES OFF, and how wide the area is — the ONE derivation
+// this file's two halves both read (the single-target skip and the blast claim), shared with the
+// presentation rail and the attack gesture. See combat/area-delivery.js for the p.99/p.108/p.110
+// citations and for why it lives in its own import-free file.
+import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
 
 /**
  * The effect list, however a caller spelled it.
@@ -563,7 +568,11 @@ function _hookWeaponFired() {
     // Area-effect ammo is owned by the dedicated explosion/spread hooks. Skip the single-target
     // apply path here so the primary target isn't damaged twice. The per-token blast/pattern
     // re-emits plain weaponFired payloads (no effectTypes/spreadMode), which fall through normally.
-    if (_effectTypesOf(payload).includes("Explosive")) return;
+    // ⛔ THE SAME CALL `_hookExplosion` MAKES, and it must stay the same call — this line and that
+    // hook are the two halves of one either/or, exactly as this function's `_spreadModeOf` line and
+    // `_hookSpread` are. If they disagreed, a thrown grenade would be damaged twice (dialog AND blast)
+    // or not at all. See combat/area-delivery.js `payloadDetonates`.
+    if (payloadDetonates(payload)) return;
     // ⚠ THE SAME DERIVATION THE PATTERN HOOK USES, and it must stay the same call: this line and
     // _hookSpread are the two halves of one either/or. If they ever disagreed, a shell would either be
     // damaged twice (dialog AND pattern) or not at all. Reading the stored spreadMode flag here while
@@ -942,7 +951,13 @@ export async function placeSuppressiveZoneFromGeometry(geo) {
   // Same pure geometry the preview drew (rayPolygonShape off the same origin/angle/length/width) → the
   // planted lane is pixel-identical to what the player saw.
   const shape = rayPolygonShape(geo.origin.x, geo.origin.y, geo.angleDeg, geo.lengthPx, geo.widthPx);
-  const saveDC = Math.max(1, Number(geo.saveDC) || 1);
+  // ⏪⭐ NO FLOOR ON THE PRICE (2026-08-27, the width-ceiling retirement — the whole supersession and
+  // the upstream author's stated reason are at lookups.js `FireZoneWidth`). This used to read
+  // `Math.max(1, … || 1)`, which propped an over-wide zone's honest 0 back up to a 1 the arithmetic
+  // never produced: the readout said 0 while the planted behaviour asked for 1. A DC of 0 is a real
+  // answer — the evasion roll's minimum is 1, so everybody crossing passes — and it is the bad choice
+  // the shooter made, shown. `?? 0` rather than `|| 0` so a legitimate 0 survives the read.
+  const saveDC = Math.max(0, Math.floor(Number(geo.saveDC ?? 0)) || 0);
   const name = localize("SuppZoneBehaviorLabel");
   const dmgFormula = geo.dmgFormula || "1d6";
   const weaponName = geo.weaponName || "";
@@ -1108,7 +1123,9 @@ function _hookSuppressiveZoneEntered() {
       const weaponName = String(sys.weaponName ?? "").trim() || localize("SuppZoneBehaviorLabel");
       const sceneId = region?.parent?.id ?? tokenDoc?.parent?.id ?? canvas?.scene?.id ?? "";
       await _postEvasionPrompt(tokenDoc, {
-        saveDC: Number(sys.saveDC) || 1,
+        // ⏪ The same de-flooring as the plant above: a behaviour that stores 0 asks for 0, and the
+        // resolver passes everybody. `|| 1` here would have re-invented the floor at prompt time.
+        saveDC: Math.max(0, Math.floor(Number(sys.saveDC ?? 0)) || 0),
         dmgFormula: sys.dmgFormula || "1d6",
         weaponName,
         attackerId,
@@ -1197,6 +1214,11 @@ export async function _executeSuppressionEvasion({ actorId, tokenId, sceneId, sa
         targetTokenId: tokenId,
         targetActorId: actorId,
         weaponName:   localize("WpnSuppressiveFireHit"),
+        // This is a DAMAGE re-emission, not a shot: no round is arriving on screen, so the
+        // presentation rail sits it out entirely (fxMute — fx/effects.js honors it at the door).
+        // User ruling 2026-08-27: a zone crossing plays no audio cue; if a suitable one is ever
+        // chosen it gets its own element, not the fire rail's.
+        fxMute:       true,
       });
     }
   }
@@ -1728,7 +1750,12 @@ async function _runOverTimeTick(combat) {
       const fireAblate = (() => { try { return game.settings.get("cp2020-augmented", "damageAblation"); } catch { return false; } })();
       for (const fs of fireStates) {
         const { location, turnsLeft, formula } = fs;
-        const mult = Number(fs.mult ?? 1);   // halves each turn (burn diminishes: 1d6, then 1d6/2…)
+        const mult = Number(fs.mult ?? 1);
+        // ⭐ WHETHER THIS MARKER'S MULTIPLIER DIMINISHES IS THE MARKER'S OWN BUSINESS (see
+        // save-rolls.js `applyFireDotState`). Default — and the answer for every marker written before
+        // this field existed — is the halving ladder this tick has always applied: 1, then ½, then ¼.
+        // A marker seeded from a round that prints a FLAT figure holds its multiplier at 1 instead.
+        const flat = fs.flat === true;
         if (!location || turnsLeft <= 0) continue;
         let rolled = 0;
         let roll = null;
@@ -1769,7 +1796,7 @@ async function _runOverTimeTick(combat) {
             speaker: ChatMessage.getSpeaker({ actor }),
           });
         } else {
-          surviving.push({ location, turnsLeft: newTurnsLeft, formula, mult: mult / 2 });
+          surviving.push({ location, turnsLeft: newTurnsLeft, formula, mult: flat ? mult : mult / 2, flat });
         }
       }
       // The burn's own end of the same mirror (see the acid branch above): `burning` comes off when the
@@ -1803,7 +1830,9 @@ async function _runOverTimeTick(combat) {
         const chokeBtm = Number(actor.system?.stats?.bt?.modifier) || 0;
         const damage = Math.max(1, (Number(roll.total) || 0) - chokeBtm);
         const current = Number(actor.system?.damage) || 0;
-        await actor.update({ "system.damage": current + damage }, { render: false, fromCyberpunkDamageSystem: true });
+        // Clamped like every other wound-track writer (utils `cappedWoundDamage`, 2026-08-27) — a choke
+        // that ticks for several turns is exactly the shape that used to walk a figure off the sheet.
+        await actor.update({ "system.damage": cappedWoundDamage(current + damage) }, { render: false, fromCyberpunkDamageSystem: true });
         await roll.toMessage({
           speaker: ChatMessage.getSpeaker({ actor }),
           flavor: `Choke — ${actor.name} takes ${damage} damage (after BTM ${chokeBtm}). Must make Stun Save.`,
@@ -2206,14 +2235,26 @@ async function _runManualRoundTick(combat) {
 export async function _postWoundSavePrompts(actor, tok, batch = null) {
   const ws = actor?.woundState?.() ?? 0;
   if (ws <= 0) return;
-  if (ws < 4) { await postStunSavePrompt(actor, tok); return; }
+  // ⭐⭐ THE STUN HALF IS THE LEDGER'S NOW (user ruling 2026-08-27, and it REVERSES the paragraph above
+  // — kept there verbatim because p.104's sentence is what the reversed reading was built on). A
+  // corridor of shells produced one stun card per shell for one trigger pull, each priced at a wound
+  // state the application had already moved past: measured on the rig at four prompts, the first
+  // printing "Serious" for a body that finished at Mortal 4. Recorded here and posted ONCE by
+  // `closeSeverityBatch`, off the body's final state — the same clock and the same close the mortal
+  // half already used, so the pair now answer about the same moment of the fight.
+  // ⛔ ONLY WHEN A LEDGER WAS HANDED IN. A caller with no batch, or with the legacy plain Set, keeps
+  // the per-event cadence exactly as it was — which is every single-hit path through here, i.e. the
+  // case p.104's sentence is plainly about.
+  const ledger = isSeverityBatch(batch);
+  if (ledger) recordSeverityStun(batch, { actor, token: tok });
+  if (ws < 4) { if (!ledger) await postStunSavePrompt(actor, tok); return; }
   // ⭐ WHEN THE APPLICATION'S SEVERITY LEDGER OWNS THE MORTAL PROMPT, this rail posts only the stun
   // half. The ledger closes AFTER the last event of the application and offers the death save once, at
   // the tier the application FINISHED on (combat/severity-batch.js) — which is the whole point of the
   // batch cadence: the first shell of a corridor no longer fixes the tier the whole burst is judged at.
   // A caller that hands in the plain Set this rail used to take keeps the old once-per-body rule below,
   // so nothing that predates the ledger changes.
-  if (severityBatchOwnsMortal(batch)) { await postStunSavePrompt(actor, tok); return; }
+  if (severityBatchOwnsMortal(batch)) return;   // the ledger owns BOTH halves — recorded above, posted at its close
   // ⭐ AT MORTAL, BOTH — and that is a correction, not a new rule (user ruling: "both"). The single-
   // target rail has always posted the pair here (save-rolls.js `postSavePrompts`, on p.99's reading:
   // the stun save governs whether the body stays on its feet, the death save whether it survives at
@@ -2239,7 +2280,9 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
     legacySet?.add(body);
     await postDeathSavePrompt(actor, tok);
   }
-  await postStunSavePrompt(actor, tok);
+  // Consciousness is a separate question with a separate answer, so it goes out either way — but only
+  // on this un-ledgered path. A severity ledger recorded it at the top and posts it at its close.
+  if (!ledger) await postStunSavePrompt(actor, tok);
 }
 
 /** Apply one area-effect hit to a token's actor through the normal pipeline (GM-side, direct).
@@ -2256,7 +2299,7 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
  * applies (N shells = N banded rolls = N trips through the armour pipeline). */
 async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null, coverSP = 0) {
   const { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
-          stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula } = payload;
+          stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula, dotFlat } = payload;
   if (!tok?.actor || dmg <= 0) return 0;
   const loc = (await rollLocation(tok.actor, null)).areaHit;
   // ⭐ THE IMPACT AUDIO, ONCE PER ROUND — NOT ONCE ON ARRIVAL AND AGAIN ON CONFIRM. When the pattern
@@ -2294,6 +2337,11 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
   const rider = { stunSaveOnHit: Boolean(stunSaveOnHit), stunSaveMod: Number(stunSaveMod ?? 0),
                   dotEnabled: Boolean(dotEnabled), dotTurns: Number(dotTurns ?? 0),
                   dotType: String(dotType || "acid"), dotDamageFormula: String(dotDamageFormula || "1d6"),
+                  // Whether that tick's multiplier diminishes travels WITH it — a rider carrying four
+                  // of the five statements about one burn seeds a state that burns on the wrong ladder.
+                  // Same defensive coercion as the rest: a caller that never carried it passes false,
+                  // which is the halving the tick has always applied.
+                  dotFlat: Boolean(dotFlat),
                   weaponName: String(weaponName || "") };
   // A shock rider counts only where the round got through and did not land in a limb's own structure —
   // the same reading the single-target flow applies (RAW: no shock through a cyberlimb).
@@ -2363,7 +2411,16 @@ function _hookExplosion() {
 
   Hooks.on("cyberpunk2020.weaponFired", async (payload) => {
     if (!enabled()) return;
-    if (!_effectTypesOf(payload).includes("Explosive")) return;
+    // ⭐ THE DOOR IS WIDER THAN `effectTypes` SINCE 2026-08-27, and this is the whole of item ① of the
+    // grenade unit: everything below — the confirm card, the grenade-table scatter, the falloff
+    // ladder, the cover charging — is untouched. What changed is only WHICH payloads walk in.
+    //
+    // The flow was reachable ONLY by a loaded round declaring `effectTypes: ["Explosive"]`, which is
+    // right for an explosive CARTRIDGE and wrong for a weapon that IS its own warhead. Every grenade
+    // in the shipped catalogue is such a weapon — no ammo item, no effect types, `attackType:
+    // "Grenade"` — so a thrown Fragmentation Grenade resolved as an ordinary single-target shot and
+    // detonated nowhere. Same for the launchers. One predicate, both halves of the either/or.
+    if (!payloadDetonates(payload)) return;
     // weaponFired fires only on the firing client; placing the blast needs the GM. The primary GM
     // SESSION places it directly; anyone else (a player, another GM, or this GM's other tab) relays
     // to it. Mirrors _hookSuppressiveFire. Without this a player's grenade produced no blast.
@@ -2392,16 +2449,61 @@ async function _placeExplosion(payload) {
     }
     if (cx === null) return;
 
+    // ⭐ WHAT KIND OF DELIVERY THIS IS, resolved once and read twice below — by the missed-warhead
+    // roll and by the radius fallback. Null for an ordinary explosive round, which is what leaves both
+    // of them exactly as they were.
+    const delivery = areaDeliveryOf(payload);
+
     // Base blast damage = the rolled weapon damage carried in areaDamages.
     let baseDamage = 0;
     for (const hits of Object.values(payload.areaDamages ?? {})) {
       for (const h of (hits ?? [])) baseDamage += Number(h.damage ?? h.dmg) || 0;
     }
-    const radius = Number(payload.blastRadius) || 0;
+    // ⭐⭐ A MISSED WARHEAD STILL GOES OFF — the OTHER HALF of the page this flow is built on, and the
+    // half a thrown grenade needs (2026-08-27). CP2020 p.108, verbatim:
+    //
+    //   "Attacks are made as with other ranged weapons, with the center of the area effect falling on
+    //    the designated target, and anything within the area of effect taking damage as well. If the
+    //    target is missed, the true center of the attack must be determined."
+    //
+    // The base system rolls a weapon's damage ONLY on a hit (item.js `__semiAuto`: `areaDamages` is
+    // filled inside `if (attackHits)`), which is right for a bullet and wrong for a grenade: a thrown
+    // warhead that missed has not vanished, it has landed somewhere else — which is exactly what the
+    // grenade table and this card's own Scatter button are for. Without this, a missed throw reached
+    // here with a zero and returned, so it produced no area, no card and no scatter: the referee was
+    // never offered the roll the page prescribes.
+    //
+    // ⛔ DELIVERY WEAPONS ONLY, and the gate is the shared derivation. An explosive ROUND behaves
+    // exactly as it always has — its damage is the cartridge's and the base rolled it, or did not.
+    // ⛔ ROLLED ONCE, HERE, AND ONLY WHEN THE CARD CARRIED NOTHING. A hit never reaches this line, so
+    // nothing can be rolled twice for one throw.
+    // ⏪ REVERT is this block: delete it and a missed delivery goes back to producing no blast at all.
+    if (baseDamage <= 0 && delivery) baseDamage = await _rollDeliveryWarhead(payload);
+    // ⭐ THE AREA OF EFFECT. The payload's own `blastRadius` first — a loaded round with a radius typed
+    // on it, or an item a GM has stated, is answered with THEIR number. A delivery weapon that carries
+    // none (every grenade and launcher in the shipped packs) falls to the book's own row for its kind:
+    // CP2020 p.99's AREA EFFECT TABLE, cited verbatim at combat/area-delivery.js together with the ONE
+    // glyph in that table this rig's text layer cannot settle. Nothing else supplies a radius, so a
+    // payload that is neither a delivery weapon nor an explosive round still resolves to 0 and returns
+    // exactly as it always did.
+    const radius = Number(payload.blastRadius) || delivery?.radiusM || 0;
     if (baseDamage <= 0 || radius <= 0) return;
 
     const weaponName = payload.weaponName ?? localize("WpnExplosion");
-    const fullWithin = Number(payload.blastFullDamageWithin ?? 1);
+    const fullWithin = Number(payload.blastFullDamageWithin ?? AREA_DELIVERY_FULL_WITHIN_M);
+
+    // ⏱ THE AREA AND ITS CARD ARRIVE WHEN THE OBJECT DOES — not when the trigger was pulled.
+    //
+    // A delivered warhead is on screen for a second or more before it lands (fx/effects.js draws the
+    // lob and the launch on the rail's visual-impact clock), so creating the circle at fire time put a
+    // blast area on the map while the grenade was still in the air and asked the referee to confirm a
+    // detonation that had not visibly happened. The wait is the rail's own completion signal — the
+    // same call the declared corridor makes before posting ITS card (`_placeSpreadZone`), which is the
+    // signal on the client that drew the shot and the honest arithmetic floor on a client that did not
+    // (a player's throw relayed here). Nothing can be parked by it: `presentationSettled` races its
+    // own cap either way, and a payload the rail refuses to draw falls straight to the arithmetic.
+    // An ordinary explosive ROUND waits out its own (much shorter) presentation the same way.
+    await presentationSettled(payload);
     // Create via the core-agnostic shim (MeasuredTemplate circle on v13, Region ellipse on v14).
     // originX/originY are stored in flags so _confirmExplosion can compute falloff distances even
     // on v14 where a Region has no top-level x/y.
@@ -2431,6 +2533,36 @@ async function _placeExplosion(payload) {
       content: explosionCard,
       speaker: ChatMessage.getSpeaker({ actor: firingActorOf(payload) ?? undefined }),
     });
+}
+
+/**
+ * ROLL A DELIVERED WARHEAD'S OWN DAMAGE — used only when the shot MISSED and the base therefore rolled
+ * nothing (see the p.108 citation at the call site). Returns 0 when it cannot answer honestly.
+ *
+ * ⛔ THE FORMULA IS THE WEAPON'S OR ITS ROUND'S, never invented. A grenade IS its warhead and carries a
+ * rollable damage of its own; a launcher's is the round it fires, resolved through the same
+ * `warheadDamageFor` ladder the attack gesture's guard uses — the loaded round, else the standard one —
+ * so one throw cannot be priced two ways and an EMPTY tube's default round still detonates where it
+ * lands on a miss. A weapon this cannot resolve — a relayed payload naming an item this client does not
+ * hold — answers 0, and the caller then behaves exactly as it did before this existed: no area, no card.
+ *
+ * The weapon is resolved through the presentation rail's own lookup because it already handles the
+ * two hard cases this needs (an id-first match, and an UNLINKED token's actor carrying items the base
+ * actor does not); re-deriving it here is how a goon's own grenade stops resolving on the GM's client.
+ */
+async function _rollDeliveryWarhead(payload) {
+  try {
+    const weapon = resolveFiredWeapon(payload, actorForPayload(payload));
+    if (!weapon) return 0;
+    const own = String(weapon._getWeaponSystem?.()?.damage ?? weapon.system?.damage ?? "").trim();
+    const formula = damageFormulaIsRollable(own) ? own : await warheadDamageFor(weapon);
+    if (!formula) return 0;
+    const roll = await new Roll(formula, weapon.actor?.getRollData?.() ?? {}).evaluate();
+    return Math.max(0, Math.floor(Number(roll.total) || 0));
+  } catch (err) {
+    console.warn("CP2020 | could not roll the delivered warhead's own damage", err);
+    return 0;
+  }
 }
 
 /** Detonate a confirmed blast: damage every token in the template with range-banded falloff. */
@@ -2966,6 +3098,11 @@ export async function _placeSpreadZone(payload) {
         stunSaveOnHit: Boolean(payload.stunSaveOnHit), stunSaveMod: Number(payload.stunSaveMod ?? 0),
         dotEnabled: Boolean(payload.dotEnabled), dotTurns: Number(payload.dotTurns ?? 0),
         dotType: String(payload.dotType || "acid"), dotDamageFormula: String(payload.dotDamageFormula || "1d6"),
+        // The fifth statement about the same burn — whether its multiplier diminishes. Stored for the
+        // reason the four above it are: the pattern OUTLIVES the payload, and the shells that land at
+        // confirm time seed their burn from what the region recorded. A corridor placed before this
+        // field existed reads false, i.e. the halving that shipped before.
+        dotFlat: Boolean(payload.dotFlat),
         // Recorded with them because it is the same contract (seam-shim AMMO_EFFECT_FIELDS) and a
         // pattern that carries five of a load's six statements is a pattern nobody can read back. No
         // damage path in this flow consults it today — the explosive branch is a different flow, and it

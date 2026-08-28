@@ -1,5 +1,5 @@
 import { formulaHasDice } from "../dice.js";
-import { localize, tryLocalize } from "../utils.js";
+import { localize, tryLocalize, cappedWoundDamage } from "../utils.js";
 import { canShop } from "../settings.js";
 import { createCyberpunkChatMessage, getPublicMessageMode, rollToCyberpunkChatMessage, renderChatCard } from "../compat.js";
 import { correctionFor, applyCorrectionToItemData, markCorrectionApplied } from "../data-corrections.js";
@@ -91,7 +91,10 @@ async function rollSurgicalDamage(actor, formula) {
   if (dmg > 0) {
     const current = Number(actor.system?.damage) || 0;
     // fromCyberpunkDamageSystem suppresses the updateActor save-prompt hook — surgery isn't combat.
-    await actor.update({ "system.damage": current + dmg }, { fromCyberpunkDamageSystem: true });
+    // Clamped to the track's last box like every other wound-track writer (utils `cappedWoundDamage`,
+    // 2026-08-27): a botched install must not be able to push a patient onto a wound state the table
+    // prints no row for.
+    await actor.update({ "system.damage": cappedWoundDamage(current + dmg) }, { fromCyberpunkDamageSystem: true });
   }
   return { dmg, roll };
 }

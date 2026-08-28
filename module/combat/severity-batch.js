@@ -17,8 +17,20 @@
  *     walked ("7 hits: Light → Serious → Mortal 2 → Mortal 6") plus one line per zone outcome.
  *   - ONE mortal-save prompt per body per application, at the FINAL tier the batch reached — not one
  *     per hit, and not at a tier the batch has already passed.
- *   - STUN prompts are NOT this file's business. They stay exactly where they are, on the per-damage-
- *     event cadence the printed rule gives them (CP2020 p.104: "every time a character takes damage").
+ *   - ⭐ ONE STUN SAVE per body per application, at the wound state the batch FINISHED on (user ruling
+ *     2026-08-27). ⏪ THIS REVERSES THE LINE THAT STOOD HERE, which read "stun prompts are NOT this
+ *     file's business — they stay on the per-damage-event cadence". The preserved alternative, kept
+ *     verbatim because it is what the book actually prints: CP2020 p.104, *"Every time a character
+ *     takes damage, he must make a save."* Read strictly that is a per-event prompt, and it is the
+ *     reading this file shipped with. What the table met is the other half of the same page: the book
+ *     resolves a burst's HITS individually but never asks a per-BULLET save, and a corridor of shells
+ *     produced a run of stun cards for one trigger pull — each of them priced at a wound state the
+ *     application had already moved past by the time anyone read it (measured on the rig: four prompts
+ *     for one corridor, the first of them printing "Serious" for a body that finished at Mortal 4).
+ *     So the stun half now keeps the same clock as the mortal half: one attack, one save, at the state
+ *     the attack left the body in. A single-event application is unaffected — it asked for one before
+ *     and asks for one now — which is why nothing about the per-event reading is lost for the case the
+ *     printed sentence is plainly about.
  *
  * COMPATIBILITY IS THE DEFAULT. A batch that recorded ONE damage event replays that event's own card
  * verbatim — the same template, the same data, the same look as before this file existed — so every
@@ -38,7 +50,7 @@
 
 import { renderChatCard } from "../compat.js";
 import { localize, localizeParam } from "../utils.js";
-import { postDeathSavePrompt, woundStateLabel } from "./save-rolls.js";
+import { postDeathSavePrompt, postStunSavePrompt, woundStateLabel } from "./save-rolls.js";
 
 const SCOPE = "cp2020-augmented";
 
@@ -97,6 +109,20 @@ export function severityBatchHandledMortal(batch, actor, token = null) {
   return !!batch.bodies.get(severityBodyKey(actor, token))?.mortalHandled;
 }
 
+/**
+ * Did the batch already deliver this body's consciousness check?
+ *
+ * The mirror of the mortal query above, for a caller whose own tail runs AFTER `closeSeverityBatch`
+ * and must not post a second stun card over the one the close just delivered. `stunOwed` is set by
+ * `recordSeverityStun` and consumed at the close, so reading it after the close is reading "the
+ * ledger dealt with it". A caller that recorded nothing gets false and keeps its own cadence, which
+ * is every path that hands this batch in without ever calling `recordSeverityStun`.
+ */
+export function severityBatchHandledStun(batch, actor, token = null) {
+  if (!isSeverityBatch(batch)) return false;
+  return !!batch.bodies.get(severityBodyKey(actor, token))?.stunOwed;
+}
+
 function entryFor(batch, actor, token) {
   const key = severityBodyKey(actor, token);
   let entry = batch.bodies.get(key);
@@ -111,6 +137,7 @@ function entryFor(batch, actor, token) {
       forcedMortalLevel: 0,
       mortalHandled: false,
       mortalLevel: 0,
+      stunOwed: false,      // ⭐ at least one event of this application asked for a consciousness check
     };
     batch.bodies.set(key, entry);
   }
@@ -130,6 +157,27 @@ export function recordSeverityHit(batch, { actor, token = null, netDamage = 0, w
   entry.applied += Math.max(0, Number(netDamage) || 0);
   const ws = (woundState === null) ? (actor.woundState?.() ?? 0) : (Number(woundState) || 0);
   entry.steps.push(ws);
+}
+
+/**
+ * ⭐ RECORD THAT THIS BODY OWES A STUN SAVE for this application (user ruling 2026-08-27).
+ *
+ * Called instead of posting, from the one rail that used to post per event
+ * (`_postWoundSavePrompts`, combat/damage-hooks.js). Deliberately records nothing about WHICH state
+ * the event reached: the prompt is priced at the close, off the body's own final wound state, which is
+ * the whole of the ruling — a shell that walked a figure from Light to Mortal 4 must not leave a card
+ * asking for a Light save behind it.
+ */
+export function recordSeverityStun(batch, { actor, token = null } = {}) {
+  if (!isSeverityBatch(batch) || !actor) return;
+  entryFor(batch, actor, token).stunOwed = true;
+}
+
+/** Does this batch own the STUN prompt for its callers? Any real ledger does — unlike the mortal half,
+ *  which only the four apply-loop owners claim, every batched application is one attack and therefore
+ *  one save. A caller handed no batch (or the legacy plain Set) keeps the per-event cadence. */
+export function severityBatchOwnsStun(batch) {
+  return isSeverityBatch(batch);
 }
 
 /**
@@ -180,7 +228,9 @@ export async function closeSeverityBatch(batch) {
 }
 
 async function closeSeverityBody(batch, entry) {
-  if (entry.hits === 0 && entry.zoneEvents.length === 0) return;
+  // `stunOwed` joins the guard: an entry that recorded nothing but a consciousness check still has a
+  // prompt to deliver, and dropping out here would swallow the very card this ledger now owns.
+  if (entry.hits === 0 && entry.zoneEvents.length === 0 && !entry.stunOwed) return;
   const actor = entry.actor;
   const token = entry.token ?? null;
 
@@ -233,6 +283,11 @@ async function closeSeverityBody(batch, entry) {
     await ChatMessage.create({ content, speaker: ChatMessage.getSpeaker({ actor }) });
   }
 
-  // ── the prompt, after the card that explains it ─────────────────────────────────────────────────
+  // ── the prompts, after the card that explains them ──────────────────────────────────────────────
+  // Death first, then consciousness — the single-target rail's own order (save-rolls.js
+  // `postSavePrompts`, on p.99's reading: the more urgent question is the one a reader should meet
+  // first). Both are offered ONCE for the application, and the stun prompt reads the body's own wound
+  // state at THIS moment, which is the state the application finished on.
   if (prompting) await postDeathSavePrompt(actor, token, level);
+  if (entry.stunOwed) await postStunSavePrompt(actor, token);
 }

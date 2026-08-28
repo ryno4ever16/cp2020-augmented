@@ -1,5 +1,5 @@
 import { onGlobalClick } from "../popout-compat.js";
-import { localize, localizeParam, resolveActorRef } from "../utils.js";
+import { localize, localizeParam, resolveActorRef, cappedWoundState } from "../utils.js";
 import { renderChatCard } from "../compat.js";
 import { markCardResolved } from "../card-lock.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
@@ -196,10 +196,18 @@ export async function applyAcidDotState(target, location, turnsLeft, formula) {
  * The flag is mirrored onto core's `burning` on the way in (mirrorDotStatus); the per-turn tick in
  * damage-hooks.js takes it off again when the last marker expires.
  */
-export async function applyFireDotState(target, location, turnsLeft, formula) {
+export async function applyFireDotState(target, location, turnsLeft, formula, flat = false) {
   const mode = (() => { try { return game.settings.get("cp2020-augmented", "fireDotStackMode"); } catch { return "stack"; } })();
-  // mult halves each surviving turn so a burn diminishes: RAW API is 1d6 then 1d6/2 (Chromebook 2).
-  const newEntry = { location, turnsLeft: Number(turnsLeft), formula: String(formula || "1d6"), mult: 1 };
+  // `mult` is the tick's multiplier. By default it HALVES each surviving turn so the burn diminishes —
+  // the Armor-Piercing Incendiary load's model (1d6, then 1d6/2), generalized from the CP2020 p.110
+  // flamethrower ladder.
+  //
+  // ⭐ `flat` IS THE OPT-OUT, and it is carried per marker rather than read from a setting because it is
+  // a fact about the ROUND that started this burn, not about the table. CP2020 p.64 prints the grenade's
+  // own figure with no decay — "Incendiary (4D6 for 3 turns)" — so a marker seeded from that round keeps
+  // its multiplier at 1 for every turn it lasts, while a marker seeded from anything else halves exactly
+  // as it always has. Two burns on the same figure, one from each source, tick on their own ladders.
+  const newEntry = { location, turnsLeft: Number(turnsLeft), formula: String(formula || "1d6"), mult: 1, flat: !!flat };
 
   if (mode === "reset") {
     await target.setFlag("cp2020-augmented", "fireDotState", [newEntry]);
@@ -213,8 +221,10 @@ export async function applyFireDotState(target, location, turnsLeft, formula) {
   if (mode === "stack") {
     const idx = states.findIndex(s => s.location === location);
     if (idx >= 0) {
-      // Re-ignite: extend duration and restore full intensity at this location.
-      states[idx] = { location, turnsLeft: states[idx].turnsLeft + Number(turnsLeft), formula: String(formula || "1d6"), mult: 1 };
+      // Re-ignite: extend duration and restore full intensity at this location. The INCOMING round's
+      // ladder is the one the extended marker burns on — re-igniting with a flat round makes the whole
+      // remaining burn flat, and re-igniting with an ordinary one puts it back on the halving ladder.
+      states[idx] = { location, turnsLeft: states[idx].turnsLeft + Number(turnsLeft), formula: String(formula || "1d6"), mult: 1, flat: !!flat };
     } else {
       states.push(newEntry);
     }
@@ -244,7 +254,9 @@ export async function applyDotFromPayload(target, location, src, penetrated = tr
     // penetrates"). An unarmored target always counts as penetrated, so they always catch fire.
     if (!penetrated) return;
     const on = (() => { try { return game.settings.get("cp2020-augmented", "fireDotEnabled"); } catch { return true; } })();
-    if (on) await applyFireDotState(target, location, turns, formula);
+    // The round's own ladder rides through with its formula and its duration. A payload from before the
+    // field existed passes undefined, which coerces to the halving that has always been the default.
+    if (on) await applyFireDotState(target, location, turns, formula, Boolean(src.dotFlat));
   } else {
     const on = (() => { try { return game.settings.get("cp2020-augmented", "acidArmorDotEnabled"); } catch { return true; } })();
     if (on) await applyAcidDotState(target, location, turns, formula);
@@ -266,9 +278,18 @@ export async function updateTaserState(actor, payload) {
  * Floored at 1. Reduced by cumulative taser penalty.
  */
 export function getStunThreshold(actor) {
-  const base = actor.stunThreshold
+  // ⭐ DERIVED FROM THE CAPPED STATE (2026-08-27 — utils `cappedWoundState`). The base's own
+  // `stunThreshold()` is `BT − woundState() + 1`, and `woundState()` has no ceiling, so a figure
+  // carrying banked damage from a build before the write clamp produced a threshold hundreds below
+  // zero. It was floored to 1 here and so never printed wrong — but the PENALTY built from the same
+  // uncapped number did print wrong (reported at 94), and the two must be built from one reading.
+  // The base's own method still answers whenever the state is inside the table, so a base that
+  // overrides it keeps winning for every figure a table will ever actually have.
+  const raw = Number(actor?.woundState?.() ?? 0) || 0;
+  const ws  = cappedWoundState(actor);
+  const base = (actor.stunThreshold && raw === ws)
     ? Math.max(1, actor.stunThreshold())
-    : Math.max(1, (Number(actor.system?.stats?.bt?.total) || 0) - (actor.woundState?.() ?? 0) + 1);
+    : Math.max(1, (Number(actor.system?.stats?.bt?.total) || 0) - ws + 1);
   return Math.max(1, base - _getTaserPenalty(actor));
 }
 
@@ -303,7 +324,11 @@ function getTokenId(actor) {
 }
 
 export async function postStunSavePrompt(actor, token = null) {
-  const woundState   = actor.woundState?.() ?? 1;
+  // ⭐ THE CAPPED STATE IS WHAT THIS CARD IS BUILT FROM (2026-08-27 — utils `cappedWoundState`). The
+  // wound LABEL was already clamped to Mortal 6 inside `woundStateLabel`; the penalty line beside it
+  // was not, so one card printed "Mortal 6" and "− 94 (wound penalty)" at the same time. Both halves
+  // now read the same number, and it is the last row the table defines.
+  const woundState   = actor.woundState ? cappedWoundState(actor) : 1;
   const threshold    = getStunThreshold(actor);
   const bt           = Number(actor.system?.stats?.bt?.total) || 0;
   const penalty      = woundState > 1 ? woundState - 1 : 0;
