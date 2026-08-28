@@ -16,9 +16,11 @@
  *
  * State legibility is COLOR + CARDS, zero custom canvas rendering: the module drives the region
  * color through three bands (intact amber → chewed orange → destroyed gray) and posts a chew
- * card on every debit. Placement is native-first (the radiation lesson): the GM scene tool spawns
- * a small ready-made cover region from the book preset table at the view center, then the native
- * Region tools reshape/move/delete it — or the GM hand-authors a Region and adds the behavior.
+ * card on every debit. Placement is native-first (the radiation lesson): the GM tool — which sits with
+ * the REGION controls, because a cover zone is a Region — takes the book preset's values, then hands the
+ * drawing back to the platform. The next region the GM draws with any native shape tool becomes that
+ * cover, geometry untouched. (Or the GM hand-authors a Region and adds the behavior; or an API caller
+ * uses `placeCoverZone`, which still drops a ready-made rectangle at the view centre.)
  *
  * Writes (chew) are active-GM gated with a socket relay for non-GM appliers — the same rail as
  * every other zone write in the module.
@@ -1089,6 +1091,127 @@ export async function placeCoverZone({ scene, label, sp, poolMax } = {}) {
   return region ?? null;
 }
 
+/* ══════════════════ Draw-arming: the GM draws the shape, the module writes the data ══════════════════
+ *
+ * ⭐ THE PLACEMENT GESTURE (2026-08-28, user order). What this replaces: the dialog dropped a fixed
+ * 2 × 1 rectangle at the VIEW CENTRE, and the referee then had to go find it, switch to the region
+ * layer, select it, and drag it where the cover actually is. Every one of those steps is the platform's
+ * own draw gesture done backwards.
+ *
+ * What happens now: confirming the preset ARMS this client — "the next region you draw is this cover" —
+ * switches the UI to the Regions layer with a shape tool live, and says so. The referee draws the
+ * barrier wherever it stands, in whatever shape it is, with the native tool of their choice; the module
+ * then writes ITS half onto that document (name, band colour, ALWAYS visibility, the cover behavior with
+ * sp/pool) and touches the shape not at all.
+ *
+ * ⛔ THE SHAPE IS NEVER OURS. That is the file's standing principle — the module places DATA, the
+ * platform owns GEOMETRY — and this is the half that was missing: we used to author a rectangle nobody
+ * asked for. The write below names `name`, `color`, `visibility` and the behavior, and nothing else.
+ *
+ * The arming is ONE-SHOT and cheap to abandon: it disarms itself before it writes, a second dialog
+ * confirm re-arms with the new preset, and an arming that never fires costs nothing — no document was
+ * created, no pool was spent. It is torn down on a scene change (`canvasTearDown`) and is refused
+ * outright for a region drawn on a different scene or by a different user, so a stale arm cannot
+ * silently adopt somebody else's shape.
+ */
+
+/** The one live arming on this client (only ever one). Null when nothing is armed. */
+let _armedCover = null;
+
+/** Register the scene-teardown safety net exactly once (lazy — no init wiring needed). */
+let _armTearDownHooked = false;
+function _ensureArmTearDown() {
+  if (_armTearDownHooked) return;
+  _armTearDownHooked = true;
+  // Changing scene disarms: the arm names the scene it was made on, and an arm that outlived its
+  // canvas is a trap waiting for the next region drawn anywhere.
+  Hooks.on("canvasTearDown", () => { try { cancelCoverDrawArming(); } catch (_e) { /* already gone */ } });
+}
+
+/**
+ * Write the module's half onto a region the GM drew. ⛔ `shapes` is deliberately absent from the
+ * update — see the block comment above. Exported for the keeper.
+ */
+export async function applyCoverDataToRegion(region, { label, sp, poolMax } = {}) {
+  if (!region) return null;
+  const spN = Math.max(0, Math.round(Number(sp) || 0));
+  const pool = Math.max(0, Math.round(Number(poolMax) || 0));
+  await region.update({
+    name: String(label || "").trim() || localize("CoverZoneFallbackName"),
+    // A core-mode zone (structure 0) is INTACT permanent cover, not rubble — the same reading
+    // `placeCoverZone` applies, asked of the intact band explicitly rather than handed a zero.
+    color: pool > 0 ? coverBandColor(pool, pool) : coverBandColor(1, 1),
+    visibility: CONST?.REGION_VISIBILITY?.ALWAYS ?? 2,
+  });
+  await region.createEmbeddedDocuments("RegionBehavior", [{
+    type: COVER_ZONE_BEHAVIOR, system: { sp: spN, pool, poolMax: pool },
+  }]);
+  return region;
+}
+
+/**
+ * Arm this client: the next region THIS user draws on THIS scene becomes the described cover.
+ * Returns the armed state (by value, so the keeper can assert it) or null when it refused.
+ */
+export function armCoverDraw({ label, sp, poolMax } = {}) {
+  if (!game.user?.isGM) return null;
+  const sc = canvas?.scene;
+  if (!sc) { ui.notifications?.warn?.(localize("CoverDrawNoScene")); return null; }
+  // A second confirm RE-ARMS rather than stacking: one client, one pending cover.
+  cancelCoverDrawArming();
+  _ensureArmTearDown();
+
+  const state = {
+    sceneId: sc.id,
+    label: String(label || "").trim(),
+    sp: Math.max(0, Math.round(Number(sp) || 0)),
+    poolMax: Math.max(0, Math.round(Number(poolMax) || 0)),
+    hookId: null,
+  };
+  state.hookId = Hooks.on("createRegion", (doc, _options, userId) => {
+    // Somebody else's region is theirs, and a region on another scene is not what was armed.
+    if (userId !== game.user?.id) return;
+    if ((doc?.parent?.id ?? null) !== state.sceneId) return;
+    // ⛔ DISARM FIRST, then write: the one-shot has to be spent before any await, or a fast second
+    // draw during the write would find the arm still live and take it too.
+    cancelCoverDrawArming();
+    applyCoverDataToRegion(doc, state)
+      .then(() => ui.notifications?.info?.(localizeParam("CoverPlaced", { name: doc.name })))
+      .catch((e) => console.warn(`${SCOPE} | cover draw write failed`, e));
+  });
+  _armedCover = state;
+
+  // Put the referee where the drawing happens: the Regions control group with a shape tool live. Both
+  // calls are made because they answer different halves — `ui.controls.activate` moves the toolbar (and
+  // its own onChange activates the layer), `canvas.regions.activate` is the layer itself for a build
+  // whose control group is named or shaped differently. Neither is allowed to break the arming.
+  try {
+    // `activate` is async on v14 — its rejection has to be caught here or it escapes as an unhandled
+    // one and shows up as a console error in a run that is otherwise clean.
+    const act = ui.controls?.activate?.({ control: "regions", tool: "rectangle" });
+    if (act?.catch) act.catch((e) => console.warn(`${SCOPE} | region controls activation failed`, e));
+    canvas.regions?.activate?.();
+  } catch (e) {
+    console.warn(`${SCOPE} | region layer activation failed`, e);
+  }
+  ui.notifications?.info?.(localizeParam("CoverDrawArmed",
+    { name: state.label || localize("CoverZoneFallbackName") }));
+  return { ...state };
+}
+
+/** Cancel any live arming (exported for teardown / tests). Nothing was created, so nothing is undone. */
+export function cancelCoverDrawArming() {
+  if (!_armedCover) return false;
+  try { Hooks.off("createRegion", _armedCover.hookId); } catch (_e) { /* ignore */ }
+  _armedCover = null;
+  return true;
+}
+
+/** Is a cover draw armed on this client right now? Read by the keeper; nothing branches on it. */
+export function coverDrawArmed() {
+  return _armedCover ? { ..._armedCover } : null;
+}
+
 /** The preset-picker dialog behind the scene-control button. */
 export async function openCoverPlacementDialog() {
   const { DialogV2 } = foundry.applications.api;
@@ -1141,9 +1264,11 @@ export async function openCoverPlacementDialog() {
       }, { action: "cancel", label: localize("Cancel") }],
     });
     if (result && result !== "cancel") {
-      const region = await placeCoverZone(result);
-      if (region) ui.notifications?.info?.(localizeParam("CoverPlaced", { name: region.name }));
-      return region;
+      // ⭐ THE DIALOG ARMS, IT NO LONGER DROPS (2026-08-28). Confirming states WHAT the cover is; the
+      // referee then draws WHERE and WHAT SHAPE it is with the platform's own tools. `placeCoverZone`
+      // is still exported and still works — it is the API/keeper entry point for "place one at the
+      // view centre" — but the gesture a referee performs is the draw.
+      return armCoverDraw(result);
     }
     return null;
   } finally {
@@ -1152,23 +1277,31 @@ export async function openCoverPlacementDialog() {
 }
 
 /**
- * Add the Place-Cover tool to the token scene-control group (the df-active-lights idiom the
- * radiation tools use: augment an existing group, no bespoke canvas layer). GM-only; the tool IS
- * the opt-in. Exported pure-of-the-hook for the keeper.
+ * Add the Place-Cover tool to a scene-control group (the df-active-lights idiom the radiation tools
+ * use: augment an existing group, no bespoke canvas layer). GM-only; the tool IS the opt-in.
+ * Exported pure-of-the-hook for the keeper.
+ *
+ * ⭐ IT LIVES WITH THE REGION TOOLS (2026-08-28, user order: "if this control drops regions, why isn't
+ * it in the region section?"). A cover zone IS a Region — the button belongs beside the tools that draw
+ * them, not in the token group, and the group it now sits in is the one the arming switches to anyway.
+ * TOKENS IS THE FALLBACK, not a preference: on a build with no `regions` control group (an older core,
+ * or a user without REGION_CREATE, whose group is not rendered at all) the button keeps its old home
+ * rather than vanishing. Returns the group key it landed in so the keeper can assert it by value.
  */
 export function addCoverTool(controls) {
   if (!game.user?.isGM) return false;
-  const tokens = controls?.tokens;
-  if (!tokens?.tools) return false;
-  tokens.tools["cp-cover-place"] = {
+  const key = controls?.regions?.tools ? "regions" : (controls?.tokens?.tools ? "tokens" : null);
+  if (!key) return false;
+  const group = controls[key];
+  group.tools["cp-cover-place"] = {
     name: "cp-cover-place",
     title: localize("CoverPlaceTool"),
     icon: "fa-solid fa-shield-halved",
     button: true,
-    order: Object.keys(tokens.tools).length,
+    order: Object.keys(group.tools).length,
     onChange: () => openCoverPlacementDialog(),
   };
-  return true;
+  return key;
 }
 
 export function registerCoverTools() {

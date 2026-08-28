@@ -28,9 +28,11 @@ expands to a full math breakdown naming every SP source (armor layers, cover, AP
 
 ## 3. Cover (post-rework shape)
 
-- **Place cover:** scene tools → Place Cover → pick a preset ("Brick Wall [25]"…) or type your
-  own SP; structure defaults to 3×SP. Zones are drawn regions; **walls and doors** can carry
-  cover too, straight from the stock wall config.
+- **Place cover:** scene tools → **Regions** group → Place Cover → pick a preset ("Brick Wall
+  [25]"…) or type your own SP; structure defaults to 3×SP. Confirming arms the next region you
+  draw: the Region tools open, you draw the barrier's real shape with any of them (rectangle,
+  ellipse, polygon…), and the cover values are written onto what you drew. Draw nothing to
+  cancel. **Walls and doors** can carry cover too, straight from the stock wall config.
 - **It just works:** there is no enable setting — placing cover IS turning it on. When a shot's
   line crosses cover, the Apply window pre-fills it (editable; typed SP always wins).
 - **Cover wears down per bullet.** Every round chews the cover's structure; a long burst can

@@ -177,6 +177,182 @@ const res = await page.evaluate(async () => {
   ok("a typed Cover SP with no object debits nothing", !typedOnly[0]?.coverChew && cov.coverChewSummary(typedOnly) === null);
   await bare.delete();
 
+  /* ══════════════════ §7 the PLACEMENT GESTURE — where the button lives, and what it arms ══════════
+   * MECHANISM (2026-08-28, user order): the control drops REGIONS, so it belongs in the Regions control
+   * group; and confirming the preset no longer drops a fixed rectangle at the view centre — it ARMS the
+   * next region THIS user draws on THIS scene, and the module then writes only its own half onto that
+   * document. The shape is the referee's, start to finish.
+   *
+   * Every leg here is an OUTCOME: the group a real hook fire lands the tool in, the document a real
+   * draw produces, the shape that document kept, and what a second draw does NOT gain. */
+  {
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const drawn = [];
+    // A region the way the platform makes one: a shape the referee drew, no name of ours, no behavior.
+    const PTS = [1200, 1200, 1500, 1200, 1500, 1450, 1350, 1600, 1200, 1450];
+    const drawRegion = async (name = "Region") => {
+      const [r] = await scene.createEmbeddedDocuments("Region", [{
+        name, shapes: [{ type: "polygon", points: [...PTS] }],
+      }]);
+      drawn.push(r);
+      await sleep(500);
+      return r;
+    };
+    const behOf = (r) => r?.behaviors?.find(x => x.type === beh.COVER_ZONE_BEHAVIOR) ?? null;
+    const shapeIntact = (r) => {
+      const s = r?.shapes?.[0];
+      const pts = Array.from(s?.points ?? []);
+      return s?.type === "polygon" && pts.length === PTS.length && pts.every((v, i) => Number(v) === PTS[i]);
+    };
+
+    try {
+      /* ── (a) THE BUTTON'S HOME: the REGIONS group, by value, through the REAL hook ─────────────── */
+      const shape = () => ({
+        tokens: { name: "tokens", tools: { select: { name: "select", order: 0 } } },
+        regions: { name: "regions", tools: { select: { name: "select", order: 0 } } },
+      });
+      const full = shape();
+      Hooks.callAll("getSceneControlButtons", full);
+      ok("§7 the real control hook lands the cover tool in the REGIONS group",
+        !!full.regions.tools["cp-cover-place"],
+        `regions holds: ${Object.keys(full.regions.tools).join(", ")}`);
+      ok("§7 ⭐ and NOT in the token group any more",
+        !full.tokens.tools["cp-cover-place"],
+        `tokens holds: ${Object.keys(full.tokens.tools).join(", ")}`);
+      const landed = full.regions.tools["cp-cover-place"];
+      ok("§7 the landed tool is a momentary button with a localized title and an action of its own",
+        landed?.button === true && typeof landed?.title === "string" && !String(landed?.title).includes("CYBERPUNK.")
+        && typeof landed?.onChange === "function",
+        `button=${landed?.button} title="${landed?.title}" action=${typeof landed?.onChange}`);
+      ok("§7 the group's existing entries are left alone", !!full.regions.tools.select);
+      ok("§7 the placer names the group it chose, by value", cov.addCoverTool(shape()) === "regions");
+
+      // FALLBACK: a control collection with no regions group (older core / no REGION_CREATE) keeps the
+      // button rather than losing it.
+      const legacyControls = { tokens: { name: "tokens", tools: { select: { name: "select", order: 0 } } } };
+      ok("§7 FALLBACK — with no regions group the button keeps its old home",
+        cov.addCoverTool(legacyControls) === "tokens" && !!legacyControls.tokens.tools["cp-cover-place"]);
+
+      // NEGATIVE: not a referee, not a button.
+      const realIsGM = Object.getOwnPropertyDescriptor(game.user, "isGM");
+      Object.defineProperty(game.user, "isGM", { value: false, configurable: true });
+      const asPlayer = shape();
+      try { Hooks.callAll("getSceneControlButtons", asPlayer); }
+      finally {
+        if (realIsGM) Object.defineProperty(game.user, "isGM", realIsGM);
+        else Object.defineProperty(game.user, "isGM", { value: true, configurable: true });
+      }
+      ok("§7 NEGATIVE — firing the same real hook without the referee flag lands nothing",
+        !asPlayer.regions.tools["cp-cover-place"] && !asPlayer.tokens.tools["cp-cover-place"],
+        `regions: ${Object.keys(asPlayer.regions.tools).join(",")} tokens: ${Object.keys(asPlayer.tokens.tools).join(",")}`);
+      ok("§7 the referee flag was handed back", game.user.isGM === true);
+      ok("§7 the LIVE toolbar carries it under regions",
+        Object.keys(ui.controls?.controls?.regions?.tools ?? {}).includes("cp-cover-place"),
+        `live regions tools: ${Object.keys(ui.controls?.controls?.regions?.tools ?? {}).join(", ")}`);
+
+      /* ── (b) THE REAL GESTURE: the dialog's own confirm click arms the draw ────────────────────── */
+      const pending = cov.openCoverPlacementDialog();
+      let dlg = null;
+      for (let i = 0; i < 40 && !dlg; i++) { await sleep(150); dlg = document.querySelector(".application.cp-cover-place"); }
+      ok("§7 the placement dialog renders", !!dlg);
+      if (dlg) {
+        dlg.querySelector('input[name="cp-cover-label"]').value = "__PWK__Drawn Barrier";
+        dlg.querySelector('input[name="cp-cover-sp"]').value = "20";
+        dlg.querySelector('input[name="cp-cover-pool"]').value = "60";
+        ok("§7 the dialog states the draw step before the confirm, not after it",
+          /draw/i.test(dlg.querySelector(".cp-cover-place-body")?.textContent ?? ""),
+          (dlg.querySelector(".cp-cover-place-hint")?.textContent ?? "").slice(0, 60));
+        // GEOMETRY — the extra hint line grew the content; the window must still show all of it and
+        // still put its confirm within reach (a dialog that clips its own button is a dead control).
+        const confirmBtn = dlg.querySelector('button[data-action="place"]');
+        const cr = confirmBtn.getBoundingClientRect();
+        ok("§7 the confirm button is on screen and has real hit area",
+          cr.height > 0 && cr.width > 0 && cr.bottom <= window.innerHeight,
+          `h=${Math.round(cr.height)} w=${Math.round(cr.width)} bottom=${Math.round(cr.bottom)} vh=${window.innerHeight}`);
+        const clipped = [...dlg.querySelectorAll(".cp-cover-place-hint")]
+          .filter(p => p.scrollHeight > p.clientHeight + 1).length;
+        ok("§7 no hint line is clipped by the window it grew", clipped === 0, `clipped=${clipped}`);
+        // THE REAL DOM EVENT — the referee's own click on the confirm button.
+        dlg.querySelector('button[data-action="place"]').click();
+      }
+      const armedFromDialog = await pending;
+      ok("§7 ⭐ confirming ARMS the draw instead of dropping a region",
+        !!armedFromDialog && armedFromDialog.sp === 20 && armedFromDialog.poolMax === 60
+        && armedFromDialog.label === "__PWK__Drawn Barrier" && armedFromDialog.sceneId === scene.id,
+        JSON.stringify(armedFromDialog));
+      ok("§7 the client reports itself armed", !!cov.coverDrawArmed());
+      ok("§7 the confirm put the referee on the region layer with a draw tool live",
+        (ui.controls?.control?.name ?? ui.controls?.activeControl) === "regions" || canvas.regions?.active === true,
+        `control=${ui.controls?.control?.name ?? "?"} layerActive=${canvas.regions?.active}`);
+      const beforeCount = scene.regions.size;
+      ok("§7 ⛔ and NOTHING was created by the confirm itself", beforeCount === scene.regions.size);
+
+      /* ── (c) THE DRAW: the next region drawn becomes that cover, shape untouched ───────────────── */
+      const first = await drawRegion();
+      const fb = behOf(first);
+      ok("§7 ⭐ the drawn region gained the cover behavior with the stated structure, by value",
+        fb?.system?.sp === 20 && fb?.system?.pool === 60 && fb?.system?.poolMax === 60,
+        JSON.stringify({ sp: fb?.system?.sp, pool: fb?.system?.pool, poolMax: fb?.system?.poolMax }));
+      ok("§7 it gained the stated name, ALWAYS visibility and the intact band colour",
+        first.name === "__PWK__Drawn Barrier"
+        && first.visibility === (CONST?.REGION_VISIBILITY?.ALWAYS ?? 2)
+        && String(first.color?.css ?? first.color).toLowerCase() === "#d1a054",
+        `${first.name} / ${first.visibility} / ${first.color?.css ?? first.color}`);
+      ok("§7 ⛔ THE SHAPE THE REFEREE DREW IS UNTOUCHED — five-point polygon, same points",
+        shapeIntact(first), JSON.stringify(first.shapes?.[0]?.points ?? null));
+      ok("§7 it is a real cover crossing the engine can see",
+        cov.coverZonesOn(scene).some(x => x.uuid === fb?.uuid && x.sp === 20));
+
+      /* ── (d) ONE-SHOT: the arming is spent, and a second draw gains nothing ────────────────────── */
+      ok("§7 the arming disarmed itself on the draw", cov.coverDrawArmed() === null);
+      const second = await drawRegion("__PWK__Plain Region");
+      ok("§7 ⭐ a SECOND region drawn after it gains nothing",
+        behOf(second) === null && second.name === "__PWK__Plain Region",
+        `${second.name} behaviors=${second.behaviors?.size ?? 0}`);
+
+      /* ── (e) THE SECOND ACT: arming again re-arms with the NEW values ──────────────────────────── */
+      const rearmed = cov.armCoverDraw({ label: "__PWK__Redrawn", sp: 5, poolMax: 0 });
+      ok("§7 a second arming takes the new preset", rearmed?.sp === 5 && rearmed?.poolMax === 0, JSON.stringify(rearmed));
+      const third = await drawRegion();
+      const tb = behOf(third);
+      ok("§7 the next draw takes the SECOND arming's values, not the first's",
+        tb?.system?.sp === 5 && tb?.system?.poolMax === 0 && third.name === "__PWK__Redrawn",
+        JSON.stringify({ sp: tb?.system?.sp, poolMax: tb?.system?.poolMax, name: third.name }));
+      ok("§7 a structure of zero is still placed INTACT, not as rubble",
+        String(third.color?.css ?? third.color).toLowerCase() !== "#555555",
+        String(third.color?.css ?? third.color));
+
+      /* ── (f) A SCENE CHANGE DISARMS — an arm cannot outlive the canvas it was made on ──────────── */
+      cov.armCoverDraw({ label: "__PWK__Stale", sp: 10, poolMax: 30 });
+      ok("§7 armed before the scene change", !!cov.coverDrawArmed());
+      Hooks.callAll("canvasTearDown");
+      await sleep(200);
+      ok("§7 ⭐ the scene change disarmed it", cov.coverDrawArmed() === null);
+      const orphan = await drawRegion("__PWK__After Teardown");
+      ok("§7 and a region drawn afterwards gains nothing",
+        behOf(orphan) === null && orphan.name === "__PWK__After Teardown",
+        `${orphan.name} behaviors=${orphan.behaviors?.size ?? 0}`);
+
+      /* ── (g) REGRESSION: the exported placer still drops one at the view centre ────────────────── */
+      const direct = await cov.placeCoverZone({ scene, label: "__PWK__Direct", sp: 10, poolMax: 30 });
+      drawn.push(direct);
+      const db = behOf(direct);
+      ok("§7 REGRESSION — placeCoverZone still places a ready-made rectangle with its values",
+        !!direct && direct.shapes?.[0]?.type === "rectangle"
+        && db?.system?.sp === 10 && db?.system?.poolMax === 30,
+        JSON.stringify({ shape: direct?.shapes?.[0]?.type, sp: db?.system?.sp, poolMax: db?.system?.poolMax }));
+    } catch (e) {
+      // ⛔ A SECTION THAT THROWS REPORTS AS ONE FAILED LEG, never as a lost run — this suite drives real
+      // documents and a real dialog, and a build missing a symbol it asks for must still let every other
+      // section report (which is also what makes a red-first pass against the pre-change serve readable
+      // rather than a single stack trace).
+      ok("§7 — section threw", false, e?.message ?? String(e));
+    } finally {
+      try { cov.cancelCoverDrawArming(); } catch (_e) {}
+      for (const r of drawn) await r?.delete?.().catch?.(() => {});
+    }
+  }
+
   // cleanup
   await scene.deleteEmbeddedDocuments("Token", [tok.id]);
   await actor.delete();

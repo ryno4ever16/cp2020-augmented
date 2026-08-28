@@ -1,5 +1,9 @@
-{{!-- Cover placement dialog: pick a book preset (Core "Common Cover SPs"), tune SP/structure,
-      place a ready-made region at the view centre — then reshape with the native Region tools.
+{{!-- Cover placement dialog: pick a book preset (Core "Common Cover SPs"), tune SP/structure, then
+      DRAW the cover on the map with the native Region tools — confirming arms the next region drawn.
+
+      ⭐ THE DIALOG STATES WHAT, THE DRAW STATES WHERE (2026-08-28). It used to drop a fixed rectangle
+      at the view centre for the referee to go and find; the draw step is the platform's own gesture,
+      and the second hint line below says so before the confirm rather than after it.
 
       ⭐ SAME DIEGETIC CONTRACT AS THE WALL FIELDSET (user ruling 2026-08-26): every field carries a
       SHORT book-tagged label and a plain-language `data-tooltip` naming the mechanism, the book and
@@ -11,6 +15,7 @@
       permanent Core p.103 cover instead. The hint below says so in as many words. --}}
 <div class="cp-cover-place-body">
     <p class="cp-cover-place-hint">{{CPLocal "CoverPlaceHint"}}</p>
+    <p class="cp-cover-place-hint">{{CPLocal "CoverPlaceDrawHint"}}</p>
     <p class="cp-cover-place-hint">{{CPLocal "CoverPlaceModeHint"}}</p>
     <div class="field">
         <label for="cp-cover-preset" data-tooltip="{{CPLocal 'CoverPresetTip'}}">{{CPLocal "CoverPresetName"}} <span class="cp-cover-book">{{CPLocal "CoverPresetBook"}}</span></label>
