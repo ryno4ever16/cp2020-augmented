@@ -34,6 +34,8 @@ import { deleteFieldUpdate, localizeParam } from "../utils.js";
 import { seatSlotPosition, placeBeside } from "./vehicle-seating.js";
 import { layoutFor, hullDimsOf, hasRecordedHull, frameSquareFor, hullRectIn, hullArtScale, DEFAULT_HULL } from "./vehicle-layout.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
+import { resolveVehicleFace, FACE_ACPA } from "./vehicle-face.js";
+import { mmEnabled } from "../settings.js";
 
 const SCOPE = "cp2020-augmented";
 const VEHICLE_SORT = -100;            // render below crew tokens
@@ -467,6 +469,98 @@ function nextFreeSeatIndex(scene, vehicleActorId, exceptTokenId = null, vehicleT
   return i;
 }
 
+/* ────────────────────────────────────────────────────────────────────────────────────────────────
+ * MOUNTING A POWERED-ARMOUR SUIT IS THE OPERATOR ASSIGNMENT (user ruling 2026-08-28)
+ *
+ * A suit's sheet carries `system.pilotId` — the character whose REF drives it, who takes the
+ * overflow damage, and whom the PA skill grant keys on. Until now that field was only ever set from
+ * the sheet's own dropdown, while the diegetic act — climbing into the thing — set nothing. Getting
+ * in IS the assignment now.
+ *
+ * ⭐ FIRST CLAIMANT ONLY. A suit holds one person in fiction, but it is a vehicle to every other
+ * mechanism here (seats, cover, the crew-follow coupling), so nothing refuses a second boarder. The
+ * protection is the FIELD instead: while it holds anybody, a later boarder rides and changes
+ * nothing. A field a GM filled in from the dropdown is equally untouchable, for the same reason —
+ * it already holds somebody.
+ *
+ * ⚠ THE CLEARING ON STEP-OUT IS AN EXTRAPOLATION, not the user's words (flagged for veto, batch of
+ * 2026-08-28). The symmetric reading is that a suit nobody is inside has no operator; the opposite
+ * reading is that the assignment is a piece of bookkeeping that outlives the ride. Only the person
+ * the field NAMES can clear it — a passenger stepping out never does.
+ *
+ * The write itself is the same one the sheet's dropdown makes: `system.pilotId` on the vehicle
+ * actor, through `Actor#update`, so the PA-skill grant hook (module/mech/pa-skills.js, which watches
+ * exactly that field on exactly that document) fires for a mount just as it does for a dropdown pick.
+ * ──────────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** Socket message type for the operator write a non-owning claimant cannot make for itself. */
+const ACPA_PILOT_RELAY = "vehicleAcpaPilot";
+
+/**
+ * Does this vehicle actor render the powered-armour face? Asked of the ONE resolver the sheet asks
+ * (vehicle-face.js), so "is this a suit" has a single answer — a catalog suit that derives the face
+ * without ever storing the pair is still a suit here. Falls back to the stored flag if the settings
+ * layer is not up yet, which is the same predicate every ACPA mechanic keys on.
+ */
+function _isPoweredArmourFace(vehicleActor) {
+  if (vehicleActor?.type !== `${SCOPE}.vehicle`) return false;
+  try {
+    let mmOn = false;
+    try { mmOn = mmEnabled(); } catch (e) { /* settings not ready */ }
+    return resolveVehicleFace(vehicleActor, { mmOn }).face === FACE_ACPA;
+  } catch (e) {
+    return vehicleActor?.system?.isACPA === true;
+  }
+}
+
+/**
+ * The world actor a crew token stands for, or null. `actorId` rather than `token.actor.id`: an
+ * unlinked token's synthetic actor answers with the BASE actor's id (the documented id-collision
+ * class), and the field wants the world actor the sheet's own dropdown would have offered.
+ */
+function _crewWorldActor(crewTokenDoc) {
+  const id = crewTokenDoc?.actorId;
+  const actor = id ? game.actors?.get(id) : null;
+  return actor?.type === "character" ? actor : null;
+}
+
+/**
+ * Write (or clear) the operator field. A GM writes it directly; a player who does not own the suit
+ * cannot, so the request goes to the primary GM session over the module socket — the same split, the
+ * same gate and the same message shape as the crew-follow relay above, rather than a second
+ * permission path invented for this one field.
+ */
+async function _requestOperatorField(vehicleActor, claimantId, release) {
+  if (vehicleActor.canUserModify?.(game.user, "update")) {
+    await vehicleActor.update({ "system.pilotId": release ? "" : claimantId });
+    return;
+  }
+  if (game.users?.activeGM) {
+    game.socket.emit(`module.${SCOPE}`, {
+      type: ACPA_PILOT_RELAY, vehicleActorId: vehicleActor.id,
+      pilotActorId: claimantId, release: !!release, requesterId: game.user.id,
+    });
+  }
+}
+
+/** Boarding a suit whose operator field is empty puts the boarder in it. */
+async function claimOperatorSeat(vehicleActor, crewTokenDoc) {
+  if (!_isPoweredArmourFace(vehicleActor)) return;
+  const claimant = _crewWorldActor(crewTokenDoc);
+  if (!claimant) return;
+  if (String(vehicleActor.system?.pilotId ?? "")) return;    // taken — later boarders just ride
+  await _requestOperatorField(vehicleActor, claimant.id, false);
+}
+
+/** Stepping out of a suit clears the operator field — but only for the person it names. */
+async function releaseOperatorSeat(vehicleActor, crewTokenDoc) {
+  if (!_isPoweredArmourFace(vehicleActor)) return;
+  const claimant = _crewWorldActor(crewTokenDoc);
+  if (!claimant) return;
+  if (String(vehicleActor.system?.pilotId ?? "") !== claimant.id) return;
+  await _requestOperatorField(vehicleActor, claimant.id, true);
+}
+
 /**
  * Seat a crew token: flag it as riding, move it into its seat inside the vehicle's footprint,
  * draw it at BOARDED_SCALE, and make sure it sorts ABOVE the handle so the seat square selects
@@ -518,6 +612,10 @@ export async function boardVehicle(crewTokenDoc, vehicleActor, vehicleTokenDoc =
       && vehicleDoc.canUserModify?.(game.user, "update")) {
     await vehicleDoc.update({ sort: VEHICLE_SORT });
   }
+
+  // The seat is claimed; on a powered-armour suit that IS the operator assignment. Last, so a
+  // refused write cannot leave a boarder half-seated.
+  await claimOperatorSeat(vehicleActor, crewTokenDoc);
 }
 
 /**
@@ -560,6 +658,11 @@ export async function disembark(crewTokenDoc) {
     update.y = spot.y;
   }
   await crewTokenDoc.update(update, moduleRiderMove(crewTokenDoc, update));
+
+  // The suit this person was in — resolved from the flags READ ABOVE, before the update cleared
+  // them. Only the operator's own step-out empties the field (see the header's veto note).
+  const leftActor = vehicleDoc?.actor ?? (vehicleActorId ? game.actors?.get(vehicleActorId) : null);
+  if (leftActor) await releaseOperatorSeat(leftActor, crewTokenDoc);
 }
 
 /**
@@ -674,6 +777,28 @@ export function registerVehicleCanvasHooks() {
     if (scene && Array.isArray(data.updates) && data.updates.length) {
       await commitSeats(scene, data.updates);
     }
+  });
+
+  // GM-side relay for the operator field of a powered-armour suit a player boarded but does not own.
+  // ⛔ THE QUESTION IS ASKED AGAIN HERE, never trusted from the wire: two boarders can be in flight
+  // at once, so the claim is refused if the field has since been filled, and the release is refused
+  // unless the field still names the person stepping out. That makes the relay idempotent — a
+  // duplicate message is a no-op rather than a second, wrong write.
+  game.socket.on("module.cp2020-augmented", async (data) => {
+    if (data?.type !== ACPA_PILOT_RELAY) return;
+    if (!isPrimaryGMSession()) return;
+    const vehicleActor = data.vehicleActorId ? game.actors?.get(data.vehicleActorId) : null;
+    if (!vehicleActor || !_isPoweredArmourFace(vehicleActor)) return;
+    const claimantId = String(data.pilotActorId ?? "");
+    if (!claimantId || !game.actors?.get(claimantId)) return;
+    const held = String(vehicleActor.system?.pilotId ?? "");
+    if (data.release === true) {
+      if (held !== claimantId) return;
+      await vehicleActor.update({ "system.pilotId": "" });
+      return;
+    }
+    if (held) return;
+    await vehicleActor.update({ "system.pilotId": claimantId });
   });
 
   // Layout follows the sheet: when a vehicle actor's prototype-token size changes (the Footprint

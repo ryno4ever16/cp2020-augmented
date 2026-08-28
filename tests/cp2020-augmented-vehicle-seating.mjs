@@ -996,6 +996,150 @@ if (cloud.useRegions) {
   check("cloud carries the legacy gas flags (v13 path)", cloud.legacyFlagged === 1, String(cloud.legacyFlagged));
 }
 
+/* --------------------------------- Q. seat claim writes the suit's operator field (unit 2026-08-28) */
+/*
+ * The coupling under test: boarding a vehicle whose resolved sheet face is the powered-armour one
+ * writes that character into the sheet's own `system.pilotId` field — the FIRST claimant only —
+ * and the claimant stepping out clears it. Everything is asserted BY VALUE off the actor document,
+ * never off the sheet's rendered markup.
+ */
+
+const suit = await page.evaluate(async ({ sceneId, grid }) => {
+  const scene = game.scenes.get(sceneId);
+  const canvasMod = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-canvas.js`);
+  const faceMod = await import(`/modules/cp2020-augmented/module/vehicle/vehicle-face.js`);
+
+  // A powered-armour vehicle actor. A 2x2 hull is deliberate: the field under test is the operator
+  // link, so the second claimant needs a well-defined seat and the geometry must not be the story.
+  const suitActor = await Actor.create({
+    name: "__PW__Suit", type: "cp2020-augmented.vehicle",
+    system: { isACPA: true, str: 30, layout: { hullW: 2, hullH: 2 } },
+  });
+  const [suitTok] = await scene.createEmbeddedDocuments("Token", [{
+    name: "__PW__Suit", actorId: suitActor.id, actorLink: true, x: 100, y: 2400,
+    flags: { "cp2020-augmented": { vehicleHandle: true } },
+  }]);
+
+  const aActor = await Actor.create({ name: "__PW__OperatorA", type: "character" });
+  const bActor = await Actor.create({ name: "__PW__OperatorB", type: "character" });
+  const cActor = await Actor.create({ name: "__PW__OperatorC", type: "character" });
+  const mk = async (actor, x, y) => (await scene.createEmbeddedDocuments("Token", [{
+    name: actor.name, actorId: actor.id, actorLink: true, x, y, width: 1, height: 1,
+    texture: { src: "icons/svg/mystery-man.svg" },
+  }]))[0];
+  const aTok = await mk(aActor, 100, 2800);
+  const bTok = await mk(bActor, 300, 2800);
+  const cTok = await mk(cActor, 500, 2800);
+  for (let i = 0; i < 50 && !(canvas.tokens.get(aTok.id) && canvas.tokens.get(bTok.id)); i++) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  const faceResolved = faceMod.resolveVehicleFace(suitActor, { mmOn: false }).face;
+  const read = () => game.actors.get(suitActor.id).system?.pilotId ?? "";
+
+  const before = read();
+  await canvasMod.boardVehicle(scene.tokens.get(aTok.id), suitActor, suitTok);
+  await window.__pwSettle(scene.id, aTok.id);
+  const afterFirst = read();
+
+  await canvasMod.boardVehicle(scene.tokens.get(bTok.id), suitActor, suitTok);
+  await window.__pwSettle(scene.id, bTok.id);
+  const afterSecond = read();
+
+  // A rider who never held the field steps out: the claim must survive somebody else leaving.
+  await canvasMod.disembark(scene.tokens.get(bTok.id));
+  await window.__pwSettle(scene.id, bTok.id);
+  const afterOtherLeft = read();
+
+  // The holder steps out.
+  await canvasMod.disembark(scene.tokens.get(aTok.id));
+  await window.__pwSettle(scene.id, aTok.id);
+  const afterHolderLeft = read();
+
+  // Second act: the same gesture again on a now-empty field re-claims it.
+  await canvasMod.boardVehicle(scene.tokens.get(cTok.id), suitActor, suitTok);
+  await window.__pwSettle(scene.id, cTok.id);
+  const afterReclaim = read();
+  await canvasMod.disembark(scene.tokens.get(cTok.id));
+  await window.__pwSettle(scene.id, cTok.id);
+
+  // A field somebody has already filled in by hand (the sheet's own picker) is never overwritten.
+  await suitActor.update({ "system.pilotId": cActor.id });
+  await canvasMod.boardVehicle(scene.tokens.get(aTok.id), suitActor, suitTok);
+  await window.__pwSettle(scene.id, aTok.id);
+  const afterPreFilled = read();
+  // ...and a NON-holder stepping out of a pre-filled suit leaves it alone.
+  await canvasMod.disembark(scene.tokens.get(aTok.id));
+  await window.__pwSettle(scene.id, aTok.id);
+  const afterPreFilledLeave = read();
+  await suitActor.update({ "system.pilotId": "" });
+
+  // The negative: an ordinary vehicle has the same field on its data model and must never gain a
+  // value from a seat claim.
+  const plain = game.actors.getName("__PW__Ride");
+  const plainTok = scene.tokens.find(t => t.actorId === plain.id);
+  const plainBefore = plain.system?.pilotId ?? "";
+  await canvasMod.boardVehicle(scene.tokens.get(aTok.id), plain, plainTok);
+  await window.__pwSettle(scene.id, aTok.id);
+  const plainAfter = game.actors.get(plain.id).system?.pilotId ?? "";
+  await canvasMod.disembark(scene.tokens.get(aTok.id));
+  await window.__pwSettle(scene.id, aTok.id);
+
+  // Relay wiring: a claimant who cannot write the vehicle actor must hand the write to the primary
+  // GM session over the module socket rather than failing silently. Simulated by refusing the write
+  // permission for one call and recording what leaves the socket.
+  const emitted = [];
+  const origEmit = game.socket.emit.bind(game.socket);
+  const origModify = suitActor.canUserModify.bind(suitActor);
+  game.socket.emit = (...args) => { emitted.push(args); return origEmit(...args); };
+  suitActor.canUserModify = () => false;
+  let relayError = null;
+  try {
+    await canvasMod.boardVehicle(scene.tokens.get(aTok.id), suitActor, suitTok);
+    await window.__pwSettle(scene.id, aTok.id);
+  } catch (e) { relayError = String(e); }
+  suitActor.canUserModify = origModify;
+  game.socket.emit = origEmit;
+  const relayMsgs = emitted.map(a => a[1]).filter(m => m && typeof m === "object");
+  await canvasMod.disembark(scene.tokens.get(aTok.id));
+  await game.actors.get(suitActor.id).update({ "system.pilotId": "" });
+
+  return {
+    faceResolved, aId: aActor.id, bId: bActor.id, cId: cActor.id,
+    before, afterFirst, afterSecond, afterOtherLeft, afterHolderLeft, afterReclaim,
+    afterPreFilled, afterPreFilledLeave, plainBefore, plainAfter,
+    relayError, relayTypes: relayMsgs.map(m => m.type),
+    relayPayload: relayMsgs.find(m => /pilot/i.test(String(m.type ?? ""))) ?? null,
+  };
+}, setup);
+
+check("the suit fixture resolves to the powered-armour sheet face", suit.faceResolved === "acpa", suit.faceResolved);
+check("the operator field starts empty", suit.before === "", `"${suit.before}"`);
+check("first seat claim writes that character into the operator field (by value)",
+  suit.afterFirst === suit.aId, `field="${suit.afterFirst}" want="${suit.aId}"`);
+check("a second claimant does not displace the holder",
+  suit.afterSecond === suit.aId, `field="${suit.afterSecond}" want="${suit.aId}"`);
+check("a non-holder stepping out leaves the field alone",
+  suit.afterOtherLeft === suit.aId, `field="${suit.afterOtherLeft}" want="${suit.aId}"`);
+check("the holder stepping out clears the field",
+  suit.afterHolderLeft === "", `field="${suit.afterHolderLeft}"`);
+check("the field is claimable again after it is cleared (second act)",
+  suit.afterReclaim === suit.cId, `field="${suit.afterReclaim}" want="${suit.cId}"`);
+check("a hand-filled operator field is never overwritten by a seat claim",
+  suit.afterPreFilled === suit.cId, `field="${suit.afterPreFilled}" want="${suit.cId}"`);
+check("a non-holder stepping out of a hand-filled suit leaves it filled",
+  suit.afterPreFilledLeave === suit.cId, `field="${suit.afterPreFilledLeave}"`);
+check("an ordinary vehicle's operator field gains nothing from a seat claim",
+  suit.plainAfter === "" && suit.plainBefore === "", `before="${suit.plainBefore}" after="${suit.plainAfter}"`);
+check("a claimant who cannot write the vehicle actor relays the write instead of throwing",
+  suit.relayError === null, String(suit.relayError));
+check("that relay leaves over the module socket under its own message type",
+  !!suit.relayPayload, JSON.stringify(suit.relayTypes));
+check("the relayed message names the vehicle and the claimant by id",
+  suit.relayPayload?.vehicleActorId === undefined ? false
+    : (typeof suit.relayPayload.vehicleActorId === "string" && suit.relayPayload.pilotActorId === suit.aId),
+  JSON.stringify(suit.relayPayload));
+
 /* ------------------------------------------------------------------ cleanup */
 
 const cleaned = await page.evaluate(async ({ sceneId, activeBefore }) => {
