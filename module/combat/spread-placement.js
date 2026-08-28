@@ -11,16 +11,25 @@
  * a left click confirms the corridor → the ordinary modifiers window opens → the roll commits → the rail
  * draws along the confirmed corridor → the pattern resolves at the end of that presentation.
  *
- * ⭐ ONE WHEEL: SHIFT+wheel is the reach fine-tune, a metre a notch. The band label, the corridor's
- * width and the banded damage are all derived from the REACH, so the reach is the only thing there is
- * to nudge.
+ * ⭐⭐ NO WHEEL AT ALL: THE CURSOR IS THE REACH (user ruling 2026-08-28). Every notch of every wheel
+ * gesture on this preview is retired. What the pointer is over is where the corridor ends, full stop —
+ * one input, one answer, and the end of the beam is never out of step with the hand holding it.
  *
- * ⏪ THE PLAIN WHEEL USED TO SET THE WIDTH and it was RETIRED on 2026-08-16, because it had no book
- * behind it: the shotgun table (Core p.109) states one width per range band and the band edges are
- * fractions of the firing weapon's own range (p.99), so a corridor's width is a FUNCTION of where it is
- * pointed and not a free knob. What survives the retirement is everything the book does state — the
- * per-load `spreadWidth*` overrides an ammo item prints, and the `SPREAD_MIN_WIDTH_M` floor. The revert
- * is the removed handler, kept in one block at the wheel site below.
+ * ⏪ THE PLAIN WHEEL SET THE WIDTH and was retired 2026-08-16: the shotgun table (Core p.109) states one
+ * width per range band and the band edges are fractions of the firing weapon's own range (p.99), so a
+ * corridor's width is a FUNCTION of where it is pointed and not a free knob.
+ *
+ * ⏪⏪ THE SHIFT+WHEEL SET THE REACH and was retired 2026-08-28, on report: *"it takes the end of the
+ * beam out of sync with the cursor"*. Once the aim is placed by pointer, a second input that moves the
+ * same number can only disagree with the first. Both removed handlers are kept as reverts, in one block
+ * at the site the listener used to be armed from.
+ *
+ * ⭐ AND THE WEAPON'S RANGE IS A WALL. The corridor's reach is CLAMPED at the firing weapon's own full
+ * range: a cursor beyond it pins the corridor's end at the range and the readout says so. Past that
+ * point the band ladder simply saturates (`spreadBandSpec` continues the Long row forever), so before
+ * this a shooter could draw a forty-metre corridor out of a weapon that reaches twenty and nothing on
+ * screen said the shot was impossible. A caller that names no range keeps the un-clamped behaviour —
+ * see `specNow`.
  *
  * ⚠ THIS FILE SPENDS NOTHING. It is armed BEFORE any roll, so an Esc (or a right click) returns null and
  * the fire flow simply stops: no roll, no ammunition spent, no pattern planted. The magazine is only
@@ -175,11 +184,9 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   const state = {
     angleDeg: facingDeg,
     reachPx: metersToPixels(scene, 10),
-    // `reachBiasM` — metres added on top of the CURSOR distance, pushing the corridor's END past (or
-    // short of) where the pointer is. The band, the book's width and the banded damage all re-derive
-    // from the new reach, so this one moves the whole corridor. Per-aim: it lives on this object, which
-    // the gesture drops when it settles, so one shot's fine-tune never leaks into the next.
-    reachBiasM: 0,
+    // ⏪ `reachBiasM` stood here — metres added on top of the CURSOR distance by the shift wheel. Gone
+    // 2026-08-28 with the gesture that wrote it (see the wheel retirement below): the cursor's own
+    // distance is the reach and nothing adds to it.
     lastClientX: window.innerWidth / 2,
     lastClientY: window.innerHeight / 2,
   };
@@ -198,13 +205,31 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   const lineColor = Number(foundry.utils.Color.from(SPREAD_ZONE_LOOK.outlineColor));
 
   /** The corridor the current cursor position describes — the ONE derivation both halves read. The
-   *  weapon's own range goes in with the distance: the band edges are fractions of it (Core p.99), so
-   *  the same aim point is a different band out of a holdout than it is out of a long gun. */
+   *  weapon's own range goes in with the distance twice over: the band edges are fractions of it
+   *  (Core p.99), so the same aim point is a different band out of a holdout than out of a long gun —
+   *  and it is also the CEILING, so the corridor cannot be drawn past the reach the weapon has.
+   *
+   *  ⭐ THE CLAMP (2026-08-28). `askedM` is what the cursor asked for; `distM` is what the weapon can
+   *  answer. Beyond the range the band ladder saturates rather than stopping, so without this a cursor
+   *  dragged to forty metres out of a twenty-metre weapon drew a forty-metre corridor at the Long
+   *  band's width and damage, and the shot was silently impossible. `atMaxRange` is reported so the
+   *  readout can SAY the reach is pinned rather than leaving the shooter to notice the corridor stopped
+   *  following the pointer.
+   *
+   *  ⚠ A CALLER THAT NAMES NO RANGE IS UNCHANGED. `rangeM` is optional on this entry point (the keeper
+   *  arms previews without one, and so would any caller that does not know the weapon), and for those
+   *  the ceiling is simply absent — same reach, same band ladder's compat edges, same behaviour as
+   *  before this clamp existed. The clamp is an addition for callers that DO state a range, never a new
+   *  requirement to state one. */
   const specNow = () => {
-    const distM = Math.max(SPREAD_MIN_LENGTH_M, pixelsToMeters(scene, state.reachPx) + state.reachBiasM);
+    const askedM = Math.max(SPREAD_MIN_LENGTH_M, pixelsToMeters(scene, state.reachPx));
+    const capM = Number.isFinite(Number(rangeM)) && Number(rangeM) > 0
+      ? Math.max(SPREAD_MIN_LENGTH_M, Number(rangeM)) : null;
+    const distM = capM === null ? askedM : Math.min(askedM, capM);
+    const atMaxRange = capM !== null && askedM > capM;
     const { band, widthM } = spreadBandSpec(distM, widths, rangeM);
     return {
-      distM, band,
+      distM, band, atMaxRange, capM,
       widthM: Math.max(SPREAD_MIN_WIDTH_M, widthM),
       dmgFormula: spreadBandDamage(band, formulas),
     };
@@ -218,9 +243,17 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
     // ⏪ The readout used to append a "(house width)" mark when the retired width wheel had been turned.
     // With the wheel gone every width on screen is the book's own — the band's, or the load's printed
     // one — so there is nothing left to mark and the sentence is the plain one again.
-    readout.textContent = localizeParam("SpreadPreviewReadout", {
+    //
+    // ⭐ THE ONE MARK IT DOES CARRY (2026-08-28) is the range ceiling: when the cursor has asked for more
+    // reach than the weapon has, the corridor's end is pinned and the sentence says which. Localized and
+    // appended here rather than built into the sentence's own key, so a caller with no range ceiling
+    // renders exactly the string it rendered before.
+    const line = localizeParam("SpreadPreviewReadout", {
       band: localize(`SpreadBand${spec.band}`), width: spec.widthM, dmg: spec.dmgFormula,
     });
+    readout.textContent = spec.atMaxRange
+      ? `${line} ${localizeParam("SpreadPreviewMaxRange", { range: spec.capM })}`
+      : line;
     readout.style.left = `${state.lastClientX + 16}px`;
     readout.style.top = `${state.lastClientY + 16}px`;
   };
@@ -234,15 +267,30 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
     redraw();
   };
 
-  /**
-   * SHIFT+wheel — the REACH fine-tune, a metre a notch. Scroll up pushes the corridor's end further out,
-   * scroll down pulls it back. Band, width and banded damage all re-derive from the new reach on the
-   * next redraw, because all three are functions of it.
+  /*
+   * ⏪⏪ THERE IS NO WHEEL HANDLER ANY MORE — retired 2026-08-28 (user, on report: the fine-tune *"takes
+   * the end of the beam out of sync with the cursor"*). This preview arms NO wheel listener at all, so
+   * every notch, shifted or not, reaches core's own canvas zoom exactly as it does when nothing is being
+   * aimed. Both retirements are kept here in one block so a restore is a transcription:
    *
-   * ⏪ THE PLAIN WHEEL IS NO LONGER THIS GESTURE'S (retired 2026-08-16 with the width override — see the
-   * file header). A wheel with no shift held is now left entirely alone, which hands it back to core's
-   * own canvas zoom, exactly as it behaves when nothing is being aimed. The removed branch, in one
-   * block, is the revert:
+   *   THE REACH FINE-TUNE (shipped 2026-08-16 → 2026-08-28), a metre a notch, with `reachBiasM: 0` on
+   *   the state object and `+ state.reachBiasM` inside `specNow`'s distance:
+   *
+   *     const onWheel = (ev) => {
+   *       if (!_isCanvasEvent(ev)) return;
+   *       if (!ev.shiftKey) return;
+   *       ev.preventDefault();
+   *       ev.stopPropagation();
+   *       const step = ev.deltaY < 0 ? 1 : -1;
+   *       const cursorM = pixelsToMeters(scene, state.reachPx);
+   *       state.reachBiasM = Math.max(SPREAD_MIN_LENGTH_M - cursorM, state.reachBiasM + step);
+   *       redraw();
+   *     };
+   *
+   *   plus `window.addEventListener("wheel", onWheel, { capture: true, passive: false })` and its
+   *   matching remove.
+   *
+   *   THE WIDTH OVERRIDE (retired earlier, 2026-08-16) was the same handler's un-shifted branch:
    *
    *     } else {
    *       const bandWidthM = bandWidthAt(
@@ -252,22 +300,9 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
    *         Math.max(SPREAD_MIN_WIDTH_M - bandWidthM, state.widthBiasM + step));
    *     }
    *
-   * with `const bandWidthAt = (distM) => spreadBandSpec(distM, widths).widthM;` beside `specNow`, a
-   * `widthBiasM: 0` on the state object, and the `widthOverridden` mark in the readout.
+   *   with `const bandWidthAt = (distM) => spreadBandSpec(distM, widths).widthM;` beside `specNow`, a
+   *   `widthBiasM: 0` on the state object, and the `widthOverridden` mark in the readout.
    */
-  const onWheel = (ev) => {
-    if (!_isCanvasEvent(ev)) return;         // a wheel over a sheet/sidebar scrolls it like normal
-    if (!ev.shiftKey) return;                // a plain wheel is core's zoom again (see the note above)
-    ev.preventDefault();
-    ev.stopPropagation();
-    const step = ev.deltaY < 0 ? 1 : -1;
-    // Clamped against the CURSOR's own distance rather than against the bias alone, so pulling back
-    // stops exactly at the shortest corridor the plant will accept instead of running the bias
-    // arbitrarily negative and making the way back out take as many notches as the way down took.
-    const cursorM = pixelsToMeters(scene, state.reachPx);
-    state.reachBiasM = Math.max(SPREAD_MIN_LENGTH_M - cursorM, state.reachBiasM + step);
-    redraw();
-  };
 
   const onDown = (ev) => {
     if (!_isCanvasEvent(ev)) return;         // clicks on open UI move/close windows, never the aim
@@ -286,7 +321,6 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
   const removeListeners = () => {
     window.removeEventListener("pointermove", onMove, true);
     window.removeEventListener("pointerdown", onDown, true);
-    window.removeEventListener("wheel", onWheel, { capture: true });
     window.removeEventListener("contextmenu", onContext, true);
     window.removeEventListener("keydown", onKey, true);
   };
@@ -347,7 +381,6 @@ export async function armSpreadPreview({ shooterToken, weaponName = "", widths =
 
   window.addEventListener("pointermove", onMove, true);
   window.addEventListener("pointerdown", onDown, true);
-  window.addEventListener("wheel", onWheel, { capture: true, passive: false });
   window.addEventListener("contextmenu", onContext, true);
   window.addEventListener("keydown", onKey, true);
 

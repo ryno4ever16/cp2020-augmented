@@ -27,8 +27,8 @@
  *     the region is planted on the DECLARED axis rather than the target axis, and the shot ends in a
  *     RESOLUTION CARD — posted once the presentation is over, listing who the corridor caught, with the
  *     region still on the table and nothing applied until somebody presses its one Apply control
- * §11 the aim preview's ONE WHEEL — shift+wheel is the reach fine-tune (the band, the width and the
- *     banded damage all follow it), and the retired width gesture moves NOTHING: a plain wheel leaves
+ * §11 the aim preview has NO WHEEL — both gestures retired, so any notch moves NOTHING and the cursor
+ *     alone is the reach; and the weapon's own range CLAMPS it. A plain wheel leaves
  *     the corridor exactly as it was, the state carries no width bias, and what survives the retirement
  *     is the load's own printed widths and the one-metre floor
  * §12 a pattern nobody applied KEEPS its card's pattern (the clocks are an orphan net, not a deadline)
@@ -177,7 +177,12 @@ const res = await page.evaluate(async () => {
   // take an unlinked token with it. The next run then plants its corridor across a previous run's
   // leftovers and reads three figures where its fixtures put one — which is a spec contaminating
   // itself, not a mechanism failing. Tokens first, by NAME, exactly as the cleanup at the bottom does.
-  for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__SPREAD"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
+  // ⚠ THE SWEEP MATCHES THE ASSERTION (2026-08-28). It swept `__PWK__SPREAD` while the leg below
+  // COUNTED `__PWK__` — so a token left by an aborted run under this suite's other prefix
+  // (`__PWK__SPREADGATE`, §19's, which is created later than this point and so cannot be this run's)
+  // survived the sweep and reddened a cleanliness leg that had nothing to do with the unit under test.
+  // Observed once, 2026-08-28. Widened to the prefix the leg actually reads.
+  for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
   for (const a of [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREAD"))) await a.delete().catch(() => {});
   // …and the encounter §6 builds for itself, for the same reason: an aborted run leaves it started and
   // the next run's out-of-combat sections would then read a world that is in combat.
@@ -994,14 +999,18 @@ const res = await page.evaluate(async () => {
   ok("§10 the aim preview writes no document of its own (it is a client-local ghost)",
     !/createEmbeddedDocuments|\.update\(|setFlag/.test(placeSrc));
 
-  /* ── §11  the aim preview's ONE WHEEL ────────────────────────────────────────────────────── */
-  // ⏪⏪ THE WIDTH WHEEL IS RETIRED (2026-08-16), and its ABSENCE is the thing under test. The shotgun
-  // table (Core p.109) states one width per range band and the band edges are fractions of the firing
-  // weapon's own range (p.99), so a corridor's width is a FUNCTION of where it is pointed and never a
-  // free knob — there was no book behind the ±1 m notch. What survives is everything the book does
-  // state: the load's own printed `spreadWidth*` numbers, and the one-metre floor. SHIFT+wheel is
-  // untouched: it is the reach fine-tune, and the band, the width and the banded damage all follow the
-  // reach because all three are derived from it.
+  /* ── §11  the aim preview has NO WHEEL, and the weapon's range is a wall ──────────────────── */
+  // ⏪⏪ BOTH WHEEL GESTURES ARE RETIRED and their ABSENCE is the thing under test. The WIDTH wheel went
+  // 2026-08-16: the shotgun table (Core p.109) states one width per range band and the band edges are
+  // fractions of the firing weapon's own range (p.99), so a corridor's width is a FUNCTION of where it
+  // is pointed and never a free knob. The REACH fine-tune went 2026-08-28, on report — a second input
+  // for a number the pointer already sets can only take the end of the corridor out of step with the
+  // cursor. What survives is everything the book does state: the load's own printed `spreadWidth*`
+  // numbers, and the one-metre floor.
+  //
+  // ⭐ AND THE NEW RULE (2026-08-28): the corridor's reach is CLAMPED at the firing weapon's own range.
+  // Past it the band ladder saturates rather than stopping, so an un-clamped preview drew a corridor of
+  // any length at the Long band's numbers with nothing on screen saying the shot could not be made.
   //
   // Every leg reads the DERIVED consequence — the readout's sentence, then the confirmed corridor's own
   // numbers, then the planted region's own flag — rather than poking at the private state behind them.
@@ -1126,53 +1135,95 @@ const res = await page.evaluate(async () => {
     Number(wheelAim?.widthM) === placement.SPREAD_MIN_WIDTH_M, String(wheelAim?.widthM));
   ok("§11 the floor is the ruled one metre", placement.SPREAD_MIN_WIDTH_M === 1, String(placement.SPREAD_MIN_WIDTH_M));
 
-  /* §11c — SHIFT+wheel is the reach fine-tune, and the band follows it */
+  /* §11c — the SHIFT wheel is retired too: the preview arms no wheel listener at all */
   wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
-  await wheelOnBoard(-100, 3, true);             // three steps further out
-  ok("§11 three SHIFT steps push the reach out, and the width is still the band's",
-    readout() === readoutFor(expectM + 3), `${readout()} | expected ${readoutFor(expectM + 3)}`);
+  const shiftBase = readout();
+  ok("§11 the shift section starts on the cursor's own reach", shiftBase === readoutFor(expectM),
+    `${shiftBase} | expected ${readoutFor(expectM)}`);
+  // Same re-aim discipline as the plain-wheel negatives above: a notch the preview ignores still reaches
+  // core's zoom, and a zoom moves the world point an unmoved cursor is over.
+  await wheelOnBoard(-100, 3, true);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 three SHIFT notches UP push the corridor out not at all (negative)",
+    readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
+  await wheelOnBoard(100, 6, true);
+  await aimAt(aimWorld.x, aimWorld.y);
+  ok("§11 and six SHIFT notches DOWN pull it back not at all either (negative)",
+    readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
   wheelClick = await aimAt(aimWorld.x, aimWorld.y);
   canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
   wheelAim = await wheelGesture;
-  ok("§11 the confirmed corridor's REACH carries the shift wheel's steps, by value",
-    Math.abs(Number(wheelAim?.reachM) - (expectM + 3)) < 0.01, `${expectM} + 3 → ${wheelAim?.reachM}`);
-  ok("§11 and the band/width the reach derives travel with it",
-    wheelAim?.band === lookup.spreadBandSpec(expectM + 3).band
-    && wheelAim?.widthM === lookup.spreadBandSpec(expectM + 3).widthM,
-    JSON.stringify({ band: wheelAim?.band, widthM: wheelAim?.widthM }));
+  ok("§11 the confirmed corridor's REACH is the cursor's own distance, nine notches spent on it, by value",
+    Math.abs(Number(wheelAim?.reachM) - expectM) < 0.01, `${expectM}m asked → ${wheelAim?.reachM}m confirmed`);
 
-  /* §11d — enough shift steps cross a band boundary, and the whole corridor changes with it */
-  // ⚠ THE STEP COUNT IS DERIVED FROM THE SCENE, not typed. This preview is armed with no weapon range,
-  // so its boundaries are the ladder's compat edges — and how many one-metre notches it takes to reach
-  // the far one depends on how many metres a square is worth on the scene the rig happens to be on. A
-  // hard-coded 11 was written against a 5 m grid and simply never crossed anything on a 1 m one.
-  const stepsToLong = Math.ceil(lookup.SPREAD_LEGACY_MEDIUM_EDGE_M - expectM) + 1;
-  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  // The source negatives behind the behaviour: no listener is armed, and the field the retired gesture
+  // wrote survives only inside the commented revert block.
+  const liveSrc = placeSrc.split("\n").filter(l => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+  ok("§11 the preview arms NO wheel listener at all (negative, source)",
+    !/addEventListener\(\s*["']wheel["']/.test(liveSrc), "wheel listener in live preview code");
+  ok("§11 and the retired reach bias is gone from live code, kept only as the commented revert (negative, source)",
+    !/reachBiasM/.test(liveSrc) && /reachBiasM/.test(placeSrc),
+    "reachBiasM in live preview code");
+
+  /* §11d — THE CLAMP: the cursor is the reach, and the weapon's own range is the wall */
+  // A small range is named on purpose so 1.5x of it is still comfortably on this scene's board; every
+  // expectation below is re-derived from the shared ladder rather than typed.
+  const clampRangeM = 8;
+  const insideM = clampRangeM / 2;
+  const beyondM = clampRangeM * 1.5;
+  const insideWorld = { x: shooterC.x, y: shooterC.y + grid.metersToPixels(scene, insideM) };
+  const beyondWorld = { x: shooterC.x, y: shooterC.y + grid.metersToPixels(scene, beyondM) };
+  const readoutRanged = (reachM, rangeM, widths = {}) => {
+    const spec = lookup.spreadBandSpec(reachM, widths, rangeM);
+    const w = Math.max(placement.SPREAD_MIN_WIDTH_M, spec.widthM);
+    return `${game.i18n.localize(`CYBERPUNK.SpreadBand${spec.band}`)} band — ${w}m wide, ${lookup.spreadBandDamage(spec.band)}`;
+  };
+  const maxMark = game.i18n.format("CYBERPUNK.SpreadPreviewMaxRange", { range: clampRangeM });
+  ok("§11 the ceiling marker is a real localized string, not the key",
+    !!maxMark && maxMark !== "CYBERPUNK.SpreadPreviewMaxRange", maxMark);
+
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable, rangeM: clampRangeM });
   await sleep(300);
-  await aimAt(aimWorld.x, aimWorld.y);
-  await wheelOnBoard(-100, stepsToLong, true);
-  ok("§11 crossing the band boundary re-derives the band, the width AND the formula, by value",
-    readout() === readoutFor(expectM + stepsToLong) && lookup.spreadBandSpec(expectM + stepsToLong).band === "Long",
-    `${readout()} | expected ${readoutFor(expectM + stepsToLong)} after ${stepsToLong} notches from ${expectM}m`);
-
-  /* §11e — a shift wheel down pulls back, and stops at the plantable floor */
-  // Far more steps down than there is corridor to give, counted from wherever §11d left the reach.
-  await wheelOnBoard(100, stepsToLong + 40, true);
-  ok("§11 pulling back stops at the shortest corridor the plant accepts, by value",
-    readout() === readoutFor(placement.SPREAD_MIN_LENGTH_M), `${readout()} | expected ${readoutFor(placement.SPREAD_MIN_LENGTH_M)}`);
-  wheelClick = await aimAt(aimWorld.x, aimWorld.y);
+  await aimAt(insideWorld.x, insideWorld.y);
+  ok("§11 a cursor INSIDE the weapon's range is followed exactly, and is not marked (negative)",
+    readout() === readoutRanged(insideM, clampRangeM) && !readout().includes(maxMark),
+    `${readout()} | expected ${readoutRanged(insideM, clampRangeM)}`);
+  await aimAt(beyondWorld.x, beyondWorld.y);
+  ok("§11 a cursor at 1.5x the range pins the corridor at the range AND says so",
+    readout() === `${readoutRanged(clampRangeM, clampRangeM)} ${maxMark}`,
+    `${readout()} | expected ${readoutRanged(clampRangeM, clampRangeM)} ${maxMark}`);
+  wheelClick = await aimAt(beyondWorld.x, beyondWorld.y);
   canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
   wheelAim = await wheelGesture;
-  ok("§11 and the floored corridor confirms at that floor rather than at the cursor, by value",
-    Math.abs(Number(wheelAim?.reachM) - placement.SPREAD_MIN_LENGTH_M) < 0.01, String(wheelAim?.reachM));
+  ok("§11 the pinned corridor CONFIRMS at the weapon's range, not at the cursor's distance, by value",
+    Math.abs(Number(wheelAim?.reachM) - clampRangeM) < 0.01,
+    `cursor asked ${beyondM}m, range ${clampRangeM}m → confirmed ${wheelAim?.reachM}m`);
+  const capSpec = lookup.spreadBandSpec(clampRangeM, {}, clampRangeM);
+  ok("§11 and its band and width are the RANGE's own, re-derived from the pinned reach, by value",
+    wheelAim?.band === capSpec.band
+    && Number(wheelAim?.widthM) === Math.max(placement.SPREAD_MIN_WIDTH_M, capSpec.widthM),
+    JSON.stringify({ band: wheelAim?.band, widthM: wheelAim?.widthM, want: capSpec }));
 
-  /* §11f — the reach bias is per-aim: a fresh gesture starts on the cursor's own distance again */
+  /* §11e — the legacy caller that names no range keeps its old behaviour, exactly */
+  wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
+  await sleep(300);
+  await aimAt(beyondWorld.x, beyondWorld.y);
+  ok("§11 a preview armed with NO weapon range still follows the cursor out there, unmarked (negative)",
+    readout() === readoutFor(beyondM) && !readout().includes(maxMark),
+    `${readout()} | expected ${readoutFor(beyondM)}`);
+  wheelClick = await aimAt(beyondWorld.x, beyondWorld.y);
+  canvas.app.view.dispatchEvent(new PointerEvent("pointerdown", { clientX: wheelClick.x, clientY: wheelClick.y, button: 0, bubbles: true }));
+  wheelAim = await wheelGesture;
+  ok("§11 and confirms at the cursor's own distance — the clamp is added for callers that state a range",
+    Math.abs(Number(wheelAim?.reachM) - beyondM) < 0.01, `${beyondM}m asked → ${wheelAim?.reachM}m confirmed`);
+
+  /* §11f — a fresh gesture starts on the cursor's own distance again (nothing outlives one aim) */
   wheelGesture = placement.armSpreadPreview({ shooterToken: shooterPlaceable });
   await sleep(300);
   await aimAt(aimWorld.x, aimWorld.y);
-  ok("§11 a NEW aim starts on the cursor's own reach — the fine-tune does not outlive its gesture (negative)",
+  ok("§11 a NEW aim starts on the cursor's own reach — nothing outlives its gesture (negative)",
     readout() === readoutFor(expectM), `${readout()} | expected ${readoutFor(expectM)}`);
   placement.cancelSpreadPreview();
   await wheelGesture;
@@ -2528,7 +2579,12 @@ const res = await page.evaluate(async () => {
   // earlier aborted run created, and an orphaned fixture token on the review scene is exactly what the
   // user must not find in the morning. Tokens go before actors — a token whose actor is already gone
   // still deletes, but it no longer answers to any of the actor-shaped filters.
-  for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__SPREAD"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
+  // ⚠ THE SWEEP MATCHES THE ASSERTION (2026-08-28). It swept `__PWK__SPREAD` while the leg below
+  // COUNTED `__PWK__` — so a token left by an aborted run under this suite's other prefix
+  // (`__PWK__SPREADGATE`, §19's, which is created later than this point and so cannot be this run's)
+  // survived the sweep and reddened a cleanliness leg that had nothing to do with the unit under test.
+  // Observed once, 2026-08-28. Widened to the prefix the leg actually reads.
+  for (const t of [...(scene.tokens ?? [])].filter(t => t.name?.startsWith("__PWK__"))) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
   for (const a of [...game.actors].filter(a => a.name?.startsWith("__PWK__SPREAD"))) await a.delete().catch(() => {});
   out.leftovers = {
     zones: myZones().length,
