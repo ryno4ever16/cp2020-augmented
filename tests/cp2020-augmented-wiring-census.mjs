@@ -1028,7 +1028,7 @@ try {
     const rootOf = (app) => (app?.element instanceof HTMLElement ? app.element : app?.element?.[0] ?? null);
     const out = { surfaces: {}, results: [], notes: [], fixtureErr: null };
     const made = { actors: [], shopIds: [], apps: [] };
-    let shopWas = null, ipWas = null, npcWas = null, pcId = null;
+    let shopWas = null, ipWas = null, pcId = null;   // ⏪ npcWas retired with npcGenEnabled 2026-08-28
 
     try {
       // ── FIXTURES ───────────────────────────────────────────────────────────────────────────
@@ -1250,13 +1250,11 @@ try {
 
       // ── the Actors directory, for the one control that opens the goon factory ───────────────
       // A HOOK-BUILT control: no template paints it, `renderActorDirectory` builds it in JS. It is
-      // GM-only and setting-gated, so the setting is forced on and the directory re-rendered — which
-      // is also the exact path the 2026-08-25 field case took (the button was absent until something
-      // forced a render), so a match here certifies the injection, not just the class name.
-      try {
-        npcWas = game.settings.get(SCOPE, "npcGenEnabled");
-        if (npcWas !== true) await game.settings.set(SCOPE, "npcGenEnabled", true);
-      } catch {}
+      // GM-only, and the directory is re-rendered — which is the exact path the 2026-08-25 field case
+      // took (the button was absent until something forced a render), so a match here certifies the
+      // injection, not just the class name.
+      // ⏪ A `npcGenEnabled` force-on stood here until 2026-08-28; the switch is retired (the feature
+      // is always present), so there is nothing left to force.
       await open("actor-directory", async () => {
         await ui.actors?.render({ force: true });
         await sleep(700);
@@ -1373,9 +1371,6 @@ try {
       }
       if (ipWas !== null && ipWas !== true) {
         try { await game.settings.set("cp2020-augmented", "ipRawTracking", ipWas); } catch {}
-      }
-      if (npcWas !== null && npcWas !== true) {
-        try { await game.settings.set("cp2020-augmented", "npcGenEnabled", npcWas); } catch {}
       }
     }
     return out;

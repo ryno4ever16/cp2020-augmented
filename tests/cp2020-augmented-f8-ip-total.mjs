@@ -131,8 +131,7 @@ try {
     let actor = null, app = null, prev = {}, origWarn = null;
     try {
       const IP = await import(`${M}/ip/ip.js`);
-      for (const k of ["ipThrottle", "ipHideUI", "ipQueue", "ipRawTracking", "ipAwardModel"]) prev[k] = game.settings.get(SCOPE, k);
-      await game.settings.set(SCOPE, "ipHideUI", false);
+      for (const k of ["ipThrottle", "ipQueue", "ipRawTracking", "ipAwardModel"]) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "ipRawTracking", false);   // Simple mode: the pool figure is painted
       await game.settings.set(SCOPE, "ipAwardModel", "manual");
       await game.settings.set(SCOPE, "ipThrottle", "off");
@@ -256,8 +255,7 @@ try {
       const { isMartialArtSkillItem } = await import("/modules/cp2020-augmented/module/lookups.js");
       const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
       const prev = {};
-      for (const k of ["ipHideUI", "ipRawTracking"]) prev[k] = game.settings.get(SCOPE, k);
-      await game.settings.set(SCOPE, "ipHideUI", false);
+      for (const k of ["ipRawTracking"]) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "ipRawTracking", false);
 
       for (const x of game.actors.filter(x => x.name === "__PW__ IP Level Chain")) await x.delete().catch(() => {});
@@ -415,8 +413,7 @@ try {
         await import("/modules/cp2020-augmented/module/lookups.js");
       const IP = await import("/modules/cp2020-augmented/module/ip/ip.js");
       const prev = {};
-      for (const k of ["ipHideUI", "ipRawTracking"]) prev[k] = game.settings.get(SCOPE, k);
-      await game.settings.set(SCOPE, "ipHideUI", false);
+      for (const k of ["ipRawTracking"]) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "ipRawTracking", true);
 
       for (const x of game.actors.filter(x => x.name === "__PW__ IP Row Reach")) await x.delete().catch(() => {});

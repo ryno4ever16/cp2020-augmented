@@ -503,15 +503,17 @@ async function migrateAugmentedSettings() {
     console.log(`${SCOPE} | limb-model migrated from limbCripplingDetailed → "${model}".`);
   }
 
-  // ipSystem (3-way) → ipRawTracking (behaviour) + ipHideUI (presence). The dual-bucket flag DATA
-  // (per-skill `ip` + actor `ipPool`) already exists, so there's no per-actor data migration — only
-  // this setting remap: disabled → hide the UI; raw → RAW auto-tracking on; simple → neither.
+  // ipSystem (3-way) → ipRawTracking (behaviour). The dual-bucket flag DATA (per-skill `ip` + actor
+  // `ipPool`) already exists, so there's no per-actor data migration — only this setting remap.
+  // ⏪ THE "disabled → hide the UI" HALF IS GONE (2026-08-28): `ipHideUI` is retired, so there is no
+  // longer a destination for it. A world that once said "disabled" now simply sees the IP UI, which is
+  // the ruled outcome — "opt out by ignoring it, opt in by using it". Writing to the retired key would
+  // throw, so this is a removal at the WRITE path, matching the retirement at the read path.
   const ipOld = rawSetting("ipSystem");
   if (ipOld !== undefined) {
     if (ipOld === "raw" && rawSetting("ipRawTracking") === undefined) await game.settings.set(SCOPE, "ipRawTracking", true);
-    if (ipOld === "disabled" && rawSetting("ipHideUI") === undefined) await game.settings.set(SCOPE, "ipHideUI", true);
     await dropLegacy("ipSystem");
-    console.log(`${SCOPE} | IP setting migrated: ipSystem "${ipOld}" → rawTracking=${ipOld === "raw"}, hideUI=${ipOld === "disabled"}.`);
+    console.log(`${SCOPE} | IP setting migrated: ipSystem "${ipOld}" → rawTracking=${ipOld === "raw"}.`);
   }
 
   // damageAutoApply → RETIRED, nothing to merge into. The feature is gone (user ruling 2026-08-14):
@@ -718,19 +720,22 @@ Hooks.once("ready", function () {
   // while piloting an ACPA via a rollSkill wrap. In-suit full initiative + Solo-suppression already ship.
   wire("PA combat sense", registerPaCombatSense);
 
-  // First-run only: offer the settings-preset picker once for a new GM (mirrors the system's own
-  // first-run picker). The flag flips immediately so the picker never reappears on later loads; the
-  // GM can reopen it from the System Settings "Settings Presets" menu. Guarded so a hiccup is non-fatal.
-  if (game.user?.isGM) {
-    try {
-      if (!game.settings.get(SCOPE, "presetFirstRunDone")) {
-        game.settings.set(SCOPE, "presetFirstRunDone", true);
-        new PresetPicker().render(true);
-      }
-    } catch (e) {
-      console.warn(`${SCOPE} | first-run preset picker failed (open it from System Settings)`, e);
-    }
-  }
+  // ⏪⏪ THE FIRST-RUN PRESET MODAL STOOD HERE UNTIL 2026-08-28 AND IS RETIRED. User: *"I'm down to
+  // drop the first run modal for the menu picker."* What it did: on a new GM's first load it read the
+  // `presetFirstRunDone` flag, flipped it, and opened the picker unasked.
+  //
+  // ⭐ WHAT IS **NOT** RETIRED — and the whole point of the change: the picker itself. It stays exactly
+  // where it always could be reached deliberately, as the GM-only **System Settings → "Settings
+  // Presets"** menu button (`game.settings.registerMenu(SCOPE, "presetMenu", …)` in init, above), with
+  // `module/presets.js`'s four bundles and its one-step undo untouched. The bundle knowledge is kept;
+  // only the interruption is gone. The `presetFirstRunDone` registration retired with this block, and a
+  // world that already stored it keeps an unread value — nothing migrates, because there is nothing
+  // left that reads it.
+  //
+  // ⚠ THE CARVE-OUT THE SAME RULING RECORDED, so a later pass does not over-apply this one: settings
+  // that are TRUE RULE ALTERNATIVES to the core book (alternate vehicle rules, limb models, explosion
+  // rules) STAY as module options. Presets cannot express them, and they are the most defensible class
+  // of setting this module has. Dropping the first-run modal is not a licence to drop those.
 
   // Apply the terminal sheet skin's <body> class, following Foundry's applications colour scheme
   // (dark = the module's own look, light = the base system's), and start the class-list observer

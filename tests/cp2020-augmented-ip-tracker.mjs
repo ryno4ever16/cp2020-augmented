@@ -72,8 +72,7 @@ try {
     try {
       const IP = await import(`${M}/ip/ip.js`);
       const T = await import(`${M}/ip/tracker.js`);
-      for (const k of ["ipQueue", "ipRawTracking", "ipAwardModel", "ipThrottle", "ipHideUI", "ipThrottleCounts"]) prev[k] = game.settings.get(SCOPE, k);
-      await game.settings.set(SCOPE, "ipHideUI", false);
+      for (const k of ["ipQueue", "ipRawTracking", "ipAwardModel", "ipThrottle", "ipThrottleCounts"]) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "ipRawTracking", true);
       await game.settings.set(SCOPE, "ipAwardModel", "manual");
       await game.settings.set(SCOPE, "ipThrottle", "off");
@@ -180,8 +179,7 @@ try {
     try {
       const IP = await import(`${M}/ip/ip.js`);
       const T = await import(`${M}/ip/tracker.js`);
-      for (const k of ["ipQueue", "ipRawTracking", "ipAwardModel", "ipThrottle", "ipHideUI", "ipThrottleCounts", "ipNeglectMuted"]) prev[k] = game.settings.get(SCOPE, k);
-      await game.settings.set(SCOPE, "ipHideUI", false);
+      for (const k of ["ipQueue", "ipRawTracking", "ipAwardModel", "ipThrottle", "ipThrottleCounts", "ipNeglectMuted"]) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "ipRawTracking", true);
       await game.settings.set(SCOPE, "ipAwardModel", "manual");
       await game.settings.set(SCOPE, "ipThrottle", "diminishing");
@@ -313,8 +311,7 @@ try {
     try {
       const IP = await import(`${M}/ip/ip.js`);
       const T = await import(`${M}/ip/tracker.js`);
-      for (const k of ["ipQueue", "ipRawTracking", "ipAwardModel", "ipThrottle", "ipHideUI", "ipThrottleCounts", "ipAutoBaselineAmount", "ipNeglectMuted"]) prev[k] = game.settings.get(SCOPE, k);
-      await game.settings.set(SCOPE, "ipHideUI", false);
+      for (const k of ["ipQueue", "ipRawTracking", "ipAwardModel", "ipThrottle", "ipThrottleCounts", "ipAutoBaselineAmount", "ipNeglectMuted"]) prev[k] = game.settings.get(SCOPE, k);
       await game.settings.set(SCOPE, "ipRawTracking", true);
       await game.settings.set(SCOPE, "ipAwardModel", "manual");
       await game.settings.set(SCOPE, "ipThrottle", "off");
@@ -649,6 +646,49 @@ try {
     return { checks };
   });
   failures += report("5 — The IP pile-up prompt loads through its lazy path and opens", S5.checks);
+
+  /* ── 6 — ⏪ THE PRESENCE SWITCH IS RETIRED (user order 2026-08-28) ────────────────────────────────
+   * `ipHideUI` was the one setting whose whole job was to make this feature invisible. It is gone:
+   * "on by default with no way to turn them off … users opt out by ignoring it and opt in by using
+   * it. Hiding them behind settings just makes them easy to lose." The reader functions survive for
+   * their callers — every call site is untouched — but they now answer unconditionally. These legs
+   * pin the ABSENCE by value, the unconditional answers, and the outcome that used to hang on it. */
+  const S6 = await page.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const checks = [];
+    const push = (name, pass, got) => checks.push({ name, pass: !!pass, got });
+    try {
+      const SET = game.settings.settings;
+      push("the presence switch is gone from the settings registry, by key",
+        !SET.has(`${SCOPE}.ipHideUI`), [...SET.keys()].filter(k => k.toLowerCase().includes("iphide")));
+      push("reading it throws, which is what 'unregistered' means here", (() => {
+        try { game.settings.get(SCOPE, "ip" + "HideUI"); return false; } catch { return true; }
+      })(), null);
+      const G = await import("/modules/cp2020-augmented/module/settings.js");
+      push("the hide gate survives for its callers and answers false unconditionally",
+        G.ipHideUI() === false, G.ipHideUI());
+      push("so the presence gate answers true unconditionally", G.ipEnabled() === true, G.ipEnabled());
+      push("the behaviour switch beside it is untouched — this retired presence, not tracking",
+        SET.has(`${SCOPE}.ipRawTracking`), null);
+      // Comments stripped first: the retirement's own ⏪ note names the dead key on purpose, and a raw
+      // substring search would red against the record of the change rather than against the change.
+      const src = await (await fetch("/modules/cp2020-augmented/module/settings-sections.js")).text();
+      const liveRows = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+      push("it is gone from the settings page's own section rows", !liveRows.includes("ipHideUI"), null);
+      // The outcome that used to hang on it: the GM's directory control for the tracker.
+      await ui.actors.render(true);
+      await sleep(500);
+      const btn = document.querySelector(".cp2020ae-ip-tracker-btn");
+      push("the GM's IP tracker control is in the Actors directory, with no switch to ask", !!btn, null);
+      push("and its label is localized (no raw key leaked)",
+        !!btn && !(btn.textContent || "").includes("CYBERPUNK."), btn?.textContent);
+    } catch (e) {
+      push("section 6 ran to completion", false, String(e?.message ?? e));
+    }
+    return { checks };
+  });
+  failures += report("6 — The IP presence switch is retired; the feature is simply present", S6.checks);
 
   const clean = pageErrors.length === 0;
   console.log(`\n  [${clean ? "PASS" : "FAIL"}] ${"0 console errors".padEnd(62)} got=${pageErrors.length}`);

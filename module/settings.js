@@ -218,15 +218,12 @@ export function registerAugmentedSettings() {
     default: "",
   });
 
-  // --- presetFirstRunDone ---
-  // config:false — first-run flag for the one-time Settings Presets picker (see the ready hook in
-  // cp2020-augmented.js). Flipped true the first time a GM loads, so the picker is offered once only.
-  game.settings.register(SCOPE, "presetFirstRunDone", {
-    scope: "world",
-    config: false,
-    type: Boolean,
-    default: false,
-  });
+  // ⏪⏪ `presetFirstRunDone` STOOD HERE UNTIL 2026-08-28 AND IS RETIRED WITH THE THING IT GUARDED.
+  // It was the "the one-time picker has been offered" flag for a ready-hook modal that no longer
+  // exists (user: *"I'm down to drop the first run modal for the menu picker"*). A flag with nothing
+  // to guard is not a setting, it is debris — so it went with the block, and a world that already
+  // stored it keeps an unread value. ⭐ The picker itself is untouched and is still reachable
+  // deliberately from System Settings → "Settings Presets".
 
   // --- damageArmorMode ---
   game.settings.register(SCOPE, "damageArmorMode", {
@@ -697,14 +694,16 @@ export function registerAugmentedSettings() {
     type: Boolean,
     default: false,
   });
-  game.settings.register(SCOPE, "ipHideUI", {
-    name: "SETTINGS.IpHideUI",
-    hint: "SETTINGS.IpHideUIHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-  });
+  // ⏪⏪ `ipHideUI` STOOD HERE UNTIL 2026-08-28 AND IS RETIRED — a world switch whose entire job was to
+  // make this feature invisible. User order, verbatim: *"on by default with no way to turn them off …
+  // users opt out by ignoring it and opt in by using it. Hiding them behind settings just makes them
+  // easy to lose."* That is the action-as-consent principle applied to a PRESENCE gate: the IP UI costs
+  // a table nothing until somebody presses something in it, so the only thing the switch bought was a
+  // way to lose the feature. `ipHideUI()` below survives — every call site is untouched — and answers
+  // false unconditionally. A world that had this set to true keeps the stored value as unread debris;
+  // nothing migrates, because there is nothing left to migrate it into.
+  // ⚠ `ipRawTracking` above is NOT this and did not go with it: that one chooses a RULE (per-skill
+  // auto-attribution and the roll queue), which is a real alternative a table can want either way.
   game.settings.register(SCOPE, "ipAwardModel", {
     name: "SETTINGS.IpAwardModel",
     hint: "SETTINGS.IpAwardModelHint",
@@ -840,20 +839,15 @@ export function registerAugmentedSettings() {
   game.settings.register(SCOPE, "shops", { scope: "world", config: false, type: Object, default: {} });
 
   // --- NPC generator (module/npcgen/*) ---
-  // ⭐ DEFAULT ON, which reads oddly against this module's "automation OFF by default" stance until you
-  // notice the feature automates NOTHING: it does nothing at all until a GM presses a button and then
-  // presses Generate. There is no hook, no tick, no listener that fires on its own. What the master
-  // switch actually controls is whether the Actors-directory button exists — so defaulting it off would
-  // hide the feature from every GM who never reads the settings page, to protect them from a thing that
-  // cannot happen by itself. (Design §Settings flagged this as an open question and leaned the same way.)
-  game.settings.register(SCOPE, "npcGenEnabled", {
-    name: "SETTINGS.NpcGenEnabled",
-    hint: "SETTINGS.NpcGenEnabledHint",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: true
-  });
+  // ⏪⏪ `npcGenEnabled` STOOD HERE UNTIL 2026-08-28 AND IS RETIRED, by the same order that retired
+  // `ipHideUI` above: *"on by default with no way to turn them off … users opt out by ignoring it and
+  // opt in by using it. Hiding them behind settings just makes them easy to lose."* The comment this
+  // replaces already argued the switch's own case away — the feature automates NOTHING, has no hook, no
+  // tick and no listener, and does nothing until a referee presses a button and then presses Generate,
+  // so all the switch ever controlled was whether the Actors-directory button EXISTS. Defaulting it on
+  // and then keeping the switch only left a way to hide the feature from the referee who never reads
+  // the settings page. `npcGenEnabled()` below survives for its callers and answers true
+  // unconditionally; a stored world value is unread debris.
 
   // Optional wildcard token art (design §Q5C): a folder path, and every generated token rolls its own
   // face out of it. Blank — the default — falls back to the base system's own edgerunner icon, which is
@@ -1023,11 +1017,15 @@ export function vehicleArcEnforcement() {
 export function ipRawTracking() {
   try { return game.settings.get(SCOPE, "ipRawTracking") === true; } catch { return false; }
 }
-/** Whether the GM has hidden the IP UI entirely (presence gate, for pure-narrative tables). */
-export function ipHideUI() {
-  try { return game.settings.get(SCOPE, "ipHideUI") === true; } catch { return false; }
-}
-/** Whether the IP UI/logic is shown. The dual-bucket store always exists; this only hides the UI. */
+/**
+ * ⏪ RETIRED AS A SWITCH, KEPT AS A FUNCTION (2026-08-28). It used to read the `ipHideUI` world
+ * setting; that setting no longer exists — user order: *"on by default with no way to turn them off …
+ * users opt out by ignoring it and opt in by using it. Hiding them behind settings just makes them
+ * easy to lose."* The function stays so that **no call site had to change**, and it answers the one
+ * answer there is now. ⏪ Revert = restore the registration and this body's `game.settings.get`.
+ */
+export function ipHideUI() { return false; }
+/** Whether the IP UI/logic is shown. The dual-bucket store always exists — and it is always shown. */
 export function ipEnabled() { return !ipHideUI(); }
 /** IP award model: "manual" (RAW GM-per-use, default) / "autoBaseline" (GM-marked success → +N). */
 export function ipAwardModel() {
@@ -1055,11 +1053,16 @@ export function ipShowPending() {
 export function shoppingEnabled() {
   try { return game.settings.get(SCOPE, "shoppingEnabled") === true; } catch { return false; }
 }
-/** Whether the NPC generator's entry point is offered at all. Read at the directory button AND again in
- *  `openNpcGenerator`, so a macro meets the same gate the button does. */
-export function npcGenEnabled() {
-  try { return game.settings.get(SCOPE, "npcGenEnabled") === true; } catch { return false; }
-}
+/**
+ * Whether the NPC generator's entry point is offered at all. Read at the directory button AND again in
+ * `openNpcGenerator`, so a macro meets the same gate the button does.
+ *
+ * ⏪ RETIRED AS A SWITCH, KEPT AS A FUNCTION (2026-08-28), for the same reason and by the same order as
+ * `ipHideUI` above — and with the extra weight that this feature has no hook, no tick and no listener,
+ * so the switch never protected anybody from anything. Both readers stay, so **no call site changed**.
+ * ⏪ Revert = restore the registration and this body's `game.settings.get`.
+ */
+export function npcGenEnabled() { return true; }
 /** Wildcard token-art folder for generated NPCs; "" (the default) means the built-in icon. */
 export function npcGenTokenArtFolder() {
   try { return String(game.settings.get(SCOPE, "npcGenTokenArtFolder") ?? ""); } catch { return ""; }

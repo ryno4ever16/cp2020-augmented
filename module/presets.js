@@ -13,7 +13,7 @@
  *
  * NOT touched by any preset (a GM/per-user choice): permissions (playersCanShop/playersCanBuyAmmo), the
  * Carolingian skin + other client display prefs, GM content/pricing (shopAllowHomebrew, shopShowSource,
- * ammoBlackhandsPricing, hitLocationCoreDisplay), the IP fine-tuning + ipHideUI, and all config:false
+ * ammoBlackhandsPricing, hitLocationCoreDisplay), the IP fine-tuning, and all config:false
  * stores.
  */
 
@@ -47,8 +47,8 @@ const MANUAL = {
   taserCumPenaltyEnabled: false, acidArmorDotEnabled: false, fireDotEnabled: false, specialMeleeEffectsEnabled: false,
   // Subsystems — Shopping + Improvement-Point (RAW) tracking are ON at EVERY tier: both are ignorable
   // if unused (the neglect detector keeps RAW IP safe as a default), so they belong in the baseline
-  // rather than a tier upgrade. Vehicles stay off until Standard. ipHideUI is a separate manual GM
-  // presence choice presets never touch.
+  // rather than a tier upgrade. Vehicles stay off until Standard. (⏪ `ipHideUI` was named here as a
+  // manual presence choice presets never touch; the setting was retired outright 2026-08-28.)
   shoppingEnabled: true, vehicleControlEnabled: false, vehicleDamageEnabled: false, ipRawTracking: true,
   // Bookkeeping rules + supplements — off / Core
   restrictMovementOncePerTurn: false, damageAblation: false, mmEnabled: false, vehicleRuleSystem: "Core",

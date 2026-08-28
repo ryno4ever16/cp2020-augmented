@@ -34,11 +34,14 @@
  *                        `pack.configure({ownership})` on two base-system packs — a write to the core
  *                        `compendiumConfiguration` world setting — and stamps/clears the companion
  *                        `hideScrapedPacksPrior` map. Two document-scope writes per flip.
- *   automationNoticeHide these four are config:false INTERNAL STATE records, not feature switches:
- *   presetFirstRunDone   what the GM last dismissed, whether first-run has happened, whether the
- *   ipNeglectMuted       IP-neglect nudge is muted or already fired. Flipping them does not change any
- *   ipNeglectNudged      behaviour a smoke probe can observe; it only rewrites bookkeeping, and
- *                        restoring them wrong would re-show dismissed notices to the user.
+ *   automationNoticeHide these three are config:false INTERNAL STATE records, not feature switches:
+ *   ipNeglectMuted       what the GM last dismissed, and whether the IP-neglect nudge is muted or has
+ *   ipNeglectNudged      already fired. Flipping them does not change any behaviour a smoke probe can
+ *                        observe; it only rewrites bookkeeping, and restoring them wrong would re-show
+ *                        dismissed notices to the user.
+ *                        (⏪ `presetFirstRunDone` was the fourth until 2026-08-28; it is retired with
+ *                        the first-run modal it guarded — see §1b, which pins both the removal and the
+ *                        survival of the System Settings menu picker.)
  *
  *   civilianSheetMigrated     ⛔ these five are MIGRATION STAMPS, and they are the most dangerous
  *   fleshLimbStatusMigrated   thing in the registry to flip. Each is a "this one-time world
@@ -143,15 +146,18 @@ const ALLOWED = [
   "specialMeleeEffectsEnabled",
   "autoRangefinding",
   "ipRawTracking",
-  "ipHideUI",
   "shoppingEnabled",
   "playersCanShop",
   "shopAllowHomebrew",
   "playersCanBuyAmmo",
-  "npcGenEnabled",
   "combatFxEnabled",
   "faceTargetOnFire",
   // ⏪ "goreEnabled" stood here until 2026-08-28: the setting was retired with the element it switched.
+  // ⏪ "ipHideUI" and "npcGenEnabled" stood here until 2026-08-28 too, and went for a different reason:
+  // both were PRESENCE gates — switches whose only job was to hide a feature that costs a table nothing
+  // until somebody uses it. User order: "on by default with no way to turn them off … users opt out by
+  // ignoring it and opt in by using it." Neither is a rule alternative, so neither leaves a successor;
+  // the matrix simply has two fewer switches to cross.
 ];
 
 /** Kept out of the matrix, each with the reason the header states at length. */
@@ -159,7 +165,8 @@ const EXCLUDED = {
   mechTokenWrites: "onChange rewrites live TokenDocuments (light + vision reconcile)",
   hideScrapedPacks: "onChange writes core compendium ownership + the prior-ownership map",
   automationNoticeHide: "config:false internal state record, not a feature switch",
-  presetFirstRunDone: "config:false internal state record, not a feature switch",
+  // ⏪ "presetFirstRunDone" was excluded here until 2026-08-28; the flag is retired with the first-run
+  // modal it guarded (§1b below asserts its absence and that the menu picker survived it).
   ipNeglectMuted: "config:false internal state record, not a feature switch",
   ipNeglectNudged: "config:false internal state record, not a feature switch",
   civilianSheetMigrated: "migration stamps: flipping re-fires or suppresses one-time world sweeps (document writes); restoring wrong re-runs a migration",
@@ -179,7 +186,7 @@ const MASTERS = {
   mmEnabled: ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"],
   ipRawTracking: ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"],
   shoppingEnabled: ["playersCanShop", "shopBuySource", "shopAllowHomebrew", "shopShowSource"],
-  npcGenEnabled: ["npcGenTokenArtFolder"],
+  // ⏪ npcGenEnabled → npcGenTokenArtFolder retired 2026-08-28 with its master.
   explosivesEnabled: ["explosivesDetailed", "areaEffectOcclusion"],
   gasGrenadeCloudEnabled: ["gasCloudAutoMove"],
   acidArmorDotEnabled: ["acidDotStackMode"],
@@ -276,6 +283,87 @@ try {
   ok("§1 every exclusion carries a stated reason",
     Object.values(EXCLUDED).every(r => typeof r === "string" && r.length > 10),
     Object.entries(EXCLUDED).map(([k, v]) => `${k}: ${v}`).join(" · "));
+
+  /* ══ §1b. THE FIRST-RUN MODAL IS RETIRED; THE MENU PICKER IS NOT ═══════════════════════════════
+   * User ruling 2026-08-28: *"I'm down to drop the first run modal for the menu picker."* Two halves,
+   * and the second is the one that can silently go wrong — a retirement that took the picker with it
+   * would leave a table with no way to reach the four bundles at all. So these legs assert the removal
+   * AND the survival, and they assert the survival by OPENING the thing.
+   *
+   * ⛔ The "no window on ready" half is asserted at SOURCE rather than by driving a fresh world's ready
+   * hook: firing `ready` again on a live client re-runs every registration this module has, which is a
+   * far larger blast radius than the leg is worth. What is checked instead is that no live line of the
+   * module's own entry point names the retired flag, and that the flag is not registered — between them
+   * there is nothing left that could open it, because the block that did read exactly that flag. */
+  console.log("\n===== §1b: the first-run modal, and what survived it =====");
+  const modal = await page.evaluate(async (scope) => {
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const out = {};
+    out.flagRegistered = game.settings.settings.has(`${scope}.presetFirstRunDone`);
+    out.readThrows = (() => {
+      try { game.settings.get(scope, "presetFirstRun" + "Done"); return false; } catch { return true; }
+    })();
+    // Comments are stripped: the retirement's own ⏪ note names the dead flag on purpose.
+    const entry = await (await fetch(`/modules/${scope}/module/cp2020-augmented.js`)).text();
+    const liveCode = entry.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+    out.entryNamesFlag = liveCode.includes("presetFirstRunDone");
+    out.entryStillRegistersMenu = liveCode.includes("presetMenu");
+
+    // THE SURVIVING PATH, as the settings page reaches it: the registered menu, its application class,
+    // and an actual open + close.
+    const menu = game.settings.menus.get(`${scope}.presetMenu`) ?? null;
+    out.menuRegistered = !!menu;
+    out.menuRestricted = menu?.restricted === true;
+    out.menuTypeName = menu?.type?.name ?? null;
+    let app = null;
+    try {
+      app = new menu.type();
+      await app.render(true);
+      for (let i = 0; i < 40 && !app.element; i++) await sleep(100);
+      out.pickerOpened = !!app.element;
+      out.pickerHasApply = !!app.element?.querySelector('[data-action="presetApply"]');
+      // ⚠ The UNDO BAR is conditional on `lastAppliedLabel` — it renders only after a tier has been
+      // applied (preset-picker.hbs:22), so asserting its NODE on a freshly-opened picker in a world
+      // that has applied nothing is asserting the wrong thing. What must survive the modal's removal
+      // is the WIRING: the action the bar's button dispatches to.
+      out.pickerUndoWired = typeof app.constructor?.DEFAULT_OPTIONS?.actions?.presetUndo === "function";
+      out.pickerApplyWired = typeof app.constructor?.DEFAULT_OPTIONS?.actions?.presetApply === "function";
+      out.pickerNoRawKeys = !/CYBERPUNK\./.test(app.element?.textContent ?? "CYBERPUNK.");
+    } catch (e) {
+      out.pickerError = String(e?.message ?? e);
+    } finally {
+      try { await app?.close(); } catch (_e) { /* already gone */ }
+    }
+    // And the bundles + undo behind it, untouched.
+    const P = await import(`/modules/${scope}/module/presets.js`);
+    out.presetKeys = typeof P.presetKeys === "function" ? P.presetKeys().length : null;
+    out.tierIds = (P.PRESETS ?? []).map(p => p.id);
+    out.hasApply = typeof P.applyPreset === "function";
+    out.hasUndo = typeof P.undoPreset === "function";
+    return out;
+  }, SCOPE);
+  ok("§1b the first-run flag is gone from the registry", modal.flagRegistered === false, modal.flagRegistered);
+  ok("§1b reading it throws, which is what 'unregistered' means here", modal.readThrows === true, modal.readThrows);
+  ok("§1b no live line of the module's entry point names it — nothing is left to open a modal",
+    modal.entryNamesFlag === false, modal.entryNamesFlag);
+  ok("§1b ⭐ the picker's menu registration SURVIVED the removal",
+    modal.entryStillRegistersMenu === true && modal.menuRegistered === true,
+    `inSource=${modal.entryStillRegistersMenu} registered=${modal.menuRegistered}`);
+  ok("§1b the menu is still referee-only", modal.menuRestricted === true, modal.menuRestricted);
+  ok("§1b it still points at the picker application", modal.menuTypeName === "PresetPicker", modal.menuTypeName);
+  ok("§1b ⭐ and opening it through that menu really renders the picker",
+    modal.pickerOpened === true, modal.pickerError ?? modal.pickerOpened);
+  ok("§1b the opened picker still paints its apply control", modal.pickerHasApply === true,
+    modal.pickerHasApply);
+  ok("§1b and both of its actions are still wired on the application class",
+    modal.pickerApplyWired === true && modal.pickerUndoWired === true,
+    `apply=${modal.pickerApplyWired} undo=${modal.pickerUndoWired}`);
+  ok("§1b and every visible string in it is localized", modal.pickerNoRawKeys === true, modal.pickerNoRawKeys);
+  ok("§1b the four bundles behind it are untouched",
+    Array.isArray(modal.tierIds) && modal.tierIds.length === 4, (modal.tierIds ?? []).join(", "));
+  ok("§1b so is the settings universe the bundles write", (modal.presetKeys ?? 0) > 10, modal.presetKeys);
+  ok("§1b and both halves of the one-step undo are still exported",
+    modal.hasApply === true && modal.hasUndo === true, `apply=${modal.hasApply} undo=${modal.hasUndo}`);
 
   /* ══ §2. THE COVERING ARRAY ════════════════════════════════════════════════════════════════════ */
   console.log("\n===== §2: the covering array =====");

@@ -37,12 +37,16 @@ const SECTIONS = [
   { key: "SectionMechAutomation", keys: [
     "mechTokenWrites", "mechRoundTickAutomation", "mechDocumentAutomation",
   ] },
+  // ⏪ "ipHideUI" stood in this row until 2026-08-28: the IP presence switch is retired (the feature is
+  // always present — "opt out by ignoring it, opt in by using it").
   { key: "SectionImprovementPoints", keys: [
     "ipRawTracking", "ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode",
-    "ipHideUI", "ipShowPending",
+    "ipShowPending",
   ] },
   { key: "SectionShopping", keys: ["shoppingEnabled", "playersCanShop", "shopBuySource", "shopAllowHomebrew", "ammoBlackhandsPricing", "shopShowSource"] },
-  { key: "SectionNpcGen", keys: ["npcGenEnabled", "npcGenTokenArtFolder"] },
+  // ⏪ "npcGenEnabled" led this row until 2026-08-28 and is retired with it; the section keeps its one
+  // remaining row, the optional token-art folder.
+  { key: "SectionNpcGen", keys: ["npcGenTokenArtFolder"] },
   { key: "SectionVehicles", keys: ["vehicleControlEnabled", "vehicleDamageEnabled", "mmEnabled", "vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"] },
   { key: "SectionAccess", keys: ["playersCanBuyAmmo", "cyberlimbRepairGmOnly", "hideScrapedPacks"] },
   { key: "SectionDisplay", keys: ["combatFxEnabled", "faceTargetOnFire"] },
@@ -55,7 +59,9 @@ const MASTERS = {
   mmEnabled:                 ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"],
   ipRawTracking:             ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"],
   shoppingEnabled:           ["playersCanShop", "shopBuySource", "shopAllowHomebrew", "shopShowSource"],
-  npcGenEnabled:             ["npcGenTokenArtFolder"],
+  // ⏪ npcGenEnabled → npcGenTokenArtFolder was here until 2026-08-28. With the master retired the
+  // folder field has no master to be greyed by, and leaving the row would have greyed it permanently
+  // against a switch nothing can turn on.
   explosivesEnabled:         ["explosivesDetailed", "areaEffectOcclusion"],
   gasGrenadeCloudEnabled:    ["gasCloudAutoMove"],
   acidArmorDotEnabled:       ["acidDotStackMode"],

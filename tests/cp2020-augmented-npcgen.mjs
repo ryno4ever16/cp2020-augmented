@@ -32,7 +32,9 @@ await joinGM(p);
 const fresh = await p.evaluate(() => ({
   present: !!document.querySelector(".cp2020ae-npcgen-btn"),
   gm: game.user?.isGM === true,
-  setting: game.settings.get("cp2020-augmented", "npcGenEnabled") === true
+  // ⏪ the third field read `npcGenEnabled`; the switch was retired 2026-08-28 (the feature is always
+  // present), so what stands in its place is the gate function's unconditional answer.
+  setting: true
 }));
 
 const r = await p.evaluate(async () => {
@@ -48,7 +50,7 @@ const r = await p.evaluate(async () => {
 
   const madeActorIds = [];
   let folderCreatedByThisRun = false;
-  let settingRestored = null;
+  // ⏪ `settingRestored` (npcGenEnabled) stood here until 2026-08-28: there is no switch left to save.
   let artRestored = null;
 
   try {
@@ -260,26 +262,42 @@ const r = await p.evaluate(async () => {
     check("summary card names the carried-not-installed limitation when there is chrome",
       chrome.length === 0 || (card?.content ?? "").includes("CARRIED"), null);
 
-    // ── The directory button obeys the master setting ──
-    settingRestored = game.settings.get(SCOPE, "npcGenEnabled");
-    await game.settings.set(SCOPE, "npcGenEnabled", true);
+    // ── ⏪ THE MASTER SETTING IS RETIRED (user order 2026-08-28) ──
+    // What stood here: master ON ⇒ button present, master OFF ⇒ button gone and openNpcGenerator()
+    // refuses. `npcGenEnabled` no longer exists as a setting — "on by default with no way to turn it
+    // off … users opt out by ignoring it and opt in by using it" — so the legs invert: the switch must
+    // be ABSENT from the registry by value, and the feature must be present REGARDLESS.
+    const SET = game.settings.settings;
+    check("the master switch is gone from the settings registry, by key",
+      !SET.has(`${SCOPE}.npcGenEnabled`), [...SET.keys()].filter(k => k.includes("npcGen")));
+    check("reading it throws, which is what 'unregistered' means here", (() => {
+      try { game.settings.get(SCOPE, "npcGenEnabled"); return false; } catch { return true; }
+    })(), null);
+    const GATE = await import("/modules/cp2020-augmented/module/settings.js");
+    check("the gate function survives for its callers and answers true unconditionally",
+      GATE.npcGenEnabled() === true, GATE.npcGenEnabled());
+    // The section rows and the master→sub greying map are not exported, so this one is a SOURCE
+    // assertion over the served file — a row naming a switch that no longer exists would leave a
+    // permanently-greyed folder field on the settings page with nothing able to un-grey it.
+    // ⚠ COMMENTS ARE STRIPPED FIRST. The retirement's own ⏪ note names the dead key on purpose (that
+    // is what makes the removal reviewable), so a raw substring search would red against the record of
+    // the change rather than against the change. What is asserted is that no LIVE row names it.
+    const sectionSrc = await (await fetch("/modules/cp2020-augmented/module/settings-sections.js")).text();
+    const liveRows = sectionSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+    check("it is gone from the settings page's own section rows and greying map",
+      !liveRows.includes("npcGenEnabled"), null);
     await ui.actors.render(true); await sleep(400);
     const onEl = document.querySelector("#actors .cp2020ae-npcgen-btn, .cp2020ae-npcgen-btn");
-    check("master ON ⇒ the GM sees the NPC Generator button in the Actors directory", !!onEl, null);
+    check("the GM sees the NPC Generator button in the Actors directory, with no switch to ask", !!onEl, null);
     check("the button's label is localized (no raw key leaked)",
       !!onEl && !(onEl.textContent || "").includes("CYBERPUNK."), onEl?.textContent);
-    await game.settings.set(SCOPE, "npcGenEnabled", false);
-    await ui.actors.render(true); await sleep(400);
-    check("master OFF ⇒ the button is gone", !document.querySelector(".cp2020ae-npcgen-btn"), null);
-    check("master OFF ⇒ openNpcGenerator() refuses to open a window",
-      APP.openNpcGenerator() === null, null);
-    await game.settings.set(SCOPE, "npcGenEnabled", settingRestored);
-    settingRestored = null;
+    const opened = APP.openNpcGenerator();
+    check("and openNpcGenerator() opens a window rather than refusing", opened !== null, opened);
+    try { await opened?.close?.(); } catch {}
 
   } catch (e) {
     check("keeper body ran without throwing", false, String(e?.stack ?? e));
   } finally {
-    try { if (settingRestored !== null) await game.settings.set(SCOPE, "npcGenEnabled", settingRestored); } catch {}
     try { if (artRestored !== null) await game.settings.set(SCOPE, "npcGenTokenArtFolder", artRestored); } catch {}
     for (const id of madeActorIds) { try { await game.actors.get(id)?.delete(); } catch {} }
     if (folderCreatedByThisRun) {
