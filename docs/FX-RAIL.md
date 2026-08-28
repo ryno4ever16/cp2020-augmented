@@ -218,6 +218,10 @@ Everything one trigger pull can put on screen, in the order it appears.
 | 13 | **Impact audio** ⭐ *new 2026-08-12, corridor half added 2026-08-14* | `sounds/hit-flesh.ogg` (flesh) / `sounds/hit-sdp.ogg` (structure), native `AudioHelper`, **interface** channel, broadcast | the round **hit** and there is a target token — **delayed by that round's own arrival** (§4.2a), one per landing round, capped at **4**, refused rounds included. ⭐ A **declared corridor** has no target token, so its victims are swept once per payload instead (`patternAudioPlanFor`): every figure standing in the corridor's own polygon, **naked**-wall-occlusion exempt (a figure behind a cover-VALUED barrier is still sounded — the confirm damages it through that barrier's SP; `areaCoverVerdict`, ruling 2026-08-25), each sounded at **its own fraction of the crossing** — and the pattern's apply seam is quiet (`fxSilent`) so the confirm click can never sound the same bodies again (§6) | n/a (not drawn) |
 | 12 | **Blood splash** | `jb2a.liquid.splash_side02.red`, trimmed to 900 ms, **rotated to the exit vector** | the world setting **and** the round landed **and** there is a target token **and** that token's actor is not structure — **one per landing round**, capped at 4, **refused rounds included** (§4.1a) | **yes** — a deliberate departure, below |
 
+| 14 | **Delivered warhead** ⭐ *new 2026-08-27* | `jb2a.throwable.throw.bomb.01.black` (thrown) / `jb2a.throwable.launch.cannon_ball.01.black` warm-tinted through `TRACER_COLOR_ROCKET` (launched — ⭐ **the ball SHIPS; the bolt trial was REJECTED by the user 2026-08-27**, §6, and real rocket art remains the standing §8 ask; ⏪ the rejected trial is still declared as `ROCKET_PROJECTILE_BOLT`, one identifier away) — both painted/banded like a bullet family, so the object crosses on the SAME `stretchTo` shape and the SAME arrival ladder machinery, with **one object per throw** (a delivery card reports one round fired, so the fan-out loop runs once and there is no cadence, no drop rule and no queue) | the fired weapon's ATTACK TYPE is Grenade / Missile / Rocket / RPG (`combat/area-delivery.js`), thrown vs launched decided by whether there is a round in the tube | yes |
+| 14b | **Detonation mark** ⭐ *new 2026-08-27* | `jb2a.explosion.shrapnel.bomb.01.black` at **2.0 sq / 700 ms** (thrown) · `jb2a.explosion.01.orange` at **2.4 sq**, trimmed to its measured **1067 ms** content end inside a 1367 ms clip (launched) — promoted through the row's own `impactKey`/`impactClipMs`, so it is the ordinary hit-mark element with a different asset | the object arrived — which for a delivery payload is **always**, hit or miss (p.108 sends a missed centre to the grenade table, not to nowhere) | yes |
+| 14c | **Detonation audio** ⭐ *new 2026-08-27* | `sounds/explosion-big.ogg`, native `AudioHelper`, **interface** channel, **not** broadcast (it rides the performance score like every other rail sound) — at **0.85** thrown / **0.9** launched, above the impact element's 0.55 and at or below the report | on the payload's **one resolved arrival**, capped at **one per payload**; it REPLACES the body-impact plan for these classes (a warhead going off is not a body being hit), and `railSoundedImpacts` answers **false** so the blast's own per-body impacts still sound at the referee's confirm | n/a (not drawn) |
+
 **The above-lighting rule.** Anything that *emits* light is routed above the lighting layer; anything
 *lit by the world* stays below it. This is not cosmetic: measured on the rig at darkness 1.0, a sprite
 left in the primary group crushes to a peak of 15/255 whatever the class or filter, and the same asset
@@ -363,6 +367,21 @@ gesture on the game document — instead of the element. Measured on the rig: `p
 
 *Added 2026-08-12. `module/fx/status-fx.js`, and the keeper is
 `tests/cp2020-augmented-status-fx.mjs`.*
+
+> ⛔⛔ **NOT WIRED IN 1.2.0 — PARKED (user ruling 2026-08-27, the pre-ship walk).** The five rows below
+> are half-baked as they stand: the death ring "doesn't glow and is almost invisible in dark scenes",
+> and the rest were judged the same way in one pass. `registerStatusFx` is **no longer called** from
+> `module/cp2020-augmented.js` — the import and the `wire("condition overlays", …)` line were both
+> removed there, and re-wiring the feature is exactly those two lines coming back. **Nothing in the file
+> changed**, and nothing in this section is stale: it documents a working feature that is not being
+> shipped yet, to be reconsidered in a future release once the look is worth a table's eyes.
+>
+> Consequences a reader will meet: the keeper marks its live-path legs **skipped by ruling** rather than
+> deleting them (its resolver and geometry legs still run, because those ask the module a question and
+> need no listener); and the review bench's condition-row parity leg prints its reading instead of
+> asserting it. ⭐ **No `lang/en.json` key is orphaned by the parking** — verified by search: the file
+> localizes nothing at all, because every visible string the feature needed belonged to the mechanisms
+> that raise the conditions, and those all still ship.
 
 Everything above is drawn **because a trigger was pulled**. This section is the other kind: a looping
 mark that rides a figure for exactly as long as a condition is on it, and goes the moment it clears.
@@ -805,13 +824,287 @@ Siblings re-run because `effects.js` gained one export: `cp2020-augmented-fx-rai
 
 ---
 
+## 2c. The movement echo trail — what an activated initiative boost looks like
+
+⭐ **New 2026-08-28** (`module/fx/afterimage.js`, ledger #23bv → #23ce). The third element on this rail
+that is not a shot: a figure whose activated initiative boost is switched on leaves copies of itself
+behind as it moves, and the room goes green **with the movement**.
+
+### 2c.1 What it is, and what it is not
+
+Two pictures, one trigger — and the trigger is the **movement**, not the switch:
+
+- **The trail.** On every movement of a figure whose boost is on, full-opacity copies of that figure's
+  **own token art** are planted along the path it actually walked — the **whole** path, however long
+  the drag, with no count cap — running a colour ramp stretched across the trail's full length. ⭐
+  **Nothing fades while the figure is still moving.** When it settles, the trail **unzips**: the first
+  copy laid begins its fade a beat after the settle, and each later copy follows one short stagger
+  behind, so the trail unravels from its head at speed.
+- **The pass.** As the trail begins to be laid, the scene's own canvas group takes a colour grade that
+  removes red and blue and leaves green alone. It ramps in, **holds for as long as the figure keeps
+  moving**, and lets go as the unzip runs out.
+
+⛔ **It draws a picture and nothing else.** No document is written, no flag is set, nothing is created,
+and the figure is not moved by it — all four asserted by the keeper. Nothing about the boost's
+*mechanics* lives here: the +3 initiative is the base system's Characteristic payload, and the printed
+five turns are `mech/consumable.js`'s timer. This element only watches.
+
+### 2c.2 The trigger, and why there is no relay and no expiry code
+
+The gate is **read from the mechanism, never mirrored**: `armedImplantOf(actor)` asks
+`isActivatedInitiativeBoost` (`mech/speedware.js` — Activatable, Characteristic, initiative > 0) and then
+reads the base system's own `EffectActive`. There is no parallel flag and no second clock, so when the
+consumable tick flips the implant off at the end of its printed turns, the very next movement reads
+false and draws nothing. **That is the whole of the expiry handling.**
+
+Both triggers are already broadcast by the core — `moveToken` fires on every connected client
+(`client/documents/token.mjs`, `#onUpdateOperationMovement`), and an item update reaches every client's
+`updateItem` — so **no socket path was added**. Every client arms itself from the same event and draws
+its own copy, and the engine's own per-sprite push is switched off (`.locally()`) for the reason
+status-fx and the extraction arrival record: when a broadcast already makes every client a drawer, the
+engine must not also transport the drawings.
+
+### 2c.3 The path, and the corners
+
+The plants come from `movement.passed.waypoints` — **the engine's own record of where the figure went**
+— prepended with the movement's origin and converted from stored top-left positions to token centres.
+A path that turns corners therefore plants on its legs, never on the chord between its ends (asserted:
+an L-path's copies sit on the two legs, with the furthest 255 px off the chord).
+
+**Two gates, both required.** A plant needs the measured **1 grid square** of distance *and* the
+measured **200 ms** of movement since the last one. The arithmetic says which binds: Foundry's own
+`CONFIG.Token.movement.defaultSpeed` is **6 grid spaces per second**, so at the engine's default pace
+the cadence binds and copies land **1.2 squares** apart; a figure moving slower than 5 squares/second is
+bound by the spacing instead and its copies land **one square** apart. Both measured on the rig.
+
+⛔ **The whole path is planted.** The list runs to the end of the drag, not to one trail-length: a long
+continuous movement keeps spitting copies out, and the only bound on the list is `plantSafetyCap`
+(**160**), a rail on how many timers one movement may queue rather than a look number. Asserted: a
+40-square drag at the engine's default pace plants **34** copies, and a pathological 1000-square drag
+stops at exactly 160.
+
+The whole trail is resolved into one **anchored schedule** before a single copy is queued (standard
+§D/11) — every plant carries an absolute offset from the movement's start, so a late timer cannot push
+the ones after it — and `unzipScheduleFor` then decorates each plant with its **whole life**: the
+fade-start (`max(atMs, duration + settleDelay + index × stagger)`, floored at the plant's own landing so
+a short duration estimate can never fade a copy before it exists), its own lerped fade length, and the
+death that follows. That life is baked into the copy's **duration at creation**, so the choreography
+needs no second timer and there is nothing to cancel but the plant timers themselves.
+
+### 2c.4 The colour — and the chained-multiply alias, measured
+
+⚠⚠ **This is the element the pixicm lesson was waiting for, and the lesson is now a measurement.**
+
+Sequencer hands each ColorMatrix option to PIXI as `super[key](value, true)` — `multiply` — and PIXI's
+`_loadMatrix` then calls `_multiply(newMatrix, this.uniforms.m, matrix)` **with `newMatrix === matrix`**.
+Output and second operand are the same array, so every term after the fifth reads columns its own
+earlier terms have already overwritten. Two consequences, both pinned by the keeper against the **live**
+engine:
+
+1. **The alias is real and it corrupts.** Composing `{greyscale, tint}` returns three *different* rows
+   from the live filter — `[0.16732, 0.33333, 0]`, `[0.05577, 0.44444, 0]`, `[0.07436, 0.25926, 0]` —
+   where honest matrix algebra says all three must be identical. Painted through, that matrix gives
+   **59.8°** on a grey pixel and **41.1°** on a warm one, against a requested **90°**: neither the
+   asked-for hue nor a stable one.
+2. **The alias cancels exactly when the left operand is diagonal**, because every clobbered cross-term
+   was being multiplied by zero. The shipped order — `{tint, greyscale}`, so the tint's diagonal is on
+   the left — is therefore **aliasing-immune**, and the keeper asserts that by holding the engine's
+   answer against an honest non-aliasing multiply computed in the spec.
+
+Key order is also the operation order **backwards**: the later key is applied to the pixel first. So
+`{tint, greyscale}` means *grey the pixel, then paint it* — a duotone.
+
+⭐ **And the reason it is a duotone at all.** A hue ROTATION cannot colour a neutral pixel: PIXI's
+`hue()` turns the RGB cube about its own neutral axis, so it moves chroma that is already there and
+creates none. Measured on the live filter: a mid-grey pixel through `hue(90) + saturate(1)` comes back
+`(0.5, 0.5, 0.5)` — **unchanged**. A ramp built as "rotate the figure's art to lime" therefore draws
+nothing on a desaturated portrait and something different on every other one. Greyscale-then-tint makes
+the output hue a property of the ramp instead of a property of whose portrait is moving: the keeper
+puts three unlike source pixels (mid grey, a warm skin tone, a dark coat) through every one of the
+thirteen wrap slots and gets **one** hue out of each, on target to within 0.2°.
+
+**The greyscale scale is 1/3, not 1.** PIXI's `greyscale(scale)` matrix is all-`scale` rows, i.e. it
+SUMS the three channels; at 1 a white pixel maps to 3× white and clips. One third is the average.
+
+⭐ **THE RAMP SPANS THE TRAIL** (measured on the 52.5 s showcase frame: eleven copies walk lime→violet
+across the *whole* line). `ghostHueFor(index, total)` therefore takes the trail's own length and gives
+each copy the colour at its **fraction** of it — a 13-copy trail gets two-to-three per colour, a
+26-copy trail four-to-five, and both start lime and end magenta. A caller that has no total (an
+index-only question) falls back to **wrapping at `ghostCap` (13)**, the reference count; that is the
+only thing `ghostCap` is still for. Asserted both ways, including the tell: index 13 with no total
+wraps back to lime, while index 13 of a 26-long trail is blue.
+
+| wrap slots (no total) | share of a spanning trail | colour | hex | hue | matrix diagonal (R, G, B) |
+|---|---|---|---|---|---|
+| 0-2 | first sixth | lime | `0x80FF00` | 90° | 0.1673 · 0.3333 · 0 |
+| 3-4 | second sixth | teal | `0x00FFCC` | 168° | 0 · 0.3333 · 0.2667 |
+| 5-6 | third sixth | cyan | `0x00D4FF` | 190° | 0 · 0.2771 · 0.3333 |
+| 7-8 | fourth sixth | blue | `0x0033FF` | 228° | 0 · 0.0667 · 0.3333 |
+| 9-10 | fifth sixth | violet | `0x9900FF` | 276° | 0.2 · 0 · 0.3333 |
+| 11-12 | last sixth | magenta | `0xFF00CC` | 312° | 0.3333 · 0 · 0.2667 |
+
+⚠ The six ANGLES are a build-lane derivation, not a measurement — the frame study records the ramp as
+*names* and nothing finer; each angle is the standard one for the colour it is named after, chosen so
+the walk is strictly monotone. ✅ **SIGNED OFF 2026-08-28** with the element as a whole (*"It's
+perfect. Sandevistan is good to go"* — ledger #23cc, after the settle-then-unzip rebuild); each is
+still one number if taste ever moves.
+
+### 2c.5 The art, and the one documented exemption
+
+The copies are drawn from the figure's **own** `texture.src` — a file path, which is the standard's one
+prohibited thing (§A/2). The exemption is stated rather than taken quietly: that rule exists so a draw
+resolves on whichever asset tier is installed and so nothing is vendored, and a token's texture is
+neither — it is a path the scene already owns and is already drawing this frame. Guarded all the same
+(`ghostSourceOf` returns null and the trail refuses with `skipped: "art"`). Size and mirroring come from
+the token document, so a large figure leaves large copies and a mirrored one leaves mirrored copies.
+
+⭐ **Rotation is taken from how the figure is DRAWN, not from how its document is posed** (user report
+2026-08-28, ledger #23cb). With **Lock Rotation** on, core keeps the art upright whatever `rotation`
+says — and this module's own facing automation writes that angle regardless — so a locked figure was
+leaving copies tipped over at an angle nothing on screen was wearing. `ghostSourceOf` now returns
+rotation **0** when `tokenDoc.lockRotation === true` and the document's real angle otherwise. The lock
+is read strictly `true`: a truthy non-boolean does not lock. Both branches asserted by value.
+
+### 2c.6 The scene pass
+
+| number | value | basis |
+|---|---|---|
+| red scale | **0.58** | measured (R −42%) |
+| green scale | **1.00** | measured (G held) |
+| blue scale | **0.77** | measured (B −23%) |
+| ramp | **1600 ms** | measured (channel ratios ramp 49.1 → 50.7 s) |
+| hold | — | **held by state**, for as long as the movement lasts. The **2400 ms** `gradeHoldMs` survives only as the fixed-hold arithmetic of the explicit `sustained: false` burst ladder |
+| release | **800 ms** | measured (ratios depart ~53.3 s, neutral ~54.0). ⏪ supersedes the 1600 ms ramp-mirrored pick |
+
+Not a Sequencer element: Sequencer's filter machinery paints one sprite, and this grades the whole
+picture. It is one `PIXI.ColorMatrixFilter` **appended** to `canvas.environment` (falling back to
+`canvas.stage`), driven by the canvas ticker, with the matrix **set outright** rather than multiplied —
+so none of §2c.4's arithmetic applies to it; it is a plain per-channel diagonal and the ramp moves the
+three numbers on it. It owns only what it added: the group's existing filters are preserved and removal
+is by object identity (asserted with a foreign filter parked on the group across the whole test).
+
+⭐⭐ **The pass RIDES THE MOVEMENT — measured twice, corrected once (2026-08-28, ledger #23ce).** The
+channel-ratio series (sandy_grade.py) shows the scene NEUTRAL before the move, the grade snapping in
+at 49.1 s exactly as the movement starts, ramping 1.6 s, holding through the move, and releasing as
+the unzip runs out (~53.3 → neutral ~54.0). It is neither a fixed burst at an activation instant nor
+sustained for the implant's five turns — both earlier readings are dead (the "whole clip is green"
+claim was the map's own art fooling a baseline subtraction). Shipped: `layTrail` starts the pass
+held as a trail begins (a chained move pushes the release out rather than restarting the ramp),
+`gradeReleaseAtMsFor` schedules the let-go, deactivation mid-pass releases early, and the release
+eases from CURRENT progress so a one-square move's pass never flashes to full on its way out.
+
+Concretely: `startSceneGrade()` defaults to **held**, and the only way to the fixed 4.8 s ramp-hold-
+release ladder is to ask for it — `startSceneGrade({ sustained: false })`, which a macro may want and
+the keeper pins through the capture seam. `gradeReleaseAtMsFor(plan)` is `durationMs + settleDelayMs +
+plants.length × unzipStaggerMs` (3900 + 200 + 13×20 = **4360**, against the reference move's observed
+~53.3 s let-go from a 49.0 s start). A **chained** movement while the pass is already up does not
+restart the ramp: the pass record survives untouched and only the pending release timer is replaced.
+`releaseSceneGrade` re-bases the clock to the point in the release phase that matches the progress the
+ramp had actually reached, so the picture eases out from wherever it got to; at full progress that
+reduces exactly to the old arithmetic. Verified as a **picture**, not only as state: the keeper reads
+the live `ColorMatrixFilter`'s `uniforms.m` off `canvas.environment` mid-hold and finds the measured
+diagonal (0.58 · 1 · 0.77), and a 32×32 `renderer.extract` readback of the graded frame measures R/G at
+**0.566** against **1.00** ungraded — the pass is on the pixels, not just on the object.
+
+### 2c.7 The long-lived contract, and settle
+
+All three parts of standard §G/21 are wired, but ⛔ **under settle-then-unzip the cap is a safety rail
+and not the look.** The reference shows no live cap at all — a whole trail stands until the figure
+settles — so the two numbers are set equal and set high: a **per-movement plant rail**
+(`plantSafetyCap`, **160**) resolved before anything is queued, and a scene-wide **`maxLive` of 160**
+with oldest-out eviction **through the engine's own manager**. 160 plants is about 13 seconds of
+continuous movement at the measured cadence, so eviction can only fire on a pathological pile-up; the
+**unzip is the real bound**, and it is the unzip that decides how long a copy stands. Room is made
+**per plant, at its own draw moment**, so a genuinely enormous drag rolls its window rather than having
+its plant list cut short. Each copy carries a stamped `name` under one prefix
+(`cp2020-augmented.afterimage.<moveId>.<index>`) so the census is a query of the engine and never a
+ledger of ours, and pending (queued-not-yet-created) copies count against the cap and are released in
+`finally`. For this element eviction and teardown are the same gesture: the trail is *meant* to
+unravel from its head.
+
+**Settle: EXCLUDED, structurally.** This is scene dressing on the *movement* clock, not on a shot's. It
+is never queued from `fxWeaponFired`, contributes no field any resolved entry carries, and therefore
+cannot appear in `presentationTailMs` — the damage-apply window can no more wait on a movement echo
+than it can on the weather. The keeper asserts it both ways: the shot rail's tail arithmetic is
+identical with the element loaded, and the element exports nothing named `tail`/`settle`/`arrival` for
+that arithmetic to read.
+
+### 2c.8 What the keeper pins — `tests/cp2020-augmented-afterimage.mjs`, 184 legs
+
+⭐ **Realigned 2026-08-28** to the shipped models. The suite's expectations are hand-derived from the
+frozen spec block's constants, never read back out of the module, and the three superseded models are
+now pinned **dead** rather than asserted.
+
+**The colour engine:** the emulator held against the **live** PIXI filter for all thirteen wrap slots
+*and* for slots taken from a 26-long spanning trail · the per-slot matrix diagonals · three unlike
+source pixels through every slot giving one on-target hue · both traps of §2c.4, driven on the live
+engine · the shipped order proved aliasing-immune against an honest multiply computed in the spec.
+
+**The spanning ramp:** the full slot walk for a 13-, 26- and 7-copy trail by name · the wrap fallback at
+`ghostCap` when no total is given · the tell that separates the two (index 13 → lime wrapped, blue
+spanned) · clamps at both ends.
+
+**The unzip schedule:** a 20-square drag's 21 copies, with **every** fade-start at or past
+duration + settleDelay — nothing fades before the settle · the fade-start ladder's values (4200, 4220,
+… 4600) · the per-copy fade lerped 150 → 200 across the trail · each copy's death baked into one
+duration at creation · the **floor** case, where a short duration estimate still cannot fade a copy
+before it has landed.
+
+**The planner:** the **whole path** planted — 34 copies on a 40-square drag, not the reference 13 · the
+`plantSafetyCap` rail stopping a 1000-square drag at exactly 160, and the rail proved a parameter rather
+than a folded-in constant · the corner case · the first copy still planted on a path shorter than one
+gate · a repeated waypoint not counted as a corner · both gates' arithmetic against Foundry's own
+default speed · determinism by computing twice.
+
+**The source description:** ⭐ a **Lock Rotation** figure leaving upright copies against an unlocked one
+leaving them at its real angle, both by value · the lock read strictly `true` · size and mirroring from
+the figure's own footprint · the two null guards.
+
+**Driven live on the bench figure's own implant** (the base pack's Sandevistan, imported by the bench
+provisioner): switched off → the gate reads unarmed and the trail refuses **by name** with nothing drawn
+and nothing graded · switched on with a real item update → the gate arms, **and the flip alone starts no
+pass** · the walk queues its whole planned trail (past the reference count), reaches the engine, every
+copy stamped under the prefix, and **starts the pass held on its ramp** · the release scheduled at
+duration + settle beat + one stagger per copy · ⭐ a **chained** second walk that draws its own trail
+without restarting the ramp (the pass's own elapsed clock keeps running across the gap) · Foundry's own
+`moveToken` hook reaching the element and drawing · eviction ending exactly the copies that were
+standing when it was asked, polled to gone through the engine's census · the **expiry** the consumable
+tick performs → unarmed again and the next walk draws nothing · master switch off → trail and pass both
+refuse by name.
+
+**The pass as a PICTURE, not only as state:** the live filter's `uniforms.m` read off
+`canvas.environment` mid-hold and found to be the measured diagonal · a 32×32 rendered-pixel readback
+measuring the graded frame's R/G at 0.566 against 1.00 ungraded · the ramp/hold/release arithmetic by
+value at every boundary against the 800 ms release · ⭐ released mid-ramp, progress **never exceeding**
+what the ramp had reached and easing on from exactly there — no flash to full · at full progress the
+release reducing to the old arithmetic · ⭐ deactivation through the real `updateItem` hook releasing
+early · one filter appended to the scene group and only ours removed · a foreign filter untouched · the
+explicit `sustained: false` burst taking **itself** down at the ladder's end through the capture seam.
+
+**The dead models, pinned dead:** `gradeSustained` and `catchUpSceneGrade` appear nowhere in the source
+and on no export · the per-copy `ghostLifetimeMs` is no longer declared (while the spec block still
+records that it was deleted, and why) — all three read off the file the client actually loaded, behind
+a positive control so an empty fetch cannot pass them vacuously.
+
+**And:** zero document writes · the figure unmoved by the drawing · settle exclusion both ways · a clean
+rig with no pass left running · 0 console errors.
+
+Siblings re-run (`module/cp2020-augmented.js` gained one wiring line): `cp2020-augmented-fx-rail.mjs`,
+`cp2020-augmented-b1-seam-payload.mjs`, `cp2020-augmented-review-bench-smoke.mjs`,
+`cp2020-augmented-trauma-team.mjs`.
+
+---
+
 ## 3. The tables
 
 ### 3.1 Weapon classes — `FX_CLASSES`
 
 Resolution is by weapon **type**, never by item name. Shotgun-ness is read from the *attack* type
 (`Shotgun` / `Autoshotgun`) **before** the type map, because base data types shell weapons as `Rifle`
-so they take the Rifle skill.
+so they take the Rifle skill. ⭐ *Since 2026-08-27 a second attack-type branch sits beside it and for the
+same reason*: every grenade and launcher in the catalogue is typed `Heavy`, so the type map drew all of
+them as a 20 mm cannon. `Grenade` / `Missile` / `Rocket` / `RPG` resolve to the two DELIVERY classes
+instead, split by whether the item has a round in the tube (`combat/area-delivery.js`).
 
 | Class | Tracer | Muzzle | Impact (sq) | Cadence | Distinctive |
 |---|---|---|---|---|---|
@@ -820,6 +1113,8 @@ so they take the Rifle skill.
 | `rifle` | bullet.02 | 1.6 sq lance | 0.95 | 80 ms | 13 motes |
 | `shotgun` | bullet.01, `tracerColor: null` | **1.9 sq lance, 220 ms dwell** | 1.15 | **180 ms** | 6 pellets @ 0.07 rad, **0.7 sq** dashes crossing in 150 ms, per-pellet jitter (§3.2b), single-shot smoke |
 | `heavy` | bullet.02 | 2.1 sq lance | 1.30 | 80 ms | 16 motes |
+| `thrown` ⭐ | `throwable.throw.bomb.01.black` (banded, arc + wind-up baked in) | ⛔ **none — a hand has no muzzle** (`noMuzzleFlash` also stands the native flash light down) | 2.00 (`explosion.shrapnel.bomb`, 700 ms) | n/a — **one object per throw** | `grenade-pin` → `explosion-big` at the arrival; no blood; the object always arrives |
+| `rocket` ⭐ | `throwable.launch.cannon_ball.01.black` warm-tinted with `TRACER_COLOR_ROCKET` (⭐ **shipped** — the `bolt.physical.orange` trial was rejected 2026-08-27, §6; real rocket art = §8) | 1.8 sq lance — a launch tube DOES flash | 2.40 (`explosion.01.orange`, trimmed to its 1067 ms content end) | n/a — one object | `rocket-launch` → `explosion-big`; 10 motes |
 
 Sizes are in **grid units**, not scale factors — the same fraction of a square on any scene.
 
@@ -1439,6 +1734,55 @@ own play resolves, so two placements issued inside that beat both read the same 
 under-evicted — eight bursts left **28 flames alive against a cap of 24**. Flames now queued but not yet
 created are counted too (`pendingGroundFires`), which makes the cap hold rather than approximately hold.
 
+### 4.1b The drawn-round cap — the ear keeps every round, the eye does not
+
+*Ruled 2026-08-27 (walk-findings ⑥). `FX_DRAWN_ROUND_CAP` / `drawnRoundCapFor` in `module/fx/effects.js`;
+pinned by `tests/cp2020-augmented-fx-rail.mjs` §j-3, on a **loaded** bench.*
+
+**The residual.** After the anchored schedule (4.1a) and the audio phase both landed, the shell class
+still put roughly three rounds' pictures on screen after its last report — but **only on a loaded
+scene**, one that had already planted burning ground and was still firing. The mechanism is arithmetic
+rather than a fault: the audio phase resolves **once per volley at round 0**, deliberately, because a
+phase that moved per round would stretch the cadence — while the engine's create latency **grows** as
+elements accumulate. The measurement is therefore always one step behind the accumulation, and ~550 ms
+of load latency over a 180 ms cadence is exactly the three trailing rounds that were reported.
+
+**The candidate that was measured and refused.** A pre-issue **pipeline**: issue round *i*'s draw two
+ticks early carrying an engine-side delay, so the expensive creation is paid ahead of the tick it must
+appear on. That works only if the engine **front-loads** creation at issue time. It does not. Measured
+on :30004 against a loaded canvas (the burning ground at `GROUND_FIRE.maxLive` plus a main-thread stall
+injector), a bare one-effect `Sequence`:
+
+| section | engine report | first frame | residual after the nominal delay |
+|---|---|---|---|
+| `.delay(0)` | ~231 ms | ~275 ms | — |
+| `.delay(400)` | ~689 ms | ~702 ms | **~300 ms** |
+
+The residual after the timer fires is the **same latency** as with no delay at all, so `.delay()` is a
+plain pre-creation wait: pipelining buys a longer queue and nothing else. Verdict: **DEFERRED**, and the
+ruled fallback ships instead.
+
+**What ships.** A per-class budget on **drawn** rounds. The report is not on the budget and never was —
+the ear gets every round of every volley. The budget sits in the loop *after* `sfx()` and *before* the
+picture, which is the ruling written as code, and a withheld round keeps its **arrival family** (mark,
+spray, impact audio) for the same reason a dropped round does: those are one sprite each at the far end
+of the shot, they are what says the round landed, and they are not what creates the backlog.
+
+⛔ **The last round is never withheld**, for both of `roundDropped`'s reasons: it is the picture a viewer
+is actually watching, and it carries the **settle tag** the apply window waits on. A capped volley draws
+its first `cap` rounds and its last one.
+
+| knob | value | meaning |
+|---|---|---|
+| `FX_DRAWN_ROUND_CAP.shotgun` | `4` | the only capped class. Every volley a pump or a burst fires at the table (1–3 shells) is untouched; a long automatic volley stops adding create work after four rounds, which is where the queue stops growing faster than the 180 ms cadence drains it. |
+| *(any other class)* | absent | **uncapped.** None was reported, and none plants ground fire the way the shell class does. |
+| `_setDrawnRoundCap(n\|null)` | test seam | forces a budget for every class (`0` = uncapped). Ships armed by nothing. It exists because the cap **masks** the mechanisms §j-2 measures — the pacing rule and the audio phase both express themselves in rounds the budget would otherwise withhold. |
+
+⏪ **Revert is the table**: empty `FX_DRAWN_ROUND_CAP` and every round draws again.
+
+The volley's result reports `drawnRoundCap`, `drawnRounds` and `drawCapped` by value, so "a long shell
+volley draws at most N pictures and still sounds every round" is a claim a test can settle.
+
 ### 4.2 The tail, and when the damage window may open
 
 The damage window waits for the rail. Three routes, and each reports which one it took:
@@ -1731,6 +2075,13 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `SPAN_ANCHOR_AT_MUZZLE` | **true** | where a PAINTED (stretched) round's span is planted — the token's forward edge (`muzzlePoint`) instead of its centre, so each cut's baked backwash falls inside the shooter's own square. Answers what the band floor structurally cannot: `bullet.01` carries 39 px of bright ink (luminance 107/255) behind the start anchor in **every** band, so there is no clean cut to fall back to. Arrival timing untouched; the travelled dash deliberately keeps the centre (its crossing time is derived from the aim distance). **Revert false** = the span returns to the token's centre, backwash included |
 | `FX_CLASSES.shotgun.soundVolume` | **0.58** | the shell class's report level — the one per-class departure from `SHOT_VOLUME`. −27.5 % / **−2.8 dB**, on the 2026-08-19 ruling ("turn it down just a touch"). **Revert = delete the field**, which returns the class to `SHOT_VOLUME` (0.8) with nothing else moved |
 | `SHOT_VOLUME` | 0.8 | the default report level for every class that names none of its own |
+| `FX_CLASSES.thrown.detonationVolume` ⭐ | **0.85** | what a thrown warhead's boom plays at (`explosion-big.ogg`). Above the impact element's 0.55 and at or below the report, which is the ordering a listener expects. ⚠ unsigned by ear (§8) |
+| `FX_CLASSES.rocket.detonationVolume` ⭐ | **0.9** | the launched warhead's boom — one notch over the thrown one, because the round is bigger. ⚠ unsigned by ear (§8) |
+| `DETONATION_VOLUME` ⭐ | **0.85** | the default under both rows, for a delivery class that names none of its own |
+| `FX_CLASSES.thrown.soundVolume` / `.rocket.soundVolume` ⭐ | **0.7 / 0.75** | the FIRE half of the two-part audio grammar — `grenade-pin.ogg` at the throw, `rocket-launch.ogg` at the launch. Under `SHOT_VOLUME` because neither is a gun report |
+| `FX_CLASSES.thrown.impactSquares` / `.rocket.impactSquares` ⭐ | **2.0 / 2.4** | the drawn width of the detonation MARK. ⛔ deliberately NOT scaled to the resolved blast radius — the radius is drawn by the damage rail's own blast area on the same clock, and scaling the sprite to it would draw one fact twice. ⚠ unsigned look call (§8) |
+| `TRACER_COLOR_ROCKET` ⭐ | `{hue 12, saturate 0.45, brightness 1.55}` | what warms the launched warhead off a black cannon-ball asset (this library ships no rocket-with-exhaust cut). ⭐ **APPLIED** — the ball is back on the row after the 2026-08-27 bolt rejection (§6), so this matrix is live again; the rejected trial asset was natively orange and carried `tracerColor: null`. ⚠ unsigned look call (§8) |
+| `ROCKET_PROJECTILE` | `= ROCKET_PROJECTILE_BALL` → `{key: "jb2a.throwable.launch.cannon_ball.01.black", tracerColor: TRACER_COLOR_ROCKET}` | ⛔ **THE ONE KNOB for the launched warhead's picture.** Carries the key AND the tint together, so the two cannot drift. ⭐ **RULED 2026-08-27:** the `ROCKET_PROJECTILE_BOLT` trial (`jb2a.bolt.physical.orange`) was **rejected by the user** — *"very small and kind of still looks like a bullet"* — because a `stretchTo` draw takes its width from the asset's own frame and thin ink reads as a streak; growing it would be scale tricks on the wrong asset (§9 A3). The bolt row is left declared, one identifier away, the way this file leaves every superseded mechanism wired. Both arrival ladders stay in `TRACER_ARRIVAL_MS` so neither choice drops to the fallback. **Real rocket art is the standing §8 ask; with art this is one `.file()` swap** |
 | `TRACER_NEAR_BAND_FLOOR` | **"15ft"** | the nearest distance band's DRAWN tracer file — the 05ft cut carries a decoded 114/136 px muzzle backwash behind its start anchor (the reported backward tail); the floor serves the clean 15ft cut there instead, arrival timing untouched. **Revert null** = the engine's own band pick, backwash included |
 | `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the two standalone arrival sites (hit mark, blood) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
@@ -1880,12 +2231,284 @@ is the table, so a sixth condition is a row rather than a change:
 | `TRAUMA_TEAM_SOUND.descent` / `.volume` | `fx-scifi-whoosh` / 0.5 | the one shipped cue. **`null` ships it silent** |
 | `LANDING_GHOST.*` | amber, alpha 0.12 | the placement ghost — `module/fx/trauma-team-tool.js` |
 
+### The movement echo trail — `AFTERIMAGE` in `module/fx/afterimage.js` ⭐ *new 2026-08-28*
+
+| Knob | Ships as | Changes |
+|---|---|---|
+| `ghostCap` | **13** | the reference count, kept only as the hue ramp's wrap period for a caller with no trail total (the ramp normally SPANS the whole trail). ⛔ NOT a live cap and NOT a plant bound — the settle-then-unzip model (§6, 2026-08-28) has neither |
+| `ghostCadenceMs` | **200** | the time gate. **Measured** — and video-confirmed: the showcase's ~3.5 squares/s drag was spacing-bound, one copy per square |
+| `ghostSpacingSquares` | **1** | the distance gate — one copy per grid square, edges touching. **Measured**, video-confirmed (slot centres ~87 px on an ~87 px grid) |
+| `requireBothGates` | **true** | whether a plant needs BOTH gates or only the spacing. **Revert false** = distance alone, which carpets the floor on a slow crawl |
+| `ghostOpacity` | **1** | full opacity. **Measured** — the reference's copies are not faint |
+| `settleDelayMs` | **200** | the beat between the figure settling and the first copy's fade. **Video-measured** (settle ~52.9 s, first fade ~53.12 s) |
+| `unzipStaggerMs` | **20** | the unzip wave's speed — one copy's fade begins this long after the previous copy's, front of the trail to the back. **Video-measured** (slots 0→5 begin 53.117/53.150/53.167/53.183/53.200/53.217; a 13-copy trail is clean ~450 ms after the wave starts) |
+| `ghostTeardownMinMs` / `ghostTeardownMaxMs` | **150 / 200** | each copy's own fade during the unzip, lerped front-to-back. **Video-measured** (~150-200 ms per copy; the old frame study's 250/400 was this same phenomenon timed coarsely) |
+| `ghostFadeInMs` | **0** | build-lane: a copy appears at once. Anything above 0 makes the newest copy the faintest, which inverts the reference |
+| `ghostGreyscale` | **1/3** | the equal-weight greyscale applied before the colour. ⛔ **1/3 and not 1** — PIXI's `greyscale` SUMS the channels. ⏪ **Revert `null`** drops the op entirely, leaving a plain multiply of the token's own colours by the ramp colour: murkier, more literally "the token art", far weaker hue read |
+| `AFTERIMAGE_HUES` | 6 entries, `0x80FF00` → `0xFF00CC` | the ramp. Each row is one hex. ⚠ the six **angles** are a build-lane derivation from the frame study's six colour NAMES (§8) |
+| `gradeRedScale` / `gradeGreenScale` / `gradeBlueScale` | **0.58 / 1.00 / 0.77** | the scene pass. **Measured** (R −42%, B −23%, G held) |
+| `gradeRampMs` | **1600** | **Measured** (channel ratios ramp 49.1→50.7 s) |
+| `gradeHoldMs` | **2400** | kept for the pure fixed-hold (burst) ladder the keeper pins and a macro may ask for (`startSceneGrade({sustained:false})`); the shipped movement-tied pass holds by state, not by this number |
+| `gradeReleaseMs` | **800** | ⭐ **Video-measured 2026-08-28-3**: ratios depart ~53.3 s, neutral ~54.0. ⏪ Revert 1600 (the ramp-mirrored pick) |
+| `gradeReleaseAtMsFor(plan)` | settle + beat + copies × stagger | when the movement's pass lets go, from the movement's start — predicted 53.36 s vs the observed ~53.3 on the reference move. Not a knob; the three terms above are |
+| `maxLive` | **160** | safety-only under settle-then-unzip (the reference shows NO live cap — the whole trail stands until the settle): equal to the plant rail so eviction can only fire on a pathological pile-up. §G's cap+eviction machinery stays wired for exactly that |
+| `plantSafetyCap` | **160** | the only bound on one movement's plant list — a safety rail on queued timers, **not a look number**. The visible trail is bounded by the unzip itself |
+| `_setAfterimageTimeScale(s)` | seam, `null` | the capture seam — compresses the plant ladder and the pass. Armed by nothing that ships |
+
 ---
 
 ## 6. Rulings log
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+**2026-08-28 — THE MOVEMENT ECHO TRAIL IS BUILT CLEAN-ROOM FROM THE FRAME STUDY (ledger #23bv).** The
+user's order was "build it using the reference". No macro was ever sourced for it (the reference's own
+was Discord-only and recon-confirmed absent), and its historical dependency list — Foundry v11, FXMaster,
+the JB2A Patreon tier, socketlib — is four things this module must not need. So the element was built
+from the 60 fps frame-measured spec alone, which is also the clean-room answer: **zero new dependencies,
+zero JB2A keys** (the copies are the figure's own texture; the pass is an engine filter).
+
+**2026-08-28 — THE ACTIVATION MECHANISM IS READ, NEVER MIRRORED.** The trail's gate asks
+`isActivatedInitiativeBoost` (`mech/speedware.js`) and then reads the base system's own `EffectActive`.
+No parallel flag, no second clock — so the printed five turns need no handling here at all: when
+`mech/consumable.js`'s tick flips the implant off, the next movement reads false. Asserted by driving
+the tick's own off-flip (`{cp2020TimerExpiry: true}`) and getting `skipped: "unarmed"`.
+
+**2026-08-28 — NO NEW SOCKET PATH, AND THAT IS A FINDING.** Both triggers are already broadcast by the
+core — `moveToken` fires on every connected client, and an item update reaches every `updateItem` — so
+every client arms itself and draws its own copy. The engine's own per-sprite push is switched off
+(`.locally()`), the third instance of that class on this rail after status-fx (2026-08-13) and the
+extraction arrival (2026-08-16). The existing score relay was **considered and not needed**.
+
+**2026-08-28 — ⚠⚠ THE PIXI CHAINED-MULTIPLY ALIAS, MEASURED AT LAST.** The lesson was on record as a
+warning; it is now a number. PIXI's `_loadMatrix` calls `_multiply(newMatrix, this.uniforms.m, matrix)`
+with `newMatrix === matrix` — **output and second operand are the same array** — so terms written early
+corrupt columns read late. Held against the live engine: composing `{greyscale, tint}` returns three
+DIFFERENT rows (`[0.16732, 0.33333, 0]`, `[0.05577, 0.44444, 0]`, `[0.07436, 0.25926, 0]`) where honest
+algebra demands three identical ones, and painting through it gives **59.8°** on a grey pixel and
+**41.1°** on a warm one against a requested **90°**. **The alias cancels exactly when the left operand
+is diagonal**, so the shipped order `{tint, greyscale}` is immune — proved by holding the engine's answer
+against a non-aliasing multiply computed in the spec. The module carries an emulator of the engine's
+arithmetic *including the alias*, and the keeper fails if PIXI, Sequencer or Foundry moves under it.
+⛔ The general rule this leaves: **on this rail a multi-op ColorMatrix is only safe when every op but
+the last-applied is diagonal.** Anything else must be measured against the live filter before it ships.
+
+**2026-08-28 — THE RAMP IS A DUOTONE, NOT A HUE ROTATION, AND THE MEASUREMENT IS WHY.** A hue rotation
+turns the RGB cube about its neutral axis: it moves chroma that is there and creates none. Measured on
+the live filter — a mid-grey pixel through `hue(90) + saturate(1)` comes back `(0.5, 0.5, 0.5)`,
+**unchanged**. A ramp built as "rotate the art to lime" therefore draws nothing on a desaturated
+portrait and something different on every other one. Greyscale-then-tint makes the output hue a property
+of the ramp: three unlike source pixels through each of the twelve slots give one hue each, on target to
+within 0.2°.
+
+**2026-08-28 — BOTH MOVEMENT GATES ARE REQUIRED, and the arithmetic names which binds.** The frame study
+gives two numbers for one thing — "~1 ghost per 200 ms" and "edge-to-edge ~1/grid". Foundry's own
+`CONFIG.Token.movement.defaultSpeed` is 6 spaces/second, so at the engine's default pace 200 ms is 1.2
+squares and the cadence binds; below 5 squares/second the spacing binds. Requiring both is the reading
+that neither carpets the floor on a crawl nor draws a solid line on a sprint.
+
+**2026-08-28 — THE FIGURE'S OWN TEXTURE IS THE ONE DOCUMENTED EXEMPTION from "database keys, never file
+paths" (standard §A/2).** That rule exists so a draw resolves on whichever tier is installed and so
+nothing is vendored. A token's `texture.src` is neither: it is a path the scene already owns and is
+already drawing this frame. Guarded per draw all the same.
+
+**2026-08-28 — ⭐ RULED ON FIRST VIEWING: FASTER DECAY, AND THE TRAIL FOLLOWS THE WHOLE DRAG (ledger
+#23ca).** The user's verdict on the built look, two rounds, verbatim: *"solid, but they stick around
+for too long… this is trying to simulate someone moving really fast — they should start to decay
+sooner"*, then *"they should fade from one to the next faster as well. They disappear too slowly
+overall."* And: *"if the player moves far enough, the afterimages stop being produced. It should keep
+spitting them out for as long as the token keeps moving as long as it's one continuous movement."*
+Three changes follow. ① `ghostLifetimeMs` 2400 → **1000** and ② the teardown band 250/400 → **150/250**
+— both were lane picks or measured-band readings, and the user's eyes outrank the frame study on a look
+call (reverts in §5). ③ The plant list now runs the WHOLE path: the per-movement `ghostCap` cut in
+`ghostPlantsFor` was the defect (the pure ramp half already wrapped `% ghostCap` in anticipation), the
+list is bounded only by the `plantSafetyCap` timer rail, and the live bound is enforced **per plant at
+draw time** (`evictForRoom(1)` in each plant's own timer) — one in, oldest out, so the twelve-wide
+window rolls behind the mover instead of the trail going silent at one trail-length. The up-front
+whole-list eviction is gone with it: sized to a long drag it would have swept every live copy at the
+drag's first frame. ⚠ Keeper realignment owed (the 90-leg suite still asserts the cap-12 plant list
+and the 2400/250/400 numbers) — queued for the rig, with the §2c prose that restates them.
+
+**2026-08-28 — ⭐ THE COUNT IS THIRTEEN, AND IT COMES FROM DENSITY, NOT LINGER (ledger #23cb).**
+⏪ **SUPERSEDED the same hour by the video measurement below** — kept as the record of a wrong turn:
+the density arithmetic (cadence 80 / spacing 0.5 / lifetime 1100 / rolling cap 13) was the only way
+to hold 13 alive under a per-copy-lifetime model, and the user's next refinement dissolved the model
+itself.
+
+**2026-08-28 — ⭐⭐ THE SETTLE-THEN-UNZIP MODEL, MEASURED OFF THE SHOWCASE VIDEO ITSELF (ledger
+#23cb).** The user: copies are laid as the token moves, none disappears until it settles, there is no
+count cap, and the disappearance runs first-laid → newest, very rapidly — then pointed at the source:
+*"You have access to the video on drive… movement starts at 49 seconds and ends at 53."* Frame study
+run in-session (60 fps, `sandy_study.py` + `sandy_unzip.py`, keyframes in the session scratchpad) on
+`Downloads/Foundry VTT and Cyberpunk RED Module Examples-E0ZgYN8onk4.mp4`:
+- **Laying:** copies appear under the mover as it goes (4 behind it at 51.0 s, 11 by 52.5 s), one per
+  grid square, edges touching, none fading during the move. The path was an L — corners ghost too.
+- **The ramp SPANS the trail** (lime at the oldest end walking to violet/magenta at the newest,
+  across however many copies the drag laid) — not wrapped at any fixed count.
+- **The unzip:** mover settles ~52.9 s; first copy's fade begins ~53.12 s (a ~200 ms beat); fade
+  starts then walk the trail at **~20 ms per copy** (slots 0→5: 53.117 / 53.150 / 53.167 / 53.183 /
+  53.200 / 53.217), each copy fading over **~150-200 ms**; a 13-copy trail is clean ~450 ms after the
+  wave starts. Strictly first-laid → newest (at 53.3 s the first eight are gone, the newest five
+  stand; 53.6 s is clean).
+- **The grade is SUSTAINED** — the green pass is on for the entire clip around the move, so the
+  "burst" reading (5.6 s) had timed the ramp alone. `gradeSustained` flips to `true`.
+MECHANISM REBUILT to match: the whole death schedule is resolved pure at plan time
+(`unzipScheduleFor` — fade-start = settle + delay + index × stagger, floored at the plant's own
+landing) and baked into each copy's DURATION at creation, so there is no second timer and nothing to
+choreograph at settle; the live cap becomes a safety rail (160, = the plant rail) that an honest drag
+never touches. ⚠ Keeper realignment owed on all of it (the 90-leg suite asserts the superseded
+models) — queued for the rig.
+
+**2026-08-28 — ⭐⭐ THE GRADE RIDES THE MOVEMENT — the user's question, answered by the video (ledger
+#23ce).** Asked point-blank whether the green pass is active the implant's whole five turns or only
+during the movement, the channel-ratio measurement (sandy_grade.py, R/G + B/G of the map region at
+10 samples/s) settled it: NEUTRAL 46-49 s (1.015/1.116), snap-in at 49.1 s with the move, 1.6 s ramp
+to full (0.51/0.48), held through the move, releasing ~53.3 s — as the unzip runs out — and neutral
+by ~54.0. So BOTH prior models die: the activation-instant burst AND the sustained-while-active hold
+(that one built on my own bad "whole clip is green" read, which the map's greenish art had fooled;
+this measurement supersedes it and the catch-up entry below). SHIPPED: `layTrail` starts the pass as
+a trail begins; `gradeReleaseAtMsFor` (= settle + beat + copies × stagger; predicted 53.36 vs
+observed ~53.3) schedules the let-go; a chained move pushes the release out instead of restarting
+the ramp; the release eases from CURRENT progress (a short move's pass released mid-ramp never
+flashes to full); release measured 800 ms; deactivation mid-pass releases early; `catchUpSceneGrade`
+and the `gradeSustained` constant are REMOVED with the models that needed them.
+
+**2026-08-28 — 🐞 THE GRADE WAS EDGE-TRIGGERED, AND A RELOAD ORPHANED IT (ledger #23cd — the
+diagnosis stands; the sustained-catch-up FIX is superseded by the movement-tied entry above).** The user
+never saw the green pass. Investigation cleared the mechanism (PIXI 7.4.3's `uniforms.m` is the real
+plumbing on 14.365; `canvas.environment` is the container that renders the scene; the keeper drove
+the real flip live and watched the pass run) and convicted the trigger model: the pass started only
+on the activation FLIP, so a client reloading — which every serve sync forces — onto a scene whose
+implant was ALREADY on got the state-read trail and no grade. Fixed with `catchUpSceneGrade()` on
+`canvasReady`: sustained means graded-while-on, so the state is asked directly; gated to the
+sustained model (the burst is an activation-moment event a reload must not replay). ⚠ The keeper gap
+that let this land: the 90 legs asserted filters, phases and uniforms — never a rendered pixel; the
+realignment lane owes that assertion plus the catch-up legs.
+
+**2026-08-28 — ✅ THE ELEMENT IS SIGNED OFF, WHOLE (ledger #23cc).** After the settle-then-unzip
+rebuild and one fix rider (Lock Rotation respected: a copy is drawn the way the figure is DRAWN, not
+the way its document is posed — rotation 0 when `lockRotation`, since facing automation writes angles
+core never shows on locked art), the user's verdict on the rig, verbatim: *"It's perfect. Sandevistan
+is good to go."* That signs the trail, the spanning ramp with its derived angles, the measured unzip,
+the sustained grade, and the lock-rotation behaviour as the shipped 1.2.0 look. Open on the element:
+only the keeper realignment (above) — a verification debt, not a look call.
+
+**2026-08-27 — ⏪ RULED: THE BOLT TRIAL IS REJECTED, THE BALL SHIPS (ledger #23br item (b), #23bs).**
+Reported at the table: the launcher's round *reads as a ball*. The instruction was to trial an
+ELONGATED directional candidate live, behind one revert. It was trialled, and the user's verdict on
+seeing it was **no**: *"very small and kind of still looks like a bullet"*. The mechanism behind that
+reading is `stretchTo` — a painted round takes its **width from the asset's own frame**, so the tier's
+most elongated cut is also its thinnest ink, and the thing that would make it bigger is a scale trick on
+the wrong asset (§9 A3, the discharge column's own lesson). ⏪ **REVERTED**: `ROCKET_PROJECTILE =
+ROCKET_PROJECTILE_BALL`, byte-identical to what shipped, matrix included, and the ball's own arrival
+ladder re-engages by design. ⛔ **The real answer is ART, and it is the standing §8 ask** — the user is
+sourcing a license-clean rocket cut; when it arrives it vendors as a module file plus a CREDITS entry
+plus **one identifier swap**, with no setting (the override-setting proposal was countermanded, #23bu).
+The measurements below are kept in full because they are what a future asset is judged against.
+
+⛔ **THE HONEST FINDING, stated before the pick, because it is not what was hoped for: no asset in the
+installed free tier meets all three criteria at once** (elongated · travels nose-first · no baked
+terminal bloom). The enumeration is **closed and library-wide** — all 79 files shipping a five-band
+`_60ft_` ranged cut, not just the `Weapon_Attacks` folder — and it splits in two: every SLIM projectile
+(bolt, arrow, ice shard, `bullet.03`) bakes an impact bloom at its own arrival, and every asset with a
+clean terminal is a member of the **toss** family (cannon ball, bomb, flask, boulder, two barrels) and
+is therefore a round object. So the choice is *keep the clean-ending ball* or *take an elongated body
+and accept a flash at the arrival point*. The trial takes the second: the reported defect is the SHAPE,
+and the flash lands on the same frame as a detonation the row already draws.
+
+⏪ **WHAT WAS TRIALLED AND REJECTED: `jb2a.bolt.physical.orange`.** Decoded at the §9 A4 instrument, which was validated first by
+reproducing the cannon ball's recorded ladder exactly (267 / 600 / 1000 / 1833 / 2233).
+
+| metric | cannon ball (revert) | `bolt.physical.orange` (trial) |
+|---|---|---|
+| body height (median over travel frames, 400 px frame, leading 240 px window) | 77 → 157 px | **64 px**, flat across 15–90 ft |
+| body aspect | 2.27 → 1.54 | **3.77** — the tier's most elongated |
+| vertical centroid excursion over travel | 2.0 → 31.3 px (it tumbles) | **0.5 → 2.6 px** (flat, nose-first) |
+| native colour | black — needs `TRACER_COLOR_ROCKET` | **orange — needs nothing** |
+| frame-0 ink (mean channel) | 0.2–1.0 | 0.0 |
+| terminal bloom (max lit height after arrival ÷ body height) | 0.39–0.86 (it *shrinks*) | ⚠ **4.06–4.16** |
+| release wind-up (ms before the head advances 100 px) | 167–200 ms | ⚠ **733–833 ms** |
+| arrival ladder 05/15/30/60/90 ft | 267 / 600 / 1000 / 1833 / 2233 | **933 / 1000 / 1167 / 1300 / 1467** |
+
+⚠⚠ **THE TWO COSTS, so the look is judged against them rather than discovered.** (1) A **733–833 ms
+wind-up at the tube**: frames 1–21 of the 60 ft cut are a 90×16 px sliver retreating (x 212 → 173) and
+then flaring — the asset's own nock-and-release — and it sits at x 150–300 of 2800, i.e. inside the
+shooter's own square. It can read as a motor lighting in the tube, or as a hang. ⛔ **Not trimmed away:**
+trimming an asset to hide part of itself is the shotgun mistake this standard exists to prevent (§9 A3).
+(2) A **terminal bloom 4.1× the shaft's height** (to 266 px of 400 ≈ 1.1 sq on a twelve-square shot),
+then the shaft dropping out of frame — coincident with this row's own 2.4 sq detonation mark, but larger
+than the bloom that got `bullet.03.blue` rejected (measured 3.12 there).
+
+✅ **What it buys:** an object 0.27 sq thick against the ball's 0.33–0.55, travelling flat with a tenth
+the vertical wander, in its own orange so the **colour matrix comes off** (one fewer transform, not one
+more). And it is faster where a rocket should be — 1300 ms across a 60 ft shot against 1833, 1467 vs
+2233 at 90 ft; only the two nearest bands are slower, and only because the wind-up is a fixed cost.
+
+⛔ **THE CLOSED REJECTION LIST, so nobody re-derives it:** `arrow.physical.blue` — the same shape one
+step thicker (96 px / 2.51) with the same two costs, *and* blue, so it would need the colour matrix back
+(strictly worse); `bullet.01/.02.orange` — already the pistol/smg and rifle/heavy tracers, so a warhead
+would draw the rifle's own round; `bullet.03.blue` — the standing no-starburst rejection, unchanged; the
+**four** `missile` cuts (blue, two white, purple-pink) — all open ALREADY LIT (frame-0 mean 97–98 vs the
+adopted cuts' 0.0–0.2) with ink filling the whole 400 px frame from frame 1, i.e. the 2026-08-27
+rejection re-measured and confirmed across all four rather than the blue one alone; `packhound` and
+`magic_missile` — four-variant blue/purple magic, bodies 368–392 px; `ranged_projectile` 01–04 — generic
+spell projectiles, all full-frame; `fire_bolt` (398 px) and `scorching_ray` (206 px) — warm and
+directional, but a flame plume the height of the shot rather than an object with a nose; `snipe.blue`
+and the beam families — arrival at 100 ms or 0 ms, they do not travel, they appear, so they have no
+clock-2 answer to give; `dagger`, `shield` and the four toss cuts — clean terminals, but 19–87 px of
+vertical wander against the bolt's 2.5, and round or bladed rather than nose-first.
+
+⏪ **THE REVERT WAS TAKEN, and it is one identifier**: `ROCKET_PROJECTILE = ROCKET_PROJECTILE_BALL`
+restores the shipped row byte-for-byte, matrix included — which is the state in the tree today. Both arrival ladders stay in `TRACER_ARRIVAL_MS` so the revert does not
+silently drop to `TRACER_ARRIVAL_FALLBACK_MS`. ⚠ The **tail moves with the picture and that is the rule,
+not a retune**: it is `arrival + impactClipMs`, so the faster asset opens the apply window sooner
+(60 ft: 2367 ms against 2900 ms) — the arrival clock answering honestly for what is drawn (§9 D13).
+⛔ **Audio, muzzle, detonation mark, cadence, settle tag: untouched.** None of them names an asset.
+
+**2026-08-27 — ⭐⭐ A GRENADE IS NOT A BULLET (user ruling, the grenade/launcher unit, ledger #23bo).**
+Verbatim: *"make sure you use all of the techniques we picked up along the way so this doesn't become the
+next shotgun."* Every grenade and launcher in the shipped catalogue is `weaponType: "Heavy"`, so
+`weaponFxClass` mapped all of them onto the HEAVY class: a **thrown** grenade lit a 20 mm muzzle flash,
+sent a bullet tracer down-range and made the heavy cannon's report. The class row was innocent — the
+weapon was being asked the wrong question. The ATTACK type answers it, and the thrown/launched split is
+asked of the item (*is there a round in the tube*), never of a name list or a range number.
+
+⭐ **ASSET-NATIVE, AND THE ARC WAS FOUND RATHER THAN BUILT.** `jb2a.throwable.throw.bomb.01.black` bows
+its ink **35 px off the shot axis and back** on a 400 px frame and retreats its horizontal centroid for
+the first ~30 frames before advancing — the lob and the wind-up, baked in. `jb2a.throwable.launch.
+cannon_ball.01.black` holds 199–207 across the same cut: **flat**, which is what a launched round is.
+Nothing is eased, scaled or spun by this rail. Full per-band ladders are in the `DELIVERY_FX` block.
+
+⛔ **ONE CANDIDATE WAS REJECTED BY MEASUREMENT, and it was the obvious one by name.**
+`jb2a.throwable.launch.missile.01.blue` has **no readable arrival**: frame 0 is already 38 % lit (mean
+channel 97.3 against the two adopted cuts' 0.2), the ink spans the whole frame from the first frame, and
+the rightmost-lit reading sits on three constant plateaus that are encoder block boundaries rather than a
+travelling head. A shape with no clock-2 answer is a defect, not a default (§9 H24), so it is not
+adoptable and the alternative would have been to invent a number for it. `jb2a.ranged_missile.001.blue`
+and `jb2a.pack_hound_missile` were rejected on idiom: four-variant blue MAGIC missiles.
+
+⭐ **THE SHOTGUN'S LESSON, STRUCTURALLY.** A delivery card reports ONE round fired, so the fan-out loop
+runs once: no cadence, no drop rule in play, no queue to fall behind. The whole class of load-dependent
+trailing the shell was reported for **cannot arise here**, because there is never a second round to be
+late — which is a stronger guarantee than a cap.
+
+⭐ **THE AUDIO IS A TWO-PART GRAMMAR, WIRED NOT SOURCED.** `grenade-pin.ogg` / `rocket-launch.ogg` at the
+trigger pull (the ordinary class report, so it takes the payload's audio phase), then `explosion-big.ogg`
+at the **visual impact**, on the identical `arriveIn` the detonation mark takes. Every file was already
+in `sounds/`, licence-clean and CREDITS-documented. ⛔ It is the RAIL that sounds the arrival, not the
+apply: a blast's damage lands when the referee presses Confirm, which can be seconds after the object
+came down.
+
+⛔ **AND THE DETONATION IS NOT A BODY IMPACT.** The delivery classes stand the flesh/structure plan down
+and `railSoundedImpacts` answers **false** for them, so the bodies the blast catches still sound their own
+impacts at the confirm — two different events, deliberately not merged. Blood is stood down for the same
+reason: a warhead arrives at a *place*.
+
+⭐ **THE OBJECT ALWAYS ARRIVES.** A missed throw is not a grenade that vanished — CP2020 p.108 sends its
+true centre to the grenade table, and the damage rail's Scatter button is where that is resolved. So the
+picture draws the object landing where it was thrown and the AREA moves afterwards if the referee
+scatters it; splaying it to a `missEndpoint` would put the picture somewhere the resolution never looks.
 
 **2026-08-26 — ⭐⭐ ⏪ A MISSED SHELL DRAWS THE SAME CHOKED PATTERN AS A HIT (user ruling, and it closes
 the choke unit's open item #1 in the affirmative).** Verbatim: *"If you shot a shotgun in real life and
@@ -3296,6 +3919,10 @@ presented while the screen stayed empty.
 
 | Item | State |
 |---|---|
+| ⛔ **THE THROWN AND LAUNCHED LOOKS ARE UNSIGNED — the arc, the rocket, and the three levels** | ⚠ **New 2026-08-27, build-lane calls made under the grenade unit's ruling.** The two assets are asset-native and decoded (§6), but nobody has *watched* them: the lob's readability at short range and the detonation mark's 2.0 / 2.4 sq widths. The knobs are `FX_CLASSES.thrown/rocket` (`impactSquares`, `tracerColor`) and the reverts are single fields (§5). ⭐ *Updated 2026-08-27:* the launched round's own picture was put to the user as a live A/B and **RULED** — the bolt was rejected and the ball ships (§6). What is left is not a look call but an **art ask**; see the next row. |
+| ⛔ **A REAL ROCKET ASSET IS NEEDED — the user is sourcing one** | ⭐ **RULED 2026-08-27 (ledger #23br(b), #23bs, #23bu).** The `jb2a.bolt.physical.orange` trial was **rejected**: it *"still looks like a bullet"*, because a `stretchTo` draw takes its width from the asset's own frame and the tier's most elongated cut is its thinnest ink. The ball is back and shipping. The closed 79-file enumeration in §6 stands: **nothing in this tier meets all three criteria** (elongated · nose-first · no baked bloom). ⛔ **The open item is now an ART ASK, not a look call** — the user is sourcing a license-clean rocket-with-exhaust cut (a supplied Hellfire render was license-verified GPL 2.0 and therefore NOT vendorable into this MIT repo). When it arrives: vendor the file + a CREDITS entry + **one identifier swap**, and no setting. |
+| ⛔ **THE THREE DELIVERY LEVELS ARE UNSIGNED BY EAR** | ⚠ **New 2026-08-27.** Report 0.7 / 0.75, detonation 0.85 / 0.9. Set by ORDERING rather than by listening — a detonation is the largest event of the shot but must not clip past the reports the rest of the table is mixed against — and the ordering is checkable against the other constants; the absolute levels are not. Knobs: `soundVolume` / `detonationVolume` on the two rows. |
+| ⚠ **THIS LIBRARY SHIPS NO ROCKET-WITH-EXHAUST CUT** | ⚠ **An asset ask, recorded 2026-08-27 rather than worked around.** The only `launch.*` entry that decodes with a readable arrival is a BLACK cannon ball; `TRACER_COLOR_ROCKET` warms it through the rail's existing ColorMatrix mechanism, which is a tint on the wrong object rather than the right object. A ranged-template cut of an actual rocket motor would replace one field. |
 | ⛔⛔ **SHOULD THE RAIL'S AUDIO WAIT FOR THE PICTURE? `FX_AUDIO_PHASE` IS BUILT, PROVEN AND SHIPPED OFF** | ⛔ **THE open call of the 2026-08-26 sync unit — a build-lane hand-back, not an omission.** The field report (*"2 shots still came out at the end after the last sound"*, most volleys, buckshot **and** the dart load) was root-caused to an arithmetic residual the arrival compensation **structurally cannot reach**: a round's own muzzle and tracer are issued with **no delay**, so `max(0, 0 − comp)` clamps to zero and the picture trails its own report by the engine's whole create latency on every round — measured **234 ms median against a 180 ms cadence**, i.e. two rounds trail before the renderer has fallen behind a single frame (§4.1c / §6). The only lever is to move the audio, because a sprite cannot be drawn in the past; the arithmetic admits exactly one consistent pairing, **phase = latency and arrival compensation = 0**, and that is what `FX_AUDIO_PHASE = true` turns on. **MEASURED, both states, same rig and instrument:** trailing round-elements after the last report go from a **median of 10 (worst offset 1374 ms)** to **0 in every volley**, on buckshot and stun-dart alike. ⛔ **It ships OFF for two reasons, both honest:** (1) it is a **feel change to every gun** — the report lands one engine-latency (~0.2 s) after the trigger resolves, and although the volley's *rhythm* is untouched by construction (one phase per payload, every round shifted equally), a trigger that answers late is a look call and look calls are the user's; (2) the only rig that can measure it is a headless **software rasteriser** that drops four rounds of eight, and on it the phase's own `setTimeout` is starved by the same renderer everything else is queued behind — sprite-vs-report gaps of **−256 to −385 ms** where the phase asked for 168, i.e. the picture ends up *leading* there. A client whose timers are not starved does not do that, and **the reporter's GPU is the only place the real number lives**. Enabling is one field; the seam `_setAudioPhase(on)` drives the other state so the keeper pins **both** (the defect reproduced with it off, the bound achieved with it on, and that on is strictly better by value). ⚠ The latency itself is **measured per client** (round 0 of each volley against an empty renderer, blended by `FX_ENGINE_LATENCY_ALPHA`, clamped by `FX_AUDIO_PHASE_MAX_MS`) — so `SEQ_PRESTART_COMP_MS` is now a **seed**, and the stale-constant problem is retired rather than re-tuned. |
 | ⭐ **THE `harmlessDischarge` FUMBLE CLASS IS DRAWN AS NOTHING, AND THE RULING ALLOWED A MUZZLE** | ⚠ **A build-lane call made under the 2026-08-26 ruling's own escape clause, recorded so it is a decision and not an omission.** Row **6** of the base's fumble table — *"Weapon discharges or strikes something harmless"* — is the one class where a round genuinely left the weapon and yet no damage corridor is owed. The ruling asked for a **muzzle-only** presentation *"if the rail can do that cheaply within the fx skill's rules (spec block etc.), else silent; document the choice"*. It cannot be done cheaply: `fxShot` composes the flash, the muzzle sprite, the tracer/pellets and the arrival mark into **one Sequence**, so "muzzle without tracer" is a new **draw shape**, not a gate on an existing one — it needs its own frozen spec block, its own clock-2 answer, its own term in `presentationTailMs`, and its own Review·Shooter entry (§9's element contract). Silence is also the answer that stays in step with the resolution rail, which plants no corridor for this class either. ⛔ **Building it is a unit of its own**; the class already rides the payload, so the change is one branch at the `fumbleStandsRailsDown` bail in `fxWeaponFired` plus the new shape. The current answer is pinned by an fx-rail leg (`fumble class: the harmlessDischarge class draws nothing…`), so the day it changes, the keeper says so. |
 | ⚠ **THE AUTO-ONLY-JAM FUMBLE BRANCH IS CLASSIFIED WHOLESALE, NOT BY ITS OWN ROLL** | ⚠ **A lane call, 2026-08-26, outside the user's ruling.** With `autoFumbleOnlyJam` on and an auto-class weapon the base **skips the printed table entirely** and rolls reliability instead (base `utils.js:617-638`), so there is no table row to map. The whole branch is classified `noDischarge` — a jam and the *"lucky you, it didn't jam - just a misfire"* pass are both rounds that never went down-range — which is the conservative direction: it never invents a shell in flight. The alternative is to read the branch's own reliability face against `reliabilityThreshold` (base `utils.js:479`) and rule the pass differently. One branch in `rangedFumbleClassFrom`. |
