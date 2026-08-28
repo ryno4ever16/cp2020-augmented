@@ -198,6 +198,12 @@ const AMMO_EFFECT_FIELDS = [
   "spreadMode", "spreadDamageShort", "spreadDamageMedium", "spreadDamageLong",
   "spreadWidthShort", "spreadWidthMedium", "spreadWidthLong",
   "stunSaveOnHit", "stunSaveMod", "dotEnabled", "dotTurns", "dotType", "dotDamageFormula",
+  // ⭐ RIDES WITH THE OTHER FOUR OVER-TIME FIELDS BECAUSE IT IS THE FIFTH STATEMENT ABOUT THE SAME TICK.
+  // The other four say whether there is one, for how long, of which kind and at what formula; this one
+  // says whether its multiplier DIMINISHES. Left out of this list, the flag never leaves the ammo
+  // document — the tick reads its state, the state is seeded from the payload, and the payload is built
+  // from exactly this list — so a round that states it would burn on the halving ladder anyway.
+  "dotFlat",
 ];
 
 /** Effect fields for the fired weapon, read from its loaded ammo (system.*) first, then the weapon
@@ -342,6 +348,22 @@ function installWeaponFiredShim(ItemProto) {
         // about this weapon and this trigger pull, like the aim and the range beside it, and because the
         // render wrapper has the card's data but not the item.
         fumbleAutoOnlyJam: _autoOnlyJamBranchFor(this),
+        // ⭐ THE WEAPON'S OWN ATTACK TYPE (2026-08-27) — a WEAPON fact, captured here beside the
+        // weapon's name and its Long range for the same reason those two are, and NOT folded into
+        // `ammoEffectFields` below: that list is the LOADED ROUND's mechanical consequences, and the
+        // attack type is a property of the thing doing the firing.
+        //
+        // WHY THE DAMAGE RAIL NEEDS IT. An AREA-DELIVERY weapon — a grenade, a launcher, a missile —
+        // is its own warhead: it carries no ammo item, so it reaches the explosion hook with none of
+        // the `effectTypes` that hook has always keyed on, and a thrown grenade therefore resolved as
+        // an ordinary single-target shot. `combat/area-delivery.js` reads this field to widen that
+        // door (see `payloadDetonates`). The presentation rail asks the ITEM instead, because it has
+        // the item in hand; this exists for the readers that only ever see the relayed payload.
+        //
+        // The base system's own field (lookups.js `rangedAttackTypes`), read through the same
+        // `_getWeaponSystem()` accessor the base's fire methods use, so a cyberware weapon reports the
+        // type of its Weapon work-block rather than the shell's. Null where the item cannot answer.
+        attackType: (this._getWeaponSystem?.() ?? this.system)?.attackType ?? null,
         effectFields: ammoEffectFields(this),   // ammo-derived explosion/gas/spread/DOT/taser/AP/pen fields
       };
       return orig.call(this, attackMods, ...rest);
@@ -475,6 +497,9 @@ function installRenderEmit() {
           attackerTokenId: _fireCtx.attackerTokenId ?? null,
           weaponName: _fireCtx.weaponName,
           weaponId: _fireCtx.weaponId,
+          // WHAT KIND OF ATTACK THIS WEAPON MAKES — carried for the readers that never see the item
+          // (the GM's client, resolving a relayed payload). See the note where it is captured.
+          attackType: _fireCtx.attackType ?? null,
           areaDamages: data?.areaDamages ?? {},
           // Rounds spent and rounds that landed for THIS card. areaDamages counts only the rounds
           // that hit, so a listener that needs the full round count (the per-shot fx fan-out) cannot
