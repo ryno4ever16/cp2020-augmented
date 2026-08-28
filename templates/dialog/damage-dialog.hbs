@@ -163,14 +163,18 @@
     </div>
   </div>
 
-  {{!-- The cover-only control sits between Apply and Cancel because it is the third thing that can be
-        done with this window, not a variant of either: it charges the picked object's structure with
-        the window's RAW damage and writes nothing to the target. Rendered only when a cover OBJECT was
+  {{!-- ⭐ APPLY SITS ON THE RIGHT (user-ruled 2026-08-28): the primary action takes the corner the
+        eye finishes in, matching every other confirm this module ships — the left-side Apply was a
+        fork-era habit from the original May combat build, never a decision. Cancel takes the far
+        left for the same convention.
+        The cover-only control keeps the MIDDLE because it is the third thing that can be done with
+        this window, not a variant of either: it charges the picked object's structure with the
+        window's RAW damage and writes nothing to the target. Rendered only when a cover OBJECT was
         detected (a hand-typed Cover SP names no document to debit), and latched after one press —
         `coverOnlyCharged` is what a spent control looks like, so a re-render cannot offer a second
         debit for the same damage number. --}}
   <div class="flexrow dialog-buttons" style="margin-top:8px; gap:4px;">
-    <button type="button" data-action="applyDamage"  class="action">{{CPLocal "DamageDlgApplyBtn"}}</button>
+    <button type="button" data-action="cancelDialog">{{CPLocal "Cancel"}}</button>
     {{#if canChewCoverOnly}}
     <button type="button" data-action="chewCoverOnly" class="cp-chew-cover-only"
             title="{{CPLocal 'DamageDlgChewCoverTip'}}">{{CPLocal "DamageDlgChewCoverBtn"}}</button>
@@ -178,7 +182,7 @@
     {{#if coverOnlyCharged}}
     <button type="button" class="cp-chew-cover-only" disabled>{{CPLocal "DamageDlgChewCoverSpent"}}</button>
     {{/if}}
-    <button type="button" data-action="cancelDialog">{{CPLocal "Cancel"}}</button>
+    <button type="button" data-action="applyDamage"  class="action">{{CPLocal "DamageDlgApplyBtn"}}</button>
   </div>
 
 </div>
