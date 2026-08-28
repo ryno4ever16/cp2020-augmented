@@ -518,7 +518,9 @@ const crewLive = await page.evaluate(async (mod) => {
   let actor = null;
   const madeTokenIds = [];
   try {
-    actor = await Actor.create({ name: "__PW__TT Crew", type: "character" });
+    // ⭐ The prototype is deliberately LINKED: the leg below demands the crew spawns unlinked ANYWAY
+    // (user-ruled 2026-08-28 — five figures sharing one linked actor are one HP pool in five hats).
+    actor = await Actor.create({ name: "__PW__TT Crew", type: "character", prototypeToken: { actorLink: true } });
     M._setTraumaTimeScale(0.05);
     const centre = { x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2 };
     const gridPx = Number(canvas.dimensions.size) || 100;
@@ -552,6 +554,8 @@ const crewLive = await page.evaluate(async (mod) => {
     out.spawnedAt = fresh.map(t => [t.x, t.y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     out.wantedAt = wanted.map(p => [p.x, p.y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     out.allFromChosenActor = fresh.every(t => t.actorId === actor.id);
+    out.linkStates = fresh.map(t => t.actorLink);
+    out.protoWasLinked = actor.prototypeToken?.actorLink === true;
     await M.endTraumaTeam();
     for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
     out.survivedDeparture = scene.tokens.filter(t => madeTokenIds.includes(t.id)).length;
@@ -601,6 +605,10 @@ check("NEGATIVE: no crew rides the wire, so no other client can write one", crew
 eq("three seats asked for, three token documents created", crewLive.spawned, 3);
 eq("each stands on its own unload beat, by coordinate", crewLive.spawnedAt, crewLive.wantedAt);
 check("and every one of them is the actor the referee chose", crewLive.allFromChosenActor === true);
+check("⭐ crew figures spawn UNLINKED even from a LINKED prototype — mooks, each with its own pool",
+  crewLive.protoWasLinked === true && Array.isArray(crewLive.linkStates)
+  && crewLive.linkStates.length === 3 && crewLive.linkStates.every(v => v === false),
+  `proto linked ${crewLive.protoWasLinked}, spawned ${JSON.stringify(crewLive.linkStates)}`);
 eq("the airframe leaving does not take them with it", crewLive.survivedDeparture, 3);
 eq("NEGATIVE: a call with no crew named writes no document at all",
   crewLive.censusAfterNoCrew, crewLive.censusBeforeNoCrew);

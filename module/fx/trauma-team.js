@@ -755,9 +755,14 @@ function crewPlanFor(crew, centre, gridPx) {
  * onto whatever the referee wandered to is a figure in the wrong place.
  *
  * ⭐ THE ACTOR'S OWN PROTOTYPE IS THE SOURCE (native-API first): `getTokenDocument` builds the document
- * the platform would build for a drag-and-drop of that actor — its art, its footprint, its link state,
- * its bars — so a referee's chosen actor arrives configured the way that actor is configured, and this
- * file has no opinion of its own about any of it.
+ * the platform would build for a drag-and-drop of that actor — its art, its footprint, its bars — so a
+ * referee's chosen actor arrives configured the way that actor is configured.
+ *
+ * ⛔ WITH ONE STATED EXCEPTION (user-ruled 2026-08-28): the crew ALWAYS spawns UNLINKED, whatever the
+ * prototype's own "Link Actor Data" says. A crew is mooks — five figures sharing one linked actor are
+ * one HP pool wearing five hats, so wounding any of them wounds all of them, which no table means by
+ * "deploy five crew". Unlinked, each figure gets its own synthetic copy of the chosen actor, which is
+ * exactly the drag-five-mooks-from-the-sidebar behaviour. ⏪ REVERT: delete the one actorLink line.
  */
 async function writeCrewFigure(record, entry) {
   try {
@@ -767,7 +772,9 @@ async function writeCrewFigure(record, entry) {
     const scene = canvas?.scene;
     if (!scene || scene.id !== record.sceneId) return null;
     const proto = await actor.getTokenDocument({ x: entry.x, y: entry.y });
-    const [created] = await scene.createEmbeddedDocuments("Token", [proto.toObject()]);
+    const obj = proto.toObject();
+    obj.actorLink = false;
+    const [created] = await scene.createEmbeddedDocuments("Token", [obj]);
     return created ?? null;
   } catch (err) {
     console.warn(`${SCOPE} | arrival crew figure write failed`, err);
