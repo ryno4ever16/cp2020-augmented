@@ -1157,17 +1157,31 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
     /* ── (c) the RENDERED window, driven by the real click on the sheet's own fire control ────── */
     const modWindows = () =>
       [...foundry.applications.instances.values()].filter(a => /Modifiers/.test(a?.constructor?.name ?? ""));
+    // ⭐ AN AREA DELIVERY IS AIMED BEFORE ITS WINDOW OPENS (2026-08-28 ruling — see §16). So this helper
+    // now drives the WHOLE gesture the table performs: click the fire control, and if the aim gesture
+    // armed, designate a point with a real canvas pointerdown. A rifle arms nothing and reaches the
+    // window on the click alone, which is what keeps the negative legs below honest.
+    const aim = await import(`/modules/${SCOPE}/module/combat/aim-placement.js`);
+    const designate = async () => {
+      const view = canvas.app?.view ?? document.getElementById("board");
+      view?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0,
+        clientX: 400, clientY: 400 }));
+      await sleep(250);
+    };
     const openVia = async (item) => {
       for (const w of modWindows()) { try { await w.close(); } catch (_e) {} }
       await sleep(200);
       const root = shooter.sheet.element;
       const ctl = root?.querySelector(`.fire-weapon[data-item-id="${item.id}"]`);
-      if (!ctl) return { ctl: null, el: null, win: null };
+      if (!ctl) return { ctl: null, el: null, win: null, aimed: false };
       ctl.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await sleep(300);
+      const aimed = aim.aimPointPlacementActive();
+      if (aimed) await designate();
       for (let i = 0; i < 40 && modWindows().length === 0; i++) await sleep(150);
       await sleep(400);
       const win = modWindows()[0] ?? null;
-      return { ctl, el: win?.element ?? null, win };
+      return { ctl, el: win?.element ?? null, win, aimed };
     };
     await shooter.sheet.render(true);
     await sleep(1200);
@@ -1704,8 +1718,11 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
         const detFrom = new Set(game.messages.map(m => m.id));
         await confirmArea(detArea.id);
         await sleep(1500);
+        // ⚠ The blast's own RESOLUTION card is excluded by name — see the note at §14's
+        // `concussionCardsSince`, which this counter is the sibling of. Same mechanism, same exclusion.
         const concussionCards = [...game.messages].filter(m => !detFrom.has(m.id)
-          && /concussion/i.test(m.content ?? "") && (m.content ?? "").includes(catcher.name)).length;
+          && /concussion/i.test(m.content ?? "") && (m.content ?? "").includes(catcher.name)
+          && !(m.content ?? "").includes("cp-spread-result-list")).length;
         ok("§13 WIRING — an explosive-typed warhead did take the concussion branch (its card was posted)",
           concussionCards === 1, `concussion cards=${concussionCards}`);
         ok("§13 RULING — the shrapnel secondary asks no second save and starts no second burn",
@@ -1807,8 +1824,14 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       const dropArea = async (area) => { try { await area.delete(); } catch (_e) {} };
       // The concussion application's own receipt, scoped to THIS body: the p.105 card names the figure
       // and says "concussion". Its presence is the branch the routing chose, stated by the code itself.
+      // ⚠ THE BLAST'S OWN RESOLUTION CARD IS EXCLUDED BY NAME (2026-08-28). Since the detonation grew a
+      // resolution card, the detailed branch's row on it carries a clause saying there is no armour math
+      // to disclose *because the application was concussion* — a second, legitimate card carrying both
+      // the word and the figure's name. This counter is about the p.105 APPLICATION receipt, so it is
+      // discriminated by the resolution card's own list class rather than by the word alone.
       const concussionCardsSince = (from) => [...game.messages].filter(m => !from.has(m.id)
-        && /concussion/i.test(m.content ?? "") && (m.content ?? "").includes(body.name)).length;
+        && /concussion/i.test(m.content ?? "") && (m.content ?? "").includes(body.name)
+        && !(m.content ?? "").includes("cp-spread-result-list")).length;
 
       /* ── (a) A FIRE-TYPED WARHEAD takes the CORE application on the detailed branch ─────────────── */
       await resetBody();
@@ -2091,6 +2114,15 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
         !!legacy?.doc && F(legacy.doc).scattered === undefined,
         JSON.stringify({ scattered: F(legacy?.doc ?? {}).scattered }));
       if (legacy?.doc) {
+        // ⛔ THE TRACK IS CLEARED FIRST, AND THAT IS A HARNESS REPAIR WITH A NAMED MECHANISM (2026-08-28).
+        // This leg asserts `after > before`, and the fixture victim has been shot by §4, §11, §13 and
+        // §15's own three throws by the time it runs. Since the wound-track CEILING shipped (utils
+        // `cappedWoundDamage`, WOUND_TRACK_MAX = 40, user ruling 2026-08-27) a body that has reached 40
+        // cannot rise, so on a run whose dice pushed it there the leg reported a product failure that
+        // was really the fixture's own accumulated damage — observed once here, 40 → 40, and green on
+        // the run before it. Zeroing the track makes the leg measure the APPLY, which is what it is
+        // about, instead of measuring how much the earlier sections happened to roll.
+        await victim.update({ "system.damage": 0 });
         const vicBefore = Number(victim.system.damage) || 0;
         const legacyCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
           `modules/${SCOPE}/templates/chat/explosion-confirm.hbs`,
@@ -2137,6 +2169,245 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       if (probeTok) await probeTok.delete().catch(() => {});
       if (probe) await probe.delete().catch(() => {});
       for (const [k, v] of Object.entries(prev15)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+    }
+  });
+
+  /* ══════════════════ §16 THE THROW GESTURE — every area delivery aims on the map ══════════════════
+   * MECHANISM (user ruling 2026-08-28: *"I want the throw gesture"*, for throws in general): firing an
+   * area-delivery weapon opens a point-designation gesture BEFORE the fire dialog. The clicked point
+   * rides the payload as two plain coordinates, the dialog's range band pre-fills from the measured
+   * shooter→point distance, and the blast is CENTRED on the point when the throw lands and SCATTERS
+   * FROM it when it misses. CP2020 p.108 designates a SPOT; a token was only ever a way to name one.
+   *
+   * Every leg reads the OUTCOME by value — the placed geometry, the rendered window's own select, the
+   * DOM state of the live gesture — never an internal intention. */
+  await sect("§16", async () => {
+    // ⛔⛔ EVERY WORLD WRITE THIS SECTION MAKES IS INSIDE THE TRY, AND THAT IS A REPAIR WITH A COST
+    // ALREADY PAID (2026-08-28). The first version set the three settings and then dynamic-imported the
+    // module under test ABOVE the `try` — so on the red-first run, where that import legitimately 404'd,
+    // the `finally` never ran and `combatFxEnabled` was left OFF **in the world**. The next run's §3 then
+    // reported `Cannot read properties of null (reading 'ms')`: the fan-out declined to draw, the report
+    // carried no arrival, and it read exactly like a product failure in a section this unit never
+    // touched. It is the documented world-state-debris class (rig-keeper skill), re-earned. Nothing is
+    // changed until the try owns the restore.
+    const prev16 = {};
+    const set16 = async (k, v) => { try { prev16[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    let aim = null;
+    const allAreas16 = () => (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+    const modWindows16 = () =>
+      [...foundry.applications.instances.values()].filter(a => /Modifiers/.test(a?.constructor?.name ?? ""));
+    const gridDistM16 = Number(scene.grid?.distance) || 1;
+    const ppm16 = gridPx / gridDistM16;
+    const shCenter = () => {
+      const t = canvas.tokens.get(shTok.id);
+      return { x: t?.center?.x ?? t?.x, y: t?.center?.y ?? t?.y };
+    };
+
+    try {
+      await set16("explosivesEnabled", true);
+      await set16("explosivesDetailed", false);
+      await set16("combatFxEnabled", false);      // §16 is about the aim, not the picture
+      aim = await import(`/modules/${SCOPE}/module/combat/aim-placement.js`);
+      ok("§16 HARNESS GUARD — the thrower and the target are both on the canvas this section measures on",
+        canvas.scene?.id === scene.id && !!canvas.tokens.get(shTok.id) && !!canvas.tokens.get(vicTok.id),
+        `scene=${canvas.scene?.id === scene.id} shooter=${!!canvas.tokens.get(shTok.id)} target=${!!canvas.tokens.get(vicTok.id)}`);
+
+      /* ── a. the PURE derivations the gesture and the dialog share ────────────────────────────── */
+      ok("§16 the ghost's area is the weapon's OWN radius when it states one, by value",
+        aim.aimPreviewRadiusM({ system: { attackType: "Grenade", blastRadius: 9 } }) === 9,
+        String(aim.aimPreviewRadiusM({ system: { attackType: "Grenade", blastRadius: 9 } })));
+      ok("§16 …and the book's p.99 row for its kind when it states none, by value (grenade 5m, missile 6m, rpg 4m)",
+        aim.aimPreviewRadiusM({ system: { attackType: "Grenade" } }) === 5
+        && aim.aimPreviewRadiusM({ system: { attackType: "Missile" } }) === 6
+        && aim.aimPreviewRadiusM({ system: { attackType: "RPG" } }) === 4,
+        `${aim.aimPreviewRadiusM({ system: { attackType: "Grenade" } })}/${aim.aimPreviewRadiusM({ system: { attackType: "Missile" } })}/${aim.aimPreviewRadiusM({ system: { attackType: "RPG" } })}`);
+      ok("§16 NEGATIVE — an ordinary rifle is not an area delivery and gets no ghost at all",
+        aim.aimPreviewRadiusM({ system: { attackType: "Single Shot" } }) === 0,
+        String(aim.aimPreviewRadiusM({ system: { attackType: "Single Shot" } })));
+
+      // The band prefill's own derivation, at a NEAR point and a FAR one out of the same 50 m weapon:
+      // p.99 puts Close at ¼ (12.5 m) and Long at the full range, so 5 m and 40 m are two different
+      // bands and the pair is what proves the measurement is of the POINT rather than of a token.
+      const o16 = shCenter();
+      const near = aim.aimPointRangeBand(o16, { x: o16.x + 5 * ppm16, y: o16.y }, 50);
+      const far  = aim.aimPointRangeBand(o16, { x: o16.x + 40 * ppm16, y: o16.y }, 50);
+      ok("§16 the band a designated point sits in is measured from the THROWER, by value — near",
+        near.category === "close" && Math.abs(near.distanceM - 5) <= 1.2, JSON.stringify(near));
+      ok("§16 …and a far point out of the SAME weapon reads a different band, by value",
+        far.category === "long" && Math.abs(far.distanceM - 40) <= 1.5, JSON.stringify(far));
+
+      /* ── b. the gesture ARMS on fire, and ESC cancels the whole shot ─────────────────────────── */
+      await shooter.sheet.render(true);
+      await sleep(1200);
+      const view = () => canvas.app?.view ?? document.getElementById("board");
+      const clickFire = (item) => {
+        const ctl = shooter.sheet.element?.querySelector(`.fire-weapon[data-item-id="${item.id}"]`);
+        ctl?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        return ctl;
+      };
+      const moveTo = async (px, py) => {
+        const t = canvas.stage.worldTransform.apply(new PIXI.Point(px, py));
+        window.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: t.x, clientY: t.y }));
+        await sleep(120);
+      };
+      const clickCanvas = async () => {
+        view()?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 }));
+        await sleep(250);
+      };
+
+      for (const w of modWindows16()) { try { await w.close(); } catch (_e) {} }
+      await sleep(200);
+      const msgsBefore = new Set(game.messages.map(m => m.id));
+      const areasBefore = new Set(allAreas16().map(d => d.id));
+      const fireCtl = clickFire(frag);
+      await sleep(400);
+      ok("§16 ⭐ the gesture ARMS on the real fire click — and the fire dialog is NOT open yet",
+        !!fireCtl && aim.aimPointPlacementActive() === true && modWindows16().length === 0,
+        `ctl=${!!fireCtl} armed=${aim.aimPointPlacementActive()} windows=${modWindows16().length}`);
+
+      // ESC — the whole shot is cancelled: no dialog, no roll, no card, no area.
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await sleep(600);
+      ok("§16 ⭐ ESC cancels the shot outright — nothing armed, nothing rolled, nothing placed",
+        aim.aimPointPlacementActive() === false && modWindows16().length === 0
+        && [...game.messages].every(m => msgsBefore.has(m.id))
+        && allAreas16().every(d => areasBefore.has(d.id)),
+        `armed=${aim.aimPointPlacementActive()} windows=${modWindows16().length} newCards=${[...game.messages].filter(m => !msgsBefore.has(m.id)).length} newAreas=${allAreas16().filter(d => !areasBefore.has(d.id)).length}`);
+
+      /* ── c. a TARGETED figure seeds the opening aim, and the band pre-fills from the point ───── */
+      // The seed is read the way the dialog reads its target list, so target the victim for this leg.
+      const tgtBefore = new Set([...game.user.targets].map(t => t.id));
+      canvas.tokens.get(vicTok.id)?.setTarget(true, { releaseOthers: true, groupSelection: false });
+      await sleep(250);
+
+      clickFire(frag);
+      await sleep(400);
+      // The gesture opens ON the targeted figure's centre — read by clicking with no pointer move at
+      // all, so the point that lands in the payload is the SEED and nothing else.
+      const seededAreasBefore = new Set(allAreas16().map(d => d.id));
+      await clickCanvas();
+      for (let i = 0; i < 40 && modWindows16().length === 0; i++) await sleep(150);
+      const seedWin = modWindows16()[0] ?? null;
+      const vc = (() => { const t = canvas.tokens.get(vicTok.id); return { x: t?.center?.x, y: t?.center?.y }; })();
+      const seedBand = aim.aimPointRangeBand(shCenter(), vc, 50);
+      const seedSel = seedWin?.element?.querySelector('select[name="range"]') ?? null;
+      const CATKEY = { pointBlank: "RangePointBlank", close: "RangeClose", medium: "RangeMedium", long: "RangeLong", extreme: "RangeExtreme", outOfRange: "RangeExtreme" };
+      ok("§16 ⭐ a targeted figure SEEDS the opening aim — clicking without moving designates its centre, and the window opens",
+        !!seedWin && !!seedSel, `window=${!!seedWin} rangeRow=${!!seedSel}`);
+      ok("§16 ⭐ the dialog's RANGE BAND pre-fills from the measured shooter→point distance, by value",
+        !!seedSel && seedSel.value === CATKEY[seedBand.category],
+        `select=${seedSel?.value} measured=${JSON.stringify(seedBand)} expected=${CATKEY[seedBand.category]}`);
+      if (seedWin) { try { await seedWin.close(); } catch (_e) {} }
+      await sleep(300);
+
+      // …and a FAR point out of the same weapon opens the same window on a DIFFERENT band. This is the
+      // pair that proves the pre-fill follows the POINT and not the targeted token.
+      clickFire(frag);
+      await sleep(400);
+      const farPt = { x: o16.x + 40 * ppm16, y: o16.y };
+      await moveTo(farPt.x, farPt.y);
+      await clickCanvas();
+      for (let i = 0; i < 40 && modWindows16().length === 0; i++) await sleep(150);
+      const farWin = modWindows16()[0] ?? null;
+      const farSel = farWin?.element?.querySelector('select[name="range"]') ?? null;
+      ok("§16 ⭐ …and a FAR designated point pre-fills a DIFFERENT band out of the same weapon, by value",
+        !!farSel && farSel.value === CATKEY[far.category] && farSel.value !== CATKEY[seedBand.category],
+        `far=${farSel?.value} near=${CATKEY[seedBand.category]} expected=${CATKEY[far.category]}`);
+      if (farWin) { try { await farWin.close(); } catch (_e) {} }
+      for (const t of [...game.user.targets]) if (!tgtBefore.has(t.id)) t.setTarget(false, { releaseOthers: false });
+      await sleep(300);
+      try { await shooter.sheet.close(); } catch (_e) {}
+      await sleep(300);
+      ok("§16 the gesture left nothing armed and no readout node behind it (teardown)",
+        aim.aimPointPlacementActive() === false
+        && document.querySelectorAll(".cp-spread-preview-readout").length === 0,
+        `armed=${aim.aimPointPlacementActive()} readouts=${document.querySelectorAll(".cp-spread-preview-readout").length}`);
+
+      /* ── d. the POINT is the blast centre on a hit, and what a MISS scatters FROM ────────────── */
+      const throwAt = async ({ hit, point }) => {
+        const before = new Set(allAreas16().filter(d => F(d).isExplosion).map(d => d.id));
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, attackerTokenId: shTok.id, weaponId: frag.id,
+          weaponName: "__PW__Frag", attackType: "Grenade",
+          areaDamages: hit ? { Torso: [{ damage: 12 }] } : {},
+          shotsFired: 1, shotsHit: hit ? 1 : 0,
+          // ⛔ THE TARGET TOKEN IS CARRIED TOO, deliberately: the point must win over it, and a leg
+          // that omitted the token could pass because there was nothing else to centre on.
+          targetTokenId: vicTok.id, fxTargetTokenId: vicTok.id, firedByUserId: game.user.id,
+          blastRadius: 25,
+          ...(point ? { aimPoint: point } : {}),
+        });
+        for (let i = 0; i < 60; i++) {
+          const a = allAreas16().find(d => F(d).isExplosion && !before.has(d.id));
+          if (a) return a;
+          await sleep(300);
+        }
+        return null;
+      };
+      const drop16 = async (a) => { try { await a.delete(); } catch (_e) {} };
+
+      // A point deliberately AWAY from the target token, so "centred on the point" and "centred on the
+      // token" cannot both be true.
+      const declared = { x: o16.x + 12 * ppm16, y: o16.y + 7 * ppm16 };
+      const tokCenter = (() => { const t = canvas.tokens.get(vicTok.id); return { x: t?.center?.x, y: t?.center?.y }; })();
+      const hitArea16 = await throwAt({ hit: true, point: declared });
+      ok("§16 a throw carrying a designated point still places its blast", !!hitArea16);
+      if (hitArea16) {
+        const f = F(hitArea16);
+        ok("§16 ⭐ THE PLACED POINT IS THE BLAST CENTRE ON A HIT, by value",
+          Math.round(Number(f.originX)) === Math.round(declared.x)
+          && Math.round(Number(f.originY)) === Math.round(declared.y),
+          `centre=(${f.originX},${f.originY}) declared=(${Math.round(declared.x)},${Math.round(declared.y)})`);
+        ok("§16 ⭐ NEGATIVE — and it is NOT the targeted token's centre, which the same payload named",
+          Math.hypot(Number(f.originX) - tokCenter.x, Number(f.originY) - tokCenter.y) > gridPx,
+          `centre=(${f.originX},${f.originY}) token=(${tokCenter.x},${tokCenter.y})`);
+        ok("§16 a landed throw records no scatter (negative)", f.scattered === false, `scattered=${f.scattered}`);
+        await drop16(hitArea16);
+      }
+
+      const missArea16 = await throwAt({ hit: false, point: declared });
+      ok("§16 a missed throw carrying a designated point still detonates", !!missArea16);
+      if (missArea16) {
+        const f = F(missArea16);
+        const driftPx = Math.hypot(Number(f.originX) - declared.x, Number(f.originY) - declared.y);
+        ok("§16 ⭐ THE MISS SCATTERS FROM THE POINT — the aim it records is the designated point, not a token",
+          Math.round(Number(f.aimedX)) === Math.round(declared.x)
+          && Math.round(Number(f.aimedY)) === Math.round(declared.y)
+          && Math.hypot(Number(f.aimedX) - tokCenter.x, Number(f.aimedY) - tokCenter.y) > gridPx,
+          `aimed=(${f.aimedX},${f.aimedY}) declared=(${Math.round(declared.x)},${Math.round(declared.y)}) token=(${tokCenter.x},${tokCenter.y})`);
+        ok("§16 ⭐ …and the landing is inside the grenade table's own band OF THAT POINT — 1d10 metres, never more",
+          f.scattered === true && driftPx / ppm16 <= 10.5 + 0.01,
+          `${(driftPx / ppm16).toFixed(2)}m from the designated point (recorded ${f.scatterDriftM}m ${f.scatterDirName})`);
+        await drop16(missArea16);
+      }
+
+      /* ── e. THE FALLBACK — a payload with no point still centres on the target token ─────────── */
+      const noPointArea = await throwAt({ hit: true, point: null });
+      ok("§16 COMPAT — a payload carrying NO designated point still places a blast", !!noPointArea);
+      if (noPointArea) {
+        const f = F(noPointArea);
+        ok("§16 ⭐ COMPAT — and it is centred on the TARGET TOKEN exactly as it was before the gesture existed",
+          Math.round(Number(f.originX)) === Math.round(tokCenter.x)
+          && Math.round(Number(f.originY)) === Math.round(tokCenter.y),
+          `centre=(${f.originX},${f.originY}) token=(${Math.round(tokCenter.x)},${Math.round(tokCenter.y)})`);
+        await drop16(noPointArea);
+      }
+
+      /* ── f. the payload contract + the strings ──────────────────────────────────────────────── */
+      const shimSrc = await (await fetch(`/modules/${SCOPE}/module/seam-shim.js`, { cache: "no-store" })).text();
+      ok("§16 SOURCE — the seam emits the field on the payload, from the attack modifiers it rode in on",
+        /aimPoint:\s*_fireCtx\.aimPoint/.test(shimSrc) && /aimPoint:\s*attackMods\?\.cpAimPoint/.test(shimSrc),
+        "seam-shim carries cpAimPoint → aimPoint");
+      ok("§16 the gesture's own strings all resolve to real text",
+        ["AimPointArmed", "AimPointArmedFor", "AimPointReadout", "AimPointRangeNote", "AimPointNoToken"]
+          .every(k => game.i18n.localize(`CYBERPUNK.${k}`) !== `CYBERPUNK.${k}`),
+        ["AimPointArmed", "AimPointReadout", "AimPointRangeNote"].map(k => game.i18n.localize(`CYBERPUNK.${k}`)).join(" | "));
+    } finally {
+      try { aim?.cancelAimPointPlacement(); } catch (_e) { /* not armed */ }
+      for (const w of modWindows16()) { try { await w.close(); } catch (_e) {} }
+      try { await shooter.sheet.close(); } catch (_e) {}
+      for (const d of allAreas16()) if (F(d).isExplosion) await d.delete().catch(() => {});
+      for (const [k, v] of Object.entries(prev16)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
     }
   });
 

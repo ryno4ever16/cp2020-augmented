@@ -325,6 +325,14 @@ function installWeaponFiredShim(ItemProto) {
         // the roll directly), in which case the plant falls back to computing an axis from the target
         // exactly as it did before this existed.
         spreadAim: attackMods?.cpSpreadAim ?? null,
+        // ⭐ THE SPOT AN AREA DELIVERY WAS AIMED AT before the trigger was pulled (2026-08-28). Same
+        // channel as the corridor above it, for the same reason and with the same absence rule: the
+        // point is declared by the shooter several steps before this (combat/aim-placement.js) and the
+        // attack modifiers are the one object that travels from the fire gesture into the base's own
+        // fire method. Null on every ordinary shot, and null on a delivery fired by anything other than
+        // the sheet's own control (a macro, a keeper driving the roll directly) — in which case the
+        // blast falls back to centring on the target token exactly as it did before this existed.
+        aimPoint: attackMods?.cpAimPoint ?? null,
         // ⭐ THE WEAPON'S OWN LONG RANGE, in metres — a WEAPON fact, which is why it is captured here
         // beside the weapon's name and not in `ammoEffectFields` with the load's own numbers. The shot
         // pattern's range bands are FRACTIONS OF IT (Core p.99: Close ¼, Medium ½, Long the full range)
@@ -529,6 +537,12 @@ function installRenderEmit() {
           // consumer treats a null as "nobody declared an aim" and computes one, which is the behaviour
           // that shipped before the placement gesture existed.
           spreadAim: _fireCtx.spreadAim ?? null,
+          // WHERE THIS WARHEAD WAS AIMED — two scene-pixel coordinates, or null. Read by the damage rail
+          // only (`_placeExplosion`): the blast is created on this point when the throw lands and
+          // scatters FROM it when it misses. A payload without the field — a macro's shot, or one
+          // relayed from a client on an older build — falls back to the aimed-at token's centre, which
+          // is the behaviour that shipped before the gesture existed.
+          aimPoint: _fireCtx.aimPoint ?? null,
           // WHAT THE PATTERN'S BAND EDGES ARE FRACTIONS OF — the firing weapon's own Long range, captured
           // at the trigger pull (see the note where it is read). Every reader of the corridor measures
           // its aim point against this one number; absent, they fall back to the ladder's compat edges.

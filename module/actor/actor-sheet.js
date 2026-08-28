@@ -1,5 +1,6 @@
 import { martialOptions, martialActionGroups, martialActions, MARTIAL_ACTION_CATALOG_UUID, unarmedStandInDamage, JUMP_KICK_TO_HIT, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
 import { armSpreadPreview } from "../combat/spread-placement.js";
+import { armAimPointPlacement, aimPreviewRadiusM, aimPointRangeBand } from "../combat/aim-placement.js";
 import { firingTokenIdOf } from "../seam-shim.js";
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, isUnwornArmor, properCase } from "../utils.js"
 import { makeD10Roll } from "../dice.js"
@@ -9,7 +10,7 @@ import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } 
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { isUnreadableNumberField, refuseUnreadableNumberFields, refuseOutOfRangeNumberFields } from "../form-number-guard.js";
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
-import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates } from "../combat/area-delivery.js";
+import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates, areaDeliveryKind } from "../combat/area-delivery.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
@@ -446,7 +447,8 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // system's OWN field, so everything downstream follows with no further wiring: the base drops or
     // restores the implant's payload through `cwIsEnabled`, P7's timer starts and posts its card
     // (mech/consumable.js), and book-legality names the rule if an earlier boost already holds the
-    // slot. stopPropagation keeps the row's own item-edit click from opening the item sheet underneath.
+    // slot. The item-edit dispatcher (same root) excludes .cp-cyber-switch so the sheet never opens
+    // underneath — stopPropagation alone cannot do that job across sibling listeners on one element.
     root.addEventListener("click", async (event) => {
       const btn = event.target?.closest?.(".cp-cyber-switch");
       if (!btn || !root.contains(btn)) return;
@@ -759,9 +761,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
 
       const itemEdit = target.closest(".item-edit");
       if (itemEdit) {
-        // The uninstall / clear / chassis-delete controls live inside an (item-edit) row — let their own
-        // handlers run instead of opening the item sheet.
-        if (target.closest(".item-unequip, .cp-container-uninstall, .cp-group-remove, .cp-chassis-delete")) return;
+        // The uninstall / clear / chassis-delete / ⚡-switch controls live inside an (item-edit) row —
+        // let their own handlers run instead of opening the item sheet. The switch MUST be listed here:
+        // its own listener sits on the same root, and stopPropagation there cannot stop this sibling
+        // listener — without the exclusion a ⚡ press toggled the implant AND opened the item sheet.
+        if (target.closest(".item-unequip, .cp-container-uninstall, .cp-group-remove, .cp-chassis-delete, .cp-cyber-switch")) return;
         event.stopPropagation();
         this._cpGetItemFromTarget(itemEdit)?.sheet?.render(true);
         return;
@@ -896,10 +900,55 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     // The question is asked of the WEAPON AS IT STANDS (which round is in it), by the same shared site
     // the fired payload will be judged by — see lookups.js weaponSpreadFlowMode for why the two must
     // never be able to disagree.
+    // ⭐ AN AREA DELIVERY IS AIMED AT A SPOT BEFORE IT IS DECLARED (user ruling 2026-08-28: *"I want
+    // the throw gesture"*, for throws in general). Asked FIRST, ahead of the pattern question, because
+    // the two gestures are mutually exclusive by construction — no weapon is both an area delivery and
+    // a shot pattern (`areaDeliveryKind` answers off Grenade/Missile/Rocket/RPG, `weaponSpreadFlowMode`
+    // off the shotgun classes) — and asking the delivery question first keeps the ordering from
+    // depending on that fact staying true. See combat/aim-placement.js for the page it rests on.
+    if (item.isRanged?.() && areaDeliveryKind(item._getWeaponSystem?.()?.attackType ?? item.system?.attackType)) {
+      return this._cpAimThrowThenOpenModifiers(item);
+    }
     if (item.isRanged?.() && weaponSpreadFlowMode(item) !== SPREAD_MODE_SINGLE) {
       return this._cpAimSpreadThenOpenModifiers(item);
     }
     return this._cpOpenAttackModifiers(item);
+  }
+
+  /**
+   * The throw gesture: designate the point of impact, then open the ordinary modifiers window on it.
+   *
+   * The same shape as the spread gesture beside it, and for the same reason: the aim decides something
+   * the window would otherwise be asking about blind (there, the band and width; here, the range band
+   * AND where the blast is actually centred). The shooter's own figure is resolved by the SAME rule the
+   * seam captures at the trigger pull (`firingTokenIdOf`), so the distance the dialog pre-fills from is
+   * measured from the figure the shot will leave.
+   *
+   * ⚠ WITH NO FIGURE ON THE CANVAS THERE IS NOTHING TO AIM FROM, so the shot falls back to the ordinary
+   * window and the blast keeps its target-token centre — the behaviour that shipped before this gesture
+   * existed. That is the one path on which an area delivery is still fired without a designated point.
+   *
+   * @returns {Promise<object|null>} the modifiers dialog, or null when the aim was cancelled
+   */
+  async _cpAimThrowThenOpenModifiers(item) {
+    const tokenId = firingTokenIdOf(this.actor);
+    const shooterToken = (tokenId ? canvas?.tokens?.get(tokenId) : null)
+      ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === this.actor?.id)
+      ?? null;
+    if (!shooterToken) return this._cpOpenAttackModifiers(item);
+
+    // A targeted figure seeds the opening aim — convenience only; what rides the payload is the point
+    // the shooter CLICKS. Read the same way the dialog reads its target list (the user's own targets).
+    const seedToken = Array.from(game.users.current.targets.values())[0] ?? null;
+    const aimPoint = await armAimPointPlacement({
+      shooterToken,
+      weaponName: item.name,
+      radiusM: aimPreviewRadiusM(item),
+      rangeM: getWeaponLongRange(item),
+      seedToken,
+    });
+    if (!aimPoint) return null;   // Esc / right click — no shot, no ammunition, no blast
+    return this._cpOpenAttackModifiers(item, { aimPoint });
   }
 
   /**
@@ -946,8 +995,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    *
    * `spreadAim` is the corridor a spread weapon was aimed along before this window opened; it rides the
    * fire options into the roll so the payload can carry it (see the note at the call to `__weaponRoll`).
+   * `aimPoint` is the same idea for an area delivery: the spot on the map its blast is centred on.
    */
-  _cpOpenAttackModifiers(item, { spreadAim = null } = {}) {
+  _cpOpenAttackModifiers(item, { spreadAim = null, aimPoint = null } = {}) {
     if (!item) return;
     let isRanged = item.isRanged();
 
@@ -1032,6 +1082,52 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         }
       }
       // ───────────────────────────────────────────────────────────────────
+
+      // ⭐ AND A DESIGNATED POINT SETS THE BAND ITSELF — measured to the SPOT, not to a figure.
+      //
+      // ⛔ WHY IT OVERRIDES THE BLOCK ABOVE rather than sitting beside it. Automated rangefinding
+      // measures shooter→TARGET TOKEN and only when exactly one thing is targeted; a throw aimed at a
+      // spot two squares short of that token is a different distance and possibly a different band, and
+      // the point is what the blast will actually be centred on. So when the shooter designated a
+      // point, that measurement wins — and it answers whether or not the rangefinding SETTING is on and
+      // whether or not anything was targeted, because the aim gesture is not an aid the GM opted into,
+      // it is the declaration the shot was made through.
+      //
+      // ⚠ IT IS A PRE-FILL, NOT A LOCK. The row is the dialog's ordinary Range selector and the shooter
+      // may change it exactly as before — the same standing that the rangefinding pre-fill has.
+      if (aimPoint && modifierGroups?.[0]?.[1]?.dataPath === "range") {
+        const attackerToken = (() => {
+          const id = firingTokenIdOf(this.actor);
+          return (id ? canvas?.tokens?.get(id) : null)
+            ?? canvas?.tokens?.placeables?.find(t => t.actor?.id === this.actor?.id) ?? null;
+        })();
+        const origin = attackerToken
+          ? { x: attackerToken.center?.x ?? attackerToken.x, y: attackerToken.center?.y ?? attackerToken.y }
+          : null;
+        if (origin) {
+          // ONE derivation, shared with the gesture's own readout (combat/aim-placement.js), so the band
+          // the shooter was shown while aiming and the band this window opens on cannot disagree.
+          const band = aimPointRangeBand(origin, aimPoint, getWeaponLongRange(item));
+          const CATEGORY_TO_RANGE_KEY = {
+            pointBlank: "RangePointBlank", close: "RangeClose", medium: "RangeMedium",
+            long: "RangeLong", extreme: "RangeExtreme", outOfRange: "RangeExtreme",
+          };
+          const RANGE_CAT_LABEL_KEY = {
+            pointBlank: "RangeCatPointBlank", close: "RangeCatClose", medium: "RangeCatMedium",
+            long: "RangeCatLong", extreme: "RangeCatExtreme", outOfRange: "RangeCatOutOfRange",
+          };
+          modifierGroups[0][1].defaultValue = CATEGORY_TO_RANGE_KEY[band.category] ?? "RangeClose";
+          // ⚠ THE NOTE FIELD IS CURRENTLY READ BY NOTHING, and that is inherited rather than introduced:
+          // the rangefinding block above has written `_rangefindingNote` since it shipped and no template
+          // or dialog renders it (grep: two writers, no readers). It is written here for PARITY — if the
+          // window ever grows a place for the sentence, both pre-fills supply one — and it costs one
+          // assignment. The pre-fill itself, which is the deliverable, is the line above.
+          modifierGroups[0][1]._rangefindingNote = localize("AimPointRangeNote", {
+            range: localize(RANGE_CAT_LABEL_KEY[band.category] ?? "RangeCatClose"),
+            dist: band.distanceM, max: getWeaponLongRange(item),
+          });
+        }
+      }
     }
     else if ((item._getWeaponSystem?.().attackType) === meleeAttackTypes.martial) {
       modifierGroups = martialOptions(this.actor, savedAttackOptions);
@@ -1098,6 +1194,12 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         // arrives at the seam (seam-shim.js) with no new channel and nothing global to keep in step —
         // and the base ignores keys it does not know. Absent on every ordinary shot.
         if (spreadAim) fireOptions.cpSpreadAim = spreadAim;
+        // ⭐ AND THE DESIGNATED POINT RIDES THEM TOO, by the same channel and for the same reason: the
+        // damage rail centres the blast on it (a hit) or scatters from it (a miss), and the rail runs
+        // on the GM's client with nothing but the relayed payload in hand. Two coordinates only —
+        // everything else the gesture measured (the band, the distance) has already been spent on this
+        // window, and a second copy of it in the payload would be a number nobody re-derives from.
+        if (aimPoint) fireOptions.cpAimPoint = { x: aimPoint.x, y: aimPoint.y };
         try {
           // ⛔ THROUGH THE DAMAGE GUARD, never straight at the base's roll — see the method for the
           // word-where-a-formula-belongs defect it answers and for how a launcher gets its warhead.
