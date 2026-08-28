@@ -133,14 +133,18 @@ export const AFTERIMAGE = Object.freeze({
   // green" read was the map's own art fooling a baseline subtraction) and NOT a fixed burst at an
   // activation instant. Release begins at settle + the unzip's span (predicted 53.36 vs observed
   // ~53.3) — gradeReleaseAtMsFor.
-  // MEASURED: ramp 1.6 s.
-  gradeRampMs: 1600,
+  // MEASURED: ramp 1.6 s. ⭐ USER RULING (2026-08-28): the measured ramp read as too slow in play —
+  // shortened, deliberately less than the halving that was on the table. ⏪ REVERT: 1600 (the
+  // video-measured value).
+  gradeRampMs: 1200,
   // Kept for the pure ladder's fixed-hold (burst) arithmetic, which the keeper pins and a macro may
   // ask for; the shipped movement-tied pass holds by state, not by this number.
   gradeHoldMs: 2400,
   // ⭐ MEASURED (2026-08-28): the release runs ~0.7-0.8 s (ratios depart ~53.3, neutral at ~54.0).
-  // ⏪ REVERT: 1600 (the earlier ramp-mirrored pick).
-  gradeReleaseMs: 800,
+  // ⭐ USER RULING (2026-08-28, same day): at 800 the let-go trailed the unzip by a touch —
+  // shortened so the colour drains with the last ghosts, not after them.
+  // ⏪ REVERT: 800 (video-measured); the earlier ramp-mirrored pick was 1600.
+  gradeReleaseMs: 600,
 
   /* ── the long-lived contract (standard §G) ── */
   // ⛔ SAFETY-ONLY under the settle-then-unzip model (the reference shows NO live cap — a 13-copy
@@ -166,9 +170,16 @@ export const AFTERIMAGE = Object.freeze({
  * is the one property the named sequence does assert. ⚠ UNSIGNED LOOK CALL (docs/FX-RAIL.md §8): the
  * six hexes are the lane's, not the user's, and each is one number.
  *
- * Thirteen ghosts over six colours is two-to-three ghosts per colour, in order — a discrete ramp
- * rather than an interpolated one, because the reference names six colours and a blend would show
- * eleven.
+ * ⏪⏪ SUPERSEDED (user ruling 2026-08-28): the DISCRETE two-to-three-ghosts-per-colour banding is
+ * retired. On a live drag the bands read as "green, green, green — suddenly purple" with the jump
+ * landing arbitrarily near the trail's halfway point (blue was band 4 of 6, and the stops are
+ * unevenly spaced in hue — lime→teal spans 78° while teal→cyan spans 22°, so the walk lingered in
+ * the greens then lurched). The user's read of the reference: "you can see it gradually shift from
+ * green to blue to purple" — a BLEND, so "the reference names six colours" was this lane's
+ * over-literal reading, not the video's. The six stops stay as the ramp's anchors; ghostHueFor now
+ * interpolates BETWEEN them at a constant rate in hue angle, so every named colour is still passed
+ * through and no two adjacent ghosts jump a band. ⏪ REVERT (discrete form):
+ * `hues[Math.min(hues.length - 1, Math.floor((i / t) * hues.length))]`.
  */
 export const AFTERIMAGE_HUES = Object.freeze([
   Object.freeze({ name: "lime", hex: 0x80ff00, hueDeg: 90 }),
@@ -332,26 +343,58 @@ export function hueOfRgb(rgb) {
 
 /* ══════════════════════════ The pure half — the ramp ══════════════════════════ */
 
+/** Channel-wise blend of two 0xRRGGBB colours; u ∈ [0,1] from a toward b. Pure. */
+function lerpHex(a, b, u) {
+  const ch = (x, s) => (x >> s) & 0xff;
+  const mix = (s) => Math.round(ch(a, s) + (ch(b, s) - ch(a, s)) * u);
+  return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+}
+
 /**
- * WHICH OF THE SIX a ghost wears, by its index in the trail — and the ramp SPANS the trail.
+ * THE COLOUR one ghost wears, by its index in the trail — and the ramp SPANS the trail.
  *
  * ⭐ MEASURED (the 52.5 s showcase frame): eleven copies on screen walk lime→violet across the WHOLE
  * line — the ramp is stretched over the trail's full length, however long the drag was, not wrapped
  * every thirteen. So when the caller knows the trail's total the slot is the index's FRACTION of it;
  * a caller with no total (an index-only question) falls back to wrapping at `ghostCap`, the reference
  * count. Pure.
+ *
+ * ⭐ USER RULING (2026-08-28) — CONTINUOUS, CONSTANT-RATE: the ghost's trail fraction maps to a hue
+ * ANGLE walked uniformly from the first stop (lime, 90°) to the last (magenta, 312°), and the colour
+ * is the channel blend of the two named stops bracketing that angle. Uniform-in-ANGLE (not
+ * uniform-in-stop-index) is the "consistent" half of the ruling: the six stops are unevenly spaced,
+ * and walking them per-index would still sprint lime→teal and crawl teal→cyan. The oldest ghost is
+ * exactly lime, the newest exactly magenta, every named stop is passed through en route, and no two
+ * adjacent ghosts differ by more than the trail's one even share of the 222° span.
+ *
+ * Returns { name, hex, hueDeg }: `name` is the nearer bracketing stop's (the coarse label the frame
+ * study recorded), and `hueDeg` is the MEASURED hue of the blended hex itself (hueOfRgb), not the
+ * walked angle — the two drift a few degrees apart because a channel blend is not hue-linear, and
+ * the reported number must be the one the drawn colour actually has. The blended `hex` is what draws.
  */
 export function ghostHueFor(index, total = null) {
   const hues = AFTERIMAGE_HUES;
   const t = Number(total);
+  let f; // trail fraction, 0 = oldest ghost, 1 = newest
   if (Number.isFinite(t) && t > 1) {
     const i = Math.max(0, Math.min(t - 1, Number(index) || 0));
-    return hues[Math.min(hues.length - 1, Math.floor((i / t) * hues.length))];
+    f = i / (t - 1);
+  } else if (t === 1) {
+    f = 0;
+  } else {
+    const cap = AFTERIMAGE.ghostCap;
+    const i = ((Number(index) || 0) % cap + cap) % cap;
+    f = cap > 1 ? i / (cap - 1) : 0;
   }
-  const cap = AFTERIMAGE.ghostCap;
-  const i = ((Number(index) || 0) % cap + cap) % cap;
-  const per = cap / hues.length;
-  return hues[Math.min(hues.length - 1, Math.floor(i / per))];
+  const first = hues[0].hueDeg, last = hues[hues.length - 1].hueDeg;
+  const angle = first + f * (last - first);
+  let j = 0;
+  while (j < hues.length - 2 && angle > hues[j + 1].hueDeg) j++;
+  const lo = hues[j], hi = hues[j + 1];
+  const u = Math.max(0, Math.min(1, (angle - lo.hueDeg) / (hi.hueDeg - lo.hueDeg)));
+  const hex = lerpHex(lo.hex, hi.hex, u);
+  const hueDeg = hueOfRgb([((hex >> 16) & 0xff) / 255, ((hex >> 8) & 0xff) / 255, (hex & 0xff) / 255]);
+  return { name: (u < 0.5 ? lo : hi).name, hex, hueDeg: hueDeg ?? angle };
 }
 
 /**
@@ -817,8 +860,12 @@ export function layTrail(tokenDoc, movement, { gridPx = null, moveId = null } = 
   }
   // ⭐ THE PASS RIDES THE MOVEMENT (measured — spec block): it comes up as the trail starts being
   // laid, holds while a pass is already up (a chained move never restarts the ramp, it just pushes
-  // the release out), and lets go on the schedule as the unzip runs out.
-  if (!_grade?.held) startSceneGrade();
+  // the release out), and lets go on the schedule as the unzip runs out. Any number of movers share
+  // the one pass: a trail landing mid-drain re-grips it from its current strength instead of
+  // restarting at neutral, and the release belongs to whichever trail runs out LAST (latest-wins
+  // in _scheduleGradeRelease).
+  if (!_grade) startSceneGrade();
+  else if (!_grade.held) regripSceneGrade();
   _scheduleGradeRelease(gradeReleaseAtMsFor(plan));
   return plan;
 }
@@ -863,6 +910,14 @@ function detachGrade() {
   const g = _grade;
   _grade = null;
   if (!g) return false;
+  // The pass is gone, so its pending release is moot — and a stale due-time must not out-vote the
+  // NEXT pass's first schedule under the latest-wins rule below.
+  if (_gradeReleaseTimer) {
+    try { clearTimeout(_gradeReleaseTimer); } catch (_e) { /* already fired */ }
+    _timers.delete(_gradeReleaseTimer);
+    _gradeReleaseTimer = null;
+  }
+  _gradeReleaseDueAt = 0;
   try { if (g.tickerFn) canvas?.app?.ticker?.remove?.(g.tickerFn); } catch (_e) { /* ticker gone */ }
   try {
     const target = g.target;
@@ -953,14 +1008,50 @@ export function releaseSceneGrade({ immediate = false } = {}) {
   return { released: true, skipped: null };
 }
 
-/** The one pending movement-release timer: a new trail while the pass is up pushes the release out. */
+/**
+ * RE-GRIP A RELEASING PASS — the mirror of releaseSceneGrade's ease-from-progress, for the other
+ * direction (user-ordered fix, 2026-08-28): a trail that starts while the green is DRAINING (a
+ * second booster moving moments after the first, or the same one moving again inside the let-go)
+ * takes the pass back over from the strength it is at. Re-based so the ramp resumes at the current
+ * progress and climbs — the old restart-from-neutral snapped the half-drained tint to zero first,
+ * a visible pop. At p = 0 (fully drained but not yet detached) this is exactly a fresh ramp.
+ */
+export function regripSceneGrade() {
+  if (!_grade) return { regripped: false, skipped: "idle" };
+  if (_grade.held) return { regripped: false, skipped: "held" };
+  const scale = _timeScale === null ? 1 : _timeScale;
+  const elapsed = (performance.now() - _grade.startedAt) / scale;
+  const p = gradeScalesAt(elapsed, { held: false }).progress;
+  _grade.held = true;
+  _grade.startedAt = performance.now() - AFTERIMAGE.gradeRampMs * p * scale;
+  return { regripped: true, skipped: null };
+}
+
+/**
+ * The one pending movement-release timer — and the pass releases when the LAST trail runs out.
+ *
+ * ⭐ TWO MOVERS SHARE ONE PASS (user-ordered fix, 2026-08-28): every trail on the scene schedules a
+ * release, and the schedules are kept LATEST-WINS by absolute due time. Unconditional replacement
+ * (the previous form) was correct for one token's chained moves (each new move ends later) but wrong
+ * for two staggered boosters: a short hop starting after a long sprint would pull the let-go UNDER
+ * the longer trail, cutting the green out while the first mover's ghosts were still unzipping. An
+ * earlier due time is now simply ignored — the standing timer already outlasts it.
+ */
 let _gradeReleaseTimer = null;
+let _gradeReleaseDueAt = 0;
 function _scheduleGradeRelease(afterMs) {
+  const due = performance.now() + _scaled(afterMs);
+  if (_gradeReleaseTimer && due <= _gradeReleaseDueAt) return;
   if (_gradeReleaseTimer) {
     try { clearTimeout(_gradeReleaseTimer); } catch (_e) { /* already fired */ }
     _timers.delete(_gradeReleaseTimer);
   }
-  _gradeReleaseTimer = at(afterMs, "pass release", () => { _gradeReleaseTimer = null; releaseSceneGrade(); });
+  _gradeReleaseDueAt = due;
+  _gradeReleaseTimer = at(afterMs, "pass release", () => {
+    _gradeReleaseTimer = null;
+    _gradeReleaseDueAt = 0;
+    releaseSceneGrade();
+  });
 }
 
 /** Is a pass running on this client right now, and in which phase? For a macro that wants to ask. */

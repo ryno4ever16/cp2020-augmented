@@ -54,7 +54,9 @@ const SPEC = {
   settleDelayMs: 200, unzipStaggerMs: 20,
   ghostTeardownMinMs: 150, ghostTeardownMaxMs: 200,
   gradeRedScale: 0.58, gradeGreenScale: 1, gradeBlueScale: 0.77,
-  gradeRampMs: 1600, gradeHoldMs: 2400, gradeReleaseMs: 800,
+  // Ramp/release shortened from the video-measured 1600/800 by user ruling (2026-08-28): the
+  // measured ramp read slow in play, and the let-go trailed the unzip by a touch.
+  gradeRampMs: 1200, gradeHoldMs: 2400, gradeReleaseMs: 600,
   maxLive: 160, plantSafetyCap: 160,
 };
 
@@ -254,19 +256,22 @@ const ramp = await page.evaluate(async (mod) => {
     clampLow: A.ghostHueFor(-4, 13).name,
   };
 }, MOD);
+// ⭐ CONTINUOUS RAMP (user ruling 2026-08-28): the six stops are anchors interpolated at a constant
+// rate in hue angle — the names below are each slot's NEAREST stop, and the banded two-per-colour
+// walk is retired ("you can see it gradually shift from green to blue to purple").
 eq("a 13-copy trail walks all six colours across its whole length", ramp.of13,
-  ["lime", "lime", "lime", "teal", "teal", "cyan", "cyan", "blue", "blue", "violet", "violet", "magenta", "magenta"]);
+  ["lime", "lime", "lime", "teal", "teal", "cyan", "cyan", "blue", "blue", "violet", "violet", "violet", "magenta"]);
 eq("a 26-copy trail stretches the SAME six colours over twice the length", ramp.of26,
-  ["lime", "lime", "lime", "lime", "lime", "teal", "teal", "teal", "teal",
-    "cyan", "cyan", "cyan", "cyan", "blue", "blue", "blue", "blue", "blue",
-    "violet", "violet", "violet", "violet", "magenta", "magenta", "magenta", "magenta"]);
+  ["lime", "lime", "lime", "lime", "lime", "teal", "teal", "teal", "teal", "teal", "teal",
+    "cyan", "cyan", "cyan", "blue", "blue", "blue", "blue", "blue",
+    "violet", "violet", "violet", "violet", "magenta", "magenta", "magenta"]);
 eq("and a 7-copy trail still starts lime and ends magenta", ramp.of7,
   ["lime", "lime", "teal", "cyan", "blue", "violet", "magenta"]);
 eq("WRAP FALLBACK: with no total the slots wrap at ghostCap", ramp.wrapNoTotal,
   ["lime", "lime", "lime", "teal", "teal", "cyan", "cyan", "blue", "blue", "violet", "violet",
-    "magenta", "magenta", "lime"]);
+    "violet", "magenta", "lime"]);
 eq("index 13 with no total wraps back to the ramp's head", ramp.idx13NoTotal, "lime");
-eq("the SAME index over a 26-long trail is mid-ramp instead", ramp.idx13Of26, "blue");
+eq("the SAME index over a 26-long trail is mid-ramp instead", ramp.idx13Of26, "cyan");
 eq("a total of one is not a span — it falls back to the wrap", ramp.of1, "lime");
 eq("an index past the trail's end clamps to its last colour", ramp.clampHigh, "magenta");
 eq("and a negative index clamps to its first", ramp.clampLow, "lime");
@@ -472,12 +477,12 @@ const grade = await page.evaluate(async (mod) => {
   return {
     ladder: A.gradeLadderMs(),
     releaseMs: A.AFTERIMAGE.gradeReleaseMs,
-    t0: at(0), tHalfRamp: at(800), tRampEnd: at(1600), tMidHold: at(2800),
-    tHoldEnd: at(4000), tMidRelease: at(4400), tDone: at(4800), tLate: at(99999),
-    heldLate: at(99999, true), heldMidRamp: at(800, true),
-    progressAtHalfRamp: Number(A.gradeScalesAt(800).progress.toFixed(4)),
+    t0: at(0), tHalfRamp: at(600), tRampEnd: at(1200), tMidHold: at(2400),
+    tHoldEnd: at(3600), tMidRelease: at(3900), tDone: at(4200), tLate: at(99999),
+    heldLate: at(99999, true), heldMidRamp: at(600, true),
+    progressAtHalfRamp: Number(A.gradeScalesAt(600).progress.toFixed(4)),
     progressHeldLate: Number(A.gradeScalesAt(99999, { held: true }).progress.toFixed(4)),
-    matrixAtFull: A.gradeMatrixOf(A.gradeScalesAt(1600)),
+    matrixAtFull: A.gradeMatrixOf(A.gradeScalesAt(1200)),
     // ⭐ the movement-tied release schedule, as a pure function of the plan
     relRef: A.gradeReleaseAtMsFor({ durationMs: 3900, plants: new Array(13) }),
     rel21: A.gradeReleaseAtMsFor({ durationMs: 4000, plants: new Array(21) }),
@@ -485,16 +490,16 @@ const grade = await page.evaluate(async (mod) => {
     relNull: A.gradeReleaseAtMsFor(null),
   };
 }, MOD);
-eq("the release ships at 800 ms — the video-measured let-go, not the ramp-mirrored 1600", grade.releaseMs, SPEC.gradeReleaseMs);
+eq("the release ships at 600 ms — the video-measured 800 shortened by ruling to land with the unzip", grade.releaseMs, SPEC.gradeReleaseMs);
 eq("the whole burst ladder is ramp + hold + release", grade.ladder,
   SPEC.gradeRampMs + SPEC.gradeHoldMs + SPEC.gradeReleaseMs);
 eq("it starts at neutral", grade.t0, { r: 1, g: 1, b: 1, phase: "ramp" });
-eq("half way up the 1.6 s ramp it is half way to the target", grade.tHalfRamp, { r: 0.79, g: 1, b: 0.885, phase: "ramp" });
+eq("half way up the 1.2 s ramp it is half way to the target", grade.tHalfRamp, { r: 0.79, g: 1, b: 0.885, phase: "ramp" });
 eq("at the ramp's end it is the measured pass: R −42%, B −23%, G held", grade.tRampEnd, { r: 0.58, g: 1, b: 0.77, phase: "hold" });
 eq("through the 2.4 s hold it does not move", grade.tMidHold, { r: 0.58, g: 1, b: 0.77, phase: "hold" });
-eq("the hold ends at 4.0 s", grade.tHoldEnd, { r: 0.58, g: 1, b: 0.77, phase: "release" });
-eq("half way through the 800 ms release it is half way home", grade.tMidRelease, { r: 0.79, g: 1, b: 0.885, phase: "release" });
-eq("and it lands exactly on neutral at 4.8 s", grade.tDone, { r: 1, g: 1, b: 1, phase: "done" });
+eq("the hold ends at 3.6 s", grade.tHoldEnd, { r: 0.58, g: 1, b: 0.77, phase: "release" });
+eq("half way through the 600 ms release it is half way home", grade.tMidRelease, { r: 0.79, g: 1, b: 0.885, phase: "release" });
+eq("and it lands exactly on neutral at 4.2 s", grade.tDone, { r: 1, g: 1, b: 1, phase: "done" });
 eq("NEGATIVE: long past the end it is still exactly neutral", grade.tLate, { r: 1, g: 1, b: 1, phase: "done" });
 eq("HELD (the shipped movement-tied form): it never leaves the hold", grade.heldLate, { r: 0.58, g: 1, b: 0.77, phase: "hold" });
 eq("but held does NOT skip the ramp — it is still ramping mid-ramp", grade.heldMidRamp, { r: 0.79, g: 1, b: 0.885, phase: "ramp" });
@@ -637,6 +642,51 @@ const live = await page.evaluate(async (mod) => {
   const wiredOk = await settleTo(3);
   out.wiring = { drewFromTheRealHook: wiredOk, live: A.liveAfterimageFx().length };
 
+  /* ── ⭐ TWO MOVERS, ONE PASS (the 2026-08-28 mechanisms). LATEST-WINS runs under the capture
+   * seam, deliberately breaking this section's no-time-scale rule for one block: the leg is about
+   * SCHEDULE ARITHMETIC (whose release stands), and the compressed ladder makes the between-the-two
+   * window deterministic instead of a thin real-clock race. ── */
+  await sweepToZero();
+  A.releaseSceneGrade({ immediate: true });
+  A._setAfterimageTimeScale(0.1);
+  const longPath = [[home.x, home.y], [home.x + 40 * G, home.y]];
+  const shortPath = [[home.x, home.y], [home.x + 5 * G, home.y]];
+  const tA = A.layTrail(tokenDoc, mk(longPath));
+  const tB = A.layTrail(tokenDoc, mk(shortPath));   // laid while held: schedules only
+  const relAms = A.gradeReleaseAtMsFor(tA), relBms = A.gradeReleaseAtMsFor(tB);
+  await sleep(Math.round(relBms * 0.1) + 150);      // past B's due, well inside A's
+  const betweenState = A.sceneGradeState();
+  await sleep(Math.max(0, Math.round(relAms * 0.1) - Math.round(relBms * 0.1) - 150) + 200);
+  out.latestWins = {
+    relA: relAms, relB: relBms,
+    stillHeldBetween: betweenState?.held ?? null, phaseBetween: betweenState?.phase ?? null,
+    afterA: A.sceneGradeState(),                    // A's own schedule let it go and it took itself down
+  };
+  A._setAfterimageTimeScale(null);
+  await sweepToZero();
+  A.releaseSceneGrade({ immediate: true });
+
+  /* ── ⭐ REGRIP, on the REAL clock: a trail landing inside the 600 ms drain takes the pass back
+   * over at its current strength — the drain window is wide enough to hit deliberately. ── */
+  const tR1 = A.layTrail(tokenDoc, mk(shortPath));
+  const relR1 = A.gradeReleaseAtMsFor(tR1);
+  await sleep(relR1 + 250);                         // ~250 ms into the drain
+  const draining = A.sceneGradeState();
+  const tR2 = A.layTrail(tokenDoc, mk(shortPath));  // the regripping trail
+  const regripped = A.sceneGradeState();
+  const heldRefusal = A.regripSceneGrade();         // pass is held again now: refuses by name
+  out.regrip = {
+    drainHeld: draining?.held ?? null, drainPhase: draining?.phase ?? null,
+    drainP: draining ? Number(draining.progress.toFixed(3)) : null,
+    afterHeld: regripped?.held ?? null, afterPhase: regripped?.phase ?? null,
+    afterP: regripped ? Number(regripped.progress.toFixed(3)) : null,
+    trailQueued: tR2.queued.length,
+    heldRefusal,
+  };
+  A.releaseSceneGrade({ immediate: true });
+  out.idleRegrip = A.regripSceneGrade();
+  await sweepToZero();
+
   /* ── EVICTION through the engine's own manager, at the shipped rail.
    * ⚠ NO FIXED SLEEP (standing rule): `endEffects` is async and its latency moves with rig load, and
    * a trail still being laid keeps landing NEW copies behind the sweep. So the leg names the exact
@@ -667,7 +717,7 @@ const live = await page.evaluate(async (mod) => {
   /* ── ⭐ THE PICTURE: the LIVE filter's uniform matrix, read off the scene group mid-hold ── */
   A.releaseSceneGrade({ immediate: true });
   A.startSceneGrade();                                        // shipped default = held
-  await sleep(1900);                                          // past the 1.6 s ramp
+  await sleep(1900);                                          // past the 1.2 s ramp
   const target = canvas.environment ?? canvas.stage;
   const ours = (target.filters ?? [])[(target.filters ?? []).length - 1];
   const m = ours?.uniforms?.m ? Array.from(ours.uniforms.m).map(n => Number(Number(n).toFixed(4))) : null;
@@ -709,7 +759,7 @@ const live = await page.evaluate(async (mod) => {
   /* ── ⭐ THE RELEASE EASES FROM CURRENT PROGRESS — no flash-to-full on a short move ── */
   A.startSceneGrade();
   const defaultHeld = A.sceneGradeState()?.held ?? null;
-  await sleep(430);                                           // ~27% up the 1.6 s ramp
+  await sleep(430);                                           // ~36% up the 1.2 s ramp
   const beforeRelease = A.sceneGradeState();
   A.releaseSceneGrade();
   const samples = [];
@@ -734,9 +784,18 @@ const live = await page.evaluate(async (mod) => {
   const atFull = A.sceneGradeState();
   A.releaseSceneGrade();
   const justAfter = A.sceneGradeState();
-  await sleep(430);
-  const partWay = A.sceneGradeState();
-  await sleep(650);
+  // POLL for a mid-drain reading instead of sleeping to a fixed point: in-page setTimeout lag under
+  // this section's render load measures ~190 ms, a third of the 600 ms drain, so any fixed-point
+  // probe races the very clock it measures. The claim is only that the ease PASSES THROUGH the
+  // middle on its way home — assert the first reading seen inside the band.
+  let partWay = null;
+  for (let i = 0; i < 40; i++) {
+    const st = A.sceneGradeState();
+    if (!st) break;                                   // already home and detached
+    if (st.phase === "release" && st.progress <= 0.9) { partWay = st; break; }
+    await sleep(30);
+  }
+  await sleep(900);
   const gone = A.sceneGradeState();
   out.fullRelease = {
     fullPhase: atFull?.phase ?? null, fullP: atFull ? Number(atFull.progress.toFixed(3)) : null,
@@ -841,6 +900,25 @@ else {
   check("WIRING: Foundry's own moveToken hook reaches this element and draws",
     live.wiring.drewFromTheRealHook, `${live.wiring.live} live from the real hook`);
 
+  check("⭐ LATEST-WINS: a shorter second trail cannot pull the release under the longer first",
+    live.latestWins.stillHeldBetween === true && live.latestWins.phaseBetween === "hold"
+    && live.latestWins.relB < live.latestWins.relA,
+    JSON.stringify({ ...live.latestWins, afterA: undefined }));
+  eq("…and the pass still lets go on the LONGER trail's own schedule, taking itself down",
+    live.latestWins.afterA, null);
+  eq("REGRIP: the pass was genuinely draining when the next trail landed",
+    { held: live.regrip.drainHeld, phase: live.regrip.drainPhase }, { held: false, phase: "release" });
+  check("⭐ REGRIP: a trail landing mid-drain takes the pass back over at its CURRENT strength",
+    live.regrip.afterHeld === true && live.regrip.afterPhase === "ramp"
+    && Math.abs(live.regrip.afterP - live.regrip.drainP) <= 0.05,
+    `drained to ${live.regrip.drainP}, resumed at ${live.regrip.afterP}`);
+  check("and the regripping trail drew its own copies too", live.regrip.trailQueued > 0,
+    `${live.regrip.trailQueued} queued`);
+  eq("NEGATIVE: regripping a HELD pass refuses by name", live.regrip.heldRefusal,
+    { regripped: false, skipped: "held" });
+  eq("NEGATIVE: regripping when nothing runs refuses by name", live.idleRegrip,
+    { regripped: false, skipped: "idle" });
+
   check("EVICTION ends exactly what was standing when it was asked",
     live.eviction.named >= 5 && live.eviction.evicted === live.eviction.liveAtEvict
     && live.eviction.liveAtEvict > 0, JSON.stringify(live.eviction));
@@ -891,7 +969,8 @@ else {
   eq("and the release reduces to the old arithmetic — release phase, full progress",
     { phase: live.fullRelease.afterPhase, p: live.fullRelease.afterP, held: live.fullRelease.afterHeld },
     { phase: "release", p: 1, held: false });
-  check("part way through it is part way home", live.fullRelease.partP > 0.25 && live.fullRelease.partP < 0.75,
+  check("part way through it is part way home — a mid-drain reading exists inside the band",
+    live.fullRelease.partP !== null && live.fullRelease.partP > 0.02 && live.fullRelease.partP <= 0.9,
     `progress ${live.fullRelease.partP}`);
   eq("and it lands neutral and detaches itself", live.fullRelease.goneState, null);
   check("leaving no colour-matrix filter on the scene group", live.fullRelease.detached);
@@ -939,7 +1018,7 @@ const gradeLive = await page.evaluate(async (mod) => {
   const foreignSurvived = (target.filters ?? []).includes(foreign);
 
   // THE CAPTURE SEAM (standard §I/25), applied FIRST in the chain: the explicit BURST runs its whole
-  // 4.8 s ladder against a compressed clock and takes itself down at the end without being told to.
+  // 4.2 s ladder against a compressed clock and takes itself down at the end without being told to.
   const seam = A._setAfterimageTimeScale(0.05);
   A.startSceneGrade({ sustained: false });
   const burstAttached = Array.isArray(target.filters) ? target.filters.length : 0;
