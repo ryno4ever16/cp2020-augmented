@@ -181,7 +181,7 @@
     "ExplosionOnTarget": "🎯 On target — the blast is centred where it was aimed.",
     "ExplosionResultTitle": "💥 Blast Resolved — {weapon}",
     "ExplosionResultSummary": "Blast radius <b>{radius}m</b>, base damage <b>{damage}</b>.",
-    "ExplosionResultRow": "<b>{name}</b> — took {damage} at its distance band",
+    "ExplosionResultRow": "<b>{name}</b> — took {damage}",
     "ExplosionResultConcussion": "Concussion (Listen Up p.105): SP ignored, half permanent and half stun — no armor math to show.",
     "AreaCardBreakdown": "Math",
     "ExplosionScatterLine": "🎲 The throw missed — it landed {dist}m {dir} of the aim point.",

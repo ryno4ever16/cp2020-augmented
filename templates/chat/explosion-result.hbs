@@ -11,9 +11,11 @@
   much, or what stopped it. This is the blast's counterpart to spread-result.hbs and is deliberately its
   twin in shape: same wrapper, same row list, same partial, same reasons for the DIV rows.
 
-  `note` is a PRE-LOCALIZED clause or an empty string — it names the branch a row was applied through
-  when that branch is not the ordinary one (Listen Up p.105 concussion ignores SP entirely, so it has no
-  armour math to disclose and says so instead of showing an empty block).
+  `modeNote` is a PRE-LOCALIZED card-level clause or an empty string — it names the branch the WHOLE
+  detonation was applied through when that branch is not the ordinary one (Listen Up p.105 concussion
+  ignores SP entirely, so there is no armour math to disclose and the card says so ONCE — the per-row
+  repetition of the same sentence was the reported density, 2026-08-28). `note` remains a per-row
+  clause for a row-specific branch; both empty on the ordinary core application.
   i18n via CPLocal; triple-stash where the string carries <b>.
 --}}
 <div class="cyberpunk save-prompt">
@@ -21,6 +23,7 @@
   <div class="save-info">
     <span>{{{CPLocal "ExplosionResultSummary" radius=radius damage=baseDamage}}}</span>
     <div class="cp-spread-result-list">
+      {{#if modeNote}}<div class="cp-spread-result-row">{{modeNote}}</div>{{/if}}
       {{#each rows}}
         <div class="cp-spread-result-row">{{{CPLocal "ExplosionResultRow" name=this.name damage=this.damage}}}</div>
         {{#if this.note}}<div class="cp-spread-result-row">{{this.note}}</div>{{/if}}

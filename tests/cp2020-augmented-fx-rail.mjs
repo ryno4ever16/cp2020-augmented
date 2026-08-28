@@ -7394,9 +7394,12 @@ try {
     fx._setSoundManifest(null);
 
     /* ── a. THE SPEC, by value ───────────────────────────────────────────────────────────────── */
-    ok("impact audio: the two clips are the shipped bases, resolved through the same delivery check",
-      fx.HIT_SOUND.flesh.base === "hit-flesh" && fx.HIT_SOUND.structure.base === "hit-sdp"
-      && fx.hitSoundSrc("flesh") === `modules/${SCOPE}/sounds/hit-flesh.ogg`
+    // ⏪ RE-VALUED 2026-08-28 (release gate): the FLESH clip is WITHDRAWN by ruling — no flesh impact
+    // ships until a better clip is found post-release. Its row stays (kind, gain, ladder) with
+    // base: null as the one mute point; structure still delivers. This leg used to pin the flesh path.
+    ok("impact audio: the flesh clip is withdrawn by ruling; structure still delivers",
+      fx.HIT_SOUND.flesh.base === null && fx.HIT_SOUND.structure.base === "hit-sdp"
+      && fx.hitSoundSrc("flesh") === null
       && fx.hitSoundSrc("structure") === `modules/${SCOPE}/sounds/hit-sdp.ogg`
       && fx.hitSoundSrc("__nope__") === null,
       JSON.stringify({ flesh: fx.hitSoundSrc("flesh"), structure: fx.hitSoundSrc("structure") }));
@@ -7472,9 +7475,12 @@ try {
       // below reads TRUE on the rig. That is exactly why the seam has to win: with the order reversed
       // every driven leg would be measuring this page's audio context instead of the element.
       out.measured.pageAudioLocked = lockedWas;
+      // ⏪ These driver negatives run on STRUCTURE since the flesh withdrawal — the mechanism under
+      // test (lock skip, seam precedence, bounds) is kind-agnostic and structure is the kind that
+      // still delivers a clip to drive it with.
       fx._setHitSoundSink(null);
       game.audio.locked = true;
-      const whileLocked = fx.fxHitSound("flesh");
+      const whileLocked = fx.fxHitSound("structure");
       game.audio.locked = lockedWas;
       fx._setHitSoundSink((e) => played.push({ ...e, at: Date.now() }));
       ok("impact audio: a locked audio context is a SKIP, not a parked promise (negative)",
@@ -7483,13 +7489,19 @@ try {
       // …and the seam takes precedence over it, which is what makes every leg below an assertion
       // about the element rather than about this page.
       game.audio.locked = true;
-      const seamWins = fx.fxHitSound("flesh", { index: 2 });
+      const seamWins = fx.fxHitSound("structure", { index: 2 });
       game.audio.locked = lockedWas;
       await sleep(30);
       ok("impact audio: an armed capture seam is consulted BEFORE the host's audio state (§9 I)",
         seamWins.played === true && seamWins.skipped === null
-        && played.length === 1 && played[0].volume === fx.hitSoundVolume("flesh", 2),
+        && played.length === 1 && played[0].volume === fx.hitSoundVolume("structure", 2),
         JSON.stringify({ seamWins, captured: played.slice(0) }));
+      // ⭐ THE WITHDRAWN KIND, at the same door: a flesh call is a plain asset-skip even with the
+      // seam armed — the mute is upstream of everything this section drives.
+      played.length = 0;
+      const fleshMuted = fx.fxHitSound("flesh", { index: 0 });
+      ok("impact audio: the withdrawn flesh kind is silent at the door (ruling negative)",
+        fleshMuted.played === false && played.length === 0, JSON.stringify(fleshMuted));
       played.length = 0;
       // The delay is a timer on the issuing client, so the returned descriptor reports it by value.
       played.length = 0;
@@ -7507,7 +7519,7 @@ try {
       // An asset the listing does not deliver is SILENT, exactly as a missing Sequencer key is.
       played.length = 0;
       fx._setSoundManifest([]);
-      const noAsset = fx.fxHitSound("flesh");
+      const noAsset = fx.fxHitSound("structure");
       const noPlan = fx.hitSoundPlanFor(canvas.tokens.get(meatTok.id));
       fx._setSoundManifest(null);
       ok("impact audio: an undelivered clip is silent and plans nothing — the missing-key rule (negative)",
@@ -7533,19 +7545,19 @@ try {
       // N hits. Driven exactly as that dialog drives it — no index, no delay, no pause.
       played.length = 0;
       fx._setHitSoundSink((e) => played.push({ ...e, at: Date.now() }));   // resets the rolling tally
-      const rows = Array.from({ length: 9 }, () => fx.fxHitSound("flesh"));
+      const rows = Array.from({ length: 9 }, () => fx.fxHitSound("structure"));
       ok("impact audio: an un-indexed caller gets the ladder AND the bound, in one tick (negative)",
         played.length === fx.HIT_SOUND_MAX_PER_PAYLOAD
-        && JSON.stringify(played.map(p => p.volume)) === JSON.stringify([0, 1, 2, 3].map(i => fx.hitSoundVolume("flesh", i)))
+        && JSON.stringify(played.map(p => p.volume)) === JSON.stringify([0, 1, 2, 3].map(i => fx.hitSoundVolume("structure", i)))
         && rows.slice(fx.HIT_SOUND_MAX_PER_PAYLOAD).every(r => r.played === false && r.skipped === "burst")
         && fx.HIT_SOUND_BURST_WINDOW_MS === 700,
         JSON.stringify({ played: played.length, of: rows.length, volumes: played.map(p => p.volume) }));
       // The window is what reopens it — quiet, not a caller.
       await sleep(fx.HIT_SOUND_BURST_WINDOW_MS + 80);
       played.length = 0;
-      const afterQuiet = fx.fxHitSound("flesh");
+      const afterQuiet = fx.fxHitSound("structure");
       ok("impact audio: the bound reopens on QUIET and restarts the ladder",
-        afterQuiet.played === true && afterQuiet.volume === fx.hitSoundVolume("flesh", 0) && played.length === 1,
+        afterQuiet.played === true && afterQuiet.volume === fx.hitSoundVolume("structure", 0) && played.length === 1,
         JSON.stringify(afterQuiet));
       // An index the caller DOES supply is exempt — the fan-out counts its own and is never refused.
       played.length = 0;
@@ -7583,45 +7595,49 @@ try {
         { weaponName: "__PW__HIT rifle", shotsFired: n, shotsHit: n,
           areaDamages: { Torso: Array.from({ length: n }, () => ({ damage: 5 })) } });
 
+      // ⏪ RE-VALUED 2026-08-28: a burst on a BODY is now SILENT — the flesh clip is withdrawn by
+      // ruling, and this driven leg is the proof that the withdrawal reaches the live fan-out
+      // (plan null, zero plays), not just the pure src answer.
       played.length = 0; globalThis.__HIT_ENTRIES.length = 0;
       const onMeat = await fx.fxWeaponFired(burstAt(meatTok.id, 12));
       await sleep(1600);
       const meatPlays = played.splice(0);
-      out.measured.flesh = { hitAudio: onMeat.hitAudio, arrival: onMeat.arrival?.ms, plays: meatPlays.length,
-        volumes: meatPlays.map(p => p.volume), delays: meatPlays.map(p => p.delayMs) };
-      ok("impact audio driven: a burst on a BODY sounds the flesh clip, one per landing round, capped",
-        onMeat.hitAudio?.kind === "flesh" && onMeat.hitAudio?.queued === fx.HIT_SOUND_MAX_PER_PAYLOAD
-        && onMeat.hitAudio?.cap === fx.HIT_SOUND_MAX_PER_PAYLOAD
-        && meatPlays.length === fx.HIT_SOUND_MAX_PER_PAYLOAD
-        && meatPlays.every(p => p.src === fx.hitSoundSrc("flesh")),
+      out.measured.flesh = { hitAudio: onMeat.hitAudio, arrival: onMeat.arrival?.ms, plays: meatPlays.length };
+      ok("impact audio driven: a burst on a BODY is silent — the flesh withdrawal reaches the fan-out",
+        onMeat.hitAudio === null && meatPlays.length === 0,
         JSON.stringify(out.measured.flesh));
-      ok("impact audio driven: the four impacts are four LEVELS, not four copies of one waveform",
-        JSON.stringify(meatPlays.map(p => p.volume)) === JSON.stringify([0, 1, 2, 3].map(i => fx.hitSoundVolume("flesh", i)))
-        && new Set(meatPlays.map(p => p.volume)).size === 4,
-        JSON.stringify(meatPlays.map(p => p.volume)));
-      // THE ARRIVAL AGREEMENT — the sound is hung on the same number the mark is, per round.
-      ok("impact audio driven: each impact waits the round's own arrival, the mark's own number",
-        meatPlays.every(p => p.delayMs <= onMeat.arrival.ms && p.delayMs > 0)
-        && meatPlays[0].delayMs === onMeat.arrival.ms && onMeat.arrival.ms > 0,
-        JSON.stringify({ arrival: onMeat.arrival, delays: meatPlays.map(p => p.delayMs) }));
 
-      // A SECOND, SEPARATE TRIGGER PULL at a different target — what a real table varies.
+      // A SECOND, SEPARATE TRIGGER PULL at a different target — what a real table varies. The
+      // structure kind still delivers, so it now carries the driven ladder and arrival assertions
+      // the flesh burst used to.
       played.length = 0; globalThis.__HIT_ENTRIES.length = 0;
       const onRig = await fx.fxWeaponFired(burstAt(rigTok.id, 12));
       await sleep(1600);
       const rigPlays = played.splice(0);
-      out.measured.structure = { hitAudio: onRig.hitAudio, plays: rigPlays.length, volumes: rigPlays.map(p => p.volume) };
-      ok("impact audio driven: the same burst at a VEHICLE sounds the structure clip instead",
-        onRig.hitAudio?.kind === "structure" && rigPlays.length === fx.HIT_SOUND_MAX_PER_PAYLOAD
-        && rigPlays.every(p => p.src === fx.hitSoundSrc("structure"))
-        && rigPlays[0].volume === fx.hitSoundVolume("structure", 0)
-        && rigPlays[0].src !== meatPlays[0].src,
+      out.measured.structure = { hitAudio: onRig.hitAudio, arrival: onRig.arrival?.ms, plays: rigPlays.length,
+        volumes: rigPlays.map(p => p.volume), delays: rigPlays.map(p => p.delayMs) };
+      ok("impact audio driven: the same burst at a VEHICLE sounds the structure clip, one per landing round, capped",
+        onRig.hitAudio?.kind === "structure" && onRig.hitAudio?.queued === fx.HIT_SOUND_MAX_PER_PAYLOAD
+        && onRig.hitAudio?.cap === fx.HIT_SOUND_MAX_PER_PAYLOAD
+        && rigPlays.length === fx.HIT_SOUND_MAX_PER_PAYLOAD
+        && rigPlays.every(p => p.src === fx.hitSoundSrc("structure")),
         JSON.stringify(out.measured.structure));
+      ok("impact audio driven: the four impacts are four LEVELS, not four copies of one waveform",
+        JSON.stringify(rigPlays.map(p => p.volume)) === JSON.stringify([0, 1, 2, 3].map(i => fx.hitSoundVolume("structure", i)))
+        && new Set(rigPlays.map(p => p.volume)).size === 4,
+        JSON.stringify(rigPlays.map(p => p.volume)));
+      // THE ARRIVAL AGREEMENT — the sound is hung on the same number the mark is, per round.
+      ok("impact audio driven: each impact waits the round's own arrival, the mark's own number",
+        rigPlays.every(p => p.delayMs <= onRig.arrival.ms && p.delayMs > 0)
+        && rigPlays[0].delayMs === onRig.arrival.ms && onRig.arrival.ms > 0,
+        JSON.stringify({ arrival: onRig.arrival, delays: rigPlays.map(p => p.delayMs) }));
       // A burst that landed nothing makes no noise at the far end, however many rounds it fired.
+      // ⏪ Retargeted at the STRUCTURE figure (flesh withdrawal): against a body the plan is null for
+      // the withdrawal's own reason, and this leg is about the landed-nothing reason.
       played.length = 0;
       const missed = await fx.fxWeaponFired({ attackerId: actor.id, weaponId: rifle.id,
         weaponName: "__PW__HIT rifle", caliber: "5.56", modifier: "standard", shotsFired: 10,
-        targetTokenId: meatTok.id, fxTargetTokenId: meatTok.id, areaDamages: {} });
+        targetTokenId: rigTok.id, fxTargetTokenId: rigTok.id, areaDamages: {} });
       await sleep(900);
       ok("impact audio driven: a burst that landed nothing sounds no impacts (negative)",
         missed.hits === 0 && missed.hitAudio?.queued === 0 && played.length === 0,
@@ -7638,8 +7654,10 @@ try {
       // makes this an assertion about the FIELD rather than about some other property of a synthetic
       // payload — and the control below is load-bearing, because the un-stamped run is what proves this
       // fixture would have sounded and drawn if the door had let it through.
+      // ⏪ The mute-field pair drives the STRUCTURE figure since the flesh withdrawal — the control
+      // leg has to produce a real sound, or the negative proves nothing.
       played.length = 0; globalThis.__HIT_ENTRIES.length = 0;
-      const mutable = burstAt(meatTok.id, 12);
+      const mutable = burstAt(rigTok.id, 12);
       const muted = await fx.fxWeaponFired({ ...mutable, fxMute: true });
       await sleep(1600);
       ok("mute field: a declared-mute payload is refused at the door, before any class is resolved",
@@ -8184,10 +8202,13 @@ try {
       // would leave it to pay its fetch+decode ON SCREEN, which is the stall this manifest exists for.
       && Object.values(fx.FX_CLASSES).every(rw => !rw.impactKey || manifest.keys.includes(rw.impactKey)),
       `${manifest.keys.length} keys, all jb2a-prefixed: ${manifest.keys.every(k => k.startsWith("jb2a."))}`);
+    // ⏪ The withdrawn flesh clip is asserted ABSENT (2026-08-28 ruling): a manifest listing a source
+    // the element will never play would preload dead weight — the structure clip is the impact entry.
     ok("manifest: at least one DELIVERED sound source is in it, resolved through the delivery check",
       manifest.sounds.length > 0
       && manifest.sounds.includes(fx.fxSoundSrc(shell.sound))
-      && manifest.sounds.includes(fx.hitSoundSrc("flesh"))
+      && manifest.sounds.includes(fx.hitSoundSrc("structure"))
+      && !manifest.sounds.includes(`modules/${SCOPE}/sounds/hit-flesh.ogg`)
       && manifest.sounds.every(s => typeof s === "string" && s.length > 0),
       JSON.stringify(manifest.sounds));
     ok("manifest: it is a SET — no key and no source is listed twice",
@@ -8301,8 +8322,12 @@ try {
     const actor = await Actor.create({ name: "__PW__PAT Shooter", type: "character" });
     const [shell] = await actor.createEmbeddedDocuments("Item", [{ name: "__PW__PAT shell gun", type: "weapon",
       system: { weaponType: "Shotgun", attackType: "Shotgun", ammoType: "12ga", damage: "3d6", range: 50, rof: 1, shots: 8, shotsLeft: 8 } }]);
+    // ⏪ Victims are STRUCTURE-bearing figures since the flesh withdrawal (2026-08-28 ruling): the
+    // sweep skips a victim whose kind delivers no clip, so flesh figures would answer every plan
+    // null and this section would be measuring the mute instead of the corridor. The mechanism under
+    // test — who the pattern swept, at what fraction, per shell — is kind-agnostic.
     const mk = async (label, cx, cy) => {
-      const a = await Actor.create({ name: `__PW__PAT ${label}`, type: "character" });
+      const a = await Actor.create({ name: `__PW__PAT ${label}`, type: `${SCOPE}.vehicle` });
       const [t] = await scene.createEmbeddedDocuments("Token", [{
         name: `__PW__PAT ${label}`, actorId: a.id, actorLink: true, x: cx - gpx / 2, y: cy - gpx / 2 }]);
       return { actor: a, doc: t };
@@ -8378,7 +8403,7 @@ try {
         `cap ${plan?.cap}, queued ${plan?.queued}`);
       ok("corridor audio: the clip is chosen per victim by the same structure predicate the spray asks",
         !!plan && plan.victims[0].kind === fx.hitSoundKindFor(near.actor)
-        && plan.victims[0].kind === "flesh",
+        && plan.victims[0].kind === "structure",
         String(plan?.victims[0].kind));
 
       /* ── d. THE OCCLUSION EXEMPTION IS WHAT EXCLUDED THE THIRD FIGURE ──────────────────────── */
@@ -8741,6 +8766,13 @@ try {
         `single vs rifle ${(20 * Math.log10(pkSingle / pkRifle)).toFixed(2)} dB`);
 
       /* ── c. THE ARRIVAL CLOCK OWNS THE IMPACT SOUND, NOT THE APPLY CLICK (A) ───────────────── */
+      // ⏪ The fixture target rides this sub-section as a FULL-CONVERSION BORG (fullBorg flag,
+      // 2026-08-28): the flesh clip is withdrawn by ruling, and a flesh target makes every
+      // both-directions leg here vacuous — silent on both sides for the withdrawal's own reason,
+      // not for the guard's. A full borg is STRUCTURE to the sound predicate while still walking
+      // the personnel damage pipeline these legs drive, which is the one fixture shape that keeps
+      // the double-sounding guard measurable. Unset after the dialog leg below.
+      await targetActor.setFlag(SCOPE, "fullBorg", true);
       const shotPayload = (over = {}) => globalThis.__goldenPayload("singleShot",
         { attackerId: shooterActor.id, attackerTokenId: shooterTok.id, weaponId: ids.rifle,
           targetTokenId: targetTok.id, targetActorId: targetActor.id }, over);
@@ -8775,7 +8807,7 @@ try {
         const quiet = seamHeard.length;
         await DA.applyLocationDamage({ target: targetActor, location: "Torso", netDamage: 3, penetrates: true, token: targetTok.object, fxSilent: false });
         ok("apply clock: the seam is silent under the flag and sounds without it (both directions)",
-          quiet === 0 && seamHeard.length === 1 && seamHeard[0].kind === "flesh",
+          quiet === 0 && seamHeard.length === 1 && seamHeard[0].kind === "structure",
           `flagged ${quiet} impact(s), unflagged ${seamHeard.length}`);
       } finally { fx._setHitSoundSink(null); }
       await targetActor.update({ "system.damage": 0 });
@@ -8801,6 +8833,7 @@ try {
         fx._setHitSoundSink(null);
         try { await dlg?.close(); } catch (e) { /* already closed */ }
         await targetActor.update({ "system.damage": 0 });
+        await targetActor.unsetFlag(SCOPE, "fullBorg").catch(() => {});
       }
 
       /* ── d. A BURNING PATTERN LOAD LIGHTS ITS CORRIDOR ON THE ARRIVAL CLOCK (C) ────────────── */

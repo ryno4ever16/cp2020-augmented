@@ -3323,7 +3323,14 @@ export function sfx(cls, { volume, burst = false, delayMs = 0 } = {}) {
  * here and the knob to change it is `gain`.
  */
 export const HIT_SOUND = Object.freeze({
-  flesh:     Object.freeze({ base: "hit-flesh", gain: 1.0,    peakDbfs: -1.23, peak100Db: -18.68 }),
+  // ⛔ THE FLESH CLIP IS WITHDRAWN (user ruling, re-affirmed at the 1.2.0 release gate 2026-08-28:
+  // no flesh impact sound ships until a better clip is found — post-release work). `base: null` is
+  // the one mute point: hitSoundSrc answers null for the kind, and every caller already treats a
+  // null src as "nothing delivered" (the fan-out's arrival, the apply seams, the area victim sweep),
+  // so the kind's plumbing — kind resolution, volume ladder, caps — stays wired for the day a clip
+  // returns. STRUCTURE is untouched: walls, vehicles and borg frames still ring.
+  // ⏪ REVERT: base: "hit-flesh" (measured row: gain 1.0, peak −1.23 dBFS, 100ms −18.68 dB).
+  flesh:     Object.freeze({ base: null,        gain: 1.0,    peakDbfs: -1.23, peak100Db: -18.68 }),
   structure: Object.freeze({ base: "hit-sdp",   gain: 1.1677, peakDbfs: -2.58, peak100Db: -12.83 }),
 });
 
@@ -3401,10 +3408,11 @@ export function hitSoundKindFor(actor) {
   return bearsStructuralSdp(actor) ? "structure" : "flesh";
 }
 
-/** The playable source for a kind, or null when the listing says nothing is delivered for it. */
+/** The playable source for a kind, or null when the listing says nothing is delivered for it —
+ *  or when the kind's clip is withdrawn (`base: null`, the flesh ruling above). */
 export function hitSoundSrc(kind) {
   const row = HIT_SOUND[kind];
-  return row ? _deliveredSrc(row.base) : null;
+  return (row && row.base) ? _deliveredSrc(row.base) : null;
 }
 
 /** The level one impact plays at: the base, the asset's peak-match gain, and the index's wobble. PURE. */

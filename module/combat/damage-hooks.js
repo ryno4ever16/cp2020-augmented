@@ -2761,6 +2761,9 @@ async function _confirmExplosion(templateId) {
   // afterwards (2026-08-28, ruling A). The rows are the apply's OWN result rows, so the math the card
   // discloses is the math that was performed; nothing here re-resolves anything.
   const resultRows = [];
+  // The card-level branch sentence (set by the concussion branch below, once — every row of one
+  // detonation takes the same branch, so this is a fact about the card, not about a row).
+  let concussionNote = "";
 
   for (const entry of targets) {
     const tok = entry.tok;
@@ -2801,11 +2804,15 @@ async function _confirmExplosion(templateId) {
       // barrier's SP is SP. The object is still charged for the blast it received (the plan above ran
       // for it either way) — what a wall stops is the fragments, not the overpressure.
       await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
-      // ⛔ NO ARMOUR MATH TO DISCLOSE ON THIS BRANCH, and the row says so rather than showing an empty
-      // block: Listen Up p.105 has concussion IGNORE SP, so there are no layers, no cover fold and no
-      // AP halving to name — the whole arithmetic is the banded damage less BTM, half of it stun. A
-      // disclosure built from a pipeline this application never entered would be a fiction.
-      const concussionRow = { name: _spreadRowName(tok), damage: dmg, note: localize("ExplosionResultConcussion"), breakdown: null };
+      // ⛔ NO ARMOUR MATH TO DISCLOSE ON THIS BRANCH: Listen Up p.105 has concussion IGNORE SP, so
+      // there are no layers, no cover fold and no AP halving to name — the whole arithmetic is the
+      // banded damage less BTM, half of it stun. A disclosure built from a pipeline this application
+      // never entered would be a fiction. ⭐ SAID ONCE, ON THE CARD, not once per row (user report
+      // 2026-08-28: the per-row repetition made a frag detonation's card "dense and hard to read") —
+      // `concussionNote` is card-level because this branch is decided by the AREA's own record, so
+      // every row of one detonation takes the same branch and the sentence is a fact about the card.
+      concussionNote = localize("ExplosionResultConcussion");
+      const concussionRow = { name: _spreadRowName(tok), damage: dmg, note: "", breakdown: null };
       resultRows.push(concussionRow);
       if (f.blastShrapnel) {
         // ⛔ THE RIDERS DO NOT RIDE THE SECONDARY, and that is a ruling rather than an omission
@@ -2866,7 +2873,7 @@ async function _confirmExplosion(templateId) {
   if (resultRows.length) {
     const resultCard = await renderChatCard("explosion-result.hbs", {
       weaponName: f.weaponName ?? localize("WpnExplosion"),
-      radius, baseDamage: base, rows: resultRows,
+      radius, baseDamage: base, rows: resultRows, modeNote: concussionNote,
     });
     await ChatMessage.create({ content: resultCard });
   }
