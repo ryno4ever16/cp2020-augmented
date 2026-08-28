@@ -11,68 +11,31 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * PAGES is a data structure of i18n KEY references (not text) — the structure/grouping is config; the
  * words are in the lang files. The page-flip nav uses V2 actions (data-action), not hand-wired clicks.
  */
+/**
+ * ⭐ ONE PAGE, BY RULING (user, 2026-08-28 at the 1.2.0 gate; policy set 2026-07-16: this is NOT
+ * patch notes — "if we add to it for every minor patch, players cycle through 8 pages just to
+ * dismiss it"). The rolling shape: an evergreen setup third, at most twelve highlights, and the
+ * links (full notes on GitHub, support on Discord — both in the intro, the one triple-stash slot).
+ * A release refreshes the CONTENT of the twelve, it never adds a page; per-version prose belongs
+ * to the GitHub release alone. ⏪ The retired four-page ladder (setup table · capabilities ·
+ * "New in 1.1.0" · "New in 1.2.0") is in git history at this site.
+ */
 const PAGES = [
   {
     intro: "CYBERPUNK.AutoNotice.Intro",
     boxes: [
       {
-        headingKey: "CYBERPUNK.AutoNotice.OptInHeading",
+        headingKey: "CYBERPUNK.AutoNotice.SetupHeading",
         rows: [
-          ["CYBERPUNK.AutoNotice.AblationName",    "CYBERPUNK.AutoNotice.AblationDesc"],
-          ["CYBERPUNK.AutoNotice.LimbName",        "CYBERPUNK.AutoNotice.LimbDesc"],
-          ["CYBERPUNK.AutoNotice.DeathSaveName",   "CYBERPUNK.AutoNotice.DeathSaveDesc"],
-          ["CYBERPUNK.AutoNotice.StunName",        "CYBERPUNK.AutoNotice.StunDesc"],
-          ["CYBERPUNK.AutoNotice.MultiActionName", "CYBERPUNK.AutoNotice.MultiActionDesc"],
-          ["CYBERPUNK.AutoNotice.LayerEvName",     "CYBERPUNK.AutoNotice.LayerEvDesc"],
+          ["CYBERPUNK.AutoNotice.SetupOptInName", "CYBERPUNK.AutoNotice.SetupOptInDesc"],
+          ["CYBERPUNK.AutoNotice.SetupCoreName",  "CYBERPUNK.AutoNotice.SetupCoreDesc"],
+          ["CYBERPUNK.AutoNotice.SetupFxName",    "CYBERPUNK.AutoNotice.SetupFxDesc"],
         ],
       },
       {
-        headingKey: "CYBERPUNK.AutoNotice.CoreRuleHeading",
-        variant: "corerule",
-        rows: [
-          ["CYBERPUNK.AutoNotice.HeadDoublingName", "CYBERPUNK.AutoNotice.HeadDoublingDesc"],
-        ],
-      },
-    ],
-  },
-  {
-    boxes: [
-      {
-        headingKey: "CYBERPUNK.AutoNotice.CombatHeading",
-        bullets: Array.from({ length: 12 }, (_, i) => `CYBERPUNK.AutoNotice.CombatItem${i + 1}`),
-      },
-      {
-        headingKey: "CYBERPUNK.AutoNotice.BeyondHeading",
+        headingKey: "CYBERPUNK.AutoNotice.HighlightsHeading",
         variant: "gold",
-        bullets: Array.from({ length: 7 }, (_, i) => `CYBERPUNK.AutoNotice.BeyondItem${i + 1}`),
-      },
-    ],
-  },
-  {
-    intro: "CYBERPUNK.AutoNotice.NewIn110Intro",
-    boxes: [
-      {
-        headingKey: "CYBERPUNK.AutoNotice.NewSystemsHeading",
-        bullets: Array.from({ length: 10 }, (_, i) => `CYBERPUNK.AutoNotice.NewSystemsItem${i + 1}`),
-      },
-      {
-        headingKey: "CYBERPUNK.AutoNotice.NewContentHeading",
-        variant: "gold",
-        bullets: Array.from({ length: 3 }, (_, i) => `CYBERPUNK.AutoNotice.NewContentItem${i + 1}`),
-      },
-    ],
-  },
-  {
-    intro: "CYBERPUNK.AutoNotice.NewIn120Intro",
-    boxes: [
-      {
-        headingKey: "CYBERPUNK.AutoNotice.NewIn120SystemsHeading",
-        bullets: Array.from({ length: 5 }, (_, i) => `CYBERPUNK.AutoNotice.NewIn120SystemsItem${i + 1}`),
-      },
-      {
-        headingKey: "CYBERPUNK.AutoNotice.NewIn120FxHeading",
-        variant: "gold",
-        bullets: Array.from({ length: 2 }, (_, i) => `CYBERPUNK.AutoNotice.NewIn120FxItem${i + 1}`),
+        bullets: Array.from({ length: 12 }, (_, i) => `CYBERPUNK.AutoNotice.Highlight${i + 1}`),
       },
     ],
   },
