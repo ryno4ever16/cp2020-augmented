@@ -204,6 +204,85 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
       qty: ammo.system.quantity });
   }
 
+  /* ── 4b. THE DELIVERY ROWS — bench parity for the thrown/launched pictures ────────────────────
+   * ⭐ ADDED 2026-08-27 with the grenade/launcher unit. Two shipped FX classes (`thrown`, `rocket`)
+   * and the whole p.108 blast entry were unreachable from this bench, which fails the review-shooter
+   * parity rule the same way the arrival choke's long figure did.
+   *
+   * ⛔ THE THROWN ROWS TAKE NO AMMO ITEM, AND THAT IS LOAD-BEARING RATHER THAN AN OMISSION. "Is there
+   * a round in the tube" is what separates the two delivery pictures (combat/area-delivery.js
+   * `areaDeliveryIsLaunched`), so linking ammo to a hand grenade would draw it as a launched rocket.
+   * A grenade IS its own warhead; the launcher is the only row that gets a round.
+   *
+   * The launcher's round carries its damage in `bonusDamageFormula` because that is the only
+   * damage-bearing ammo field the shipped 1.1.1 schema HAS and the only one the ammo sheet renders —
+   * which is what makes "set the loaded round's damage" an instruction a referee can actually carry
+   * out on this build (the guard's message says exactly that). Its `blastRadius` is stated too, so the
+   * bench exercises the referee-supplied radius rather than only the book fallback.
+   */
+  const DELIVERY = [
+    { n: 17, base: "Fragmentation Grenade",         round: null },
+    { n: 18, base: "Incendiary Grenade",            round: null },
+    { n: 19, base: "Grenade Launcher",              round: { label: "40mm HE", damage: "7d6", blastRadius: 5 } },
+    { n: 20, base: "Scorpion 16 Missile Launcher",  round: null },
+  ];
+  const deliveryReport = [];
+  const deliverySources = {};
+  {
+    const wanted = DELIVERY.map(r => r.base);
+    // A plain copy already on the sheet wins (it is what a hand-added bench item is), then the packs.
+    for (const b of wanted) {
+      const plain = actor.itemTypes.weapon.find(w => w.name === b && !w.getFlag(SCOPE, "reviewBench"));
+      if (plain) { deliverySources[b] = plain.toObject(); continue; }
+    }
+    const stillMissing = wanted.filter(b => !deliverySources[b]);
+    if (stillMissing.length) {
+      for (const pk of game.packs) {
+        if (pk.documentName !== "Item" || !stillMissing.length) continue;
+        const idx = await pk.getIndex();
+        for (const b of [...stillMissing]) {
+          const e = idx.find(i => i.name === b && (i.type === undefined || i.type === "weapon"));
+          if (!e) continue;
+          const doc = await pk.getDocument(e._id);
+          if (doc?.type !== "weapon") continue;
+          deliverySources[b] = doc.toObject();
+          stillMissing.splice(stillMissing.indexOf(b), 1);
+        }
+      }
+    }
+    // Delete the plain copies we are about to replace, exactly as section 2 does for the gun rows.
+    const plainDoomed = actor.itemTypes.weapon.filter(w => wanted.includes(w.name) && !w.getFlag(SCOPE, "reviewBench"));
+    if (plainDoomed.length) await actor.deleteEmbeddedDocuments("Item", plainDoomed.map(i => i.id));
+
+    for (const r of DELIVERY) {
+      const src = deliverySources[r.base] ? foundry.utils.deepClone(deliverySources[r.base]) : null;
+      if (!src) { deliveryReport.push(`${pad(r.n)} ${r.base}: NO SOURCE`); continue; }
+      delete src._id; delete src._stats; delete src.folder; delete src.ownership; delete src.effects;
+      src.name = `${pad(r.n)} · ${r.base}`;
+      src.sort = 100000 + r.n * 100;
+      src.flags = { [SCOPE]: { reviewBench: { n: r.n, base: r.base, kind: "delivery" } } };
+      src.system.shotsLeft = Math.max(1, Math.floor(Number(src.system?.shots) || 1));
+      let roundItem = null;
+      if (r.round) {
+        const caliber = String(src.system?.ammoType ?? "").trim() || "Grenade";
+        const [made] = await actor.createEmbeddedDocuments("Item", [{
+          name: `${pad(r.n)} · ${r.round.label}`,
+          type: "ammo", sort: 100000 + r.n * 100 - 1,
+          system: { caliber, ammoType: caliber, quantity: STOCK, boxSize: 1, boxCost: 0,
+                    bonusDamageFormula: r.round.damage, blastRadius: r.round.blastRadius },
+          flags: { [SCOPE]: { reviewBench: { n: r.n, base: r.base, kind: "delivery-ammo" } } },
+        }]);
+        roundItem = made;
+        src.system.ammoItemId = made.id;
+      } else {
+        src.system.ammoItemId = "";
+      }
+      const [made] = await actor.createEmbeddedDocuments("Item", [src]);
+      deliveryReport.push(`${pad(r.n)} ${made.name} · attackType=${made.system.attackType} · fx=${fx.weaponFxClass(made)}`
+        + ` · damage="${made.system.damage}" · round=${roundItem ? `${roundItem.name} (${roundItem.system.bonusDamageFormula}, r=${roundItem.system.blastRadius}m)` : "none"}`);
+    }
+  }
+
   /* ── 5. SKILLS: the shooter must be able to HIT, or the whole walk-down draws misses ─────────── */
   const SKILLS = { Handgun: 10, Rifle: 10, Submachinegun: 10, "Heavy Weapons": 10 };
   const skillReport = [];
@@ -335,6 +414,32 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
   let spreadOn = null;
   try { spreadOn = game.settings.get(SCOPE, "shotgunSpreadEnabled"); } catch (e) { spreadOn = `ERR ${e.message}`; }
 
+  /* ── 7b. THE ACTIVATED INITIATIVE BOOST (Review·Shooter parity for the movement echo trail) ─────
+   * The trail element (module/fx/afterimage.js) is reachable only from a figure carrying an
+   * Activatable Characteristic-initiative implant, so the bench carries one. IMPORTED FROM THE BASE
+   * PACK rather than hand-built: the read-time timer overlay (mech/speedware.js) keys on the pack
+   * entry's own EffectMode + Checks.Initiative, and a hand-built stand-in would prove the wrong
+   * thing. Idempotent: present-and-switched-off is the resting state, so a re-run neither stacks a
+   * second copy nor leaves the previous run's activation running. */
+  let speedware = null;
+  try {
+    const pack = game.packs.get("cyberpunk2020.neuralware");
+    const idx = pack ? await pack.getIndex() : null;
+    const entry = idx?.find(e => /sandevistan/i.test(e.name)) ?? null;
+    const existing = actor.itemTypes.cyberware.filter(i => entry && i.name === entry.name);
+    if (existing.length > 1) await actor.deleteEmbeddedDocuments("Item", existing.slice(1).map(i => i.id));
+    let own = existing[0] ?? null;
+    if (!own && entry) {
+      const src = (await pack.getDocument(entry._id)).toObject();
+      delete src._id;
+      [own] = await actor.createEmbeddedDocuments("Item", [src]);
+    }
+    if (own?.system?.EffectActive === true) await own.update({ "system.EffectActive": false });
+    speedware = own
+      ? `${own.name} · mode ${own.system?.EffectMode} · +${own.system?.CyberWorkType?.Checks?.Initiative} init · switched ${own.system?.EffectActive ? "ON" : "off"}`
+      : "NOT FOUND in cyberpunk2020.neuralware";
+  } catch (e) { speedware = `ERR ${e.message}`; }
+
   /* ── 8. VERIFY, by reading the documents back ────────────────────────────────────────────────── */
   const order = actor.itemTypes.weapon.map(w => w.name);
   const unloaded = actor.itemTypes.weapon
@@ -344,8 +449,8 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
     .map(w => w.name);
 
   return {
-    actor: actor.name, built, deleted, sourceFrom, skillReport, rangeReport, zeroed,
-    gore, spreadOn, hasLoadedPair, order, unloaded,
+    actor: actor.name, built, deleted, sourceFrom, skillReport, rangeReport, zeroed, deliveryReport,
+    gore, spreadOn, hasLoadedPair, order, unloaded, speedware,
     counts: { weapons: actor.itemTypes.weapon.length, ammo: actor.itemTypes.ammo.length },
     sceneName: scene.name,
   };
@@ -366,11 +471,15 @@ if (result.error) {
   console.log(` fork-only loadedAmmoId/loadedAmmo pair present in this system's weapon schema: ${result.hasLoadedPair ? "yes (written)" : "NO (skipped — ammoItemId is the loaded link here)"}`);
   console.log(` sheet order (Combat tab reads this top-to-bottom):`);
   for (const n of result.order) console.log(`   ${n}`);
+  console.log(`
+ delivery rows (thrown / launched — the p.108 blast entry):`);
+  for (const d of result.deliveryReport) console.log(`   ${d}`);
   console.log(`\n skills: ${result.skillReport.join(" · ")}`);
   console.log(` range:`);
   for (const r of result.rangeReport) console.log(`   ${r}`);
   console.log(` damage zeroed on: ${[...new Set(result.zeroed)].join(", ")}`);
   console.log(` gore setting: ${result.gore} · shotgun spread pattern: ${result.spreadOn}`);
+  console.log(` activated initiative boost: ${result.speedware}`);
   console.log(` items on sheet now: ${result.counts.weapons} weapon(s) / ${result.counts.ammo} ammo`);
 }
 console.log(`\npage errors: ${errors.length}${errors.length ? ` — ${errors.slice(0, 3).join(" | ")}` : ""}`);

@@ -120,8 +120,12 @@ const setup = await p.evaluate(async (SCOPE) => {
   };
 }, SCOPE);
 
-ok("the review bench is provisioned on this rig (16 numbered guns)",
-  setup.found && Object.keys(setup.guns).length === 16, `${Object.keys(setup.guns).length} gun(s)`);
+// ⚠ RE-VALUED 2026-08-28: the bench gained four DELIVERY rows when the area-delivery lane extended the
+// provisioner, and this count was left at the old 16 — a stale harness assertion, not a provisioning
+// fault. `cp2020-augmented-b1-seam-payload.mjs:229` is the authority on the bench's shape and already
+// reads 20 ("16 numbered guns + 4 delivery rows"); the two now agree.
+ok("the review bench is provisioned on this rig (16 numbered guns + 4 delivery rows)",
+  setup.found && Object.keys(setup.guns).length === 20, `${Object.keys(setup.guns).length} gun(s)`);
 ok("the bench's own scene is drawn, with the firing figure on it",
   setup.benchSceneDrawn === true && setup.shooterTokenIds.length > 0,
   `scene=${JSON.stringify(setup.benchSceneName)} figures=${JSON.stringify(setup.shooterTokenIds)}`);

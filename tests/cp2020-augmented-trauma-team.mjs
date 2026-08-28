@@ -177,14 +177,17 @@ const pure = await page.evaluate(async (mod) => {
     totalMs: M.landingLadderMs(),
   };
 }, MOD);
-eq("the marked area is the spec's own rectangle, in squares", [pure.spec.width, pure.spec.length], [4, 6]);
+// ⏪ LANDSCAPE since the 2026-08-27 user ruling ("it needs to be rotated 90 degrees") — the whole
+// formation swapped axes and these four legs were left asserting the retired portrait figures. Corrected
+// 2026-08-28 by the movement-echo unit, which observed them red (zero-red policy).
+eq("the marked area is the spec's own rectangle, in squares", [pure.spec.width, pure.spec.length], [6, 4]);
 eq("four pulse rings and five figures, per the reference", [pure.spec.pulses, pure.spec.figures], [4, 5]);
-eq("the rectangle is centred on the placement, sized in grid units", pure.rect, { x: 1000, y: 1000, w: 400, h: 600 });
+eq("the rectangle is centred on the placement, sized in grid units", pure.rect, { x: 1000, y: 1000, w: 600, h: 400 });
 eq("its four corners, in order", pure.corners, [
-  { x: 800, y: 700 }, { x: 1200, y: 700 }, { x: 1200, y: 1300 }, { x: 800, y: 1300 },
+  { x: 700, y: 800 }, { x: 1300, y: 800 }, { x: 1300, y: 1200 }, { x: 700, y: 1200 },
 ]);
 check("the same placement computes the same rectangle twice", pure.rectTwice);
-eq("a doubled grid doubles the drawn footprint", [pure.bigGridW, pure.bigGridH], [800, 1200]);
+eq("a doubled grid doubles the drawn footprint", [pure.bigGridW, pure.bigGridH], [1200, 800]);
 check("the entry point sits off the near edge, on the entry heading", pure.entry.y < pure.rect.y - pure.rect.h / 2, JSON.stringify(pure.entry));
 eq("the entry point keeps the placement's own axis", pure.entry.x, 1000);
 eq("four rings, spaced against the ring's own 2750 ms clip", pure.pulses, [3700, 4900, 6100, 7300]);

@@ -162,10 +162,14 @@ const res = await page.evaluate(async () => {
     /* ── §1  the consolidated progression card ────────────────────────────────────────────────── */
     await target.update({ "system.damage": 0 });
     let from = since();
-    const p1 = await fire({ Torso: rounds(7, 6 + btm) });
+    // ⚠ FIVE, NOT SIX, PER EVENT (2026-08-27). The wound track now stops at its last box (forty — see
+    // §8), and seven events of six ran 42 past it, so the "seven events wrote seven times" reading was
+    // being answered by the clamp rather than by the cadence. Five keeps the whole application inside
+    // the track, which is what lets this leg go on saying what it was written to say.
+    const p1 = await fire({ Torso: rounds(7, 5 + btm) });
     ok("§1 the seam claimed the resolution (so the counts below are this flow's)",
        p1.handled === SCOPE, `handled=${p1.handled}`);
-    ok("§1 seven damage events wrote the wound track once each", Number(target.system.damage) === 42,
+    ok("§1 seven damage events wrote the wound track once each", Number(target.system.damage) === 35,
        `damage=${target.system.damage}`);
     ok("§1 a seven-event application posts exactly ONE progression card",
        count(CARD.progression, from) === 1, `progression=${count(CARD.progression, from)}`);
@@ -208,12 +212,23 @@ const res = await page.evaluate(async () => {
        (card2.match(/Right Arm/g) ?? []).length === 1, card2.replace(/\s+/g, " ").slice(0, 240));
     ok("§2 the zone record was written by value", (target.getFlag(SCOPE, "fleshLimbStatus") ?? {}).rArm === "severed",
        JSON.stringify(target.getFlag(SCOPE, "fleshLimbStatus") ?? {}));
-    ok("§2 total cards for the whole application is 2, not the old flood",
-       [...game.messages].filter(m => !from.has(m.id)).length === 2,
-       String([...game.messages].filter(m => !from.has(m.id)).length));
+    // ⭐ THREE, NOT TWO, SINCE 2026-08-27 — and the third is a card this application was always owed.
+    // The apply window's own tail posted the death save alone at Mortal while BOTH sibling rails posted
+    // the death+stun PAIR (save-rolls.js `postSavePrompts`, damage-hooks.js `_postWoundSavePrompts`),
+    // so a figure dropped to Mortal through this window was never asked whether it was still conscious.
+    // The composition is named rather than counted blind, so a future flood cannot hide inside the
+    // total: ONE progression card + ONE death prompt + ONE consciousness check, and nothing else.
+    ok("§2 total cards for the whole application is 3 — the progression card and the Mortal PAIR",
+       [...game.messages].filter(m => !from.has(m.id)).length === 3
+       && totals2.progression === 1 && totals2.mortal === 1 && totals2.stun === 1,
+       `${[...game.messages].filter(m => !from.has(m.id)).length} · ${JSON.stringify(totals2)}`);
     await wipeSince(from);
 
     /* ── §3  the persistent same-zone guard ───────────────────────────────────────────────────── */
+    // ⚠ HEADROOM RESTORED FIRST (2026-08-27). §2 left this figure ON the track's last box, and "its
+    // damage still lands" cannot be read off a full track — the clamp would answer it, not the guard.
+    // The zone RECORD (`fleshLimbStatus`) is untouched, which is the state this section is actually about.
+    await target.update({ "system.damage": 10 });
     const dmgBefore3 = Number(target.system.damage) || 0;
     from = since();
     await fire({ rArm: rounds(1, 20 + btm) });
@@ -387,6 +402,155 @@ const res = await page.evaluate(async () => {
         if (rig) await rig.delete().catch(() => {});
         for (const k of VKEYS) if (vWas[k] !== null) await set(k, vWas[k]);
       }
+    }
+
+    /* ────────────────────────────────────────────────────────────────────────────────────────────
+       §7 ONE STUN SAVE PER APPLICATION, AT THE STATE IT FINISHED ON (user ruling 2026-08-27).
+
+       Reported from the table: a corridor of shells produced a run of stun prompts for one trigger
+       pull. The mechanism is the same one-application/many-events shape §1 and §2 close for the
+       progression card and the mortal prompt — the stun half was simply left on the per-event cadence
+       (Core p.104's "every time a character takes damage", which the code comment still preserves as
+       the alternative reading). The ruling: one attack, one stun save, priced at the wound state the
+       whole application FINISHED on — not at the state the first shell happened to reach.
+
+       Driven through the corridor's own confirm, which is the real multi-event application a table
+       meets, and counted BY VALUE: the number of prompts a reader has to resolve is the thing the
+       ruling is about. */
+    {
+      const myZones7 = () => [...(scene?.regions ?? [])].filter(r => r?.flags?.[SCOPE]?.isSpreadZone === true);
+      const wipeZones7 = async () => {
+        await sleep(150);
+        for (const r of myZones7()) { if (scene?.regions?.get?.(r.id)) await r.delete().catch(() => {}); }
+      };
+      const corridor = async (shells) => {
+        await hooks._placeSpreadZone({
+          attackerId: shooter.id, weaponName: "__PWK__BATCH Stun Gun",
+          areaDamages: { Torso: [{ damage: 8 }] }, shotsFired: shells, shotsHit: 1,
+          targetTokenId: targetTok.id, fxTargetTokenId: targetTok.id, firedByUserId: game.user.id,
+          caliber: "00", modifier: "standard", spreadMode: "single",
+          spreadDamageShort: "8", spreadDamageMedium: "8", spreadDamageLong: "8",
+        });
+        await sleep(700);
+        const placed = myZones7();
+        if (placed.length !== 1) return { planted: false };
+        await hooks._confirmSpreadZone(placed[0].id);
+        await sleep(3500);
+        return { planted: true };
+      };
+      try {
+        await wipeZones7();
+        await target.update({ "system.damage": 0 });
+        await target.unsetFlag(SCOPE, "fleshLimbStatus").catch(() => {});
+        from = since();
+        const four = await corridor(4);
+        const dmg7 = Number(target.system.damage) || 0;
+        const stun7 = count(CARD.stunPrompt, from);
+        ok("§7 the four-shell corridor was planted and confirmed (the counts below are its own)",
+           four.planted === true && dmg7 > 0, `planted=${four.planted} damage=${dmg7}`);
+        ok("§7 a four-event application asks for exactly ONE stun save, not one per event",
+           stun7 === 1, `stun prompts=${stun7} for ${dmg7} damage`);
+        // The state the application FINISHED on, read off the figure and matched against what the one
+        // prompt actually printed — "once" at the wrong tier would be a different defect passing as a fix.
+        const ws7 = target.woundState?.() ?? 0;
+        const label7 = ws7 >= 4 ? `Mortal ${Math.min(ws7, 10) - 4}`
+                                : ["Uninjured", "Light", "Serious", "Critical"][ws7];
+        const stunCard7 = newCards(CARD.stunPrompt)(from)[0]?.content ?? "";
+        ok("§7 and it is priced at the state the application FINISHED on, by value",
+           stunCard7.includes(label7), `${label7} :: ${stunCard7.replace(/\s+/g, " ").slice(0, 200)}`);
+        ok("§7 the mortal half is unchanged — still exactly one for the application",
+           count(CARD.mortalPrompt, from) <= 1, `mortal=${count(CARD.mortalPrompt, from)}`);
+        await wipeZones7();
+        await wipeSince(from);
+
+        // COMPATIBILITY CONTROL: a ONE-event application asked for one stun save before this ruling and
+        // must still ask for exactly one. Without it, "1" above could be a prompt that stopped firing.
+        await target.update({ "system.damage": 0 });
+        await target.unsetFlag(SCOPE, "fleshLimbStatus").catch(() => {});
+        from = since();
+        const one = await corridor(1);
+        const stunOne = count(CARD.stunPrompt, from);
+        ok("§7 CONTROL: a one-event application still asks for exactly one stun save",
+           one.planted === true && stunOne === 1, `planted=${one.planted} stun=${stunOne}`);
+        await wipeZones7();
+        await wipeSince(from);
+      } finally {
+        await wipeZones7();
+      }
+    }
+
+    /* ────────────────────────────────────────────────────────────────────────────────────────────
+       §8 THE WOUND TRACK'S CEILING (user report 2026-08-27: a stun card printed "penalty 94").
+
+       The track is forty boxes — ten wound states of four (the base's own `woundtracker.hbs`), and
+       `woundState()` is `ceil(damage / 4)`. Nothing stopped a writer appending past the last box, so a
+       range dummy shot at all afternoon banked ~380, `woundState()` answered 95 and the penalty line
+       (`woundState − 1`) printed 94 beside a wound LABEL that was already capped at Mortal 6. Two
+       halves are asserted here because two halves were fixed: what may be WRITTEN, and what is READ
+       back off an actor that banked damage before the clamp existed. */
+    {
+      const U = await import(`/modules/${SCOPE}/module/utils.js`);
+      const saves = await import(`/modules/${SCOPE}/module/combat/save-rolls.js`);
+      // (a) THE WRITE. One ordinary apply, driven through the seam every personnel hit passes.
+      await solo.update({ "system.damage": 38 });
+      from = since();
+      await DA.applyLocationDamage({ target: solo, location: "Torso", netDamage: 20, structuralDamage: 20,
+                                     penetrates: true, token: soloTok.object ?? null, fxSilent: true });
+      await sleep(600);
+      ok("§8 an apply that would overrun the track stops at the last box, by value",
+         Number(solo.system.damage) === 40, `damage=${solo.system.damage} (was 38, applied 20)`);
+      ok("§8 and the state it produces is the last row the table prints",
+         (solo.woundState?.() ?? 0) === 10, `woundState=${solo.woundState?.()}`);
+      await wipeSince(from);
+
+      // (b) THE READ, on a figure that banked damage BEFORE the clamp — no migration touches anybody's
+      //     sheet, so the print path has to hold the line on its own.
+      await solo.update({ "system.damage": 380 });
+      from = since();
+      await saves.postStunSavePrompt(solo, soloTok.object ?? null);
+      await sleep(500);
+      const legacyCard = newCards(CARD.stunPrompt)(from)[0]?.content ?? "";
+      ok("§8 a legacy over-damaged figure prints the LAST wound row, not an invented one",
+         /Mortal 6/.test(legacyCard) && !/Mortal (?:[7-9]|\d\d)/.test(legacyCard),
+         legacyCard.replace(/\s+/g, " ").slice(0, 220));
+      ok("§8 and its wound penalty is the table's own maximum, by value",
+         /−\s*9\s*\(wound penalty\)|- ?9 \(wound penalty\)/.test(legacyCard) && !/\b9[0-9]\b/.test(legacyCard),
+         legacyCard.replace(/\s+/g, " ").slice(0, 220));
+      await wipeSince(from);
+
+      // (c) NEGATIVE CONTROL: below the ceiling nothing changes. A cap that also moved ordinary numbers
+      //     would pass (a) and (b) and still be wrong.
+      await solo.update({ "system.damage": 12 });
+      from = since();
+      await saves.postStunSavePrompt(solo, soloTok.object ?? null);
+      await sleep(500);
+      const normalCard = newCards(CARD.stunPrompt)(from)[0]?.content ?? "";
+      ok("§8 NEGATIVE: an ordinary wound track prints its own row and its own penalty, untouched",
+         /Critical/.test(normalCard) && /2\s*\(wound penalty\)/.test(normalCard),
+         normalCard.replace(/\s+/g, " ").slice(0, 220));
+      ok("§8 NEGATIVE: the write clamp leaves an ordinary apply alone", U.cappedWoundDamage(30) === 30,
+         String(U.cappedWoundDamage(30)));
+      await wipeSince(from);
+
+      // (d) THE WIRING, as a CLOSED enumeration over the module's own sources. Every accumulating write
+      //     to the wound track must go through the clamp — a fourth writer added later reddens here
+      //     rather than reopening the defect quietly. Read off the served files, not restated.
+      const WRITERS = ["module/combat/DamageApplicator.js", "module/combat/damage-hooks.js",
+                       "module/cyberware/install.js"];
+      const wiring = [];
+      for (const f of WRITERS) {
+        const src = await (await fetch(`/modules/${SCOPE}/${f}`)).text();
+        // every line that writes the wound track, and whether it goes through the clamp
+        const lines = src.split(/\r?\n/).filter(l => /"system\.damage"\s*:/.test(l));
+        wiring.push({ f, writes: lines.length, clamped: lines.filter(l => /cappedWoundDamage/.test(l)).length });
+      }
+      out.trackWiring = wiring;
+      ok("§8 WIRING: every wound-track writer in the module goes through the clamp (closed set)",
+         wiring.length === 3 && wiring.every(w => w.writes > 0 && w.writes === w.clamped),
+         JSON.stringify(wiring));
+      ok("§8 WIRING: the ceiling is the base system's own — ten wound states of four boxes",
+         U.WOUND_TRACK_MAX === 40, String(U.WOUND_TRACK_MAX));
+      await solo.update({ "system.damage": 0 });
     }
 
   } catch (err) {

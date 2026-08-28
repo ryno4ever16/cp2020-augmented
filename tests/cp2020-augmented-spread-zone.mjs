@@ -32,7 +32,8 @@
  *     the corridor exactly as it was, the state carries no width bias, and what survives the retirement
  *     is the load's own printed widths and the one-metre floor
  * §12 a pattern nobody applied KEEPS its card's pattern (the clocks are an orphan net, not a deadline)
- * §13 the save cadences — at Mortal BOTH saves are asked for, on their two clocks: one death prompt per
+ * §13 the save cadences — at Mortal BOTH saves are asked for, once each per application (the stun half
+ *     moved onto the application's ledger by the 2026-08-27 ruling; see the note in the section): one death prompt per
  *     application batch, a stun prompt per damage event; plus the stabilized gate this rail now shares
  *     with the single-target one, and the p.105 rule that clears stabilization before either can read it
  * §14 a declared corridor can still MISS, and a miss goes to the grenade table — the rose, the drift, the
@@ -1242,8 +1243,14 @@ const res = await page.evaluate(async () => {
   // shot to Mortal by a pattern was never asked whether it stayed on its feet. The two keep their own
   // cadences: death once for the batch (above), stun once per damage event, which for three shells is
   // three.
-  ok("§13 and the same burst asks for a stun save per damage event — BOTH saves at Mortal, as the single-target rail does",
-    stunCards(sinceIds).length === 3,
+  // ⭐⭐ ONCE PER APPLICATION, NOT PER EVENT (user ruling 2026-08-27, and it REVERSES what this section
+  // was written to assert). One attack is one consciousness check, recorded by every event of the
+  // application and posted ONCE at the ledger's close off the body's FINAL wound state — measured on
+  // the rig at four prompts for one trigger pull, the first of them printing "Serious" for a body that
+  // finished at Mortal. The two saves still keep DIFFERENT clocks, which is what this section is about:
+  // death once for the batch, stun once for the batch, and the per-TURN death cadence below is a third.
+  ok("§13 and the same burst asks for ONE stun save — BOTH saves at Mortal, as the single-target rail does",
+    stunCards(sinceIds).length === 1,
     `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length}`);
   await wipeZones(); await wipeCards(); await wipeSaveCards();
 
@@ -1254,8 +1261,8 @@ const res = await page.evaluate(async () => {
   await sleep(500);
   await hooks._confirmSpreadZone(myZones()[0].id);
   await sleep(3500);
-  ok("§13 a wounded-but-not-Mortal figure is still asked once per damage event, by value",
-    stunCards(sinceIds).length === 2 && deathCards(sinceIds).length === 0,
+  ok("§13 a wounded-but-not-Mortal figure is asked once for the whole application, by value",
+    stunCards(sinceIds).length === 1 && deathCards(sinceIds).length === 0,
     `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length} damage=${victim13.system?.damage}`);
   await wipeZones(); await wipeCards(); await wipeSaveCards();
   await victim13.update({ "system.damage": 0 });
@@ -1311,8 +1318,8 @@ const res = await page.evaluate(async () => {
   ok("§13 and the table is told the stabilization was lost rather than left to notice",
     [...game.messages].some(m => !sinceIds.has(m.id) && /stabiliz/i.test(m.content ?? "")),
     String([...game.messages].filter(m => !sinceIds.has(m.id) && /stabiliz/i.test(m.content ?? "")).length));
-  ok("§13 so an un-stabilized Mortal figure is asked for both saves on their own clocks",
-    deathCards(sinceIds).length === 1 && stunCards(sinceIds).length === 2,
+  ok("§13 so an un-stabilized Mortal figure is asked for both saves, once each",
+    deathCards(sinceIds).length === 1 && stunCards(sinceIds).length === 1,
     `stun=${stunCards(sinceIds).length} death=${deathCards(sinceIds).length}`);
   await wipeZones(); await wipeCards(); await wipeSaveCards();
   await victim13.unsetFlag(SCOPE, "stabilized");

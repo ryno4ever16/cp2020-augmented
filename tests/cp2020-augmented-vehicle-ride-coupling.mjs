@@ -420,8 +420,28 @@ const out = await page.evaluate(async (SCOPE) => {
         warnings.length = 0;
         const leaver = scene.tokens.get(riders[0].tokenId);
         const leftBefore = { x: leaver._source.x, y: leaver._source.y };
+        // ⭐ WHICH DELETION SPELLING THIS CORE ACTUALLY HANDS THE UPDATE HOOKS (recorded 2026-08-27).
+        // The module's writers all go through `utils.deleteFieldUpdate`, which picks `ForcedDeletion` on
+        // v14 and the legacy `-=` prefix before it — so the READERS in update hooks (this file's
+        // `_leavesVehicle`, mech light/vision's limbStatus watchers, the aboard banner) have to recognise
+        // whichever one arrives. That is a fact about the running core, not an opinion, so it is observed
+        // here rather than assumed, and the leg below states it in the run output.
+        const seenKeys = [];
+        const spy = (doc, changed) => {
+          if (doc?.id !== leaver.id) return;
+          const f = changed?.flags?.["cp2020-augmented"];
+          if (f) seenKeys.push(...Object.keys(f));
+          for (const k of Object.keys(changed ?? {})) if (k.includes("boardedVehicle")) seenKeys.push(k);
+        };
+        Hooks.on("updateToken", spy);
         await V.disembark(leaver);
         await sleep(1000);
+        Hooks.off("updateToken", spy);
+        o.lock.deletionShape = {
+          keys: seenKeys,
+          plain: seenKeys.some(k => k === "boardedVehicle" || k.endsWith(".boardedVehicle")),
+          legacy: seenKeys.some(k => k.includes("-=boardedVehicle")),
+        };
         const left = scene.tokens.get(riders[0].tokenId);
         const drivePose = V.storedPoseOf(handle);
         const hullRect = L.hullRectIn(
@@ -1083,6 +1103,21 @@ check("EXEMPT: the token stepped out lands off the hull",
   out.lock?.disembark?.offHull === true);
 check("EXEMPT: stepping out raises no warning", out.lock?.disembark?.warned === 0,
   `${out.lock?.disembark?.warned} warnings`);
+/* ⭐ THE DELETION-SHAPE READING (2026-08-27). The two legs above are the OUTCOME half — stepping out
+ * cleared the flag and was not refused, which can only happen if `_leavesVehicle` recognised the
+ * deletion form `disembark` actually wrote through `utils.deleteFieldUpdate`. This leg states WHICH
+ * form that was, so the fact is in the run output instead of being re-derived by the next reader who
+ * wonders whether an update hook has to check `-=`. Exactly one spelling arrives on any given core; the
+ * shipped readers accept either, which is what makes them correct across the v13/v14 boundary. */
+{
+  const s = out.lock?.deletionShape ?? {};
+  check("deletion shape: exactly one spelling of the cleared flag reaches the update hooks",
+    (s.plain === true) !== (s.legacy === true),
+    `plain=${s.plain} legacy=${s.legacy} keys=${JSON.stringify(s.keys ?? [])}`);
+  check("deletion shape: the reader was handed a form it recognises (the move was not refused)",
+    (s.plain === true || s.legacy === true) && out.lock?.disembark?.warned === 0,
+    `plain=${s.plain} legacy=${s.legacy} warned=${out.lock?.disembark?.warned}`);
+}
 check("boarding again is not refused either", out.lock?.reboarded === 2,
   `${out.lock?.reboarded} aboard`);
 check("NEGATIVE: a token that is not aboard moves wherever it is put",

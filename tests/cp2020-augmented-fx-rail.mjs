@@ -278,9 +278,15 @@ const res = await page.evaluate(async () => {
   const lanceRows = mapped.filter(([, e]) => !!e.muzzle);
   const muzzleMisses = lanceRows.filter(([, e]) => !fx.fxDbEntryExists(e.muzzle)).map(([c, e]) => `${c}=${e.muzzle}`);
   const tracerMisses = mapped.filter(([, e]) => !fx.fxDbEntryExists(e.tracer)).map(([c, e]) => `${c}=${e.tracer}`);
+  // ⭐ THE EXEMPTION IS NAMED, NOT COUNTED AROUND (2026-08-27, the delivery rows). A THROWN warhead
+  // leaves no muzzle — a hand has none — so `thrown` declares `muzzle: null` and stands the native
+  // flash light down with it. Every OTHER row must still name a lance, which is what the count checks;
+  // listing the exemption by name is what stops a row losing its lance by accident and passing.
+  const NO_LANCE = ["thrown"];
   ok("mapped: every class that names a muzzle key resolves it on the installed tier",
-    muzzleMisses.length === 0 && lanceRows.length === Object.keys(fx.FX_CLASSES).length,
-    muzzleMisses.join(",") || `${lanceRows.length} lance row(s), ${mapped.length - lanceRows.length} without`);
+    muzzleMisses.length === 0 && lanceRows.length === Object.keys(fx.FX_CLASSES).length - NO_LANCE.length
+    && NO_LANCE.every(c => !fx.FX_CLASSES[c]?.muzzle),
+    muzzleMisses.join(",") || `${lanceRows.length} lance row(s), ${mapped.length - lanceRows.length} without (expected: ${NO_LANCE.join(",")})`);
   ok("mapped: every class tracer key resolves on the installed tier", tracerMisses.length === 0, tracerMisses.join(",") || "none");
   // The three keys the muzzle look added. Same floor, same reason: a key only the paid tier carries
   // would leave the spikes, the spray and the wisp silently absent for most users.
@@ -1398,8 +1404,13 @@ const res = await page.evaluate(async () => {
   ok("cadence: the payload reports the spacing it actually ran at", burst.cadenceMs === fx.SHOT_CADENCE_MS, String(burst.cadenceMs));
   // Every round announces its own flash — nothing is dropped on the way out. The bound is applied
   // where the drawing happens (§5d): the shooter still ends up with ONE source set for the burst.
+  // ⭐ THE THIRD TERM (2026-08-27): a class carrying a drawn-round budget withholds pictures the pacing
+  // rule did not refuse (FX_DRAWN_ROUND_CAP). This class carries none — `drawCapped` reads 0 here, which
+  // the detail line states — so the reading is unchanged; the term is in the arithmetic so that adding a
+  // budget to another class reddens somewhere honest instead of here.
   ok("fan-out: every DRAWN round announces a flash — nothing is lost on the way out",
-    burst.flashes === burst.shots - burst.dropped, `${burst.flashes} flashes / ${burst.shots} rounds − ${burst.dropped} dropped`);
+    burst.flashes === burst.shots - burst.dropped - burst.drawCapped,
+    `${burst.flashes} flashes / ${burst.shots} rounds − ${burst.dropped} dropped − ${burst.drawCapped} withheld`);
   await sleep(600);
   ok("cap: a five-round burst leaves at most one source set on the shooter",
     fx.liveFlashCount() <= 1 && flashSources(tokenDoc.id).length <= 2,
@@ -2339,8 +2350,9 @@ const res = await page.evaluate(async () => {
   // ⏪⏪ THE LANCE ROWS — all five again (2026-08-09). The list is asserted by name rather than derived
   // and trusted, so a row losing its lance by accident can never pass these as "nothing to check".
   const lanceClasses = Object.keys(fx.FX_CLASSES).filter(c => !!fx.FX_CLASSES[c].muzzle);
-  ok("sprite: every class draws a lance — the shell is no longer the exception",
-    lanceClasses.join(",") === ["pistol", "smg", "rifle", "shotgun", "heavy"].join(","), lanceClasses.join(","));
+  // ⭐ `rocket` JOINS THEM AND `thrown` DOES NOT (2026-08-27): a launch tube flashes, a hand does not.
+  ok("sprite: every class draws a lance except the thrown warhead, which has no muzzle",
+    lanceClasses.join(",") === ["pistol", "smg", "rifle", "shotgun", "heavy", "rocket"].join(","), lanceClasses.join(","));
   ok("sprite: every class that draws one sizes its flash in grid units to its OWN mapped width",
     lanceClasses.every(c => muzzleOf(c)?.size?.width === fx.FX_CLASSES[c].muzzleSquares
       && muzzleOf(c)?.sizeOpts?.gridUnits === true),
@@ -5612,7 +5624,14 @@ try {
       prevLive = liveNow;
       liveNow = fx.liveGroundFires().length;
       if (liveNow > peakLive) peakLive = liveNow;
-      if (i >= 4 && liveNow === prevLive) break;
+      // ⛔ THE EARLY BREAK MUST NOT FIRE BEFORE THE PEAK (repaired again 2026-08-27, inside the run
+      // that observed it — it read `peak 2 vs one payload's 4`). "Two identical readings" is true in a
+      // LULL between bursts as well as after the last one, so the poll could stop while later bursts
+      // were still on their way and record a peak that never included them. Requiring the settled
+      // reading to be BELOW the peak means the population has been seen to rise and then decay, which
+      // is the only shape that proves the peak is behind us. If it never decays inside the 7.5 s bound
+      // the loop simply runs out, which is the honest slow path rather than a wrong number.
+      if (i >= 4 && liveNow === prevLive && peakLive > liveNow) break;
     }
     ok("live: the scene cap holds across bursts — the peak never exceeds it",
       peakLive <= fx.GROUND_FIRE.maxLive,
@@ -7785,6 +7804,42 @@ try {
       ok("impact audio driven: a burst that landed nothing sounds no impacts (negative)",
         missed.hits === 0 && missed.hitAudio?.queued === 0 && played.length === 0,
         JSON.stringify({ hits: missed.hits, queued: missed.hitAudio?.queued, plays: played.length }));
+
+      /* ── d-ii. THE MUTE FIELD: a payload that declares itself no shot is turned away at the door ── */
+      // ⭐ WHAT THE FIELD IS FOR (2026-08-27, ledger #23bi — user field report). A failed suppressive-zone
+      // save re-enters `cyberpunk2020.weaponFired` as a SYNTHETIC payload whose only errand is the damage
+      // pipeline: no round is arriving on screen, so the presentation rail owes it nothing. The emitter
+      // (damage-hooks `_executeSuppressionEvasion`) declares that with `fxMute`, and the fan-out honours it
+      // BEFORE class resolution, so nothing downstream — report, impact audio, engine queue — ever sees it.
+      //
+      // Read on ONE payload, twice: the identical hydrated burst with the stamp and without it. That is what
+      // makes this an assertion about the FIELD rather than about some other property of a synthetic
+      // payload — and the control below is load-bearing, because the un-stamped run is what proves this
+      // fixture would have sounded and drawn if the door had let it through.
+      played.length = 0; globalThis.__HIT_ENTRIES.length = 0;
+      const mutable = burstAt(meatTok.id, 12);
+      const muted = await fx.fxWeaponFired({ ...mutable, fxMute: true });
+      await sleep(1600);
+      ok("mute field: a declared-mute payload is refused at the door, before any class is resolved",
+        muted.skipped === "muted" && muted.shots === 0 && muted.hits === 0
+        && muted.weaponClass === null && muted.hitAudio === null,
+        JSON.stringify({ skipped: muted.skipped, shots: muted.shots, weaponClass: muted.weaponClass, hitAudio: muted.hitAudio }));
+      ok("mute field: nothing reached the capture seam and nothing was queued on the engine (negative)",
+        played.length === 0 && globalThis.__HIT_ENTRIES.length === 0,
+        JSON.stringify({ sounds: played.length, queuedSequences: globalThis.__HIT_ENTRIES.length }));
+
+      // THE CONTROL — the same payload, stamp removed. It must NOT be refused for that reason, and the
+      // fixture must really produce both a sound and an engine entry, or the negative above proves nothing.
+      played.length = 0; globalThis.__HIT_ENTRIES.length = 0;
+      const unmuted = await fx.fxWeaponFired(mutable);
+      await sleep(1600);
+      ok("mute field control: the identical payload WITHOUT the stamp is not refused as muted",
+        unmuted.skipped !== "muted" && unmuted.shots === 12 && unmuted.hits === 12,
+        JSON.stringify({ skipped: unmuted.skipped, shots: unmuted.shots, hits: unmuted.hits }));
+      ok("mute field control: and it really sounds its impacts and queues the engine work the mute run did not",
+        played.length === fx.HIT_SOUND_MAX_PER_PAYLOAD && globalThis.__HIT_ENTRIES.length > 0
+        && unmuted.hitAudio?.queued === fx.HIT_SOUND_MAX_PER_PAYLOAD,
+        JSON.stringify({ sounds: played.length, queuedSequences: globalThis.__HIT_ENTRIES.length, queued: unmuted.hitAudio?.queued }));
     } finally {
       fx._setHitSoundSink(null);
       fx._setSoundManifest(null);
@@ -8287,8 +8342,12 @@ try {
       `arrival ${fx.PELLET_ARRIVAL.key}: ${manifest.keys.includes(fx.PELLET_ARRIVAL.key)};`
       + ` the blunt load's own mark is still listed too: ${manifest.keys.includes(fx.IMPACT_DUST.key)}`);
     ok("manifest: every class's muzzle and tracer is in it, and every entry is a database key",
-      Object.values(fx.FX_CLASSES).every(rw => manifest.keys.includes(rw.muzzle) && manifest.keys.includes(rw.tracer))
-      && manifest.keys.every(k => typeof k === "string" && k.startsWith("jb2a.")),
+      Object.values(fx.FX_CLASSES).every(rw => (!rw.muzzle || manifest.keys.includes(rw.muzzle)) && manifest.keys.includes(rw.tracer))
+      && manifest.keys.every(k => typeof k === "string" && k.startsWith("jb2a."))
+      // ⭐ AND THE PROMOTED IMPACT KEYS THE DELIVERY ROWS NAME (2026-08-27) — the loudest, largest
+      // sprite of a delivery shot is its detonation, and a manifest that scraped only muzzle+tracer
+      // would leave it to pay its fetch+decode ON SCREEN, which is the stall this manifest exists for.
+      && Object.values(fx.FX_CLASSES).every(rw => !rw.impactKey || manifest.keys.includes(rw.impactKey)),
       `${manifest.keys.length} keys, all jb2a-prefixed: ${manifest.keys.every(k => k.startsWith("jb2a."))}`);
     ok("manifest: at least one DELIVERED sound source is in it, resolved through the delivery check",
       manifest.sounds.length > 0
@@ -8531,7 +8590,11 @@ try {
       // went red while the guard it exists to check was untouched. What this leg certifies is the
       // TERNARY — that the corridor plan stands the target plan down — so the argument list is
       // matched as "anything but a comma-free bare call" rather than by exact text.
-      const audioGuard = /const hitAudio = patternAudio \? null : hitSoundPlanFor\(target[^)]*\);/;
+      // ⚠ WIDENED AGAIN 2026-08-27, and again not weakened. The ternary's CONDITION gained a second
+      // stand-down — a DELIVERED warhead sounds its detonation instead of a body impact — so the test
+      // is still "does the corridor plan stand the target plan down", with `patternAudio` required in
+      // the condition and the assignment still the guarded call.
+      const audioGuard = /const hitAudio = \([^)]*patternAudio[^)]*\) \? null : hitSoundPlanFor\(target[^)]*\);/;
       ok("corridor audio: the fan-out stands the target plan down when the corridor plan answers",
         audioGuard.test(src)
         && (src.match(/const patternAudio = patternAudioPlanFor\(payload, shooter\);/g) ?? []).length === 1,
@@ -8775,11 +8838,19 @@ try {
       /* ── a. THE SHELL CLASS'S REPORT LEVEL (B) ─────────────────────────────────────────────── */
       // The ruling is a level call and it is the user's; what this pins is that the number moved by the
       // amount reported, that it is the ONLY class that moved, and that the revert value is the default.
-      ok("report level: the default is unchanged and every class but the shell takes it (negative)",
+      // ⭐ THE LIST IS THREE NOW, NOT ONE (2026-08-27), and each entry is a stated call rather than a
+      // drift: `shotgun` is the ruled −27.5 % on the report; `thrown` and `rocket` are the two DELIVERY
+      // rows, whose “report” is a pin-pull and a launch rather than a gun (§5), so they were never going
+      // to take the gun default. What the leg still certifies is what it always did — the default has
+      // not moved, and no class takes a level of its own by accident — so it is asserted as an exact
+      // membership list rather than loosened to “some rows have one”.
+      const OWN_LEVEL = ["shotgun", "thrown", "rocket"];
+      const namesOwnLevel = Object.entries(fx.FX_CLASSES).filter(([, r]) => r.soundVolume !== undefined).map(([c]) => c);
+      ok("report level: the default is unchanged and only the three stated rows name their own (negative)",
         fx.SHOT_VOLUME === 0.8
         && ["pistol", "smg", "rifle", "heavy"].every(c => fx.classShotVolume(c) === fx.SHOT_VOLUME)
-        && Object.entries(fx.FX_CLASSES).filter(([, r]) => r.soundVolume !== undefined).map(([c]) => c).join(",") === "shotgun",
-        `default ${fx.SHOT_VOLUME}; rows naming their own: ${Object.entries(fx.FX_CLASSES).filter(([, r]) => r.soundVolume !== undefined).map(([c]) => c).join(",") || "none"}`);
+        && namesOwnLevel.slice().sort().join(",") === OWN_LEVEL.slice().sort().join(","),
+        `default ${fx.SHOT_VOLUME}; rows naming their own: ${namesOwnLevel.join(",") || "none"}`);
       const shellVol = fx.classShotVolume("shotgun");
       const cut = 1 - shellVol / fx.SHOT_VOLUME;
       out.measured.reportLevel = { was: fx.SHOT_VOLUME, now: shellVol,
@@ -9446,13 +9517,15 @@ try {
     ok("phase: with the flag off it is the shipped static floor again — the one-field revert",
       fx.fxArrivalCompMs({ enabled: false }) === fx.SEQ_PRESTART_COMP_MS,
       `${fx.fxArrivalCompMs({ enabled: false })} = ${fx.SEQ_PRESTART_COMP_MS}`);
-    // ⛔ SHIPPED OFF — a deliberate hand-back, not a half-built feature: the trade is a FEEL change
-    // (the report lands one engine-latency after the trigger) and the only rig that can measure it is
-    // a software rasteriser that over-corrects. Pinned so the shipped state is a decision on the
-    // record and an accidental flip is a red. See the FX_AUDIO_PHASE block and §8.
-    ok("phase: it ships OFF, so the rail's audio is un-phased and the arrival keeps the static floor",
-      fx.FX_AUDIO_PHASE === false && fx.fxAudioPhaseEnabled() === false
-      && fx.audioPhaseMs() === 0 && fx.fxArrivalCompMs() === fx.SEQ_PRESTART_COMP_MS,
+    // ⭐ SHIPPED **ON** (user-ratified; the flip landed in commit 5cbfce5, "audio phased to its own
+    // picture"). ⏪ THIS LEG USED TO PIN THE OPPOSITE and was not updated with the flip, so it carried a
+    // red for the product being in the state the table asked for — corrected 2026-08-27, test side only.
+    // The trade the shipped state accepts is a FEEL change: the report lands one engine-latency after the
+    // trigger, and in exchange the picture and the report arrive together. Pinned so the shipped state is
+    // a decision on the record and an accidental flip BACK is a red. See the FX_AUDIO_PHASE block and §8.
+    ok("phase: it ships ON, so the rail's audio is phased and the arrival compensation is zeroed",
+      fx.FX_AUDIO_PHASE === true && fx.fxAudioPhaseEnabled() === true
+      && fx.audioPhaseMs() > 0 && fx.fxArrivalCompMs() === 0,
       `flag=${fx.FX_AUDIO_PHASE} phase=${fx.audioPhaseMs()} comp=${fx.fxArrivalCompMs()}`);
     // ...and the seam drives the other state, so the mechanism is pinned in BOTH rather than only in
     // the one that ships. The pairing is the whole arithmetic: phase on ⟺ compensation zero.
@@ -9467,9 +9540,9 @@ try {
     } finally { fx._setAudioPhase(null); }
     ok("phase: the seam restores the shipped constant when it is disarmed",
       fx.fxAudioPhaseEnabled() === fx.FX_AUDIO_PHASE);
-    // ⚠ `enabled: true` is passed EXPLICITLY here rather than relying on the default — the default now
-    // reads the shipped constant, which is false, and these legs are about the arithmetic rather than
-    // about which state ships.
+    // ⚠ `enabled` is passed EXPLICITLY on both sides here rather than relying on the default — the
+    // default reads the shipped constant, and these legs are about the ARITHMETIC rather than about
+    // which state ships. Written that way from the start, which is why they survived the flip.
     ok("phase: the phase is the client's own estimate, clamped by the responsiveness ceiling",
       fx.audioPhaseMs({ estimateMs: 250, maxMs: 400, enabled: true }) === 250
       && fx.audioPhaseMs({ estimateMs: 9999, maxMs: 400, enabled: true }) === 400,
@@ -9645,13 +9718,27 @@ try {
       };
       let off = { t: [], o: [] }, on = { t: [], o: [] };
       try {
-        // ⛔ BOTH STATES DRIVEN, because a bound is only meaningful against the thing it improves on.
-        off = await runs(4);                       // shipped: the phase is off
+        // ⛔ THE DRAWN-ROUND CAP IS DISARMED FOR THIS BLOCK (2026-08-27, test side only). The shell
+        // class now draws at most FX_DRAWN_ROUND_CAP.shotgun rounds of a volley plus its last one, which
+        // is the SHIPPED fix for the trailing this block measures — so with the cap live an eight-shell
+        // volley can no longer express the phase difference at all, and both readings would report the
+        // cap rather than the phase. Disarmed through the module's own seam so this block goes on
+        // measuring the mechanism it was written for; the cap's own bound is pinned in its own block.
+        fx._setDrawnRoundCap(0);
+        // ⛔ BOTH STATES DRIVEN THROUGH THE SEAM, and that is a correction (2026-08-27, test side only):
+        // this block used to take the un-phased reading by simply not touching anything, on the
+        // assumption that OFF was what shipped. The product ships the phase ON now, so the "off" reading
+        // was silently measuring the phased state against itself. Naming both states explicitly makes the
+        // comparison independent of which one happens to be the default.
+        fx._setAudioPhase(false);
+        fx._resetFxWarmed?.();
+        off = await runs(4);                       // the un-phased state, driven
         fx._setAudioPhase(true);
         fx._resetFxWarmed?.();
-        on = await runs(4);                        // the mechanism, driven through its seam
+        on = await runs(4);                        // the shipped state, driven the same way
       } finally {
         fx._setAudioPhase(null);
+        fx._setDrawnRoundCap(null);
         Hooks.off("createSequencerEffect", phaseHook);
         helperRef.play = origHelperPlay;
       }
@@ -9659,14 +9746,14 @@ try {
       // ⭐ THE DEFECT ITSELF, REPRODUCED — the shipped state trails, which is what the field reported.
       // Asserted as a RANGE rather than a floor: this pins that the measurement is live and sensitive,
       // so a green "phase fixes it" below cannot come from an instrument that sees nothing either way.
-      ok("report phase: with the phase OFF the shell class trails after the last report — the reported defect, reproduced",
+      ok("report phase: driven OFF, the shell class trails after the last report — the reported defect, reproduced",
         off.t.length >= 3 && off.t.some(n => n >= 1),
         `off: trailing [${off.t.join(", ")}], worst offset ${off.o.length ? Math.max(...off.o) : 0} ms`);
       // ⛔ AND THE BOUND THE MECHANISM ACHIEVES, across every volley — not a median, not a best case.
-      ok("report phase: with the phase ON no volley leaves two or more rounds drawing after the last report",
+      ok("report phase: driven ON (the shipped state) no volley leaves two or more rounds drawing after the last report",
         on.t.length >= 3 && on.t.every(n => n <= 1),
         `on: trailing [${on.t.join(", ")}], worst offset ${on.o.length ? Math.max(...on.o) : 0} ms`);
-      ok("report phase: and it is strictly better than the state that ships, by value",
+      ok("report phase: and the shipped state is strictly better than the un-phased one, by value",
         on.t.length >= 3 && off.t.length >= 3
         && (on.t.reduce((a, b) => a + b, 0) / on.t.length) < (off.t.reduce((a, b) => a + b, 0) / off.t.length),
         `mean trailing ${(on.t.reduce((a, b) => a + b, 0) / Math.max(1, on.t.length)).toFixed(2)} on vs ${(off.t.reduce((a, b) => a + b, 0) / Math.max(1, off.t.length)).toFixed(2)} off`);
@@ -9674,6 +9761,126 @@ try {
       ok("report phase: the client's engine-latency estimate is live and inside its own ceiling",
         fx.fxEngineLatencyMs() > 0 && fx.fxEngineLatencyMs() <= fx.FX_AUDIO_PHASE_MAX_MS,
         `${fx.fxEngineLatencyMs()} ms (ceiling ${fx.FX_AUDIO_PHASE_MAX_MS}, seed ${fx.SEQ_PRESTART_COMP_MS})`);
+    }
+
+    /* ── j-3. THE DRAWN-ROUND CAP, ON A LOADED SCENE ──────────────────────────────────────────
+     * ⭐ THE RULED FALLBACK (user 2026-08-27), and the block that says it works. The shell class's
+     * remaining trailing is load-dependent — it appears once burning ground has accumulated and the
+     * engine's create latency has grown past the cadence — so it CANNOT be pinned on the empty bench.
+     * The candidate alternative (pre-issue pipelining) was measured and refused: the engine defers its
+     * creation work until a section's delay expires rather than front-loading it, so issuing early buys
+     * a longer queue and nothing else. See FX_DRAWN_ROUND_CAP for the numbers.
+     *
+     * ⛔ THE CONTRACT, in three parts, and every one of them is asserted: the EAR keeps every round ·
+     * the EYE gets at most `cap` rounds plus the LAST one · and the last round is never withheld,
+     * because it carries the settle tag the apply window waits on.
+     */
+    {
+      const capReports = [], capMuzzles = [];
+      const lastDraw2 = { at: 0 };
+      const helperRef2 = foundry.audio.AudioHelper;
+      const origPlay2 = helperRef2.play.bind(helperRef2);
+      helperRef2.play = function (opts, broadcast) {
+        try { if (/shot-/.test(String(opts?.src ?? ""))) capReports.push(Date.now()); } catch (_e) { /* instrument */ }
+        return origPlay2(opts, broadcast);
+      };
+      const capHook = Hooks.on("createSequencerEffect", (eff) => {
+        lastDraw2.at = Date.now();
+        if (/muzzle_flash/i.test(String(eff?.data?.file ?? eff?.data?.src ?? ""))) capMuzzles.push(Date.now());
+      });
+      let loaded = 0;
+      try {
+        // PURE: the budget table itself, by value, and its negative — no other class is capped.
+        ok("cap: the shell class carries a drawn-round budget and no other class does (negative)",
+          fx.drawnRoundCapFor("shotgun") === fx.FX_DRAWN_ROUND_CAP.shotgun
+          && fx.drawnRoundCapFor("shotgun") > 0
+          && fx.drawnRoundCapFor("rifle") === 0 && fx.drawnRoundCapFor("pistol") === 0,
+          `shotgun=${fx.drawnRoundCapFor("shotgun")} rifle=${fx.drawnRoundCapFor("rifle")}`);
+
+        // ⭐ LOAD THE SCENE — the state the report was made in. Burning ground at its own scene cap, so
+        // the engine is carrying the accumulation that makes create latency grow. An empty bench cannot
+        // reproduce this and a leg taken on one certifies nothing about it.
+        const capLive = fx.GROUND_FIRE?.maxLive ?? 12;
+        for (let i = 0; i < capLive; i += 4) {
+          const pts = [];
+          for (let k = 0; k < 4 && i + k < capLive; k++) pts.push({ x: 900 + ((i + k) % 6) * 160, y: 1900 + Math.floor((i + k) / 6) * 160 });
+          await fx.fxGroundFire(pts, { delayMs: 0, max: 4 }).catch(() => {});
+          await sleep(250);
+        }
+        await sleep(1000);
+        loaded = (globalThis.Sequencer?.EffectManager?.effects ?? []).length;
+        ok("cap: the bench is genuinely LOADED for this block, not empty",
+          loaded >= 4, `${loaded} live engine effects`);
+
+        const capVolley = async () => {
+          capReports.length = 0; capMuzzles.length = 0; lastDraw2.at = 0;
+          const r = await fx.fxWeaponFired(globalThis.__goldenPayload("shotgunSpread",
+            { attackerId: actor.id, attackerTokenId: shooterTok.id, weaponId: gun.id,
+              targetTokenId: targetTok.id, targetActorId: dummy.id },
+            { weaponName: "__PW__CHK shell gun", shotsFired: 10, shotsHit: 2,
+              areaDamages: { Torso: [{ damage: 3 + Math.floor(Math.random() * 6) }] } }));
+          for (let w = 0; w < 200; w++) {
+            if (lastDraw2.at && Date.now() - lastDraw2.at > 1200) break;
+            await sleep(100);
+          }
+          const last = capReports.length ? Math.max(...capReports) : 0;
+          return { r, reports: capReports.length, muzzles: capMuzzles.length,
+                   trailing: last ? capMuzzles.filter(t => t > last).length : -1 };
+        };
+
+        const capped = await capVolley();
+        const cap = fx.drawnRoundCapFor("shotgun");
+        ok("cap: a ten-shell volley draws at most the budget plus its last round, by value",
+          capped.r.drawnRounds <= cap + 1 && capped.r.drawnRounds >= 1,
+          `drawn ${capped.r.drawnRounds} of ${capped.r.shots} (cap ${cap}, withheld ${capped.r.drawCapped}, dropped ${capped.r.dropped})`);
+        ok("cap: every round of that volley still SOUNDED — the ear is not on this budget",
+          capped.reports >= capped.r.shots - capped.r.dropped,
+          `${capped.reports} reports for ${capped.r.shots} rounds (${capped.r.dropped} dropped by the pacing rule)`);
+        ok("cap: the withheld count and the drawn count account for the whole volley",
+          capped.r.drawnRounds + capped.r.drawCapped + capped.r.dropped === capped.r.shots,
+          `${capped.r.drawnRounds} + ${capped.r.drawCapped} + ${capped.r.dropped} vs ${capped.r.shots}`);
+        ok("cap: the last round is never withheld — it still carries the volley's settle tail",
+          Number(capped.r.settleTailMs) > 0, `settleTailMs=${capped.r.settleTailMs}`);
+        // ⭐ THE BOUND THE FALLBACK WAS RULED FOR, on the loaded scene: no pile of pictures after the
+        // last report. This is the field report's own metric, measured where the defect lives.
+        ok("cap: on a LOADED scene no more than one round's picture lands after the last report",
+          capped.trailing >= 0 && capped.trailing <= 1,
+          `${capped.trailing} muzzle(s) after the last report, ${capped.muzzles} drawn in all`);
+
+        // ⛔ THE CONTROL IS THE BUDGET'S OWN EFFECT, NOT A ROUND COUNT — and that is a correction this
+        // block earned by measuring itself. On a genuinely loaded scene the PACING RULE is already
+        // refusing rounds (measured here: 5 of 10 dropped, and the budget withheld nothing), so "the
+        // uncapped run draws more" compares two stochastic numbers and reds on the run where the drop
+        // rule happened to bite harder. What is deterministic is what the BUDGET itself withholds, so
+        // that is what the pair below reads: forced low it must bite, disarmed it must not.
+        fx._setDrawnRoundCap(2);
+        const tight = await capVolley();
+        ok("cap: forced low, the budget itself withholds pictures and bounds the drawn count",
+          tight.r.drawCapped > 0 && tight.r.drawnRounds <= 3,
+          `drawn ${tight.r.drawnRounds}, withheld ${tight.r.drawCapped}, dropped ${tight.r.dropped} of ${tight.r.shots}`);
+        ok("cap: forced low, the ear STILL keeps every round the pacing rule did not refuse",
+          tight.reports >= tight.r.shots - tight.r.dropped,
+          `${tight.reports} reports, ${tight.r.dropped} dropped, ${tight.r.drawCapped} pictures withheld`);
+        fx._setDrawnRoundCap(0);
+        const uncapped = await capVolley();
+        fx._setDrawnRoundCap(null);
+        ok("cap: NEGATIVE — disarmed, the budget withholds nothing at all",
+          uncapped.r.drawCapped === 0 && uncapped.r.drawnRoundCap === 0
+          && uncapped.r.drawnRounds + uncapped.r.dropped === uncapped.r.shots,
+          `drawn ${uncapped.r.drawnRounds}, withheld ${uncapped.r.drawCapped}, dropped ${uncapped.r.dropped} of ${uncapped.r.shots}`);
+        out.measured.drawnRoundCap = {
+          cap, loaded,
+          capped: { drawn: capped.r.drawnRounds, withheld: capped.r.drawCapped, dropped: capped.r.dropped, reports: capped.reports, trailing: capped.trailing },
+          tight: { drawn: tight.r.drawnRounds, withheld: tight.r.drawCapped, dropped: tight.r.dropped, reports: tight.reports, trailing: tight.trailing },
+          uncapped: { drawn: uncapped.r.drawnRounds, withheld: uncapped.r.drawCapped, dropped: uncapped.r.dropped, reports: uncapped.reports, trailing: uncapped.trailing },
+        };
+      } finally {
+        fx._setDrawnRoundCap(null);
+        Hooks.off("createSequencerEffect", capHook);
+        helperRef2.play = origPlay2;
+        try { Sequencer.EffectManager.endEffects({ name: `${fx.GROUND_FIRE_NAME}*` }); } catch (_e) { /* none */ }
+        await sleep(300);
+      }
     }
 
     /* ── k. fxShot on its own derives the same choke rather than drawing the raw cone ────────── */

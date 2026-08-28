@@ -513,14 +513,11 @@ try {
       ok("with no owned martial item the dialog still opens", c9s.opened, c9s.opened);
       ok("empty-handed Strike rolls the catalog entry's damage", c9s.head === "1d6/2", c9s.formula);
       ok("empty-handed Kick rolls the catalog entry's damage", c9k.head === "1d6", c9k.formula);
-      // NEGATIVE: no catalog entry → the bare stand-in, which is NOT damage-less. A weapon document
-      // with no damage written on it inherits the base template's default ("2d6+1"), so this is what
-      // an empty-handed Throw has always rolled — and still does. Recorded as a finding.
+      // An action with NO catalog entry now takes its damage from the mirrored maneuver table
+      // instead of the base template's "2d6+1" default (the table section below is the full matrix).
       const c9t = await rollFor("Throw", "");
-      const c9tFull = norm(c9t.formula);
-      ok("NEGATIVE: an action with no catalog entry keeps the bare stand-in and its template default",
-        c9t.hasDamage === true && c9tFull.startsWith("2d6+1"), c9t.formula);
-      if (c9tFull.startsWith("2d6+1")) out.notes.push('the bare stand-in inherits the base template default damage "2d6+1" (a weapon document with no damage written on it is not damage-less) — every damage-bearing action with no catalog entry rolls that');
+      ok("an action with no catalog entry takes the mirrored table value on its stand-in (Throw)",
+        c9t.hasDamage === true && norm(c9t.formula).startsWith("1d6+"), c9t.formula);
       const c9d = await rollFor("SweepTrip", "");
       ok("NEGATIVE: a non-damaging action still posts the roll-only card", c9d.hasDamage === false, c9d.formula);
 
@@ -542,16 +539,16 @@ try {
       const melee = game.packs.get("cyberpunk2020.melee");
       for (const [act, want] of Object.entries(BOOK_P111)) {
         const e = byName(act);
-        if (!e) { out.notes.push(`no catalog entry named "${act}" — book p.111 gives ${want}; its stand-in falls to the base template default instead`); continue; }
+        if (!e) { out.notes.push(`no catalog entry named "${act}" — book p.111 gives ${want}; its stand-in is served by the mirrored maneuver table instead`); continue; }
         const doc = await melee.getDocument(e._id);
         const got = String(doc?.system?.damage ?? "").trim();
         if (norm(got) !== norm(want)) out.notes.push(`catalog "${act}" damage ${JSON.stringify(got)} vs book p.111 ${JSON.stringify(want)}`);
       }
-      // Every action the base pays damage for (item.js damagingMartialActions) needs an entry to
-      // reach a damaging stand-in; the ones without are recorded, not silently accepted.
+      // Every action the base pays damage for (item.js damagingMartialActions) that has no catalog
+      // entry is served by the mirrored maneuver table instead — recorded here, exercised below.
       const DAMAGING = ["Strike", "Punch", "Kick", "JumpKick", "Ram", "Cast", "Throw", "Choke"];
       const unpinned = DAMAGING.filter(a => !table[a]);
-      if (unpinned.length) out.notes.push(`damage-bearing actions with no catalog entry (stand-in falls to the base template default "2d6+1"): ${unpinned.join(", ")}`);
+      if (unpinned.length) out.notes.push(`damage-bearing actions with no catalog entry (stand-in damage comes from the mirrored maneuver table): ${unpinned.join(", ")}`);
       ok("catalog damage audited against Core p.111 (findings are reported, not failed)", true,
         out.notes.length ? `${out.notes.length} finding(s)` : "no discrepancy");
 
@@ -599,6 +596,220 @@ try {
   console.log("\nmartial per-action item resolution\n" + P.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(68)} got=${c.got}`).join("\n"));
   if (P.notes?.length) console.log("  catalog-data findings (reported, not failed):\n" + P.notes.map(n => `    - ${n}`).join("\n"));
   failures += P.checks.filter(c => !c.pass).length;
+
+  // ── UNARMED MANEUVER DAMAGE TABLES. Six damage-bearing actions have no catalog item, so their
+  //    empty-handed stand-in used to inherit the base weapon template's default "2d6+1" — every one
+  //    of Punch / JumpKick / Ram / Cast / Throw / Choke rolled the same wrong number bare-fisted.
+  //    The stand-in now carries the maneuver's own damage, from the tables mirrored verbatim from
+  //    the upstream system's v1.2.0-dev (lookups.js). Legs read the formula the base actually built,
+  //    off the produced card — never the table the module just handed it.
+  const U = await page.evaluate(async () => {
+    const out = { checks: [], notes: [] };
+    const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const norm = (s) => String(s ?? "").replace(/\s+/g, "").toLowerCase();
+    const SCOPE = "cp2020-augmented";
+    const KICK_UUID = "Compendium.cyberpunk2020.melee.Item.TF0nBrjofPX2RiuG";
+    let actor = null, sheet = null, prevFnff2 = null;
+    const cards = [];
+    try {
+      const L = await import("/modules/cp2020-augmented/module/lookups.js");
+      // The FNFF2 toggle is DUAL-SCOPE: the base system owns the key where it registers one and the
+      // module keeps an inert shadow for installs that don't (lookups.js isFnff2Enabled reads the
+      // system's copy first). Writing the shadow on a base that owns the real key changes nothing —
+      // resolve the authoritative scope the way presets.js does, or the gate legs test nothing.
+      const GATE_SCOPE = (() => {
+        try { if (game.settings.settings.has("cyberpunk2020.fnff2Enabled")) return "cyberpunk2020"; } catch (e) { /* not registered */ }
+        return SCOPE;
+      })();
+      out.notes.push(`the FNFF2 toggle is owned by "${GATE_SCOPE}" on this rig`);
+      prevFnff2 = game.settings.get(GATE_SCOPE, "fnff2Enabled");
+      const setGate = async (on) => {
+        await game.settings.set(GATE_SCOPE, "fnff2Enabled", on);
+        for (let i = 0; i < 40 && game.settings.get(GATE_SCOPE, "fnff2Enabled") !== on; i++) await sleep(100);
+        return game.settings.get(GATE_SCOPE, "fnff2Enabled");
+      };
+
+      // ── The mirror itself: the values, not just that a table exists. ──
+      await setGate(true);
+      ok("core maneuver table mirrors upstream exactly (4 entries, by value)",
+        JSON.stringify(L.unarmedManeuverDamage) === JSON.stringify({ Strike: "1D6/2", Kick: "1D6", Throw: "1D6", Choke: "1D6" }),
+        JSON.stringify(L.unarmedManeuverDamage));
+      ok("FNFF2 maneuver table mirrors upstream exactly (3 entries, by value)",
+        JSON.stringify(L.unarmedManeuverDamageFNFF2) === JSON.stringify({ Punch: "1D6/2", JumpKick: "1D6+5", Cast: "1D6" }),
+        JSON.stringify(L.unarmedManeuverDamageFNFF2));
+      ok("the Jump Kick's automatic to-hit price is -5", L.JUMP_KICK_TO_HIT === -5, L.JUMP_KICK_TO_HIT);
+
+      const RAM_BANDS = [[1, "1D6-2"], [2, "1D6-2"], [3, "1D6-1"], [4, "1D6-1"], [5, "1D6"], [6, "2D6"],
+        [7, "2D6"], [8, "2D6+1"], [9, "2D6+1"], [10, "2D6+2"], [11, "3D6+4"], [12, "3D6+4"],
+        [13, "3D6+6"], [14, "3D6+6"], [15, "3D6+8"], [16, "4D6+8"], [20, "4D6+8"], [21, "5D6+8"], [25, "9D6+8"]];
+      const badBand = RAM_BANDS.filter(([b, want]) => L.ramDamageFormula(b) !== want);
+      ok("the Ram chart answers every band by BODY, incl. the +1D6-per-point tail past 20",
+        badBand.length === 0, badBand.map(([b, w]) => `${b}:${L.ramDamageFormula(b)}!=${w}`).join(",") || `${RAM_BANDS.length} bands`);
+      ok("the Ram chart's BODY-12 row matches the book's own worked example (3D6+4)",
+        L.ramDamageFormula(12) === "3D6+4", L.ramDamageFormula(12));
+
+      // ── NO DOUBLE BODY. The base composes `<damage> + @strengthBonus + …`, and the Ram chart's
+      //    additive column already IS that bonus — the stand-in must hand over the dice alone. ──
+      const doubled = [];
+      for (let b = 1; b <= 25; b++) {
+        const bonus = Number(L.strengthDamageBonus(b)) || 0;
+        const signed = bonus > 0 ? `+${bonus}` : (bonus < 0 ? String(bonus) : "");
+        if (`${L.unarmedStandInDamage("Ram", b)}${signed}` !== L.ramDamageFormula(b)) doubled.push(b);
+      }
+      ok("stand-in Ram damage + the bonus the base appends reconstructs the chart at every BODY 1-25",
+        doubled.length === 0, doubled.join(",") || "25/25");
+      ok("NEGATIVE: a flat-die maneuver is written through untouched (no column to strip)",
+        L.unarmedStandInDamage("Kick", 12) === "1D6" && L.unarmedStandInDamage("Strike", 12) === "1D6/2",
+        `${L.unarmedStandInDamage("Kick", 12)} / ${L.unarmedStandInDamage("Strike", 12)}`);
+
+      // ── The ruleset gate, at the resolver. ──
+      const gateOff = await setGate(false);
+      const offAnswers = ["Punch", "JumpKick", "Cast", "Ram"].filter(a => L.unarmedManeuverFormula(a, 12) !== undefined);
+      ok("the FNFF2 toggle reads back OFF before the gate legs", gateOff === false, gateOff);
+      ok("gate OFF: the FNFF2 maneuvers and Ram are priced by no table", offAnswers.length === 0, offAnswers.join(",") || "none");
+      ok("gate OFF: the CORE four are priced anyway (no corebook maneuver sits behind the toggle)",
+        ["Strike", "Kick", "Throw", "Choke"].every(a => !!L.unarmedManeuverFormula(a, 12)), "4/4");
+      await setGate(true);
+      ok("gate ON: all seven priced maneuvers answer",
+        ["Strike", "Kick", "Throw", "Choke", "Punch", "JumpKick", "Cast"].every(a => !!L.unarmedManeuverFormula(a, 12))
+        && L.unarmedManeuverFormula("Ram", 12) === "3D6+4", L.unarmedManeuverFormula("Ram", 12));
+
+      // ── Fixture. ──
+      for (const a of game.actors.filter(a => a.name === "__PW__Maneuver")) await a.delete().catch(() => {});
+      actor = await Actor.create({ name: "__PW__Maneuver", type: "character" });
+      await sleep(400);
+      sheet = actor.sheet;
+      await sheet.render(true);
+      await sleep(1200);
+
+      const setBody = async (n) => {
+        await actor.update({ "system.stats.bt.base": n });
+        await sleep(250);
+        return actor.system?.stats?.bt?.total;
+      };
+      const clearGear = async () => {
+        const ids = actor.items.filter(i => i.type === "weapon" || i.type === "cyberware").map(i => i.id);
+        if (ids.length) await actor.deleteEmbeddedDocuments("Item", ids);
+        await sleep(200);
+      };
+      /** Drive the panel row's dialog empty-handed and read BOTH rolls the base built: the damage
+       *  formula off the card's inline damage roll, and the attack formula off the card's own roll. */
+      const rollFor = async (action, itemId = "") => {
+        const before = new Set(game.messages.map(m => m.id));
+        sheet._cpOpenMartialActionDialog({ dataset: { action, itemId } });
+        await sleep(1300);
+        const dlg = [...foundry.applications.instances.values()].find(a => a.element?.querySelector?.(".weapon-modifiers"));
+        dlg?.element?.querySelector('button.fire, button[type="submit"]')
+          ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        let card = null;
+        for (let i = 0; i < 60 && !card; i++) { await sleep(100); card = [...game.messages].reverse().find(m => !before.has(m.id)); }
+        await sleep(300);
+        try { await dlg?.close?.(); } catch (e) { /* already closed */ }
+        if (card) cards.push(card.id);
+        const m = /<a class="[^"]*\bdamage\b[^"]*"\s+data-roll="([^"]+)"/.exec(card?.content ?? "");
+        let dmg = null;
+        if (m) { try { dmg = norm(JSON.parse(decodeURIComponent(m[1]))?.formula); } catch (e) { dmg = null; } }
+        return { hasDamage: !!m, dmg, attack: norm(card?.rolls?.[0]?.formula ?? "") };
+      };
+
+      // ── Which stand-in each action gets: the catalog clone where one is pinned, the bare
+      //    stand-in carrying table damage where none is. Rung order, read off the built document. ──
+      await clearGear();
+      const tsStrike = await sheet._cpBuildTransientMartialItem("Strike");
+      const tsPunch = await sheet._cpBuildTransientMartialItem("Punch");
+      ok("a pinned action still gets the CATALOG clone, not a table-stamped stand-in (ladder intact)",
+        tsStrike?.name === "Strike" && norm(tsStrike?.system?.damage) === "1d6/2", `${tsStrike?.name}:${tsStrike?.system?.damage}`);
+      ok("an unpinned action gets the bare stand-in stamped with its table damage",
+        tsPunch?.name !== "Strike" && norm(tsPunch?.system?.damage) === "1d6/2", `${tsPunch?.name}:${tsPunch?.system?.damage}`);
+
+      // ── Gate ON, empty-handed: every one of the six now rolls its own table value. ──
+      //    The base composes `<stand-in damage> + @strengthBonus + @martialDamageBonus`; at BODY 12
+      //    that is "+4+0" (Brawling pays no martial damage bonus), so every expectation below is the
+      //    WHOLE formula, not a prefix — "2d6+1+…" would otherwise satisfy a "2d6+1"-shaped test.
+      const bt12 = await setBody(12);
+      ok("fixture BODY set to 12 (the band the book's worked example prints)", bt12 === 12, bt12);
+      const wantOn = { Punch: "1d6/2+4+0", Cast: "1d6+4+0", Throw: "1d6+4+0", Choke: "1d6+4+0", JumpKick: "1d6+5+4+0" };
+      for (const [action, want] of Object.entries(wantOn)) {
+        const r = await rollFor(action);
+        ok(`empty-handed ${action} rolls its table value (was the template default 2d6+1)`,
+          r.hasDamage && r.dmg === want, `${r.dmg} want=${want}`);
+      }
+      const ram12 = await rollFor("Ram");
+      ok("empty-handed Ram at BODY 12 rolls the chart's band with BODY counted ONCE (3d6 + 4)",
+        ram12.hasDamage && ram12.dmg === "3d6+4+0", `${ram12.dmg} want=3d6+4+0`);
+      const bt8 = await setBody(8);
+      const ram8 = await rollFor("Ram");
+      ok("fixture BODY moved to 8", bt8 === 8, bt8);
+      ok("empty-handed Ram at BODY 8 rolls the OTHER band (2d6 + 1), so the chart is read per actor",
+        ram8.hasDamage && ram8.dmg === "2d6+1+0", `${ram8.dmg} want=2d6+1+0`);
+
+      // ── The Jump Kick's automatic to-hit price, in the attack roll the card carries. ──
+      const jk = await rollFor("JumpKick");
+      const plainKick = await rollFor("Kick");
+      //    Foundry renders the negative additional-modifier term as "- 5", so the whole formula is
+      //    reported alongside: a plain Kick's is all "+ 0" terms.
+      ok("the Jump Kick's attack roll carries the automatic -5", jk.attack.includes("-5"), jk.attack);
+      ok("NEGATIVE: a plain Kick's attack roll carries no such term", !plainKick.attack.includes("-5"), plainKick.attack);
+
+      // ── Gate OFF: the FNFF2 three and Ram fall back to the base template default; the core two
+      //    that have no catalog item keep their corebook value. ──
+      //    Still at BODY 8, so the base appends "+1+0".
+      await setGate(false);
+      for (const action of ["Punch", "JumpKick", "Cast", "Ram"]) {
+        const r = await rollFor(action);
+        ok(`gate OFF: empty-handed ${action} falls back to the base template default`,
+          r.hasDamage && r.dmg === "2d6+1+1+0", `${r.dmg} want=2d6+1+1+0`);
+      }
+      for (const action of ["Throw", "Choke"]) {
+        const r = await rollFor(action);
+        ok(`gate OFF: empty-handed ${action} still rolls its corebook value (core is not gated)`,
+          r.hasDamage && r.dmg === "1d6+1+0", `${r.dmg} want=1d6+1+0`);
+      }
+      const jkOff = await rollFor("JumpKick");
+      ok("gate OFF: the Jump Kick's attack roll carries no automatic penalty either",
+        !jkOff.attack.includes("-5"), jkOff.attack);
+      await setGate(true);
+
+      // ── REGRESSION: an OWNED item still outranks the table. Items stay authoritative. ──
+      const [ownThrow] = await actor.createEmbeddedDocuments("Item", [{
+        name: "Throw", type: "weapon", system: { attackType: "Martial", weaponType: "Melee", damage: "2D6", accuracy: 0 },
+      }]);
+      await sleep(200);
+      const rThrow = await rollFor("Throw", ownThrow.id);
+      ok("an owned item named for the action beats the table (items stay authoritative)",
+        rThrow.dmg === "2d6+1+0", `${rThrow.dmg} want=2d6+1+0 (table would be 1d6+1+0)`);
+      const kickDoc = await Item.implementation.fromDropData({ type: "Item", uuid: KICK_UUID });
+      const [ownKick] = await actor.createEmbeddedDocuments("Item", [kickDoc.toObject()]);
+      await ownKick.update({ "system.damage": "9D6" });
+      await sleep(200);
+      const rKick = await rollFor("Kick", ownKick.id);
+      ok("an owned catalog copy's edited damage beats both the catalog clone and the table",
+        rKick.dmg?.startsWith("9d6"), rKick.dmg);
+      await clearGear();
+
+      // ── NEGATIVE: a non-damaging action is still roll-only with the tables live. ──
+      const sweep = await rollFor("SweepTrip");
+      ok("NEGATIVE: a non-damaging action posts no damage roll (the tables did not widen the set)",
+        sweep.hasDamage === false, sweep.dmg);
+    } catch (e) {
+      out.error = e?.stack || e?.message || String(e);
+    } finally {
+      try {
+        if (prevFnff2 !== null) {
+          const s = game.settings.settings.has("cyberpunk2020.fnff2Enabled") ? "cyberpunk2020" : SCOPE;
+          await game.settings.set(s, "fnff2Enabled", prevFnff2);
+        }
+      } catch (e) { /* unregistered */ }
+      for (const id of cards) { try { await game.messages.get(id)?.delete(); } catch (e) { /* gone */ } }
+      try { if (sheet) await sheet.close(); } catch {}
+      try { if (actor) await actor.delete(); } catch {}
+    }
+    return out;
+  });
+  if (U.error) { console.error("IN-PAGE ERROR (unarmed maneuver tables):", U.error); failures++; }
+  console.log("\nunarmed maneuver damage tables\n" + U.checks.map(c => `  [${c.pass ? "PASS" : "FAIL"}] ${c.name.padEnd(78)} got=${c.got}`).join("\n"));
+  failures += U.checks.filter(c => !c.pass).length;
 
   const errOk = consoleErrors.length === 0;
   console.log(`\n  [${errOk ? "PASS" : "FAIL"}] 0 console errors${errOk ? "" : "  got=" + JSON.stringify(consoleErrors.slice(0, 5))}`);

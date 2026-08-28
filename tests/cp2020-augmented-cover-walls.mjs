@@ -26,7 +26,18 @@ const check = (n, ok, d = "") => { console.log(`  ${ok ? "PASS" : "FAIL"}: ${n}$
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 const errors = [];
-page.on("console", m => { if (m.type() === "error" && !/compatibility|deprecat|screen resolution/i.test(m.text())) errors.push(m.text()); });
+// ⭐ COMPATIBILITY WARNINGS ARE COLLECTED SEPARATELY (2026-08-27), because the error collector below
+// filters them out and the Clear/Repair controls are exactly where one used to fire: those handlers
+// hand-rolled the legacy `-=` deletion key, which v14 answers with a deprecation warning rather than an
+// error. They now go through `utils.deleteFieldUpdate`, which asks the RUNNING core which spelling it
+// speaks — and "no warning fires when the button is pressed" is the only reading that says so.
+const compatWarnings = [];
+const isCompat = (t) => /deprecat|is deprecated|compatibility/i.test(t);
+page.on("console", m => {
+  const t = m.text();
+  if (isCompat(t) && /cp2020-augmented|-=|ForcedDeletion|deletion/i.test(t)) compatWarnings.push(t);
+  if (m.type() === "error" && !/compatibility|deprecat|screen resolution/i.test(t)) errors.push(t);
+});
 page.on("pageerror", e => errors.push(e.message));
 
 await page.goto(`${URL}/join`);
@@ -367,7 +378,15 @@ if (fieldsetSeen) {
     const btns = [...fs.querySelectorAll("button")].map(b => ({
       cls: b.className, text: b.textContent.trim(), tip: b.getAttribute("data-tooltip") ?? "",
     }));
-    return { rows, btns, hints: [...fs.querySelectorAll("p.hint")].map(h => h.textContent.trim()) };
+    // ⭐ THE HINTS ARE READ AS A PAIR NOW (rework 2026-08-27): the SUMMARY that is on the face and the
+    // FULL RULE that is on its `data-tooltip`. Reading only `textContent`, as this did before the
+    // rework, would report the teaching as deleted when it has only moved onto hover.
+    return {
+      rows, btns,
+      hints: [...fs.querySelectorAll("p.hint")].map(h => ({
+        text: h.textContent.trim(), tip: h.getAttribute("data-tooltip") ?? "",
+      })),
+    };
   });
   check("every field carries a SHORT book-tagged label",
     diegetic.rows.length === 3
@@ -390,17 +409,70 @@ if (fieldsetSeen) {
     diegetic.rows.map(r => /blank/i.test(r.labelTip)).join(","));
   check("no tooltip leaks a raw i18n key",
     diegetic.rows.every(r => !/CYBERPUNK\./.test(r.labelTip)) && diegetic.btns.every(b => !/CYBERPUNK\./.test(b.tip)));
-  check("the hint block explains BOTH models and names both books",
-    diegetic.hints.some(h => /Core p\.103/.test(h) && /Maximum Metal p\.58/.test(h)),
-    diegetic.hints.join(" // ").slice(0, 200));
+  // ⭐ THE PROSE MOVED ONTO HOVER (user ruling 2026-08-27 — the block "eats half the screen"). Every
+  // leg below reads the SAME facts it read before the rework; what changed is WHERE the fact has to be
+  // found. The summaries are asserted short, the full rules are asserted intact on the tooltips, and
+  // the book names are asserted still on the FACE — that half of the 2026-08-26 labelling ruling did
+  // not move and a rework that quietly buried it would be a regression this leg has to catch.
+  const summaries = diegetic.hints.filter(h => !/currently breached/i.test(h.text));
+  check("the hint block is FOUR one-line summaries, not paragraphs",
+    summaries.length === 4 && summaries.every(h => h.text.length > 0 && h.text.length <= 64),
+    summaries.map(h => h.text.length).join(","));
+  check("every summary carries the FULL rule on hover — nothing was deleted, it moved",
+    summaries.every(h => h.tip.length > 120),
+    summaries.map(h => h.tip.length).join(","));
+  check("the mode line names BOTH books on the FACE, not only on hover",
+    summaries.some(h => /Core p\.103/.test(h.text) && /Maximum Metal p\.58/.test(h.text)),
+    summaries.map(h => h.text).join(" // ").slice(0, 240));
+  check("the hint tooltips explain BOTH models and name both books",
+    summaries.some(h => /Core p\.103/.test(h.tip) && /Maximum Metal p\.58/.test(h.tip)),
+    summaries.map(h => h.tip).join(" // ").slice(0, 200));
   /* ── ④ the hint block covers zero structure (breach + repair) and blesses low cover ────────── */
   check("the hints explain what zero structure does — breach AND repair",
-    diegetic.hints.some(h => /breach/i.test(h)) && diegetic.hints.some(h => /[Rr]epair/.test(h)),
-    diegetic.hints.filter(h => /breach/i.test(h)).join(" // ").slice(0, 200));
+    summaries.some(h => /breach/i.test(h.text)) && summaries.some(h => /[Rr]epair/.test(h.text))
+    && summaries.some(h => /breach/i.test(h.tip) && /[Rr]epair/.test(h.tip)),
+    summaries.filter(h => /breach/i.test(h.tip)).map(h => h.tip).join(" // ").slice(0, 200));
   check("the hints BLESS the low-cover idiom (a movement- or sight-open valued wall)",
-    diegetic.hints.some(h => /chest-high|armoured window|armored window/i.test(h)
-      && /movement/i.test(h) && /sight/i.test(h)),
-    diegetic.hints.filter(h => /chest-high/i.test(h)).join("").slice(0, 200));
+    summaries.some(h => /chest-high|armoured window|armored window/i.test(h.tip)
+      && /movement/i.test(h.tip) && /sight/i.test(h.tip)),
+    summaries.filter(h => /chest-high/i.test(h.tip)).map(h => h.tip).join("").slice(0, 200));
+  check("no hint tooltip leaks a raw i18n key", summaries.every(h => !/CYBERPUNK\./.test(h.tip)),
+    summaries.map(h => h.tip.slice(0, 30)).join(" | "));
+  /* ── ④b THE REWORK'S OWN CLAIM, MEASURED. "It eats half the screen" is a geometry complaint, so the
+   *      answer is a geometry assertion: the strip's rendered height on the real 480px Wall sheet, and
+   *      the share of the fieldset it takes. A summary that wrapped to two lines would show up here as
+   *      a height the bound refuses, which is the failure mode a character-count leg cannot see. */
+  const strip = await page.evaluate(() => {
+    const fs = document.querySelector(".cp-cover-wall-fields");
+    const hints = fs?.querySelector(".cp-cover-wall-hints");
+    if (!fs || !hints) return null;
+    const lines = [...hints.querySelectorAll(".cp-cover-hint")].map(p => Math.round(p.getBoundingClientRect().height));
+    return {
+      stripH: Math.round(hints.getBoundingClientRect().height),
+      fieldsetH: Math.round(fs.getBoundingClientRect().height),
+      lines, sheetW: Math.round(fs.closest(".application, .app")?.getBoundingClientRect().width ?? 0),
+    };
+  });
+  check("the hint strip renders as four SINGLE lines (no summary wraps at the sheet's own width)",
+    !!strip && strip.lines.length === 4 && strip.lines.every(h => h <= 26),
+    JSON.stringify(strip));
+  check("the hint strip is a minority of the fieldset — the fields are reachable without scrolling past prose",
+    !!strip && strip.stripH < strip.fieldsetH * 0.45,
+    strip ? `strip ${strip.stripH}px of fieldset ${strip.fieldsetH}px (sheet ${strip.sheetW}px)` : "no strip");
+  /* ── ④c OUTCOME, NOT PRESENCE: a real hover must actually PUT THE PROSE ON SCREEN. A `data-tooltip`
+   *      attribute that core never shows is exactly the shape of the dead-control class (coverage
+   *      rule #1), and it is the whole of this rework's promise. */
+  const hovered = await page.evaluate(async () => {
+    const line = document.querySelector(".cp-cover-wall-hints .cp-cover-hint");
+    if (!line) return { shown: "" };
+    line.dispatchEvent(new PointerEvent("pointerenter", { bubbles: false }));
+    await new Promise(r => setTimeout(r, 900));
+    const tip = document.getElementById("tooltip");
+    return { shown: (tip?.textContent ?? "").trim(), visible: !!tip && tip.classList.contains("active") };
+  });
+  check("hovering a summary shows its FULL rule in core's own tooltip",
+    hovered.shown.length > 120 && summaries.some(h => h.tip === hovered.shown),
+    `${hovered.shown.length} chars, active=${hovered.visible} — ${hovered.shown.slice(0, 80)}`);
   check("the Clear Cover button is present, book-tagged and tooltipped",
     diegetic.btns.some(b => /cp-cover-wall-clear/.test(b.cls) && b.text.length > 0 && b.tip.length > 40),
     JSON.stringify(diegetic.btns));
@@ -449,6 +521,11 @@ if (fieldsetSeen) {
     });
     check("clear: the rendered control matches the handler's own selector",
       wired.found === true && wired.tag === "BUTTON" && wired.type === "button", JSON.stringify(wired));
+    // ⚠ SCOPED TO THE PRESS. The collector runs for the whole page lifetime and the module raises one
+    // deprecation of its own at INIT (the seam shim deliberately reads and wraps the global
+    // `renderTemplate`, which is a deprecation accessor — see module/seam-shim.js). A cumulative count
+    // would charge that to this button. The reading is the DELTA across the gesture.
+    const warnBeforeClear = compatWarnings.length;
     await page.click(".cp-cover-wall-fields .cp-cover-wall-clear");
     await page.waitForTimeout(900);
     const after = await page.evaluate(({ sceneId, cfgWallId }) => {
@@ -474,6 +551,72 @@ if (fieldsetSeen) {
       return cov.coverWallsOn(scene).some(r => r.uuid === w.uuid);
     }), res.ids);
     check("clear: ⑤ the wall is plain-indestructible again — no cover row at all", rowAfter === false, String(rowAfter));
+    // ⭐ AND NO CORE COMPATIBILITY WARNING CAME OUT OF IT (2026-08-27). Clear unsets four flags at once,
+    // and it used to spell the deletion key by hand (`flags.<scope>.-=coverSp`), which v14 answers with a
+    // deprecation warning — a working button that shouts in the console every time a GM presses it. The
+    // writes go through `utils.deleteFieldUpdate` now, which asks the RUNNING core which spelling it
+    // speaks. Asserted on the whole press, from the dedicated collector at the top of this file.
+    check("clear: the press raises no core compatibility warning",
+      compatWarnings.length === warnBeforeClear,
+      compatWarnings.slice(warnBeforeClear, warnBeforeClear + 3).join(" | ") || "none");
+
+    /* ── ④b REPAIR: the other half of the same pair, driven the same way ───────────────────────── */
+    const warnAtRepair = compatWarnings.length;
+    await page.evaluate(async ({ sceneId, cfgWallId }) => {
+      const scope = "cp2020-augmented";
+      const w = game.scenes.get(sceneId).walls.get(cfgWallId);
+      await w.update({
+        move: CONST.WALL_MOVEMENT_TYPES.NORMAL, sight: CONST.WALL_SENSE_TYPES.NORMAL,
+        [`flags.${scope}.coverSp`]: 20, [`flags.${scope}.coverPool`]: 60, [`flags.${scope}.coverPoolMax`]: 60,
+      });
+      const cov = await import(`/modules/${scope}/module/combat/cover.js`);
+      await cov.chewCoverWall({ wallUuid: w.uuid, damage: 60 });   // breach it again
+      // ⚠ CLOSED AND REOPENED, not re-rendered (2026-08-27). The fieldset is INJECTED into an already
+      // rendered sheet and the injector returns early when one is already present, so a sheet that was
+      // open BEFORE the breach keeps its pre-breach fieldset — no Repair control — until it is reopened.
+      // That is a real staleness edge (recorded in the lane report); what this block is about is the
+      // Repair gesture itself, so it opens the sheet the way a GM meets a wall that is already breached.
+      await w.sheet.close().catch(() => {});
+      await new Promise(r => setTimeout(r, 400));
+      await w.sheet.render(true);
+      await new Promise(r => setTimeout(r, 1100));
+    }, res.ids);
+    const repairWired = await page.evaluate(({ sceneId, cfgWallId }) => {
+      const scope = "cp2020-augmented";
+      const w = game.scenes.get(sceneId).walls.get(cfgWallId);
+      const b = document.querySelector(".cp-cover-wall-fields .cp-cover-wall-repair");
+      return {
+        found: !!b, tag: b?.tagName,
+        // The PRECONDITION, read beside the control: "no button" and "no breach" are different
+        // diagnoses and a leg that cannot tell them apart sends the next reader to the wrong file.
+        breached: !!w.flags?.[scope]?.coverBreach,
+        pool: w.flags?.[scope]?.coverPool, poolMax: w.flags?.[scope]?.coverPoolMax,
+        fieldsetOnScreen: !!document.querySelector(".cp-cover-wall-fields"),
+      };
+    }, res.ids);
+    check("repair: the wall really is breached before the control is looked for (precondition)",
+      repairWired.breached === true && repairWired.fieldsetOnScreen === true, JSON.stringify(repairWired));
+    check("repair: a breached wall offers the control, and it matches the handler's selector",
+      repairWired.found === true && repairWired.tag === "BUTTON", JSON.stringify(repairWired));
+    if (repairWired.found) {
+      await page.click(".cp-cover-wall-fields .cp-cover-wall-repair");
+      await page.waitForTimeout(1200);
+      const repaired = await page.evaluate(({ sceneId, cfgWallId }) => {
+        const scope = "cp2020-augmented";
+        const w = game.scenes.get(sceneId).walls.get(cfgWallId);
+        const f = w.flags?.[scope] ?? {};
+        return { breach: f.coverBreach, move: w.move, sight: w.sight, pool: f.coverPool, poolMax: f.coverPoolMax };
+      }, res.ids);
+      check("repair: the breach is closed and the structure refilled, by value",
+        repaired.breach === undefined && repaired.move !== 0 && repaired.sight !== 0
+        && repaired.pool === repaired.poolMax && repaired.pool === 60, JSON.stringify(repaired));
+      check("repair: the press raises no core compatibility warning either",
+        compatWarnings.length === warnAtRepair,
+        compatWarnings.slice(warnAtRepair, warnAtRepair + 3).join(" | ") || "none");
+    }
+    // Clear it back down so the re-seed below starts from the state the later legs expect.
+    await page.click(".cp-cover-wall-fields .cp-cover-wall-clear").catch(() => {});
+    await page.waitForTimeout(900);
     // Re-seed for the submit-persistence legs below, which expect an SP of 20 typed into the sheet.
     await page.evaluate((SCOPE) => {
       const sp = document.querySelector(`.cp-cover-wall-fields input[name="flags.${SCOPE}.coverSp"]`);

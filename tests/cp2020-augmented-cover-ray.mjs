@@ -268,6 +268,151 @@ check("nothing on the segment: Cover SP stays 0", dlg.sp === "0", String(dlg.sp)
 check("nothing on the segment: the math line names no cover component",
   !dlg.bdRows.some(r => /__PWX__|^Cover$/.test(r.label)), dlg.bdRows.map(r => r.label).join(","));
 
+/* ═══════════════ phase 3: a wall NOBODY VALUED still stops an aimed round ═══════════════
+ *
+ * THE DEFECT (field report 2026-08-27, hypothesis "only shotguns stop": correct). The aimed path's
+ * geometry walks VALUED rows only — cover zones, walls carrying `coverSp`, deployed vehicles — so an
+ * ordinary move-blocking wall was in nothing it ever asked about and aimed fire crossed it as though it
+ * were not on the map. The AREA paths never had the gap: they ask the same predicate with a naked-wall
+ * fall-through. These legs pin the aimed half onto that same answer, and pin the ORDER with it — a wall
+ * somebody DID value soaks, it does not exempt.
+ *
+ * The scene reaching this phase has been emptied of cover by the block above, which is what makes
+ * "nothing valued is in the way" a fact rather than an assumption. */
+const phase3 = await page.evaluate(async ({ SCOPE, ids }) => {
+  const out = { checks: [], settingWas: null };
+  const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+  const cov = await import(`/modules/${SCOPE}/module/combat/cover.js`);
+  const scene = game.scenes.get(ids.sceneId);
+  const G = scene.grid?.size ?? 100;
+  const aTok = scene.tokens.get(ids.aTokId);
+  const tTok = scene.tokens.get(ids.tTokId);
+
+  // The naked half is gated by the area-occlusion switch (`areaOcclusionTest` reads it itself), so it
+  // is pinned ON for this phase and handed back at the end.
+  try { out.settingWas = game.settings.get(SCOPE, "areaEffectOcclusion"); } catch (e) { out.settingWas = null; }
+  if (out.settingWas !== null) await game.settings.set(SCOPE, "areaEffectOcclusion", true);
+
+  let naked = null;
+  try {
+    // A PLAIN wall across the segment: created with nothing but its endpoints, so it carries Foundry's
+    // own defaults (move-blocking) and none of this module's flags. That is the map furniture the
+    // report is about.
+    [naked] = await scene.createEmbeddedDocuments("Wall", [{ c: [12 * G, 9 * G, 12 * G, 12 * G] }]);
+    await new Promise(r => setTimeout(r, 400));
+
+    ok("the naked wall carries no cover values of its own (it is map furniture)",
+       !naked.flags?.[SCOPE]?.coverSp && cov.coverWallsOn(scene).every(r => r.uuid !== naked.uuid),
+       JSON.stringify(naked.flags?.[SCOPE] ?? {}));
+    ok("the valued-row geometry still returns nothing — it never could see this wall (unchanged)",
+       cov.coverBetween(aTok, tTok).length === 0, String(cov.coverBetween(aTok, tTok).length));
+    const blocked = cov.aimedCoverVerdict(aTok, tTok);
+    ok("THE FIX: the aimed verdict says the round was stopped by the wall",
+       blocked.state === cov.AREA_COVER_EXEMPT, `state=${blocked.state}`);
+    ok("a stopped shot folds no SP — a wall nobody priced is not armour",
+       blocked.sp === 0 && blocked.row === null, JSON.stringify({ sp: blocked.sp, row: blocked.row?.label ?? null }));
+
+    // ORDER: the same wall, VALUED, soaks instead of exempting — the 2026-08-25 ruling that valued is
+    // asked first, now asserted on the aimed path too.
+    await naked.update({ [`flags.${SCOPE}.coverSp`]: 12 });
+    await new Promise(r => setTimeout(r, 300));
+    const soaked = cov.aimedCoverVerdict(aTok, tTok);
+    ok("ORDER: a wall the GM DID value soaks rather than exempting",
+       soaked.state === cov.AREA_COVER_SOAKED && soaked.sp === 12, `state=${soaked.state} sp=${soaked.sp}`);
+    await naked.update({ [`flags.${SCOPE}.coverSp`]: 0 });
+    await new Promise(r => setTimeout(r, 300));
+
+    // NEGATIVE: take the wall off the line and the same shot is clear again.
+    await naked.update({ c: [12 * G, 2 * G, 12 * G, 5 * G] });
+    await new Promise(r => setTimeout(r, 300));
+    ok("NEGATIVE: the same wall off the line leaves the shot clear",
+       cov.aimedCoverVerdict(aTok, tTok).state === cov.AREA_COVER_IN,
+       cov.aimedCoverVerdict(aTok, tTok).state);
+    await naked.update({ c: [12 * G, 9 * G, 12 * G, 12 * G] });
+    await new Promise(r => setTimeout(r, 300));
+
+    // NEGATIVE: with the switch off the table has said walls do not interact with shots, and this half
+    // honours that — same reading the area half makes.
+    if (out.settingWas !== null) {
+      await game.settings.set(SCOPE, "areaEffectOcclusion", false);
+      ok("NEGATIVE: with area occlusion switched off the naked wall stops nothing",
+         cov.aimedCoverVerdict(aTok, tTok).state === cov.AREA_COVER_IN,
+         cov.aimedCoverVerdict(aTok, tTok).state);
+      await game.settings.set(SCOPE, "areaEffectOcclusion", true);
+    }
+    out.nakedWallId = naked.id;
+  } catch (e) {
+    ok("phase 3 ran to completion", false, String(e?.message ?? e));
+  }
+  return out;
+}, { SCOPE, ids: res.ids });
+for (const c of phase3.checks) check(c.n, c.p, c.d);
+
+/* The window a referee actually sees for that shot: it SAYS the round was stopped, every row reads 0,
+   and the referee can still overrule it — outcome, never presence. */
+await openDialog();
+const blockedWin = await page.evaluate(() => {
+  const root = document.querySelector("form.damage-dialog");
+  return {
+    notice: root?.querySelector(".cp-blocked-wall-note")?.textContent?.trim() ?? "",
+    rows: [...root.querySelectorAll("input.after-sp-override")].map(i => i.value),
+    total: root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "",
+  };
+});
+check("the Apply window states the shot was stopped by a wall", /wall/i.test(blockedWin.notice),
+  blockedWin.notice.slice(0, 120) || "(no notice)");
+check("the notice is prose, not a raw i18n key", !/CYBERPUNK\./.test(blockedWin.notice), blockedWin.notice.slice(0, 60));
+check("every damage row is seeded at 0", blockedWin.rows.length > 0 && blockedWin.rows.every(v => v === "0"),
+  blockedWin.rows.join(","));
+check("and the window's total is 0", blockedWin.total === "0", blockedWin.total);
+
+/* THE FIAT: the referee types a value back in and the total follows — the block is a seed, not a veto. */
+// ⚠ NO RE-RENDER ON THIS CONTROL, deliberately: the after-SP inputs update the total IN PLACE
+// (`_updateTotalDisplay`) so a referee typing several rows is not re-rendered under their own cursor.
+// So the gesture is driven and the readout is polled, rather than waiting for a rebuild that never comes.
+await page.evaluate(() => {
+  const el = document.querySelector("form.damage-dialog input.after-sp-override");
+  el.value = "9";
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await page.waitForFunction(() =>
+  Number(document.querySelector("form.damage-dialog .damage-total-value")?.textContent ?? "0") > 0,
+  null, { timeout: 10000 }).catch(() => {});
+const overruled = await page.evaluate(() => {
+  const root = document.querySelector("form.damage-dialog");
+  return {
+    first: root?.querySelector("input.after-sp-override")?.value ?? "",
+    total: root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "",
+    stillNoticed: !!root?.querySelector(".cp-blocked-wall-note"),
+  };
+});
+check("the referee can overrule the block by typing a row back in", overruled.first === "9", overruled.first);
+check("and the overruled damage reaches the window's total, by value",
+  Number(overruled.total) > 0, `total=${overruled.total}`);
+check("the notice still stands after the override — it states what the geometry found, not what was applied",
+  overruled.stillNoticed === true, String(overruled.stillNoticed));
+
+/* NEGATIVE CONTROL: the wall gone, the same shot opens with its damage intact. Without this the zeroes
+   above could be a window that always reads 0. */
+await page.evaluate(async ({ sceneId, wallId }) => {
+  const scene = game.scenes.get(sceneId);
+  if (wallId && scene.walls.get(wallId)) await scene.deleteEmbeddedDocuments("Wall", [wallId]);
+  await new Promise(r => setTimeout(r, 400));
+}, { sceneId: res.ids.sceneId, wallId: phase3.nakedWallId });
+await openDialog();
+const clearWin = await page.evaluate(() => {
+  const root = document.querySelector("form.damage-dialog");
+  return {
+    notice: root?.querySelectorAll(".cp-blocked-wall-note").length ?? 0,
+    total: root?.querySelector(".damage-total-value")?.textContent?.trim() ?? "",
+  };
+});
+check("NEGATIVE: with the wall gone the window carries no blocked notice", clearWin.notice === 0, String(clearWin.notice));
+check("NEGATIVE: and the same shot's damage arrives intact", Number(clearWin.total) > 0, `total=${clearWin.total}`);
+await page.evaluate(async ({ SCOPE, was }) => {
+  if (was !== null) await game.settings.set(SCOPE, "areaEffectOcclusion", was);
+}, { SCOPE, was: phase3.settingWas });
+
 /* ═══════════════════════════════ cleanup + rig hygiene ═══════════════════════════════ */
 // The whole surface this spec built goes with the scene; the previously active one is handed back
 // so the rig is left exactly as it was found.
@@ -282,11 +427,21 @@ await page.evaluate(async ({ sceneId, prevActiveId }) => {
   await game.scenes.get(sceneId)?.delete().catch(() => {});
 }, res.ids).catch(e => console.log(`  (cleanup warning: ${e.message})`));
 
-const leftovers = await page.evaluate(({ prevActiveId }) => ({
-  probeScenes: game.scenes.filter(s => s.name?.startsWith("__PWX__")).length,
-  actors: game.actors.filter(a => a.name?.startsWith("__PWX__")).length,
-  activeRestored: (game.scenes.active?.id ?? null) === prevActiveId ? 0 : 1,
-}), res.ids);
+// ⚠ POLLED, NOT READ ONCE (2026-08-27). `Scene#activate` is a WORLD write: the client's own canvas
+// swaps first and `game.scenes.active` follows when the update round-trips, so a single read taken
+// immediately after the canvas settled reported the OLD active scene and failed a hand-back that had in
+// fact happened (verified against the world in a second session). Polling asserts the same fact without
+// racing the round trip — and still fails if the hand-back genuinely did not happen.
+const leftovers = await page.evaluate(async ({ prevActiveId }) => {
+  for (let i = 0; i < 60 && (game.scenes.active?.id ?? null) !== prevActiveId; i++) {
+    await new Promise(r => setTimeout(r, 250));
+  }
+  return {
+    probeScenes: game.scenes.filter(s => s.name?.startsWith("__PWX__")).length,
+    actors: game.actors.filter(a => a.name?.startsWith("__PWX__")).length,
+    activeRestored: (game.scenes.active?.id ?? null) === prevActiveId ? 0 : 1,
+  };
+}, res.ids);
 check("fixtures swept and the previously active scene handed back", Object.values(leftovers).every(v => v === 0), JSON.stringify(leftovers));
 
 check("0 console errors", errors.length === 0, errors.slice(0, 3).join(" | "));

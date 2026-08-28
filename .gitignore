@@ -16,3 +16,7 @@ import-staging/**/*_fulltext.txt
 import-staging/**/*-prose-dump.txt
 import-staging/**/booktext/
 .claude/
+
+# Playwright probe/cleanup scripts carry rig credentials inline - never tracked
+tests/_pw*
+_pw*

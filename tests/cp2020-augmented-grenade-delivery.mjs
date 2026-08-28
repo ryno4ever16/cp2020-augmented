@@ -1,0 +1,1464 @@
+/**
+ * KEEPER: area-delivery weapons — the entry wiring, the unrollable-damage guard, and the two
+ * delivery pictures (:30004, official 1.1.1 + module).
+ *
+ *  §1 the pure derivation (combat/area-delivery.js): rollable-formula classification, the delivery
+ *     kind per attack type, the p.99 radius rows and the referee's own number winning over them, and
+ *     the ONE detonation predicate both halves of the damage rail read.
+ *  §2 the presentation resolution (fx/effects.js): class per weapon by VALUE (thrown vs launched vs
+ *     the unchanged bullet classes), the plan's four gates, the decoded arrival ladders, the tail,
+ *     the two audio sources and the three database keys.
+ *  §3 the live fan-out: one object per throw, the boom on the arrival clock read off a capture sink,
+ *     no blood, the miss that still arrives, fxMute at the door, determinism, and the bullet negative.
+ *  §4 the entry wiring, driven through the REAL fire path: a thrown grenade routes into the p.108
+ *     blast flow, the area carries the book radius, the confirm applies damage by value, and the
+ *     single-target window is not opened for it.
+ *  §5 the unrollable-damage guard: the refusal + its notification, the loaded round supplying the
+ *     formula, the accessor restored afterwards, and the ordinary weapon passing through untouched.
+ *  §6 rider R-A: the apply window posts the death+stun PAIR at Mortal.
+ *  §7 rider R-B: a breach with the wall sheet OPEN grows the Repair control without a reopen.
+ *  §8 the authored launcher ROUNDS: they survive the write, the pack launcher offers them, firing
+ *     with one produces a rollable warhead, and the blast enters by the ammo effectTypes door.
+ *  §9 the STANDARD-ROUND ladder for an EMPTY tube (user ruling 2026-08-27): the scope predicate, the
+ *     derived pack key, each of the four rungs by value, the loaded round still winning, the second
+ *     act, the gas-grenade scope negative, and a live empty-tube shot decoded off its confirm card.
+ * §10 the attack-modifiers ROW GATING: the item-side detonation predicate (attack type OR the loaded
+ *     round's effect types), the called-shot row absent from the returned rows for a thrown delivery /
+ *     a launcher / a missile tube and PRESENT for a rifle, nothing else removed with it, and the
+ *     RENDERED window driven by a real click on the sheet's own fire control (plus a second act).
+ * §11 the point-blank ROLL-MAXIMIZE predicate: shadowed false during a detonating weapon's gesture on
+ *     BOTH guard paths, restored afterwards, the value consequence (point-blank 7d6 totals not pinned
+ *     at 42) with a rifle negative still pinned at 30, and the blast base-damage continuity regression.
+ * §12 the over-time tick's FLAT-BURN marker: the shipped round states it and discloses the printed
+ *     figure, it survives the DataModel write and the seam copy, it reaches the state through the
+ *     routing helper, and — driven by real round advances — a flat marker ticks 1/1/1 while a marker
+ *     without it still halves 1/½/¼ on the same body in the same combat.
+ *
+ * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-grenade-delivery.mjs
+ */
+import { chromium } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const URL = process.env.FVTT_URL ?? "http://localhost:30004";
+const PW = process.env.FVTT_RIG_PASSWORD ?? "cp2020-v14-rig";
+const SCOPE = "cp2020-augmented";
+
+// ⛔ §8's FIXTURES ARE THE SHIPPING PACK SOURCE ITSELF, read off disk here and handed to the page —
+// NOT a hand-built copy of it. The seed only ever CREATES, so the compiled pack on this rig predates
+// these two files until the release re-seed runs; reading the source is therefore the only way to test
+// what will actually ship, and it is also the stronger test: a field the DataModel would strip on write
+// gets stripped here too, which is precisely the vanilla-host failure this module exists to close.
+const HERE = dirname(fileURLToPath(import.meta.url));
+const SRC = join(HERE, "..", "src", "packs", "supplement-heavy");
+const ROUND_SOURCES = [
+  "Fragmentation_Grenade_Round_2smdtLN5J0FvhvoS.json",
+  "Incendiary_Grenade_Round_8CKKcZdPEnHu9cWA.json",
+].map((f) => JSON.parse(readFileSync(join(SRC, f), "utf8")));
+
+let pass = 0, fail = 0;
+const check = (n, ok, d = "") => { console.log(`  ${ok ? "PASS" : "FAIL"}: ${n}${d ? ` — ${d}` : ""}`); ok ? pass++ : fail++; };
+
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+const errors = [];
+// ⛔ ONE DOCUMENTED CORE EXCLUSION, carried on the same footing as the compatibility/viewport ones and
+// already excluded by name in two sibling suites (cp2020-augmented-area-relay-crossclient.mjs:43,
+// cp2020-augmented-automation-notice.mjs:112): Foundry's own combat tracker raises
+// `Cannot use 'in' operator to search for 'turn' in undefined` on a round advance. It is CORE's, not
+// this module's — §12 is the first section here to advance a round, which is why it appears now — and
+// the mechanism is named rather than the class of error suppressed, so a real module error of any
+// other shape still reds this suite.
+const CORE_TURN_BUG = /Cannot use 'in' operator to search for 'turn' in undefined/;
+page.on("console", m => { const t = m.text(); if (m.type() === "error" && !/compatibility|deprecat|screen resolution/i.test(t) && !CORE_TURN_BUG.test(t)) errors.push(t); });
+page.on("pageerror", e => { if (!CORE_TURN_BUG.test(e.message)) errors.push(e.message); });
+
+await page.goto(`${URL}/join`);
+await page.waitForSelector('select[name="userid"]');
+await page.evaluate(() => {
+  const sel = document.querySelector('select[name="userid"]');
+  sel.value = [...sel.options].find(o => /gamemaster/i.test(o.textContent)).value;
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+});
+await page.fill('input[name="password"]', PW);
+await page.click('button[name="join"]');
+await page.waitForFunction(() => window.game?.ready === true, null, { timeout: 90000 });
+await page.waitForFunction(() => window.canvas?.ready === true, null, { timeout: 60000 }).catch(() => {});
+
+const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
+  const out = { checks: [], notes: [] };
+  const ok = (n, p, d) => out.checks.push({ n, p: !!p, d: d === undefined ? "" : String(d) });
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const F = (d) => d.flags?.[SCOPE] ?? {};
+  // ⛔ A SECTION THAT THROWS REPORTS AS ONE FAILED LEG, never as a lost run. This keeper drives real
+  // documents, real windows and real sheets, and a build missing a symbol it asks for must still let
+  // every OTHER section report — which is also what makes a red-first pass against the pre-change
+  // serve copy readable rather than a single stack trace.
+  // ⭐ AND A SECTION THAT LOGS A CONSOLE ERROR NAMES ITSELF. The final "0 console errors" leg reports
+  // a message with no context, which has cost real time before (a stray EmbeddedCollection complaint
+  // reads identically whichever section produced it). `SECT` is stamped by the wrapper below, so every
+  // console error carries the section that was running when it fired.
+  let SECT = "(setup)";
+  const realConsoleError = console.error.bind(console);
+  console.error = (...a) => {
+    const stack = a.map(x => x?.stack).filter(Boolean).join(" ")
+      || (new Error("cp2020 keeper trace")).stack;
+    out.notes.push(`⚠ console.error during ${SECT}: ${a.map(x => (x?.message ?? String(x))).join(" ").slice(0, 200)} :: ${String(stack).split("\n").slice(0, 6).join(" ⟵ ").slice(0, 700)}`);
+    return realConsoleError(...a);
+  };
+  const sect = async (name, fn) => {
+    SECT = name;
+    try { await fn(); } catch (e) { ok(`${name} — section threw`, false, e?.message ?? String(e)); }
+    finally { SECT = `${name}→next`; }
+  };
+
+  const AD = await import(`/modules/${SCOPE}/module/combat/area-delivery.js`);
+  const fx = await import(`/modules/${SCOPE}/module/fx/effects.js`);
+  const base = await import("/systems/cyberpunk2020/module/lookups.js");
+
+  /* ══════════════════ §1 the pure derivation ══════════════════ */
+  const rollable = (s) => AD.damageFormulaIsRollable(s);
+  ok("§1 formula classifier accepts the catalogue's dice strings",
+    rollable("7d6") && rollable("4d6") && rollable("7d10") && rollable("2d6+1") && rollable("(2d6+1)*2") && rollable("@strengthBonus"),
+    "7d6/4d6/7d10/2d6+1/(2d6+1)*2/@strengthBonus");
+  ok("§1 formula classifier refuses the catalogue's words (the crash class)",
+    !rollable("Varies") && !rollable("Gas") && !rollable("Stun") && !rollable("Deaf") && !rollable("Blind"),
+    "Varies/Gas/Stun/Deaf/Blind");
+  ok("§1 the empty string is refused, and is not the guard's business",
+    !rollable("") && !rollable("   "), "empty");
+  ok("§1 delivery kind per attack type",
+    AD.areaDeliveryKind("Grenade") === "grenade" && AD.areaDeliveryKind("Missile") === "missile"
+    && AD.areaDeliveryKind("RPG") === "rpg" && AD.areaDeliveryKind("Auto") === null,
+    `Grenade=${AD.areaDeliveryKind("Grenade")} Missile=${AD.areaDeliveryKind("Missile")} Auto=${AD.areaDeliveryKind("Auto")}`);
+  ok("§1 the p.99 rows, by value",
+    AD.AREA_DELIVERY_RADIUS_M.grenade === 5 && AD.AREA_DELIVERY_RADIUS_M.missile === 6 && AD.AREA_DELIVERY_RADIUS_M.rpg === 4,
+    `grenade=${AD.AREA_DELIVERY_RADIUS_M.grenade} missile=${AD.AREA_DELIVERY_RADIUS_M.missile} rpg=${AD.AREA_DELIVERY_RADIUS_M.rpg}`);
+  ok("§1 a stated radius beats the book row",
+    AD.areaDeliveryOf({ attackType: "Grenade" })?.radiusM === 5
+    && AD.areaDeliveryOf({ attackType: "Grenade", blastRadius: 3 })?.radiusM === 3
+    && AD.areaDeliveryOf({ attackType: "Missile" })?.radiusM === 6,
+    `book=5 stated=${AD.areaDeliveryOf({ attackType: "Grenade", blastRadius: 3 })?.radiusM}`);
+  ok("§1 a bullet payload has no delivery", AD.areaDeliveryOf({ attackType: "Auto" }) === null);
+  ok("§1 the one detonation predicate: explosive round OR delivery weapon, and nothing else",
+    AD.payloadDetonates({ effectTypes: ["Explosive"] }) === true
+    && AD.payloadDetonates({ attackType: "Grenade" }) === true
+    && AD.payloadDetonates({ attackType: "Missile" }) === true
+    && AD.payloadDetonates({ attackType: "Auto" }) === false
+    && AD.payloadDetonates({}) === false);
+  ok("§1 a bare 'Non-Explosive' string is not read as a substring match",
+    AD.payloadDetonates({ effectTypes: "Non-Explosive" }) === false);
+
+  /* ══════════════════ fixtures ══════════════════ */
+  const scene = game.scenes.active ?? canvas.scene;
+  // stale sweep from any interrupted run, tokens BEFORE actors
+  for (const t of [...scene.tokens].filter(t => t.name?.startsWith("__PW__"))) await t.delete().catch(() => {});
+  for (const coll of [scene.templates, scene.regions]) if (coll) for (const d of [...coll]) if (F(d).isExplosion) await d.delete().catch(() => {});
+  for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__"))) await a.delete().catch(() => {});
+  for (const w of [...scene.walls].filter(w => F(w).__pwGrenade === true)) await w.delete().catch(() => {});
+
+  const shooter = await Actor.create({ name: "__PW__Thrower", type: "character" });
+  const victim = await Actor.create({ name: "__PW__Victim", type: "character" });
+  const gridPx = scene.grid?.size ?? 100;
+  const [shTok] = await scene.createEmbeddedDocuments("Token", [{ name: shooter.name, actorId: shooter.id, actorLink: true, x: 800, y: 1000, width: 1, height: 1 }]);
+  const [vicTok] = await scene.createEmbeddedDocuments("Token", [{ name: victim.name, actorId: victim.id, actorLink: true, x: 800 + 3 * gridPx, y: 1000, width: 1, height: 1 }]);
+  await sleep(600);
+
+  const mkWeapon = async (name, system) => (await shooter.createEmbeddedDocuments("Item", [{ name, type: "weapon", system }]))[0];
+  const HEAVY = { weaponType: "Heavy", attackSkill: "Heavy Weapons", accuracy: 0, shots: "1", shotsLeft: "1", rof: "1", reliability: "VeryReliable" };
+
+  const frag = await mkWeapon("__PW__Frag", { ...HEAVY, attackType: "Grenade", ammoType: "Grenade", damage: "7d6", range: "50" });
+  const launcher = await mkWeapon("__PW__Launcher", { ...HEAVY, attackType: "Grenade", ammoType: "Grenade", damage: "Varies", range: "225" });
+  const missile = await mkWeapon("__PW__Missile", { ...HEAVY, attackType: "Missile", ammoType: "Missile", damage: "7d10", range: "1000" });
+  // The scope counter-example the standard-round ladder must NOT cover: grenade-chambered like the
+  // launcher, unrollable like the launcher, but its warhead is its own (CP2020 p.64, "Gas").
+  const gasGrenade = await mkWeapon("__PW__Gas", { ...HEAVY, attackType: "Grenade", ammoType: "Grenade", damage: "Gas", range: "50" });
+  const pistol = await mkWeapon("__PW__Pistol", { weaponType: "Pistol", attackType: "Single", ammoType: "9mm", damage: "2d6+1", range: "50", shots: "10", shotsLeft: "10", rof: "2", accuracy: 0, attackSkill: "Handgun" });
+  const [round] = await shooter.createEmbeddedDocuments("Item", [{
+    name: "__PW__40mm HE", type: "ammo",
+    system: { caliber: "Grenade", ammoType: "Grenade", quantity: 10, bonusDamageFormula: "7d6", blastRadius: 5 },
+  }]);
+
+  /* ══════════════════ §2 presentation resolution ══════════════════ */
+  await sect("§2", async () => {
+    ok("§2 a thrown grenade is NOT a bullet class", fx.weaponFxClass(frag) === "thrown", `got ${fx.weaponFxClass(frag)}`);
+    ok("§2 an EMPTY launcher (no round in the tube) still reads as thrown",
+      fx.weaponFxClass(launcher) === "thrown", `got ${fx.weaponFxClass(launcher)}`);
+    await launcher.update({ "system.ammoItemId": round.id });
+    ok("§2 a LOADED launcher reads as launched", fx.weaponFxClass(launcher) === "rocket", `got ${fx.weaponFxClass(launcher)}`);
+    ok("§2 a missile launcher reads as launched by its own attack type",
+      fx.weaponFxClass(missile) === "rocket", `got ${fx.weaponFxClass(missile)}`);
+    ok("§2 NEGATIVE — the bullet classes are untouched",
+      fx.weaponFxClass(pistol) === "pistol", `got ${fx.weaponFxClass(pistol)}`);
+
+    const planT = fx.deliveryPlanFor("thrown");
+    const planR = fx.deliveryPlanFor("rocket");
+    ok("§2 the thrown plan: no muzzle flash, no blood, the object arrives, boom named",
+      planT && planT.flash === false && planT.bleeds === false && planT.arrives === true && planT.detonation === "explosion-big",
+      JSON.stringify(planT));
+    ok("§2 the launched plan: a tube DOES flash", planR && planR.flash === true && planR.detonation === "explosion-big", JSON.stringify(planR));
+    ok("§2 NEGATIVE — a bullet class has no delivery plan", fx.deliveryPlanFor("pistol") === null && fx.deliveryPlanFor("shotgun") === null);
+
+    // the decoded ladders, by value, through the shared resolver
+    const aT = fx.arrivalSpecFor("thrown", null, 10);
+    const aR = fx.arrivalSpecFor("rocket", null, 3);
+    ok("§2 the thrown arrival is the decoded 60ft band", aT.source === "stretch" && aT.band === "60ft" && aT.ms === 2867, JSON.stringify(aT));
+    // ⚠ RE-VALUED 2026-08-27 to the CANNON BALL. These two legs carried the bolt trial's ladder and
+    // were written to go red on revert — the revert then happened (the user rejected the bolt: "very
+    // small and kind of still looks like a bullet"), so they are re-valued to the shipped picture. The
+    // point they pin is unchanged: the ladder is a property of the picture, so a swap MUST move it.
+    ok("§2 the launched arrival is the decoded 15ft band", aR.source === "stretch" && aR.band === "15ft" && aR.ms === 600, JSON.stringify(aR));
+    ok("§2 an arrival is measured, never the 400ms unmapped fallback",
+      fx.arrivalSpecFor("thrown", null, 1).ms === 1300 && fx.arrivalSpecFor("rocket", null, 20).ms === 2233,
+      `05ft=${fx.arrivalSpecFor("thrown", null, 1).ms} 90ft=${fx.arrivalSpecFor("rocket", null, 20).ms}`);
+    // the tail must OVER-state: arrival + the promoted mark's own trim
+    const tailT = fx.presentationTailMs("thrown", null, null, aT.ms);
+    ok("§2 the tail covers the arrival PLUS the detonation mark's trim (over-stated, never under)",
+      tailT >= aT.ms + 700, `tail=${tailT} arrival=${aT.ms}`);
+    const tailR = fx.presentationTailMs("rocket", null, null, aR.ms);
+    ok("§2 the launched tail likewise", tailR >= aR.ms + 1067, `tail=${tailR} arrival=${aR.ms}`);
+
+    ok("§2 the fire report is the pin / the launch, not a gun",
+      /grenade-pin\./.test(fx.shotSoundSrc("thrown") ?? "") && /rocket-launch\./.test(fx.shotSoundSrc("rocket") ?? ""),
+      `${fx.shotSoundSrc("thrown")} | ${fx.shotSoundSrc("rocket")}`);
+    ok("§2 both detonations resolve to the shipped explosion asset",
+      /explosion-big\./.test(fx.detonationSoundSrc("thrown") ?? "") && /explosion-big\./.test(fx.detonationSoundSrc("rocket") ?? ""),
+      `${fx.detonationSoundSrc("thrown")}`);
+    ok("§2 NEGATIVE — a bullet class names no detonation", fx.detonationSoundSrc("pistol") === null);
+
+    const keys = ["jb2a.throwable.throw.bomb.01.black", "jb2a.throwable.launch.cannon_ball.01.black",
+                  "jb2a.explosion.shrapnel.bomb.01.black", "jb2a.explosion.01.orange"];
+    const missingKeys = keys.filter(k => !fx.fxDbEntryExists(k));
+    ok("§2 every adopted database key resolves on the installed tier", missingKeys.length === 0, missingKeys.join(", "));
+
+    /* ── the launched picture, and the rejected alternative it is still measured against ─────────
+     * ⭐ RE-VALUED 2026-08-27 after the user's verdict on the bolt trial (rejected: "very small and
+     * kind of still looks like a bullet"). The cannon ball is the SHIPPED picture again; the bolt row
+     * is kept whole so a future look ask lands on a measured ladder rather than the 400 ms fallback.
+     * Three legs, each pinning a different thing a look-swap can silently get wrong: what is DRAWN,
+     * that the alternative still resolves, and that BOTH keep a measured arrival. */
+    ok("§2 the launched row draws the cannon ball, warmed by the rocket matrix",
+      fx.FX_CLASSES.rocket.tracer === fx.ROCKET_PROJECTILE.key
+      && fx.ROCKET_PROJECTILE.key === "jb2a.throwable.launch.cannon_ball.01.black"
+      && fx.FX_CLASSES.rocket.tracerColor === fx.TRACER_COLOR_ROCKET,
+      `tracer=${fx.FX_CLASSES.rocket.tracer} color=${JSON.stringify(fx.FX_CLASSES.rocket.tracerColor)}`);
+    ok("§2 the REJECTED bolt is still carried whole and still resolves, in its own colour",
+      fx.fxDbEntryExists(fx.ROCKET_PROJECTILE_BOLT.key)
+      && fx.ROCKET_PROJECTILE_BOLT.key === "jb2a.bolt.physical.orange"
+      && fx.ROCKET_PROJECTILE_BOLT.tracerColor === null,
+      JSON.stringify(fx.ROCKET_PROJECTILE_BOLT));
+    ok("§2 BOTH pictures keep a measured five-band ladder, so neither can fall to the fallback",
+      (() => {
+        const bands = ["05ft", "15ft", "30ft", "60ft", "90ft"];
+        const b = fx.TRACER_ARRIVAL_MS[fx.ROCKET_PROJECTILE_BALL.key];
+        const t = fx.TRACER_ARRIVAL_MS[fx.ROCKET_PROJECTILE_BOLT.key];
+        return !!t && !!b && bands.every(k => Number(t[k]) > 0 && Number(b[k]) > 0)
+          && b["60ft"] === 1833 && t["60ft"] === 1300;
+      })(),
+      `shipped=${JSON.stringify(fx.TRACER_ARRIVAL_MS[fx.ROCKET_PROJECTILE.key])}`);
+    ok("§2 the settle floor followed the picture back to the ball",
+      fx.presentationTailMs("rocket", null, null, fx.arrivalSpecFor("rocket", null, 12).ms) === 1833 + 1067,
+      `tail=${fx.presentationTailMs("rocket", null, null, fx.arrivalSpecFor("rocket", null, 12).ms)}`);
+    ok("§2 the rejected missile key is NOT wired anywhere",
+      fx.FX_CLASSES.thrown.tracer !== "jb2a.throwable.launch.missile.01.blue" && fx.FX_CLASSES.rocket.tracer !== "jb2a.throwable.launch.missile.01.blue");
+    ok("§2 the manifest preloads the delivery pictures and the boom",
+      (() => { const m = fx.fxPreloadManifest();
+        return keys.every(k => m.keys.includes(k)) && m.sounds.some(s => /explosion-big\./.test(s))
+          && m.sounds.some(s => /grenade-pin\./.test(s)) && m.sounds.some(s => /rocket-launch\./.test(s)); })());
+  });
+
+  /* ══════════════════ §3 the live fan-out ══════════════════ */
+  await sect("§3", async () => {
+    const detonations = [];
+    const impacts = [];
+    fx._setDetonationSink((e) => detonations.push(e));
+    fx._setHitSoundSink((e) => impacts.push(e));
+    try {
+      const payloadFor = (weapon, over = {}) => ({
+        attackerId: shooter.id, attackerTokenId: shTok.id, weaponId: weapon.id, weaponName: weapon.name,
+        attackType: weapon.system.attackType, fxTargetTokenId: vicTok.id,
+        shotsFired: 1, shotsHit: 1, baseHit: true,
+        areaDamages: { Torso: [{ damage: 21 }] }, ...over,
+      });
+
+      detonations.length = 0; impacts.length = 0;
+      const rThrow = await fx.fxWeaponFired(payloadFor(frag), { remote: true });
+      // ⏱ THE SINKS ARE READ AFTER THE ARRIVAL, never in the same tick. The boom is issued on a timer
+      // at `arriveIn` (that IS the element under test), so a sink read immediately would be reading
+      // the clock rather than the wiring. Waited out by the payload's OWN reported arrival, not a
+      // guessed sleep, so the leg stays honest if the ladder is ever re-decoded.
+      await sleep(rThrow.arrival.ms + 500);
+      out.notes.push(`§3 throw: class=${rThrow.weaponClass} arrival=${rThrow.arrival?.ms}ms band=${rThrow.arrival?.band} tail=${rThrow.settleTailMs}ms`);
+        ok("§3 the throw resolves as a delivery payload, one object",
+        rThrow.weaponClass === "thrown" && rThrow.delivery?.kind === "thrown" && rThrow.shots === 1 && rThrow.dropped === 0,
+        `class=${rThrow.weaponClass} shots=${rThrow.shots}`);
+      ok("§3 the throw draws NO blood", rThrow.blood === null, JSON.stringify(rThrow.blood));
+      ok("§3 the throw sounds ONE detonation and no body impact",
+        rThrow.detonationAudio?.queued === 1 && rThrow.hitAudio === null,
+        `det=${JSON.stringify(rThrow.detonationAudio)} hit=${JSON.stringify(rThrow.hitAudio)}`);
+      ok("§3 the boom is on the arrival clock, at the class level, from the shipped file",
+        detonations.length === 1 && detonations[0].delayMs === rThrow.arrival.ms
+        && /explosion-big\./.test(detonations[0].src) && detonations[0].volume === 0.85,
+        JSON.stringify(detonations));
+      ok("§3 no body-impact clip was played for a delivered warhead", impacts.length === 0, JSON.stringify(impacts));
+
+      // the MISS: the object still arrives (p.108 sends its centre to the grenade table, not to nowhere)
+      detonations.length = 0;
+      const rMiss = await fx.fxWeaponFired(payloadFor(frag, { shotsHit: 0, baseHit: false, areaDamages: {} }), { remote: true });
+      await sleep(rMiss.arrival.ms + 500);
+      ok("§3 a MISSED throw still arrives and still detonates",
+        rMiss.hits === 0 && rMiss.detonationAudio?.queued === 1 && detonations.length === 1,
+        `hits=${rMiss.hits} det=${JSON.stringify(rMiss.detonationAudio)}`);
+
+      // the launched picture
+      detonations.length = 0;
+      const rRocket = await fx.fxWeaponFired(payloadFor(missile), { remote: true });
+      await sleep(rRocket.arrival.ms + 500);
+      ok("§3 the launched shot resolves as a rocket and sounds its own level",
+        rRocket.delivery?.kind === "rocket" && detonations.length === 1 && detonations[0].volume === 0.9,
+        `${rRocket.delivery?.kind} vol=${detonations[0]?.volume}`);
+
+      // fxMute at the door
+      detonations.length = 0;
+      const rMute = await fx.fxWeaponFired(payloadFor(frag, { fxMute: true }), { remote: true });
+      await sleep(900);
+      ok("§3 fxMute is answered at the door — nothing resolved, nothing sounded",
+        rMute.skipped === "muted" && rMute.delivery === null && detonations.length === 0, JSON.stringify(rMute.skipped));
+
+      // determinism: two separate trigger pulls of the same shot agree on the clock
+      detonations.length = 0;
+      const d1 = await fx.fxWeaponFired(payloadFor(frag), { remote: true });
+      const d2 = await fx.fxWeaponFired(payloadFor(frag), { remote: true });
+      ok("§3 two trigger pulls agree on the arrival and the tail",
+        d1.arrival.ms === d2.arrival.ms && d1.settleTailMs === d2.settleTailMs,
+        `${d1.arrival.ms}/${d2.arrival.ms} tail ${d1.settleTailMs}/${d2.settleTailMs}`);
+
+      // NEGATIVE: a bullet is unchanged — no delivery, no boom, and it DOES sound a body impact
+      detonations.length = 0; impacts.length = 0;
+      const rBullet = await fx.fxWeaponFired(payloadFor(pistol, { attackType: "Single" }), { remote: true });
+      await sleep(rBullet.arrival.ms + 500);
+      ok("§3 NEGATIVE — a bullet payload takes no delivery treatment and keeps its own impact",
+        rBullet.delivery === null && rBullet.detonationAudio === null && detonations.length === 0
+        && rBullet.hitAudio !== null && impacts.length >= 1,
+        `delivery=${rBullet.delivery} det=${detonations.length} impacts=${impacts.length}`);
+    } finally {
+      fx._setDetonationSink(null);
+      fx._setHitSoundSink(null);
+    }
+  });
+
+  /* ══════════════════ §4 the entry wiring, through the REAL fire path ══════════════════ */
+  await sect("§4", async () => {
+    // Pin the settings the delta assertion depends on, exactly as the sibling detonation keeper does.
+    const prev = {};
+    const setSetting = async (k, v) => { try { prev[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    await setSetting("headHitDoubling", false);
+    await setSetting("limbModel", "core");
+    await setSetting("explosivesDetailed", false);
+    await setSetting("combatFxEnabled", false);   // §4 is about the DAMAGE rail; the picture has its own section
+    try {
+      // give the thrower the skill so the base's own to-hit can land, and aim at the victim
+      await shooter.createEmbeddedDocuments("Item", [{ name: "Heavy Weapons", type: "skill", system: { level: 10, stat: "ref" } }]);
+      const before = Number(victim.system.damage) || 0;
+      const areasBefore = new Set((scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]).filter(d => F(d).isExplosion).map(d => d.id));
+
+      const msgsBefore = new Set(game.messages.map(m => m.id));
+      // The SEAM's own output, captured off the real fire — the field the damage rail routes on has to
+      // be on the payload or nothing downstream can work, and a failure here says so by name instead of
+      // as a missing area three assertions later.
+      const seen = [];
+      const spy = (pl) => seen.push(pl);
+      Hooks.on("cyberpunk2020.weaponFired", spy);
+      try {
+        await frag.__weaponRoll({ fireMode: base.fireModes.semiAuto, range: "RangeClose", targetActor: victim }, [{ id: vicTok.id, name: vicTok.name }]);
+        for (let i = 0; i < 30 && seen.length === 0; i++) await sleep(150);
+      } finally { Hooks.off("cyberpunk2020.weaponFired", spy); }
+      ok("§4 the seam stamps the weapon's attack type onto the fired payload",
+        seen[0]?.attackType === "Grenade", `payload=${seen.length} attackType=${seen[0]?.attackType}`);
+      const landedRounds = Object.values(seen[0]?.areaDamages ?? {}).flat().length;
+      out.notes.push(`§4 real fire: baseHit=${seen[0]?.baseHit} rolled rows=${landedRounds}`);
+
+      // The area is placed on the visual-impact clock, so poll generously.
+      let area = null;
+      for (let i = 0; i < 60; i++) {
+        const all = (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+        area = all.find(d => F(d).isExplosion && !areasBefore.has(d.id)) ?? null;
+        if (area) break;
+        await sleep(300);
+      }
+      ok("§4 a thrown grenade routes into the p.108 blast flow (an area was placed)", !!area);
+      if (area) {
+        const f = F(area);
+        ok("§4 the area carries the book radius for a weapon that states none", Number(f.blastRadius) === 5, `radius=${f.blastRadius}`);
+        ok("§4 the area's base damage is the weapon's OWN rolled 7d6, not a stand-in",
+          Number(f.baseDamage) >= 7 && Number(f.baseDamage) <= 42, `baseDamage=${f.baseDamage}`);
+        out.notes.push(`§4 blast baseDamage rolled off 7d6 = ${f.baseDamage}`);
+
+        let btn = null;
+        for (let i = 0; i < 40; i++) {
+          btn = document.querySelector(`.cp-confirm-explosion[data-template-id="${area.id}"]`);
+          if (btn) break;
+          await sleep(250);
+        }
+        ok("§4 the confirm card was posted for this area", !!btn);
+        if (btn) {
+          btn.click();
+          let after = before;
+          for (let i = 0; i < 40; i++) { after = Number(victim.system.damage) || 0; if (after > before) break; await sleep(250); }
+          ok("§4 confirming the blast applies its damage to the figure in it",
+            after > before, `damage ${before} → ${after}`);
+          out.notes.push(`§4 blast applied ${after - before} to the figure at 3 squares (base ${F(area).baseDamage})`);
+        }
+      }
+      const newMsgs = game.messages.filter(m => !msgsBefore.has(m.id));
+      out.notes.push(`§4 the real fire posted ${newMsgs.length} card(s)`);
+
+      // ⛔ THE EITHER/OR, DRIVEN AT ITS OWN SEAM AND WITH ITS CONTROL. A payload naming a target token
+      // is what puts the single-target apply window on screen (PATH A). A detonating payload must
+      // never reach it, or the figure at the centre is damaged twice — once by the window and once by
+      // the blast. Asserted against a CONTROL payload that differs in exactly one field, so the leg
+      // cannot pass because nothing opened a window for unrelated reasons.
+      const damageWindows = () =>
+        [...foundry.applications.instances.values()].filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""));
+      const drive = async (extra) => {
+        for (const w of damageWindows()) { try { await w.close(); } catch (_e) {} }
+        await sleep(200);
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, attackerTokenId: shTok.id, weaponName: "__PW__Seam Probe",
+          areaDamages: { Torso: [{ damage: 12 }] }, shotsFired: 1, shotsHit: 1,
+          targetTokenId: vicTok.id, fxTargetTokenId: vicTok.id, firedByUserId: game.user.id, ...extra,
+        });
+        for (let i = 0; i < 40 && damageWindows().length === 0; i++) await sleep(150);
+        const n = damageWindows().length;
+        for (const w of damageWindows()) { try { await w.close(); } catch (_e) {} }
+        return n;
+      };
+      const opensControl = await drive({});
+      const opensGrenade = await drive({ attackType: "Grenade" });
+      ok("§4 CONTROL — an ordinary payload DOES open the single-target apply window", opensControl === 1, `windows=${opensControl}`);
+      ok("§4 NEGATIVE — a detonating payload never opens it (no double application)",
+        opensGrenade === 0, `windows=${opensGrenade}`);
+    } finally {
+      for (const [k, v] of Object.entries(prev)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+    }
+  });
+
+  /* ══════════════════ §5 the unrollable-damage guard ══════════════════ */
+  await sect("§5", async () => {
+    {
+      // ⭐ THE DEFECT, PINNED AT ITS SOURCE: the base builds a Roll from the printed string, and the
+      // string the catalogue prints on a launcher is a WORD. This is the throw the guard exists to stop.
+      let threw = false;
+      try { await new Roll("Varies").evaluate(); } catch (_e) { threw = true; }
+      ok("§5 RED — evaluating the printed damage word throws (the reported crash)", threw);
+
+      // The actor's OWN sheet instance — the object the gesture runs on at a real table. Nothing is
+      // rendered: the guard is a method on it and takes the item plus a thunk.
+      const sheet = shooter.sheet;
+
+      const warns = [];
+      const realWarn = ui.notifications.warn.bind(ui.notifications);
+      ui.notifications.warn = (m, ...r) => { warns.push(String(m)); return realWarn(m, ...r); };
+      try {
+        // (a) a weapon that IS its own warhead and prints a word: still refused, named, nothing rolled.
+        // ⭐ RE-VALUED 2026-08-27 (the standard-round ruling): the EMPTY LAUNCHER no longer belongs here
+        // — it now resolves a standard round (§9). The refusal's own subject moved to the weapon class
+        // the ladder deliberately does not cover: a gas grenade carries its warhead, and defaulting it
+        // to frag would turn one weapon into another.
+        await launcher.update({ "system.ammoItemId": "" });
+        let called = 0;
+        const refused = await sheet._cpFireThroughDamageGuard(gasGrenade, async () => { called++; return "fired"; });
+        ok("§5 a weapon whose own damage is a word it OWNS is refused, not crashed", refused === null && called === 0, `called=${called}`);
+        ok("§5 the refusal names the weapon and the fix, localized (no raw key)",
+          warns.some(w => w.includes(gasGrenade.name) && w.includes("Gas") && !/^CYBERPUNK\./.test(w)),
+          warns.join(" | "));
+
+        // (b) with a round loaded, the ROUND supplies the formula for the duration of the roll
+        await launcher.update({ "system.ammoItemId": round.id });
+        let seen = null;
+        const outv = await sheet._cpFireThroughDamageGuard(launcher, async () => { seen = launcher._getWeaponSystem().damage; return "fired"; });
+        ok("§5 the loaded round's damage stands in during the roll", seen === "7d6" && outv === "fired", `seen=${seen}`);
+        ok("§5 the accessor is restored afterwards and the document is untouched",
+          launcher._getWeaponSystem().damage === "Varies" && launcher.system.damage === "Varies"
+          && !Object.prototype.hasOwnProperty.call(launcher, "_getWeaponSystem"),
+          `after=${launcher._getWeaponSystem().damage}`);
+        ok("§5 the round's own blast radius reaches the payload fields",
+          (await import(`/modules/${SCOPE}/module/seam-shim.js`)).ammoEffectFields(launcher).blastRadius === 5);
+
+        // (c) NEGATIVE: an ordinary weapon passes straight through
+        const warnsBefore = warns.length;
+        let ranPlain = 0;
+        const plain = await sheet._cpFireThroughDamageGuard(frag, async () => { ranPlain++; return "ok"; });
+        ok("§5 NEGATIVE — a weapon with a real formula is untouched by the guard",
+          plain === "ok" && ranPlain === 1 && warns.length === warnsBefore);
+      } finally {
+        ui.notifications.warn = realWarn;
+      }
+    }
+  });
+
+  /* ══════════════════ §6 rider R-A — the pair at Mortal ══════════════════ */
+  await sect("§6", async () => {
+    {
+      // Driven through the REAL chain the table uses: the fired-event seam opens the apply window, and
+      // the window's own control is what writes the damage and posts the tail. Nothing internal is
+      // called — the defect was in what that tail posts.
+      const CARD = { death: "death-save-prompt", stun: "stun-save-prompt" };
+      const damageWindows = () =>
+        [...foundry.applications.instances.values()].filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""));
+      const patient = await Actor.create({ name: "__PW__Mortal", type: "character" });
+      const [pTok] = await scene.createEmbeddedDocuments("Token", [{ name: patient.name, actorId: patient.id, actorLink: true, x: 800, y: 1400, width: 1, height: 1 }]);
+      await sleep(600);
+      const prev6 = {};
+      const set6 = async (k, v) => { try { prev6[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+      await set6("headHitDoubling", false);
+      await set6("limbModel", "core");
+      await set6("limbLossEnabled", false);
+      await set6("combatFxEnabled", false);
+      try {
+        await patient.update({ "system.damage": 0 });
+        const from = new Set(game.messages.map(m => m.id));
+        for (const w of damageWindows()) { try { await w.close(); } catch (_e) {} }
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, weaponName: "__PW__Mortal Blow",
+          areaDamages: { Torso: [{ damage: 40 }] }, shotsFired: 1, shotsHit: 1,
+          targetTokenId: pTok.id, fxTargetTokenId: pTok.id, firedByUserId: game.user.id,
+        });
+        for (let i = 0; i < 100 && damageWindows().length === 0; i++) await sleep(100);
+        const win = damageWindows()[0] ?? null;
+        const applyCtl = win?.element?.querySelector('[data-action="applyDamage"]') ?? null;
+        ok("§6 the apply window opened and carries its own control", !!applyCtl);
+        if (applyCtl) {
+          applyCtl.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          for (let i = 0; i < 100 && damageWindows().length > 0; i++) await sleep(100);
+          await sleep(1500);   // the ledger closes (cards + prompts) after the window has gone
+          const fresh = [...game.messages].filter(m => !from.has(m.id)).map(m => String(m.content ?? ""));
+          const death = fresh.filter(c => c.includes(CARD.death)).length;
+          const stun = fresh.filter(c => c.includes(CARD.stun)).length;
+          const ws = patient.woundState?.() ?? 0;
+          ok("§6 the fixture actually reached Mortal", ws >= 4, `woundState=${ws} damage=${patient.system.damage}`);
+          ok("§6 a Mortal apply posts BOTH prompts — the death save AND the consciousness check",
+            death === 1 && stun === 1, `death=${death} stun=${stun}`);
+        }
+        // NEGATIVE / the other side of the same rule: below Mortal, the stun prompt alone.
+        await patient.update({ "system.damage": 0 });
+        const from2 = new Set(game.messages.map(m => m.id));
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, weaponName: "__PW__Light Blow",
+          areaDamages: { Torso: [{ damage: 5 }] }, shotsFired: 1, shotsHit: 1,
+          targetTokenId: pTok.id, fxTargetTokenId: pTok.id, firedByUserId: game.user.id,
+        });
+        for (let i = 0; i < 100 && damageWindows().length === 0; i++) await sleep(100);
+        const win2 = damageWindows()[0] ?? null;
+        const ctl2 = win2?.element?.querySelector('[data-action="applyDamage"]') ?? null;
+        ctl2?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+        for (let i = 0; i < 100 && damageWindows().length > 0; i++) await sleep(100);
+        await sleep(1500);
+        const fresh2 = [...game.messages].filter(m => !from2.has(m.id)).map(m => String(m.content ?? ""));
+        ok("§6 NEGATIVE — below Mortal the window posts the consciousness check and no death save",
+          fresh2.filter(c => c.includes(CARD.stun)).length === 1 && fresh2.filter(c => c.includes(CARD.death)).length === 0,
+          `stun=${fresh2.filter(c => c.includes(CARD.stun)).length} death=${fresh2.filter(c => c.includes(CARD.death)).length}`);
+      } finally {
+        for (const w of damageWindows()) { try { await w.close(); } catch (_e) {} }
+        for (const [k, v] of Object.entries(prev6)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+        await pTok.delete().catch(() => {});
+        await patient.delete().catch(() => {});
+      }
+    }
+  });
+
+  /* ══════════════════ §7 rider R-B — the breached wall's Repair control ══════════════════ */
+  await sect("§7", async () => {
+    {
+      const cov = await import(`/modules/${SCOPE}/module/combat/cover.js`);
+      const [wall] = await scene.createEmbeddedDocuments("Wall", [{
+        c: [900, 1600, 1100, 1600], move: 20, sight: 20,
+        flags: { [SCOPE]: { __pwGrenade: true, coverSp: 20, coverPool: 60, coverPoolMax: 60 } },
+      }]);
+      await wall.sheet.render(true);
+      for (let i = 0; i < 40 && !wall.sheet?.element?.querySelector(".cp-cover-wall-fields"); i++) await sleep(200);
+      const root = () => wall.sheet?.element ?? null;
+      ok("§7 the cover fieldset is injected into the native wall sheet", !!root()?.querySelector(".cp-cover-wall-fields"));
+      ok("§7 an unbreached wall shows no Repair control", !root()?.querySelector(".cp-cover-wall-repair"));
+      ok("§7 RED-GUARD — exactly one fieldset, never two", (root()?.querySelectorAll(".cp-cover-wall-fields").length ?? 0) === 1);
+
+      // breach it WHILE THE SHEET IS OPEN
+      await wall.setFlag(SCOPE, "coverBreach", { door: 0, ds: 0, at: Date.now() });
+      let repair = null;
+      for (let i = 0; i < 40; i++) { repair = root()?.querySelector(".cp-cover-wall-repair"); if (repair) break; await sleep(200); }
+      ok("§7 a breach with the sheet OPEN grows the Repair control, with no close-and-reopen", !!repair);
+      ok("§7 and still exactly one fieldset after the rebuild", (root()?.querySelectorAll(".cp-cover-wall-fields").length ?? 0) === 1);
+
+      // an unrelated re-render must NOT rebuild (the double-injection guard still holds)
+      const stamped = root()?.querySelector(".cp-cover-wall-fields")?.dataset?.cpCoverState;
+      await wall.sheet.render(false);
+      await sleep(700);
+      ok("§7 an unchanged re-render keeps the same fieldset",
+        root()?.querySelector(".cp-cover-wall-fields")?.dataset?.cpCoverState === stamped
+        && (root()?.querySelectorAll(".cp-cover-wall-fields").length ?? 0) === 1, `stamp=${stamped}`);
+      try { await wall.sheet.close(); } catch (_e) {}
+      await wall.delete().catch(() => {});
+      void cov;
+    }
+  });
+
+  /* ══════════════════ §8 the launcher's ROUNDS — the authored pack ammo ══════════════════
+   * ⛔ WHAT THIS SECTION EXISTS FOR. The launcher shipped guard-refusing out of the box: the guard
+   * worked (a message, not a crash) but there was NO LOADABLE GRENADE AMMO ANYWHERE — every grenade in
+   * every pack is a WEAPON, and a weapon cannot be put in a tube. Two `ammo` items now answer that, and
+   * the four things that have to be true of them are the four things below: they survive the DataModel,
+   * the base reload picker OFFERS them for the pack launcher, firing with one produces a rollable
+   * warhead instead of the refusal, and the detonation reaches the p.108 flow by the ORIGINAL
+   * ammo-triggered door (`effectTypes` including "Explosive") rather than only by the weapon's type.
+   */
+  await sect("§8", async () => {
+    const gunner = await Actor.create({ name: "__PW__Gunner", type: "character" });
+    // ⚠ THE GUNNER NEEDS A FIGURE ON THE MAP, and the reason is the flow under test rather than tidiness:
+    // the base fire path leaves `targetTokenId` null on this call shape, so `_placeExplosion` centres the
+    // blast on the SHOOTER's figure — and an actor with no token gives it no point to centre on, so it
+    // returns and no area is ever placed. Diagnosed on a probe: identical fire, token present, area 5 m.
+    const [gTok] = await scene.createEmbeddedDocuments("Token", [{
+      name: gunner.name, actorId: gunner.id, actorLink: true, x: 800, y: 1800, width: 1, height: 1,
+    }]);
+    await sleep(600);
+    try {
+      ok("§8 harness guard — the gunner's figure is on the canvas this section measures from",
+        canvas.scene?.id === scene.id && !!canvas.tokens.get(gTok.id), `scene=${canvas.scene?.id}`);
+      await gunner.createEmbeddedDocuments("Item", [{ name: "Heavy Weapons", type: "skill", system: { level: 10, stat: "ref" } }]);
+
+      // ── the rounds, created from the shipping SOURCE data ──────────────────────────────────────
+      const madeRounds = await gunner.createEmbeddedDocuments("Item",
+        ROUND_SOURCES.map((d) => ({ name: d.name, type: d.type, img: d.img, system: d.system })));
+      const byName = (n) => gunner.items.find(i => i.name === n) ?? null;
+      const fragRound = byName("Fragmentation Grenade Round");
+      const incRound = byName("Incendiary Grenade Round");
+      ok("§8 both authored rounds are created as ammo documents",
+        madeRounds.length === 2 && fragRound?.type === "ammo" && incRound?.type === "ammo",
+        `created=${madeRounds.length} types=${fragRound?.type}/${incRound?.type}`);
+
+      // ⭐ THE VANILLA-STRIP GUARD. `caliber` is the module's own net-new field and the base 1.1.1 ammo
+      // model drops it on write; `bonusDamageFormula` is 1.1.1's ONLY damage-bearing ammo field and is
+      // what makes the round's warhead reachable without a schema change. If either is stripped, the
+      // round is inert and every leg below would fail for a reason that has nothing to do with them.
+      ok("§8 the round's cartridge and warhead survive the write on this host",
+        fragRound?.system?.caliber === "Grenade" && fragRound?.system?.ammoType === "Grenade"
+        && fragRound?.system?.bonusDamageFormula === "7d6",
+        `caliber=${fragRound?.system?.caliber} ammoType=${fragRound?.system?.ammoType} dmg=${fragRound?.system?.bonusDamageFormula}`);
+      ok("§8 the frag round declares the explosive effect type, by value",
+        Array.isArray(fragRound?.system?.effectTypes) && fragRound.system.effectTypes.includes("Explosive"),
+        JSON.stringify(fragRound?.system?.effectTypes));
+      ok("§8 the incendiary round carries the printed 4d6 and the fire burn the DoT flow reads",
+        incRound?.system?.bonusDamageFormula === "4d6" && incRound?.system?.dotEnabled === true
+        && incRound?.system?.dotType === "fire" && Number(incRound?.system?.dotTurns) === 2
+        && incRound?.system?.dotDamageFormula === "4d6"
+        && incRound.system.effectTypes.includes("Explosive") && incRound.system.effectTypes.includes("DoT"),
+        `dmg=${incRound?.system?.bonusDamageFormula} dot=${incRound?.system?.dotEnabled}/${incRound?.system?.dotType}/${incRound?.system?.dotTurns}/${incRound?.system?.dotDamageFormula}`);
+      // ⛔ THE FREE-GRENADE HOLE, closed on the item rather than in the registry. "Grenade" is not a
+      // registered CALIBER, and an unregistered caliber falls to the "none" cost class — box 1 at price
+      // 0 — so the ammo sheet's own restock control would hand out a warhead for nothing. Stating the
+      // mirrored 30 eb on the item is what the restock reads FIRST, so no registry entry (and no
+      // invented cost class) is needed to make the control honest.
+      const lk = await import(`/modules/${SCOPE}/module/lookups.js`);
+      ok("§8 the rounds price their own restock, since an unregistered caliber prices at zero",
+        Number(fragRound?.system?.boxSize) === 1 && Number(fragRound?.system?.boxCost) === 30
+        && Number(incRound?.system?.boxCost) === 30
+        && lk.getAmmoBoxPrice("Grenade", "standard") === 0,
+        `item=${fragRound?.system?.boxCost}eb registry=${lk.getAmmoBoxPrice("Grenade", "standard")}eb`);
+      ok("§8 neither round states a radius, so the book's own grenade row still answers for it",
+        Number(fragRound?.system?.blastRadius) === 0 && Number(incRound?.system?.blastRadius) === 0,
+        `frag=${fragRound?.system?.blastRadius} inc=${incRound?.system?.blastRadius}`);
+
+      // ── the PACK launcher (the real document, through the corrections chain) ────────────────────
+      const packLauncher = await fromUuid("Compendium.cyberpunk2020.heavy.Item.u9R4ZnzKOlIFva0o");
+      ok("§8 the pack Grenade Launcher was found in the base compendium", !!packLauncher, packLauncher?.name);
+      const [gl] = await gunner.createEmbeddedDocuments("Item", [packLauncher.toObject()]);
+      ok("§8 the pack launcher chambers 'Grenade' and prints an unrollable warhead of its own",
+        gl.system.ammoType === "Grenade" && gl.system.damage === "Varies",
+        `ammoType=${gl.system.ammoType} damage=${gl.system.damage}`);
+
+      // a NON-matching cartridge, so the picker leg cannot pass by listing everything
+      const [nineMil] = await gunner.createEmbeddedDocuments("Item", [{
+        name: "__PW__9mm Ball", type: "ammo", system: { caliber: "9mm", ammoType: "9mm", quantity: 30 },
+      }]);
+
+      // ⭐ OUTCOME, NOT PRESENCE: the RENDERED select is read, not the helper. The picker is what a GM
+      // actually uses to load the tube, and its `data-*`/option values are the wiring that has silently
+      // broken before elsewhere in this module.
+      await gl.sheet.render(true);
+      let sel = null;
+      for (let i = 0; i < 40; i++) {
+        sel = gl.sheet?.element?.querySelector('select[name="system.ammoItemId"]');
+        if (sel) break;
+        await sleep(200);
+      }
+      ok("§8 the launcher's own sheet renders a reload control", !!sel);
+      const optionIds = sel ? [...sel.options].map(o => o.value) : [];
+      ok("§8 the reload control OFFERS both grenade rounds — the caliber matched",
+        optionIds.includes(fragRound.id) && optionIds.includes(incRound.id),
+        `options=${optionIds.length}`);
+      ok("§8 NEGATIVE — a 9mm cartridge is not offered for a grenade tube",
+        !optionIds.includes(nineMil.id), `options=${optionIds.join(",")}`);
+      try { await gl.sheet.close(); } catch (_e) {}
+
+      // ── firing with the round in: a rollable warhead, and no refusal ────────────────────────────
+      const sheet = gunner.sheet;
+      const warns = [];
+      const realWarn = ui.notifications.warn.bind(ui.notifications);
+      ui.notifications.warn = (m, ...r) => { warns.push(String(m)); return realWarn(m, ...r); };
+      try {
+        // ⭐ RE-VALUED 2026-08-27 (the standard-round ruling). This gunner OWNS the frag round, so an
+        // empty tube is no longer the reported red state — it takes the shot with the standard round's
+        // printed 7d6 and says nothing. §9 exercises the ladder's other rungs.
+        await gl.update({ "system.ammoItemId": "" });
+        let ranEmpty = 0, seenEmpty = null;
+        const firedEmpty = await sheet._cpFireThroughDamageGuard(gl, async () => {
+          ranEmpty++; seenEmpty = gl._getWeaponSystem().damage; return "fired";
+        });
+        ok("§8 an unloaded pack launcher fires the OWNED standard round, with no refusal",
+          firedEmpty === "fired" && ranEmpty === 1 && seenEmpty === "7d6" && warns.length === 0,
+          `called=${ranEmpty} damage=${seenEmpty} warns=${warns.length}`);
+
+        await gl.update({ "system.ammoItemId": fragRound.id });
+        const warnsBefore = warns.length;
+        let seenFrag = null, ranFrag = 0;
+        const firedFrag = await sheet._cpFireThroughDamageGuard(gl, async () => {
+          ranFrag++; seenFrag = gl._getWeaponSystem().damage; return "fired";
+        });
+        ok("§8 with the frag round loaded the shot is taken, with the round's 7d6 as the warhead",
+          firedFrag === "fired" && ranFrag === 1 && seenFrag === "7d6" && warns.length === warnsBefore,
+          `damage=${seenFrag} warns=${warns.length - warnsBefore}`);
+        ok("§8 and the roll the base would build off it actually evaluates",
+          (await new Roll(seenFrag).evaluate()).total >= 7, `formula=${seenFrag}`);
+
+        await gl.update({ "system.ammoItemId": incRound.id });
+        let seenInc = null;
+        await sheet._cpFireThroughDamageGuard(gl, async () => { seenInc = gl._getWeaponSystem().damage; return "fired"; });
+        ok("§8 swapping the round swaps the warhead — the incendiary supplies its own 4d6",
+          seenInc === "4d6", `damage=${seenInc}`);
+        ok("§8 the accessor is restored and the launcher document is untouched by either shot",
+          gl.system.damage === "Varies" && gl._getWeaponSystem().damage === "Varies"
+          && !Object.prototype.hasOwnProperty.call(gl, "_getWeaponSystem"));
+      } finally {
+        ui.notifications.warn = realWarn;
+      }
+
+      // ── the ORIGINAL ammo-triggered door, and the fields that walk through it ───────────────────
+      const seam = await import(`/modules/${SCOPE}/module/seam-shim.js`);
+      await gl.update({ "system.ammoItemId": fragRound.id });
+      const fieldsFrag = seam.ammoEffectFields(gl);
+      ok("§8 the loaded round's effect types reach the fired payload's fields",
+        Array.isArray(fieldsFrag.effectTypes) && fieldsFrag.effectTypes.includes("Explosive")
+        && fieldsFrag.caliber === "Grenade",
+        JSON.stringify(fieldsFrag.effectTypes));
+      // ⛔ THE DOOR UNDER TEST IS THE OLD ONE. `attackType` is deliberately absent, so if this passes it
+      // passed through `effectTypes` — the route that has always existed — and not through the 2026-08-27
+      // widening that lets a grenade WEAPON detonate on its own.
+      ok("§8 a payload carrying only the round's effect types detonates (the ammo door, not the type door)",
+        AD.payloadDetonates({ effectTypes: fieldsFrag.effectTypes }) === true
+        && AD.payloadDetonates({ effectTypes: ["None"] }) === false,
+        JSON.stringify(fieldsFrag.effectTypes));
+      await gl.update({ "system.ammoItemId": incRound.id });
+      const fieldsInc = seam.ammoEffectFields(gl);
+      ok("§8 the incendiary's burn fields reach the payload too, by value",
+        fieldsInc.dotEnabled === true && fieldsInc.dotType === "fire"
+        && Number(fieldsInc.dotTurns) === 2 && fieldsInc.dotDamageFormula === "4d6",
+        `${fieldsInc.dotEnabled}/${fieldsInc.dotType}/${fieldsInc.dotTurns}/${fieldsInc.dotDamageFormula}`);
+
+      // ── live: fire the pack launcher for real and read the round's damage off the confirm card ──
+      const prev8 = {};
+      const set8 = async (k, v) => { try { prev8[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+      await set8("combatFxEnabled", false);
+      await set8("explosivesDetailed", false);
+      try {
+        await gl.update({ "system.ammoItemId": fragRound.id, "system.shotsLeft": "1" });
+        const areasBefore = new Set((scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]).filter(d => F(d).isExplosion).map(d => d.id));
+        const seen8 = [];
+        const spy8 = (pl) => seen8.push(pl);
+        Hooks.on("cyberpunk2020.weaponFired", spy8);
+        try {
+          await sheet._cpFireThroughDamageGuard(gl, async () =>
+            gl.__weaponRoll({ fireMode: base.fireModes.semiAuto, range: "RangeClose", targetActor: victim }, [{ id: vicTok.id, name: vicTok.name }]));
+          for (let i = 0; i < 30 && seen8.length === 0; i++) await sleep(150);
+        } finally { Hooks.off("cyberpunk2020.weaponFired", spy8); }
+        ok("§8 the real launcher fire raises a payload carrying the round's explosive type",
+          !!seen8[0] && (seen8[0].effectTypes ?? []).includes("Explosive"),
+          `payloads=${seen8.length} types=${JSON.stringify(seen8[0]?.effectTypes)}`);
+
+        let area8 = null;
+        for (let i = 0; i < 60; i++) {
+          const all = (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+          area8 = all.find(d => F(d).isExplosion && !areasBefore.has(d.id)) ?? null;
+          if (area8) break;
+          await sleep(300);
+        }
+        ok("§8 the launched round places a blast area (the p.108 flow was entered)", !!area8);
+        if (area8) {
+          const f8 = F(area8);
+          // ⭐ THE DECODE: 7d6 is 7..42, and 4d6 could not reach 43 — so a base damage inside that
+          // window with the frag round loaded says the ROUND's warhead was the thing that was rolled.
+          ok("§8 the blast's base damage decodes as the ROUND's 7d6, not the tube's word",
+            Number(f8.baseDamage) >= 7 && Number(f8.baseDamage) <= 42, `baseDamage=${f8.baseDamage}`);
+          ok("§8 and the area took the book's grenade radius, since the round states none",
+            Number(f8.blastRadius) === 5, `radius=${f8.blastRadius}`);
+          out.notes.push(`§8 launched frag: baseDamage=${f8.baseDamage} radius=${f8.blastRadius}m`);
+          let btn8 = null;
+          for (let i = 0; i < 40; i++) { btn8 = document.querySelector(`.cp-confirm-explosion[data-template-id="${area8.id}"]`); if (btn8) break; await sleep(250); }
+          ok("§8 a confirm card was posted for the launched round's blast", !!btn8);
+          await area8.delete().catch(() => {});
+        }
+      } finally {
+        for (const [k, v] of Object.entries(prev8)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+      }
+    } finally {
+      await gTok.delete().catch(() => {});   // tokens BEFORE actors
+      await gunner.delete().catch(() => {});
+    }
+  });
+
+  /* ══════════════════ §9 the STANDARD-ROUND ladder for an empty tube ══════════════════ */
+  await sect("§9", async () => {
+    // ⛔ THE RULING BEING CERTIFIED (user, 2026-08-27): an empty grenade tube must fire a standard
+    // round rather than post a refusal. The four rungs are loaded round → owned standard round → the
+    // module pack's own Fragmentation Grenade Round → the message. Every rung is asserted by VALUE,
+    // and the scope counter-example (a gas grenade) is asserted beside them.
+    const PACK = "supplement-heavy";
+    const FRAG_ID = "2smdtLN5J0FvhvoS";
+    const fragSrc = ROUND_SOURCES.find(d => d._id === FRAG_ID);
+    const packRef = game.packs.find(p => p?.metadata?.packageName === SCOPE && p?.metadata?.name === PACK) ?? null;
+
+    // ── (a) the scope predicate, by value on real documents ────────────────────────────────────
+    ok("§9 the tube defers its damage to a round; the weapons that carry their own do not",
+      AD.defersDamageToGrenadeRound(launcher) === true
+      && AD.defersDamageToGrenadeRound(gasGrenade) === false
+      && AD.defersDamageToGrenadeRound(frag) === false
+      && AD.defersDamageToGrenadeRound(missile) === false
+      && AD.defersDamageToGrenadeRound(pistol) === false,
+      `launcher=${AD.defersDamageToGrenadeRound(launcher)} gas=${AD.defersDamageToGrenadeRound(gasGrenade)} frag=${AD.defersDamageToGrenadeRound(frag)}`);
+    ok("§9 the compendium key is DERIVED from the module's own pack registration, not written out",
+      AD.standardGrenadeRoundUuid() === `Compendium.${SCOPE}.${PACK}.Item.${FRAG_ID}`,
+      AD.standardGrenadeRoundUuid() || "(pack not registered)");
+
+    const empty = await Actor.create({ name: "__PW__Empty Tube", type: "character" });
+    const stocked = await Actor.create({ name: "__PW__Stocked Tube", type: "character" });
+    let createdInPack = false, wasLocked = null, sTok = null;
+    try {
+      const packLauncher = await fromUuid("Compendium.cyberpunk2020.heavy.Item.u9R4ZnzKOlIFva0o");
+      const [glE] = await empty.createEmbeddedDocuments("Item", [packLauncher.toObject()]);
+      const [glS] = await stocked.createEmbeddedDocuments("Item", [packLauncher.toObject()]);
+      await glE.update({ "system.ammoItemId": "" });
+      await glS.update({ "system.ammoItemId": "" });
+
+        SECT="§9(b) rung4";
+    // ── (b) RUNG 4 — nothing owned, and whatever this world's pack actually holds ────────────
+      const packHas = packRef ? !!(await packRef.getDocument(FRAG_ID).catch(() => null)) : false;
+      out.notes.push(`§9 pack registered=${!!packRef} already holds the standard round=${packHas}`);
+      const bare = await AD.warheadDamageFor(glE);
+      ok("§9 with nothing owned the ladder answers exactly what the pack holds — never an invented number",
+        bare === (packHas ? "7d6" : ""), `warhead=${JSON.stringify(bare)} packHas=${packHas}`);
+
+      const sheetE = empty.sheet;
+      const warnsE = [];
+      const realWarnE = ui.notifications.warn.bind(ui.notifications);
+      ui.notifications.warn = (m, ...r) => { warnsE.push(String(m)); return realWarnE(m, ...r); };
+      try {
+        let ranBare = 0;
+        const outBare = await sheetE._cpFireThroughDamageGuard(glE, async () => { ranBare++; return "fired"; });
+        ok("§9 the message is what is LEFT when no round exists anywhere, and only then",
+          packHas ? (outBare === "fired" && ranBare === 1 && warnsE.length === 0)
+                  : (outBare === null && ranBare === 0 && warnsE.length === 1),
+          `out=${outBare} called=${ranBare} warns=${warnsE.length}`);
+
+          SECT="§9(c) rung3";
+        // ── (c) RUNG 3 — the module pack's own entry, read (not created into inventory) ─────────
+        if (packRef && !packHas) {
+          wasLocked = packRef.locked;
+          if (wasLocked) await packRef.configure({ locked: false });
+          const seed = foundry.utils.deepClone(fragSrc);
+          delete seed._key;
+          await Item.create(seed, { pack: packRef.collection, keepId: true });
+          createdInPack = true;
+        }
+        const packDoc = packRef ? await packRef.getDocument(FRAG_ID).catch(() => null) : null;
+        ok("§9 HARNESS GUARD — the standard round is readable in the module pack before rung 3 is measured",
+          !!packDoc && packDoc.system?.bonusDamageFormula === "7d6",
+          `doc=${packDoc?.name} dmg=${packDoc?.system?.bonusDamageFormula}`);
+
+        const itemsBefore = empty.items.size;
+        const fromPack = await AD.warheadDamageFor(glE);
+        ok("§9 RUNG 3 — an empty tube on an actor owning nothing fires the PACK's standard round, 7d6",
+          fromPack === "7d6", `warhead=${JSON.stringify(fromPack)}`);
+        ok("§9 rung 3 adds NOTHING to the inventory and writes nothing to the tube",
+          empty.items.size === itemsBefore && glE.system.damage === "Varies"
+          && !Object.prototype.hasOwnProperty.call(glE, "_getWeaponSystem"),
+          `items ${itemsBefore}→${empty.items.size} damage=${glE.system.damage}`);
+
+        const warnsBeforePack = warnsE.length;
+        let seenPack = null, ranPack = 0;
+        const firedPack = await sheetE._cpFireThroughDamageGuard(glE, async () => {
+          ranPack++; seenPack = glE._getWeaponSystem().damage; return "fired";
+        });
+        ok("§9 and the gesture takes the shot with it, silently — no refusal reaches the referee",
+          firedPack === "fired" && ranPack === 1 && seenPack === "7d6" && warnsE.length === warnsBeforePack,
+          `damage=${seenPack} warns=${warnsE.length - warnsBeforePack}`);
+      } finally {
+        ui.notifications.warn = realWarnE;
+      }
+
+      SECT="§9(d) rung2";
+      // ── (d) RUNG 2 — an owned round wins over the pack, and STANDARD wins over the rest ───────
+      // Created worst-first on purpose: a resolver that took "the first ammo item" would answer 1d6.
+      const [oddRound] = await stocked.createEmbeddedDocuments("Item", [{
+        name: "__PW__Practice Round", type: "ammo",
+        system: { caliber: "Grenade", ammoType: "Grenade", quantity: 3, bonusDamageFormula: "1d6" },
+      }]);
+      const [wrongCal] = await stocked.createEmbeddedDocuments("Item", [{
+        name: "__PW__9mm Ball", type: "ammo",
+        system: { caliber: "9mm", ammoType: "9mm", quantity: 30, bonusDamageFormula: "9d6" },
+      }]);
+      ok("§9 RUNG 2 — with only a non-standard grenade round owned, THAT round answers (not the pack)",
+        (await AD.warheadDamageFor(glS)) === "1d6", `warhead=${await AD.warheadDamageFor(glS)}`);
+      ok("§9 NEGATIVE — a 9mm cartridge is never a grenade tube's default",
+        (await AD.warheadDamageFor(glS)) !== "9d6");
+
+      const namedSrc = foundry.utils.deepClone(fragSrc);
+      delete namedSrc._key; delete namedSrc._id; delete namedSrc._stats;
+      namedSrc.system.bonusDamageFormula = "5d6";     // a name match, deliberately mis-valued
+      const [byName] = await stocked.createEmbeddedDocuments("Item", [namedSrc]);
+      ok("§9 the FRAGMENTATION round is preferred over the other grenade rounds owned (standard-first)",
+        (await AD.warheadDamageFor(glS)) === "5d6", `warhead=${await AD.warheadDamageFor(glS)}`);
+
+      const sourcedSrc = foundry.utils.deepClone(fragSrc);
+      delete sourcedSrc._key; delete sourcedSrc._id;
+      sourcedSrc.name = "__PW__Renamed Frag";
+      sourcedSrc._stats = { compendiumSource: AD.standardGrenadeRoundUuid() };
+      const [bySource] = await stocked.createEmbeddedDocuments("Item", [sourcedSrc]);
+      ok("§9 HARNESS GUARD — the source pointer survived the write, so the rung below is real",
+        bySource._stats?.compendiumSource === AD.standardGrenadeRoundUuid(),
+        `source=${bySource._stats?.compendiumSource}`);
+      ok("§9 the SOURCE POINTER outranks the name — a renamed copy of the standard round still answers",
+        (await AD.warheadDamageFor(glS)) === "7d6", `warhead=${await AD.warheadDamageFor(glS)}`);
+
+      SECT="§9(e) loaded-wins";
+      // ── (e) REGRESSION — an explicitly loaded round still beats every default ─────────────────
+      const [sabot] = await stocked.createEmbeddedDocuments("Item", [{
+        name: "__PW__Loaded Sabot", type: "ammo",
+        system: { caliber: "Grenade", ammoType: "Grenade", quantity: 2, bonusDamageFormula: "3d6" },
+      }]);
+      await glS.update({ "system.ammoItemId": sabot.id });
+      ok("§9 REGRESSION — the round actually in the tube wins over every default rung",
+        (await AD.warheadDamageFor(glS)) === "3d6", `warhead=${await AD.warheadDamageFor(glS)}`);
+      const sheetS = stocked.sheet;
+      let seenLoaded = null;
+      await sheetS._cpFireThroughDamageGuard(glS, async () => { seenLoaded = glS._getWeaponSystem().damage; return "fired"; });
+      ok("§9 and the gesture shadows the LOADED round's formula, not the standard one",
+        seenLoaded === "3d6", `damage=${seenLoaded}`);
+      await glS.update({ "system.ammoItemId": "" });
+
+      SECT="§9(f) second-act";
+      // ── (f) SECOND ACT — the same gesture twice agrees, and leaves nothing behind ─────────────
+      const twice = [];
+      for (let i = 0; i < 2; i++) {
+        await sheetS._cpFireThroughDamageGuard(glS, async () => { twice.push(glS._getWeaponSystem().damage); return "fired"; });
+      }
+      ok("§9 two trigger pulls on the empty tube resolve the same standard round",
+        twice.length === 2 && twice[0] === "7d6" && twice[1] === "7d6", JSON.stringify(twice));
+      ok("§9 the accessor is restored after the defaulted shots and the document is untouched",
+        glS.system.damage === "Varies" && glS._getWeaponSystem().damage === "Varies"
+        && !Object.prototype.hasOwnProperty.call(glS, "_getWeaponSystem"));
+
+      SECT="§9(g) scope";
+      // ── (g) the SCOPE counter-example, through the same gesture ───────────────────────────────
+      const [gasG] = await stocked.createEmbeddedDocuments("Item", [{
+        name: "__PW__Pack Gas", type: "weapon",
+        system: { ...HEAVY, attackType: "Grenade", ammoType: "Grenade", damage: "Gas", range: "50" },
+      }]);
+      ok("§9 SCOPE — a gas grenade is NOT given a frag warhead by the ladder",
+        (await AD.warheadDamageFor(gasG)) === "", `warhead=${JSON.stringify(await AD.warheadDamageFor(gasG))}`);
+      const warnsG = [];
+      const realWarnG = ui.notifications.warn.bind(ui.notifications);
+      ui.notifications.warn = (m, ...r) => { warnsG.push(String(m)); return realWarnG(m, ...r); };
+      let ranG = 0;
+      try {
+        const outG = await sheetS._cpFireThroughDamageGuard(gasG, async () => { ranG++; return "fired"; });
+        ok("§9 SCOPE — and it still gets the guard message, unchanged",
+          outG === null && ranG === 0 && warnsG.length === 1 && warnsG[0].includes("Gas"),
+          `out=${outG} called=${ranG} warns=${JSON.stringify(warnsG)}`);
+      } finally { ui.notifications.warn = realWarnG; }
+
+      SECT="§9(h) live";
+      // ── (h) LIVE: the empty tube fired for real places a blast priced off the standard round ──
+      const prev9 = {};
+      const set9 = async (k, v) => { try { prev9[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+      await set9("combatFxEnabled", false);
+      await set9("explosivesDetailed", false);
+      [sTok] = await scene.createEmbeddedDocuments("Token", [{ name: stocked.name, actorId: stocked.id, actorLink: true, x: 800, y: 1600, width: 1, height: 1 }]);
+      await sleep(600);
+      try {
+        // HARNESS GUARD: a fan-out that cannot see the shooter's figure aims from its facing instead.
+        ok("§9 HARNESS GUARD — the canvas can see the shooter before the live shot is measured",
+          canvas.scene?.id === scene.id && !!canvas.tokens?.get(sTok.id));
+        // Only the standard-round rungs are in play: the tube is empty and the ODD rounds are gone.
+        for (const it of [oddRound, byName, sabot, wrongCal]) await it.delete().catch(() => {});
+        await glS.update({ "system.ammoItemId": "", "system.shotsLeft": "1" });
+        ok("§9 the empty tube's warhead is the standard round's 7d6 at the moment of the live shot",
+          (await AD.warheadDamageFor(glS)) === "7d6");
+        const areasBefore = new Set((scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]).filter(d => F(d).isExplosion).map(d => d.id));
+        await sheetS._cpFireThroughDamageGuard(glS, async () =>
+          glS.__weaponRoll({ fireMode: base.fireModes.semiAuto, range: "RangeClose", targetActor: victim }, [{ id: vicTok.id, name: vicTok.name }]));
+        let area9 = null;
+        for (let i = 0; i < 60; i++) {
+          const all = (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+          area9 = all.find(d => F(d).isExplosion && !areasBefore.has(d.id)) ?? null;
+          if (area9) break;
+          await sleep(300);
+        }
+        ok("§9 firing the EMPTY tube enters the p.108 blast flow (the shot happened at all)", !!area9);
+        if (area9) {
+          const f9 = F(area9);
+          // ⭐ THE DECODE: 7d6 is 7..42. A 1d6 practice round could not reach 7 as a floor and the
+          // tube itself has no number at all, so a base damage in that window says the STANDARD round
+          // was what got rolled.
+          ok("§9 the blast's base damage decodes as the standard round's 7d6",
+            Number(f9.baseDamage) >= 7 && Number(f9.baseDamage) <= 42, `baseDamage=${f9.baseDamage}`);
+          ok("§9 and the area still takes the book's grenade radius", Number(f9.blastRadius) === 5, `radius=${f9.blastRadius}`);
+          out.notes.push(`§9 empty-tube default: baseDamage=${f9.baseDamage} radius=${f9.blastRadius}m`);
+          await area9.delete().catch(() => {});
+        }
+      } finally {
+        // ⚠ THE SHOOTER'S FIGURE IS **NOT** DELETED HERE (root-caused 2026-08-28). Deleting it the
+        // instant the area was read left a floating consumer of the fired-shot chain holding the token
+        // id, and Foundry's own handler reported it as `id [<sTok>] does not exist in the
+        // EmbeddedCollection` — a HARNESS fault that reads exactly like a product red. It goes in the
+        // outer finally, after a settle, tokens before actors.
+        for (const [k, v] of Object.entries(prev9)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+      }
+    } finally {
+      SECT="§9(z) teardown";
+      await sleep(1500);                       // let the fired-shot chain finish with the figure
+      if (sTok) await sTok.delete().catch(() => {});   // tokens BEFORE actors
+      if (createdInPack && packRef) {
+        const d = await packRef.getDocument(FRAG_ID).catch(() => null);
+        if (d) await d.delete().catch(() => {});
+        const gone = !(await packRef.getDocument(FRAG_ID).catch(() => null));
+        ok("§9 CLEANUP — the pack fixture was removed and the compendium is back as it was", gone);
+        if (wasLocked) await packRef.configure({ locked: true }).catch(() => {});
+      }
+      await empty.delete().catch(() => {});
+      await stocked.delete().catch(() => {});
+    }
+  });
+
+  /* ══════════════════ §10 the attack-modifiers ROW GATING ══════════════════
+   * MECHANISM: `rangedModifiers` (module/lookups.js) builds the rows the attack window renders and
+   * submits. The called-shot row costs −4 to hit and buys a declared damage location; a weapon whose
+   * damage the blast flow takes over has no such location to steer, so the row is REMOVED from the
+   * returned arrays — not hidden, because a hidden row is still a field that can still be submitted
+   * and still be charged for. Asserted on the returned rows AND on the rendered window's own DOM. */
+  let rifle = null;
+  await sect("§10", async () => {
+    const lk = await import(`/modules/${SCOPE}/module/lookups.js`);
+    const paths = (w) => lk.rangedModifiers(w, [], {}).flat().map(r => r.dataPath);
+
+    rifle = await mkWeapon("__PW__Rifle", {
+      weaponType: base.weaponTypes.rifle, attackType: "Single", ammoType: "5.56mm",
+      damage: "5d6", range: "400", shots: "20", shotsLeft: "20", rof: "1", accuracy: 0, attackSkill: "Rifle",
+    });
+    // §11 counts LANDED shots, so the shooter needs the rifle's own skill for its to-hit to clear the
+    // point-blank DC as reliably as the delivery weapon's does (§4 gave it Heavy Weapons).
+    await shooter.createEmbeddedDocuments("Item", [{ name: "Rifle", type: "skill", system: { level: 10, stat: "ref" } }]);
+
+    /* ── (a) the item-side predicate itself, by value ─────────────────────────────────────────── */
+    ok("§10 the weapon-side detonation predicate answers on the attack type",
+      AD.weaponDetonates(frag) === true && AD.weaponDetonates(launcher) === true && AD.weaponDetonates(missile) === true,
+      `frag=${AD.weaponDetonates(frag)} launcher=${AD.weaponDetonates(launcher)} missile=${AD.weaponDetonates(missile)}`);
+    ok("§10 NEGATIVE — an ordinary firearm does not detonate",
+      AD.weaponDetonates(rifle) === false && AD.weaponDetonates(pistol) === false,
+      `rifle=${AD.weaponDetonates(rifle)} pistol=${AD.weaponDetonates(pistol)}`);
+    ok("§10 NEGATIVE — a null/undefined item answers false rather than throwing",
+      AD.weaponDetonates(null) === false && AD.weaponDetonates(undefined) === false && AD.weaponDetonates({}) === false);
+
+    // the SECOND half of the predicate: an ordinary tube with an EXPLOSIVE round in it
+    const [heRound] = await shooter.createEmbeddedDocuments("Item", [{
+      name: "__PW__HE Cartridge", type: "ammo",
+      system: { caliber: "9mm", ammoType: "9mm", quantity: 5, bonusDamageFormula: "2d6", effectTypes: ["Explosive"] },
+    }]);
+    const [inertRound] = await shooter.createEmbeddedDocuments("Item", [{
+      name: "__PW__Ball Cartridge", type: "ammo",
+      system: { caliber: "9mm", ammoType: "9mm", quantity: 5, effectTypes: ["Non-Explosive"] },
+    }]);
+    try {
+      await pistol.update({ "system.ammoItemId": heRound.id });
+      ok("§10 an ordinary tube loaded with an EXPLOSIVE round detonates by its round",
+        AD.weaponDetonates(pistol) === true);
+      ok("§10 and its called-shot row goes with it", !paths(pistol).includes("targetArea"), paths(pistol).join(","));
+      await pistol.update({ "system.ammoItemId": inertRound.id });
+      ok("§10 NEGATIVE — a bare 'Non-Explosive' string is not read as a substring match",
+        AD.weaponDetonates(pistol) === false && paths(pistol).includes("targetArea"));
+    } finally {
+      await pistol.update({ "system.ammoItemId": "" });
+      await heRound.delete().catch(() => {});
+      await inertRound.delete().catch(() => {});
+    }
+
+    /* ── (b) the returned ROWS, by value, for all four subjects ───────────────────────────────── */
+    await launcher.update({ "system.ammoItemId": "" });
+    const rFrag = paths(frag), rLaunch = paths(launcher), rMiss = paths(missile), rRifle = paths(rifle);
+    ok("§10 the called-shot row is REMOVED for a thrown delivery (rollable printed damage)",
+      !rFrag.includes("targetArea"), rFrag.join(","));
+    ok("§10 …and for the launcher, whose printed damage is the deferral word",
+      !rLaunch.includes("targetArea") && String(launcher.system.damage) === "Varies", rLaunch.join(","));
+    ok("§10 …and for a Missile-type tube", !rMiss.includes("targetArea"), rMiss.join(","));
+    ok("§10 NEGATIVE — an ordinary rifle keeps the row, with its blank default",
+      rRifle.includes("targetArea")
+      && lk.rangedModifiers(rifle, [], {}).flat().find(r => r.dataPath === "targetArea")?.defaultValue === "",
+      rRifle.join(","));
+    ok("§10 the row is the ONLY thing removed — every other row survives, in order",
+      rFrag.length === rRifle.length - 1
+      && rRifle.filter(p => p !== "targetArea").join(",") === rFrag.join(","),
+      `rifle=${rRifle.length} frag=${rFrag.length}`);
+    ok("§10 the MELEE and MARTIAL called-shot rows are untouched by this",
+      lk.meleeBonkOptions({}).flat().some(r => r.dataPath === "targetArea")
+      && lk.martialOptions(shooter, {}).flat().some(r => r.dataPath === "targetArea"));
+
+    /* ── (c) the RENDERED window, driven by the real click on the sheet's own fire control ────── */
+    const modWindows = () =>
+      [...foundry.applications.instances.values()].filter(a => /Modifiers/.test(a?.constructor?.name ?? ""));
+    const openVia = async (item) => {
+      for (const w of modWindows()) { try { await w.close(); } catch (_e) {} }
+      await sleep(200);
+      const root = shooter.sheet.element;
+      const ctl = root?.querySelector(`.fire-weapon[data-item-id="${item.id}"]`);
+      if (!ctl) return { ctl: null, el: null, win: null };
+      ctl.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      for (let i = 0; i < 40 && modWindows().length === 0; i++) await sleep(150);
+      await sleep(400);
+      const win = modWindows()[0] ?? null;
+      return { ctl, el: win?.element ?? null, win };
+    };
+    await shooter.sheet.render(true);
+    await sleep(1200);
+    try {
+      const g = await openVia(frag);
+      // WIRING leg: the handler's selector matches the rendered node AND the data field it reads is
+      // non-empty — a presence-only check here would pass on an empty data-item-id.
+      ok("§10 HARNESS/WIRING — the fire control is on the rendered sheet and carries a non-empty item id",
+        !!g.ctl && g.ctl.dataset.itemId === frag.id && g.ctl.dataset.itemId !== "");
+      ok("§10 the RENDERED window opened from the real click carries no called-shot control",
+        !!g.el && g.el.querySelector('select[name="targetArea"]') === null
+        && g.el.querySelector('select[name="range"]') !== null,
+        `targetArea=${!!g.el?.querySelector('select[name="targetArea"]')} range=${!!g.el?.querySelector('select[name="range"]')}`);
+      if (g.win) { try { await g.win.close(); } catch (_e) {} }
+
+      const r = await openVia(rifle);
+      ok("§10 NEGATIVE — the rifle's window DOES carry it, with a blank first option",
+        !!r.el && r.el.querySelector('select[name="targetArea"]') !== null
+        && r.el.querySelector('select[name="targetArea"]')?.value === "",
+        `present=${!!r.el?.querySelector('select[name="targetArea"]')} value=${r.el?.querySelector('select[name="targetArea"]')?.value}`);
+      if (r.win) { try { await r.win.close(); } catch (_e) {} }
+
+      // SECOND ACT: reopening the delivery weapon's window after the rifle's must not restore the row
+      // (saved options are re-read on every open).
+      const g2 = await openVia(frag);
+      ok("§10 SECOND ACT — reopening after another weapon's window still offers no called-shot control",
+        !!g2.el && g2.el.querySelector('select[name="targetArea"]') === null);
+      if (g2.win) { try { await g2.win.close(); } catch (_e) {} }
+    } finally {
+      for (const w of modWindows()) { try { await w.close(); } catch (_e) {} }
+      try { await shooter.sheet.close(); } catch (_e) {}
+      await sleep(300);
+    }
+  });
+
+  /* ══════════════════ §11 the point-blank ROLL-MAXIMIZE predicate ══════════════════
+   * MECHANISM: the base's `_shouldMaximizePointBlankDamage` is `isRanged() && _isFirearm() && range ===
+   * pointBlank`, and `_isFirearm()` includes the HVY weaponType every delivery weapon in the catalogue
+   * carries — so the maximize reached warheads. The gesture guard shadows the predicate on the INSTANCE
+   * for detonating weapons only, before its own rollable-damage early return, and restores it after. */
+  await sect("§11", async () => {
+    const sheet = shooter.sheet;
+    const PB = { range: base.ranges.pointBlank };
+    const prev11 = {};
+    const set11 = async (scope, k, v) => {
+      try { prev11[`${scope}|${k}`] = game.settings.get(scope, k); await game.settings.set(scope, k, v); } catch (_e) {}
+    };
+    await set11(SCOPE, "combatFxEnabled", false);
+    await set11(SCOPE, "explosivesDetailed", false);
+    // A fumble legitimately forces a miss (~10%), and a miss carries no damage row — so the counting
+    // legs below stand the table down and restore it (the documented ranged-fumble collapse).
+    await set11("cyberpunk2020", "fumbleTableEnabled", false);
+    // ⚠ THE SAMPLES ARE LANDED SHOTS, AND THE TO-HIT IS NOT WHAT THIS SECTION MEASURES. A fixture
+    // actor rolls REF 5 + 1d10 against the point-blank DC of 10, so roughly two shots in five carry no
+    // damage row at all (measured: 4 of 7 deliveries, 1 of 5 rifle shots) — a thin sample that reads as
+    // a product red. The NEIGHBOURING mechanism is therefore pinned for the counting legs, exactly as
+    // the harness pins the fumble collapse when it is counting rounds: `attackRoll` is shadowed on the
+    // INSTANCE to a certain hit and restored right after, so every shot lands and the numbers being
+    // compared are damage rolls and nothing else. The damage roll itself is never touched.
+    const pinHit = (weapon) => {
+      const d = Object.getOwnPropertyDescriptor(weapon, "attackRoll");
+      weapon.attackRoll = async () => await new Roll("40").evaluate();
+      return () => { if (d) Object.defineProperty(weapon, "attackRoll", d); else delete weapon.attackRoll; };
+    };
+    try {
+      /* ── (a) the MECHANISM, read during the gesture, on BOTH guard paths ───────────────────── */
+      let duringThrown = null, duringLaunched = null, duringRifle = null;
+      await sheet._cpFireThroughDamageGuard(frag, async () => {
+        duringThrown = frag._shouldMaximizePointBlankDamage(PB); return "fired";
+      });
+      ok("§11 the maximize predicate answers FALSE during a THROWN delivery's gesture (past the rollable-damage early return)",
+        duringThrown === false, `during=${duringThrown}`);
+      await launcher.update({ "system.ammoItemId": round.id });
+      await sheet._cpFireThroughDamageGuard(launcher, async () => {
+        duringLaunched = launcher._shouldMaximizePointBlankDamage(PB); return "fired";
+      });
+      ok("§11 …and FALSE during a LAUNCHER's gesture (the warhead-substitution path)",
+        duringLaunched === false, `during=${duringLaunched}`);
+      await launcher.update({ "system.ammoItemId": "" });
+      await sheet._cpFireThroughDamageGuard(rifle, async () => {
+        duringRifle = rifle._shouldMaximizePointBlankDamage(PB); return "fired";
+      });
+      ok("§11 NEGATIVE — an ordinary rifle's gesture leaves the predicate answering TRUE at point blank",
+        duringRifle === true, `during=${duringRifle}`);
+
+      /* ── (b) GUARD RESTORE — no own property is left on any of the three ───────────────────── */
+      const owns = (it) => Object.prototype.hasOwnProperty.call(it, "_shouldMaximizePointBlankDamage");
+      ok("§11 guard restore — the instance no longer shadows the predicate after the gesture",
+        !owns(frag) && !owns(launcher) && !owns(rifle)
+        && frag._shouldMaximizePointBlankDamage(PB) === true,
+        `frag=${owns(frag)} launcher=${owns(launcher)} rifle=${owns(rifle)} answersAgain=${frag._shouldMaximizePointBlankDamage(PB)}`);
+      ok("§11 guard restore — the damage accessor is restored with it",
+        !Object.prototype.hasOwnProperty.call(launcher, "_getWeaponSystem")
+        && launcher._getWeaponSystem().damage === "Varies");
+
+      /* ── (c) THE VALUE CONSEQUENCE, off the real fire path ─────────────────────────────────── */
+      // 7d6 maximized is a pinned 42. Fire point blank repeatedly and read the damage rows the base
+      // actually put on the payload; unmaximized they must vary and must fall below the ceiling.
+      const fireAt = async (weapon, rangeKey, shots) => {
+        const totals = [];
+        const seen = [];
+        const spy = (pl) => seen.push(pl);
+        Hooks.on("cyberpunk2020.weaponFired", spy);
+        const unpin = pinHit(weapon);
+        try {
+          for (let i = 0; i < shots; i++) {
+            seen.length = 0;
+            await weapon.update({ "system.shotsLeft": "5" });
+            await sheet._cpFireThroughDamageGuard(weapon, async () => weapon.__weaponRoll(
+              { fireMode: base.fireModes.semiAuto, range: rangeKey, targetActor: victim },
+              [{ id: vicTok.id, name: vicTok.name }]));
+            for (let w = 0; w < 60 && seen.length === 0; w++) await sleep(100);
+            const rows = Object.values(seen[0]?.areaDamages ?? {}).flat();
+            if (rows.length) totals.push(rows.reduce((s, h) => s + (Number(h.damage ?? h.dmg) || 0), 0));
+            // A NON-detonating hit opens the single-target apply window; five of them would pile up and
+            // follow this section into the next. Closed, not applied — the damage is not the subject.
+            await sleep(250);
+            for (const w of [...foundry.applications.instances.values()].filter(a => /DamageDialog/.test(a?.constructor?.name ?? ""))) {
+              try { await w.close(); } catch (_e) {}
+            }
+          }
+        } finally { unpin(); Hooks.off("cyberpunk2020.weaponFired", spy); }
+        return totals;
+      };
+      const gTotals = await fireAt(frag, base.ranges.pointBlank, 7);
+      out.notes.push(`§11 point-blank 7d6 delivery totals: ${JSON.stringify(gTotals)}`);
+      ok("§11 HARNESS GUARD — enough point-blank deliveries landed to measure", gTotals.length >= 3, `landed=${gTotals.length}`);
+      ok("§11 a point-blank delivery's damage is NOT pinned at the maximized 42",
+        gTotals.length >= 3 && !gTotals.every(t => t === 42) && gTotals.some(t => t < 42),
+        JSON.stringify(gTotals));
+      ok("§11 every one of them is still a legal 7d6 result (7…42)",
+        gTotals.length >= 3 && gTotals.every(t => t >= 7 && t <= 42), JSON.stringify(gTotals));
+
+      const rTotals = await fireAt(rifle, base.ranges.pointBlank, 5);
+      out.notes.push(`§11 point-blank 5d6 rifle totals: ${JSON.stringify(rTotals)}`);
+      ok("§11 HARNESS GUARD — enough point-blank rifle shots landed to measure", rTotals.length >= 3, `landed=${rTotals.length}`);
+      ok("§11 NEGATIVE — a rifle at point blank still maximizes, every shot pinned at 5d6's 30",
+        rTotals.length >= 3 && rTotals.every(t => t === 30), JSON.stringify(rTotals));
+
+      /* ── (d) BLAST BASE-DAMAGE CONTINUITY — regression, unchanged behaviour ─────────────────── */
+      // On a HIT the area is priced off the card's own carried roll (damage-hooks sums
+      // payload.areaDamages); the warhead is re-rolled only on a miss. That must still be true.
+      const areasBefore = new Set((scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]).filter(d => F(d).isExplosion).map(d => d.id));
+      const seen11 = [];
+      const spy11 = (pl) => seen11.push(pl);
+      Hooks.on("cyberpunk2020.weaponFired", spy11);
+      let carried = null;
+      const unpin11 = pinHit(frag);
+      try {
+        await frag.update({ "system.shotsLeft": "5" });
+        await sheet._cpFireThroughDamageGuard(frag, async () => frag.__weaponRoll(
+          { fireMode: base.fireModes.semiAuto, range: base.ranges.close, targetActor: victim },
+          [{ id: vicTok.id, name: vicTok.name }]));
+        for (let w = 0; w < 30 && seen11.length === 0; w++) await sleep(100);
+        const rows = Object.values(seen11[0]?.areaDamages ?? {}).flat();
+        carried = rows.length ? rows.reduce((s, h) => s + (Number(h.damage ?? h.dmg) || 0), 0) : null;
+      } finally { unpin11(); Hooks.off("cyberpunk2020.weaponFired", spy11); }
+      let area11 = null;
+      for (let i = 0; i < 60 && carried !== null; i++) {
+        const all = (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+        area11 = all.find(d => F(d).isExplosion && !areasBefore.has(d.id)) ?? null;
+        if (area11) break;
+        await sleep(300);
+      }
+      ok("§11 REGRESSION — on a hit the blast's base damage still equals the card's own carried roll",
+        !!area11 && carried !== null && Number(F(area11).baseDamage) === carried,
+        `carried=${carried} area=${area11 ? F(area11).baseDamage : "none"}`);
+      if (area11) await area11.delete().catch(() => {});
+    } finally {
+      ok("§11 HARNESS RESTORE — the pinned to-hit is off every fixture the section touched",
+        !Object.prototype.hasOwnProperty.call(frag, "attackRoll")
+        && !Object.prototype.hasOwnProperty.call(rifle, "attackRoll"));
+      for (const [key, v] of Object.entries(prev11)) {
+        const [scope, k] = key.split("|");
+        try { await game.settings.set(scope, k, v); } catch (_e) {}
+      }
+    }
+  });
+
+  /* ══════════════════ §12 the over-time tick's FLAT-BURN marker ══════════════════
+   * MECHANISM: the fire tick (damage-hooks) multiplies each turn's roll by the marker's `mult` and
+   * HALVES it for the next turn — an uncited generalization of the p.110 flamethrower ladder, and the
+   * default for every load. A marker carrying `flat` holds its multiplier at 1 instead, which is what
+   * p.64's printed "Incendiary (4D6 for 3 turns)" states. Both ladders are driven on ONE actor in ONE
+   * combat, at two locations, so the positive and its negative cannot be measuring different runs. */
+  await sect("§12", async () => {
+    const saves = await import(`/modules/${SCOPE}/module/combat/save-rolls.js`);
+    const seam = await import(`/modules/${SCOPE}/module/seam-shim.js`);
+
+    /* ── (a) the SHIPPED round states the marker, and its disclosure was rewritten ─────────────── */
+    const inc = ROUND_SOURCES.find(s => /Incendiary/i.test(s.name ?? ""));
+    const fragSrc = ROUND_SOURCES.find(s => /Fragmentation/i.test(s.name ?? ""));
+    ok("§12 the shipped incendiary round states the flat-burn marker beside its other over-time fields",
+      inc?.system?.dotFlat === true && inc?.system?.dotEnabled === true
+      && String(inc?.system?.dotDamageFormula) === "4d6" && Number(inc?.system?.dotTurns) === 2
+      && String(inc?.system?.dotType) === "fire",
+      `dotFlat=${inc?.system?.dotFlat} turns=${inc?.system?.dotTurns} formula=${inc?.system?.dotDamageFormula}`);
+    ok("§12 its notes disclose the printed FLAT figure and no longer disclose a halved third turn",
+      /dotFlat/.test(inc?.system?.notes ?? "") && /4D6, 4D6, 4D6/.test(inc?.system?.notes ?? "")
+      && !/half of 4D6 on the third/.test(inc?.system?.notes ?? ""));
+    ok("§12 NEGATIVE — the fragmentation round carries no over-time tick at all and is untouched",
+      fragSrc?.system?.dotEnabled === false && fragSrc?.system?.dotFlat === undefined,
+      `dotEnabled=${fragSrc?.system?.dotEnabled} dotFlat=${fragSrc?.system?.dotFlat}`);
+
+    /* ── (b) the marker SURVIVES THE WRITE on this host, and rides the seam onto a payload ─────── */
+    const [liveInc] = await shooter.createEmbeddedDocuments("Item", [{
+      name: "__PW__Incendiary Round", type: "ammo", system: { ...inc.system },
+    }]);
+    try {
+      ok("§12 the marker survives the DataModel write on this host (not stripped like a schema-less field)",
+        liveInc.system.dotFlat === true, `read back ${liveInc.system.dotFlat}`);
+      await launcher.update({ "system.ammoItemId": liveInc.id });
+      const f = seam.ammoEffectFields(shooter.items.get(launcher.id));
+      ok("§12 the seam copies the marker onto the fired payload beside the other four over-time fields",
+        f.dotFlat === true && f.dotEnabled === true && Number(f.dotTurns) === 2
+        && String(f.dotDamageFormula) === "4d6" && String(f.dotType) === "fire",
+        JSON.stringify({ dotFlat: f.dotFlat, dotTurns: f.dotTurns, dotType: f.dotType }));
+      const fBare = seam.ammoEffectFields(shooter.items.get(frag.id));
+      ok("§12 NEGATIVE — a weapon with no round in it carries no marker, so the tick keeps its default",
+        fBare.dotFlat === undefined, `dotFlat=${fBare.dotFlat}`);
+    } finally {
+      await launcher.update({ "system.ammoItemId": "" });
+    }
+
+    /* ── (c) the marker reaches the STATE through the routing helper ───────────────────────────── */
+    await victim.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+    await saves.applyDotFromPayload(victim, "Torso", { ...liveInc.system, dotTurns: 3 }, true);
+    const seeded = victim.getFlag(SCOPE, "fireDotState") ?? [];
+    ok("§12 a payload built from the shipped round seeds a FLAT marker at the hit location",
+      seeded.length === 1 && seeded[0].flat === true && seeded[0].mult === 1
+      && seeded[0].formula === "4d6" && seeded[0].turnsLeft === 3,
+      JSON.stringify(seeded));
+    await victim.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+    await saves.applyDotFromPayload(victim, "Torso",
+      { dotEnabled: true, dotTurns: 3, dotType: "fire", dotDamageFormula: "1d6" }, true);
+    const seededOld = victim.getFlag(SCOPE, "fireDotState") ?? [];
+    ok("§12 NEGATIVE — a payload from before the field existed seeds a NON-flat marker (the runtime floor)",
+      seededOld.length === 1 && seededOld[0].flat === false, JSON.stringify(seededOld));
+    await victim.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+    await liveInc.delete().catch(() => {});
+
+    /* ── (d) THE TICK ITSELF, driven by real round advances, both ladders on one body ──────────── */
+    const prev12 = {};
+    const set12 = async (k, v) => { try { prev12[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    await set12("fireDotEnabled", true);
+    await set12("mechRoundTickAutomation", true);
+    await set12("damageAblation", false);
+    await set12("combatFxEnabled", false);
+    let combat = null;
+    try {
+      await victim.update({ "system.damage": 0 });
+      // The tick refuses to burn a figure marked dead; earlier sections put real damage on this body.
+      try { if (victim.statuses?.has?.("dead")) await victim.toggleStatusEffect("dead", { active: false }); } catch (_e) {}
+      // Torso burns on the printed flat ladder; the arm burns on the module's default halving one.
+      await saves.applyFireDotState(victim, "Torso", 3, "4d6", true);
+      await saves.applyFireDotState(victim, "lArm", 3, "1d6", false);
+      const multOf = (loc) => {
+        const st = victim.getFlag(SCOPE, "fireDotState") ?? [];
+        const e = st.find(s => s.location === loc);
+        return e ? Number(e.mult) : null;
+      };
+      const flatSeq = [multOf("Torso")], halveSeq = [multOf("lArm")];
+
+      combat = await Combat.create({ scene: scene.id });
+      await combat.createEmbeddedDocuments("Combatant", [{ tokenId: vicTok.id, sceneId: scene.id, actorId: victim.id, initiative: 10 }]);
+      await combat.startCombat();
+      await sleep(800);
+      ok("§12 HARNESS GUARD — the burning figure is the combatant the tick will run for",
+        combat.combatant?.actor?.id === victim.id, `combatant=${combat.combatant?.actor?.name}`);
+      // Two advances: turn 2 and turn 3 of a three-turn burn. The multiplier READ BEFORE each advance
+      // is the one that turn's roll was multiplied by.
+      for (const r of [2, 3]) {
+        await combat.update({ round: r, turn: 0 });
+        for (let i = 0; i < 40; i++) {
+          await sleep(300);
+          const st = victim.getFlag(SCOPE, "fireDotState") ?? [];
+          const t = st.find(s => s.location === "Torso");
+          if (!t || t.turnsLeft === 4 - r) break;
+        }
+        flatSeq.push(multOf("Torso"));
+        halveSeq.push(multOf("lArm"));
+      }
+      out.notes.push(`§12 per-turn multipliers — flat marker ${JSON.stringify(flatSeq)} · default marker ${JSON.stringify(halveSeq)}`);
+      ok("§12 the FLAT marker's multiplier is 1 on every one of its three turns",
+        flatSeq.length === 3 && flatSeq[0] === 1 && flatSeq[1] === 1 && flatSeq[2] === 1,
+        JSON.stringify(flatSeq));
+      ok("§12 NEGATIVE — a marker without it still halves: 1, ½, ¼",
+        halveSeq.length === 3 && halveSeq[0] === 1 && halveSeq[1] === 0.5 && halveSeq[2] === 0.25,
+        JSON.stringify(halveSeq));
+      ok("§12 the flat marker keeps its own flag across the ticks that rewrote it",
+        (victim.getFlag(SCOPE, "fireDotState") ?? []).find(s => s.location === "Torso")?.flat === true);
+      ok("§12 the burn actually landed damage while it ticked (the tick ran, it was not a silent no-op)",
+        Number(victim.system.damage) > 0, `damage=${victim.system.damage}`);
+    } finally {
+      if (combat) await combat.delete().catch(() => {});
+      await victim.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+      try { if (victim.statuses?.has?.("burning")) await victim.toggleStatusEffect("burning", { active: false }); } catch (_e) {}
+      for (const [k, v] of Object.entries(prev12)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+    }
+  });
+
+  /* ══════════════════ cleanup — tokens BEFORE actors ══════════════════ */
+  SECT = "(cleanup)";
+  for (const t of [...scene.tokens].filter(t => t.name?.startsWith("__PW__"))) await t.delete().catch(() => {});
+  for (const coll of [scene.templates, scene.regions]) if (coll) for (const d of [...coll]) if (F(d).isExplosion) await d.delete().catch(() => {});
+  for (const a of [...game.actors].filter(a => a.name?.startsWith("__PW__"))) await a.delete().catch(() => {});
+  for (const w of [...scene.walls].filter(w => F(w).__pwGrenade === true)) await w.delete().catch(() => {});
+  // ⚠ THE SWEEP READS THREE PLACES, NOT ONE (2026-08-28). It matched `content` only, and §12's tick
+  // posts roll cards whose fixture name is in the FLAVOR ("🔥 Fire DOT — __PW__Victim burns at …") and
+  // save prompts whose only fixture reference is the SPEAKER's alias. Those survived the sweep, and a
+  // later suite re-rendering a prompt card whose actor no longer exists logged one unattributable
+  // `Cannot set properties of null (setting 'hidden')` — observed once in the spread-zone suite run
+  // immediately after this one, gone on a clean re-run. Debris this suite made, cleared by this suite.
+  const pwCard = (m) => /__PW__/.test(m.content ?? "") || /__PW__/.test(m.flavor ?? "")
+    || /__PW__/.test(m.speaker?.alias ?? "") || /__PW__/.test(m.rolls?.[0]?.options?.flavor ?? "");
+  for (const m of [...game.messages].filter(pwCard)) await m.delete().catch(() => {});
+
+  console.error = realConsoleError;
+  return out;
+}, { SCOPE, ROUND_SOURCES });
+
+for (const c of res.checks) check(c.n, c.p, c.d);
+for (const n of res.notes ?? []) console.log(`  note: ${n}`);
+check("0 console errors", errors.length === 0, errors.slice(0, 4).join(" | "));
+
+console.log(`\n${pass} passed, ${fail} failed`);
+await browser.close();
+process.exit(fail ? 1 : 0);

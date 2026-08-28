@@ -132,9 +132,12 @@ const MANIFEST = [
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".facedown-roll", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".recognition-roll", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".skill-roll", "", null, null],
-  ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".roll-initiative", "", null, null],
+  // Narrowed from the bare `.roll-initiative` / `.stun-death-save` block selectors to the clickable
+  // label inside each: the block wraps its modifier <input>, so a click on the input closed up to the
+  // block and fired the roll (outside contribution, actor-sheet.js:730/737).
+  ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".roll-initiative .action", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".roll-initiative-modificator", "", null, null],
-  ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".stun-death-save", "", null, null],
+  ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".stun-death-save .action", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".roll-stun-death-modificator", "", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".damage", "damage", null, null],
   ["module/actor/actor-sheet.js:689", "_cpActivateBasicActorActions", "character-sheet", "click", ".item-delete", "", null, null],

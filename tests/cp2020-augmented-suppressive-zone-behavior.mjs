@@ -59,8 +59,14 @@ const r = await p.evaluate(async () => {
   // the same helper the code under test reads the grid with (not a constant re-derived here).
   const PXGRID = await import("/modules/cp2020-augmented/module/vehicle/vehicle-grid.js");
 
+  // The presentation rail, imported for the SILENCE legs in (e2): its capture seam is the only honest
+  // reading of "did anything sound", because a headless page's own audio context is locked and every
+  // real play would be swallowed by the host rather than by the product.
+  const FX = await import("/modules/cp2020-augmented/module/fx/effects.js");
+
   const madeRegions = [], madeActors = [];
   let combat = null, prevSetting = null, settingTouched = false, otherScene = null;
+  let fxPrevSetting = null, fxSettingTouched = false;
 
   const trackReg = (reg) => { if (reg?.id) madeRegions.push(reg.id); return reg; };
   const newMessagesSince = (before) => game.messages.contents.filter(m => !before.has(m.id)).map(m => m.content).join("\n");
@@ -144,6 +150,33 @@ const r = await p.evaluate(async () => {
     let evadeMsgs = ""; for (let i = 0; i < 20; i++) { evadeMsgs = newMessagesSince(msgBeforeEvade); if (/EVADED/i.test(evadeMsgs)) break; await sleep(150); }
     check("EVASION success: beatable DC posts an EVADED result card", /EVADED/i.test(evadeMsgs), evadeMsgs.slice(0, 160));
 
+    // ⭐ A SAVE OF ZERO IS NOT A BROKEN SAVE (2026-08-27, the width-ceiling retirement's other half).
+    // `_dcFor` lost its `max(1, …)` floor, so an over-wide zone now plants `saveDC: 0` — and the claim
+    // that this is HONEST rather than degenerate is exactly this behaviour: the evasion roll is
+    // `1d10 + REF + Athletics`, whose minimum is 1, so `total > dc` passes for everybody. A zone
+    // nobody has to save against, which is the bad choice the shooter made and can see. Driven at the
+    // real resolver rather than reasoned about, and read off the card it posts.
+    const msgBeforeZero = new Set(game.messages.map(m => m.id));
+    const dmgBeforeZero = Number(evader.system?.damage) || 0;
+    await DH._executeSuppressionEvasion({ actorId: evader.id, tokenId: evTok.id, sceneId: scene.id, saveDC: 0, dmgFormula: "3d6", attackerId: shooter.id });
+    let zeroMsgs = ""; for (let i = 0; i < 20; i++) { zeroMsgs = newMessagesSince(msgBeforeZero); if (/EVADED/i.test(zeroMsgs)) break; await sleep(150); }
+    check("ZERO DC: a save of 0 is passed by every crossing — the over-wide zone prices nothing",
+      /EVADED/i.test(zeroMsgs), zeroMsgs.slice(0, 160));
+    check("ZERO DC: and nobody took damage from it (negative)",
+      (Number(evader.system?.damage) || 0) === dmgBeforeZero,
+      { before: dmgBeforeZero, after: Number(evader.system?.damage) || 0 });
+
+    // ⭐ THE RAIL IS ARMED BEFORE THE FAILING SAVE, not after it (2026-08-27, ledger #23bi). The crossing
+    // below is the whole subject of the (e2) legs: the master FX switch is turned ON so a silence reading
+    // means the PRODUCT stayed quiet rather than the switch having been off, and the element's capture
+    // seam stands in for the speaker because this page's audio context is locked and would swallow a real
+    // play. Both are handed back in the finally.
+    fxPrevSetting = game.settings.get(SCOPE, "combatFxEnabled"); fxSettingTouched = true;
+    await game.settings.set(SCOPE, "combatFxEnabled", true);
+    const heard = [];
+    FX._setHitSoundSink((e) => heard.push({ ...e }));
+
+    const dmgBeforeCrossing = Number(evader.system?.damage) || 0;
     let fired = null; const firedHook = Hooks.on("cyberpunk2020.weaponFired", (pl) => { if (!fired) fired = pl; });
     await DH._executeSuppressionEvasion({ actorId: evader.id, tokenId: evTok.id, sceneId: scene.id, saveDC: 999, dmgFormula: "3d6", attackerId: shooter.id });
     for (let i = 0; i < 25 && !fired; i++) await sleep(150);
@@ -151,6 +184,45 @@ const r = await p.evaluate(async () => {
     const hitEntries = fired ? Object.values(fired.areaDamages ?? {}).flat() : [];
     const hitCount = hitEntries.length;
     check("EVASION failure: re-emits weaponFired with 1..6 random hits, all positive damage", !!fired && hitCount >= 1 && hitCount <= 6 && hitEntries.every(h => Number(h.damage) > 0), { hitCount, sample: hitEntries[0] });
+
+    // ── (e2) A ZONE CROSSING IS SILENT (user ruling 2026-08-27, field report #23bi) ─────────────────
+    // The failed save's damage re-enters the shot hook as a SYNTHETIC payload whose only errand is the
+    // damage pipeline — no round is arriving on screen — so the crossing plays no audio cue at any point
+    // of the flow. The emitter declares that with `fxMute` and the presentation rail honours it at the
+    // door; these legs read the declaration, the rail's own verdict, and then the SPEAKER, which is the
+    // only reading the user's report was ever about.
+    check("SILENT CROSSING: the re-emitted payload declares itself no shot (fxMute)", fired?.fxMute === true, { fxMute: fired?.fxMute ?? null, keys: fired ? Object.keys(fired) : null });
+    const railVerdict = fired ? await FX.fxWeaponFired({ ...fired }) : null;
+    check("SILENT CROSSING: the presentation rail refuses the re-emission as muted, fanning out nothing",
+      railVerdict?.skipped === "muted" && railVerdict?.shots === 0 && railVerdict?.hitAudio === null,
+      { skipped: railVerdict?.skipped, shots: railVerdict?.shots, hitAudio: railVerdict?.hitAudio });
+    await sleep(1200);
+    check("SILENT CROSSING: nothing sounded while the crossing resolved (negative)", heard.length === 0, { sounds: heard.length, srcs: heard.map(h => h.src) });
+
+    // …AND THE DAMAGE STILL LANDS, SILENTLY. The re-emission carries a target token, so the pipeline
+    // routes it to the apply window; the crossing is only resolved once a reader clicks Apply, which is
+    // where the reported cue was heard. Driven as the real DOM gesture (the outcome rule), then the
+    // written HP and the speaker are read together — silence with no damage would certify nothing.
+    let applyDlg = null;
+    for (let i = 0; i < 40 && !applyDlg; i++) {
+      applyDlg = [...foundry.applications.instances.values()].find(w => w.constructor?.name === "DamageDialog")
+        ?? Object.values(ui.windows ?? {}).find(w => w.constructor?.name === "DamageDialog") ?? null;
+      if (!applyDlg) await sleep(200);
+    }
+    check("SILENT CROSSING: the crossing reached the damage pipeline — an apply window opened for it", !!applyDlg, null);
+    heard.length = 0;
+    const applyBtn = applyDlg?.element?.querySelector('[data-action="applyDamage"]') ?? null;
+    check("SILENT CROSSING: the apply window offers the real Apply control", !!applyBtn, null);
+    if (applyBtn) applyBtn.click();
+    for (let i = 0; i < 30 && (Number(evader.system?.damage) || 0) === dmgBeforeCrossing; i++) await sleep(200);
+    await sleep(800);
+    const dmgApplied = (Number(evader.system?.damage) || 0) - dmgBeforeCrossing;
+    check("SILENT CROSSING: applying the crossing's damage writes HP on the figure that crossed", dmgApplied > 0, { before: dmgBeforeCrossing, applied: dmgApplied });
+    check("SILENT CROSSING: and that apply sounded NOTHING through the capture seam (negative — the reported cue)",
+      heard.length === 0, { sounds: heard.length, srcs: heard.map(h => h.src), damageApplied: dmgApplied });
+    FX._setHitSoundSink(null);
+    for (const w of [...foundry.applications.instances.values()]) { if (w.constructor?.name === "DamageDialog") await w.close().catch(() => {}); }
+    for (const w of Object.values(ui.windows ?? {})) { if (w.constructor?.name === "DamageDialog") await w.close?.().catch(() => {}); }
 
     // ── (f) EXPIRY: round advance deletes a shooter-owned lane; a blank-shooter lane survives ──
     combat = await Combat.create({ scene: scene.id, active: true });
@@ -459,15 +531,21 @@ const r = await p.evaluate(async () => {
       check(`${T2} WHEEL CLAMP FLOOR: the planted square is the 2 m minimum (${Math.round(mPx(2))}px on every side)`,
         squareOf(cFloor, 2) && saveDCOf(pFloor.region) === 6, { sides: sidesOf(cFloor).map(s => Math.round(s)), dc: saveDCOf(pFloor.region) });
 
-      // CAP CLAMP: the rounds fired are the upper bound — a burst of 8 cannot spread past 8 m, past which
-      // the save would go inert at the 1 the guard pins it to and every further metre would be free. Five
-      // widening notches from 6 m stop at 8 m.
+      // ⏪⭐ THE CAP IS GONE, AND THESE LEGS ARE ITS INVERSE (2026-08-27, conforming to the upstream
+      // landing — the author's own reason is quoted at lookups.js `FireZoneWidth`: *"this system prefers
+      // showing a bad choice over refusing it."*). The wheel used to stop at the rounds fired, because
+      // past that the save quotient falls under 1 and every further metre is free ground. It no longer
+      // stops: five widening notches from 6 m reach 11 m on a burst of 8 — and the price is SHOWN rather
+      // than propped up, because `_dcFor` lost its `max(1, …)` in the same pass. floor(8/11) = 0.
       const pCap = await placeZone({ native: path.native, zoneWidth: 6, roundsFired: 8, clientX: 960, clientY: 620, wheel: -5 });
       const cCap = cornersOf(pCap.region);
-      check(`${T2} WHEEL CLAMP CAP: five widening notches stop at the rounds fired (8 rounds ⇒ 8m, save floor(8/8)=1)`,
-        /8m/i.test(pCap.readoutTxt) && /save 1\b/i.test(pCap.readoutTxt), pCap.readoutTxt);
-      check(`${T2} WHEEL CLAMP CAP: the planted square is the capped width (8m = ${Math.round(mPx(8))}px on every side)`,
-        squareOf(cCap, 8) && saveDCOf(pCap.region) === 1, { sides: sidesOf(cCap).map(s => Math.round(s)), dc: saveDCOf(pCap.region) });
+      check(`${T2} WHEEL NO CAP: five widening notches climb PAST the rounds fired unimpeded (6m + 5 ⇒ 11m on a burst of 8)`,
+        /11m/i.test(pCap.readoutTxt), pCap.readoutTxt);
+      check(`${T2} WHEEL NO CAP: the planted square is the un-capped width (11m = ${Math.round(mPx(11))}px on every side)`,
+        squareOf(cCap, 11), { sides: sidesOf(cCap).map(s => Math.round(s)) });
+      check(`${T2} SAVE SHOWN NOT FLOORED: a zone wider than its burst reads save 0, on the live readout and in the planted behavior`,
+        /save 0\b/i.test(pCap.readoutTxt) && saveDCOf(pCap.region) === 0,
+        { readout: pCap.readoutTxt, dc: saveDCOf(pCap.region) });
 
       // PAYLOAD COHERENCE: the confirm freezes ONE width into three places — the metre value, the pixel
       // side (metersToPixels of that same value, carried in BOTH lengthPx and widthPx because the square is
@@ -476,9 +554,20 @@ const r = await p.evaluate(async () => {
       // paths is what lets the GM-side plant and the socket relay stay ignorant of which one ran.
       const gCap = geoFlagOf(pCap.region);
       check(`${T2} CONFIRM PAYLOAD: the wheel-adjusted width rides as widthM, as metersToPixels(widthM) in both pixel axes, and as its own saveDC`,
-        !!gCap && Number(gCap.widthM) === 8 && near(Number(gCap.widthPx), mPx(8), 2) && near(Number(gCap.lengthPx), mPx(8), 2)
-          && Number(gCap.roundsFired) === 8 && saveDCOf(pCap.region) === 1,
-        { widthM: gCap?.widthM, widthPx: gCap?.widthPx, lengthPx: gCap?.lengthPx, expectPx: Math.round(mPx(8)), dc: saveDCOf(pCap.region) });
+        !!gCap && Number(gCap.widthM) === 11 && near(Number(gCap.widthPx), mPx(11), 2) && near(Number(gCap.lengthPx), mPx(11), 2)
+          && Number(gCap.roundsFired) === 8 && saveDCOf(pCap.region) === 0,
+        { widthM: gCap?.widthM, widthPx: gCap?.widthPx, lengthPx: gCap?.lengthPx, expectPx: Math.round(mPx(11)), dc: saveDCOf(pCap.region) });
+
+      // ⭐ THE WHEEL HINT (2026-08-27, adopted from the upstream landing). The gesture is invisible —
+      // a plain notch over the board is the canvas ZOOM everywhere else in Foundry — so the armed cue
+      // has to say it. Asserted as a RESOLVED string rather than as a key: a missing key renders as
+      // the bare key and would sail past a presence check.
+      const hint = game.i18n.localize("CYBERPUNK.SuppZoneWidthHint");
+      const armed = game.i18n.format("CYBERPUNK.SuppPreviewArmed", { hint });
+      check(`${T2} WHEEL HINT: the armed cue tells the shooter the wheel resizes and Shift+wheel turns`,
+        !/^CYBERPUNK\./.test(hint) && /wheel/i.test(hint) && /shift/i.test(hint)
+        && armed.includes(hint) && !armed.includes("{hint}"),
+        { hint, armed });
 
       // ⛔ THE DOCUMENTED CARD-PARITY DIVERGENCE, pinned as a VALUE so it cannot drift unnoticed.
       // 33 rounds over 2 m: our zone asks floor(33/2) = 16. The installed base system's own suppressive
@@ -566,11 +655,18 @@ const r = await p.evaluate(async () => {
     // Hand the placement-path probe back to the real API — a seam left armed would make every later
     // suite on this client run a path no user is on.
     try { PV._setNativePlacement(null); } catch { /* ignore */ }
+    try { FX._setHitSoundSink(null); } catch { /* ignore */ }
     try { if (settingTouched) await game.settings.set(SCOPE, "suppressiveFireSaves", prevSetting); } catch { /* ignore */ }
+    try { if (fxSettingTouched) await game.settings.set(SCOPE, "combatFxEnabled", fxPrevSetting); } catch { /* ignore */ }
     if (combat) await combat.delete().catch(() => {});
     const sc = canvas?.scene;
     if (sc) { for (const id of [...new Set(madeRegions)]) await sc.deleteEmbeddedDocuments("Region", [id]).catch(() => {}); }
     if (otherScene) await otherScene.delete().catch(() => {});
+    // ⚠ THE FIGURES GO BEFORE THEIR ACTORS, and that ordering is the fix for real debris: deleting the
+    // actor alone leaves its TOKENS on the scene with nothing behind them, and an actor-less figure is
+    // the shape that makes a later suite read `Cannot read properties of undefined (reading 'center')`.
+    // Fifty-three of them were swept off this rig on 2026-08-27, laid down by earlier runs of this file.
+    if (sc) { const ids = sc.tokens.filter(t => t.name?.startsWith("__PW__Supp")).map(t => t.id); if (ids.length) await sc.deleteEmbeddedDocuments("Token", ids).catch(() => {}); }
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__Supp"))) await a.delete().catch(() => {});
   }
   return out;

@@ -156,6 +156,44 @@ eq("a ground mark takes no offset", geo.dead1, { x: 0, y: 0 });
 eq("figure size does not move a ring", geo.poison2, { x: 0, y: 0 });
 eq("the spec block's own values", geo.spec, { rise: 0.3, spacing: 0.42, spread: 0.22, maxLive: 60, life: 600000 });
 
+/* ══════════════ SKIPPED BY RULING — the overlays are not wired in 1.2.0 ══════════════
+ *
+ * User ruling 2026-08-27 (the pre-ship walk): the five overlay rows are half-baked for this release,
+ * so `registerStatusFx` is no longer called from `module/cp2020-augmented.js`. The FILE is untouched
+ * and parked in-tree, which is why §1–2 above still run and still assert the resolver and the geometry
+ * by value — those ask the module a question and do not need a listener.
+ *
+ * ⛔ EVERYTHING BELOW DRIVES THE LIVE PATH — `toggleStatusEffect`, a flag write, a scene round trip —
+ * and every one of those depends on the hooks the ruling removed. Their legs are NOT deleted: they are
+ * the verification that comes back the day the wiring comes back, and deleting them would mean writing
+ * them again from scratch. The gate is one constant, so re-wiring the feature is re-wiring its keeper.
+ *
+ * The gate is also SELF-CHECKING: it asserts the module really is unwired rather than taking this
+ * constant's word for it, so a re-wire that forgets to flip the constant reddens here instead of
+ * silently skipping a live feature's whole keeper.
+ */
+const OVERLAYS_WIRED = false;   // ⭐ flip to true when the `wire("condition overlays", …)` line returns
+const wiring = await page.evaluate(async () => {
+  const src = await (await fetch("/modules/cp2020-augmented/module/cp2020-augmented.js")).text();
+  // The call, not the mention: the file carries a comment naming the ruling, and a substring test that
+  // matched prose would report the feature wired by its own retirement note.
+  return { wired: /wire\(\s*"condition overlays"/.test(src) };
+});
+check("ruling holds: the condition-overlay wiring is absent from the module entry point",
+  wiring.wired === OVERLAYS_WIRED, `wire() present=${wiring.wired}, keeper expects=${OVERLAYS_WIRED}`);
+
+if (!OVERLAYS_WIRED) {
+  console.log("\n  SKIPPED BY RULING (2026-08-27): §3–§13 drive the live overlay path, which is not wired");
+  console.log("  in 1.2.0. module/fx/status-fx.js is parked in-tree; §1–2 above still certify its resolver");
+  console.log("  and its slot geometry by value. Re-wire the feature and flip OVERLAYS_WIRED to restore.");
+  console.log("\n§10 console");
+  if (engineRaces.length) console.log(`  (engine teardown races ignored: ${engineRaces.length})`);
+  check("0 console errors", errors.length === 0, errors.slice(0, 4).join(" | "));
+  console.log(`\n${pass}/${pass + fail} checks passed`);
+  await browser.close();
+  process.exit(fail ? 1 : 0);
+}
+
 /* ─────────────────── fixtures ─────────────────── */
 const fixture = await page.evaluate(async () => {
   const actor = await Actor.create({ name: "__PW__ConditionSubject", type: "character" });

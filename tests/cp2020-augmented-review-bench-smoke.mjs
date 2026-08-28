@@ -611,9 +611,14 @@ ok("parity: every shipped weapon-class row has a gun on the rack that resolves t
 ok("parity: every shipped load-overlay row has a numbered row carrying that load",
   (parity.loads ?? []).every(l => l.routed),
   (parity.loads ?? []).map(l => `${l.k}${l.routed ? "" : " ✗"}`).join(" ") + ` | rack loads: ${(parity.benchLoads ?? []).join(",")}`);
-ok("parity: every shipped condition row is raisable on a bench figure (by a load or by the figure's own controls)",
-  (parity.rows ?? []).every(r => r.viaLoad || r.viaControls),
-  (parity.rows ?? []).map(r => `${r.id}:${r.viaLoad ? "load" : r.viaControls ? "controls" : "✗"}`).join(" "));
+// ⛔ SKIPPED BY RULING (2026-08-27, the pre-ship walk): the persistent condition overlays are NOT wired
+// in 1.2.0 — `registerStatusFx` is no longer called from module/cp2020-augmented.js and the file is
+// parked in-tree. This leg's premise is "every element the module SHIPS is reachable from the bench",
+// and a parked table ships nothing, so asserting it would red on a feature that is deliberately absent.
+// The reading is KEPT and printed, not deleted: it is the enumeration that must go green again the day
+// the wiring returns, and the bench route it names is what would otherwise have to be rediscovered.
+console.log(`  SKIP  parity: condition rows are parked for 1.2.0 (ruling 2026-08-27) — bench routes still resolve: `
+  + (parity.rows ?? []).map(r => `${r.id}:${r.viaLoad ? "load" : r.viaControls ? "controls" : "✗"}`).join(" "));
 ok("parity: the arrival tool is reachable from the bench's own toolbar",
   parity.traumaRouted === true && parity.traumaOnLiveBar === true,
   `hook: ${parity.traumaRouted} · live bar: ${parity.traumaOnLiveBar}`);

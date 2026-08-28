@@ -80,8 +80,15 @@ const r = await p.evaluate(async (SCOPE) => {
     system: {
       modifier: "dualPurpose", caliber: "20/9mm",
       effectTypes: ["Explosive"], blastRadius: 5, blastFullDamageWithin: 1,
-      dotEnabled: true, dotTurns: 3, dotType: "fire", stunSaveOnHit: true, ap: true, penDamageMult: 2,
+      dotEnabled: true, dotTurns: 3, dotType: "fire", dotFlat: true, stunSaveOnHit: true, ap: true, penDamageMult: 2,
     },
+  }]);
+  const [plainDot] = await actor.createEmbeddedDocuments("Item", [{
+    name: "__PW__PlainDotAmmo", type: "ammo",
+    system: { modifier: "api", caliber: "9mm", dotEnabled: true, dotTurns: 2, dotType: "fire" },
+  }]);
+  const [plainWeapon] = await actor.createEmbeddedDocuments("Item", [{
+    name: "__PW__PlainTube", type: "weapon", system: { ammoItemId: plainDot.id },
   }]);
   const [weapon] = await actor.createEmbeddedDocuments("Item", [{
     name: "__PW__Launcher", type: "weapon", system: { ammoItemId: ammo.id },
@@ -96,9 +103,11 @@ const r = await p.evaluate(async (SCOPE) => {
     name: "__PW__BareShell", type: "weapon", system: { ammoType: "12ga" },
   }]);
   const bareFields = mod.ammoEffectFields(actor.items.get(bare.id));
+  const plainFields = mod.ammoEffectFields(actor.items.get(plainWeapon.id));
+  const flatSurvivedWrite = plainDot.system.dotFlat === false && ammo.system.dotFlat === true;
 
   await actor.delete().catch(() => {});
-  return { servedHasHelper, shimEngaged, fields, bareFields };
+  return { servedHasHelper, shimEngaged, fields, bareFields, plainFields, flatSurvivedWrite };
 }, SCOPE);
 
 console.log("\n===== §1–2: the seam's payload fields, off a synthesized weapon =====");
@@ -117,6 +126,18 @@ ok("§2 the ammo's own MODIFIER id rides the payload, by value",
   f.modifier === "dualPurpose", `modifier=${JSON.stringify(f.modifier)}`);
 ok("§2 the CARTRIDGE rides it too, by value — beside the id, never instead of it",
   f.caliber === "20/9mm", `caliber=${JSON.stringify(f.caliber)}`);
+// ⭐ THE FIFTH OVER-TIME FIELD. The other four say whether there is a tick, for how long, of which kind
+// and at what formula; this one says whether its MULTIPLIER DIMINISHES. Left off this list the flag
+// never leaves the ammo document, and a round that states a flat burn would tick on the halving ladder
+// anyway — the field would exist and do nothing. Asserted with its negative on a second round, because
+// a defaulted `false` and a missing key are the same thing at the seam and only one of them is right.
+ok("§2 the over-time tick's FLAT-BURN marker rides the payload with the other four DOT fields",
+  f.dotFlat === true, `dotFlat=${JSON.stringify(f.dotFlat)}`);
+ok("§2 NEGATIVE — a burning round that does NOT state it reports false, so the tick keeps its halving",
+  (r.plainFields || {}).dotFlat === false && (r.plainFields || {}).dotEnabled === true,
+  `dotFlat=${JSON.stringify((r.plainFields || {}).dotFlat)}`);
+ok("§2 the marker survives the ammo DataModel write on this host, in both states",
+  r.flatSurvivedWrite === true);
 ok("§2 with no ammo item linked the WEAPON's own chambering stands in as the cartridge",
   r.bareFields?.caliber === "12ga", `caliber=${JSON.stringify(r.bareFields?.caliber)}`);
 ok("§2 and no identity is invented for a weapon that has no load (negative)",
@@ -200,8 +221,15 @@ const setup = await p.evaluate(async (SCOPE) => {
   };
 }, SCOPE);
 
-ok("§3 the review bench is provisioned on this rig (16 numbered guns)",
-  setup.found && Object.keys(setup.guns).length === 16, `${Object.keys(setup.guns).length} gun(s)`);
+// ⭐ TWENTY SINCE 2026-08-27: the sixteen (class × load) gun rows plus the FOUR delivery rows the
+// grenade unit added for Review·Shooter parity (17 Fragmentation · 18 Incendiary · 19 Grenade Launcher
+// · 20 Scorpion 16). Both halves are named so a bench that loses either one still reds — a bare
+// "at least sixteen" would pass a bench with the delivery rows silently missing, which is the exact
+// parity this leg exists to hold.
+ok("§3 the review bench is provisioned on this rig (16 numbered guns + 4 delivery rows)",
+  setup.found && Object.keys(setup.guns).length === 20
+  && ["17", "18", "19", "20"].every(n => n in setup.guns),
+  `${Object.keys(setup.guns).length} gun(s): ${Object.keys(setup.guns).sort().join(",")}`);
 ok("§3 the bench's own scene is drawn, with the firing figure on it",
   setup.benchSceneDrawn === true && setup.shooterTokenIds.length > 0,
   `scene=${JSON.stringify(setup.benchSceneName)} drawn=${setup.benchSceneDrawn} figures=${JSON.stringify(setup.shooterTokenIds)}`);
