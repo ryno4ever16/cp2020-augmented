@@ -2221,7 +2221,8 @@ async function _runManualRoundTick(combat) {
  * So a caller that applies several hits as ONE moment passes a `batch` set and the death prompt is
  * offered once for each body in it. The recurring per-turn prompt is not this function's job and is
  * already built: save-rolls.js posts one on every round/turn advance for a Mortal, unstabilized actor
- * (world setting `autoDeathSavePerTurn`), which is the cadence the book describes and the place the
+ * (unconditional since 2026-08-28 — the old world setting is retired; supersession replaces last
+ * turn's unanswered ask), which is the cadence the book describes and the place the
  * "only way out is stabilization" reading is already honored.
  *
  * ⚠ The batch is keyed by TOKEN id, not actor id. An unlinked token's synthetic actor shares the world

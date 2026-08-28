@@ -119,8 +119,8 @@ const ALLOWED = [
   "limbLossEnabled",
   "rerollGoneLimbLocation",
   "suppressiveFireSaves",
-  "autoDeathSavePerTurn",
-  "autoSaveRePrompt",
+  // ⏪ autoDeathSavePerTurn / autoSaveRePrompt retired 2026-08-28 — the per-turn prompts run
+  // unconditionally (save-rolls.js); no registration, nothing to pairwise.
   "activeDodgeParryEnabled",
   "aimTrackingEnabled",
   "waitForTurnEnabled",

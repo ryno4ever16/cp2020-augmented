@@ -297,25 +297,12 @@ export function registerAugmentedSettings() {
     default: false,
   });
 
-  // --- autoDeathSavePerTurn ---
-  game.settings.register(SCOPE, "autoDeathSavePerTurn", {
-    name: "SETTINGS.AutoDeathSavePerTurn",
-    hint: "SETTINGS.AutoDeathSavePerTurnHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
-
-  // --- autoSaveRePrompt ---
-  game.settings.register(SCOPE, "autoSaveRePrompt", {
-    name: "SETTINGS.AutoSaveRePrompt",
-    hint: "SETTINGS.AutoSaveRePromptHint",
-    scope:   "world",
-    config:  true,
-    type:    Boolean,
-    default: false,
-  });
+  // ⏪ `autoDeathSavePerTurn` and `autoSaveRePrompt` were REGISTERED HERE — retired 2026-08-28
+  // (user ruling at the 1.2.0 gate): the per-turn Death Save (p.105) and unconscious Stun-recovery
+  // (p.104) prompts are the book's own cadence and write nothing until answered, so they run
+  // unconditionally (combat/save-rolls.js, the updateCombat hook) and need no switch. The chat-spam
+  // objection is answered structurally there — one standing ask per body per kind — not by a
+  // setting. A world's stored values for the old keys are orphaned harmlessly.
 
   // --- activeDodgeParryEnabled ---
   game.settings.register(SCOPE, "activeDodgeParryEnabled", {

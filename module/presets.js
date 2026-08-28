@@ -40,7 +40,6 @@ function settingScope(key) {
 const MANUAL = {
   // Combat automation — the module's master OFF + every feature off
   combatAutomationEnabled: false,
-  autoDeathSavePerTurn: false, autoSaveRePrompt: false,
   activeDodgeParryEnabled: false, aimTrackingEnabled: false, waitForTurnEnabled: false,
   multiActionPenaltyEnabled: false, multiActionAutoTrack: false, limbLossEnabled: false, suppressiveFireSaves: false,
   shotgunSpreadEnabled: false, explosivesEnabled: false, areaEffectOcclusion: false, gasGrenadeCloudEnabled: false,
@@ -65,7 +64,6 @@ const STANDARD_DELTA = {
   // `damageAutoApply` was in this delta until 2026-08-14 — which is how a table got a preset that
   // silently stopped asking before it wrote damage. The setting is retired (there is no module-wide
   // rule any more; each instance of damage is decided at that instance), so no tier references it.
-  autoDeathSavePerTurn: true, autoSaveRePrompt: true,
   activeDodgeParryEnabled: true, aimTrackingEnabled: true, waitForTurnEnabled: true,
   multiActionPenaltyEnabled: true, multiActionAutoTrack: true, limbLossEnabled: true, suppressiveFireSaves: true,
   shotgunSpreadEnabled: true, explosivesEnabled: true, areaEffectOcclusion: true, gasGrenadeCloudEnabled: true,

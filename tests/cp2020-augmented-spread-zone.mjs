@@ -1380,11 +1380,15 @@ const res = await page.evaluate(async () => {
   await victim13.unsetFlag(SCOPE, "stabilized");
   await victim13.update({ "system.damage": 0 });
 
-  /* §13c — the per-TURN cadence the book actually describes is already built, and it is gated */
+  /* §13c — the per-TURN cadence the book describes runs UNCONDITIONALLY (2026-08-28 ruling: the
+   * settings retired; a prompt writes nothing until answered). The leg pins the retirement: the
+   * source keeps the stabilization gate and the supersession answer, reads no setting, and the
+   * registry no longer carries the old key. */
   const savesSrc = await (await fetch(`/modules/${SCOPE}/module/combat/save-rolls.js`, { cache: "no-store" })).text();
-  ok("§13 a round advance is where the recurring death prompt lives, and it respects stabilization",
-    /autoDeathSavePerTurn/.test(savesSrc) && /stabilized/.test(savesSrc)
-    && typeof game.settings.get(SCOPE, "autoDeathSavePerTurn") === "boolean");
+  ok("§13 the recurring death prompt is unconditional, respects stabilization, and supersedes its unanswered ask",
+    !/settings\.get\("cp2020-augmented",\s*"autoDeathSavePerTurn"/.test(savesSrc)
+    && /stabilized/.test(savesSrc) && /_supersedeUnansweredPrompt/.test(savesSrc)
+    && (() => { try { game.settings.get(SCOPE, "autoDeathSavePerTurn"); return false; } catch { return true; } })());
 
   /* ── §14  a declared corridor can still MISS, and a miss goes to the grenade table ───────── */
   // CP2020 p.108: a pattern that misses has its TRUE CENTRE determined on the grenade table — 1d10 for

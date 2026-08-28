@@ -1,7 +1,7 @@
 import { onGlobalClick } from "../popout-compat.js";
 import { localize, localizeParam, resolveActorRef, cappedWoundState } from "../utils.js";
 import { renderChatCard } from "../compat.js";
-import { markCardResolved } from "../card-lock.js";
+import { markCardResolved, isCardResolved } from "../card-lock.js";
 import { isPrimaryGMSession } from "../gm-session-primary.js";
 
 // The chat-card helpers now live in compat.js so the vehicle module can reuse them without
@@ -323,7 +323,7 @@ function getTokenId(actor) {
   return canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id)?.id ?? "";
 }
 
-export async function postStunSavePrompt(actor, token = null) {
+export async function postStunSavePrompt(actor, token = null, { perTurn = false } = {}) {
   // ⭐ THE CAPPED STATE IS WHAT THIS CARD IS BUILT FROM (2026-08-27 — utils `cappedWoundState`). The
   // wound LABEL was already clamped to Mortal 6 inside `woundStateLabel`; the penalty line beside it
   // was not, so one card printed "Mortal 6" and "− 94 (wound penalty)" at the same time. Both halves
@@ -352,6 +352,9 @@ export async function postStunSavePrompt(actor, token = null) {
   await ChatMessage.create({
     content,
     speaker: ChatMessage.getSpeaker({ actor, token }),
+    // The per-turn flag is what supersession keys on (_supersedeUnansweredPrompt) — only the
+    // updateCombat cadence stamps it, so damage-flow prompts can never be swept.
+    ...(perTurn ? { flags: { "cp2020-augmented": { perTurnSave: { actorId: actor.id, kind: "stun" } } } } : {}),
   });
 }
 
@@ -361,7 +364,7 @@ export async function postStunSavePrompt(actor, token = null) {
  * @param {Token|null} token
  * @param {number|null} forcedMortalLevel  Override the mortal level for this save (e.g. limb loss forces Mortal 0).
  */
-export async function postDeathSavePrompt(actor, token = null, forcedMortalLevel = null) {
+export async function postDeathSavePrompt(actor, token = null, forcedMortalLevel = null, { perTurn = false } = {}) {
   const woundState  = actor.woundState?.() ?? 4;
   const bt          = Number(actor.system?.stats?.bt?.total) || 0;
   const mortalLevel = (forcedMortalLevel !== null)
@@ -383,6 +386,8 @@ export async function postDeathSavePrompt(actor, token = null, forcedMortalLevel
   await ChatMessage.create({
     content,
     speaker: ChatMessage.getSpeaker({ actor, token }),
+    // See postStunSavePrompt — only the per-turn cadence stamps this, so supersession stays scoped.
+    ...(perTurn ? { flags: { "cp2020-augmented": { perTurnSave: { actorId: actor.id, kind: "death" } } } } : {}),
   });
 }
 
@@ -722,28 +727,44 @@ export function registerSaveRollHandlers() {
 
     const token = canvas?.tokens?.placeables?.find(t => t.id === combatant.tokenId) ?? null;
 
+    // ⏪ BOTH PROMPTS RUN UNCONDITIONALLY (user ruling 2026-08-28, the settings retired at their
+    // registration site): the per-turn cadence IS the book's — p.105 has a Mortal character save
+    // each turn, p.104 has an unconscious one re-roll — and a prompt writes nothing until someone
+    // answers it, so there is nothing to protect a world from. The one real cost was CHAT SPAM,
+    // and that is answered structurally by supersession below, not by a switch.
+
     // Death Save each turn (CP2020 p.105): Mortal + unstabilized
-    const deathPerTurn = (() => {
-      try { return game.settings.get("cp2020-augmented", "autoDeathSavePerTurn"); }
-      catch { return false; }
-    })();
-    if (deathPerTurn && woundState >= 4) {
+    if (woundState >= 4) {
       const isStabilized = actor.getFlag?.("cp2020-augmented", "stabilized");
       if (!isStabilized) {
-        await postDeathSavePrompt(actor, token);
+        await _supersedeUnansweredPrompt(actor.id, "death");
+        await postDeathSavePrompt(actor, token, null, { perTurn: true });
       }
     }
 
     // Stun Save recovery (CP2020 p.104): unconscious characters re-roll each turn
-    const stunRecovery = (() => {
-      try { return game.settings.get("cp2020-augmented", "autoSaveRePrompt"); }
-      catch { return false; }
-    })();
-    if (stunRecovery) {
-      const isUnconscious = actor.statuses?.has("unconscious") ?? false;  // Set<string> in Foundry v11+
-      if (isUnconscious) {
-        await postStunSavePrompt(actor, token);
-      }
+    const isUnconscious = actor.statuses?.has("unconscious") ?? false;  // Set<string> in Foundry v11+
+    if (isUnconscious) {
+      await _supersedeUnansweredPrompt(actor.id, "stun");
+      await postStunSavePrompt(actor, token, { perTurn: true });
     }
   });
+}
+
+/**
+ * ⭐ ONE STANDING ASK PER BODY PER KIND — the structural answer to per-turn prompt spam (user
+ * ruling 2026-08-28: mitigate it, "it probably doesn't need to be a setting at all" — so no
+ * setting). Before this turn's prompt posts, last turn's UNANSWERED copy of the same question for
+ * the same figure is deleted: the question has not changed, only the turn it is asked on. A card
+ * that was ANSWERED is history — the resolved stamp (card-lock.js) keeps it — and prompts posted
+ * by the damage flow itself carry no per-turn flag, so nothing here can touch them.
+ */
+async function _supersedeUnansweredPrompt(actorId, kind) {
+  for (const m of [...(game.messages ?? [])]) {
+    let f = null;
+    try { f = m.getFlag("cp2020-augmented", "perTurnSave"); } catch { continue; }
+    if (!f || f.actorId !== actorId || f.kind !== kind) continue;
+    if (isCardResolved(m)) continue;
+    await m.delete().catch(() => {});
+  }
 }

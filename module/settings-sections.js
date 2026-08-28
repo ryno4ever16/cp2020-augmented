@@ -23,7 +23,7 @@ const SECTIONS = [
     "limbModel", "hitLocationCoreDisplay",
   ] },
   { key: "SectionCombatAutomation", keys: [
-    "combatAutomationEnabled", "autoDeathSavePerTurn", "autoSaveRePrompt", "activeDodgeParryEnabled",
+    "combatAutomationEnabled", "activeDodgeParryEnabled",
     "aimTrackingEnabled", "waitForTurnEnabled", "specialMeleeEffectsEnabled", "multiActionPenaltyEnabled",
     "multiActionAutoTrack", "suppressiveFireSaves", "restrictMovementOncePerTurn", "autoRangefinding",
     "rerollGoneLimbLocation",
