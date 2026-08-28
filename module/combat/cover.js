@@ -1228,11 +1228,23 @@ export function armCoverDraw({ label, sp, poolMax } = {}) {
     console.warn(`${SCOPE} | region layer activation failed`, e);
   }
   // ⭐ PERMANENT: this sentence has to outlive the pause between reading it and doing it (see the
-  // block on `_dismissArmedNotice`). The wording already names the gesture ("draw it with any Region
-  // shape tool"), what the next region becomes, and how to back out ("draw nothing to cancel"), which
-  // is the test the ruling set — so the string is unchanged and only its lifetime moved.
+  // block on `_dismissArmedNotice`). The wording names the gesture ("draw it with any Region shape
+  // tool"), what the next region becomes, and how to back out.
   state.notice = ui.notifications?.info?.(localizeParam("CoverDrawArmed",
     { name: state.label || localize("CoverZoneFallbackName") }), { permanent: true }) ?? null;
+  // ⭐ CLICK = CANCEL (user-ordered 2026-08-28): swatting the standing instruction used to leave the
+  // arm live and SILENT — the notice died but the next drawn region still became cover. Core already
+  // dismisses a clicked notification, so the click now also stands the arm down, through the same
+  // single choke point every other ending uses; the string above names the gesture. The listener's
+  // lifetime is the li element's own (removed with the notice), so there is nothing to unhook. The
+  // element renders a beat after the post — retry briefly, and stop if this arm is no longer the one.
+  const wireClickCancel = (tries = 0) => {
+    if (_armedCover !== state) return;
+    const el = state.notice?.element ?? null;
+    if (el) { el.addEventListener("click", () => cancelCoverDrawArming(), { once: true }); return; }
+    if (tries < 10) setTimeout(() => wireClickCancel(tries + 1), 100);
+  };
+  if (state.notice) wireClickCancel();
   return { ...state };
 }
 

@@ -1480,7 +1480,7 @@
     "CoverLabel": "Name",
     "CoverPlaceBtn": "Draw It",
     "CoverPlaced": "{name} placed — the shape is the one you drew. Edit or move it with the Region tools.",
-    "CoverDrawArmed": "Now draw {name} on the map with any Region shape tool — the next region you draw becomes this cover. Draw nothing to cancel.",
+    "CoverDrawArmed": "Now draw {name} on the map with any Region shape tool — the next region you draw becomes this cover. Click this message to cancel.",
     "CoverDrawNoScene": "Open a scene before placing cover.",
     "CoverChewTitle": "Cover hit",
     "CoverDestroyedTitle": "Cover destroyed",
