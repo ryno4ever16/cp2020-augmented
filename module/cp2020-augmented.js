@@ -20,9 +20,13 @@ import { registerSaveRollHandlers } from "./combat/save-rolls.js";
 import { registerPopoutCompat } from "./popout-compat.js";
 import { registerCardLock } from "./card-lock.js";
 import { registerCombatFx } from "./fx/effects.js";
-import { registerStatusFx } from "./fx/status-fx.js";
+// ⛔ `registerStatusFx` (./fx/status-fx.js) IS DELIBERATELY NOT IMPORTED — user ruling 2026-08-27, the
+// pre-ship walk: the persistent condition overlays are half-baked for 1.2.0 and are stripped from the
+// wiring for this release. The file stays in-tree, parked; see its own header for the ruling in full
+// and for what re-wiring it takes (this import plus one `wire(…)` call below).
 import { landTraumaTeam, endTraumaTeam, traumaTeamActive, traumaTeamState, registerTraumaTeam } from "./fx/trauma-team.js";
 import { registerTraumaTeamTool } from "./fx/trauma-team-tool.js";
+import { registerAfterimage } from "./fx/afterimage.js";
 
 // Vehicle / ACPA (Maximum Metal) sub-types — module-owned Actor/Item types, data in system.*.
 import { CyberpunkVehicleActorData } from "./data/vehicle-actor-data.js";
@@ -775,14 +779,19 @@ Hooks.once("ready", function () {
   // automation, so it must run even where the combat-automation layer stands down. Its own world
   // setting (combatFxEnabled) is read per event, so the switch applies without a reload.
   wire("combat fx rail", registerCombatFx);
-  // Persistent condition overlays. Unconditional for the same reason and gated by the same world
-  // setting (combatFxEnabled), read per event: it is presentation of a condition something else
-  // already applied, so it must run wherever that condition can reach a figure.
-  wire("condition overlays", registerStatusFx);
+  // ⛔ PERSISTENT CONDITION OVERLAYS — NOT WIRED FOR 1.2.0 (user ruling 2026-08-27, the pre-ship walk).
+  // The five overlay rows are half-baked as they stand — the death ring in particular "doesn't glow and
+  // is almost invisible in dark scenes" — so the wiring is removed for this release rather than shipped
+  // and apologised for. `module/fx/status-fx.js` is untouched and parked in-tree; re-wiring it is this
+  // line plus the import at the top of this file, and nothing else. Reconsider in a future release.
   // The medical-extraction arrival sequence. Unconditional and gated by the same world setting, read
   // per event, for the same reason as the two above: it is presentation a referee asked for by hand,
   // it writes nothing, and its listeners are inert until a control is pressed.
   wire("extraction arrival sequence", registerTraumaTeam);
+  // The movement echo trail and its activation pass. Unconditional and gated by the same world
+  // setting, read per event, for the same reasons: it writes nothing, every client draws its own
+  // copy, and its two listeners are inert until an activated initiative boost is actually switched on.
+  wire("movement echo trail", registerAfterimage);
   if (doCombat) {
     wire("damage hooks", registerDamageHooks);
     wire("movement gate", registerMovementGate);
