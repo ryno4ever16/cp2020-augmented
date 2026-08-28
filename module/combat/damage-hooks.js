@@ -334,14 +334,8 @@ export function registerDamageHooks() {
     const addActionBtn  = ev.target.closest(".cp-add-action-btn");
     const manualTickBtn = ev.target.closest(".cp-manual-tick-btn");
 
-    const scatterBtn = ev.target.closest(".cp-confirm-explosion-scatter");
-    if (scatterBtn && !scatterBtn.disabled) {
-      ev.preventDefault();
-      scatterBtn.disabled = true;
-      await _scatterExplosion(scatterBtn.dataset.templateId);
-      // One-shot: scatter + confirm are two buttons on ONE explosion card — either resolves it (card-lock.js).
-      await markCardResolved(scatterBtn.closest("[data-message-id]")?.dataset?.messageId, "explosionScatter");
-    }
+    // ⏪ THE SCATTER BUTTON'S HANDLER STOOD HERE — retired 2026-08-28 with the button. A missed throw
+    // now resolves its own landing at placement (`_placeExplosion`), so the card carries ONE control.
 
     if (blastBtn && !blastBtn.disabled) {
       ev.preventDefault();
@@ -2478,7 +2472,14 @@ async function _placeExplosion(payload) {
     // ⛔ ROLLED ONCE, HERE, AND ONLY WHEN THE CARD CARRIED NOTHING. A hit never reaches this line, so
     // nothing can be rolled twice for one throw.
     // ⏪ REVERT is this block: delete it and a missed delivery goes back to producing no blast at all.
-    if (baseDamage <= 0 && delivery) baseDamage = await _rollDeliveryWarhead(payload);
+    //
+    // ⭐⭐ AND THIS LINE IS WHERE HIT AND MISS ARE TOLD APART (2026-08-28). The card that reached this
+    // function already answered the question: a HIT carries the rolled damage in `areaDamages`, a MISS
+    // carries none. Nothing further has to be asked, and — the user's report — nothing further should be
+    // ASKED OF THE REFEREE either: the card used to offer a Scatter button and a Confirm button and left
+    // the table to work out which applied, on a card that never said whether the throw had landed.
+    const missedThrow = baseDamage <= 0 && !!delivery;
+    if (missedThrow) baseDamage = await _rollDeliveryWarhead(payload);
     // ⭐ THE AREA OF EFFECT. The payload's own `blastRadius` first — a loaded round with a radius typed
     // on it, or an item a GM has stated, is answered with THEIR number. A delivery weapon that carries
     // none (every grenade and launcher in the shipped packs) falls to the book's own row for its kind:
@@ -2504,6 +2505,43 @@ async function _placeExplosion(payload) {
     // own cap either way, and a payload the rail refuses to draw falls straight to the arithmetic.
     // An ordinary explosive ROUND waits out its own (much shorter) presentation the same way.
     await presentationSettled(payload);
+
+    // ⭐⭐ A MISSED THROW SCATTERS HERE, ONCE, AND THE BLAST IS PLACED WHERE IT LANDED (2026-08-28).
+    //
+    // CP2020 p.108: *"If the target is missed, the true center of the attack must be determined."* That
+    // determination is a TABLE, not a judgement call, so there is nothing for the referee to decide and
+    // nothing to press — the throw is resolved behind the scenes exactly as the shot pattern's miss has
+    // been since 2026-08-26, and the card then NARRATES what happened instead of asking about it.
+    //
+    // ⛔ ONE ROLL, AT PLACEMENT — the discipline the suppressive and pattern flows already keep. This
+    // function runs on the primary GM SESSION only (`isPrimaryGMSession` at the hook), so "once here"
+    // is once, full stop; and the faces are turned into a point by the one pure site both rails read
+    // (`scatterLandedPoint`), so a blast and a pattern drifting on the same face travel the same way.
+    // The results TRAVEL: the landed point becomes the area's centre and its own origin flags, and the
+    // facts are recorded beside them for the card to read back, so nothing downstream re-rolls or
+    // re-derives anything.
+    //
+    // ⏪ REVERT: drop this block (and the four flags below it) and the blast is placed on the aim point
+    // again, with the referee moving it by hand.
+    const aimedX = cx, aimedY = cy;
+    let scatter = null;
+    if (missedThrow) {
+      const gridSizePx = scene.grid?.size ?? canvas?.grid?.size ?? 100;
+      const gridDistM = Number(scene.grid?.distance) || 1;
+      const dirRoll = await new Roll("1d10").evaluate();
+      const distRoll = await new Roll("1d10").evaluate();
+      const landed = scatterLandedPoint({
+        aimedX, aimedY, pixelsPerMeter: gridSizePx / gridDistM,
+        dirFace: dirRoll.total, distFace: distRoll.total,
+        // Clamped onto the map for the reason the pattern's is: a blast centred off the edge of the
+        // scene is a blast nobody can read, and no figure can be standing there to catch it.
+        sceneRect: { x: 0, y: 0, width: scene.width, height: scene.height },
+      });
+      scatter = { driftM: landed.driftM, dirName: landed.dirName, dirFace: landed.dirFace, clamped: landed.clamped };
+      cx = landed.x;
+      cy = landed.y;
+    }
+
     // Create via the core-agnostic shim (MeasuredTemplate circle on v13, Region ellipse on v14).
     // originX/originY are stored in flags so _confirmExplosion can compute falloff distances even
     // on v14 where a Region has no top-level x/y.
@@ -2518,6 +2556,20 @@ async function _placeExplosion(payload) {
         penDamageMult: Number(payload.penDamageMult ?? 1), blastShrapnel: Boolean(payload.blastShrapnel),
         weaponName, createdRound: game.combat?.round ?? 0,
         originX: cx, originY: cy,
+        // ⭐ WHAT THE GRENADE TABLE DECIDED, recorded beside the geometry it produced (2026-08-28).
+        // The area OUTLIVES the payload, so a reader — the card, a keeper, a referee looking back — has
+        // no other way to tell a blast the thrower placed from one the table did. Presentation and
+        // diagnosis only: no damage path branches on any of them, because a scattered blast hurts
+        // whoever is standing in it exactly as an aimed one does. Same shape and same reasoning as the
+        // pattern flow's `scattered`/`scatterDirFace`/`scatterDriftM` trio.
+        // ⛔ THE AIM POINT IS KEPT TOO, so the card's stated drift can be checked against the geometry
+        // rather than trusted. An area placed before these fields existed carries none of them, reads
+        // falsy for `scattered`, and confirms exactly as it always did.
+        scattered: !!scatter,
+        scatterDirFace: scatter ? scatter.dirFace : 0,
+        scatterDriftM: scatter ? scatter.driftM : 0,
+        scatterDirName: scatter ? scatter.dirName : "",
+        aimedX, aimedY,
         // ⭐ THE LOAD'S PER-HIT RIDERS TRAVEL WITH THE BLAST (2026-08-28). The flags above are the
         // ARMOUR half of what a load does; these are the other half — the shock a stun round delivers
         // and the burn an incendiary one starts. The pattern flow was given this pass on 2026-08-10
@@ -2546,9 +2598,19 @@ async function _placeExplosion(payload) {
     });
     if (!handle?.doc) { console.warn("CP2020 | Explosion area creation failed"); return; }
 
+    // ⭐ THE CARD SAYS WHAT HAPPENED (2026-08-28). One sentence, decided here where the outcome is
+    // known, rather than a hint asking the referee to work it out. Three cases, because the table has
+    // three: an on-target throw, a miss that drifted, and a miss whose direction face was one of the
+    // two that do not drift (rose faces 5 and 10) — which is a miss that landed on the aim point anyway
+    // and must not print "0 m".
+    const outcomeLine = scatter
+      ? (scatter.driftM > 0
+          ? localizeParam("ExplosionScatterLine", { dir: tryLocalize(scatter.dirName), dist: scatter.driftM })
+          : localize("ExplosionScatterNoDrift"))
+      : localize("ExplosionOnTarget");
     const explosionCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
       "modules/cp2020-augmented/templates/chat/explosion-confirm.hbs",
-      { weaponName, radius, baseDamage, fullWithin, templateId: handle.doc.id }
+      { weaponName, radius, baseDamage, fullWithin, templateId: handle.doc.id, outcomeLine }
     );
     // The card names the FIGURE that threw it — same change, same reasoning as the gas cloud's card
     // (written out at _placeGasCloud). `attackerId` above is untouched: the AREA still records the base
@@ -2787,45 +2849,18 @@ function _blastCoverCrossings(scene, originX, originY, targets, radiusM, gridSiz
  */
 export { SCATTER_ROSE, scatterDriftM };
 
-/** Scatter a missed grenade: Grenade Table (CP2020 p.108) — 1d10 direction + 1d10 metres. */
-async function _scatterExplosion(templateId) {
-  if (!canvas?.scene || !templateId) return;
-  const scene = canvas.scene;
-
-  // Shim lookup: works on both v13 (MeasuredTemplate) and v14 (Region).
-  const handle = areaById(scene, templateId);
-  if (!handle?.doc?.flags?.["cp2020-augmented"]?.isExplosion) { ui.notifications.warn(localize("BlastTemplateNotFound")); return; }
-
-  const gridSize = scene.grid?.size ?? canvas?.grid?.size ?? 100;
-  const gridDist = scene.grid?.distance ?? 1;
-
-  const dirRoll  = await new Roll("1d10").evaluate();
-  const distRoll = await new Roll("1d10").evaluate();
-  // The rose and the arithmetic both come from the shared site above, so a missed throw and a missed
-  // pattern travel the same way for the same face.
-  const drift = scatterDriftM(dirRoll.total, distRoll.total);
-  const distM = drift.distanceM;
-  const dx = (drift.dxM / gridDist) * gridSize;
-  const dy = (drift.dyM / gridDist) * gridSize;
-
-  // Move via the shim (MeasuredTemplate.update on v13; shifts Region shape vertices on v14).
-  await moveArea(handle, dx, dy);
-
-  // Update the stored originX/originY flags so _confirmExplosion uses the new blast centre.
-  const f = handle.doc.flags?.["cp2020-augmented"] ?? {};
-  const newOriginX = (Number(f.originX) || 0) + dx;
-  const newOriginY = (Number(f.originY) || 0) + dy;
-  try {
-    await handle.doc.setFlag("cp2020-augmented", "originX", newOriginX);
-    await handle.doc.setFlag("cp2020-augmented", "originY", newOriginY);
-  } catch { /* non-fatal */ }
-
-  await postSavePromptCard({
-    // The rose's name goes through tryLocalize at the render edge (the value-is-key convention), so a
-    // world with no compass keys prints exactly the compass point it printed before.
-    body: localizeParam("ScatterBody", { dir: tryLocalize(drift.name), drift: distM ? localizeParam("ScatterDrift", { dist: distM }) : localize("ScatterNoDrift") }),
-  });
-}
+/*
+ * ⏪⏪ `_scatterExplosion` STOOD HERE — removed 2026-08-28 (user: *"the current flow is confusing with
+ * both a miss and confirm button; the card says 'if the throw missed' — how would the user even know if
+ * it missed?"*). It was the referee's manual roll of the Grenade Table: 1d10 direction + 1d10 metres,
+ * `scatterDriftM` for the drift, `moveArea` to shift the placed circle, a re-write of the `originX`/
+ * `originY` flags so the confirm measured falloff from the new centre, and a `ScatterBody` card
+ * announcing the result. Every one of those steps still happens — they happen BEFORE the area is
+ * created now, inside `_placeExplosion`, on the one client that places it, and only for a throw the
+ * card's own damage already proves missed. The i18n keys `ScatterBody`, `ScatterDrift`,
+ * `ScatterNoDrift` and `ExplosionScatterBtn` went with it; the sentence the card prints instead is
+ * `ExplosionScatterLine` / `ExplosionScatterNoDrift` / `ExplosionOnTarget`.
+ */
 
 /**
  * How long an UNCONFIRMED pattern lives when no encounter is running, in wall-clock milliseconds.

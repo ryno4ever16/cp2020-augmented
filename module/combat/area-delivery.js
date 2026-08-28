@@ -34,8 +34,11 @@
  *    other Area weapon has hit, roll 1D10 to determine the directrion on the Grenade Table, then roll
  *    a second D10 to see how many meters away it hit."          — CP2020 Core p.108 [sic "directrion"]
  *
- * Both halves of that are ALREADY BUILT (damage-hooks `_placeExplosion` centres the area on the
- * designated target and `_scatterExplosion` rolls the two faces off combat/scatter-table.js).
+ * Both halves of that are ALREADY BUILT, and since 2026-08-28 they are ONE step: damage-hooks
+ * `_placeExplosion` centres the area on the designated target for a throw that landed, and for one that
+ * missed it rolls the two faces off combat/scatter-table.js itself and creates the area at the point
+ * they name. Nothing is left for the referee to press — the confirm card states which of the two
+ * happened.
  *
  * ⚠ THE NUMBER IS ON TWO OTHER PAGES, and only one of them is unambiguous:
  *

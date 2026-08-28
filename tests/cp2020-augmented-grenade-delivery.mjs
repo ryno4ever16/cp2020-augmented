@@ -39,6 +39,9 @@
  *     without the fields seeds nothing, an area written before the fields existed still applies plain
  *     damage cleanly, the batched save cadence is one prompt per body, and the shrapnel secondary of
  *     the detailed branch deliberately carries no riders of its own.
+ * §15 the MISS auto-resolves: a thrown warhead that missed rolls its own landing at PLACEMENT, the
+ *     blast is created there, the card NARRATES the outcome and carries ONE control (the Scatter button
+ *     and its handler are retired); an area from the old flow still confirms exactly as before.
  * §14 the DETAILED branch's warhead routing: with the optional mode ON, a fire-typed warhead takes the
  *     CORE application (burn seeded flat, shock rider honored, NOT one p.105 concussion card), an
  *     explosive one still takes concussion (its card once, the ½-permanent arithmetic by value, riders
@@ -204,8 +207,12 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
 
     const planT = fx.deliveryPlanFor("thrown");
     const planR = fx.deliveryPlanFor("rocket");
-    ok("§2 the thrown plan: no muzzle flash, no blood, the object arrives, boom named",
-      planT && planT.flash === false && planT.bleeds === false && planT.arrives === true && planT.detonation === "explosion-big",
+    // ⏪ RE-VALUED 2026-08-28: the plan's `bleeds` gate went with the hit-spray element it gated (the
+    // rail's tombstone carries the ruling). Its ABSENCE is now the assertion — a gate that is always
+    // false is a mechanism a later reader has to disprove, so the field is gone rather than pinned.
+    ok("§2 the thrown plan: no muzzle flash, the object arrives, boom named — and no retired gate",
+      planT && planT.flash === false && planT.bleeds === undefined && planT.arrives === true
+      && planT.detonation === "explosion-big",
       JSON.stringify(planT));
     ok("§2 the launched plan: a tube DOES flash", planR && planR.flash === true && planR.detonation === "explosion-big", JSON.stringify(planR));
     ok("§2 NEGATIVE — a bullet class has no delivery plan", fx.deliveryPlanFor("pistol") === null && fx.deliveryPlanFor("shotgun") === null);
@@ -303,7 +310,11 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
         ok("§3 the throw resolves as a delivery payload, one object",
         rThrow.weaponClass === "thrown" && rThrow.delivery?.kind === "thrown" && rThrow.shots === 1 && rThrow.dropped === 0,
         `class=${rThrow.weaponClass} shots=${rThrow.shots}`);
-      ok("§3 the throw draws NO blood", rThrow.blood === null, JSON.stringify(rThrow.blood));
+      // ⏪ RE-VALUED 2026-08-28: this asserted the withdrawn hit spray was declined for a delivery
+      // payload. The element is gone, so the report carries no field for it at all — which is the
+      // stronger statement and the one the removal owes.
+      ok("§3 the throw's report carries no hit-spray field at all (the element is withdrawn)",
+        rThrow.blood === undefined, JSON.stringify(rThrow.blood));
       ok("§3 the throw sounds ONE detonation and no body impact",
         rThrow.detonationAudio?.queued === 1 && rThrow.hitAudio === null,
         `det=${JSON.stringify(rThrow.detonationAudio)} hit=${JSON.stringify(rThrow.hitAudio)}`);
@@ -416,9 +427,21 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
           btn.click();
           let after = before;
           for (let i = 0; i < 40; i++) { after = Number(victim.system.damage) || 0; if (after > before) break; await sleep(250); }
-          ok("§4 confirming the blast applies its damage to the figure in it",
-            after > before, `damage ${before} → ${after}`);
-          out.notes.push(`§4 blast applied ${after - before} to the figure at 3 squares (base ${F(area).baseDamage})`);
+          // ⏪ RE-VALUED 2026-08-28. This asserted the aimed-at figure ALWAYS took the blast, which was
+          // true only because a missed throw used to be centred on it regardless. A miss now lands where
+          // the grenade table puts it (§15), so the honest statement is the geometric one: the blast
+          // reaches whoever is inside it and nobody else. This fixture's real fire misses often — the
+          // note records which branch ran — so the expectation is DERIVED from the placed circle rather
+          // than assumed, and the leg is deterministic either way.
+          const f4 = F(area);
+          const vCen = canvas.tokens.get(vicTok.id).center;
+          const ppm4 = gridPx / (Number(scene.grid?.distance) || 1);
+          const figureM = Math.hypot(vCen.x - Number(f4.originX), vCen.y - Number(f4.originY)) / ppm4;
+          const caught = figureM <= Number(f4.blastRadius);
+          ok("§4 confirming the blast reaches whoever is inside it, and nobody outside it",
+            caught ? after > before : after === before,
+            `${f4.scattered ? `scattered ${f4.scatterDriftM}m ${f4.scatterDirName}` : "on target"}; figure ${figureM.toFixed(1)}m from the centre, radius ${f4.blastRadius}m; damage ${before} → ${after}`);
+          out.notes.push(`§4 blast ${f4.scattered ? "scattered" : "on target"}: figure ${figureM.toFixed(1)}m from the centre (radius ${f4.blastRadius}m), applied ${after - before} (base ${f4.baseDamage})`);
         }
       }
       const newMsgs = game.messages.filter(m => !msgsBefore.has(m.id));
@@ -1879,6 +1902,241 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       if (bodyTok) await bodyTok.delete().catch(() => {});
       if (body) await body.delete().catch(() => {});
       for (const [k, v] of Object.entries(prev14)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+    }
+  });
+
+
+  /* ══════════════════ §15 the MISS resolves itself, and the card narrates ══════════════════
+   * MECHANISM: the card that reaches _placeExplosion already answers hit-or-miss — a HIT carries the
+   * rolled damage in `areaDamages`, a MISS carries none. Until 2026-08-28 the flow knew that and asked
+   * anyway: the confirm card carried TWO buttons and a hint beginning "if the throw missed", which is a
+   * question the table has no way to answer. The landing is a TABLE (p.108), so it is rolled once at
+   * placement — the discipline the pattern and suppressive flows already keep — the blast is created at
+   * the landed point, and the card states the outcome instead of asking about it.
+   *
+   * Every leg reads the PLACED GEOMETRY and the POSTED CARD, never the internals: the area's own centre
+   * against its own recorded aim point, and the card's own sentence against both. */
+  await sect("§15", async () => {
+    const prev15 = {};
+    const set15 = async (k, v) => { try { prev15[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    await set15("explosivesEnabled", true);
+    await set15("explosivesDetailed", false);
+    await set15("combatFxEnabled", false);       // §15 is about the placement, not the picture
+    await set15("headHitDoubling", false);
+    await set15("damageAblation", false);
+    await set15("limbModel", "core");
+
+    let probe = null, probeTok = null;
+    try {
+      const allAreas = () => (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+      const gridDistM = Number(scene.grid?.distance) || 1;
+      const ppm = gridPx / gridDistM;
+      // The aim point every leg measures against: the victim's own centre, which is where the blast
+      // would be placed if nothing scattered it.
+      const aimPoint = () => {
+        const t = canvas.tokens.get(vicTok.id);
+        return { x: t?.center?.x ?? t?.x, y: t?.center?.y ?? t?.y };
+      };
+      ok("§15 HARNESS GUARD — the aimed-at figure is on the canvas this section measures against",
+        canvas.scene?.id === scene.id && !!canvas.tokens.get(vicTok.id),
+        `scene=${canvas.scene?.id === scene.id} token=${!!canvas.tokens.get(vicTok.id)}`);
+
+      // A throw, driven at the seam the real fire path raises. `weaponId` is load-bearing for the MISS
+      // case: the warhead's own damage is rolled off the weapon the payload names.
+      const throwBlast = async ({ hit, radius = 25 }) => {
+        const before = new Set(allAreas().filter(d => F(d).isExplosion).map(d => d.id));
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, attackerTokenId: shTok.id, weaponId: frag.id,
+          weaponName: "__PW__Frag", attackType: "Grenade",
+          // ⛔ THE ONE FIELD THAT DECIDES IT. Rows present = the base rolled damage = the throw landed;
+          // rows absent = the base rolled nothing = the throw missed. Nothing else differs between the
+          // two calls, so a leg that passes for the wrong reason has nowhere to hide.
+          areaDamages: hit ? { Torso: [{ damage: 12 }] } : {},
+          shotsFired: 1, shotsHit: hit ? 1 : 0,
+          targetTokenId: vicTok.id, fxTargetTokenId: vicTok.id, firedByUserId: game.user.id,
+          blastRadius: radius,
+        });
+        for (let i = 0; i < 60; i++) {
+          const a = allAreas().find(d => F(d).isExplosion && !before.has(d.id));
+          if (a) return a;
+          await sleep(300);
+        }
+        return null;
+      };
+      const cardFor = (areaId) => [...game.messages].reverse()
+        .find(m => (m.content ?? "").includes(`data-template-id="${areaId}"`)) ?? null;
+      const dropArea15 = async (a) => { try { await a.delete(); } catch (_e) { /* gone */ } };
+
+      /* ── a. a MISS resolves its own landing, and the blast is created THERE ─────────────────── */
+      const aimAtMiss = aimPoint();
+      const missArea = await throwBlast({ hit: false });
+      ok("§15 a missed throw still detonates — an area is placed", !!missArea);
+      if (missArea) {
+        const f = F(missArea);
+        ok("§15 the area records that the table placed it, by value",
+          f.scattered === true, JSON.stringify({ scattered: f.scattered }));
+        ok("§15 the direction face it rolled is a real face of the rose, by value",
+          Number.isFinite(Number(f.scatterDirFace)) && Number(f.scatterDirFace) >= 1 && Number(f.scatterDirFace) <= 10,
+          `face=${f.scatterDirFace}`);
+        ok("§15 the drift is inside the table's own band — 1d10 metres, never more",
+          Number(f.scatterDriftM) >= 0 && Number(f.scatterDriftM) <= 10, `${f.scatterDriftM}m`);
+        ok("§15 the aim point is recorded beside the landing, so the drift can be checked and not trusted",
+          Math.abs(Number(f.aimedX) - aimAtMiss.x) < 1 && Math.abs(Number(f.aimedY) - aimAtMiss.y) < 1,
+          JSON.stringify({ aimed: [f.aimedX, f.aimedY], want: [aimAtMiss.x, aimAtMiss.y] }));
+
+        // ⭐ THE GEOMETRY, MEASURED: the placed centre is the aim point plus exactly the recorded drift.
+        const placed = { x: Number(f.originX), y: Number(f.originY) };
+        const measuredM = Math.hypot(placed.x - Number(f.aimedX), placed.y - Number(f.aimedY)) / ppm;
+        out.notes.push(`§15 miss landed ${Number(f.scatterDriftM)}m ${f.scatterDirName} (measured ${measuredM.toFixed(2)}m)`);
+        ok("§15 ⭐ DETERMINISM — the distance the area RECORDS is the distance it actually moved",
+          Math.abs(measuredM - Number(f.scatterDriftM)) < 0.05,
+          `recorded ${f.scatterDriftM}m vs measured ${measuredM.toFixed(3)}m`);
+        if (Number(f.scatterDriftM) > 0) {
+          ok("§15 a drifted blast is NOT centred on the aim point (negative)",
+            !(Math.abs(placed.x - Number(f.aimedX)) < 0.5 && Math.abs(placed.y - Number(f.aimedY)) < 0.5),
+            JSON.stringify({ placed, aimed: [f.aimedX, f.aimedY] }));
+        } else {
+          ok("§15 a no-drift face lands the blast on the aim point exactly (the rose's own 5 and 10)",
+            Math.abs(placed.x - Number(f.aimedX)) < 0.5 && Math.abs(placed.y - Number(f.aimedY)) < 0.5,
+            JSON.stringify({ placed, aimed: [f.aimedX, f.aimedY], face: f.scatterDirFace }));
+        }
+
+        /* ── b. the card NARRATES, and carries one control ────────────────────────────────────── */
+        let missCard = null;
+        for (let i = 0; i < 40 && !missCard; i++) { missCard = cardFor(missArea.id); if (!missCard) await sleep(250); }
+        ok("§15 the confirm card was posted for the missed throw", !!missCard);
+        if (missCard) {
+          const text = missCard.content ?? "";
+          const driftM = Number(f.scatterDriftM);
+          const expected = driftM > 0
+            ? game.i18n.format("CYBERPUNK.ExplosionScatterLine", {
+                dir: (game.i18n.has(`CYBERPUNK.${f.scatterDirName}`) ? game.i18n.localize(`CYBERPUNK.${f.scatterDirName}`) : f.scatterDirName),
+                dist: driftM })
+            : game.i18n.localize("CYBERPUNK.ExplosionScatterNoDrift");
+          ok("§15 ⭐ the card STATES the outcome, in the words the placement recorded",
+            text.includes(expected), `expected "${expected}" in the card`);
+          ok("§15 and it never asks the table to work out whether the throw missed (negative)",
+            !/if the throw missed/i.test(text), text.slice(0, 160));
+          ok("§15 the card carries exactly ONE control, and it is the confirm",
+            (text.match(/<button/g) ?? []).length === 1 && text.includes("cp-confirm-explosion"),
+            `${(text.match(/<button/g) ?? []).length} button(s)`);
+          ok("§15 the Scatter button is gone from the rendered card (DOM negative)",
+            document.querySelector(`.cp-confirm-explosion-scatter[data-template-id="${missArea.id}"]`) === null
+            && document.querySelector(".cp-confirm-explosion-scatter") === null);
+        }
+
+        /* ── c. the one Confirm applies AT THE LANDED POSITION, through the normal pipeline ───── */
+        // A body put on the landed centre takes the blast's full damage; nothing about the apply path
+        // changed, so this is the ordinary falloff pipeline measured at distance zero.
+        probe = await Actor.create({ name: "__PW__Landing Probe", type: "character" });
+        [probeTok] = await scene.createEmbeddedDocuments("Token", [{
+          name: probe.name, actorId: probe.id, actorLink: true,
+          x: placed.x - gridPx / 2, y: placed.y - gridPx / 2, width: 1, height: 1,
+        }]);
+        await sleep(700);
+        ok("§15 HARNESS GUARD — the probe stands at the landed centre",
+          !!canvas.tokens.get(probeTok.id), String(!!canvas.tokens.get(probeTok.id)));
+        const dmgBefore = Number(probe.system.damage) || 0;
+        let btn = null;
+        for (let i = 0; i < 40 && !btn; i++) {
+          btn = document.querySelector(`.cp-confirm-explosion[data-template-id="${missArea.id}"]`);
+          if (!btn) await sleep(250);
+        }
+        ok("§15 the single Confirm control is on screen for the missed throw", !!btn);
+        if (btn) {
+          btn.click();
+          let after = dmgBefore;
+          for (let i = 0; i < 40; i++) { after = Number(probe.system.damage) || 0; if (after > dmgBefore) break; await sleep(250); }
+          ok("§15 ⭐ ONE press applies the blast at the LANDED position, through the ordinary pipeline",
+            after > dmgBefore, `damage ${dmgBefore} → ${after} (baseDamage ${F(missArea).baseDamage})`);
+          out.notes.push(`§15 the landed blast applied ${after - dmgBefore} at its own centre`);
+        }
+        await dropArea15(missArea);
+      }
+
+      /* ── d. the HIT control: nothing scatters, and the card says on target ───────────────────── */
+      const aimAtHit = aimPoint();
+      const hitArea = await throwBlast({ hit: true, radius: 3 });
+      ok("§15 a landing throw places its blast too", !!hitArea);
+      if (hitArea) {
+        const f = F(hitArea);
+        ok("§15 CONTROL — a hit records no scatter at all (negative)",
+          f.scattered === false && Number(f.scatterDriftM) === 0 && Number(f.scatterDirFace) === 0,
+          JSON.stringify({ scattered: f.scattered, drift: f.scatterDriftM, face: f.scatterDirFace }));
+        ok("§15 CONTROL — and its blast is centred exactly where it was aimed, by value",
+          Math.abs(Number(f.originX) - aimAtHit.x) < 0.5 && Math.abs(Number(f.originY) - aimAtHit.y) < 0.5,
+          JSON.stringify({ placed: [f.originX, f.originY], aimed: [aimAtHit.x, aimAtHit.y] }));
+        let hitCard = null;
+        for (let i = 0; i < 40 && !hitCard; i++) { hitCard = cardFor(hitArea.id); if (!hitCard) await sleep(250); }
+        ok("§15 CONTROL — the hit's card says on target",
+          !!hitCard && (hitCard.content ?? "").includes(game.i18n.localize("CYBERPUNK.ExplosionOnTarget")),
+          (hitCard?.content ?? "").slice(0, 160));
+        await dropArea15(hitArea);
+      }
+
+      /* ── e. an area from the OLD flow confirms exactly as before (backward compatibility) ───── */
+      // Hand-built with the pre-2026-08-28 flag set: no scatter record of any kind. It must confirm
+      // through the same one control and apply the same way.
+      const shapes15 = await import(`/modules/${SCOPE}/module/combat/area-shapes.js`);
+      const legacyCentre = { x: Number(canvas.tokens.get(vicTok.id).center.x), y: Number(canvas.tokens.get(vicTok.id).center.y) };
+      const legacy = await shapes15.createArea(scene, {
+        kind: "circle", x: legacyCentre.x, y: legacyCentre.y, radiusM: 10,
+        color: "#ff8800", borderColor: "#cc4400",
+        flags: { isExplosion: true, baseDamage: 20, blastRadius: 10, blastFullDamageWithin: 2,
+                 blastMultipliers: [0.5, 0.25, 0.125, 0.0625], attackerId: shooter.id,
+                 weaponName: "__PW__Legacy Blast", createdRound: 0,
+                 originX: legacyCentre.x, originY: legacyCentre.y },
+      });
+      ok("§15 COMPAT — an area carrying no scatter record can still be built and read",
+        !!legacy?.doc && F(legacy.doc).scattered === undefined,
+        JSON.stringify({ scattered: F(legacy?.doc ?? {}).scattered }));
+      if (legacy?.doc) {
+        const vicBefore = Number(victim.system.damage) || 0;
+        const legacyCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
+          `modules/${SCOPE}/templates/chat/explosion-confirm.hbs`,
+          { weaponName: "__PW__Legacy Blast", radius: 10, baseDamage: 20, fullWithin: 2, templateId: legacy.doc.id });
+        await ChatMessage.create({ content: legacyCard });
+        let lbtn = null;
+        for (let i = 0; i < 40 && !lbtn; i++) {
+          lbtn = document.querySelector(`.cp-confirm-explosion[data-template-id="${legacy.doc.id}"]`);
+          if (!lbtn) await sleep(250);
+        }
+        ok("§15 COMPAT — a card with no outcome line still renders its one confirm control", !!lbtn);
+        if (lbtn) {
+          lbtn.click();
+          let vicAfter = vicBefore;
+          for (let i = 0; i < 40; i++) { vicAfter = Number(victim.system.damage) || 0; if (vicAfter > vicBefore) break; await sleep(250); }
+          ok("§15 COMPAT — and it applies exactly as it always did",
+            vicAfter > vicBefore, `damage ${vicBefore} → ${vicAfter}`);
+        }
+        await dropArea15(legacy.doc);
+      }
+
+      /* ── f. the source negatives ─────────────────────────────────────────────────────────────── */
+      const hooksSrc = await (await fetch(`/modules/${SCOPE}/module/combat/damage-hooks.js`, { cache: "no-store" })).text();
+      const liveHooks = hooksSrc.split("\n").filter(l => !/^\s*(\*|\/\/|\/\*)/.test(l)).join("\n");
+      ok("§15 SOURCE — the manual scatter handler is gone from live code (negative)",
+        !/_scatterExplosion\s*\(/.test(liveHooks), "_scatterExplosion in live code");
+      ok("§15 SOURCE — and nothing listens for the retired button any more (negative)",
+        !/cp-confirm-explosion-scatter/.test(liveHooks), "scatter selector in live code");
+      const tplSrc = await (await fetch(`/modules/${SCOPE}/templates/chat/explosion-confirm.hbs`, { cache: "no-store" })).text();
+      ok("§15 SOURCE — the template declares exactly one button, and it is the confirm",
+        (tplSrc.match(/<button/g) ?? []).length === 1 && !/cp-confirm-explosion-scatter/.test(tplSrc),
+        `${(tplSrc.match(/<button/g) ?? []).length} button(s) in the template`);
+      ok("§15 SOURCE — the retired button's string is gone from the language pack (negative)",
+        game.i18n.localize("CYBERPUNK.ExplosionScatterBtn") === "CYBERPUNK.ExplosionScatterBtn",
+        game.i18n.localize("CYBERPUNK.ExplosionScatterBtn"));
+      ok("§15 SOURCE — and the three sentences the card prints instead all resolve to real text",
+        ["ExplosionOnTarget", "ExplosionScatterLine", "ExplosionScatterNoDrift"]
+          .every(k => game.i18n.localize(`CYBERPUNK.${k}`) !== `CYBERPUNK.${k}`),
+        ["ExplosionOnTarget", "ExplosionScatterLine", "ExplosionScatterNoDrift"].map(k => game.i18n.localize(`CYBERPUNK.${k}`)).join(" | "));
+    } finally {
+      for (const d of (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])])) {
+        if (F(d).isExplosion) await d.delete().catch(() => {});
+      }
+      if (probeTok) await probeTok.delete().catch(() => {});
+      if (probe) await probe.delete().catch(() => {});
+      for (const [k, v] of Object.entries(prev15)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
     }
   });
 
