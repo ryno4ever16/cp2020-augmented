@@ -35,7 +35,7 @@
  *
  * IT DOES NOT TOUCH: any other scene, the showcase encounter, the three cover regions, any other
  * actor, or any world setting except that it turns the gore switch ON if it is off (the spec asks
- * for blood without fiddling).
+ * without fiddling).
  *
  * ⭐ THE SELF-SHOT NEEDS NO FIXTURE, and that is why none was added for it (2026-08-13). Firing at
  * one's own token is a TARGETING choice, not a load or an asset: target the shooter itself and pull
@@ -405,12 +405,10 @@ const result = await page.evaluate(async ({ SHOOTER, STOCK }) => {
   } catch (e) { longReport = `Review · Target (Long): ERR ${e.message}`; }
   rangeReport.push(longReport);
 
-  /* ── 7. GORE ON (the spec: blood must show without touching settings) ────────────────────────── */
-  let gore = null;
-  try {
-    gore = game.settings.get(SCOPE, "goreEnabled");
-    if (gore !== true) { await game.settings.set(SCOPE, "goreEnabled", true); gore = game.settings.get(SCOPE, "goreEnabled"); }
-  } catch (e) { gore = `ERR ${e.message}`; }
+  /* ── 7. ⏪ THE HIT-SPRAY SWITCH IS GONE (element and setting both removed 2026-08-28). The bench
+   * used to arm it here so the element showed without the reviewer touching settings; there is
+   * nothing left to arm. ───────────────────────────────────────────────────────────────────────── */
+  const gore = null;
   let spreadOn = null;
   try { spreadOn = game.settings.get(SCOPE, "shotgunSpreadEnabled"); } catch (e) { spreadOn = `ERR ${e.message}`; }
 

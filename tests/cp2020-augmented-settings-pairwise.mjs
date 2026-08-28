@@ -151,7 +151,7 @@ const ALLOWED = [
   "npcGenEnabled",
   "combatFxEnabled",
   "faceTargetOnFire",
-  "goreEnabled",
+  // ⏪ "goreEnabled" stood here until 2026-08-28: the setting was retired with the element it switched.
 ];
 
 /** Kept out of the matrix, each with the reason the header states at length. */

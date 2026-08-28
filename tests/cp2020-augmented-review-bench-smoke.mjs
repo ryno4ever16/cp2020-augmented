@@ -119,7 +119,10 @@ const setup = await page.evaluate(async (SCOPE) => {
     // `createSequencerEffect` reports the DATABASE KEY the section was handed (sometimes with a
     // range/variant suffix appended: "…yellow.1"), so the match below is key-prefix, not path.
     keys: {
-      groundFire: fx.GROUND_FIRE.key, blood: fx.BLOOD_SPLATTER.key, baton: fx.BATON_ROUND.key,
+      groundFire: fx.GROUND_FIRE.key, baton: fx.BATON_ROUND.key,
+      // ⏪ The withdrawn hit spray (user ruling 2026-08-28). Named as a literal because the module no
+      // longer exports a constant for it — legs A and B assert it is never drawn, on either target.
+      withdrawnSpray: "jb2a.liquid.splash_side02.red",
       dust: fx.IMPACT_DUST.key, fireImpact: fx.IMPACT_FIRE.key,
       hitConfirm: fx.HIT_CONFIRM.key,
       // ⏪ The withdrawn ground mark (user ruling 2026-08-10). Named as a literal because the module no
@@ -217,7 +220,7 @@ async function fire(num, targetName, { forceHit = false } = {}) {
     }
   }, { actorId: setup.actorId, forceHit });
   await page.waitForFunction(() => globalThis.__smoke.payloads.length > 0, null, { timeout: 25000 }).catch(() => {});
-  // Past PRESENTATION_CAP_MS (8 s): the fan-out, the fires, the blood AND any deferred apply window.
+  // Past PRESENTATION_CAP_MS (8 s): the fan-out, the fires AND any deferred apply window.
   await page.waitForTimeout(9000);
   return page.evaluate(() => ({
     handled: globalThis.__smoke.raw.map(p => p.handled ?? null),
@@ -248,7 +251,7 @@ async function fireUntilHit(num, targetName, tries = 3) {
 }
 const drew = (files, key) => files.some(f => f === key || f.startsWith(`${key}.`));
 
-/* ══ A. 01 pistol Standard at the FLESH target — the baseline, and the blood gate ═════════════ */
+/* ══ A. 01 pistol Standard at the FLESH target — the baseline ════════════════════════════════ */
 console.log(`\n── A · 01 pistol Standard → Review · Target (flesh) ──`);
 let r = await fireUntilHit("01", "Review · Target");
 ok("A: the gun fired with no loading step and the seam raised its payload",
@@ -257,15 +260,20 @@ ok("A: the payload carries the loaded cartridge (the ammo link is live)",
   r.payloads[0]?.caliber === "10mm", `caliber=${r.payloads[0]?.caliber}`);
 ok("A: the round landed (the bench can hit — skills, not weapon accuracy)",
   (r.payloads[0]?.landed ?? 0) > 0, `${r.payloads[0]?.landed} location(s)`);
-ok("A: BLOOD is drawn on a flesh hit with gore on",
-  drew(r.files, setup.keys.blood), r.files.join(", ").slice(0, 200));
+// ⏪ RE-VALUED 2026-08-28: this leg asserted the hit spray was DRAWN on a flesh hit. The element was
+// removed, so the flesh target is now a negative too — and the arrival mark, which shared its clock and
+// its call site, must still reach the canvas on the same shot.
+ok("A: the withdrawn spray reaches the canvas on a flesh hit either (negative)",
+  !drew(r.files, setup.keys.withdrawnSpray), r.files.join(", ").slice(0, 200));
+ok("A: the arrival mark still reaches the canvas on that same hit (regression)",
+  drew(r.files, setup.keys.hitConfirm), r.files.join(", ").slice(0, 200));
 
-/* ══ B. 01 pistol at the VEHICLE — the same shot must draw NO blood ═══════════════════════════ */
+/* ══ B. 01 pistol at the VEHICLE — the same shot, the same absence ════════════════════════════ */
 console.log(`\n── B · 01 pistol Standard → Review · Target (Vehicle) — the negative ──`);
 r = await fireUntilHit("01", "Review · Target (Vehicle)");
 ok("B: the shot landed on the vehicle", (r.payloads[0]?.landed ?? 0) > 0, `${r.payloads[0]?.landed} location(s)`);
-ok("B: and NO blood is drawn — a vehicle takes damage into structure (negative)",
-  !drew(r.files, setup.keys.blood), r.files.join(", ").slice(0, 200));
+ok("B: and the withdrawn spray is absent here too (negative)",
+  !drew(r.files, setup.keys.withdrawnSpray), r.files.join(", ").slice(0, 200));
 
 /* ══ C. 05 SMG Rubber — the baton round ═══════════════════════════════════════════════════════ */
 console.log(`\n── C · 05 H&K MPK-9 Rubber → Review · Target (flesh) ──`);
