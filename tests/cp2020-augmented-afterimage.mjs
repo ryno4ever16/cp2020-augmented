@@ -687,6 +687,23 @@ const live = await page.evaluate(async (mod) => {
   out.idleRegrip = A.regripSceneGrade();
   await sweepToZero();
 
+  /* ── ⭐ THE QUIET DRAG RULER (2026-08-28): the grid highlight stands down for an armed mover.
+   * Driven on the LIVE patched method with a waypoint shaped as core shapes one, called once with
+   * the armed bench figure and once with no token at all (the stock picture must survive). ── */
+  const rulerProto = CONFIG.Token.rulerClass?.prototype;
+  const wp = { unreachable: false, actionConfig: { teleport: false }, stage: "passed", previous: null, userId: game.user.id };
+  const liveTok = canvas.tokens.get(tokenDoc.id);
+  out.quietRuler = {
+    installed: rulerProto?._getGridHighlightStyle?.__cpAfterimageQuiet === true,
+    gateArmed: A.movementHighlightSuppressedFor(actor),
+    gateNobody: A.movementHighlightSuppressedFor(null),
+    // Foundry's Color is a Number subclass and does not survive the evaluate boundary — coerce here.
+    armedStyle: (() => { const s = rulerProto?._getGridHighlightStyle.call({ token: liveTok }, wp, {});
+      return s ? { alpha: s.alpha, colorNum: s.color !== undefined ? Number(s.color) : null } : null; })(),
+    strayStyle: (() => { const s = rulerProto?._getGridHighlightStyle.call({ token: null }, wp, {});
+      return s ? { alpha: s.alpha, colorNum: s.color !== undefined ? Number(s.color) : null } : null; })(),
+  };
+
   /* ── EVICTION through the engine's own manager, at the shipped rail.
    * ⚠ NO FIXED SLEEP (standing rule): `endEffects` is async and its latency moves with rig load, and
    * a trail still being laid keeps landing NEW copies behind the sweep. So the leg names the exact
@@ -918,6 +935,16 @@ else {
     { regripped: false, skipped: "held" });
   eq("NEGATIVE: regripping when nothing runs refuses by name", live.idleRegrip,
     { regripped: false, skipped: "idle" });
+
+  check("⭐ QUIET RULER: the patch is installed on core's own ruler prototype",
+    live.quietRuler.installed === true);
+  eq("the gate answers armed for the boosted figure", live.quietRuler.gateArmed, true);
+  eq("and refuses with nobody to ask about", live.quietRuler.gateNobody, false);
+  eq("an armed mover's grid highlight is drawn at alpha 0 — the engine's own hide idiom",
+    live.quietRuler.armedStyle?.alpha, 0);
+  check("a tokenless ruler keeps the stock picture — user colour at half alpha",
+    live.quietRuler.strayStyle?.alpha === 0.5 && Number.isFinite(live.quietRuler.strayStyle?.colorNum),
+    JSON.stringify(live.quietRuler.strayStyle));
 
   check("EVICTION ends exactly what was standing when it was asked",
     live.eviction.named >= 5 && live.eviction.evicted === live.eviction.liveAtEvict

@@ -1099,11 +1099,59 @@ export function activationVisibleHere(actor) {
 }
 
 /**
+ * ⭐ SHOULD THE DRAG RULER'S GRID HIGHLIGHT STAND DOWN for this mover? (user-ordered 2026-08-28:
+ * "the blue movement highlight … partially obscures the sandevistan effect — can we turn it off
+ * when the Sandevistan is active?") The same two gates the trail itself draws under — the table's
+ * FX switch and the mover's own armed boost — so the highlight goes quiet exactly when a trail is
+ * about to be laid over the ground it would have painted, and never otherwise. Pure-ish.
+ */
+export function movementHighlightSuppressedFor(actor) {
+  try { return combatFxEnabled() && afterimageArmedFor(actor); } catch (_e) { return false; }
+}
+
+/**
+ * ⭐ THE SPEEDSTER'S DRAG GOES QUIET — core's own seam, patched in place.
+ *
+ * Core's TokenRuler `_getGridHighlightStyle(waypoint, offset)` returns `{color, alpha}` per
+ * highlighted square, and core itself answers `{alpha: 0}` for squares it wants hidden (unreachable
+ * waypoints) — so alpha 0 IS the engine's own "draw nothing" idiom, not an invention. The gate above
+ * is asked per square at draw time, so switching the implant (or the FX setting) takes effect on the
+ * very next drag with no re-registration.
+ *
+ * ⚠ PATCHED ON THE PROTOTYPE rather than swapped as a subclass on CONFIG.Token.rulerClass, and the
+ * timing is the reason: this registers on the READY hook, by which time the scene's tokens are drawn
+ * and each already holds a ruler INSTANCE of the old class — a class swap would leave every existing
+ * token un-suppressed until its next full re-draw. A prototype patch reaches live instances at once.
+ * Idempotent by flag; the segment line and waypoint labels are deliberately untouched (the distance
+ * readout stays useful — the reported obscurer is the grid highlight).
+ */
+export function registerQuietMovementHighlight() {
+  const Ruler = CONFIG?.Token?.rulerClass;
+  const proto = Ruler?.prototype;
+  if (!proto || typeof proto._getGridHighlightStyle !== "function") return false;
+  if (proto._getGridHighlightStyle.__cpAfterimageQuiet) return false;
+  const orig = proto._getGridHighlightStyle;
+  function quietGridHighlight(...args) {
+    const style = orig.apply(this, args);
+    try {
+      if (movementHighlightSuppressedFor(this.token?.actor)) return { ...style, alpha: 0 };
+    } catch (_e) { /* fail toward the stock picture */ }
+    return style;
+  }
+  quietGridHighlight.__cpAfterimageQuiet = true;
+  proto._getGridHighlightStyle = quietGridHighlight;
+  return true;
+}
+
+/**
  * Hook wiring — called once from the module's ready hook, registered unconditionally like the shot
  * rail and the extraction arrival: the master switch is read per event, so a referee toggling it
  * takes effect immediately with no reload and the listeners are inert while it is off.
  */
 export function registerAfterimage() {
+  try { registerQuietMovementHighlight(); } catch (err) {
+    console.warn(`${SCOPE} | quiet movement highlight failed to register`, err);
+  }
   // ⭐ NO SESSION ELECTION AND NO REFEREE GATE, the third instance of the deliberate exemption
   // (module/gm-session-primary.js): every client draws its own copy of a picture nobody wrote down,
   // so electing one client here would mean exactly one viewer saw the trail.
