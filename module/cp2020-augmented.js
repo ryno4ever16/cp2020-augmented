@@ -167,6 +167,10 @@ const AUGMENTED_TEMPLATES = [
   "modules/cp2020-augmented/templates/item/parts/vehicleWeapon/settings.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/summary.hbs",
   "modules/cp2020-augmented/templates/item/parts/acpaSystem/settings.hbs",
+  // The per-figure math disclosure both AREA resolution cards carry under each caught figure's row
+  // (spread-result.hbs and explosion-result.hbs). A partial because the markup, like the rows it prints,
+  // exists exactly once — see combat/damage-breakdown.js for the one-renderer ruling behind it.
+  "modules/cp2020-augmented/templates/chat/parts/area-breakdown.hbs",
   // Shop buyer strip — included by the catalog template and re-rendered on its own when the buyer
   // changes, which is why it is a partial at all (module/shop/catalog.js _cpSyncBuyer).
   "modules/cp2020-augmented/templates/shop/buyer-bar.hbs",

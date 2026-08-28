@@ -3718,6 +3718,54 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .field-list .field {
   opacity: 1;
 }
 
+/* ── Area cards: the same math line, under a caught figure's row ───────────────────────────────
+ * The spread and blast RESOLUTION cards carry the identical disclosure the Apply window shows,
+ * rendered by the identical builder (module/combat/damage-breakdown.js) — so it is styled as the
+ * same object rather than re-invented. The differences from the window's block are the two the
+ * medium forces: a chat card has no location column to align under (so a small indent replaces the
+ * 60px offset), and rows in chat inherit `user-select:text`, which is wanted here.
+ * Collapsed by default is the RULING, not a style: the template never writes an `open` attribute.
+ * Indented one step from the row it explains so a five-victim card still reads as five figures. */
+.cyberpunk .cp-area-breakdown {
+  margin: 2px 0 6px 14px;
+  font-size: 0.75em;
+}
+.cyberpunk .cp-area-breakdown > summary {
+  cursor: pointer;
+  opacity: 0.7;
+  list-style: revert;
+}
+.cyberpunk .cp-area-breakdown > summary:hover { opacity: 1; }
+/* Which round of a multi-round figure the block below belongs to. Present only when the figure took
+ * more than one — one round needs no numbering. */
+.cyberpunk .cp-area-breakdown-index {
+  padding: 3px 0 1px 6px;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+.cyberpunk .cp-area-breakdown-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 1px 0 1px 12px;
+}
+.cyberpunk .cp-area-breakdown-row .cp-area-breakdown-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  opacity: 0.85;
+}
+.cyberpunk .cp-area-breakdown-row .cp-area-breakdown-value {
+  flex: 0 0 auto;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The structure a cover object gave up for this round — the window's own amber, same reasoning. */
+.cyberpunk .cp-area-breakdown-row.cp-area-breakdown-drain .cp-area-breakdown-label,
+.cyberpunk .cp-area-breakdown-row.cp-area-breakdown-drain .cp-area-breakdown-value {
+  color: #d1a054;
+  opacity: 1;
+}
+
 /* ── Vehicle occupancy: who is aboard ────────────────────────────────────────
  * The vehicle sheet's riders list and the "Aboard X" strip a passenger gets on their own
  * character sheet. Both are read-outs of the same boarding flag, so they share a look: a quiet
@@ -4139,6 +4187,10 @@ body.theme-light .cyberpunk .cp-veh-cell-nose { box-shadow: inset 0 0 0 2px var(
 body.theme-light .cp-active-badge { background: var(--cp-lt-active); }
 body.theme-light .cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-label,
 body.theme-light .cyberpunk .cp-damage-breakdown-row.cp-damage-breakdown-drain .cp-bd-value { color: var(--cp-lt-brass); }
+/* The area cards' disclosure is the same object as the window's line, so its drain band takes the same
+   light-scheme token for the same reason: #d1a054 does not clear contrast against core's parchment. */
+body.theme-light .cyberpunk .cp-area-breakdown-row.cp-area-breakdown-drain .cp-area-breakdown-label,
+body.theme-light .cyberpunk .cp-area-breakdown-row.cp-area-breakdown-drain .cp-area-breakdown-value { color: var(--cp-lt-brass); }
 
 /* -- Panels that assumed a dark ground -------------------------------------------------- */
 /* Both rich-text surfaces (the item Notes tab and the actor Life tab share this markup) drop

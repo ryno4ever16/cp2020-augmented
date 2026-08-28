@@ -1,11 +1,16 @@
 {{!--
   Shot-pattern RESOLUTION card (CP2020 p.109) — one card for the whole burst, however many shells it
   threw. Rendered via renderTemplate with
-  { weaponName, band, shells, multiShell, dmgFormula, rows: [{ name, rolls, total }] }.
+  { weaponName, band, shells, multiShell, dmgFormula, rows: [{ name, rolls, total, breakdown }] }.
   `rolls` is the per-shell damage list as text, so N shells read as N numbers rather than as one sum.
   Rows are DIVs, not a list: core's own layered `ul` styling wins over a module rule on this build
   (probed — list-style computed `circle` with the module rule live), and a chat card wants no markers.
   i18n via CPLocal; triple-stash where the string carries <b>.
+
+  ⭐ `breakdown` (2026-08-28, ruling A) is the COLLAPSED per-figure math the Apply window's own line
+  shows, built by the same renderer from the rows the apply actually produced — see the partial and
+  combat/damage-breakdown.js. Absent on a row whose apply produced none, in which case the card is
+  byte-identical to the one that shipped before.
 --}}
 <div class="cyberpunk save-prompt">
   <h3>{{CPLocal "SpreadResultTitle" weapon=weaponName}}</h3>
@@ -18,6 +23,7 @@
     <div class="cp-spread-result-list">
       {{#each rows}}
         <div class="cp-spread-result-row">{{{CPLocal "SpreadResultRow" name=this.name rolls=this.rolls total=this.total}}}</div>
+        {{#if this.breakdown}}{{> "modules/cp2020-augmented/templates/chat/parts/area-breakdown.hbs" breakdown=this.breakdown}}{{/if}}
       {{/each}}
     </div>
   </div>

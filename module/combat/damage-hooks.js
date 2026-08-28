@@ -83,6 +83,9 @@ import { isPrimaryGMSession } from "../gm-session-primary.js";
 // presentation rail and the attack gesture. See combat/area-delivery.js for the p.99/p.108/p.110
 // citations and for why it lives in its own import-free file.
 import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
+// The ONE renderer for a caught figure's math line — the same builder the Apply Damage window uses, so
+// the cards and the window can never state one hit two ways (user ruling 2026-08-28, option A).
+import { cardBreakdownFor } from "./damage-breakdown.js";
 
 /**
  * The effect list, however a caller spelled it.
@@ -2290,11 +2293,17 @@ export async function _postWoundSavePrompts(actor, tok, batch = null) {
  * nothing, `stunSaveOnHit` is falsy and `dotEnabled` is falsy, and neither call does anything — so the
  * explosion path through this helper is unchanged by their arrival.
  * Once per landed shell per token, which is what the pattern flow already does with everything else it
- * applies (N shells = N banded rolls = N trips through the armour pipeline). */
+ * applies (N shells = N banded rolls = N trips through the armour pipeline).
+ *
+ * ⭐ RETURNS THE ROWS, NOT JUST THE TOTAL (2026-08-28). The area cards now print a collapsed per-figure
+ * math line, and the ruling behind it is that the card and the apply window must be ONE derivation —
+ * so the card quotes the rows this apply produced rather than re-simulating the shell to describe it.
+ * `{ total, hits }`: `total` is the number this function has always returned, and every existing caller
+ * ignores it (they always did), so nothing downstream changes by carrying the rows beside it. */
 async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null, coverSP = 0) {
   const { ap, edged, mono, armorMultSoft, armorMultHard, penDamageMult, weaponName,
           stunSaveOnHit, stunSaveMod, dotEnabled, dotTurns, dotType, dotDamageFormula, dotFlat } = payload;
-  if (!tok?.actor || dmg <= 0) return 0;
+  if (!tok?.actor || dmg <= 0) return { total: 0, hits: [] };
   const loc = (await rollLocation(tok.actor, null)).areaHit;
   // ⭐ THE IMPACT AUDIO, ONCE PER ROUND — NOT ONCE ON ARRIVAL AND AGAIN ON CONFIRM. When the pattern
   // flow owns this payload, the presentation rail sounds the figures the corridor caught at the moment
@@ -2350,7 +2359,7 @@ async function _applyAreaHitToToken(tok, dmg, payload = {}, severityBatch = null
   // The shell's own stun prompt is per damage event, as the book has it; the death prompt is offered
   // once per application batch when the caller named one (a burst of shells is one moment of the fight).
   if (total > 0) await _postWoundSavePrompts(tok.actor, tok, severityBatch);
-  return total;
+  return { total, hits };
 }
 
 /*
@@ -2430,9 +2439,24 @@ async function _placeExplosion(payload) {
 
     const attackerId = payload.attackerId ?? payload.attackerActorId ?? payload.actorId ?? null;
 
-    // Blast center: target token position, else attacker token.
+    // Blast center: the DESIGNATED POINT, else the target token's position, else the attacker's.
     let cx = null, cy = null;
-    if (payload.targetTokenId) {
+    // ⭐⭐ THE POINT THE SHOOTER DESIGNATED WINS (2026-08-28, user ruling: every throw is aimed on the
+    // map). CP2020 p.108 puts "the center of the area effect falling on the designated target", and the
+    // designated target is a SPOT — a token was only ever a convenient way to name one. The shooter
+    // placed it before the fire dialog opened (combat/aim-placement.js) and it rode the payload here as
+    // two plain coordinates, so it survives the socket relay to this client unchanged.
+    //
+    // ⛔ THE TWO FALLBACKS BELOW ARE KEPT, and not as decoration: a payload carrying no `aimPoint` is a
+    // real thing — a macro's shot, a keeper driving `__weaponRoll` directly, or a client mid-update
+    // that is still on the build before the gesture — and each of those must resolve exactly as it did
+    // before this line existed. The field's ABSENCE is the compatibility mechanism; there is no version
+    // gate anywhere in this flow.
+    const aimed = payload?.aimPoint;
+    if (Number.isFinite(Number(aimed?.x)) && Number.isFinite(Number(aimed?.y))) {
+      cx = Number(aimed.x); cy = Number(aimed.y);
+    }
+    if (cx === null && payload.targetTokenId) {
       const tok = canvas?.tokens?.placeables?.find(t => t.id === payload.targetTokenId);
       if (tok) { cx = tok.center?.x ?? tok.x; cy = tok.center?.y ?? tok.y; }
     }
@@ -2721,6 +2745,11 @@ async function _confirmExplosion(templateId) {
   // application — nothing after it posts a tail of its own.
   const severity = makeSeverityBatch({ ownsWoundTrackPrompt: true });
 
+  // ⭐ WHAT THE DETONATION DID, PER FIGURE — collected as the loop applies it and reported on one card
+  // afterwards (2026-08-28, ruling A). The rows are the apply's OWN result rows, so the math the card
+  // discloses is the math that was performed; nothing here re-resolves anything.
+  const resultRows = [];
+
   for (const entry of targets) {
     const tok = entry.tok;
     const dmg = bandDamage(tok.center?.x ?? tok.document?.x ?? tok.x ?? 0,
@@ -2760,6 +2789,12 @@ async function _confirmExplosion(templateId) {
       // barrier's SP is SP. The object is still charged for the blast it received (the plan above ran
       // for it either way) — what a wall stops is the fragments, not the overpressure.
       await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
+      // ⛔ NO ARMOUR MATH TO DISCLOSE ON THIS BRANCH, and the row says so rather than showing an empty
+      // block: Listen Up p.105 has concussion IGNORE SP, so there are no layers, no cover fold and no
+      // AP halving to name — the whole arithmetic is the banded damage less BTM, half of it stun. A
+      // disclosure built from a pipeline this application never entered would be a fiction.
+      const concussionRow = { name: _spreadRowName(tok), damage: dmg, note: localize("ExplosionResultConcussion"), breakdown: null };
+      resultRows.push(concussionRow);
       if (f.blastShrapnel) {
         // ⛔ THE RIDERS DO NOT RIDE THE SECONDARY, and that is a ruling rather than an omission
         // (2026-08-28, with the rider carry above). The fragments are a SECOND application on a body
@@ -2779,9 +2814,14 @@ async function _confirmExplosion(templateId) {
         // (the concussion takes a weapon name and nothing else), and the fragments add none of its own.
         // That one is still the open rules question, and still recorded rather than silently patched.
         const shrap = await new Roll("1d10").evaluate();
-        await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
+        const shrapRes = await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
           { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) },
           severity, coverSP);
+        // The FRAGMENTS do go through the armour pipeline, so they have math to disclose even though the
+        // concussion beside them does not. Attached to the same figure's row rather than a second row:
+        // one detonation, one line per body.
+        concussionRow.breakdown = cardBreakdownFor(shrapRes?.hits ?? [],
+          Number(tok.actor?.system?.stats?.bt?.modifier) || 0);
       }
     } else {
       // Core blast: range-banded damage through normal armor, with the barrier folded outermost.
@@ -2793,13 +2833,31 @@ async function _confirmExplosion(templateId) {
       // arrive here unaltered, and `_applyAreaHitToToken` destructures and honors them exactly as it
       // does for a pattern's shells. Nothing on the apply side needed changing for this: the helper was
       // built to read them off whatever caller had them, and until now the blast simply had none.
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity, coverSP);
+      const res = await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity, coverSP);
+      resultRows.push({
+        name: _spreadRowName(tok), damage: dmg, note: "",
+        breakdown: cardBreakdownFor(res?.hits ?? [], Number(tok.actor?.system?.stats?.bt?.modifier) || 0),
+      });
     }
   }
 
   // Every body the detonation touched, reported once: the progression card, then the one mortal prompt
   // at the tier the detonation finished on.
   await closeSeverityBatch(severity);
+
+  // ⭐ ONE RESOLUTION CARD FOR THE WHOLE DETONATION (2026-08-28) — the blast's counterpart to the
+  // corridor's own result card, and the home of the per-figure math disclosure the ruling calls for.
+  // Posted AFTER the severity ledger closes, so the progression cards sit beside the numbers that
+  // produced them rather than after the detonation's own summary — the ordering the pattern flow keeps.
+  // Nothing is posted when the blast caught nobody: the existing "nothing in the blast" notice already
+  // covers that case above, and a summary card listing no one would be noise.
+  if (resultRows.length) {
+    const resultCard = await renderChatCard("explosion-result.hbs", {
+      weaponName: f.weaponName ?? localize("WpnExplosion"),
+      radius, baseDamage: base, rows: resultRows,
+    });
+    await ChatMessage.create({ content: resultCard });
+  }
 
   // …and every object it charged, once each.
   await commitAreaCoverChew(chewPlan, f.weaponName ?? localize("WpnExplosion"));
@@ -3687,15 +3745,24 @@ export async function _confirmSpreadZone(templateId, requestedBy = "") {
     // does the SECOND figure behind a barrier somebody else already paid for.
     const preset = sharedShots.get(entry) ?? null;
     const shots = [];
+    // ⭐ THE ROWS THE APPLY ACTUALLY PRODUCED, kept for this figure's card breakdown (2026-08-28,
+    // ruling A). Not a second resolution of the shell — these ARE the rows `applyAreaDamages` returned
+    // as it wrote the damage, so the number the card explains and the number the body took are the same
+    // number by construction. See combat/damage-breakdown.js for why there is only one renderer.
+    const applied = [];
     for (let i = 0; i < shells; i++) {
       const dmg = preset ? preset[i] : await rollShell();
       shots.push(dmg);
       // The SP this shell had to get through: 0 on a clear line, and on a soaked one the SP the
       // barrier still had when this shell left — read from the plan resolved above, never re-derived.
       const coverSP = entry.soaked ? areaCoverSpForRound(chewPlan, entry.row, i) : 0;
-      await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, severity, coverSP);
+      const res = await _applyAreaHitToToken(tok, dmg, { ...f, weaponName }, severity, coverSP);
+      applied.push(...(res?.hits ?? []));
     }
-    rows.push({ name: _spreadRowName(tok), rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0) });
+    rows.push({
+      name: _spreadRowName(tok), rolls: shots.join(", "), total: shots.reduce((s, n) => s + n, 0),
+      breakdown: cardBreakdownFor(applied, Number(tok.actor?.system?.stats?.bt?.modifier) || 0),
+    });
   }
 
   // The structure debits, written once each after the figures are resolved — one relayed chew per

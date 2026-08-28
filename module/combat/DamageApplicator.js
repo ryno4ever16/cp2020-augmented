@@ -415,6 +415,47 @@ export async function applyLocationDamage({ target, location, netDamage = 0, str
  *                                  and closes its own.
  * @returns {Promise<object[]>}     Per-hit results (includes netDamage when dryRun=false)
  */
+/**
+ * THE NAMED PARTS OF ONE ROUND'S ARITHMETIC — assembled in exactly one place and attached to the row by
+ * BOTH resolvers, so the apply window's preview and the applied result describe the same trip through
+ * the pipeline rather than two opinions about it.
+ *
+ * Every component is carried as data + a NAME (armor items by their own name, the cover object by its
+ * label) — the render edge (combat/damage-breakdown.js) turns it into text, this stays i18n-free.
+ * Structural only: nothing here feeds the damage numbers, it reports on them.
+ *
+ * ⭐ WHY THE ASYNC PATH CARRIES IT TOO (2026-08-28). It used to be built only in the sync preview, which
+ * is what the apply window reads; the area cards then had no honest way to state a caught figure's math,
+ * because the corridor and the blast never go through the preview at all. Building it here for both
+ * means a card can quote the row the apply loop actually produced — the one-derivation rule the card
+ * ruling rests on — instead of re-simulating the shot to describe it.
+ */
+function hitBreakdown({ target, spKey, damageType, armorMode, rawDamage, armorBase, armorMult, armorSP,
+                        cover, roundCoverSP, spFull, spUsed, ap, penDamageMult, damageAfterSP, penetrates }) {
+  const layers   = (armorMode === ARMOR_MODES.NONE) ? [] : armorLayerRows(target, spKey, damageType);
+  const layerMax = layers.reduce((m, l) => Math.max(m, l.sp), 0);
+  return {
+    raw: rawDamage,
+    layers,
+    // What the proportional table (p.99) added on top of the single best layer to reach the
+    // combined value the math used — read off armorBase itself, never re-folded.
+    layerBonus: Math.max(0, armorBase - layerMax),
+    armorBase, armorMult, armorSP,
+    // The row's DISPLAY name — the one that carries a per-attack verdict when the row had one
+    // (combat/cover.js). `label` is the clean name and stays the one the wear receipt is written
+    // against; this is what the apply window's breakdown line calls the row.
+    coverName: String(cover?.displayLabel || cover?.label || ""),
+    coverSP: roundCoverSP,
+    effectiveSP: spFull,
+    apHalved: !!ap && armorMode !== ARMOR_MODES.NONE && spUsed !== spFull,
+    spUsed,
+    afterSPRaw: rawDamage - spUsed,
+    penMult: Number(penDamageMult) || 1,
+    afterSP: damageAfterSP,
+    penetrates,
+  };
+}
+
 export async function applyAreaDamages({ target, areaDamages, ap, edged = false, mono = false, armorMultSoft = 1.0, armorMultHard = 1.0, penDamageMult = 1.0, armorMode, ablate, coverSP = 0, cover = null, damageType = "", token = null, targetTokenId = null, dryRun = false, fxSilent = false, severityBatch = null }) {
   // Vehicles NEVER use the personnel pipeline — they have no limbs, death saves, BTM, or HP. Route
   // any vehicle target to the vehicle damage resolver (Core SP→SDP / Maximum Metal penetration),
@@ -470,6 +511,10 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     const rawDamage = baseRaw;
     const spKey = spLocationKey(location);   // armor/ablation location (Groin → Torso)
     let currentSP = getLiveSP(location);
+    // The pre-multiplier combined armour and the multiplier itself, held apart from `currentSP` so the
+    // row's breakdown can name both. Same two locals the sync resolver keeps, for the same reason.
+    const armorBase = currentSP;
+    let   armorMult = 1;
 
     // Asymmetric armor multipliers: edged/mono weapon and/or ammo armor mults.
     // edged flag = armorMultSoft: 0.5, armorMultHard: 1.0.
@@ -484,7 +529,7 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
       // soft-ammo mult) must not halve its SP even when no armor ITEM is present to mark it hard.
       const hasHardArmor = isFullBorg(target) || allItems.some(item => getArmorHardness(item) === "hard");
       const mult = hasHardArmor ? effectiveHardMult : effectiveSoftMult;
-      if (mult !== 1.0) currentSP = Math.max(0, Math.floor(currentSP * mult));
+      if (mult !== 1.0) { armorMult = mult; currentSP = Math.max(0, Math.floor(currentSP * mult)); }
     }
 
     const roundCoverSP = coverLedger.spForRound();
@@ -498,7 +543,16 @@ export async function applyAreaDamages({ target, areaDamages, ap, edged = false,
     // netDamage centralizes head doubling (p.103) and the optional Listen Up limb model.
     const netDamage = computeNetDamage(damageAfterSP, btm, penetrates, location);
 
-    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location), coverSP: roundCoverSP, coverChew });
+    // The row's own arithmetic, named — the same object the sync preview attaches, from the same
+    // assembly, so a chat card quoting an APPLIED row and the window quoting a PREVIEWED one describe
+    // the trip identically (combat/damage-breakdown.js is the one renderer for both).
+    const breakdown = hitBreakdown({
+      target, spKey, damageType, armorMode, rawDamage,
+      armorBase, armorMult, armorSP: currentSP, cover, roundCoverSP,
+      spFull, spUsed, ap, penDamageMult, damageAfterSP, penetrates,
+    });
+
+    results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, btm, netDamage, penetrates, cyberlimb: routesToSdp(target, location), coverSP: roundCoverSP, coverChew, breakdown });
 
     if (!dryRun) {
       // Prefer the caller's token (the shot's actual target token, threaded from the auto-apply call
@@ -599,32 +653,11 @@ export function resolveAreaDamagesSync({ target, areaDamages, ap, edged = false,
       // borg (Head/Torso included), so the preview marks exactly the rows applyLocationDamage will
       // absorb into a machine zone's SDP (rounded afterSP, no BTM, no doubling) instead of the flesh
       // wound track — the preview must never disagree with what Apply does.
-      // The named parts of this round's arithmetic, for the window's expandable math line. Every
-      // component is carried as data + a NAME (armor items by their own name, the cover object by
-      // its label) — the render edge turns it into text, this stays i18n-free. Structural only:
-      // nothing here feeds the damage numbers, it reports on them.
-      const layers      = (armorMode === ARMOR_MODES.NONE) ? [] : armorLayerRows(target, spKey, damageType);
-      const layerMax    = layers.reduce((m, l) => Math.max(m, l.sp), 0);
-      const breakdown = {
-        raw: rawDamage,
-        layers,
-        // What the proportional table (p.99) added on top of the single best layer to reach the
-        // combined value the math used — read off armorBase itself, never re-folded.
-        layerBonus: Math.max(0, armorBase - layerMax),
-        armorBase, armorMult, armorSP: currentSP,
-        // The row's DISPLAY name — the one that carries a per-attack verdict when the row had one
-        // (combat/cover.js). `label` is the clean name and stays the one the wear receipt is written
-        // against; this is what the apply window's breakdown line calls the row.
-        coverName: String(cover?.displayLabel || cover?.label || ""),
-        coverSP: roundCoverSP,
-        effectiveSP: spFull,
-        apHalved: !!ap && armorMode !== ARMOR_MODES.NONE && spUsed !== spFull,
-        spUsed,
-        afterSPRaw: rawDamage - spUsed,
-        penMult: Number(penDamageMult) || 1,
-        afterSP: damageAfterSP,
-        penetrates,
-      };
+      const breakdown = hitBreakdown({
+        target, spKey, damageType, armorMode, rawDamage,
+        armorBase, armorMult, armorSP: currentSP, cover, roundCoverSP,
+        spFull, spUsed, ap, penDamageMult, damageAfterSP, penetrates,
+      });
 
       results.push({ location, rawDamage, spFull, spUsed, damageAfterSP, penetrates, sdp: routesToSdp(target, location), coverSP: roundCoverSP, coverChew, breakdown });
 

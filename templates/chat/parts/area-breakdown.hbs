@@ -1,0 +1,29 @@
+{{!--
+  ONE CAUGHT FIGURE'S MATH, COLLAPSED — the per-figure disclosure the spread and blast resolution cards
+  carry under each row (user ruling 2026-08-28, option A). Included as a partial from both cards so the
+  markup, like the rows themselves, exists once.
+
+  Context = the `breakdown` object combat/damage-breakdown.js `cardBreakdownFor` builds:
+    { summary, blocks: [{ index, multi, rows: [{ label, value, drain }] }] }
+  `summary` and every label/value arrive PRE-LOCALIZED from JS (the GasCloudPenaltyClause idiom), so this
+  file states no strings of its own and needs no CPLocal call.
+
+  ⛔ NO `open` ATTRIBUTE, EVER. Collapsed by default is the ruling itself — a five-victim card has to
+  stay scannable — and the keeper asserts the rendered DOM carries no `open`.
+
+  `multi` marks a figure that took more than one round: each round is its own trip through the armour
+  pipeline (SP is subtracted per hit, and a barrier's pool falls between them), so N rounds are N blocks
+  under one summary and each is numbered.
+--}}
+<details class="cp-area-breakdown">
+  <summary>{{breakdown.summary}}</summary>
+  {{#each breakdown.blocks}}
+    {{#if this.multi}}<div class="cp-area-breakdown-index">{{this.index}}</div>{{/if}}
+    {{#each this.rows}}
+    <div class="cp-area-breakdown-row{{#if this.drain}} cp-area-breakdown-drain{{/if}}">
+      <span class="cp-area-breakdown-label">{{this.label}}</span>
+      <span class="cp-area-breakdown-value">{{this.value}}</span>
+    </div>
+    {{/each}}
+  {{/each}}
+</details>

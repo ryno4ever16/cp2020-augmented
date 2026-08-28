@@ -62,7 +62,8 @@ const res = await page.evaluate(async () => {
 
   const presets = await import(`/modules/${SCOPE}/module/presets.js`);
 
-  const CARD = { progression: "severity-progression", mortalPrompt: "death-save-prompt" };
+  const CARD = { progression: "severity-progression", mortalPrompt: "death-save-prompt",
+                 stunPrompt: "stun-save-prompt" };
   const since = () => new Set(game.messages.map(m => m.id));
   const startedAt = since();
   const count = (mark, from) => [...game.messages].filter(m => !from.has(m.id) && (m.content ?? "").includes(mark)).length;
@@ -238,13 +239,28 @@ const res = await page.evaluate(async () => {
     from = since();
     const r6 = await fire({ rArm: rounds(5, 20 + btm) });
     const totals = { progression: count(CARD.progression, from), mortal: count(CARD.mortalPrompt, from),
+                     stun: count(CARD.stunPrompt, from),
                      all: [...game.messages].filter(m => !from.has(m.id)).length };
-    ok("§6 the window applied five events in one batch, by value",
-       r6.opened === true && r6.after === 100, JSON.stringify(r6));
+    // ⏪ RE-VALUED 2026-08-28 — 100 → 40, and the reason is a RULING, not a regression. Five rounds of
+    // 20 + BTM into an arm still resolve to 100 points of flesh damage; what changed is what may be
+    // WRITTEN to the wound track. `cappedWoundDamage` (module/utils.js, user ruling 2026-08-27) clamps
+    // `system.damage` at `WOUND_TRACK_MAX` = 40 — the printed sheet's own forty boxes, i.e. Mortal 6 —
+    // because a range dummy shot all afternoon had banked ~380 and its stun card printed "penalty 94".
+    // The clamp is a display-and-arithmetic bound and changes nothing about death, stabilization or the
+    // severity ladder, all of which already resolved everything past Mortal 6 as Mortal 6. So the leg's
+    // old expectation was measuring an unbounded track that no longer exists; 40 is the ruled value.
+    ok("§6 the window applied five events in one batch, clamped to the wound track's last box, by value",
+       r6.opened === true && r6.after === 40, JSON.stringify(r6));
     ok("§6 one consolidated progression card for the batch", totals.progression === 1, JSON.stringify(totals));
     ok("§6 one mortal prompt for the batch", totals.mortal === 1, JSON.stringify(totals));
-    ok("§6 two cards in total — the cadence unit's counts, unchanged by this unit",
-       totals.all === 2, JSON.stringify(totals));
+    // ⏪ RE-VALUED 2026-08-28 — 2 → 3 cards, and the third one is named rather than counted blind. The
+    // batched STUN save (user ruling 2026-08-27, severity-batch.js: *one stun save per body per
+    // application, at the wound state the batch FINISHED on*) reversed the line that said stun prompts
+    // stay on the per-damage-event cadence. A five-round burst therefore closes its ledger with the
+    // progression card, the ONE mortal prompt and the ONE stun prompt — the pair the cadence now owes.
+    // Counted by NAME as well as in total, so "three cards" can never be satisfied by three of anything.
+    ok("§6 three cards in total — the progression card and the mortal/stun prompt PAIR the ledger owes",
+       totals.all === 3 && totals.stun === 1, JSON.stringify(totals));
     await wipeSince(from);
     await target.update({ "system.damage": 0 });
     await target.unsetFlag(SCOPE, "fleshLimbStatus").catch(() => {});

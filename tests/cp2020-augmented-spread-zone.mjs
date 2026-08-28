@@ -2572,6 +2572,186 @@ const res = await page.evaluate(async () => {
       !/_signpostSpreadScatter/.test(dhSrc17) && !/SpreadScatterNotice/.test(dhSrc17));
   }
 
+  /* ══ §20 THE WINDOW'S MATH LINE JOINS THE AREA CARDS ══════════════════════════════════════════
+   *
+   * MECHANISM (user ruling 2026-08-28, option A): each caught figure's row on an area RESOLUTION card
+   * gains a collapsed per-figure breakdown rendered by the SAME builder the Apply Damage window uses.
+   * The emphasis is the whole ruling — one renderer (combat/damage-breakdown.js) reading one data
+   * object (`hitBreakdown` in DamageApplicator, now attached by BOTH resolvers), so the card and the
+   * window can never state one hit two ways.
+   *
+   * ⛔ WHY THE CARD THE DISCLOSURE LANDS ON IS THE **RESULT** CARD AND NOT THE CONFIRM CARD. The confirm
+   * card is posted BEFORE the shot is resolved: the shells are unrolled and — decisively — the hit
+   * LOCATION has not been rolled, so the armour a round will actually meet is unknown at that moment. A
+   * breakdown printed there would state SP the round never met, which is the exact card-disagrees-with-
+   * the-window failure the ruling exists to prevent. The result card reports what the apply DID.
+   *
+   * The legs read the RENDERED card and the RENDERED window, by value, and compare the card's own
+   * numbers against the damage the pipeline actually wrote to each body. */
+  {
+    await wipeZones();
+    await wipeCards();
+    const bd = await import(`/modules/${SCOPE}/module/combat/damage-breakdown.js`);
+    const DD = await import(`/modules/${SCOPE}/module/combat/DamageDialog.js`);
+
+    /* ── (a) the extraction is ONE site — source negatives ─────────────────────────────────── */
+    const dlgSrc = await (await fetch(`/modules/${SCOPE}/module/combat/DamageDialog.js`, { cache: "no-store" })).text();
+    const bdSrc  = await (await fetch(`/modules/${SCOPE}/module/combat/damage-breakdown.js`, { cache: "no-store" })).text();
+    ok("§20 the assembly lives in the shared site and NOT in the window any more (source negative)",
+      /DamageDlgBdLayerBonus/.test(bdSrc) && !/DamageDlgBdLayerBonus/.test(dlgSrc)
+      && /damageBreakdownRows/.test(dlgSrc),
+      `shared=${/DamageDlgBdLayerBonus/.test(bdSrc)} window=${/DamageDlgBdLayerBonus/.test(dlgSrc)}`);
+    const hooksSrc20 = await (await fetch(`/modules/${SCOPE}/module/combat/damage-hooks.js`, { cache: "no-store" })).text();
+    ok("§20 the card builders call that same site rather than assembling rows of their own",
+      /cardBreakdownFor/.test(hooksSrc20) && !/DamageDlgBdRoll/.test(hooksSrc20),
+      `calls=${/cardBreakdownFor/.test(hooksSrc20)} ownAssembly=${/DamageDlgBdRoll/.test(hooksSrc20)}`);
+    ok("§20 the partial never writes an `open` attribute — collapsed by default is the ruling (source)",
+      !/<details[^>]*\sopen/.test(await (await fetch(`/modules/${SCOPE}/templates/chat/parts/area-breakdown.hbs`, { cache: "no-store" })).text()),
+      "no open attribute in the disclosure partial");
+
+    /* ── (b) A MULTI-VICTIM LANDED PATTERN — the one-derivation assertion ──────────────────── */
+    // Two figures in the same corridor, one of them ARMOURED in two layers, so the card has to state a
+    // different arithmetic per figure and the equality below cannot pass by coincidence.
+    const bare = await Actor.create({ name: "__PWK__SPREAD Bystander", type: "character" });
+    const clad = await Actor.create({ name: "__PWK__SPREAD Armoured", type: "character" });
+    // The coverage shape the base system stores: one entry per hit location, SP as a STRING (the shape
+    // every other keeper's armour fixture uses — mono-weapon, final-fixpass).
+    // ⛔ UNIFORM ACROSS EVERY LOCATION, deliberately. A shell's hit location is ROLLED, so torso-only
+    // armour would leave the "this figure's rows name both layers" leg a coin flip on the die rather
+    // than a statement about the renderer.
+    const cov20 = (sp) => Object.fromEntries(["Head", "Torso", "lArm", "rArm", "lLeg", "rLeg"]
+      .map(k => [k, { stoppingPower: String(sp), ablation: 0 }]));
+    await clad.createEmbeddedDocuments("Item", [
+      { name: "__PWK__SPREAD Vest",   type: "armor", system: { equipped: true, armorType: "", coverage: cov20(8) } },
+      { name: "__PWK__SPREAD Jacket", type: "armor", system: { equipped: true, armorType: "", coverage: cov20(4) } },
+    ]);
+    // ⚠ ON THE CORRIDOR'S OWN AXIS AND CLEAR OF THE AIMED-AT FIGURE. The corridor runs from the gunner
+    // at (300,200) to the aimed-at target at (700,200); these two stand between them, at their own
+    // squares, so all three are caught and no two figures share a position.
+    const [bareTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PWK__SPREAD Bystander Fig",
+      actorId: bare.id, actorLink: true, x: 480, y: 200, width: 1, height: 1 }]);
+    const [cladTok] = await scene.createEmbeddedDocuments("Token", [{ name: "__PWK__SPREAD Armoured Fig",
+      actorId: clad.id, actorLink: true, x: 590, y: 200, width: 1, height: 1 }]);
+    await sleep(500);
+    ok("§20 HARNESS GUARD — both figures of the multi-victim fixture are on the canvas",
+      !!canvas.tokens.get(bareTok.id) && !!canvas.tokens.get(cladTok.id),
+      `bare=${!!canvas.tokens.get(bareTok.id)} clad=${!!canvas.tokens.get(cladTok.id)}`);
+
+    const prev20 = {};
+    const set20 = async (k, v) => { try { prev20[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    await set20("damageArmorMode", "full");
+    await set20("damageAblation", false);
+    await set20("headHitDoubling", false);
+    await set20("combatFxEnabled", false);
+    try {
+      await bare.update({ "system.damage": 0 });
+      await clad.update({ "system.damage": 0 });
+      // A FIXTURED band formula ("20") so the roll is not a variable: every shell is exactly 20, which
+      // makes the card's stated arithmetic checkable against the body's own damage.
+      await hooks._placeSpreadZone(basePayload({ shotsFired: 2,
+        spreadDamageShort: "20", spreadDamageMedium: "20", spreadDamageLong: "20" }));
+      await sleep(600);
+      const confirm20 = [...game.messages].filter(m => (m.content ?? "").includes("cp-confirm-spread-zone")).pop();
+      const btn20 = confirm20 ? document.querySelector(`[data-message-id="${confirm20.id}"] .cp-confirm-spread-zone`) : null;
+      ok("§20 the multi-victim corridor posted its confirm card with its one control", !!btn20);
+      btn20?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await sleep(3500);
+
+      const card20 = [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).pop();
+      const node20 = card20 ? document.querySelector(`[data-message-id="${card20.id}"]`) : null;
+      ok("§20 the result card is on screen for the resolved corridor", !!node20);
+      const discs = node20 ? [...node20.querySelectorAll("details.cp-area-breakdown")] : [];
+      ok("§20 ⭐ EVERY caught figure's row carries its own collapsed disclosure",
+        discs.length >= 2, `${discs.length} disclosure(s) on the card`);
+      ok("§20 ⭐ COLLAPSED BY DEFAULT — no disclosure on the card is rendered open (DOM)",
+        discs.length > 0 && discs.every(d => d.open === false && !d.hasAttribute("open")),
+        `${discs.filter(d => d.open).length} of ${discs.length} open`);
+
+      // The card's own numbers, read out of the rendered rows and keyed by the figure they sit under.
+      const rowsFor = (name) => {
+        const list = node20?.querySelector(".cp-spread-result-list");
+        if (!list) return null;
+        const kids = [...list.children];
+        const at = kids.findIndex(k => k.classList.contains("cp-spread-result-row") && k.textContent.includes(name));
+        if (at < 0) return null;
+        const disc = kids.slice(at + 1).find(k => k.matches("details.cp-area-breakdown"));
+        if (!disc) return null;
+        return [...disc.querySelectorAll(".cp-area-breakdown-row")].map(r => ({
+          label: r.querySelector(".cp-area-breakdown-label")?.textContent?.trim() ?? "",
+          value: r.querySelector(".cp-area-breakdown-value")?.textContent?.trim() ?? "",
+        }));
+      };
+      const finals = (rows) => (rows ?? []).filter(r => r.label === game.i18n.localize("CYBERPUNK.DamageDlgBdFinal"))
+        .map(r => Number(r.value) || 0);
+      const bareRows = rowsFor("__PWK__SPREAD Bystander Fig");
+      const cladRows = rowsFor("__PWK__SPREAD Armoured Fig");
+      const bareApplied = Number(bare.system?.damage ?? 0);
+      const cladApplied = Number(clad.system?.damage ?? 0);
+      const bareSum = finals(bareRows).reduce((s, n) => s + n, 0);
+      const cladSum = finals(cladRows).reduce((s, n) => s + n, 0);
+      ok("§20 ⭐⭐ ONE DERIVATION — the bystander's card breakdown totals exactly what the pipeline WROTE to that body",
+        bareRows !== null && bareSum === bareApplied && bareApplied > 0,
+        `card=${bareSum} (${JSON.stringify(finals(bareRows))}) applied=${bareApplied}`);
+      ok("§20 ⭐⭐ ONE DERIVATION — and the ARMOURED figure's does too, at its own different number",
+        cladRows !== null && cladSum === cladApplied && cladApplied > 0 && cladApplied !== bareApplied,
+        `card=${cladSum} (${JSON.stringify(finals(cladRows))}) applied=${cladApplied} bystander=${bareApplied}`);
+      ok("§20 ⭐ the armoured figure's rows NAME both worn layers and the p.99 layering bonus, by value",
+        (cladRows ?? []).some(r => r.label === "__PWK__SPREAD Vest" && r.value === "[8]")
+        && (cladRows ?? []).some(r => r.label === "__PWK__SPREAD Jacket" && r.value === "[4]")
+        && (cladRows ?? []).some(r => r.label === game.i18n.localize("CYBERPUNK.DamageDlgBdLayerBonus")),
+        JSON.stringify(cladRows));
+      ok("§20 NEGATIVE — the UNARMOURED figure's rows name no layer and no layering bonus at all",
+        (bareRows ?? []).length > 0
+        && !(bareRows ?? []).some(r => /__PWK__SPREAD (Vest|Jacket)/.test(r.label))
+        && !(bareRows ?? []).some(r => r.label === game.i18n.localize("CYBERPUNK.DamageDlgBdLayerBonus")),
+        JSON.stringify(bareRows));
+      out.cardRows20 = { bystander: bareRows, armoured: cladRows, bareApplied, cladApplied };
+
+      /* ── (c) REGRESSION — the WINDOW's own math line is unchanged, layered AND covered ─────── */
+      for (const w of Object.values(ui.windows ?? {})) if (w?.constructor?.name === "DamageDialog") { try { await w.close(); } catch (_e) {} }
+      const dlg20 = new DD.DamageDialog(
+        { weaponName: "__PWK__SPREAD Window Probe", areaDamages: { Torso: [{ damage: 30 }] }, ap: false }, clad);
+      dlg20._armorMode = "full"; dlg20._ablate = false;   // pinned, not inherited from the world
+      dlg20._coverSP = 6;                     // the outermost layer — the "covered" half of the pair
+      await dlg20.render(true);
+      await sleep(900);
+      const wRows = [...(dlg20.element?.querySelectorAll(".cp-damage-breakdown-row") ?? [])].map(r => ({
+        label: r.querySelector(".cp-bd-label")?.textContent?.trim() ?? "",
+        value: r.querySelector(".cp-bd-value")?.textContent?.trim() ?? "",
+      }));
+      const L = (k) => game.i18n.localize(`CYBERPUNK.${k}`);
+      ok("§20 ⭐ REGRESSION — the window still renders its own math line with the same class and shape",
+        wRows.length > 0 && wRows[0].label === L("DamageDlgBdRoll") && wRows[0].value === "30",
+        JSON.stringify(wRows.slice(0, 3)));
+      ok("§20 ⭐ COMPONENTS BY VALUE for a LAYERED + COVERED figure — both layers, the bonus, combined armour, the cover and the effective SP",
+        wRows.some(r => r.label === "__PWK__SPREAD Vest" && r.value === "[8]")
+        && wRows.some(r => r.label === "__PWK__SPREAD Jacket" && r.value === "[4]")
+        && wRows.some(r => r.label === L("DamageDlgBdLayerBonus"))
+        && wRows.some(r => r.label === L("DamageDlgBdArmorSp"))
+        && wRows.some(r => r.label === L("DamageDlgBdCover") && r.value === "[6]")
+        && wRows.some(r => r.label === L("DamageDlgBdEffectiveSp")),
+        JSON.stringify(wRows));
+      // ⛔ THE TWO RENDERINGS ARE THE SAME BUILDER'S OUTPUT, asserted rather than assumed: the shared
+      // function is called on the window's own resolved row and its labels must be the rendered ones.
+      const ctx20 = await dlg20._prepareContext({});
+      const shared = bd.damageBreakdownRows(ctx20.resolvedHits[0],
+        ctx20.btm, ctx20.resolvedHits[0].afterSP, false, !!ctx20.resolvedHits[0].sdp);
+      ok("§20 ⭐ the window's RENDERED rows are exactly the shared builder's output, label for label and value for value",
+        shared.length === wRows.length
+        && shared.every((r, i) => r.label === wRows[i].label && r.value === wRows[i].value),
+        `${shared.length} shared vs ${wRows.length} rendered`);
+      try { await dlg20.close(); } catch (_e) {}
+    } finally {
+      for (const w of Object.values(ui.windows ?? {})) if (w?.constructor?.name === "DamageDialog") { try { await w.close(); } catch (_e) {} }
+      for (const [k, v] of Object.entries(prev20)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+      await wipeZones();
+      await wipeCards();
+      for (const t of [bareTok, cladTok]) if (t) await scene.deleteEmbeddedDocuments("Token", [t.id]).catch(() => {});
+      for (const a of [bare, clad]) if (a) await a.delete().catch(() => {});
+      await sleep(300);
+    }
+  }
+
   /* ── cleanup ────────────────────────────────────────────────────────────────────────────── */
   await wipeZones();
   await wipeCards();

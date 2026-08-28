@@ -1,0 +1,31 @@
+{{!--
+  Blast RESOLUTION card (CP2020 p.108) — one card for the whole detonation, posted after the confirm has
+  applied it. Rendered via renderChatCard with
+  { weaponName, radius, baseDamage, rows: [{ name, damage, note, breakdown }] }.
+
+  ⭐ WHY THIS CARD EXISTS (2026-08-28, ruling A). The ruling puts a collapsed per-figure math line on the
+  spread AND blast resolution cards, and the blast had no resolution card at all: the CONFIRM card is
+  posted at placement, BEFORE anything is applied, and at that moment the hit locations have not been
+  rolled — so a breakdown printed there would state SP the shot never met. What a reader could see after
+  a detonation was a set of progression cards and prompts with no statement of who was caught, for how
+  much, or what stopped it. This is the blast's counterpart to spread-result.hbs and is deliberately its
+  twin in shape: same wrapper, same row list, same partial, same reasons for the DIV rows.
+
+  `note` is a PRE-LOCALIZED clause or an empty string — it names the branch a row was applied through
+  when that branch is not the ordinary one (Listen Up p.105 concussion ignores SP entirely, so it has no
+  armour math to disclose and says so instead of showing an empty block).
+  i18n via CPLocal; triple-stash where the string carries <b>.
+--}}
+<div class="cyberpunk save-prompt">
+  <h3>{{CPLocal "ExplosionResultTitle" weapon=weaponName}}</h3>
+  <div class="save-info">
+    <span>{{{CPLocal "ExplosionResultSummary" radius=radius damage=baseDamage}}}</span>
+    <div class="cp-spread-result-list">
+      {{#each rows}}
+        <div class="cp-spread-result-row">{{{CPLocal "ExplosionResultRow" name=this.name damage=this.damage}}}</div>
+        {{#if this.note}}<div class="cp-spread-result-row">{{this.note}}</div>{{/if}}
+        {{#if this.breakdown}}{{> "modules/cp2020-augmented/templates/chat/parts/area-breakdown.hbs" breakdown=this.breakdown}}{{/if}}
+      {{/each}}
+    </div>
+  </div>
+</div>
