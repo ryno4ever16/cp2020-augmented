@@ -1118,6 +1118,37 @@ export async function placeCoverZone({ scene, label, sp, poolMax } = {}) {
 /** The one live arming on this client (only ever one). Null when nothing is armed. */
 let _armedCover = null;
 
+/**
+ * ⭐ THE ARMED NOTICE IS PERMANENT, AND IT IS DISMISSED BY THE ARM ITSELF (user ruling 2026-08-28:
+ * *"fine as long as the message stays visible for the user and it's clear what to do"*).
+ *
+ * Why it had to change: the instruction and the gesture it describes are separated by however long the
+ * referee takes to pick a shape tool, find the barrier and drag it out. An ordinary toast is gone in
+ * seconds, so the one sentence naming what to do next expired before the doing — which is the whole of
+ * the complaint. `{ permanent: true }` makes it stand.
+ *
+ * ⛔ AND SOMETHING HAS TO TAKE IT DOWN, or a permanent notice becomes litter that outlives its own
+ * instruction. The notice's lifetime is EXACTLY the arm's, so it is carried ON the arm state and
+ * removed in `cancelCoverDrawArming` — the single choke point every ending already goes through:
+ *   · the draw LANDS      → the createRegion hook disarms before it writes → notice goes
+ *   · a second CONFIRM    → `armCoverDraw` disarms before it re-arms → the old notice goes, then the
+ *                           new one posts, so exactly one ever stands
+ *   · a scene CHANGE      → the canvasTearDown net disarms → notice goes
+ * One site, three endings, no fourth path to forget.
+ */
+function _dismissArmedNotice(state) {
+  const notice = state?.notice ?? null;
+  if (!notice) return false;
+  state.notice = null;
+  try {
+    ui.notifications?.remove?.(notice);
+    return true;
+  } catch (e) {
+    console.warn(`${SCOPE} | cover draw notice dismissal failed`, e);
+    return false;
+  }
+}
+
 /** Register the scene-teardown safety net exactly once (lazy — no init wiring needed). */
 let _armTearDownHooked = false;
 function _ensureArmTearDown() {
@@ -1167,6 +1198,8 @@ export function armCoverDraw({ label, sp, poolMax } = {}) {
     sp: Math.max(0, Math.round(Number(sp) || 0)),
     poolMax: Math.max(0, Math.round(Number(poolMax) || 0)),
     hookId: null,
+    // The standing instruction, filled in below once it has been posted. Its lifetime is this arm's.
+    notice: null,
   };
   state.hookId = Hooks.on("createRegion", (doc, _options, userId) => {
     // Somebody else's region is theirs, and a region on another scene is not what was armed.
@@ -1194,15 +1227,21 @@ export function armCoverDraw({ label, sp, poolMax } = {}) {
   } catch (e) {
     console.warn(`${SCOPE} | region layer activation failed`, e);
   }
-  ui.notifications?.info?.(localizeParam("CoverDrawArmed",
-    { name: state.label || localize("CoverZoneFallbackName") }));
+  // ⭐ PERMANENT: this sentence has to outlive the pause between reading it and doing it (see the
+  // block on `_dismissArmedNotice`). The wording already names the gesture ("draw it with any Region
+  // shape tool"), what the next region becomes, and how to back out ("draw nothing to cancel"), which
+  // is the test the ruling set — so the string is unchanged and only its lifetime moved.
+  state.notice = ui.notifications?.info?.(localizeParam("CoverDrawArmed",
+    { name: state.label || localize("CoverZoneFallbackName") }), { permanent: true }) ?? null;
   return { ...state };
 }
 
-/** Cancel any live arming (exported for teardown / tests). Nothing was created, so nothing is undone. */
+/** Cancel any live arming (exported for teardown / tests). Nothing was created, so nothing is undone —
+ *  except the standing instruction, which is taken down here because this is where every ending meets. */
 export function cancelCoverDrawArming() {
   if (!_armedCover) return false;
   try { Hooks.off("createRegion", _armedCover.hookId); } catch (_e) { /* ignore */ }
+  _dismissArmedNotice(_armedCover);
   _armedCover = null;
   return true;
 }
@@ -1210,6 +1249,12 @@ export function cancelCoverDrawArming() {
 /** Is a cover draw armed on this client right now? Read by the keeper; nothing branches on it. */
 export function coverDrawArmed() {
   return _armedCover ? { ..._armedCover } : null;
+}
+
+/** The standing instruction's id, or null. Exported so the keeper can ask the notification manager
+ *  about it by value rather than counting toasts on the screen. */
+export function coverDrawNoticeId() {
+  return _armedCover?.notice?.id ?? null;
 }
 
 /** The preset-picker dialog behind the scene-control button. */

@@ -281,6 +281,25 @@ const res = await page.evaluate(async () => {
         && armedFromDialog.label === "__PWK__Drawn Barrier" && armedFromDialog.sceneId === scene.id,
         JSON.stringify(armedFromDialog));
       ok("§7 the client reports itself armed", !!cov.coverDrawArmed());
+
+      /* ── (b2) THE STANDING INSTRUCTION (user ruling 2026-08-28) ─────────────────────────────────────
+       * The sentence naming the next gesture has to still be on screen WHEN the referee performs it.
+       * An ordinary toast expires in seconds; these legs pin that this one does not, and — the other
+       * half of a permanent notice — that something takes it down at every ending. Asserted through the
+       * notification manager's own answer and the toast's own element, never by counting pixels. */
+      await sleep(250);
+      const armedNotice = cov.coverDrawArmed()?.notice ?? null;
+      const armedNoticeId = cov.coverDrawNoticeId();
+      ok("§7 ⭐ arming posts a notice and the module holds its id", armedNoticeId !== null, armedNoticeId);
+      ok("§7 ⭐ the notice is PERMANENT — it does not expire out from under the gesture it describes",
+        armedNotice?.permanent === true, `permanent=${armedNotice?.permanent}`);
+      ok("§7 the notification manager still holds it",
+        ui.notifications.has(armedNoticeId) === true, ui.notifications.has(armedNoticeId));
+      ok("§7 and it is really on screen — its own element is in the document",
+        armedNotice?.element?.isConnected === true, `connected=${armedNotice?.element?.isConnected}`);
+      ok("§7 the notice names the gesture and the way out, not just the fact",
+        /region/i.test(armedNotice?.message ?? "") && /cancel/i.test(armedNotice?.message ?? ""),
+        String(armedNotice?.message ?? "").slice(0, 90));
       ok("§7 the confirm put the referee on the region layer with a draw tool live",
         (ui.controls?.control?.name ?? ui.controls?.activeControl) === "regions" || canvas.regions?.active === true,
         `control=${ui.controls?.control?.name ?? "?"} layerActive=${canvas.regions?.active}`);
@@ -305,6 +324,13 @@ const res = await page.evaluate(async () => {
 
       /* ── (d) ONE-SHOT: the arming is spent, and a second draw gains nothing ────────────────────── */
       ok("§7 the arming disarmed itself on the draw", cov.coverDrawArmed() === null);
+      await sleep(250);
+      ok("§7 ⭐ THE DRAW LANDING TAKES THE INSTRUCTION DOWN — the manager no longer holds it",
+        ui.notifications.has(armedNoticeId) === false, ui.notifications.has(armedNoticeId));
+      ok("§7 and its element left the document with it",
+        armedNotice?.element?.isConnected === false, `connected=${armedNotice?.element?.isConnected}`);
+      ok("§7 the module holds no notice while nothing is armed", cov.coverDrawNoticeId() === null,
+        cov.coverDrawNoticeId());
       const second = await drawRegion("__PWK__Plain Region");
       ok("§7 ⭐ a SECOND region drawn after it gains nothing",
         behOf(second) === null && second.name === "__PWK__Plain Region",
@@ -312,7 +338,19 @@ const res = await page.evaluate(async () => {
 
       /* ── (e) THE SECOND ACT: arming again re-arms with the NEW values ──────────────────────────── */
       const rearmed = cov.armCoverDraw({ label: "__PWK__Redrawn", sp: 5, poolMax: 0 });
-      ok("§7 a second arming takes the new preset", rearmed?.sp === 5 && rearmed?.poolMax === 0, JSON.stringify(rearmed));
+      ok("§7 a second arming takes the new preset", rearmed?.sp === 5 && rearmed?.poolMax === 0,
+        JSON.stringify({ sp: rearmed?.sp, poolMax: rearmed?.poolMax, label: rearmed?.label }));
+      // And the re-arm's own notice half: the first one had to go BEFORE this one posted, or two
+      // contradicting instructions stand at once and the referee reads the stale one.
+      await sleep(250);
+      const rearmNoticeId = cov.coverDrawNoticeId();
+      ok("§7 ⭐ re-arming posts a NEW notice", rearmNoticeId !== null && rearmNoticeId !== armedNoticeId,
+        `${armedNoticeId} → ${rearmNoticeId}`);
+      ok("§7 ⭐ and exactly one stands: the new one held, the old one gone",
+        ui.notifications.has(rearmNoticeId) === true && ui.notifications.has(armedNoticeId) === false,
+        `new=${ui.notifications.has(rearmNoticeId)} old=${ui.notifications.has(armedNoticeId)}`);
+      ok("§7 the standing notice names the SECOND preset, not the first",
+        /Redrawn/.test(rearmed?.notice?.message ?? ""), String(rearmed?.notice?.message ?? "").slice(0, 80));
       const third = await drawRegion();
       const tb = behOf(third);
       ok("§7 the next draw takes the SECOND arming's values, not the first's",
@@ -325,9 +363,15 @@ const res = await page.evaluate(async () => {
       /* ── (f) A SCENE CHANGE DISARMS — an arm cannot outlive the canvas it was made on ──────────── */
       cov.armCoverDraw({ label: "__PWK__Stale", sp: 10, poolMax: 30 });
       ok("§7 armed before the scene change", !!cov.coverDrawArmed());
+      await sleep(250);
+      const staleNoticeId = cov.coverDrawNoticeId();
+      ok("§7 the pre-teardown arm is holding its own notice",
+        staleNoticeId !== null && ui.notifications.has(staleNoticeId) === true, staleNoticeId);
       Hooks.callAll("canvasTearDown");
-      await sleep(200);
+      await sleep(300);
       ok("§7 ⭐ the scene change disarmed it", cov.coverDrawArmed() === null);
+      ok("§7 ⭐ AND TOOK THE INSTRUCTION WITH IT — a permanent notice cannot outlive its own arm",
+        ui.notifications.has(staleNoticeId) === false, ui.notifications.has(staleNoticeId));
       const orphan = await drawRegion("__PWK__After Teardown");
       ok("§7 and a region drawn afterwards gains nothing",
         behOf(orphan) === null && orphan.name === "__PWK__After Teardown",
