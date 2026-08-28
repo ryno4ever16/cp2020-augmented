@@ -68,8 +68,18 @@ export function registerSuppressiveZoneBehavior() {
   class SuppressiveZoneBehavior extends Base {
     static defineSchema() {
       return {
+        // ⏪⭐ `min: 0` SINCE 2026-08-27 — the schema was the LAST floor, and the loudest, because a
+        // DataModel clamp is silent: the plant handed it the honest `saveDC: 0` an over-wide zone
+        // computes to and the field wrote back a 1, so the live readout said 0 while the planted
+        // behaviour asked for 1. The whole supersession (and the upstream author's stated reason for
+        // it) is at lookups.js `FireZoneWidth`; a DC of 0 is a real answer, not a broken one — the
+        // evasion roll's minimum is 1, so everybody crossing passes.
+        // ⚠ `initial` STAYS 1, deliberately. The floor that moved is on what a PLANT may state; a
+        // hand-authored lane a referee creates from the Region sheet still opens at 1 rather than at a
+        // zone nobody has to save against. Widening a `min` needs no migration: every value already
+        // stored is still valid.
         saveDC: new fields.NumberField({
-          required: true, integer: true, min: 1, initial: 1,
+          required: true, integer: true, min: 0, initial: 1,
           label: "CYBERPUNK.SuppZoneBehaviorSaveDC",
           hint: "CYBERPUNK.SuppZoneBehaviorSaveDCHint",
         }),

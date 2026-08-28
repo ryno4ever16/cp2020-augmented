@@ -158,21 +158,21 @@ const WIDTH_STEP = 1;       // metres per plain wheel notch
 const ROTATE_STEP_DEG = 15; // degrees per SHIFT+wheel notch on the legacy preview (core's own coarse step)
 
 /**
- * The wheel's ceiling for a burst: a zone wider than the rounds fired divides the save below 1, where it
- * is pinned anyway, so every metre past this one would be free. Raised to the floor for a burst so short
- * the two would cross.
- */
-function _widthCap(roundsFired) { return Math.max(WIDTH_FLOOR, roundsFired); }
-
-/**
  * The evasion save a burst of `roundsFired` asks for at `widthM` metres — CP2020 p.101, the quotient
  * ROUNDED DOWN (ruled 2026-08-27). The book settles the rounding in its own worked example: p.106 puts
  * 64 rounds into a 5-metre area and calls for "a save of 12 or greater" — 12.8 floored, not 13 — and the
  * base system's 1.2 development build computes `Math.floor` at both of its sites (its item/item.js at
- * fire time, its combat.js in the turn upkeep), so the two readings converge. The `max(1, …)` guard stays:
- * a save of 0 or less is not a save, and it is what pins the wheel's own width cap.
+ * fire time, its combat.js in the turn upkeep), so the two readings converge.
+ *
+ * ⏪⭐ THE `max(1, …)` FLOOR IS GONE (2026-08-27, conforming to the upstream landing — see the
+ * supersession note at lookups.js `FireZoneWidth`). A zone spread wider than the burst that pays for it
+ * now honestly reads **save 0**, which is what the arithmetic says and what the base system's own card
+ * math prints. A DC of 0 is not a broken save: the evasion roll is `1d10 + REF + Athletics`, whose
+ * minimum is 1, so `total > dc` passes for everybody — i.e. a zone nobody has to save against, which is
+ * exactly the bad choice the shooter made and can see. The remaining `max(1, widthM)` is a
+ * divide-by-zero guard on the DIVISOR, not a floor on the answer.
  */
-function _dcFor(roundsFired, widthM) { return Math.max(1, Math.floor(roundsFired / Math.max(1, widthM))); }
+function _dcFor(roundsFired, widthM) { return Math.floor(roundsFired / Math.max(1, widthM)); }
 
 /**
  * The opening width: the DECLARED fire-zone number and nothing else — the dialog's zoneWidth field, or the
@@ -185,15 +185,18 @@ function _seedWidth(opts) {
 
 /**
  * One plain wheel notch, as a value. Scroll away widens the zone (an easier save), scroll toward narrows it
- * (a harder one). The cap is applied only when WIDENING and is itself floored at the current width, so a
- * re-armed zone seeded wider than this burst's cap (an unlock of an older lane) is never yanked smaller by
- * the first notch — it can only be walked down by hand. Pure, so both placement paths step identically.
+ * (a harder one). Floored at the book's 2 metres and **open above it**. Pure, so both placement paths step
+ * identically.
+ *
+ * ⏪⭐ THE ROUNDS-FIRED CEILING IS GONE (2026-08-27), and with it the `roundsFired` parameter this took
+ * only to compute one. The reason is the upstream author's own, quoted at lookups.js `FireZoneWidth`:
+ * *"this system prefers showing a bad choice over refusing it."* A zone wider than the burst prices a
+ * save of 0 and the shooter watches it happen on the live readout while they scroll, which is a better
+ * teacher than a wheel that stops moving for reasons nothing on screen explains.
  */
-function _steppedWidth(widthM, deltaY, roundsFired) {
+function _steppedWidth(widthM, deltaY) {
   const step = deltaY < 0 ? WIDTH_STEP : -WIDTH_STEP;
-  return step > 0
-    ? Math.min(Math.max(_widthCap(roundsFired), widthM), widthM + step)
-    : Math.max(WIDTH_FLOOR, widthM + step);
+  return Math.max(WIDTH_FLOOR, widthM + step);
 }
 
 /** The cursor-following width/save readout — DOM (styleable + localizable), never canvas text. */
@@ -382,8 +385,9 @@ async function _armLegacyPreview({ scene, opts, roundsFired }) {
       // native path hands this same gesture to CORE's rotate rather than doing the arithmetic itself.
       state.angleDeg = (state.angleDeg + (ev.deltaY < 0 ? -ROTATE_STEP_DEG : ROTATE_STEP_DEG)) % 360;
     } else {
-      // Plain wheel RE-SIZES, by the same pure step the native path uses.
-      state.widthM = _steppedWidth(state.widthM, ev.deltaY, roundsFired);
+      // Plain wheel RE-SIZES, by the same pure step the native path uses — floored at 2 m and open
+      // above, so a shooter can draw a zone nobody needs to save against and see the price say 0.
+      state.widthM = _steppedWidth(state.widthM, ev.deltaY);
     }
     redraw();
   };
@@ -437,7 +441,7 @@ async function _armLegacyPreview({ scene, opts, roundsFired }) {
   window.addEventListener("contextmenu", onContext, true);
   window.addEventListener("keydown", onKey, true);
 
-  ui.notifications?.info?.(localize("SuppPreviewArmed"));
+  ui.notifications?.info?.(localizeParam("SuppPreviewArmed", { hint: localize("SuppZoneWidthHint") }));
   redraw();
 }
 
@@ -508,9 +512,13 @@ async function _armNativePlacement({ scene, opts, roundsFired }) {
   const onPlainWheel = (ev) => {
     if (!_isCanvasEvent(ev)) return;                       // a scroll over open UI scrolls that UI
     if (ev.shiftKey || ev.ctrlKey || ev.metaKey) return;   // modified notches are core's to rotate with
+    // Read before the notch is consumed: a placement context core has already torn down leaves the
+    // wheel to its own zoom rather than silently moving a width nothing will draw.
+    const ctx = layer?._placementContext;
+    if (!ctx?.shape || !ctx?.preview?.document) return;
     ev.preventDefault();
     ev.stopPropagation();                                  // ...and core does not zoom under the preview
-    state.widthM = _steppedWidth(state.widthM, ev.deltaY, roundsFired);
+    state.widthM = _steppedWidth(state.widthM, ev.deltaY);
     resizeLivePreview();
     paint();
   };
@@ -528,7 +536,7 @@ async function _armNativePlacement({ scene, opts, roundsFired }) {
 
   window.addEventListener("wheel", onPlainWheel, { capture: true, passive: false });
   window.addEventListener("pointermove", trackPointer, true);
-  ui.notifications?.info?.(localize("SuppPreviewArmed"));
+  ui.notifications?.info?.(localizeParam("SuppPreviewArmed", { hint: localize("SuppZoneWidthHint") }));
   paint();
 
   const sidePx = metersToPixels(scene, state.widthM);

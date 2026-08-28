@@ -564,21 +564,14 @@ export class ModifiersDialog extends HandlebarsApplicationMixin(ApplicationV2) {
         if (!validateIntegerRangeInput(roundsInput, { min: 1, max: maxRounds, messageKey: "IntegerRangeInvalid", report })) return false;
       }
 
-      // ⭐ THE WIDTH IS ALSO CAPPED, at the rounds this burst fires (ruled 2026-08-27, ledger #23as).
-      // The save is rounds ÷ width, so at width > rounds the quotient drops below 1 and the floor at 1
-      // is the only thing left holding it up: every further metre of zone is free, and the declaration
-      // stops meaning anything. The ceiling is the LIVE rounds entry rather than the field's static
-      // `data-max`, because the shooter can change the burst length in this same dialog and the pair
-      // has to stay consistent with what they will actually fire; the static max is the fallback for a
-      // rounds box that is blank or unreadable. The zone geometry does not enforce this — the wheel out
-      // on the canvas turns the square now and cannot re-size it — so this is the one door.
+      // ⏪⭐ THE WIDTH'S ROUNDS CEILING IS RETIRED (2026-08-27) — the full supersession, and the
+      // upstream author's stated reason for it, are at lookups.js `FireZoneWidth`. It shipped for one
+      // day: the width was capped at the LIVE rounds entry so a declaration could not out-run the burst
+      // that pays for it. What replaces it is not a looser cap but no cap: an over-wide zone is
+      // ACCEPTED and its save is displayed as the 0 it computes to, here and on the canvas readout.
+      // The floor stays — 2 m is the book's, and it is the divisor's own guard.
       const zoneMin = Math.max(1, Math.floor(Number(zoneWidthInput?.dataset?.min) || 2));
-      const enteredRounds = Number(String(roundsInput?.value ?? "").trim());
-      const roundsCeiling = Number.isFinite(enteredRounds) && enteredRounds > 0
-        ? Math.floor(enteredRounds)
-        : maxRounds;
-      const zoneMax = roundsCeiling > 0 ? Math.max(zoneMin, roundsCeiling) : Infinity;
-      if (!validateNumberRangeInput(zoneWidthInput, { min: zoneMin, max: zoneMax, messageKey: "NumberRangeInvalid", report })) return false;
+      if (!validateNumberRangeInput(zoneWidthInput, { min: zoneMin, max: Infinity, messageKey: "NumberRangeInvalid", report })) return false;
 
       if (!validateIntegerMinInput(targetsInput, { min: 1, messageKey: "IntegerMinInvalid", report })) return false;
 
