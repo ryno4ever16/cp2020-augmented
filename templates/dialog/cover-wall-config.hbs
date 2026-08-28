@@ -58,25 +58,25 @@
     {{#if breached}}
     <p class="hint cp-cover-breached-note">{{CPLocal "CoverWallBreachedNote"}}</p>
     {{/if}}
+    {{!-- Tooltips live on the LABELS ONLY (user ruling 2026-08-28): a tooltip on the number input
+          itself opened while typing/hovering the field and covered the rest of the form. Hover the
+          field's title to read it; the input stays quiet. --}}
     <div class="form-group">
         <label data-tooltip="{{CPLocal 'CoverWallSPTip'}}">{{CPLocal "CoverWallSPName"}} <span class="cp-cover-book">{{CPLocal "CoverWallSPBook"}}</span></label>
         <div class="form-fields">
-            <input type="number" name="flags.{{scope}}.coverSp" value="{{sp}}" min="0" step="1"
-                   data-tooltip="{{CPLocal 'CoverWallSPTip'}}"/>
+            <input type="number" name="flags.{{scope}}.coverSp" value="{{sp}}" min="0" step="1"/>
         </div>
     </div>
     <div class="form-group">
         <label data-tooltip="{{CPLocal 'CoverWallPoolTip'}}">{{CPLocal "CoverWallPoolName"}} <span class="cp-cover-book">{{CPLocal "CoverWallPoolBook"}}</span></label>
         <div class="form-fields">
-            <input type="number" name="flags.{{scope}}.coverPool" value="{{pool}}" min="0" step="1"
-                   data-tooltip="{{CPLocal 'CoverWallPoolTip'}}"/>
+            <input type="number" name="flags.{{scope}}.coverPool" value="{{pool}}" min="0" step="1"/>
         </div>
     </div>
     <div class="form-group">
         <label data-tooltip="{{CPLocal 'CoverWallPoolMaxTip'}}">{{CPLocal "CoverWallPoolMaxName"}} <span class="cp-cover-book">{{CPLocal "CoverWallPoolMaxBook"}}</span></label>
         <div class="form-fields">
-            <input type="number" name="flags.{{scope}}.coverPoolMax" value="{{poolMax}}" min="0" step="1"
-                   data-tooltip="{{CPLocal 'CoverWallPoolMaxTip'}}"/>
+            <input type="number" name="flags.{{scope}}.coverPoolMax" value="{{poolMax}}" min="0" step="1"/>
         </div>
     </div>
     <div class="form-group cp-cover-wall-buttons">

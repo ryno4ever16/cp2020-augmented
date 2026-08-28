@@ -3051,16 +3051,17 @@ export function classCadenceMs(cls) {
  * withheld last round would leave the apply window waiting on the fallback timer instead of on the
  * engine. So a capped volley draws its FIRST `cap` rounds and its LAST one.
  *
- * ⚠ WHY 4 FOR THE SHELL CLASS, checkable rather than taste: every volley a pump or a burst actually
- * fires at the table (1–3 shells) is untouched, and a long automatic volley — the only shape the report
- * was ever made about — stops adding create work after four rounds, which is where the queue stops
- * growing faster than the 180 ms cadence drains it. A class whose row is absent here is UNCAPPED, which
- * is every other class: none of them was reported and none of them plants ground fire the way the shell
- * does. ⏪ REVERT is this table: empty it and every round draws again.
+ * ⏪⏪ THE TABLE IS EMPTY BY USER RULING (2026-08-28, at the release gate): "Not playing the
+ * animation to stop the lag seems nonsensical." The cap was the emergency fallback from the era when
+ * pictures trailed their reports by seconds — withholding mid-volley pictures kept the create queue
+ * from growing faster than the cadence drained it — but the real fix (FX_AUDIO_PHASE, the per-client
+ * self-measured report timing) shipped and measured zero trailing rounds, so the cap had become
+ * belt-and-braces that visibly ate animations. Every round draws again; the drop rule (a fraction of
+ * cadence, load-measured) remains the only thing that may withhold a picture, and only under real
+ * renderer distress. ⏪ REVERT: `shotgun: 4` — the measured row the cap shipped with, kept here so
+ * the fallback is one line away if a client class ever resurfaces the trailing report.
  */
-export const FX_DRAWN_ROUND_CAP = Object.freeze({
-  shotgun: 4,
-});
+export const FX_DRAWN_ROUND_CAP = Object.freeze({});
 
 /** Test seam of the same family as `_setDropLagMs` and `_setAudioPhase`, armed by nothing that ships:
  *  force a budget for every class (0 = uncapped), or `null` to restore the table. It exists so a keeper

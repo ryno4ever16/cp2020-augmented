@@ -3514,7 +3514,9 @@ body.cp-carolingian .cyberpunk.sheet.vehicle .field-list .field {
    colour the active badge above uses, so one glance down the body map reads the same way. */
 .cp-cyber-switch {
   flex: 0 0 auto;
-  margin-right: 4px;
+  /* 4px put the bolt almost on top of the eject control beside it — a mis-tap uninstalls the
+     implant you meant to activate (user report 2026-08-28). 14px separates the two gestures. */
+  margin-right: 14px;
   cursor: pointer;
   opacity: 0.45;
   filter: grayscale(1);
@@ -4216,3 +4218,17 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-cover-place-body .field > label { flex: 1 1 11em; min-width: 8em; }
 .cp-cover-place-body { display: flex; flex-direction: column; gap: 8px; }
 .cp-cover-place-body > :is(p, div) { margin: 0; flex: 0 0 auto; }
+
+/* ── The medical-extraction call's optional crew question (2026-08-28) ──────────────────────────────
+   The same shape as the cover placement dialog above and for the same reasons: ONE gap-owning column
+   so the two hints and the two rows keep an even pitch, and the children's own margins zeroed so the
+   generic paragraph rules cannot leak an uneven one back in.
+   The actor select carries the shared `.cp2020ae-install-picker` class (the long-option idiom, :553) —
+   an explicit min-width in place of the flex auto-minimum, so a world with one very long actor name
+   makes the select clip rather than shoving the label to a stub. Only the row height is added here,
+   which that class does not carry: a bare select is ~39px intrinsic against a 24px number input, and
+   an unpinned one would balloon its row against its neighbour. */
+.cp-tt-crew-body { display: flex; flex-direction: column; gap: 8px; }
+.cp-tt-crew-body > :is(p, div) { margin: 0; flex: 0 0 auto; }
+.cp-tt-crew-body .field > label { flex: 1 1 11em; min-width: 8em; }
+.cp-tt-crew-body .field > select { height: 24px; min-height: 24px; }
