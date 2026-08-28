@@ -2667,7 +2667,32 @@ async function _confirmExplosion(templateId) {
     // The barrier's SP for this detonation — a single event, so round 0 of its ledger.
     const coverSP = entry.soaked ? areaCoverSpForRound(chewPlan, entry.row, 0) : 0;
 
-    if (detailed) {
+    // ⭐⭐ WHICH APPLICATION THIS WARHEAD GETS — the fork, and the reason it is not simply `detailed`
+    // (ruled 2026-08-28, after a closed sweep of Listen Up). READ THIS BEFORE CHASING
+    // "incendiary doesn't work right with detailed explosion rules on".
+    //
+    //   ① LISTEN UP HAS NO FIRE RULES. The sweep was closed, not a spot check: incendiary / thermite /
+    //      "catches fire" / fire damage, across all 114 pages — nothing. What p.105 prints is a
+    //      CONCUSSION + SHRAPNEL model, and it is written for HIGH EXPLOSIVE: overpressure that ignores
+    //      SP, half of it permanent and half stun, plus the fragments the casing throws.
+    //   ② THE CORE p.64 INCENDIARY ENTRY IS THE WARHEAD'S OWN PRINTED EFFECT: "4D6 for 3 turns". The
+    //      listed damage IS the fire. There is no overpressure to model for it and nothing to split in
+    //      half — an incendiary warhead is a fire-starting device, not a blast one.
+    //   ③ SO: a FIRE-TYPED warhead takes the CORE application on this branch — the identical call the
+    //      default branch below makes, `{...f}` and all, so the load's own printed burn (and its other
+    //      riders) reach the figure exactly as they do with the optional mode off. The concussion +
+    //      shrapnel split stays RESERVED for explosive warheads, which is the only kind p.105 describes.
+    //   ④ AND ITS COVER BEHAVIOUR IS THE CORE BRANCH'S, deliberately: the barrier's SP is folded in as
+    //      the outermost layer (`coverSP` below), NOT waived the way this branch waives it for
+    //      concussion. Fire is a thing a wall stops; overpressure is the thing that goes round one.
+    //      The no-cover-fold rule under ⛔ below is a statement about concussion, and it stays there.
+    //
+    // The question asked is the AREA's own rider record — the seven fields `_placeExplosion` wrote —
+    // and not the weapon's name or the payload, because the area outlives the payload and this confirm
+    // reads the area and nothing else.
+    const fireWarhead = Boolean(f.dotEnabled) && String(f.dotType ?? "") === "fire";
+
+    if (detailed && !fireWarhead) {
       // HEP concussion (SP ignored, ½ permanent + ½ stun, soft armor −2). Optional shrapnel on top.
       // ⛔ NO COVER FOLD ON THIS BRANCH, deliberately: Listen Up p.105 has concussion ignore SP, and a
       // barrier's SP is SP. The object is still charged for the blast it received (the plan above ran
@@ -2683,9 +2708,14 @@ async function _confirmExplosion(templateId) {
         // the load's shock/burn stay with the warhead's MAIN blast application in the branch below.
         // ⚠ The consequence on THIS branch is that a rider-carrying load ignites nobody while
         // `explosivesDetailed` is on, because the main application here is the concussion (Listen Up
-        // p.105 overpressure, which takes only a weapon name). Recorded rather than silently patched:
-        // where an incendiary warhead's filler belongs in the concussion/fragment split is a rules
-        // question, not a wiring one.
+        // p.105 overpressure, which takes only a weapon name). ⏩ RESOLVED 2026-08-28 for the case that
+        // actually mattered: a FIRE-typed warhead no longer arrives here at all (see the routing note
+        // at the fork above — Listen Up prints no fire rules, so its concussion/shrapnel model is
+        // reserved for explosive warheads and an incendiary takes the core application instead). What
+        // remains true here is the narrow original case: an EXPLOSIVE warhead that also states a rider
+        // — an etching load, a shock load — has no rider-carrying application on this branch at all
+        // (the concussion takes a weapon name and nothing else), and the fragments add none of its own.
+        // That one is still the open rules question, and still recorded rather than silently patched.
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
           { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) },
@@ -2693,6 +2723,10 @@ async function _confirmExplosion(templateId) {
       }
     } else {
       // Core blast: range-banded damage through normal armor, with the barrier folded outermost.
+      // ⭐ TWO ROUTES REACH THIS ONE CALL (2026-08-28): the ordinary blast with the optional detailed
+      // mode off, and a FIRE-TYPED warhead with it on. They are deliberately the SAME application
+      // rather than a copy — an incendiary is meant to behave identically under either setting, and a
+      // second call site is how the two would quietly drift apart.
       // `{...f}` is the whole delivery of the load's riders too — the seven fields the placement wrote
       // arrive here unaltered, and `_applyAreaHitToToken` destructures and honors them exactly as it
       // does for a pattern's shells. Nothing on the apply side needed changing for this: the helper was

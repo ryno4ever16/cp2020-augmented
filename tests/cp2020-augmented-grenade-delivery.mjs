@@ -39,6 +39,11 @@
  *     without the fields seeds nothing, an area written before the fields existed still applies plain
  *     damage cleanly, the batched save cadence is one prompt per body, and the shrapnel secondary of
  *     the detailed branch deliberately carries no riders of its own.
+ * §14 the DETAILED branch's warhead routing: with the optional mode ON, a fire-typed warhead takes the
+ *     CORE application (burn seeded flat, shock rider honored, NOT one p.105 concussion card), an
+ *     explosive one still takes concussion (its card once, the ½-permanent arithmetic by value, riders
+ *     dropped), the fork is fire-TYPED rather than rider-typed (an acid load still concusses), and the
+ *     mode OFF answers exactly as it always did.
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-grenade-delivery.mjs
  */
@@ -1663,13 +1668,23 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       }
 
       /* ── (f) THE SHRAPNEL SECONDARY carries no riders of its own (the ruling, pinned) ──────────── */
+      // ⚠ THE PAYLOAD HERE IS DELIBERATELY NOT FIRE-TYPED (realigned 2026-08-28 with §14). The ruling
+      // this leg pins is about the CONCUSSION branch's fragment secondary, so the payload has to reach
+      // that branch: a fire-typed warhead now routes to the core application instead (§14) and would
+      // never touch the shrapnel call at all. An etching load states the same two riders and is
+      // explosive-typed, so it lands where this leg needs it.
       await resetCatcher();
       await game.settings.set(SCOPE, "explosivesDetailed", true);
-      const detArea = await placeBlast({ ...RIDERS, blastShrapnel: true });
+      const detArea = await placeBlast({ ...RIDERS, dotType: "acid", blastShrapnel: true });
       ok("§13 the detailed branch places its blast", !!detArea);
       if (detArea) {
+        const detFrom = new Set(game.messages.map(m => m.id));
         await confirmArea(detArea.id);
         await sleep(1500);
+        const concussionCards = [...game.messages].filter(m => !detFrom.has(m.id)
+          && /concussion/i.test(m.content ?? "") && (m.content ?? "").includes(catcher.name)).length;
+        ok("§13 WIRING — an explosive-typed warhead did take the concussion branch (its card was posted)",
+          concussionCards === 1, `concussion cards=${concussionCards}`);
         ok("§13 RULING — the shrapnel secondary asks no second save and starts no second burn",
           dotOf().length === 0 && !catcher.getFlag(SCOPE, "taserState"),
           `dot=${JSON.stringify(dotOf())} taser=${JSON.stringify(catcher.getFlag(SCOPE, "taserState") ?? null)}`);
@@ -1685,6 +1700,185 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       if (catchTok) await catchTok.delete().catch(() => {});
       if (catcher) await catcher.delete().catch(() => {});
       for (const [k, v] of Object.entries(prev13)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+    }
+  });
+
+  /* ══════════════════ §14 the DETAILED branch's warhead routing ══════════════════
+   * MECHANISM: with `explosivesDetailed` on, EVERY figure a blast caught took the Listen Up p.105 HEP
+   * application — concussion (SP ignored, half permanent + half stun, soft armour −2) plus an optional
+   * fragment secondary — whatever the warhead was, and that application takes only a weapon name. A
+   * fire-typed load therefore damaged and ignited nobody the moment the optional mode was switched on.
+   * The routing now asks the area's own rider record what KIND of warhead it is: a fire-typed one takes
+   * the CORE application (the same call the default branch makes, riders and cover fold included), and
+   * the concussion/fragment split stays with explosive warheads.
+   *
+   * The setting is pinned ON for the whole section and restored in the finally. Every leg below is
+   * asked of the SAME body in turn — a figure carrying PRIOR state on every act after the first, which
+   * is the shape this batch's rider defects actually had. */
+  await sect("§14", async () => {
+    const prev14 = {};
+    const set14 = async (k, v) => { try { prev14[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    await set14("explosivesEnabled", true);
+    await set14("explosivesDetailed", true);       // ⭐ the whole section is the OPTIONAL mode
+    await set14("combatFxEnabled", false);         // §14 is about the DAMAGE rail
+    await set14("fireDotEnabled", true);
+    await set14("taserCumPenaltyEnabled", true);
+    await set14("damageAblation", false);
+    await set14("headHitDoubling", false);
+    await set14("limbModel", "core");
+
+    let body = null, bodyTok = null;
+    try {
+      body = await Actor.create({ name: "__PW__Detail Catcher", type: "character" });
+      [bodyTok] = await scene.createEmbeddedDocuments("Token", [{
+        name: body.name, actorId: body.id, actorLink: true,
+        x: 800, y: 1000 + 8 * gridPx, width: 1, height: 1,
+      }]);
+      await sleep(600);
+      ok("§14 HARNESS GUARD — the catching figure is on the canvas this section will measure",
+        canvas.scene?.id === scene.id && !!canvas.tokens.get(bodyTok.id),
+        `scene=${canvas.scene?.id === scene.id} token=${!!canvas.tokens.get(bodyTok.id)}`);
+
+      const allAreas = () => (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+      const FIRE = { stunSaveOnHit: true, stunSaveMod: -3, dotEnabled: true, dotTurns: 3,
+                     dotType: "fire", dotDamageFormula: "4d6", dotFlat: true };
+      const ETCH = { ...FIRE, dotType: "acid" };
+      const BASE_DMG = 10;
+
+      const placeBlast = async (extra) => {
+        const before = new Set(allAreas().filter(d => F(d).isExplosion).map(d => d.id));
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, attackerTokenId: shTok.id, weaponName: "__PW__Detail Probe",
+          attackType: "Grenade", areaDamages: { Torso: [{ damage: BASE_DMG }] }, shotsFired: 1, shotsHit: 1,
+          targetTokenId: bodyTok.id, fxTargetTokenId: bodyTok.id, firedByUserId: game.user.id,
+          blastRadius: 3, ...extra,
+        });
+        for (let i = 0; i < 60; i++) {
+          const a = allAreas().find(d => F(d).isExplosion && !before.has(d.id));
+          if (a) return a;
+          await sleep(300);
+        }
+        return null;
+      };
+      const confirmArea = async (areaId) => {
+        let btn = null;
+        for (let i = 0; i < 40; i++) {
+          btn = document.querySelector(`.cp-confirm-explosion[data-template-id="${areaId}"]`);
+          if (btn) break;
+          await sleep(250);
+        }
+        if (!btn) return false;
+        btn.click();
+        await sleep(2500);
+        return true;
+      };
+      const dotOf = () => body.getFlag(SCOPE, "fireDotState") ?? [];
+      const resetBody = async () => {
+        await body.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+        await body.unsetFlag(SCOPE, "taserState").catch(() => {});
+        await body.update({ "system.damage": 0 });
+        for (const s of ["dead", "burning"]) {
+          try { if (body.statuses?.has?.(s)) await body.toggleStatusEffect(s, { active: false }); } catch (_e) {}
+        }
+      };
+      const dropArea = async (area) => { try { await area.delete(); } catch (_e) {} };
+      // The concussion application's own receipt, scoped to THIS body: the p.105 card names the figure
+      // and says "concussion". Its presence is the branch the routing chose, stated by the code itself.
+      const concussionCardsSince = (from) => [...game.messages].filter(m => !from.has(m.id)
+        && /concussion/i.test(m.content ?? "") && (m.content ?? "").includes(body.name)).length;
+
+      /* ── (a) A FIRE-TYPED WARHEAD takes the CORE application on the detailed branch ─────────────── */
+      await resetBody();
+      const fireFrom = new Set(game.messages.map(m => m.id));
+      const fireArea = await placeBlast({ ...FIRE });
+      ok("§14 an incendiary warhead places its blast with the optional mode ON", !!fireArea);
+      if (fireArea) {
+        ok("§14 the confirm card was posted for it", await confirmArea(fireArea.id));
+        for (let i = 0; i < 30 && dotOf().length === 0; i++) await sleep(300);
+        const st = dotOf();
+        ok("§14 the caught figure took the blast's damage", Number(body.system.damage) > 0,
+          `damage=${body.system.damage}`);
+        ok("§14 ⭐ the fire warhead routed to the CORE application: the over-time state is seeded, FLAT",
+          st.length === 1 && st[0].flat === true && Number(st[0].mult) === 1
+          && String(st[0].formula) === "4d6" && Number(st[0].turnsLeft) === 3,
+          JSON.stringify(st));
+        const taser = body.getFlag(SCOPE, "taserState") ?? null;
+        ok("§14 the load's other rider is honored on the same application (the core call carries both)",
+          !!taser && Number(taser.count) === 1 && Number(taser.mod) === -3, JSON.stringify(taser));
+        ok("§14 ⭐ NEGATIVE — NO concussion application for a fire warhead: not one p.105 card for this body",
+          concussionCardsSince(fireFrom) === 0, `concussion cards=${concussionCardsSince(fireFrom)}`);
+        const stun = [...game.messages].filter(m => !fireFrom.has(m.id)
+          && (m.content ?? "").includes("stun-save-prompt") && (m.content ?? "").includes(`data-actor-id="${body.id}"`)).length;
+        const mortal = [...game.messages].filter(m => !fireFrom.has(m.id)
+          && (m.content ?? "").includes("death-save-prompt") && (m.content ?? "").includes(`data-actor-id="${body.id}"`)).length;
+        ok("§14 REGRESSION — the batched save cadence holds: ONE stun prompt for this body, no mortal prompt",
+          stun === 1 && mortal === 0, `stun=${stun} mortal=${mortal}`);
+        await dropArea(fireArea);
+      }
+
+      /* ── (b) AN EXPLOSIVE WARHEAD on the SAME setting still takes concussion (regression) ───────── */
+      await resetBody();
+      const heFrom = new Set(game.messages.map(m => m.id));
+      const before = Number(body.system.damage) || 0;
+      const btm = Number(body.system.stats?.bt?.modifier) || 0;
+      // p.105 arithmetic, computed here from the same three numbers the application reads: SP is ignored,
+      // BTM comes off, half of what is left is permanent (floored, never below 1), and it lands on Torso.
+      const expectPermanent = Math.max(1, Math.floor(Math.max(1, BASE_DMG - btm) / 2));
+      const heArea = await placeBlast({});
+      ok("§14 a fragmentation warhead places its blast on the same setting", !!heArea);
+      if (heArea) {
+        await confirmArea(heArea.id);
+        await sleep(1500);
+        ok("§14 REGRESSION — the explosive warhead still takes concussion: its p.105 card is posted once",
+          concussionCardsSince(heFrom) === 1, `concussion cards=${concussionCardsSince(heFrom)}`);
+        ok("§14 REGRESSION — the ½-permanent arithmetic by value",
+          Number(body.system.damage) - before === expectPermanent,
+          `delta=${Number(body.system.damage) - before} expected=${expectPermanent} btm=${btm}`);
+        ok("§14 NEGATIVE — the concussion application carries no riders: no burn, no shock",
+          dotOf().length === 0 && !body.getFlag(SCOPE, "taserState"),
+          `dot=${JSON.stringify(dotOf())} taser=${JSON.stringify(body.getFlag(SCOPE, "taserState") ?? null)}`);
+        await dropArea(heArea);
+      }
+
+      /* ── (c) THE FORK READS THE WARHEAD'S TYPE, not merely "has a rider" ────────────────────────── */
+      await resetBody();
+      const etchFrom = new Set(game.messages.map(m => m.id));
+      const etchArea = await placeBlast({ ...ETCH });
+      ok("§14 an etching (acid) warhead places its blast", !!etchArea);
+      if (etchArea) {
+        await confirmArea(etchArea.id);
+        await sleep(1500);
+        ok("§14 ⭐ the fork is FIRE-typed, not rider-typed: an acid load still takes concussion",
+          concussionCardsSince(etchFrom) === 1, `concussion cards=${concussionCardsSince(etchFrom)}`);
+        ok("§14 NEGATIVE — and it starts no burn either (its rider is dropped with the branch)",
+          dotOf().length === 0, JSON.stringify(dotOf()));
+        await dropArea(etchArea);
+      }
+
+      /* ── (d) THE SETTING OFF IS UNCHANGED — the same load, the same core answer ─────────────────── */
+      await resetBody();
+      await game.settings.set(SCOPE, "explosivesDetailed", false);
+      const offFrom = new Set(game.messages.map(m => m.id));
+      const offArea = await placeBlast({ ...FIRE });
+      ok("§14 the same incendiary warhead places its blast with the mode OFF", !!offArea);
+      if (offArea) {
+        await confirmArea(offArea.id);
+        for (let i = 0; i < 30 && dotOf().length === 0; i++) await sleep(300);
+        const st = dotOf();
+        ok("§14 REGRESSION — with the mode OFF the answer is the one that always shipped: flat 4d6 × 3",
+          st.length === 1 && st[0].flat === true && Number(st[0].mult) === 1
+          && String(st[0].formula) === "4d6" && Number(st[0].turnsLeft) === 3, JSON.stringify(st));
+        ok("§14 REGRESSION — and no concussion card off the branch that never posts one",
+          concussionCardsSince(offFrom) === 0, `concussion cards=${concussionCardsSince(offFrom)}`);
+        await dropArea(offArea);
+      }
+    } finally {
+      for (const d of (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])])) {
+        if (F(d).isExplosion) await d.delete().catch(() => {});
+      }
+      if (bodyTok) await bodyTok.delete().catch(() => {});
+      if (body) await body.delete().catch(() => {});
+      for (const [k, v] of Object.entries(prev14)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
     }
   });
 
