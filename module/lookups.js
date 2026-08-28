@@ -257,6 +257,7 @@ export function caliberFamily(caliberId) {
 export const SPREAD_MODE_SINGLE = "single";
 export const SPREAD_MODE_BUCK = "buck";
 export const SPREAD_MODE_SLUG = "slug";
+export const SPREAD_MODE_FLECHETTE = "flechette";
 
 /**
  * The spread mode a fired round ACTUALLY has (CP2020 p.109). Pure of documents — takes the three
@@ -269,17 +270,24 @@ export const SPREAD_MODE_SLUG = "slug";
  * would have made the book behaviour reachable only by hand-editing ammo. Deriving it means an
  * untouched world's buckshot fires the pattern on the next shot, with no migration and no re-seed.
  *
- * The four cases, in the order they are decided:
+ * The cases, in the order they are decided:
  *   1. `slug` — the ONE load that puts a single projectile down a shotgun barrel. It is checked FIRST
  *      because it is the exception to the caliber rule, and it is asked of the load two ways (the
  *      seeded `spreadMode` and the modifier id itself) so an item whose fields were edited apart still
  *      resolves the same. Slugs must NOT gain a pattern.
- *   2. Any other explicitly declared non-single mode wins — `flechette` is the shipped one, and a
- *      hand-authored mode on a homebrew item keeps working exactly as it did.
- *   3. A non-shotgun caliber (or a caliber the registry does not know, including a blank one) is
+ *   2. ⭐ `flechette` throws the dart cloud FROM A SHOTGUN BARREL ONLY (user-ruled 2026-08-28, the
+ *      Militech Ronin report: a rifle loading flechette was firing shotgun patterns). The flechette
+ *      MODIFIER serves two ammo families — rifles load it for its armor arithmetic — and its whole
+ *      mech block, spreadMode included, is copied onto the ammo item, so the declaration rode into
+ *      cartridge calibers where a flechette round is physically ONE dart. A flechette SHELL is a
+ *      dart cloud (p.108's class: a spread of small projectiles) and keeps the pattern; a flechette
+ *      CARTRIDGE keeps quarter-armor and the ordinary single-target flow.
+ *   3. Any other explicitly declared non-single mode wins — a hand-authored mode on a homebrew item
+ *      keeps working exactly as it did.
+ *   4. A non-shotgun caliber (or a caliber the registry does not know, including a blank one) is
  *      single-target. A blank caliber answering "single" is the deliberate safe default: an item with
  *      no cartridge recorded must not start throwing patterns.
- *   4. Everything left is a shotgun-family caliber firing its default load — buckshot.
+ *   5. Everything left is a shotgun-family caliber firing its default load — buckshot.
  *
  * @param {{spreadMode?: string, caliber?: string, modifier?: string}} ammoFields
  * @returns {string} the resolved mode; "single" means the ordinary single-target damage flow
@@ -287,6 +295,7 @@ export const SPREAD_MODE_SLUG = "slug";
 export function spreadModeForAmmo({ spreadMode, caliber, modifier } = {}) {
   const declared = String(spreadMode ?? "").trim();
   if (declared === SPREAD_MODE_SLUG || String(modifier ?? "").trim() === SPREAD_MODE_SLUG) return SPREAD_MODE_SINGLE;
+  if (declared === SPREAD_MODE_FLECHETTE && caliberFamily(caliber) !== "shotgun") return SPREAD_MODE_SINGLE;
   if (declared && declared !== SPREAD_MODE_SINGLE) return declared;
   if (caliberFamily(caliber) !== "shotgun") return SPREAD_MODE_SINGLE;
   return SPREAD_MODE_BUCK;

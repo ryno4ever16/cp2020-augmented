@@ -157,7 +157,11 @@ const res = await page.evaluate(async () => {
   ok("§1 slug by modifier id alone (stale spread field)", M({ spreadMode: "single", caliber: "00", modifier: "slug" }) === "single");
   ok("§1 slug by spread field alone", M({ spreadMode: "slug", caliber: "12ga", modifier: "" }) === "single");
   ok("§1 flechette shell keeps its own mode", M({ spreadMode: "flechette", caliber: "00", modifier: "flechette" }) === "flechette");
-  ok("§1 flechette on a rifle cartridge still spreads", M({ spreadMode: "flechette", caliber: "10mm" }) === "flechette");
+  // ⭐ RULED 2026-08-28 (the Militech Ronin report): a flechette CARTRIDGE is one dart — the pattern
+  // belongs to the shell alone. This leg used to pin the opposite ("still spreads").
+  ok("§1 flechette on a rifle cartridge is a single dart, not a pattern", M({ spreadMode: "flechette", caliber: "10mm" }) === "single");
+  ok("§1 flechette on a pistol cartridge likewise", M({ spreadMode: "flechette", caliber: "9mm", modifier: "flechette" }) === "single");
+  ok("§1 flechette on a gauge alias still throws the cloud", M({ spreadMode: "flechette", caliber: "12ga", modifier: "flechette" }) === "flechette");
   ok("§1 rifle cartridge → single", M({ spreadMode: "single", caliber: "5.56", modifier: "ap" }) === "single");
   ok("§1 pistol cartridge → single", M({ spreadMode: "single", caliber: "9mm" }) === "single");
   ok("§1 arrow → single", M({ spreadMode: "single", caliber: "Arrow", modifier: "broadhead" }) === "single");
