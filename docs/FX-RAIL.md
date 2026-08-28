@@ -951,27 +951,31 @@ thirteen wrap slots and gets **one** hue out of each, on target to within 0.2°.
 SUMS the three channels; at 1 a white pixel maps to 3× white and clips. One third is the average.
 
 ⭐ **THE RAMP SPANS THE TRAIL** (measured on the 52.5 s showcase frame: eleven copies walk lime→violet
-across the *whole* line). `ghostHueFor(index, total)` therefore takes the trail's own length and gives
-each copy the colour at its **fraction** of it — a 13-copy trail gets two-to-three per colour, a
-26-copy trail four-to-five, and both start lime and end magenta. A caller that has no total (an
-index-only question) falls back to **wrapping at `ghostCap` (13)**, the reference count; that is the
-only thing `ghostCap` is still for. Asserted both ways, including the tell: index 13 with no total
-wraps back to lime, while index 13 of a 26-long trail is blue.
+across the *whole* line) **AND IS CONTINUOUS** (⏪ 2026-08-28-4, §6): `ghostHueFor(index, total)`
+maps each copy's trail fraction to a hue **angle** walked uniformly from lime (90°) to magenta
+(312°), and blends the two named stops bracketing that angle — every stop is passed through, no two
+adjacent ghosts jump a band, and the oldest/newest copies are exactly lime/magenta. The discrete
+two-per-colour banding this replaces put blue at the trail's halfway point as a hard jump. A caller
+that has no total (an index-only question) falls back to **wrapping at `ghostCap` (13)**, the
+reference count; that is the only thing `ghostCap` is still for. Asserted both ways, including the
+tell: index 13 with no total wraps back to lime, while index 13 of a 26-long trail is cyan.
 
-| wrap slots (no total) | share of a spanning trail | colour | hex | hue | matrix diagonal (R, G, B) |
-|---|---|---|---|---|---|
-| 0-2 | first sixth | lime | `0x80FF00` | 90° | 0.1673 · 0.3333 · 0 |
-| 3-4 | second sixth | teal | `0x00FFCC` | 168° | 0 · 0.3333 · 0.2667 |
-| 5-6 | third sixth | cyan | `0x00D4FF` | 190° | 0 · 0.2771 · 0.3333 |
-| 7-8 | fourth sixth | blue | `0x0033FF` | 228° | 0 · 0.0667 · 0.3333 |
-| 9-10 | fifth sixth | violet | `0x9900FF` | 276° | 0.2 · 0 · 0.3333 |
-| 11-12 | last sixth | magenta | `0xFF00CC` | 312° | 0.3333 · 0 · 0.2667 |
+The six ANCHORS (each row one hex; the drawn colours interpolate between adjacent rows):
+
+| anchor | hex | angle | matrix diagonal at the anchor (R, G, B) |
+|---|---|---|---|
+| lime | `0x80FF00` | 90° | 0.1673 · 0.3333 · 0 |
+| teal | `0x00FFCC` | 168° | 0 · 0.3333 · 0.2667 |
+| cyan | `0x00D4FF` | 190° | 0 · 0.2771 · 0.3333 |
+| blue | `0x0033FF` | 228° | 0 · 0.0667 · 0.3333 |
+| violet | `0x9900FF` | 276° | 0.2 · 0 · 0.3333 |
+| magenta | `0xFF00CC` | 312° | 0.3333 · 0 · 0.2667 |
 
 ⚠ The six ANGLES are a build-lane derivation, not a measurement — the frame study records the ramp as
 *names* and nothing finer; each angle is the standard one for the colour it is named after, chosen so
-the walk is strictly monotone. ✅ **SIGNED OFF 2026-08-28** with the element as a whole (*"It's
-perfect. Sandevistan is good to go"* — ledger #23cc, after the settle-then-unzip rebuild); each is
-still one number if taste ever moves.
+the walk is strictly monotone. ✅ Signed off 2026-08-28 with the element as a whole, and **re-signed
+2026-08-28-4 as the continuous ramp** (*"Sandevistan is working beautifully"*); each anchor is still
+one number if taste ever moves.
 
 ### 2c.5 The art, and the one documented exemption
 
@@ -1053,20 +1057,22 @@ than it can on the weather. The keeper asserts it both ways: the shot rail's tai
 identical with the element loaded, and the element exports nothing named `tail`/`settle`/`arrival` for
 that arithmetic to read.
 
-### 2c.8 What the keeper pins — `tests/cp2020-augmented-afterimage.mjs`, 184 legs
+### 2c.8 What the keeper pins — `tests/cp2020-augmented-afterimage.mjs`, 191 legs
 
-⭐ **Realigned 2026-08-28** to the shipped models. The suite's expectations are hand-derived from the
-frozen spec block's constants, never read back out of the module, and the three superseded models are
-now pinned **dead** rather than asserted.
+⭐ **Realigned 2026-08-28** to the shipped models, and again **2026-08-28-4** to the continuous ramp,
+the 1200/600 grade clock, and the two-mover pass (latest-wins release + regrip, proven by value:
+resumed at 0.539 == drained to 0.539). The suite's expectations are hand-derived from the frozen
+spec block's constants, never read back out of the module, and the three superseded models are now
+pinned **dead** rather than asserted.
 
 **The colour engine:** the emulator held against the **live** PIXI filter for all thirteen wrap slots
 *and* for slots taken from a 26-long spanning trail · the per-slot matrix diagonals · three unlike
 source pixels through every slot giving one on-target hue · both traps of §2c.4, driven on the live
 engine · the shipped order proved aliasing-immune against an honest multiply computed in the spec.
 
-**The spanning ramp:** the full slot walk for a 13-, 26- and 7-copy trail by name · the wrap fallback at
-`ghostCap` when no total is given · the tell that separates the two (index 13 → lime wrapped, blue
-spanned) · clamps at both ends.
+**The spanning ramp:** the full slot walk for a 13-, 26- and 7-copy trail by nearest-anchor name · the
+wrap fallback at `ghostCap` when no total is given · the tell that separates the two (index 13 → lime
+wrapped, cyan spanned) · clamps at both ends.
 
 **The unzip schedule:** a 20-square drag's 21 copies, with **every** fade-start at or past
 duration + settleDelay — nothing fades before the settle · the fade-start ladder's values (4200, 4220,
@@ -2280,11 +2286,11 @@ is the table, so a sixth condition is a row rather than a change:
 | `ghostTeardownMinMs` / `ghostTeardownMaxMs` | **150 / 200** | each copy's own fade during the unzip, lerped front-to-back. **Video-measured** (~150-200 ms per copy; the old frame study's 250/400 was this same phenomenon timed coarsely) |
 | `ghostFadeInMs` | **0** | build-lane: a copy appears at once. Anything above 0 makes the newest copy the faintest, which inverts the reference |
 | `ghostGreyscale` | **1/3** | the equal-weight greyscale applied before the colour. ⛔ **1/3 and not 1** — PIXI's `greyscale` SUMS the channels. ⏪ **Revert `null`** drops the op entirely, leaving a plain multiply of the token's own colours by the ramp colour: murkier, more literally "the token art", far weaker hue read |
-| `AFTERIMAGE_HUES` | 6 entries, `0x80FF00` → `0xFF00CC` | the ramp. Each row is one hex. ⚠ the six **angles** are a build-lane derivation from the frame study's six colour NAMES (§8) |
+| `AFTERIMAGE_HUES` | 6 entries, `0x80FF00` → `0xFF00CC` | the ramp's ANCHORS. ⏪ **Continuous since 2026-08-28-4** (§6): `ghostHueFor` blends BETWEEN the six stops at a constant rate in hue angle — the discrete two-per-colour banding is retired. Each row is still one hex; the walk passes through every one |
 | `gradeRedScale` / `gradeGreenScale` / `gradeBlueScale` | **0.58 / 1.00 / 0.77** | the scene pass. **Measured** (R −42%, B −23%, G held) |
-| `gradeRampMs` | **1600** | **Measured** (channel ratios ramp 49.1→50.7 s) |
+| `gradeRampMs` | **1200** | ⏪ user ruling 2026-08-28-4: the measured 1600 read slow in play — shortened, deliberately less than a halving. ⏪ Revert **1600** (video-measured, ratios ramp 49.1→50.7 s) |
 | `gradeHoldMs` | **2400** | kept for the pure fixed-hold (burst) ladder the keeper pins and a macro may ask for (`startSceneGrade({sustained:false})`); the shipped movement-tied pass holds by state, not by this number |
-| `gradeReleaseMs` | **800** | ⭐ **Video-measured 2026-08-28-3**: ratios depart ~53.3 s, neutral ~54.0. ⏪ Revert 1600 (the ramp-mirrored pick) |
+| `gradeReleaseMs` | **600** | ⏪ user ruling 2026-08-28-4: at the video-measured 800 the let-go trailed the unzip by a touch. ⏪ Revert **800** (video-measured: ratios depart ~53.3 s, neutral ~54.0); the ramp-mirrored pick before that was 1600 |
 | `gradeReleaseAtMsFor(plan)` | settle + beat + copies × stagger | when the movement's pass lets go, from the movement's start — predicted 53.36 s vs the observed ~53.3 on the reference move. Not a knob; the three terms above are |
 | `maxLive` | **160** | safety-only under settle-then-unzip (the reference shows NO live cap — the whole trail stands until the settle): equal to the plant rail so eviction can only fire on a pathological pile-up. §G's cap+eviction machinery stays wired for exactly that |
 | `plantSafetyCap` | **160** | the only bound on one movement's plant list — a safety rail on queued timers, **not a look number**. The visible trail is bounded by the unzip itself |
@@ -2296,6 +2302,32 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+⏪ **2026-08-28-4 — THE GRADE QUICKENS AND THE GHOST RAMP GOES CONTINUOUS** (post-sign-off retune,
+user-ruled after watching the shipped pass in play; look re-signed *"Sandevistan is working
+beautifully"*). Three rulings in one sitting: **(1)** `gradeRampMs` 1600 → **1200** — the
+video-measured ramp read slow at the table; the user asked for shorter "but maybe not as drastically"
+as the halving on offer. **(2)** `gradeReleaseMs` 800 → **600** — the measured let-go trailed the
+unzip by a touch; the colour now drains *with* the last ghosts. **(3)** the ghost hue ramp is
+**CONTINUOUS**: the discrete two-to-three-ghosts-per-band walk put blue (which reads purple) at band
+4 of 6 — a hard jump at the trail's halfway point — and the user's read of the reference killed the
+banding's justification: *"you can see it gradually shift from green to blue to purple."* The six
+named stops stay as anchors; `ghostHueFor` now blends between them at a constant rate in **hue
+angle** (uniform-in-stop-index would still sprint the 78° lime→teal span and crawl the 22° teal→cyan
+one). Video-measured values kept as reverts at each site.
+
+⭐ **2026-08-28-4 — MANY MOVERS SHARE ONE PASS.** Flushed out by the user asking what two Sandevistan
+users moving at once — then slightly apart — would do to the tint. Depth was already safe (one
+module-level record, one filter, held-guarded start: tint saturates, never stacks), but the release
+timer was last-writer-wins and a trail landing mid-drain restarted the pass from neutral. Ruled into
+the pre-ship batch: **(1)** the release schedule is **latest-wins by absolute due time** — the pass
+lets go when the LAST trail runs out, so a short second hop can no longer pull the green out from
+under a longer sprint (this also makes one token's chained moves strictly correct instead of
+incidentally so); **(2)** a trail landing inside the drain **re-grips** the pass at its current
+strength (`regripSceneGrade`, the mirror of the release's ease-from-progress) — no snap to neutral;
+**(3)** a detached pass clears its pending schedule so a stale due time cannot out-vote the next
+pass's first trail. Keeper: latest-wins held between the two schedules (relA 7547 vs relB 1133 under
+the capture seam) and the regrip resumed at exactly the drained strength (0.539 → 0.539), 191/191.
 
 ⏪ **2026-08-28 — THE DRAWN-ROUND CAP IS EMPTIED; THE AUDIO PHASE CARRIES THE LOAD ALONE.** Field report
 at the release gate: an automatic buckshot volley drew nothing but impact marks for roughly the first
