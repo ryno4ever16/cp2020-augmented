@@ -2295,6 +2295,7 @@ is the table, so a sixth condition is a row rather than a change:
 | `maxLive` | **160** | safety-only under settle-then-unzip (the reference shows NO live cap — the whole trail stands until the settle): equal to the plant rail so eviction can only fire on a pathological pile-up. §G's cap+eviction machinery stays wired for exactly that |
 | `plantSafetyCap` | **160** | the only bound on one movement's plant list — a safety rail on queued timers, **not a look number**. The visible trail is bounded by the unzip itself |
 | `_setAfterimageTimeScale(s)` | seam, `null` | the capture seam — compresses the plant ladder and the pass. Armed by nothing that ships |
+| quiet drag ruler | prototype patch, no knob | ⭐ 2026-08-28-4 (user-ordered): core TokenRuler's `_getGridHighlightStyle` is wrapped on the PROTOTYPE (a class swap at ready misses already-drawn tokens' instances) and answers the engine's own `{alpha: 0}` hide idiom for a mover whose trail gates are armed (`movementHighlightSuppressedFor` = FX switch + armed boost) — the blue grid fill was obscuring the trail. Segment line + distance labels untouched. Revert = delete `registerQuietMovementHighlight` and its call |
 
 ---
 
@@ -2315,6 +2316,13 @@ banding's justification: *"you can see it gradually shift from green to blue to 
 named stops stay as anchors; `ghostHueFor` now blends between them at a constant rate in **hue
 angle** (uniform-in-stop-index would still sprint the 78° lime→teal span and crawl the 22° teal→cyan
 one). Video-measured values kept as reverts at each site.
+
+⭐ **2026-08-28-4 — THE DRAG RULER GOES QUIET UNDER A TRAIL.** User-ordered on the same day: core's
+blue grid-highlight fill (the token drag ruler) partially obscured the afterimage trail. The ruler's
+own style method already returns `{alpha: 0}` to hide squares, so the patch is the engine's idiom
+applied at the engine's seam — prototype-wrapped so tokens drawn before ready are reached — and it
+answers quiet exactly when the mover's trail gates are armed, on every viewer's client. The distance
+labels and segment line stay (the readout is information; the fill was the obscurer).
 
 ⭐ **2026-08-28-4 — MANY MOVERS SHARE ONE PASS.** Flushed out by the user asking what two Sandevistan
 users moving at once — then slightly apart — would do to the tint. Depth was already safe (one
