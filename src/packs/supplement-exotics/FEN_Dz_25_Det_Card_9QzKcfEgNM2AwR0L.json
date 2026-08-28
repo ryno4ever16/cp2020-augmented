@@ -5,7 +5,7 @@
   "img": "modules/cp2020-augmented/img/icons/ray-gun.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Blackhand's idx44 + Reference Book: FEN Dz 25 'Det Card' 120eb (RB: 1d10 HE, Chr1-sourced). | Index-priced. | [Audit row +110 — Chromebook 1 p.93]</p><p>Damage 1D10 HE per the Reference Book collation. Credit-card wafer of C-4, 20-second delay after snapping. [Backfill 2026-07-17]</p>",
+    "notes": "<p>Blackhand's idx44 + Reference Book: FEN Dz 25 'Det Card' 120eb (RB: 1d10 HE, Chr1-sourced). | Index-priced. | [Audit row +110 — Chromebook 1 p.93]</p><p>Damage 1D10 HE per the Reference Book collation. Credit-card wafer of C-4, 20-second delay after snapping. [Backfill 2026-07-17]</p> Damage printed as 1D10 (HE).",
     "cost": 120,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "1D10 (HE)",
+    "damage": "1D10",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",

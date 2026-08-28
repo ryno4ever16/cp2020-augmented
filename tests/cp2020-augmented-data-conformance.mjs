@@ -89,6 +89,12 @@ const OPEN_AMMO = {
   /* The weapon carries no cartridge by design — 3 strings / 5 items: energy weapons that recharge
    * (Laser / Microwave, "Special"), battery melee, and a thrown weapon. CLOSES WHEN: never. */
   noCartridgeByDesign: ["Special", "battery", "Throw"],
+  /* Surfaced at the 1.2.0 gate (2026-08-28) by the FIRST full-tree compile since 2026-07-17 (every
+   * release between was a swap-zip or cherry-pick patch whose packs excluded the July data work) —
+   * a bespoke cannon cartridge with no registry entry yet. No priced row is invented for it: the
+   * book's ammo price is unverified. CLOSES WHEN: the caliber-registry proposal ruling lands (the
+   * same decision as noRegistryEntry / bookMined2026_08; this string joins it). */
+  releaseGate2026_08_28: ["25mm Cockerill"],
   /* A shotgun gauge label outside the ratified alias set — 4 strings / 4 items. These four spellings
    * ("CAL12 E", "CAL12 MAG" = a load on the gauge, "CAL477", "23 mm") were not in the proposal's
    * §7a alias table, so they were deliberately not wired. CLOSES WHEN: the user extends the alias
@@ -118,6 +124,17 @@ const OPEN_DAMAGE = {
    * the non-dice damage model is decided (same decision as descriptive). */
   bookMined2026_08: [
     "Varies (2D6+1 riot / 4D6 urban / 6D6 full combat)", "4D6+2 (00 Buckshot)", "6D6 (#00)",
+  ],
+  /* Surfaced at the 1.2.0 gate (2026-08-28) by the first full-tree compile since 2026-07-17 — the
+   * books' own non-dice damage entries on July-era imports, same class as `descriptive` above
+   * (faithful transcriptions, not typos). The annotated-FORMULA siblings found beside them
+   * ("5D10+10 AP", "2D6+3 (15m)", "1D10 (HE)", "10D10 special", "2D6/4D6 (mono)") were instead
+   * edited at source with the annotation moved to the item's notes, per the moduleDoctypeApSuffix
+   * precedent below — a formula a table can roll beats a string that breaks at the trigger pull.
+   * CLOSES WHEN: the non-dice damage model is decided (the same decision as descriptive). */
+  releaseGate2026_08_28: [
+    "Special (4m)", "Special (5m)", "Varies (rifle grenade)",
+    "Entangle, 40 AP (all locations)", "Special (restraint)",
   ],
   /* ⚠ NEW ROT found by this lint's module-doctype coverage, NOT in the original sweep (which did
    * not run class E over vehicleWeapon) — 1 string / 4 items, all in cp2020-augmented.vehicle-weapons:

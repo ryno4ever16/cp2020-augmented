@@ -5,7 +5,7 @@
   "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Blackhand's idx41 'FEN Dz 22 Saucer Grenades': 65eb — corroborates. | Index-priced. | [Audit row +109 — Chromebook 1 p.93]</p><p>Damage backfilled from Chromebook 1 p.48 text layer: 160 hardened steel pellets, 15m fragmentation zone, Damage 2D6+3; +2 Athletics to throw (saucer shape), 6-second delay, rubber edge for caroms. [Backfill 2026-07-17]</p>",
+    "notes": "<p>Blackhand's idx41 'FEN Dz 22 Saucer Grenades': 65eb — corroborates. | Index-priced. | [Audit row +109 — Chromebook 1 p.93]</p><p>Damage backfilled from Chromebook 1 p.48 text layer: 160 hardened steel pellets, 15m fragmentation zone, Damage 2D6+3; +2 Athletics to throw (saucer shape), 6-second delay, rubber edge for caroms. [Backfill 2026-07-17]</p> Damage printed as 2D6+3 (15m).",
     "cost": 65,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "2D6+3 (15m)",
+    "damage": "2D6+3",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",

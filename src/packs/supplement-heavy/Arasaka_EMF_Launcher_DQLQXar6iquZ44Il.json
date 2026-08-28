@@ -5,7 +5,7 @@
   "img": "modules/cp2020-augmented/img/icons/missile-launcher.svg",
   "system": {
     "flavor": "",
-    "notes": "<p>Stat line backfilled from the Reference Book (Firestorm: Shockwave): HVY -2 L P 10D10 special 1 1 ST 100m, 550eb — the LIGHT one-shot launcher (the heavy 20D10 reloadable version is 1500eb). EMF warhead: 'special' anti-armor electromagnetic effect vs vehicles/ACPA per Shockwave; protective coating rolls apply. [Backfill 2026-07-17]</p>",
+    "notes": "<p>Stat line backfilled from the Reference Book (Firestorm: Shockwave): HVY -2 L P 10D10 special 1 1 ST 100m, 550eb — the LIGHT one-shot launcher (the heavy 20D10 reloadable version is 1500eb). EMF warhead: 'special' anti-armor electromagnetic effect vs vehicles/ACPA per Shockwave; protective coating rolls apply. [Backfill 2026-07-17]</p> Damage printed as 10D10 special.",
     "cost": 550,
     "weight": 0,
     "equipped": false,
@@ -19,7 +19,7 @@
     "ammoItemId": "",
     "loadedAmmoId": "",
     "loadedAmmo": {},
-    "damage": "10D10 special",
+    "damage": "10D10",
     "rangeDamages": {
       "pointBlank": "",
       "close": "",
