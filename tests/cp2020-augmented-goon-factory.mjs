@@ -1160,6 +1160,10 @@ const r = await p.evaluate(async () => {
     check("… and it is present with the dial OFF, which is the whole point of disclosing it",
       app.preview?.every(row => row.loot.dial === "off") === true && !!salvageEl,
       app.preview?.map(row => row.loot.dial));
+    // ── THE DIAL'S DISPLAY ROUND (2026-08-28): off = NO per-goon carrying line ───────────────────
+    check("with the dial off, no preview card renders a carrying line",
+      app.element.querySelectorAll(".cp-goon-card-loot").length === 0,
+      app.element.querySelectorAll(".cp-goon-card-loot").length);
 
     // Turning the dial up moves the CARRIED cash and leaves the salvage figure alone. Driven on the
     // real control (the same seed, so the squad is otherwise identical): setting `overrides` by hand
@@ -1179,6 +1183,33 @@ const r = await p.evaluate(async () => {
     check("⛔ INVARIANT — and it did NOT change the gear: the salvage figure is the same",
       app.element.querySelector(".cp-goon-salvage")?.textContent?.trim() === salvageOffText,
       { off: salvageOffText, generous: app.element.querySelector(".cp-goon-salvage")?.textContent?.trim() });
+
+    // ── THE DIAL'S DISPLAY ROUND (2026-08-28): amounts on the options + carrying lines per card.
+    // Both assert against lootProfileFor / the plan row's own loot object — the display and the
+    // build path share one source, so the legs prove the SAME number reaches both surfaces.
+    const gradeNow = app.element.querySelector(".cp-goon-grade")?.value ?? "";
+    const optByValue = Object.fromEntries(
+      [...(app.element.querySelector(".cp-goon-loot")?.options ?? [])].map(o => [o.value, o.textContent.trim()]));
+    check("each on-setting option states its resolved cash for the picked grade",
+      !!gradeNow && ["scarce", "standard", "generous"].every(k =>
+        optByValue[k]?.includes(GR.lootProfileFor(k, gradeNow).cashEb.toLocaleString("en-US"))),
+      { grade: gradeNow, options: optByValue });
+    check("… and its spare-magazine count, singular where it is one",
+      ["scarce", "standard", "generous"].every(k => {
+        const p = GR.lootProfileFor(k, gradeNow);
+        return optByValue[k]?.includes(p.spareMags === 1 ? "1 spare mag" : `${p.spareMags} spare mags`);
+      }), optByValue);
+    check("the OFF option stays a bare word — no number to promise",
+      optByValue.off === game.i18n.localize("CYBERPUNK.GoonFactory.Loot.Off"), optByValue.off);
+    const lootLineEls = [...app.element.querySelectorAll(".cp-goon-card-loot")];
+    check("with the dial on, EVERY preview card carries a carrying line",
+      lootLineEls.length === (app.preview?.length ?? -1) && lootLineEls.length > 0,
+      { lines: lootLineEls.length, rows: app.preview?.length });
+    check("… whose figures are the row's own loot — cash and magazine count both",
+      (app.preview ?? []).every((row, i) =>
+        lootLineEls[i]?.textContent.includes(row.loot.cashEb.toLocaleString("en-US"))
+        && lootLineEls[i]?.textContent.includes(row.loot.spareMags === 1 ? "1 spare magazine" : `${row.loot.spareMags} spare magazines`)),
+      lootLineEls.map(el => el.textContent.trim()));
     app.overrides = {};
     app.preview = null;
     await app.render();

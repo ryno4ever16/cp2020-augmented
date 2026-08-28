@@ -33,7 +33,7 @@ import {
   ARMAMENT_POSTURES, ARMOR_HARDNESS_FILTERS, ARMOR_WEIGHT_FILTERS, BT_TICKS, BT_RANGE, COUNT,
   DISPOSITIONS, GRADE_KEYS, GRADES, LOOT_DIAL, LOOT_LABEL_KEYS, REF_RANGE, ROLE_OPTIONS,
   ROLE_RANDOM, SKILL_POINTS, STAT_POOL, STAT_SHAPES, STAT_SHAPE_LABEL_KEYS,
-  clampCount, salvageEstimate, trackPct,
+  clampCount, lootProfileFor, salvageEstimate, trackPct,
 } from "./grades.js";
 import { OUTFITS } from "./outfits.js";
 import {
@@ -279,7 +279,19 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       armorWeights: sel(ARMOR_WEIGHT_FILTERS, cfg.armorWeight, (k) => tryLocalize(`GoonFactory.Weight.${k}`, k)),
       armorHardnesses: sel(ARMOR_HARDNESS_FILTERS, cfg.armorHardness, (k) => tryLocalize(`GoonFactory.Hardness.${k}`, k)),
       armaments: sel(ARMAMENT_POSTURES, cfg.armament, (k) => tryLocalize(`GoonFactory.Armament.${k}`, k)),
-      lootDial: sel(LOOT_DIAL, cfg.loot, (k) => tryLocalize(LOOT_LABEL_KEYS[k], k)),
+      // ⭐ THE DIAL SAYS ITS AMOUNTS (ruled 2026-08-28, the "genuinely ambiguous" report). With a
+      // grade picked, each option carries the RESOLVED cash and magazine count for this squad —
+      // the same `lootProfileFor` the build path calls at plan time, so the label and the created
+      // credchip cannot disagree. `off` and the ungraded state stay bare: no number to promise yet.
+      lootDial: LOOT_DIAL.map((k) => {
+        let label = tryLocalize(LOOT_LABEL_KEYS[k], k);
+        if (k !== "off" && cfg.grade) {
+          const p = lootProfileFor(k, cfg.grade);
+          label = localizeParam(p.spareMags === 1 ? "GoonFactory.LootOptionOne" : "GoonFactory.LootOption",
+            { label, eb: p.cashEb.toLocaleString("en-US"), mags: p.spareMags });
+        }
+        return { key: k, label, selected: String(k) === String(cfg.loot) };
+      }),
       // preview
       hasPreview: !!this.preview?.length,
       preview: this.preview?.map((row, i) => this._previewCard(row, i)) ?? null,
@@ -322,6 +334,14 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
         })
         : "",
       chromeLine: chromeNames.length ? localizeParam("GoonFactory.PreviewChrome", { names: chromeNames.join(", ") }) : "",
+      // ⭐ THE DIAL'S OUTPUT, CONFIRMED BEFORE GENERATE (same 2026-08-28 ruling: the dial's results
+      // never showed in the preview). Reads the plan row's own `loot` — the object the materialize
+      // step spends — so this line and the created items cannot disagree. `off` renders nothing;
+      // the squad salvage line above already tells the gear story.
+      lootLine: row.loot && row.loot.dial !== "off"
+        ? localizeParam(row.loot.spareMags === 1 ? "GoonFactory.PreviewLootOne" : "GoonFactory.PreviewLoot",
+          { eb: row.loot.cashEb.toLocaleString("en-US"), mags: row.loot.spareMags })
+        : "",
       honesty: (row.honesty ?? []).map((h) => ({
         tone: WARN_CODES.has(h.code) ? "warn" : "info",
         text: this._honestyText(h),

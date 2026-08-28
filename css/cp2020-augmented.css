@@ -1248,6 +1248,7 @@ body.cp-carolingian .cyberpunk .field-list .form-group input { color: #cccccc !i
 .cp-goon .cp-goon-icon:hover { opacity: 1; }
 .cp-goon .cp-goon-card p { margin: 0 0 2px; font-size: 0.85em; }
 .cp-goon .cp-goon-card-stats { font-variant-numeric: tabular-nums; opacity: 0.9; }
+.cp-goon .cp-goon-card-loot { font-variant-numeric: tabular-nums; }
 
 /* The honesty list. §1: "Every shortfall is disclosed in preview; nothing gates silently." Warnings
  * are amber and informational lines stay quiet, so a card full of ordinary disclosure does not read

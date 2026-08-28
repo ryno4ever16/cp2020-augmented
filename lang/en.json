@@ -2496,13 +2496,17 @@
         "chemical": "Chemical loads"
       },
       "LootLabel": "Carried cash & consumables",
-      "LootHint": "Pocket cash on a credchip and spare magazines — off by default. It never changes the weapons, armor or chrome a goon is generated with.",
+      "LootHint": "Pocket cash on a credchip and spare magazines — off by default. Amounts scale with the squad's threat level. It never changes the weapons, armor or chrome a goon is generated with.",
       "Loot": {
         "Off": "Off",
         "Scarce": "Scarce",
         "Standard": "Standard",
         "Generous": "Generous"
       },
+      "LootOption": "{label} — {eb} eb, {mags} spare mags",
+      "LootOptionOne": "{label} — {eb} eb, 1 spare mag",
+      "PreviewLoot": "Carrying: {eb} eb on a credchip, {mags} spare magazines",
+      "PreviewLootOne": "Carrying: {eb} eb on a credchip, 1 spare magazine",
       "PreviewSection": "Preview",
       "Salvage": "This squad walks in wearing ~{eb} eb of sellable kit — weapons, armor and chrome, whatever the carried-cash dial says.",
       "PreviewRole": "Rolled role: {role}",
