@@ -436,7 +436,17 @@ function installRenderEmit() {
   if (typeof orig !== "function" || orig.__cpSeamShim === true) return;
 
   async function renderWrapper(path, data, ...rest) {
-    const out = await orig.call(this, path, data, ...rest);
+    let out = await orig.call(this, path, data, ...rest);
+    // ⭐ THE BASE SUPPRESSIVE CARD ARRIVES UNTHEMED (user report 2026-08-28): suppressive.hbs is the
+    // one base chat card whose root <div> carries no `cyberpunk` class, so it takes neither the
+    // system's own chat font nor this module's scheme-aware card styling (.chat-message .cyberpunk) —
+    // it rendered as Foundry's default light parchment in every theme. The class is added HERE, at
+    // the same seam that already reads this render, because the template is the base system's file
+    // (base patches are temporary by policy) and the patched markup persists into the stored
+    // ChatMessage content. First occurrence only: the template's root is its first <div>.
+    if (path === SUPPRESSIVE_TEMPLATE && typeof out === "string") {
+      out = out.replace("<div>", '<div class="cyberpunk">');
+    }
     try {
       if (_fireCtx && path === MULTI_HIT_TEMPLATE && !(data && _emittedFor.has(data))) {
         if (data) _emittedFor.add(data);   // one card, one emission — however many wrappers are stacked
