@@ -4921,6 +4921,18 @@ export function aimPointOf(shooterToken, targetToken, gridSizePx = 100) {
  * Null on every ordinary shot, which is what makes every caller a plain fall-through.
  */
 export function declaredAimPointOf(payload, shooterToken) {
+  // ⭐ A DESIGNATED POINT IS A DECLARED AIM TOO (2026-08-28). An area delivery is now aimed at a SPOT
+  // before its fire dialog opens (combat/aim-placement.js), and the damage rail centres the blast on
+  // that spot — so the object has to be drawn flying to it as well, or the picture and the geometry
+  // describe two different throws. Read FIRST because a payload never carries both: a corridor belongs
+  // to a shot pattern and a point to an area delivery, and no weapon is both.
+  //
+  // ⛔ TAKEN AS TWO COORDINATES RATHER THAN REBUILT, unlike the corridor below it. The corridor is
+  // stated RELATIVE to the shooter (an angle and a reach), so it is re-derived off the figure as it
+  // stands; a designated point is stated about the GROUND, and p.108's spot does not move because the
+  // thrower did. Same reasoning as the payload field itself.
+  const p = payload?.aimPoint;
+  if (Number.isFinite(Number(p?.x)) && Number.isFinite(Number(p?.y))) return { x: Number(p.x), y: Number(p.y) };
   const a = payload?.spreadAim;
   if (!a) return null;
   const angleDeg = Number(a.angleDeg), reachM = Number(a.reachM);

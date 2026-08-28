@@ -1756,10 +1756,20 @@ own play resolves, so two placements issued inside that beat both read the same 
 under-evicted — eight bursts left **28 flames alive against a cap of 24**. Flames now queued but not yet
 created are counted too (`pendingGroundFires`), which makes the cap hold rather than approximately hold.
 
-### 4.1b The drawn-round cap — the ear keeps every round, the eye does not
+### 4.1b The drawn-round cap — ⏪ **EMPTIED BY RULING 2026-08-28; the mechanism stays wired**
 
-*Ruled 2026-08-27 (walk-findings ⑥). `FX_DRAWN_ROUND_CAP` / `drawnRoundCapFor` in `module/fx/effects.js`;
-pinned by `tests/cp2020-augmented-fx-rail.mjs` §j-3, on a **loaded** bench.*
+*Ruled 2026-08-27 (walk-findings ⑥), **table emptied 2026-08-28 at the release gate**.
+`FX_DRAWN_ROUND_CAP` / `drawnRoundCapFor` in `module/fx/effects.js`; pinned by
+`tests/cp2020-augmented-fx-rail.mjs` §j-3, on a **loaded** bench.*
+
+⛔ **READ THIS FIRST.** Everything below describes a mechanism that is **still in the code and still
+works**, but whose table is **empty**, so it withholds nothing. The user's ruling, verbatim: *"Not
+playing the animation to stop the lag seems nonsensical."* The cap was the emergency fallback from the
+era when pictures trailed their reports by seconds; the real fix — the per-client self-measured audio
+phase (§4.1a / `FX_AUDIO_PHASE`) — shipped and measured **zero** trailing rounds, so the cap had become
+belt-and-braces that visibly ate animations. **Every round draws again.** The pacing rule (`roundDropped`,
+a fraction of the cadence, load-measured) is now the only thing that may withhold a picture, and only
+under real renderer distress. The supersession is the point: the **audio phase carries this load alone**.
 
 **The residual.** After the anchored schedule (4.1a) and the audio phase both landed, the shell class
 still put roughly three rounds' pictures on screen after its last report — but **only on a loaded
@@ -1796,14 +1806,19 @@ its first `cap` rounds and its last one.
 
 | knob | value | meaning |
 |---|---|---|
-| `FX_DRAWN_ROUND_CAP.shotgun` | `4` | the only capped class. Every volley a pump or a burst fires at the table (1–3 shells) is untouched; a long automatic volley stops adding create work after four rounds, which is where the queue stops growing faster than the 180 ms cadence drains it. |
-| *(any other class)* | absent | **uncapped.** None was reported, and none plants ground fire the way the shell class does. |
-| `_setDrawnRoundCap(n\|null)` | test seam | forces a budget for every class (`0` = uncapped). Ships armed by nothing. It exists because the cap **masks** the mechanisms §j-2 measures — the pacing rule and the audio phase both express themselves in rounds the budget would otherwise withhold. |
+| `FX_DRAWN_ROUND_CAP` | **`{}` — EMPTY** | ⏪ *ruled 2026-08-28.* No class carries a budget, so nothing is withheld by one. Pinned by value in §j-3 (`Object.keys(...).length === 0`) so a silent re-cap goes red. |
+| `FX_DRAWN_ROUND_CAP.shotgun` | ⏪ **`4` — the retired row** | The measured fallback the cap shipped with, kept in the source comment so a restore is one line. Its reasoning, for whoever restores it: a pump or a burst (1–3 shells) was untouched; a long automatic volley stopped adding create work after four rounds, which is where the queue stopped growing faster than the 180 ms cadence drained it. |
+| *(any other class)* | absent | **uncapped.** None was ever reported, and none plants ground fire the way the shell class does. |
+| `_setDrawnRoundCap(n\|null)` | test seam | forces a budget for every class (`0` = uncapped). Ships armed by nothing. Still exercised by §j-3's forced-low pair, which is what says the emptying is a **ruling about the table** rather than a broken feature — and by §j-2, which the cap would otherwise **mask** (the pacing rule and the audio phase both express themselves in rounds a budget would withhold). |
 
-⏪ **Revert is the table**: empty `FX_DRAWN_ROUND_CAP` and every round draws again.
+⏪ **Restore is the table**: put `shotgun: 4` back into `FX_DRAWN_ROUND_CAP` and the eye is bounded
+again. Nothing else moves — the loop, the last-round exemption and the reported counters are all live.
 
-The volley's result reports `drawnRoundCap`, `drawnRounds` and `drawCapped` by value, so "a long shell
-volley draws at most N pictures and still sounds every round" is a claim a test can settle.
+The volley's result reports `drawnRoundCap`, `drawnRounds` and `drawCapped` by value, so both the capped
+claim ("a long shell volley draws at most N pictures and still sounds every round") and the **uncapped**
+one that now ships ("every round the pacing rule kept drew its picture, and the budget withheld nothing")
+are claims a test can settle. §j-3 asserts the second and reports the trailing-picture count as a
+measurement rather than a bound — that bound was the cap's own effect and went with it.
 
 ### 4.2 The tail, and when the damage window may open
 
@@ -2107,6 +2122,7 @@ Everything worth changing, and what it does. All in `module/fx/effects.js`.
 | `ROCKET_PROJECTILE` | `= ROCKET_PROJECTILE_BALL` → `{key: "jb2a.throwable.launch.cannon_ball.01.black", tracerColor: TRACER_COLOR_ROCKET}` | ⛔ **THE ONE KNOB for the launched warhead's picture.** Carries the key AND the tint together, so the two cannot drift. ⭐ **RULED 2026-08-27:** the `ROCKET_PROJECTILE_BOLT` trial (`jb2a.bolt.physical.orange`) was **rejected by the user** — *"very small and kind of still looks like a bullet"* — because a `stretchTo` draw takes its width from the asset's own frame and thin ink reads as a streak; growing it would be scale tricks on the wrong asset (§9 A3). The bolt row is left declared, one identifier away, the way this file leaves every superseded mechanism wired. Both arrival ladders stay in `TRACER_ARRIVAL_MS` so neither choice drops to the fallback. **Real rocket art is the standing §8 ask; with art this is one `.file()` swap** |
 | `TRACER_NEAR_BAND_FLOOR` | **"15ft"** | the nearest distance band's DRAWN tracer file — the 05ft cut carries a decoded 114/136 px muzzle backwash behind its start anchor (the reported backward tail); the floor serves the clean 15ft cut there instead, arrival timing untouched. **Revert null** = the engine's own band pick, backwash included |
 | `SEQ_PRESTART_COMP_MS` | **175** | the engine's measured pre-timer floor, subtracted from the arrival delay at the standalone arrival site (hit mark) so the picture lands on the audio instant. Measured 2026-08-17 (bare-sequence control, 171–181 ms over five reps); **revert 0** = arrival elements trail their audio by the floor again |
+| `FX_DRAWN_ROUND_CAP` ⏪ | **`{}` — EMPTY** | the per-class budget on **drawn** rounds (the ear was never on it). **Emptied by ruling 2026-08-28** — *"Not playing the animation to stop the lag seems nonsensical"* — so every round draws again and the drop rule is the only remaining withholder. The mechanism is untouched and still exercised by its test seam. ⏪ **Restore = `{ shotgun: 4 }`**, the measured row it shipped with; full reasoning at §4.1b |
 | `SHOT_CADENCE_MS` | 80 | default spacing between rounds |
 | `MAX_FX_SHOTS` | 30 | per-payload fan-out cap |
 | `FX_PRESENTATION_FEEDBACK` | **true** | whether the drop rule judges the **presentation** clock as well as its own schedule (§4.1b). **Revert false** = the pre-2026-08-26 build: the loop watches only when it reached each slot, and a client whose renderer is three slots behind drops nothing because its timers are fine |
@@ -2280,6 +2296,25 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+⏪ **2026-08-28 — THE DRAWN-ROUND CAP IS EMPTIED; THE AUDIO PHASE CARRIES THE LOAD ALONE.** Field report
+at the release gate: an automatic buckshot volley drew nothing but impact marks for roughly the first
+three or four of ten rounds. Diagnosis: `FX_DRAWN_ROUND_CAP.shotgun: 4` — the design withholds the
+**middle** rounds and the viewer perceived the **first**, most likely create-latency clustering; moot
+either way, because the ruling settles it. User, verbatim: ***"Not playing the animation to stop the lag
+seems nonsensical."*** ⇒ the table is **emptied**: every round draws, and the drop rule (`roundDropped`,
+a fraction of the cadence, load-measured) is the only remaining withholder, biting only under real
+renderer distress.
+
+**The supersession, stated plainly.** The cap (ruled 2026-08-27, walk-findings ⑥) was the emergency
+fallback from the era when pictures trailed their reports by seconds. The **real** fix is §4.1a's
+per-client self-measured `FX_AUDIO_PHASE`, which shipped and measured **zero** trailing rounds; the cap
+was belt-and-braces on top of it, and it cost visible animation. So the audio phase now carries this load
+alone, which is what it was built to do. The mechanism stays wired and the seam stays exercised —
+⏪ **restore is `{ shotgun: 4 }`**, one row, reasoning preserved at §4.1b and in the source comment.
+Signed off the same day (*"The shotgun animations are now acceptable"*), which also closed the standing
+"cap-of-4 feel" verification item — by **removal** rather than by tuning. §j-3 re-valued to the uncapped
+contract, with a source leg pinning the empty table so a silent re-cap reddens.
 
 🐞 **2026-08-28 — THE RECONCILER'S CENSUS WAS INCOMPLETE, AND IT DREW THREE AIRFRAMES.** Caught by the
 arrival suite's own re-issue leg on a certification run (`got 3 want 1`). Mechanism:

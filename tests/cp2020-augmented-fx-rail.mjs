@@ -1405,9 +1405,10 @@ const res = await page.evaluate(async () => {
   // Every round announces its own flash — nothing is dropped on the way out. The bound is applied
   // where the drawing happens (§5d): the shooter still ends up with ONE source set for the burst.
   // ⭐ THE THIRD TERM (2026-08-27): a class carrying a drawn-round budget withholds pictures the pacing
-  // rule did not refuse (FX_DRAWN_ROUND_CAP). This class carries none — `drawCapped` reads 0 here, which
-  // the detail line states — so the reading is unchanged; the term is in the arithmetic so that adding a
-  // budget to another class reddens somewhere honest instead of here.
+  // rule did not refuse (FX_DRAWN_ROUND_CAP). ⏪ NO CLASS CARRIES ONE since 2026-08-28 — the table was
+  // emptied by ruling (see §j-3) — so `drawCapped` reads 0 here, which the detail line states, and the
+  // reading is unchanged. The term stays in the arithmetic so that RESTORING a budget for any class
+  // reddens somewhere honest instead of here.
   ok("fan-out: every DRAWN round announces a flash — nothing is lost on the way out",
     burst.flashes === burst.shots - burst.dropped - burst.drawCapped,
     `${burst.flashes} flashes / ${burst.shots} rounds − ${burst.dropped} dropped − ${burst.drawCapped} withheld`);
@@ -7778,6 +7779,20 @@ try {
       && fx.declaredAimPointOf({ spreadAim: { angleDeg: NaN, reachM: 5 } }, shooterPl) === null);
     ok("corridor: with no figure to fire from there is no point either (negative)",
       fx.declaredAimPointOf(aimPayload(), null) === null);
+    // ⭐ A DESIGNATED POINT IS A DECLARED AIM TOO (2026-08-28 throw gesture). An area delivery states a
+    // SPOT rather than a corridor, and the drawn object has to fly to the spot the blast will be
+    // centred on — or the picture and the geometry describe two different throws. Taken as the two
+    // coordinates it states, NOT rebuilt off the shooter: p.108's spot is about the ground.
+    const spot = { x: from.x + 3.5 * gpx, y: from.y - 2.25 * gpx };
+    ok("corridor: a DESIGNATED POINT answers as the declared aim, verbatim, by value",
+      (() => { const q = fx.declaredAimPointOf({ aimPoint: spot }, shooterPl);
+               return !!q && q.x === spot.x && q.y === spot.y; })(),
+      JSON.stringify({ spot, got: fx.declaredAimPointOf({ aimPoint: spot }, shooterPl) }));
+    ok("corridor: NEGATIVE — a malformed or absent point falls through to the corridor rules unchanged",
+      fx.declaredAimPointOf({ aimPoint: null }, shooterPl) === null
+      && fx.declaredAimPointOf({ aimPoint: { x: 5 } }, shooterPl) === null
+      && fx.declaredAimPointOf({ aimPoint: { x: NaN, y: 3 } }, shooterPl) === null,
+      "null / half a point / NaN all fall through");
 
     /* ── b. the corridor OUTRANKS the aimed-at token, and the two are far apart ──────────────── */
     const declaredPt = fx.payloadAimPoint(aimPayload(), shooterPl, targetPl, gpx);
@@ -9538,12 +9553,12 @@ try {
       };
       let off = { t: [], o: [] }, on = { t: [], o: [] };
       try {
-        // ⛔ THE DRAWN-ROUND CAP IS DISARMED FOR THIS BLOCK (2026-08-27, test side only). The shell
-        // class now draws at most FX_DRAWN_ROUND_CAP.shotgun rounds of a volley plus its last one, which
-        // is the SHIPPED fix for the trailing this block measures — so with the cap live an eight-shell
-        // volley can no longer express the phase difference at all, and both readings would report the
-        // cap rather than the phase. Disarmed through the module's own seam so this block goes on
-        // measuring the mechanism it was written for; the cap's own bound is pinned in its own block.
+        // ⛔ THE DRAWN-ROUND CAP IS EXPLICITLY DISARMED FOR THIS BLOCK (2026-08-27, test side only) —
+        // and it stays explicit even though the shipped table is now EMPTY (ruling 2026-08-28, §j-3).
+        // With a budget live an eight-shell volley cannot express the phase difference at all: both
+        // readings would report the cap rather than the phase. Naming the state through the module's own
+        // seam keeps this block measuring the mechanism it was written for regardless of what the table
+        // happens to hold, which is the same reasoning as the explicit phase states just below.
         fx._setDrawnRoundCap(0);
         // ⛔ BOTH STATES DRIVEN THROUGH THE SEAM, and that is a correction (2026-08-27, test side only):
         // this block used to take the un-phased reading by simply not touching anything, on the
@@ -9583,17 +9598,26 @@ try {
         `${fx.fxEngineLatencyMs()} ms (ceiling ${fx.FX_AUDIO_PHASE_MAX_MS}, seed ${fx.SEQ_PRESTART_COMP_MS})`);
     }
 
-    /* ── j-3. THE DRAWN-ROUND CAP, ON A LOADED SCENE ──────────────────────────────────────────
-     * ⭐ THE RULED FALLBACK (user 2026-08-27), and the block that says it works. The shell class's
-     * remaining trailing is load-dependent — it appears once burning ground has accumulated and the
-     * engine's create latency has grown past the cadence — so it CANNOT be pinned on the empty bench.
-     * The candidate alternative (pre-issue pipelining) was measured and refused: the engine defers its
-     * creation work until a section's delay expires rather than front-loading it, so issuing early buys
-     * a longer queue and nothing else. See FX_DRAWN_ROUND_CAP for the numbers.
+    /* ── j-3. THE DRAWN-ROUND CAP, EMPTIED BY RULING — ON A LOADED SCENE ──────────────────────
+     * ⏪⏪ RE-VALUED 2026-08-28. This block used to certify the shell class's cap of 4 (the ruled
+     * fallback of 2026-08-27, for load-dependent trailing). The user emptied the table at the release
+     * gate, verbatim: *"Not playing the animation to stop the lag seems nonsensical."* The real fix —
+     * FX_AUDIO_PHASE, the per-client self-measured report timing — had shipped and measured zero
+     * trailing rounds, so the budget had become belt-and-braces that visibly ate animations.
      *
-     * ⛔ THE CONTRACT, in three parts, and every one of them is asserted: the EAR keeps every round ·
-     * the EYE gets at most `cap` rounds plus the LAST one · and the last round is never withheld,
-     * because it carries the settle tag the apply window waits on.
+     * ⛔ THE CONTRACT THE LEGS NOW ASSERT, and it is the ruling's own promise:
+     *   · the TABLE IS EMPTY — the source leg below pins that by value, so a silent re-cap goes red;
+     *   · EVERY ROUND THE PACING RULE KEPT DRAWS ITS PICTURE (nothing is withheld by a budget);
+     *   · the EAR still keeps every round, exactly as before — that half never changed;
+     *   · the last round still carries the settle tail the apply window waits on;
+     *   · and the MECHANISM still works when armed — the forced-low pair below proves the budget can
+     *     still bite, so the emptying is a RULING about the table and not a broken feature.
+     *
+     * ⏪ WHAT WAS RETIRED WITH THE CAP: the leg *"on a LOADED scene no more than one round's picture
+     * lands after the last report"*. That bound was the CAP's own effect and cannot be asserted of an
+     * uncapped volley — with every round drawing, the trailing count is bounded by the drawn rounds,
+     * not by 1. The trailing figure is still MEASURED and reported below (`out.measured`), and the
+     * audio phase is what carries the load it used to. Restoring the cap restores that leg with it.
      */
     {
       const capReports = [], capMuzzles = [];
@@ -9610,12 +9634,15 @@ try {
       });
       let loaded = 0;
       try {
-        // PURE: the budget table itself, by value, and its negative — no other class is capped.
-        ok("cap: the shell class carries a drawn-round budget and no other class does (negative)",
-          fx.drawnRoundCapFor("shotgun") === fx.FX_DRAWN_ROUND_CAP.shotgun
-          && fx.drawnRoundCapFor("shotgun") > 0
+        // ⛔ THE SOURCE LEG. The budget table is EMPTY by ruling, so NO class carries one — asserted on
+        // the table itself as well as through the accessor, because a re-cap would be a one-line edit
+        // and this leg is what makes it loud. The shell class is named explicitly: it is the only row
+        // the table ever had, and the one a restore would reach for first.
+        ok("cap: the drawn-round budget table is EMPTY by ruling — no class carries a budget",
+          Object.keys(fx.FX_DRAWN_ROUND_CAP).length === 0
+          && fx.drawnRoundCapFor("shotgun") === 0
           && fx.drawnRoundCapFor("rifle") === 0 && fx.drawnRoundCapFor("pistol") === 0,
-          `shotgun=${fx.drawnRoundCapFor("shotgun")} rifle=${fx.drawnRoundCapFor("rifle")}`);
+          `table=${JSON.stringify(fx.FX_DRAWN_ROUND_CAP)} shotgun=${fx.drawnRoundCapFor("shotgun")} rifle=${fx.drawnRoundCapFor("rifle")}`);
 
         // ⭐ LOAD THE SCENE — the state the report was made in. Burning ground at its own scene cap, so
         // the engine is carrying the accumulation that makes create latency grow. An empty bench cannot
@@ -9650,9 +9677,13 @@ try {
 
         const capped = await capVolley();
         const cap = fx.drawnRoundCapFor("shotgun");
-        ok("cap: a ten-shell volley draws at most the budget plus its last round, by value",
-          capped.r.drawnRounds <= cap + 1 && capped.r.drawnRounds >= 1,
-          `drawn ${capped.r.drawnRounds} of ${capped.r.shots} (cap ${cap}, withheld ${capped.r.drawCapped}, dropped ${capped.r.dropped})`);
+        // ⭐ THE RULING'S OWN PROMISE, by value, on the LOADED scene the cap was ruled for: with the
+        // table empty every round the pacing rule kept draws its picture, and the budget withholds
+        // nothing at all. This replaces the "at most cap + 1" bound the capped era asserted.
+        ok("cap: uncapped, every round the pacing rule kept draws its picture — nothing is withheld",
+          cap === 0 && capped.r.drawCapped === 0
+          && capped.r.drawnRounds === capped.r.shots - capped.r.dropped,
+          `drawn ${capped.r.drawnRounds} of ${capped.r.shots} (budget ${cap}, withheld ${capped.r.drawCapped}, dropped ${capped.r.dropped})`);
         ok("cap: every round of that volley still SOUNDED — the ear is not on this budget",
           capped.reports >= capped.r.shots - capped.r.dropped,
           `${capped.reports} reports for ${capped.r.shots} rounds (${capped.r.dropped} dropped by the pacing rule)`);
@@ -9661,11 +9692,10 @@ try {
           `${capped.r.drawnRounds} + ${capped.r.drawCapped} + ${capped.r.dropped} vs ${capped.r.shots}`);
         ok("cap: the last round is never withheld — it still carries the volley's settle tail",
           Number(capped.r.settleTailMs) > 0, `settleTailMs=${capped.r.settleTailMs}`);
-        // ⭐ THE BOUND THE FALLBACK WAS RULED FOR, on the loaded scene: no pile of pictures after the
-        // last report. This is the field report's own metric, measured where the defect lives.
-        ok("cap: on a LOADED scene no more than one round's picture lands after the last report",
-          capped.trailing >= 0 && capped.trailing <= 1,
-          `${capped.trailing} muzzle(s) after the last report, ${capped.muzzles} drawn in all`);
+        // ⏪ THE TRAILING BOUND IS NO LONGER ASSERTED — see the block header. It was the CAP's own
+        // effect, and the audio phase carries that load now; the number is measured and reported so a
+        // reader can still see it, but a leg that bounds it at 1 would be certifying a mechanism the
+        // ruling removed. Recorded in out.measured.drawnRoundCap below.
 
         // ⛔ THE CONTROL IS THE BUDGET'S OWN EFFECT, NOT A ROUND COUNT — and that is a correction this
         // block earned by measuring itself. On a genuinely loaded scene the PACING RULE is already
@@ -9673,6 +9703,10 @@ try {
         // uncapped run draws more" compares two stochastic numbers and reds on the run where the drop
         // rule happened to bite harder. What is deterministic is what the BUDGET itself withholds, so
         // that is what the pair below reads: forced low it must bite, disarmed it must not.
+        // ⛔ THE MECHANISM IS STILL THERE, and the pair below is what says the emptying is a RULING about
+        // the table rather than a broken feature: forced low the budget bites exactly as it did, and
+        // disarmed it withholds nothing. A restore is one row in the table, and these two legs are what
+        // would certify it.
         fx._setDrawnRoundCap(2);
         const tight = await capVolley();
         ok("cap: forced low, the budget itself withholds pictures and bounds the drawn count",
