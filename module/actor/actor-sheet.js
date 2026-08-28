@@ -1,4 +1,4 @@
-import { martialOptions, martialActionGroups, MARTIAL_ACTION_CATALOG_UUID, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
+import { martialOptions, martialActionGroups, martialActions, MARTIAL_ACTION_CATALOG_UUID, unarmedStandInDamage, JUMP_KICK_TO_HIT, meleeAttackTypes, meleeBonkOptions, rangedModifiers, weaponTypes, FNFF2_ONLY_MARTIAL_ART_KEYS, isFnff2Enabled, isMartialArtSkillItem, ANATOMY_IMAGES, DEFAULT_ANATOMY_KEY, weaponSpreadFlowMode, SPREAD_MODE_SINGLE } from "../lookups.js"
 import { armSpreadPreview } from "../combat/spread-placement.js";
 import { firingTokenIdOf } from "../seam-shim.js";
 import { deleteFieldUpdate, localize, localizeParam, tryLocalize, cwHasType, cwIsEnabled, cwIsSkinweave, isCombatSenseSkill, isUnwornArmor, properCase } from "../utils.js"
@@ -9,6 +9,7 @@ import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } 
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { isUnreadableNumberField, refuseUnreadableNumberFields, refuseOutOfRangeNumberFields } from "../form-number-guard.js";
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
+import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates } from "../combat/area-delivery.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
@@ -1098,7 +1099,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         // and the base ignores keys it does not know. Absent on every ordinary shot.
         if (spreadAim) fireOptions.cpSpreadAim = spreadAim;
         try {
-          return await item.__weaponRoll(fireOptions, targetTokens);
+          // ⛔ THROUGH THE DAMAGE GUARD, never straight at the base's roll — see the method for the
+          // word-where-a-formula-belongs defect it answers and for how a launcher gets its warhead.
+          return await this._cpFireThroughDamageGuard(item, () => item.__weaponRoll(fireOptions, targetTokens));
         } finally {
           Hooks.off("cyberpunk2020.weaponFired", closeOnFire);
         }
@@ -1106,6 +1109,121 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     });
     dialog.render(true);
     return dialog;
+  }
+
+  /**
+   * ⛔ FIRE A WEAPON ONLY IF ITS DAMAGE IS SOMETHING THAT CAN BE ROLLED — and give a launcher its
+   * warhead from the round in the tube.
+   *
+   * ⭐ THE DEFECT, reported from the table: firing the Grenade Launcher raised
+   * `Unresolved StringTerm Varies` and the shot died with an uncaught error. Its shipped damage is the
+   * literal word **"Varies"** (it has no warhead of its own — the ROUND does), and the base system's
+   * fire path builds `new Roll(system.damage, …)` from that string unconditionally (base item.js
+   * `__semiAuto`). Foundry parses an unrecognised word into a `StringTerm` and throws when it is
+   * evaluated. The shipped catalogue holds six more of them — "Gas", "Stun", "Deaf", "Blind" — so
+   * every non-damaging grenade type is the same crash.
+   *
+   * ⛔ THE GUARD IS OURS, AT OUR LAYER, and it has to be: the throw happens inside the BASE's method,
+   * several frames past anything this module owns, so there is nothing downstream to catch. This is
+   * the last point at which the shot can be declined instead of failing.
+   *
+   * ⭐ AN EMPTY GRENADE TUBE IS NO LONGER DECLINED — it fires a STANDARD ROUND (user ruling, 2026-08-27:
+   * "I would really prefer the default behavior of the weapons was not to spit an error and instead
+   * defaulted to standard grenade ammo in the same way standard weapons default to standard bullets").
+   * The whole ladder — loaded round, then an owned Fragmentation round, then the module pack's own
+   * entry — lives in combat/area-delivery.js `warheadDamageFor`, so the MISS path prices the same shot
+   * the same way. The message below is what is left when the ladder finds no round anywhere, and for
+   * every weapon the ladder does not cover (a gas grenade IS its own warhead; see
+   * `defersDamageToGrenadeRound` for the closed enumeration).
+   *
+   * ⚠ AN EMPTY DAMAGE STRING IS DELIBERATELY NOT REFUSED. The defect is a WORD where a formula
+   * belongs; a weapon with nothing written on it is a different case with the base's own answers
+   * (`sys.damage || "1d6"` on the suppressive path, the martial builder's own fallback, the template
+   * default), and refusing it here would break martial actions that have always worked.
+   *
+   * ⭐ THE ROUND SUPPLIES THE FORMULA WHERE THERE IS ONE. That IS what a launcher is: the tube
+   * has no damage, the round does. `warheadDamageFor` reads the three fields a round can carry it in,
+   * in a stated order, off the loaded round or off the resolved standard one
+   * (combat/area-delivery.js). The substitution is made by shadowing the base's own
+   * `_getWeaponSystem` accessor on THIS ITEM for the duration of the roll — the one reader every
+   * damage/ammo/range read in the base's fire path goes through, so one shadow answers all of them —
+   * and it is restored in `finally`. Nothing is written to the document: the round's damage is a fact
+   * about this shot, not an edit to the weapon.
+   * ⚠ It returns a fresh shallow COPY per call, so `shotsLeft` and every other field still read the
+   * item's live values; the ammunition write goes through `__setWeaponField`, which uses
+   * `this.update()` and never touches this accessor.
+   * ⚠ Scoped to one gesture: two overlapping fires of the SAME item would share the shadow. A trigger
+   * pull is a click and the restore is in `finally`, so the window is a frame — recorded rather than
+   * guarded, because a guard would have to serialise firing.
+   *
+   * ⭐⭐ THE SECOND SHADOW: A WARHEAD'S YIELD DOES NOT DEPEND ON HOW FAR IT TRAVELLED.
+   *
+   * The base system maximizes a damage roll fired at point-blank range — `_shouldMaximizePointBlankDamage`
+   * (systems/cyberpunk2020/module/item/item.js) is `isRanged() && _isFirearm() && range === pointBlank`,
+   * and its three fire methods pass the answer straight into `Roll#evaluate({ maximize })`. The rule it
+   * models is a bullet placed where the shooter wants it; `_isFirearm()` decides membership by
+   * `weaponType`, and **HVY is in that list** — which is the weaponType every grenade, every launcher
+   * and the missile tube in the shipped catalogue carries. So the maximize leaked onto warheads.
+   *
+   * ⛔ AND IT STICKS, WHICH IS WHY IT MATTERS. On a HIT the blast's base damage IS the card's own roll
+   * (combat/damage-hooks.js reads `payload.areaDamages`; the warhead is re-rolled only on a MISS), so a
+   * maximized point-blank roll is the number every figure in the area is then priced off — a 7d6 grenade
+   * dealt a pinned 42 at the centre for no reason but the thrower's distance from it.
+   *
+   * The exclusion is applied HERE, on the instance, for the same reason the damage substitution is: the
+   * base system's install is not ours to modify, and this is the one point every fire gesture passes
+   * through (both call sites route here). `weaponDetonates` is the ONE predicate — the item-side mirror
+   * of the payload predicate the damage rail routes on (combat/area-delivery.js) — so the weapons whose
+   * damage the blast flow takes over are exactly the weapons excluded here, and nothing else moves: an
+   * ordinary firearm still maximizes at point blank, unchanged.
+   *
+   * ⛔ IT MUST GO ON BEFORE THE ROLLABLE-DAMAGE EARLY RETURN, and that is the reason for the outer
+   * try/finally rather than a second line inside the inner one. A THROWN grenade prints a real 7d6 and
+   * therefore takes that early return — it never reaches the warhead substitution at all — and it is the
+   * commonest detonating weapon at a table. A shadow installed after that return would have covered only
+   * launchers.
+   *
+   * @param {Item} item the weapon (or cyberware weapon) about to be fired
+   * @param {Function} roll a thunk that performs the base roll
+   * @returns {Promise<*>} whatever the roll returned, or null when the shot was declined
+   */
+  async _cpFireThroughDamageGuard(item, roll) {
+    const sys = item?._getWeaponSystem?.() ?? item?.system ?? {};
+    const printed = String(sys.damage ?? "").trim();
+
+    // The maximize exclusion, saved and restored by the same own-descriptor idiom the damage shadow
+    // below uses — an own property that did not exist before is DELETED again, so the prototype's own
+    // method answers afterwards and nothing is left on the document.
+    const excludeMaximize = weaponDetonates(item);
+    const maximizeDescriptor = excludeMaximize
+      ? Object.getOwnPropertyDescriptor(item, "_shouldMaximizePointBlankDamage") : null;
+    if (excludeMaximize) item._shouldMaximizePointBlankDamage = () => false;
+
+    try {
+      if (!printed || damageFormulaIsRollable(printed)) return await roll();
+
+      const round = await warheadDamageFor(item);
+      if (!round) {
+        ui.notifications?.warn?.(localizeParam("FireDamageNotRollable", { name: item?.name ?? "", damage: printed }));
+        return null;
+      }
+
+      const ownDescriptor = Object.getOwnPropertyDescriptor(item, "_getWeaponSystem");
+      const read = (typeof item._getWeaponSystem === "function")
+        ? item._getWeaponSystem.bind(item) : (() => item.system ?? {});
+      item._getWeaponSystem = () => ({ ...read(), damage: round });
+      try {
+        return await roll();
+      } finally {
+        if (ownDescriptor) Object.defineProperty(item, "_getWeaponSystem", ownDescriptor);
+        else delete item._getWeaponSystem;   // back to the prototype's own method
+      }
+    } finally {
+      if (excludeMaximize) {
+        if (maximizeDescriptor) Object.defineProperty(item, "_shouldMaximizePointBlankDamage", maximizeDescriptor);
+        else delete item._shouldMaximizePointBlankDamage;
+      }
+    }
   }
 
   /**
@@ -1933,7 +2051,14 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    * UUID rung 1 matches on. The stand-in is a CLONE of that entry, so the values stay the system's
    * single source of truth and no formula is duplicated into module code. The pack ships with the
    * system, so a failed fetch is exceptional: it degrades to the bare unarmed stand-in this method
-   * has always built (roll-only, no damage), rather than eating the click.
+   * has always built, rather than eating the click.
+   *
+   * SIX damage-bearing actions have NO catalog entry (Punch, JumpKick, Ram, Cast, Throw, Choke), and
+   * a weapon document with no damage written on it is NOT damage-less — it inherits the base
+   * template's default "2d6+1", which is what every one of them used to roll bare-handed. So the
+   * bare stand-in is stamped with the maneuver's own damage from the mirrored table
+   * (`unarmedStandInDamage`; core four always, the FNFF2 three plus Ram only behind the FNFF2
+   * toggle). An action the tables do not price keeps the template default, exactly as before.
    */
   async _cpBuildTransientMartialItem(action) {
     const uuid = MARTIAL_ACTION_CATALOG_UUID[action];
@@ -1950,9 +2075,11 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
         console.warn("cp2020-augmented | martial catalog entry unreadable; falling back to the bare stand-in", { action, uuid, error: e });
       }
     }
+    const system = { attackType: meleeAttackTypes.martial, weaponType: "Melee" };
+    const damage = unarmedStandInDamage(action, Number(this.actor.system?.stats?.bt?.total) || 0);
+    if (damage) system.damage = damage;
     return new CONFIG.Item.documentClass(
-      { name: localize("MartialArt"), type: "weapon", img: "systems/cyberpunk2020/img/punch-icon.svg",
-        system: { attackType: meleeAttackTypes.martial, weaponType: "Melee" } },
+      { name: localize("MartialArt"), type: "weapon", img: "systems/cyberpunk2020/img/punch-icon.svg", system },
       { parent: this.actor }
     );
   }
@@ -1980,7 +2107,21 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
       targetTokens,
       modifierGroups: martialOptions(this.actor),
       onConfirm: async (fireOptions) => {
-        await item.__weaponRoll({ ...fireOptions, action }, targetTokens);
+        // The Jump Kick's to-hit penalty is AUTOMATIC and priced with the maneuver, not offered as a
+        // choice: its 1D6+5 would otherwise strictly dominate a plain Kick. Folded into the dialog's
+        // own additional-modifier term, which is the only seam a module has into the base's martial
+        // attack roll. Item-blind and FNFF2-gated, the way upstream ships it — a real boot is still
+        // a jump kick. (⚠ 1.2-COMPAT: a base system that prices the maneuver itself would double
+        // this; drop this fold at that handoff.)
+        const jumpKick = isFnff2Enabled() && action === martialActions.jumpKick;
+        const attackMods = jumpKick
+          ? { ...fireOptions, action, extraMod: (Number(fireOptions?.extraMod) || 0) + JUMP_KICK_TO_HIT }
+          : { ...fireOptions, action };
+        // Through the same damage guard the ranged gesture uses, so ONE rule answers for both windows.
+        // Every martial implement carries a rollable formula (the catalog's, or the stand-in's own),
+        // so this is a pass-through in practice — but the guard is where a word-instead-of-a-formula
+        // is refused, and a martial action fired through a hand-authored weapon is no exception.
+        await this._cpFireThroughDamageGuard(item, () => item.__weaponRoll(attackMods, targetTokens));
         // Special martial hit-effect (A6 → the offered contest): a hold / grapple / choke / throw /
         // sweep on a single target no longer applies on-declare — it posts the defense-offer card
         // (martial.js postMartialDefenseOffer): the target's owner may roll the opposed defense, and
