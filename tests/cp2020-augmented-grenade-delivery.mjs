@@ -33,6 +33,12 @@
  *     figure, it survives the DataModel write and the seam copy, it reaches the state through the
  *     routing helper, and — driven by real round advances — a flat marker ticks 1/1/1 while a marker
  *     without it still halves 1/½/¼ on the same body in the same combat.
+ * §13 the BLAST's rider carry: the placed area records all seven per-hit rider fields by value beside
+ *     the armour statements it always recorded, the confirm hands them to the apply (over-time state
+ *     seeded FLAT, shock flag written), the seeded burn ticks 1/1/1 on real round advances, a payload
+ *     without the fields seeds nothing, an area written before the fields existed still applies plain
+ *     damage cleanly, the batched save cadence is one prompt per body, and the shrapnel secondary of
+ *     the detailed branch deliberately carries no riders of its own.
  *
  * Run: FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node cp2020-augmented-grenade-delivery.mjs
  */
@@ -1432,6 +1438,253 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       await victim.unsetFlag(SCOPE, "fireDotState").catch(() => {});
       try { if (victim.statuses?.has?.("burning")) await victim.toggleStatusEffect("burning", { active: false }); } catch (_e) {}
       for (const [k, v] of Object.entries(prev12)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+    }
+  });
+
+  /* ══════════════════ §13 the BLAST's rider carry ══════════════════
+   * MECHANISM: a blast area OUTLIVES the payload that placed it — the GM confirms it seconds later,
+   * by which point the only record of what the load does is the area's own flags. The flag block wrote
+   * the ARMOUR half of that record (ap/edged/mono/the two multipliers/the penetration multiplier) and
+   * not the PER-HIT half (the shock a stun round delivers, the burn an incendiary one starts), so the
+   * confirm's `{...f}` handed the apply nothing and the two rider calls in `_applyAreaHitToToken` were
+   * no-ops for every detonation. The pattern flow got this pass on 2026-08-10; the blast never did.
+   *
+   * One body takes all four detonations in turn — a figure with PRIOR state each time after the first,
+   * which is the shape the rider bugs of this batch actually had. */
+  await sect("§13", async () => {
+    const shapes = await import(`/modules/${SCOPE}/module/combat/area-shapes.js`);
+    const renderCard = (path, data) =>
+      (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(path, data);
+
+    const prev13 = {};
+    const set13 = async (k, v) => { try { prev13[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
+    await set13("explosivesEnabled", true);
+    await set13("explosivesDetailed", false);
+    await set13("combatFxEnabled", false);       // §13 is about the DAMAGE rail
+    await set13("fireDotEnabled", true);
+    await set13("taserCumPenaltyEnabled", true);
+    await set13("mechRoundTickAutomation", true);
+    await set13("damageAblation", false);
+    await set13("headHitDoubling", false);
+    await set13("limbModel", "core");
+
+    let catcher = null, catchTok = null, combat13 = null;
+    try {
+      /* ── fixtures: a body of this section's own, far enough out that the blast catches only it ──── */
+      catcher = await Actor.create({ name: "__PW__Blast Catcher", type: "character" });
+      [catchTok] = await scene.createEmbeddedDocuments("Token", [{
+        name: catcher.name, actorId: catcher.id, actorLink: true,
+        x: 800, y: 1000 + 8 * gridPx, width: 1, height: 1,
+      }]);
+      await sleep(600);
+      ok("§13 HARNESS GUARD — the catching figure is on the canvas this section will measure",
+        canvas.scene?.id === scene.id && !!canvas.tokens.get(catchTok.id),
+        `scene=${canvas.scene?.id === scene.id} token=${!!canvas.tokens.get(catchTok.id)}`);
+
+      const allAreas = () => (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])]);
+      // Every rider a load can state, with values that are distinguishable from every default — a leg
+      // that reads back the defaults would pass against a flag block that wrote nothing.
+      const RIDERS = { stunSaveOnHit: true, stunSaveMod: -3, dotEnabled: true, dotTurns: 3,
+                       dotType: "fire", dotDamageFormula: "4d6", dotFlat: true };
+      // The armour half, at values no default supplies either — this is the regression guard: the fields
+      // the block ALREADY wrote must still arrive unchanged once the rider fields join them.
+      const ARMOUR = { ap: true, edged: true, mono: true, armorMultSoft: 2, armorMultHard: 0.5,
+                       penDamageMult: 3, blastShrapnel: true };
+
+      const placeBlast = async (extra) => {
+        const before = new Set(allAreas().filter(d => F(d).isExplosion).map(d => d.id));
+        Hooks.callAll("cyberpunk2020.weaponFired", {
+          attackerId: shooter.id, attackerTokenId: shTok.id, weaponName: "__PW__Blast Probe",
+          attackType: "Grenade", areaDamages: { Torso: [{ damage: 10 }] }, shotsFired: 1, shotsHit: 1,
+          targetTokenId: catchTok.id, fxTargetTokenId: catchTok.id, firedByUserId: game.user.id,
+          // 3 m keeps the circle off the fixtures the earlier sections left standing eight squares away,
+          // so the counts below are this figure's and nobody else's.
+          blastRadius: 3, ...extra,
+        });
+        for (let i = 0; i < 60; i++) {
+          const a = allAreas().find(d => F(d).isExplosion && !before.has(d.id));
+          if (a) return a;
+          await sleep(300);
+        }
+        return null;
+      };
+      const confirmArea = async (areaId) => {
+        let btn = null;
+        for (let i = 0; i < 40; i++) {
+          btn = document.querySelector(`.cp-confirm-explosion[data-template-id="${areaId}"]`);
+          if (btn) break;
+          await sleep(250);
+        }
+        if (!btn) return false;
+        btn.click();
+        await sleep(2500);
+        return true;
+      };
+      const dotOf = () => catcher.getFlag(SCOPE, "fireDotState") ?? [];
+      const resetCatcher = async () => {
+        await catcher.unsetFlag(SCOPE, "fireDotState").catch(() => {});
+        await catcher.unsetFlag(SCOPE, "taserState").catch(() => {});
+        await catcher.update({ "system.damage": 0 });
+        for (const s of ["dead", "burning"]) {
+          try { if (catcher.statuses?.has?.(s)) await catcher.toggleStatusEffect(s, { active: false }); } catch (_e) {}
+        }
+      };
+      const dropArea = async (area) => { try { await area.delete(); } catch (_e) {} };
+
+      /* ── (a) THE RECORD: every rider field on the area, beside the armour statements ────────────── */
+      const recArea = await placeBlast({ ...RIDERS, ...ARMOUR });
+      ok("§13 a detonating payload places an area to read the record off", !!recArea);
+      if (recArea) {
+        const f = F(recArea);
+        ok("§13 the area records all seven per-hit rider fields by value",
+          f.stunSaveOnHit === true && Number(f.stunSaveMod) === -3 && f.dotEnabled === true
+          && Number(f.dotTurns) === 3 && String(f.dotType) === "fire"
+          && String(f.dotDamageFormula) === "4d6" && f.dotFlat === true,
+          JSON.stringify({ stunSaveOnHit: f.stunSaveOnHit, stunSaveMod: f.stunSaveMod, dotEnabled: f.dotEnabled,
+                           dotTurns: f.dotTurns, dotType: f.dotType, dotDamageFormula: f.dotDamageFormula, dotFlat: f.dotFlat }));
+        ok("§13 REGRESSION — the armour statements the area always recorded are unchanged beside them",
+          f.ap === true && f.edged === true && f.mono === true && Number(f.armorMultSoft) === 2
+          && Number(f.armorMultHard) === 0.5 && Number(f.penDamageMult) === 3 && f.blastShrapnel === true
+          && Number(f.baseDamage) === 10 && Number(f.blastRadius) === 3,
+          JSON.stringify({ ap: f.ap, edged: f.edged, mono: f.mono, soft: f.armorMultSoft, hard: f.armorMultHard,
+                           pen: f.penDamageMult, shrapnel: f.blastShrapnel, base: f.baseDamage, radius: f.blastRadius }));
+        await dropArea(recArea);
+      }
+
+      /* ── (b) HONORED: the confirm hands the riders to the apply ────────────────────────────────── */
+      await resetCatcher();
+      const from = new Set(game.messages.map(m => m.id));
+      const hotArea = await placeBlast({ ...RIDERS });
+      ok("§13 an incendiary-shaped payload places its blast", !!hotArea);
+      if (hotArea) {
+        ok("§13 the confirm card was posted for it", await confirmArea(hotArea.id));
+        for (let i = 0; i < 30 && dotOf().length === 0; i++) await sleep(300);
+        const st = dotOf();
+        ok("§13 the caught figure took the blast's damage",
+          Number(catcher.system.damage) > 0, `damage=${catcher.system.damage}`);
+        ok("§13 confirming the blast seeds the over-time state on the caught figure, FLAT",
+          st.length === 1 && st[0].flat === true && Number(st[0].mult) === 1
+          && String(st[0].formula) === "4d6" && Number(st[0].turnsLeft) === 3,
+          JSON.stringify(st));
+        const taser = catcher.getFlag(SCOPE, "taserState") ?? null;
+        ok("§13 the shock rider is honored on the same application, at the payload's own figure",
+          !!taser && Number(taser.count) === 1 && Number(taser.mod) === -3, JSON.stringify(taser));
+        // The ledger owns the stun half and posts it once, off the state the application FINISHED on.
+        const mine = (mark) => [...game.messages]
+          .filter(m => !from.has(m.id) && (m.content ?? "").includes(mark) && (m.content ?? "").includes(`data-actor-id="${catcher.id}"`)).length;
+        ok("§13 REGRESSION — the batched save cadence holds: ONE stun prompt for this body, no mortal prompt",
+          mine("stun-save-prompt") === 1 && mine("death-save-prompt") === 0,
+          `stun=${mine("stun-save-prompt")} mortal=${mine("death-save-prompt")}`);
+        await dropArea(hotArea);
+      }
+
+      /* ── (c) THE TICK, driven by real round advances off the state the BLAST seeded ────────────── */
+      if (dotOf().length === 1) {
+        // The burn is the blast's own; only the wound track is reset, so three 4d6 turns have room to
+        // land without the tick refusing a body it reads as dead.
+        await catcher.update({ "system.damage": 0 });
+        try { if (catcher.statuses?.has?.("dead")) await catcher.toggleStatusEffect("dead", { active: false }); } catch (_e) {}
+        const multNow = () => { const e = dotOf()[0]; return e ? Number(e.mult) : null; };
+        const seq = [multNow()];
+        combat13 = await Combat.create({ scene: scene.id });
+        await combat13.createEmbeddedDocuments("Combatant", [{ tokenId: catchTok.id, sceneId: scene.id, actorId: catcher.id, initiative: 10 }]);
+        await combat13.startCombat();
+        await sleep(800);
+        ok("§13 HARNESS GUARD — the burning figure is the combatant the tick will run for",
+          combat13.combatant?.actor?.id === catcher.id, `combatant=${combat13.combatant?.actor?.name}`);
+        for (const r of [2, 3]) {
+          await combat13.update({ round: r, turn: 0 });
+          for (let i = 0; i < 40; i++) {
+            await sleep(300);
+            const e = dotOf()[0];
+            if (!e || Number(e.turnsLeft) === 4 - r) break;
+          }
+          seq.push(multNow());
+        }
+        out.notes.push(`§13 blast-seeded burn multipliers per turn: ${JSON.stringify(seq)}`);
+        ok("§13 the blast-seeded burn ticks on the FLAT ladder: 1, 1, 1",
+          seq.length === 3 && seq[0] === 1 && seq[1] === 1 && seq[2] === 1, JSON.stringify(seq));
+        ok("§13 the burn landed damage while it ticked (the tick ran, not a silent no-op)",
+          Number(catcher.system.damage) > 0, `damage=${catcher.system.damage}`);
+      } else {
+        ok("§13 the blast-seeded burn ticks on the FLAT ladder: 1, 1, 1", false, "no blast-seeded burn to tick");
+      }
+      if (combat13) { await combat13.delete().catch(() => {}); combat13 = null; }
+
+      /* ── (d) NEGATIVE: a fragmentation-shaped payload states no riders and seeds none ───────────── */
+      await resetCatcher();
+      const coldArea = await placeBlast({});
+      ok("§13 a fragmentation-shaped payload places its blast", !!coldArea);
+      if (coldArea) {
+        const f = F(coldArea);
+        ok("§13 NEGATIVE — its area records the 'does nothing' value for every rider, not undefined",
+          f.stunSaveOnHit === false && Number(f.stunSaveMod) === 0 && f.dotEnabled === false
+          && Number(f.dotTurns) === 0 && f.dotFlat === false,
+          JSON.stringify({ stun: f.stunSaveOnHit, mod: f.stunSaveMod, dot: f.dotEnabled, turns: f.dotTurns, flat: f.dotFlat }));
+        await confirmArea(coldArea.id);
+        await sleep(1200);
+        ok("§13 NEGATIVE — its blast damages the figure and starts no burn at all",
+          Number(catcher.system.damage) > 0 && dotOf().length === 0
+          && !catcher.getFlag(SCOPE, "taserState"),
+          `damage=${catcher.system.damage} dot=${JSON.stringify(dotOf())} taser=${JSON.stringify(catcher.getFlag(SCOPE, "taserState") ?? null)}`);
+        await dropArea(coldArea);
+      }
+
+      /* ── (e) AN AREA WRITTEN BEFORE THE FIELDS EXISTED still applies plain damage ──────────────── */
+      await resetCatcher();
+      {
+        const cc = canvas.tokens.get(catchTok.id);
+        const ox = cc?.center?.x ?? 800, oy = cc?.center?.y ?? (1000 + 8 * gridPx);
+        // The flag set VERBATIM as the block wrote it before this unit — no rider keys at all, which is
+        // what every area already standing on a live table carries. Backward compatibility here is the
+        // ABSENCE of the fields, not a version gate, so this is the whole of the compatibility test.
+        const legacy = await shapes.createArea(scene, {
+          kind: "circle", x: ox, y: oy, radiusM: 3, color: "#ff8800", borderColor: "#cc4400",
+          flags: {
+            isExplosion: true, baseDamage: 10, blastRadius: 3, blastFullDamageWithin: 2,
+            blastMultipliers: [0.5, 0.25, 0.125, 0.0625], attackerId: shooter.id,
+            ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1,
+            penDamageMult: 1, blastShrapnel: false, weaponName: "__PW__Legacy Blast",
+            createdRound: 0, originX: ox, originY: oy,
+          },
+        });
+        ok("§13 a pre-change area (no rider keys written at all) can be stood up", !!legacy?.doc);
+        if (legacy?.doc) {
+          const card = await renderCard(`modules/${SCOPE}/templates/chat/explosion-confirm.hbs`,
+            { weaponName: "__PW__Legacy Blast", radius: 3, baseDamage: 10, fullWithin: 2, templateId: legacy.doc.id });
+          await ChatMessage.create({ content: card });
+          ok("§13 its confirm card renders and resolves", await confirmArea(legacy.doc.id));
+          await sleep(1200);
+          ok("§13 COMPATIBILITY — a pre-change area still applies plain damage and starts nothing",
+            Number(catcher.system.damage) > 0 && dotOf().length === 0 && !catcher.getFlag(SCOPE, "taserState"),
+            `damage=${catcher.system.damage} dot=${dotOf().length}`);
+          try { await legacy.doc.delete(); } catch (_e) {}
+        }
+      }
+
+      /* ── (f) THE SHRAPNEL SECONDARY carries no riders of its own (the ruling, pinned) ──────────── */
+      await resetCatcher();
+      await game.settings.set(SCOPE, "explosivesDetailed", true);
+      const detArea = await placeBlast({ ...RIDERS, blastShrapnel: true });
+      ok("§13 the detailed branch places its blast", !!detArea);
+      if (detArea) {
+        await confirmArea(detArea.id);
+        await sleep(1500);
+        ok("§13 RULING — the shrapnel secondary asks no second save and starts no second burn",
+          dotOf().length === 0 && !catcher.getFlag(SCOPE, "taserState"),
+          `dot=${JSON.stringify(dotOf())} taser=${JSON.stringify(catcher.getFlag(SCOPE, "taserState") ?? null)}`);
+        out.notes.push(`§13 detailed branch: concussion+shrapnel applied, over-time entries=${dotOf().length} — the riders ride the CORE blast application only`);
+        await dropArea(detArea);
+      }
+      await game.settings.set(SCOPE, "explosivesDetailed", false);
+    } finally {
+      if (combat13) await combat13.delete().catch(() => {});
+      for (const d of (scene.templates ? [...scene.templates] : []).concat([...(scene.regions ?? [])])) {
+        if (F(d).isExplosion) await d.delete().catch(() => {});
+      }
+      if (catchTok) await catchTok.delete().catch(() => {});
+      if (catcher) await catcher.delete().catch(() => {});
+      for (const [k, v] of Object.entries(prev13)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
     }
   });
 

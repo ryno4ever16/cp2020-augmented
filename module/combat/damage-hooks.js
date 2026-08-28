@@ -2518,6 +2518,30 @@ async function _placeExplosion(payload) {
         penDamageMult: Number(payload.penDamageMult ?? 1), blastShrapnel: Boolean(payload.blastShrapnel),
         weaponName, createdRound: game.combat?.round ?? 0,
         originX: cx, originY: cy,
+        // ⭐ THE LOAD'S PER-HIT RIDERS TRAVEL WITH THE BLAST (2026-08-28). The flags above are the
+        // ARMOUR half of what a load does; these are the other half — the shock a stun round delivers
+        // and the burn an incendiary one starts. The pattern flow was given this pass on 2026-08-10
+        // (`_placeSpreadZone`, where the same seven fields are written for the same reason) and the
+        // blast never was, so every detonating load that carried a rider lost it: the area OUTLIVES
+        // the payload, the confirm reads the area and nothing else, and `_applyAreaHitToToken` was
+        // therefore handed nothing to honor. Measured consequence: an Incendiary Grenade Round
+        // detonated, damaged by falloff, and ignited nobody.
+        // Written here, where every other fact about this detonation is written, and honored per
+        // caught figure in `_applyAreaHitToToken` — the same two calls the single-target flow makes,
+        // in the same order (the taser flag before the prompt that reads it, the burn gated on the
+        // round having got through).
+        // Same defensive coercion as the fields above, so a payload missing any of them stores the
+        // "does nothing" value rather than undefined — and an area placed BEFORE these fields existed
+        // answers falsy for every one of them and applies exactly as it always did. The backward
+        // compatibility is the ABSENCE of the fields, not a version gate.
+        stunSaveOnHit: Boolean(payload.stunSaveOnHit), stunSaveMod: Number(payload.stunSaveMod ?? 0),
+        dotEnabled: Boolean(payload.dotEnabled), dotTurns: Number(payload.dotTurns ?? 0),
+        dotType: String(payload.dotType || "acid"), dotDamageFormula: String(payload.dotDamageFormula || "1d6"),
+        // The fifth statement about the same burn — whether its multiplier diminishes. Stored for the
+        // reason the four above it are: the area OUTLIVES the payload, and the figures caught at
+        // confirm time seed their burn from what the area recorded. An area placed before this field
+        // existed reads false, i.e. the halving that shipped before.
+        dotFlat: Boolean(payload.dotFlat),
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Explosion area creation failed"); return; }
@@ -2650,6 +2674,18 @@ async function _confirmExplosion(templateId) {
       // for it either way) — what a wall stops is the fragments, not the overpressure.
       await _applyConcussionToToken(tok, dmg, { weaponName: localizeParam("WpnVariantConcussion", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity);
       if (f.blastShrapnel) {
+        // ⛔ THE RIDERS DO NOT RIDE THE SECONDARY, and that is a ruling rather than an omission
+        // (2026-08-28, with the rider carry above). The fragments are a SECOND application on a body
+        // this detonation has already applied to; handing them `{...f}` would ask one body to save
+        // twice and to catch fire twice for one detonation, which is the exact cardinality the
+        // batched save cadence exists to prevent (one detonation = one ledger = one prompt per body).
+        // So this call keeps its own object — the plain fragment statement it has always passed — and
+        // the load's shock/burn stay with the warhead's MAIN blast application in the branch below.
+        // ⚠ The consequence on THIS branch is that a rider-carrying load ignites nobody while
+        // `explosivesDetailed` is on, because the main application here is the concussion (Listen Up
+        // p.105 overpressure, which takes only a weapon name). Recorded rather than silently patched:
+        // where an incendiary warhead's filler belongs in the concussion/fragment split is a rules
+        // question, not a wiring one.
         const shrap = await new Roll("1d10").evaluate();
         await _applyAreaHitToToken(tok, Math.max(0, Math.floor(shrap.total)),
           { ap: false, edged: false, mono: false, armorMultSoft: 1, armorMultHard: 1, penDamageMult: 1, weaponName: localizeParam("WpnVariantShrapnel", { name: f.weaponName ?? localize("WpnExplosion") }) },
@@ -2657,6 +2693,10 @@ async function _confirmExplosion(templateId) {
       }
     } else {
       // Core blast: range-banded damage through normal armor, with the barrier folded outermost.
+      // `{...f}` is the whole delivery of the load's riders too — the seven fields the placement wrote
+      // arrive here unaltered, and `_applyAreaHitToToken` destructures and honors them exactly as it
+      // does for a pattern's shells. Nothing on the apply side needed changing for this: the helper was
+      // built to read them off whatever caller had them, and until now the blast simply had none.
       await _applyAreaHitToToken(tok, dmg, { ...f, weaponName: localizeParam("WpnVariantBlast", { name: f.weaponName ?? localize("WpnExplosion") }) }, severity, coverSP);
     }
   }
