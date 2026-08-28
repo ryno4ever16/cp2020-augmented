@@ -1445,7 +1445,7 @@
     "CoverZoneSP": "Cover SP",
     "CoverZoneSPHint": "Stopping Power the cover adds as the outermost armor layer while it stands. Stays constant until the cover is destroyed.",
     "CoverZonePool": "Structure left",
-    "CoverZonePoolHint": "Remaining structure. Damage from shots resolved through this cover drains it; at 0 the cover is destroyed and stops protecting.",
+    "CoverZonePoolHint": "Remaining structure. Every shot resolved through this cover takes its full damage off this number — Maximum Metal p.58 counts damage RECEIVED, not damage that got through, so the object wears down even when its SP stops every round. At 0 it is destroyed and stops protecting.",
     "CoverZonePoolMax": "Structure",
     "CoverZonePoolMaxHint": "Total structure. Default is 3 × SP (Maximum Metal p.58); scale it up for massive objects or down for flimsy partial ones. Size the zone to ONE cover object — the book shatters the block that was hit, not the whole wall.",
     "CoverZoneDestroyed": "Destroyed",
