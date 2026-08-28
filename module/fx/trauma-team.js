@@ -5,11 +5,16 @@
  * station over it, four rings go out under it, five figures step off it one after another, and it is
  * STILL THERE when the sequence finishes. A second use of the same control sends it back up.
  *
- * ⛔ THIS DRAWS A PICTURE AND NOTHING ELSE. The five figures are SPRITES, not documents: no actor is
+ * ⛔ BY DEFAULT THIS DRAWS A PICTURE AND NOTHING ELSE. The five figures are SPRITES: no actor is
  * created, no token is placed, no region is written, and the scene's own flags are untouched from the
- * first frame to the last (asserted by the keeper, both directions). If a table wants five figures it
- * can then move and roll for, that is a document-creating feature and it belongs to whatever builds
- * non-player figures — the seam is recorded in docs/FX-RAIL.md §8 rather than half-built here.
+ * first frame to the last (asserted by the keeper, both directions).
+ *
+ * ⭐ THE ONE EXCEPTION, ADDED 2026-08-28 ON A USER RULING, and it is opt-in per call. A referee may
+ * name a world actor and a count when calling, and the unload beats then also WRITE that many token
+ * documents at the marks — the seam that used to be recorded in docs/FX-RAIL.md §8 as "belongs to
+ * whatever builds non-player figures", closed in the only way that keeps this file out of the content
+ * business: the actor is the WORLD'S, never one we ship. Answer nothing and the sequence is the pure
+ * cinematic it has always been. See "The crew a referee can move afterwards" below for the whole of it.
  *
  * ⭐ WHY IT IS A SEPARATE FILE. Same answer the condition overlays gave: `module/fx/` is the
  * containment boundary, not one file inside it. Every capability question below is asked through the
@@ -316,6 +321,65 @@ export function figureSchedule(centre = { x: 0, y: 0 }, gridPx = 100) {
   }));
 }
 
+/* ══════════════════════════ The crew a referee can move afterwards ══════════════════════════
+ *
+ * ⭐ THE OPTIONAL HALF OF THE CALL (user ruling 2026-08-28, "agreed. build it"). The five marks above
+ * are still sprites and still write nothing. But at CALL time a referee may name ANY world actor and a
+ * count, and then the unload beats WRITE that many token documents where those marks are drawn — the
+ * figures stop being a picture and become things a table can move and roll for.
+ *
+ * ⛔ NO STAT BLOCK SHIPS WITH THIS, and that is a content-policy line, not an oversight: the picker
+ * offers the WORLD'S OWN actors and nothing else. This module bundles no medical-response NPC, names
+ * none, and has no opinion about what one should be.
+ *
+ * ⛔ THE DEFAULT IS NONE. A referee who answers nothing gets exactly the cinematic that shipped — the
+ * sprites, no documents, the census unmoved — which is what the keeper's negative leg pins.
+ *
+ * ⛔⛔ AND THE WRITE BELONGS TO THE CLIENT THAT CONFIRMED THE CALL. The crew never rides the socket
+ * announcement (see `landTraumaTeam`): the payload is byte-for-byte the one this file has always sent,
+ * so every OTHER client draws the same per-client cinematic it always drew and has nothing to act on.
+ * One referee gesture, one referee's write — the alternative, every client acting on a relayed crew,
+ * is N copies of the same five people.
+ */
+
+/**
+ * THE SEATS ARE THE MARKS. At most as many figures as there are unload beats, at least one — a crew of
+ * NONE is expressed by choosing no actor at all, never by a zero, so this function never returns one.
+ */
+export function clampCrewCount(n) {
+  const v = Math.floor(Number(n));
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(TRAUMA_TEAM.figureCount, Math.max(1, v));
+}
+
+/**
+ * WHERE AND WHEN EACH REQUESTED FIGURE IS WRITTEN. Pure, and it takes the beats from `figureSchedule`
+ * rather than recomputing them, so a token a table can move stands exactly where the mark it replaced
+ * was drawn — one schedule, one answer, no second derivation (standard §B/6).
+ *
+ * ⭐ THE ONE CONVERSION IN IT: the engine draws a sprite AT a point, while a token document is placed
+ * BY ITS TOP-LEFT CORNER. So half the token's own footprint, in the scene's own squares, comes off both
+ * axes — which is what makes a 2 × 2 figure straddle its mark instead of hanging down-and-right of it.
+ *
+ * @param {{x:number,y:number}} centre  the placement point
+ * @param {number} gridPx               the scene's square, in pixels
+ * @param {number} count                how many were asked for (clamped here)
+ * @param {{width:number,height:number}} size  the chosen actor's own prototype footprint, in squares
+ */
+export function crewSpawnPlan(centre = { x: 0, y: 0 }, gridPx = 100, count = 1, size = {}) {
+  const g = Number(gridPx) > 0 ? Number(gridPx) : 100;
+  const w = Number(size?.width) > 0 ? Number(size.width) : 1;
+  const h = Number(size?.height) > 0 ? Number(size.height) : 1;
+  return figureSchedule(centre, g)
+    .slice(0, clampCrewCount(count))
+    .map((mark, index) => ({
+      index,
+      atMs: mark.atMs,
+      x: mark.x - (w * g) / 2,
+      y: mark.y - (h * g) / 2,
+    }));
+}
+
 /** When the SEQUENCE is over — which is not when the airframe leaves, because it does not. */
 export function landingLadderMs() {
   const figuresEnd = TRAUMA_TEAM.unloadAtMs
@@ -451,11 +515,34 @@ function section(seq, name) {
   return fx;
 }
 
-/** Play one queued sequence, releasing its pending count in `finally` (standard §G/21). */
-function playSection(seq, verb) {
+/**
+ * ⭐⭐ PARTS THIS CLIENT HAS QUEUED BUT THE ENGINE HAS NOT CREATED YET, BY NAME.
+ *
+ * `_pending` is a COUNT and the cap is all it can serve. The reconciler needs NAMES, and here is the
+ * defect that proved it (observed 2026-08-28, three airframes on station where one belongs):
+ * `redrawTraumaTeam` decides what is missing by asking the ENGINE what is alive — and a part that has
+ * been queued is invisible to that question until the engine's own create resolves, measured on this
+ * rig at a 269-460 ms window. Two reconciling events inside one such window (an ended-effect re-issue
+ * landing beside a `canvasReady`/`sequencerReady` sweep, which is exactly what a rebuild produces)
+ * therefore BOTH see the airframe as absent and BOTH draw it. The census is honest; the question was
+ * incomplete. So the census is asked of the engine plus this set, and the duplicate cannot form.
+ */
+const _inFlight = new Set();
+
+/** Play one queued sequence, releasing its pending count — and its name — in `finally` (standard §G/21). */
+function playSection(seq, verb, name = null) {
+  if (name) _inFlight.add(name);
   seq.play()
     .catch((err) => console.warn(`${SCOPE} | arrival sequence ${verb} failed`, err))
-    .finally(() => { _pending = Math.max(0, _pending - 1); });
+    .finally(() => {
+      _pending = Math.max(0, _pending - 1);
+      if (name) _inFlight.delete(name);
+    });
+}
+
+/** Parts of one placement that this client has in flight, for the reconciler. Exported for the keeper. */
+export function inFlightTraumaFx(prefix = "") {
+  return [..._inFlight].filter((n) => n.startsWith(prefix));
 }
 
 /** The ground plate — the marked rectangle itself, under the figures on the scene. */
@@ -474,7 +561,7 @@ function drawZone(record) {
     .duration(TRAUMA_TEAM.lifetimeMs)
     .fadeIn(TRAUMA_TEAM.fadeInMs)
     .fadeOut(TRAUMA_TEAM.fadeOutMs);
-  playSection(seq, "plate");
+  playSection(seq, "plate", name);
   return name;
 }
 
@@ -493,7 +580,7 @@ function drawCorner(record, index) {
     .duration(TRAUMA_TEAM.lifetimeMs)
     .fadeIn(TRAUMA_TEAM.fadeInMs)
     .fadeOut(TRAUMA_TEAM.fadeOutMs);
-  playSection(seq, "caution mark");
+  playSection(seq, "caution mark", name);
   return name;
 }
 
@@ -570,7 +657,7 @@ function drawAirframe(record) {
   } catch (err) {
     console.warn(`${SCOPE} | arrival sequence station-keeping unavailable`, err);
   }
-  playSection(seq, "airframe");
+  playSection(seq, "airframe", name);
   return name;
 }
 
@@ -621,8 +708,10 @@ function drawPulse(record, index) {
 }
 
 /**
- * One figure taking its place. ⛔ A SPRITE, NOT A DOCUMENT — see the file header. Nothing here creates
- * an actor or a token, and the keeper asserts the scene's embedded-document counts are unmoved.
+ * One figure taking its place. ⛔ A SPRITE, NOT A DOCUMENT — nothing here creates an actor or a token,
+ * and the keeper asserts the scene's embedded-document counts are unmoved by a call with no crew named.
+ * The optional document half is `writeCrewFigure`, and it rides the same beat as this mark rather than
+ * replacing it: the mark is where the figure appeared, the token is what stays there.
  */
 function drawFigure(record, index, point) {
   const name = traumaFxNameFor(record.id, `figure.${index}`);
@@ -634,6 +723,56 @@ function drawFigure(record, index, point) {
     .belowTokens();
   playSection(seq, "figure");
   return name;
+}
+
+/**
+ * RESOLVE THE REFEREE'S ANSWER INTO A PLAN, or into nothing. Null in every case that is not a real
+ * world actor with a real count, so the ladder's only question is "is there a plan".
+ *
+ * ⛔ The crew is NOT counted against `maxLive`: that cap bounds SPRITES the engine holds, and these are
+ * documents the world holds. Their own bound is the seat count (five), which is a much harder one.
+ */
+function crewPlanFor(crew, centre, gridPx) {
+  if (!crew) return null;
+  const actorId = String(crew.actorId ?? "").trim();
+  if (!actorId) return null;
+  const actor = game.actors?.get(actorId) ?? null;
+  if (!actor) return null;
+  const plan = crewSpawnPlan(centre, gridPx, crew.count, {
+    width: actor.prototypeToken?.width ?? 1,
+    height: actor.prototypeToken?.height ?? 1,
+  });
+  return plan.length ? { actorId, plan } : null;
+}
+
+/**
+ * WRITE ONE FIGURE — ⛔ THE ONE DOCUMENT WRITE ON THIS RAIL, and every gate it needs is asked here.
+ *
+ * It is reached from the ladder's own timers, so it happens ON the unload beat rather than all at once
+ * at the call, and it is only ever scheduled by the LOCAL call (`landTraumaTeam`), never by the relay.
+ * The referee flag is asked again at the write for the reason the placement asks it twice: an API is a
+ * door too. The scene is re-checked because the ladder outlives a scene change and a figure written
+ * onto whatever the referee wandered to is a figure in the wrong place.
+ *
+ * ⭐ THE ACTOR'S OWN PROTOTYPE IS THE SOURCE (native-API first): `getTokenDocument` builds the document
+ * the platform would build for a drag-and-drop of that actor — its art, its footprint, its link state,
+ * its bars — so a referee's chosen actor arrives configured the way that actor is configured, and this
+ * file has no opinion of its own about any of it.
+ */
+async function writeCrewFigure(record, entry) {
+  try {
+    if (game.user?.isGM !== true) return null;
+    const actor = game.actors?.get(record?.crew?.actorId ?? "");
+    if (!actor) return null;
+    const scene = canvas?.scene;
+    if (!scene || scene.id !== record.sceneId) return null;
+    const proto = await actor.getTokenDocument({ x: entry.x, y: entry.y });
+    const [created] = await scene.createEmbeddedDocuments("Token", [proto.toObject()]);
+    return created ?? null;
+  } catch (err) {
+    console.warn(`${SCOPE} | arrival crew figure write failed`, err);
+    return null;
+  }
 }
 
 /** The descent cue. Skipped outright on a client whose audio context has never been unlocked. */
@@ -677,8 +816,12 @@ function planFor(record) {
  * DRAW ONE PLACEMENT on this client. Returns what it queued, by value, so the whole mechanism is
  * assertable from a keeper — and returns the SAME shape whether it drew everything or nothing.
  */
-function drawLanding({ id, x, y, sceneId }) {
-  const out = { queued: [], skipped: null };
+function drawLanding({ id, x, y, sceneId, crew = null }) {
+  // ⭐ `crew` is null on every return below and on every relayed call, because the relay never carries
+  // it. The two refusals in `landTraumaTeam` keep their own older shape (they never got as far as a
+  // plan, so there is nothing to report) — this is the shape a client that actually drew something
+  // hands back.
+  const out = { queued: [], skipped: null, crew: null };
   if (!sequencerActive()) { out.skipped = "engine"; return out; }
   if (!combatFxEnabled()) { out.skipped = "disabled"; return out; }
   if (!canvas?.ready) { out.skipped = "canvas"; return out; }
@@ -692,6 +835,9 @@ function drawLanding({ id, x, y, sceneId }) {
   const record = { id, centre: { x, y }, gridPx, sceneId: sceneId ?? canvas.scene?.id ?? null, timers: [] };
   const plan = planFor(record);
   record.plan = plan;
+  // The crew is resolved ONCE here, into the record, exactly as the asset gates are — the ladder below
+  // reads the plan and asks nothing (standard, "the once-per-payload gate").
+  record.crew = crewPlanFor(crew, record.centre, gridPx);
   _active = record;
 
   const figures = figureSchedule(record.centre, gridPx);
@@ -736,6 +882,17 @@ function drawLanding({ id, x, y, sceneId }) {
       at(record, f.atMs, "figure", () => drawFigure(record, i, { x: f.x, y: f.y }));
       out.queued.push("figure");
     });
+  }
+  /* ── and, only when a referee asked for them, the figures a table can then move ──
+   * Scheduled on the SAME timers as the marks above, so a departure part-way through the ladder
+   * cancels the seats that had not stepped off yet (clearTimers), and the ones already written stay:
+   * they are documents now, and the airframe leaving is not a reason to delete somebody. */
+  if (record.crew) {
+    record.crew.plan.forEach((entry) => {
+      at(record, entry.atMs, "crew figure", () => { void writeCrewFigure(record, entry); });
+      out.queued.push("crew");
+    });
+    out.crew = { actorId: record.crew.actorId, count: record.crew.plan.length };
   }
   return out;
 }
@@ -823,8 +980,16 @@ export function traumaTeamState() {
  * Referee-only, at the action layer as well as at the control: this puts a sequence on everybody's
  * screen, so it is the referee's call and nobody else's. The gesture that reaches it is already
  * referee-gated (trauma-team-tool.js); this is the second gate, because an API is a door too.
+ *
+ * ⛔⛔ `crew` IS DELIBERATELY ABSENT FROM THE ANNOUNCEMENT. The socket payload below is the one this
+ * file has always sent — type, id, x, y, sceneId — so every receiving client draws the cinematic and
+ * nothing else. The crew is handed to the LOCAL draw only, which is what makes the document write the
+ * calling referee's own and stops N connected clients writing N crews for one call.
+ *
+ * @param {{x:number,y:number}} centre
+ * @param {{sceneId?:string|null, crew?:{actorId:string,count:number}|null}} [options]
  */
-export async function landTraumaTeam(centre = {}, { sceneId = null } = {}) {
+export async function landTraumaTeam(centre = {}, { sceneId = null, crew = null } = {}) {
   if (game.user?.isGM !== true) return { queued: [], skipped: "permission" };
   if (!combatFxEnabled()) return { queued: [], skipped: "disabled" };
   const scene = sceneId ?? canvas?.scene?.id ?? null;
@@ -839,7 +1004,7 @@ export async function landTraumaTeam(centre = {}, { sceneId = null } = {}) {
   } catch (err) {
     console.warn(`${SCOPE} | arrival sequence announcement failed`, err);
   }
-  return drawLanding({ id, x, y, sceneId: scene });
+  return drawLanding({ id, x, y, sceneId: scene, crew });
 }
 
 /** Send it away — on every client, the same way it arrived. */
@@ -876,10 +1041,14 @@ export function redrawTraumaTeam() {
     return out;
   }
   const prefix = `${TRAUMA_TEAM_NAME}.${record.id}.`;
-  const drawn = new Set(liveTraumaFx()
-    .map((e) => String(e?.data?.name ?? ""))
-    .filter((n) => n.startsWith(prefix))
-    .map((n) => n.slice(prefix.length)));
+  // ⭐ "ALREADY THERE" MEANS ALIVE **OR** IN FLIGHT (repaired 2026-08-28 — see `_inFlight`). Asking the
+  // engine alone leaves a 269-460 ms window in which a queued part reads as absent, and two reconciling
+  // events inside that window each draw it: three airframes on station, observed on the rig. Both halves
+  // of the answer, or the reconciler is not idempotent at all — it is only idempotent when it is slow.
+  const drawn = new Set([
+    ...liveTraumaFx().map((e) => String(e?.data?.name ?? "")),
+    ...inFlightTraumaFx(prefix),
+  ].filter((n) => n.startsWith(prefix)).map((n) => n.slice(prefix.length)));
 
   const wanted = [];
   if (record.plan?.zone && !drawn.has("zone")) wanted.push("zone");

@@ -599,17 +599,48 @@ The reference the user described, and its five facts are rulings rather than bui
 A second use of the control sends it back up (reverse ascent). Everything else in this section is a
 number, and every number is one constant listed in §8.
 
-### 2b.2 ⛔ It draws a picture, and only a picture
+### 2b.2 ⛔ It draws a picture — and, only if asked, writes a crew
 
 The five figures are **sprites, not documents**. No actor is created, no token is placed, no region is
 written, and the scene's own flags are untouched from the first frame to the last — the keeper asserts
-region / tile / token / drawing counts and `scene.flags.sequencer` on both sides of a full run. This is
-standard §G/22 taken without an exception.
+region / tile / token / drawing counts and `scene.flags.sequencer` on both sides of a full run with no
+crew named. This is standard §G/22 taken with **one stated exception**, below.
 
-⛔ **THE SCOPING CALL, made in the build lane and flagged for the user (§8).** The reference shows five
-*people*. A table that wants five figures it can move and roll for wants **documents**, which is a
-different feature with its own questions (which actors? owned by whom? cleaned up when?) and it belongs
-to whatever builds non-player figures, not to a presentation rail. v1 ships the cinematic only.
+⛔ **THE SCOPING CALL as it stood at v1** (build lane, flagged for the user in §8): the reference shows
+five *people*, and a table that wants five figures it can move and roll for wants **documents** — a
+different feature with its own questions (which actors? owned by whom? cleaned up when?). v1 shipped the
+cinematic only.
+
+### 2b.2a The optional crew — ⭐ *ruled 2026-08-28, "agreed. build it"*
+
+Those questions now have answers, and the seam is closed rather than deferred:
+
+- **Which actor?** Whichever one the referee names, out of **the world's own actors**. ⛔ No stat block
+  ships with this. The module bundles no medical-response NPC, names none, and has no opinion about
+  what one should be — the picker offers `game.actors` and nothing else. That is a content-policy line,
+  not a convenience.
+- **How many?** A count, clamped to `1 … figureCount` (**5**) — *the marks are the seats*. `crewSpawnPlan`
+  is the pure statement of it, and it takes the beats straight from `figureSchedule` rather than
+  recomputing them, so the token stands exactly where the mark it replaced was drawn. The one conversion
+  in it is centre → top-left corner (half the actor's own prototype footprint off both axes), which is
+  what makes a 2 × 2 figure straddle its mark rather than hang down-and-right of it.
+- **Owned by whom, configured how?** The actor's own prototype answers all of it: `getTokenDocument`
+  builds the document the platform would build for a drag-and-drop of that actor — art, footprint, link
+  state, bars. This file has no opinion of its own about any of them (native-API first).
+- **Written by whom?** ⛔⛔ **The client that confirmed the call, and only it.** The crew never rides
+  the socket announcement: the payload is byte-for-byte the one this file has always sent (`type, id, x,
+  y, sceneId`), so every receiving client draws the same per-client cinematic it always drew and has
+  nothing to act on. The alternative — every client acting on a relayed crew — is N copies of the same
+  five people. The keeper pins the wire's key set by value.
+- **When?** On the unload beats themselves, through the ladder's own timers. So a departure part-way
+  through cancels the seats that had not stepped off yet; the ones already written **stay** — they are
+  documents now, and the airframe leaving is not a reason to delete somebody.
+- **Cleaned up when?** Never, by us. They are the table's figures from the instant they exist.
+
+**The default is none.** A referee who answers nothing gets exactly the cinematic that shipped, and the
+keeper's negative leg pins the census across a full crewless run. The crew is also **not counted against
+`maxLive`**: that cap bounds sprites the engine holds, and these are documents the world holds — their
+bound is the seat count, which is a harder one.
 
 ### 2b.3 The ladder
 
@@ -731,6 +762,11 @@ change and a canvas rebuild are recovered and a **full reload is not** (§8). �
 `sequencerReady`, not `ready` — the +0 / +12 / +677 ms ordering measured for the condition overlays
 applies unchanged, and a sweep at `ready` queues work against an engine that is not up yet.
 
+⭐ **And the reconciler counts what is IN FLIGHT as present** (`_inFlight`, 2026-08-28 — see the rulings
+log). Asking only the engine leaves a 269-460 ms blind window in which a queued part reads as absent;
+two reconciling events inside it each drew the same airframe. Idempotence is a property of the question,
+not of the timing.
+
 **Sync**: one socket announcement, dispatched by type on the module's standing channel. The referee's
 client emits and draws its own copy locally (an emit never echoes to its sender), every other client
 draws from the announcement. No active-referee election, because nothing is written.
@@ -745,6 +781,15 @@ is a door too.
 
 The button is a toggle in *behaviour*, not in state: nothing on station → arm the placement ghost;
 something on station → send it away.
+
+⭐ **The call is now two steps, and the click is still the trigger** (2026-08-28). Pressing the control
+first asks the optional crew question (`promptTraumaTeamCrew` → `templates/dialog/trauma-team-crew.hbs`:
+an actor select defaulting to *none*, and a count), *then* arms the ghost. Asking first is what keeps the
+click the moment the sequence begins rather than putting a dialog between the aim and the picture. Both
+steps are cheap to abandon and cancelling either leaves the world untouched. The dialog needs **no render
+wiring** — both controls are read once at the confirm, the same way the deploy-name prompt and the cover
+placement dialog read theirs — which sidesteps the v14 trap where DialogV2's config `render` callback
+never fires.
 
 ⭐ **Review·Shooter parity** is satisfied by construction rather than by a bench row. The standing rule
 is that every shipped element must be reachable from the bench; this element is not payload-driven, so
@@ -764,7 +809,7 @@ The whole element is **excluded** from the shot rail's settle signal and carries
 scene dressing in exactly the sense that ruling names (standard §E/14), no damage window waits on it,
 and it is never queued from a payload.
 
-### 2b.10 What the keeper pins — `tests/cp2020-augmented-trauma-team.mjs`, 62 legs
+### 2b.10 What the keeper pins — `tests/cp2020-augmented-trauma-team.mjs`, **116 legs**
 
 **By value:** the control is added for a referee and **refused** without the flag, with nothing written
 into the group, and the handler refuses again at the action layer · the rectangle, its four corners in
@@ -786,6 +831,17 @@ back, exactly one) · the rebuild driven through the **real hooks** — `canvasT
 away, the record survives it, and `sequencerReady` rebuilds the standing half and **only** it, one of
 each, with a sweep straight after adding nothing · the departure leaving nothing under the prefix · a
 clean rig · 0 console errors.
+
+⭐ **The crew's own three sections (2026-08-28).** §8 is the pure arithmetic: the plan's instants against
+`figureSchedule`'s own, the centre→corner conversion for a 1 × 1 and a 2 × 2 figure, the clamp in both
+directions and on junk, and the plan computed twice. §9 drives it live: the announcement's key set
+asserted **by value** (no crew on the wire — the leg that would catch a relayed crew), three seats asked
+for and three token documents created **at the plan's own coordinates**, all from the chosen actor, the
+departure leaving them standing, a crewless call moving the census by **zero**, and nine-asked clamping
+to five both in the report and in what was written. §9b is the **wiring** leg the coverage policy
+demands: the real dialog is rendered, its nodes matched against the handler's own selectors, both
+controls set through real DOM events, and both buttons pressed — answered, untouched (crew `null`) and
+refused (`null`), with no dialog left standing.
 
 Siblings re-run because `effects.js` gained one export: `cp2020-augmented-fx-rail.mjs` **823/823**,
 `cp2020-augmented-review-bench-smoke.mjs` **36/36**, `cp2020-augmented-b1-seam-payload.mjs` **28/28**.
@@ -2191,6 +2247,8 @@ is the table, so a sixth condition is a row rather than a change:
 | `lifetimeMs` / `maxLive` | 600000 / 40 | the leak bound and the scene cap |
 | `TRAUMA_TEAM_SOUND.descent` / `.volume` | `fx-scifi-whoosh` / 0.5 | the one shipped cue. **`null` ships it silent** |
 | `LANDING_GHOST.*` | amber, alpha 0.12 | the placement ghost — `module/fx/trauma-team-tool.js` |
+| the crew's seat count | `figureCount` (**5**) | ⭐ *2026-08-28* — the optional crew's clamp is not a knob of its own: `clampCrewCount` reads `figureCount`, because **the marks are the seats**. Moving the figure count moves the ceiling with it |
+| the crew's default count | `figureCount` (**5**) | build-lane pick: the dialog pre-fills the full complement and the referee dials down. **Revert = 1** (one line in `promptTraumaTeamCrew`'s template context) |
 
 ### The movement echo trail — `AFTERIMAGE` in `module/fx/afterimage.js` ⭐ *new 2026-08-28*
 
@@ -2222,6 +2280,36 @@ is the table, so a sixth condition is a row rather than a change:
 
 Dated decisions, mined from the supersession chains in the code. Values and *why*, never change
 history. ⏪ marks a decision that reversed an earlier one.
+
+🐞 **2026-08-28 — THE RECONCILER'S CENSUS WAS INCOMPLETE, AND IT DREW THREE AIRFRAMES.** Caught by the
+arrival suite's own re-issue leg on a certification run (`got 3 want 1`). Mechanism:
+`redrawTraumaTeam` decided what was missing by asking the **engine** what was alive, and a part that has
+been *queued* is invisible to that question until the engine's own create resolves — measured on this rig
+at **269-460 ms**. A canvas rebuild produces two reconciling events inside that window as a matter of
+course (an `endedSequencerEffect` re-issue landing beside the `sequencerReady` sweep), so both saw the
+airframe as absent and both drew it. The census was honest; the **question** was half of one.
+Fix: `_inFlight`, a Set of part names added when a section is played and removed in its `finally` — the
+name-carrying sibling of the `_pending` counter, which could only ever serve the cap. `redrawTraumaTeam`
+now treats alive-**or**-in-flight as present, so the reconciler is idempotent at any speed instead of only
+when it is slow. Keeper: the pairing is now driven **deliberately** (three passes inside one create
+window) rather than waited for — at most one may draw, exactly one may stand, and the in-flight set is
+asserted non-empty during the window. ⏪ Revert = drop the `_inFlight` half of the `drawn` set.
+
+⭐ **2026-08-28 — THE ARRIVAL MAY NOW CARRY A CREW, AND THE CREW IS THE WORLD'S.** User, on the
+usability design put to them: *"agreed. build it."* At call time the referee may name **any world actor**
+and a count; the unload beats then write that many token documents at the marks (`crewSpawnPlan`,
+clamped `1 … figureCount` — *the marks are the seats*). Four things this ruling fixes in place:
+**① no stat block ships** — the picker offers `game.actors` and nothing else, which is the content-policy
+line, not a convenience; **② the default is none**, so an untouched confirm is the pure cinematic that
+shipped and the keeper's census leg pins it; **③ the write is the calling client's alone** — the crew
+never rides the socket announcement, whose payload is unchanged (`type, id, x, y, sceneId`), so the
+presentation stays per-client and N clients cannot write N crews; **④ the actor's own prototype decides
+everything else** (`getTokenDocument` — art, footprint, link state), so this rail keeps no opinion of its
+own. This closes the §8 open item that read "five figures a table can move is a document-creating feature
+and belongs elsewhere": it belongs here after all, because the only thing that made it not belong was the
+content question, and *the referee supplies the actor* answers it. Keeper: **69 → 113 legs** — `+24`
+value legs in §8/§9 plus `+20` real-gesture legs in §9b (the dialog is rendered, both controls set
+through real DOM events, both buttons pressed, all three acts driven in sequence).
 
 ⏪⏪ **2026-08-28 — THE HIT SPRAY IS REMOVED ENTIRELY, ELEMENT AND OPTION BOTH.** User, verbatim:
 *"Remove the note on blood splatter, and additionally remove the option. In addition we'll remove the
@@ -3979,7 +4067,7 @@ presented while the screen stayed empty.
 | **The overlays ride the shot rail's master switch and have none of their own** | ⚠ `combatFxEnabled` governs both, which is what the docket specified. A table that wants gunfire effects but no condition marks (or the reverse) has no way to say so today; a dedicated sub-toggle is one setting plus one reader if it is wanted. |
 | **An evicted overlay is silent about being evicted** | ⚠ Past `maxLive` = 60 the oldest mark is ended to make room, so on a very busy scene a figure can be wearing a condition with nothing drawn until the next event touching it redraws it. The reconciler makes this self-correcting rather than permanent, and 60 is twelve fully-marked figures, but the failure mode is worth knowing before someone reports a missing flame. |
 | **A canvas torn down mid-load can still destroy an effect mid-activate — inside the engine** | ⚠ **The residual window of the 2026-08-15 wipe-race fix, the engine's own and stated honestly.** The sweep now starts strictly after Sequencer's per-load wipe, which closes the reproducible case. What remains: rapid scene flips can tear the canvas down while an overlay is still inside its asset load, and Sequencer destroys it mid-`activate` with the same unheld rethrow. Rare (needs the flip to land inside a ~860 ms load), self-corrects on the next reconciling event, and only Sequencer can close it — its `_initialize` resolves the play promise before rethrowing, so no caller can hold the rejection. Worth an upstream report to the Sequencer project. |
-| ⛔⛔ **THE ARRIVAL'S FIVE FIGURES ARE A CINEMATIC, NOT FIVE FIGURES — AND THAT IS A BUILD-LANE CALL** | ⚠ **THE OPEN ITEM OF THIS UNIT, and the first thing to ask.** The reference shows five people getting out. What ships is five SPRITES: no actor, no token, no document of any kind (asserted both directions by the keeper). The reasoning is that real figures are a *document* feature carrying questions a presentation rail cannot answer — which actors, owned by whom, cleaned up when, and what happens to them when the aircraft leaves — and half-building one is worse than not building it. If what was wanted is five figures a table can move and roll for, that is the non-player-figure generator's job and this sequence becomes its trigger: the seam is `figureSchedule()`, which already returns five stated points and five stated instants, so a document-creating caller has exactly the geometry it needs and nothing else has to move. |
+| ✅ ~~**THE ARRIVAL'S FIVE FIGURES ARE A CINEMATIC, NOT FIVE FIGURES**~~ — **CLOSED 2026-08-28** | ~~THE OPEN ITEM OF THIS UNIT, and the first thing to ask. The reference shows five people getting out. What ships is five SPRITES: no actor, no token, no document of any kind. Real figures are a *document* feature carrying questions a presentation rail cannot answer — which actors, owned by whom, cleaned up when, and what happens to them when the aircraft leaves.~~ **Asked, and answered** (§2b.2a): the referee names the actor at call time, so "which actors" stops being ours to answer — which was the only question that actually blocked it. The others fell out: owned and configured by the actor's own prototype; cleaned up never, they are the table's from the moment they exist; the aircraft leaving takes nothing with it. The seam was indeed `figureSchedule()`, and `crewSpawnPlan` is the ten lines that read it. **The default stays none**, so the cinematic-only sequence is still exactly what an untouched call produces. |
 | **An asset ask: there is no aircraft art** | ⚠ **Recorded rather than solved, and nothing was scraped.** All 2 061 installed keys were enumerated; the free tier has no aircraft, and neither the module nor the base system ships one (module `img/` is five files; the system's is 22, all sheet furniture). So the airframe is an engine-native rounded shape — a dark planform with a lit edge, which is at least what a top-down camera would see. **With a licensed top-down aerodyne image this becomes one `.file()` call and the shape goes**, along with `airframeShape()` and the offset correction under it. That is the single highest-value asset the user could hand this rail. |
 | **A sound ask: there is no station-keeping bed** | ⚠ **Measured, not assumed (§2b.6).** Every candidate in the 46-file library decays to silence and none is a rotor or turbine LOOP, so the longest phase of the sequence — a machine hanging in the air — is silent. The descent gets `fx-scifi-whoosh` (197 Hz, decaying, the lowest thing shipped) because it genuinely fits that one beat. What is wanted is a **loopable low turbine/rotor bed** and, if a second is ever sourced, a spin-up/spin-down pair for the arrival and departure. No audio was sourced for this unit, per the docket. |
 | **A full reload loses a placement that is on station** | ⚠ **Stated so it is a decision, not a surprise.** Nothing is persisted (§G/22), so the record of what is standing lives in each client's memory. A scene change and a canvas rebuild are recovered by the reconciler; a browser reload is not, and the referee places it again. Persisting it would mean a document write from presentation, which this rail does not do — the alternative, if it is ever wanted, is the referee's own client answering a "what is on station?" request from a joining client, which is a socket round trip rather than a write. |

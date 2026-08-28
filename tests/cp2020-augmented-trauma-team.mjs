@@ -323,6 +323,22 @@ const redraw = await page.evaluate(async (mod) => {
   await sleep(700);
   const reissued = M.liveTraumaFx().filter(e => String(e?.data?.name).endsWith(".airframe")).length;
 
+  // (a2) ⭐ THE CREATE-WINDOW RACE (leg added 2026-08-28 after this section reported THREE airframes).
+  // The reconciler decides what is missing by asking the engine what is ALIVE, and a part that has been
+  // queued is invisible to that question for the length of the engine's own create (269-460 ms on this
+  // rig). Two reconciling passes inside that window therefore each drew the same part. A rebuild
+  // produces exactly that pairing — an ended-effect re-issue landing beside a `sequencerReady` sweep —
+  // so this drives the pairing DELIBERATELY rather than waiting to be unlucky again.
+  const airframeName2 = M.traumaFxNameFor(M.traumaTeamState().id, "airframe");
+  await globalThis.Sequencer.EffectManager.endEffects({ name: airframeName2 });
+  await sleep(60);
+  const raceA = M.redrawTraumaTeam();
+  const raceB = M.redrawTraumaTeam();          // squarely inside the first one's create window
+  const raceC = M.redrawTraumaTeam();
+  const inFlightDuring = M.inFlightTraumaFx().length;
+  await sleep(1500);
+  const raceAirframes = M.liveTraumaFx().filter(e => String(e?.data?.name).endsWith(".airframe")).length;
+
   // (b) THE REBUILD, driven through the REAL hooks rather than through the exported function: a canvas
   // teardown takes every sprite away, and the catch-up on the engine's own ready signal is what puts
   // the standing half back (the +0 / +12 / +677 ms ordering lesson).
@@ -337,6 +353,7 @@ const redraw = await page.evaluate(async (mod) => {
   await sleep(300);
   return {
     r1, r2, reissued, afterTearDown, recordSurvived,
+    raceAdded: [raceA.added, raceB.added, raceC.added], inFlightDuring, raceAirframes,
     rebuilt: rebuilt.map(n => n.split(".").slice(1).join(".")).sort(),
     rebuiltCount: rebuilt.length,
     idleZones: afterIdle.filter(n => n.endsWith(".zone")).length,
@@ -347,6 +364,13 @@ eq("a sweep over an already-correct scene redraws nothing", redraw.r1.added, [])
 eq("and does not double the plate", redraw.idleZones, 1);
 eq("nor its caution marks", redraw.idleCorners, 4);
 eq("a part ended by nobody is re-issued, leaving exactly one on station", redraw.reissued, 1);
+check("⭐ a queued part is visible to the reconciler before the engine has created it",
+  redraw.inFlightDuring >= 1, `in flight: ${redraw.inFlightDuring}`);
+// At most one of the three passes may draw — and it can legitimately be NONE of them, when the
+// ended-effect hook's own re-issue got there first. What may never happen is two of them drawing.
+check("⭐ THREE reconciling passes inside one create window draw the part at most ONCE between them",
+  redraw.raceAdded.filter(a => a.length).length <= 1, JSON.stringify(redraw.raceAdded));
+eq("⭐ and exactly one stands afterwards", redraw.raceAirframes, 1);
 eq("a canvas teardown takes every sprite away", redraw.afterTearDown, 0);
 check("but the placement record survives it", redraw.recordSurvived === true);
 eq("the engine-ready catch-up rebuilds the standing half, and only it",
@@ -440,8 +464,289 @@ check("key absent: the asset parts skip silently",
 eq("key absent: the engine-drawn airframe still carries the placement", negatives.missingLive.length, 1);
 eq("the rig is left clean", negatives.finalLive, 0);
 
-/* ─────────────────── §8 console ─────────────────── */
-console.log("\n§8 client health");
+/* ─────────────────── §8 the unload beats, read as document positions ───────────────────
+ *
+ * The optional half of the call (2026-08-28 order): a referee may name a world actor and a count, and
+ * the unload beats then WRITE that many tokens where the marks are drawn. This section is the pure
+ * arithmetic — the seats, the clamp, and the corner-vs-centre conversion — with no canvas in it. */
+console.log("\n§8 crew plan (pure)");
+const crewPure = await page.evaluate(async (mod) => {
+  const M = await import(mod);
+  const G = 100;
+  const centre = { x: 1000, y: 1000 };
+  const marks = M.figureSchedule(centre, G);
+  return {
+    marks,
+    plan3: M.crewSpawnPlan(centre, G, 3),
+    plan3Again: M.crewSpawnPlan(centre, G, 3),
+    planBig: M.crewSpawnPlan(centre, G, 2, { width: 2, height: 2 }),
+    clampLow: M.clampCrewCount(0),
+    clampNeg: M.clampCrewCount(-4),
+    clampHigh: M.clampCrewCount(99),
+    clampJunk: M.clampCrewCount("abc"),
+    clampExact: M.clampCrewCount(5),
+    seats: M.crewSpawnPlan(centre, G, 99).length,
+    scaled: M.crewSpawnPlan(centre, 200, 1)[0],
+    markScaled: M.figureSchedule(centre, 200)[0],
+  };
+}, MOD);
+eq("a crew of three takes the first three unload beats, by time",
+  crewPure.plan3.map(p => p.atMs), crewPure.marks.slice(0, 3).map(m => m.atMs));
+eq("and stands on those marks — a 1×1 figure's corner is half a square up and left of its mark",
+  crewPure.plan3.map(p => [p.x, p.y]),
+  crewPure.marks.slice(0, 3).map(m => [m.x - 50, m.y - 50]));
+eq("a 2×2 figure straddles its mark rather than hanging off it",
+  crewPure.planBig.map(p => [p.x, p.y]),
+  crewPure.marks.slice(0, 2).map(m => [m.x - 100, m.y - 100]));
+eq("the plan is deterministic", crewPure.plan3, crewPure.plan3Again);
+eq("the conversion scales with the scene's own square",
+  [crewPure.scaled.x, crewPure.scaled.y], [crewPure.markScaled.x - 100, crewPure.markScaled.y - 100]);
+eq("the count clamps up to one seat", crewPure.clampLow, 1);
+eq("a negative count clamps to one seat", crewPure.clampNeg, 1);
+eq("and down to the marks that exist — the marks are the seats", crewPure.clampHigh, 5);
+eq("a non-number clamps to one seat", crewPure.clampJunk, 1);
+eq("an exact count is left alone", crewPure.clampExact, 5);
+eq("so the plan can never be longer than the beats", crewPure.seats, crewPure.marks.length);
+
+/* ─────────────────── §9 the crew, live — the one document write on this rail ─────────────────── */
+console.log("\n§9 crew, live");
+const crewLive = await page.evaluate(async (mod) => {
+  const M = await import(mod);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const scene = canvas.scene;
+  const out = {};
+  let actor = null;
+  const madeTokenIds = [];
+  try {
+    actor = await Actor.create({ name: "__PW__TT Crew", type: "character" });
+    M._setTraumaTimeScale(0.05);
+    const centre = { x: canvas.dimensions.width / 2, y: canvas.dimensions.height / 2 };
+    const gridPx = Number(canvas.dimensions.size) || 100;
+
+    /* (a) the announcement carries NO crew — which is what makes the write the caller's alone. */
+    const realEmit = game.socket.emit;
+    const wire = [];
+    game.socket.emit = function (...args) { wire.push(args[1]); return realEmit.apply(this, args); };
+    let placed;
+    try {
+      placed = await M.landTraumaTeam(centre, { crew: { actorId: actor.id, count: 3 } });
+    } finally { game.socket.emit = realEmit; }
+    out.wireKeys = wire.map(m => Object.keys(m ?? {}).sort());
+    out.wireHasCrew = wire.some(m => "crew" in (m ?? {}));
+    out.placedQueued = placed.queued;
+    out.placedCrew = placed.crew ?? null;
+
+    /* (b) the write itself — polled to the engine's own answer, never slept at. */
+    const before = new Set(scene.tokens.map(t => t.id));
+    const wanted = M.crewSpawnPlan(centre, gridPx, 3, {
+      width: actor.prototypeToken?.width ?? 1, height: actor.prototypeToken?.height ?? 1,
+    });
+    let fresh = [];
+    for (let i = 0; i < 60; i++) {
+      await sleep(150);
+      fresh = scene.tokens.filter(t => !before.has(t.id) && t.actorId === actor.id);
+      if (fresh.length >= 3) break;
+    }
+    fresh.forEach(t => madeTokenIds.push(t.id));
+    out.spawned = fresh.length;
+    out.spawnedAt = fresh.map(t => [t.x, t.y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    out.wantedAt = wanted.map(p => [p.x, p.y]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    out.allFromChosenActor = fresh.every(t => t.actorId === actor.id);
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+    out.survivedDeparture = scene.tokens.filter(t => madeTokenIds.includes(t.id)).length;
+
+    /* (c) the default: no crew named, no document written — the pure cinematic it has always been. */
+    const censusBefore = scene.tokens.size;
+    await M.landTraumaTeam(centre);
+    for (let i = 0; i < 20; i++) await sleep(100);
+    out.censusAfterNoCrew = scene.tokens.size;
+    out.censusBeforeNoCrew = censusBefore;
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+
+    /* (d) the clamp reaches the live path too: nine asked, five seats written. */
+    const before2 = new Set(scene.tokens.map(t => t.id));
+    const over = await M.landTraumaTeam(centre, { crew: { actorId: actor.id, count: 9 } });
+    out.overCrewCount = over.crew?.count ?? null;
+    let fresh2 = [];
+    for (let i = 0; i < 60; i++) {
+      await sleep(150);
+      fresh2 = scene.tokens.filter(t => !before2.has(t.id) && t.actorId === actor.id);
+      if (fresh2.length >= 5) break;
+    }
+    fresh2.forEach(t => madeTokenIds.push(t.id));
+    out.overSpawned = fresh2.length;
+    await M.endTraumaTeam();
+    for (let i = 0; i < 40; i++) { if (M.liveTraumaFx().length === 0) break; await sleep(100); }
+  } catch (err) {
+    out.threw = String(err?.message ?? err);
+  } finally {
+    // ⛔ TOKENS FIRST, THEN THE ACTOR: deleting the actor out from under its own scene tokens leaves
+    // the canvas drawing placeables whose actor is gone, which is the dangling-reference class this
+    // suite set already carries a repair note for.
+    try { await scene.deleteEmbeddedDocuments("Token", madeTokenIds.filter(id => scene.tokens.get(id))); } catch (_e) { /* already gone */ }
+    try { await actor?.delete(); } catch (_e) { /* already gone */ }
+    M._setTraumaTimeScale(null);
+    out.leftBehind = scene.tokens.filter(t => t.name === "__PW__TT Crew").length;
+    out.actorsLeft = game.actors.filter(a => a.name === "__PW__TT Crew").length;
+  }
+  return out;
+}, MOD);
+check("the crew section ran without throwing", !crewLive.threw, String(crewLive.threw ?? ""));
+eq("the placement reports the crew it will write, by value", crewLive.placedCrew?.count ?? null, 3);
+eq("the announcement to other clients carries only the cinematic's own fields",
+  crewLive.wireKeys, [["id", "sceneId", "type", "x", "y"]]);
+check("NEGATIVE: no crew rides the wire, so no other client can write one", crewLive.wireHasCrew === false);
+eq("three seats asked for, three token documents created", crewLive.spawned, 3);
+eq("each stands on its own unload beat, by coordinate", crewLive.spawnedAt, crewLive.wantedAt);
+check("and every one of them is the actor the referee chose", crewLive.allFromChosenActor === true);
+eq("the airframe leaving does not take them with it", crewLive.survivedDeparture, 3);
+eq("NEGATIVE: a call with no crew named writes no document at all",
+  crewLive.censusAfterNoCrew, crewLive.censusBeforeNoCrew);
+eq("nine asked for clamps to the five marks — reported", crewLive.overCrewCount, 5);
+eq("nine asked for clamps to the five marks — written", crewLive.overSpawned, 5);
+eq("the fixture tokens are gone", crewLive.leftBehind, 0);
+eq("and so is the fixture actor", crewLive.actorsLeft, 0);
+
+/* ─────────────────── §9b the crew question, driven as a real gesture ───────────────────
+ *
+ * ⛔ THE WIRING LEG (regression-coverage policy §1). Everything above proves the mechanism the tool
+ * hands to the rail; NONE of it proves the tool reads what the template renders. The handler looks up
+ * `select[name="cp-tt-actor"]` and `input[name="cp-tt-count"]` on the rendered dialog — rename either
+ * in the .hbs and every leg above stays green while a referee's answer is silently dropped. So this
+ * section renders the real dialog, sets both controls through real DOM events, presses the real button
+ * and asserts what came back by value; then presses the other button and asserts the refusal. */
+console.log("\n§9b the crew question — real dialog, real clicks");
+const crewDialog = await page.evaluate(async (tool) => {
+  const T = await import(tool);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const out = {};
+  let actor = null;
+  const openDialog = async () => {
+    for (let i = 0; i < 40; i++) {
+      const el = document.querySelector(".application.cp-tt-crew");
+      if (el) return el;
+      await sleep(100);
+    }
+    return null;
+  };
+  // ⛔ AND EACH ACT WAITS FOR THE PREVIOUS DIALOG TO BE GONE FIRST. Learned the expensive way: an
+  // application's element outlives its own close for the length of the close animation, so a second
+  // act that grabs `.cp-tt-crew` straight away gets the CORPSE of the first — and every button on it
+  // is detached, so the press lands on nothing and the second promise never settles. This is the
+  // suite set's own "second-act rule" with a DOM twist: the transition is the thing under test, and
+  // the harness has to see the transition finish before it drives the next one.
+  const waitGone = async () => {
+    for (let i = 0; i < 60; i++) {
+      if (!document.querySelector(".application.cp-tt-crew")) return true;
+      await sleep(100);
+    }
+    return false;
+  };
+  // ⛔ EVERY WAIT ON THE DIALOG'S OWN PROMISE IS BOUNDED. A driven dialog that does not settle is not
+  // a slow test, it is a HUNG one: the evaluate never returns, the harness never reports, and the run
+  // has to be killed from outside (which is exactly what the first draft of this section did). A
+  // bounded wait turns that whole class into an ordinary red with a name on it.
+  const settled = (p, tag) => Promise.race([
+    Promise.resolve(p).then(v => ({ ok: true, v })),
+    sleep(8000).then(() => ({ ok: false, v: `TIMED OUT waiting for ${tag}` })),
+  ]);
+  const press = (el, action) => {
+    const btn = el?.querySelector(`button[data-action="${action}"]`) ?? null;
+    if (!btn) return false;
+    btn.click();
+    return true;
+  };
+  try {
+    actor = await Actor.create({ name: "__PW__TT Dialog", type: "character" });
+
+    /* (a) answered: the chosen actor and a hand-typed count come back as the call's crew */
+    const answered = T.promptTraumaTeamCrew();
+    const el = await openDialog();
+    out.rendered = !!el;
+    const sel = el?.querySelector('select[name="cp-tt-actor"]') ?? null;
+    const cnt = el?.querySelector('input[name="cp-tt-count"]') ?? null;
+    out.selectorsMatch = !!sel && !!cnt;
+    out.defaultActor = sel?.value ?? null;
+    out.offersChosenActor = !!sel?.querySelector(`option[value="${actor.id}"]`);
+    out.countMax = cnt?.max ?? null;
+    out.countDefault = cnt?.value ?? null;
+    out.noRawKeys = !/CYBERPUNK\./.test(el?.textContent ?? "CYBERPUNK.");
+    // Diagnostic, printed only when a press leg reds: what the footer actually offers.
+    out.footer = [...(el?.querySelectorAll("button") ?? [])]
+      .map(b => `${b.tagName.toLowerCase()}[type=${b.type};action=${b.dataset.action ?? ""}]`);
+    if (sel) { sel.value = actor.id; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    if (cnt) { cnt.value = "2"; cnt.dispatchEvent(new Event("change", { bubbles: true })); }
+    out.pressedCall = press(el, "call");
+    const a = await settled(answered, "the answered call");
+    out.answeredSettled = a.ok;
+    out.answered = a.ok ? a.v : a.v;
+    out.answeredMatchesActor = a.ok && a.v?.crew?.actorId === actor.id;
+
+    /* (b) confirmed untouched: the default is none, which is the cinematic that shipped */
+    out.firstDialogClosed = await waitGone();
+    const untouched = T.promptTraumaTeamCrew();
+    const el2 = await openDialog();
+    press(el2, "call");
+    const u = await settled(untouched, "the untouched call");
+    out.untouchedSettled = u.ok;
+    out.untouched = u.v;
+
+    /* (c) refused: the second button backs the whole call out */
+    out.secondDialogClosed = await waitGone();
+    const refused = T.promptTraumaTeamCrew();
+    const el3 = await openDialog();
+    out.hasCancel = !!el3?.querySelector('button[data-action="cancel"]');
+    press(el3, "cancel");
+    const rf = await settled(refused, "the refusal");
+    out.refusedSettled = rf.ok;
+    out.refused = rf.v;
+    out.thirdDialogClosed = await waitGone();
+    out.leftOpen = document.querySelectorAll(".application.cp-tt-crew").length;
+  } catch (err) {
+    out.threw = String(err?.message ?? err);
+  } finally {
+    // Close anything still standing BEFORE the fixture goes: a dialog left open is what made the
+    // fixture survive its own delete on the first attempt.
+    for (const app of [...foundry.applications.instances.values()]) {
+      if (app?.element?.classList?.contains("cp-tt-crew")) { try { await app.close(); } catch (_e) { /* gone */ } }
+    }
+    for (const stray of game.actors.filter(a => a.name === "__PW__TT Dialog")) {
+      try { await stray.delete(); } catch (e) { out.cleanupError = String(e?.message ?? e); }
+    }
+    out.actorsLeft = game.actors.filter(a => a.name === "__PW__TT Dialog").length;
+  }
+  return out;
+}, TOOL);
+check("the crew dialog section ran without throwing", !crewDialog.threw, String(crewDialog.threw ?? ""));
+check("the dialog renders", crewDialog.rendered === true);
+check("the handler's own selectors match the rendered nodes", crewDialog.selectorsMatch === true);
+eq("it opens on none — the default is the cinematic that shipped", crewDialog.defaultActor, "");
+check("the world's own actors are offered", crewDialog.offersChosenActor === true);
+eq("the count field is bounded by the marks", crewDialog.countMax, "5");
+eq("and pre-filled with the full complement", crewDialog.countDefault, "5");
+check("every visible string is localized", crewDialog.noRawKeys === true);
+check("the confirm button is present and pressable", crewDialog.pressedCall === true,
+  `footer: ${(crewDialog.footer ?? []).join(", ")}`);
+check("pressing it settles the call", crewDialog.answeredSettled === true, String(crewDialog.answered));
+eq("a chosen actor and a typed count come back as the call's crew",
+  crewDialog.answered?.crew?.count ?? null, 2);
+check("and it is the actor that was picked", crewDialog.answeredMatchesActor === true);
+check("the untouched confirm settles too", crewDialog.untouchedSettled === true, String(crewDialog.untouched));
+eq("NEGATIVE: confirming untouched asks for no crew at all", crewDialog.untouched, { crew: null });
+check("the refusal button is offered", crewDialog.hasCancel === true);
+check("the refusal settles too", crewDialog.refusedSettled === true, String(crewDialog.refused));
+eq("NEGATIVE: refusing backs the whole call out", crewDialog.refused, null);
+check("each act's dialog closes before the next is driven",
+  crewDialog.firstDialogClosed === true && crewDialog.secondDialogClosed === true
+  && crewDialog.thirdDialogClosed === true,
+  `${crewDialog.firstDialogClosed}/${crewDialog.secondDialogClosed}/${crewDialog.thirdDialogClosed}`);
+eq("no dialog is left standing", crewDialog.leftOpen, 0);
+eq("the dialog fixture actor is gone", crewDialog.actorsLeft, 0);
+
+/* ─────────────────── §10 console ─────────────────── */
+console.log("\n§10 client health");
 if (engineRaces.length) console.log(`  (note: ${engineRaces.length} engine teardown race(s) swallowed — a known keeper trap, not ours)`);
 eq("0 console errors", errors.slice(0, 4), []);
 

@@ -1,0 +1,26 @@
+{{!-- The optional half of the medical-extraction call (user ruling 2026-08-28): name a world actor and
+      a count, and the unload beats write that many tokens where the marks are drawn.
+
+      ⛔ THE LIST IS THE WORLD'S OWN ACTORS. This module bundles no medical-response NPC and names none —
+      the referee supplies the figure, which is what keeps the feature clear of shipped stat blocks.
+
+      ⭐ THE DEFAULT IS THE EMPTY OPTION, so confirming without touching anything is the pure cinematic
+      that has always shipped. The count is read only when an actor is chosen; the hint says so rather
+      than the field being greyed, because greying it would need live render wiring for one sentence. --}}
+<div class="cp-tt-crew-body">
+    <p class="cp-tt-crew-hint">{{CPLocal "TraumaTeamCrewHint"}}</p>
+    <p class="cp-tt-crew-hint">{{CPLocal "TraumaTeamCrewNoneHint"}}</p>
+    <div class="field">
+        <label for="cp-tt-actor" data-tooltip="{{CPLocal 'TraumaTeamCrewActorTip'}}">{{CPLocal "TraumaTeamCrewActorLabel"}}</label>
+        <select name="cp-tt-actor" class="cp2020ae-install-picker" data-tooltip="{{CPLocal 'TraumaTeamCrewActorTip'}}">
+            <option value="" selected>{{CPLocal "TraumaTeamCrewNone"}}</option>
+            {{#each actors}}
+            <option value="{{id}}">{{name}}</option>
+            {{/each}}
+        </select>
+    </div>
+    <div class="field">
+        <label for="cp-tt-count" data-tooltip="{{CPLocal 'TraumaTeamCrewCountTip'}}">{{CPLocal "TraumaTeamCrewCountLabel"}}</label>
+        <input type="number" name="cp-tt-count" value="{{defaultCount}}" min="1" max="{{maxCount}}" step="1" data-tooltip="{{CPLocal 'TraumaTeamCrewCountTip'}}"/>
+    </div>
+</div>

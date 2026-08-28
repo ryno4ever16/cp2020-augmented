@@ -14,8 +14,10 @@
  *     the SAME rectangle the sequence will (fx/trauma-team.js `landingRect`), by import rather than by
  *     copy, so what the referee aims is what the module puts down.
  *
- * ⚠ THIS FILE SPENDS NOTHING AND WRITES NOTHING. Cancelling costs nothing because nothing has happened
- * yet, and confirming only calls the presentation rail — no document is created at either end.
+ * ⚠ NOTHING IS SPENT AND NOTHING IS WRITTEN UNTIL THE CLICK LANDS. Both steps — the crew question and
+ * the ghost — are cheap to abandon at any point, and cancelling either leaves the world exactly as it
+ * was. Confirming calls the presentation rail, which writes documents only if the referee named a crew
+ * (see fx/trauma-team.js, "The crew a referee can move afterwards"); with no crew named, still nothing.
  *
  * THE BUTTON IS A TOGGLE IN BEHAVIOUR, NOT IN STATE: with nothing on station it arms the ghost; with
  * something on station it sends that away. One control for both, because "there is an airframe over my
@@ -24,11 +26,14 @@
  */
 
 import {
-  landingRect, landTraumaTeam, endTraumaTeam, traumaTeamActive,
+  landingRect, landTraumaTeam, endTraumaTeam, traumaTeamActive, clampCrewCount, TRAUMA_TEAM,
 } from "./trauma-team.js";
 import { localize } from "../utils.js";
 
 const SCOPE = "cp2020-augmented";
+
+const renderTpl = (path, data) =>
+  (foundry.applications?.handlebars?.renderTemplate ?? globalThis.renderTemplate)(path, data);
 
 /**
  * The ghost's look. Amber, because the rectangle it previews carries amber caution marks, and thin,
@@ -177,6 +182,55 @@ export function landingPickerActive() {
 }
 
 /**
+ * WHO STEPS OFF — the optional half of the call (user ruling 2026-08-28), asked BEFORE the spot is
+ * picked so that the click stays the trigger: the referee answers this, then aims, and the sequence
+ * begins the instant they commit a place rather than a beat later behind a dialog.
+ *
+ * ⛔ THE LIST IS THE WORLD'S OWN ACTORS AND NOTHING ELSE. This module ships no medical-response NPC,
+ * names none and bundles no stat block; the referee supplies the figure. Default is the empty option,
+ * so pressing the confirm without touching anything keeps the pure cinematic that shipped.
+ *
+ * ⚠ NO RENDER WIRING, DELIBERATELY. DialogV2's config `render` callback never fires on v14, so a
+ * dialog that needs live behaviour has to patch `_onRender` or ride the `renderDialogV2` hook. This
+ * one needs none: both controls are read once, at the confirm, exactly as the deploy-name prompt and
+ * the cover placement dialog read theirs. The count is simply ignored when no actor is chosen, which
+ * the hint says in as many words rather than being enforced by greying a field.
+ *
+ * @returns {Promise<{crew:{actorId:string,count:number}|null}|null>} null = the referee backed out
+ */
+export async function promptTraumaTeamCrew() {
+  const { DialogV2 } = foundry.applications.api;
+  const actors = (game.actors?.contents ?? [])
+    .map((a) => ({ id: a.id, name: String(a.name ?? "") }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const content = await renderTpl(`modules/${SCOPE}/templates/dialog/trauma-team-crew.hbs`, {
+    actors,
+    maxCount: TRAUMA_TEAM.figureCount,
+    defaultCount: TRAUMA_TEAM.figureCount,
+  });
+  const answer = await DialogV2.wait({
+    window: { title: localize("TraumaTeamCrewTitle"), resizable: true },
+    // Stated width for the reason the cover dialog states one: DialogV2 is fixed-size by default and
+    // its default is narrow enough to wrap a long actor name onto three lines.
+    position: { width: 460 },
+    classes: ["cyberpunk", "cp-tt-crew"],
+    content,
+    rejectClose: false,
+    buttons: [{
+      action: "call", default: true, label: localize("TraumaTeamCrewConfirm"),
+      callback: (event, button, dialog) => {
+        const el = (dialog.element ?? dialog);
+        const actorId = el.querySelector('select[name="cp-tt-actor"]')?.value ?? "";
+        const count = el.querySelector('input[name="cp-tt-count"]')?.value;
+        return { crew: actorId ? { actorId, count: clampCrewCount(count) } : null };
+      },
+    }, { action: "cancel", label: localize("Cancel") }],
+  });
+  if (!answer || answer === "cancel") return null;
+  return answer;
+}
+
+/**
  * THE CONTROL'S HANDLER — the second referee gate, and the one that actually refuses. Returns what it
  * did, by value, so both halves and the refusal are assertable.
  */
@@ -187,9 +241,11 @@ export async function onTraumaTeamTool() {
     ui.notifications?.info?.(localize("TraumaTeamDeparted"));
     return { departed };
   }
+  const answer = await promptTraumaTeamCrew();
+  if (!answer) return { skipped: "cancelled" };
   const point = await armLandingPicker();
   if (!point) return { skipped: "cancelled" };
-  const placed = await landTraumaTeam(point);
+  const placed = await landTraumaTeam(point, { crew: answer.crew });
   if (!placed.skipped) ui.notifications?.info?.(localize("TraumaTeamPlaced"));
   return { placed };
 }
