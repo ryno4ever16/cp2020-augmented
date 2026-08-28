@@ -28,7 +28,7 @@
  * localizes it.
  */
 
-import { resolveGoonConfig } from "./blueprint.js";
+import { resolveGoonConfig, parseDiceExpression } from "./blueprint.js";
 import {
   ARMAMENT_POSTURES, ARMOR_HARDNESS_FILTERS, ARMOR_WEIGHT_FILTERS, BT_TICKS, BT_RANGE, COUNT,
   DISPOSITIONS, GRADE_KEYS, GRADES, LOOT_DIAL, LOOT_LABEL_KEYS, REF_RANGE, ROLE_OPTIONS,
@@ -437,6 +437,51 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
       const out = t.closest(".cp-goon-row")?.querySelector(".cp-goon-out");
       if (out) out.textContent = t.value;
     });
+
+    // ⭐ NUMBER FIELDS TAKE NUMBERS (user-ordered 2026-08-28, the chrome-count report): a
+    // type="number" input still lets Chromium type the exponent characters e E + - . — which is
+    // what "I can type letters in it" was. Blocked at the keystroke for every number field in the
+    // window, and the value is clamped to the field's own integer min/max when the edit lands.
+    root.addEventListener("keydown", (ev) => {
+      const t = ev.target;
+      if (!t?.matches?.('input[type="number"]')) return;
+      if (["e", "E", "+", "-", "."].includes(ev.key)) ev.preventDefault();
+    });
+    root.addEventListener("change", (ev) => {
+      const t = ev.target;
+      if (!t?.matches?.('input[type="number"]')) return;
+      if (t.value === "") return;                       // empty = "re-derive" everywhere in this window
+      const n = Math.trunc(Number(t.value));
+      const min = t.min !== "" ? Number(t.min) : -Infinity;
+      const max = t.max !== "" ? Number(t.max) : Infinity;
+      const clamped = Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : "";
+      if (String(clamped) !== t.value) t.value = String(clamped);
+    });
+
+    // ⭐ THE PROMISED AT-THE-FIELD FORMULA CHECK, actually wired (user report 2026-08-28: the dice
+    // boxes took anything). blueprint.js's parser doc has claimed since it was written that "the
+    // impure edge additionally runs Roll.validate so a GM is told at the field rather than silently
+    // falling back at generate time" — but nothing ever supplied the template's formulaNote, so the
+    // promise never fired. This is that edge: both parsers must accept the text (our small grammar
+    // is the floor, Roll.validate the ceiling) or the field marks itself and the note names the
+    // fallback that generate time will actually use.
+    root.addEventListener("input", (ev) => {
+      const t = ev.target;
+      if (!t?.matches?.(".cp-goon-luck, .cp-goon-rep")) return;
+      const text = String(t.value ?? "").trim();
+      let bad = false;
+      if (text) {
+        let rollOk = true;
+        try { rollOk = Roll.validate(text); } catch { rollOk = false; }
+        bad = !parseDiceExpression(text) || !rollOk;
+      }
+      t.classList.toggle("cp-goon-field-invalid", bad);
+      const note = root.querySelector(".cp-goon-formula-note");
+      if (note) {
+        note.hidden = !bad;
+        if (bad) note.textContent = game.i18n.format("CYBERPUNK.GoonFactory.FormulaInvalid", { formula: text });
+      }
+    });
   }
 
   /**
@@ -553,6 +598,11 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
     const ov = {};
     const put = (key, value, derivedValue) => {
       if (value === null || value === undefined || value === "") return;
+      // ⛔ NaN IS NOT AN OVERRIDE (found 2026-08-28 under the chrome-count report): a cleared or
+      // garbage numeric field parseInts to NaN, which passed the guards above and was RECORDED —
+      // so clearing the chrome box bricked the batch to zero chrome instead of re-deriving. An
+      // unreadable number is the same statement as an empty field: nothing was picked.
+      if (typeof value === "number" && !Number.isFinite(value)) return;
       if (String(value) === String(derivedValue)) return;                 // untouched ⇒ not an override
       ov[key] = value;
     };

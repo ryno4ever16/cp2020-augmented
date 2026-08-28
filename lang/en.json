@@ -2474,7 +2474,9 @@
         "InvalidFormula": "That formula could not be read — the default was used instead."
       },
       "ChromedLabel": "Chromed",
-      "ChromeDerivation": "{base} grade {grade} + {solo} Solo + {outfit} outfit",
+      "ChromeDerivation": "= {base} (grade {grade}) + {solo} (Solo) + {outfit} (outfit)",
+      "ChromeCountTip": "How many combat cyberware picks each goon in the batch gets. One pick brings its support pieces with it — a cyberoptic option brings its eye, a cyberarm its hand — and cosmetic garnish plus outfit or grade bonus items ride on top, so the sheet can hold more individual implants than this number. It derives from the threat grade (+2 if the role is Solo, adjusted by the outfit); type a number to override it, clear the field to re-derive.",
+      "FormulaInvalid": "\"{formula}\" isn't a dice formula this window can roll — generating now would ignore it and use the default.",
       "GarnishLabel": "Garnish",
       "GarnishHint": "One cosmetic implant. Never counts against the chrome count.",
       "ArmorWeightLabel": "Armor",

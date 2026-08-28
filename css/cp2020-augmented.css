@@ -4284,3 +4284,7 @@ body.theme-light .chat-message .cyberpunk h4 { color: inherit; }
 .cp-tt-crew-body > :is(p, div) { margin: 0; flex: 0 0 auto; }
 .cp-tt-crew-body .field > label { flex: 1 1 11em; min-width: 8em; }
 .cp-tt-crew-body .field > select { height: 24px; min-height: 24px; }
+
+/* Goon Factory — the live formula check's invalid state (npcgen-app _onRender; user-ordered
+   2026-08-28). The warn colour matches .cp-goon-warn; the border is the field marking itself. */
+.cp-goon .cp-goon-field-invalid { border-color: #c0791a; outline: 1px solid #c0791a; }

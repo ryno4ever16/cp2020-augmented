@@ -221,7 +221,9 @@
         <label class="cp-goon-label" for="cp-goon-rep">{{localize "CYBERPUNK.GoonFactory.RepLabel"}}</label>
         <input id="cp-goon-rep" class="cp-goon-rep" type="text" value="{{repFormula}}" {{#unless advanced}}disabled{{/unless}} />
       </div>
-      {{#if formulaNote}}<p class="cp-goon-warn">{{formulaNote}}</p>{{/if}}
+      {{!-- Always present, filled and unhidden by the live formula check (npcgen-app _onRender) —
+            the {{#if}} form could never show: nothing ever supplied formulaNote at render time. --}}
+      <p class="cp-goon-warn cp-goon-formula-note" hidden></p>
     </div>
 
     {{!-- Chromed --}}
@@ -231,11 +233,12 @@
         {{localize "CYBERPUNK.GoonFactory.ChromedLabel"}}
       </label>
       {{!-- A number input cannot render a dash, so the underived state is an EMPTY field with the
-            dash as its placeholder — the same "nothing picked yet" reading. --}}
-      <input id="cp-goon-chrome-count" class="cp-goon-chrome-count" type="number" min="0" max="20"
-             value="{{chromeCountValue}}" placeholder="{{unsetMark}}" title="{{chromeDerivationLine}}"
+            dash as its placeholder — the same "nothing picked yet" reading. The title explains the
+            NUMBER (user-ordered 2026-08-28); the hint span beside it shows its derivation. --}}
+      <input id="cp-goon-chrome-count" class="cp-goon-chrome-count" type="number" min="0" max="20" step="1"
+             value="{{chromeCountValue}}" placeholder="{{unsetMark}}" title="{{localize "CYBERPUNK.GoonFactory.ChromeCountTip"}}"
              {{#unless advanced}}disabled{{/unless}} />
-      <span class="cp-goon-hint">{{chromeDerivationLine}}</span>
+      <span class="cp-goon-hint" title="{{localize "CYBERPUNK.GoonFactory.ChromeCountTip"}}">{{chromeDerivationLine}}</span>
     </div>
 
     {{!-- Garnish --}}
