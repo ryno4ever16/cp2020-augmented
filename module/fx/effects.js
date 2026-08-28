@@ -51,6 +51,11 @@ import { declaredSpreadAim, spreadAttackOutcome, scatteredSpreadCorridor } from 
 // the same reason: this rail and the plant must answer "does this shell still go down-range" with ONE
 // predicate. The class itself is derived once at the seam; nothing here re-derives it.
 import { fumbleStandsRailsDown } from "../combat/fumble-outcome.js";
+// WHETHER A FIRED THING IS A DELIVERED WARHEAD, and whether it was thrown or launched. Pure and
+// import-free, like the three above and for the same reason: the damage rail claims a payload for the
+// blast flow off this derivation and this rail draws it off the same one, so a grenade cannot be a
+// grenade to the mechanics and a bullet to the picture. See combat/area-delivery.js.
+import { areaDeliveryKind, areaDeliveryIsLaunched } from "../combat/area-delivery.js";
 import { rayPolygonPoints, pointInPolygon } from "../combat/area-geometry.js";
 // The closest-mode wall query behind the EXEMPT clip (2026-08-26). Same file and same backend the
 // naked-wall exemption itself is decided on, so a round is stopped by the very wall that exempted it.
@@ -1264,6 +1269,20 @@ export const TRACER_CLIP_MS = 933;
 export const TRACER_ARRIVAL_MS = Object.freeze({
   "jb2a.bullet.01.orange": Object.freeze({ "05ft": 100, "15ft": 333, "30ft": 467, "60ft": 567, "90ft": 733 }),
   "jb2a.bullet.02.orange": Object.freeze({ "05ft": 267, "15ft": 200, "30ft": 367, "60ft": 533, "90ft": 700 }),
+  // ⭐ THE TWO DELIVERY FAMILIES (2026-08-27), decoded at the same instrument on the same rig — the
+  // full tables, the arc/flat measurements and the two rejected candidates are at DELIVERY_FX. These
+  // are an ORDER OF MAGNITUDE longer than a bullet's, and that is the point rather than a problem: a
+  // thrown object is meant to be watched crossing the map, and everything that waits on the arrival
+  // (the detonation mark, its report, the blast area and its confirm card) waits with it.
+  "jb2a.throwable.throw.bomb.01.black":          Object.freeze({ "05ft": 1300, "15ft": 1633, "30ft": 2000, "60ft": 2867, "90ft": 3267 }),
+  "jb2a.throwable.launch.cannon_ball.01.black":  Object.freeze({ "05ft": 267,  "15ft": 600,  "30ft": 1000, "60ft": 1833, "90ft": 2233 }),
+  // ⭐ THE ROCKET LOOK TRIAL'S LADDER (2026-08-27, user look pending — see ROCKET_PROJECTILE). Decoded
+  // at the same instrument on the same rig, which reproduced the cannon ball's row above exactly before
+  // this one was taken. BOTH ROWS STAY: the ball's is the revert's ladder, and a table that carries only
+  // the currently-wired key would silently drop the reverted picture to TRACER_ARRIVAL_FALLBACK_MS.
+  // ⚠ Its first two bands are LONGER than the ball's and its last three SHORTER, and both halves are the
+  // same fact: the asset spends a fixed ~800ms on its release before the head moves at all.
+  "jb2a.bolt.physical.orange":                   Object.freeze({ "05ft": 933,  "15ft": 1000, "30ft": 1167, "60ft": 1300, "90ft": 1467 }),
 });
 
 /**
@@ -1602,6 +1621,127 @@ export const TRACER_COLOR_INERT      = Object.freeze({ hue: 0,   saturate: -0.55
  * standing uniformity ruling (§ the AMMO_FX block).
  */
 export const TRACER_COLOR_BATON = Object.freeze({ hue: 0, saturate: -0.85, brightness: 1.30 });
+
+/**
+ * ⭐ THE LAUNCHED WARHEAD'S TINT (2026-08-27). The only `launch.*` asset in this library that decodes
+ * with a readable arrival is a BLACK cannon ball (see DELIVERY_FX's decode); a rocket leaving a tube
+ * reads warm and lit, not matte. Same ColorMatrix mechanism every other recolour on this rail uses —
+ * no new machinery, and a `filter` rather than a tint for the reason TRACER_COLOR records at length
+ * (a tint multiplies and cannot brighten a dark sprite; a matrix can).
+ *
+ * The three terms, each with its reason: `brightness 1.55` is what lifts a near-black object off a dark
+ * map at all — it is the largest brightness on this rail because it is the only row whose source ink is
+ * black rather than orange; `saturate 0.45` gives the lifted grey a colour to be; `hue 12` puts that
+ * colour on the warm side of the tracer family's own 18, so a rocket and a bullet are recognisably the
+ * same palette without being the same object.
+ * ⏪ REVERT IS ONE FIELD: `tracerColor: null` on the `rocket` row returns the asset's own black.
+ * ⚠ UNSIGNED LOOK CALL — the three numbers are the lane's, not the user's (docs/FX-RAIL.md §8).
+ */
+export const TRACER_COLOR_ROCKET = Object.freeze({ hue: 12, saturate: 0.45, brightness: 1.55 });
+
+/**
+ * ⭐⭐ THE LAUNCHED WARHEAD'S PICTURE — A TRIAL, AWAITING THE USER'S EYES (2026-08-27).
+ *
+ * ⛔ WHAT WAS ASKED (user, #23br item (b)): the launcher's round *reads as a ball*. Trial one of the
+ * ELONGATED directional candidates instead, and wire it live behind ONE revert.
+ *
+ * ⛔⛔ THE HONEST FINDING FIRST, because it is the thing a reviewer needs and it is not what was hoped
+ * for: **no asset in the installed free tier satisfies all three of the stated criteria at once**
+ * (elongated · travels nose-first · no baked terminal bloom). The enumeration is CLOSED — every one of
+ * the 79 files in this tier that ships a five-band `_60ft_` ranged cut was decoded, library-wide, not
+ * just the Weapon_Attacks folder — and it splits cleanly in two:
+ *   · every SLIM projectile (bolt, arrow, ice shard, bullet.03) bakes an impact bloom at its own
+ *     arrival, because it is drawn for a system where the projectile IS the whole effect;
+ *   · every asset with a CLEAN terminal is a member of the toss family — cannon ball, bomb, flask,
+ *     boulder, the two barrels — and every one of those is a round object.
+ * So the choice is not "ball or rocket". It is "keep the clean-ending ball" or "take an elongated body
+ * and accept a flash at the arrival point". This trial takes the second, because the reported defect is
+ * the SHAPE, and the flash lands on the same frame as a detonation the row already draws.
+ *
+ * ─────────────── THE DECODE (this rig's installed tier, §9 A4 instrument, 30 fps) ───────────────
+ * Instrument validated before it was trusted: re-run against the CURRENT asset it reproduced the
+ * recorded ladder exactly (267 / 600 / 1000 / 1833 / 2233), so the numbers below are comparable.
+ *
+ *   metric              cannon ball (current)      bolt.physical.orange (trial)
+ *   body height*            77-157 px                     64 px, flat across 15-90ft
+ *   body aspect*            2.27 → 1.54                   3.77 (the tier's most elongated)
+ *   vertical excursion†     2.0 → 31.3 px (tumbles)       0.5 → 2.6 px (dead flat, nose-first)
+ *   native colour           black (needs the matrix)      orange (needs nothing)
+ *   frame-0 ink             0.2-1.0 mean                  0.0 mean (clean start, both)
+ *   terminal bloom‡         0.39-0.86 (it SHRINKS)        4.06-4.16 (⚠ a bloom)
+ *   release wind-up§        167-200 ms                    ⚠ 733-833 ms
+ *   arrival ladder          267/600/1000/1833/2233        933/1000/1167/1300/1467
+ *
+ *   * median over the travel frames, of a 400 px frame, leading 240 px window = the OBJECT not its trail
+ *   † vertical centroid range over the travel frames — the flat/lobbed reading
+ *   ‡ max lit height after arrival ÷ body height. >1 is a bloom; the ball's <1 is the ball receding
+ *   § ms before the head first advances 100 px past its own first position
+ *
+ * ⚠⚠ THE TWO COSTS, STATED RATHER THAN DISCOVERED — this is what the user is being asked to look at:
+ *   1. **A 733-833 ms wind-up at the tube.** Frames 1-21 of the 60ft cut are a 90×16 px sliver
+ *      RETREATING (x 212 → 173) and then flaring: the asset's own nock-and-release. It sits at x 150-300
+ *      of 2800, i.e. inside the shooter's own square, so what is drawn is a small bright thing at the
+ *      muzzle for three quarters of a second before the round leaves. That can read as a motor lighting
+ *      in the tube — or as a hang. ⛔ NOT TRIMMED AWAY: trimming an asset to hide part of itself is the
+ *      shotgun mistake this standard exists to prevent (§9 A3), and the launch report already plays at
+ *      t=0 either way. It is reported, not tuned.
+ *   2. **A terminal bloom 4.1× the shaft's height** (to 266 px of a 400 px frame ≈ 1.1 squares on a
+ *      twelve-square shot), then the shaft dropping out of frame. It coincides with this row's own
+ *      `impactKey` detonation mark at 2.4 squares, so it reads as the round flaring an instant before
+ *      the warhead goes — but it IS a baked terminal event, larger than the one that got
+ *      `bullet.03.blue` rejected (measured 3.12 there), and the user's criterion said none.
+ *
+ * ✅ WHAT THE TRIAL BUYS: an object 64 px thick instead of 77-157 px tapering — 0.27 of a square against
+ * the ball's 0.33-0.55 — travelling flat and nose-first with 1/10th the vertical wander, in its own
+ * orange so the colour matrix comes OFF (one fewer transform on the rail, not one more). And it is
+ * FASTER where a rocket should be: 1300 ms to cross a 60ft shot against the ball's 1833, 1467 against
+ * 2233 at 90ft. Only the two nearest bands are slower, and only because the wind-up is a fixed cost.
+ *
+ * ⛔ WHAT WAS REJECTED, AND ON WHAT MEASUREMENT — the closed list, so nobody re-derives it:
+ *   arrow.physical.blue ....... the same shape one step thicker (96 px, aspect 2.51) and the same two
+ *                               costs (733 ms wind-up, 2.83 bloom) — and it is BLUE, so it would need
+ *                               the colour matrix back to stop reading as a magic bolt. Strictly worse.
+ *   bullet.01/.02.orange ...... already the pistol/smg and rifle/heavy tracers. A launched warhead that
+ *                               draws the rifle's own round is not a delivery picture at all.
+ *   bullet.03.blue ............ the standing no-starburst rejection (measured bloom 3.12), unchanged.
+ *   the four `missile` cuts .... blue/white/purple-pink, and all four open ALREADY LIT (frame-0 mean
+ *                               97-98 against the adopted cuts' 0.0-0.2) with ink filling the whole
+ *                               400 px frame from frame 1. No readable arrival — the recorded rejection,
+ *                               re-measured and confirmed across all four, not just the blue one.
+ *   packhound / magic_missile . four-variant blue and purple MAGIC missiles; bodies 368-392 px.
+ *   ranged_projectile 01-04 ... generic spell projectiles; every one fills the full 400 px frame.
+ *   fire_bolt / scorching_ray . warm and directional, but 398 px and 206 px bodies — a flame plume the
+ *                               height of the shot, not an object with a nose.
+ *   snipe.blue / the beams .... arrival at 100 ms or 0 ms: they do not travel, they appear. A delivery
+ *                               shot whose object never crosses the map has no clock-2 answer to give.
+ *   dagger / shield / the four toss cuts ... clean terminals, but they tumble (vertical excursion 19-87 px
+ *                               against the bolt's 2.5) and they are round or bladed, not nose-first.
+ *
+ * ⏪⏪ THE REVERT IS ONE IDENTIFIER. `ROCKET_PROJECTILE` below is assigned the trial; point it at
+ * `ROCKET_PROJECTILE_BALL` and the row is byte-identical to what shipped — the cannon ball key with its
+ * warming matrix, whose own arrival ladder is still carried in TRACER_ARRIVAL_MS beside the trial's.
+ * Nothing else in this file moves: the audio, the muzzle, the detonation mark, the cadence, the settle
+ * tag and the tail arithmetic all read the row and none of them names an asset.
+ * ⚠ The tail DOES move, and correctly rather than as a change: it is `arrival + impactClipMs`, so a
+ * faster picture opens the apply window sooner (60ft: 2367 ms against 2900 ms). That is the arrival
+ * clock answering honestly for the asset that is drawn, which is the rule (§9 D13), not a retune.
+ */
+export const ROCKET_PROJECTILE_BALL = Object.freeze({
+  key: "jb2a.throwable.launch.cannon_ball.01.black",
+  tracerColor: TRACER_COLOR_ROCKET,
+});
+export const ROCKET_PROJECTILE_BOLT = Object.freeze({
+  key: "jb2a.bolt.physical.orange",
+  // ⭐ NULL IS THE POINT, not an omission: the asset ships orange, so the warming matrix that exists to
+  // lift a black ball would only over-drive it. Reverting to the ball restores the matrix with it.
+  tracerColor: null,
+});
+/** ⏪ THE ONE KNOB. `= ROCKET_PROJECTILE_BALL` restores the shipped look exactly.
+ *  ⏪ TRIAL VERDICT (user, 2026-08-27): the bolt "is very small and kind of still looks like a
+ *  bullet" — it draws through stretchTo, so its thin ink reads as a streak, and growing it means
+ *  scale tricks on the wrong asset (the exact trap §9 bars). REVERTED to the ball; the real fix
+ *  stays the §8 ask: actual rocket art, at which point this becomes one `.file()` swap. */
+export const ROCKET_PROJECTILE = ROCKET_PROJECTILE_BALL;
 
 /**
  * THE DART MATRIX (2026-08-09) — what a needle load's own projectiles are repainted with.
@@ -2012,7 +2152,144 @@ export const FX_CLASSES = Object.freeze({
   // (delete it and the class returns to SHOT_VOLUME, 0.8, with nothing else moved). See classShotVolume.
   shotgun: { sound: "shot-shotgun", soundBurst: "shot-shotgun-burst", soundVolume: 0.58, muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.01.orange", tracerColor: null, muzzleSquares: 1.9, muzzleMs: 220, motes: 10, smokeSquares: 0.6, smokeSingle: true, impactSquares: 1.15, pellets: 6, spreadRad: 0.07, dashSquares: 1.0, dashMs: 150, cadenceMs: 180 },
   heavy:   { sound: "shot-heavy",   muzzle: "jb2a.muzzle_flash.single.01.yellow", tracer: "jb2a.bullet.02.orange", tracerColor: TRACER_COLOR, muzzleSquares: 2.1, motes: 16, impactSquares: 1.3 },
+  // ⭐⭐ THE TWO DELIVERY ROWS (2026-08-27). A grenade and a rocket are not bullets and were being drawn
+  // as one; the whole spec, the asset decode and the two rejected candidates are at DELIVERY_FX below.
+  // They are ordinary rows on purpose — the tail arithmetic, the arrival clock, the settle tag, the
+  // impact promotion and the ammo merge site all read this table, so a delivery shot gets every one of
+  // them for free rather than through a second draw path.
+  thrown:  { sound: "grenade-pin",   soundVolume: 0.7, muzzle: null, noMuzzleFlash: true, delivery: "thrown",
+             tracer: "jb2a.throwable.throw.bomb.01.black", tracerColor: null,
+             impactKey: "jb2a.explosion.shrapnel.bomb.01.black", impactSquares: 2.0, impactClipMs: 700,
+             detonation: "explosion-big", detonationVolume: 0.85 },
+  // ⚠ `tracer`/`tracerColor` are the TRIAL PICTURE (2026-08-27, user look pending) — one identifier,
+  // ROCKET_PROJECTILE, carries both; point it at ROCKET_PROJECTILE_BALL to restore the shipped
+  // cannon ball with its warming matrix. The full decode, the closed rejection list and the two
+  // stated costs are at ROCKET_PROJECTILE above. Nothing else on this row moves.
+  rocket:  { sound: "rocket-launch", soundVolume: 0.75, muzzle: "jb2a.muzzle_flash.single.01.yellow", muzzleSquares: 1.8, delivery: "rocket",
+             tracer: ROCKET_PROJECTILE.key, tracerColor: ROCKET_PROJECTILE.tracerColor,
+             impactKey: "jb2a.explosion.01.orange", impactSquares: 2.4, impactClipMs: 1067,
+             detonation: "explosion-big", detonationVolume: 0.9, motes: 10 },
 });
+
+/**
+ * ⭐⭐ THE DELIVERED WARHEAD — a thrown grenade and a launched round, drawn as the OBJECTS they are.
+ *
+ * ⛔ THE DEFECT (item ③ of the grenade unit, 2026-08-27). Every grenade and launcher in the shipped
+ * catalogue is `weaponType: "Heavy"`, so `weaponFxClass` mapped it straight onto the HEAVY class: a
+ * thrown Fragmentation Grenade lit a 20 mm muzzle flash, sent a bullet tracer down-range and made the
+ * heavy cannon's report. There was nothing wrong with the class row — the weapon was simply being
+ * asked the wrong question. The attack type is the field that answers it (combat/area-delivery.js).
+ *
+ * ⛔ ONE OBJECT PER THROW, AND THAT IS STRUCTURAL RATHER THAN A SETTING. A delivery weapon's card
+ * reports one round fired, so `shotCountOf` is 1 and the fan-out loop runs once: there is no cadence,
+ * no drop rule in play, no queue to fall behind — the whole class of load-dependent trailing the shell
+ * class was reported for cannot arise here, because there is never a second round to be late.
+ *
+ * ─────────────────── THE ASSETS, DECODED OFF THIS RIG'S INSTALLED FREE TIER ───────────────────
+ * Instrument: the standard's own recipe (docs/FX-RAIL.md §9 A4) — per frame, the RIGHTMOST lit column
+ * is the head, and the arrival is the first frame at which that leading edge reaches 98 % of the
+ * clip's own maximum. Read with the brightest CHANNEL rather than luminance, so a coloured asset is
+ * not under-read. All files 30 fps.
+ *
+ * ✅ THROWN — `jb2a.throwable.throw.bomb.01.black` (ThrowBomb01_01_Regular_Black, five bands):
+ *      band    arrival   clip     frame
+ *      05ft     1300ms   1467ms    600×400
+ *      15ft     1633ms   1800ms   1000×400
+ *      30ft     2000ms   2200ms   1600×400
+ *      60ft     2867ms   3067ms   2800×400
+ *      90ft     3267ms   3533ms   4000×400
+ *    ⭐ THE ARC AND THE WIND-UP ARE THE ASSET'S OWN — nothing here eases, scales or spins anything.
+ *    Measured on the 60ft cut: the ink's HORIZONTAL centroid RETREATS for the first ~30 frames
+ *    (270 → 139 px) before advancing to 2492 — that is the throwing motion — and its VERTICAL centroid
+ *    bows 238 → 273 → 203 on a 400-px frame, i.e. ±35 px off the shot axis and back, which is the lob
+ *    read on a top-down map. This is what "asset-native first" means in practice (§9 A3): the arc was
+ *    not built, it was found.
+ *    ⚠ RECORDED, NOT SMOOTHED: the file carries 115 px of ink BEHIND the ranged template's 200 px start
+ *    anchor in every band (leftmost lit column 85). That is the object leaving the thrower's hand, so
+ *    unlike the bullet families' backwash it is ink that BELONGS at the origin — and it lands inside
+ *    the shooter's own square anyway, because a painted span is planted at the muzzle point
+ *    (SPAN_ANCHOR_AT_MUZZLE, half a token forward).
+ *
+ * ⏪ ROCKET — SUPERSEDED BY A TRIAL, 2026-08-27, and left here whole because it IS the revert. The row
+ *    currently draws `jb2a.bolt.physical.orange` (ROCKET_PROJECTILE above: the closed enumeration, the
+ *    two stated costs and the one-identifier revert). Everything below is the ball's own decode.
+ *
+ * ⏪ THE BALL — `jb2a.throwable.launch.cannon_ball.01.black` (LaunchCannonBall01_01_Regular_Black):
+ *      band    arrival   clip     frame
+ *      05ft      267ms    467ms    600×400
+ *      15ft      600ms    767ms   1000×400
+ *      30ft     1000ms   1167ms   1600×400
+ *      60ft     1833ms   2067ms   2800×400
+ *      90ft     2233ms   2433ms   4000×400
+ *    Its vertical centroid holds 199–207 across the whole 60ft cut — a FLAT trajectory, where the
+ *    thrown cut bows 35 px. Flat-and-fast against arced-and-slow is exactly the difference between a
+ *    launched round and a lobbed one, and it is the asset's, not ours. Backwash is 12–20 px behind the
+ *    anchor, well inside the muzzle-point margin.
+ *    ⚠ IT IS A BLACK PROJECTILE, and this library ships no rocket-with-exhaust cut. `TRACER_COLOR_ROCKET`
+ *    warms it through the SAME ColorMatrix mechanism every other class recolours with — no new machinery
+ *    — and the missing asset is recorded as an ask in docs/FX-RAIL.md §8.
+ *    ⛔ AND IT IS A BALL, which is the report that opened the trial: the user reads it as a cannon ball,
+ *    not a warhead. The asset ask in §8 stands whichever picture is signed off — neither candidate is a
+ *    rocket, one is a round object and the other is a crossbow bolt.
+ *
+ * ⛔ REJECTED — `jb2a.throwable.launch.missile.01.blue`, the obvious first choice by NAME. It has NO
+ * MEASURABLE ARRIVAL: its frame 0 is already 38 % lit (mean channel value 97.3 against the two adopted
+ * cuts' 0.2), its ink spans the full frame from the first frame, and the rightmost-lit reading sits on
+ * three constant plateaus (1535 / 2563 / 2799 px on the 60ft cut) which are encoder block boundaries
+ * rather than a travelling head. An asset with no readable clock-2 answer cannot be adopted (§9 A4/H24
+ * — a shape with no arrival is a defect, not a default), and the alternative would have been to invent
+ * a number for it. Also rejected: `jb2a.ranged_missile.001.blue` and `jb2a.pack_hound_missile` — both
+ * are four-variant blue MAGIC missiles, the wrong idiom for a launched warhead.
+ *
+ * ⛔ THE DETONATION MARK IS A FLASH, NOT THE RADIUS. `impactSquares` is a fixed drawn width per class
+ * and is deliberately NOT scaled to the resolved blast radius: the radius is drawn by the damage rail's
+ * own blast area (the circle the referee confirms), which appears on this same visual-impact clock, so
+ * scaling the sprite to it as well would draw the same fact twice. Both marks are decoded off the
+ * installed files — shrapnel bomb 700 ms (its ink fills its whole 800×800 frame, so a grid-unit width
+ * IS the drawn width), explosion 01 orange 1067 ms of CONTENT inside a 1367 ms clip, trimmed to the
+ * content end exactly as §9 E16 requires. Both widths are unsigned look calls (§8).
+ *
+ * ⛔ NO GUN REPORT IS BORROWED. A thrown grenade has no muzzle at all — `noMuzzleFlash` stands the
+ * native flash light down for the row, and `muzzle: null` means the lance is never drawn — and its
+ * "report" is the pin, not a discharge. The launcher keeps a flash because a launch tube has one.
+ *
+ * ⛔ EVERY NUMBER A REVIEWER MIGHT MOVE IS ON THE TWO ROWS ABOVE — one spec block, no second table
+ * (§9 A1). The per-band arrival ladders live where every other painted family's do, in
+ * TRACER_ARRIVAL_MS keyed by the tracer key, so `arrivalSpecFor` answers a delivery shot through the
+ * same call it answers a rifle shot.
+ *
+ * ─────────────────────────────── THE PLAN, RESOLVED ONCE ───────────────────────────────
+ * The gates a delivery payload changes are resolved HERE, before the loop, into one object — the
+ * standard's one idiom (§9, "the once-per-payload gate"), in its `per-payload` form since a delivery
+ * payload is one round by construction. Null for every ordinary shot, so every gate below it is a
+ * plain fall-through.
+ *
+ *   `flash`      — a launch tube lights; a hand does not.
+ *   `bleeds`     — FALSE for both. Blood belongs to a bullet that went into a body; a warhead ARRIVES
+ *                  at a place, and what it does to the bodies there is the blast's business (the
+ *                  detonation's own applications sound and mark themselves at the confirm).
+ *   `arrives`    — TRUE for both, and it is the one thing a delivery shot asserts over a bullet: the
+ *                  object gets THERE whatever the attack roll said. A missed throw is not a grenade
+ *                  that vanished — p.108 sends its true centre to the grenade table, and the damage
+ *                  rail's Scatter button is where that is resolved, on the referee's beat. So the
+ *                  picture draws the object landing at the point it was thrown at, and the area moves
+ *                  afterwards if the referee scatters it. Drawing a `missEndpoint` splay instead would
+ *                  put the object somewhere the resolution never looks.
+ *   `detonation` — what the arrival SOUNDS like, and the level it plays at. See DETONATION_SOUND.
+ */
+export function deliveryPlanFor(weaponClass) {
+  const row = FX_CLASSES[weaponClass];
+  const kind = row?.delivery;
+  if (!kind) return null;
+  return {
+    kind,
+    flash: !row.noMuzzleFlash,
+    bleeds: false,
+    arrives: true,
+    detonation: row.detonation ?? null,
+    detonationVolume: Number(row.detonationVolume) > 0 ? Number(row.detonationVolume) : DETONATION_VOLUME,
+  };
+}
 
 /**
  * ⛔⛔ THE ARRIVAL CHOKE — an ABSOLUTE cap on how wide a fanned round may be WHERE IT LANDS.
@@ -2803,6 +3080,63 @@ export function classCadenceMs(cls) {
   return Number.isFinite(own) && own > 0 ? own : SHOT_CADENCE_MS;
 }
 
+/* ────────────────── THE DRAWN-ROUND CAP — the ruled answer to load-dependent trailing ────────────────── */
+
+/**
+ * ⭐⭐ HOW MANY ROUNDS OF ONE VOLLEY A CLASS MAY DRAW. The report is unaffected: the ear gets every
+ * round, always. Only the PICTURE is bounded.
+ *
+ * ⛔ THE DEFECT, AND WHY THE OBVIOUS FIX WAS MEASURED AND REJECTED (2026-08-27). The shell class puts
+ * about three rounds' pictures on screen after its last report, and only on a LOADED scene — a corridor
+ * that has planted burning ground and is still firing. The mechanism is not the pacing: the audio phase
+ * (FX_AUDIO_PHASE) resolves ONCE per volley at round 0, by design, because a phase that moved per round
+ * would stretch the cadence — while the engine's create latency GROWS as elements accumulate. So the
+ * phase is always one step behind the accumulation, and ~550 ms of load latency over a 180 ms cadence is
+ * exactly the ~3 trailing rounds that were reported.
+ *
+ * The candidate fix was a PRE-ISSUE PIPELINE: issue round i's draw two ticks early carrying an
+ * engine-side delay, so the expensive creation is paid ahead of the tick it must appear on. That only
+ * works if the engine FRONT-LOADS creation at issue time. **It does not.** Measured on :30004 against a
+ * loaded canvas (the burning ground at its scene cap plus a main-thread stall injector), a bare
+ * one-effect Sequence:
+ *
+ *     delay 0    → engine report at ~231 ms, first frame at ~275 ms
+ *     delay 400  → engine report at ~689 ms, first frame at ~702 ms  (= 400 + ~300)
+ *
+ * The residual after the timer fires is the SAME latency as with no delay at all, so `.delay()` is a
+ * plain pre-creation wait and pipelining buys nothing but a longer queue. The ruled fallback ships
+ * instead, and this constant is it.
+ *
+ * ⛔ THE LAST ROUND IS NEVER WITHHELD, for the same two reasons `roundDropped` exempts it: the volley's
+ * final picture is the one a viewer is actually watching, and the settle tag rides the last round — a
+ * withheld last round would leave the apply window waiting on the fallback timer instead of on the
+ * engine. So a capped volley draws its FIRST `cap` rounds and its LAST one.
+ *
+ * ⚠ WHY 4 FOR THE SHELL CLASS, checkable rather than taste: every volley a pump or a burst actually
+ * fires at the table (1–3 shells) is untouched, and a long automatic volley — the only shape the report
+ * was ever made about — stops adding create work after four rounds, which is where the queue stops
+ * growing faster than the 180 ms cadence drains it. A class whose row is absent here is UNCAPPED, which
+ * is every other class: none of them was reported and none of them plants ground fire the way the shell
+ * does. ⏪ REVERT is this table: empty it and every round draws again.
+ */
+export const FX_DRAWN_ROUND_CAP = Object.freeze({
+  shotgun: 4,
+});
+
+/** Test seam of the same family as `_setDropLagMs` and `_setAudioPhase`, armed by nothing that ships:
+ *  force a budget for every class (0 = uncapped), or `null` to restore the table. It exists so a keeper
+ *  can measure the mechanisms the cap now MASKS — the pacing rule and the audio phase both express
+ *  themselves in rounds this budget would otherwise withhold. */
+let _drawnRoundCapOverride = null;
+export function _setDrawnRoundCap(n) { _drawnRoundCapOverride = (n === null || n === undefined) ? null : Math.max(0, Number(n) || 0); }
+
+/** The drawn-round budget for a class — 0 meaning "uncapped". Pure apart from the seam above. */
+export function drawnRoundCapFor(cls) {
+  if (_drawnRoundCapOverride !== null) return _drawnRoundCapOverride;
+  const own = Number(FX_DRAWN_ROUND_CAP[cls]);
+  return Number.isFinite(own) && own > 0 ? own : 0;
+}
+
 /* ══════════════════════════ Capability detection ══════════════════════════ */
 
 /** Is the Sequencer module installed, active, and exposing its Sequence constructor? */
@@ -3234,6 +3568,85 @@ export function fxHitSound(kind, { delayMs = 0, index = null, broadcast = true, 
   return out;
 }
 
+/* ══════════════════ Detonation audio — what a DELIVERED WARHEAD sounds like ══════════════════ */
+
+/**
+ * ⭐ THE BOOM, ON THE SAME CLOCK AS THE PICTURE OF IT (2026-08-27).
+ *
+ * A delivery shot's audio is a TWO-PART grammar, and both halves are already in `sounds/` — nothing is
+ * sourced, licensed or re-encoded by this unit, only wired:
+ *   · at the trigger pull — the class row's own `sound`: `grenade-pin` for a throw, `rocket-launch`
+ *     for a launch. That is the ordinary class report, played by `sfx()` from inside the loop like
+ *     every other class's, so it takes the payload's audio phase with it.
+ *   · at the VISUAL IMPACT — `explosion-big`, this element, hung on the identical `arriveIn` the
+ *     detonation MARK is hung on. The ear and the eye are told the same thing at the same instant,
+ *     which is the rule the impact-audio element was built to (docs/FX-RAIL.md §2).
+ *
+ * ⛔ IT IS THE RAIL THAT SOUNDS THE ARRIVAL, NOT THE APPLY, for the reason the impact element records:
+ * a blast's damage lands when the referee presses Confirm, which may be seconds after the object came
+ * down. A boom played there is not late by a frame, it is late by the whole action.
+ *
+ * ⚠ THIS IS NOT THE PER-BODY IMPACT. The bodies the blast catches still sound their own flesh/structure
+ * impacts when the detonation is applied, exactly as an explosive ROUND's victims always have — that is
+ * the apply seam's sound and it answers a different question ("this body was hit") from this one ("the
+ * warhead went off there"). The two are deliberately not merged.
+ *
+ * LEVELS: 0.85 thrown / 0.9 rocket, on the class rows beside the reports they follow. Both sit above
+ * the impact element's 0.55 and at or below the report level (0.8 default), which is the ordering a
+ * listener expects — a detonation is the largest event of the shot but must not clip past the reports
+ * the rest of the table is mixed against. ⚠ UNSIGNED BY EAR (docs/FX-RAIL.md §8); the knobs are
+ * `detonationVolume` on the two rows and this default under them.
+ */
+export const DETONATION_VOLUME = 0.85;
+
+/** Test seam of the `_setHitSoundSink` family: capture detonations instead of playing them. Armed by
+ *  nothing that ships — it exists so a keeper reads the boom's src/level/delay by VALUE rather than
+ *  listening for it. Consulted FIRST, ahead of any host audio state, for the reason recorded at
+ *  `fxHitSound` (a sink never reaches a device, so a locked context cannot be its business). */
+let _detonationSink = null;
+export function _setDetonationSink(fn) { _detonationSink = typeof fn === "function" ? fn : null; }
+
+/** The playable source for a class's detonation, or null when nothing is delivered for it. */
+export function detonationSoundSrc(weaponClass) {
+  const base = FX_CLASSES[weaponClass]?.detonation;
+  return base ? _deliveredSrc(base) : null;
+}
+
+/**
+ * Sound ONE detonation, `delayMs` from now. Same shape, same host constraints and the same reporting
+ * contract as `fxHitSound` — see that function for why the delay is a timer rather than a playback
+ * option, and why a locked audio context is skipped rather than awaited.
+ *
+ * `broadcast: false` by default and always in practice: this rides the performance score, so every
+ * client runs the fan-out and plays its own copy in phase with its own draws.
+ */
+export function fxDetonationSound(weaponClass, { delayMs = 0, volume = null, phaseMs = null, broadcast = false } = {}) {
+  const out = { played: false, weaponClass: weaponClass ?? null, src: null, volume: 0, delayMs: 0, phaseMs: 0, skipped: null };
+  if (!combatFxEnabled()) return { ...out, skipped: "disabled" };
+  const src = detonationSoundSrc(weaponClass);
+  if (!src) return { ...out, skipped: "asset" };
+  const captured = !!_detonationSink;
+  try { if (!captured && game?.audio?.locked) return { ...out, skipped: "locked" }; } catch (_e) { /* no audio layer */ }
+  const asked = Number(volume);
+  const level = Number.isFinite(asked) && asked > 0 ? asked
+    : (Number(FX_CLASSES[weaponClass]?.detonationVolume) || DETONATION_VOLUME);
+  const delay = Number(delayMs) > 0 ? Math.round(Number(delayMs)) : 0;
+  const phase = Number.isFinite(Number(phaseMs)) ? Math.max(0, Math.round(Number(phaseMs))) : 0;
+  out.played = true; out.src = src; out.volume = Number(Math.min(1, level).toFixed(4)); out.delayMs = delay; out.phaseMs = phase;
+  const fire = () => {
+    if (_detonationSink) { _detonationSink({ weaponClass, src, volume: out.volume, delayMs: delay, broadcast }); return; }
+    try {
+      Promise.resolve(foundry.audio.AudioHelper.play({ src, volume: out.volume, autoplay: true, loop: false, channel: "interface" }, broadcast))
+        .catch((err) => console.warn(`${SCOPE} | detonation audio play failed`, err));
+    } catch (err) {
+      console.warn(`${SCOPE} | detonation audio failed`, err);
+    }
+  };
+  const waitMs = delay + phase;
+  if (waitMs > 0) setTimeout(fire, waitMs); else fire();
+  return out;
+}
+
 /**
  * The once-per-payload plan for a fan-out's impacts: resolved BEFORE the loop, issued from inside it,
  * `per-round-capped` — the standard's second issue policy (§9, "the one idiom"), the same shape the
@@ -3486,13 +3899,29 @@ export function railSoundedImpacts(payload) {
   // un-updated caller takes.
   try {
     if (!combatFxEnabled() || !payload) return false;
+    // ⭐ A MUTED PAYLOAD ANSWERS TRUE (2026-08-27, the zone-crossing ruling's second half). fxMute
+    // means "this application owes NO presentation at all" — and this predicate's caller uses a
+    // FALSE answer as licence to sound the apply itself. Answering true is how the mute reaches the
+    // apply seam: the rail drew nothing AND the apply stays silent. The first half (the door check
+    // in fxWeaponFired) alone silenced only the rail, which was never what sounded a crossing — the
+    // keeper's red leg on the apply path is what surfaced this line.
+    if (payload.fxMute) return true;
     // The ruled fumble bail, by CLASS (2026-08-26). A rows-1–4 fumble is an ordinary miss: the fan-out
     // draws it and its corridor sounds its victims exactly as any other missed pattern does, so this
     // must NOT answer false for that class or the apply would sound a second set of impacts over the
     // rail's own. The other three classes drew nothing, so the apply keeps its own sound.
     if (fumbleStandsRailsDown(payload)) return false;
     const actor = actorForPayload(payload);
-    if (!weaponFxClass(resolveFiredWeapon(payload, actor))) return false;
+    const cls = weaponFxClass(resolveFiredWeapon(payload, actor));
+    if (!cls) return false;
+    // ⛔ A DELIVERED WARHEAD ANSWERS FALSE, and it is the one class where the honest answer is not the
+    // one `hitSoundPlanFor` would give. This rail sounded the DETONATION — "the warhead went off
+    // there" — which is a different event from "this body was hit". The bodies the blast catches are
+    // still owed their own impacts when the referee confirms it, exactly as an explosive ROUND's
+    // victims always have been, so the apply seam must keep its own sound. Placed with the other
+    // composition steps rather than folded into the plan factories, because the plan factories answer
+    // about a payload's IMPACTS and this is a statement about a payload's KIND.
+    if (deliveryPlanFor(cls)) return false;
     const shooter = shooterTokenForPayload(payload, actor);
     if (!shooter) return false;
     // The two flows never overlap, and each has exactly one plan factory — the same either/or the
@@ -6012,6 +6441,14 @@ export function weaponFxClass(weapon) {
   if (weapon.isRanged?.() === false) return null;
   const attack = String(sys.attackType ?? "").trim().toLowerCase();
   if (attack === "shotgun" || attack === "autoshotgun") return "shotgun";
+  // ⭐ DELIVERY BEFORE TYPE (2026-08-27), and for the identical reason the shotgun line above sits
+  // here: the weaponTYPE answers which SKILL a thing is fired with, not what it looks like leaving the
+  // shooter. Every grenade and launcher in the shipped catalogue is `weaponType: "Heavy"`, so the type
+  // map drew all of them as a 20 mm cannon — a thrown grenade with a muzzle flash and a bullet tracer.
+  // The ATTACK type is the field that answers, and the split between the two pictures is asked of the
+  // ITEM (does it have a round in the tube — combat/area-delivery.js `areaDeliveryIsLaunched`) rather
+  // than of a name list or a range number.
+  if (areaDeliveryKind(attack)) return areaDeliveryIsLaunched(weapon) ? "rocket" : "thrown";
   const raw = String(sys.weaponType ?? "").trim().toLowerCase();
   if (!raw || raw === "melee") return null;
   return WEAPON_TYPE_TO_CLASS[raw] ?? null;
@@ -6451,8 +6888,14 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // `fumbleClass` is REPORTED, not decided here: it is the payload's own field (derived once at the
   // seam) and it rides the result so a reader — the keeper, a bench run — can tell WHICH ruled fumble
   // produced a silent return, rather than only that one did. Null on every other payload.
-  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false, fumbleClass: null };
+  const result = { shots: 0, hits: 0, flashes: 0, motes: 0, smokePuffs: 0, turnedDeg: null, weaponClass: null, cadenceMs: SHOT_CADENCE_MS, skipped: null, ammoKey: null, groundFire: null, patternFire: null, blood: null, volley: null, arrival: null, impacts: null, hitAudio: null, delivery: null, detonationAudio: null, dropped: 0, maxLagMs: 0, loopMs: 0, remote, scoreEmitted: false, fumbleClass: null };
   if (!combatFxEnabled()) return { ...result, skipped: "disabled" };
+  // ⭐ A MUTED PAYLOAD IS A DAMAGE RE-EMISSION, NOT A SHOT (2026-08-27, user ruling). The suppressive
+  // zone's failed save re-enters this hook only to reach the damage pipeline — no round is arriving on
+  // screen, so the rail owes it nothing: no report, no impact audio, no draw. The field is the
+  // emitter's own declaration (damage-hooks.js `_executeSuppressionEvasion`), checked at the door
+  // before any class resolution so nothing downstream ever sees the payload.
+  if (payload?.fxMute) return { ...result, skipped: "muted" };
   const actor = actorForPayload(payload);
   const weapon = resolveFiredWeapon(payload, actor);
   const weaponClass = weaponFxClass(weapon);
@@ -6518,6 +6961,11 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // so a key resolved there would have to be invented. See ammoFxKeyOf for id-first / fingerprint.
   const ammoKey = ammoFxKeyOf(payload);
   const ammoEntry = ammoFxEntry(weaponClass, ammoKey);
+
+  // ⭐ THE DELIVERED-WARHEAD PLAN, resolved ONCE here beside the load and threaded into the four gates
+  // it moves (the flash, the blood, the impact audio and whether the object arrives). Null for every
+  // ordinary shot, so each of those gates is a plain fall-through. See deliveryPlanFor.
+  const delivery = deliveryPlanFor(weaponClass);
 
   const shots = shotCountOf(payload);
   const hits = Math.min(hitCountOf(payload), shots);
@@ -6771,7 +7219,11 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   // still never tagged, so it can neither delay a round nor hold the damage window.
   // ⛔ AND NEVER FOR A CLIPPED SHOT (2026-08-26). Blood needs a body the round reached; a round that
   // stopped at a wall reached masonry. The gate is the plan, not a second opinion about the geometry.
-  const bleeds = goreEnabled() && hits > 0 && !!target && !bearsStructuralSdp(target.actor) && !wallClip;
+  //  5. ⭐ AND NOT A DELIVERED WARHEAD (2026-08-27). Blood belongs to a round that went INTO a body; a
+  //     grenade arrives at a PLACE, and what it does to the bodies there is the detonation's business —
+  //     the blast's own applications mark and sound themselves when the referee confirms it. A lobbed
+  //     object that landed on somebody's square is not a wound yet.
+  const bleeds = goreEnabled() && hits > 0 && !!target && !bearsStructuralSdp(target.actor) && !wallClip && !delivery;
   let blood = bleeds ? { queued: 0, key: BLOOD_SPLATTER.key, squares: BLOOD_SPLATTER.squares,
     tokenId: target.id, cap: BLOOD_SPLATTER.maxPerPayload } : null;
 
@@ -6803,7 +7255,13 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   const patternAudio = patternAudioPlanFor(payload, shooter);
   // ⭐ A CLIPPED ROUND SOUNDS LIKE THE WALL IT STOPPED ON, not like the body it never reached — the
   // plan's own `kind`, resolved with the clip so the ear and the eye are told the same thing.
-  const hitAudio = patternAudio ? null : hitSoundPlanFor(target, wallClip?.kind ?? null);
+  // ⭐ A DELIVERED WARHEAD STANDS THE BODY-IMPACT PLAN DOWN and sounds its DETONATION instead — the
+  // third mutually-exclusive answer to "what does this payload's arrival sound like", beside the
+  // corridor's plan and the target-token one. The boom is not a hit on a body, so it takes neither the
+  // flesh/structure choice nor the per-hit cap: one object, one arrival, one report, issued on the
+  // same `arriveIn` the detonation MARK takes (see DETONATION_VOLUME).
+  const hitAudio = (patternAudio || delivery) ? null : hitSoundPlanFor(target, wallClip?.kind ?? null);
+  const detonationAudio = delivery ? { queued: 0, cap: 1, weaponClass, volume: delivery.detonationVolume } : null;
   let flashes = 0;
   let smokePuffs = 0;
   // ⏪ INVERTED (FR#22). This gate used to read "a burst always smokes"; it now reads the opposite. Our
@@ -6832,6 +7290,12 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
   const loopStart = Date.now();
   let dropped = 0;
   let maxLagMs = 0;
+  // ⭐ THE DRAWN-ROUND BUDGET for this class (FX_DRAWN_ROUND_CAP — the measured answer to the shell
+  // class's load-dependent trailing). `drawn` counts rounds handed to the engine; `drawCapped` counts
+  // rounds whose PICTURE the budget withheld. The report is not on this budget and never was.
+  const drawnCap = drawnRoundCapFor(weaponClass);
+  let drawn = 0;
+  let drawCapped = 0;
   // ⭐ THE PRESENTATION CLOCK'S BOOKKEEPING (2026-08-26 — the whole mechanism is at
   // effectiveRoundLagMs). `lastIssue` is when the previous round was handed to the engine and what the
   // engine's creation count stood at then; the next iteration reads how long it took the engine to
@@ -6874,6 +7338,19 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       if (i === 1) _observeEngineLatency(_drawObserved.firstAfterMarkMs || NaN);
     }
     const isLast = i === shots - 1;
+    // ⭐ DOES THIS ROUND ARRIVE — the one question the arrival family (mark, spray, report) is gated on,
+    // asked ONCE per round so the three gates below cannot answer it differently.
+    //
+    // For a bullet it is what it has always been: the hits are the LEADING rounds of the burst, so
+    // `i < hits` is the round that landed on something.
+    // ⛔ FOR A DELIVERED WARHEAD IT IS ALWAYS TRUE, and that is a rules fact rather than a look choice.
+    // A missed throw is not a grenade that vanished: CP2020 p.108 sends its true centre to the grenade
+    // table, and the damage rail resolves that on the referee's beat with the blast area's own Scatter
+    // button. So the object is drawn landing where it was thrown, and the AREA moves afterwards if the
+    // referee scatters it. Splaying the object to a `missEndpoint` instead would put the picture
+    // somewhere the resolution never looks — the two-rails-two-answers defect this file has paid for
+    // twice already.
+    const landed = delivery ? delivery.arrives : (i < hits);
     // ⭐ THE DROP, and it takes the WHOLE round — its audio with its picture. The first build of this
     // rule kept the audio and refused only the sprites, on the reading that the ear should still get
     // every round; the rig refused that reading by measurement. Because a starved loop reaches several
@@ -6944,6 +7421,14 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       // what a listener hears are one event. Its own cap, for the reason at HIT_SOUND_MAX_PER_PAYLOAD.
       // The queued index rides the variance ladder, so four impacts are four levels rather than four
       // copies of one waveform.
+      // ⭐ THE BOOM, on the identical clock. It is issued from inside `markAndBleed` beside the impact
+      // audio it replaces — the same `arriveIn`, the same payload phase — so a reader looking for
+      // "what does this payload sound at arrival" finds all three answers (corridor, body, warhead) in
+      // one place. Capped at one for the payload: a warhead detonates once.
+      if (detonationAudio && detonationAudio.queued < detonationAudio.cap) {
+        fxDetonationSound(detonationAudio.weaponClass, { delayMs: arriveIn, volume: detonationAudio.volume, phaseMs: audioPhase });
+        detonationAudio.queued++;
+      }
       if (hitAudio && hitAudio.queued < hitAudio.cap) {
         // `broadcast: false` — a RAIL impact is scored (MSG_SCORE): every client performs this same
         // loop, so the play is local and in phase with this client's own draws.
@@ -6965,10 +7450,26 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     }
     if (refused) {
       dropped++;
-      if (shooter && i < hits) markAndBleed(true);
+      if (shooter && landed) markAndBleed(true);
       continue;
     }
     sfx(weaponClass, { burst, delayMs: audioPhase });
+    // ⭐⭐ THE DRAWN-ROUND CAP, and it sits HERE — after the report, before the picture — because that
+    // placement IS the ruling: the ear keeps every round, the eye does not (see FX_DRAWN_ROUND_CAP for
+    // the measurement that chose this over a pre-issue pipeline). A withheld round keeps its ARRIVAL
+    // family too, exactly as a dropped round does and for the same reason: a mark and a spray are one
+    // sprite each at the far end of the shot, they are what says the round landed, and they are not
+    // what creates the backlog.
+    // ⛔ `!isLast` — the last round always draws. It carries the settle tag, so withholding it would
+    // leave the apply window waiting on the fallback timer instead of on the engine.
+    if (!isLast && drawnCap > 0 && drawn >= drawnCap) {
+      drawCapped++;
+      if (shooter && landed) markAndBleed(true);
+      // RE-STAMP, for `refused`'s reason: this round queued nothing, so it is not evidence about the
+      // renderer, and leaving the stale instant would have every later round measured against it.
+      lastIssue = { at: Date.now(), seen: _drawObserved.count };
+      continue;
+    }
     // Flash + sprite + tracer all start in the SAME tick as this shot's audio, and none of them is
     // awaited: the loop's timer is the cadence a viewer and a listener both read. Every round of a
     // burst still announces its own flash — a round is never silently dropped on the way out — and what
@@ -7011,7 +7512,13 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       // Only round 0: every later round is measuring a queue rather than the engine (see the reading
       // site above and _markDrawObservation).
       if (i === 0) _markDrawObservation();
-      fxShot(shooter, target, { weaponClass, hit: i < hits, settleTag: isLast ? settleTag : null, ammoKey,
+      drawn++;   // this round's picture is going to the engine — the budget above counts these
+      // ⭐ `light` — A HAND HAS NO MUZZLE. The native flash is the one element of a shot that is not
+      // Sequencer's, so it cannot be stood down by leaving a key off the row: it is an argument, and
+      // the plan carries the answer (a launch tube lights, a throw does not). Every other class passes
+      // the default and is byte-identical to before.
+      fxShot(shooter, target, { weaponClass, hit: landed, light: delivery ? delivery.flash : true,
+        settleTag: isLast ? settleTag : null, ammoKey,
         volley, arrivalMs, coneRad: choke.coneRad, shotSeed: shotSeedFor(i), aimPoint: aim, lightHoldMs,
         // THE EXEMPT CLIP, handed down like the arrival and the cone: resolved once for the payload,
         // applied per RAY inside fxShot (six pellets meet a wall at six points).
@@ -7022,7 +7529,7 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
       // burst (the same assignment fxShot's `hit` argument uses one line above), so `i < hits` is the
       // round that landed. Issued AFTER the round's own sequence so the ordering on the wire reads the
       // way the shot does.
-      if (i < hits) markAndBleed(false);
+      if (landed) markAndBleed(false);
     }
   }
   // The last round has left the muzzle; what remains on screen is its terminal elements. The watch is
@@ -7055,6 +7562,12 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     // same reason the mark tally is: "an N-round burst on a vehicle sounds M structure impacts" is the
     // claim, and this is the number that says whether it held.
     hitAudio, patternAudio,
+    // ⭐ THE DELIVERED WARHEAD, by value: which of the two pictures this payload took and whether its
+    // boom was issued. Reported for the same reason the choke and the clip are — a picture that can
+    // only be checked by watching the canvas is a picture nothing can assert. Null on every ordinary
+    // shot, so a reader can tell a delivery payload from a bullet without inspecting the class name.
+    delivery: delivery ? { kind: delivery.kind, flash: delivery.flash, arrives: delivery.arrives } : null,
+    detonationAudio,
     // WHERE THIS PAYLOAD WAS POINTED, reported rather than inferred — the point every element above
     // was drawn along, the distance that banded it, and whether the shooter DECLARED that corridor
     // (combat/spread-placement.js) or it was read off the aimed-at token. Reported for the same reason
@@ -7075,6 +7588,11 @@ export async function fxWeaponFired(payload, { remote = false } = {}) {
     // schedule clock alone would have kept, and what the preload cost. The claim "a twenty-round volley
     // holds its cadence against the drawn frames" is exactly these numbers.
     dropped, maxLagMs, maxPresentationLagMs, presentationDrops, preload,
+    // ⭐ THE DRAWN-ROUND BUDGET, by value: how many rounds this class may draw, how many it drew, and
+    // how many pictures the budget withheld. Reported for the reason the pacing is — "a long shell
+    // volley draws at most N pictures and still sounds every round" is a claim, and these are the
+    // numbers that say whether it held.
+    drawnRoundCap: drawnCap, drawnRounds: drawn, drawCapped,
     // ⭐ THE PHASE THIS VOLLEY'S AUDIO WAITED, and the estimate it was drawn from — reported so the
     // keeper can pin "every report of one volley took the SAME phase" and watch the estimate converge
     // on a real client, rather than inferring either from a stopwatch.
@@ -7213,6 +7731,12 @@ export function fxPreloadManifest() {
   for (const row of Object.values(FX_CLASSES)) {
     if (row?.muzzle) keys.add(row.muzzle);
     if (row?.tracer) keys.add(row.tracer);
+    // ⭐ A ROW'S OWN PROMOTED IMPACT (2026-08-27). The two delivery rows name their detonation MARK on
+    // the row rather than taking HIT_CONFIRM's, so a manifest that scraped only the muzzle and the
+    // tracer would leave the loudest, largest sprite of the whole shot to pay its fetch+decode ON
+    // SCREEN — which is the exact stall this manifest exists to prevent. Generic, so any later row
+    // that promotes its impact is covered the moment it is authored.
+    if (row?.impactKey) keys.add(row.impactKey);
   }
   for (const entry of Object.values(AMMO_FX)) {
     for (const v of Object.values(entry ?? {})) {
@@ -7221,7 +7745,9 @@ export function fxPreloadManifest() {
   }
   const sounds = new Set();
   for (const row of Object.values(FX_CLASSES)) {
-    for (const base of [row?.sound, row?.soundBurst]) {
+    // `detonation` joins the report and its burst alternate for the same reason — it is a row-named
+    // asset that plays as part of an ordinary shot on this rail.
+    for (const base of [row?.sound, row?.soundBurst, row?.detonation]) {
       const src = base ? fxSoundSrc(base) : null;
       if (src) sounds.add(src);
     }

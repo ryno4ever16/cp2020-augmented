@@ -1,6 +1,21 @@
 /**
  * ══════════════════════ PERSISTENT CONDITION OVERLAYS ══════════════════════
  *
+ * ⛔⛔ PARKED — NOT WIRED IN 1.2.0 (user ruling 2026-08-27, the pre-ship walk). The five overlay rows
+ * below are half-baked as they stand: the death ring "doesn't glow and is almost invisible in dark
+ * scenes", and the rest were judged the same way in one pass. So `registerStatusFx` is no longer called
+ * from `module/cp2020-augmented.js` — the import AND the `wire("condition overlays", …)` line were both
+ * removed there, and re-wiring is exactly those two lines coming back. Nothing in this file changed with
+ * the ruling, and nothing here should be treated as dead: it is a working feature that is not being
+ * shipped yet, to be reconsidered in a future release once the look is worth a table's eyes.
+ *
+ * ⚠ CONSEQUENCES A READER WILL MEET. Its keeper (`tests/cp2020-augmented-status-fx.mjs`) marks its
+ * overlay legs SKIPPED-BY-RULING rather than deleting them, so the day the wiring comes back the
+ * verification comes back with it, and the review bench's condition-row parity leg prints its reading
+ * instead of asserting it. ⭐ NO `lang/en.json` KEYS ARE ORPHANED BY THE PARKING — verified by search:
+ * this file localizes nothing at all. It draws sprites and stamps names; every visible string the
+ * feature ever needed belonged to the mechanisms that RAISE the conditions, and those all still ship.
+ *
  * A looping sprite that rides a figure for exactly as long as the condition that caused it is on that
  * figure, and goes the moment it clears. Nothing here is written anywhere: the overlays are drawn by
  * each client for itself, on the scene it is looking at, and a reload rebuilds them from the

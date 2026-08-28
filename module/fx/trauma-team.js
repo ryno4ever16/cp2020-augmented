@@ -64,11 +64,14 @@ const MSG_END = "traumaTeamEnd";
  */
 export const TRAUMA_TEAM = Object.freeze({
   /* ── the marked area ── */
-  // In grid squares. A 4 × 6 footprint is two figures wide and long enough that an airframe drawn over
-  // it reads as an airframe rather than a blob; on this system's 2 m squares that is 8 m × 12 m, which
-  // is the order of a real medium lifter. Revert: any two numbers.
-  zoneWidthSquares: 4,
-  zoneLengthSquares: 6,
+  // In grid squares. A 6 × 4 footprint is two figures deep and long enough that an airframe drawn over
+  // it reads as an airframe rather than a blob; on this system's 2 m squares that is 12 m × 8 m, which
+  // is the order of a real medium lifter. ⭐ LANDSCAPE by user ruling (2026-08-27, first live review:
+  // "almost completely perfect except that it needs to be rotated 90 degrees") — the whole formation
+  // swapped axes; the pulse ring's 7.2 frame still clears the long axis, which is 6 either way.
+  // Revert: any two numbers.
+  zoneWidthSquares: 6,
+  zoneLengthSquares: 4,
   // ⭐ THE PLATE IS SIZED AGAINST ITS OWN INK, NOT ITS FRAME (standard §A/4). Decoded off the installed
   // clip: `ZoningSquare01Out_..._Loop_600x600.webm` is 73 frames at 24 fps (3 042 ms) and its border
   // TRAVELS OUTWARD, reaching **0.893 × 0.895** of its own 600 × 600 frame at its widest. Drawn at the
@@ -90,8 +93,9 @@ export const TRAUMA_TEAM = Object.freeze({
   // hanging in the air is its planform and its shadow, so that is what is drawn: a dark rounded body
   // with a lit edge. The asset ask is recorded in docs/FX-RAIL.md §8 — with real art this becomes one
   // `.file()` call and the shape goes.
-  airframeWidthSquares: 2.4,
-  airframeLengthSquares: 4.6,
+  // Axes follow the zone's landscape ruling above: the long dimension is the WIDTH now.
+  airframeWidthSquares: 4.6,
+  airframeLengthSquares: 2.4,
   // A lozenge rather than a slab: a rounded planform is what an aerodyne looks like from directly
   // above, and a hard-cornered rectangle read as a hole in the map on the first capture.
   airframeCornerSquares: 0.8,
