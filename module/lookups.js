@@ -2,6 +2,15 @@
 // Any given string value is the same as its key in the localization file, and will be used for translation
 import { cloneSystemDefault, DEFAULT_HIT_LOCATIONS, STAT_KEYS } from "./constants.js";
 import { apiHelper } from "./system-api.js";
+// ⚠ THIS IS A DELIBERATE IMPORT CYCLE, AND IT IS SAFE FOR ONE STATED REASON. `combat/area-delivery.js`
+// imports `caliberMatches` / `normalizeCaliber` back out of this file, so the two modules reference each
+// other. Neither one USES the other at module-evaluation time — every reference is inside a function
+// body, and both sides' bindings are plain `export function` declarations, which ESM initialises during
+// instantiation rather than during evaluation. So whichever of the two Foundry happens to load first,
+// the other's names are already bound by the time anything calls them. Do NOT add a top-level constant
+// here that is computed from an area-delivery export: that WOULD run during evaluation and would read
+// undefined on one of the two load orders.
+import { weaponDetonates } from "./combat/area-delivery.js";
 
 // Prefer the base system's lookup helpers (game.cyberpunk.api.lookups) at call time; fall back to the
 // local copies (the _-prefixed functions below). See module/system-api.js. (Data tables stay local.)
@@ -720,6 +729,121 @@ export const MARTIAL_ACTION_CATALOG_UUID = Object.freeze({
   Kick:   "Compendium.cyberpunk2020.melee.Item.TF0nBrjofPX2RiuG",
 });
 
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+ * UNARMED MANEUVER DAMAGE — mirrored VERBATIM from the upstream `cyberpunk2020` system's
+ * v1.2.0-dev branch (commit 09e15ddc, his D200): the three tables, the two constants and the two
+ * resolver functions below are his shape and his values, copied rather than re-derived so that a
+ * base system which later ships them collides with an identical answer instead of a rival one.
+ *
+ * PROVENANCE, per value:
+ *   · `unarmedManeuverDamage` (Strike 1D6/2 · Kick 1D6 · Throw 1D6 · Choke 1D6) — Core p.111,
+ *     TEXT-LAYER verified on our side (the extraction recorded in memory
+ *     `reference-martial-defense-raw`; ledger #23as / #23bf).
+ *   · `JumpKick 1D6+5` and `JUMP_KICK_TO_HIT = -5` — Pacific Rim (FNFF2) idx145 / p.144,
+ *     text-layer verified on our side.
+ *   · `ramDamageFormula` — the Pacific Rim p.143 chart. ANCHOR-VALIDATED against the book's own
+ *     worked example (BODY 12 → "3D6+4"); the remaining rows are his primary-verified
+ *     transcription, adopted on the soft-defer-to-his-data rule.
+ *   · `Punch 1D6/2` and `Cast 1D6` — his primary-verified transcription only. OUR INDEPENDENT
+ *     EYES ARE STILL PENDING on those two values.
+ *
+ * Why the additive column of the Ram chart is NOT a second BODY bonus: at every printed row it is
+ * exactly `strengthDamageBonus(BODY)` (checked row by row against the local copy below). The base
+ * system composes martial damage as `<item damage> + @strengthBonus + @martialDamageBonus`, so a
+ * caller that hands it a full chart row would count BODY twice — see `unarmedStandInDamage`.
+ * ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The four maneuvers the CORE rules price as a formula of their own. Every other unarmed action
+ * either deals no damage or belongs to the FNFF2 set below.
+ */
+export const unarmedManeuverDamage = {
+  Strike: "1D6/2",
+  Kick: "1D6",
+  Throw: "1D6",
+  Choke: "1D6"
+};
+
+/**
+ * FNFF2's extra unarmed maneuvers. No corebook line covers any of them, so they sit behind the same
+ * ruleset toggle the rest of the FNFF2 layer does (`isFnff2Enabled`). Ram is absent because its
+ * damage is a chart on the attacker's own BODY — `ramDamageFormula`.
+ */
+export const unarmedManeuverDamageFNFF2 = {
+  Punch: "1D6/2",
+  JumpKick: "1D6+5",
+  Cast: "1D6"
+};
+
+/**
+ * The Jump Kick's automatic to-hit penalty. Priced WITH the maneuver rather than after it: the
+ * `1D6+5` alone would strictly dominate a plain Kick, and the book states the two together.
+ */
+export const JUMP_KICK_TO_HIT = -5;
+
+/**
+ * Ram's damage, by the attacker's own BODY. The chart's last printed row is "each + : each +1D6",
+ * which is why a BODY past the top band keeps gaining dice rather than flattening.
+ *
+ * @param {number} body The attacker's BODY total
+ * @returns {string} A rollable formula (dice AND the chart's additive column)
+ */
+export function ramDamageFormula(body) {
+  const bod = Math.max(2, Math.floor(Number(body) || 0));
+  if (bod <= 2) return "1D6-2";
+  if (bod <= 4) return "1D6-1";
+  if (bod <= 5) return "1D6";
+  if (bod <= 7) return "2D6";
+  if (bod <= 9) return "2D6+1";
+  if (bod <= 10) return "2D6+2";
+  if (bod <= 12) return "3D6+4";
+  if (bod <= 14) return "3D6+6";
+  if (bod <= 15) return "3D6+8";
+  return `${4 + Math.max(0, bod - 20)}D6+8`;
+}
+
+/**
+ * What one unarmed maneuver rolls, or `undefined` where neither table gives it a formula — which
+ * leaves the caller's own damage untouched.
+ *
+ * @param {string} action A `martialActions` value
+ * @param {number} body   The attacker's BODY total, for the one entry that reads it
+ * @returns {string|undefined}
+ */
+export function unarmedManeuverFormula(action, body) {
+  if (unarmedManeuverDamage[action]) return unarmedManeuverDamage[action];
+  if (!isFnff2Enabled()) return undefined;
+  if (action === martialActions.ram) return ramDamageFormula(body);
+  return unarmedManeuverDamageFNFF2[action];
+}
+
+/**
+ * MODULE-OWNED WIRING HELPER (not upstream's): the damage string to write on the empty-handed
+ * stand-in item so that what the base system finally ROLLS is the table value.
+ *
+ * The base builds `<item damage> + @strengthBonus + @martialDamageBonus`, and `@strengthBonus` is
+ * `strengthDamageBonus(BODY)`. For every maneuver but Ram that is exactly the HH(BODY) the rules
+ * add on top of a flat die, so the table value is written through unchanged. Ram's chart already
+ * HAS that bonus in its additive column, so the column is removed here and the base's own append
+ * puts it back — one BODY bonus, not two. (Upstream solves the same double-count inside its own
+ * `__martialBonk`, which a module cannot reach.)
+ *
+ * @param {string} action A `martialActions` value
+ * @param {number} body   The attacker's BODY total
+ * @returns {string|undefined} damage to stamp on the stand-in, or undefined to leave it alone
+ */
+export function unarmedStandInDamage(action, body) {
+  const formula = unarmedManeuverFormula(action, body);
+  if (!formula) return undefined;
+  if (action !== martialActions.ram) return formula;
+  const bonus = Number(strengthDamageBonus(body)) || 0;
+  const dice = formula.replace(/[+-]\d+$/, "");
+  const signed = bonus > 0 ? `+${bonus}` : (bonus < 0 ? String(bonus) : "");
+  // Only strip when the additive column IS the strength bonus it is documented to be; anything
+  // else stays whole rather than being silently rewritten.
+  return `${dice}${signed}` === formula ? dice : formula;
+}
+
 export const MARTIAL_ART_KEY_BY_ID = Object.fromEntries(
   Object.entries(MARTIAL_ART_ID_BY_KEY).map(([k, id]) => [id, k])
 );
@@ -1145,6 +1269,28 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
     // Saved attack options: pre-fill the weapon's last-used fire mode, if still a valid choice.
     const savedFireMode = savedOptions?.fireMode;
     const fireModeDefault = fireModes.includes(savedFireMode) ? savedFireMode : fireModes[0];
+    // ⛔ A CALLED SHOT ON A WEAPON THAT DETONATES IS A PAID NO-OP, so the row is not offered.
+    //
+    // THE MECHANISM, not the fiction: the base's own attack builder charges for this row —
+    // `targetAreaMod = attackMods.targetArea ? -4 : 0` (systems/cyberpunk2020/module/item/item.js) is
+    // folded straight into the to-hit formula — and the thing it buys is that the DECLARED location
+    // takes the damage instead of a rolled one. For a detonating delivery there is no such damage to
+    // steer: the payload leaves the single-target apply entirely (`payloadDetonates` routes it to the
+    // p.108 blast flow), and that flow rolls a location PER FIGURE it catches. Grepped, and it is a
+    // closed answer: no module blast path reads `targetArea` anywhere. So on a grenade, a launcher or a
+    // missile the row was a −4 to hit in exchange for a location line the card prints and nothing acts
+    // on — the shooter paid for display.
+    //
+    // ⭐ REMOVED FROM THE ROWS, NOT HIDDEN IN CSS. The dialog renders what this returns and submits what
+    // it rendered; a row hidden with a class is still a field, still carries `defaultValue`, and can
+    // still be restored from saved options — i.e. it can still be submitted and still be charged for.
+    // A row that is not in the array cannot be. Nothing else changes: `targetArea` defaults to "" for a
+    // submission that never carried it, which is exactly what the base reads as "no called shot", and
+    // no i18n string is added or retired (this is a subtraction).
+    //
+    // ⏪ REVERT is this one conditional spread. The MELEE and MARTIAL rows (below) keep theirs — those
+    // weapons have no blast flow to route into, and their damage really does land where it is declared.
+    const detonates = weaponDetonates(weapon);
     return [
         [{
             localKey: "FireMode",
@@ -1172,13 +1318,13 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
                 return { value: x, localKey: "Rounds", localData: {rounds: x}}
             }),
         },
-        {
+        ...(detonates ? [] : [{
             localKey: "TargetArea",
             dataPath: "targetArea",
             defaultValue: "",
             choices: defaultTargetLocations,
             allowBlank: true
-        },
+        }]),
         {localKey:"Ambush", dataPath:"ambush",defaultValue: false},
         {localKey:"Blinded", dataPath:"blinded",defaultValue: false},
         {localKey:"DualWield", dataPath:"dualWield",defaultValue: false},
@@ -1216,15 +1362,29 @@ export function rangedModifiers(weapon, targetTokens=[], savedOptions={}) {
         // its DC formula assumes, its rounds cap at min(ROF, shots left), its target count floors at 1);
         // ours had dropped everything but the rounds pair. Restored to his numbers, and his
         // `suppressive-field` selector classes with them so both dialogs address the rows the same way.
-        // ⭐ THE CEILING (2026-08-27): a zone wider than the burst's own round count prices a save the
-        // formula can no longer state — rounds ÷ width falls below 1 and only the floor at 1 holds it
-        // up — so every metre past that is free ground. `roundsFiredMax` is the widest burst this weapon
-        // and magazine can produce, which is the widest zone that can ever be honest; the dialog then
-        // tightens it further to the rounds actually entered (module/dialog/modifiers.js). The canvas
-        // preview cannot re-size any more — its wheel turns the square — so the declaration is the one
-        // place the bound belongs.
+        // ⏪⭐⭐ THE CEILING IS RETIRED (2026-08-27), and by the upstream author's own ruling rather than
+        // by a change of mind here. It shipped for one day: a zone wider than the burst's own round
+        // count prices a save the formula can no longer state — rounds ÷ width falls below 1 — so the
+        // width was bounded at `roundsFiredMax`, the dialog tightened it further to the rounds actually
+        // entered, and the placement wheel stopped at the same number.
+        //
+        // The reading that supersedes it came back with PR #46 (landed upstream as `156c5c7`, reworked
+        // by him in `d639eaf0`), stated as a house principle: **"this system prefers showing a bad
+        // choice over refusing it."** So the width now floors at the book's 2 m and is OPEN above it,
+        // here, in the dialog validator, and on the canvas wheel — and the save the over-wide zone earns
+        // is DISPLAYED rather than propped up: `_dcFor` lost its `max(1, …)` in the same pass, so the
+        // readout says **0** while the shooter is still scrolling. A save of 0 is not a broken number —
+        // the evasion roll's minimum is 1, so everybody crossing passes — it is the bad choice, shown.
+        //
+        // ⛔ THE SAVE HAD **FOUR** FLOORS, and every one of them had to go or the readout and the plant
+        // disagreed about the same zone: `_dcFor`'s `max(1, …)` (suppressive-placement.js), the plant's
+        // `Math.max(1, … || 1)` and the evasion prompt's `|| 1` (damage-hooks.js), and — the silent one,
+        // which is why the first three looked like they had not worked — the behaviour DataModel's
+        // `saveDC: NumberField({ min: 1 })` (suppressive-zone-behavior.js), which clamped the honest 0
+        // back to 1 on write. Its `initial` stays 1 so a hand-authored lane still opens at a real save.
+        // ⏪ REVERT is this row's `max:`, the dialog validator's ceiling, the wheel's cap, and those four.
         {localKey:"FireZoneWidth",  dataPath:"zoneWidth",  dtype:"Number", defaultValue: 2,
-         min: 2, max: roundsFiredMax, step: 1, extraClasses: "suppressive-field suppressive-zone-width"},
+         min: 2, step: 1, extraClasses: "suppressive-field suppressive-zone-width"},
         {localKey:"RoundsFiredLbl", dataPath:"roundsFired", dtype:"Number", defaultValue: roundsFiredMax,
          min: 1, max: roundsFiredMax, step: 1, extraClasses: "suppressive-field suppressive-rounds-fired"},
         {
