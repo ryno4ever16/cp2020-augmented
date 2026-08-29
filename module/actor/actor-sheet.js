@@ -10,7 +10,7 @@ import { rollFacedown as cpRollFacedown, rollRecognition as cpRollRecognition } 
 import { getHtmlElement, getRichEditorHTML, itemFromDropData, saveRichEditorHTML } from "../compat.js";
 import { isUnreadableNumberField, refuseUnreadableNumberFields, refuseOutOfRangeNumberFields } from "../form-number-guard.js";
 import { getWeaponLongRange, resolveAttackRange } from "../combat/rangefinding.js";
-import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates, areaDeliveryKind } from "../combat/area-delivery.js";
+import { damageFormulaIsRollable, warheadDamageFor, weaponDetonates, areaDeliveryKind, wordWarheadOf, WORD_WARHEAD_FORMULA } from "../combat/area-delivery.js";
 import { attackModProviders, skillModProviders, statModProviders, gearModGroup, gearModSum } from "../mech/roll-mods.js";
 import { activeInfluencesFor, statContributionsFor } from "../mech/status.js";
 import { addictionStateFor, clearAddictionFor, clearDrugMarker } from "../mech/drug.js";
@@ -1235,8 +1235,9 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
    * The whole ladder — loaded round, then an owned Fragmentation round, then the module pack's own
    * entry — lives in combat/area-delivery.js `warheadDamageFor`, so the MISS path prices the same shot
    * the same way. The message below is what is left when the ladder finds no round anywhere, and for
-   * every weapon the ladder does not cover (a gas grenade IS its own warhead; see
-   * `defersDamageToGrenadeRound` for the closed enumeration).
+   * every weapon neither the ladder nor the word-warhead substitution covers (see
+   * `defersDamageToGrenadeRound` for the ladder's closed enumeration, and `wordWarheadOf` for the
+   * word family — "Stun", "Dazzle", "Sonic", "Deaf" and "Blind" are still refused, gas no longer is).
    *
    * ⚠ AN EMPTY DAMAGE STRING IS DELIBERATELY NOT REFUSED. The defect is a WORD where a formula
    * belongs; a weapon with nothing written on it is a different case with the base's own answers
@@ -1304,7 +1305,23 @@ export class CyberpunkActorSheet extends HandlebarsApplicationMixin(foundry.appl
     try {
       if (!printed || damageFormulaIsRollable(printed)) return await roll();
 
-      const round = await warheadDamageFor(item);
+      // ⭐⭐ WHAT GETS SUBSTITUTED FOR THE WORD, and there are now TWO kinds of answer.
+      //
+      // ① THE ROUND'S FORMULA, for a tube whose damage column says the round decides ("Varies").
+      // ② A ROLLABLE ZERO, for a WORD WARHEAD — a payload whose whole effect is an AREA rather than a
+      //    number (combat/area-delivery.js `wordWarheadOf`; today that is gas, thrown or launched).
+      //
+      // ⛔ WHY ② IS A SUBSTITUTION AND NOT AN EXEMPTION. The shot MUST COMPLETE for its area to happen
+      // at all: the cloud is raised off the `weaponFired` payload the base's own fire path emits through
+      // the seam (seam-shim.js `ammoEffectFields` carries `effectTypes`/`blastRadius`/`stunSaveMod`/
+      // `dotTurns`; combat/damage-hooks.js `_hookGasCloud` reads them). Declining the shot here — which
+      // is what happened until 2026-08-28 — never reached that emit, so the base heavy pack's thrown Gas
+      // Grenade could not be delivered at all and a complete cloud mechanic sat unreachable behind a
+      // warning. A zero is the honest dice contribution for a payload that deals none.
+      //
+      // Both answers travel the SAME shadow below, because they are the same operation: hand the base's
+      // one system reader a damage it can roll, for the duration of this one roll, and restore it.
+      const round = await warheadDamageFor(item) || (wordWarheadOf(item) ? WORD_WARHEAD_FORMULA : "");
       if (!round) {
         ui.notifications?.warn?.(localizeParam("FireDamageNotRollable", { name: item?.name ?? "", damage: printed }));
         return null;

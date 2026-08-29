@@ -82,7 +82,7 @@ import { isPrimaryGMSession } from "../gm-session-primary.js";
 // this file's two halves both read (the single-target skip and the blast claim), shared with the
 // presentation rail and the attack gesture. See combat/area-delivery.js for the p.99/p.108/p.110
 // citations and for why it lives in its own import-free file.
-import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
+import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, wordWarheadOf, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
 // The ONE renderer for a caught figure's math line — the same builder the Apply Damage window uses, so
 // the cards and the window can never state one hit two ways (user ruling 2026-08-28, option A).
 import { cardBreakdownFor } from "./damage-breakdown.js";
@@ -2672,11 +2672,21 @@ async function _placeExplosion(payload) {
  * The weapon is resolved through the presentation rail's own lookup because it already handles the
  * two hard cases this needs (an id-first match, and an UNLINKED token's actor carrying items the base
  * actor does not); re-deriving it here is how a goon's own grenade stops resolving on the GM's client.
+ *
+ * ⭐ A WORD WARHEAD ANSWERS ZERO HERE, SAID OUT LOUD (2026-08-28). A payload whose effect is an AREA
+ * rather than a number — gas, thrown or launched (combat/area-delivery.js `wordWarheadOf`) — has no
+ * dice to roll where it lands, so the caller's `baseDamage <= 0` return is exactly right: it means no
+ * blast circle and no confirm card, and the cloud its own hook raised is left as the whole consequence.
+ * The ladder already answers "" for both cases, so this line changes no behaviour today; it is written
+ * as its own named rung because the CLEAN SKIP and the CANNOT-RESOLVE skip are different facts that
+ * would otherwise be indistinguishable at the same `return 0`, and because a future ladder rung that
+ * started pricing a gas tube would silently detonate a substituted formula out here.
  */
 async function _rollDeliveryWarhead(payload) {
   try {
     const weapon = resolveFiredWeapon(payload, actorForPayload(payload));
     if (!weapon) return 0;
+    if (wordWarheadOf(weapon)) return 0;
     const own = String(weapon._getWeaponSystem?.()?.damage ?? weapon.system?.damage ?? "").trim();
     const formula = damageFormulaIsRollable(own) ? own : await warheadDamageFor(weapon);
     if (!formula) return 0;

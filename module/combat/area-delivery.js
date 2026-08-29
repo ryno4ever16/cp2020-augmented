@@ -217,7 +217,22 @@ export function loadedRoundOf(weapon) {
 }
 
 /**
- * THE DAMAGE A LOADED ROUND SUPPLIES, or "" — how a launcher gets a warhead.
+ * THE DAMAGE A LOADED ROUND SUPPLIES, or "" — the plain one-call reader.
+ *
+ * ⚠ THIS IS NOT WHAT THE LADDER BELOW ASKS, and the difference is the whole of the 2026-08-28 fix. It
+ * COLLAPSES two different facts into the same "": "there is no round in the tube" and "there is a round
+ * and it carries no dice". `warheadDamageFor` has to tell those apart — the first falls through to the
+ * standard round, the second must not — so it asks `loadedRoundOf` + `roundDamageOf` itself. Kept here
+ * as the reader for callers that only ever want a formula and do not care which of the two "" means.
+ */
+export function loadedRoundDamage(weapon) {
+  const sys = loadedRoundOf(weapon)?.system;
+  return sys ? roundDamageOf(sys) : "";
+}
+
+/**
+ * THE DAMAGE ANY ONE ROUND CARRIES, read off its `system` — one precedence, in one place, used both for
+ * the round in the tube and for a CANDIDATE round the standard-round ladder below is pricing.
  *
  * ⛔ THREE FIELDS, IN THIS ORDER, AND EACH HAS A REASON:
  *   1. `damage` — what a GM types when they think of the round as the thing that goes off, and the
@@ -232,18 +247,6 @@ export function loadedRoundOf(weapon) {
  *      on today's build without a schema change.
  * The first ROLLABLE one wins; a field holding another unrollable word is skipped rather than
  * returned, so a half-filled round falls through to the guard's message instead of to a crash.
- */
-export function loadedRoundDamage(weapon) {
-  const sys = loadedRoundOf(weapon)?.system;
-  return sys ? roundDamageOf(sys) : "";
-}
-
-/**
- * THE DAMAGE ANY ONE ROUND CARRIES, read off its `system` — the three-field precedence above, applied
- * to a round that is not necessarily the loaded one.
- *
- * Split out of `loadedRoundDamage` (which now calls it) so the standard-round ladder below prices a
- * CANDIDATE round by exactly the same rule as a round in the tube. One precedence, one place.
  */
 export function roundDamageOf(system) {
   for (const key of ["damage", "damageFormula", "bonusDamageFormula"]) {
@@ -409,20 +412,85 @@ async function packStandardRoundDamage() {
 /**
  * THE WARHEAD A DELIVERY WEAPON FIRES, or "" — the whole ladder, read by both rails that ask.
  *
- * 1. the ROUND IN THE TUBE, when there is one (unchanged behaviour, and it always wins);
+ * ⭐⭐ THE RULE, RESTATED 2026-08-28: **A LOADED ROUND ALWAYS ANSWERS FOR THE TUBE, INCLUDING ANSWERING
+ * WITH NOTHING.** Rung 1 is now "is there a round in the tube", not "does the round in the tube carry
+ * dice" — so a round that carries none ends the ladder at "" instead of letting the standard-round rungs
+ * answer over the top of it.
+ *
+ * ⛔ THE DEFECT THAT FORCED IT. Rung 1 used to be `loadedRoundDamage(weapon)` and take the fall-through
+ * on a falsy result, which cannot distinguish an EMPTY TUBE from a tube holding a round that has no dice
+ * on purpose — the module pack's Gas Grenade Round is exactly that (`effectTypes: ["Gas"]`, all three
+ * damage fields empty, because gas is an area effect and not a number). A launcher loaded with it
+ * therefore priced its shot off the standard FRAGMENTATION round and fired 7d6: the round the referee
+ * chambered was silently swapped for a different one. That is the same substitution
+ * `defersDamageToGrenadeRound` refuses for a thrown gas grenade, and it is refused here for the same
+ * reason.
+ *
+ * 1. the ROUND IN THE TUBE, when there IS one — whatever it carries, "" included;
  * 2. else, for a grenade tube whose damage is the deferral word, an OWNED standard round;
  * 3. else that round's entry in this module's own pack;
- * 4. else "" — the caller shows its message.
+ * 4. else "" — the caller shows its message, or substitutes for a word warhead (below).
+ *
+ * ⚠ THE EMPTY-TUBE RULING IS UNTOUCHED (user, 2026-08-27 — an empty tube fires the standard
+ * Fragmentation round). Rungs 2 and 3 are reached on exactly the same condition as before: NO round
+ * loaded. Only the loaded-but-diceless case changed, and it had no honest answer before.
  *
  * Both readers must use this one function or a shot could be priced two ways: the ATTACK gesture rolls
  * the warhead on a hit (actor-sheet `_cpFireThroughDamageGuard`) and the DAMAGE rail rolls it on a MISS
  * so the p.108 scatter still has something to detonate (damage-hooks `_rollDeliveryWarhead`).
  */
 export async function warheadDamageFor(weapon) {
-  const loaded = loadedRoundDamage(weapon);
-  if (loaded) return loaded;
+  const loaded = loadedRoundOf(weapon);
+  if (loaded) return roundDamageOf(loaded.system);
   if (!defersDamageToGrenadeRound(weapon)) return "";
   return ownedStandardRoundDamage(weapon) || await packStandardRoundDamage();
+}
+
+/**
+ * THE WORD A NON-DICE WARHEAD IS PRINTED AS, when this shot has one — currently only `"Gas"`, else null.
+ *
+ * ⭐ WHAT IT IS FOR. `damageFormulaIsRollable` splits every printed damage into "a formula" and "a word",
+ * and until now BOTH halves of the second group were treated the same: refuse the shot. But the two are
+ * not the same. "Varies" means *the round decides* — answered by the ladder above. "Gas" means *there is
+ * nothing to decide*: the payload's whole effect is an AREA the module already models
+ * (combat/damage-hooks.js `_hookGasCloud`, keyed on the payload's `effectTypes` carried by
+ * seam-shim.js `ammoEffectFields`). Refusing those shots did not protect anything — it made the base
+ * heavy pack's thrown Gas Grenade undeliverable and left a complete cloud mechanic unreachable.
+ *
+ * TWO WAYS A SHOT CAN BE ONE, and they are the thrown case and the launched case of the same thing:
+ *   (a) THE WEAPON ITSELF prints the word (base heavy pack "Gas Grenade", `damage: "Gas"`) — a thrown
+ *       grenade IS its own warhead, so its own damage column is the whole statement;
+ *   (b) THE LOADED ROUND declares the cloud AND carries no dice — `effectTypes` includes "Gas" and
+ *       `roundDamageOf` is "". Both halves are required: a round that has a cloud AND dice (an
+ *       incendiary-style load a GM authored) keeps its dice and is priced by the ladder as usual.
+ *
+ * `effectTypes` is coerced and matched EXACTLY as `_hookGasCloud` coerces and matches it (array, bare
+ * string, junk; `includes("Gas")`), so this answers on precisely the shots that will produce a cloud —
+ * the guard can never let a shot through that the cloud hook then ignores, or refuse one it would have
+ * served.
+ *
+ * ⛔ SCOPE IS GAS ONLY, DELIBERATELY. The remaining WORD-WARHEAD FAMILY in the shipped catalogue —
+ * "Stun", "Dazzle", "Sonic", "Deaf", "Blind" (CP2020 p.64's own list of grenade types) — is still
+ * REFUSED, because unlike gas none of them has a modelled consequence for the shot to ride: there is no
+ * hook that reads them, so letting one fire would produce a silent nothing instead of a message. They
+ * come off this list one at a time, each with the mechanic that earns it (post-release).
+ */
+export const WORD_WARHEAD_GAS = "Gas";
+
+/** The formula a word warhead is rolled with — a real, rollable ZERO. The shot has to complete for its
+ *  area consequence to be raised at all, and it must contribute no dice while doing so. */
+export const WORD_WARHEAD_FORMULA = "0";
+
+export function wordWarheadOf(weapon) {
+  const sys = weapon?._getWeaponSystem?.() ?? weapon?.system ?? {};
+  if (String(sys.damage ?? "").trim().toLowerCase() === WORD_WARHEAD_GAS.toLowerCase()) return WORD_WARHEAD_GAS;
+
+  const round = loadedRoundOf(weapon);
+  if (!round) return null;
+  const t = round.system?.effectTypes;
+  const types = Array.isArray(t) ? t : (typeof t === "string" && t ? [t] : []);
+  if (!types.includes(WORD_WARHEAD_GAS)) return null;
+  return roundDamageOf(round.system) ? null : WORD_WARHEAD_GAS;
 }
 
 /**
