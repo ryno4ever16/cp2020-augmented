@@ -82,7 +82,7 @@ import { isPrimaryGMSession } from "../gm-session-primary.js";
 // this file's two halves both read (the single-target skip and the blast claim), shared with the
 // presentation rail and the attack gesture. See combat/area-delivery.js for the p.99/p.108/p.110
 // citations and for why it lives in its own import-free file.
-import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, wordWarheadOf, wordWarheadOfPayload, deliveryShotMissed, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
+import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, wordWarheadOf, blastRidingWordOfPayload, deliveryShotMissed, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
 // The ONE renderer for a caught figure's math line — the same builder the Apply Damage window uses, so
 // the cards and the window can never state one hit two ways (user ruling 2026-08-28, option A).
 import { cardBreakdownFor } from "./damage-breakdown.js";
@@ -2587,7 +2587,22 @@ async function _placeExplosion(payload) {
     // none — and it is what makes the confirm's own damage loop a clean no-op for these shots without a
     // second branch: `bandDamage` returns 0 at every distance and every row falls through its own
     // `dmg <= 0` skip. Nothing about an ordinary blast changes.
-    const word = wordWarheadOfPayload(payload);
+    //
+    // ⛔ AND THE WORD MUST BE ONE WHOSE CONSEQUENCE THIS FLOW ACTUALLY CARRIES (2026-08-29). The
+    // admission first read the whole `WORD_WARHEADS` set, which includes "Gas" — and gas is the one
+    // member with a placement consumer of its OWN (`_hookGasCloud` → `_placeGasCloud`). A real fired
+    // gas payload carries `attackType: "Grenade"` and `effectTypes: ["Gas"]`, so both consumers claimed
+    // it and one throw put TWO areas on the map: the cloud, plus a zero-damage circle whose Confirm
+    // applied nothing and whose effect line rendered blank. The narrowed predicate
+    // (`blastRidingWordOfPayload`, combat/area-delivery.js — where the two lists and the reason they
+    // differ are written out) admits only the three words that have no other route to the figures they
+    // caught, so a gas-only payload takes this bail exactly as it did before the word door opened.
+    //
+    // ⚠ READ ONCE AND USED FOR ALL FOUR THINGS the word decides below — this bail, the flag written on
+    // the area, the sentence the card prints, and (through that flag) the consequence applied at
+    // confirm. That is what keeps a refused word from still being recorded on an area placed for some
+    // other reason: a gas load carrying real dice detonates on its dice, and records no word.
+    const word = blastRidingWordOfPayload(payload);
     if ((baseDamage <= 0 && !word) || radius <= 0) return;
 
     const weaponName = payload.weaponName ?? localize("WpnExplosion");
@@ -2851,14 +2866,19 @@ async function _applyWordWarhead(word, f, targets) {
  * two hard cases this needs (an id-first match, and an UNLINKED token's actor carrying items the base
  * actor does not); re-deriving it here is how a goon's own grenade stops resolving on the GM's client.
  *
- * ⭐ A WORD WARHEAD ANSWERS ZERO HERE, SAID OUT LOUD (2026-08-28). A payload whose effect is an AREA
- * rather than a number — gas, thrown or launched (combat/area-delivery.js `wordWarheadOf`) — has no
- * dice to roll where it lands, so the caller's `baseDamage <= 0` return is exactly right: it means no
- * blast circle and no confirm card, and the cloud its own hook raised is left as the whole consequence.
- * The ladder already answers "" for both cases, so this line changes no behaviour today; it is written
- * as its own named rung because the CLEAN SKIP and the CANNOT-RESOLVE skip are different facts that
- * would otherwise be indistinguishable at the same `return 0`, and because a future ladder rung that
- * started pricing a gas tube would silently detonate a substituted formula out here.
+ * ⭐ A WORD WARHEAD ANSWERS ZERO HERE, SAID OUT LOUD (2026-08-28). A payload whose effect is stated as a
+ * word rather than as a number (combat/area-delivery.js `wordWarheadOf`) has no dice to roll where it
+ * lands, so zero is the honest figure and the caller decides what a zero means. The ladder already
+ * answers "" for these cases, so this line changes no behaviour today; it is written as its own named
+ * rung because the CLEAN SKIP and the CANNOT-RESOLVE skip are different facts that would otherwise be
+ * indistinguishable at the same `return 0`, and because a future ladder rung that started pricing such a
+ * tube would silently detonate a substituted formula out here.
+ *
+ * ⚠ WHAT THE ZERO THEN MEANS IS THE CALLER'S SPLIT, NOT THIS ONE (2026-08-29). For gas it means the
+ * placement bails and the cloud its own hook raised is left as the whole consequence; for stun / dazzle
+ * / sonic the area is still placed on the strength of the word, because the blast's figure enumeration
+ * is the only route their consequence has. Both branches read that zero — the difference is decided at
+ * the admission by `blastRidingWordOfPayload`, and nothing here needs to know which one applies.
  */
 async function _rollDeliveryWarhead(payload) {
   try {

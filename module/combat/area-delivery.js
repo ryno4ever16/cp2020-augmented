@@ -509,6 +509,69 @@ export const WORD_WARHEADS = Object.freeze(["Gas", "Stun", "Blind", "Deaf"]);
 export const WORD_WARHEAD_GAS = "Gas";
 
 /**
+ * WHICH WORDS' CONSEQUENCE IS CARRIED BY THE BLAST'S OWN FIGURE ENUMERATION — the subset of
+ * `WORD_WARHEADS` that the AREA-PLACEMENT rail may admit, and the reason it is a smaller list.
+ *
+ * ⛔ THE TWO LISTS ANSWER TWO DIFFERENT QUESTIONS, and collapsing them into one is the defect this
+ * split exists to close (reproduced live 2026-08-29, on a real thrown Gas Grenade):
+ *
+ *   · `WORD_WARHEADS` above answers the FIRE GUARD's question — "may this printed word be fired at
+ *     all, or is the shot declined with the not-rollable message". All four must stay on it. Gas was
+ *     the first word ever admitted there, and dropping it would put the thrown Gas Grenade back to
+ *     being undeliverable — the exact regression the 2026-08-28 unit removed.
+ *
+ *   · THIS list answers the PLACEMENT question — "does this word need the blast flow to enumerate the
+ *     figures it caught, because it has no other way to reach them". Stun, Blind and Deaf do: their
+ *     whole consequence is raised per caught figure at `_confirmExplosion`, off the one figure set
+ *     that flow derives (containment through the area shim, then the cover verdict). Gas does NOT:
+ *     its consequence is a CLOUD REGION, placed by its own consumer (`_hookGasCloud` →
+ *     `_placeGasCloud`) and resolved per combat turn by the cloud's own tick.
+ *
+ * ⛔ WHAT ADMITTING GAS AT THE BLAST ACTUALLY PRODUCED. A fired gas payload carries BOTH
+ * `attackType: "Grenade"` (so `payloadDetonates` is true) and `effectTypes: ["Gas"]` (so the cloud hook
+ * claims it), and every gas warhead deals zero dice by definition. With Gas on the admission list the
+ * zero-damage bail was lifted for it, so ONE throw placed TWO areas: the cloud, and a second circle
+ * flagged `isExplosion` carrying zero damage — plus a confirm card whose Confirm applies nothing (Gas
+ * is neither the stun branch nor a `WORD_CONDITIONS` entry) and whose effect line renders blank
+ * (`_wordWarheadSummary` has no row for it). Two regions on the map for one grenade, and a control that
+ * does nothing.
+ *
+ * ⚠ THIS IS NOT A SECOND OPINION ABOUT WHETHER GAS DETONATES. `payloadDetonates` is untouched and still
+ * says yes, which is what keeps the single-target damage apply skipped for a gas throw — the either/or
+ * that predicate's own comment protects. The only thing narrowed is which words can hold the blast
+ * PLACEMENT open on their own when no dice were rolled.
+ *
+ * ⏪ REVERT: put "Gas" back in this array and the duplicate placement returns.
+ */
+export const BLAST_RIDING_WORDS = Object.freeze(["Stun", "Blind", "Deaf"]);
+
+/**
+ * DOES THIS WORD'S CONSEQUENCE RIDE THE BLAST ENUMERATION — the predicate the placement rail asks,
+ * so no caller has to restate the membership test.
+ *
+ * Case-insensitive and null-safe: a payload with no word, or one carrying a word nothing models,
+ * answers false and the placement bails on its damage exactly as an ordinary shot does.
+ */
+export function wordRidesBlast(word) {
+  const w = String(word ?? "").trim().toLowerCase();
+  return BLAST_RIDING_WORDS.some(x => x.toLowerCase() === w);
+}
+
+/**
+ * THE BLAST-RIDING WORD A FIRED PAYLOAD CARRIES, or null — the one call the placement rail makes.
+ *
+ * ⛔ IT IS `wordWarheadOfPayload` NARROWED BY `wordRidesBlast`, in one place, because the placement rail
+ * reads its answer FOUR times — the admission, the flag it records on the area, the sentence the confirm
+ * card prints, and (through that flag) the consequence applied at confirm. Deriving it once is what
+ * guarantees a word the admission refused can never still be written into the area's record and leave a
+ * blank effect line and an inert Confirm behind it.
+ */
+export function blastRidingWordOfPayload(payload) {
+  const word = wordWarheadOfPayload(payload);
+  return wordRidesBlast(word) ? word : null;
+}
+
+/**
  * WHICH WORD A LIST OF EFFECT TYPES DECLARES, or null — one coercion, one match, in one place.
  *
  * `effectTypes` is coerced exactly as every other reader coerces it (array, bare string, junk) and

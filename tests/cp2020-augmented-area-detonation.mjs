@@ -481,9 +481,150 @@ try {
   legs.push(["the word-family legs raised no page or console error", errs2.length === 0, errs2.join(" | ") || "none"]);
   armed2 = false;
 
+  // ═══════ ③ ONE CONSEQUENCE PER WORD — a REAL fired cloud payload places ONE area (2026-08-29) ═══════
+  //
+  // ⛔ WHY THIS LEG EXISTS AND WHY IT ENTERS AT THE SHEET RATHER THAN AT THE HOOK. Every cloud leg in
+  // this repo — here and in the cloud-behavior suite — raises a hand-built `weaponFired` object, and
+  // every one of them OMITS `attackType`. That single field is what routes a payload into the area
+  // placement (`payloadDetonates` reads it), so the synthetic shape exercises the cloud consumer alone
+  // and can never observe what the two consumers do to ONE payload that satisfies both. A real fired
+  // cloud carries BOTH `attackType: "Grenade"` (the seam reads it off the item) and
+  // `effectTypes: ["Gas"]`, and on the build this leg was written against it placed TWO areas: the
+  // cloud, plus a zero-damage circle with a confirm control that applied nothing. So the entry point
+  // is the sheet's own fire gesture and the payload is READ BACK rather than authored — the last leg
+  // below asserts the shape itself, so a future harness change that quietly drops `attackType` fails
+  // here instead of silently making the other three legs vacuous.
+  //
+  // ⚠ THE FACES ARE PINNED LOW, NOT AT THE FLOOR. `randomUniform` is inverted into a face by v13+
+  // (`ceil((1 - u) * faces)`), so 0.25 is a high-but-not-maximum face on every die this shot rolls —
+  // and deliberately NOT 0.05, which lands face 10 and sends the base's exploding die into a recursion
+  // that never terminates against a constant generator. The to-hit is carried by `extraMod` instead.
+  let armed3 = false; const errs3 = [];
+  gm.on("pageerror", e => { if (armed3) errs3.push("pageerror: " + e.message); });
+  gm.on("console", m => { if (armed3 && m.type() === "error") errs3.push("console: " + m.text()); });
+  armed3 = true;
+
+  const G = await gm.evaluate(async () => {
+    const SCOPE = "cp2020-augmented";
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    const scene = game.scenes.active ?? canvas.scene;
+    const F = (d) => d.flags?.[SCOPE] ?? {};
+    const areasNow = () => [...(scene.templates ?? [])].concat([...(scene.regions ?? [])]);
+
+    const prevUniform = CONFIG.Dice.randomUniform;
+    const prev = {};
+    const pin = async (key, val) => { try { prev[key] = game.settings.get(SCOPE, key); await game.settings.set(SCOPE, key, val); } catch (_e) {} };
+    let shooter = null, victim = null;
+    const spied = [];
+    const spy = (p) => spied.push(p);
+
+    try {
+      const base = await import("/systems/cyberpunk2020/module/lookups.js");
+      const gcb  = await import(`/modules/${SCOPE}/module/combat/gas-cloud-behavior.js`);
+      const heavy = game.packs.get("cyberpunk2020.heavy");
+      if (!heavy) return { fatal: "the base heavy pack is not registered" };
+
+      // The two masters this leg needs open, and the two that would make it non-deterministic.
+      await pin("explosivesEnabled", true);
+      await pin("gasGrenadeCloudEnabled", true);
+      await pin("combatFxEnabled", false);      // no draw clock between the trigger and the placement
+      await pin("explosivesDetailed", false);
+      CONFIG.Dice.randomUniform = () => 0.25;
+
+      shooter = await Actor.create({ name: "__PW__GasThrower", type: "character" });
+      victim  = await Actor.create({ name: "__PW__GasVictim",  type: "character" });
+      const [sTok] = await scene.createEmbeddedDocuments("Token",
+        [{ name: shooter.name, actorId: shooter.id, actorLink: true, x: 1000, y: 1600, width: 1, height: 1 }]);
+      const [vTok] = await scene.createEmbeddedDocuments("Token",
+        [{ name: victim.name,  actorId: victim.id,  actorLink: true, x: 1200, y: 1600, width: 1, height: 1 }]);
+
+      // The base heavy pack's THROWN Gas Grenade, taken the way a table takes it. `fromCompendium`
+      // stamps `_stats.compendiumSource`, which is the pointer the corrections layer matches on to put
+      // this item's payload fields (effectTypes, cloud radius, save penalty) onto the owned copy — a
+      // bare `toObject()` copy carries none and would reach the seam with the schema's zeros.
+      const packDoc = await heavy.getDocument("CG2nNDkUA2eroMti");
+      if (!packDoc) return { fatal: "the thrown Gas Grenade did not resolve from the base heavy pack" };
+      const obj = game.items.fromCompendium(packDoc);
+      obj.name = "__PW__Thrown Gas Live";
+      const [gren] = await shooter.createEmbeddedDocuments("Item", [obj]);
+      if (!gren) return { fatal: "the gas grenade fixture was not embedded on the shooter" };
+      await gren.update({ "system.shotsLeft": "5" });
+
+      const beforeAreas = new Set(areasNow().map(d => d.id));
+      const beforeMsgs  = new Set([...game.messages].map(m => m.id));
+
+      Hooks.on("cyberpunk2020.weaponFired", spy);
+      await shooter.sheet._cpFireThroughDamageGuard(gren, () => gren.__weaponRoll(
+        { fireMode: base.fireModes.semiAuto, range: "RangeClose", targetActor: victim, extraMod: 30 },
+        [{ id: vTok.id, name: vTok.name }]));
+      for (let i = 0; i < 60 && spied.length === 0; i++) await sleep(100);
+
+      // Wait for the FIRST area, then keep waiting — the defect's second placement lands after the
+      // cloud's, so a poll that stops at the first one would report a clean single placement.
+      let seenNew = [];
+      for (let i = 0; i < 60; i++) {
+        seenNew = areasNow().filter(d => !beforeAreas.has(d.id));
+        if (seenNew.length) break;
+        await sleep(200);
+      }
+      await sleep(3000);
+      seenNew = areasNow().filter(d => !beforeAreas.has(d.id));
+
+      const rows = seenNew.map(d => ({
+        id: d.id,
+        isExplosion: F(d).isExplosion === true,
+        wordWarhead: String(F(d).wordWarhead ?? ""),
+        cloud: (d.behaviors?.some?.(bv => bv.type === gcb.GAS_CLOUD_BEHAVIOR) === true) || F(d).isGasCloud === true,
+      }));
+      const confirmCards = [...game.messages]
+        .filter(m => !beforeMsgs.has(m.id) && String(m.content || "").includes("cp-confirm-explosion")).length;
+      const p = spied[0] ?? {};
+      const types = Array.isArray(p.effectTypes) ? p.effectTypes : (p.effectTypes ? [p.effectTypes] : []);
+
+      for (const d of seenNew) await d.delete().catch(() => {});
+      for (const m of [...game.messages].filter(m => !beforeMsgs.has(m.id))) await m.delete().catch(() => {});
+
+      return { rows, confirmCards, fired: spied.length,
+               attackType: String(p.attackType ?? ""), effectTypes: types };
+    } catch (err) {
+      return { fatal: String(err?.message ?? err) };
+    } finally {
+      Hooks.off("cyberpunk2020.weaponFired", spy);
+      CONFIG.Dice.randomUniform = prevUniform;
+      for (const [k, v] of Object.entries(prev)) { try { await game.settings.set(SCOPE, k, v); } catch (_e) {} }
+      await shooter?.delete().catch(() => {});
+      await victim?.delete().catch(() => {});
+    }
+  });
+
+  if (G?.fatal) {
+    legs.push(["the live-fire cloud fixture reached its shot", false, G.fatal]);
+  } else {
+    log.push(`live cloud shot — payload=${G.fired}, areas=${JSON.stringify(G.rows)}, confirm cards=${G.confirmCards}`);
+    // The shape leg first: it is what proves the three below are measuring the REAL routing rather than
+    // a payload that never qualified for the area flow at all.
+    legs.push(["live cloud shot — the emitted payload carries the delivery type AND the cloud word (the shape the hand-built legs omit)",
+      G.attackType === "Grenade" && G.effectTypes.includes("Gas"),
+      `attackType=${G.attackType} effectTypes=${JSON.stringify(G.effectTypes)}`]);
+    legs.push(["live cloud shot — EXACTLY ONE area was placed for one throw",
+      G.rows?.length === 1, `${G.rows?.length} area(s): ${JSON.stringify(G.rows)}`]);
+    legs.push(["live cloud shot — that area is the cloud (it carries the cloud's own behavior)",
+      G.rows?.length === 1 && G.rows[0].cloud === true, JSON.stringify(G.rows?.[0] ?? null)]);
+    legs.push(["live cloud shot — NO area was placed by the blast flow",
+      (G.rows ?? []).every(r => r.isExplosion === false), JSON.stringify(G.rows)]);
+    legs.push(["live cloud shot — no confirm control was posted for it",
+      G.confirmCards === 0, `${G.confirmCards} card(s)`]);
+  }
+  legs.push(["the live-fire cloud leg raised no page or console error", errs3.length === 0, errs3.join(" | ") || "none"]);
+  armed3 = false;
+
 } catch(e){ log.push("ERROR: "+e.message); legs.push(["the run reached the verdict without throwing", false, e.message]); }
 finally {
   if (gm && S) await gm.evaluate(async (d)=>{ const s=game.scenes.active??canvas.scene; const F=(x)=>x.flags?.["cp2020-augmented"]??{}; for(const t of s.tokens.filter(t=>t.name?.startsWith("__PW__"))) await t.delete().catch(()=>{}); for(const coll of [s.templates,s.regions]) if(coll) for(const x of [...coll]) if(F(x).isExplosion||F(x).isGasCloud||F(x).isSpreadZone) await x.delete().catch(()=>{});
+    // ⚠ A v14 CLOUD CARRIES NO FLAG — its data lives on a native region BEHAVIOR (damage-hooks
+    // `_placeGasCloud`), so the flag sweep above cannot see it and a cloud this run placed would be
+    // left standing on the rig for the next suite to trip over.
+    for(const x of [...(s.regions ?? [])]) if(x.behaviors?.some?.(bv=>bv.type==="cp2020-augmented.gasCloud")) await x.delete().catch(()=>{});
     // The encounter this run created for the timed-condition cadence, and its own chat trail.
     for(const c of [...game.combats]) await c.delete().catch(()=>{});
     for(const m of [...game.messages].filter(m=>/__PW__|PW Grenade/.test(m.content||""))) await m.delete().catch(()=>{});
