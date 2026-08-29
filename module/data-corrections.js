@@ -213,7 +213,12 @@ export const DATA_CORRECTIONS = {
     WJMz0EzGuDgv3KXu: { patch: { accuracy: 0 } },  // Barrett-Arasaka Light 20mm
     B5brbHA8AfLERMNH: { patch: { accuracy: 0 } },  // C-6 "Flatfire" Plastic Explosive
     kzs0XczTAwo1pgfb: { patch: { accuracy: 0 } },  // Dazzle Grenade
-    CG2nNDkUA2eroMti: { patch: { accuracy: 0 } },  // Gas Grenade
+    // Gas Grenade: WA 0 like its shelf-mates, PLUS the gas payload itself — the thrown item is its
+    // own warhead (no loaded round), so the cloud's fields ride the weapon's system through the
+    // module's schema extension (data/weapon-item-data.js, gas-payload family). Values mirror the
+    // module's Gas Grenade Round (supplement-heavy): 3 m cloud, 3 turns, plain save (Core p.64 "Gas
+    // (see FNFF Gas Table)" — per-gas penalties are the GM's edit on the copy).
+    CG2nNDkUA2eroMti: { patch: { accuracy: 0, effectTypes: ["Gas"], blastRadius: 3, dotTurns: 3 } },  // Gas Grenade
     P1fY9ea1Et8yT2Zd: { patch: { accuracy: 0 } },  // Incendiary Grenade
     u9R4ZnzKOlIFva0o: { patch: { accuracy: 0 } },  // Grenade Launcher (conventional)
     iN1wBc0bMIf1m7kG: { patch: { accuracy: 0 } },  // Sonic Grenade

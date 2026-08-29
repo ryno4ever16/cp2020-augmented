@@ -16,7 +16,18 @@
 const WEAPON_AUGMENT_FIELDS = {
   edged:  (f) => new f.BooleanField({ initial: false }),
   mono:   (f) => new f.BooleanField({ initial: false }),
-  broken: (f) => new f.BooleanField({ initial: false })
+  broken: (f) => new f.BooleanField({ initial: false }),
+  // ── The gas-payload family (2026-08-28) ──────────────────────────────────────────────────────
+  // A THROWN grenade is its own warhead: it has no loaded round to carry effect fields, so the
+  // seam's fallback reads them off the WEAPON's own system (seam-shim.js ammoEffectFields, second
+  // pass) — and the base weapon model strips undeclared fields on write, which is why the base
+  // heavy pack's thrown Gas Grenade fired without ever raising its cloud. Same four fields the
+  // cloud hook prices off a payload (damage-hooks.js _placeGasCloud: radius / duration / save
+  // penalty), populated on the base item by the corrections layer (data-corrections.js, heavy).
+  effectTypes: (f) => new f.ArrayField(new f.StringField({ required: true, blank: false }), { initial: [] }),
+  blastRadius: (f) => new f.NumberField({ initial: 0 }),
+  dotTurns:    (f) => new f.NumberField({ initial: 0 }),
+  stunSaveMod: (f) => new f.NumberField({ initial: 0 })
 };
 
 /**

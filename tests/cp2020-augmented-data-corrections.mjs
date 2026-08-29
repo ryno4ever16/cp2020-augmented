@@ -123,6 +123,22 @@ try {
       ok("PR41: 'Fist Aid Kit' → 'First Aid Kit'", fak.name === "First Aid Kit", fak.name);
       const gas = await mkFrom("cyberpunk2020.heavy", "CG2nNDkUA2eroMti");
       ok("PR42: Gas Grenade accuracy → 0", Number(gas.system.accuracy) === 0, gas.system.accuracy);
+      // Gas-payload family (2026-08-28): the patched effect fields SURVIVE the weapon schema (the
+      // module's augment fields — without them updateSource strips the whole set), and the seam's
+      // weapon-fallback hands them to a payload, which is what raises the cloud for a thrown item.
+      ok("gas-payload: patched effect fields survive the weapon schema",
+        JSON.stringify(gas.system.effectTypes) === JSON.stringify(["Gas"])
+        && gas.system.blastRadius === 3 && gas.system.dotTurns === 3,
+        JSON.stringify({ e: gas.system.effectTypes, r: gas.system.blastRadius, t: gas.system.dotTurns }));
+      const SEAM = await import(`${M}/seam-shim.js`);
+      const seamFields = SEAM.ammoEffectFields(gas);
+      ok("gas-payload: the seam's weapon-fallback carries the fields into the payload shape",
+        Array.isArray(seamFields.effectTypes) && seamFields.effectTypes.includes("Gas")
+        && seamFields.blastRadius === 3 && seamFields.dotTurns === 3,
+        JSON.stringify(seamFields));
+      const frag = await mkFrom("cyberpunk2020.heavy", "IpfEt6QiPxF1Jhfl");
+      ok("gas-payload negative: a sibling grenade's copy gains NO effect types",
+        (frag.system.effectTypes ?? []).length === 0, JSON.stringify(frag.system.effectTypes));
       const nagi = await mkFrom("cyberpunk2020.melee", "CfQQEwck7VZNQzC6");
       ok("PR42: Naginata accuracy '' → 1", Number(nagi.system.accuracy) === 1, nagi.system.accuracy);
       const avante = await mkFrom("cyberpunk2020.exotics", "5d4juFywt9NMCYTw");
