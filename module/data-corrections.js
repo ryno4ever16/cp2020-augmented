@@ -212,7 +212,12 @@ export const DATA_CORRECTIONS = {
   "cyberpunk2020.heavy": {
     WJMz0EzGuDgv3KXu: { patch: { accuracy: 0 } },  // Barrett-Arasaka Light 20mm
     B5brbHA8AfLERMNH: { patch: { accuracy: 0 } },  // C-6 "Flatfire" Plastic Explosive
-    kzs0XczTAwo1pgfb: { patch: { accuracy: 0 } },  // Dazzle Grenade
+    // Dazzle / Sonic / Stun: WA 0 plus their word-warhead payloads (the same gas-payload schema
+    // family, data/weapon-item-data.js) — the thrown item is its own warhead, so the effect word,
+    // the save penalty and the timed-effect duration ride the weapon's system for the seam's
+    // weapon-fallback to carry. Values are Core p.64 verbatim: "Stun (-5 to Stun), Dazzle (Blind
+    // for 4 turns), Sonic (deafened 4 turns)"; durations ride dotTurns, the Gas entry's own carrier.
+    kzs0XczTAwo1pgfb: { patch: { accuracy: 0, effectTypes: ["Blind"], dotTurns: 4 } },  // Dazzle Grenade
     // Gas Grenade: WA 0 like its shelf-mates, PLUS the gas payload itself — the thrown item is its
     // own warhead (no loaded round), so the cloud's fields ride the weapon's system through the
     // module's schema extension (data/weapon-item-data.js, gas-payload family). Values mirror the
@@ -221,8 +226,8 @@ export const DATA_CORRECTIONS = {
     CG2nNDkUA2eroMti: { patch: { accuracy: 0, effectTypes: ["Gas"], blastRadius: 3, dotTurns: 3 } },  // Gas Grenade
     P1fY9ea1Et8yT2Zd: { patch: { accuracy: 0 } },  // Incendiary Grenade
     u9R4ZnzKOlIFva0o: { patch: { accuracy: 0 } },  // Grenade Launcher (conventional)
-    iN1wBc0bMIf1m7kG: { patch: { accuracy: 0 } },  // Sonic Grenade
-    ggK24JleGw0yaQBt: { patch: { accuracy: 0 } },  // Stun Grenade
+    iN1wBc0bMIf1m7kG: { patch: { accuracy: 0, effectTypes: ["Deaf"], dotTurns: 4 } },  // Sonic Grenade
+    ggK24JleGw0yaQBt: { patch: { accuracy: 0, effectTypes: ["Stun"], stunSaveMod: -5 } },  // Stun Grenade
     IpfEt6QiPxF1Jhfl: { patch: { accuracy: 0 } },  // Fragmentation Grenade
     MKMz4FoO3R3tOqoB: { patch: { accuracy: 0 } },  // Mine (all types)
   },
