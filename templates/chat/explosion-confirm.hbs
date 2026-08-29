@@ -11,7 +11,11 @@
 <div class="cyberpunk save-prompt">
   <h3>{{CPLocal "ExplosionConfirmTitle" weapon=weaponName}}</h3>
   <div class="save-info">
+    {{#if wordSummary}}
+    <span>{{{CPLocal "ExplosionConfirmWordSummary" radius=radius effect=wordSummary}}}</span><br>
+    {{else}}
     <span>{{{CPLocal "ExplosionConfirmSummary" radius=radius damage=baseDamage within=fullWithin}}}</span><br>
+    {{/if}}
     {{#if outcomeLine}}<span class="cp-explosion-outcome">{{outcomeLine}}</span><br>{{/if}}
     <span class="save-note">{{CPLocal "ExplosionConfirmHint"}}</span>
   </div>

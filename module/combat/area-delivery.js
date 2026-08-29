@@ -310,7 +310,12 @@ const STANDARD_ROUND_NAME = "Fragmentation Grenade Round";
  * ⛔ THE SECOND CONDITION IS NOT DECORATION — it is what keeps a THROWN grenade out. Every hand grenade
  * in the base heavy pack is also `ammoType: "Grenade"` and several print an unrollable word of their own
  * ("Gas", "Stun", "Blind", "Deaf"): those weapons ARE their own warhead, and handing them a frag round
- * would silently turn a gas grenade into an explosion. They keep the refusal message.
+ * would silently turn a gas grenade into an explosion.
+ * ⏪ WHAT BECOMES OF THEM INSTEAD (corrected 2026-08-28 — this used to read "they keep the refusal
+ * message", which was true only while the family was refused): all four are now WORD WARHEADS, so the
+ * guard substitutes a rollable zero for the printed word and each rides its own modelled consequence.
+ * The exclusion here is unchanged and still load-bearing — it is what stops the frag substitution — but
+ * the shot it excludes now completes rather than being declined.
  *
  * ⭐ CLOSED ENUMERATION over the shipped catalogue (base `packs/*.db` + this module's `src/packs`,
  * 2026-08-27): exactly ONE document satisfies both — the base heavy pack's Grenade Launcher
@@ -469,13 +474,57 @@ export async function warheadDamageFor(weapon) {
  * the guard can never let a shot through that the cloud hook then ignores, or refuse one it would have
  * served.
  *
- * ⛔ SCOPE IS GAS ONLY, DELIBERATELY. The remaining WORD-WARHEAD FAMILY in the shipped catalogue —
- * "Stun", "Dazzle", "Sonic", "Deaf", "Blind" (CP2020 p.64's own list of grenade types) — is still
- * REFUSED, because unlike gas none of them has a modelled consequence for the shot to ride: there is no
- * hook that reads them, so letting one fire would produce a silent nothing instead of a message. They
- * come off this list one at a time, each with the mechanic that earns it (post-release).
+ * ⭐⭐ THE FAMILY IS COMPLETE FOR THE SHIPPED CATALOGUE (2026-08-28). Until this change the list held
+ * "Gas" alone and the other four printed words were refused for a stated reason: none of them had a
+ * modelled consequence for the shot to ride, so letting one fire would have produced a silent nothing
+ * instead of a message. Each has one now, so each is admitted — CP2020 p.64, verbatim, is the whole
+ * specification and nothing here exceeds it:
+ *
+ *   "Types include Fragmentation (7D6), Incendiary (4D6 for 3 turns), Stun (-5 to Stun), Dazzle
+ *    (Blind for 4 turns), Sonic (deafened 4 turns), Gas (see FNFF Gas Table)."
+ *
+ *   · "Stun"  — every figure the detonation catches makes ONE stun save at the payload's own
+ *               `stunSaveMod` (−5 as the corrections layer stamps it). No damage, no duration.
+ *   · "Blind" — the Dazzle grenade's printed damage word; a timed condition for `dotTurns` turns.
+ *   · "Deaf"  — the Sonic grenade's printed damage word; the same shape, the other sense.
+ * All three are raised on the figures the BLAST's own enumeration already names (damage-hooks.js
+ * `_confirmExplosion`), which is why they are words on this list rather than a second placement.
+ *
+ * ⚠ "Dazzle" AND "Sonic" ARE NOT ON THE LIST, and that is not an omission. They are the ITEM NAMES;
+ * the base heavy pack writes the EFFECT in the damage column — `Blind` on the Dazzle Grenade, `Deaf`
+ * on the Sonic Grenade (read off packs/heavy.db, 2026-08-28) — and this reader answers about the
+ * effect, never about the name.
+ *
+ * ⛔ WHAT A GM-AUTHORED WORD STILL GETS. The set below is closed, so a weapon printing any other word
+ * — "Flash", "EMP", "Varies" on something that is not a grenade tube — resolves to null here, falls
+ * through the guard's ladder, and is DECLINED with the `FireDamageNotRollable` notification naming the
+ * word and the fix. That message is the honest answer for a word nothing models: a shot admitted with
+ * no consequence behind it is a silent nothing, which is what the refusal exists to prevent. The
+ * shipped catalogue's refused set is now empty; the door stays shut for everything outside it.
  */
+export const WORD_WARHEADS = Object.freeze(["Gas", "Stun", "Blind", "Deaf"]);
+
+/** ⏪ The single-word constant this list grew out of, kept as the name the gas hook's own reasoning
+ *  is written against so a reader of `_hookGasCloud` still finds it spelled the same way. */
 export const WORD_WARHEAD_GAS = "Gas";
+
+/**
+ * WHICH WORD A LIST OF EFFECT TYPES DECLARES, or null — one coercion, one match, in one place.
+ *
+ * `effectTypes` is coerced exactly as every other reader coerces it (array, bare string, junk) and
+ * matched by EQUALITY against the closed set, never as a substring, so a hand-authored "Non-Explosive"
+ * or "Stunning" is not read as one of ours. Case-insensitive because pack data is hand-typed, and the
+ * canonical spelling from the set is what is returned — so downstream branches compare one form.
+ */
+function wordWarheadIn(effectTypes) {
+  const t = effectTypes;
+  const types = Array.isArray(t) ? t : (typeof t === "string" && t ? [t] : []);
+  for (const raw of types) {
+    const hit = WORD_WARHEADS.find(w => w.toLowerCase() === String(raw ?? "").trim().toLowerCase());
+    if (hit) return hit;
+  }
+  return null;
+}
 
 /** The formula a word warhead is rolled with — a real, rollable ZERO. The shot has to complete for its
  *  area consequence to be raised at all, and it must contribute no dice while doing so. */
@@ -483,14 +532,67 @@ export const WORD_WARHEAD_FORMULA = "0";
 
 export function wordWarheadOf(weapon) {
   const sys = weapon?._getWeaponSystem?.() ?? weapon?.system ?? {};
-  if (String(sys.damage ?? "").trim().toLowerCase() === WORD_WARHEAD_GAS.toLowerCase()) return WORD_WARHEAD_GAS;
+  const printed = String(sys.damage ?? "").trim().toLowerCase();
+  const own = WORD_WARHEADS.find(w => w.toLowerCase() === printed);
+  if (own) return own;
 
   const round = loadedRoundOf(weapon);
   if (!round) return null;
-  const t = round.system?.effectTypes;
-  const types = Array.isArray(t) ? t : (typeof t === "string" && t ? [t] : []);
-  if (!types.includes(WORD_WARHEAD_GAS)) return null;
-  return roundDamageOf(round.system) ? null : WORD_WARHEAD_GAS;
+  const declared = wordWarheadIn(round.system?.effectTypes);
+  if (!declared) return null;
+  return roundDamageOf(round.system) ? null : declared;
+}
+
+/**
+ * THE WORD A FIRED PAYLOAD CARRIES, or null — the same question as `wordWarheadOf`, asked of the
+ * DATAGRAM instead of the item.
+ *
+ * ⛔ WHY IT IS A SECOND FUNCTION, for the same reason `payloadDetonates` and `weaponDetonates` are two.
+ * The item reader is asked BEFORE the trigger is pulled (the attack gesture's guard, deciding what to
+ * substitute for the printed word); this one is asked AFTER, on a client that may never have held the
+ * item at all — a player's throw reaches the GM as relayed JSON. The seam gathers the same two facts
+ * into one flat field on the way out (`ammoEffectFields` reads the loaded round's `effectTypes` first
+ * and falls back to the WEAPON's own, which is where the corrections layer stamps a thrown grenade's),
+ * so by the time a payload exists the two doors have already been collapsed into one list and there is
+ * exactly one thing left to read.
+ *
+ * ⚠ IT DOES NOT RE-ASK THE DICELESS QUESTION, and cannot: a payload carries no round document. It does
+ * not need to — a load that carries BOTH a word and dice was priced by the ladder at fire time and its
+ * card arrives here with real damage in `areaDamages`, which is what the blast prices off. The word is
+ * read for its CONSEQUENCE, and an incendiary-style load that also states one is entitled to it.
+ */
+export function wordWarheadOfPayload(payload) {
+  return wordWarheadIn(payload?.effectTypes);
+}
+
+/**
+ * DID THIS DELIVERED WARHEAD MISS — the ONE test the two rails that ask must both read.
+ *
+ * ⛔ THE DEFECT IT ANSWERS (2026-08-28, the word-warhead family). Both sites used to ask "did the card
+ * carry any rolled damage", summing `areaDamages` and treating a zero as a miss (seam-shim.js
+ * `blastScatter`, damage-hooks.js `missedThrow`). That is exact for a warhead with dice — 7d6 cannot
+ * roll zero — and WRONG for a word warhead, which fires through a substituted rollable ZERO
+ * (`WORD_WARHEAD_FORMULA`) and therefore lands a clean HIT whose damage sums to nothing. A stun
+ * grenade thrown squarely at a figure would have been ruled a miss and sent to the grenade table.
+ *
+ * ⭐ SO THE BASE'S OWN VERDICT IS ASKED FIRST. `baseHit` is the boolean the base system computed after
+ * every rule it applies — the range DC, the fumble table's `forceMiss`, the per-fire-mode tie rule —
+ * carried on the payload since 2026-08-26 precisely so no consumer has to re-derive it (seam-shim.js).
+ * A payload that states it is answered by it and nothing else.
+ *
+ * ⚠ THE DAMAGE SUM SURVIVES AS THE FALLBACK, unchanged, for a payload that does NOT state the verdict:
+ * a macro's shot, a keeper driving the hook directly, or one relayed from a client on a build before
+ * the field existed. Absence is the compatibility mechanism, exactly as it is everywhere else in this
+ * flow — and for every dice-bearing warhead the two readings agree anyway, so nothing that fires today
+ * changes behaviour.
+ */
+export function deliveryShotMissed(payload) {
+  if (typeof payload?.baseHit === "boolean") return !payload.baseHit;
+  let landed = 0;
+  for (const hits of Object.values(payload?.areaDamages ?? {})) {
+    for (const h of (hits ?? [])) landed += Number(h?.damage ?? h?.dmg) || 0;
+  }
+  return landed <= 0;
 }
 
 /**

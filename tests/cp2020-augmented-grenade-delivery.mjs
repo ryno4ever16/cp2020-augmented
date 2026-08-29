@@ -506,18 +506,34 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       const realWarn = ui.notifications.warn.bind(ui.notifications);
       ui.notifications.warn = (m, ...r) => { warns.push(String(m)); return realWarn(m, ...r); };
       try {
-        // (a) a weapon that IS its own warhead and prints a word: still refused, named, nothing rolled.
+        // (a) a weapon that IS its own warhead and prints a word: refused, named, nothing rolled.
         // ⭐ RE-VALUED 2026-08-27 (the standard-round ruling): the EMPTY LAUNCHER no longer belongs here
-        // — it now resolves a standard round (§9). The refusal's own subject moved to the weapon class
-        // the ladder deliberately does not cover: a gas grenade carries its warhead, and defaulting it
-        // to frag would turn one weapon into another.
+        // — it now resolves a standard round (§9).
+        // ⭐⭐ RE-VALUED AGAIN 2026-08-28 (the word-warhead family), and the subject moved a second time.
+        // This leg used to fire a GAS grenade and require the refusal; gas became a word warhead with a
+        // modelled consequence that same day, and the other four printed words followed, so every word
+        // in the shipped catalogue is now SERVED rather than refused. Requiring a refusal for one of
+        // them pins behaviour the module deliberately no longer has.
+        // ⛔ WHAT THE REFUSAL STILL COVERS, and what this leg is now about: a word NOTHING models. The
+        // admitted set (area-delivery.js `WORD_WARHEADS`) is closed, so a GM-authored word outside it
+        // reaches the guard with no consequence behind it — and a shot admitted with nothing behind it
+        // is a silent nothing, which is exactly what the message exists to prevent.
         await launcher.update({ "system.ammoItemId": "" });
+        const [unmodelled] = await shooter.createEmbeddedDocuments("Item", [{
+          name: "__PW__Flash", type: "weapon",
+          system: { ...HEAVY, attackType: "Grenade", ammoType: "Grenade", damage: "Flash", range: "50" },
+        }]);
         let called = 0;
-        const refused = await sheet._cpFireThroughDamageGuard(gasGrenade, async () => { called++; return "fired"; });
-        ok("§5 a weapon whose own damage is a word it OWNS is refused, not crashed", refused === null && called === 0, `called=${called}`);
+        const refused = await sheet._cpFireThroughDamageGuard(unmodelled, async () => { called++; return "fired"; });
+        ok("§5 a weapon printing a word NOTHING models is refused, not crashed", refused === null && called === 0, `called=${called}`);
         ok("§5 the refusal names the weapon and the fix, localized (no raw key)",
-          warns.some(w => w.includes(gasGrenade.name) && w.includes("Gas") && !/^CYBERPUNK\./.test(w)),
+          warns.some(w => w.includes(unmodelled.name) && w.includes("Flash") && !/^CYBERPUNK\./.test(w)),
           warns.join(" | "));
+        // …and the counterpart: an ADMITTED word is served instead of refused, on the substituted zero.
+        let calledGas = 0;
+        const servedGas = await sheet._cpFireThroughDamageGuard(gasGrenade, async () => { calledGas++; return "fired"; });
+        ok("§5 a weapon printing an ADMITTED word is served, not refused (the substituted zero)",
+          servedGas === "fired" && calledGas === 1, `out=${servedGas} called=${calledGas}`);
 
         // (b) with a round loaded, the ROUND supplies the formula for the duration of the roll
         await launcher.update({ "system.ammoItemId": round.id });
@@ -1025,9 +1041,15 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
       ui.notifications.warn = (m, ...r) => { warnsG.push(String(m)); return realWarnG(m, ...r); };
       let ranG = 0;
       try {
+        // ⭐ RE-VALUED 2026-08-28 (the word-warhead family). This used to require the guard MESSAGE for
+        // a gas grenade. The ladder's scope is unchanged and still the point of the leg above — a gas
+        // tube is never handed a frag warhead — but the SHOT is no longer refused: gas is an admitted
+        // word warhead, so the guard substitutes a rollable zero and the shot completes to raise its
+        // cloud. Refusing it was the defect the gas unit fixed, so the assertion is inverted to match
+        // the shipped contract: no warning at all, and the thunk reached.
         const outG = await sheetS._cpFireThroughDamageGuard(gasG, async () => { ranG++; return "fired"; });
-        ok("§9 SCOPE — and it still gets the guard message, unchanged",
-          outG === null && ranG === 0 && warnsG.length === 1 && warnsG[0].includes("Gas"),
+        ok("§9 SCOPE — and the shot is SERVED on a substituted zero, with no guard message",
+          outG === "fired" && ranG === 1 && warnsG.length === 0,
           `out=${outG} called=${ranG} warns=${JSON.stringify(warnsG)}`);
       } finally { ui.notifications.warn = realWarnG; }
 

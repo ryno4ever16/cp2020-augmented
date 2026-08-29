@@ -235,6 +235,77 @@ export async function applyFireDotState(target, location, turnsLeft, formula, fl
   await mirrorDotStatus(target, "burning", true);
 }
 
+/* ═══════════════ TIMED SENSE CONDITIONS — the Dazzle / Sonic half of CP2020 p.64 ═══════════════
+ *
+ * ⛔ WHY THESE ARE THE SAME MECHANISM AS THE TWO ABOVE AND NOT A NEW ONE. p.64 prints "Dazzle (Blind
+ * for 4 turns), Sonic (deafened 4 turns)" — a condition on a body with a printed number of turns on it,
+ * which is exactly what `fireDotState` and `dotState` already are. So this reuses their whole shape
+ * rather than inventing a parallel: an ARRAY of markers on an actor flag, each carrying its own
+ * `turnsLeft`, counted down by the combat tick in damage-hooks.js (`_runOverTimeTick`), mirrored onto
+ * a CORE STATUS on the way in and off it when the LAST marker of that condition expires
+ * (`mirrorDotStatus`, whose own note explains why the two vocabularies must both be spoken).
+ *
+ * ⛔ WHAT IS DELIBERATELY NOT USED. Not a bare `setTimeout` — a wall clock is not the fight's clock and
+ * would keep counting through a paused table. Not an unexpiring status either: a condition the referee
+ * has to remember to remove is the thing this whole family of engines exists to avoid.
+ *
+ * ⭐ THE STATUS IDS ARE FOUNDRY'S OWN — `blind` and `deaf` are in core's default `CONFIG.statusEffects`
+ * and the base system registers none of its own (verified in fx/status-fx.js's detection note), so a
+ * dazzled figure gets a real ActiveEffect that the token HUD, the effects list and every other module
+ * can read. The module's own condition-overlay rail reads the same two roads and needs no change.
+ *
+ * ⚠ ONE MARKER PER CONDITION PER BODY, and the longer duration wins. Two dazzle grenades in one
+ * detonation are one blinding, not two four-turn timers running side by side — the same reading the
+ * acid/fire engines' "stack" mode takes at a location, resolved here to a MAX rather than a sum because
+ * p.64 states a fixed duration for the effect rather than a quantity that accumulates.
+ */
+
+/** The two conditions this engine models, keyed by the effect word the payload carries, each naming the
+ *  CORE status id it is mirrored onto. Closed: a word outside it is not a sense condition. */
+export const WORD_CONDITIONS = Object.freeze({
+  Blind: "blind",
+  Deaf:  "deaf",
+});
+
+/**
+ * Raise a timed sense condition on one body.
+ *
+ * @param {Actor}  target      the actor to mark — for an unlinked figure, ITS OWN synthetic actor
+ * @param {string} word        "Blind" or "Deaf" (a word outside WORD_CONDITIONS is a no-op)
+ * @param {number} turns       how many turns it lasts (CP2020 p.64 prints 4 for both)
+ * @param {string} weaponName  what caused it, for the expiry notice
+ * @returns {Promise<boolean>} whether a marker was written
+ */
+export async function applyWordConditionState(target, word, turns, weaponName = "") {
+  const statusId = WORD_CONDITIONS[word];
+  const turnsLeft = Math.max(0, Math.floor(Number(turns) || 0));
+  if (!target || !statusId || turnsLeft <= 0) return false;
+
+  const raw = target.getFlag?.("cp2020-augmented", "wordConditionState");
+  const states = Array.isArray(raw) ? [...raw] : (raw ? [raw] : []);
+  const idx = states.findIndex(s => s?.word === word);
+  const entry = { word, turnsLeft, weaponName: String(weaponName || "") };
+  if (idx >= 0) {
+    // The longer of the two stands — see the cardinality note above.
+    states[idx] = { ...entry, turnsLeft: Math.max(Number(states[idx].turnsLeft) || 0, turnsLeft) };
+  } else {
+    states.push(entry);
+  }
+  await target.setFlag("cp2020-augmented", "wordConditionState", states);
+  await mirrorDotStatus(target, statusId, true);
+  return true;
+}
+
+/**
+ * Route a WORD-WARHEAD payload's timed condition to the engine above. The payload states the word and
+ * the duration; a word that names no condition (a "Stun" or "Gas" payload, whose consequences are
+ * elsewhere) is a clean no-op, so every caller can hand over whatever word it read without branching.
+ */
+export async function applyWordConditionFromPayload(target, word, src = {}) {
+  if (!WORD_CONDITIONS[word]) return false;
+  return await applyWordConditionState(target, word, Number(src.dotTurns), String(src.weaponName || ""));
+}
+
 /**
  * Route a DOT-bearing payload to the correct mechanic by its dotType ("fire" -> HP burn,
  * anything else -> acid armor degradation). Honors each mechanic's enable setting. Safe no-op
@@ -323,13 +394,36 @@ function getTokenId(actor) {
   return canvas?.tokens?.placeables?.find(t => t.actor?.id === actor.id)?.id ?? "";
 }
 
-export async function postStunSavePrompt(actor, token = null, { perTurn = false } = {}) {
+/**
+ * ⭐⭐ A SAVE MODIFIER THIS ONE PROMPT WAS BUILT WITH, carried to its own resolution (2026-08-28).
+ *
+ * ⛔ THE PROBLEM IT SOLVES. CP2020 p.64 gives the stun grenade "Stun (-5 to Stun)": one save, one flat
+ * penalty, at the detonation. The module's existing save penalty is the TASER ladder, and that is a
+ * different rule by design — `_getTaserPenalty` returns `(count − 1) × |mod|`, so the FIRST shock
+ * carries no penalty at all and only successive hits inside a three-turn window bite. Routing the
+ * grenade through it would have delivered exactly −0 on the one save the book prices at −5, and
+ * routing it through it with a faked count would have made the taser's own ladder read wrong.
+ *
+ * ⭐ SO IT RIDES THE PROMPT, WHICH IS AN IDIOM THIS FILE ALREADY HAS. `postDeathSavePrompt` takes a
+ * `forcedMortalLevel`, prints the threshold it built, puts the value on the button as `data-mortal-
+ * level`, and `executeDeathSave` resolves at THAT value rather than re-deriving one — "resolve at the
+ * same level the prompt was built with", written out at its own call. This is the same mechanism for
+ * the same reason: the number is a fact about the EVENT that asked for the save, not a lasting state of
+ * the body, so it travels with the question and dies with it. Nothing is written to the actor, nothing
+ * has to be cleared afterwards, and a second unrelated stun save posted the same turn is unaffected.
+ *
+ * ⚠ THE VALUE IS THE PAYLOAD'S OWN AND IS NEGATIVE (`stunSaveMod: -5`), so it is ADDED to the threshold
+ * and the result is floored at 1 exactly as `getStunThreshold` floors its own — a save is never made
+ * impossible by it, which is the same guarantee every other threshold in this file gives.
+ */
+export async function postStunSavePrompt(actor, token = null, { perTurn = false, saveMod = 0 } = {}) {
   // ⭐ THE CAPPED STATE IS WHAT THIS CARD IS BUILT FROM (2026-08-27 — utils `cappedWoundState`). The
   // wound LABEL was already clamped to Mortal 6 inside `woundStateLabel`; the penalty line beside it
   // was not, so one card printed "Mortal 6" and "− 94 (wound penalty)" at the same time. Both halves
   // now read the same number, and it is the last row the table defines.
   const woundState   = actor.woundState ? cappedWoundState(actor) : 1;
-  const threshold    = getStunThreshold(actor);
+  const declaredMod  = Math.min(0, Math.floor(Number(saveMod) || 0));
+  const threshold    = Math.max(1, getStunThreshold(actor) + declaredMod);
   const bt           = Number(actor.system?.stats?.bt?.total) || 0;
   const penalty      = woundState > 1 ? woundState - 1 : 0;
   const taserPenalty = _getTaserPenalty(actor);
@@ -340,13 +434,16 @@ export async function postStunSavePrompt(actor, token = null, { perTurn = false 
   // threshold is already floored to ≥ 1 by getStunThreshold, so no floored note is shown.
   const woundClause = penalty > 0      ? localizeParam("StunWoundPenaltyClause", { penalty }) : "";
   const taserClause = taserPenalty > 0 ? localizeParam("StunTaserPenaltyClause", { penalty: taserPenalty }) : "";
+  // The event's own penalty, named beside the other two so the card discloses the whole arithmetic it
+  // was built from rather than printing a threshold the reader cannot reconstruct.
+  const eventClause = declaredMod < 0  ? localizeParam("StunEventPenaltyClause", { penalty: Math.abs(declaredMod) }) : "";
   const taserCount  = actor.getFlag?.("cp2020-augmented", "taserState")?.count ?? 1;
 
   const content = await renderChatCard("stun-save-prompt.hbs", {
     actorName: actor.name,
     woundLabel: woundStateLabel(woundState),
-    bt, woundClause, taserClause, taserPenalty, taserCount, threshold,
-    actorId: actor.id, tokenId, sceneId,
+    bt, woundClause, taserClause, eventClause, taserPenalty, taserCount, threshold,
+    actorId: actor.id, tokenId, sceneId, saveMod: declaredMod,
   });
 
   await ChatMessage.create({
@@ -424,7 +521,7 @@ export async function postSavePrompts(actor, token = null) {
   }
 }
 
-export async function executeStunSave({ actorId, tokenId, sceneId }) {
+export async function executeStunSave({ actorId, tokenId, sceneId, saveMod = 0 }) {
   // Token-first: the card's tokenId names WHICH body took the wound — an unlinked token's save
   // reads and writes its own synthetic actor, never the shared world actor its id also matches.
   const actor = resolveActorRef({ tokenId, sceneId, actorId });
@@ -433,7 +530,12 @@ export async function executeStunSave({ actorId, tokenId, sceneId }) {
   // Only the actor's owner or the GM may resolve this save (see _assertCanResolveSave).
   if (!_assertCanResolveSave(actor)) return;
 
-  const threshold = getStunThreshold(actor);
+  // Resolve at the SAME threshold the prompt was built with — the event's own penalty rides the button
+  // (`data-save-mod`), exactly as the death save's mortal level does, so a save cannot be asked at one
+  // number and rolled at another. A card from before the field existed sends nothing and resolves as it
+  // always did. Floored at 1 by the same rule the prompt floors it with.
+  const declaredMod = Math.min(0, Math.floor(Number(saveMod) || 0));
+  const threshold = Math.max(1, getStunThreshold(actor) + declaredMod);
   const roll      = await new Roll("1d10").evaluate();
   const result    = roll.total;
   const success   = result <= threshold;
@@ -680,6 +782,10 @@ export function registerSaveRollHandlers() {
         actorId: stunBtn.dataset.actorId,
         tokenId: stunBtn.dataset.tokenId,
         sceneId: stunBtn.dataset.sceneId,
+        // The event's own penalty, carried on the card that asked (see postStunSavePrompt). Absent on
+        // every prompt that declared none and on any card written before the attribute existed —
+        // `Number(undefined)` is NaN, which the reader coerces to 0.
+        saveMod: Number(stunBtn.dataset.saveMod),
       });
       // One-shot: the save rolled — stamp the prompt so it cannot be re-fired (card-lock.js).
       await markCardResolved(stunBtn.closest("[data-message-id]")?.dataset?.messageId, "stunSave");

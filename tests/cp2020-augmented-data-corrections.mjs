@@ -136,9 +136,49 @@ try {
         Array.isArray(seamFields.effectTypes) && seamFields.effectTypes.includes("Gas")
         && seamFields.blastRadius === 3 && seamFields.dotTurns === 3,
         JSON.stringify(seamFields));
+      // ── The rest of the word-warhead family (2026-08-28) — the same three assertions per item ──
+      // CP2020 p.64 verbatim: "Stun (-5 to Stun), Dazzle (Blind for 4 turns), Sonic (deafened 4
+      // turns)". Each thrown item is its own warhead, so — exactly as the Gas entry above — the effect
+      // word and its one number ride the WEAPON's system through the module's schema extension, and
+      // the seam's weapon-fallback is what carries them into the payload the detonation is priced off.
+      const stunG = await mkFrom("cyberpunk2020.heavy", "ggK24JleGw0yaQBt");
+      ok("word-warhead: the Stun Grenade's word and its −5 survive the weapon schema",
+        JSON.stringify(stunG.system.effectTypes) === JSON.stringify(["Stun"]) && stunG.system.stunSaveMod === -5,
+        JSON.stringify({ e: stunG.system.effectTypes, m: stunG.system.stunSaveMod }));
+      ok("word-warhead: the seam carries the Stun payload's word and penalty",
+        (() => { const f = SEAM.ammoEffectFields(stunG);
+                 return Array.isArray(f.effectTypes) && f.effectTypes.includes("Stun") && f.stunSaveMod === -5; })(),
+        JSON.stringify(SEAM.ammoEffectFields(stunG)));
+
+      const dazzleG = await mkFrom("cyberpunk2020.heavy", "kzs0XczTAwo1pgfb");
+      ok("word-warhead: the Dazzle Grenade carries Blind for the book's 4 turns",
+        JSON.stringify(dazzleG.system.effectTypes) === JSON.stringify(["Blind"]) && dazzleG.system.dotTurns === 4,
+        JSON.stringify({ e: dazzleG.system.effectTypes, t: dazzleG.system.dotTurns }));
+      ok("word-warhead: the seam carries the Dazzle payload's word and duration",
+        (() => { const f = SEAM.ammoEffectFields(dazzleG);
+                 return Array.isArray(f.effectTypes) && f.effectTypes.includes("Blind") && f.dotTurns === 4; })(),
+        JSON.stringify(SEAM.ammoEffectFields(dazzleG)));
+
+      const sonicG = await mkFrom("cyberpunk2020.heavy", "iN1wBc0bMIf1m7kG");
+      ok("word-warhead: the Sonic Grenade carries Deaf for the book's 4 turns",
+        JSON.stringify(sonicG.system.effectTypes) === JSON.stringify(["Deaf"]) && sonicG.system.dotTurns === 4,
+        JSON.stringify({ e: sonicG.system.effectTypes, t: sonicG.system.dotTurns }));
+      ok("word-warhead: the seam carries the Sonic payload's word and duration",
+        (() => { const f = SEAM.ammoEffectFields(sonicG);
+                 return Array.isArray(f.effectTypes) && f.effectTypes.includes("Deaf") && f.dotTurns === 4; })(),
+        JSON.stringify(SEAM.ammoEffectFields(sonicG)));
+
+      // ⛔ THE NEGATIVE, WIDENED TO THE WHOLE FAMILY. A shelf-mate with no corrections entry of its own
+      // must gain NOTHING — not the word, not the penalty, not the duration — or the layer would be
+      // stamping payloads onto items the book gives none.
       const frag = await mkFrom("cyberpunk2020.heavy", "IpfEt6QiPxF1Jhfl");
-      ok("gas-payload negative: a sibling grenade's copy gains NO effect types",
-        (frag.system.effectTypes ?? []).length === 0, JSON.stringify(frag.system.effectTypes));
+      ok("word-warhead negative: a sibling grenade's copy gains no word, no penalty, no duration",
+        (frag.system.effectTypes ?? []).length === 0 && !frag.system.stunSaveMod && !frag.system.dotTurns,
+        JSON.stringify({ e: frag.system.effectTypes, m: frag.system.stunSaveMod, t: frag.system.dotTurns }));
+      const incend = await mkFrom("cyberpunk2020.heavy", "P1fY9ea1Et8yT2Zd");
+      ok("word-warhead negative: the Incendiary Grenade's copy gains none of the payload fields either",
+        (incend.system.effectTypes ?? []).length === 0 && !incend.system.stunSaveMod && !incend.system.dotTurns,
+        JSON.stringify({ e: incend.system.effectTypes, m: incend.system.stunSaveMod, t: incend.system.dotTurns }));
       const nagi = await mkFrom("cyberpunk2020.melee", "CfQQEwck7VZNQzC6");
       ok("PR42: Naginata accuracy '' → 1", Number(nagi.system.accuracy) === 1, nagi.system.accuracy);
       const avante = await mkFrom("cyberpunk2020.exotics", "5d4juFywt9NMCYTw");

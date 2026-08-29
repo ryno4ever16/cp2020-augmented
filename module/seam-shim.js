@@ -22,7 +22,7 @@ import { scatterDriftM } from "./combat/scatter-table.js";
 // The scatter DECISION comes from the verdict's own home (2026-08-26), the drift TABLE from the file
 // above; they were one import until the predicate had to start reading the base's ruling.
 import { payloadScattersOnMiss } from "./combat/spread-geometry.js";
-import { areaDeliveryKind } from "./combat/area-delivery.js";
+import { areaDeliveryKind, deliveryShotMissed } from "./combat/area-delivery.js";
 import { getWeaponLongRange } from "./combat/rangefinding.js";
 // ⭐ WHICH ROW OF THE BASE'S FUMBLE TABLE WAS RULED. This file is the ONE caller of the derivation —
 // see the "one derivation, one caller" note in combat/fumble-outcome.js. Its answer rides the payload
@@ -515,13 +515,22 @@ function installRenderEmit() {
         // base fills areaDamages only on a hit) — so the two sites cannot rule differently. Null on
         // every hit and every non-delivery shot; the plant keeps its own roll as the fallback for a
         // payload relayed from a build without this field.
+        //
+        // ⭐⭐ AND THE MISS TEST IS NOW A SHARED CALL (2026-08-28, the word-warhead family). It used to
+        // be a damage sum written out here and a second copy of the same sum written out at the plant;
+        // both read a card that carried no dice as a miss, which is exact for a warhead WITH dice and
+        // wrong for one whose whole effect is a word (it fires through a substituted rollable zero and
+        // lands a clean hit summing to nothing). `deliveryShotMissed` asks the base's own carried
+        // verdict first and keeps the sum as its fallback — the full reasoning is at its definition in
+        // combat/area-delivery.js. The base's boolean is passed in the shape the payload carries it in,
+        // so this site and the plant are asking the identical question of the identical facts.
         let blastScatter = null;
         if (areaDeliveryKind(_fireCtx.attackType)) {
-          let landedDmg = 0;
-          for (const hits of Object.values(data?.areaDamages ?? {})) {
-            for (const h of (hits ?? [])) landedDmg += Number(h?.damage ?? h?.dmg) || 0;
-          }
-          if (landedDmg <= 0) {
+          const missed = deliveryShotMissed({
+            baseHit: typeof data?.hit === "boolean" ? data.hit : null,
+            areaDamages: data?.areaDamages,
+          });
+          if (missed) {
             blastScatter = {
               dirFace: (await new Roll("1d10").evaluate()).total,
               distFace: (await new Roll("1d10").evaluate()).total,

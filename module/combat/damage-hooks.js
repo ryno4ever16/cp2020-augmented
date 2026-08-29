@@ -38,7 +38,7 @@ import { applyAreaDamages, ablateLocationOnce, ablateLocationByAmount, applyLoca
 import { makeSeverityBatch, closeSeverityBatch, severityBatchOwnsMortal, severityBatchHandledMortal, isSeverityBatch, recordSeverityStun } from "./severity-batch.js";
 import { routesToSdp, contributingItems } from "../mech/cyberlimb.js";
 import { isFullBorg } from "../mech/borg.js";
-import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus } from "./save-rolls.js";
+import { postStunSavePrompt, postDeathSavePrompt, updateTaserState, applyAcidDotState, applyDotFromPayload, postSavePromptCard, mirrorDotStatus, applyWordConditionFromPayload, WORD_CONDITIONS } from "./save-rolls.js";
 import { gasSaveDecisionFor, percentGateOutcome } from "../mech/protection.js";
 // combatFxEnabled is read (with the presentation rail's patternFlowOwns) at the pattern's apply, so one
 // round is not sounded twice — once on arrival by the rail and again when the corridor is confirmed.
@@ -82,7 +82,7 @@ import { isPrimaryGMSession } from "../gm-session-primary.js";
 // this file's two halves both read (the single-target skip and the blast claim), shared with the
 // presentation rail and the attack gesture. See combat/area-delivery.js for the p.99/p.108/p.110
 // citations and for why it lives in its own import-free file.
-import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, wordWarheadOf, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
+import { areaDeliveryOf, payloadDetonates, damageFormulaIsRollable, warheadDamageFor, wordWarheadOf, wordWarheadOfPayload, deliveryShotMissed, AREA_DELIVERY_FULL_WITHIN_M } from "./area-delivery.js";
 // The ONE renderer for a caught figure's math line — the same builder the Apply Damage window uses, so
 // the cards and the window can never state one hit two ways (user ruling 2026-08-28, option A).
 import { cardBreakdownFor } from "./damage-breakdown.js";
@@ -1807,6 +1807,51 @@ async function _runOverTimeTick(combat) {
     }
   }
 
+  // ── Timed sense conditions (Dazzle / Sonic — CP2020 p.64) ────────────────
+  //
+  // ⛔ THE SAME CADENCE AND THE SAME SHAPE as the two engines above, deliberately: an array of markers
+  // on an actor flag, each carrying its own `turnsLeft`, counted down once per pass and lifted off
+  // core's own status when the LAST one of that condition goes. Reusing their tick is what makes "4
+  // turns" mean the same thing here as everywhere else in the module — the fight's clock, not a wall
+  // clock — and it is why nothing in this feature reaches for a timer of its own.
+  //
+  // ⚠ UNGATED BY ANY FEATURE SETTING, and that is the project's standing rule rather than an oversight:
+  // throwing the grenade IS the consent (memory `feedback-action-as-consent-rules`). The three engines
+  // above carry their own toggles because each is an OPTIONAL RULE layered onto ordinary damage; a
+  // dazzle grenade's blinding is not optional, it is the entire printed effect of the item.
+  //
+  // The dead check matches the branches above: a body that is out does not carry a sense condition, and
+  // clearing rather than ticking is what stops a corpse wearing one indefinitely.
+  {
+    const rawWord = actor.getFlag?.("cp2020-augmented", "wordConditionState");
+    const wordStates = Array.isArray(rawWord) ? rawWord : (rawWord ? [rawWord] : []);
+    if (wordStates.length > 0) {
+      const isDead = actor.statuses?.has("dead");
+      const surviving = [];
+      for (const ws of wordStates) {
+        const word = String(ws?.word ?? "");
+        const statusId = WORD_CONDITIONS[word];
+        const turnsLeft = Number(ws?.turnsLeft) || 0;
+        if (!statusId || turnsLeft <= 0 || isDead) continue;   // dropped, and its status lifted below
+        const newTurnsLeft = turnsLeft - 1;
+        if (newTurnsLeft > 0) { surviving.push({ ...ws, turnsLeft: newTurnsLeft }); continue; }
+        await postSavePromptCard({
+          body: localizeParam("WordConditionExpiredBody", { name: actor.name, effect: localize(`WordCondition${word}`) }),
+          speaker: ChatMessage.getSpeaker({ actor }),
+        });
+      }
+      // Each condition's core status comes off only when NO marker of that condition survives — the
+      // same last-marker rule the burn and the etch keep, so two overlapping dazzles do not clear the
+      // mark when the shorter of them runs out.
+      for (const [word, statusId] of Object.entries(WORD_CONDITIONS)) {
+        if (!wordStates.some(s => s?.word === word)) continue;
+        if (!surviving.some(s => s?.word === word)) await mirrorDotStatus(actor, statusId, false);
+      }
+      if (surviving.length > 0) await actor.setFlag("cp2020-augmented", "wordConditionState", surviving);
+      else await actor.unsetFlag("cp2020-augmented", "wordConditionState");
+    }
+  }
+
   // ── Choke DOT ────────────────────────────────────────────────────────────
   const meleeEnabled = (() => {
     try { return game.settings.get("cp2020-augmented", "specialMeleeEffectsEnabled"); }
@@ -2503,7 +2548,16 @@ async function _placeExplosion(payload) {
     // carries none. Nothing further has to be asked, and — the user's report — nothing further should be
     // ASKED OF THE REFEREE either: the card used to offer a Scatter button and a Confirm button and left
     // the table to work out which applied, on a card that never said whether the throw had landed.
-    const missedThrow = baseDamage <= 0 && !!delivery;
+    //
+    // ⭐⭐ AND THE TEST IS NO LONGER THE DAMAGE SUM (2026-08-28, the word-warhead family). "The card
+    // carried nothing" and "the throw missed" are the same fact for a warhead WITH dice — 7d6 cannot
+    // roll zero — and two different facts for one whose whole effect is a WORD: it fires through a
+    // substituted rollable zero, so a stun grenade landing squarely on a figure produces a card whose
+    // damage sums to nothing and would have been ruled a miss and sent to the grenade table. The base
+    // system's own carried verdict answers first now; `deliveryShotMissed` (combat/area-delivery.js)
+    // holds the whole reasoning and the seam asks it in the identical shape, so the two rails still
+    // cannot rule differently — which was the property the old duplicated sum was protecting.
+    const missedThrow = !!delivery && deliveryShotMissed(payload);
     if (missedThrow) baseDamage = await _rollDeliveryWarhead(payload);
     // ⭐ THE AREA OF EFFECT. The payload's own `blastRadius` first — a loaded round with a radius typed
     // on it, or an item a GM has stated, is answered with THEIR number. A delivery weapon that carries
@@ -2513,7 +2567,28 @@ async function _placeExplosion(payload) {
     // payload that is neither a delivery weapon nor an explosive round still resolves to 0 and returns
     // exactly as it always did.
     const radius = Number(payload.blastRadius) || delivery?.radiusM || 0;
-    if (baseDamage <= 0 || radius <= 0) return;
+    // ⭐⭐ A WARHEAD WHOSE EFFECT IS A WORD STILL LANDS (2026-08-28 — the Stun / Dazzle / Sonic unit).
+    //
+    // ⛔ THE DEFECT THIS LINE ANSWERS, and it is the reason the family could not simply be admitted at
+    // the fire guard. A word warhead deals no dice by definition, so it arrived here with `baseDamage`
+    // at zero and took this bail — no area was created, no confirm card was posted, and therefore the
+    // BLAST'S OWN FIGURE ENUMERATION never ran. The consequence has nowhere to be applied when the shot
+    // does not place: `_confirmExplosion` is the one site that answers "who was standing in the burst",
+    // and it can only answer about an area that exists.
+    //
+    // ⛔ WHY THE CONSEQUENCE RIDES THIS FLOW AND NOT A SECOND PLACEMENT OF ITS OWN. The figures a
+    // detonation catches are already derived once, carefully — containment through the v13/v14 shim,
+    // then the cover verdict that exempts anyone a wall genuinely protects. A parallel radius scan
+    // would be a second answer to that question and the two would drift; worse, a second placement
+    // would put two circles on the map for one grenade. So the word travels in the area's own flags
+    // beside every other fact about this detonation, and is honored per caught figure at confirm.
+    //
+    // ⚠ THE ZERO IS KEPT AS THE BASE DAMAGE, deliberately. It is the honest figure — the warhead deals
+    // none — and it is what makes the confirm's own damage loop a clean no-op for these shots without a
+    // second branch: `bandDamage` returns 0 at every distance and every row falls through its own
+    // `dmg <= 0` skip. Nothing about an ordinary blast changes.
+    const word = wordWarheadOfPayload(payload);
+    if ((baseDamage <= 0 && !word) || radius <= 0) return;
 
     const weaponName = payload.weaponName ?? localize("WpnExplosion");
     const fullWithin = Number(payload.blastFullDamageWithin ?? AREA_DELIVERY_FULL_WITHIN_M);
@@ -2631,6 +2706,14 @@ async function _placeExplosion(payload) {
         // confirm time seed their burn from what the area recorded. An area placed before this field
         // existed reads false, i.e. the halving that shipped before.
         dotFlat: Boolean(payload.dotFlat),
+        // ⭐ THE WORD THIS WARHEAD IS, when it is one — "" for every ordinary blast (2026-08-28).
+        // Written here with the riders above and for the identical reason: the area OUTLIVES the
+        // payload, the confirm reads the area and nothing else, and the consequence has to be
+        // reconstructable from the record alone. `dotTurns` and `stunSaveMod` are already carried two
+        // lines up — the duration and the save penalty this word spends are the SAME two fields an
+        // incendiary and a shock load spend, so nothing new had to be stored for them.
+        // An area placed before this field existed reads "" and confirms exactly as it always did.
+        wordWarhead: word ?? "",
       },
     });
     if (!handle?.doc) { console.warn("CP2020 | Explosion area creation failed"); return; }
@@ -2645,9 +2728,15 @@ async function _placeExplosion(payload) {
           ? localizeParam("ExplosionScatterLine", { dir: tryLocalize(scatter.dirName), dist: scatter.driftM })
           : localize("ExplosionScatterNoDrift"))
       : localize("ExplosionOnTarget");
+    // ⭐ WHAT THE CARD SAYS THIS WARHEAD DOES. An ordinary blast states its radius and its rolled
+    // damage; a word warhead has no damage to state, so it states its EFFECT instead — the same
+    // sentence the consequence will actually deliver, priced off the same two payload fields the flags
+    // just recorded. Assembled in JS and passed as one localized line (the GasCloudPenaltyClause
+    // pattern) so the template stays a declarative card with no arithmetic in it.
+    const wordSummary = word ? _wordWarheadSummary(word, payload) : "";
     const explosionCard = await (foundry?.applications?.handlebars?.renderTemplate ?? renderTemplate)(
       "modules/cp2020-augmented/templates/chat/explosion-confirm.hbs",
-      { weaponName, radius, baseDamage, fullWithin, templateId: handle.doc.id, outcomeLine }
+      { weaponName, radius, baseDamage, fullWithin, templateId: handle.doc.id, outcomeLine, wordSummary }
     );
     // The card names the FIGURE that threw it — same change, same reasoning as the gas cloud's card
     // (written out at _placeGasCloud). `attackerId` above is untouched: the AREA still records the base
@@ -2656,6 +2745,95 @@ async function _placeExplosion(payload) {
       content: explosionCard,
       speaker: ChatMessage.getSpeaker({ actor: firingActorOf(payload) ?? undefined }),
     });
+}
+
+/* ═════════════ WORD WARHEADS — the consequence the blast's own figure set receives ═════════════
+ *
+ * CP2020 p.64, verbatim and in full: "Stun (-5 to Stun), Dazzle (Blind for 4 turns), Sonic (deafened
+ * 4 turns)". That sentence is the entire specification and nothing below exceeds it — no damage, no
+ * secondary save, no penalty beyond the printed one, no duration beyond the printed one.
+ *
+ * ⛔ THE FIGURES ARE NOT CHOSEN HERE. They are handed in by `_confirmExplosion`, which is the one site
+ * that derives who a detonation caught — containment through the area shim, then the cover verdict that
+ * exempts whoever a barrier genuinely shielded. A word warhead gets exactly that set, which is what
+ * makes "the grenade went off behind a wall" answer the same way for a stun grenade as for a frag one.
+ *
+ * ⚠ ONE CONSEQUENCE OF RIDING THIS FLOW, STATED RATHER THAN HIDDEN: these warheads inherit the area
+ * flow's own master (`explosivesEnabled`, checked at `_hookExplosion`). A table that switches off
+ * detonation automation switches these off with it and resolves them by hand, exactly as it already
+ * does for every other grenade. No toggle of their own is added — throwing the grenade IS the consent
+ * (memory `feedback-action-as-consent-rules`), and a second switch would only be a second thing to
+ * disagree with the first.
+ *
+ * ⚠ GM ROUTING IS INHERITED TOO, and needed no new wiring: `weaponFired` is raised only on the firing
+ * client, and `_hookExplosion` already places on the primary GM SESSION or relays there
+ * (`explosionFired`, the socket table in `_hookSocketRelay`). So a player's stun grenade reaches the
+ * GM by the road every other blast already travels, and the consequence is applied exactly once.
+ */
+
+/** The one-line statement of what a word warhead does, built from the payload's own two numbers. Shared
+ *  by the confirm card (which promises it) and the resolution card (which reports it), so a table cannot
+ *  be told two different things about one detonation. */
+function _wordWarheadSummary(word, src = {}) {
+  if (word === "Stun") {
+    const mod = Math.min(0, Math.floor(Number(src.stunSaveMod) || 0));
+    return mod < 0 ? localizeParam("WordWarheadStunSummary", { mod }) : localize("WordWarheadStunPlainSummary");
+  }
+  const turns = Math.max(0, Math.floor(Number(src.dotTurns) || 0));
+  if (word === "Blind") return localizeParam("WordWarheadBlindSummary", { turns });
+  if (word === "Deaf")  return localizeParam("WordWarheadDeafSummary",  { turns });
+  return "";
+}
+
+/**
+ * DELIVER ONE WORD WARHEAD'S CONSEQUENCE to the figures the detonation caught, and report it.
+ *
+ * `word` is the effect the area recorded; `f` is the area's own flag record (the `stunSaveMod` /
+ * `dotTurns` written at placement); `targets` are the confirm's own rows, already cover-filtered.
+ *
+ * ⛔ TWO CONSEQUENCES, AND EACH REUSES THE ENGINE THAT ALREADY OWNS IT:
+ *   · STUN — `postStunSavePrompt` with the event's own penalty riding the prompt to its own
+ *     resolution (save-rolls.js, where the reasoning for that idiom is written out). A FAILED save
+ *     resolves through `executeStunSave` exactly as every other stun save in this module does; there
+ *     is no second resolution anywhere and nothing here decides an outcome.
+ *   · BLIND / DEAF — `applyWordConditionFromPayload` (save-rolls.js), the timed-marker engine that the
+ *     acid and fire ticks already use, mirrored onto core's own `blind` / `deaf` status so the figure
+ *     carries a real ActiveEffect. It counts down and lifts on the combat tick (`_runOverTimeTick`).
+ *
+ * ⚠ ONE CARD FOR THE WHOLE DETONATION, naming the figures — the shape the gas cloud's per-round card
+ * has. Nothing is posted when nobody was caught: the confirm's own "nothing in the blast" notice
+ * already covers that, and a card listing no one is noise.
+ */
+async function _applyWordWarhead(word, f, targets) {
+  if (!word || !targets?.length) return;
+  const weaponName = f.weaponName ?? localize("WpnExplosion");
+  const caught = [];
+
+  for (const entry of targets) {
+    // The TOKEN's own actor — for an unlinked figure that is its synthetic actor, and the condition
+    // belongs on THAT body rather than on the world actor whose id it also matches (the id-collision
+    // class recorded in combat-data-hazards; the same reading every write in this file takes).
+    const actor = entry.tok?.actor ?? null;
+    if (!actor) continue;
+    // A body already out of the fight is not asked to save again and is not marked: a corpse wearing a
+    // blind condition is noise, and the stun save it would be asked for has no state left to change.
+    if (actor.statuses?.has?.("dead")) continue;
+
+    if (word === "Stun") {
+      await postStunSavePrompt(actor, entry.tok, { saveMod: Number(f.stunSaveMod ?? 0) });
+      caught.push(entry.tok);
+    } else if (WORD_CONDITIONS[word]) {
+      const marked = await applyWordConditionFromPayload(actor, word, { dotTurns: f.dotTurns, weaponName });
+      if (marked) caught.push(entry.tok);
+    }
+  }
+
+  if (!caught.length) return;
+  const names = caught.map(t => `<b>${_spreadRowName(t)}</b>`).join(", ");
+  await postSavePromptCard({
+    title: localizeParam("WordWarheadTitle", { weapon: weaponName }),
+    body: localizeParam("WordWarheadBody", { names, effect: _wordWarheadSummary(word, f) }),
+  });
 }
 
 /**
@@ -2760,6 +2938,16 @@ async function _confirmExplosion(templateId) {
     (row) => bandDamage(row.center?.x ?? originX, row.center?.y ?? originY));
 
   if (!targets.length && !chewPlan.size) { ui.notifications.info(localize("NoTokensInBlast")); return; }
+
+  // ⭐⭐ THE WORD WARHEAD'S CONSEQUENCE RIDES THIS ENUMERATION (2026-08-28). `targets` above IS the
+  // burst's figure set — containment through the area shim, then the cover verdict — and it is derived
+  // exactly once, here. A stun / dazzle / sonic detonation takes that set and nothing else: no second
+  // radius scan, no second placement, and therefore no way for the two answers to drift apart.
+  //
+  // Placed BEFORE the damage loop for one reason: it is the whole of what these warheads do, and the
+  // loop below is a no-op for them anyway (their recorded base damage is zero, so every row falls
+  // through its own `dmg <= 0` skip). An ordinary blast records no word and is untouched by this line.
+  await _applyWordWarhead(String(f.wordWarhead ?? ""), f, targets);
 
   // One detonation is ONE application batch, which matters most on the detailed branch: the blow and the
   // fragments it throws are two applications on the same body at the same instant, and each used to post
