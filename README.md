@@ -27,7 +27,7 @@ themselves, not their palette UI / scripts / window chrome. (There is no separat
 the skin follows Foundry's own **Colour Scheme → Applications** setting. Switch that to Light and
 the sheets render in the base system's plain style instead.)
 
-- **Cyberpunk Restyler** — © DARKNEET69, MIT — the sheet styling (dark surface, bracketed `[ ]`
+- **Cyberpunk Restyler** — © [DARKNEET69](https://github.com/DARKNEET69), MIT — the sheet styling (dark surface, bracketed `[ ]`
   tabs, `>`-prompt headers + blink cursor, teal glow, statsrow / armor-display / wound-tracker /
   skill chip-toggle / selects + buttons).
 - **Carolingian UI** (`crlngn-ui`) — © Carol / crlngn-dev, MIT — a snapshot of ~8 colour-token
