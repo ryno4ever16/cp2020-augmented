@@ -2535,6 +2535,7 @@
         "UnarmedRung": "This threat level arms itself with fists and improvised weapons — the book's pool lists no purchasable weapon.",
         "PostureLoadMissing": "No {posture} load exists for {caliber} — standard rounds were loaded instead.",
         "ChemicalPoolWidened": "No chemical-capable weapon sits in this threat level's own pool — drew from the full chemical rack instead.",
+        "ChromeWhiff": "{n} of {count} cyberware pulls came up empty — threat levels C and below can whiff a pull, per the book's procedure.",
         "LauncherLoadedRound": "{name} arrives loaded: {round}.",
         "LauncherLoadedMicromissiles": "{name} arrives loaded: {count} micromissiles.",
         "LauncherLoadedCaseless": "{name} arrives with a {caliber} caseless magazine.",

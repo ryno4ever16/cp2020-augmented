@@ -740,6 +740,12 @@ export class NpcGeneratorApp extends HandlebarsApplicationMixin(ApplicationV2) {
   static async _onRerollOne(event, target) {
     const i = Number(target?.dataset?.index);
     if (!Number.isFinite(i) || !this.preview?.[i]) return;
+    // ⛔ READ THE DIALS FIRST (user report 2026-08-28: "after you reroll, the number resets to its
+    // default"). Generate reads the form; reroll did not — so a dial edited AFTER the preview
+    // appeared was ignored by the replan, and the re-render then repainted the field from the stale
+    // config, which read as the window discarding the edit. A reroll is "roll THIS one again with
+    // what is on screen", so it takes the same read the fused button takes.
+    this._readForm();
     const dest = this.destination.mode === "existing" ? game.folders?.get(this.destination.folderId) : null;
     const one = await planGoonSquad({
       ...this._planOpts(), count: 1, seed: `${this.seed}:${i}:${Math.random().toString(36).slice(2, 6)}`,

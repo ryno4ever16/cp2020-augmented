@@ -516,6 +516,16 @@ export async function planGoonSquad(opts = {}) {
     for (const l of chrome.lint) {
       honesty.push({ code: l.code, slotId: l.slotId ?? null, messageKey: `CYBERPUNK.GoonFactory.Lint.${l.code}` });
     }
+    // ⭐ THE WHIFF, SAID OUT LOUD (user report 2026-08-28: "I put in 10 and got 9 cyberware"). At
+    // threat C and below each pull's draw carries the book's nothing-share (chrome.js §3 pull
+    // mechanics), so a count of 10 can honestly land 9 — but a shortfall nobody narrates reads as
+    // the dial being ignored. The plan already counts the empties; this line just reports them.
+    if (chrome.nothingCount > 0) {
+      honesty.push({
+        code: "chromeWhiff", n: chrome.nothingCount, count: cfg.chromeCount,
+        messageKey: "GoonFactory.Honesty.ChromeWhiff",
+      });
+    }
     // Chrome launchers arrive LOADED where the book names their load (chromeLauncherLoadFor above);
     // the honesty line says what landed. A launcher the table does not know keeps the honest
     // "arrives empty" line it always had.

@@ -1303,6 +1303,67 @@ const r = await p.evaluate(async () => {
         { gun: gun?.name, link: gun?.system?.ammoItemId, gas: gasItem?.id });
     }
 
+    // ── THE FIELD-REPORT PAIR (2026-08-28 live testing) ──────────────────────────────────────────
+    // ⑧ Reroll honors the dials as they stand: a chrome count typed AFTER the preview appeared
+    //    reaches the rerolled goon, and the field keeps the typed value across the repaint.
+    {
+      const fire = (el, type) => el.dispatchEvent(new Event(type, { bubbles: true }));
+      app.overrides = {};
+      app.preview = null;
+      app.seed = "__PW__reroll";
+      app.count = 1;
+      await app.render();
+      await sleep(500);
+      const gradeSel = app.element.querySelector(".cp-goon-grade");
+      if (gradeSel.value !== "C") { gradeSel.value = "C"; fire(gradeSel, "change"); await sleep(500); }
+      const advBox = app.element.querySelector(".cp-goon-advanced");
+      if (advBox && !advBox.checked) { advBox.click(); await sleep(500); }
+      app.element.querySelector('.cp-goon-go[data-action="goonGenerate"]')?.click();
+      await sleep(3000);
+      const chromeField = () => app.element.querySelector(".cp-goon-chrome-count");
+      const beforeCount = Number(chromeField()?.value || 0);
+      const typedCount = beforeCount + 3;
+      chromeField().value = String(typedCount);
+      fire(chromeField(), "change");
+      await sleep(200);
+      app.element.querySelector('.cp-goon-icon[data-action="goonRerollOne"][data-index="0"]')?.click();
+      await sleep(3000);
+      check("a dial edited after the preview reaches the rerolled plan",
+        app.preview?.[0]?.bp?.config?.chromeCount === typedCount,
+        { typed: typedCount, planned: app.preview?.[0]?.bp?.config?.chromeCount });
+      check("… and the field keeps the typed value across the reroll's repaint",
+        Number(chromeField()?.value) === typedCount, chromeField()?.value);
+      app.overrides = {};
+      app.preview = null;
+      await app.render();
+      await sleep(300);
+    }
+
+    // ⑨ The whiff is narrated: at grade C a pull's draw carries the nothing-share, so a plan whose
+    //    chrome landed short of its count MUST say so on the honesty list, with the plan's own number.
+    {
+      let whiffed = null;
+      for (let i = 0; i < 40 && !whiffed; i++) {
+        const plan = await GF.planGoonSquad({
+          role: "solo", grade: "C", count: 1, seed: `__PW__whiff-${i}`,
+          destinationFolder: locker, overrides: { chromeCount: 10 },
+        });
+        if ((plan?.[0]?.chrome?.nothingCount ?? 0) > 0) whiffed = plan[0];
+      }
+      check("a short chrome landing carries the whiff honesty line, with the plan's own count",
+        !!whiffed && whiffed.honesty.some(h => h.code === "chromeWhiff"
+          && h.n === whiffed.chrome.nothingCount && h.count === 10),
+        whiffed && { nothing: whiffed.chrome.nothingCount, rows: whiffed.honesty.filter(h => h.code === "chromeWhiff") });
+      const clean = await GF.planGoonSquad({
+        role: "solo", grade: "A", count: 1, seed: "__PW__nowhiff",
+        destinationFolder: locker, overrides: { chromeCount: 4 },
+      });
+      check("grade A cannot whiff, so no whiff line renders there",
+        (clean?.[0]?.chrome?.nothingCount ?? -1) === 0
+        && !clean?.[0]?.honesty.some(h => h.code === "chromeWhiff"),
+        { nothing: clean?.[0]?.chrome?.nothingCount });
+    }
+
     // ── DETERMINISM ON THE LIVE RIG ───────────────────────────────────────────────────────────────
     const detA = await GF.planGoonSquad({ role: "cop", grade: "C", count: 2, seed: "__PW__det", destinationFolder: locker });
     const detB = await GF.planGoonSquad({ role: "cop", grade: "C", count: 2, seed: "__PW__det", destinationFolder: locker });
