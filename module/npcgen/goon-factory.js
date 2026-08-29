@@ -27,7 +27,8 @@
  */
 
 import { localize, tryLocalize } from "../utils.js";
-import { getCalibers, getCaliberBox, modifiersForCaliber } from "../lookups.js";
+import { getCalibers, getCaliberBox, modifiersForCaliber, normalizeCaliber } from "../lookups.js";
+import { GRENADE_ROUND_CALIBER } from "../combat/area-delivery.js";
 import { ammoModifierSystemFields } from "../shop/buy-ammo.js";
 import { checkInstall } from "../mech/container.js";
 import { MODE_TABLE, desiredVisionFor, resolveVisionMode } from "../mech/vision.js";
@@ -244,6 +245,79 @@ export function loadForPosture(posture, caliberId) {
   return { modifier: hit, satisfied: true, wanted: posture };
 }
 
+/* ═══════════════ THE CHEMICAL POSTURE — a WEAPON steer, not an ammo load (ruled 2026-08-28) ══════
+ *
+ * ⛔ THE RULING (user, 2026-08-28): the Chemical posture must actually deliver — "it should
+ * automatically try to select appropriate weapons that can use chemical loads like the power squirt
+ * or gas grenades". No chemical BULLET exists in the book or the registry (the POSTURE_LOADS note
+ * above), so chemistry arrives as a WEAPON: a chemical-delivery mechanism, a gas grenade, or a
+ * grenade launcher whose magazine this factory loads with gas rounds.
+ *
+ * THE PREDICATE, off index-row data (catalog.js threads attackType/ammoType for exactly this):
+ *   1. attackType ∈ {Drugs, Acid, Squirt, Gas} — the chemical delivery mechanisms of the base
+ *      catalogue (Power Squirt, Needlegun, Nelspot loads; lookups.js rangedAttackTypes).
+ *   2. a thrown GAS grenade: attackType "Grenade" and the name says gas — grenades all share one
+ *      attackType, so the payload word is the only index-level discriminator (base heavy pack).
+ *   3. a launcher CHAMBERED for "Grenade" rounds: Core p.111 "All grenade types are available in
+ *      hand or rifle-propelled versions" — chemical-capable because this factory loads it with the
+ *      Gas Grenade Round. Caliber-exact: the supplement 40mm/25mm launchers stay out until their
+ *      round families are curated (the ammo-caliber-normalization lane).
+ */
+export const CHEMICAL_ATTACK_TYPES = new Set(["Drugs", "Acid", "Squirt", "Gas"]);
+
+export function chemicalCapableRow(row) {
+  if (row?.category !== "Weapons") return false;
+  const at = String(row.attackType ?? "");
+  if (CHEMICAL_ATTACK_TYPES.has(at)) return true;
+  if (at === "Grenade" && /\bgas\b/i.test(String(row.name ?? ""))) return true;
+  if (normalizeCaliber(String(row.ammoType ?? "").trim()) === "Grenade"
+    && /launcher/i.test(String(row.name ?? ""))) return true;
+  return false;
+}
+
+/**
+ * THE ROUNDS A GRENADE TUBE IS LOADED WITH, by posture — ONE derivation, read by the plan's honesty
+ * line, the primary-weapon magazine and the chrome launcher load, so the three can never disagree.
+ * Fragmentation is the standard round (the 2026-08-27 empty-tube ruling, area-delivery.js); the
+ * chemical posture swaps in gas (Core p.92: the cyberlimb launcher stores "one grenade — any
+ * standard type").
+ */
+export const GRENADE_ROUND_NAME_BY_POSTURE = {
+  chemical: "Gas Grenade Round",
+  default: "Fragmentation Grenade Round",
+};
+export function grenadeRoundNameFor(posture) {
+  return GRENADE_ROUND_NAME_BY_POSTURE[String(posture ?? "")] ?? GRENADE_ROUND_NAME_BY_POSTURE.default;
+}
+
+/**
+ * WHAT A CHROME LAUNCHER ARRIVES LOADED WITH (ruled 2026-08-28: "that should also be resolved using
+ * the book as a reference") — the ONE derivation the plan's honesty line and the materializer both
+ * read. Book bases, all text-layer verified 2026-08-28:
+ *   · Grenade Launcher — Core p.92: "One grenade (you may use any standard type) is stored in the
+ *     launcher; a reload may be dropped in after the first one is used." → 1 round, posture-aware.
+ *   · Micro-missile Launcher — Core p.91: "contains four miniature missiles"; p.64 prices the
+ *     reload "Micro Missile Reload (4ea) … 100eb". → 4 micromissiles.
+ *   · Popup Gun — Core p.91: "a standard automatic handgun … popup guns are designed to use
+ *     caseless ammunition only", sized by BT ("Average to Strong: Medium Pistol or Light SMG").
+ *     → one 9mm magazine, the medium-pistol default for the average goon; in this era caseless IS
+ *     the standard cartridge (brass-cased is the paid retro load, lookups.js `brassCased`).
+ * A name not listed answers null and keeps the honest "arrives empty" line.
+ *
+ * ⚠ SUPPLY, NOT MECHANIZATION: the base cyberweapon items carry no weapon fields at all (no
+ * attackType/damage/shots — verified in cyberweapons.db 2026-08-28), so the launcher itself still
+ * cannot FIRE through the base path. Making chrome launchers fireable is the chrome-mechanization
+ * seam (CHROME-COMB), its own unit; the rounds are real and correct from today.
+ */
+export function chromeLauncherLoadFor(name, posture) {
+  switch (String(name ?? "")) {
+    case "Grenade Launcher": return { kind: "grenadeRound", roundName: grenadeRoundNameFor(posture), quantity: 1 };
+    case "Micro-missile Launcher": return { kind: "micromissiles", quantity: 4 };
+    case "Popup Gun": return { kind: "caselessPistol", caliber: "9mm" };
+    default: return null;
+  }
+}
+
 /**
  * PICK THE PRIMARY WEAPON for a goon (§2.3: *"weapons pull (grade rung pool, posture-biased loads)"*).
  *
@@ -252,12 +326,37 @@ export function loadForPosture(posture, caliberId) {
  * the constraint, and it is the book's own p.40 axis. Adding a budget back would be inventing a
  * dial the design deliberately does not have.
  */
-export function pickPrimaryWeapon(rows, weaponsRung, rng) {
+export function rungWeaponPool(rows, weaponsRung) {
   const dial = WEAPONS_DIAL_BY_RUNG[weaponsRung] ?? WEAPONS_DIAL_BY_RUNG[5];
   const cats = dial?.shop ?? [];
-  const pool = rows.filter((r) => cats.some((c) => r.category === c.category && (!c.sub || r.sub === c.sub)));
+  return rows.filter((r) => cats.some((c) => r.category === c.category && (!c.sub || r.sub === c.sub)));
+}
+
+/** One uniform draw from a pool — the same clamped-index idiom every pick here uses. */
+function drawFrom(pool, rng) {
   if (!pool.length) return null;
   return pool[Math.min(Math.floor((Number(rng()) || 0) * pool.length), pool.length - 1)];
+}
+
+export function pickPrimaryWeapon(rows, weaponsRung, rng) {
+  return drawFrom(rungWeaponPool(rows, weaponsRung), rng);
+}
+
+/**
+ * THE CHEMICAL STEER (ruled 2026-08-28). Three rungs, honesty-first:
+ *   1. the rung's own pool ∩ chemical-capable — the grade's book axis still governs where it can;
+ *   2. else the WHOLE catalog's chemical-capable set (`widened: true` → an honesty line): the book's
+ *      chemical weapons live in the Exotic and Heavy shelves, which only rung 1 (grade A/AA) opens,
+ *      and a Chemical posture that only worked at grade A would be the old dead dropdown again;
+ *   3. else `row: null` — no chemical-capable weapon in this world's packs at all; the caller falls
+ *      back to the ordinary pick and the posture-unmet honesty line says so.
+ */
+export function pickChemicalPrimaryWeapon(rows, weaponsRung, rng) {
+  const rungChem = rungWeaponPool(rows, weaponsRung).filter(chemicalCapableRow);
+  if (rungChem.length) return { row: drawFrom(rungChem, rng), widened: false };
+  const allChem = rows.filter(chemicalCapableRow);
+  if (allChem.length) return { row: drawFrom(allChem, rng), widened: true };
+  return { row: null, widened: false };
 }
 
 // =================================================================================================
@@ -297,7 +396,22 @@ export async function planGoonSquad(opts = {}) {
     const honesty = [...bp.honesty];
 
     // ── 3a. WEAPON ────────────────────────────────────────────────────────────────────────────────
-    const weaponRow = pickPrimaryWeapon(rows, cfg.weaponsRung, rng);
+    // The Chemical posture steers the pick itself (the 2026-08-28 ruling block above); every other
+    // posture draws from the rung pool exactly as before, same rng consumption, same squads.
+    let chemMeta = null;
+    let weaponRow;
+    if (cfg.armament === "chemical") {
+      chemMeta = pickChemicalPrimaryWeapon(rows, cfg.weaponsRung, rng);
+      weaponRow = chemMeta.row ?? pickPrimaryWeapon(rows, cfg.weaponsRung, rng);
+      if (chemMeta.row && chemMeta.widened) {
+        honesty.push({
+          code: "chemicalPoolWidened", posture: cfg.armament,
+          messageKey: "GoonFactory.Honesty.ChemicalPoolWidened",
+        });
+      }
+    } else {
+      weaponRow = pickPrimaryWeapon(rows, cfg.weaponsRung, rng);
+    }
     const weaponDoc = weaponRow ? await loadCatalogDoc(weaponRow.key) : null;
     const weapon = weaponDoc ? {
       key: weaponRow.key, name: weaponDoc.name,
@@ -318,7 +432,13 @@ export async function planGoonSquad(opts = {}) {
     }
 
     // ── 3b. AMMO LOAD, posture-biased and honest when the posture cannot be met ───────────────────
-    const load = loadForPosture(cfg.armament, weapon?.ammoType);
+    // A chemical pick that LANDED satisfies the posture through the weapon itself (its ammo IS the
+    // chemistry, or its magazine gets gas rounds below) — no modifier, no honesty line. The line
+    // fires only when the steer found nothing chemical-capable in the whole catalog.
+    const chemicalSatisfied = !!chemMeta?.row;
+    const load = chemicalSatisfied
+      ? { modifier: "standard", satisfied: true, wanted: cfg.armament }
+      : loadForPosture(cfg.armament, weapon?.ammoType);
     if (weapon?.ammoType && !load.satisfied) {
       honesty.push({
         code: "postureLoadMissing", posture: cfg.armament, caliber: weapon.ammoType,
@@ -396,8 +516,24 @@ export async function planGoonSquad(opts = {}) {
     for (const l of chrome.lint) {
       honesty.push({ code: l.code, slotId: l.slotId ?? null, messageKey: `CYBERPUNK.GoonFactory.Lint.${l.code}` });
     }
+    // Chrome launchers arrive LOADED where the book names their load (chromeLauncherLoadFor above);
+    // the honesty line says what landed. A launcher the table does not know keeps the honest
+    // "arrives empty" line it always had.
+    const chromeLoads = [];
     for (const n of chrome.needsAmmo) {
-      honesty.push({ code: "launcherNeedsAmmo", name: n.name, caseless: n.caseless, messageKey: "GoonFactory.Honesty.LauncherNeedsAmmo" });
+      const chromeLoad = chromeLauncherLoadFor(n.name, cfg.armament);
+      if (chromeLoad) {
+        chromeLoads.push({ name: n.name, load: chromeLoad });
+        honesty.push({
+          code: "launcherLoaded", name: n.name,
+          round: chromeLoad.roundName ?? "", caliber: chromeLoad.caliber ?? "", count: chromeLoad.quantity ?? 0,
+          messageKey: chromeLoad.kind === "grenadeRound" ? "GoonFactory.Honesty.LauncherLoadedRound"
+            : chromeLoad.kind === "micromissiles" ? "GoonFactory.Honesty.LauncherLoadedMicromissiles"
+              : "GoonFactory.Honesty.LauncherLoadedCaseless",
+        });
+      } else {
+        honesty.push({ code: "launcherNeedsAmmo", name: n.name, caseless: n.caseless, messageKey: "GoonFactory.Honesty.LauncherNeedsAmmo" });
+      }
     }
 
     // ── 6. LOOT ──────────────────────────────────────────────────────────────────────────────────
@@ -405,7 +541,7 @@ export async function planGoonSquad(opts = {}) {
 
     out.push({
       bp,
-      weapon, weaponRow, ammoModifier: load.modifier,
+      weapon, weaponRow, ammoModifier: load.modifier, chromeLoads,
       armor, chrome, skills, loot,
       stats: { ...bp.stats, emp },
       humanity, emp, humanityLoss: chrome.humanityLoss,
@@ -543,6 +679,68 @@ export function goonGmNotes(flavor) {
   return `<p><strong>${heading}</strong></p>\n${lines.map((l) => `<p>${l}</p>`).join("\n")}`;
 }
 
+/** The module's own supplement-heavy pack, found through the runtime registration — the same idiom
+ *  as area-delivery.js `standardRoundPack` (private there; both sites state the pairing). */
+function moduleHeavyPack() {
+  return game?.packs?.find?.((p) => p?.metadata?.packageName === SCOPE && p?.metadata?.name === "supplement-heavy") ?? null;
+}
+
+/**
+ * A REAL grenade round from the module pack as embedded-item data, or null (missing pack/round →
+ * the caller falls back to the synthetic magazine, and the goon is still armed). Quantity is set to
+ * the tube's shots and `qtyLocked` is cleared: the pack copy ships qty 0 + locked as a CATALOG
+ * entry, but a goon's carried rounds are a real, spendable count.
+ */
+async function grenadeRoundItemData(roundName, quantity) {
+  const pack = moduleHeavyPack();
+  if (!pack) return null;
+  try {
+    const idx = await pack.getIndex();
+    const hit = idx.find((e) => String(e.name ?? "").trim().toLowerCase() === String(roundName).toLowerCase());
+    const doc = hit ? await pack.getDocument(hit._id) : null;
+    if (!doc) return null;
+    const data = game.items.fromCompendium(doc);
+    data.system = { ...(data.system ?? {}), quantity: Math.max(1, Math.trunc(Number(quantity) || 1)), qtyLocked: false, equipped: true };
+    return data;
+  } catch (e) { return null; }
+}
+
+/** Four micromissiles — Core p.91 (the launcher "contains four miniature missiles") + p.64 (the
+ *  reload: "Micro Missile Reload (4ea) … 100eb"). The 4d6 warhead rides the ROUND's own damage
+ *  field (the 1.1.1 ammo mechanism grenade rounds already use; Reference Book prints "4d6
+ *  (micromissile)" on both the cyberweapon and the Urban Missile Launcher rows), and the caliber
+ *  string matches the supplement launchers' own `ammoType: "micromissile"`. */
+function micromissileItemData(quantity) {
+  return {
+    name: "Micromissiles",
+    type: "ammo",
+    img: "modules/cp2020-augmented/img/weapon-icon.svg",
+    system: foundry.utils.mergeObject(
+      { caliber: "micromissile", ammoType: "micromissile", quantity: Math.max(1, Math.trunc(Number(quantity) || 4)), boxSize: 4, boxCost: 100, cost: 100, equipped: true, bonusDamageFormula: "4d6" },
+      ammoModifierSystemFields("standard"),
+      { inplace: false, overwrite: false },
+    ),
+  };
+}
+
+/** One caseless pistol magazine for a Popup Gun — Core p.91: caseless only, sized by BT; 9mm is the
+ *  medium-pistol default for the average goon. In this era caseless IS the standard cartridge
+ *  (brass-cased is the paid retro modifier), so the standard fields are the caseless fields. */
+function caselessPistolMagData(caliber) {
+  const cal = String(caliber || "9mm");
+  const calLabel = getCalibers()[cal]?.label ?? cal;
+  return {
+    name: `${calLabel} Caseless`,
+    type: "ammo",
+    img: "modules/cp2020-augmented/img/weapon-icon.svg",
+    system: foundry.utils.mergeObject(
+      { caliber: cal, ammoType: cal, quantity: Number(getCaliberBox(cal).box) || 10, boxSize: Number(getCaliberBox(cal).box) || 1, equipped: true },
+      ammoModifierSystemFields("standard"),
+      { inplace: false },
+    ),
+  };
+}
+
 /** A magazine for a weapon, built from the shop's OWN ammo engine so it matches a bought box. */
 function ammoItemDataFor(weaponDoc, modifierId) {
   const caliber = String(weaponDoc?.system?.ammoType ?? "").trim();
@@ -574,7 +772,8 @@ function ammoItemDataFor(weaponDoc, modifierId) {
  *   6. the prototype token's sight, from the optics that actually landed.
  */
 export async function materializeGoon(row, { folder, nameByKey }) {
-  const { bp, weapon, weaponRow, ammoModifier, armor, chrome, skills, loot } = row;
+  const { bp, weapon, weaponRow, ammoModifier, armor, chrome, skills, loot, chromeLoads } = row;
+  const posture = bp?.config?.armament ?? "standard";
   const cfg = bp.config;
 
   // §B.3: the outfit's jurisdiction / reinforcement / flavour note, GM-side only. Empty string when
@@ -629,14 +828,24 @@ export async function materializeGoon(row, { folder, nameByKey }) {
       stamp(data, weaponToken);
       data.system = data.system ?? {};
       toCreate.push(data);
-      const ammo = ammoItemDataFor(doc, ammoModifier);
+      // A tube chambered for "Grenade" rounds is loaded with the REAL round item — gas under the
+      // Chemical posture, fragmentation otherwise (grenadeRoundNameFor, one derivation with the
+      // plan's honesty) — so what the launcher fires is the round the book prices, not a synthetic
+      // "Grenade Standard". Everything else keeps the shop-engine magazine. Missing pack/round
+      // falls back to the synthetic magazine so the goon is never disarmed by a data gap.
+      const grenadeTube = normalizeCaliber(String(doc.system?.ammoType ?? "").trim()) === GRENADE_ROUND_CALIBER;
+      const tubeShots = Math.max(1, Math.trunc(Number(doc.system?.shots) || 0) || 1);
+      const makeMag = async () => grenadeTube
+        ? (await grenadeRoundItemData(grenadeRoundNameFor(posture), tubeShots)) ?? ammoItemDataFor(doc, ammoModifier)
+        : ammoItemDataFor(doc, ammoModifier);
+      const ammo = await makeMag();
       if (ammo) {
         ammoToken = `a${seq++}`;
         stamp(ammo, ammoToken);
         toCreate.push(ammo);
         // §1's loot dial: spare magazines are REAL ammo items, not a number on a card.
         for (let i = 0; i < loot.spareMags; i++) {
-          const spare = ammoItemDataFor(doc, ammoModifier);
+          const spare = await makeMag();
           spare.system.equipped = false;
           stamp(spare, `s${seq++}`);
           toCreate.push(spare);
@@ -670,6 +879,22 @@ export async function materializeGoon(row, { folder, nameByKey }) {
     data.system.equipped = true;
     toCreate.push(data);
     chromeTokens.push({ token, entry: it });
+  }
+
+  // Chrome launchers arrive LOADED (2026-08-28 ruling; book bases at chromeLauncherLoadFor). The
+  // plan's chromeLoads rows carry the one derivation; this only turns each into a real item. The
+  // rounds are carried items — the base cyberweapon has no ammoItemId field to link them into.
+  for (const cl of chromeLoads ?? []) {
+    const l = cl?.load;
+    if (!l) continue;
+    if (l.kind === "grenadeRound") {
+      const data = await grenadeRoundItemData(l.roundName, l.quantity);
+      if (data) toCreate.push(stamp(data, `g${seq++}`)); else missing.push(l.roundName);
+    } else if (l.kind === "micromissiles") {
+      toCreate.push(stamp(micromissileItemData(l.quantity), `g${seq++}`));
+    } else if (l.kind === "caselessPistol") {
+      toCreate.push(stamp(caselessPistolMagData(l.caliber), `g${seq++}`));
+    }
   }
 
   if (loot.cashEb > 0) toCreate.push(stamp(credchipItemData(loot.cashEb), `k${seq++}`));

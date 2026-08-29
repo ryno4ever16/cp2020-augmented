@@ -1215,6 +1215,94 @@ const r = await p.evaluate(async () => {
     await app.render();
     await sleep(400);
 
+    // ── THE CHEMICAL LANE (2026-08-28): pool composition, the steer, and the loaded launchers ────
+    // ① Pool composition: base-system packs feed the generator; the frozen scraped family does not.
+    const poolRows = await MT.npcGenCatalogRows();
+    const packIds = new Set(poolRows.map(r => r.packId));
+    check("the goon pool draws from the base system's own packs, not just the module's",
+      [...packIds].some(id => id.startsWith("cyberpunk2020.")), [...packIds].slice(0, 6));
+    const frozen = ["cyberpunk2020.pistols-add", "cyberpunk2020.rifles-add", "cyberpunk2020.smgs-add", "cyberpunk2020.armor-add"];
+    check("the frozen scraped packs contribute ZERO rows to the goon pool",
+      poolRows.filter(r => frozen.includes(r.packId)).length === 0,
+      poolRows.filter(r => frozen.includes(r.packId)).map(r => r.name));
+    check("index rows carry the delivery fields the chemical steer reads",
+      poolRows.every(r => "attackType" in r && "ammoType" in r), Object.keys(poolRows[0] ?? {}));
+
+    // ② The predicate, over the REAL rows: the chemical rack exists and holds the book's own gear.
+    const chemRack = poolRows.filter(GF.chemicalCapableRow);
+    const rackNames = chemRack.map(r => r.name);
+    check("the chemical rack is non-empty on a stock install", chemRack.length > 0, rackNames);
+    check("… and holds the Power Squirt and the core Grenade Launcher",
+      rackNames.some(n => /power squirt/i.test(n)) && rackNames.some(n => n === "Grenade Launcher"), rackNames);
+    check("… while an ordinary rifle row is NOT chemical-capable",
+      !poolRows.filter(r => r.sub === "Rifles").some(GF.chemicalCapableRow), null);
+
+    // ③ The steer: rung 3 (grade C) holds no chemical weapon → widened draw, still capable;
+    //    a widened draw is never null while the rack is non-empty.
+    const steerRng = BP.seededRng(BP.seedFrom("__PW__chem", "steer"));
+    const steered = GF.pickChemicalPrimaryWeapon(poolRows, 3, steerRng);
+    check("the chemical steer answers a rung with no chemical pool by widening, honestly flagged",
+      !!steered.row && steered.widened === true && GF.chemicalCapableRow(steered.row),
+      { name: steered.row?.name, widened: steered.widened });
+
+    // ④ The round mapping is ONE derivation: posture flips gas↔frag; unknown chrome answers null.
+    check("grenade tubes load gas under the chemical posture and fragmentation otherwise",
+      GF.grenadeRoundNameFor("chemical") === "Gas Grenade Round"
+      && GF.grenadeRoundNameFor("standard") === "Fragmentation Grenade Round", null);
+    const clGL = GF.chromeLauncherLoadFor("Grenade Launcher", "chemical");
+    const clMM = GF.chromeLauncherLoadFor("Micro-missile Launcher", "standard");
+    const clPU = GF.chromeLauncherLoadFor("Popup Gun", "standard");
+    check("the chrome loads carry the book's numbers: 1 gas round · 4 micromissiles · 9mm caseless",
+      clGL?.kind === "grenadeRound" && clGL.roundName === "Gas Grenade Round" && clGL.quantity === 1
+      && clMM?.kind === "micromissiles" && clMM.quantity === 4
+      && clPU?.kind === "caselessPistol" && clPU.caliber === "9mm"
+      && GF.chromeLauncherLoadFor("Wolvers", "chemical") === null,
+      { clGL, clMM, clPU });
+
+    // ⑤ The Gas Grenade Round is REAL pack data with the cloud's own fields and no dice.
+    const heavyPack = game.packs.find(x => x.metadata.packageName === "cp2020-augmented" && x.metadata.name === "supplement-heavy");
+    const gasIdx = (await heavyPack.getIndex()).find(e => e.name === "Gas Grenade Round");
+    const gasDoc = gasIdx ? await heavyPack.getDocument(gasIdx._id) : null;
+    check("the Gas Grenade Round ships in the module pack, effect not dice",
+      !!gasDoc && JSON.stringify(gasDoc.system.effectTypes) === JSON.stringify(["Gas"])
+      && !gasDoc.system.bonusDamageFormula && gasDoc.system.caliber === "Grenade"
+      && gasDoc.system.blastRadius === 3 && gasDoc.system.dotTurns === 3,
+      gasDoc && { eff: gasDoc.system.effectTypes, dmg: gasDoc.system.bonusDamageFormula, r: gasDoc.system.blastRadius });
+
+    // ⑥ End-to-end: a chemical squad's every goon carries a chemical-capable weapon, the posture
+    //    reads satisfied (no postureLoadMissing), and grade C plans carry the widened line. The
+    //    seed is scanned for one that draws the Grenade Launcher so the magazine leg is REAL.
+    let glPlan = null, glSeed = null;
+    for (let i = 0; i < 60 && !glPlan; i++) {
+      const seed = `__PW__chem-${i}`;
+      const plan = await GF.planGoonSquad({ role: "solo", grade: "C", count: 2, seed, destinationFolder: locker, overrides: { armament: "chemical" } });
+      if (!plan.every(r => !r.weaponRow || GF.chemicalCapableRow(r.weaponRow))) { glPlan = null; out.fails.push("non-chemical draw under chemical posture: " + plan.map(r => r.weaponRow?.name)); break; }
+      if (plan.some(r => r.honesty.some(h => h.code === "postureLoadMissing"))) { out.fails.push("postureLoadMissing under a satisfied chemical pick"); break; }
+      const hit = plan.find(r => r.weaponRow?.name === "Grenade Launcher");
+      if (hit) { glPlan = plan; glSeed = seed; }
+    }
+    check("chemical squads draw ONLY chemical-capable primaries, and a launcher turns up in the scan",
+      !!glPlan, glSeed);
+    check("… and the grade-C plan says the pool was widened",
+      glPlan?.some(r => r.honesty.some(h => h.code === "chemicalPoolWidened")) === true,
+      glPlan?.map(r => r.honesty.map(h => h.code)));
+
+    // ⑦ Materialize the launcher goon: the tube holds the REAL gas round, linked as its magazine.
+    if (glPlan) {
+      const glRow = glPlan.find(r => r.weaponRow?.name === "Grenade Launcher");
+      const made = await GF.materializeGoon(glRow, { folder: locker, nameByKey: await MT.skillNameIndex() });
+      if (made?.id) madeActorIds.push(made.id);
+      const actor = game.actors.get(made?.id);
+      const gasItem = actor?.items.find(i => i.type === "ammo" && i.name === "Gas Grenade Round");
+      const gun = actor?.items.find(i => i.type === "weapon" && /grenade launcher/i.test(i.name));
+      check("the launcher goon carries the real Gas Grenade Round at the tube's own count",
+        !!gasItem && gasItem.system.quantity === 1 && gasItem.system.qtyLocked === false,
+        gasItem && { q: gasItem.system.quantity, locked: gasItem.system.qtyLocked });
+      check("… linked as the launcher's loaded magazine",
+        !!gun && gun.system.ammoItemId === gasItem?.id,
+        { gun: gun?.name, link: gun?.system?.ammoItemId, gas: gasItem?.id });
+    }
+
     // ── DETERMINISM ON THE LIVE RIG ───────────────────────────────────────────────────────────────
     const detA = await GF.planGoonSquad({ role: "cop", grade: "C", count: 2, seed: "__PW__det", destinationFolder: locker });
     const detB = await GF.planGoonSquad({ role: "cop", grade: "C", count: 2, seed: "__PW__det", destinationFolder: locker });

@@ -79,10 +79,26 @@ export async function ensureNpcGenFolder() {
  * data defaults a blank cost to the number 0 and real guns read 0). A budget filler cannot reason about
  * a row like that, and silently treating it as free is how a mook ends up in Metal Gear.
  */
+/**
+ * ⛔ PACKS THE GENERATOR NEVER DRAWS FROM (user order 2026-08-28: "everything except the broken,
+ * excluded packs that we hid from the users"). These are the frozen, unreviewed bulk-scraped family
+ * under the standing no-mass-patching ruling: pistols-add / rifles-add are the two the module
+ * actively hides from players (`hideScrapedPacks`, settings.js SCRAPED_PACK_IDS); smgs-add is the
+ * same scrape batch, and armor-add is already excluded from the goon ARMOR pool by the same ruling
+ * (armor.js ARMOR_POOL_EXCLUSIONS) — this closes the loadout-slot leak (rig-measured 2026-08-28:
+ * 9 + 3 + 4 rows were reaching the pool). Unconditional, not tied to the hide setting: the setting
+ * governs sidebar visibility; the generator's question is data quality.
+ */
+const GOON_EXCLUDED_PACK_IDS = new Set([
+  "cyberpunk2020.pistols-add", "cyberpunk2020.rifles-add",
+  "cyberpunk2020.smgs-add", "cyberpunk2020.armor-add",
+]);
+
 export async function npcGenCatalogRows() {
   const all = await getCatalogIndex();
   const cfg = shopSourceConfig();
-  return all.filter((r) => !r.unpriced && isVisibleTo(r.supplement, r.canon, cfg, false));
+  return all.filter((r) => !r.unpriced && !GOON_EXCLUDED_PACK_IDS.has(r.packId)
+    && isVisibleTo(r.supplement, r.canon, cfg, false));
 }
 
 /** Does a row satisfy one of a slot's `{category, sub}` shapes? A null/blank `sub` means "any sub of

@@ -212,7 +212,10 @@ async function buildCatalogIndex() {
   const results = await Promise.all(catalogPacks().map(async (pack) => {
     const packName = pack.metadata.name;
     let idx;
-    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
+    // `system.attackType` + `system.ammoType` ride the index for the Goon Factory's chemical-posture
+    // steer (npcgen/goon-factory.js chemicalCapableRow) — the delivery mechanism and the chambered
+    // caliber are what identify a chemical-capable weapon without loading the document.
+    try { idx = await pack.getIndex({ fields: ["system.cost", "system.source", "system.weaponType", "system.vehicleType", "system.cyberwareType", "system.attackType", "system.ammoType", "flags.cp2020-augmented.borgBody", "type", "img"] }); }
     catch (e) { return []; }
     const items = [];
     for (const e of idx) {
@@ -231,6 +234,7 @@ async function buildCatalogIndex() {
         id: e._id, packId: pack.collection, name: corr?.name ?? e.name, img: e.img,
         cost: pr.price ?? 0, unpriced: !pr.purchasable, priceRange: corr?.priceRange ?? null,
         type, category, sub, supplement, supplementShort: shortSupplement(supplement), canon,
+        attackType: e.system?.attackType ?? "", ammoType: e.system?.ammoType ?? "",
         key: `${pack.collection}.${e._id}`
       });
     }
