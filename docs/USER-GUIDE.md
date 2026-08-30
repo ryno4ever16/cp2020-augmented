@@ -162,3 +162,19 @@ hand-edit skill levels), and **hide the IP UI entirely** for tables that don't u
 ## 9. Chipware & skill chips (stub)
 
 ## 10. Settings reference (stub — regenerate at release; every setting, its default, and who it's for)
+
+> **2026-08-29 settings trim:** ~23 world switches were retired or merged in one pass. The
+> governing principle is action-as-consent: a rule you engage by *doing something* (loading a
+> round, placing a zone or a wall, pressing a tracker button) needs no world switch — using it is
+> opting in, ignoring it is opting out. What remains in the menu is genuine rule/book choices
+> (armor mode, limb model, the supplement layers), permission scoping, and per-user display
+> preferences. Regenerate this section from `module/settings.js` at the next release.
+
+### Hit locations and the limb-damage model (moved here from the old setting hint)
+
+The **Combat: Limb-Damage Model** setting changes what a wound *does* to an arm or leg, not
+*where* hits land. Every hit — including the module's suppressive, area-effect, and
+vehicle-occupant hits — rolls on the core rulebook's hit-location table, because that is where
+the base Cyberpunk 2020 system rolls every regular attack; one fight should not run two
+different anatomies. W4RST4R's own chart (which adds the groin) waits on hit-location support in
+the base system, expected in its 1.2.
