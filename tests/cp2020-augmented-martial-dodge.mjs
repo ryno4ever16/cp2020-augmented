@@ -96,8 +96,8 @@ const r = await p.evaluate(async () => {
   //        checked is now covered by the offer contest's result-card fold below (resultShowsDodgeFold). ──
   out.offer = { err: null };
   try {
-    // The no-damage leg used to arm this gate; set it here now that that leg is gone.
-    try { await game.settings.set(SCOPE, "specialMeleeEffectsEnabled", true); } catch {}
+    // ⏪ the module's special-melee gate retired 2026-08-29 (settings-trim): declaring the action is
+    //    the consent, so there is nothing to arm here.
     try { ui.sidebar?.expand?.(); ui.sidebar?.activateTab?.("chat"); } catch {}
     const attacker2 = await mk("__PW__DodgeOfferAtk", { skills: { Brawling: 6 } });
 
@@ -106,7 +106,7 @@ const r = await p.evaluate(async () => {
     const dDE = await MA.rollMeleeDefense(dnE, { dodging: false });
     out.offer.dodgeEscape = { skillName: dDE.skillName, skillVal: dDE.skillVal };  // "Dodge & Escape", 7
 
-    // Gate + shape: an offer posts for a contested maneuver, never for the self-action; off-gate = no card.
+    // Shape: an offer posts for a contested maneuver, never for the self-action.
     const flagOf = () => aikido.getFlag(SCOPE, "grappledBy") ?? null;
     const btnFor = async (cls) => {
       await sleep(600); ui.chat?.render?.(true); await sleep(400);
@@ -116,10 +116,8 @@ const r = await p.evaluate(async () => {
     out.offer.posts = offered === true;
     out.offer.noWriteAtDeclare = flagOf() === null;
     out.offer.escapeNotOffered = (await MA.postMartialDefenseOffer({ attackerActor: attacker2, targetActor: aikido, action: "Escape" })) === false;
-    const gateWas = game.settings.get(SCOPE, "specialMeleeEffectsEnabled");
-    await game.settings.set(SCOPE, "specialMeleeEffectsEnabled", false);
-    out.offer.gateOff = (await MA.postMartialDefenseOffer({ attackerActor: attacker2, targetActor: aikido, action: "Grapple" })) === false;
-    await game.settings.set(SCOPE, "specialMeleeEffectsEnabled", gateWas);
+    // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim) - "gate off means no offer
+    //    card" went with the module's special-melee key.
 
     // The chosen roll: a real click on the offer's roll button → the result card (breakdown + outcome
     // buttons + the opposed roll attached). The dodging Aikido defender's clause shows the +5 fold.
@@ -167,17 +165,15 @@ const r = await p.evaluate(async () => {
   // and reads the rendered window, not the hook's internals.
   out.prefill = { err: null };
   out.stance  = { err: null };
-  let restoreSettings = {};
+  const restoreSettings = {};
   let prevActiveSceneId = null;
   const madeFixtures = [];
   try {
-    for (const k of ["activeDodgeParryEnabled", "multiActionPenaltyEnabled", "multiActionAutoTrack"]) {
-      try { restoreSettings[k] = game.settings.get(SCOPE, k); } catch { restoreSettings[k] = undefined; }
-    }
-    await game.settings.set(SCOPE, "activeDodgeParryEnabled", true);
-    // The multi-action fold writes the SAME field. Off for the readback section so every number in it
-    // is attributable to the stance hook; the stance section below turns it back on deliberately.
-    await game.settings.set(SCOPE, "multiActionPenaltyEnabled", false);
+    // ⏪ the declared-defence switch and the two multi-action keys retired 2026-08-29 (settings-trim):
+    //    all three behaviours are unconditional now, so nothing is snapshot or armed. The multi-action
+    //    fold writes the SAME field as the stance prefill, but its penalty is zero outside a started
+    //    combat - and this section runs before section (E) starts one - so every number read below is
+    //    still attributable to the stance hook alone.
 
     prevActiveSceneId = game.scenes.active?.id ?? null;
     for (const s of [...game.scenes]) if (s.name?.startsWith("__PW__Dodge")) await s.delete().catch(() => {});
@@ -271,12 +267,8 @@ const r = await p.evaluate(async () => {
     await sleep(200);
     out.prefill.flagsCleared = await openAndRead(knife, [tokA.id, tokB.id]);
 
-    // D7 — feature gate OFF: the flag may be set, the window stays untouched.
-    await defA.setFlag(SCOPE, "dodging", true); await sleep(150);
-    await game.settings.set(SCOPE, "activeDodgeParryEnabled", false);
-    out.prefill.gateOff = await openAndRead(knife, [tokA.id]);
-    await game.settings.set(SCOPE, "activeDodgeParryEnabled", true);
-    await defA.unsetFlag(SCOPE, "dodging").catch(() => {});
+    // ⏪ D7 off-state leg retired 2026-08-29 with its switch (settings-trim) - "the flag may be set,
+    //    the window stays untouched" was the declared-defence key's off reading.
 
     // The shipped constant itself, so the legs above are checked against the module's number rather
     // than a re-typed copy of it.
@@ -287,8 +279,6 @@ const r = await p.evaluate(async () => {
     // The −3-to-other-actions half of the p.112 clause is represented by the declaration COSTING an
     // action, not by a second penalty — so this section is the proof that the counter still moves.
     try {
-      await game.settings.set(SCOPE, "multiActionPenaltyEnabled", true);
-      await game.settings.set(SCOPE, "multiActionAutoTrack", true);
       for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__Dodge"))) await c.delete().catch(() => {});
       const combat = await Combat.create({});
       await combat.createEmbeddedDocuments("Combatant", [{ actorId: attacker.id, name: "__PW__DodgeSwinger" }]);
@@ -362,7 +352,8 @@ const checks = [
   ["caller rule: Karate / non-martial / mixed dodger → +2 (stance only)", r.helper.karate === 2 && r.helper.nonMart === 2 && r.helper.mixed === 2],
   ["caller rule: not dodging → +0 (no bonus at all)", r.helper.notDodging === 0],
   ["canonical Dodge & Escape skill counts in the selection (stable key + level 7)", r.offer.dodgeEscape?.skillName === "DodgeEscape" && r.offer.dodgeEscape?.skillVal === 7],
-  ["offer: declare posts the card, writes NO state; self-action + off-gate post nothing", r.offer.posts === true && r.offer.noWriteAtDeclare === true && r.offer.escapeNotOffered === true && r.offer.gateOff === true],
+  // ⏪ the off-gate clause of this leg retired 2026-08-29 with its switch (settings-trim).
+  ["offer: declare posts the card, writes NO state; the self-action posts nothing", r.offer.posts === true && r.offer.noWriteAtDeclare === true && r.offer.escapeNotOffered === true],
   ["offer: the chosen roll posts the result card with the opposed roll + the +5 fold", r.offer.rollBtnFound === true && r.offer.resultPosts === true && r.offer.resultHasRoll === true && r.offer.resultShowsDodgeFold === true],
   ["outcome: [lands] applies the status via the single-home path", r.offer.landsApplies === true],
   ["outcome: [evaded] posts the notice and writes nothing", r.offer.evadedNoWrite === true && r.offer.evadedNotice === true],
@@ -392,8 +383,8 @@ const checks = [
     noFold(r.prefill.linkedTwin) && r.prefill.linkedTwin?.noteCount === 0],
   ["flags cleared: same fixtures, same targets → field unchanged and no note block",
     noFold(r.prefill.flagsCleared) && r.prefill.flagsCleared?.noteCount === 0],
-  ["feature gate OFF: flag set, window untouched",
-    noFold(r.prefill.gateOff) && r.prefill.gateOff?.noteCount === 0],
+  // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim): "feature gate OFF: flag set,
+  //    window untouched" had nothing left to switch off.
   ["prefill section ran to the end (did not stop on a throw)", !r.prefill.err, r.prefill.err],
 
   // ── (E) the tracker controls still toggle and still cost an action ──

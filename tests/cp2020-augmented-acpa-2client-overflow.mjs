@@ -79,7 +79,6 @@ try {
     const O = CONST.DOCUMENT_OWNERSHIP_LEVELS;
     const cap = {};
     const setS = async (k, v) => { try { cap[k] = game.settings.get("cp2020-augmented", k); } catch {} try { await game.settings.set("cp2020-augmented", k, v); } catch (e) {} };
-    await setS("vehicleDamageEnabled", true);
     await setS("mmEnabled", true);
     await setS("vehicleRuleSystem", "MaximumMetal");
 

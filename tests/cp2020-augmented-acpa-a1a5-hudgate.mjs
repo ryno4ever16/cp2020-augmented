@@ -32,7 +32,6 @@ const r = await p.evaluate(async () => {
 
   // ── cleanup prior fixtures ───────────────────────────────────────────
   for (const a of game.actors.filter(a => a.name?.startsWith("__PW__"))) await a.delete().catch(() => {});
-  try { await game.settings.set("cp2020-augmented", "vehicleDamageEnabled", true); } catch {}
 
   const acpa = await import("/modules/cp2020-augmented/module/vehicle/vehicle-acpa.js");
   const dmg  = await import("/modules/cp2020-augmented/module/vehicle/vehicle-damage.js");

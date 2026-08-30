@@ -65,7 +65,7 @@ const r = await p.evaluate(async () => {
   const FX = await import("/modules/cp2020-augmented/module/fx/effects.js");
 
   const madeRegions = [], madeActors = [];
-  let combat = null, prevSetting = null, settingTouched = false, otherScene = null;
+  let combat = null, otherScene = null;
   let fxPrevSetting = null, fxSettingTouched = false;
 
   const trackReg = (reg) => { if (reg?.id) madeRegions.push(reg.id); return reg; };
@@ -84,9 +84,8 @@ const r = await p.evaluate(async () => {
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__Supp"))) await a.delete().catch(() => {});
     for (const c of [...game.combats].filter(c => c.combatants?.some(cb => cb.actor?.name?.startsWith("__PW__Supp")))) await c.delete().catch(() => {});
 
-    // Feature gate ON for the whole run.
-    prevSetting = game.settings.get(SCOPE, "suppressiveFireSaves"); settingTouched = true;
-    await game.settings.set(SCOPE, "suppressiveFireSaves", true);
+    // ⏪ the lane's feature gate retired 2026-08-29 (settings-trim): it runs unconditionally, so
+    //    there is nothing to arm for the run.
 
     const gs = scene.grid?.size ?? 100;
     const behaviorOf = (reg) => reg?.behaviors?.find(bb => bb.type === T);
@@ -656,7 +655,6 @@ const r = await p.evaluate(async () => {
     // suite on this client run a path no user is on.
     try { PV._setNativePlacement(null); } catch { /* ignore */ }
     try { FX._setHitSoundSink(null); } catch { /* ignore */ }
-    try { if (settingTouched) await game.settings.set(SCOPE, "suppressiveFireSaves", prevSetting); } catch { /* ignore */ }
     try { if (fxSettingTouched) await game.settings.set(SCOPE, "combatFxEnabled", fxPrevSetting); } catch { /* ignore */ }
     if (combat) await combat.delete().catch(() => {});
     const sc = canvas?.scene;

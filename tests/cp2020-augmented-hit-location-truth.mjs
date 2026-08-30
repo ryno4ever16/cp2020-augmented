@@ -13,12 +13,13 @@
  *   1. the resolution receipt — where the per-actor map actually lives on a document, and what the
  *      base engine does with an actor that carries a customised one;
  *   2. face-by-face parity with the base engine's own live code, for all ten faces, under each
- *      limb-damage model and both positions of the force-Core switch;
+ *      limb-damage model (⏪ the force-Core switch retired 2026-08-29, settings-trim: the Core map is
+ *      pinned in utils.js, so the model is the only dimension left);
  *   3. the absolute Core values too, so parity cannot pass by both sides breaking together;
  *   4. the real suppressive chain end-to-end: the zones the hook payload actually carries;
  *   5. a closed-enumeration guard — the second map is referenced by no file but its own definition,
  *      and every module call site goes through the one shared resolver;
- *   6. the setting hint keys resolve and say where location tables resolve.
+ *   6. the limb-model hint key resolves and says where location tables resolve.
  *
  *   FVTT_URL=http://localhost:30004 FVTT_RIG_PASSWORD=cp2020-v14-rig node tests/cp2020-augmented-hit-location-truth.mjs
  */
@@ -42,7 +43,7 @@ const r = await p.evaluate(async () => {
   // v13+ DiceTerm.randomFace(): ceil((1 - randomUniform()) * faces). Pin the middle of the band so
   // rounding can never drift the face.
   const forceFace = (f, faces = 10) => { CONFIG.Dice.randomUniform = () => 1 - (f - 0.5) / faces; };
-  let prevModel = null, prevCore = null, prevReroll = null;
+  let prevModel = null;
 
   try {
     const U  = await import("/modules/cp2020-augmented/module/utils.js");
@@ -51,11 +52,9 @@ const r = await p.evaluate(async () => {
     out.baseVersion = game.system.version;
 
     prevModel  = game.settings.get(SCOPE, "limbModel");
-    prevCore   = game.settings.get(SCOPE, "hitLocationCoreDisplay");
-    prevReroll = game.settings.get(SCOPE, "rerollGoneLimbLocation");
-    // The re-roll rule reshapes a location when a limb is gone. The fixtures below have every limb,
-    // so it never fires — pinned off anyway so this spec measures the MAP and nothing else.
-    await game.settings.set(SCOPE, "rerollGoneLimbLocation", false);
+    // ⏪ the location-table override and the absent-limb re-roll switch both retired 2026-08-29
+    //    (settings-trim). The re-roll rule reshapes a location when a limb is gone; the fixtures below
+    //    have every limb, so it never fires, and there is nothing left to pin off.
 
     for (const a of game.actors.filter(a => a.name.startsWith("__PW__HitLoc"))) await a.delete().catch(() => {});
     const plain  = await Actor.create({ name: "__PW__HitLocPlain",  type: "character" });
@@ -95,21 +94,18 @@ const r = await p.evaluate(async () => {
 
     out.matrix = [];
     for (const model of ["core", "listenup", "w4rst4r"]) {
-      for (const forceCore of [true, false]) {
-        await game.settings.set(SCOPE, "limbModel", model);
-        await game.settings.set(SCOPE, "hitLocationCoreDisplay", forceCore);
-        const modPlain  = await mapFor(U.rollLocation, plain);
-        const modCustom = await mapFor(U.rollLocation, custom);
-        out.matrix.push({
-          model, forceCore,
-          modPlain, modCustom,
-          plainMatchesBase:  sameMap(modPlain,  out.baseMapPlain),
-          customMatchesBase: sameMap(modCustom, out.baseMapCustom),
-          plainIsCore:       isCore(modPlain),
-          customIsCore:      isCore(modCustom),
-          producesGroin:     faces.some(f => modPlain[f] === "Groin" || modCustom[f] === "Groin"),
-        });
-      }
+      await game.settings.set(SCOPE, "limbModel", model);
+      const modPlain  = await mapFor(U.rollLocation, plain);
+      const modCustom = await mapFor(U.rollLocation, custom);
+      out.matrix.push({
+        model,
+        modPlain, modCustom,
+        plainMatchesBase:  sameMap(modPlain,  out.baseMapPlain),
+        customMatchesBase: sameMap(modCustom, out.baseMapCustom),
+        plainIsCore:       isCore(modPlain),
+        customIsCore:      isCore(modCustom),
+        producesGroin:     faces.some(f => modPlain[f] === "Groin" || modCustom[f] === "Groin"),
+      });
     }
 
     // ── 4. the real suppressive chain ────────────────────────────────────────────────────────────
@@ -117,7 +113,6 @@ const r = await p.evaluate(async () => {
     // used to produce the zone the base engine cannot make. Read the zones off the payload the hook
     // actually carries, not off the resolver.
     await game.settings.set(SCOPE, "limbModel", "w4rst4r");
-    await game.settings.set(SCOPE, "hitLocationCoreDisplay", true);
     const captured = [];
     const hookId = Hooks.on("cyberpunk2020.weaponFired", (payload) => {
       if (payload?.targetActorId === plain.id) captured.push(Object.keys(payload.areaDamages ?? {}));
@@ -152,25 +147,25 @@ const r = await p.evaluate(async () => {
 
     // ── 6. the honest hint ───────────────────────────────────────────────────────────────────────
     const hintKey = "SETTINGS.LimbModelHint";
-    const coreKey = "SETTINGS.HitLocationCoreDisplayHint";
     out.hintResolves  = game.i18n.has(hintKey) && game.i18n.localize(hintKey) !== hintKey;
     out.hintText      = game.i18n.localize(hintKey);
-    out.coreHintText  = game.i18n.localize(coreKey);
-    // The honest note, and the removal of the claim it replaces.
-    out.hintSaysCoreSide       = /hit-location tables resolve Core-side/i.test(out.hintText);
-    out.hintNamesTheBaseWait   = /base system/i.test(out.hintText) && /1\.2/.test(out.hintText);
+    // ⏪ the retired override's own hint key went with it; its name/hint keys must not resolve.
+    out.retiredHintGone = game.i18n.has("SETTINGS.HitLocationCoreDisplay") === false
+                       && game.i18n.has("SETTINGS.HitLocationCoreDisplayHint") === false;
+    out.retiredKeyUnregistered = game.settings.settings.has(`${SCOPE}.hitLocationCoreDisplay`) === false;
+    // The honest note, and the removal of the claim it replaces. ⏪ REWORDED 2026-08-29 with the
+    //    settings-trim: the hint used to promise Core-side resolution "until the base system's 1.2",
+    //    because the alternate chart was waiting on a switch. The switch is gone and the Core map is
+    //    pinned, so the shipped sentence is an unconditional statement and the leg reads it as one.
+    out.hintSaysCoreSide       = /hit locations?\s+always\s+roll\s+on\s+the\s+Core\s+table/i.test(out.hintText);
     out.hintDropsOwnChartClaim = !/it uses its own hit-location chart/i.test(out.hintText);
-    // The neighbouring switch must not still advertise the retired behaviour either.
-    out.coreHintDropsAltClaim  = !/W4RST4R/i.test(out.coreHintText);
 
     await plain.delete().catch(() => {});
     await custom.delete().catch(() => {});
   } catch (e) { out.err = e?.message || String(e); }
   finally {
     CONFIG.Dice.randomUniform = origUniform;
-    try { if (prevModel  !== null) await game.settings.set(SCOPE, "limbModel", prevModel); } catch {}
-    try { if (prevCore   !== null) await game.settings.set(SCOPE, "hitLocationCoreDisplay", prevCore); } catch {}
-    try { if (prevReroll !== null) await game.settings.set(SCOPE, "rerollGoneLimbLocation", prevReroll); } catch {}
+    try { if (prevModel !== null) await game.settings.set(SCOPE, "limbModel", prevModel); } catch {}
     for (const a of game.actors.filter(a => a.name.startsWith("__PW__HitLoc"))) await a.delete().catch(() => {});
   }
   return out;
@@ -178,7 +173,7 @@ const r = await p.evaluate(async () => {
 
 console.log(JSON.stringify(r, null, 1));
 
-const row = (model, forceCore) => (r.matrix || []).find(m => m.model === model && m.forceCore === forceCore) || {};
+const row = (model) => (r.matrix || []).find(m => m.model === model) || {};
 const allRows = r.matrix || [];
 const checks = [
   ["receipt: the per-actor map lives under system, not on the document itself",
@@ -188,17 +183,17 @@ const checks = [
   ["receipt: the base engine answers the Core zone for that actor anyway (face 2 = Torso)",
     r.baseMapCustom?.[2] === "Torso" && r.baseMapPlain?.[2] === "Torso"],
 
-  ["all six model x switch combinations were measured", allRows.length === 6],
-  ["every combination matches the base engine face for face, plain actor",
-    allRows.length === 6 && allRows.every(m => m.plainMatchesBase === true)],
-  ["every combination matches the base engine face for face, actor carrying its own map",
-    allRows.length === 6 && allRows.every(m => m.customMatchesBase === true)],
+  ["all three limb-damage models were measured", allRows.length === 3],
+  ["every model matches the base engine face for face, plain actor",
+    allRows.length === 3 && allRows.every(m => m.plainMatchesBase === true)],
+  ["every model matches the base engine face for face, actor carrying its own map",
+    allRows.length === 3 && allRows.every(m => m.customMatchesBase === true)],
   ["parity is not two engines breaking together: the shared answer IS the Core map",
-    allRows.length === 6 && allRows.every(m => m.plainIsCore === true && m.customIsCore === true)],
-  ["no combination produces a zone the base engine cannot make",
-    allRows.length === 6 && allRows.every(m => m.producesGroin === false)],
+    allRows.length === 3 && allRows.every(m => m.plainIsCore === true && m.customIsCore === true)],
+  ["no model produces a zone the base engine cannot make",
+    allRows.length === 3 && allRows.every(m => m.producesGroin === false)],
   ["the model that used to swap the map now answers Core on the telltale faces (2 and 10)",
-    row("w4rst4r", true).modPlain?.[2] === "Torso" && row("w4rst4r", true).modPlain?.[10] === "rLeg"],
+    row("w4rst4r").modPlain?.[2] === "Torso" && row("w4rst4r").modPlain?.[10] === "rLeg"],
 
   ["the real suppressive chain fired and carried zones", r.suppressiveFired === true && (r.suppressiveZones || []).length > 0],
   ["the suppressive payload's zones are all Core-map zones",
@@ -214,10 +209,14 @@ const checks = [
     r.rollSites?.["module/vehicle/vehicle-targeting.js"] === 1],
 
   ["the limb-model hint key resolves", r.hintResolves === true],
-  ["the hint states that hit-location tables resolve Core-side", r.hintSaysCoreSide === true],
-  ["the hint names what the alternate chart is waiting on (base system 1.2)", r.hintNamesTheBaseWait === true],
+  ["the hint states, unconditionally, that location rolls use the Core table", r.hintSaysCoreSide === true],
+  // ⏪ leg retired 2026-08-29 with its switch (settings-trim): "the hint names what the alternate
+  //    chart is waiting on (base system 1.2)" described a deferral that the pinning ended.
   ["the hint no longer claims the model brings its own chart", r.hintDropsOwnChartClaim === true],
-  ["the neighbouring switch's hint drops the retired claim too", r.coreHintDropsAltClaim === true],
+  // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim): the neighbouring override's
+  //    hint cannot advertise anything because the override is gone. Its absence is asserted instead.
+  ["the retired location-table override is unregistered", r.retiredKeyUnregistered === true],
+  ["and its name/hint keys are gone with it", r.retiredHintGone === true],
 
   ["no unexpected error in the probe", !r.err],
   ["0 console errors", errors.length === 0],

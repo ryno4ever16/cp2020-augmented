@@ -77,8 +77,8 @@ const res = await page.evaluate(async () => {
   };
 
   // ── settings pinned for determinism, restored in the finally ──────────────────────────────────
-  const KEYS = ["limbLossEnabled", "limbModel", "damageArmorMode", "damageAblation",
-                "rerollGoneLimbLocation", "combatFxEnabled", "headHitDoubling", "shotgunSpreadEnabled",
+  const KEYS = ["limbLossEnabled", "limbModel", "damageArmorMode",
+                "combatFxEnabled", "headHitDoubling",
                 "combatAutomationEnabled"];
   const was = {};
   for (const k of KEYS) { try { was[k] = game.settings.get(SCOPE, k); } catch { was[k] = null; } }
@@ -92,11 +92,11 @@ const res = await page.evaluate(async () => {
     await set("limbLossEnabled", true);
     await set("limbModel", "core");
     await set("damageArmorMode", "none");
-    await set("damageAblation", false);
-    await set("rerollGoneLimbLocation", false);
+    // ⏪ the wear-on-penetration boolean, the absent-limb re-roll switch and the pattern switch all
+    //    retired 2026-08-29 (settings-trim). "none" already excludes armor entirely, the re-roll runs
+    //    unconditionally, and the pattern lane is always available.
     await set("headHitDoubling", true);
     await set("combatAutomationEnabled", true);
-    await set("shotgunSpreadEnabled", true);
     await set("combatFxEnabled", false);   // §5 turns it back on for the audio legs only
 
     // stale fixtures first — tokens before actors (deleting an actor leaves an unlinked token standing)
@@ -228,11 +228,28 @@ const res = await page.evaluate(async () => {
     // ⚠ HEADROOM RESTORED FIRST (2026-08-27). §2 left this figure ON the track's last box, and "its
     // damage still lands" cannot be read off a full track — the clamp would answer it, not the guard.
     // The zone RECORD (`fleshLimbStatus`) is untouched, which is the state this section is actually about.
+    // ⏪ ADAPTED 2026-08-29 (settings-trim). This section used to pin the absent-limb re-roll OFF so a
+    //    second application could be aimed straight back AT the recorded zone. That switch is retired and
+    //    the re-roll runs unconditionally, so a hit named for a severed limb is MOVED before the
+    //    applicator ever sees it — the old premise is unreachable through the fire path. The section
+    //    keeps its subject (the recorded zone is neither re-announced nor re-graded, and the damage
+    //    still lands) and pins the die the re-roll rolls, so where the hit goes is a fixture rather than
+    //    a coin toss. Face 3 is Torso on the Core map, which carries no limb card and no head doubling
+    //    — the two things that would otherwise move the numbers this section reads.
+    //    v14 maps a die face as ceil((1 − u) × faces), so u = 1 − (3 − 0.5)/10 = 0.75 forces a 3.
     await target.update({ "system.damage": 10 });
     const dmgBefore3 = Number(target.system.damage) || 0;
+    const uniformWas3 = CONFIG.Dice.randomUniform;
     from = since();
-    await fire({ rArm: rounds(1, 20 + btm) });
-    ok("§3 a further event into an already-recorded zone announces nothing",
+    try {
+      CONFIG.Dice.randomUniform = () => 0.75;
+      await fire({ rArm: rounds(1, 20 + btm) });
+    } finally { CONFIG.Dice.randomUniform = uniformWas3; }
+    const cards3 = [...game.messages].filter(m => !from.has(m.id)).map(m => m.content ?? "").join(" ");
+    ok("§3 the already-recorded zone is not re-announced by any card of this application",
+       !/Right Arm/.test(cards3),
+       cards3.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(0, 200) || "(no cards)");
+    ok("§3 and no limb card or progression card was posted at all for the moved hit",
        count(CARD.zoneCard, from) === 0 && count(CARD.progression, from) === 0,
        `zone=${count(CARD.zoneCard, from)} progression=${count(CARD.progression, from)}`);
     ok("§3 and its damage still lands, by value",
@@ -315,13 +332,29 @@ const res = await page.evaluate(async () => {
 
       // POSITIVE CONTROL, same sink, same switch: a hand-applied hit has no arrival clock to be late
       // for, so it still sounds. Without this the silence above could be a dead sink.
+      // ⛔ REPOINTED TO THE STRUCTURE KIND 2026-08-29. The plain-character clip is WITHDRAWN
+      //    (module/fx/effects.js `HIT_SOUND.flesh: { base: null }`, commit 7328447), so `hitSoundSrc`
+      //    answers null for that kind and the sweep filters every plain figure before it can be counted
+      //    — which reads as "no plan" and takes the MECHANISM under test down with it. The structure
+      //    kind still rings, so the figure is flagged structural for this section only and handed back
+      //    immediately after. The withdrawal is TEMPORARY by its own record (effects.js keeps the revert
+      //    line; docs/FX-RAIL.md §6 carries the ruling), so ↪ RE-POINT THIS BACK to a plain figure when
+      //    the clip returns.
+      //    The flag is the shipped structural predicate's own explicit door (`isFullBorg`,
+      //    mech/borg.js:121 → `bearsStructuralSdp`, effects.js:6014).
+      await solo.setFlag(SCOPE, "fullBorg", true);
+      await sleep(250);
       heard.length = 0;
       from = since();
       await DA.applyLocationDamage({ target: solo, location: "Torso", netDamage: 4, structuralDamage: 4, penetrates: true, token: soloTok.object ?? null });
       await sleep(400);
       const handPlays = heard.splice(0).length;
-      ok("§5 a hand-applied hit still sounds at the apply (positive control)",
+      await solo.unsetFlag(SCOPE, "fullBorg").catch(() => {});
+      await sleep(200);
+      ok("§5 a hand-applied hit still sounds at the apply (positive control — the sink is alive)",
          handPlays === 1, `${handPlays} play(s)`);
+      ok("§5 and the control handed the figure back — the structural flag is off again",
+         solo.getFlag(SCOPE, "fullBorg") === undefined, String(solo.getFlag(SCOPE, "fullBorg")));
       await wipeSince(from);
     } finally {
       FX._setHitSoundSink(null);
@@ -346,14 +379,13 @@ const res = await page.evaluate(async () => {
        asserted beside it — the fix must silence sounds and change nothing else. */
     {
       const VW = await import(`/modules/${SCOPE}/module/vehicle/vehicle-weapons.js`);
-      const VKEYS = ["mmEnabled", "vehicleRuleSystem", "vehicleDamageEnabled"];
+      const VKEYS = ["mmEnabled", "vehicleRuleSystem"];
       const vWas = {};
       for (const k of VKEYS) { try { vWas[k] = game.settings.get(SCOPE, k); } catch { vWas[k] = null; } }
       let rig = null;
       try {
         await set("mmEnabled", true);
         await set("vehicleRuleSystem", "MaximumMetal");
-        await set("vehicleDamageEnabled", true);
 
         rig = await Actor.create({
           name: "__PWK__BATCH Rig", type: `${SCOPE}.vehicle`,

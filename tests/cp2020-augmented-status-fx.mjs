@@ -298,13 +298,14 @@ const mirror = await page.evaluate(async ({ actorId, tokenId }) => {
   const statusesNow = () => [...(actor.statuses ?? [])];
   const effectStatuses = () => actor.effects.map(e => [...(e.statuses ?? [])]).flat();
   const tickWas = game.settings.get(SCOPE, "mechRoundTickAutomation");
-  const fireWas = game.settings.get(SCOPE, "fireDotEnabled");
-  const acidWas = game.settings.get(SCOPE, "acidArmorDotEnabled");
+  // ⏪ the burn + acid enablement keys retired 2026-08-29 (settings-trim); their two stack-mode
+  //    selectors were replaced by the single `dotStackMode`. Both ladders run unconditionally, so what
+  //    is pinned here is the stacking mode the legs below are measured against.
+  const dotStackWas = game.settings.get(SCOPE, "dotStackMode");
   let combat = null;
   try {
     await game.settings.set(SCOPE, "mechRoundTickAutomation", true);
-    await game.settings.set(SCOPE, "fireDotEnabled", true);
-    await game.settings.set(SCOPE, "acidArmorDotEnabled", true);
+    await game.settings.set(SCOPE, "dotStackMode", "stack");
 
     /* §4b-i — a fire DoT applied through the real helper raises `burning` */
     await saves.applyFireDotState(actor, "Torso", 2, "1d6");
@@ -342,8 +343,7 @@ const mirror = await page.evaluate(async ({ actorId, tokenId }) => {
   } finally {
     if (combat) await combat.delete().catch(() => {});
     await game.settings.set(SCOPE, "mechRoundTickAutomation", tickWas);
-    await game.settings.set(SCOPE, "fireDotEnabled", fireWas);
-    await game.settings.set(SCOPE, "acidArmorDotEnabled", acidWas);
+    await game.settings.set(SCOPE, "dotStackMode", dotStackWas);
     await actor.unsetFlag(SCOPE, "fireDotState").catch(() => {});
     await actor.unsetFlag(SCOPE, "dotState").catch(() => {});
     for (const id of ["burning", "corrode"]) {

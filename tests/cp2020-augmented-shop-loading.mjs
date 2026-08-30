@@ -99,7 +99,9 @@ try {
 
     chk("P0 probe: module active", game.modules.get("cp2020-augmented")?.active === true,
       game.modules.get("cp2020-augmented")?.active);
-    chk("P0 probe: shopping enabled in this world", SET.shoppingEnabled() === true, SET.shoppingEnabled());
+    // ⏪ the world switch behind this accessor retired 2026-08-29 (settings-trim); the accessor
+    //    survives and now answers true unconditionally, which is what the probe reads back.
+    chk("P0 probe: the shop is available in this world", SET.shoppingEnabled() === true, SET.shoppingEnabled());
 
     // Cold start: drop the memo and close any window a previous run left behind.
     for (const w of [...foundry.applications.instances.values()]) {

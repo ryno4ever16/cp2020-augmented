@@ -1460,9 +1460,12 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
     /* ── (d) THE TICK ITSELF, driven by real round advances, both ladders on one body ──────────── */
     const prev12 = {};
     const set12 = async (k, v) => { try { prev12[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
-    await set12("fireDotEnabled", true);
+    // ⏪ the blast / burn / taser-stack enablement keys retired 2026-08-29 (settings-trim): each
+    //    of those lanes is unconditional now. The armor mode is pinned EXPLICITLY in their place,
+    //    because the old "no wear" state was the retired boolean sitting under a "full" default,
+    //    and "full" now MEANS wear-on-penetration.
     await set12("mechRoundTickAutomation", true);
-    await set12("damageAblation", false);
+    await set12("damageArmorMode", "simple");
     await set12("combatFxEnabled", false);
     let combat = null;
     try {
@@ -1534,13 +1537,14 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
 
     const prev13 = {};
     const set13 = async (k, v) => { try { prev13[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
-    await set13("explosivesEnabled", true);
+    // ⏪ the blast / burn / taser-stack enablement keys retired 2026-08-29 (settings-trim): each
+    //    of those lanes is unconditional now. The armor mode is pinned EXPLICITLY in their place,
+    //    because the old "no wear" state was the retired boolean sitting under a "full" default,
+    //    and "full" now MEANS wear-on-penetration.
     await set13("explosivesDetailed", false);
     await set13("combatFxEnabled", false);       // §13 is about the DAMAGE rail
-    await set13("fireDotEnabled", true);
-    await set13("taserCumPenaltyEnabled", true);
     await set13("mechRoundTickAutomation", true);
-    await set13("damageAblation", false);
+    await set13("damageArmorMode", "simple");
     await set13("headHitDoubling", false);
     await set13("limbModel", "core");
 
@@ -1792,12 +1796,13 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
   await sect("§14", async () => {
     const prev14 = {};
     const set14 = async (k, v) => { try { prev14[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
-    await set14("explosivesEnabled", true);
+    // ⏪ the blast / burn / taser-stack enablement keys retired 2026-08-29 (settings-trim): each
+    //    of those lanes is unconditional now. The armor mode is pinned EXPLICITLY in their place,
+    //    because the old "no wear" state was the retired boolean sitting under a "full" default,
+    //    and "full" now MEANS wear-on-penetration.
     await set14("explosivesDetailed", true);       // ⭐ the whole section is the OPTIONAL mode
     await set14("combatFxEnabled", false);         // §14 is about the DAMAGE rail
-    await set14("fireDotEnabled", true);
-    await set14("taserCumPenaltyEnabled", true);
-    await set14("damageAblation", false);
+    await set14("damageArmorMode", "simple");
     await set14("headHitDoubling", false);
     await set14("limbModel", "core");
 
@@ -1976,11 +1981,14 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
   await sect("§15", async () => {
     const prev15 = {};
     const set15 = async (k, v) => { try { prev15[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
-    await set15("explosivesEnabled", true);
+    // ⏪ the blast / burn / taser-stack enablement keys retired 2026-08-29 (settings-trim): each
+    //    of those lanes is unconditional now. The armor mode is pinned EXPLICITLY in their place,
+    //    because the old "no wear" state was the retired boolean sitting under a "full" default,
+    //    and "full" now MEANS wear-on-penetration.
     await set15("explosivesDetailed", false);
     await set15("combatFxEnabled", false);       // §15 is about the placement, not the picture
     await set15("headHitDoubling", false);
-    await set15("damageAblation", false);
+    await set15("damageArmorMode", "simple");
     await set15("limbModel", "core");
 
     let probe = null, probeTok = null;
@@ -2238,7 +2246,7 @@ const res = await page.evaluate(async ({ SCOPE, ROUND_SOURCES }) => {
     };
 
     try {
-      await set16("explosivesEnabled", true);
+      // ⏪ the blast enablement key retired 2026-08-29 (settings-trim): the lane is unconditional.
       await set16("explosivesDetailed", false);
       await set16("combatFxEnabled", false);      // §16 is about the aim, not the picture
       aim = await import(`/modules/${SCOPE}/module/combat/aim-placement.js`);

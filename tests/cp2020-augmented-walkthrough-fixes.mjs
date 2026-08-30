@@ -46,12 +46,10 @@ const legA = await p.evaluate(async () => {
   const { ModifiersDialog } = await import("/modules/cp2020-augmented/module/dialog/modifiers.js");
   const emitFire = (actor) => Hooks.callAll("cyberpunk2020.weaponFired", { attackerId: actor.id, areaDamages: {} });
   const cnt = (a) => a.getFlag(SCOPE, "actionCount");
-  let restore = {};
+  const restore = {};
   try {
-    for (const k of ["multiActionPenaltyEnabled", "multiActionAutoTrack"]) {
-      try { restore[k] = game.settings.get(SCOPE, k); } catch { restore[k] = undefined; }
-      await game.settings.set(SCOPE, k, true);
-    }
+    // ⏪ the two multi-action enablement keys retired 2026-08-29 (settings-trim): the counter tracks
+    //    unconditionally, so there is nothing to arm before these legs.
     for (const a of game.actors.filter(a => a.name?.startsWith("__PW__WFa"))) await a.delete().catch(() => {});
     for (const c of [...game.combats]) if (c.combatants.some(cb => cb.name?.startsWith?.("__PW__WFa"))) await c.delete().catch(() => {});
 
@@ -576,12 +574,12 @@ const legG = await p.evaluate(async (DAI_NAME) => {
   try {
     // Pin the ruleset to MaximumMetal so the {{#if isMM}} condition column + resizable dialog render,
     // regardless of the world's current toggle. Capture + restore.
-    for (const k of ["mmEnabled", "vehicleRuleSystem", "vehicleControlEnabled"]) {
+    // ⏪ the vehicle-control gate retired 2026-08-29 (settings-trim): the sheet control is always live.
+    for (const k of ["mmEnabled", "vehicleRuleSystem"]) {
       try { restore[k] = game.settings.get(SCOPE, k); } catch { restore[k] = undefined; }
     }
     await game.settings.set(SCOPE, "mmEnabled", true);
     await game.settings.set(SCOPE, "vehicleRuleSystem", "MaximumMetal");
-    await game.settings.set(SCOPE, "vehicleControlEnabled", true);
 
     actor = game.actors.find(a => a.name === DAI_NAME);
     out.notes.actorFound = !!actor;
@@ -688,12 +686,12 @@ const legH = await p.evaluate(async (DAI_NAME) => {
     return app;
   };
   try {
-    for (const k of ["mmEnabled", "vehicleRuleSystem", "vehicleControlEnabled"]) {
+    // ⏪ the vehicle-control gate retired 2026-08-29 (settings-trim): the sheet control is always live.
+    for (const k of ["mmEnabled", "vehicleRuleSystem"]) {
       try { settingRestore[k] = game.settings.get(SCOPE, k); } catch { settingRestore[k] = undefined; }
     }
     await game.settings.set(SCOPE, "mmEnabled", true);
     await game.settings.set(SCOPE, "vehicleRuleSystem", "MaximumMetal");
-    await game.settings.set(SCOPE, "vehicleControlEnabled", true);
 
     actor = game.actors.find(a => a.name === DAI_NAME);
     if (!actor) throw new Error("DaiOni fixture not found");

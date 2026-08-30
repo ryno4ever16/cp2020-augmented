@@ -793,7 +793,7 @@ const live = await page.evaluate(async ({ SCOPE }) => {
     Q.length = 0;
     if (!(s1 === 7 && s2 === 3 && s3 === 1 && s4 === 10 && s5 === 42)) return out;
 
-    await remember("vehicleDamageEnabled", true);
+    // ⏪ the vehicle-damage gate retired 2026-08-29 (settings-trim): the lane is unconditional.
     await remember("vehicleMoraleEnabled", false);
     await remember("vehicleArmorDamageEnabled", false);
 
@@ -904,13 +904,14 @@ const cleanup = await page.evaluate(async ({ ids, msgIds }) => {
   for (const a of game.actors.filter(a => a.name?.startsWith("__PW__VDM"))) await a.delete().catch(() => {});
   out.strays = game.actors.filter(a => a.name?.startsWith("__PW__VDM")).map(a => a.name);
   const get = (k) => { try { return game.settings.get("cp2020-augmented", k); } catch { return "unregistered"; } };
-  out.settings = { damage: get("vehicleDamageEnabled"), morale: get("vehicleMoraleEnabled"), armorErosion: get("vehicleArmorDamageEnabled") };
+  out.settings = { morale: get("vehicleMoraleEnabled"), armorErosion: get("vehicleArmorDamageEnabled") };
   return out;
 }, { ids: [...(r.cleanupIds ?? []), ...(live.cleanupIds ?? [])], msgIds: live.msgIds ?? [] });
 check("every fixture this suite created is gone", (cleanup.strays?.length ?? 1) === 0, J(cleanup.strays));
 check("the world settings this suite moved are back on the values it found, not on its own",
-  Object.keys(live.settingsWas ?? {}).length === 3
-  && cleanup.settings?.damage === live.settingsWas?.vehicleDamageEnabled
+  // ⏪ 3 → 2 (2026-08-29, settings-trim): the vehicle-damage gate is retired, so this suite moves
+  //    two world values instead of three.
+  Object.keys(live.settingsWas ?? {}).length === 2
   && cleanup.settings?.morale === live.settingsWas?.vehicleMoraleEnabled
   && cleanup.settings?.armorErosion === live.settingsWas?.vehicleArmorDamageEnabled,
   `found ${J(live.settingsWas)} -> left ${J(cleanup.settings)}`);

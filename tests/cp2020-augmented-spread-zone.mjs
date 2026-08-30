@@ -264,29 +264,11 @@ const res = await page.evaluate(async () => {
   for (const w of Object.values(ui.windows ?? {})) if (w?.constructor?.name === "DamageDialog") await w.close().catch(() => {});
   await wipeZones();
 
-  // ⭐ THE THIRD CASE, WHICH USED TO BE NOBODY'S. Pre-existing defect, recorded as an open item until
-  // this unit: with the pattern mechanic switched OFF the single-target gate stood down because the
-  // cartridge derived to `buck`, and the pattern hook stood down because the setting said no — so a
-  // shell payload was claimed by NEITHER flow. No apply window, no pattern, no damage at all. The
-  // switch now lives in the one shared site both gates ask (lookups.js `spreadFlowModeOf`), so with the
-  // mechanic off a shell is claimed by the ordinary flow exactly as a slug is. The setting is restored
-  // in a `finally`, so a failing assertion cannot leave the user's world switched.
-  const spreadWas = game.settings.get(SCOPE, "shotgunSpreadEnabled");
-  let offP = null, offZones = null;
-  try {
-    await game.settings.set(SCOPE, "shotgunSpreadEnabled", false);
-    offP = basePayload();
-    Hooks.callAll("cyberpunk2020.weaponFired", offP);
-    await sleep(900);
-    offZones = myZones().length;
-  } finally {
-    await game.settings.set(SCOPE, "shotgunSpreadEnabled", spreadWas);
-  }
-  ok("§3 with the pattern SWITCHED OFF the shell is claimed by the ordinary flow — owned, not orphaned",
-    !!offP.handled, `handled=${offP.handled}`);
-  ok("§3 and with the mechanic off no pattern is placed either (negative)", offZones === 0, String(offZones));
-  ok("§3 the world switch is back where this section found it",
-    game.settings.get(SCOPE, "shotgunSpreadEnabled") === spreadWas, String(spreadWas));
+  // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim). The third case this block
+  //    pinned - a shell claimed by NEITHER flow because the single-target gate stood down for the
+  //    cartridge while the pattern hook stood down for the setting - cannot occur any more: the shared
+  //    flow site (lookups.js `spreadFlowModeOf`) answers unconditionally, so a shell is always claimed
+  //    by exactly one flow. The either/or itself is still pinned structurally in §8.
   for (const w of Object.values(ui.windows ?? {})) if (w?.constructor?.name === "DamageDialog") await w.close().catch(() => {});
   await wipeZones();
 
@@ -530,7 +512,6 @@ const res = await page.evaluate(async () => {
   // the corridor with that SP folded outermost and would debit the wall's structure. This leg pins the
   // NAKED half of the split; the valued half and the barrier's own wear live in
   // cp2020-augmented-cover-area-soak.mjs.
-  const occlusionOn = game.settings.get(SCOPE, "areaEffectOcclusion");
   const [wall] = await scene.createEmbeddedDocuments("Wall", [{ c: [500, 0, 500, 500] }]);
   await sleep(400);
   await wipeCards();
@@ -539,14 +520,11 @@ const res = await page.evaluate(async () => {
   const occZone = myZones()[0];
   await hooks._confirmSpreadZone(occZone.id);
   await sleep(1500);
-  // ⏪ 2026-08-16 (vacuous-leg audit): the predicate used to open `!occlusionOn ||`, which handed the leg
-  // a free pass on any world with the switch off. The switch's posture is now its own leg (it ships on,
-  // and the rig runs it on), so the occlusion claim itself is unconditional.
-  ok("§7 fixture: the occlusion switch is on, so the exemption below is the rule actually under test",
-    occlusionOn === true, String(occlusionOn));
+  // ⏪ the occlusion switch and its fixture leg retired 2026-08-29 (settings-trim): the exemption is
+  //    unconditional, so there is no posture left to state before the claim.
   ok("§7 a token behind a wall is exempted (no result card)",
     [...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length === 0,
-    `occlusion=${occlusionOn}`);
+    `result cards ${[...game.messages].filter(m => (m.content ?? "").includes("cp-spread-result-list")).length}`);
   ok("§7 the pattern still vanishes when nobody was hit", myZones().length === 0, String(myZones().length));
   await scene.deleteEmbeddedDocuments("Wall", [wall.id]);
 
@@ -556,16 +534,17 @@ const res = await page.evaluate(async () => {
   ok("§8 the derivation is called from BOTH sides of the either/or", (dhSrc.match(/if \(_spreadModeOf\(payload\)/g) ?? []).length === 2,
     String((dhSrc.match(/if \(_spreadModeOf\(payload\)/g) ?? []).length));
   ok("§8 no new code reads region.behaviors.length", !/behaviors[?.]*\.length/.test(dhSrc));
-  // The structural half of the ownership fix: the world switch must be read in exactly ONE place, the
-  // shared site both gates already ask. A second read here is how the two gates disagreed before.
-  ok("§8 the damage rail no longer reads the pattern's world setting for itself",
-    !/shotgunSpreadEnabled/.test(dhSrc));
+  // The structural half of the ownership fix: the flow answer is produced in exactly ONE place, the
+  // shared site both gates already ask. A second derivation here is how the two gates disagreed before.
+  // ⏪ the world key that used to be folded in there retired 2026-08-29 (settings-trim); the shared
+  //    site and its single-answer property are what the legs pin now.
+  ok("§8 the damage rail derives no flow answer of its own", !/shotgunPatternEnabled/.test(dhSrc));
   const lookupSrc = await (await fetch(`/modules/${SCOPE}/module/lookups.js`, { cache: "no-store" })).text();
-  ok("§8 the switch lives in the shared flow site, which is what all three callers ask",
-    /export function spreadFlowModeOf/.test(lookupSrc) && /shotgunSpreadEnabled/.test(lookupSrc));
+  ok("§8 the shared flow site is what all three callers ask, and it owns the pattern predicate",
+    /export function spreadFlowModeOf/.test(lookupSrc) && /shotgunPatternEnabled/.test(lookupSrc));
   const fxSrc = await (await fetch(`/modules/${SCOPE}/module/fx/effects.js`, { cache: "no-store" })).text();
   ok("§8 the presentation rail asks that same site rather than deriving its own answer",
-    /spreadFlowModeOf\(payload\)/.test(fxSrc) && !/shotgunSpreadEnabled/.test(fxSrc));
+    /spreadFlowModeOf\(payload\)/.test(fxSrc) && !/shotgunPatternEnabled/.test(fxSrc));
   const lookSrc = await (await fetch(`/modules/${SCOPE}/module/combat/spread-zone-look.js`, { cache: "no-store" })).text();
   ok("§8 the look keys off the flag, never a region name", /isSpreadZone/.test(lookSrc) && !/document\.name\s*===/.test(lookSrc));
 
@@ -585,17 +564,14 @@ const res = await page.evaluate(async () => {
     await victim.unsetFlag(SCOPE, "fireDotState").catch(() => {});
     await victim.unsetFlag(SCOPE, "dotState").catch(() => {});
   };
-  // World settings the rider mechanics themselves are gated on: an inherited world state is not a
-  // controlled fixture, so each is pinned here and restored in the finally.
+  // ⏪ the taser + burn enablement keys retired 2026-08-29 (settings-trim), and the acid/fire stack
+  //    pair was replaced by the single `dotStackMode`. What is left to pin is the stacking mode the
+  //    riders below are measured against; it is restored in the finally.
   const riderWas = {
-    taser: game.settings.get(SCOPE, "taserCumPenaltyEnabled"),
-    fire: game.settings.get(SCOPE, "fireDotEnabled"),
-    fireStack: game.settings.get(SCOPE, "fireDotStackMode"),
+    dotStack: game.settings.get(SCOPE, "dotStackMode"),
   };
   try {
-    await game.settings.set(SCOPE, "taserCumPenaltyEnabled", true);
-    await game.settings.set(SCOPE, "fireDotEnabled", true);
-    await game.settings.set(SCOPE, "fireDotStackMode", "stack");
+    await game.settings.set(SCOPE, "dotStackMode", "stack");
 
     /* §9a — a shock load: recorded at placement, applied per shell at confirm */
     await wipeZones(); await wipeCards(); await resetVictim();
@@ -690,9 +666,7 @@ const res = await page.evaluate(async () => {
       && !victim.getFlag(SCOPE, "taserState") && !victim.getFlag(SCOPE, "fireDotState"),
       `damage ${victim.system?.damage}, zones ${myZones().length}`);
   } finally {
-    await game.settings.set(SCOPE, "taserCumPenaltyEnabled", riderWas.taser);
-    await game.settings.set(SCOPE, "fireDotEnabled", riderWas.fire);
-    await game.settings.set(SCOPE, "fireDotStackMode", riderWas.fireStack);
+    await game.settings.set(SCOPE, "dotStackMode", riderWas.dotStack);
     await resetVictim();
   }
 
@@ -2648,7 +2622,9 @@ const res = await page.evaluate(async () => {
     const prev20 = {};
     const set20 = async (k, v) => { try { prev20[k] = game.settings.get(SCOPE, k); await game.settings.set(SCOPE, k, v); } catch (_e) {} };
     await set20("damageArmorMode", "full");
-    await set20("damageAblation", false);
+    // ⏪ the wear-on-penetration boolean retired 2026-08-29 (settings-trim): the mode carries it now,
+    //    and "simple" is the same no-wear arithmetic this leg always ran on.
+    await set20("damageArmorMode", "simple");
     await set20("headHitDoubling", false);
     await set20("combatFxEnabled", false);
     try {

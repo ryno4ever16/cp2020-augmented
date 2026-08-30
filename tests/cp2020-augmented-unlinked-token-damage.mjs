@@ -71,7 +71,7 @@ const res = await page.evaluate(async () => {
   // rather than the code under test, which is exactly how a green suite went red with no code change.
   try { await game.settings.set(NS, "limbLossEnabled", true); } catch (e) {}
   const modelWas = (() => { try { return game.settings.get(NS, "limbModel"); } catch { return null; } })();
-  const rerollWas = (() => { try { return game.settings.get(NS, "rerollGoneLimbLocation"); } catch { return null; } })();
+  // ⏪ the absent-limb re-roll switch retired 2026-08-29 (settings-trim): it always runs.
   const sevMsgsBefore = new Set(game.messages.map(m => m.id));
 
   try { await game.settings.set(NS, "limbModel", "w4rst4r"); } catch (e) {}
@@ -102,7 +102,6 @@ const res = await page.evaluate(async () => {
 
   // The reader the record exists for: with the re-roll toggle on, a hit rolled onto the gone zone is
   // moved off it under Core — the behavior that silently did nothing while Core recorded nothing.
-  try { await game.settings.set(NS, "rerollGoneLimbLocation", true); } catch (e) {}
   const moved = await U.rerollGoneLimbAreaDamages(actorA, { lLeg: [{ damage: 5 }], Torso: [{ damage: 3 }] });
   const movedCount = Object.values(moved).reduce((n, hits) => n + hits.length, 0);
   ok("severity (core): the gone-zone reader relocates a hit off the recorded zone",
@@ -152,7 +151,6 @@ const res = await page.evaluate(async () => {
      && (typeof oneFn === "function" ? oneFn(actorA, "lArm") : "") === "severed",
      `${JSON.stringify(beforeNew)} -> ${JSON.stringify(afterNew)}`);
 
-  if (rerollWas !== null) { try { await game.settings.set(NS, "rerollGoneLimbLocation", rerollWas); } catch (e) {} }
   if (modelWas !== null) { try { await game.settings.set(NS, "limbModel", modelWas); } catch (e) {} }
   for (const m of game.messages.filter(m => !sevMsgsBefore.has(m.id))) { try { await m.delete(); } catch (e) {} }
 

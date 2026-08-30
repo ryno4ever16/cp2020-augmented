@@ -5,20 +5,21 @@
  * its own by the suite that owns its feature; almost none of them are ever exercised TOGETHER. The
  * defect class that lives in that gap is the interaction one — a panel that only fails to draw when its
  * master is off and a neighbour is on, a code path that only reaches an undefined read when two
- * unrelated gates disagree. Exhausting the switch space is not available (45 binary switches is 2^45
+ * unrelated gates disagree. Exhausting the switch space is not available (19 binary switches is 2^19
  * worlds), so this suite covers every PAIR instead: `tools/pairwise-gen.mjs` builds a covering array in
  * which all four value combinations of every two switches appear together in some row, and each row is
  * a real world the client is put into and smoke-driven.
  *
  * ⭐ THE ROWS ASSERT OUTCOMES, NOT PRESENCE. A row that only checked "a window appeared" would certify
  * nothing, so each row reads back three things whose value is DETERMINED by the row:
- *   · the character sheet's Services tab exists exactly when `shoppingEnabled` is on for that row
- *     (actor-sheet.js:132 → actor-sheet.hbs:35), and is absent when it is off;
- *   · the shop window OPENS when `shoppingEnabled` is on, and when it is off refuses LOUDLY — a warn
- *     notification and no window (catalog.js:1831), never a half-opened one;
+ *   · the character sheet's Services tab is drawn under EVERY combination — ⏪ the switch that used
+ *     to decide it retired 2026-08-29 (settings-trim), and its ABSENCE under some row is now the
+ *     failure, so the leg reads the same node with the opposite expectation;
+ *   · the shop window OPENS under every combination too, with its list painted — ⏪ the refusal half
+ *     ("off refuses LOUDLY, a warn and no window") went with the same switch;
  *   · on the System Settings page, every master's sub-settings carry the disabled marker exactly when
  *     that master is off in this row (settings-sections.js MASTERS → `.cp-mm-disabled`), checked for
- *     all nine masters the matrix moves.
+ *     both masters the matrix still moves.
  * A fired-shot payload is emitted into each row as well, and the row fails on any uncaught error or any
  * module-attributed console error raised while that row was live.
  *
@@ -108,56 +109,47 @@ const ROW_LIMIT = (() => {
   return i > 0 ? Math.max(1, Number(process.argv[i + 1]) || 0) : 0;
 })();
 
-/** The world-scoped BOOLEAN switches the matrix moves. */
+/** The world-scoped BOOLEAN switches the matrix moves.
+ *
+ * ⏪ SHRUNK 2026-08-29 (settings-trim). Twenty-four keys left the registry in one ruling and the
+ * matrix lost them with their registrations: the damage-ablation boolean (merged into the armor-mode
+ * selector), the declared-defence / aim / wait group, the multi-action AUTO-TRACK half, the
+ * movement-restriction switch, the suppressive lane, the pattern switch, the blast + occlusion +
+ * cloud group, the acid/fire/taser riders (their two stack selectors replaced by one `dotStackMode`),
+ * the special-melee and rangefinding module shadows, the absent-limb re-roll, the hit-location
+ * override, the shop's presence gate, and the vehicle control/damage/arc trio. Every one of those
+ * behaviours is unconditional now, so there is no second value to cross them at.
+ *
+ * ↪ AND ONE CAME BACK THE SAME DAY. `multiActionPenaltyEnabled` was cut with its auto-track partner
+ * and RESTORED by user ruling on 2026-08-29, so it is back in the matrix (18 → 19 switches). The
+ * reason is the line this suite cares about: the rule engages AUTOMATICALLY on every second action,
+ * so a table that skips it would be zeroing the pre-filled term on every roll — a per-roll tax rather
+ * than an ignore-it opt-out, which is the head-hit-doubling class and keeps its switch. It
+ * re-registers defaulting ON (the old OFF default guarded a silent fold that no longer exists). It
+ * has NO sub-settings, so the MASTERS mirror below is unchanged.
+ *
+ * §1 below is what keeps this list honest: it reds by name if the live registry and this list ever
+ * disagree — which is exactly how a restore of this shape gets noticed. */
 const ALLOWED = [
   "combatAutomationEnabled",
   "mechRoundTickAutomation",
   "mechDocumentAutomation",
   "cyberlimbRepairGmOnly",
-  "damageAblation",
   "headHitDoubling",
-  "limbLossEnabled",
-  "rerollGoneLimbLocation",
-  "suppressiveFireSaves",
-  // ⏪ autoDeathSavePerTurn / autoSaveRePrompt retired 2026-08-28 — the per-turn prompts run
-  // unconditionally (save-rolls.js); no registration, nothing to pairwise.
-  "activeDodgeParryEnabled",
-  "aimTrackingEnabled",
-  "waitForTurnEnabled",
-  "gasGrenadeCloudEnabled",
-  "gasCloudAutoMove",
-  "taserCumPenaltyEnabled",
-  "acidArmorDotEnabled",
-  "fireDotEnabled",
   "multiActionPenaltyEnabled",
-  "multiActionAutoTrack",
-  "restrictMovementOncePerTurn",
-  "shotgunSpreadEnabled",
-  "explosivesEnabled",
-  "areaEffectOcclusion",
+  "limbLossEnabled",
+  "gasCloudAutoMove",
   "explosivesDetailed",
-  "hitLocationCoreDisplay",
-  "vehicleControlEnabled",
-  "vehicleDamageEnabled",
   "mmEnabled",
   "vehicleArmorDamageEnabled",
   "vehicleMoraleEnabled",
   "fnff2Enabled",
-  "specialMeleeEffectsEnabled",
-  "autoRangefinding",
   "ipRawTracking",
-  "shoppingEnabled",
   "playersCanShop",
   "shopAllowHomebrew",
   "playersCanBuyAmmo",
   "combatFxEnabled",
   "faceTargetOnFire",
-  // ⏪ "goreEnabled" stood here until 2026-08-28: the setting was retired with the element it switched.
-  // ⏪ "ipHideUI" and "npcGenEnabled" stood here until 2026-08-28 too, and went for a different reason:
-  // both were PRESENCE gates — switches whose only job was to hide a feature that costs a table nothing
-  // until somebody uses it. User order: "on by default with no way to turn them off … users opt out by
-  // ignoring it and opt in by using it." Neither is a rule alternative, so neither leaves a successor;
-  // the matrix simply has two fewer switches to cross.
 ];
 
 /** Kept out of the matrix, each with the reason the header states at length. */
@@ -181,17 +173,13 @@ const EXCLUDED = {
   vehicleHullFramedCompleted: "migration stamps: the companion 'sweep finished' record; clearing it makes the next load re-run that sweep",
 };
 
-/** Master → sub-settings, mirrored from settings-sections.js MASTERS. The row asserts the greying. */
+/** Master → sub-settings, mirrored from settings-sections.js MASTERS. The row asserts the greying.
+ *  ⏪ SHRUNK 2026-08-29 (settings-trim) to the two pairs the organizer still declares: the blast,
+ *  cloud, acid, fire and multi-action masters all went with their sub-settings, and the MM master
+ *  lost `vehicleArcEnforcement` from its list. */
 const MASTERS = {
-  mmEnabled: ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled", "vehicleArcEnforcement"],
+  mmEnabled: ["vehicleRuleSystem", "vehicleArmorDamageEnabled", "vehicleMoraleEnabled"],
   ipRawTracking: ["ipAwardModel", "ipAutoBaselineAmount", "ipThrottle", "ipSkillLockMode"],
-  shoppingEnabled: ["playersCanShop", "shopBuySource", "shopAllowHomebrew", "shopShowSource"],
-  // ⏪ npcGenEnabled → npcGenTokenArtFolder retired 2026-08-28 with its master.
-  explosivesEnabled: ["explosivesDetailed", "areaEffectOcclusion"],
-  gasGrenadeCloudEnabled: ["gasCloudAutoMove"],
-  acidArmorDotEnabled: ["acidDotStackMode"],
-  fireDotEnabled: ["fireDotStackMode"],
-  multiActionPenaltyEnabled: ["multiActionAutoTrack"],
 };
 
 const checks = [];
@@ -272,8 +260,11 @@ try {
   const unclassified = liveKeys.filter(k => !classified.has(k));
   const phantom = [...classified].filter(k => !liveKeys.includes(k));
 
+  // ↪ 30 → 31 live world booleans on 2026-08-29 with the multi-action penalty's restore. The bound is
+  //    a floor rather than an equality on purpose: the two legs below are what actually pin the set,
+  //    by NAME, so a miscount cannot pass while an unclassified key hides inside it.
   ok("§1 the client registers a world-scoped boolean set of the expected size",
-    liveKeys.length >= 40, `${liveKeys.length} world boolean setting(s)`);
+    liveKeys.length >= 25, `${liveKeys.length} world boolean setting(s)`);
   ok("§1 every registered world boolean is either in the matrix or in the stated exclusion list",
     unclassified.length === 0,
     unclassified.length ? `UNCLASSIFIED: ${unclassified.join(", ")} — add to ALLOWED or to EXCLUDED with a reason`
@@ -478,38 +469,31 @@ try {
         const sheetRoot = shooter.sheet.element ?? null;
         out.sheetDrawn = !!sheetRoot?.querySelector('[data-tab="combat"]')
           && !!sheetRoot?.querySelector('[data-tab="gear"]');
-        // The value the row determines: the Services tab is rendered from `showShop`, which IS
-        // shoppingEnabled (actor-sheet.js:132), so its presence is the row's own answer read back.
+        // ⏪ the switch this used to read back retired 2026-08-29 (settings-trim). The tab is drawn
+        //    under every combination now, so the row's own answer is gone and what is left to state is
+        //    the invariant: NO combination of the surviving switches may take the tab away.
         out.servicesTab = !!sheetRoot?.querySelector('[data-tab="services"]');
-        out.servicesMatchesRow = out.servicesTab === (row.shoppingEnabled === true);
+        out.servicesMatchesRow = out.servicesTab === true;
 
         /* ── UI 2: the shop catalog window ── */
         const CAT = await import(`/modules/${scope}/module/shop/catalog.js`);
         const winOf = () => [...foundry.applications.instances.values()].find(w => w?.constructor?.name === "CatalogBrowser") ?? null;
-        const wantShop = row.shoppingEnabled === true;
         CAT.openShopWindow(shooter, { view: "catalog" });
-        // ⚠ ONLY THE ROWS THAT EXPECT A WINDOW WAIT FOR ONE. Polling the full opening budget on a row
-        // that switched shopping off would spend it all confirming an absence — half the matrix, once
-        // per row. A row that expects nothing settles briefly and reads the refusal instead.
-        if (wantShop) {
-          for (let t = 0; t < 90; t++) {
-            const w = winOf();
-            if (w?.rendered && w.element?.querySelector(".cp-catalog-list")) break;
-            await sleep(300);
-          }
-        } else {
-          await sleep(800);
+        // ⏪ off-state leg retired 2026-08-29 with its switch (settings-trim): the refusal half (a warn
+        //    by name and NO window) had a switch to be refused by, and no longer does. Every row now
+        //    expects a window, so every row waits the full opening budget for one.
+        for (let t = 0; t < 90; t++) {
+          const w = winOf();
+          if (w?.rendered && w.element?.querySelector(".cp-catalog-list")) break;
+          await sleep(300);
         }
         const shopWin = winOf();
         const shopRoot = shopWin?.element ?? null;
         out.shopOpened = !!shopWin?.rendered && !!shopRoot?.querySelector(".cp-catalog-list");
         out.shopRows = shopRoot?.querySelectorAll(".cp-catalog-row").length ?? 0;
-        // Off must REFUSE, and say so BY NAME: the disabled notice and no window at all, never a
-        // half-drawn one (catalog.js:1831). Matching the message keeps an unrelated warning raised by
-        // the sheet render from standing in for the refusal.
-        const refusal = game.i18n.localize("CYBERPUNK.ShopDisabled");
-        out.shopRefused = !shopWin && notified.some(n => n.startsWith("warn: ") && n.includes(refusal));
-        out.shopMatchesRow = wantShop ? out.shopOpened : out.shopRefused;
+        // The invariant in the refusal's place: no combination of the surviving switches may stop the
+        // window opening, and it must arrive with rows rather than half-drawn.
+        out.shopMatchesRow = out.shopOpened && out.shopRows > 0;
 
         /* ── UI 3: the System Settings page, with the module's organizer on it ── */
         const SettingsApp = foundry.applications?.settings?.SettingsConfig ?? globalThis.SettingsConfig;
@@ -582,7 +566,7 @@ try {
 
     const on = ALLOWED.filter(k => row[k]).length;
     console.log(`${clean ? "  ok  " : "  FAIL"}  row ${String(i).padStart(2, "0")} (${on}/${ALLOWED.length} on)`
-      + `  sheet=${v.sheetDrawn ? "y" : "n"} services=${v.servicesTab ? "y" : "n"}(want ${row.shoppingEnabled ? "y" : "n"})`
+      + `  sheet=${v.sheetDrawn ? "y" : "n"} services=${v.servicesTab ? "y" : "n"}(want y)`
       + ` shop=${v.shopOpened ? `y/${v.shopRows}` : "n"} settings=${v.settingsDrawn ? "y" : "n"}`
       + ` gates=${v.gateMisses?.length ?? "?"} dmg=${v.damage} warns=${v.warns} uncaught=${v.uncaught.length}`
       + (v.threw ? `  THREW ${v.threw.split("\n")[0]}` : "")
@@ -604,19 +588,21 @@ try {
     verdicts.every(x => !x.v.threw), verdicts.find(x => x.v.threw)?.v.threw ?? "none");
   ok("§4 the character sheet drew in every row",
     verdicts.every(x => x.v.sheetDrawn), `${verdicts.filter(x => x.v.sheetDrawn).length}/${verdicts.length}`);
-  ok("§4 the Services tab is present in exactly the rows that enable shopping",
+  // ⏪ the two "in exactly the rows that enable shopping" legs were rewritten 2026-08-29 with the
+  //    switch that decided them (settings-trim). The either/or is gone; what replaces it is the
+  //    INVARIANT, which is the stronger statement now that nothing may take either surface away: no
+  //    combination of the surviving switches removes the Services tab or stops the window opening.
+  ok("§4 the Services tab is present under EVERY combination",
     verdicts.every(x => x.v.servicesMatchesRow),
-    verdicts.filter(x => !x.v.servicesMatchesRow).map(x => `row ${x.i}`).join(", ") || "all rows agree");
-  ok("§4 the shop window opens when shopping is on and refuses by name when it is off",
+    verdicts.filter(x => !x.v.servicesMatchesRow).map(x => `row ${x.i}`).join(", ") || "all rows drew it");
+  ok("§4 the shop window opens under EVERY combination, with its list painted",
     verdicts.every(x => x.v.shopMatchesRow),
-    verdicts.filter(x => !x.v.shopMatchesRow).map(x => `row ${x.i}`).join(", ") || "all rows agree");
-  // ⛔ BOTH POPULATIONS, AND THE CENSUS. The either/or above is satisfiable by a matrix that only ever
-  // took one of its two branches, and by a window that opened EMPTY — so both branches must have been
-  // walked, and the windows that opened must have listed something.
+    verdicts.filter(x => !x.v.shopMatchesRow).map(x => `row ${x.i}`).join(", ") || "all rows opened it");
+  // ⛔ THE CENSUS STILL STANDS: an invariant satisfied by a window that opened EMPTY would certify
+  // nothing, so every opened window must have listed something.
   const opened = verdicts.filter(x => x.v.shopOpened);
-  const refused = verdicts.filter(x => x.v.shopRefused);
-  ok("§4 both branches were actually walked — some rows opened the shop and some were refused",
-    opened.length > 0 && refused.length > 0, `${opened.length} opened · ${refused.length} refused`);
+  ok("§4 every row opened the window — no combination refused it",
+    opened.length === verdicts.length, `${opened.length}/${verdicts.length} opened`);
   ok("§4 an opened shop window listed catalog rows rather than opening empty",
     opened.length > 0 && opened.every(x => x.v.shopRows > 0),
     opened.length ? `smallest listing ${Math.min(...opened.map(x => x.v.shopRows))} row(s)` : "no row opened it");

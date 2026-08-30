@@ -47,7 +47,7 @@ try {
     const SCOPE = "cp2020-augmented";
     const out = { checks: [] };
     const ok = (name, cond, got) => out.checks.push({ name, pass: !!cond, got });
-    let veh = null, prevDmg;
+    let veh = null;
     try {
       // source-shape: the dialog collects + passes the flags
       const src = await (await fetch(`${M}/vehicle/vehicle-damage.js`, { cache: "no-store" })).text();
@@ -62,8 +62,7 @@ try {
 
       // behavioural: HEAT engages Composite ½-Pen; plain does not
       const VD = await import(`${M}/vehicle/vehicle-damage.js`);
-      prevDmg = game.settings.get(SCOPE, "vehicleDamageEnabled");
-      await game.settings.set(SCOPE, "vehicleDamageEnabled", true);
+      // ⏪ the vehicle-damage gate retired 2026-08-29 (settings-trim): the lane is unconditional.
       veh = await Actor.create({ name: "GRIG Composite Tank", type: "cp2020-augmented.vehicle",
         system: { compositeArmor: true, sp: { front: 0 }, bodyValue: 0 } });
       const rHeat = await VD.applyVehicleDamageMM(veh, { basePen: 10, facing: "front", heat: true });
@@ -74,7 +73,6 @@ try {
       out.error = e?.stack || e?.message || String(e);
     } finally {
       try { if (veh) await veh.delete(); } catch {}
-      try { if (prevDmg !== undefined) await game.settings.set(SCOPE, "vehicleDamageEnabled", prevDmg); } catch {}
     }
     return out;
   });
